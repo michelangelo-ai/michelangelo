@@ -3,8 +3,8 @@ litellm:
   replicaCount: 2
 
   image:
-    repository: ghcr.io/berriai/litellm-database
-    tag: "v1.85.1@sha256:fb757549de0da017a597ee4b9be0bfb55c49cde77898abe789fa3ad37d770c69"
+    repository: ghcr.io/berriai/litellm-non_root
+    tag: "v1.85.1@sha256:97ce25938fc7f38f14a4036df78ba3d57725706b6183488af9931750e395c673"
     pullPolicy: IfNotPresent
 
   imagePullSecrets: []
@@ -27,9 +27,17 @@ litellm:
   podAnnotations: {}
   podLabels: {}
   podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    runAsGroup: 65534
+    fsGroup: 65534
+    fsGroupChangePolicy: OnRootMismatch
     seccompProfile:
       type: RuntimeDefault
   securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    runAsGroup: 65534
     allowPrivilegeEscalation: false
     readOnlyRootFilesystem: false
     capabilities:
@@ -154,7 +162,6 @@ litellm:
   nodeSelector: {}
   tolerations: []
   affinity: {}
-  priorityClassName: ""
   terminationGracePeriodSeconds: 90
 
   # These resources are owned by this wrapper because the upstream behavior

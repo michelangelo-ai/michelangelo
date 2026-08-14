@@ -41,8 +41,7 @@
               "minLength": 1
             },
             "tag": {
-              "type": "string",
-              "pattern": "^v1\\.85\\.1@sha256:[a-fA-F0-9]{64}$"
+              "const": "v1.85.1@sha256:97ce25938fc7f38f14a4036df78ba3d57725706b6183488af9931750e395c673"
             },
             "pullPolicy": {
               "enum": ["Always", "IfNotPresent", "Never"]
@@ -95,6 +94,7 @@
         },
         "proxyConfigMap": {
           "type": "object",
+          "additionalProperties": false,
           "required": ["create", "key"],
           "properties": {
             "create": {
@@ -109,7 +109,22 @@
             "key": {
               "$ref": "#/definitions/secretKey"
             }
-          }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "create": {"const": true}
+                },
+                "required": ["create"]
+              },
+              "then": {
+                "properties": {
+                  "key": {"const": "config.yaml"}
+                }
+              }
+            }
+          ]
         },
         "proxy_config": {
           "type": "object"
@@ -157,8 +172,12 @@
             "type": "string"
           }
         },
-        "podSecurityContext": {"type": "object"},
-        "securityContext": {"type": "object"},
+        "podSecurityContext": {
+          "$ref": "#/definitions/podSecurityContext"
+        },
+        "securityContext": {
+          "$ref": "#/definitions/containerSecurityContext"
+        },
         "extraEnvVars": {
           "type": "array",
           "items": {
@@ -426,12 +445,6 @@
           "items": {"type": "object"}
         },
         "affinity": {"type": "object"},
-        "priorityClassName": {
-          "oneOf": [
-            {"const": ""},
-            {"$ref": "#/definitions/dnsName"}
-          ]
-        },
         "topologySpreadConstraints": {
           "type": "array",
           "items": {"$ref": "#/definitions/topologySpreadConstraint"}
@@ -617,11 +630,11 @@
         },
         "ingress": {
           "type": "array",
-          "items": {"type": "object"}
+          "items": {"$ref": "#/definitions/networkPolicyIngressRule"}
         },
         "egress": {
           "type": "array",
-          "items": {"type": "object"}
+          "items": {"$ref": "#/definitions/networkPolicyEgressRule"}
         }
       }
     },
@@ -645,7 +658,9 @@
         "interval": {"$ref": "#/definitions/duration"},
         "scrapeTimeout": {"$ref": "#/definitions/duration"},
         "path": {"type": "string", "pattern": "^/"},
-        "namespaceSelector": {"type": "object"},
+        "namespaceSelector": {
+          "$ref": "#/definitions/serviceMonitorNamespaceSelector"
+        },
         "authorization": {
           "type": "object",
           "additionalProperties": false,
@@ -676,8 +691,7 @@
           "properties": {
             "repository": {"type": "string", "minLength": 1},
             "tag": {
-              "type": "string",
-              "pattern": "^[^@]+@sha256:[a-fA-F0-9]{64}$"
+              "const": "8.12.1@sha256:94e9e444bcba979c2ea12e27ae39bee4cd10bc7041a472c4727a558e213744e6"
             },
             "pullPolicy": {"enum": ["Always", "IfNotPresent", "Never"]}
           }
@@ -712,6 +726,205 @@
       "type": "object",
       "propertyNames": {"$ref": "#/definitions/qualifiedName"},
       "additionalProperties": {"type": "string"}
+    },
+    "podSecurityContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runAsNonRoot",
+        "runAsUser",
+        "runAsGroup",
+        "fsGroup",
+        "fsGroupChangePolicy",
+        "seccompProfile"
+      ],
+      "properties": {
+        "runAsNonRoot": {"const": true},
+        "runAsUser": {"const": 65534},
+        "runAsGroup": {"const": 65534},
+        "fsGroup": {"const": 65534},
+        "fsGroupChangePolicy": {"const": "OnRootMismatch"},
+        "seccompProfile": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type"],
+          "properties": {
+            "type": {"const": "RuntimeDefault"}
+          }
+        }
+      }
+    },
+    "containerSecurityContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runAsNonRoot",
+        "runAsUser",
+        "runAsGroup",
+        "allowPrivilegeEscalation",
+        "readOnlyRootFilesystem",
+        "capabilities"
+      ],
+      "properties": {
+        "runAsNonRoot": {"const": true},
+        "runAsUser": {"const": 65534},
+        "runAsGroup": {"const": 65534},
+        "allowPrivilegeEscalation": {"const": false},
+        "readOnlyRootFilesystem": {"const": false},
+        "capabilities": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["drop"],
+          "properties": {
+            "add": {
+              "type": "array",
+              "maxItems": 0,
+              "items": {"type": "string"}
+            },
+            "drop": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {"type": "string"},
+              "contains": {"const": "ALL"}
+            }
+          }
+        }
+      }
+    },
+    "cidr": {
+      "type": "string",
+      "oneOf": [
+        {
+          "pattern": "^((25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])/(3[0-2]|[12]?[0-9])$"
+        },
+        {
+          "pattern": "^(([0-9A-Fa-f]{1,4}:){7}[0-9A-Fa-f]{1,4}|([0-9A-Fa-f]{1,4}:){1,7}:|([0-9A-Fa-f]{1,4}:){1,6}:[0-9A-Fa-f]{1,4}|([0-9A-Fa-f]{1,4}:){1,5}(:[0-9A-Fa-f]{1,4}){1,2}|([0-9A-Fa-f]{1,4}:){1,4}(:[0-9A-Fa-f]{1,4}){1,3}|([0-9A-Fa-f]{1,4}:){1,3}(:[0-9A-Fa-f]{1,4}){1,4}|([0-9A-Fa-f]{1,4}:){1,2}(:[0-9A-Fa-f]{1,4}){1,5}|[0-9A-Fa-f]{1,4}:((:[0-9A-Fa-f]{1,4}){1,6})|:((:[0-9A-Fa-f]{1,4}){1,7}|:))/(12[0-8]|1[01][0-9]|[1-9]?[0-9])$"
+        },
+        {
+          "pattern": "^(([0-9A-Fa-f]{1,4}:){6}|::([0-9A-Fa-f]{1,4}:){0,5}|[0-9A-Fa-f]{1,4}::([0-9A-Fa-f]{1,4}:){0,4}|([0-9A-Fa-f]{1,4}:){1}[0-9A-Fa-f]{1,4}::([0-9A-Fa-f]{1,4}:){0,3}|([0-9A-Fa-f]{1,4}:){2}[0-9A-Fa-f]{1,4}::([0-9A-Fa-f]{1,4}:){0,2}|([0-9A-Fa-f]{1,4}:){3}[0-9A-Fa-f]{1,4}::([0-9A-Fa-f]{1,4}:){0,1}|([0-9A-Fa-f]{1,4}:){4}[0-9A-Fa-f]{1,4}::)((25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])/(12[0-8]|1[01][0-9]|[1-9]?[0-9])$"
+        }
+      ]
+    },
+    "ianaServiceName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 15,
+      "pattern": "^[a-z](?:[-a-z0-9]*[a-z0-9])?$"
+    },
+    "networkPolicyIPBlock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cidr"],
+      "properties": {
+        "cidr": {"$ref": "#/definitions/cidr"},
+        "except": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/definitions/cidr"}
+        }
+      }
+    },
+    "networkPolicyPeer": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "podSelector": {"$ref": "#/definitions/labelSelector"},
+        "namespaceSelector": {"$ref": "#/definitions/labelSelector"},
+        "ipBlock": {"$ref": "#/definitions/networkPolicyIPBlock"}
+      },
+      "oneOf": [
+        {
+          "required": ["ipBlock"],
+          "not": {
+            "anyOf": [
+              {"required": ["podSelector"]},
+              {"required": ["namespaceSelector"]}
+            ]
+          }
+        },
+        {
+          "not": {"required": ["ipBlock"]},
+          "anyOf": [
+            {"required": ["podSelector"]},
+            {"required": ["namespaceSelector"]}
+          ]
+        }
+      ]
+    },
+    "networkPolicyPort": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "protocol": {"enum": ["TCP", "UDP", "SCTP"]},
+        "port": {
+          "oneOf": [
+            {"type": "integer", "minimum": 1, "maximum": 65535},
+            {"$ref": "#/definitions/ianaServiceName"}
+          ]
+        },
+        "endPort": {"type": "integer", "minimum": 1, "maximum": 65535}
+      },
+      "allOf": [
+        {
+          "if": {"required": ["endPort"]},
+          "then": {
+            "required": ["port"],
+            "properties": {
+              "port": {"type": "integer"}
+            }
+          }
+        }
+      ]
+    },
+    "networkPolicyIngressRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "from": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/definitions/networkPolicyPeer"}
+        },
+        "ports": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/definitions/networkPolicyPort"}
+        }
+      }
+    },
+    "networkPolicyEgressRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "to": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/definitions/networkPolicyPeer"}
+        },
+        "ports": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/definitions/networkPolicyPort"}
+        }
+      }
+    },
+    "serviceMonitorNamespaceSelector": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "any": {"type": "boolean"},
+        "matchNames": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"$ref": "#/definitions/dnsName"}
+        }
+      }
     },
     "hostname": {
       "type": "string",
@@ -774,7 +987,36 @@
                 "type": "array",
                 "items": {"$ref": "#/definitions/labelValue"}
               }
-            }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "operator": {"enum": ["In", "NotIn"]}
+                  },
+                  "required": ["operator"]
+                },
+                "then": {
+                  "required": ["values"],
+                  "properties": {
+                    "values": {"minItems": 1}
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "operator": {"enum": ["Exists", "DoesNotExist"]}
+                  },
+                  "required": ["operator"]
+                },
+                "then": {
+                  "properties": {
+                    "values": {"maxItems": 0}
+                  }
+                }
+              }
+            ]
           }
         }
       }

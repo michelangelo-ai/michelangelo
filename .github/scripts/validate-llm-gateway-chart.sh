@@ -5,6 +5,14 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 CHART_DIR="$REPO_ROOT/helm/michelangelo-llm-gateway"
 DEPENDENCY="$CHART_DIR/charts/litellm-helm-1.85.1.tgz"
 EXPECTED_DEPENDENCY_SHA256="40909115b2c8fb0b27e9446549f18d8105fd057e2a7d30015595bd7d3065dc9a"
+KUBECONFORM_BIN="${KUBECONFORM_BIN:-kubeconform}"
+CORE_SCHEMA_LOCATION='https://raw.githubusercontent.com/yannh/kubernetes-json-schema/c8f4e61c63bc529749125ac566bccc6986e08d45/{{ .NormalizedKubernetesVersion }}-standalone{{ .StrictSuffix }}/{{ .ResourceKind }}{{ .KindSuffix }}.json'
+CRD_SCHEMA_LOCATION='https://raw.githubusercontent.com/datreeio/CRDs-catalog/52b0261318acc7dd0b66e032759b1f218216b980/{{ .Group }}/{{ .ResourceKind }}_{{ .ResourceAPIVersion }}.json'
+
+if ! command -v "$KUBECONFORM_BIN" >/dev/null 2>&1; then
+  echo "Missing $KUBECONFORM_BIN; install kubeconform v0.8.0" >&2
+  exit 1
+fi
 
 if [[ ! -f "$DEPENDENCY" ]]; then
   echo "Missing $DEPENDENCY; run helm dependency build $CHART_DIR" >&2
@@ -25,8 +33,12 @@ render() {
   helm template litellm "$CHART_DIR" \
     --namespace litellm \
     --kube-version 1.27.0 \
-    "$@" \
-    >/dev/null
+    "$@" | "$KUBECONFORM_BIN" \
+      -strict \
+      -summary \
+      -kubernetes-version 1.27.0 \
+      -schema-location "$CORE_SCHEMA_LOCATION" \
+      -schema-location "$CRD_SCHEMA_LOCATION"
 }
 
 validate_profile() {
@@ -62,8 +74,21 @@ assert_contains() {
   fi
 }
 
+assert_not_contains() {
+  local output="$1"
+  local unexpected="$2"
+
+  if [[ "$output" == *"$unexpected"* ]]; then
+    echo "Expected rendered output not to contain: $unexpected" >&2
+    exit 1
+  fi
+}
+
 validate_profile
 validate_profile -f "$CHART_DIR/examples/values-gcp.yaml"
+validate_profile \
+  -f "$CHART_DIR/examples/values-gcp.yaml" \
+  -f "$CHART_DIR/examples/values-gcp-standard.yaml"
 validate_profile \
   --set migrationJob.hooks.helm.enabled=false \
   --set migrationJob.hooks.argocd.enabled=true
@@ -76,6 +101,8 @@ validate_profile \
 validate_profile \
   --set networkPolicy.enabled=true \
   --set networkPolicy.migration.managedExternally=true \
+  --set-json 'networkPolicy.ingress=[{"from":[{"namespaceSelector":{"matchLabels":{"kubernetes.io/metadata.name":"callers"}},"podSelector":{"matchExpressions":[{"key":"app.kubernetes.io/name","operator":"In","values":["gateway-client"]}]}}],"ports":[{"protocol":"TCP","port":"http"},{"protocol":"TCP","port":4000}]}]' \
+  --set-json 'networkPolicy.egress=[{"to":[{"ipBlock":{"cidr":"10.0.0.0/8","except":["10.1.0.0/16"]}},{"ipBlock":{"cidr":"2001:db8::/32"}},{"ipBlock":{"cidr":"::ffff:192.0.2.128/128"}}],"ports":[{"protocol":"TCP","port":443,"endPort":445}]}]' \
   --set serviceMonitor.enabled=true \
   --set serviceMonitor.authorization.secretName=litellm-metrics
 validate_profile \
@@ -87,10 +114,38 @@ validate_profile \
 render --set-string litellm.resources.requests.cpu=1E
 
 default_output="$(helm template litellm "$CHART_DIR" --namespace litellm)"
-assert_contains "$default_output" 'ghcr.io/berriai/litellm-database:v1.85.1@sha256:fb757549de0da017a597ee4b9be0bfb55c49cde77898abe789fa3ad37d770c69'
+assert_contains "$default_output" 'ghcr.io/berriai/litellm-non_root:v1.85.1@sha256:97ce25938fc7f38f14a4036df78ba3d57725706b6183488af9931750e395c673'
 assert_contains "$default_output" 'curlimages/curl:8.12.1@sha256:94e9e444bcba979c2ea12e27ae39bee4cd10bc7041a472c4727a558e213744e6'
 assert_contains "$default_output" '--use_v2_migration_resolver'
 assert_contains "$default_output" '--enforce_prisma_migration_check'
+assert_contains "$default_output" 'runAsNonRoot: true'
+assert_contains "$default_output" 'runAsUser: 65534'
+assert_contains "$default_output" 'runAsGroup: 65534'
+assert_contains "$default_output" 'fsGroup: 65534'
+assert_contains "$default_output" 'helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded'
+assert_not_contains "$default_output" 'hook-failed'
+
+argocd_output="$(helm template litellm "$CHART_DIR" \
+  --namespace litellm \
+  --set migrationJob.hooks.helm.enabled=false \
+  --set migrationJob.hooks.argocd.enabled=true)"
+assert_contains "$argocd_output" 'argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded'
+assert_not_contains "$argocd_output" 'HookFailed'
+
+gcp_standard_output="$(helm template litellm "$CHART_DIR" \
+  --namespace litellm \
+  -f "$CHART_DIR/examples/values-gcp.yaml" \
+  -f "$CHART_DIR/examples/values-gcp-standard.yaml")"
+assert_contains "$gcp_standard_output" 'iam.gke.io/gke-metadata-server-enabled: "true"'
+
+safe_proxy_config_output="$(helm template litellm "$CHART_DIR" \
+  --namespace litellm \
+  --set 'litellm.proxy_config.model_list[0].model_name=safe' \
+  --set 'litellm.proxy_config.model_list[0].litellm_params.model=openai/gpt-4o' \
+  --set-string 'litellm.proxy_config.model_list[0].litellm_params.api_key=os.environ/OPENAI_API_KEY' \
+  --set-string 'litellm.proxy_config.model_list[0].litellm_params.input_cost_per_token=0.01')"
+assert_contains "$safe_proxy_config_output" 'api_key: os.environ/OPENAI_API_KEY'
+assert_contains "$safe_proxy_config_output" 'input_cost_per_token: "0.01"'
 
 private_registry_values=(
   --set 'litellm.imagePullSecrets[0].name=registry-creds'
@@ -170,8 +225,6 @@ expect_failure "invalid command" "litellm.command" \
   --set litellm.command=litellm
 expect_failure "invalid argument" "litellm.args.0" \
   --set 'litellm.args[0]=1'
-expect_failure "invalid priority class" "litellm.priorityClassName" \
-  --set litellm.priorityClassName=Bad_Name
 expect_failure "ServiceAccount token policy" "litellm.serviceAccount.create" \
   --set litellm.serviceAccount.create=false
 expect_failure "invalid ServiceAccount name" "litellm.serviceAccount.name" \
@@ -186,8 +239,14 @@ expect_failure "migration NetworkPolicy prerequisite" "pre-existing externally m
   --set networkPolicy.enabled=true
 expect_failure "ServiceMonitor authentication" "authorization.secretName" \
   --set serviceMonitor.enabled=true
+expect_failure "unknown ServiceMonitor namespace selector" "notARealField" \
+  --set serviceMonitor.namespaceSelector.notARealField=true
 expect_failure "external ConfigMap" "proxyConfigMap.name is required" \
   --set litellm.proxyConfigMap.create=false
+expect_failure "chart-owned ConfigMap key" "litellm.proxyConfigMap.key" \
+  --set litellm.proxyConfigMap.key=custom.yaml
+expect_failure "unsupported Deployment priority class" "litellm.priorityClassName is unsupported" \
+  --set litellm.priorityClassName=high-priority
 expect_failure "PDB availability" "set only one of litellm.pdb" \
   --set litellm.pdb.minAvailable=1
 expect_failure "invalid PDB availability" "litellm.pdb.maxUnavailable" \
@@ -203,6 +262,78 @@ expect_failure "KEDA without triggers" "litellm.keda.triggers" \
   --set litellm.keda.enabled=true
 expect_failure "plaintext secret" "cannot contain reserved or sensitive variable API_TOKEN" \
   --set litellm.envVars.API_TOKEN=secret
+expect_failure "plaintext proxy API key" "litellm.proxy_config.model_list[0].litellm_params.api_key must use os.environ/ENV_VAR" \
+  --set 'litellm.proxy_config.model_list[0].model_name=unsafe' \
+  --set 'litellm.proxy_config.model_list[0].litellm_params.model=openai/gpt-4o' \
+  --set-string 'litellm.proxy_config.model_list[0].litellm_params.api_key=sk-visible'
+expect_failure "plaintext nested credential" "litellm.proxy_config.model_list[0].litellm_params.vertex_credentials must use os.environ/ENV_VAR" \
+  --set 'litellm.proxy_config.model_list[0].model_name=unsafe' \
+  --set 'litellm.proxy_config.model_list[0].litellm_params.model=vertex_ai/gemini' \
+  --set-string 'litellm.proxy_config.model_list[0].litellm_params.vertex_credentials={"private_key":"visible"}'
+expect_failure "plaintext credential with external ConfigMap" "litellm.proxy_config.model_list[0].litellm_params.api_key must use os.environ/ENV_VAR" \
+  --set litellm.proxyConfigMap.create=false \
+  --set litellm.proxyConfigMap.name=external-config \
+  --set 'litellm.proxy_config.model_list[0].model_name=unused-but-persisted' \
+  --set 'litellm.proxy_config.model_list[0].litellm_params.model=openai/gpt-4o' \
+  --set-string 'litellm.proxy_config.model_list[0].litellm_params.api_key=sk-still-persisted'
+expect_failure "plaintext master key with external ConfigMap" "litellm.proxy_config.general_settings.master_key must use os.environ/ENV_VAR" \
+  --set litellm.proxyConfigMap.create=false \
+  --set litellm.proxyConfigMap.name=external-config \
+  --set-string 'litellm.proxy_config.general_settings.master_key=sk-still-persisted'
+expect_failure "plaintext authorization header" "litellm.proxy_config.model_list[0].litellm_params.extra_headers.Authorization must use os.environ/ENV_VAR" \
+  --set 'litellm.proxy_config.model_list[0].model_name=unsafe' \
+  --set 'litellm.proxy_config.model_list[0].litellm_params.model=openai/gpt-4o' \
+  --set-string 'litellm.proxy_config.model_list[0].litellm_params.extra_headers.Authorization=Bearer visible'
+expect_failure "malformed environment credential reference" "litellm.proxy_config.model_list[0].litellm_params.api_key must use os.environ/ENV_VAR" \
+  --set 'litellm.proxy_config.model_list[0].model_name=unsafe' \
+  --set 'litellm.proxy_config.model_list[0].litellm_params.model=openai/gpt-4o' \
+  --set-string 'litellm.proxy_config.model_list[0].litellm_params.api_key=os.environ/1INVALID'
+expect_failure "non-root pod policy" "litellm.podSecurityContext.runAsNonRoot" \
+  --set litellm.podSecurityContext.runAsNonRoot=false
+expect_failure "non-root container user" "litellm.securityContext.runAsUser" \
+  --set litellm.securityContext.runAsUser=0
+expect_failure "writable runtime filesystem" "litellm.securityContext.readOnlyRootFilesystem" \
+  --set litellm.securityContext.readOnlyRootFilesystem=true
+expect_failure "unknown NetworkPolicy rule field" "notARealNetworkPolicyField" \
+  --set networkPolicy.enabled=true \
+  --set networkPolicy.migration.managedExternally=true \
+  --set 'networkPolicy.ingress[0].notARealNetworkPolicyField=true'
+expect_failure "empty NetworkPolicy rule" "networkPolicy.ingress.0" \
+  --set networkPolicy.enabled=true \
+  --set networkPolicy.migration.managedExternally=true \
+  --set-json 'networkPolicy.ingress=[{}]'
+expect_failure "empty NetworkPolicy peer" "networkPolicy.ingress.0.from.0" \
+  --set networkPolicy.enabled=true \
+  --set networkPolicy.migration.managedExternally=true \
+  --set-json 'networkPolicy.ingress=[{"from":[{}]}]'
+expect_failure "unknown NetworkPolicy peer field" "notARealPeerField" \
+  --set networkPolicy.enabled=true \
+  --set networkPolicy.migration.managedExternally=true \
+  --set-json 'networkPolicy.ingress=[{"from":[{"notARealPeerField":true}]}]'
+expect_failure "unknown NetworkPolicy port field" "notARealPortField" \
+  --set networkPolicy.enabled=true \
+  --set networkPolicy.migration.managedExternally=true \
+  --set-json 'networkPolicy.ingress=[{"ports":[{"notARealPortField":true}]}]'
+expect_failure "invalid NetworkPolicy selector expression" "networkPolicy.ingress.0.from.0.podSelector.matchExpressions.0.values" \
+  --set networkPolicy.enabled=true \
+  --set networkPolicy.migration.managedExternally=true \
+  --set-json 'networkPolicy.ingress=[{"from":[{"podSelector":{"matchExpressions":[{"key":"app","operator":"In","values":[]}]}}]}]'
+expect_failure "mixed NetworkPolicy IP and selector peer" "networkPolicy.egress.0.to.0" \
+  --set networkPolicy.enabled=true \
+  --set networkPolicy.migration.managedExternally=true \
+  --set-json 'networkPolicy.egress=[{"to":[{"ipBlock":{"cidr":"10.0.0.0/8"},"namespaceSelector":{}}]}]'
+expect_failure "invalid IPv4 NetworkPolicy CIDR" "networkPolicy.egress.0.to.0.ipBlock.cidr" \
+  --set networkPolicy.enabled=true \
+  --set networkPolicy.migration.managedExternally=true \
+  --set-json 'networkPolicy.egress=[{"to":[{"ipBlock":{"cidr":"999.999.999.999/999"}}]}]'
+expect_failure "invalid IPv6 NetworkPolicy CIDR" "networkPolicy.egress.0.to.0.ipBlock.cidr" \
+  --set networkPolicy.enabled=true \
+  --set networkPolicy.migration.managedExternally=true \
+  --set-json 'networkPolicy.egress=[{"to":[{"ipBlock":{"cidr":"2001:db8::1/129"}}]}]'
+expect_failure "NetworkPolicy endPort bounds" "endPort cannot be less than port" \
+  --set networkPolicy.enabled=true \
+  --set networkPolicy.migration.managedExternally=true \
+  --set-json 'networkPolicy.egress=[{"ports":[{"protocol":"TCP","port":445,"endPort":443}]}]'
 expect_failure "runtime image digest" "litellm.image.tag" \
   --set litellm.image.tag=v1.85.1
 expect_failure "test image digest" "tests.image.tag" \
@@ -219,6 +350,7 @@ if [[ "${SKIP_PACKAGE:-false}" != "true" ]]; then
   package_contents="$(tar tzf "$package")"
   assert_contains "$package_contents" 'charts/litellm-helm/Chart.yaml'
   assert_contains "$package_contents" 'examples/values-gcp.yaml'
+  assert_contains "$package_contents" 'examples/values-gcp-standard.yaml'
 fi
 
 echo "Validated $CHART_DIR"

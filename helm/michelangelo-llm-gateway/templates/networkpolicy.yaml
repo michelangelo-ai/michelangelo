@@ -15,7 +15,7 @@ spec:
   {{- if or .Values.networkPolicy.ingress .Values.tests.enabled }}
   ingress:
     {{- with .Values.networkPolicy.ingress }}
-    {{- tpl (toYaml .) $ | nindent 4 }}
+    {{- toYaml . | nindent 4 }}
     {{- end }}
     {{- if .Values.tests.enabled }}
     - from:
@@ -47,7 +47,7 @@ spec:
           protocol: TCP
     {{- end }}
     {{- with .Values.networkPolicy.egress }}
-    {{- tpl (toYaml .) $ | nindent 4 }}
+    {{- toYaml . | nindent 4 }}
     {{- end }}
   {{- else }}
   egress: []

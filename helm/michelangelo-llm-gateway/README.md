@@ -22,15 +22,17 @@ This wrapper owns only behavior that the upstream chart cannot express safely:
 
 Cloud SQL, Redis, Secret Manager, External Secrets Operator, private DNS, TLS, provider infrastructure, dashboards, and alerts remain external.
 
-The prerelease wrapper intentionally does not fork upstream templates. LiteLLM 1.85.1 therefore does not expose `loadBalancerSourceRanges`, `externalTrafficPolicy`, `enableServiceLinks`, or `revisionHistoryLimit`. Apply source restrictions outside the Service, and address the missing Deployment hardening upstream before declaring this chart stable.
+The prerelease wrapper intentionally does not fork upstream templates. LiteLLM 1.85.1 therefore does not expose `loadBalancerSourceRanges`, `externalTrafficPolicy`, `enableServiceLinks`, `revisionHistoryLimit`, workload `priorityClassName`, HPA behavior, or safe sidecar injection. Apply source restrictions outside the Service and address required upstream gaps before declaring this chart stable.
 
 ## Prerequisites
 
 - Kubernetes 1.27 or newer.
 - Helm 3.17 or newer for installation, upgrades, and the filtered wrapper test.
+- kubeconform 0.8.0 for strict Kubernetes and operator-CRD validation.
 - An existing PostgreSQL database supported by LiteLLM 1.85.1.
 - Existing Kubernetes Secrets for the LiteLLM master key, salt key, database URL, and provider credentials.
 - At least one approved provider model.
+- GKE Workload Identity Federation enabled on the cluster and eligible node pools when using Vertex AI.
 
 ## Build the dependency
 
@@ -54,11 +56,17 @@ The defaults read three values from the existing `litellm-secrets` Secret:
 | `litellm.extraEnvVars[name=LITELLM_SALT_KEY]` | `LITELLM_SALT_KEY` |
 | `litellm.extraEnvVars[name=DATABASE_URL]` | `DATABASE_URL` |
 
-Use `valueFrom.secretKeyRef` for provider credentials and other sensitive environment variables. Do not put plaintext credentials in values files: Helm persists supplied values in the release Secret.
+Use `valueFrom.secretKeyRef` for provider credentials and other sensitive environment variables. Provider credential fields in `litellm.proxy_config` must use `os.environ/ENV_VAR`; the chart rejects plaintext values recursively. Do not put plaintext credentials anywhere in values files: Helm persists supplied values in the release Secret.
 
 The wrapper requires the dependency to create its ServiceAccount with token automount disabled. Add Workload Identity annotations through `litellm.serviceAccount.annotations`; do not replace it with an unmanaged ServiceAccount.
 
 The wrapper deliberately disables the upstream standalone PostgreSQL and Redis dependencies. Production data stores must be provisioned and operated separately.
+
+## Runtime security context
+
+The chart pins LiteLLM's official non-root image and runs both the proxy and migration Job as UID and GID `65534`. The pod and container security contexts are part of the wrapper contract: non-root execution, `RuntimeDefault` seccomp, disabled privilege escalation, and dropped Linux capabilities cannot be overridden.
+
+The image needs writable application cache and migration paths, so `readOnlyRootFilesystem` remains disabled. The chart otherwise satisfies the container-level Restricted Pod Security requirements; cluster policy and any injected platform resources must still be validated in the target environment.
 
 ## Configuration
 
@@ -108,7 +116,19 @@ helm upgrade --install litellm helm/michelangelo-llm-gateway \
   -f path/to/environment-values.yaml
 ```
 
-For GCP, copy `examples/values-gcp.yaml` and replace every `REPLACE_WITH_...` placeholder. The example uses a GKE internal LoadBalancer and Workload Identity.
+For GCP, copy `examples/values-gcp.yaml` and replace every `REPLACE_WITH_...` placeholder. The common example uses a GKE internal LoadBalancer and a Kubernetes ServiceAccount annotated for Workload Identity Federation.
+
+On Standard GKE, enable the GKE metadata server on every eligible node pool and apply the Standard placement overlay as a second values file:
+
+```bash
+helm upgrade --install litellm helm/michelangelo-llm-gateway \
+  --namespace litellm \
+  --create-namespace \
+  -f helm/michelangelo-llm-gateway/examples/values-gcp.yaml \
+  -f helm/michelangelo-llm-gateway/examples/values-gcp-standard.yaml
+```
+
+Grant the annotated Google Service Account `roles/iam.workloadIdentityUser` to `serviceAccount:PROJECT_ID.svc.id.goog[litellm/litellm]`, then grant that Google Service Account only the required Vertex AI permissions. Autopilot already enables the metadata server on every node and must not use the Standard-only node selector.
 
 ## Database migrations
 
@@ -140,11 +160,23 @@ migrationJob:
       enabled: false
 ```
 
-Migration hooks run before ordinary release resources. `migrationJob.serviceAccountName` must therefore name an existing ServiceAccount. Helm rollback does not reverse database schema changes; use backward-compatible migrations and maintain a tested database recovery path.
+Migration hooks run before ordinary release resources. `migrationJob.serviceAccountName` must therefore name an existing ServiceAccount. Failed migration Jobs are retained for diagnosis until their 24-hour TTL expires or the next hook attempt replaces them. Helm rollback does not reverse database schema changes; use backward-compatible migrations and maintain a tested database recovery path.
 
 ## Metrics
 
-The upstream ServiceMonitor is disabled because it cannot configure authentication. Enable the wrapper monitor with a dedicated LiteLLM metrics credential:
+The upstream ServiceMonitor is disabled because it cannot configure authentication. The wrapper ServiceMonitor references an existing Secret in the release namespace; it does not create or authorize the credential.
+
+After LiteLLM and its database are available, create a dedicated virtual key through the Management API using the master key:
+
+```bash
+curl --fail --show-error --silent \
+  --request POST "${LITELLM_URL}/key/generate" \
+  --header "Authorization: Bearer ${PROXY_MASTER_KEY}" \
+  --header 'Content-Type: application/json' \
+  --data '{"key_alias":"prometheus-scrape","allowed_routes":["/metrics"]}'
+```
+
+Store the returned `key` through the approved Secret Manager and External Secrets workflow as `litellm-metrics/token`, then enable the monitor:
 
 ```yaml
 serviceMonitor:
@@ -154,11 +186,11 @@ serviceMonitor:
     secretKey: token
 ```
 
-Chart-owned LiteLLM configuration must include the `prometheus` success callback when the ServiceMonitor is enabled. Restrict metrics access through network policy and platform routing.
+Chart-owned LiteLLM configuration must include the `prometheus` success callback when the ServiceMonitor is enabled. An arbitrary bearer token is not accepted. Rotate by provisioning a new LiteLLM key, updating the Secret, confirming a successful scrape, and then deleting the old key. The master key is a bootstrap-only fallback. Restrict metrics access through network policy and platform routing.
 
 ## NetworkPolicy
 
-The optional NetworkPolicy is deny-by-default apart from explicitly configured ingress, egress, DNS, and the wrapper test. Define database, provider, caller, observability, and metadata-server rules before enabling it.
+The optional NetworkPolicy is deny-by-default apart from explicitly configured ingress, egress, DNS, and the wrapper test. Rules are structurally validated and rendered literally; template expressions and empty allow-all rules are rejected. Define database, provider, caller, observability, and metadata-server rules before enabling it.
 
 Migration hooks run before this NetworkPolicy exists. Provision a matching migration policy externally, then acknowledge it with:
 
@@ -181,7 +213,11 @@ helm test litellm \
 ```
 
 > [!WARNING]
-> The upstream 1.85.1 chart contains unconditional test hooks with mutable public images, and one assumes Datadog-specific values. Always select the wrapper-owned test with `--filter`; do not run this release's tests unfiltered. This limitation should be removed after upstream provides configurable, disableable tests.
+> The upstream 1.85.1 chart contains unconditional test hooks with mutable public images, and one assumes Datadog-specific values. Unfiltered tests are unsupported. Always select the wrapper-owned test with `--filter`; it is digest-pinned and inherits `litellm.imagePullSecrets`. Failed wrapper tests remain available until the next test run so `--logs` and cluster events remain useful. This limitation can only be removed after upstream provides configurable, disableable tests or the wrapper deliberately owns a patched dependency.
+
+## Qualification status
+
+CI validates schemas, rendering, packaging, the pinned dependency, and image tag-to-digest and platform metadata. It does not replace live qualification. Before production, record successful GKE, Cloud SQL, External Secrets, Workload Identity, provider traffic, budget enforcement, metrics, telemetry, migration, upgrade, rollback, disruption, and uninstall tests for the exact chart and values release.
 
 ## Upgrade and uninstall
 

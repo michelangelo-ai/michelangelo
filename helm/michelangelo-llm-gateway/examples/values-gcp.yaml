@@ -1,3 +1,5 @@
+# Use this file alone on Autopilot. On Standard GKE, also apply
+# values-gcp-standard.yaml after enabling the metadata server on eligible nodes.
 litellm:
   serviceAccount:
     name: litellm

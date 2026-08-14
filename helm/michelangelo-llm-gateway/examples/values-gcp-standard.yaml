@@ -1,0 +1,5 @@
+# Apply this overlay with values-gcp.yaml on Standard GKE clusters.
+# Every eligible node pool must have GKE Workload Identity Federation enabled.
+litellm:
+  nodeSelector:
+    iam.gke.io/gke-metadata-server-enabled: "true"

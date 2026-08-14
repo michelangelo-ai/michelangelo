@@ -15,12 +15,12 @@ metadata:
   annotations:
     {{- if .Values.migrationJob.hooks.helm.enabled }}
     helm.sh/hook: pre-install,pre-upgrade
-    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded,hook-failed
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
     helm.sh/hook-weight: {{ .Values.migrationJob.hooks.helm.weight | quote }}
     {{- end }}
     {{- if .Values.migrationJob.hooks.argocd.enabled }}
     argocd.argoproj.io/hook: PreSync
-    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded,HookFailed
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
     {{- end }}
     {{- with .Values.migrationJob.annotations }}
     {{- toYaml . | nindent 4 }}
@@ -84,8 +84,5 @@ spec:
       {{- with .Values.litellm.tolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- with .Values.litellm.priorityClassName }}
-      priorityClassName: {{ . | quote }}
       {{- end }}
 {{- end }}

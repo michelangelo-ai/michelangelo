@@ -64,6 +64,7 @@ Michelangelo's Helm charts live in `helm/michelangelo/` for the control plane an
 | `helm/michelangelo/values-k3d.yaml` | Local k3d overrides for development |
 | `helm/michelangelo-llm-gateway/values.yaml` | LLM gateway wrapper defaults and pinned upstream values |
 | `helm/michelangelo-llm-gateway/examples/values-gcp.yaml` | LLM gateway GCP example |
+| `helm/michelangelo-llm-gateway/examples/values-gcp-standard.yaml` | Standard GKE Workload Identity placement overlay |
 | `helm/michelangelo-llm-gateway/README.md` | LLM gateway installation, security, and release guide |
 
 See the [Platform Setup guide](../../operator-guides/setup/platform-setup.md) for Helm configuration details.

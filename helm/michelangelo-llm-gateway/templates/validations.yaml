@@ -16,8 +16,8 @@
 {{- if .Values.litellm.serviceMonitor.enabled -}}
 {{- fail "litellm.serviceMonitor.enabled must remain false because the wrapper owns the authenticated ServiceMonitor" -}}
 {{- end -}}
-{{- if not (regexMatch "^v1\\.85\\.1@sha256:[a-fA-F0-9]{64}$" .Values.litellm.image.tag) -}}
-{{- fail "litellm.image.tag must pin v1.85.1 by sha256 digest" -}}
+{{- if ne .Values.litellm.image.tag "v1.85.1@sha256:97ce25938fc7f38f14a4036df78ba3d57725706b6183488af9931750e395c673" -}}
+{{- fail "litellm.image.tag must pin the qualified v1.85.1 non-root image digest" -}}
 {{- end -}}
 {{- if empty .Values.litellm.masterkeySecretName -}}
 {{- fail "litellm.masterkeySecretName is required" -}}
@@ -71,11 +71,16 @@
 {{- end -}}
 {{- end -}}
 
+{{- include "michelangelo-llm-gateway.validateProxyConfigSecrets" (dict "value" .Values.litellm.proxy_config "path" "litellm.proxy_config") -}}
 {{- if .Values.litellm.proxyConfigMap.create -}}
+{{- if ne .Values.litellm.proxyConfigMap.key "config.yaml" -}}
+{{- fail "litellm.proxyConfigMap.key must be config.yaml when create=true" -}}
+{{- end -}}
 {{- $generalSettings := default dict .Values.litellm.proxy_config.general_settings -}}
 {{- if ne (get $generalSettings "master_key") "os.environ/PROXY_MASTER_KEY" -}}
 {{- fail "litellm.proxy_config.general_settings.master_key must use os.environ/PROXY_MASTER_KEY" -}}
 {{- end -}}
+
 {{- if ne (get $generalSettings "disable_prisma_schema_update") true -}}
 {{- fail "litellm.proxy_config.general_settings.disable_prisma_schema_update must be true" -}}
 {{- end -}}
@@ -95,6 +100,19 @@
 {{- end -}}
 {{- if empty .Values.litellm.proxyConfigMap.key -}}
 {{- fail "litellm.proxyConfigMap.key is required when create=false" -}}
+{{- end -}}
+{{- end -}}
+
+{{- if hasKey .Values.litellm "priorityClassName" -}}
+{{- fail "litellm.priorityClassName is unsupported by the pinned upstream Deployment" -}}
+{{- end -}}
+{{- range $direction := list "ingress" "egress" -}}
+{{- range $ruleIndex, $rule := get $.Values.networkPolicy $direction -}}
+{{- range $portIndex, $port := default list $rule.ports -}}
+{{- if and (hasKey $port "endPort") (lt (int $port.endPort) (int $port.port)) -}}
+{{- fail (printf "networkPolicy.%s[%d].ports[%d].endPort cannot be less than port" $direction $ruleIndex $portIndex) -}}
+{{- end -}}
+{{- end -}}
 {{- end -}}
 {{- end -}}
 
@@ -143,6 +161,6 @@
 {{- if and (ne .Values.litellm.pdb.minAvailable nil) (ne .Values.litellm.pdb.maxUnavailable nil) -}}
 {{- fail "set only one of litellm.pdb.minAvailable and maxUnavailable" -}}
 {{- end -}}
-{{- if and .Values.tests.enabled (not (regexMatch "^[^@]+@sha256:[a-fA-F0-9]{64}$" .Values.tests.image.tag)) -}}
-{{- fail "tests.image.tag must include a sha256 digest" -}}
+{{- if and .Values.tests.enabled (ne .Values.tests.image.tag "8.12.1@sha256:94e9e444bcba979c2ea12e27ae39bee4cd10bc7041a472c4727a558e213744e6") -}}
+{{- fail "tests.image.tag must pin the qualified curl test image digest" -}}
 {{- end -}}

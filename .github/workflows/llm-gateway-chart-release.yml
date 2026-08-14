@@ -98,6 +98,17 @@ jobs:
       - name: Build dependency
         run: helm dependency build "$CHART_DIR"
 
+      - name: Install kubeconform
+        run: |
+          archive=/tmp/kubeconform-linux-amd64.tar.gz
+          curl --fail --location --silent --show-error \
+            --output "$archive" \
+            https://github.com/yannh/kubeconform/releases/download/v0.8.0/kubeconform-linux-amd64.tar.gz
+          echo "9bc2bffbf71f261128533edaf912153948b7ff238f9a531ae6d34466ec287883  $archive" | sha256sum --check
+          tar --extract --gzip --file "$archive" --directory /tmp kubeconform
+          sudo install --mode 0755 /tmp/kubeconform /usr/local/bin/kubeconform
+          kubeconform -v
+
       - name: Validate chart
         run: bash .github/scripts/validate-llm-gateway-chart.sh
 
