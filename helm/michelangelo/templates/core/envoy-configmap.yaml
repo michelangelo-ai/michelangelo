@@ -1,4 +1,8 @@
 {{- if .Values.envoy.enabled }}
+{{- $transcoderServices := .Files.Get "files/transcoder-services.json" | mustFromJson }}
+{{- if not $transcoderServices }}
+{{- fail "helm/michelangelo/files/transcoder-services.json is missing, empty, or malformed. Regenerate it with tools/gen-grpc-client.sh and commit the result — without it the grpc_json_transcoder allowlist would silently render empty and no gRPC service would transcode." }}
+{{- end }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -55,7 +59,7 @@ data:
                           # descriptor set as proto_descriptor above, so it can't
                           # drift from the services the client is built against.
                           services:
-                            {{- range (.Files.Get "files/transcoder-services.json" | fromJsonArray) }}
+                            {{- range $transcoderServices }}
                             - {{ . | quote }}
                             {{- end }}
                           # Generate POST /{service}/{method} bindings for every
