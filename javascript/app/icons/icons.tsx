@@ -16,6 +16,7 @@ import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import KeyboardBackspaceIcon from '@mui/icons-material/KeyboardBackspace';
 import Launch from '@mui/icons-material/Launch';
+import LightbulbIcon from '@mui/icons-material/Lightbulb';
 import MenuIcon from '@mui/icons-material/Menu';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
@@ -45,6 +46,7 @@ export const ICONS = {
   deleteAlt: createMuiIconAdapter(CancelIcon),
   diamondEmpty: createMuiIconAdapter(CropSquareIcon),
   stopCircle: createMuiIconAdapter(StopCircleIcon),
+  lightbulb: createMuiIconAdapter(LightbulbIcon),
   menu: createMuiIconAdapter(MenuIcon),
   overflowMenu: createMuiIconAdapter(MoreVertIcon),
   playerNext: createMuiIconAdapter(SkipNextIcon),

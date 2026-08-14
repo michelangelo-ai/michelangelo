@@ -6,7 +6,7 @@ import type { PhaseConfig } from '#core/types/common/studio-types';
 
 export const EXPERIMENT_PRODUCTIONIZE_PHASE: PhaseConfig = {
   id: 'retrain',
-  icon: 'rocket',
+  icon: 'lightbulb',
   name: 'Experiment & Productionize',
   description: 'Experiment with pipelines and productionize your machine learning workflows',
   state: 'active' as const,
