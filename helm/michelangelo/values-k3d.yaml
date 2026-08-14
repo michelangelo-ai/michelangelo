@@ -87,6 +87,7 @@ controllermgr:
           pathPrefix: log
           s3DisableSSL: true
           logURLFormat: "http://localhost:9090/browser/{{.Bucket}}/{{.PathPrefix}}/{{.ClusterName}}_{{.RayLocalNamespace}}/"
+        rayJobTTLSeconds: 1800
 
 
 

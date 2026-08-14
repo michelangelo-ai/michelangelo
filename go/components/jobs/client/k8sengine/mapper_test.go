@@ -114,7 +114,7 @@ func TestMapper_MapGlobalJobToLocal(t *testing.T) {
 						"ray.io/cluster":      rayCluster.Name,
 						"rayClusterNamespace": RayLocalNamespace,
 					},
-					TTLSecondsAfterFinished:  int32(300),
+					TTLSecondsAfterFinished:  int32(1800),
 					ShutdownAfterJobFinishes: true,
 					SubmitterPodTemplate:     submitterPod,
 				},
@@ -172,6 +172,30 @@ func TestMapper_MapGlobalJobToLocal(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestMapper_MapGlobalJobToLocal_CustomTTL(t *testing.T) {
+	m := Mapper{RayJobTTLSeconds: 3600}
+
+	headPod := &corev1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"role": "head"}}}
+	submitterPod := headPod.DeepCopy()
+	submitterPod.Spec.RestartPolicy = corev1.RestartPolicyNever
+
+	rayJob := &v2pb.RayJob{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-job"},
+		Spec:       v2pb.RayJobSpec{Entrypoint: "python main.py"},
+	}
+	rayCluster := &v2pb.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
+		Spec: v2pb.RayClusterSpec{
+			Head: &v2pb.RayHeadSpec{Pod: headPod},
+		},
+	}
+
+	lj, err := m.MapGlobalJobToLocal(rayJob, rayCluster, nil)
+	require.NoError(t, err)
+	rayV1Job := lj.(*rayv1.RayJob)
+	assert.Equal(t, int32(3600), rayV1Job.Spec.TTLSecondsAfterFinished)
 }
 
 func TestMapper_MapGlobalJobClusterToLocal(t *testing.T) {

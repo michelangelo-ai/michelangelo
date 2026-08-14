@@ -445,6 +445,10 @@ controllermgr:
           # Example (sandbox MinIO console): "http://localhost:9090/browser/{{.Bucket}}/{{.PathPrefix}}/{{.ClusterName}}_{{.RayLocalNamespace}}/"
           logURLFormat: ""
 
+        # Seconds to keep the RayCluster alive after job finishes (for collector flush + quick debugging).
+        # Log persistence ships logs to S3 in near-real-time; this TTL is just the safety window.
+        rayJobTTLSeconds: 1800
+
   resources: {}
 
 # -----------------------------------------------------------------------------

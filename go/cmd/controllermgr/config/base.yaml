@@ -63,6 +63,7 @@ jobs:
         # {{.RayLocalNamespace}}. Sandbox default points at the in-cluster MinIO
         # console; production overlays point at OCI Object Storage / S3 console.
         logURLFormat: "http://localhost:9090/browser/{{.Bucket}}/{{.PathPrefix}}/{{.ClusterName}}_{{.RayLocalNamespace}}/"
+      rayJobTTLSeconds: 1800
 
 minio:
   awsRegion: us-east-1

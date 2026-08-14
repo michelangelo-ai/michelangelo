@@ -73,10 +73,11 @@ data:
       {{- fail (printf "workflow.engine must be 'cadence' or 'temporal', got: %s" .Values.workflow.engine) }}
       {{- end }}
 
-    {{- with .Values.controllermgr.jobs.k8sengine.mapper.logPersistence }}
     jobs:
       k8sengine:
         mapper:
+          rayJobTTLSeconds: {{ .Values.controllermgr.jobs.k8sengine.mapper.rayJobTTLSeconds | default 1800 }}
+    {{- with .Values.controllermgr.jobs.k8sengine.mapper.logPersistence }}
           logPersistence:
             enabled: {{ .enabled }}
             storageEndpoint: {{ .storageEndpoint | default $.Values.objectStorage.endpoint | quote }}

@@ -7,5 +7,6 @@ import "go.uber.org/fx"
 // client.Module so the consumer/impl boundary stays explicit.
 var Module = fx.Options(
 	fx.Provide(NewLogPersistenceConfig),
+	fx.Provide(NewMapperConfig),
 	fx.Provide(NewMapper),
 )

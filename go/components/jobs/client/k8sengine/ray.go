@@ -57,7 +57,7 @@ func (m Mapper) mapRay(rayJob *v2pb.RayJob, jobClusterObject runtime.Object, clu
 				"rayClusterNamespace": RayLocalNamespace,
 			},
 			Entrypoint:               rayJob.Spec.Entrypoint,
-			TTLSecondsAfterFinished:  int32(300),
+			TTLSecondsAfterFinished:  m.getRayJobTTL(),
 			ShutdownAfterJobFinishes: true,
 			// Right-size the submitter pod rather than cloning the head. The submitter
 			// only runs `ray job submit` against the existing cluster, so it gets modest
@@ -154,6 +154,13 @@ func (m Mapper) mapRayCluster(rayCluster *v2pb.RayCluster) (runtime.Object, erro
 		},
 	}
 	return rayV1Cluster, nil
+}
+
+func (m Mapper) getRayJobTTL() int32 {
+	if m.RayJobTTLSeconds > 0 {
+		return m.RayJobTTLSeconds
+	}
+	return 1800
 }
 
 func getHeadGroupSpec(head *v2pb.RayHeadSpec) rayv1.HeadGroupSpec {

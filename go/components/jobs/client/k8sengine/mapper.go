@@ -15,8 +15,9 @@ import (
 
 // Mapper helps to map global to local crds and vice versa
 type Mapper struct {
-	LogPersistence LogPersistenceConfig
-	logURLTemplate *template.Template
+	LogPersistence   LogPersistenceConfig
+	RayJobTTLSeconds int32
+	logURLTemplate   *template.Template
 }
 
 // MapperResult has Mapper result
@@ -29,6 +30,12 @@ type MapperResult struct {
 const _mapperName = "k8sengineMapper"
 
 const logPersistenceConfigKey = "jobs.k8sengine.mapper.logPersistence"
+const mapperConfigKey = "jobs.k8sengine.mapper"
+
+// MapperConfig holds top-level mapper configuration loaded from YAML.
+type MapperConfig struct {
+	RayJobTTLSeconds int32 `yaml:"rayJobTTLSeconds"`
+}
 
 // NewLogPersistenceConfig loads LogPersistenceConfig from YAML config provider.
 func NewLogPersistenceConfig(provider config.Provider) (LogPersistenceConfig, error) {
@@ -41,17 +48,28 @@ func NewLogPersistenceConfig(provider config.Provider) (LogPersistenceConfig, er
 	return conf, nil
 }
 
+// NewMapperConfig loads MapperConfig from YAML config provider.
+func NewMapperConfig(provider config.Provider) (MapperConfig, error) {
+	conf := MapperConfig{}
+	err := provider.Get(mapperConfigKey).Populate(&conf)
+	if err != nil {
+		return MapperConfig{}, nil
+	}
+	return conf, nil
+}
+
 // NewMapper constructs the Mapper. Panics if LogURLFormat is set but does not
 // parse as a valid Go text/template — config errors should fail at startup.
-func NewMapper(logPersistence LogPersistenceConfig) MapperResult {
+func NewMapper(logPersistence LogPersistenceConfig, mapperConfig MapperConfig) MapperResult {
 	var tmpl *template.Template
 	if logPersistence.Enabled && logPersistence.LogURLFormat != "" {
 		tmpl = template.Must(template.New("logURL").Parse(logPersistence.LogURLFormat))
 	}
 	return MapperResult{
 		Mapper: Mapper{
-			LogPersistence: logPersistence,
-			logURLTemplate: tmpl,
+			LogPersistence:   logPersistence,
+			RayJobTTLSeconds: mapperConfig.RayJobTTLSeconds,
+			logURLTemplate:   tmpl,
 		},
 	}
 }
