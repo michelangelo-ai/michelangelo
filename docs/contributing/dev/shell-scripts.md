@@ -41,17 +41,13 @@ See [Protocol Buffers](protobuf.md) for the full code generation workflow.
 tools/gen-descriptors.sh [output-dir]
 ```
 
-This script builds `helm/michelangelo/files/descriptors.pb`. Envoy's `grpc_json_transcoder` filter reads this file. It is a compiled proto `FileDescriptorSet`.
+Builds `helm/michelangelo/files/descriptors.pb`, the compiled proto `FileDescriptorSet` Envoy's `grpc_json_transcoder` filter reads to resolve message and enum names. It runs `bazel build //proto/api/v2:v2_proto` — the same compile step `gen-proto-go.sh` uses — so it needs no network access and produces a byte-identical file on repeat runs.
 
-The script runs `bazel build //proto/api/v2:v2_proto`. This is the same compile step `gen-proto-go.sh` uses. It needs no network access, and repeat runs produce a byte-identical file.
+It also writes `transcoder-services.json`: the services `javascript/packages/rpc/services.ts` actually imports, matched against the descriptor set. This list is deliberately narrower than every service under `proto/api` — Envoy exposes anything on it over plain JSON/HTTP, so a Go-only service shouldn't become web-reachable just because its proto compiles. The script fails if a `services.ts` import doesn't resolve to a real service, or if `services.ts` references none at all.
 
-The script also writes `transcoder-services.json`. This file lists the services that `javascript/packages/rpc/services.ts` actually imports, matched against the descriptor set. It is not a list of every service under `proto/api`. Envoy's transcoder exposes any service on this list over plain JSON/HTTP, so the list must stay narrow: a Go-only service should not become web-reachable just because its proto compiles.
+**Run this on every proto change**, even one that looks Go-only or JS-only — `descriptors.pb` covers the whole proto tree in one file, so a change to a shared type can affect how an already-used service resolves. CI enforces this in `main.yml`'s `dirty-check` job.
 
-The script fails if a `services.ts` import does not resolve to a real proto service. It also fails if `services.ts` references no services at all.
-
-**Run this script on every proto change**, even one that looks Go-only or JS-only. `descriptors.pb` covers the whole proto tree in one file. A change to a shared type can affect how an already-used service resolves, even if its own proto file wasn't touched. CI enforces this check in `main.yml`'s `dirty-check` job, on every `proto/**` or `go/**` change.
-
-Both `descriptors.pb` and `transcoder-services.json` are committed files, not build output. `helm install` never runs Bazel or buf. As a last-resort check, the Envoy ConfigMap template fails at `helm template`/`lint`/`install` time if `transcoder-services.json` is missing, empty, or malformed.
+Both files are committed, not build output — `helm install` never runs Bazel or buf. As a last-resort check, the Envoy ConfigMap template fails at render time if `transcoder-services.json` is missing, empty, or malformed.
 
 ## check-transcoder-services.sh
 
@@ -59,7 +55,7 @@ Both `descriptors.pb` and `transcoder-services.json` are committed files, not bu
 tools/check-transcoder-services.sh
 ```
 
-This script is a narrow backstop. It runs `gen-descriptors.sh` into a scratch directory, then compares the result against the committed files. It exists because `main.yml`'s `dirty-check` job does not run on `javascript/**`-only changes. Without this check, a `services.ts` edit with no proto change could slip through uncaught. Run it locally to reproduce a CI failure.
+A narrow backstop: it runs `gen-descriptors.sh` into a scratch directory and diffs the result against the committed files. It exists because `main.yml`'s `dirty-check` doesn't run on `javascript/**`-only changes — without it, a `services.ts` edit with no proto change would slip through uncaught. Run it locally to reproduce a CI failure.
 
 ## grpc-svc-gen.sh
 
