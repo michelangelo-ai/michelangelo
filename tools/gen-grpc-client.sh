@@ -111,18 +111,9 @@ EOF
 buf dep update "${TMP_DIR}"
 buf generate --template "${TMP_DIR}/buf.gen.yaml" "${TMP_DIR}" -o "${TMP_DIR}"
 
-# build a FileDescriptorSet so Envoy's grpc_json_transcoder filter can
-# transcode JSON<->binary proto without any Go-side jsonpb involvement
-mkdir -p "${WORKSPACE_ROOT}/helm/michelangelo/files"
-buf build "${TMP_DIR}" --exclude-source-info -o "${WORKSPACE_ROOT}/helm/michelangelo/files/descriptors.pb"
-
-# derive the grpc_json_transcoder allowlist from the same descriptor set,
-# so it can never drift from the services the client actually generates for
-buf build "${TMP_DIR}" --exclude-source-info -o "${TMP_DIR}/descriptors.json"
-jq -r '
-  [.file[] | select(.service != null) | .package as $pkg | .service[] | "\($pkg).\(.name)"]
-  | sort
-' "${TMP_DIR}/descriptors.json" > "${WORKSPACE_ROOT}/helm/michelangelo/files/transcoder-services.json"
+# build the FileDescriptorSet + grpc_json_transcoder services allowlist that
+# the Envoy ConfigMap templates read at `helm template`/`helm install` time
+"${WORKSPACE_ROOT}/tools/gen-descriptors.sh" "${WORKSPACE_ROOT}/helm/michelangelo/files"
 
 # copy generated code to requesting client directories
 IFS=',' read -ra CLIENT_ARRAY <<< "$CLIENTS"
