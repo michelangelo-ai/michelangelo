@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'proto/**'
+      - 'javascript/packages/rpc/services.ts'
       - 'helm/michelangelo/files/**'
       - 'tools/gen-descriptors.sh'
       - 'tools/check-transcoder-services.sh'
@@ -12,6 +13,7 @@ on:
       - main
     paths:
       - 'proto/**'
+      - 'javascript/packages/rpc/services.ts'
       - 'helm/michelangelo/files/**'
       - 'tools/gen-descriptors.sh'
       - 'tools/check-transcoder-services.sh'
