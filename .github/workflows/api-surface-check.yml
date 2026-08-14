@@ -213,6 +213,78 @@ jobs:
             });
 
   # ---------------------------------------------------------------------------
+  # Generated proto artifacts — detect a stale descriptors.pb / JS client
+  # ---------------------------------------------------------------------------
+  # descriptors.pb is the FileDescriptorSet Envoy's grpc_json_transcoder uses
+  # to convert JSON<->binary proto (see envoy-configmap.yaml). If it isn't
+  # regenerated after a .proto change, Envoy can't resolve names for newly
+  # added enum values and falls back to printing them as raw numbers instead
+  # of their string names. Same risk applies to the generated JS RPC client.
+  descriptor-freshness-check:
+    name: Generated Proto Artifacts Freshness (advisory)
+    needs: filter
+    if: needs.filter.outputs.proto == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up buf
+        uses: bufbuild/buf-setup-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Regenerate descriptors.pb and JS client
+        run: tools/gen-grpc-client.sh --clients javascript
+
+      - name: Check for drift
+        id: drift-check
+        run: |
+          output=$(git status --porcelain -- helm/michelangelo/files/descriptors.pb javascript/packages/rpc/gen)
+          echo "HAS_DRIFT=$([ -n "$output" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          {
+            echo "DRIFT_OUTPUT<<DRIFT_EOF"
+            echo "$output"
+            echo "DRIFT_EOF"
+          } >> "$GITHUB_ENV"
+
+      - name: Post drift comment
+        if: steps.drift-check.outputs.HAS_DRIFT == 'true'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const output = process.env.DRIFT_OUTPUT || '(none)';
+            const body = [
+              '### Generated Proto Artifacts Freshness (advisory)',
+              '',
+              '`helm/michelangelo/files/descriptors.pb` and/or `javascript/packages/rpc/gen` are out of',
+              'date with the `.proto` changes in this PR. Regenerate them with:',
+              '',
+              '```',
+              'tools/gen-grpc-client.sh',
+              '```',
+              '',
+              'and commit the result. A stale `descriptors.pb` means Envoy may not recognize new enum',
+              'values and will fall back to printing them as raw numbers instead of string names.',
+              '',
+              '```',
+              output,
+              '```',
+              '',
+              '_This check is advisory and does not block merge._',
+            ].join('\n');
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body,
+            });
+
+  # ---------------------------------------------------------------------------
   # Helm values — detect removed or renamed top-level keys
   # ---------------------------------------------------------------------------
   helm-values-check:
