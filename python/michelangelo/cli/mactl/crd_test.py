@@ -459,7 +459,10 @@ class RenderHelpersTest(TestCase):
         """
         from michelangelo.cli.mactl.crd import _render_single_item
 
+        # Non-wrapper message: single field but scalar-typed → no unwrap.
         msg = self._mock_item("ns", "x")
+        msg.DESCRIPTOR = Mock()
+        msg.DESCRIPTOR.fields = []
         _render_single_item(msg, "table")
 
         mock_print.assert_called_once_with([msg], extra_columns=())
@@ -471,9 +474,34 @@ class RenderHelpersTest(TestCase):
 
         extras = [{"column_name": "OWNER", "retrieve_func": lambda m: "u"}]
         msg = self._mock_item("ns", "x")
+        msg.DESCRIPTOR = Mock()
+        msg.DESCRIPTOR.fields = []
         _render_single_item(msg, "table", extra_columns=extras)
 
         mock_print.assert_called_once_with([msg], extra_columns=extras)
+
+    @patch("michelangelo.cli.mactl.crd.print_list_formatted")
+    def test_render_single_item_table_unwraps_wrapper_response(self, mock_print):
+        """GetXxxResponse (one message-typed field) is unwrapped for the table.
+
+        `_get` returns e.g. `GetPipelineResponse` with a single `pipeline`
+        field. The table formatter expects the resource itself so it can
+        read `metadata.namespace`.
+        """
+        from michelangelo.cli.mactl.crd import _render_single_item
+
+        inner = self._mock_item("ns", "x")
+        wrapper = Mock()
+        wrapper.DESCRIPTOR = Mock()
+        field = Mock()
+        field.name = "pipeline"
+        field.message_type = Mock()  # truthy → treated as message field
+        wrapper.DESCRIPTOR.fields = [field]
+        wrapper.pipeline = inner
+
+        _render_single_item(wrapper, "table")
+
+        mock_print.assert_called_once_with([inner], extra_columns=())
 
 
 class DeleteFuncImplTest(TestCase):

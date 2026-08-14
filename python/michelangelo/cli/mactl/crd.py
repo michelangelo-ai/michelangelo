@@ -512,6 +512,21 @@ def _render_list_items(
         print_list_formatted(items, extra_columns=extra_columns)
 
 
+def _unwrap_single_field_response(msg: Message) -> Message:
+    """Return the inner resource from a single-field wrapper response.
+
+    `GetXxxResponse` messages wrap the resource in one message-typed field
+    (e.g. `GetPipelineResponse.pipeline`). The table formatter needs the
+    resource itself so it can read `metadata.namespace` and friends. Non-
+    wrapper messages (already the resource, or a shape we don't recognize)
+    pass through unchanged.
+    """
+    fields = msg.DESCRIPTOR.fields
+    if len(fields) == 1 and fields[0].message_type is not None:
+        return getattr(msg, fields[0].name)
+    return msg
+
+
 def _render_single_item(
     msg: Message,
     output_format: str,
@@ -533,7 +548,9 @@ def _render_single_item(
     elif output_format == "json":
         print(MessageToJson(msg, preserving_proto_field_name=True))
     else:
-        print_list_formatted([msg], extra_columns=extra_columns)
+        print_list_formatted(
+            [_unwrap_single_field_response(msg)], extra_columns=extra_columns
+        )
 
 
 def _resolve_criteria(spec, bound_args: dict, arg_dest: str) -> list[Criterion]:
