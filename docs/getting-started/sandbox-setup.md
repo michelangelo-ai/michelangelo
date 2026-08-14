@@ -253,6 +253,19 @@ For the full story on local vs. remote execution, building Docker images, config
 
 ---
 
+## Optional: set a custom dev identity
+
+The UI shows a placeholder "Local Developer" user (name, email, and avatar) in the nav bar. To swap in your own GitHub name, email, and photo, get the URL to open from:
+
+```bash
+cd <repo-root>/javascript/app
+yarn set-avatar <your-github-username>
+```
+
+Open the printed URL once in your browser — it looks like `http://localhost:8090/?ghUser=<username>`. On that first visit, the app fetches your public GitHub profile (`https://api.github.com/users/<username>`, no auth needed) and caches your name, email, and avatar in your browser's `localStorage`, so **no UI rebuild or backend restart is needed**: after that first visit, a normal page reload keeps showing them. If GitHub doesn't expose a public email, it falls back to `<username>@users.noreply.github.com`. This works the same way against the sandbox UI (`localhost:8090`) or the local `yarn dev` server. Leave it unset for the default placeholder identity.
+
+---
+
 ## Troubleshooting
 
 ### `command not found: ma`
