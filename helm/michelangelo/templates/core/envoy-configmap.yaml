@@ -89,8 +89,9 @@ data:
                             # Envoy upgrade. Values Envoy's proto_descriptor
                             # doesn't recognize (e.g. a stale descriptors.pb)
                             # still fall back to numbers regardless of this
-                            # setting — see the descriptor-freshness-check CI
-                            # job in api-surface-check.yml.
+                            # setting — see the "Check transcoder descriptor
+                            # artifacts are up to date" dirty-check step in
+                            # main.yml.
                             always_print_enums_as_ints: false
                       - name: envoy.filters.http.cors
                         typed_config:
