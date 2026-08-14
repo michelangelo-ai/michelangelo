@@ -1,0 +1,17 @@
+[
+  "michelangelo.api.v2.CachedOutputService",
+  "michelangelo.api.v2.ClusterService",
+  "michelangelo.api.v2.DeploymentService",
+  "michelangelo.api.v2.EvaluationReportService",
+  "michelangelo.api.v2.InferenceServerService",
+  "michelangelo.api.v2.ModelFamilyService",
+  "michelangelo.api.v2.ModelService",
+  "michelangelo.api.v2.PipelineRunService",
+  "michelangelo.api.v2.PipelineService",
+  "michelangelo.api.v2.ProjectService",
+  "michelangelo.api.v2.RayClusterService",
+  "michelangelo.api.v2.RayJobService",
+  "michelangelo.api.v2.RevisionService",
+  "michelangelo.api.v2.SparkJobService",
+  "michelangelo.api.v2.TriggerRunService"
+]

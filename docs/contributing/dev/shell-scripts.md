@@ -63,6 +63,8 @@ tools/gen-grpc-client.sh
 
 Generates gRPC client stubs for Python and JavaScript from the compiled proto definitions. Run this after proto changes when client-side stubs need to be regenerated.
 
+It also regenerates `helm/michelangelo/files/descriptors.pb` and `helm/michelangelo/files/transcoder-services.json`, which the Envoy `grpc_json_transcoder` filter's ConfigMap templates read at `helm template`/`helm install` time. Commit both alongside the client stub changes so the chart's transcoder allowlist stays in sync with the services the client is built against.
+
 ## goimports
 
 ```bash
