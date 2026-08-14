@@ -1,4 +1,4 @@
-import { getIn, setIn } from 'final-form';
+import { deleteByPath, getByPath } from '#core/components/form/utils/object-path';
 
 import type { FormConfig, LayoutItem } from '#core/components/form/types/config-types';
 
@@ -21,7 +21,7 @@ function stripHiddenConditions<T extends Record<string, unknown>>(
   return layout.reduce((acc, item) => {
     if (typeof item === 'string') return acc;
 
-    if (item.type === 'condition' && getIn(acc, item.when) !== item.is) {
+    if (item.type === 'condition' && getByPath(acc, item.when) !== item.is) {
       return stripFieldNames(item.items, acc);
     }
 
@@ -32,8 +32,7 @@ function stripHiddenConditions<T extends Record<string, unknown>>(
 function stripFieldNames<T extends Record<string, unknown>>(layout: LayoutItem[], values: T): T {
   return layout.reduce((acc, item) => {
     if (typeof item === 'string') {
-      // cast: setIn's return type is `object`; it always returns a value of the same shape as `acc`
-      return (setIn(acc, item, undefined) ?? {}) as T;
+      return deleteByPath(acc, item);
     }
 
     return stripFieldNames(item.items, acc);
