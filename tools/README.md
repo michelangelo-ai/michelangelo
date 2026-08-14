@@ -23,9 +23,9 @@ Scripts in the root `tools/` directory are for **development purposes** and may 
 - **`goimports`** - Go import formatter
 - **`mamockgen`** - Mock generator for Michelangelo AI
 - **`grpc-svc-gen.sh`** - gRPC service generator
-- **`gen-grpc-client.sh`** - gRPC client generator
+- **`gen-grpc-client.sh`** - gRPC client generator; run automatically by `yarn generate`/`prebuild`/`setup` in `javascript/`
 - **`gen-descriptors.sh`** - Builds the proto descriptor set + `grpc_json_transcoder` services allowlist consumed by the Helm chart (called by `gen-grpc-client.sh`)
-- **`check-transcoder-services.sh`** - CI check verifying the transcoder services allowlist matches `proto/api`
+- **`check-transcoder-services.sh`** - CI backstop verifying the transcoder services allowlist is up to date, for proto changes that bypass `yarn generate`
 - **`run_ruff.sh`** - Python linter runner
 - **`assert_python_version.py`** - Python version checker
 - **`utils.py`** - Common utilities

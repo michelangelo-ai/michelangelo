@@ -14,8 +14,9 @@ Shell scripts in `tools/` automate code generation and development workflows. Th
 | Script | Purpose | When to run |
 |--------|---------|-------------|
 | `tools/gen-proto-go.sh` | Regenerates `proto-go/` from `.proto` sources | After any `.proto` file change |
-| `tools/gen-grpc-client.sh` | Generates gRPC client code (Python and JavaScript) from protobuf files | After proto changes that affect client stubs |
-| `tools/check-transcoder-services.sh` | Verifies `helm/michelangelo/files/transcoder-services.json` matches the services declared under `proto/api` | Run in CI on any `proto/**` or `helm/michelangelo/files/**` change; run locally to debug a CI failure |
+| `tools/gen-grpc-client.sh` | Generates gRPC client code (Python and JavaScript) from protobuf files; also regenerates the Envoy transcoder's descriptor set and services allowlist | After proto changes that affect client stubs — but you rarely run this directly, see below |
+| `tools/gen-descriptors.sh` | Builds `helm/michelangelo/files/descriptors.pb` + `transcoder-services.json` from `proto/api` (called by `gen-grpc-client.sh`) | Not run directly; invoked by `gen-grpc-client.sh` and `check-transcoder-services.sh` |
+| `tools/check-transcoder-services.sh` | Verifies `helm/michelangelo/files/transcoder-services.json` is what `gen-descriptors.sh` would produce right now | CI backstop on any `proto/**` or `helm/michelangelo/files/**` change; run locally to reproduce a CI failure |
 | `tools/grpc-svc-gen.sh [Entity]` | Scaffolds a new gRPC service definition for a CRD type | When adding a new API resource |
 | `tools/gazelle` | Updates Bazel BUILD files for Go packages and proto targets | After adding/removing Go files or proto definitions |
 | `tools/goimports` | Bazel wrapper that runs goimports for Go import formatting | When reformatting Go imports |
@@ -62,11 +63,22 @@ See [Bazel Build System](bazel.md) for context on when to run Gazelle.
 tools/gen-grpc-client.sh
 ```
 
-Generates gRPC client stubs for Python and JavaScript from the compiled proto definitions. Run this after proto changes when client-side stubs need to be regenerated.
+Generates gRPC client stubs for Python and JavaScript from the compiled proto definitions, and (via `tools/gen-descriptors.sh`) regenerates `helm/michelangelo/files/descriptors.pb` and `helm/michelangelo/files/transcoder-services.json` — the Envoy `grpc_json_transcoder` filter's proto descriptor set and services allowlist.
 
-It also regenerates `helm/michelangelo/files/descriptors.pb` and `helm/michelangelo/files/transcoder-services.json` (via `tools/gen-descriptors.sh`), which the Envoy `grpc_json_transcoder` filter's ConfigMap templates read at `helm template`/`helm install` time. Commit both alongside the client stub changes so the chart's transcoder allowlist stays in sync with the services the client is built against.
+**You rarely need to run this directly.** `javascript/package.json` wires it in as `yarn generate`, which runs automatically as a `prebuild` and `setup` script — so `yarn build`, `yarn dev` (via prebuild on first install), and `yarn setup` all regenerate these files as a side effect whenever you have a JS dev loop running, without you needing to know they exist. If you only touched Go code and never run a JS command, run `tools/gen-grpc-client.sh` (or just `tools/gen-descriptors.sh`, which skips the Python/JS stub codegen) manually and commit the result alongside the proto change.
 
-Both files are committed generated artifacts, not build-time output — `helm install` never invokes buf, so the chart works from a plain checkout without the buf toolchain. The Envoy ConfigMap template fails fast (`fail` in the template) if `transcoder-services.json` is missing, empty, or malformed, and the "Transcoder services check" CI workflow re-derives the expected service list directly from `proto/api/**/*.proto` and fails the PR if it doesn't match the committed file — so a proto change without a `gen-grpc-client.sh` re-run can't merge silently.
+Both `descriptors.pb` and `transcoder-services.json` are committed generated artifacts, not build-time output — `helm install` never invokes buf, so the chart works from a plain checkout without the buf toolchain. Two independent backstops guard against them going stale or missing:
+
+- The Envoy ConfigMap template fails fast (`fail` in the template) at `helm template`/`lint`/`install` time if `transcoder-services.json` is missing, empty, or malformed.
+- The "Transcoder services check" CI workflow runs `tools/check-transcoder-services.sh` on every `proto/**` or `helm/michelangelo/files/**` change, for proto edits that never touch `javascript/` (so `yarn generate` never runs) or a hand-edited generated file.
+
+## gen-descriptors.sh
+
+```bash
+tools/gen-descriptors.sh [output-dir]
+```
+
+Builds `descriptors.pb` + `transcoder-services.json` from `proto/api` into `output-dir` (default `helm/michelangelo/files`). This is the shared implementation `gen-grpc-client.sh` and `check-transcoder-services.sh` both call — you normally don't invoke it directly, but it's useful standalone if you only need the Helm chart files regenerated without the Python/JS client stub codegen.
 
 ## check-transcoder-services.sh
 
@@ -74,7 +86,7 @@ Both files are committed generated artifacts, not build-time output — `helm in
 tools/check-transcoder-services.sh
 ```
 
-Parses `package`/`service` declarations out of `proto/api/**/*.proto` (no buf invocation, no network) and diffs the result against `helm/michelangelo/files/transcoder-services.json`. This is what CI runs on every `proto/**` or `helm/michelangelo/files/**` change; run it locally to reproduce a CI failure before re-running `gen-grpc-client.sh`.
+Runs `gen-descriptors.sh` into a scratch directory and diffs the resulting `transcoder-services.json` against the committed one — the real generator, not a proto-parsing approximation. (It deliberately skips comparing `descriptors.pb` byte-for-byte: rebuilding it re-resolves an unpinned `buf.build/coscene-io/kubernetes-apis` BSR dependency that can drift between runs even with no proto/api change, which would make a raw binary diff flaky.) This is the CI backstop described above; run it locally to reproduce a CI failure before re-running `gen-grpc-client.sh`.
 
 ## goimports
 
