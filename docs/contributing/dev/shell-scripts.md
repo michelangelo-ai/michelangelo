@@ -15,6 +15,7 @@ Shell scripts in `tools/` automate code generation and development workflows. Th
 |--------|---------|-------------|
 | `tools/gen-proto-go.sh` | Regenerates `proto-go/` from `.proto` sources | After any `.proto` file change |
 | `tools/gen-grpc-client.sh` | Generates gRPC client code (Python and JavaScript) from protobuf files | After proto changes that affect client stubs |
+| `tools/check-transcoder-services.sh` | Verifies `helm/michelangelo/files/transcoder-services.json` matches the services declared under `proto/api` | Run in CI on any `proto/**` or `helm/michelangelo/files/**` change; run locally to debug a CI failure |
 | `tools/grpc-svc-gen.sh [Entity]` | Scaffolds a new gRPC service definition for a CRD type | When adding a new API resource |
 | `tools/gazelle` | Updates Bazel BUILD files for Go packages and proto targets | After adding/removing Go files or proto definitions |
 | `tools/goimports` | Bazel wrapper that runs goimports for Go import formatting | When reformatting Go imports |
@@ -63,7 +64,17 @@ tools/gen-grpc-client.sh
 
 Generates gRPC client stubs for Python and JavaScript from the compiled proto definitions. Run this after proto changes when client-side stubs need to be regenerated.
 
-It also regenerates `helm/michelangelo/files/descriptors.pb` and `helm/michelangelo/files/transcoder-services.json`, which the Envoy `grpc_json_transcoder` filter's ConfigMap templates read at `helm template`/`helm install` time. Commit both alongside the client stub changes so the chart's transcoder allowlist stays in sync with the services the client is built against.
+It also regenerates `helm/michelangelo/files/descriptors.pb` and `helm/michelangelo/files/transcoder-services.json` (via `tools/gen-descriptors.sh`), which the Envoy `grpc_json_transcoder` filter's ConfigMap templates read at `helm template`/`helm install` time. Commit both alongside the client stub changes so the chart's transcoder allowlist stays in sync with the services the client is built against.
+
+Both files are committed generated artifacts, not build-time output — `helm install` never invokes buf, so the chart works from a plain checkout without the buf toolchain. The Envoy ConfigMap template fails fast (`fail` in the template) if `transcoder-services.json` is missing, empty, or malformed, and the "Transcoder services check" CI workflow re-derives the expected service list directly from `proto/api/**/*.proto` and fails the PR if it doesn't match the committed file — so a proto change without a `gen-grpc-client.sh` re-run can't merge silently.
+
+## check-transcoder-services.sh
+
+```bash
+tools/check-transcoder-services.sh
+```
+
+Parses `package`/`service` declarations out of `proto/api/**/*.proto` (no buf invocation, no network) and diffs the result against `helm/michelangelo/files/transcoder-services.json`. This is what CI runs on every `proto/**` or `helm/michelangelo/files/**` change; run it locally to reproduce a CI failure before re-running `gen-grpc-client.sh`.
 
 ## goimports
 
