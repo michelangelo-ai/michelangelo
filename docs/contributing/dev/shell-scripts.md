@@ -65,12 +65,14 @@ tools/gen-grpc-client.sh
 
 Generates gRPC client stubs for Python and JavaScript from the compiled proto definitions, and (via `tools/gen-descriptors.sh`) regenerates `helm/michelangelo/files/descriptors.pb` and `helm/michelangelo/files/transcoder-services.json` — the Envoy `grpc_json_transcoder` filter's proto descriptor set and services allowlist.
 
-**You rarely need to run this directly.** `javascript/package.json` wires it in as `yarn generate`, which runs automatically as a `prebuild` and `setup` script — so `yarn build`, `yarn dev` (via prebuild on first install), and `yarn setup` all regenerate these files as a side effect whenever you have a JS dev loop running, without you needing to know they exist. If you only touched Go code and never run a JS command, run `tools/gen-grpc-client.sh` (or just `tools/gen-descriptors.sh`, which skips the Python/JS stub codegen) manually and commit the result alongside the proto change.
+`transcoder-services.json` is **not** every service that exists in `proto/api` — Envoy's `grpc_json_transcoder` exposes whatever is on it over plain JSON/HTTP, so dumping the full descriptor set there would make any new Go-only service web-reachable the moment its proto compiles, whether or not the browser client can actually call it. It's the intersection of what `javascript/packages/rpc/services.ts` actually imports and instantiates, and the compiled descriptor set (used only to resolve each of those names to its fully-qualified proto service name).
+
+**You rarely need to run this directly.** `javascript/package.json` wires it in as `yarn generate`, which runs automatically as a `prebuild` and `setup` script — so `yarn build`, `yarn dev` (via prebuild on first install), and `yarn setup` all regenerate these files as a side effect whenever you have a JS dev loop running, without you needing to know they exist. In practice the trigger that matters is editing `services.ts` to add or remove a service from the client — that's the file a developer actually touches, and the next `yarn build`/`yarn setup` picks it up. A proto-only change doesn't need this re-run unless it also renames/removes a service `services.ts` already references (in which case name resolution would fail loudly — see `gen-descriptors.sh` below).
 
 Both `descriptors.pb` and `transcoder-services.json` are committed generated artifacts, not build-time output — `helm install` never invokes buf, so the chart works from a plain checkout without the buf toolchain. Two independent backstops guard against them going stale or missing:
 
 - The Envoy ConfigMap template fails fast (`fail` in the template) at `helm template`/`lint`/`install` time if `transcoder-services.json` is missing, empty, or malformed.
-- The "Transcoder services check" CI workflow runs `tools/check-transcoder-services.sh` on every `proto/**` or `helm/michelangelo/files/**` change, for proto edits that never touch `javascript/` (so `yarn generate` never runs) or a hand-edited generated file.
+- The "Transcoder services check" CI workflow runs `tools/check-transcoder-services.sh` on every change to `proto/**`, `javascript/packages/rpc/services.ts`, or `helm/michelangelo/files/**` — for edits that never trigger `yarn generate`, or a hand-edited generated file.
 
 ## gen-descriptors.sh
 
@@ -78,7 +80,7 @@ Both `descriptors.pb` and `transcoder-services.json` are committed generated art
 tools/gen-descriptors.sh [output-dir]
 ```
 
-Builds `descriptors.pb` + `transcoder-services.json` from `proto/api` into `output-dir` (default `helm/michelangelo/files`). This is the shared implementation `gen-grpc-client.sh` and `check-transcoder-services.sh` both call — you normally don't invoke it directly, but it's useful standalone if you only need the Helm chart files regenerated without the Python/JS client stub codegen.
+Builds `descriptors.pb` + `transcoder-services.json` into `output-dir` (default `helm/michelangelo/files`). Parses `javascript/packages/rpc/services.ts` for the `*Service` identifiers it imports, resolves each against the compiled proto descriptor set to a fully-qualified service name, and writes only that intersection — failing loudly if a `services.ts` import doesn't resolve to any proto service (a likely typo/rename) or if no services are referenced at all (refuses to write an empty allowlist). This is the shared implementation `gen-grpc-client.sh` and `check-transcoder-services.sh` both call — you normally don't invoke it directly, but it's useful standalone if you only need the Helm chart files regenerated without the Python/JS client stub codegen.
 
 ## check-transcoder-services.sh
 

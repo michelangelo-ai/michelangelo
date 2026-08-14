@@ -27,7 +27,7 @@ After editing any `.proto` file, regenerate the Go bindings:
 4. Run `tools/gen-proto-go.sh` to regenerate alias `BUILD.bazel` files under `proto-go/`, sync dependency versions from `go/go.mod` into `proto-go/go.mod`, and run `go mod tidy` in `proto-go/`
 5. Check in both the `.proto` changes and the generated `proto-go/` changes
 
-If the change adds, removes, or renames a service (not just a field or method), the JavaScript and Python clients and the Envoy transcoder's allowlist need regenerating too — see [gen-grpc-client.sh](shell-scripts.md#gen-grpc-clientsh). That one you usually don't have to run by hand: it's wired into `javascript/`'s normal `yarn build`/`yarn setup` flow.
+If the change adds, removes, or renames a service (not just a field or method) that the JS client uses, update `javascript/packages/rpc/services.ts` accordingly — the Envoy transcoder's allowlist (`helm/michelangelo/files/transcoder-services.json`) is generated from exactly what `services.ts` references, not from every service that exists under `proto/api`, so a Go-only service never becomes web-reachable just by compiling. See [gen-grpc-client.sh](shell-scripts.md#gen-grpc-clientsh) — you usually don't have to run it by hand, it's wired into `javascript/`'s normal `yarn build`/`yarn setup` flow and picks up `services.ts` changes automatically.
 
 ## Service Pattern
 
