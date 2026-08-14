@@ -516,16 +516,21 @@ func convertRayV1JobStatusToGlobal(rayV1Job *rayv1.RayJob) *v2pb.RayJobStatus {
 
 	globalJobStatus := &v2pb.RayJobStatus{}
 
+	globalJobStatus.JobId = rayV1Job.Status.JobId
+	globalJobStatus.DashboardUrl = rayV1Job.Status.DashboardURL
 	globalJobStatus.JobStatus = string(rayV1Job.Status.JobStatus)
 	globalJobStatus.JobDeploymentStatus = string(rayV1Job.Status.JobDeploymentStatus)
+	globalJobStatus.RayClusterName = rayV1Job.Status.RayClusterName
 	globalJobStatus.State = mapV1RayJobStatusToMAState(rayV1Job.Status.JobStatus, rayV1Job.Status.JobDeploymentStatus)
-	globalJobStatus.Message = rayV1Job.Status.Message
+	globalJobStatus.Message = enrichMessageWithReason(rayV1Job.Status.Reason, rayV1Job.Status.Message)
 
 	return globalJobStatus
 }
 
 func mapV1RayJobStatusToMAState(status rayv1.JobStatus, deploymentStatus rayv1.JobDeploymentStatus) v2pb.RayJobState {
 	switch status {
+	case rayv1.JobStatusPending:
+		return v2pb.RAY_JOB_STATE_INITIALIZING
 	case rayv1.JobStatusSucceeded:
 		return v2pb.RAY_JOB_STATE_SUCCEEDED
 	case rayv1.JobStatusFailed:
@@ -539,7 +544,25 @@ func mapV1RayJobStatusToMAState(status rayv1.JobStatus, deploymentStatus rayv1.J
 	switch deploymentStatus {
 	case rayv1.JobDeploymentStatusInitializing, rayv1.JobDeploymentStatusWaiting:
 		return v2pb.RAY_JOB_STATE_INITIALIZING
+	case rayv1.JobDeploymentStatusRunning:
+		return v2pb.RAY_JOB_STATE_RUNNING
+	case rayv1.JobDeploymentStatusComplete:
+		return v2pb.RAY_JOB_STATE_SUCCEEDED
+	case rayv1.JobDeploymentStatusSuspended:
+		return v2pb.RAY_JOB_STATE_KILLED
+	case rayv1.JobDeploymentStatusFailed:
+		return v2pb.RAY_JOB_STATE_FAILED
 	}
 
 	return v2pb.RAY_JOB_STATE_INVALID
+}
+
+func enrichMessageWithReason(reason rayv1.JobFailedReason, message string) string {
+	if reason == "" {
+		return message
+	}
+	if message == "" {
+		return string(reason)
+	}
+	return fmt.Sprintf("[%s] %s", reason, message)
 }

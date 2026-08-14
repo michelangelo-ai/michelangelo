@@ -158,17 +158,52 @@ func (r *Reconciler) fetchRayCluster(ctx context.Context, logger logr.Logger, ra
 }
 
 // ensureClusterReady checks if the RayCluster is in ready state.
-// Returns true if ready, false otherwise (will requeue).
+// Returns true if ready, false otherwise. Terminal cluster states (FAILED, TERMINATED, UNHEALTHY)
+// cause the RayJob to fail immediately with a descriptive message.
 func (r *Reconciler) ensureClusterReady(ctx context.Context, logger logr.Logger, rayJob *v2pb.RayJob, rayCluster *v2pb.RayCluster, res *ctrl.Result) bool {
-	if rayCluster.Status.State != v2pb.RAY_CLUSTER_STATE_READY {
-		logger.Info("cluster is not ready, waiting")
-		// Reflect waiting state while the cluster becomes ready
+	switch rayCluster.Status.State {
+	case v2pb.RAY_CLUSTER_STATE_READY:
+		return true
+
+	case v2pb.RAY_CLUSTER_STATE_FAILED, v2pb.RAY_CLUSTER_STATE_TERMINATED, v2pb.RAY_CLUSTER_STATE_UNHEALTHY:
+		logger.Info("cluster is in terminal state, failing ray job",
+			"clusterState", rayCluster.Status.State.String())
+		rayJob.Status.State = v2pb.RAY_JOB_STATE_FAILED
+		rayJob.Status.Message = buildClusterFailureMessage(rayCluster)
+		return false
+
+	default:
+		logger.Info("cluster is not ready, waiting", "clusterState", rayCluster.Status.State.String())
 		rayJob.Status.State = v2pb.RAY_JOB_STATE_INITIALIZING
-		rayJob.Status.Message = fmt.Sprintf("cluster %s/%s is not ready", rayCluster.Namespace, rayCluster.Name)
+		rayJob.Status.Message = fmt.Sprintf("cluster %s/%s is not ready (state: %s)",
+			rayCluster.Namespace, rayCluster.Name, rayCluster.Status.State.String())
 		res.RequeueAfter = requeueAfter
 		return false
 	}
-	return true
+}
+
+func buildClusterFailureMessage(rayCluster *v2pb.RayCluster) string {
+	msg := fmt.Sprintf("cluster %s/%s is in state %s",
+		rayCluster.Namespace, rayCluster.Name, rayCluster.Status.State.String())
+
+	if len(rayCluster.Status.PodErrors) > 0 {
+		firstErr := rayCluster.Status.PodErrors[0]
+		if firstErr.Reason != "" {
+			msg += fmt.Sprintf(": %s", firstErr.Reason)
+		}
+		if firstErr.Message != "" {
+			msg += fmt.Sprintf(" - %s", firstErr.Message)
+		}
+	}
+
+	for _, cond := range rayCluster.Status.StatusConditions {
+		if cond.Status == apipb.CONDITION_STATUS_FALSE && cond.Reason != "" {
+			msg += fmt.Sprintf("; condition %s: %s", cond.Type, cond.Reason)
+			break
+		}
+	}
+
+	return msg
 }
 
 // getAssignedCluster retrieves the assigned physical cluster from the RayCluster status.
@@ -254,9 +289,12 @@ func (r *Reconciler) applyRayJobStatus(
 		return
 	}
 	rayJob.Status.State = jobStatus.Ray.State
+	rayJob.Status.JobId = jobStatus.Ray.JobId
 	rayJob.Status.JobStatus = jobStatus.Ray.JobStatus
+	rayJob.Status.JobDeploymentStatus = jobStatus.Ray.JobDeploymentStatus
 	rayJob.Status.Message = jobStatus.Ray.Message
 	rayJob.Status.DashboardUrl = jobStatus.Ray.DashboardUrl
+	rayJob.Status.RayClusterName = jobStatus.Ray.RayClusterName
 
 	if !isTerminalRayJobState(jobStatus.Ray.State) {
 		res.RequeueAfter = requeueAfter

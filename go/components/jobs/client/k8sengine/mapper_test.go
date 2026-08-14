@@ -11,7 +11,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
-
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
@@ -109,11 +108,11 @@ func TestMapper_MapGlobalJobToLocal(t *testing.T) {
 					Namespace: RayLocalNamespace,
 				},
 				Spec: rayv1.RayJobSpec{
-					Entrypoint: rayJob.Spec.Entrypoint,
 					ClusterSelector: map[string]string{
 						"ray.io/cluster":      rayCluster.Name,
 						"rayClusterNamespace": RayLocalNamespace,
 					},
+					Entrypoint:               rayJob.Spec.Entrypoint,
 					TTLSecondsAfterFinished:  int32(300),
 					ShutdownAfterJobFinishes: true,
 					SubmitterPodTemplate:     submitterPod,
@@ -335,22 +334,103 @@ func TestMapper_GetLocalName(t *testing.T) {
 func TestMapper_MapLocalJobStatusToGlobal(t *testing.T) {
 	m := Mapper{}
 
-	mkRayV1 := func(jobStatus rayv1.JobStatus) *rayv1.RayJob {
+	mkRayV1 := func(status rayv1.RayJobStatus) *rayv1.RayJob {
 		r := &rayv1.RayJob{}
-		r.Status.JobStatus = jobStatus
+		r.Status = status
 		return r
 	}
 
 	tests := []struct {
-		name         string
-		job          k8sruntime.Object
-		expectStatus string
-		expectMsg    string
+		name                   string
+		job                    k8sruntime.Object
+		expectState            v2pb.RayJobState
+		expectJobStatus        string
+		expectDeploymentStatus string
+		expectMsg              string
+		expectJobID            string
+		expectDashboardURL     string
+		expectRayClusterName   string
 	}{
 		{
-			name:         "running RayJob -> RUNNING",
-			job:          mkRayV1(rayv1.JobStatusRunning),
-			expectStatus: string(rayv1.JobStatusRunning),
+			name: "running RayJob -> RUNNING",
+			job: mkRayV1(rayv1.RayJobStatus{
+				JobId:               "ray-job-id",
+				RayClusterName:      "ray-cluster",
+				DashboardURL:        "ray-dashboard:8265",
+				JobStatus:           rayv1.JobStatusRunning,
+				JobDeploymentStatus: rayv1.JobDeploymentStatusRunning,
+				Message:             "job is running",
+			}),
+			expectState:            v2pb.RAY_JOB_STATE_RUNNING,
+			expectJobStatus:        string(rayv1.JobStatusRunning),
+			expectDeploymentStatus: string(rayv1.JobDeploymentStatusRunning),
+			expectMsg:              "job is running",
+			expectJobID:            "ray-job-id",
+			expectDashboardURL:     "ray-dashboard:8265",
+			expectRayClusterName:   "ray-cluster",
+		},
+		{
+			name: "failed deployment with empty Ray job status -> FAILED",
+			job: mkRayV1(rayv1.RayJobStatus{
+				JobDeploymentStatus: rayv1.JobDeploymentStatusFailed,
+				Message:             "Job submission has failed. Reason: BackoffLimitExceeded",
+			}),
+			expectState:            v2pb.RAY_JOB_STATE_FAILED,
+			expectDeploymentStatus: "Failed",
+			expectMsg:              "Job submission has failed. Reason: BackoffLimitExceeded",
+		},
+		{
+			name: "SubmissionFailed reason -> FAILED with reason prefix",
+			job: mkRayV1(rayv1.RayJobStatus{
+				JobDeploymentStatus: rayv1.JobDeploymentStatusFailed,
+				Reason:              rayv1.SubmissionFailed,
+				Message:             "Job deploy failed",
+			}),
+			expectState:            v2pb.RAY_JOB_STATE_FAILED,
+			expectDeploymentStatus: string(rayv1.JobDeploymentStatusFailed),
+			expectMsg:              "[SubmissionFailed] Job deploy failed",
+		},
+		{
+			name: "DeadlineExceeded reason -> FAILED with reason prefix",
+			job: mkRayV1(rayv1.RayJobStatus{
+				JobDeploymentStatus: rayv1.JobDeploymentStatusFailed,
+				Reason:              rayv1.DeadlineExceeded,
+				Message:             "Job exceeded deadline",
+			}),
+			expectState:            v2pb.RAY_JOB_STATE_FAILED,
+			expectDeploymentStatus: string(rayv1.JobDeploymentStatusFailed),
+			expectMsg:              "[DeadlineExceeded] Job exceeded deadline",
+		},
+		{
+			name: "AppFailed reason -> FAILED with reason prefix",
+			job: mkRayV1(rayv1.RayJobStatus{
+				JobDeploymentStatus: rayv1.JobDeploymentStatusFailed,
+				Reason:              rayv1.AppFailed,
+				Message:             "Application exited with error",
+			}),
+			expectState:            v2pb.RAY_JOB_STATE_FAILED,
+			expectDeploymentStatus: string(rayv1.JobDeploymentStatusFailed),
+			expectMsg:              "[AppFailed] Application exited with error",
+		},
+		{
+			name: "Complete deployment -> SUCCEEDED",
+			job: mkRayV1(rayv1.RayJobStatus{
+				JobDeploymentStatus: rayv1.JobDeploymentStatusComplete,
+				JobStatus:           rayv1.JobStatusSucceeded,
+				Message:             "Job completed successfully",
+			}),
+			expectState:            v2pb.RAY_JOB_STATE_SUCCEEDED,
+			expectJobStatus:        string(rayv1.JobStatusSucceeded),
+			expectDeploymentStatus: string(rayv1.JobDeploymentStatusComplete),
+			expectMsg:              "Job completed successfully",
+		},
+		{
+			name: "Suspended deployment -> KILLED",
+			job: mkRayV1(rayv1.RayJobStatus{
+				JobDeploymentStatus: rayv1.JobDeploymentStatusSuspended,
+			}),
+			expectState:            v2pb.RAY_JOB_STATE_KILLED,
+			expectDeploymentStatus: string(rayv1.JobDeploymentStatusSuspended),
 		},
 	}
 
@@ -360,8 +440,13 @@ func TestMapper_MapLocalJobStatusToGlobal(t *testing.T) {
 			require.NoError(t, err)
 			require.NotNil(t, js)
 			require.NotNil(t, js.Ray)
-			assert.Equal(t, tt.expectStatus, js.Ray.JobStatus)
+			assert.Equal(t, tt.expectState, js.Ray.State)
+			assert.Equal(t, tt.expectJobStatus, js.Ray.JobStatus)
+			assert.Equal(t, tt.expectDeploymentStatus, js.Ray.JobDeploymentStatus)
 			assert.Equal(t, tt.expectMsg, js.Ray.Message)
+			assert.Equal(t, tt.expectJobID, js.Ray.JobId)
+			assert.Equal(t, tt.expectDashboardURL, js.Ray.DashboardUrl)
+			assert.Equal(t, tt.expectRayClusterName, js.Ray.RayClusterName)
 		})
 	}
 }
