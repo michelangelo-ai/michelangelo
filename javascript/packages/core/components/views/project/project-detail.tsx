@@ -62,7 +62,7 @@ export function ProjectDetail({ phases }: { phases: PhaseConfig[] }) {
         className={css({
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-          gap: '12px',
+          gap: theme.sizing.scale500,
           padding: theme.sizing.scale400,
         })}
       >
