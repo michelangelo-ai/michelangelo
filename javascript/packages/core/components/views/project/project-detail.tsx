@@ -61,8 +61,8 @@ export function ProjectDetail({ phases }: { phases: PhaseConfig[] }) {
       <div
         className={css({
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-          gap: theme.sizing.scale600,
+          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+          gap: '12px',
           padding: theme.sizing.scale400,
         })}
       >
