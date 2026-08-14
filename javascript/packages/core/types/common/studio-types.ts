@@ -198,3 +198,24 @@ export type PhaseEntityState = 'active' | 'disabled';
 export type Accessor<TIn = unknown, TOut = unknown> = AccessorFn<TIn, TOut> | string;
 
 export type AccessorFn<TIn = unknown, TOut = unknown> = (object: TIn) => TOut | undefined;
+
+/**
+ * Top-level configuration passed to `CoreApp`. Describes the domain structure
+ * of a Studio instance — what categories, phases, and entities it contains.
+ *
+ * Core renders whatever config a consumer supplies; it ships the machinery,
+ * not a default set of entities.
+ *
+ * @example
+ * ```tsx
+ * const studioConfig: StudioConfig = {
+ *   categories: [
+ *     { id: 'core-ml', name: 'Core ML', phases: [TRAIN_PHASE, DEPLOY_PHASE] },
+ *   ],
+ * };
+ * <CoreApp config={studioConfig} dependencies={deps} />
+ * ```
+ */
+export type StudioConfig = {
+  categories: CategoryConfig[];
+};

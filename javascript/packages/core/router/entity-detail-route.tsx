@@ -9,13 +9,11 @@ import { Signpost } from '#core/components/signpost/signpost';
 import { DetailViewPageRenderer } from '#core/components/views/detail-view/components/detail-view-page-renderer/detail-view-page-renderer';
 import { DetailViewPages } from '#core/components/views/detail-view/components/detail-view-pages/detail-view-pages';
 import { DetailView } from '#core/components/views/detail-view/detail-view';
-import { PHASES } from '#core/config/phases/phases';
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
 import { useStudioQuery } from '#core/hooks/use-studio-query';
 import { useInterpolationResolver } from '#core/interpolation/use-interpolation-resolver';
+import { useStudioConfig } from '#core/providers/config-provider/use-studio-config';
 import { capitalizeFirstLetter } from '#core/utils/string-utils';
-
-import type { PhaseConfig } from '#core/types/common/studio-types';
 
 /**
  * Route component that handles entity detail views.
@@ -23,14 +21,13 @@ import type { PhaseConfig } from '#core/types/common/studio-types';
  * Maps URL parameters to specific entity detail pages and handles:
  * - Entity not found scenarios
  * - Navigation back to entity list
- *
- * @param phases - Phase configuration override for testing. Defaults to {@link PHASES}.
  */
-export function EntityDetailRoute({ phases = PHASES }: { phases?: Record<string, PhaseConfig> }) {
+export function EntityDetailRoute() {
   const [, theme] = useStyletron();
   const { phase, entity, entityId, projectId, entityTab } = useStudioParams('detail');
   const navigate = useNavigate();
-  const entityConfig = phases[phase].entities.find((e) => e.id === entity);
+  const { getEntity } = useStudioConfig();
+  const entityConfig = getEntity(phase, entity);
   const resolver = useInterpolationResolver();
 
   const { data, isLoading, error } = useStudioQuery<Record<string, unknown>>({
@@ -55,7 +52,6 @@ export function EntityDetailRoute({ phases = PHASES }: { phases?: Record<string,
     navigate(`/${projectId}/${phase}/${entity}`);
   };
 
-  // TODO: error handling for URLs that don't match any entity config
   const detailViewConfig =
     (entityConfig?.views ?? []).find((view) => view.type === 'detail') ?? undefined;
 
@@ -96,16 +92,36 @@ export function EntityDetailRoute({ phases = PHASES }: { phases?: Record<string,
     );
   }
 
+  if (!entityConfig) {
+    return (
+      <ErrorView
+        title="Entity not found"
+        description={`Entity "${entity}" is not configured in phase "${phase}".`}
+        illustration={
+          <CircleExclamationMark
+            kind={CircleExclamationMarkKind.ERROR}
+            width={theme.sizing.scale1600}
+            height={theme.sizing.scale1600}
+          />
+        }
+        buttonConfig={{
+          onClick: () => navigate(`/${projectId}/${phase}`),
+          content: 'Back to phase',
+        }}
+      />
+    );
+  }
+
   // cast: PhaseEntityConfig carries no entity type generic, so the runtime-selected service key's
   // value is assumed to be the entity object; related to #1425
-  const entityData = data?.[entityConfig!.service] as Record<string, unknown> | undefined;
+  const entityData = data?.[entityConfig.service] as Record<string, unknown> | undefined;
   const resolvedDetailViewConfig = resolver(detailViewConfig, { page: entityData });
   return (
     <DetailView
-      subtitle={entityConfig!.name}
+      subtitle={entityConfig.name}
       title={entityId}
       onGoBack={handleReturnToEntityList}
-      actions={entityConfig!.actions}
+      actions={entityConfig.actions}
       record={entityData}
       loading={isLoading}
       headerContent={

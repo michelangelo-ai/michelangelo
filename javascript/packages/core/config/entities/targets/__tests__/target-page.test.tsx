@@ -6,6 +6,7 @@ import { DEPLOY_PHASE } from '#core/config/phases/deploy';
 import { EntityDetailRoute } from '#core/router/entity-detail-route';
 import { PhaseListRoute } from '#core/router/phase-list-route';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
+import { getConfigProviderWrapper } from '#core/test/wrappers/get-config-provider-wrapper';
 import { getErrorProviderWrapper } from '#core/test/wrappers/get-error-provider-wrapper';
 import { getRouterWrapper } from '#core/test/wrappers/get-router-wrapper';
 import {
@@ -16,8 +17,11 @@ import {
 describe('Target list page', () => {
   it('renders the Targets tab', () => {
     render(
-      <PhaseListRoute phases={{ deploy: DEPLOY_PHASE }} />,
+      <PhaseListRoute />,
       buildWrapper([
+        getConfigProviderWrapper({
+          categories: [{ id: 'test', name: 'Test', phases: [DEPLOY_PHASE] }],
+        }),
         getErrorProviderWrapper(),
         getRouterWrapper({ location: '/myproject/deploy/targets' }),
         getServiceProviderWrapper({
@@ -31,8 +35,11 @@ describe('Target list page', () => {
 
   it('renders the correct column headers', async () => {
     render(
-      <PhaseListRoute phases={{ deploy: DEPLOY_PHASE }} />,
+      <PhaseListRoute />,
       buildWrapper([
+        getConfigProviderWrapper({
+          categories: [{ id: 'test', name: 'Test', phases: [DEPLOY_PHASE] }],
+        }),
         getErrorProviderWrapper(),
         getRouterWrapper({ location: '/myproject/deploy/targets' }),
         getServiceProviderWrapper({
@@ -49,8 +56,11 @@ describe('Target list page', () => {
 
   it('renders a link to the target detail page on the target name', async () => {
     render(
-      <PhaseListRoute phases={{ deploy: DEPLOY_PHASE }} />,
+      <PhaseListRoute />,
       buildWrapper([
+        getConfigProviderWrapper({
+          categories: [{ id: 'test', name: 'Test', phases: [DEPLOY_PHASE] }],
+        }),
         getErrorProviderWrapper(),
         getRouterWrapper({ location: '/myproject/deploy/targets' }),
         getServiceProviderWrapper({
@@ -86,8 +96,11 @@ describe('Target detail page', () => {
 
   it('renders details for target', async () => {
     render(
-      <EntityDetailRoute phases={{ deploy: DEPLOY_PHASE }} />,
+      <EntityDetailRoute />,
       buildWrapper([
+        getConfigProviderWrapper({
+          categories: [{ id: 'test', name: 'Test', phases: [DEPLOY_PHASE] }],
+        }),
         getErrorProviderWrapper(),
         getRouterWrapper({
           location: '/myproject/deploy/targets/sentiment-target/stages',
@@ -108,8 +121,11 @@ describe('Target detail page', () => {
 
   it('renders the stages for the target', async () => {
     render(
-      <EntityDetailRoute phases={{ deploy: DEPLOY_PHASE }} />,
+      <EntityDetailRoute />,
       buildWrapper([
+        getConfigProviderWrapper({
+          categories: [{ id: 'test', name: 'Test', phases: [DEPLOY_PHASE] }],
+        }),
         getErrorProviderWrapper(),
         getRouterWrapper({
           location: '/myproject/deploy/targets/sentiment-target/stages',
@@ -150,8 +166,11 @@ describe('Target detail page', () => {
 
   it('renders the Information and Details fields within a target stage', async () => {
     render(
-      <EntityDetailRoute phases={{ deploy: DEPLOY_PHASE }} />,
+      <EntityDetailRoute />,
       buildWrapper([
+        getConfigProviderWrapper({
+          categories: [{ id: 'test', name: 'Test', phases: [DEPLOY_PHASE] }],
+        }),
         getErrorProviderWrapper(),
         getRouterWrapper({
           location: '/myproject/deploy/targets/sentiment-target/stages',
@@ -188,8 +207,11 @@ describe('Target detail page', () => {
 
   it('renders the empty state when no stages are reported', async () => {
     render(
-      <EntityDetailRoute phases={{ deploy: DEPLOY_PHASE }} />,
+      <EntityDetailRoute />,
       buildWrapper([
+        getConfigProviderWrapper({
+          categories: [{ id: 'test', name: 'Test', phases: [DEPLOY_PHASE] }],
+        }),
         getErrorProviderWrapper(),
         getRouterWrapper({
           location: '/myproject/deploy/targets/sentiment-target/stages',

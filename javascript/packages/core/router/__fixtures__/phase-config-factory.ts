@@ -3,7 +3,12 @@ import { merge } from 'lodash';
 import { CellType } from '#core/components/cell/constants';
 
 import type { ListViewConfig } from '#core/components/views/types';
-import type { PhaseConfig, PhaseEntityConfig } from '#core/types/common/studio-types';
+import type {
+  CategoryConfig,
+  PhaseConfig,
+  PhaseEntityConfig,
+  StudioConfig,
+} from '#core/types/common/studio-types';
 import type { DeepPartial } from '#core/types/utility-types';
 
 /**
@@ -82,3 +87,49 @@ export const buildPhaseConfigFactory = (base: DeepPartial<PhaseConfig> = {}) => 
     return merge({}, required, base, overrides);
   };
 };
+
+/**
+ * Wraps entities, phases, or categories into a complete StudioConfig with sensible defaults.
+ * Accepts the most specific level you care about — the rest is filled in automatically.
+ *
+ * Priority: entities > phases > categories (most specific wins).
+ *
+ * @example
+ * ```typescript
+ * // Just entities — wraps in default phase ('train') + default category ('test')
+ * buildStudioConfig({ entities: [buildEntity({ views: [...] })] })
+ *
+ * // Custom phases — wraps in default category
+ * buildStudioConfig({ phases: [buildPhase({ id: 'train', entities: [...] })] })
+ *
+ * // Full categories — passes through as-is
+ * buildStudioConfig({ categories: [...] })
+ * ```
+ */
+export function buildStudioConfig(
+  config: {
+    categories?: CategoryConfig[];
+    phases?: PhaseConfig[];
+    entities?: PhaseEntityConfig[];
+  } = {}
+): StudioConfig {
+  if (config.categories) {
+    return { categories: config.categories };
+  }
+
+  const defaultPhase = buildPhaseConfigFactory();
+
+  if (config.phases) {
+    return { categories: [{ id: 'test', name: 'Test', phases: config.phases }] };
+  }
+
+  return {
+    categories: [
+      {
+        id: 'test',
+        name: 'Test',
+        phases: [defaultPhase({ id: 'train', entities: config.entities ?? [] })],
+      },
+    ],
+  };
+}

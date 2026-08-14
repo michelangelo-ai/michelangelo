@@ -33,12 +33,37 @@ A configuration isn't tied to one call site — it's a data shape that however m
 
 `core` provides the runtime that interprets configurations. The configurations themselves — the actual `PhaseConfig` objects, entity definitions, action lists, form schemas — live in the consuming application.
 
-Today the reference configurations live in `javascript/app/`. Consumers building their own apps on top of `@michelangelo-ai/core` provide their own. `core` does not ship a default set of entities; it ships the machinery to render them.
+Consumers pass configuration to `CoreApp` via the `config` prop, typed as `StudioConfig`:
+
+```tsx
+import { CoreApp } from '@michelangelo-ai/core';
+import type { StudioConfig } from '@michelangelo-ai/core';
+
+const studioConfig: StudioConfig = {
+  categories: [{ id: 'core-ml', name: 'Core ML', phases: [TRAIN_PHASE, DEPLOY_PHASE] }],
+};
+
+<CoreApp config={studioConfig} dependencies={deps} />;
+```
+
+`StudioConfig` is a wrapper that groups `CategoryConfig[]` and is extensible for future top-level config (e.g. project-level settings). Today the reference configurations live in `javascript/app/`. `core` does not ship a default set of entities; it ships the machinery to render them.
+
+Internally, `CoreApp` wraps the tree in a `ConfigProvider`. Route components access config via the `useStudioConfig()` hook rather than importing config directly:
+
+```ts
+const { categories, getPhase, getEntity } = useStudioConfig();
+const phase = getPhase('train'); // PhaseConfig | undefined
+const entity = getEntity('train', 'pipelines'); // PhaseEntityConfig | undefined
+```
+
+Convention: read config once at the route boundary via `useStudioConfig()`, then prop-drill to leaf components. Leaf components should not call `useStudioConfig()` directly.
 
 ## 3. Configuration system
 
 A configuration is a declarative description of a view, action, or form, expressed as a TypeScript object. The `core` runtime walks the configuration and renders the right components. Configurations nest:
 
+- A **`StudioConfig`** is the top-level container passed to `CoreApp`. It holds `CategoryConfig[]` and is extensible for future top-level settings.
+- A **`CategoryConfig`** groups phases into a logical section (e.g. _Core ML_, _Gen AI_). Categories drive navigation grouping.
 - A **`PhaseConfig`** describes a phase (e.g. _train_, _deploy_) and lists the entities it contains.
 - An **`EntityConfig`** describes an entity (e.g. _pipeline_, _deployment_) and lists its views and actions.
 - A **`ViewConfig`** describes a view of an entity — `list`, `detail`, or `form` — and specifies the columns, tabs, or fields it renders.
@@ -102,10 +127,10 @@ This is what lets the same `core` package serve different consumers without modi
 import { CoreApp } from '@michelangelo-ai/core';
 import { request } from '@michelangelo-ai/rpc';
 
-<CoreApp dependencies={{ service: { request } }} />;
+<CoreApp config={{ categories: CATEGORIES }} dependencies={{ service: { request } }} />;
 ```
 
-Inside `core`, components consume injected implementations through hooks (e.g. `useServiceProvider`) and never reach for an SDK directly. `useStudioMutation`, for example, is a thin wrapper around `useServiceProvider().request`.
+Inside `core`, components consume injected implementations through hooks (e.g. `useServiceProvider`, `useStudioConfig`) and never reach for an SDK or config module directly. `useStudioMutation`, for example, is a thin wrapper around `useServiceProvider().request`, and route components resolve phase/entity config through `useStudioConfig().getPhase()`.
 
 ### Type-safe extension via declaration merging
 
@@ -184,6 +209,6 @@ Avoid mocking core's hooks (e.g. `vi.mock('#core/hooks/use-studio-mutation', …
 ## 9. Where to look next
 
 - **Coding conventions** — `CLAUDE.md` in this directory (testing patterns) and `javascript/CLAUDE.md` (package layout, scripts, available skills)
-- **Reference application** — `javascript/app/` is a complete integration: it imports from `@michelangelo-ai/core`, wires `@michelangelo-ai/rpc` into `<CoreApp dependencies={...}>`, and supplies a configuration tree
-- **Entity config examples** — `javascript/packages/core/config/entities/pipeline/pipeline.ts` shows the shape of an entity configuration. These configs live in core today and will migrate to consumer packages.
-- **Test wrappers** — `test/wrappers/build-wrapper.tsx` and the `get*ProviderWrapper` helpers in the same directory show how to render `core` components with the right context for tests
+- **Reference application** — `javascript/app/` is a complete integration: it imports from `@michelangelo-ai/core`, wires `@michelangelo-ai/rpc` into `<CoreApp dependencies={...}>`, and supplies a `StudioConfig` via the `config` prop
+- **Entity config examples** — `javascript/packages/core/config/entities/pipeline/pipeline.ts` shows the shape of an entity configuration
+- **Test wrappers** — `test/wrappers/build-wrapper.tsx` and the `get*ProviderWrapper` helpers (including `getConfigProviderWrapper`) in the same directory show how to render `core` components with the right context for tests
