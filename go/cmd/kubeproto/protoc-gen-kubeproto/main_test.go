@@ -666,50 +666,91 @@ func loadAllProtoMsgs(t *testing.T, reqData []byte) (map[string]*protogen.Messag
 	return allProtoMsgs, extTypes
 }
 
-// TestResolveWrapperKindErrors exercises every way resolveWrapperKind can
-// reject a revisioned_in kind at codegen time: the kind not resolving to any
-// message, the resolved message not being a CRD resource, the wrapper having
-// no "spec" field at all, the wrapper's spec having no "content" field, and
-// the wrapper's content field existing but not being a google.protobuf.Any.
-// This is the check that guarantees, at build time, that
-// wrapperContentPath ("spec.content") actually exists on every wrapper a
-// revisioned base type opts into via revisioned_in.
-func TestResolveWrapperKindErrors(t *testing.T) {
-	tests := map[string]string{
-		"UnresolvedWrapperBase": `Invalid revisioned_in annotation on UnresolvedWrapperBase: kind "nonexistent_wrapper" does not resolve to any message named "NonexistentWrapper" in this compile unit`,
-		"NotAResourceBase": `Invalid revisioned_in annotation on NotAResourceBase: kind "not_a_resource_wrapper" resolves to message NotAResourceWrapper, which is not ` +
-			`a CRD resource (missing michelangelo.api.resource)`,
-		"NoSpecBase": `Invalid revisioned_in annotation on NoSpecBase: kind "no_spec_wrapper" resolves to message NoSpecWrapper, which has no field "spec" at path "spec.content"`,
-		"MissingContentBase": `Invalid revisioned_in annotation on MissingContentBase: kind "missing_content_wrapper" resolves to message MissingContentWrapper, ` +
-			`which has no field "content" at path "spec.content"`,
-		"WrongTypeContentBase": `Invalid revisioned_in annotation on WrongTypeContentBase: kind "wrong_type_content_wrapper" resolves to message WrongTypeContentWrapper, ` +
-			`whose field at path "spec.content" is not a google.protobuf.Any`,
-	}
+// wrapperKindOf extracts the sole revisioned_in kind string declared on the
+// fixture message named baseCrdName, asserting the fixture is well-formed.
+func wrapperKindOf(t *testing.T, allProtoMsgs map[string]*protogen.Message, extTypes *protoregistry.Types, baseCrdName string) string {
+	t.Helper()
 
+	msg, ok := allProtoMsgs[baseCrdName]
+	assert.True(t, ok, "fixture message %v not found", baseCrdName)
+
+	options, err := pboptions.ReadOptions(extTypes, msg.Desc.Options().(*descriptorpb.MessageOptions))
+	assert.NoError(t, err)
+	assert.True(t, options.Bool("has_resource"), "fixture %v must be a CRD resource", baseCrdName)
+	assert.Equal(t, int64(1), options.Int64("resource.len(revisioned_in)"),
+		"fixture %v should declare exactly one revisioned_in kind", baseCrdName)
+
+	return options.String("resource.revisioned_in[0]")
+}
+
+// TestResolveWrapperKind_UnresolvedKind verifies that a revisioned_in kind
+// which resolves to no message in the compile unit fails codegen.
+func TestResolveWrapperKind_UnresolvedKind(t *testing.T) {
+	const baseCrdName = "UnresolvedWrapperBase"
 	allProtoMsgs, extTypes := loadAllProtoMsgs(t, revisionederrorspb.GetProtocReqData())
+	kind := wrapperKindOf(t, allProtoMsgs, extTypes, baseCrdName)
 
-	tested := 0
-	for name, expectedPanic := range tests {
-		msg, ok := allProtoMsgs[name]
-		assert.True(t, ok, "fixture message %v not found", name)
-		if !ok {
-			continue
-		}
-
-		options, err := pboptions.ReadOptions(extTypes, msg.Desc.Options().(*descriptorpb.MessageOptions))
-		assert.NoError(t, err)
-		assert.True(t, options.Bool("has_resource"), "fixture %v must be a CRD resource", name)
-		assert.Equal(t, int64(1), options.Int64("resource.len(revisioned_in)"),
-			"fixture %v should declare exactly one revisioned_in kind", name)
-		kind := options.String("resource.revisioned_in[0]")
-
-		assertPanic(t, expectedPanic, func() {
-			resolveWrapperKind(name, kind, allProtoMsgs, extTypes)
+	assertPanic(t, `Invalid revisioned_in annotation on UnresolvedWrapperBase: kind "nonexistent_wrapper" does not resolve to any message named "NonexistentWrapper" in this compile unit`,
+		func() {
+			resolveWrapperKind(baseCrdName, kind, allProtoMsgs, extTypes)
 		})
-		tested++
-	}
+}
 
-	assert.Equal(t, len(tests), tested)
+// TestResolveWrapperKind_NotACrdResource verifies that a revisioned_in kind
+// resolving to a message without michelangelo.api.resource fails codegen.
+func TestResolveWrapperKind_NotACrdResource(t *testing.T) {
+	const baseCrdName = "NotAResourceBase"
+	allProtoMsgs, extTypes := loadAllProtoMsgs(t, revisionederrorspb.GetProtocReqData())
+	kind := wrapperKindOf(t, allProtoMsgs, extTypes, baseCrdName)
+
+	assertPanic(t, `Invalid revisioned_in annotation on NotAResourceBase: kind "not_a_resource_wrapper" resolves to message NotAResourceWrapper, which is not `+
+		`a CRD resource (missing michelangelo.api.resource)`,
+		func() {
+			resolveWrapperKind(baseCrdName, kind, allProtoMsgs, extTypes)
+		})
+}
+
+// TestResolveWrapperKind_MissingSpecField verifies that a wrapper CRD with no
+// "spec" field at all fails codegen before even reaching "content".
+func TestResolveWrapperKind_MissingSpecField(t *testing.T) {
+	const baseCrdName = "NoSpecBase"
+	allProtoMsgs, extTypes := loadAllProtoMsgs(t, revisionederrorspb.GetProtocReqData())
+	kind := wrapperKindOf(t, allProtoMsgs, extTypes, baseCrdName)
+
+	assertPanic(t, `Invalid revisioned_in annotation on NoSpecBase: kind "no_spec_wrapper" resolves to message NoSpecWrapper, which has no field "spec" at path "spec.content"`,
+		func() {
+			resolveWrapperKind(baseCrdName, kind, allProtoMsgs, extTypes)
+		})
+}
+
+// TestResolveWrapperKind_MissingContentField verifies that a wrapper CRD
+// whose spec has no "content" field fails codegen. This is the check that
+// guarantees, at build time, that wrapperContentPath ("spec.content")
+// actually exists on every wrapper a revisioned base type opts into.
+func TestResolveWrapperKind_MissingContentField(t *testing.T) {
+	const baseCrdName = "MissingContentBase"
+	allProtoMsgs, extTypes := loadAllProtoMsgs(t, revisionederrorspb.GetProtocReqData())
+	kind := wrapperKindOf(t, allProtoMsgs, extTypes, baseCrdName)
+
+	assertPanic(t, `Invalid revisioned_in annotation on MissingContentBase: kind "missing_content_wrapper" resolves to message MissingContentWrapper, `+
+		`which has no field "content" at path "spec.content"`,
+		func() {
+			resolveWrapperKind(baseCrdName, kind, allProtoMsgs, extTypes)
+		})
+}
+
+// TestResolveWrapperKind_ContentFieldWrongType verifies that a wrapper CRD
+// whose spec.content exists but is not a google.protobuf.Any fails codegen.
+func TestResolveWrapperKind_ContentFieldWrongType(t *testing.T) {
+	const baseCrdName = "WrongTypeContentBase"
+	allProtoMsgs, extTypes := loadAllProtoMsgs(t, revisionederrorspb.GetProtocReqData())
+	kind := wrapperKindOf(t, allProtoMsgs, extTypes, baseCrdName)
+
+	assertPanic(t, `Invalid revisioned_in annotation on WrongTypeContentBase: kind "wrong_type_content_wrapper" resolves to message WrongTypeContentWrapper, `+
+		`whose field at path "spec.content" is not a google.protobuf.Any`,
+		func() {
+			resolveWrapperKind(baseCrdName, kind, allProtoMsgs, extTypes)
+		})
 }
 
 func assertPanic(t *testing.T, expected interface{}, f func()) {
