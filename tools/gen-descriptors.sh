@@ -1,28 +1,48 @@
 #!/usr/bin/env bash
 # Build the proto FileDescriptorSet + grpc_json_transcoder services allowlist
-# consumed by the Envoy ConfigMap templates, from proto/api.
+# consumed by the Envoy ConfigMap templates.
 #
-# The allowlist is deliberately NOT "every service that compiles" — Envoy's
+# The descriptor set itself (descriptors.pb) comes from Bazel's native
+# proto_library implicit output — `bazel build //proto/api/v2:v2_proto`
+# materializes bazel-bin/proto/api/v2/v2_proto-descriptor-set.proto.bin —
+# not from a separate `buf build` compile. This is deliberate: it's the same
+# underlying proto compilation (deps, k8s types, everything) that already
+# backs `bazel build //proto/...` / tools/gen-proto-go.sh, so it needs no
+# BSR dependency resolution or network access and can't drift from what Go
+# codegen compiles against. It regenerates unconditionally on any
+# proto/api/v2 change, independent of whether anything under javascript/
+# changed — see docs/contributing/dev/protobuf.md and the
+# "Check transcoder descriptor artifacts are up to date" step in
+# .github/workflows/main.yml's dirty-check job.
+#
+# The services allowlist is a second, independent concern: it is
+# deliberately NOT "every service that compiles" — Envoy's
 # grpc_json_transcoder exposes whatever is on it over plain JSON/HTTP, so an
 # internal-only Go service would become web-reachable the moment its proto
 # compiles if we did that. It's the intersection of:
 #   - the services javascript/packages/rpc/services.ts actually instantiates
 #     (i.e. what the browser client can call), and
-#   - the compiled descriptor set (used only to resolve each of those names
-#     to its fully-qualified proto service name).
+#   - the descriptor set above (used only to resolve each of those names to
+#     its fully-qualified proto service name — `buf build <path>#format=binpb`
+#     used here purely as a local format decoder, no network/BSR lookups).
 # A new Go-only service does not appear here until something in services.ts
-# starts referencing it.
+# starts referencing it; see tools/check-transcoder-services.sh's own
+# comments for how that half is enforced independently of proto changes.
 #
 # Shared by gen-grpc-client.sh (writes the committed chart files) and CI
-# (writes to a scratch dir and diffs against the committed files, so a
-# services.ts change that isn't followed by a re-run of gen-grpc-client.sh
-# fails the PR instead of silently shipping a stale transcoder config).
+# (writes to a scratch dir and diffs against the committed files).
 set -e
 set -x
 
 WORKSPACE_ROOT="${WORKSPACE_ROOT:-$(git rev-parse --show-toplevel)}"
 OUT_DIR="${1:-${WORKSPACE_ROOT}/helm/michelangelo/files}"
 SERVICES_TS="${WORKSPACE_ROOT}/javascript/packages/rpc/services.ts"
+BAZEL="${WORKSPACE_ROOT}/tools/bazel"
+
+if [ ! -x "${BAZEL}" ]; then
+  echo "bazel wrapper not found at ${BAZEL}"
+  exit 1
+fi
 
 if ! command -v buf &> /dev/null; then
   echo "Buf is NOT installed. Please install it from https://docs.buf.build/installation"
@@ -39,32 +59,18 @@ if [ ! -f "${SERVICES_TS}" ]; then
   exit 1
 fi
 
+mkdir -p "${OUT_DIR}"
+
+"${BAZEL}" build //proto/api/v2:v2_proto
+cp -f "${WORKSPACE_ROOT}/bazel-bin/proto/api/v2/v2_proto-descriptor-set.proto.bin" "${OUT_DIR}/descriptors.pb"
+chmod +w "${OUT_DIR}/descriptors.pb"
+
 TMP_DIR=$(mktemp -d)
 trap 'rm -rf "$TMP_DIR"' EXIT
 
-mkdir -p "${TMP_DIR}/michelangelo"
-cp -r "${WORKSPACE_ROOT}/proto/api" "${TMP_DIR}/michelangelo"
-
-cat << EOF > "${TMP_DIR}/buf.yaml"
-version: v2
-deps:
-  - buf.build/coscene-io/kubernetes-apis
-lint:
-  use:
-    - STANDARD
-breaking:
-  use:
-    - FILE
-EOF
-
-buf dep update "${TMP_DIR}"
-
-mkdir -p "${OUT_DIR}"
-
-# FileDescriptorSet so Envoy's grpc_json_transcoder filter can transcode
-# JSON<->binary proto without any Go-side jsonpb involvement.
-buf build "${TMP_DIR}" --exclude-source-info -o "${OUT_DIR}/descriptors.pb"
-buf build "${TMP_DIR}" --exclude-source-info -o "${TMP_DIR}/descriptors.json"
+# Decode the descriptor set to JSON — a local format conversion of the file
+# we just built, not a compile: no buf.yaml, no BSR deps, no network.
+buf build "${OUT_DIR}/descriptors.pb#format=binpb" -o "${TMP_DIR}/descriptors.json"
 
 # Service identifiers services.ts imports from generated `*_svc_pb` modules,
 # e.g. `import { DeploymentService } from './gen/michelangelo/api/v2/deployment_svc_pb';`
