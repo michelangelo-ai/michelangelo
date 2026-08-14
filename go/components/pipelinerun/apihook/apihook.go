@@ -2,7 +2,6 @@ package apihook
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"go.uber.org/zap"
@@ -163,7 +162,7 @@ func (a apiHook) tryResolveLatestRevision(ctx context.Context, request *v2.Creat
 		// live-Pipeline run when the Revision CR is gone.
 		request.PipelineRun.Spec.Revision = nil
 		request.PipelineRun.Spec.PipelineSpec = nil
-		if isNotFoundError(err) {
+		if utils.IsNotFoundError(err) {
 			a.logger.Info("BeforeCreate: status.latestRevision CR not found; falling back to live Pipeline",
 				zap.String("revision", latest.GetName()),
 				zap.String("namespace", revisionNamespace),
@@ -188,17 +187,6 @@ func resourceNamespace(ref *apipb.ResourceIdentifier, fallback string) string {
 		return ns
 	}
 	return fallback
-}
-
-// isNotFoundError reports whether err (or any wrapped cause) is a not-found
-// error. resolveRevision wraps apiHandler.Get failures with fmt.Errorf %w.
-func isNotFoundError(err error) bool {
-	for e := err; e != nil; e = errors.Unwrap(e) {
-		if utils.IsNotFoundError(e) {
-			return true
-		}
-	}
-	return false
 }
 
 // resolveRevision loads the Revision CR pinned by Spec.Revision and normalises
@@ -227,7 +215,10 @@ func (a apiHook) resolveRevision(ctx context.Context, request *v2.CreatePipeline
 
 	rev := &v2.Revision{}
 	if err := a.apiHandler.Get(ctx, namespace, revisionRef.GetName(), &metav1.GetOptions{}, rev); err != nil {
-		return fmt.Errorf("resolve revision %s/%s: %w", namespace, revisionRef.GetName(), err)
+		// Returned unwrapped: the handler already reports namespace and name, and
+		// callers classify it with utils.IsNotFoundError, which does not walk the
+		// error chain.
+		return err
 	}
 
 	// Revisions snapshot several resource kinds. Pinning a run to a non-Pipeline

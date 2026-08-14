@@ -159,7 +159,7 @@ func TestBeforeCreate_RejectsMissingRevision(t *testing.T) {
 
 	err := hook.BeforeCreate(context.Background(), newCreateRequest("does-not-exist"))
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "resolve revision")
+	assert.Contains(t, err.Error(), "does-not-exist")
 }
 
 func TestBeforeCreate_RejectsRevisionWithoutContent(t *testing.T) {
@@ -329,5 +329,5 @@ func TestBeforeCreate_ExplicitMissingRevisionStillRejected(t *testing.T) {
 	}
 	err := hook.BeforeCreate(context.Background(), request)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "resolve revision")
+	assert.Contains(t, err.Error(), "does-not-exist")
 }
