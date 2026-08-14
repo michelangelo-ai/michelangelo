@@ -8,12 +8,19 @@ import { CATEGORIES } from '#core/config/categories';
 import { DATA_PHASE } from '#core/config/phases/data';
 import { DEPLOY_PHASE } from '#core/config/phases/deploy';
 import { RETRAIN_PHASE } from '#core/config/phases/retrain';
+import { MONITOR_DEBUG_PHASE } from '#core/config/phases/monitor-debug';
 import { TRAIN_PHASE } from '#core/config/phases/train';
 import { EntityDetailRoute } from './entity-detail-route';
 import { PhaseListRoute } from './phase-list-route';
 import { StudioBar } from './studio-bar';
 
-const PROJECT_PHASES = [DATA_PHASE, TRAIN_PHASE, DEPLOY_PHASE, RETRAIN_PHASE];
+const PROJECT_PHASES = [
+  DATA_PHASE,
+  TRAIN_PHASE,
+  DEPLOY_PHASE,
+  RETRAIN_PHASE,
+  MONITOR_DEBUG_PHASE,
+];
 
 export function Router() {
   return (
