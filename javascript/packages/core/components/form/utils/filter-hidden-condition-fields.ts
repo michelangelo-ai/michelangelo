@@ -1,4 +1,6 @@
-import { deleteByPath, getByPath } from '#core/components/form/utils/object-path';
+import { get } from 'lodash';
+
+import { deleteByPath } from '#core/components/form/utils/delete-by-path';
 
 import type { FormConfig, LayoutItem } from '#core/components/form/types/config-types';
 
@@ -21,7 +23,7 @@ function stripHiddenConditions<T extends Record<string, unknown>>(
   return layout.reduce((acc, item) => {
     if (typeof item === 'string') return acc;
 
-    if (item.type === 'condition' && getByPath(acc, item.when) !== item.is) {
+    if (item.type === 'condition' && get(acc, item.when) !== item.is) {
       return stripFieldNames(item.items, acc);
     }
 

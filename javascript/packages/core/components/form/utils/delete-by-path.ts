@@ -1,18 +1,6 @@
 import { cloneDeep, get, isEmpty, set, toPath, unset } from 'lodash';
 
 /**
- * Reads the value at a dot/bracket path (e.g. `spec.items[0].name`), or `undefined` if any
- * segment along the path is missing.
- *
- * Callers outside this file should never reach for a form library's own path resolver directly —
- * going through here keeps the form utilities swappable if the underlying form library ever
- * changes.
- */
-export function getByPath(values: Record<string, unknown>, path: string): unknown {
-  return get(values, path);
-}
-
-/**
  * Returns a copy of `values` with the value at `path` removed, pruning any parent object or
  * array left empty as a result.
  */
