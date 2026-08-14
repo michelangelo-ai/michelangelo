@@ -13,7 +13,7 @@ import { EntityDetailRoute } from './entity-detail-route';
 import { PhaseListRoute } from './phase-list-route';
 import { StudioBar } from './studio-bar';
 
-const PROJECT_PHASES = [DATA_PHASE, TRAIN_PHASE, EXPERIMENT_PRODUCTIONIZE_PHASE, DEPLOY_PHASE];
+const PROJECT_PHASES = [DATA_PHASE, TRAIN_PHASE, DEPLOY_PHASE, EXPERIMENT_PRODUCTIONIZE_PHASE];
 
 export function Router() {
   return (

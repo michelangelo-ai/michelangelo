@@ -6,6 +6,6 @@ import { TRAIN_PHASE } from './train';
 export const PHASES = {
   data: DATA_PHASE,
   train: TRAIN_PHASE,
-  retrain: EXPERIMENT_PRODUCTIONIZE_PHASE,
   deploy: DEPLOY_PHASE,
+  retrain: EXPERIMENT_PRODUCTIONIZE_PHASE,
 };
