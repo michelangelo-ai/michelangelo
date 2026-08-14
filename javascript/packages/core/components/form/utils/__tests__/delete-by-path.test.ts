@@ -1,24 +1,4 @@
-import { deleteByPath, getByPath } from '#core/components/form/utils/object-path';
-
-describe('getByPath', () => {
-  it('reads a top-level value', () => {
-    expect(getByPath({ name: 'Alice' }, 'name')).toBe('Alice');
-  });
-
-  it('reads a nested value', () => {
-    expect(getByPath({ spec: { a: { b: 'value' } } }, 'spec.a.b')).toBe('value');
-  });
-
-  it('reads an indexed value', () => {
-    expect(getByPath({ items: [{ name: 'first' }, { name: 'second' }] }, 'items[1].name')).toBe(
-      'second'
-    );
-  });
-
-  it('returns undefined when a segment is missing', () => {
-    expect(getByPath({ spec: {} }, 'spec.a.b')).toBeUndefined();
-  });
-});
+import { deleteByPath } from '#core/components/form/utils/delete-by-path';
 
 describe('deleteByPath', () => {
   it('removes a top-level key', () => {
