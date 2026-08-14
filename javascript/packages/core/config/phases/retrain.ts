@@ -4,7 +4,7 @@ import { TRIGGER_ENTITY_CONFIG } from '#core/config/entities/trigger/trigger';
 
 import type { PhaseConfig } from '#core/types/common/studio-types';
 
-export const EXPERIMENT_PRODUCTIONIZE_PHASE: PhaseConfig = {
+export const RETRAIN_PHASE: PhaseConfig = {
   id: 'retrain',
   icon: 'lightbulb',
   name: 'Experiment & Productionize',
