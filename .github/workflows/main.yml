@@ -29,7 +29,7 @@ jobs:
 
       # Cache Bazel outputs
       - name: Cache Bazel Outputs
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cache/bazel
@@ -96,7 +96,7 @@ jobs:
 
       # Restore-only: reuse the cache saved by bazel-build (no redundant save)
       - name: Restore Bazel Cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: |
             ~/.cache/bazel

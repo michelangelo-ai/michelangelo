@@ -106,7 +106,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Cache Bazel Outputs
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/bazel
           key: bazel-nightly-${{ runner.os }}-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock') }}
