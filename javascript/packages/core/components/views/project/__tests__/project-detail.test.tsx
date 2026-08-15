@@ -45,6 +45,59 @@ describe('ProjectDetail', () => {
     expect(screen.getAllByText('fraud-detection')).not.toHaveLength(0);
   });
 
+  test('renders a source code link when gitRepo is set', async () => {
+    render(
+      <ProjectDetail phases={[]} />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getErrorProviderWrapper(),
+        getIconProviderWrapper(),
+        getRouterWrapper({ location: '/fraud-detection' }),
+        getServiceProviderWrapper({
+          request: createQueryMockRouter({
+            GetProject: {
+              project: {
+                metadata: { name: 'fraud-detection' },
+                spec: {
+                  description: 'Detects fraudulent transactions',
+                  gitRepo: 'https://github.com/example-org/fraud-detection',
+                },
+              },
+            },
+          }),
+        }),
+      ])
+    );
+
+    const link = await screen.findByRole('link', { name: 'Link' });
+    expect(link).toHaveAttribute('href', 'https://github.com/example-org/fraud-detection');
+  });
+
+  test('omits the source code link when gitRepo is not set', async () => {
+    render(
+      <ProjectDetail phases={[]} />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getErrorProviderWrapper(),
+        getIconProviderWrapper(),
+        getRouterWrapper({ location: '/fraud-detection' }),
+        getServiceProviderWrapper({
+          request: createQueryMockRouter({
+            GetProject: {
+              project: {
+                metadata: { name: 'fraud-detection' },
+                spec: { description: 'Detects fraudulent transactions' },
+              },
+            },
+          }),
+        }),
+      ])
+    );
+
+    await screen.findByText('Detects fraudulent transactions');
+    expect(screen.queryByText('Source Code')).not.toBeInTheDocument();
+  });
+
   test('renders all three phase cards with correct states', async () => {
     render(
       <ProjectDetail
