@@ -11,11 +11,12 @@ import type { LinkNavItem, NavigationLink } from './types';
 
 type Props = {
   links?: NavigationLink[];
+  onSignOut?: () => void;
 };
 
 const USER_MENU_ITEMS: NavItem[] = [{ label: 'Sign out' }];
 
-export function NavigationBar({ links }: Props) {
+export function NavigationBar({ links, onSignOut }: Props) {
   const user = useUserProvider();
 
   const mainItems: LinkNavItem[] =
@@ -61,6 +62,7 @@ export function NavigationBar({ links }: Props) {
       usernameSubtitle={user.email}
       userImgUrl={user.avatarUrl}
       userItems={USER_MENU_ITEMS}
+      onUserItemSelect={onSignOut}
       overrides={{
         Root: { style: { position: 'relative' as const } },
         AppName: { style: { whiteSpace: 'nowrap' } },

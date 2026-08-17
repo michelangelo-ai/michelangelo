@@ -56,6 +56,15 @@ export default defineConfig({
           include: ['eslint-local-rules/**/__tests__/**/*.{js,ts}'],
         },
       },
+      {
+        extends: true,
+
+        test: {
+          name: 'app',
+          environment: 'jsdom', // window.localStorage/window.location are used directly
+          include: ['app/**/__tests__/**/*.{ts,tsx}'],
+        },
+      },
     ],
   },
 });

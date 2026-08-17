@@ -258,11 +258,15 @@ For the full story on local vs. remote execution, building Docker images, config
 The UI shows a placeholder "Local Developer" user (name, email, and avatar) in the nav bar. To swap in your own GitHub name, email, and photo, get the URL to open from:
 
 ```bash
-cd <repo-root>/javascript/app
+cd <repo-root>/javascript
 yarn set-avatar <your-github-username>
+# or, to also set a specific email:
+yarn set-avatar <your-github-username> --email <your-email>
 ```
 
-Open the printed URL once in your browser — it looks like `http://localhost:8090/?ghUser=<username>`. On that first visit, the app fetches your public GitHub profile (`https://api.github.com/users/<username>`, no auth needed) and caches your name, email, and avatar in your browser's `localStorage`, so **no UI rebuild or backend restart is needed**: after that first visit, a normal page reload keeps showing them. If GitHub doesn't expose a public email, it falls back to `<username>@users.noreply.github.com`. This works the same way against the sandbox UI (`localhost:8090`) or the local `yarn dev` server. Leave it unset for the default placeholder identity.
+Open the printed URL once in your browser — it looks like `http://localhost:8090/?ghUser=<username>`. On that first visit, the app fetches your public GitHub profile (`https://api.github.com/users/<username>`, no auth needed) and caches your name, email, and avatar in your browser's `localStorage`, so **no UI rebuild or backend restart is needed**: after that first visit, a normal page reload keeps showing them. Most GitHub profiles don't expose a public email, so pass `--email` if you want a real one shown; otherwise it falls back to your own `git config user.email` when running against the local `yarn dev` server (read once via a dev-only endpoint that doesn't exist in the built sandbox bundle, since that's just nginx serving static files with no backend to ask), or a plain placeholder if neither is available. Leave it unset for the default placeholder identity.
+
+To go back to the default placeholder identity, use **Sign out** from the user menu — in the sandbox it clears the cached GitHub profile instead of ending a real session (there's no real auth here). Removing the `localStorage` entry by hand won't work if the page URL still has `?ghUser=...`/`&email=...` in it, since reloading would just fetch and cache it again; Sign out strips those params for you.
 
 ---
 
