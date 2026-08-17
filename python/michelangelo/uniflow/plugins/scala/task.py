@@ -110,7 +110,10 @@ class ScalaTask(TaskConfig):
         local_dir = tempfile.mkdtemp(prefix="michelangelo_scala_")
         local_jar = os.path.join(local_dir, os.path.basename(self.main_file))
         log.info("scala task: downloading %s to %s", self.main_file, local_jar)
-        with fsspec.open(self.main_file, mode="rb") as src, open(local_jar, "wb") as dst:
+        with (
+            fsspec.open(self.main_file, mode="rb") as src,
+            open(local_jar, "wb") as dst,
+        ):
             dst.write(src.read())
 
         cmd = [

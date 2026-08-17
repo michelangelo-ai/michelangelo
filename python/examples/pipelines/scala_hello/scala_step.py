@@ -20,8 +20,10 @@ __all__ = ["hello_scala"]
 
 
 @uniflow.task(
-    config=ScalaTask(main_file="", main_class=""),  # real values set via with_overrides()
-    cache_enabled=False,  # off for tutorial simplicity; no result contract to cache anyway
+    # real values set via with_overrides()
+    config=ScalaTask(main_file="", main_class=""),
+    # off for tutorial simplicity; no result contract to cache anyway
+    cache_enabled=False,
 )
 def hello_scala() -> None:
     """No-op body — HelloScala.scala's main() does the actual work."""
