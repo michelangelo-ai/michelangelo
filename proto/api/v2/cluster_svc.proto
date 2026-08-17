@@ -96,6 +96,10 @@ message ListClusterRequest {
   k8s.io.apimachinery.pkg.apis.meta.v1.ListOptions list_options = 2;
 
   michelangelo.api.ListOptionsExt list_options_ext = 3;
+
+  // TEST(ci-repro): synthetic field added to verify descriptor drift is
+  // caught by main.yml's dirty-check job. Throwaway, do not merge.
+  string ci_repro_test_field = 4;
 }
 
 // Response message for ClusterService.List method.
