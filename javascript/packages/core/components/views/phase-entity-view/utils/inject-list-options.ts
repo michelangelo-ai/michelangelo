@@ -3,9 +3,13 @@ import type { InjectedListOptions } from '../types';
 
 /**
  * Derives the RPC-level listOptions needed to restrict an entity's list query to a
- * phase's pipeline types, branching per entity service the way studio-web's list view
- * does (pipelines filter by field, everything downstream of a pipeline run filters by
- * label). Returns undefined when there's nothing to inject.
+ * phase's pipeline types. Only `pipeline` is handled today: studio-web's equivalent
+ * also filters pipelineRun/triggerRun by a `michelangelo/SourcePipelineType` label, but
+ * the OSS apiserver never stamps that label onto PipelineRun/TriggerRun rows (it's only
+ * read for notification formatting — see go/base/notification/types/types.go), so
+ * applying it here would silently return zero rows. Leave runs/triggers unfiltered
+ * until a backend change adds that label. Returns undefined when there's nothing to
+ * inject.
  */
 export function injectListOptions(
   service: QueryConfig['service'],
@@ -19,12 +23,6 @@ export function injectListOptions(
       // as a literal MySQL column (indexPathToKeyMaps is nil), so it must be the raw
       // `pipeline_type` column, not the proto path `spec.type`.
       fieldSelector: `pipeline_type in (${pipelineTypes.join(',')})`,
-    };
-  }
-
-  if (service === 'pipelineRun' || service === 'triggerRun') {
-    return {
-      labelSelector: `michelangelo/SourcePipelineType in (${pipelineTypes.join(',')})`,
     };
   }
 
