@@ -6,6 +6,7 @@ import type {
   MessageInitShape,
   MessageShape,
 } from '@bufbuild/protobuf';
+import type { ClusterService } from './gen/michelangelo/api/v2/cluster_svc_pb';
 import type { DeploymentService } from './gen/michelangelo/api/v2/deployment_svc_pb';
 import type { InferenceServerService } from './gen/michelangelo/api/v2/inference_server_svc_pb';
 import type { ModelService } from './gen/michelangelo/api/v2/model_svc_pb';
@@ -60,6 +61,7 @@ export type ServiceClient<T extends DescService> = {
 };
 
 export type Services = {
+  ClusterService: ServiceClient<typeof ClusterService>;
   DeploymentService: ServiceClient<typeof DeploymentService>;
   InferenceServerService: ServiceClient<typeof InferenceServerService>;
   ProjectService: ServiceClient<typeof ProjectService>;
