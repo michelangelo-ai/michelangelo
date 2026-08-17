@@ -9,5 +9,5 @@ export const PHASES = {
   train: TRAIN_PHASE,
   deploy: DEPLOY_PHASE,
   retrain: RETRAIN_PHASE,
-  'monitor-debug': MONITOR_DEBUG_PHASE,
+  monitor: MONITOR_DEBUG_PHASE,
 };

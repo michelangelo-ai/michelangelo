@@ -1,7 +1,7 @@
 import type { PhaseConfig } from '#core/types/common/studio-types';
 
 export const MONITOR_DEBUG_PHASE: PhaseConfig = {
-  id: 'monitor-debug',
+  id: 'monitor',
   icon: 'monitor',
   name: 'Monitor & Debug',
   description: 'Monitor model performance and debug issues in production',
