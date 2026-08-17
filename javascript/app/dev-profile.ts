@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 
 import type { DevProfile, GithubUserResponse, UseDevProfileResult } from './types';
 
-const DEV_PROFILE_STORAGE_KEY = 'ma-dev-github-profile';
+export const DEV_PROFILE_STORAGE_KEY = 'ma-dev-github-profile';
+export const GH_USER_PARAM = 'ghUser';
+export const EMAIL_PARAM = 'email';
 const DEFAULT_EMAIL = 'dev@localhost';
 
 // Sandbox-only identity override sourced from ?ghUser=<username>[&email=<email>] in the URL,
@@ -13,9 +15,9 @@ export function useDevProfile(): UseDevProfileResult {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const username = params.get('ghUser');
+    const username = params.get(GH_USER_PARAM);
     if (!username) return;
-    const emailOverride = params.get('email') ?? undefined;
+    const emailOverride = params.get(EMAIL_PARAM) ?? undefined;
     // Avoid refetching (and flickering the nav bar) when the cache already matches.
     const cached = readCachedDevProfile();
     if (cached?.username === username && cached.emailOverride === emailOverride) return;
@@ -32,10 +34,10 @@ export function useDevProfile(): UseDevProfileResult {
 function isStaleForCurrentUrl(profile: DevProfile | undefined): boolean {
   if (typeof window === 'undefined') return false;
   const params = new URLSearchParams(window.location.search);
-  const username = params.get('ghUser');
+  const username = params.get(GH_USER_PARAM);
   if (!username) return false;
   if (profile?.username !== username) return true;
-  return profile.emailOverride !== (params.get('email') ?? undefined);
+  return profile.emailOverride !== (params.get(EMAIL_PARAM) ?? undefined);
 }
 
 function readCachedDevProfile(): DevProfile | undefined {
@@ -83,13 +85,11 @@ async function fetchLocalGitEmail(): Promise<string | undefined> {
 export function clearDevProfile(): void {
   window.localStorage.removeItem(DEV_PROFILE_STORAGE_KEY);
   const url = new URL(window.location.href);
-  if (url.searchParams.has('ghUser') || url.searchParams.has('email')) {
-    url.searchParams.delete('ghUser');
-    url.searchParams.delete('email');
+  if (url.searchParams.has(GH_USER_PARAM) || url.searchParams.has(EMAIL_PARAM)) {
+    url.searchParams.delete(GH_USER_PARAM);
+    url.searchParams.delete(EMAIL_PARAM);
     window.location.assign(url.toString());
     return;
   }
   window.location.reload();
 }
-
-export const testing = { DEV_PROFILE_STORAGE_KEY, readCachedDevProfile, fetchDevProfile };

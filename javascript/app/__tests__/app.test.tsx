@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { App } from '../App';
-import { testing } from '../dev-profile';
+import { DEV_PROFILE_STORAGE_KEY, GH_USER_PARAM } from '../dev-profile';
 
 vi.mock('@michelangelo-ai/rpc', () => ({
   request: vi.fn((queryName: string) =>
@@ -27,7 +27,7 @@ afterEach(() => {
 });
 
 it('shows the GitHub profile fetched via ?ghUser= in the nav bar', async () => {
-  window.history.replaceState(null, '', '/?ghUser=ada');
+  window.history.replaceState(null, '', `/?${new URLSearchParams({ [GH_USER_PARAM]: 'ada' })}`);
   vi.stubGlobal(
     'fetch',
     vi.fn(() =>
@@ -51,7 +51,7 @@ it('shows the GitHub profile fetched via ?ghUser= in the nav bar', async () => {
 
 it('signs out to clear the cached dev profile', async () => {
   window.localStorage.setItem(
-    testing.DEV_PROFILE_STORAGE_KEY,
+    DEV_PROFILE_STORAGE_KEY,
     JSON.stringify({
       username: 'ada',
       name: 'Ada Lovelace',
@@ -72,5 +72,5 @@ it('signs out to clear the cached dev profile', async () => {
   );
   await userEvent.click(screen.getByRole('option', { name: 'Sign out' }));
 
-  expect(window.localStorage.getItem(testing.DEV_PROFILE_STORAGE_KEY)).toBeNull();
+  expect(window.localStorage.getItem(DEV_PROFILE_STORAGE_KEY)).toBeNull();
 });
