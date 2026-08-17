@@ -3,13 +3,11 @@
 # from protobuf files via buf's remote codegen plugins.
 #
 # Does NOT touch helm/michelangelo/files/descriptors.pb or
-# transcoder-services.json — those are a separate concern with a separate
-# trigger (see tools/gen-descriptors.sh). This script needs network access
-# to buf.build's remote plugins and BSR dependencies regardless, and is
-# wired into javascript/package.json's `generate`/`prebuild`/`setup`
-# scripts; requiring Bazel here too (gen-descriptors.sh's dependency, now
-# that it builds descriptors.pb via `bazel build`) would impose a new,
-# unrelated toolchain requirement on every `yarn build`/`yarn setup`.
+# transcoder-services.json — see tools/gen-descriptors.sh for those. This
+# script already needs buf's network access regardless, and is wired into
+# javascript/package.json's `generate`/`prebuild`/`setup` scripts; adding
+# gen-descriptors.sh's Bazel dependency here would put a new toolchain
+# requirement on every `yarn build`.
 set -e
 set -x
 

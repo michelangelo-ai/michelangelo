@@ -1,15 +1,9 @@
 name: Transcoder services check
 
-# Narrower than it looks: this only needs to catch a
-# javascript/packages/rpc/services.ts change that isn't followed by a
-# regeneration of helm/michelangelo/files/transcoder-services.json.
-# Proto-side staleness (a .proto change without a corresponding
-# descriptors.pb/transcoder-services.json regen) is now caught
-# unconditionally by the "Check transcoder descriptor artifacts are up to
-# date" step in main.yml's dirty-check job, which fires on every proto/go
-# change via `tools/gen-descriptors.sh` — the same underlying generator this
-# job also calls. That job doesn't run on javascript/**-only changes
-# (main.yml ignores that path entirely), which is the gap this job covers.
+# Narrow: catches a javascript/packages/rpc/services.ts change with no
+# matching transcoder-services.json regen. Proto-side staleness is caught
+# unconditionally by main.yml's dirty-check job instead, which doesn't run
+# on javascript/**-only changes — that's the gap this job covers.
 on:
   pull_request:
     paths:
