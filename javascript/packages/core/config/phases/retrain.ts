@@ -10,5 +10,11 @@ export const RETRAIN_PHASE: PhaseConfig = {
   name: 'Experiment & Productionize',
   description: 'Experiment with pipelines and productionize your machine learning workflows',
   state: 'active' as const,
+  pipelineTypes: [
+    'PIPELINE_TYPE_RETRAIN',
+    'PIPELINE_TYPE_EXPERIMENT',
+    'PIPELINE_TYPE_POST_PROCESSING',
+    'PIPELINE_TYPE_OPTIMIZATION',
+  ],
   entities: [PIPELINE_ENTITY_CONFIG, RUN_ENTITY_CONFIG, TRIGGER_ENTITY_CONFIG],
 };
