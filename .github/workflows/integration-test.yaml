@@ -193,10 +193,16 @@ jobs:
           node-version: 24.18.0
 
       - name: Install browser test dependencies
+        # Explicit registry so this step is independent of whatever npm
+        # config happens to be present on the runner machine. Our only
+        # dependency is the public @playwright/test package.
         run: |
           npm ci
           npx playwright install --with-deps chromium
         working-directory: ${{ github.workspace }}/integration-test/browser
+        env:
+          NPM_CONFIG_REGISTRY: https://registry.npmjs.org/
+          NPM_CONFIG_USERCONFIG: /tmp/empty-npmrc-for-browser-tests
 
       - name: Run browser tests
         run: npm test
