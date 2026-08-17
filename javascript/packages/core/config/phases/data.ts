@@ -10,6 +10,7 @@ export const DATA_PHASE: PhaseConfig = {
   description: 'Create data pipelines and analyze your datasets',
   docUrl: 'https://michelangelo-ai.org/docs/user-guides/getting-started/prepare-your-data',
   state: 'disabled' as const,
+  pipelineTypes: ['PIPELINE_TYPE_DATA_PREP', 'PIPELINE_TYPE_BASIS_FEATURE'],
   entities: [
     { ...PIPELINE_ENTITY_CONFIG, state: 'disabled' },
     { ...RUN_ENTITY_CONFIG, state: 'disabled' },
