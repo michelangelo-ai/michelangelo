@@ -255,18 +255,11 @@ For the full story on local vs. remote execution, building Docker images, config
 
 ## Optional: set a custom dev identity
 
-The UI shows a placeholder "Local Developer" user (name, email, and avatar) in the nav bar. To swap in your own GitHub name, email, and photo, get the URL to open from:
+The UI shows a placeholder "Local Developer" user (name, email, and avatar) in the nav bar. To swap in your own GitHub name, email, and photo, visit the sandbox URL with a `?ghUser=<your-github-username>` query param, e.g. `http://localhost:8090/?ghUser=<username>` (optionally add `&email=<your-email>` to set a specific email). On that first visit, the app fetches your public GitHub profile (no auth needed) and caches your name, email, and avatar in your browser's `localStorage`, so **no UI rebuild or backend restart is needed** — a normal page reload afterward keeps showing them.
 
-```bash
-cd <repo-root>/javascript
-yarn set-avatar <your-github-username>
-# or, to also set a specific email:
-yarn set-avatar <your-github-username> --email <your-email>
-```
+`yarn set-avatar <your-github-username> [--email <your-email>]` (run from `javascript/`) is just a shortcut that prints this URL for you; editing the URL directly works the same way. Most GitHub profiles don't expose a public email, so pass `--email` (or add `&email=` to the URL yourself) if you want a real one shown — otherwise it falls back to your local git email (only works against `yarn dev`, not the built sandbox) or a placeholder.
 
-Open the printed URL once in your browser — it looks like `http://localhost:8090/?ghUser=<username>`. On that first visit, the app fetches your public GitHub profile (`https://api.github.com/users/<username>`, no auth needed) and caches your name, email, and avatar in your browser's `localStorage`, so **no UI rebuild or backend restart is needed**: after that first visit, a normal page reload keeps showing them. Most GitHub profiles don't expose a public email, so pass `--email` if you want a real one shown; otherwise it falls back to your own `git config user.email` when running against the local `yarn dev` server (read once via a dev-only endpoint that doesn't exist in the built sandbox bundle, since that's just nginx serving static files with no backend to ask), or a plain placeholder if neither is available. Leave it unset for the default placeholder identity.
-
-To go back to the default placeholder identity, use **Sign out** from the user menu — in the sandbox it clears the cached GitHub profile instead of ending a real session (there's no real auth here). Removing the `localStorage` entry by hand won't work if the page URL still has `?ghUser=...`/`&email=...` in it, since reloading would just fetch and cache it again; Sign out strips those params for you.
+To go back to the default placeholder identity, use **Sign out** from the user menu — in the sandbox it just clears the cached profile and strips `ghUser`/`email` from the URL (there's no real auth here), so a manual `localStorage` edit alone won't stick if those params are still in the URL.
 
 ---
 
