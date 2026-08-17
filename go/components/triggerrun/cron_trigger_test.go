@@ -143,6 +143,61 @@ func TestRun(t *testing.T) {
 	}
 }
 
+func TestRunStartsSchedulePaused(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
+	mockClient.EXPECT().GetDomain().Return("test-domain")
+	mockClient.EXPECT().GetProvider().Return("test-provider").AnyTimes()
+	mockClient.EXPECT().ListOpenWorkflow(gomock.Any(), gomock.Any()).Return(
+		&clientInterface.ListOpenWorkflowExecutionsResponse{}, nil)
+	mockClient.EXPECT().StartWorkflow(
+		gomock.Any(),
+		gomock.Any(),
+		"trigger.CronTrigger",
+		gomock.Any(),
+	).DoAndReturn(func(
+		_ context.Context,
+		options clientInterface.StartWorkflowOptions,
+		_ string,
+		_ ...interface{},
+	) (*clientInterface.WorkflowExecution, error) {
+		require.True(t, options.StartPaused)
+		return &clientInterface.WorkflowExecution{ID: _workflowID, RunID: _runID}, nil
+	})
+
+	triggerRun := _triggerRun.DeepCopy()
+	triggerRun.Spec.Action = v2pb.TRIGGER_RUN_ACTION_PAUSE
+	status, err := setupCronTrigger(t, mockClient).Run(context.Background(), triggerRun)
+
+	require.NoError(t, err)
+	assert.Equal(t, v2pb.TRIGGER_RUN_STATE_PAUSED, status.State)
+	assert.Equal(t, mustScheduleInputHash(t, triggerRun), status.ActualScheduleInputHash)
+}
+
+func TestRunPausesExistingScheduleImmediately(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
+	mockClient.EXPECT().GetDomain().Return("test-domain")
+	mockClient.EXPECT().GetProvider().Return("test-provider")
+	mockClient.EXPECT().ListOpenWorkflow(gomock.Any(), gomock.Any()).Return(
+		&clientInterface.ListOpenWorkflowExecutionsResponse{
+			Executions: []clientInterface.WorkflowExecutionInfo{
+				{Execution: &clientInterface.WorkflowExecution{RunID: _runID}},
+			},
+		}, nil)
+	paused := true
+	mockClient.EXPECT().UpdateTrigger(
+		gomock.Any(), generateWorkflowID(&_triggerRun), "", gomock.Eq(&paused), gomock.Nil()).Return(nil)
+
+	triggerRun := _triggerRun.DeepCopy()
+	triggerRun.Spec.Action = v2pb.TRIGGER_RUN_ACTION_PAUSE
+	status, err := setupCronTrigger(t, mockClient).Run(context.Background(), triggerRun)
+
+	require.NoError(t, err)
+	assert.Equal(t, v2pb.TRIGGER_RUN_STATE_PAUSED, status.State)
+	assert.Empty(t, status.ActualScheduleInputHash)
+}
+
 func TestRunExistingWorkflowLeavesInputForReconciliation(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockClient := interfaceMock.NewMockWorkflowClient(ctrl)

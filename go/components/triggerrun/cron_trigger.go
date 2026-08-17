@@ -53,8 +53,8 @@ func NewCronTrigger(log logr.Logger, workflowClient clientInterface.WorkflowClie
 //   - DecisionTaskStartToCloseTimeout: 30 seconds
 //   - CronSchedule: From TriggerRun spec
 //
-// Returns State=RUNNING if workflow starts successfully or is already running,
-// State=FAILED if workflow start fails.
+// Returns State=RUNNING when an active schedule starts successfully, State=PAUSED when
+// a PAUSE action is applied during creation, or State=FAILED if workflow start fails.
 func (r *cronTrigger) Run(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2pb.TriggerRunStatus, error) {
 	log := r.Log.WithValues("triggerRun", k8stypes.NamespacedName{
 		Namespace: triggerRun.Namespace,
@@ -67,6 +67,7 @@ func (r *cronTrigger) Run(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2p
 		ExecutionStartToCloseTimeout:    time.Hour * 24 * 365, // 1 year, practically no timeout
 		DecisionTaskStartToCloseTimeout: 30 * time.Second,
 		CronSchedule:                    triggerRun.Spec.Trigger.GetCronSchedule().GetCron(),
+		StartPaused:                     triggerRun.Spec.Action == v2pb.TRIGGER_RUN_ACTION_PAUSE,
 	}
 	domain := r.WorkflowClient.GetDomain()
 	rid, err := getWorkflowOpenRunID(ctx, wid, r.WorkflowClient, domain)
@@ -89,10 +90,21 @@ func (r *cronTrigger) Run(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2p
 		// its schedule action contains the current TriggerRun input. Leave the
 		// Actual* fields empty so Update verifies and refreshes them on the next
 		// reconciliation.
-		return v2pb.TriggerRunStatus{
+		status := v2pb.TriggerRunStatus{
 			State:  v2pb.TRIGGER_RUN_STATE_RUNNING,
 			LogUrl: getWorkflowURL(wid, r.WorkflowClient.GetProvider()),
-		}, nil
+		}
+		if opt.StartPaused {
+			paused := true
+			if updateErr := r.WorkflowClient.UpdateTrigger(ctx, wid, "", &paused, nil); updateErr != nil {
+				status.State = v2pb.TRIGGER_RUN_STATE_FAILED
+				status.ErrorMessage = updateErr.Error()
+				return status, fmt.Errorf("pause existing trigger %s/%s: %w",
+					triggerRun.Namespace, triggerRun.Name, updateErr)
+			}
+			status.State = v2pb.TRIGGER_RUN_STATE_PAUSED
+		}
+		return status, nil
 	}
 	inputHash, err := scheduleInputHash(triggerRun)
 	if err != nil {
@@ -122,13 +134,18 @@ func (r *cronTrigger) Run(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2p
 			}, fmt.Errorf("start workflow for trigger %s/%s: %w",
 				triggerRun.Namespace, triggerRun.Name, err)
 	}
-	r.Log.Info("scheduled workflow enabled",
+	r.Log.Info("scheduled workflow created",
 		"operation", "workflow_started",
 		"namespace", triggerRun.Namespace,
 		"name", triggerRun.Name,
+		"paused", opt.StartPaused,
 		"execution_id", exec.ID,
 		"run_id", exec.RunID)
-	return recurringTriggerStatus(triggerRun, wid, opt.CronSchedule, inputHash, r.WorkflowClient.GetProvider()), nil
+	status := recurringTriggerStatus(triggerRun, wid, opt.CronSchedule, inputHash, r.WorkflowClient.GetProvider())
+	if opt.StartPaused {
+		status.State = v2pb.TRIGGER_RUN_STATE_PAUSED
+	}
+	return status, nil
 }
 
 func recurringTriggerStatus(

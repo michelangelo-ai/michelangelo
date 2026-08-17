@@ -103,6 +103,12 @@ func (c *TemporalClient) createScheduleForCron(ctx context.Context, options clie
 	if scheduleHandle != nil {
 		_, err := scheduleHandle.Describe(ctx)
 		if err == nil {
+			if options.StartPaused {
+				paused := true
+				if err := c.UpdateTrigger(ctx, options.ID, "", &paused, nil); err != nil {
+					return nil, fmt.Errorf("failed to pause existing Temporal schedule: %w", err)
+				}
+			}
 			// Schedule already exists, return success
 			return &clientInterface.WorkflowExecution{
 				ID:    scheduleID,
@@ -125,6 +131,10 @@ func (c *TemporalClient) createScheduleForCron(ctx context.Context, options clie
 		},
 		Overlap:        overlapPolicy, // Use extracted policy based on maxConcurrency
 		PauseOnFailure: false,
+		Paused:         options.StartPaused,
+	}
+	if options.StartPaused {
+		scheduleOptions.Note = "paused by michelangelo"
 	}
 
 	// Set workflow timeout if provided

@@ -69,6 +69,17 @@ func TestStartWorkflow(t *testing.T) {
 	}
 }
 
+func TestStartWorkflowRejectsStartPaused(t *testing.T) {
+	client := &CadenceClient{Client: &cadencemocks.Client{}}
+	_, err := client.StartWorkflow(
+		context.Background(),
+		clientInterface.StartWorkflowOptions{StartPaused: true},
+		"testWorkflow",
+	)
+
+	assert.EqualError(t, err, "starting a paused workflow is not supported by Cadence")
+}
+
 func TestGetWorkflowExecutionInfo(t *testing.T) {
 	workflowID := "testWorkflowID"
 	runID := "testRunID"

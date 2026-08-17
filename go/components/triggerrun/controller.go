@@ -247,6 +247,10 @@ StateMachine:
 			"state", status.State,
 			"execution_workflow_id", status.ExecutionWorkflowId)
 		triggerRun.Status = status
+		if triggerRun.Spec.Action == v2pb.TRIGGER_RUN_ACTION_PAUSE &&
+			status.State == v2pb.TRIGGER_RUN_STATE_PAUSED {
+			triggerRun.Spec.Action = v2pb.TRIGGER_RUN_ACTION_NO_ACTION
+		}
 	case v2pb.TRIGGER_RUN_STATE_RUNNING:
 		log.Info("TRIGGER_RUN_STATE_RUNNING")
 

@@ -153,6 +153,25 @@ func TestReconcile(t *testing.T) {
 			expectRequeue:  true,
 		},
 		{
+			name:    "first time pause is consumed during creation",
+			request: ctrl.Request{NamespacedName: types.NamespacedName{Namespace: _namespace, Name: _triggerRun.Name}},
+			initialObject: func() v2pb.TriggerRun {
+				tr := _triggerRun.DeepCopy()
+				tr.Spec.Action = v2pb.TRIGGER_RUN_ACTION_PAUSE
+				return *tr
+			}(),
+			initialStatus: v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_INVALID},
+			cronRunnerProvider: func() Runner {
+				mockRunner := &MockRunner{}
+				mockRunner.On("Run", mock.Anything, mock.Anything).
+					Return(v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_PAUSED}, nil)
+				return mockRunner
+			},
+			expectedStatus: v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_PAUSED},
+			expectedAction: v2pb.TRIGGER_RUN_ACTION_NO_ACTION,
+			expectRequeue:  true,
+		},
+		{
 			name:    "kill trigger after initial creation",
 			request: ctrl.Request{NamespacedName: types.NamespacedName{Namespace: _namespace, Name: _triggerRun.Name}},
 			initialObject: func() v2pb.TriggerRun {

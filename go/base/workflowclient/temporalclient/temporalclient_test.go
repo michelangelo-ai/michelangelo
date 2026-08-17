@@ -452,6 +452,28 @@ func TestCreateScheduleForCron(t *testing.T) {
 			errMsg:        "",
 		},
 		{
+			name: "success - schedule created paused",
+			options: clientInterface.StartWorkflowOptions{
+				ID:           "paused-workflow",
+				TaskList:     "test-task-list",
+				CronSchedule: "0 0 * * *",
+				StartPaused:  true,
+			},
+			workflowName: "test-workflow-name",
+			args:         []interface{}{"arg1"},
+			mockFunc: func(mockClient *temporalMocks.Client, mockScheduleClient *temporalMocks.ScheduleClient, mockScheduleHandle *temporalMocks.ScheduleHandle) {
+				mockClient.On("ScheduleClient").Return(mockScheduleClient)
+				mockScheduleClient.On("GetHandle", mock.Anything, "paused-workflow-schedule").Return(mockScheduleHandle)
+				mockScheduleHandle.On("Describe", mock.Anything).Return(nil, fmt.Errorf("schedule not found"))
+				mockScheduleClient.On("Create", mock.Anything, mock.MatchedBy(func(options temporalClient.ScheduleOptions) bool {
+					return options.Paused && options.Note == "paused by michelangelo"
+				})).Return(mockScheduleHandle, nil)
+			},
+			expectedID:    "paused-workflow-schedule",
+			expectedRunID: "",
+			errMsg:        "",
+		},
+		{
 			name: "success - schedule already exists",
 			options: clientInterface.StartWorkflowOptions{
 				ID:           "existing-workflow",
@@ -473,6 +495,35 @@ func TestCreateScheduleForCron(t *testing.T) {
 				// Create should not be called in this case
 			},
 			expectedID:    "existing-workflow-schedule",
+			expectedRunID: "",
+			errMsg:        "",
+		},
+		{
+			name: "success - existing schedule paused immediately",
+			options: clientInterface.StartWorkflowOptions{
+				ID:           "existing-paused-workflow",
+				TaskList:     "test-task-list",
+				CronSchedule: "0 0 * * *",
+				StartPaused:  true,
+			},
+			workflowName: "test-workflow-name",
+			args:         []interface{}{"arg1"},
+			mockFunc: func(mockClient *temporalMocks.Client, mockScheduleClient *temporalMocks.ScheduleClient, mockScheduleHandle *temporalMocks.ScheduleHandle) {
+				mockClient.On("ScheduleClient").Return(mockScheduleClient).Twice()
+				mockScheduleClient.On("GetHandle", mock.Anything, "existing-paused-workflow-schedule").Return(mockScheduleHandle).Twice()
+				mockScheduleHandle.On("Describe", mock.Anything).Return(&temporalClient.ScheduleDescription{}, nil)
+				mockScheduleHandle.On("Update", mock.Anything, mock.MatchedBy(func(options temporalClient.ScheduleUpdateOptions) bool {
+					state := &temporalClient.ScheduleState{}
+					update, err := options.DoUpdate(temporalClient.ScheduleUpdateInput{
+						Description: temporalClient.ScheduleDescription{
+							Schedule: temporalClient.Schedule{State: state},
+						},
+					})
+					require.NoError(t, err)
+					return update.Schedule.State.Paused
+				})).Return(nil)
+			},
+			expectedID:    "existing-paused-workflow-schedule",
 			expectedRunID: "",
 			errMsg:        "",
 		},

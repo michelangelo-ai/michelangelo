@@ -44,6 +44,9 @@ type CadenceClient struct {
 var _ clientInterface.WorkflowClient = &CadenceClient{}
 
 func (c *CadenceClient) StartWorkflow(ctx context.Context, options clientInterface.StartWorkflowOptions, workflowName string, args ...interface{}) (*clientInterface.WorkflowExecution, error) {
+	if options.StartPaused {
+		return nil, fmt.Errorf("starting a paused workflow is not supported by Cadence")
+	}
 
 	cadenceOptions := cadenceClient.StartWorkflowOptions{
 		ID:                              options.ID,
