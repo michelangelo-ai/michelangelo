@@ -3,7 +3,7 @@ export type DevProfile = {
   name: string;
   email: string;
   avatarUrl: string;
-  /** Raw `?email=` override used to produce this profile, if any; tracked to invalidate the cache when it changes even if the username hasn't. */
+  /** `?email=` override in effect when this profile was cached, if any. */
   emailOverride?: string;
 };
 

@@ -8,10 +8,7 @@ import { Provider as StyletronProvider } from 'styletron-react';
 import { clearDevProfile, useDevProfile } from './dev-profile';
 import { ICONS } from './icons/icons';
 
-// This whole file is the sandbox/demo app shell (see the hardcoded fallback name/email/role
-// below, overridable via useDevProfile); a real production deployment would supply its own user
-// identity from its own identity service via a different app shell, so that override never
-// reaches production.
+// Sandbox/demo app shell; a real deployment supplies its own identity via a different shell.
 const engine = new Styletron();
 const queryClient = new QueryClient();
 
