@@ -227,19 +227,6 @@ func (c *cronTrigger) Update(ctx context.Context, triggerRun *v2pb.TriggerRun, a
 		Name:      triggerRun.Name,
 	})
 
-	// A paused schedule cannot start workflows with stale inputs, so defer all
-	// schedule synchronization until resume. This also avoids repeatedly calling
-	// Temporal for paused schedules whose workflow has exhausted its signal limit.
-	// Kill is intentionally not handled here; returning actionHandled=false lets
-	// the controller continue to the normal schedule deletion path.
-	if triggerRun.Status.State == v2pb.TRIGGER_RUN_STATE_PAUSED &&
-		action != v2pb.TRIGGER_RUN_ACTION_RESUME {
-		log.Info("trigger is paused, deferring schedule synchronization until resume")
-		// A repeated PAUSE command is already satisfied. Mark it handled so the
-		// controller clears the one-time action without contacting Temporal.
-		return triggerRun.Status, action == v2pb.TRIGGER_RUN_ACTION_PAUSE, nil
-	}
-
 	desiredCron := triggerRun.Spec.Trigger.GetCronSchedule().GetCron()
 	if desiredCron == "" {
 		log.Info("no cron schedule in spec, skipping update")

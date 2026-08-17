@@ -754,47 +754,45 @@ func TestCronTrigger_Update(t *testing.T) {
 	}
 }
 
-func TestCronTrigger_UpdateDefersDriftWhilePaused(t *testing.T) {
-	for _, test := range []struct {
-		action          v2pb.TriggerRunAction
-		expectedHandled bool
-	}{
-		{action: v2pb.TRIGGER_RUN_ACTION_NO_ACTION},
-		{action: v2pb.TRIGGER_RUN_ACTION_KILL},
-		{action: v2pb.TRIGGER_RUN_ACTION_PAUSE, expectedHandled: true},
-	} {
-		t.Run(test.action.String(), func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
-			triggerRun := &v2pb.TriggerRun{
-				ObjectMeta: metav1.ObjectMeta{
-					Namespace: "test-namespace",
-					Name:      "test-triggerrun",
+func TestCronTrigger_UpdateSyncsDriftWhilePaused(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
+	triggerRun := &v2pb.TriggerRun{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "test-namespace",
+			Name:      "test-triggerrun",
+		},
+		Spec: v2pb.TriggerRunSpec{
+			Trigger: &v2pb.Trigger{
+				TriggerType: &v2pb.Trigger_CronSchedule{
+					CronSchedule: &v2pb.CronSchedule{Cron: "0 0 * * *"},
 				},
-				Spec: v2pb.TriggerRunSpec{
-					Trigger: &v2pb.Trigger{
-						TriggerType: &v2pb.Trigger_CronSchedule{
-							CronSchedule: &v2pb.CronSchedule{Cron: "0 0 * * *"},
-						},
-						MaxConcurrency: 2,
-					},
-				},
-				Status: v2pb.TriggerRunStatus{
-					State:                   v2pb.TRIGGER_RUN_STATE_PAUSED,
-					ActualTrigger:           &v2pb.Trigger{TriggerType: &v2pb.Trigger_CronSchedule{CronSchedule: &v2pb.CronSchedule{Cron: "0 6 * * *"}}},
-					ActualScheduleInputHash: "previous-input-hash",
-					ErrorMessage:            "exceeded workflow execution limit for signal events",
-				},
-			}
-
-			status, handled, err := NewCronTrigger(zapr.NewLogger(zap.NewNop()), mockClient).Update(
-				context.Background(), triggerRun, test.action)
-
-			require.NoError(t, err)
-			assert.Equal(t, test.expectedHandled, handled)
-			assert.Equal(t, triggerRun.Status, status)
-		})
+				MaxConcurrency: 2,
+			},
+		},
+		Status: v2pb.TriggerRunStatus{
+			State:                   v2pb.TRIGGER_RUN_STATE_PAUSED,
+			ActualTrigger:           &v2pb.Trigger{TriggerType: &v2pb.Trigger_CronSchedule{CronSchedule: &v2pb.CronSchedule{Cron: "0 6 * * *"}}},
+			ActualScheduleInputHash: "previous-input-hash",
+		},
 	}
+	desiredHash := mustScheduleInputHash(t, triggerRun)
+	mockClient.EXPECT().UpdateTrigger(
+		gomock.Any(),
+		"test-namespace.test-triggerrun",
+		"0 0 * * *",
+		gomock.Nil(),
+		gomock.Eq([]interface{}{CreateTriggerRequest{TriggerRun: scheduleWorkflowInput(triggerRun)}}),
+	).Return(nil)
+
+	status, handled, err := NewCronTrigger(zapr.NewLogger(zap.NewNop()), mockClient).Update(
+		context.Background(), triggerRun, v2pb.TRIGGER_RUN_ACTION_NO_ACTION)
+
+	require.NoError(t, err)
+	assert.False(t, handled)
+	assert.Equal(t, v2pb.TRIGGER_RUN_STATE_PAUSED, status.State)
+	assert.Equal(t, "0 0 * * *", status.ActualTrigger.GetCronSchedule().GetCron())
+	assert.Equal(t, desiredHash, status.ActualScheduleInputHash)
 }
 
 func TestCronTrigger_UpdateSyncsDriftOnResume(t *testing.T) {
