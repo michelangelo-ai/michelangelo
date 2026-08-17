@@ -149,4 +149,80 @@ describe('filterHiddenConditionFields', () => {
 
     expect(filterHiddenConditionFields(values, config)).toEqual({ name: 'Alice', mode: 'basic' });
   });
+
+  it('strips a field whose isNot condition currently evaluates to hidden', () => {
+    const config: FormConfig = {
+      fields: {},
+      layout: ['mode', { type: 'condition', when: 'mode', isNot: 'hidden', items: ['visible'] }],
+    };
+    const values = { mode: 'hidden', visible: 'stale' };
+
+    expect(filterHiddenConditionFields(values, config)).toEqual({ mode: 'hidden' });
+  });
+
+  it('keeps a field whose isNot condition currently evaluates to visible', () => {
+    const config: FormConfig = {
+      fields: {},
+      layout: ['mode', { type: 'condition', when: 'mode', isNot: 'hidden', items: ['visible'] }],
+    };
+    const values = { mode: 'shown', visible: 'value' };
+
+    expect(filterHiddenConditionFields(values, config)).toEqual(values);
+  });
+
+  it('strips a field whose isEmpty: true condition currently evaluates to hidden', () => {
+    const config: FormConfig = {
+      fields: {},
+      layout: ['name', { type: 'condition', when: 'name', isEmpty: true, items: ['hint'] }],
+    };
+    const values = { name: 'Alice', hint: 'stale' };
+
+    expect(filterHiddenConditionFields(values, config)).toEqual({ name: 'Alice' });
+  });
+
+  it('strips a field whose isEmpty: false condition currently evaluates to hidden', () => {
+    const config: FormConfig = {
+      fields: {},
+      layout: ['name', { type: 'condition', when: 'name', isEmpty: false, items: ['greeting'] }],
+    };
+    const values = { name: '', greeting: 'stale' };
+
+    expect(filterHiddenConditionFields(values, config)).toEqual({ name: '' });
+  });
+
+  it('strips a field whose containsAny condition currently evaluates to hidden', () => {
+    const config: FormConfig = {
+      fields: {},
+      layout: [
+        'role',
+        {
+          type: 'condition',
+          when: 'role',
+          containsAny: ['admin', 'superadmin'],
+          items: ['adminPanel'],
+        },
+      ],
+    };
+    const values = { role: 'guest', adminPanel: 'stale' };
+
+    expect(filterHiddenConditionFields(values, config)).toEqual({ role: 'guest' });
+  });
+
+  it('keeps a field whose containsAny condition currently evaluates to visible', () => {
+    const config: FormConfig = {
+      fields: {},
+      layout: [
+        'role',
+        {
+          type: 'condition',
+          when: 'role',
+          containsAny: ['admin', 'superadmin'],
+          items: ['adminPanel'],
+        },
+      ],
+    };
+    const values = { role: 'admin', adminPanel: 'value' };
+
+    expect(filterHiddenConditionFields(values, config)).toEqual(values);
+  });
 });
