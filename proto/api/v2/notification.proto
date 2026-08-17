@@ -93,4 +93,8 @@ message Notification {
   
   // The slack destinations to send the notification to.
   repeated string slack_destinations = 5;
+
+  // THROWAWAY TEST FIELD: added to verify dirty-check CI catches stale
+  // descriptors.pb. Safe to revert; not intended to merge.
+  string ci_repro_test_field = 6;
 }
