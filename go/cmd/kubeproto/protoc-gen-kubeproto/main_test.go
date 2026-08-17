@@ -26,8 +26,8 @@ import (
 	plugin_go "github.com/gogo/protobuf/protoc-gen-gogo/plugin"
 	"github.com/gogo/protobuf/types"
 	"github.com/stretchr/testify/assert"
-	golangproto "google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/compiler/protogen"
+	golangproto "google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoregistry"
 	"google.golang.org/protobuf/types/descriptorpb"
 	"google.golang.org/protobuf/types/pluginpb"
@@ -785,10 +785,10 @@ func TestResolveWrapperKind_SpecFieldRepeated(t *testing.T) {
 }
 
 // TestGenerate_RevisionedIn_Panics is an end-to-end regression test that
-// drives the real generate() entry point directly on the revisioned_errors 
+// drives the real generate() entry point directly on the revisioned_errors
 // fixture bytes. The fixture file declares several broken base/wrapper pairs;
-// generate() processes messages in declaration order and panics on the first 
-// one it reaches (UnresolvedWrapperBase), so that's the panic asserted here. 
+// generate() processes messages in declaration order and panics on the first
+// one it reaches (UnresolvedWrapperBase), so that's the panic asserted here.
 // The other branches are covered precisely, in isolation, by the
 // TestResolveWrapperKind_* tests above.
 func TestGenerate_RevisionedIn_Panics(t *testing.T) {
