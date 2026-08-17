@@ -4,6 +4,7 @@ import { adaptTableConfigToTableProps } from '#core/components/views/utils/table
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
 import { useStudioQuery } from '#core/hooks/use-studio-query';
 import { capitalizeFirstLetter } from '#core/utils/string-utils';
+import { injectListOptions } from './utils/inject-list-options';
 
 import type { EntityTableProps } from './types';
 
@@ -24,13 +25,16 @@ export function EntityTable<T extends object = object>({
   service,
   tableConfig,
   tableSettingsId,
+  pipelineTypes,
 }: EntityTableProps<T>) {
   const { projectId } = useStudioParams('base');
+  const listOptions = injectListOptions(service, pipelineTypes);
 
   const { data, isLoading, error } = useStudioQuery<Record<`${string}List`, { items: T[] }>>({
     queryName: `List${capitalizeFirstLetter(service)}`,
     serviceOptions: {
       namespace: projectId,
+      ...(listOptions && { listOptions }),
     },
   });
 
