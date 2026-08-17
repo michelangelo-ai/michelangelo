@@ -49,6 +49,8 @@ It also writes `transcoder-services.json`: the services `javascript/packages/rpc
 
 Both files are committed, not build output — `helm install` never runs Bazel or buf. As a last-resort check, the Envoy ConfigMap template fails at render time if `transcoder-services.json` is missing, empty, or malformed.
 
+The allowlist is scoped to this repo's bundled JS UI, not to JSON/HTTP clients in general. `services.ts` is the only input the script reads, so a non-JS client has no supported path onto the allowlist. Today, adding one means either adding an import to `services.ts` (even if no JS code calls it) or hand-editing `transcoder-services.json` directly — the Helm template only checks that the file is valid JSON, so a hand edit works, but it is not an officially supported workflow and the next `gen-descriptors.sh` run overwrites it.
+
 ## check-transcoder-services.sh
 
 ```bash
