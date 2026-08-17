@@ -96,6 +96,7 @@ export function PhaseEntityView<T extends object = object>({
                   actions: entity.actions,
                 }}
                 tableSettingsId={`${phaseConfig.id}/${entity.id}`}
+                pipelineTypes={phaseConfig.pipelineTypes}
               />
             )}
           </Tab>
