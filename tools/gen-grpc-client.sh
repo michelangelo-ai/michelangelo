@@ -1,13 +1,6 @@
 #!/usr/bin/env bash
 # Generate gRPC client language bindings (Python and JavaScript classes)
 # from protobuf files via buf's remote codegen plugins.
-#
-# Does NOT touch helm/michelangelo/files/descriptors.pb or
-# transcoder-services.json — see tools/gen-descriptors.sh for those. This
-# script already needs buf's network access regardless, and is wired into
-# javascript/package.json's `generate`/`prebuild`/`setup` scripts; adding
-# gen-descriptors.sh's Bazel dependency here would put a new toolchain
-# requirement on every `yarn build`.
 set -e
 set -x
 
