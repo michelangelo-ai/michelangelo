@@ -65,6 +65,9 @@ message ClusterSpec {
 
   // DC type of the cluster
   DCType dc = 7;
+
+  // Description of the cluster
+  string description = 8;
 }
 
 // ClusterStatus will have workload
