@@ -5,6 +5,10 @@ import type { RowProps } from '#core/components/row/types';
 export function RowLabel(props: { label: RowProps['items'][number]['label'] }) {
   const [css, theme] = useStyletron();
 
+  if (!props.label) {
+    return null;
+  }
+
   return (
     <div
       className={css({

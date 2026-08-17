@@ -1,8 +1,36 @@
+import { ActionHierarchy } from '#core/components/actions/types';
 import { CellType } from '#core/components/cell/constants';
+import { RetryModal } from '#core/components/cell/renderers/retry/retry-modal';
 import { TASK_STATE } from '#core/components/views/execution/constants';
+import { interpolate } from '#core/interpolation/interpolate';
 import { SHARED_RUN_CELL_CONFIG } from './shared';
 
+import type { ActionConfigSchema } from '#core/components/actions/types';
+import type { RetryActionRecord } from '#core/components/cell/renderers/retry/types';
 import type { DetailViewConfig } from '#core/components/views/types';
+
+const TERMINATED_STATES = new Set([3, 4, 5, 6]);
+
+const RETRY_TASK_ACTIONS: ActionConfigSchema<RetryActionRecord>[] = [
+  {
+    display: { label: 'Retry' },
+    hierarchy: ActionHierarchy.SECONDARY,
+    disabled: [
+      {
+        condition: interpolate(
+          ({ row }: { row?: RetryActionRecord }) => !TERMINATED_STATES.has(row?.status?.state ?? -1)
+        ),
+        message: 'Retry is only available once this pipeline run has finished.',
+      },
+      {
+        condition: interpolate(({ row }: { row?: RetryActionRecord }) => !row?.activityId),
+        message:
+          "Retry isn't available for this task because it has no associated workflow activity — this happens for tasks that were skipped or never started executing.",
+      },
+    ],
+    modal: { type: 'custom', component: RetryModal },
+  },
+];
 
 export const RUN_DETAIL_CONFIG: DetailViewConfig = {
   type: 'detail',
@@ -77,14 +105,8 @@ export const RUN_DETAIL_CONFIG: DetailViewConfig = {
                 6: 'gray',
               },
             },
-            {
-              id: 'retry',
-              label: 'Actions',
-              type: CellType.RETRY,
-              accessor: 'activityId',
-              hideEmpty: true,
-            },
           ],
+          actions: RETRY_TASK_ACTIONS,
         },
         body: [
           {

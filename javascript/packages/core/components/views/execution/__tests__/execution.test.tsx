@@ -521,6 +521,7 @@ describe('Execution view', () => {
         subTasks: [],
         record: { displayName: 'Custom Task 1' },
         focused: false,
+        depth: 0,
       },
       {
         name: 'Custom Task 2',
@@ -528,6 +529,7 @@ describe('Execution view', () => {
         subTasks: [],
         record: { displayName: 'Custom Task 2' },
         focused: true,
+        depth: 0,
       },
     ];
 

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
 
@@ -904,6 +904,145 @@ describe('EntityDetailRoute', () => {
 
     await user.hover(runButton);
     expect(await screen.findByText('Pipeline is already running')).toBeInTheDocument();
+  });
+
+  describe('task-level action disabled conditions', () => {
+    const StubDialog = () => <div role="dialog">Stub</div>;
+
+    const buildTaskActionPhases = () => ({
+      train: buildPhase({
+        id: 'train',
+        entities: [
+          buildEntity({
+            views: [
+              {
+                type: 'detail',
+                metadata: [],
+                pages: [
+                  {
+                    id: 'execution',
+                    label: 'Execution',
+                    ...buildExecutionSchema({
+                      tasks: {
+                        header: {
+                          actions: [
+                            {
+                              display: { label: 'Retry' },
+                              hierarchy: ActionHierarchy.SECONDARY,
+                              modal: { type: 'custom', component: StubDialog },
+                              disabled: [
+                                {
+                                  condition: interpolate(
+                                    ({ row }: { row?: { activityId?: string } }) => !row?.activityId
+                                  ),
+                                  message: 'No workflow activity',
+                                },
+                              ],
+                            },
+                          ],
+                        },
+                      },
+                    }),
+                  },
+                ],
+              },
+            ],
+          }),
+        ],
+      }),
+    });
+
+    const mockTaskRunRequest = () =>
+      vi.fn().mockResolvedValue({
+        pipelineRun: {
+          metadata: { creationTimestamp: { seconds: 1640995200 } },
+          status: {
+            state: 'SUCCESS',
+            steps: [
+              {
+                displayName: 'Execute Workflow',
+                state: 'SUCCEEDED',
+                subSteps: [
+                  {
+                    displayName: 'Has Activity',
+                    state: 'SUCCEEDED',
+                    activityId: '1',
+                    subSteps: [],
+                  },
+                  { displayName: 'No Activity', state: 'SUCCEEDED', subSteps: [] },
+                ],
+              },
+            ],
+          },
+        },
+      });
+
+    // Regression test: the route used to resolve the entire detail view config (including
+    // per-task actions) with only page-level data, permanently baking these row-dependent
+    // conditions to `true` before the task ever received its own row context.
+    test('disables the action for a task whose row fails the condition', async () => {
+      const user = userEvent.setup();
+
+      render(
+        <EntityDetailRoute phases={buildTaskActionPhases()} />,
+        buildWrapper([
+          getErrorProviderWrapper(),
+          getRouterWrapper({ location: '/myproject/train/runs/run-123' }),
+          getServiceProviderWrapper({ request: mockTaskRunRequest() }),
+        ])
+      );
+
+      await screen.findAllByText('No Activity');
+      const disabledTask = document.getElementById('task-No Activity')!;
+
+      await user.click(within(disabledTask).getByRole('button', { name: 'Actions' }));
+      await user.click(await screen.findByRole('option', { name: 'Retry' }));
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    test('enables the action for a task whose row passes the condition', async () => {
+      const user = userEvent.setup();
+
+      render(
+        <EntityDetailRoute phases={buildTaskActionPhases()} />,
+        buildWrapper([
+          getErrorProviderWrapper(),
+          getRouterWrapper({ location: '/myproject/train/runs/run-123' }),
+          getServiceProviderWrapper({ request: mockTaskRunRequest() }),
+        ])
+      );
+
+      await screen.findAllByText('Has Activity');
+      const enabledTask = document.getElementById('task-Has Activity')!;
+
+      await user.click(within(enabledTask).getByRole('button', { name: 'Actions' }));
+      await user.click(await screen.findByRole('option', { name: 'Retry' }));
+      expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    });
+
+    // Regression test: activityId is never set on top-level steps like Execute Workflow (only
+    // on nested subSteps — see go/components/pipelinerun/actors/executeworkflow.go), so an
+    // always-disabled action there is misleading. Top-level steps shouldn't render the action at all.
+    test('does not render the action on a top-level step', async () => {
+      render(
+        <EntityDetailRoute phases={buildTaskActionPhases()} />,
+        buildWrapper([
+          getErrorProviderWrapper(),
+          getRouterWrapper({ location: '/myproject/train/runs/run-123' }),
+          getServiceProviderWrapper({ request: mockTaskRunRequest() }),
+        ])
+      );
+
+      await screen.findAllByText('Execute Workflow');
+      const topLevelContainer = document.getElementById('task-Execute Workflow')!;
+      // Header renders before body content in document order, so the first `role="button"`
+      // descendant is the task's own header, not a nested subtask's.
+      const topLevelHeader = topLevelContainer.querySelector('[role="button"]')!;
+
+      expect(
+        within(topLevelHeader as HTMLElement).queryByRole('button', { name: 'Actions' })
+      ).not.toBeInTheDocument();
+    });
   });
 
   describe('page navigation', () => {

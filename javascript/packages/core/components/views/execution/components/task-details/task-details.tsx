@@ -18,21 +18,46 @@ import type { TaskDetailsProps } from './types';
 export function TaskDetails<TTaskRecord extends object = object>(
   props: TaskDetailsProps<TTaskRecord>
 ) {
-  const { task, metadata, bodySchema, overrides } = props;
+  const { task, metadata, actions, pageData, bodySchema, overrides } = props;
   const scrollId = buildTaskScrollId(task);
+  // Top-level steps (e.g. Image Build, Execute Workflow) are actor-driven and have no
+  // per-task actions available; only nested tasks support them.
+  const taskActions = task.depth > 0 ? actions : undefined;
 
   if (!!task.subTasks?.length || bodySchema?.length) {
+    // cast: TTaskRecord extends object lacks an index signature; always a plain record at
+    // runtime; see #1443
+    const record = task.record as Record<string, unknown>;
+    const actionRecord = { ...pageData, ...record };
+
     return (
       <TaskPanel
         id={scrollId}
         title={<TaskHeader task={task} metadata={metadata} />}
         defaultExpanded={task.focused}
         state={task.state}
+        actions={taskActions}
+        actionRecord={actionRecord}
       >
-        <TaskBody task={task} bodySchema={bodySchema} metadata={metadata} overrides={overrides} />
+        <TaskBody
+          task={task}
+          bodySchema={bodySchema}
+          metadata={metadata}
+          actions={actions}
+          pageData={pageData}
+          overrides={overrides}
+        />
       </TaskPanel>
     );
   }
 
-  return <TaskHeader id={scrollId} task={task} metadata={metadata} />;
+  return (
+    <TaskHeader
+      id={scrollId}
+      task={task}
+      metadata={metadata}
+      actions={taskActions}
+      pageData={pageData}
+    />
+  );
 }
