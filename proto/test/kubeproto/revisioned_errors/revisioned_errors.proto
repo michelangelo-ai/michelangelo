@@ -184,3 +184,89 @@ message NoSpecBase {
   NoSpecBaseSpec spec = 3;
   NoSpecBaseStatus status = 4;
 }
+
+// ---- Case 6: wrapper CRD has a "content" field at spec.content that is a
+// google.protobuf.Any, but repeated (a list), not a singular value ----
+
+message RepeatedContentWrapperSpec {
+  repeated google.protobuf.Any content = 1;
+}
+
+message RepeatedContentWrapperStatus {
+}
+
+message RepeatedContentWrapper {
+  option (michelangelo.api.resource) = {};
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 2;
+
+  RepeatedContentWrapperSpec spec = 3;
+  RepeatedContentWrapperStatus status = 4;
+}
+
+message RepeatedContentBaseSpec {
+  string name = 1;
+}
+
+message RepeatedContentBaseStatus {
+}
+
+message RepeatedContentBase {
+  option (michelangelo.api.resource) = {
+    revisioned_in: ["repeated_content_wrapper"]
+  };
+  option (michelangelo.api.index) = {
+    path: "spec.name";
+    key:  "name";
+  };
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 2;
+
+  RepeatedContentBaseSpec spec = 3;
+  RepeatedContentBaseStatus status = 4;
+}
+
+// ---- Case 7: wrapper CRD's "spec" field itself is repeated (a list), not a
+// singular value, so the first path segment can't be reflected into ----
+
+message RepeatedSpecWrapperSpec {
+  google.protobuf.Any content = 1;
+}
+
+message RepeatedSpecWrapperStatus {
+}
+
+message RepeatedSpecWrapper {
+  option (michelangelo.api.resource) = {};
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 2;
+
+  repeated RepeatedSpecWrapperSpec spec = 3;
+  RepeatedSpecWrapperStatus status = 4;
+}
+
+message RepeatedSpecBaseSpec {
+  string name = 1;
+}
+
+message RepeatedSpecBaseStatus {
+}
+
+message RepeatedSpecBase {
+  option (michelangelo.api.resource) = {
+    revisioned_in: ["repeated_spec_wrapper"]
+  };
+  option (michelangelo.api.index) = {
+    path: "spec.name";
+    key:  "name";
+  };
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 2;
+
+  RepeatedSpecBaseSpec spec = 3;
+  RepeatedSpecBaseStatus status = 4;
+}

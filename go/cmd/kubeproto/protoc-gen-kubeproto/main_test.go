@@ -753,6 +753,51 @@ func TestResolveWrapperKind_ContentFieldWrongType(t *testing.T) {
 		})
 }
 
+// TestResolveWrapperKind_ContentFieldRepeated verifies that a wrapper CRD
+// whose spec.content is a repeated google.protobuf.Any (a list, not a
+// singular value) fails codegen, since the storage layer reflects into a
+// single Any at that path.
+func TestResolveWrapperKind_ContentFieldRepeated(t *testing.T) {
+	const baseCrdName = "RepeatedContentBase"
+	allProtoMsgs, extTypes := loadAllProtoMsgs(t, revisionederrorspb.GetProtocReqData())
+	kind := wrapperKindOf(t, allProtoMsgs, extTypes, baseCrdName)
+
+	assertPanic(t, `Invalid revisioned_in annotation on RepeatedContentBase: kind "repeated_content_wrapper" resolves to message RepeatedContentWrapper, `+
+		`whose field "content" at path "spec.content" is repeated but a singular field is required`,
+		func() {
+			resolveWrapperKind(baseCrdName, kind, allProtoMsgs, extTypes)
+		})
+}
+
+// TestResolveWrapperKind_SpecFieldRepeated verifies that a wrapper CRD whose
+// "spec" field itself is repeated (a list of RepeatedSpecWrapperSpec, not a
+// single one) fails codegen.
+func TestResolveWrapperKind_SpecFieldRepeated(t *testing.T) {
+	const baseCrdName = "RepeatedSpecBase"
+	allProtoMsgs, extTypes := loadAllProtoMsgs(t, revisionederrorspb.GetProtocReqData())
+	kind := wrapperKindOf(t, allProtoMsgs, extTypes, baseCrdName)
+
+	assertPanic(t, `Invalid revisioned_in annotation on RepeatedSpecBase: kind "repeated_spec_wrapper" resolves to message RepeatedSpecWrapper, `+
+		`whose field "spec" at path "spec.content" is repeated but a singular field is required`,
+		func() {
+			resolveWrapperKind(baseCrdName, kind, allProtoMsgs, extTypes)
+		})
+}
+
+// TestGenerate_RevisionedIn_Panics is an end-to-end regression test that
+// drives the real generate() entry point directly on the revisioned_errors 
+// fixture bytes. The fixture file declares several broken base/wrapper pairs;
+// generate() processes messages in declaration order and panics on the first 
+// one it reaches (UnresolvedWrapperBase), so that's the panic asserted here. 
+// The other branches are covered precisely, in isolation, by the
+// TestResolveWrapperKind_* tests above.
+func TestGenerate_RevisionedIn_Panics(t *testing.T) {
+	assertPanic(t, `Invalid revisioned_in annotation on UnresolvedWrapperBase: kind "nonexistent_wrapper" does not resolve to any message named "NonexistentWrapper" in this compile unit`,
+		func() {
+			generate(revisionederrorspb.GetProtocReqData())
+		})
+}
+
 func assertPanic(t *testing.T, expected interface{}, f func()) {
 	t.Helper()
 	defer func() {
