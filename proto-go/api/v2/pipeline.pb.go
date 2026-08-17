@@ -3389,6 +3389,8 @@ spec:
               notifications:
                 items:
                   properties:
+                    ciReproTestField:
+                      type: string
                     emails:
                       items:
                         type: string

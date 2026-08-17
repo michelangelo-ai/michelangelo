@@ -4163,6 +4163,8 @@ spec:
               notifications:
                 items:
                   properties:
+                    ciReproTestField:
+                      type: string
                     emails:
                       items:
                         type: string
@@ -4303,6 +4305,8 @@ spec:
               actualNotifications:
                 items:
                   properties:
+                    ciReproTestField:
+                      type: string
                     emails:
                       items:
                         type: string
