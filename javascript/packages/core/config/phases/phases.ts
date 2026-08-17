@@ -1,7 +1,7 @@
 import { DATA_PHASE } from './data';
 import { DEPLOY_PHASE } from './deploy';
-import { RETRAIN_PHASE } from './retrain';
 import { MONITOR_DEBUG_PHASE } from './monitor-debug';
+import { RETRAIN_PHASE } from './retrain';
 import { TRAIN_PHASE } from './train';
 
 export const PHASES = {
