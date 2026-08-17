@@ -30,8 +30,8 @@ export function App() {
       onSignOut: clearDevProfile,
     },
     user: {
-      name: devProfile.name ?? 'Local Developer',
-      email: devProfile.email ?? 'dev@localhost',
+      name: devProfile.name ?? (devProfile.loading ? undefined : 'Local Developer'),
+      email: devProfile.email ?? (devProfile.loading ? undefined : 'dev@localhost'),
       role: UserRole.Admin,
       timeZone: TimeZone.Local,
       avatarUrl: devProfile.avatarUrl,
