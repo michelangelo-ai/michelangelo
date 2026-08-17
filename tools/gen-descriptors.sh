@@ -1,36 +1,19 @@
 #!/usr/bin/env bash
-# Build the proto FileDescriptorSet + grpc_json_transcoder services allowlist
+# Builds the proto FileDescriptorSet + grpc_json_transcoder services allowlist
 # consumed by the Envoy ConfigMap templates.
 #
-# The descriptor set itself (descriptors.pb) comes from Bazel's native
-# proto_library implicit output — `bazel build //proto/api/v2:v2_proto`
-# materializes bazel-bin/proto/api/v2/v2_proto-descriptor-set.proto.bin —
-# not from a separate `buf build` compile. This is deliberate: it's the same
-# underlying proto compilation (deps, k8s types, everything) that already
-# backs `bazel build //proto/...` / tools/gen-proto-go.sh, so it needs no
-# BSR dependency resolution or network access and can't drift from what Go
-# codegen compiles against. It regenerates unconditionally on any
-# proto/api/v2 change, independent of whether anything under javascript/
-# changed — see docs/contributing/dev/protobuf.md and the
-# "Check transcoder descriptor artifacts are up to date" step in
-# .github/workflows/main.yml's dirty-check job.
+# descriptors.pb comes from Bazel's native proto_library descriptor-set
+# output (`bazel build //proto/api/v2:v2_proto`), not a `buf build` compile —
+# it reuses the same compilation gen-proto-go.sh already triggers, so it
+# needs no BSR/network access and can't drift from what Go codegen compiles
+# against.
 #
-# The services allowlist is a second, independent concern: it is
-# deliberately NOT "every service that compiles" — Envoy's
-# grpc_json_transcoder exposes whatever is on it over plain JSON/HTTP, so an
-# internal-only Go service would become web-reachable the moment its proto
-# compiles if we did that. It's the intersection of:
-#   - the services javascript/packages/rpc/services.ts actually instantiates
-#     (i.e. what the browser client can call), and
-#   - the descriptor set above (used only to resolve each of those names to
-#     its fully-qualified proto service name — `buf build <path>#format=binpb`
-#     used here purely as a local format decoder, no network/BSR lookups).
-# A new Go-only service does not appear here until something in services.ts
-# starts referencing it; see tools/check-transcoder-services.sh's own
-# comments for how that half is enforced independently of proto changes.
-#
-# Shared by gen-grpc-client.sh (writes the committed chart files) and CI
-# (writes to a scratch dir and diffs against the committed files).
+# transcoder-services.json is deliberately NOT "every service that
+# compiles": Envoy's grpc_json_transcoder exposes whatever is on it over
+# plain JSON/HTTP, so it's the intersection of what
+# javascript/packages/rpc/services.ts actually imports and the descriptor
+# set above, used only to resolve each import to its fully-qualified proto
+# service name.
 set -e
 set -x
 

@@ -124,13 +124,9 @@ jobs:
           tools/gen-proto-go.sh
           git diff --exit-code || (echo "proto-go is out of date. Please run tools/gen-proto-go.sh before commit." && exit 1)
 
-      # Regenerates helm/michelangelo/files/descriptors.pb (built via `bazel
-      # build //proto/api/v2:v2_proto`, same as gen-proto-go.sh above — no
-      # network/BSR dependency) and transcoder-services.json (the subset of
-      # it javascript/packages/rpc/services.ts references). Runs on every
-      # proto/go change regardless of whether javascript/ also changed,
-      # since a Go-only proto edit can still affect how an existing,
-      # JS-consumed service's types resolve in the shared descriptor set.
+      # Runs on every proto/go change, not just javascript/ changes — a
+      # Go-only proto edit can still affect how an existing, JS-consumed
+      # service resolves in the shared descriptor set.
       - name: Set up buf
         uses: bufbuild/buf-setup-action@v1
         with:
