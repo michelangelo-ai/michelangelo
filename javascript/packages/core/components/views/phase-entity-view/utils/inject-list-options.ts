@@ -3,13 +3,22 @@ import type { InjectedListOptions } from '../types';
 
 /**
  * Derives the RPC-level listOptions needed to restrict an entity's list query to a
- * phase's pipeline types. Only `pipeline` is handled today: studio-web's equivalent
- * also filters pipelineRun/triggerRun by a `michelangelo/SourcePipelineType` label, but
- * the OSS apiserver never stamps that label onto PipelineRun/TriggerRun rows (it's only
- * read for notification formatting — see go/base/notification/types/types.go), so
- * applying it here would silently return zero rows. Leave runs/triggers unfiltered
- * until a backend change adds that label. Returns undefined when there's nothing to
- * inject.
+ * phase's pipeline types. Only `pipeline` is handled today: PipelineRun/TriggerRun have
+ * no way to filter by pipeline type server-side. Two candidate mechanisms were checked
+ * and both are dead ends:
+ * - `michelangelo/SourcePipelineType` label: never stamped onto PipelineRun/TriggerRun
+ *   rows (only read for notification formatting — go/base/notification/types/types.go).
+ * - `pipelinerun.michelangelo/pipeline-type` label: read in
+ *   go/components/pipelinerun/controller.go's getPipelineType(), but never written
+ *   anywhere — that function is a metrics-labeling stub that always falls through to
+ *   "unknown".
+ * PipelineRunSpec/TriggerRunSpec also only reference the target Pipeline by name
+ * (spec.pipeline), not by type, and the storage layer's List() resolves field/label
+ * selectors against a single resource's own indexed columns — there's no join back to
+ * the referenced Pipeline's `spec.type`. Filtering these two services requires
+ * denormalizing pipeline type onto PipelineRun/TriggerRun at creation time (proto +
+ * migration), which is a backend change out of scope here. Returns undefined when
+ * there's nothing to inject.
  */
 export function injectListOptions(
   service: QueryConfig['service'],
