@@ -6,7 +6,10 @@ load("@io_bazel_rules_go//proto:def.bzl", "go_proto_library")
 
 proto_library(
     name = "kubeproto_proto",
-    srcs = ["revisioned_errors.proto"],
+    srcs = [
+        "groupversion_info.proto",
+        "revisioned_errors.proto",
+    ],
     import_prefix = "michelangelo",
     strip_import_prefix = "/proto",
     visibility = ["//visibility:public"],

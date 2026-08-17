@@ -297,6 +297,11 @@ func ValidateWrapperContentField(baseCrdName, wrapperKind, wrapperName, path str
 			logger.Panicf("Invalid revisioned_in annotation on %v: kind %q resolves to message %v, "+
 				"which has no field %q at path %q", baseCrdName, wrapperKind, wrapperName, segment, path)
 		}
+		if field.Desc.IsList() {
+			logger.Panicf("Invalid revisioned_in annotation on %v: kind %q resolves to message %v, "+
+				"whose field %q at path %q is repeated but a singular field is required",
+				baseCrdName, wrapperKind, wrapperName, segment, path)
+		}
 		lastField = field
 		curMsg = field.Message
 	}
