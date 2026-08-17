@@ -21,13 +21,17 @@ function setUrlParams(params: Record<string, string>) {
   window.history.replaceState(null, '', `/?${new URLSearchParams(params).toString()}`);
 }
 
-function stubFetch(githubResponse: unknown, gitEmailResponse?: { ok: boolean; text?: string }) {
+function stubFetch(
+  githubResponse: unknown,
+  gitEmailResponse?: { ok: boolean; text?: string; contentType?: string }
+) {
   vi.stubGlobal(
     'fetch',
     vi.fn((url: string) =>
       url === '/__dev/git-email'
         ? Promise.resolve({
             ok: gitEmailResponse?.ok ?? false,
+            headers: { get: () => gitEmailResponse?.contentType ?? 'text/plain' },
             text: () => Promise.resolve(gitEmailResponse?.text ?? ''),
           })
         : Promise.resolve({ json: () => Promise.resolve(githubResponse) })
@@ -72,6 +76,23 @@ it('picks an email in priority order: override > GitHub > local git config > def
   const defaultEmail = renderHook(() => useDevProfile());
   await waitFor(() => expect(defaultEmail.result.current.loading).toBe(false));
   expect(defaultEmail.result.current.email).toBe('dev@localhost');
+});
+
+it('falls through to the default email when /__dev/git-email returns nginx SPA-fallback HTML', async () => {
+  setUrlParams({ [GH_USER_PARAM]: 'ada' });
+  stubFetch(
+    { name: null, email: null, avatar_url: 'https://example.com/a.png' },
+    {
+      ok: true,
+      text: '<!doctype html><html><head></head><body></body></html>',
+      contentType: 'text/html',
+    }
+  );
+
+  const { result } = renderHook(() => useDevProfile());
+  await waitFor(() => expect(result.current.loading).toBe(false));
+
+  expect(result.current.email).toBe('dev@localhost');
 });
 
 it('caches the fetched profile', async () => {

@@ -14,6 +14,7 @@ function devGitEmailPlugin(): Plugin {
     apply: 'serve',
     configureServer(server) {
       server.middlewares.use('/__dev/git-email', (_req, res) => {
+        res.setHeader('Content-Type', 'text/plain');
         try {
           const email = execFileSync('git', ['config', 'user.email'], { encoding: 'utf-8' }).trim();
           res.statusCode = email ? 200 : 404;

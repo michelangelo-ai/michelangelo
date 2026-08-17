@@ -68,13 +68,19 @@ async function fetchDevProfile(username: string, emailOverride?: string): Promis
 }
 
 // Asks the Vite dev server (see the `dev-git-email` plugin in vite.config.ts) for
-// `git config user.email`. 404s against the built sandbox bundle, which has no backend to ask.
+// `git config user.email`. Against the built sandbox bundle (nginx, no backend), this path
+// doesn't exist, but nginx's SPA fallback returns index.html with a 200 rather than a 404 --
+// so `response.ok` alone can't tell a real answer from the fallback page. Guard on the
+// `text/plain` content type the dev server sets, and as defense-in-depth, reject anything
+// that looks like HTML even if some proxy in between strips or rewrites the header.
 async function fetchLocalGitEmail(): Promise<string | undefined> {
   try {
     const response = await fetch('/__dev/git-email');
     if (!response.ok) return undefined;
+    if (!response.headers.get('Content-Type')?.includes('text/plain')) return undefined;
     const email = (await response.text()).trim();
-    return email || undefined;
+    if (!email || email.startsWith('<')) return undefined;
+    return email;
   } catch {
     return undefined;
   }
