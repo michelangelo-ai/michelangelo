@@ -759,6 +759,20 @@ func TestUpdateTrigger(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestUpdateTriggerRejectsPauseForCadence(t *testing.T) {
+	client := &CadenceClient{Client: &cadencemocks.Client{}}
+
+	paused := true
+	err := client.UpdateTrigger(context.Background(), "testWorkflowID", "", &paused, nil)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "PauseTrigger not supported")
+
+	paused = false
+	err = client.UpdateTrigger(context.Background(), "testWorkflowID", "", &paused, nil)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "UnpauseTrigger not supported")
+}
+
 // Mock implementation of cadence history iterator
 type mockHistoryIterator struct {
 	events       []*shared.HistoryEvent
