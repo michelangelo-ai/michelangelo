@@ -2,11 +2,15 @@
 # Builds the proto FileDescriptorSet + grpc_json_transcoder services allowlist
 # consumed by the Envoy ConfigMap templates.
 #
-# descriptors.pb comes from Bazel's native proto_library descriptor-set
-# output (`bazel build //proto/api/v2:v2_proto`), not a `buf build` compile —
-# it reuses the same compilation gen-proto-go.sh already triggers, so it
-# needs no BSR/network access and can't drift from what Go codegen compiles
-# against.
+# descriptors.pb comes from Bazel's proto toolchain (`bazel build
+# //proto/api/v2:v2_full_descriptor_set`), not a `buf build` compile — it
+# reuses the same compilation gen-proto-go.sh already triggers, so it needs
+# no BSR/network access and can't drift from what Go codegen compiles
+# against. v2_full_descriptor_set merges the transitive descriptor sets of
+# v2_proto's dependency graph (see //bazel/rules/proto:transitive_descriptor_set.bzl)
+# because Bazel's default proto_library descriptor-set output only includes
+# the .proto files declared directly on the target, not transitively
+# imported ones (e.g. google/protobuf/*.proto, k8s.io/*).
 #
 # transcoder-services.json is deliberately NOT "every service that
 # compiles": Envoy's grpc_json_transcoder exposes whatever is on it over
@@ -44,8 +48,8 @@ fi
 
 mkdir -p "${OUT_DIR}"
 
-"${BAZEL}" build //proto/api/v2:v2_proto
-cp -f "${WORKSPACE_ROOT}/bazel-bin/proto/api/v2/v2_proto-descriptor-set.proto.bin" "${OUT_DIR}/descriptors.pb"
+"${BAZEL}" build //proto/api/v2:v2_full_descriptor_set
+cp -f "${WORKSPACE_ROOT}/bazel-bin/proto/api/v2/v2_full_descriptor_set.proto.bin" "${OUT_DIR}/descriptors.pb"
 chmod +w "${OUT_DIR}/descriptors.pb"
 
 TMP_DIR=$(mktemp -d)
