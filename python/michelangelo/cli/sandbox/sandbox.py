@@ -62,7 +62,7 @@ _ray_ports = [
 # Maps host-side port → dotted path in values-k3d.yaml where NodePort is defined.
 # Read at cluster-create time so a chart change propagates without editing this file.
 _helm_nodeport_map = [
-    ("14567", ("apiserver", "service", "nodePort")),  # Michelangelo API Server
+    ("15566", ("apiserver", "service", "nodePort")),  # Michelangelo API Server
     ("8081", ("envoy", "service", "nodePort")),  # Envoy gRPC-Web proxy
     ("8090", ("ui", "service", "nodePort")),  # Michelangelo UI
     ("8088", ("cadence", "web", "service", "nodePort")),  # Cadence Web
