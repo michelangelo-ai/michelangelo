@@ -23,7 +23,7 @@ export function PhaseCard(props: PhaseConfig & { projectId: string }) {
     <Box
       overrides={{
         BoxContainer: {
-          style: { backgroundColor: theme.colors.backgroundLightAccent, minHeight: '220px' },
+          style: { backgroundColor: theme.colors.backgroundAccentLight, minHeight: '220px' },
         },
       }}
       title={
