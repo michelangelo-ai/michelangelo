@@ -16,7 +16,7 @@ export const DATA_PHASE: PhaseConfig = {
     { ...RUN_ENTITY_CONFIG, state: 'disabled' },
     {
       id: 'datasources',
-      name: 'data sources',
+      name: 'Data Sources',
       state: 'disabled',
       service: 'datasource',
       views: [],
