@@ -1,0 +1,13 @@
+- generic [ref=e3]:
+  - generic [ref=e4]: "[plugin:vite:import-analysis] Failed to resolve import \"./gen/michelangelo/api/v2/deployment_svc_pb\" from \"../packages/rpc/services.ts\". Does the file exist?"
+  - generic [ref=e5]: /Users/npuppala/code/michelangelo/javascript/packages/rpc/services.ts:5:34
+  - generic [ref=e6]: "2 | import { createFetchTransport } from \"./create-fetch-transport\"; 3 | import { TypedStructSchema } from \"./gen/michelangelo/api/typed_struct_pb\"; 4 | import { DeploymentService } from \"./gen/michelangelo/api/v2/deployment_svc_pb\"; | ^ 5 | import { InferenceServerService } from \"./gen/michelangelo/api/v2/inference_server_svc_pb\"; 6 | import { ModelService } from \"./gen/michelangelo/api/v2/model_svc_pb\";"
+  - generic [ref=e7]: at TransformPluginContext._formatLog (file:///Users/npuppala/code/michelangelo/javascript/node_modules/vite/dist/node/chunks/dep-D4NMHUTW.js:42528:41) at TransformPluginContext.error (file:///Users/npuppala/code/michelangelo/javascript/node_modules/vite/dist/node/chunks/dep-D4NMHUTW.js:42525:16) at normalizeUrl (file:///Users/npuppala/code/michelangelo/javascript/node_modules/vite/dist/node/chunks/dep-D4NMHUTW.js:40504:23) at process.processTicksAndRejections (node:internal/process/task_queues:105:5) at async file:///Users/npuppala/code/michelangelo/javascript/node_modules/vite/dist/node/chunks/dep-D4NMHUTW.js:40623:37 at async Promise.all (index 3) at async TransformPluginContext.transform (file:///Users/npuppala/code/michelangelo/javascript/node_modules/vite/dist/node/chunks/dep-D4NMHUTW.js:40550:7) at async EnvironmentPluginContainer.transform (file:///Users/npuppala/code/michelangelo/javascript/node_modules/vite/dist/node/chunks/dep-D4NMHUTW.js:42323:18) at async loadAndTransform (file:///Users/npuppala/code/michelangelo/javascript/node_modules/vite/dist/node/chunks/dep-D4NMHUTW.js:35739:27) at async viteTransformMiddleware (file:///Users/npuppala/code/michelangelo/javascript/node_modules/vite/dist/node/chunks/dep-D4NMHUTW.js:37254:24
+  - generic [ref=e8]:
+    - text: Click outside, press Esc key, or fix the code to dismiss.You can also disable this overlay by setting
+    - code [ref=e9]: server.hmr.overlay
+    - text: to
+    - code [ref=e10]: "false"
+    - text: in
+    - code [ref=e11]: vite.config.ts
+    - text: .

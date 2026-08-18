@@ -4,6 +4,7 @@ import { TextareaField } from '#core/components/form/fields/textarea/textarea-fi
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
 import { useStudioMutation } from '#core/hooks/use-studio-mutation/use-studio-mutation';
 import { generateSuffix } from '#core/utils/name-utils';
+import { ResumeRunFields } from './resume-run-fields';
 
 import type { ActionComponentProps } from '#core/components/actions/types';
 import type { Pipeline } from '#core/config/entities/pipeline/types';
@@ -11,6 +12,7 @@ import type { PipelineRun } from '#core/config/entities/run/types';
 
 export const CreatePipelineRunForm = ({ record, onClose }: ActionComponentProps<Pipeline>) => {
   const { projectId } = useStudioParams('base');
+  const pipelineName = record?.metadata?.name ?? '';
 
   const createPipelineRunMutation = useStudioMutation<PipelineRun, PipelineRun>({
     mutationName: 'CreatePipelineRun',
@@ -21,7 +23,7 @@ export const CreatePipelineRunForm = ({ record, onClose }: ActionComponentProps<
       return;
     }
 
-    await createPipelineRunMutation.mutateAsync(values);
+    await createPipelineRunMutation.mutateAsync(buildPayload(values, projectId));
   };
 
   const initialValues: PipelineRun = {
@@ -31,7 +33,7 @@ export const CreatePipelineRunForm = ({ record, onClose }: ActionComponentProps<
     },
     spec: {
       pipeline: {
-        name: record?.metadata?.name ?? '',
+        name: pipelineName,
         namespace: projectId,
       },
     },
@@ -48,6 +50,8 @@ export const CreatePipelineRunForm = ({ record, onClose }: ActionComponentProps<
     >
       <StringField name="spec.pipeline.name" label="Pipeline to run" readOnly />
 
+      <ResumeRunFields pipelineName={pipelineName} />
+
       <TextareaField
         name="spec.description"
         label="Description"
@@ -57,3 +61,34 @@ export const CreatePipelineRunForm = ({ record, onClose }: ActionComponentProps<
     </FormDialog>
   );
 };
+
+/**
+ * Normalizes the resume spec before submission.
+ *
+ * The resume fields live in a collapsible group the user may open and close without
+ * choosing anything, so the form can carry a `resume` branch holding no source run.
+ * `Resume.pipeline_run` is a required field, so that branch has to be dropped entirely
+ * rather than sent half-populated. The namespace is attached here instead of being bound
+ * to a hidden field, since it is always the current project.
+ */
+function buildPayload(values: PipelineRun, projectId: string): PipelineRun {
+  const sourceRunName = values.spec?.resume?.pipelineRun?.name;
+  const { resume: _resume, ...spec } = values.spec;
+
+  if (!sourceRunName) {
+    return { ...values, spec };
+  }
+
+  const resumeFrom = values.spec.resume?.resumeFrom ?? [];
+
+  return {
+    ...values,
+    spec: {
+      ...spec,
+      resume: {
+        pipelineRun: { name: sourceRunName, namespace: projectId },
+        ...(resumeFrom.length > 0 && { resumeFrom }),
+      },
+    },
+  };
+}
