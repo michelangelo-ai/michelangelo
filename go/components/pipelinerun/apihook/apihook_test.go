@@ -2,6 +2,7 @@ package apihook
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -14,6 +15,7 @@ import (
 
 	pbtypes "github.com/gogo/protobuf/types"
 
+	"github.com/michelangelo-ai/michelangelo/go/api"
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2 "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
@@ -330,4 +332,197 @@ func TestBeforeCreate_ExplicitMissingRevisionStillRejected(t *testing.T) {
 	err := hook.BeforeCreate(context.Background(), request)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "does-not-exist")
+}
+
+// Spec.Pipeline must identify the same Pipeline the Revision snapshotted.
+// Otherwise we would execute B's spec while stamping ownerRef / notifications from A.
+func TestBeforeCreate_RejectsRevisionOfDifferentPipeline(t *testing.T) {
+	snapshottedB := &v2.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{Name: "pipeline-b", Namespace: testNamespace},
+		Spec:       v2.PipelineSpec{Description: "snapshot B"},
+	}
+	liveA := &v2.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{Name: "pipeline-a", Namespace: testNamespace},
+	}
+	hook := setUpHook(t, liveA, snapshotRevision(t, "rev-b", snapshottedB))
+
+	request := newCreateRequest("rev-b")
+	request.PipelineRun.Spec.Pipeline = &apipb.ResourceIdentifier{
+		Name:      "pipeline-a",
+		Namespace: testNamespace,
+	}
+	err := hook.BeforeCreate(context.Background(), request)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "pipeline-a")
+	assert.Contains(t, err.Error(), "pipeline-b")
+	assert.Nil(t, request.PipelineRun.Spec.PipelineSpec,
+		"must not materialize a mismatched snapshot")
+}
+
+func TestBeforeCreate_RejectsRevisionOfDifferentPipelineNamespace(t *testing.T) {
+	snapshotted := &v2.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-pipeline", Namespace: "other-namespace"},
+		Spec:       v2.PipelineSpec{Description: "other ns"},
+	}
+	live := &v2.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-pipeline", Namespace: testNamespace},
+	}
+	hook := setUpHook(t, live, snapshotRevision(t, "rev-x", snapshotted))
+
+	request := newCreateRequest("rev-x")
+	request.PipelineRun.Spec.Pipeline = &apipb.ResourceIdentifier{
+		Name:      "test-pipeline",
+		Namespace: testNamespace,
+	}
+	err := hook.BeforeCreate(context.Background(), request)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), testNamespace)
+	assert.Contains(t, err.Error(), "other-namespace")
+	assert.Nil(t, request.PipelineRun.Spec.PipelineSpec)
+}
+
+func TestBeforeCreate_MatchingPipelineAndRevisionSucceeds(t *testing.T) {
+	snapshotted := &v2.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-pipeline", Namespace: testNamespace},
+		Spec:       v2.PipelineSpec{Description: "revision X"},
+	}
+	live := &v2.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-pipeline", Namespace: testNamespace},
+	}
+	hook := setUpHook(t, live, snapshotRevision(t, "rev-x", snapshotted))
+
+	request := newCreateRequest("rev-x")
+	request.PipelineRun.Spec.Pipeline = &apipb.ResourceIdentifier{
+		Name:      "test-pipeline",
+		Namespace: testNamespace,
+	}
+	require.NoError(t, hook.BeforeCreate(context.Background(), request))
+	require.NotNil(t, request.PipelineRun.Spec.PipelineSpec)
+	assert.Equal(t, "revision X", request.PipelineRun.Spec.PipelineSpec.Description)
+}
+
+// interceptGetHandler optionally fails Get for selected object kinds so tests
+// can exercise the soft-fail path that the fake client cannot produce.
+type interceptGetHandler struct {
+	api.Handler
+	failPipeline error
+}
+
+func (h interceptGetHandler) Get(ctx context.Context, namespace, name string, opts *metav1.GetOptions, obj client.Object) error {
+	if h.failPipeline != nil {
+		if _, ok := obj.(*v2.Pipeline); ok {
+			return h.failPipeline
+		}
+	}
+	return h.Handler.Get(ctx, namespace, name, opts, obj)
+}
+
+func TestBeforeCreate_CopiesNotificationsFromPipeline(t *testing.T) {
+	live := &v2.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-pipeline", Namespace: testNamespace},
+		Spec: v2.PipelineSpec{
+			Notifications: []*v2.Notification{{
+				NotificationType: v2.NOTIFICATION_TYPE_EMAIL,
+				Emails:           []string{"alerts@example.com"},
+			}},
+		},
+	}
+	hook := setUpHook(t, live)
+
+	request := newPipelineRefRequest("test-pipeline")
+	require.NoError(t, hook.BeforeCreate(context.Background(), request))
+	require.Len(t, request.PipelineRun.Spec.Notifications, 1)
+	assert.Equal(t, "alerts@example.com", request.PipelineRun.Spec.Notifications[0].Emails[0])
+}
+
+func TestBeforeCreate_InlinePipelineSpecSkipsLatestRevision(t *testing.T) {
+	live := &v2.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-pipeline", Namespace: testNamespace},
+		Status: v2.PipelineStatus{
+			LatestRevision: &apipb.ResourceIdentifier{
+				Name:      "pipeline-test-pipeline-master",
+				Namespace: testNamespace,
+			},
+		},
+	}
+	hook := setUpHook(t, live)
+
+	request := newPipelineRefRequest("test-pipeline")
+	request.PipelineRun.Spec.PipelineSpec = &v2.PipelineSpec{Description: "dev-run"}
+	require.NoError(t, hook.BeforeCreate(context.Background(), request))
+
+	assert.Nil(t, request.PipelineRun.Spec.Revision, "inline spec must not be overwritten by latestRevision")
+	assert.Equal(t, "dev-run", request.PipelineRun.Spec.PipelineSpec.Description)
+}
+
+func TestBeforeCreate_LatestRevisionWrongKindRejected(t *testing.T) {
+	rev := snapshotRevision(t, "rev-model", &v2.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-pipeline", Namespace: testNamespace},
+	})
+	rev.Spec.BaseType.Kind = "Model"
+	live := &v2.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-pipeline", Namespace: testNamespace},
+		Status: v2.PipelineStatus{
+			LatestRevision: &apipb.ResourceIdentifier{
+				Name:      "rev-model",
+				Namespace: testNamespace,
+			},
+		},
+	}
+	hook := setUpHook(t, live, rev)
+
+	err := hook.BeforeCreate(context.Background(), newPipelineRefRequest("test-pipeline"))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `snapshots kind "Model"`)
+}
+
+func TestBeforeCreate_RejectsRevisionWithCorruptContent(t *testing.T) {
+	rev := snapshotRevision(t, "rev-bad", &v2.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-pipeline", Namespace: testNamespace},
+	})
+	rev.Spec.Content = &pbtypes.Any{
+		TypeUrl: "type.googleapis.com/michelangelo.api.v2.Pipeline",
+		Value:   []byte("not-valid-protobuf"),
+	}
+	hook := setUpHook(t, rev)
+
+	err := hook.BeforeCreate(context.Background(), newCreateRequest("rev-bad"))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unmarshal snapshotted pipeline")
+}
+
+func TestBeforeCreate_RevisionNamespaceFallsBackToPipelineRun(t *testing.T) {
+	snapshotted := &v2.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-pipeline", Namespace: testNamespace},
+		Spec:       v2.PipelineSpec{Description: "revision X"},
+	}
+	hook := setUpHook(t, snapshotRevision(t, "rev-x", snapshotted))
+
+	request := newCreateRequest("rev-x")
+	request.PipelineRun.Spec.Revision.Namespace = ""
+	require.NoError(t, hook.BeforeCreate(context.Background(), request))
+	require.NotNil(t, request.PipelineRun.Spec.PipelineSpec)
+	assert.Equal(t, "revision X", request.PipelineRun.Spec.PipelineSpec.Description)
+}
+
+func TestBeforeCreate_PipelineGetTransientErrorIsSoft(t *testing.T) {
+	live := &v2.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-pipeline", Namespace: testNamespace},
+		Status: v2.PipelineStatus{
+			LatestRevision: &apipb.ResourceIdentifier{
+				Name:      "pipeline-test-pipeline-master",
+				Namespace: testNamespace,
+			},
+		},
+	}
+	hook := setUpHook(t, live)
+	hook.apiHandler = interceptGetHandler{
+		Handler:      hook.apiHandler,
+		failPipeline: fmt.Errorf("apiserver unavailable"),
+	}
+
+	request := newPipelineRefRequest("test-pipeline")
+	require.NoError(t, hook.BeforeCreate(context.Background(), request))
+	assert.Nil(t, request.PipelineRun.Spec.Revision)
+	assert.Nil(t, request.PipelineRun.Spec.PipelineSpec)
 }

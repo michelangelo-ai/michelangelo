@@ -46,10 +46,7 @@ type apiHook struct {
 func (a apiHook) BeforeCreate(ctx context.Context, request *v2.CreatePipelineRunRequest) error {
 	// Fetch the live Pipeline once when a pipeline ref is present. Used both to
 	// optionally pin status.latestRevision and to stamp ownerRef / notifications.
-	pipeline, err := a.getReferencedPipeline(ctx, request)
-	if err != nil {
-		return err
-	}
+	pipeline := a.getReferencedPipeline(ctx, request)
 
 	// Resolve a revision into an inline PipelineSpec before ownerRef stamping, so
 	// stamping and notification inheritance observe any backfilled Spec.Pipeline.
@@ -59,14 +56,14 @@ func (a apiHook) BeforeCreate(ctx context.Context, request *v2.CreatePipelineRun
 	//  2. Else Pipeline.Status.LatestRevision — pin that snapshot when present.
 	//     If the Revision CR is missing, fall back to the live Pipeline path.
 	if request.PipelineRun.Spec.GetRevision().GetName() != "" {
-		if err = a.resolveRevision(ctx, request); err != nil {
+		if err := a.resolveRevision(ctx, request); err != nil {
 			a.logger.Error("BeforeCreate: failed to resolve pinned revision",
 				zap.String("revision", request.PipelineRun.Spec.GetRevision().GetName()),
 				zap.String("pipelinerun", request.PipelineRun.GetName()),
 				zap.Error(err))
 			return err
 		}
-	} else if err = a.tryResolveLatestRevision(ctx, request, pipeline); err != nil {
+	} else if err := a.tryResolveLatestRevision(ctx, request, pipeline); err != nil {
 		a.logger.Error("BeforeCreate: failed to resolve pipeline status.latestRevision",
 			zap.String("pipelinerun", request.PipelineRun.GetName()),
 			zap.Error(err))
@@ -76,10 +73,7 @@ func (a apiHook) BeforeCreate(ctx context.Context, request *v2.CreatePipelineRun
 	// resolveRevision may have backfilled Spec.Pipeline from the revision's base
 	// resource; fetch now if we did not already have the live Pipeline.
 	if pipeline == nil {
-		pipeline, err = a.getReferencedPipeline(ctx, request)
-		if err != nil {
-			return err
-		}
+		pipeline = a.getReferencedPipeline(ctx, request)
 	}
 	if pipeline == nil {
 		a.logger.Info("BeforeCreate: no pipeline reference, skipping ownerRef/notifications")
@@ -96,12 +90,12 @@ func (a apiHook) BeforeCreate(ctx context.Context, request *v2.CreatePipelineRun
 }
 
 // getReferencedPipeline loads Spec.Pipeline when set. Any Get failure (including
-// not-found) returns (nil, nil): latestRevision pinning then no-ops (live
-// fallback), and ownerRef/notification stamping is skipped.
-func (a apiHook) getReferencedPipeline(ctx context.Context, request *v2.CreatePipelineRunRequest) (*v2.Pipeline, error) {
+// not-found) returns nil: latestRevision pinning then no-ops (live fallback),
+// and ownerRef/notification stamping is skipped.
+func (a apiHook) getReferencedPipeline(ctx context.Context, request *v2.CreatePipelineRunRequest) *v2.Pipeline {
 	pipelineRef := request.PipelineRun.Spec.GetPipeline()
 	if pipelineRef.GetName() == "" {
-		return nil, nil
+		return nil
 	}
 
 	namespace := resourceNamespace(pipelineRef, request.PipelineRun.GetNamespace())
@@ -116,7 +110,7 @@ func (a apiHook) getReferencedPipeline(ctx context.Context, request *v2.CreatePi
 			a.logger.Info("BeforeCreate: pipeline not found",
 				zap.String("pipeline", pipelineRef.GetName()),
 				zap.String("namespace", namespace))
-			return nil, nil
+			return nil
 		}
 		// Soft for ownerRef/notifications: a transient Get failure should not
 		// block PipelineRun create. Callers that require the Pipeline (latest
@@ -125,9 +119,9 @@ func (a apiHook) getReferencedPipeline(ctx context.Context, request *v2.CreatePi
 			zap.String("pipeline", pipelineRef.GetName()),
 			zap.String("namespace", namespace),
 			zap.Error(err))
-		return nil, nil
+		return nil
 	}
-	return pipeline, nil
+	return pipeline
 }
 
 // tryResolveLatestRevision sets Spec.Revision from pipeline.Status.LatestRevision
@@ -195,6 +189,9 @@ func resourceNamespace(ref *apipb.ResourceIdentifier, fallback string) string {
 // needs no revision-aware logic and never reads the live, mutable Pipeline.
 //
 // It also:
+//   - rejects the create when Spec.Pipeline is set and does not match the
+//     revision's base resource (name or namespace), so we never execute B's
+//     snapshot while stamping ownerRef / notifications from A;
 //   - backfills Spec.Pipeline from the revision's base resource when the caller
 //     supplied only a revision, so ownerRef stamping and notification
 //     inheritance keep working;
@@ -241,11 +238,20 @@ func (a apiHook) resolveRevision(ctx context.Context, request *v2.CreatePipeline
 		return fmt.Errorf("unmarshal snapshotted pipeline from revision %s/%s: %w", namespace, revisionRef.GetName(), err)
 	}
 
-	request.PipelineRun.Spec.PipelineSpec = &pipeline.Spec
-
-	if request.PipelineRun.Spec.GetPipeline().GetName() == "" {
-		request.PipelineRun.Spec.Pipeline = rev.Spec.GetBaseResource()
+	pipelineRef := request.PipelineRun.Spec.GetPipeline()
+	base := rev.Spec.GetBaseResource()
+	runNS := request.PipelineRun.GetNamespace()
+	if pipelineRef.GetName() == "" {
+		request.PipelineRun.Spec.Pipeline = base
+	} else if pipelineRef.GetName() != base.GetName() || resourceNamespace(pipelineRef, runNS) != resourceNamespace(base, runNS) {
+		return fmt.Errorf("pipeline run %q references pipeline %s/%s but revision %s/%s snapshots %s/%s",
+			request.PipelineRun.GetName(),
+			resourceNamespace(pipelineRef, runNS), pipelineRef.GetName(),
+			namespace, revisionRef.GetName(),
+			resourceNamespace(base, runNS), base.GetName())
 	}
+
+	request.PipelineRun.Spec.PipelineSpec = &pipeline.Spec
 
 	for k, v := range pipeline.GetAnnotations() {
 		if request.PipelineRun.Annotations == nil {

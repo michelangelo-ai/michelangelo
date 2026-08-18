@@ -23,6 +23,7 @@ go_test(
     srcs = ["apihook_test.go"],
     embed = [":go_default_library"],
     deps = [
+        "//go/api:go_default_library",
         "//go/api/handler:go_default_library",
         "//proto/api:go_default_library",
         "//proto/api/v2:go_default_library",
