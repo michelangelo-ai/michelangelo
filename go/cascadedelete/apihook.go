@@ -6,6 +6,8 @@ import (
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	notificationtypes "github.com/michelangelo-ai/michelangelo/go/base/notification/types"
 )
 
 // StampOwnerRefOnCreate stamps owner as the controller ownerReference on child
@@ -35,4 +37,20 @@ func StampOwnerRefOnCreate(ctx context.Context, logger *zap.Logger, scheme *runt
 			zap.String("child", child.GetName()))
 	}
 	return nil
+}
+
+// StampSourcePipelineTypeLabelOnCreate stamps pipelineType (e.g.
+// "PIPELINE_TYPE_TRAIN") onto child under
+// notificationtypes.SourcePipelineTypeLabelName. No-op if pipelineType is empty.
+func StampSourcePipelineTypeLabelOnCreate(child client.Object, pipelineType string) {
+	if pipelineType == "" {
+		return
+	}
+
+	labels := child.GetLabels()
+	if labels == nil {
+		labels = map[string]string{}
+	}
+	labels[notificationtypes.SourcePipelineTypeLabelName] = pipelineType
+	child.SetLabels(labels)
 }

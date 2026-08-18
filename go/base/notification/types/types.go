@@ -31,9 +31,9 @@ const (
 	// operators have rolled past this release.
 	DeprecatedPRNotificationWorkflowName = "PRNotificationWorkflow"
 
-	// sourcePipelineTypeLabelName is the Kubernetes label key that identifies the
+	// SourcePipelineTypeLabelName is the Kubernetes label key that identifies the
 	// pipeline type (e.g. PIPELINE_TYPE_TRAIN).
-	sourcePipelineTypeLabelName = "michelangelo/SourcePipelineType"
+	SourcePipelineTypeLabelName = "michelangelo/SourcePipelineType"
 	// sourcePipelineManifestTypeLabelName is the Kubernetes label key that identifies
 	// the pipeline manifest type (e.g. PIPELINE_MANIFEST_TYPE_ASL).
 	sourcePipelineManifestTypeLabelName = "pipeline.michelangelo/PipelineManifestType"
@@ -134,7 +134,7 @@ func GenerateBody(pipelineRun *v2pb.PipelineRun, studioBaseURL string, phaseReso
 	if phaseResolver == nil {
 		phaseResolver = DefaultPhaseResolver
 	}
-	pipelineType := pipelineRun.Labels[sourcePipelineTypeLabelName]
+	pipelineType := pipelineRun.Labels[SourcePipelineTypeLabelName]
 	pipelineManifestType := pipelineRun.Labels[sourcePipelineManifestTypeLabelName]
 	state := strings.TrimPrefix(pipelineRun.Status.State.String(), "PIPELINE_RUN_STATE_")
 	pipelineTypeStr := strings.TrimPrefix(pipelineType, "PIPELINE_TYPE_")
@@ -179,7 +179,7 @@ func GenerateText(pipelineRun *v2pb.PipelineRun, textType v2pb.Notification_Noti
 	if phaseResolver == nil {
 		phaseResolver = DefaultPhaseResolver
 	}
-	pipelineType := pipelineRun.Labels[sourcePipelineTypeLabelName]
+	pipelineType := pipelineRun.Labels[SourcePipelineTypeLabelName]
 	pipelineManifestType := pipelineRun.Labels[sourcePipelineManifestTypeLabelName]
 	state := strings.TrimPrefix(pipelineRun.Status.State.String(), "PIPELINE_RUN_STATE_")
 	pipelineTypeStr := strings.TrimPrefix(pipelineType, "PIPELINE_TYPE_")

@@ -13,10 +13,11 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
-// RegisterTriggerRunAPIHook registers the API hook that stamps the owning Pipeline
-// as the controller ownerReference on TriggerRuns at creation, so a run is never
-// GC-eligible-but-unprotected. Resolving the owning Pipeline is kind-specific and
-// happens here; the shared stamping body lives in cascadedelete.StampOwnerRefOnCreate.
+// RegisterTriggerRunAPIHook registers the API hook that stamps the owning
+// Pipeline as the controller ownerReference on TriggerRuns at creation, and
+// stamps the owning Pipeline's type as the michelangelo/SourcePipelineType
+// label. Both are best-effort: if the owning Pipeline can't be resolved,
+// creation proceeds without them.
 func RegisterTriggerRunAPIHook(logger *zap.Logger, apiHandler api.Handler, scheme *runtime.Scheme) {
 	v2.RegisterTriggerRunAPIHook(apiHook{
 		logger:     logger,
@@ -50,6 +51,10 @@ func (a apiHook) BeforeCreate(ctx context.Context, request *v2.CreateTriggerRunR
 		a.logger.Warn("BeforeCreate: failed to resolve owning Pipeline for ownerRef",
 			zap.String("pipeline", pipelineRef.GetName()), zap.Error(err))
 		return nil
+	}
+
+	if pipelineType := pipeline.Spec.GetType(); pipelineType != v2.PIPELINE_TYPE_INVALID {
+		cascadedelete.StampSourcePipelineTypeLabelOnCreate(request.TriggerRun, pipelineType.String())
 	}
 
 	return cascadedelete.StampOwnerRefOnCreate(ctx, a.logger, a.scheme, request.TriggerRun, pipeline)
