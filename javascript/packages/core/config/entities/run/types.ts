@@ -39,6 +39,31 @@ export type Resume = {
   resumeFrom?: string[];
 };
 
+/** Mirrors proto PipelineRunState enum (pipeline_run.proto). */
+export enum PipelineRunState {
+  QUEUED = 0,
+  PENDING = 1,
+  RUNNING = 2,
+  SUCCEEDED = 3,
+  KILLED = 4,
+  FAILED = 5,
+  SKIPPED = 6,
+}
+
+/**
+ * States in which a run has stopped for good.
+ *
+ * A run must be terminal before it can be resumed from: the resume cache is built only
+ * from sub-steps that already succeeded, so a queued, pending, or running run has
+ * nothing settled to offer.
+ */
+export const TERMINAL_RUN_STATES: ReadonlySet<PipelineRunState> = new Set([
+  PipelineRunState.SUCCEEDED,
+  PipelineRunState.KILLED,
+  PipelineRunState.FAILED,
+  PipelineRunState.SKIPPED,
+]);
+
 /** Timestamp as returned by the API for pipeline run steps. */
 type StepTimestamp = {
   seconds?: string;

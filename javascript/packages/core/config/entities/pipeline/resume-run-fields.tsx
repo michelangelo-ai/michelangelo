@@ -4,6 +4,7 @@ import { SelectField } from '#core/components/form/fields/select/select-field';
 import { useField } from '#core/components/form/hooks/use-field';
 import { FormGroup } from '#core/components/form/layout/form-group/form-group';
 import { RUN_STATE_TEXT_MAP } from '#core/config/entities/run/shared';
+import { TERMINAL_RUN_STATES } from '#core/config/entities/run/types';
 import { useStudioQuery } from '#core/hooks/use-studio-query';
 import { timestampToString } from '#core/utils/time-utils';
 import { ResumeStepOption } from './resume-step-option';
@@ -25,13 +26,6 @@ export const RESUME_FROM_FIELD = 'spec.resume.resumeFrom';
  * Mirrors `ExecuteWorkflowStepName` in `go/components/pipelinerun/actors/utils/utils.go`.
  */
 const EXECUTE_WORKFLOW_STEP_NAME = 'Execute Workflow';
-
-/**
- * States a run must be in before it can be resumed from. The resume cache is built
- * only from sub-steps that already succeeded, so a pending or running run has
- * nothing to offer. Matches the gate the per-step Retry button applies.
- */
-const TERMINAL_RUN_STATES = new Set([3, 4, 5, 6]);
 
 /** Keeps the picker scannable; older runs stay reachable through search. */
 const MAX_SOURCE_RUN_OPTIONS = 25;
