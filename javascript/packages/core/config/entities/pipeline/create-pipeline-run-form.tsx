@@ -1,13 +1,16 @@
 import { FormDialog } from '#core/components/form/components/form-dialog/form-dialog';
 import { StringField } from '#core/components/form/fields/string/string-field';
 import { TextareaField } from '#core/components/form/fields/textarea/textarea-field';
+import { ArrayFormGroup } from '#core/components/form/layout/array-form-group/array-form-group';
+import { FormGroup } from '#core/components/form/layout/form-group/form-group';
+import { NotificationFields } from '#core/config/entities/pipeline/notification-fields';
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
 import { useStudioMutation } from '#core/hooks/use-studio-mutation/use-studio-mutation';
 import { generateSuffix } from '#core/utils/name-utils';
 import { ResumeRunFields } from './resume-run-fields';
 
 import type { ActionComponentProps } from '#core/components/actions/types';
-import type { Pipeline } from '#core/config/entities/pipeline/types';
+import type { Pipeline, PipelineRunFormValues } from '#core/config/entities/pipeline/types';
 import type { PipelineRun } from '#core/config/entities/run/types';
 
 export const CreatePipelineRunForm = ({ record, onClose }: ActionComponentProps<Pipeline>) => {
@@ -18,15 +21,27 @@ export const CreatePipelineRunForm = ({ record, onClose }: ActionComponentProps<
     mutationName: 'CreatePipelineRun',
   });
 
-  const handleRunSubmit = async (values: PipelineRun) => {
+  const handleRunSubmit = async (values: PipelineRunFormValues) => {
     if (createPipelineRunMutation.isPending) {
       return;
     }
 
-    await createPipelineRunMutation.mutateAsync(buildPayload(values, projectId));
+    const payload = buildPayload(values, projectId);
+    await createPipelineRunMutation.mutateAsync({
+      ...payload,
+      spec: {
+        ...payload.spec,
+        notifications: values.spec.notifications?.map((notification) => ({
+          ...notification,
+          resource_type: 'RESOURCE_TYPE_PIPELINE_RUN',
+          emails: notification.emails?.map(({ value }) => value) ?? [],
+          slack_destinations: notification.slack_destinations?.map(({ value }) => value) ?? [],
+        })),
+      },
+    });
   };
 
-  const initialValues: PipelineRun = {
+  const initialValues: PipelineRunFormValues = {
     metadata: {
       name: `run${generateSuffix({ withDate: true })}`,
       namespace: projectId,
@@ -40,7 +55,7 @@ export const CreatePipelineRunForm = ({ record, onClose }: ActionComponentProps<
   };
 
   return (
-    <FormDialog<PipelineRun>
+    <FormDialog<PipelineRunFormValues>
       isOpen
       onDismiss={onClose}
       heading="Start new pipeline run"
@@ -58,6 +73,20 @@ export const CreatePipelineRunForm = ({ record, onClose }: ActionComponentProps<
         placeholder="Enter a description for this run…"
         description="Optional. Helps identify this run in the pipeline run list."
       />
+
+      <FormGroup
+        title="Set Up Notifications (Optional)"
+        description="Get notified by email or Slack when this run changes state."
+        collapsible
+      >
+        <ArrayFormGroup
+          rootFieldPath="spec.notifications"
+          groupLabel="Notification"
+          addLabel="Add notification"
+        >
+          {(indexedFieldPath) => <NotificationFields indexedFieldPath={indexedFieldPath} />}
+        </ArrayFormGroup>
+      </FormGroup>
     </FormDialog>
   );
 };

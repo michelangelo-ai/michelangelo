@@ -76,6 +76,60 @@ describe('CreatePipelineRunForm', () => {
     });
   });
 
+  it('submits a configured email notification with the pipeline-run resource type', async () => {
+    const user = userEvent.setup();
+    const mockRequest = createQueryMockRouter({ CreatePipelineRun: {} });
+
+    render(
+      <FormWrapper />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getIconProviderWrapper(),
+        getErrorProviderWrapper(),
+        getInterpolationProviderWrapper(),
+        getRouterWrapper({ location: '/ma-dev-test/train/pipelines' }),
+        getServiceProviderWrapper({ request: mockRequest }),
+      ])
+    );
+
+    const dialog = await screen.findByRole('dialog', { name: 'Start new pipeline run' });
+
+    await user.click(
+      within(dialog).getByRole('button', { name: /Set Up Notifications \(Optional\)/ })
+    );
+    await user.click(within(dialog).getByRole('button', { name: 'Add notification' }));
+
+    await user.click(within(dialog).getByRole('combobox', { name: 'Notification type *' }));
+    await user.click(screen.getByRole('option', { name: 'Email' }));
+
+    await user.click(within(dialog).getByRole('combobox', { name: 'Notify me when the run *' }));
+    await user.click(screen.getByRole('option', { name: 'Failed' }));
+
+    await user.type(within(dialog).getByRole('textbox', { name: 'Email' }), 'oncall@example.com');
+
+    await user.click(within(dialog).getByRole('button', { name: 'Run' }));
+
+    await waitFor(() => {
+      expect(mockRequest).toHaveBeenCalledWith(
+        'CreatePipelineRun',
+        expect.objectContaining({
+          spec: expect.objectContaining({
+            notifications: [
+              {
+                notification_type: 'NOTIFICATION_TYPE_EMAIL',
+                event_types: ['EVENT_TYPE_PIPELINE_RUN_STATE_FAILED'],
+                resource_type: 'RESOURCE_TYPE_PIPELINE_RUN',
+                emails: ['oncall@example.com'],
+                slack_destinations: [],
+              },
+            ],
+          }) as Record<string, unknown>,
+        }),
+        {}
+      );
+    });
+  });
+
   it('keeps dialog open and displays error when submission fails', async () => {
     const user = userEvent.setup();
     const mockError = new Error('Test error');

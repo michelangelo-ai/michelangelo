@@ -1,3 +1,20 @@
+export type NotificationType = 'NOTIFICATION_TYPE_EMAIL' | 'NOTIFICATION_TYPE_SLACK';
+
+export type NotificationEventType =
+  | 'EVENT_TYPE_PIPELINE_RUN_STATE_STARTED'
+  | 'EVENT_TYPE_PIPELINE_RUN_STATE_SUCCEEDED'
+  | 'EVENT_TYPE_PIPELINE_RUN_STATE_FAILED'
+  | 'EVENT_TYPE_PIPELINE_RUN_STATE_KILLED'
+  | 'EVENT_TYPE_PIPELINE_RUN_STATE_SKIPPED';
+
+export type PipelineRunNotification = {
+  notification_type: NotificationType;
+  event_types: NotificationEventType[];
+  resource_type: 'RESOURCE_TYPE_PIPELINE_RUN';
+  emails: string[];
+  slack_destinations: string[];
+};
+
 export type PipelineRun = {
   metadata: {
     name: string;
@@ -24,6 +41,7 @@ export type PipelineRun = {
     resume?: Resume;
     /** Inline pipeline spec for dev runs; regular runs reference a Pipeline instead. */
     pipelineSpec?: PipelineSnapshotSpec;
+    notifications?: PipelineRunNotification[];
   };
   status?: {
     /** Snapshot of the pipeline this run executes, captured when the run starts. */
