@@ -1,0 +1,123 @@
+{
+  "items": [
+    {
+      "items": [
+        {
+          "items": [
+            {
+              "items": [
+                {
+                  "items": [
+                    "api-reference/michelangelo/lib/native_transform/torch/base_layers",
+                    "api-reference/michelangelo/lib/native_transform/torch/id_hash_tokenizer",
+                    "api-reference/michelangelo/lib/native_transform/torch/utils"
+                  ],
+                  "label": "michelangelo.lib.native_transform.torch",
+                  "type": "category"
+                }
+              ],
+              "label": "michelangelo.lib.native_transform",
+              "type": "category"
+            },
+            {
+              "items": [
+                {
+                  "items": [
+                    "api-reference/michelangelo/lib/trainer/torch/data_collate_functions",
+                    "api-reference/michelangelo/lib/trainer/torch/utils"
+                  ],
+                  "label": "michelangelo.lib.trainer.torch",
+                  "type": "category"
+                }
+              ],
+              "label": "michelangelo.lib.trainer",
+              "type": "category"
+            }
+          ],
+          "label": "michelangelo.lib",
+          "type": "category"
+        },
+        {
+          "items": [
+            {
+              "items": [
+                "api-reference/michelangelo/uniflow/core/context",
+                "api-reference/michelangelo/uniflow/core/decorator",
+                "api-reference/michelangelo/uniflow/core/image_spec",
+                "api-reference/michelangelo/uniflow/core/io_registry",
+                "api-reference/michelangelo/uniflow/core/task_config"
+              ],
+              "label": "michelangelo.uniflow.core",
+              "type": "category"
+            },
+            {
+              "items": [
+                {
+                  "items": [
+                    "api-reference/michelangelo/uniflow/plugins/pandas/io"
+                  ],
+                  "label": "michelangelo.uniflow.plugins.pandas",
+                  "type": "category"
+                },
+                {
+                  "items": [
+                    "api-reference/michelangelo/uniflow/plugins/ray/io",
+                    "api-reference/michelangelo/uniflow/plugins/ray/run_config",
+                    "api-reference/michelangelo/uniflow/plugins/ray/task"
+                  ],
+                  "label": "michelangelo.uniflow.plugins.ray",
+                  "type": "category"
+                },
+                {
+                  "items": [
+                    "api-reference/michelangelo/uniflow/plugins/spark/io",
+                    "api-reference/michelangelo/uniflow/plugins/spark/task"
+                  ],
+                  "label": "michelangelo.uniflow.plugins.spark",
+                  "type": "category"
+                }
+              ],
+              "label": "michelangelo.uniflow.plugins",
+              "type": "category"
+            }
+          ],
+          "label": "michelangelo.uniflow",
+          "type": "category"
+        },
+        {
+          "items": [
+            {
+              "items": [
+                {
+                  "items": [
+                    "api-reference/michelangelo/workflow/tasks/pusher/exceptions",
+                    "api-reference/michelangelo/workflow/tasks/pusher/registry",
+                    "api-reference/michelangelo/workflow/tasks/pusher/task"
+                  ],
+                  "label": "michelangelo.workflow.tasks.pusher",
+                  "type": "category"
+                }
+              ],
+              "label": "michelangelo.workflow.tasks",
+              "type": "category"
+            },
+            {
+              "items": [
+                "api-reference/michelangelo/workflow/variables/metadata",
+                "api-reference/michelangelo/workflow/variables/types"
+              ],
+              "label": "michelangelo.workflow.variables",
+              "type": "category"
+            }
+          ],
+          "label": "michelangelo.workflow",
+          "type": "category"
+        }
+      ],
+      "label": "michelangelo",
+      "type": "category"
+    }
+  ],
+  "label": "API Reference",
+  "type": "category"
+}
