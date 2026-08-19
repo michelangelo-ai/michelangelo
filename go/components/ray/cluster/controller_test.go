@@ -1138,6 +1138,84 @@ func TestReconcilerReconcile(t *testing.T) {
 			},
 		},
 		{
+			// A freshly-created RayCluster whose head pod has not been scheduled
+			// yet reports HeadPodReady=False / HeadPodNotFound. This must be
+			// treated as transient (keep monitoring), not terminal: otherwise the
+			// controller races KubeRay and tears the cluster down before the head
+			// pod ever exists.
+			name: "Cluster UNKNOWN with HeadPodNotFound stays UNKNOWN (head pod not yet scheduled)",
+			setup: func() []client.Object {
+				objects := make([]client.Object, 0)
+				cluster := &v2pb.RayCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       rayClusterName,
+						Namespace:  testNamespace,
+						Generation: 1,
+					},
+					Spec: createRayClusterSpec(),
+					Status: v2pb.RayClusterStatus{
+						State: v2pb.RAY_CLUSTER_STATE_PROVISIONING,
+						StatusConditions: []*apipb.Condition{
+							{
+								Type:   EnqueuedCondition,
+								Status: apipb.CONDITION_STATUS_TRUE,
+							},
+							{
+								Type:   ScheduledCondition,
+								Status: apipb.CONDITION_STATUS_TRUE,
+							},
+							{
+								Type:   LaunchedCondition,
+								Status: apipb.CONDITION_STATUS_TRUE,
+							},
+						},
+						Assignment: &v2pb.AssignmentInfo{
+							Cluster: assignedCluster,
+						},
+					},
+				}
+				objects = append(objects, cluster)
+				return objects
+			},
+			setupMocks: func(mfc *clientmocks.MockFederatedClient, mcc *mockClusterCache, msq *mockSchedulerQueue) {
+				mcc.addCluster(assignedCluster, &v2pb.Cluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: assignedCluster,
+					},
+				})
+				mfc.EXPECT().GetJobClusterStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(
+					&matypes.JobClusterStatus{
+						Ray: &v2pb.RayClusterStatus{
+							State: v2pb.RAY_CLUSTER_STATE_UNKNOWN,
+							PodErrors: []*v2pb.PodErrors{
+								{
+									Name:    "HeadPodReady",
+									Reason:  "HeadPodNotFound",
+									Message: "Head Pod not found",
+								},
+							},
+						},
+						Reason: "HeadPodNotFound",
+					}, nil)
+			},
+			expectedState:   v2pb.RAY_CLUSTER_STATE_UNKNOWN,
+			expectedMessage: "",
+			errorAssertion:  require.NoError,
+			postCheck: func(res ctrl.Result) {
+				assert.Equal(t, requeueAfter, res.RequeueAfter)
+			},
+			verifyConditions: func(t *testing.T, cluster *v2pb.RayCluster) {
+				assert.Len(t, cluster.Status.PodErrors, 1)
+				assert.Equal(t, "HeadPodNotFound", cluster.Status.PodErrors[0].Reason)
+				for _, cond := range cluster.Status.StatusConditions {
+					if cond.Type == SucceededCondition {
+						assert.NotEqual(t, apipb.CONDITION_STATUS_FALSE, cond.Status,
+							"SucceededCondition must not be marked FALSE for a transient HeadPodNotFound")
+					}
+				}
+			},
+		},
+		{
 			name: "Cluster UNKNOWN without terminal pod errors continues monitoring",
 			setup: func() []client.Object {
 				objects := make([]client.Object, 0)
