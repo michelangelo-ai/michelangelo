@@ -36,7 +36,16 @@ def _cluster_name(name: str) -> str:
 
 
 def _helm_release(name: str) -> str:
-    """Return the Helm release name for a given sandbox instance name."""
+    """Return the Helm release name for a given sandbox instance name.
+
+    Preserves the historical release name ("michelangelo") for the
+    unnamed/default sandbox so existing clusters, deployment names
+    (michelangelo-apiserver, etc.), and in-cluster service hostnames are
+    unaffected; named sandboxes get a release prefixed with their own name
+    so multiple instances don't collide.
+    """
+    if name == _default_sandbox_name:
+        return "michelangelo"
     return f"michelangelo-{name}"
 
 
@@ -174,8 +183,9 @@ def _add_name_arg(parser: argparse.ArgumentParser):
         default=_default_sandbox_name,
         help=(
             "Name of the sandbox instance, used to identify its k3d cluster "
-            f"(michelangelo-{{name}}) and Helm release "
-            f"(default: {_default_sandbox_name})."
+            "(michelangelo-{name}) and Helm release (michelangelo-{name}, or "
+            'just "michelangelo" for the default sandbox, unchanged from '
+            f"before) (default: {_default_sandbox_name})."
         ),
     )
 
