@@ -82,6 +82,12 @@ const config: Config = {
           position: 'left',
         },
         {
+          type: 'docSidebar',
+          sidebarId: 'apiSidebar',
+          position: 'left',
+          label: 'API Reference',
+        },
+        {
           href: 'https://github.com/michelangelo-ai/michelangelo',
           label: 'GitHub',
           position: 'right',
