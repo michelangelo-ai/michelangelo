@@ -31,8 +31,27 @@ _default_compute_kube_cluster_name = "michelangelo-compute-0"
 
 
 def _cluster_name(name: str) -> str:
-    """Return the k3d cluster name for a given sandbox instance name."""
-    return f"michelangelo-{name}"
+    """Return the k3d cluster name backing a given sandbox instance.
+
+    All sandbox instances share a single k3d cluster
+    (michelangelo-{_default_sandbox_name}) — a named sandbox is isolated by
+    Kubernetes namespace and Helm release within that shared cluster, not by
+    a separate k3d cluster, so this always resolves to the shared cluster
+    regardless of ``name``.
+    """
+    return f"michelangelo-{_default_sandbox_name}"
+
+
+def _namespace(name: str) -> str:
+    """Return the Kubernetes namespace for a given sandbox instance name.
+
+    The default sandbox keeps using the `default` namespace, unchanged from
+    before. Named sandboxes get their own namespace (same as their name) so
+    multiple instances can share the cluster without colliding.
+    """
+    if name == _default_sandbox_name:
+        return "default"
+    return name
 
 
 def _helm_release(name: str) -> str:
@@ -52,7 +71,8 @@ def _helm_release(name: str) -> str:
 def _kube_context(name: str) -> str:
     """Return the kubectl context for a given sandbox instance name.
 
-    Follows k3d's own naming convention (k3d-{cluster_name}).
+    Follows k3d's own naming convention (k3d-{cluster_name}). All sandbox
+    instances share the same cluster/context — see _cluster_name().
     """
     return f"k3d-{_cluster_name(name)}"
 
@@ -62,12 +82,13 @@ def _default_compute_cluster_name(name: str) -> str:
 
     Preserves the historical default ("michelangelo-compute-0") for the
     unnamed/default sandbox so existing workflows are unaffected; named
-    sandboxes get a name prefixed with their own cluster name so multiple
-    instances don't collide.
+    sandboxes get a name prefixed with "michelangelo-{name}" (not derived
+    from _cluster_name(), which now always resolves to the shared cluster)
+    so multiple instances don't collide.
     """
     if name == _default_sandbox_name:
         return _default_compute_kube_cluster_name
-    return f"{_cluster_name(name)}-compute-0"
+    return f"michelangelo-{name}-compute-0"
 
 
 # Path to the Michelangelo Helm chart (relative to this file)
@@ -138,6 +159,20 @@ def _offset_ports(port_specs: list[str], offset: int) -> list[str]:
     return [_offset_port_spec(p, offset) for p in port_specs]
 
 
+def _read_values_k3d_path(path: tuple[str, ...]):
+    """Read a dotted path out of values-k3d.yaml (single source of truth)."""
+    with open(_values_k3d_path) as f:
+        values = yaml.safe_load(f) or {}
+    node = values
+    for key in path:
+        node = (node or {}).get(key)
+    if node is None:
+        raise ValueError(
+            f"values-k3d.yaml is missing a value at {'.'.join(str(k) for k in path)}"
+        )
+    return node
+
+
 def _helm_chart_ports(workflow: str) -> list[str]:
     """Read control plane NodePorts from values-k3d.yaml.
 
@@ -182,10 +217,11 @@ def _add_name_arg(parser: argparse.ArgumentParser):
         "--name",
         default=_default_sandbox_name,
         help=(
-            "Name of the sandbox instance, used to identify its k3d cluster "
-            "(michelangelo-{name}) and Helm release (michelangelo-{name}, or "
-            'just "michelangelo" for the default sandbox, unchanged from '
-            f"before) (default: {_default_sandbox_name})."
+            f'Name of the sandbox instance. The default ("{_default_sandbox_name}") '
+            "gets its own k3d cluster, unchanged from before. Any other name is "
+            "deployed as a lightweight, namespace-isolated Helm release inside "
+            "the default sandbox's cluster, sharing its MySQL/MinIO/workflow "
+            f"engine (default: {_default_sandbox_name})."
         ),
     )
 
@@ -376,6 +412,30 @@ def run(ns: argparse.Namespace):
 
 def _create(ns: argparse.Namespace):
     assert ns
+
+    if ns.name != _default_sandbox_name:
+        # Named sandboxes are namespace-isolated within the default
+        # sandbox's k3d cluster rather than getting a cluster of their
+        # own (a separate k3d cluster per sandbox OOMs laptops), so there
+        # is no k3d cluster to create here — just make sure the shared
+        # cluster the namespace will live in already exists.
+        cluster_name = _cluster_name(ns.name)
+        cluster_exists = (
+            subprocess.run(
+                ["k3d", "cluster", "get", cluster_name], capture_output=True
+            ).returncode
+            == 0
+        )
+        if not cluster_exists:
+            _err_exit(
+                f"Shared cluster '{cluster_name}' not found. Named sandboxes "
+                "are deployed as a namespace inside the default sandbox's "
+                "cluster — run 'ma sandbox create' (no --name) first."
+            )
+        _exec("k3d", "cluster", "start", cluster_name)
+        _deploy_services(ns)
+        return
+
     offset = getattr(ns, "port_offset", 0)
     infra_ports = _offset_ports(
         [p for p in _infra_ports if _infra_port_owner.get(p) not in ns.exclude],
@@ -392,13 +452,6 @@ def _create(ns: argparse.Namespace):
         "--agents",
         "1",
     ]
-
-    if ns.name != _default_sandbox_name:
-        # Don't hijack the ambient kubectl context for a secondary sandbox —
-        # any other process using kubectl without --context (another agent,
-        # a running test plan, the user's terminal) should keep hitting the
-        # default sandbox, not silently switch to this one.
-        args.append("--kubeconfig-switch-context=false")
 
     for p in ports:
         args += ["-p", f"{_loopback(p)}@agent:0"]
@@ -425,9 +478,12 @@ def _sync(ns: argparse.Namespace):
     """
     assert ns
 
-    cluster_name = _cluster_name(ns.name)
-    context = _kube_context(ns.name)
-    release = _helm_release(ns.name)
+    name = ns.name
+    is_default = name == _default_sandbox_name
+    namespace = _namespace(name)
+    cluster_name = _cluster_name(name)
+    context = _kube_context(name)
+    release = _helm_release(name)
 
     cluster_exists = (
         subprocess.run(
@@ -441,10 +497,17 @@ def _sync(ns: argparse.Namespace):
         print("No existing cluster found — performing a full create.")
         return _create(ns)
 
-    print(
-        "Existing cluster found — restarting app services "
-        "(leaving infrastructure running)."
-    )
+    if is_default:
+        print(
+            "Existing cluster found — restarting app services "
+            "(leaving infrastructure running)."
+        )
+    else:
+        print(
+            f"Syncing lightweight sandbox '{name}' — only the app-layer Helm "
+            f"release in namespace '{namespace}' is touched, shared infra is "
+            "left running."
+        )
 
     # Start the cluster in case it was stopped at the end of a previous run.
     _exec("k3d", "cluster", "start", cluster_name)
@@ -464,25 +527,30 @@ def _sync(ns: argparse.Namespace):
     # Upgrade or install the control plane via Helm.
     # Infrastructure (mysql, cadence, minio, grafana, prometheus) is left running.
 
-    _refresh_mysql_schema(ns.name)
+    if is_default:
+        _refresh_mysql_schema(name)
+    else:
+        # Named sandboxes share the default sandbox's MySQL/MinIO/Cadence —
+        # only their own namespace and app-layer config need to exist.
+        _ensure_namespace_exists(namespace, name)
+        _deploy_michelangelo_config(name)
 
-    _ensure_credentials_secret(ns.name)
+    _ensure_credentials_secret(name)
     _helm_ensure_repos()
     helm_args = _build_helm_set_args(ns)
 
     # Check if there is a healthy deployed release we can upgrade.
-    status_result = subprocess.run(
-        ["helm", "status", release, "--kube-context", context, "-o", "json"],
-        capture_output=True,
-        text=True,
-    )
+    status_args = ["helm", "status", release, "--kube-context", context, "-o", "json"]
+    if not is_default:
+        status_args += ["--namespace", namespace]
+    status_result = subprocess.run(status_args, capture_output=True, text=True)
     release_healthy = (
         status_result.returncode == 0 and '"status":"deployed"' in status_result.stdout
     )
 
     if release_healthy:
         # Healthy release: upgrade in-place, keeping infra running.
-        _exec(
+        upgrade_args = [
             "helm",
             "upgrade",
             release,
@@ -493,8 +561,11 @@ def _sync(ns: argparse.Namespace):
             str(_chart_dir / "values-k3d.yaml"),
             "--dependency-update",
             "--reuse-values",
-            *helm_args,
-        )
+        ]
+        if not is_default:
+            upgrade_args += ["--namespace", namespace]
+        upgrade_args += helm_args
+        _exec(*upgrade_args)
         # Force-restart app deployments so they always pick up the latest
         # configmap values (helm upgrade only restarts pods when the pod
         # template spec changes, but values-only changes may not alter it).
@@ -512,7 +583,7 @@ def _sync(ns: argparse.Namespace):
                     "restart",
                     f"deployment/{deploy}",
                     "-n",
-                    "default",
+                    namespace,
                 ],
                 capture_output=True,
             )
@@ -531,30 +602,30 @@ def _sync(ns: argparse.Namespace):
                     "status",
                     f"deployment/{deploy}",
                     "-n",
-                    "default",
+                    namespace,
                     "--timeout=300s",
                 ],
                 capture_output=False,
             )
     else:
         # Missing or broken release: uninstall cleanly, then reinstall from scratch.
-        subprocess.run(
-            [
-                "helm",
-                "uninstall",
-                release,
-                "--kube-context",
-                context,
-                "--ignore-not-found",
-                "--wait",
-            ],
-            capture_output=False,
-        )
+        uninstall_args = [
+            "helm",
+            "uninstall",
+            release,
+            "--kube-context",
+            context,
+            "--ignore-not-found",
+            "--wait",
+        ]
+        if not is_default:
+            uninstall_args += ["--namespace", namespace]
+        subprocess.run(uninstall_args, capture_output=False)
         # After uninstall, force-delete any remaining Services from the chart
         # to free their NodePorts before reinstalling.
-        _helm_delete_services(helm_args, ns.name)
-        _helm_adopt_orphaned_resources(helm_args, ns.name)
-        _exec(
+        _helm_delete_services(helm_args, name)
+        _helm_adopt_orphaned_resources(helm_args, name)
+        install_args = [
             "helm",
             "install",
             release,
@@ -564,10 +635,16 @@ def _sync(ns: argparse.Namespace):
             "-f",
             str(_chart_dir / "values-k3d.yaml"),
             "--dependency-update",
-            *helm_args,
-        )
+        ]
+        if not is_default:
+            install_args += ["--namespace", namespace, "--create-namespace"]
+        install_args += helm_args
+        _exec(*install_args)
 
     _helm_wait(ns)
+
+    if not is_default:
+        _setup_app_port_forwards(ns)
 
 
 def _refresh_mysql_schema(name: str = _default_sandbox_name):
@@ -663,6 +740,8 @@ def _helm_delete_services(helm_args: list[str], name: str = _default_sandbox_nam
             "template",
             release,
             str(_chart_dir),
+            "--namespace",
+            _namespace(name),
             "-f",
             str(_chart_dir / "values-k3d.yaml"),
             *helm_args,
@@ -752,6 +831,8 @@ def _helm_adopt_orphaned_resources(
             "template",
             release,
             str(_chart_dir),
+            "--namespace",
+            _namespace(name),
             "-f",
             str(_chart_dir / "values-k3d.yaml"),
             *helm_args,
@@ -766,7 +847,7 @@ def _helm_adopt_orphaned_resources(
             continue
         kind = doc.get("kind", "")
         resource_name = (doc.get("metadata") or {}).get("name", "")
-        namespace = (doc.get("metadata") or {}).get("namespace", "default")
+        namespace = (doc.get("metadata") or {}).get("namespace", _namespace(name))
         if not kind or not resource_name:
             continue
         # Check if this resource exists and lacks Helm ownership annotations.
@@ -822,6 +903,9 @@ def _deploy_app_services(ns: argparse.Namespace):
         str(_chart_dir),
         "--kube-context",
         context,
+        "--namespace",
+        _namespace(name),
+        "--create-namespace",
         "-f",
         str(_chart_dir / "values-k3d.yaml"),
         "--dependency-update",
@@ -842,6 +926,7 @@ def _helm_wait(ns: argparse.Namespace):
     """
     timeout = getattr(ns, "wait_timeout", 600)
     context = _kube_context(ns.name)
+    namespace = _namespace(ns.name)
     instance_selector = f"app.kubernetes.io/instance={_helm_release(ns.name)}"
 
     # Stage 1: apiserver Deployment (schema-init can take 30-60s)
@@ -850,6 +935,8 @@ def _helm_wait(ns: argparse.Namespace):
         "kubectl",
         "--context",
         context,
+        "-n",
+        namespace,
         "wait",
         "deployment",
         "-l",
@@ -864,6 +951,8 @@ def _helm_wait(ns: argparse.Namespace):
         "kubectl",
         "--context",
         context,
+        "-n",
+        namespace,
         "wait",
         "deployment",
         "-l",
@@ -938,6 +1027,47 @@ def _build_helm_set_args(ns: argparse.Namespace) -> list[str]:
     if "ui" in getattr(ns, "exclude", []):
         args += ["--set", "envoy.enabled=false"]
 
+    if ns.name != _default_sandbox_name:
+        # Non-default sandboxes are a lightweight app-only Helm release
+        # layered into the existing shared cluster/namespace — they don't
+        # get their own MySQL/MinIO/Cadence/Temporal, they share the
+        # default sandbox's, reached via cross-namespace Service DNS.
+        # These --set flags are appended after the workflow block above so
+        # they win over it (cadence.enabled/temporal.enabled/workflow.endpoint
+        # all get overridden here), and before the arbitrary passthrough
+        # below so a caller-supplied --set still has the final say.
+        default_release = _helm_release(_default_sandbox_name)
+        args += [
+            "--set",
+            "cadence.enabled=false",
+            "--set",
+            "temporal.enabled=false",
+            "--set",
+            "metadataStorage.host=mysql.default.svc.cluster.local",
+            "--set",
+            "objectStorage.endpoint=minio.default.svc.cluster.local:9091",
+        ]
+        if ns.workflow == "temporal":
+            args += [
+                "--set",
+                f"workflow.endpoint={default_release}-temporal-frontend"
+                ".default.svc.cluster.local:7233",
+            ]
+        else:
+            args += [
+                "--set",
+                f"workflow.endpoint={default_release}-cadence-frontend"
+                ".default.svc.cluster.local:7833",
+            ]
+
+        # NodePorts are unique cluster-wide, so the app-only release needs
+        # its own NodePort values, offset the same way as everything else.
+        for _host_port, path in _helm_nodeport_map:
+            if path[0] not in ("apiserver", "envoy", "ui"):
+                continue  # cadence/temporal Web aren't part of this release
+            base_node_port = int(_read_values_k3d_path(path))
+            args += ["--set", f"{'.'.join(path)}={base_node_port + offset}"]
+
     # Arbitrary --set passthrough from the caller (e.g. CI workflow)
     for kv in getattr(ns, "helm_set", []):
         args += ["--set", kv]
@@ -948,6 +1078,12 @@ def _build_helm_set_args(ns: argparse.Namespace) -> list[str]:
 def _deploy_services(ns: argparse.Namespace):
     assert ns
     name = ns.name
+
+    if name != _default_sandbox_name:
+        # Named sandboxes are namespace-isolated app-only releases inside
+        # the shared cluster — see _deploy_lightweight_services().
+        return _deploy_lightweight_services(ns)
+
     context = _kube_context(name)
     offset = getattr(ns, "port_offset", 0)
 
@@ -1145,6 +1281,122 @@ def _deploy_services(ns: argparse.Namespace):
         print(f"  - {title}: {url} {comment}")
 
     print()
+
+
+# Component -> (host port, in-cluster Service port) for the app-layer
+# Services a namespaced sandbox exposes via kubectl port-forward, since it
+# has no k3d NodePort mapping of its own. Host ports match the default
+# sandbox's NodePort-mapped host ports (see _helm_nodeport_map) before
+# --port-offset is applied.
+_app_port_forwards = [
+    ("apiserver", 15566, 15566),
+    ("envoy", 8081, 8081),
+    ("ui", 8090, 80),  # UI Service port is 80; NodePort/host side is 8090
+]
+
+
+def _deploy_michelangelo_config(name: str = _default_sandbox_name):
+    """Apply the michelangelo-config ConfigMap.
+
+    Consumed via envFrom by the Helm-managed worker/controllermgr
+    Deployments. The default sandbox applies it unmodified — everything lives in the
+    same namespace so the in-cluster short Service names resolve. Named
+    sandboxes share MinIO/apiserver from the default namespace instead, so
+    the endpoints are rewritten to fully-qualified Service names that
+    resolve across namespaces. Without this, worker/controllermgr pods in a
+    named sandbox's namespace would reference a ConfigMap that either
+    doesn't exist there or points at unreachable in-namespace short names.
+    """
+    config_path = _dir / "resources" / "michelangelo-config.yaml"
+    if name == _default_sandbox_name:
+        _kube_apply(config_path, name)
+        return
+
+    with open(config_path) as f:
+        doc = yaml.safe_load(f)
+    doc["data"]["AWS_ENDPOINT_URL"] = "http://minio.default.svc.cluster.local:9091"
+    doc["data"]["REGISTRY_ENDPOINT"] = f"{_helm_release(name)}-apiserver:15566"
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as tmp:
+        yaml.dump(doc, tmp)
+        tmp.flush()
+        _kube_apply(Path(tmp.name), name)
+
+
+def _deploy_lightweight_services(ns: argparse.Namespace):
+    """Deploy a namespace-isolated, infra-sharing sandbox instance.
+
+    Named sandboxes don't get their own k3d cluster or copy of
+    MySQL/MinIO/Cadence/Temporal — they're a second Helm release of just the
+    Michelangelo app layer (apiserver/envoy/ui/worker/controllermgr),
+    deployed into their own namespace inside the shared michelangelo-sandbox
+    cluster, pointed at the default namespace's shared infra via
+    cross-namespace Service DNS (see _build_helm_set_args()).
+    """
+    name = ns.name
+    namespace = _namespace(name)
+    offset = getattr(ns, "port_offset", 0)
+
+    _ensure_namespace_exists(namespace, name)
+    # Namespaced Secrets/ConfigMaps don't cross namespaces, so this release
+    # needs its own copies even though they point at shared infra.
+    _deploy_michelangelo_config(name)
+    _ensure_credentials_secret(name)
+    _sync_config_from_secret(name)
+
+    _assert_command(
+        "helm", "Helm not found, please install it: https://helm.sh/docs/intro/install/"
+    )
+
+    # Install the Michelangelo app layer via Helm. Infra (MySQL, MinIO,
+    # Cadence/Temporal, Prometheus, Grafana, kuberay, spark-operator) is
+    # shared from the default sandbox and is not deployed here.
+    _deploy_app_services(ns)
+
+    _setup_app_port_forwards(ns)
+
+    print(
+        f"\n🚀 Sandbox '{name}' deployed into namespace '{namespace}' "
+        "(sharing infra from the default sandbox). "
+        "To access the services, please use the following links:\n"
+    )
+    for component, host_port, _svc_port in _app_port_forwards:
+        print(f"  - {component}: http://localhost:{host_port + offset}")
+    print()
+
+
+def _setup_app_port_forwards(ns: argparse.Namespace):
+    """Port-forward a namespaced sandbox's app Services to the host.
+
+    Named sandboxes don't get their own k3d host-port mapping — k3d can't
+    add port mappings to a cluster after it's created, and NodePorts are
+    unique cluster-wide so the app-only release already runs on different
+    NodePort values (see _build_helm_set_args()). `kubectl port-forward`
+    bridges the two: it works against any Service regardless of type, so
+    host access doesn't depend on the NodePort value at all. This mirrors
+    the background port-forward already used for the inference demo
+    gateway in _setup_istio_with_gateway_api().
+    """
+    name = ns.name
+    context = _kube_context(name)
+    namespace = _namespace(name)
+    release = _helm_release(name)
+    offset = getattr(ns, "port_offset", 0)
+
+    for component, host_port, svc_port in _app_port_forwards:
+        subprocess.Popen(
+            [
+                "kubectl",
+                "--context",
+                context,
+                "-n",
+                namespace,
+                "port-forward",
+                f"svc/{release}-{component}",
+                f"{host_port + offset}:{svc_port}",
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
 
 
 def _create_bucket_setup(bucket_names, name: str = _default_sandbox_name):
@@ -1414,14 +1666,35 @@ def _delete(ns: argparse.Namespace):
     name = ns.name
     context = _kube_context(name)
     release = _helm_release(name)
+    is_default = name == _default_sandbox_name
 
     # Uninstall the michelangelo Helm release if present.
     # Credential Secrets have resource-policy: keep so they survive uninstall.
-    subprocess.run(
-        ["helm", "uninstall", release, "--kube-context", context],
-        capture_output=True,
-        check=False,
-    )
+    uninstall_args = ["helm", "uninstall", release, "--kube-context", context]
+    if not is_default:
+        uninstall_args += ["--namespace", _namespace(name)]
+    subprocess.run(uninstall_args, capture_output=True, check=False)
+
+    if not is_default:
+        # Named sandboxes only ever own their namespace in the shared
+        # cluster — deleting it removes everything the release created
+        # without touching the cluster or the default sandbox's infra.
+        namespace = _namespace(name)
+        subprocess.run(
+            [
+                "kubectl",
+                "--context",
+                context,
+                "delete",
+                "namespace",
+                namespace,
+                "--ignore-not-found=true",
+            ],
+            capture_output=True,
+            check=False,
+        )
+        print(f"Deleted namespace '{namespace}' — shared cluster left running.")
+        return
 
     # Determine which compute cluster to check for
     compute_cluster = ns.compute_cluster_name or _default_compute_cluster_name(name)
@@ -1457,16 +1730,38 @@ def _delete(ns: argparse.Namespace):
 
 def _start(ns: argparse.Namespace):
     assert ns
+    if ns.name != _default_sandbox_name:
+        print(
+            f"'{ns.name}' is a namespace in the shared sandbox cluster, not a "
+            "separate cluster — nothing to start. Use "
+            f"'ma sandbox create --name {ns.name}' to (re)deploy it."
+        )
+        return
     _exec("k3d", "cluster", "start", _cluster_name(ns.name))
 
 
 def _stop(ns: argparse.Namespace):
     assert ns
+    if ns.name != _default_sandbox_name:
+        print(
+            f"'{ns.name}' is a namespace in the shared sandbox cluster, not a "
+            "separate cluster — nothing to stop independently."
+        )
+        return
     _exec("k3d", "cluster", "stop", _cluster_name(ns.name))
 
 
 def _kube_create(path: Path, name: str = _default_sandbox_name):
-    _exec("kubectl", "--context", _kube_context(name), "create", "-f", str(path))
+    _exec(
+        "kubectl",
+        "--context",
+        _kube_context(name),
+        "-n",
+        _namespace(name),
+        "create",
+        "-f",
+        str(path),
+    )
 
 
 def _ensure_credentials_secret(name: str = _default_sandbox_name):
@@ -1478,6 +1773,7 @@ def _ensure_credentials_secret(name: str = _default_sandbox_name):
     default minioadmin credentials from the YAML files on first create.
     """
     context = _kube_context(name)
+    namespace = _namespace(name)
     for secret_name, yaml_file in [
         ("object-storage-credentials", "object-storage-credentials.yaml"),
         ("aws-credentials", "aws-credentials.yaml"),
@@ -1485,7 +1781,16 @@ def _ensure_credentials_secret(name: str = _default_sandbox_name):
     ]:
         exists = (
             subprocess.run(
-                ["kubectl", "--context", context, "get", "secret", secret_name],
+                [
+                    "kubectl",
+                    "--context",
+                    context,
+                    "-n",
+                    namespace,
+                    "get",
+                    "secret",
+                    secret_name,
+                ],
                 capture_output=True,
             ).returncode
             == 0
@@ -1510,11 +1815,14 @@ def _sync_config_from_secret(name: str = _default_sandbox_name):
     the same credentials.
     """
     context = _kube_context(name)
+    namespace = _namespace(name)
     result = subprocess.run(
         [
             "kubectl",
             "--context",
             context,
+            "-n",
+            namespace,
             "get",
             "secret",
             "object-storage-credentials",
@@ -1541,6 +1849,8 @@ def _sync_config_from_secret(name: str = _default_sandbox_name):
             "kubectl",
             "--context",
             context,
+            "-n",
+            namespace,
             "patch",
             "configmap",
             "michelangelo-config",
@@ -1553,7 +1863,27 @@ def _sync_config_from_secret(name: str = _default_sandbox_name):
 
 
 def _kube_apply(path: Path, name: str = _default_sandbox_name):
-    _exec("kubectl", "--context", _kube_context(name), "apply", "-f", str(path))
+    """Apply a manifest via kubectl into the sandbox's namespace.
+
+    Resource files under resources/ hardcode (or omit) metadata.namespace
+    for the default sandbox's "default" namespace. Named sandboxes get
+    their own namespace within the shared cluster, so the manifest's
+    namespace has to be rewritten to match — kubectl refuses to apply an
+    object whose baked-in namespace disagrees with -n.
+    """
+    if name == _default_sandbox_name:
+        _exec("kubectl", "--context", _kube_context(name), "apply", "-f", str(path))
+        return
+
+    namespace = _namespace(name)
+    with open(path) as f:
+        docs = [d for d in yaml.safe_load_all(f) if d]
+    for doc in docs:
+        doc.setdefault("metadata", {})["namespace"] = namespace
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as tmp:
+        yaml.dump_all(docs, tmp)
+        tmp.flush()
+        _exec("kubectl", "--context", _kube_context(name), "apply", "-f", tmp.name)
 
 
 def _apply_model_sync(is_name: str, context: Optional[str] = None):
@@ -1665,11 +1995,14 @@ def _kube_wait(
     timeout: int = 600,
 ):
     context = _kube_context(name)
+    namespace = _namespace(name)
     if pods:
         _exec(
             "kubectl",
             "--context",
             context,
+            "-n",
+            namespace,
             "wait",
             "--for=condition=ready",
             "pod",
@@ -1682,6 +2015,8 @@ def _kube_wait(
             "kubectl",
             "--context",
             context,
+            "-n",
+            namespace,
             "wait",
             "--all",
             "jobs",

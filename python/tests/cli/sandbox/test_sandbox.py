@@ -451,3 +451,127 @@ class ArgumentParsingTest(TestCase):
         """`ma sandbox create` without --set should default helm_set to []."""
         ns = self._parse(["create"])
         self.assertEqual(ns.helm_set, [])
+
+
+class NamespaceIsolationTest(TestCase):
+    """Tests for namespace-based isolation of named sandboxes."""
+
+    def test_cluster_name_and_context_always_resolve_to_shared_cluster(self):
+        """Named sandboxes share the default sandbox's k3d cluster/context."""
+        self.assertEqual(sandbox._cluster_name("dev2"), "michelangelo-sandbox")
+        self.assertEqual(
+            sandbox._cluster_name("dev2"), sandbox._cluster_name("sandbox")
+        )
+        self.assertEqual(sandbox._kube_context("dev2"), "k3d-michelangelo-sandbox")
+
+    def test_namespace_default_vs_named(self):
+        """Default sandbox uses 'default'; named sandboxes get their own."""
+        self.assertEqual(sandbox._namespace("sandbox"), "default")
+        self.assertEqual(sandbox._namespace("dev2"), "dev2")
+
+    def test_build_helm_set_args_shares_infra_for_named_sandbox(self):
+        """Named sandboxes disable bundled infra and point at the shared default."""
+        ns = argparse.Namespace(
+            name="dev2",
+            port_offset=100,
+            workflow="cadence",
+            exclude=[],
+            helm_set=[],
+        )
+        args = sandbox._build_helm_set_args(ns)
+        self.assertIn("cadence.enabled=false", args)
+        self.assertIn("temporal.enabled=false", args)
+        self.assertIn("metadataStorage.host=mysql.default.svc.cluster.local", args)
+        self.assertIn(
+            "objectStorage.endpoint=minio.default.svc.cluster.local:9091", args
+        )
+        self.assertIn(
+            "workflow.endpoint=michelangelo-cadence-frontend"
+            ".default.svc.cluster.local:7833",
+            args,
+        )
+        # NodePorts must be offset so they don't collide with the default
+        # sandbox's own NodePorts on the shared cluster.
+        self.assertIn("apiserver.service.nodePort=30109", args)
+        self.assertIn("envoy.service.nodePort=30110", args)
+        self.assertIn("ui.service.nodePort=30111", args)
+
+    def test_build_helm_set_args_default_sandbox_unaffected(self):
+        """Default sandbox keeps its own in-namespace endpoints, no overrides."""
+        ns = argparse.Namespace(
+            name="sandbox",
+            port_offset=0,
+            workflow="cadence",
+            exclude=[],
+            helm_set=[],
+        )
+        args = sandbox._build_helm_set_args(ns)
+        self.assertNotIn("metadataStorage.host=mysql.default.svc.cluster.local", args)
+        self.assertIn("workflow.endpoint=michelangelo-cadence-frontend:7833", args)
+
+    @patch("michelangelo.cli.sandbox.sandbox._deploy_services")
+    @patch("michelangelo.cli.sandbox.sandbox._exec")
+    @patch("michelangelo.cli.sandbox.sandbox.subprocess.run")
+    def test_create_named_sandbox_reuses_shared_cluster(
+        self, mock_run, mock_exec, mock_deploy
+    ):
+        """`create --name dev2` must not create a new k3d cluster."""
+        mock_run.return_value = Mock(returncode=0)
+        ns = argparse.Namespace(name="dev2", port_offset=100, exclude=[])
+
+        sandbox._create(ns)
+
+        create_calls = [
+            c
+            for c in mock_exec.call_args_list
+            if "create" in c[0] and "cluster" in c[0]
+        ]
+        self.assertEqual(create_calls, [])
+        mock_deploy.assert_called_once_with(ns)
+
+    @patch("michelangelo.cli.sandbox.sandbox._deploy_services")
+    @patch("michelangelo.cli.sandbox.sandbox._exec")
+    @patch("michelangelo.cli.sandbox.sandbox.subprocess.run")
+    def test_create_named_sandbox_errors_when_shared_cluster_missing(
+        self, mock_run, mock_exec, mock_deploy
+    ):
+        """`create --name dev2` should fail fast if there's no shared cluster."""
+        mock_run.return_value = Mock(returncode=1)
+        ns = argparse.Namespace(name="dev2", port_offset=100, exclude=[])
+
+        with self.assertRaises(SystemExit):
+            sandbox._create(ns)
+
+        mock_deploy.assert_not_called()
+
+    @patch("michelangelo.cli.sandbox.sandbox.subprocess.run")
+    def test_delete_named_sandbox_only_removes_namespace(self, mock_run):
+        """`delete --name dev2` must not touch the shared k3d cluster."""
+        ns = Mock()
+        ns.name = "dev2"
+
+        sandbox._delete(ns)
+
+        commands = [c[0][0] for c in mock_run.call_args_list]
+        self.assertTrue(any("uninstall" in cmd for cmd in commands))
+        self.assertTrue(any("delete" in cmd and "namespace" in cmd for cmd in commands))
+        self.assertFalse(
+            any("k3d" in cmd for cmd in commands),
+            "named-sandbox delete must never touch k3d",
+        )
+
+    @patch("michelangelo.cli.sandbox.sandbox._exec")
+    def test_start_named_sandbox_is_a_noop(self, mock_exec):
+        """`start --name dev2` is a no-op — namespaces can't be started."""
+        ns = Mock()
+        ns.name = "dev2"
+        sandbox._start(ns)
+        mock_exec.assert_not_called()
+
+    @patch("michelangelo.cli.sandbox.sandbox._exec")
+    def test_stop_named_sandbox_is_a_noop(self, mock_exec):
+        """`stop --name dev2` is a no-op — namespaces can't be stopped."""
+        ns = Mock()
+        ns.name = "dev2"
+        sandbox._stop(ns)
+        mock_exec.assert_not_called()
