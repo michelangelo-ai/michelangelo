@@ -1,4 +1,5 @@
 import { CellType } from '#core/components/cell/constants';
+import { interpolate } from '#core/interpolation/interpolate';
 
 import type { Cell } from '#core/components/cell/types';
 import type { TagColor } from '#core/components/tag/types';
@@ -95,6 +96,38 @@ export const RUN_STATE_COLUMN: Cell = {
 };
 
 /**
+ * Label stamped on every pipeline run spawned by a trigger, holding the name of the
+ * originating TriggerRun. Written by the trigger workflow — keep in sync with
+ * `TriggerredByLabel` in go/worker/workflows/trigger/cron_trigger_workflows.go.
+ *
+ * Doubles as the filter key for listing the runs a trigger produced, via
+ * `listOptions.labelSelector`.
+ */
+export const TRIGGERED_BY_LABEL = 'pipelinerun.michelangelo/triggered-by';
+
+/**
+ * Links a pipeline run back to the trigger that spawned it.
+ *
+ * Manually started runs carry no trigger label, so the value renders empty and the URL
+ * resolves to '' — which {@link LinkCell} renders as plain text rather than a dead link.
+ * That case is the majority, so it is handled explicitly here instead of relying on a
+ * failed string interpolation.
+ */
+export const TRIGGERED_BY_CELL_CONFIG: Cell = {
+  id: `metadata.labels['${TRIGGERED_BY_LABEL}']`,
+  label: 'Triggered by',
+  type: CellType.LINK,
+  url: interpolate<string>(({ studio, data }) => {
+    // cast: data is `any` from the interpolation context — row in list views, page in
+    // detail views; always a PipelineRun for these cells. See #1425
+    const triggerName = (data as { metadata?: { labels?: Record<string, string> } })?.metadata
+      ?.labels?.[TRIGGERED_BY_LABEL];
+
+    return triggerName ? `/${studio.projectId}/${studio.phase}/triggers/${triggerName}` : '';
+  }),
+};
+
+/**
  * Cell configurations rendered for Pipeline Runs:
  *  - Columns for list view
  *  - Header metadata for detail view
@@ -103,5 +136,6 @@ export const SHARED_RUN_CELL_CONFIG: Cell[] = [
   RUN_CREATED_COLUMN,
   RUN_PIPELINE_COLUMN,
   RUN_STARTED_BY_COLUMN,
+  TRIGGERED_BY_CELL_CONFIG,
   RUN_STATE_COLUMN,
 ];

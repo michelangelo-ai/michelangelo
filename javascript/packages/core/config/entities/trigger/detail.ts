@@ -1,8 +1,20 @@
 import { CellType } from '#core/components/cell/constants';
-import { SHARED_RUN_CELL_CONFIG } from '#core/config/entities/run/shared';
+import {
+  SHARED_RUN_CELL_CONFIG,
+  TRIGGERED_BY_CELL_CONFIG,
+  TRIGGERED_BY_LABEL,
+} from '#core/config/entities/run/shared';
 import { TRIGGER_PIPELINE_CELL_CONFIG, TRIGGER_STATE_CELL_CONFIG } from './shared';
 
 import type { DetailViewConfig } from '#core/components/views/types';
+
+/**
+ * Every row on this tab is already scoped to the trigger being viewed, so the
+ * "Triggered by" column would repeat the page's own name and link back to itself.
+ */
+const RUN_CELLS_EXCLUDING_TRIGGER = SHARED_RUN_CELL_CONFIG.filter(
+  (cell) => cell !== TRIGGERED_BY_CELL_CONFIG
+);
 
 export const TRIGGER_DETAIL_CONFIG: DetailViewConfig = {
   type: 'detail',
@@ -22,7 +34,9 @@ export const TRIGGER_DETAIL_CONFIG: DetailViewConfig = {
         service: 'pipelineRun',
         serviceOptions: {
           listOptions: {
-            labelSelector: 'pipelinerun.michelangelo/triggered-by=${page.metadata.name}',
+            // `\${...}` escapes the interpolation token so it survives this template
+            // literal and is resolved later against the page data.
+            labelSelector: `${TRIGGERED_BY_LABEL}=\${page.metadata.name}`,
           },
         },
       },
@@ -33,7 +47,7 @@ export const TRIGGER_DETAIL_CONFIG: DetailViewConfig = {
             label: 'Name',
             url: '/${studio.projectId}/${studio.phase}/runs/${row.metadata.name}',
           },
-          ...SHARED_RUN_CELL_CONFIG,
+          ...RUN_CELLS_EXCLUDING_TRIGGER,
         ],
       },
     },
