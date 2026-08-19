@@ -6,7 +6,7 @@ export type DeploymentRecord = {
     annotations?: Record<string, string>;
   };
   spec?: {
-    definition?: { type?: number };
+    definition?: { type?: string };
     selector?: {
       matchLabels?: Record<string, string>;
       matchExpressions?: { values?: string[] }[];
@@ -18,7 +18,7 @@ export type DeploymentRecord = {
   };
   status?: {
     message?: string;
-    stage?: number;
+    stage?: string;
     currentRevision?: ResourceRef;
     candidateRevision?: ResourceRef;
   };

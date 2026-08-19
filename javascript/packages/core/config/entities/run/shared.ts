@@ -3,6 +3,21 @@ import { CellType } from '#core/components/cell/constants';
 import type { Cell } from '#core/components/cell/types';
 
 /**
+ * Mirrors the generated proto PipelineRunState enum (pipeline_run.proto). Colocated here until
+ * core has access to the shared generated package — swapping the import path is the only change
+ * needed then, since usage sites reference `PipelineRunState.READY` etc.
+ */
+export const PipelineRunState = {
+  INVALID: 'PIPELINE_RUN_STATE_INVALID',
+  PENDING: 'PIPELINE_RUN_STATE_PENDING',
+  RUNNING: 'PIPELINE_RUN_STATE_RUNNING',
+  SUCCEEDED: 'PIPELINE_RUN_STATE_SUCCEEDED',
+  KILLED: 'PIPELINE_RUN_STATE_KILLED',
+  FAILED: 'PIPELINE_RUN_STATE_FAILED',
+  SKIPPED: 'PIPELINE_RUN_STATE_SKIPPED',
+} as const;
+
+/**
  * Cell configurations rendered for Pipeline Runs:
  *  - Columns for list view
  *  - Header metadata for detail view
@@ -33,22 +48,22 @@ export const SHARED_RUN_CELL_CONFIG: Cell[] = [
     label: 'State',
     type: CellType.STATE,
     stateTextMap: {
-      0: 'Queued',
-      1: 'Pending',
-      2: 'Running',
-      3: 'Succeeded',
-      4: 'Killed',
-      5: 'Failed',
-      6: 'Skipped',
+      [PipelineRunState.INVALID]: 'Queued',
+      [PipelineRunState.PENDING]: 'Pending',
+      [PipelineRunState.RUNNING]: 'Running',
+      [PipelineRunState.SUCCEEDED]: 'Succeeded',
+      [PipelineRunState.KILLED]: 'Killed',
+      [PipelineRunState.FAILED]: 'Failed',
+      [PipelineRunState.SKIPPED]: 'Skipped',
     },
     stateColorMap: {
-      0: 'gray',
-      1: 'blue',
-      2: 'blue',
-      3: 'green',
-      4: 'red',
-      5: 'red',
-      6: 'gray',
+      [PipelineRunState.INVALID]: 'gray',
+      [PipelineRunState.PENDING]: 'blue',
+      [PipelineRunState.RUNNING]: 'blue',
+      [PipelineRunState.SUCCEEDED]: 'green',
+      [PipelineRunState.KILLED]: 'red',
+      [PipelineRunState.FAILED]: 'red',
+      [PipelineRunState.SKIPPED]: 'gray',
     },
   },
 ];

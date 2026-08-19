@@ -2,7 +2,8 @@ import { ActionHierarchy } from '#core/components/actions/types';
 import { interpolate } from '#core/interpolation/interpolate';
 import { TRIGGER_DETAIL_CONFIG } from './detail';
 import { TRIGGER_LIST_CONFIG } from './list';
-import { TriggerRunAction, TriggerRunState } from './types';
+import { TriggerRunState } from './shared';
+import { TriggerRunAction } from './types';
 
 import type { PhaseEntityConfig } from '#core/types/common/studio-types';
 import type { TriggerRun } from './types';

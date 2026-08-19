@@ -1,11 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { vi } from 'vitest';
 
-import {
-  DEPLOYMENT_CONDITION_STATUS,
-  DEPLOYMENT_STAGE,
-  DEPLOYMENT_STATE,
-} from '#core/config/entities/deployment/shared';
 import { DEPLOY_PHASE } from '#core/config/phases/deploy';
 import { EntityDetailRoute } from '#core/router/entity-detail-route';
 import { PhaseListRoute } from '#core/router/phase-list-route';
@@ -84,8 +79,8 @@ describe('Deployment detail page', () => {
         labels: { 'michelangelo/owner': 'user-example' },
       },
       status: {
-        state: DEPLOYMENT_STATE.HEALTHY,
-        stage: DEPLOYMENT_STAGE.ROLLOUT_COMPLETE,
+        state: 'DEPLOYMENT_STATE_HEALTHY',
+        stage: 'DEPLOYMENT_STAGE_ROLLOUT_COMPLETE',
         conditions: [] as object[],
       },
       ...overrides,
@@ -123,15 +118,15 @@ describe('Deployment detail page', () => {
         labels: { 'michelangelo/owner': 'user-example' },
       },
       spec: {
-        definition: { type: 1 },
+        definition: { type: 'TARGET_TYPE_INFERENCE_SERVER' },
         strategy: { rolloutStrategy: { case: 'rolling', value: {} } },
         target: { case: 'inferenceServer', value: { name: 'triton-server' } },
         desiredRevision: { name: 'sentiment-model-rev-3' },
         resourceLinks: { Dashboard: 'https://grafana.example.com/d/abc' },
       },
       status: {
-        state: DEPLOYMENT_STATE.HEALTHY,
-        stage: DEPLOYMENT_STAGE.ROLLOUT_COMPLETE,
+        state: 'DEPLOYMENT_STATE_HEALTHY',
+        stage: 'DEPLOYMENT_STAGE_ROLLOUT_COMPLETE',
         message: 'Rollout completed successfully.',
         currentRevision: { name: 'sentiment-model-rev-2' },
         conditions: [] as object[],
@@ -227,8 +222,8 @@ describe('Deployment detail page', () => {
               GetDeployment: {
                 deployment: {
                   metadata: { name: 'sentiment-deployment' },
-                  spec: { definition: { type: 1 } },
-                  status: { state: DEPLOYMENT_STATE.EMPTY, stage: DEPLOYMENT_STAGE.INVALID },
+                  spec: { definition: { type: 'TARGET_TYPE_INFERENCE_SERVER' } },
+                  status: { state: 'DEPLOYMENT_STATE_EMPTY', stage: 'DEPLOYMENT_STAGE_INVALID' },
                 },
               },
             }),
@@ -250,8 +245,8 @@ describe('Deployment detail page', () => {
         labels: { 'michelangelo/owner': 'user-example' },
       },
       status: {
-        state: DEPLOYMENT_STATE.HEALTHY,
-        stage: DEPLOYMENT_STAGE.ROLLOUT_COMPLETE,
+        state: 'DEPLOYMENT_STATE_HEALTHY',
+        stage: 'DEPLOYMENT_STAGE_ROLLOUT_COMPLETE',
         conditions: [] as object[],
       },
       ...overrides,
@@ -270,17 +265,17 @@ describe('Deployment detail page', () => {
               GetDeployment: {
                 deployment: buildDeployment({
                   status: {
-                    state: DEPLOYMENT_STATE.HEALTHY,
-                    stage: DEPLOYMENT_STAGE.ROLLOUT_COMPLETE,
+                    state: 'DEPLOYMENT_STATE_HEALTHY',
+                    stage: 'DEPLOYMENT_STAGE_ROLLOUT_COMPLETE',
                     conditions: [
                       {
                         type: 'Validation',
-                        status: DEPLOYMENT_CONDITION_STATUS.TRUE,
+                        status: 'CONDITION_STATUS_TRUE',
                         lastUpdatedTimestamp: '1746000600000',
                       },
                       {
                         type: 'Placement',
-                        status: DEPLOYMENT_CONDITION_STATUS.UNKNOWN,
+                        status: 'CONDITION_STATUS_UNKNOWN',
                         message: 'Placing on inference server.',
                         reason: 'PlacementInProgress',
                         lastUpdatedTimestamp: '1746002400000',
@@ -312,12 +307,12 @@ describe('Deployment detail page', () => {
               GetDeployment: {
                 deployment: buildDeployment({
                   status: {
-                    state: DEPLOYMENT_STATE.HEALTHY,
-                    stage: DEPLOYMENT_STAGE.ROLLOUT_COMPLETE,
+                    state: 'DEPLOYMENT_STATE_HEALTHY',
+                    stage: 'DEPLOYMENT_STAGE_ROLLOUT_COMPLETE',
                     conditions: [
                       {
                         type: 'Placement',
-                        status: DEPLOYMENT_CONDITION_STATUS.UNKNOWN,
+                        status: 'CONDITION_STATUS_UNKNOWN',
                         message: 'Placing on inference server.',
                         reason: 'PlacementInProgress',
                         lastUpdatedTimestamp: '1746002400000',
@@ -350,18 +345,18 @@ describe('Deployment detail page', () => {
               GetDeployment: {
                 deployment: buildDeployment({
                   status: {
-                    state: DEPLOYMENT_STATE.UNHEALTHY,
-                    stage: DEPLOYMENT_STAGE.ROLLOUT_FAILED,
+                    state: 'DEPLOYMENT_STATE_UNHEALTHY',
+                    stage: 'DEPLOYMENT_STAGE_ROLLOUT_FAILED',
                     conditions: [],
                     conditionsSnapshot: [
                       {
                         type: 'SnapshotValidation',
-                        status: DEPLOYMENT_CONDITION_STATUS.TRUE,
+                        status: 'CONDITION_STATUS_TRUE',
                         lastUpdatedTimestamp: '1746000600000',
                       },
                       {
                         type: 'SnapshotPlacement',
-                        status: DEPLOYMENT_CONDITION_STATUS.FALSE,
+                        status: 'CONDITION_STATUS_FALSE',
                         message: 'Failed to place on inference server.',
                         reason: 'NoCapacity',
                         lastUpdatedTimestamp: '1746001200000',

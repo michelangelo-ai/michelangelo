@@ -46,10 +46,7 @@ describe('Model list page', () => {
                   },
                   spec: {
                     description: 'model workflow=fraud-classifier git=abc123',
-                    // The generated proto client decodes enum fields to their numeric
-                    // discriminant (MODEL_KIND_BINARY_CLASSIFICATION = 3), not the enum's
-                    // string name — mock the real runtime shape, not the wire JSON shape.
-                    kind: 3,
+                    kind: 'MODEL_KIND_BINARY_CLASSIFICATION',
                     modelFamily: { name: 'fraud-family' },
                   },
                 },
@@ -61,7 +58,7 @@ describe('Model list page', () => {
                   },
                   spec: {
                     description: 'model workflow=demand-forecaster git=def456',
-                    kind: 2, // MODEL_KIND_REGRESSION
+                    kind: 'MODEL_KIND_REGRESSION',
                     modelFamily: { name: 'demand-family' },
                   },
                 },
@@ -73,7 +70,7 @@ describe('Model list page', () => {
                   },
                   spec: {
                     description: 'model workflow=user-segmenter git=ghi789',
-                    kind: 5, // MODEL_KIND_CLUSTERING
+                    kind: 'MODEL_KIND_CLUSTERING',
                     modelFamily: { name: 'segment-family' },
                   },
                 },

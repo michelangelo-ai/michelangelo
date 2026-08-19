@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 
 import { InterpolatableActionsPopover } from '#core/components/actions/interpolatable-actions-popover';
 import { TRIGGER_ENTITY_CONFIG } from '#core/config/entities/trigger/trigger';
-import { TriggerRunAction, TriggerRunState } from '#core/config/entities/trigger/types';
+import { TriggerRunAction } from '#core/config/entities/trigger/types';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getBaseProviderWrapper } from '#core/test/wrappers/get-base-provider-wrapper';
 import { getErrorProviderWrapper } from '#core/test/wrappers/get-error-provider-wrapper';
@@ -37,7 +37,7 @@ function buildRunningTriggerRun(overrides: Partial<TriggerRun> = {}): TriggerRun
       kill: false,
       action: TriggerRunAction.NO_ACTION,
     },
-    status: { state: TriggerRunState.RUNNING },
+    status: { state: 'TRIGGER_RUN_STATE_RUNNING' },
     ...overrides,
   };
 }
@@ -86,7 +86,7 @@ describe('TRIGGER_ENTITY_CONFIG: kill action', () => {
 
   it('disables the action with a tooltip when the run is not killable', async () => {
     const user = userEvent.setup();
-    const record = buildRunningTriggerRun({ status: { state: TriggerRunState.SUCCEEDED } });
+    const record = buildRunningTriggerRun({ status: { state: 'TRIGGER_RUN_STATE_SUCCEEDED' } });
 
     render(
       <InterpolatableActionsPopover actions={KILL_ACTIONS} record={record} />,

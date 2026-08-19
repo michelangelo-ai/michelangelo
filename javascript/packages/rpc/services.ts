@@ -1,4 +1,4 @@
-import { create, createRegistry, fromJson, toJson } from '@bufbuild/protobuf';
+import { create, createRegistry, toJson } from '@bufbuild/protobuf';
 
 import { createFetchTransport } from './create-fetch-transport';
 import { TypedStructSchema } from './gen/michelangelo/api/typed_struct_pb';
@@ -43,7 +43,7 @@ function createServiceClient<T extends DescService>(
         requestJson,
         headers
       );
-      return fromJson(method.output, responseJson, { registry: typeRegistry });
+      return responseJson;
     };
   }
 

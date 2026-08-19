@@ -4,6 +4,21 @@ import { SHARED_RUN_CELL_CONFIG } from './shared';
 
 import type { DetailViewConfig } from '#core/components/views/types';
 
+/**
+ * Mirrors the generated proto PipelineRunStepState enum (pipeline_run.proto). Colocated here
+ * until core has access to the shared generated package — swapping the import path is the only
+ * change needed then, since usage sites reference `PipelineRunStepState.SUCCEEDED` etc.
+ */
+export const PipelineRunStepState = {
+  INVALID: 'PIPELINE_RUN_STEP_STATE_INVALID',
+  PENDING: 'PIPELINE_RUN_STEP_STATE_PENDING',
+  RUNNING: 'PIPELINE_RUN_STEP_STATE_RUNNING',
+  SUCCEEDED: 'PIPELINE_RUN_STEP_STATE_SUCCEEDED',
+  KILLED: 'PIPELINE_RUN_STEP_STATE_KILLED',
+  FAILED: 'PIPELINE_RUN_STEP_STATE_FAILED',
+  SKIPPED: 'PIPELINE_RUN_STEP_STATE_SKIPPED',
+} as const;
+
 export const RUN_DETAIL_CONFIG: DetailViewConfig = {
   type: 'detail',
   metadata: SHARED_RUN_CELL_CONFIG,
@@ -59,22 +74,22 @@ export const RUN_DETAIL_CONFIG: DetailViewConfig = {
               label: 'Status',
               type: CellType.STATE,
               stateTextMap: {
-                0: 'Pending',
-                1: 'Pending',
-                2: 'Running',
-                3: 'Success',
-                4: 'Killed',
-                5: 'Failed',
-                6: 'Skipped',
+                [PipelineRunStepState.INVALID]: 'Pending',
+                [PipelineRunStepState.PENDING]: 'Pending',
+                [PipelineRunStepState.RUNNING]: 'Running',
+                [PipelineRunStepState.SUCCEEDED]: 'Success',
+                [PipelineRunStepState.KILLED]: 'Killed',
+                [PipelineRunStepState.FAILED]: 'Failed',
+                [PipelineRunStepState.SKIPPED]: 'Skipped',
               },
               stateColorMap: {
-                0: 'gray',
-                1: 'blue',
-                2: 'blue',
-                3: 'green',
-                4: 'red',
-                5: 'red',
-                6: 'gray',
+                [PipelineRunStepState.INVALID]: 'gray',
+                [PipelineRunStepState.PENDING]: 'blue',
+                [PipelineRunStepState.RUNNING]: 'blue',
+                [PipelineRunStepState.SUCCEEDED]: 'green',
+                [PipelineRunStepState.KILLED]: 'red',
+                [PipelineRunStepState.FAILED]: 'red',
+                [PipelineRunStepState.SKIPPED]: 'gray',
               },
             },
             {
@@ -104,19 +119,19 @@ export const RUN_DETAIL_CONFIG: DetailViewConfig = {
             markdown: false,
           },
         ],
-        stateBuilder: (record: { state: number }) => {
+        stateBuilder: (record: { state: string }) => {
           switch (record.state) {
-            case 1:
+            case PipelineRunStepState.PENDING:
               return TASK_STATE.PENDING;
-            case 2:
+            case PipelineRunStepState.RUNNING:
               return TASK_STATE.RUNNING;
-            case 3:
+            case PipelineRunStepState.SUCCEEDED:
               return TASK_STATE.SUCCESS;
-            case 4:
+            case PipelineRunStepState.KILLED:
               return TASK_STATE.ERROR;
-            case 5:
+            case PipelineRunStepState.FAILED:
               return TASK_STATE.ERROR;
-            case 6:
+            case PipelineRunStepState.SKIPPED:
               return TASK_STATE.SKIPPED;
             default:
               return TASK_STATE.PENDING;
