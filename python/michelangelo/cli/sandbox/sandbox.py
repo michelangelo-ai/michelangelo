@@ -271,6 +271,7 @@ def init_arguments(p: argparse.ArgumentParser):
         ),
     )
     _add_name_arg(sync_p)
+    _add_port_offset_arg(sync_p)
     sync_p.add_argument(
         "--exclude",
         help=(
@@ -1123,7 +1124,7 @@ def _deploy_services(ns: argparse.Namespace):
         ns, "compute_cluster_name", None
     ) or _default_compute_cluster_name(name)
     if create_compute_cluster:
-        _create_compute_cluster(compute_cluster_name, name)
+        _create_compute_cluster(compute_cluster_name, name, port_offset=offset)
         _create_compute_cluster_crd(compute_cluster_name, name)
         _apply_compute_cluster_rbac(compute_cluster_name)
         _create_compute_cluster_secrets(compute_cluster_name, name)
@@ -2357,7 +2358,7 @@ def _create_inference_demo_crs(ns: argparse.Namespace):
 
     # Setup istio with Gateway API
     # This allows usage of HTTPRoutes to route traffic to the inference server.
-    _setup_istio_with_gateway_api(name)
+    _setup_istio_with_gateway_api(name, offset=getattr(ns, "port_offset", 0))
 
     # Create the SA, RBAC, and token secret that the clientfactory uses to
     # connect to the sandbox cluster as a ClusterTarget.
@@ -2474,11 +2475,12 @@ def _create_inference_multicluster_demo_crs(ns: argparse.Namespace):
     5. Deploy model-sync to every clusterTarget via the shared helper.
     """
     name = getattr(ns, "name", _default_sandbox_name)
+    offset = getattr(ns, "port_offset", 0)
 
     print("🚀 Setting up Michelangelo AI Multi-Cluster Inference Demo...")
 
     # Local sandbox: Istio + Gateway API + IS RBAC/credentials.
-    _setup_istio_with_gateway_api(name)
+    _setup_istio_with_gateway_api(name, offset=offset)
     _setup_inference_server_secrets(name)
 
     # Each remote cluster: k3d, Istio + Gateway API, IS RBAC + token + CA.
@@ -2557,7 +2559,9 @@ def _create_inference_multicluster_demo_crs(ns: argparse.Namespace):
 
 
 def _setup_istio_with_gateway_api(
-    name: str = _default_sandbox_name, context: Optional[str] = None
+    name: str = _default_sandbox_name,
+    context: Optional[str] = None,
+    offset: int = 0,
 ):
     """Install Istio service mesh with Kubernetes Gateway API support.
 
@@ -2704,7 +2708,7 @@ def _setup_istio_with_gateway_api(
                 "default",
                 "port-forward",
                 "svc/ma-gateway-istio",
-                "8880:80",
+                f"{8880 + offset}:80",
             ],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,

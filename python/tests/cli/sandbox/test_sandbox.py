@@ -67,7 +67,7 @@ class CreateFunctionTest(TestCase):
         # Verify dedicated compute cluster functions were called with the
         # compute cluster name
         mock_create_compute_cluster.assert_called_once_with(
-            "test-compute-cluster", "sandbox"
+            "test-compute-cluster", "sandbox", port_offset=0
         )
         mock_create_crd.assert_called_once_with("test-compute-cluster", "sandbox")
         mock_apply_rbac.assert_called_once_with("test-compute-cluster")
