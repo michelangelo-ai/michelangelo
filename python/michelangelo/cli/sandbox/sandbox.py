@@ -392,6 +392,13 @@ def _create(ns: argparse.Namespace):
         "1",
     ]
 
+    if ns.name != _default_sandbox_name:
+        # Don't hijack the ambient kubectl context for a secondary sandbox —
+        # any other process using kubectl without --context (another agent,
+        # a running test plan, the user's terminal) should keep hitting the
+        # default sandbox, not silently switch to this one.
+        args.append("--kubeconfig-switch-context=false")
+
     for p in ports:
         args += ["-p", f"{_loopback(p)}@agent:0"]
 
