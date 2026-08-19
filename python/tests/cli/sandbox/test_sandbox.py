@@ -43,6 +43,8 @@ class CreateFunctionTest(TestCase):
         """Test dedicated cluster functions called with compute cluster name."""
         # Setup namespace with create_compute_cluster=True
         ns = argparse.Namespace(
+            name="sandbox",
+            port_offset=0,
             workflow="cadence",
             exclude=[],
             include_experimental=[],
@@ -64,10 +66,12 @@ class CreateFunctionTest(TestCase):
 
         # Verify dedicated compute cluster functions were called with the
         # compute cluster name
-        mock_create_compute_cluster.assert_called_once_with("test-compute-cluster")
-        mock_create_crd.assert_called_once_with("test-compute-cluster")
+        mock_create_compute_cluster.assert_called_once_with(
+            "test-compute-cluster", "sandbox"
+        )
+        mock_create_crd.assert_called_once_with("test-compute-cluster", "sandbox")
         mock_apply_rbac.assert_called_once_with("test-compute-cluster")
-        mock_create_secrets.assert_called_once_with("test-compute-cluster")
+        mock_create_secrets.assert_called_once_with("test-compute-cluster", "sandbox")
 
     @patch("michelangelo.cli.sandbox.sandbox._kube_wait")
     @patch("michelangelo.cli.sandbox.sandbox._create_cadence_domain")
@@ -101,6 +105,8 @@ class CreateFunctionTest(TestCase):
         """Test control plane cluster functions called with sandbox cluster name."""
         # Setup namespace with create_compute_cluster=False
         ns = argparse.Namespace(
+            name="sandbox",
+            port_offset=0,
             workflow="cadence",
             exclude=[],
             include_experimental=[],
@@ -125,9 +131,9 @@ class CreateFunctionTest(TestCase):
 
         # Verify control plane cluster CRD/RBAC/secrets were created with
         # sandbox cluster name
-        mock_create_crd.assert_called_once_with("michelangelo-sandbox")
+        mock_create_crd.assert_called_once_with("michelangelo-sandbox", "sandbox")
         mock_apply_rbac.assert_called_once_with("michelangelo-sandbox")
-        mock_create_secrets.assert_called_once_with("michelangelo-sandbox")
+        mock_create_secrets.assert_called_once_with("michelangelo-sandbox", "sandbox")
 
 
 class ComputeClusterSetupTest(TestCase):
@@ -162,7 +168,7 @@ class ComputeClusterSetupTest(TestCase):
         self.assertEqual(len(helm_calls), 1)
 
         # Verify all setup functions were called
-        mock_create_config.assert_called_once_with(cluster_name)
+        mock_create_config.assert_called_once_with(cluster_name, "sandbox")
         mock_create_aws_creds.assert_called_once_with(cluster_name)
 
     @patch("michelangelo.cli.sandbox.sandbox._exec")
@@ -324,6 +330,7 @@ current-context: test-context
     def test_delete_with_existing_compute_cluster(self, mock_check_output, mock_exec):
         """Test deletion when compute cluster exists."""
         ns = Mock()
+        ns.name = "sandbox"
         ns.compute_cluster_name = "test-compute"
 
         # Simulate cluster exists
@@ -356,6 +363,7 @@ current-context: test-context
     ):
         """Test deletion when compute cluster doesn't exist."""
         ns = Mock()
+        ns.name = "sandbox"
         ns.compute_cluster_name = "test-compute"
 
         # Simulate cluster doesn't exist
@@ -381,6 +389,7 @@ current-context: test-context
     def test_delete_without_compute_cluster_name(self, mock_check_output, mock_exec):
         """Test deletion when no compute cluster name is specified."""
         ns = Mock()
+        ns.name = "sandbox"
         ns.compute_cluster_name = None
 
         # Simulate default cluster doesn't exist
@@ -398,6 +407,7 @@ current-context: test-context
     def test_delete_prints_skip_message(self, mock_print, mock_check_output, mock_exec):
         """Test that skip message is printed when cluster doesn't exist."""
         ns = Mock()
+        ns.name = "sandbox"
         ns.compute_cluster_name = "test-compute"
 
         # Simulate cluster doesn't exist
