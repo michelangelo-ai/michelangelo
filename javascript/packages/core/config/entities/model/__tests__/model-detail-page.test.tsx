@@ -139,9 +139,7 @@ describe('Model detail page', () => {
       expect(await screen.findByRole('textbox', { name: 'Model family' })).toHaveValue(
         'fraud-classifier-family'
       );
-      expect(screen.getByRole('textbox', { name: 'Training framework' })).toHaveValue(
-        'TensorFlow'
-      );
+      expect(screen.getByRole('textbox', { name: 'Training framework' })).toHaveValue('TensorFlow');
       expect(screen.getByRole('textbox', { name: 'Source platform' })).toHaveValue('canvas');
     });
 
