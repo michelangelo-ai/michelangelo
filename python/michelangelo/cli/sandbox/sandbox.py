@@ -352,12 +352,17 @@ def init_arguments(p: argparse.ArgumentParser):
     demo_sp = demo_p.add_subparsers(
         dest="demo_action", required=True, help="Demo type to create"
     )
-    _ = demo_sp.add_parser("pipeline", help="Create pipeline demo resources")
-    _ = demo_sp.add_parser("inference", help="Create inference server demo resources")
-    _ = demo_sp.add_parser(
+    pipeline_p = demo_sp.add_parser("pipeline", help="Create pipeline demo resources")
+    _add_name_arg(pipeline_p)
+    inference_p = demo_sp.add_parser(
+        "inference", help="Create inference server demo resources"
+    )
+    _add_name_arg(inference_p)
+    inference_multicluster_p = demo_sp.add_parser(
         "inference-multicluster",
         help=("Create a multi-cluster inference server demo."),
     )
+    _add_name_arg(inference_multicluster_p)
 
     delete_p = sp.add_parser("delete", help="Delete the cluster.")
     _add_name_arg(delete_p)
