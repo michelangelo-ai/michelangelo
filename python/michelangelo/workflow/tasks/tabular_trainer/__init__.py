@@ -17,6 +17,7 @@ from michelangelo.workflow.schema.tabular_trainer import (
     ParquetReadConfig,
     ScalingConfig,
     TabularTrainerConfig,
+    TorchCompileConfig,
     TransferLearningSpecConfig,
 )
 from michelangelo.workflow.tasks.tabular_trainer.task import (
@@ -42,6 +43,7 @@ __all__ = [
     "ParquetReadConfig",
     "ScalingConfig",
     "TabularTrainerConfig",
+    "TorchCompileConfig",
     "TransferLearningSpecConfig",
     "train_tabular",
 ]

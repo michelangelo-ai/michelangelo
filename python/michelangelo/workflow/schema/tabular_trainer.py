@@ -35,6 +35,7 @@ __all__ = [
     "ParquetReadConfig",
     "ScalingConfig",
     "TabularTrainerConfig",
+    "TorchCompileConfig",
     "TrackerConfig",
     "TransferLearningSpecConfig",
 ]
@@ -366,6 +367,67 @@ class CheckpointConfig:
             )
 
 
+class TorchCompileMode(str, Enum):
+    """Supported ``torch.compile`` modes.
+
+    Each mode trades compilation time for execution speed.
+
+    Attributes:
+        DEFAULT: Balanced default.
+        REDUCE_OVERHEAD: Minimizes framework overhead; best for small models.
+        MAX_AUTOTUNE: Maximum autotuning; longer compile, fastest kernels.
+        MAX_AUTOTUNE_NO_CUDAGRAPHS: Like ``max-autotune`` but without CUDA
+            graphs.
+    """
+
+    DEFAULT = "default"
+    REDUCE_OVERHEAD = "reduce-overhead"
+    MAX_AUTOTUNE = "max-autotune"
+    MAX_AUTOTUNE_NO_CUDAGRAPHS = "max-autotune-no-cudagraphs"
+
+
+@dataclass
+class TorchCompileConfig:
+    """Configuration for ``torch.compile`` on the Lightning model.
+
+    Only ``model.forward`` is compiled — Lightning lifecycle hooks are
+    excluded from the compilation scope. Checkpoint compatibility is
+    preserved automatically by stripping ``_orig_mod.`` key prefixes on
+    save.
+
+    Attributes:
+        mode: Compile mode (see :class:`TorchCompileMode`). Defaults to
+            ``"default"``.
+        fullgraph: When ``True`` (default), the compiler captures the entire
+            forward pass as a single graph, raising on graph breaks. Set to
+            ``False`` only if graph breaks are unavoidable.
+        dynamic: Controls dynamic-shape handling. ``True`` traces
+            dynamic-shape kernels; ``False`` compiles static kernels;
+            ``None`` (default) lets ``torch.compile`` auto-detect.
+        print_graph_breaks: When ``True``, logs the operations causing
+            graph breaks. Useful for debugging ``fullgraph=True`` failures.
+
+    Example:
+        >>> TorchCompileConfig(mode="reduce-overhead", fullgraph=True)
+        TorchCompileConfig(mode='reduce-overhead', fullgraph=True, dynamic=None, print_graph_breaks=False)
+    """
+
+    mode: str = "default"
+    fullgraph: bool = True
+    dynamic: bool | None = None
+    print_graph_breaks: bool = False
+
+    _VALID_MODES: ClassVar[set[str]] = {m.value for m in TorchCompileMode}
+
+    def __post_init__(self):
+        """Validate the compile mode."""
+        if self.mode not in self._VALID_MODES:
+            raise ConfigurationError(
+                f"Invalid torch.compile mode: {self.mode!r}. "
+                f"Valid modes: {sorted(self._VALID_MODES)}."
+            )
+
+
 @dataclass
 class LightningTrainerKwargs:
     """Passthrough kwargs for ``lightning.pytorch.Trainer.__init__``.
@@ -572,6 +634,9 @@ class LightningTrainerConfig:
         experiment_tracker: Experiment tracking backend (Comet ML, MLflow,
             or a custom tracker via ``CustomTrackerConfig``). ``None``
             disables experiment tracking.
+        torch_compile: Optional ``torch.compile`` configuration. When set,
+            ``model.forward`` is compiled with the given settings. ``None``
+            (default) disables compilation.
         transfer_learning_spec: Transfer-learning spec config. Setting this
             raises ``NotImplementedError`` until the spec builder is ported.
         incremental_training_mode: Incremental training mode config.
@@ -601,6 +666,7 @@ class LightningTrainerConfig:
     lightning_trainer_kwargs: LightningTrainerKwargs | None = None
     hyperparameters: dict | None = None
     experiment_tracker: ExperimentTrackerConfig | None = None
+    torch_compile: TorchCompileConfig | None = None
     transfer_learning_spec: TransferLearningSpecConfig | None = None
     incremental_training_mode: IncrementalTrainingModeConfig | None = None
 
