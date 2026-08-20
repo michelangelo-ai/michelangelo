@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	"github.com/cadence-workflow/starlark-worker/workflow"
+	"github.com/slack-go/slack"
 	notificationActivities "github.com/michelangelo-ai/michelangelo/go/worker/activities/notification"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"go.uber.org/zap"
@@ -79,7 +80,7 @@ func (s *EmailSink) Notify(ctx workflow.Context, _ *zap.Logger, notif *v2pb.Noti
 	}
 	return workflow.ExecuteActivity(
 		workflow.WithActivityOptions(ctx, workflowActivityOpts),
-		notificationActivities.SendMessageToEmailActivity,
+		"SendMessageToEmailActivity",
 		req).Get(ctx, nil)
 }
 
@@ -88,7 +89,15 @@ func (s *EmailSink) Notify(ctx workflow.Context, _ *zap.Logger, notif *v2pb.Noti
 // The actual transport is provided by SendMessageToSlackActivity. Replace that
 // activity registration with a real Slack API implementation before relying on
 // Slack delivery in production.
-type SlackSink struct{}
+//
+// SlackSink attempts to use Block Kit for rich formatting when a PipelineRun is
+// available in the workflow state (via GetPipelineRunFromContext). Falls back to
+// plain text when Block Kit generation fails or returns no blocks.
+type SlackSink struct {
+	// StudioBaseURL is the base URL for the Studio console (e.g. https://studio.example.com).
+	// If empty, Block Kit "View Details" buttons will have no URL.
+	StudioBaseURL string
+}
 
 // Notify posts a message to every channel in notif.SlackDestinations.
 // Uses text/slack from FormattedBodies when available, falling back to Body.
@@ -99,14 +108,23 @@ func (s *SlackSink) Notify(ctx workflow.Context, logger *zap.Logger, notif *v2pb
 	if mrkdwn, ok := msg.FormattedBodies[FormatSlackMrkdwn]; ok && mrkdwn != "" {
 		text = mrkdwn
 	}
+
+	// Attempt to generate Block Kit blocks for richer Slack UI.
+	// This requires the PipelineRun to be available in the workflow context.
+	var blocks []slack.Block
+	if pipelineRun := GetPipelineRunFromContext(ctx); pipelineRun != nil {
+		blocks = GenerateBlocks(pipelineRun, s.StudioBaseURL)
+	}
+
 	var errs error
 	for _, channel := range notif.SlackDestinations {
 		err := workflow.ExecuteActivity(
 			workflow.WithActivityOptions(ctx, workflowActivityOpts),
-			notificationActivities.SendMessageToSlackActivity,
+			"SendMessageToSlackActivity",
 			&notificationActivities.SendMessageToSlackActivityRequest{
 				Channel: channel,
 				Text:    text,
+				Blocks:  blocks,
 			}).Get(ctx, nil)
 		if err != nil {
 			if logger != nil {

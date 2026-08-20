@@ -3,6 +3,7 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 go_library(
     name = "go_default_library",
     srcs = [
+        "blocks.go",
         "module.go",
         "sinks.go",
         "testing.go",
@@ -16,6 +17,8 @@ go_library(
         "//proto/api/v2:go_default_library",
         "@com_github_cadence_workflow_starlark_worker//worker:go_default_library",
         "@com_github_cadence_workflow_starlark_worker//workflow:go_default_library",
+        "@com_github_slack_go_slack//:go_default_library",
+        "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
         "@org_uber_go_fx//:go_default_library",
         "@org_uber_go_zap//:go_default_library",
     ],

@@ -1,21 +1,5 @@
 // Package notification provides Cadence/Temporal activities for delivering
 // pipeline run notifications.
-//
-// Default implementations log the request and return nil. They are intentional
-// no-ops: no message is sent unless the activity body is replaced with a real
-// transport (SMTP, Slack API, etc.).
-//
-// The preferred customization path for operators using fx is fx.Decorate on the
-// Sink interface in the notification workflow module:
-//
-//	fx.Decorate(func() []notification.Sink {
-//	    return []notification.Sink{&MyEmailSink{}, &MySlackSink{}}
-//	})
-//
-// Replacing the function body of SendMessageToEmailActivity or
-// SendMessageToSlackActivity directly is a last-resort alternative for operators
-// not using fx. In either case, real transport integration is required before
-// notifications will be delivered in production.
 package notification
 
 import (
@@ -23,6 +7,8 @@ import (
 	"errors"
 
 	"github.com/cadence-workflow/starlark-worker/activity"
+	maSlack "github.com/michelangelo-ai/michelangelo/go/base/notification/slack"
+	"github.com/slack-go/slack"
 	"go.uber.org/zap"
 )
 
@@ -36,8 +22,11 @@ const (
 type SendMessageToSlackActivityRequest struct {
 	// Channel is the Slack channel or user to send the message to.
 	Channel string `json:"channel"`
-	// Text is the message content.
+	// Text is the message content (used as fallback when Blocks is provided).
 	Text string `json:"text"`
+	// Blocks is an optional list of Slack Block Kit blocks for rich formatting.
+	// When provided, Text is used as the notification fallback.
+	Blocks []slack.Block `json:"blocks,omitempty"`
 }
 
 // SendMessageToEmailActivityRequest holds the parameters for an email notification.
@@ -62,43 +51,76 @@ type SendMessageToEmailActivityRequest struct {
 	// when integrating with a real email transport (SMTP, SendGrid, etc.).
 }
 
-// SendMessageToSlackActivity is the default Slack notification activity.
+// Activities holds notification activity implementations.
+type Activities struct {
+	slackClient *maSlack.Client
+}
+
+// NewActivities creates a new Activities instance with the given Slack client.
+// If slackClient is nil, Slack notifications will be skipped.
+func NewActivities(slackClient *maSlack.Client) *Activities {
+	return &Activities{slackClient: slackClient}
+}
+
+// SendMessageToSlackActivity sends a Slack notification using Block Kit or plain text.
 //
-// This implementation logs the request and returns nil without sending any
-// message. The preferred customization path is fx.Decorate on the Sink interface
-// in the notification workflow module. Replacing the body of this function
-// directly is a last-resort alternative for operators not using fx — integrate
-// a real transport (Slack API, etc.) before relying on Slack notifications in
-// production.
-func SendMessageToSlackActivity(ctx context.Context, req *SendMessageToSlackActivityRequest) error {
+// When Blocks is provided, the Slack API will render the Block Kit UI and use
+// Text as the notification fallback. Falls back to plain text when Blocks is empty.
+//
+// If no Slack client is configured, the notification is skipped with a warning.
+func (a *Activities) SendMessageToSlackActivity(ctx context.Context, req *SendMessageToSlackActivityRequest) error {
 	if req == nil {
 		return errors.New("SendMessageToSlackActivityRequest cannot be nil")
 	}
-	if logger := activity.GetLogger(ctx); logger != nil {
-		logger.Warn("SendMessageToSlackActivity called (no-op: no transport configured)",
-			zap.String("channel", req.Channel),
-			zap.String("text", req.Text))
+
+	logger := activity.GetLogger(ctx)
+	if logger == nil {
+		logger = zap.NewNop()
 	}
+
+	if a.slackClient == nil {
+		logger.Warn("Slack client not configured, skipping notification",
+			zap.String("channel", req.Channel))
+		return nil
+	}
+
+	// Send with Block Kit if blocks are provided
+	if len(req.Blocks) > 0 {
+		if err := a.slackClient.PostBlocks(req.Channel, req.Blocks...); err != nil {
+			logger.Error("Failed to send Block Kit notification", zap.Error(err))
+			return err
+		}
+		logger.Info("Slack Block Kit notification sent", zap.String("channel", req.Channel))
+		return nil
+	}
+
+	// Fall back to plain text
+	if err := a.slackClient.PostMessage(req.Channel, req.Text); err != nil {
+		logger.Error("Failed to send Slack notification", zap.Error(err))
+		return err
+	}
+	logger.Info("Slack notification sent", zap.String("channel", req.Channel))
 	return nil
 }
 
-// SendMessageToEmailActivity is the default email notification activity.
+// SendMessageToEmailActivity sends an email notification.
 //
-// This implementation logs the request and returns nil without sending any
-// message. The preferred customization path is fx.Decorate on the Sink interface
-// in the notification workflow module. Replacing the body of this function
-// directly is a last-resort alternative for operators not using fx — integrate
-// a real transport (SMTP, SendGrid, etc.) before relying on email notifications
-// in production.
-func SendMessageToEmailActivity(ctx context.Context, req *SendMessageToEmailActivityRequest) error {
+// This is a no-op stub. Operators should integrate a real email transport
+// (SMTP, SendGrid, etc.) by replacing this implementation or using fx.Decorate
+// to provide a custom EmailSink.
+func (a *Activities) SendMessageToEmailActivity(ctx context.Context, req *SendMessageToEmailActivityRequest) error {
 	if req == nil {
 		return errors.New("SendMessageToEmailActivityRequest cannot be nil")
 	}
-	if logger := activity.GetLogger(ctx); logger != nil {
-		logger.Warn("SendMessageToEmailActivity called (no-op: no transport configured)",
-			zap.Strings("to", req.To),
-			zap.String("subject", req.Subject),
-			zap.String("send_as", req.SendAs))
+
+	logger := activity.GetLogger(ctx)
+	if logger == nil {
+		logger = zap.NewNop()
 	}
+
+	logger.Warn("SendMessageToEmailActivity called (no-op: no email transport configured)",
+		zap.Strings("to", req.To),
+		zap.String("subject", req.Subject),
+		zap.String("send_as", req.SendAs))
 	return nil
 }

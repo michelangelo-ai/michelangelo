@@ -33,10 +33,27 @@ func providePhaseResolver() types.PhaseResolver {
 	return types.DefaultPhaseResolver
 }
 
+// SinkConfig holds configuration for notification sinks.
+type SinkConfig struct {
+	// StudioBaseURL is the base URL for the Studio console (e.g. https://studio.example.com).
+	// Used by SlackSink to generate Block Kit "View Details" buttons.
+	StudioBaseURL string
+}
+
 // provideDefaultSinks supplies the built-in email and Slack sinks.
 // Override via fx.Decorate to add or replace channels.
-func provideDefaultSinks() []Sink {
-	return []Sink{&EmailSink{}, &SlackSink{}}
+//
+// To configure the StudioBaseURL for Block Kit links, provide a SinkConfig to FX:
+//
+//	fx.Provide(func() notification.SinkConfig {
+//	    return notification.SinkConfig{StudioBaseURL: "https://studio.example.com"}
+//	})
+func provideDefaultSinks(config ...SinkConfig) []Sink {
+	var cfg SinkConfig
+	if len(config) > 0 {
+		cfg = config[0]
+	}
+	return []Sink{&EmailSink{}, &SlackSink{StudioBaseURL: cfg.StudioBaseURL}}
 }
 
 // register registers the notification workflow method with each worker instance.
@@ -44,6 +61,10 @@ func provideDefaultSinks() []Sink {
 // in-flight executions dispatched by a pre-upgrade controllermgr can drain
 // without hanging. Remove the alias registration after all operators have rolled
 // past this release.
+//
+// Note: Notification activities are registered separately in
+// go/worker/activities/notification/module.go to allow operators to inject
+// custom transport implementations via FX.
 func register(wf *Workflow, workers []worker.Worker) {
 	for _, w := range workers {
 		w.RegisterWorkflow(wf.SendPipelineRunNotification, types.PipelineRunNotificationWorkflowName)

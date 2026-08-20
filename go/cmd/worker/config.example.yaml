@@ -1,0 +1,26 @@
+# Michelangelo Worker Configuration Example
+#
+# Copy this file to config.yaml and customize for your environment.
+
+# Slack Notifications (Optional)
+# Uncomment to enable Slack notifications via Block Kit
+#
+# To get a Slack token:
+# 1. Create a Slack app at https://api.slack.com/apps
+# 2. Add OAuth scopes: chat:write, users:read.email
+# 3. Install to workspace and copy the Bot User OAuth Token
+#
+slack:
+  # token: "xoxb-your-slack-bot-token-here"
+
+# Worker Configuration
+worker:
+  # Cadence/Temporal connection settings
+  # host: "localhost:7933"
+  # domain: "michelangelo"
+  # taskList: "michelangelo-worker"
+
+# Logging
+logging:
+  # level: "info"
+  # development: false

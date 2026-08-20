@@ -11,6 +11,13 @@ import (
 	"go.uber.org/zap"
 )
 
+// contextKey is a private type for context keys to avoid collisions.
+type contextKey int
+
+const (
+	pipelineRunContextKey contextKey = iota
+)
+
 var workflowActivityOpts = workflow.ActivityOptions{
 	ScheduleToStartTimeout: 1 * time.Minute,
 	StartToCloseTimeout:    30 * time.Minute,
@@ -79,6 +86,11 @@ func (wf *Workflow) SendPipelineRunNotification(ctx workflow.Context, req *types
 	if wf.backend != nil {
 		ctx = workflow.WithBackend(ctx, wf.backend)
 	}
+
+	// Store the PipelineRun in context so sinks can access it for rich formatting
+	// (e.g. Block Kit for Slack).
+	ctx = withPipelineRun(ctx, req.PipelineRun)
+
 	logger := workflow.GetLogger(ctx)
 
 	pipelineRun := req.PipelineRun
@@ -109,4 +121,20 @@ func (wf *Workflow) SendPipelineRunNotification(ctx workflow.Context, req *types
 	}
 
 	return errs
+}
+
+// withPipelineRun adds the PipelineRun to the context.
+func withPipelineRun(ctx workflow.Context, pr *v2pb.PipelineRun) workflow.Context {
+	return workflow.WithValue(ctx, pipelineRunContextKey, pr)
+}
+
+// GetPipelineRunFromContext retrieves the PipelineRun from the workflow context if available.
+// Returns nil if not found.
+func GetPipelineRunFromContext(ctx workflow.Context) *v2pb.PipelineRun {
+	if pr := ctx.Value(pipelineRunContextKey); pr != nil {
+		if pipelineRun, ok := pr.(*v2pb.PipelineRun); ok {
+			return pipelineRun
+		}
+	}
+	return nil
 }
