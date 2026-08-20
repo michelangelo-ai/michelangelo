@@ -349,9 +349,7 @@ def _train_lightning(
     # Build and run trainer
     from dataclasses import asdict
 
-    torch_compile = (
-        asdict(config.torch_compile) if config.torch_compile else None
-    )
+    torch_compile = asdict(config.torch_compile) if config.torch_compile else None
     trainer_param = LightningTrainerParam(
         create_model_fn=create_model_fn,
         create_model_fn_kwargs=create_model_fn_kwargs,

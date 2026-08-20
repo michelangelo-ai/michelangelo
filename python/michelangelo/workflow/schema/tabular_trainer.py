@@ -409,7 +409,7 @@ class TorchCompileConfig:
 
     Example:
         >>> TorchCompileConfig(mode="reduce-overhead", fullgraph=True)
-        TorchCompileConfig(mode='reduce-overhead', fullgraph=True, dynamic=None, print_graph_breaks=False)
+        TorchCompileConfig(mode='reduce-overhead', ...)
     """
 
     mode: str = "default"

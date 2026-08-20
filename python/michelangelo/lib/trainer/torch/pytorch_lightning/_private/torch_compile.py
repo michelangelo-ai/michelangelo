@@ -33,9 +33,7 @@ def _on_save_checkpoint(checkpoint: dict) -> None:
         checkpoint["state_dict"] = _strip_orig_mod_keys(sd)
 
 
-def _compile_model_forward(
-    model: torch.nn.Module, config: dict
-) -> torch.nn.Module:
+def _compile_model_forward(model: torch.nn.Module, config: dict) -> torch.nn.Module:
     """Compile *model*.forward in place with ``torch.compile``.
 
     Only ``model.forward`` is compiled, not the full model, so Lightning

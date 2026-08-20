@@ -15,9 +15,7 @@ from michelangelo.lib.trainer.torch.pytorch_lightning._private.torch_compile imp
     apply_torch_compile,
 )
 
-_MODULE = (
-    "michelangelo.lib.trainer.torch.pytorch_lightning._private.torch_compile"
-)
+_MODULE = "michelangelo.lib.trainer.torch.pytorch_lightning._private.torch_compile"
 
 
 # -----------------------------------------------------------------------------
@@ -155,7 +153,10 @@ class TestStripOrigModKeys:
 
     def test_noop_when_no_orig_mod_keys(self):
         """Keys without ``_orig_mod.`` are unchanged."""
-        original = {"layer.weight": torch.tensor([1.0]), "layer.bias": torch.tensor([0.0])}
+        original = {
+            "layer.weight": torch.tensor([1.0]),
+            "layer.bias": torch.tensor([0.0]),
+        }
         result = _strip_orig_mod_keys(original)
         assert set(result.keys()) == set(original.keys())
 
