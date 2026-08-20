@@ -1,6 +1,6 @@
 ---
-sidebar_position: 10
-sidebar_label: API Reference
+sidebar_position: 4
+sidebar_label: Jobs
 ---
 
 # Jobs API Reference
@@ -10,7 +10,7 @@ This page documents the gRPC services that back job submission and lifecycle man
 - **RayJobService** — create, inspect, and delete Ray training or batch inference jobs.
 - **SparkJobService** — create, inspect, and delete Spark ETL and batch processing jobs.
 
-Both services follow the same CRUD + `DeleteCollection` + `List` pattern. The `Required` column in each table reflects fields that must be supplied for a successful call, inferred from the proto structure (proto3 does not encode field necessity explicitly). Option structs sourced from the Kubernetes API machinery (`CreateOptions`, `GetOptions`, etc.) are always optional.
+> New to this reference? See [How to Read the gRPC API Reference](./conventions.md) for the shared CRUD-plus-list pattern, the Required column, and how undocumented fields are shown. For how jobs run end-to-end, see [Michelangelo AI Jobs](../../operator-guides/jobs/index.md).
 
 ---
 
@@ -31,7 +31,7 @@ Create a new RayJob with the given spec.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `ray_job` | `RayJob` | Yes | The metadata and spec of the RayJob to be created. |
-| `create_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.CreateOptions` | No | No description provided in source. |
+| `create_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.CreateOptions` | No | — |
 
 **Response fields**
 
@@ -53,7 +53,7 @@ Get the specified RayJob.
 |-------|------|----------|-------------|
 | `name` | `string` | Yes | Name of the RayJob. |
 | `namespace` | `string` | Yes | Object name and auth scope. |
-| `get_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.GetOptions` | No | No description provided in source. |
+| `get_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.GetOptions` | No | — |
 
 **Response fields**
 
@@ -74,7 +74,7 @@ Update a RayJob with the given spec.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `ray_job` | `RayJob` | Yes | The metadata and spec of the RayJob to be updated. |
-| `update_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.UpdateOptions` | No | No description provided in source. |
+| `update_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.UpdateOptions` | No | — |
 
 **Response fields**
 
@@ -96,7 +96,7 @@ Delete a RayJob.
 |-------|------|----------|-------------|
 | `name` | `string` | Yes | Name of the RayJob. |
 | `namespace` | `string` | Yes | Object name and auth scope. |
-| `delete_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.DeleteOptions` | No | No description provided in source. |
+| `delete_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.DeleteOptions` | No | — |
 
 **Response fields**
 
@@ -115,8 +115,8 @@ Delete collection of RayJob.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `namespace` | `string` | Yes | Object name and auth scope. |
-| `delete_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.DeleteOptions` | No | No description provided in source. |
-| `list_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.ListOptions` | No | No description provided in source. |
+| `delete_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.DeleteOptions` | No | — |
+| `list_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.ListOptions` | No | — |
 
 **Response fields**
 
@@ -136,15 +136,15 @@ List objects of type RayJob.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `namespace` | `string` | Yes | No description provided in source. |
-| `list_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.ListOptions` | No | No description provided in source. |
-| `list_options_ext` | `michelangelo.api.ListOptionsExt` | No | No description provided in source. |
+| `namespace` | `string` | Yes | — |
+| `list_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.ListOptions` | No | — |
+| `list_options_ext` | `michelangelo.api.ListOptionsExt` | No | — |
 
 **Response fields**
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `ray_job_list` | `RayJobList` | No description provided in source. |
+| `ray_job_list` | `RayJobList` | — |
 
 ---
 
@@ -165,7 +165,7 @@ Create a new SparkJob with the given spec.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `spark_job` | `SparkJob` | Yes | The metadata and spec of the SparkJob to be created. |
-| `create_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.CreateOptions` | No | No description provided in source. |
+| `create_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.CreateOptions` | No | — |
 
 **Response fields**
 
@@ -187,7 +187,7 @@ Get the specified SparkJob.
 |-------|------|----------|-------------|
 | `name` | `string` | Yes | Name of the SparkJob. |
 | `namespace` | `string` | Yes | Object name and auth scope. |
-| `get_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.GetOptions` | No | No description provided in source. |
+| `get_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.GetOptions` | No | — |
 
 **Response fields**
 
@@ -208,7 +208,7 @@ Update a SparkJob with the given spec.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `spark_job` | `SparkJob` | Yes | The metadata and spec of the SparkJob to be updated. |
-| `update_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.UpdateOptions` | No | No description provided in source. |
+| `update_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.UpdateOptions` | No | — |
 
 **Response fields**
 
@@ -230,7 +230,7 @@ Delete a SparkJob.
 |-------|------|----------|-------------|
 | `name` | `string` | Yes | Name of the SparkJob. |
 | `namespace` | `string` | Yes | Object name and auth scope. |
-| `delete_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.DeleteOptions` | No | No description provided in source. |
+| `delete_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.DeleteOptions` | No | — |
 
 **Response fields**
 
@@ -249,8 +249,8 @@ Delete collection of SparkJob.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `namespace` | `string` | Yes | Object name and auth scope. |
-| `delete_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.DeleteOptions` | No | No description provided in source. |
-| `list_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.ListOptions` | No | No description provided in source. |
+| `delete_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.DeleteOptions` | No | — |
+| `list_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.ListOptions` | No | — |
 
 **Response fields**
 
@@ -270,14 +270,19 @@ List objects of type SparkJob.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `namespace` | `string` | Yes | No description provided in source. |
-| `list_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.ListOptions` | No | No description provided in source. |
-| `list_options_ext` | `michelangelo.api.ListOptionsExt` | No | No description provided in source. |
+| `namespace` | `string` | Yes | — |
+| `list_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.ListOptions` | No | — |
+| `list_options_ext` | `michelangelo.api.ListOptionsExt` | No | — |
 
 **Response fields**
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `spark_job_list` | `SparkJobList` | No description provided in source. |
+| `spark_job_list` | `SparkJobList` | — |
 
 ---
+
+## Next Steps
+
+* [Michelangelo AI Jobs](../../operator-guides/jobs/index.md): Core concepts, architecture, and how Ray/Spark jobs run end-to-end
+* [Run a Pipeline on a Compute Cluster](../../operator-guides/jobs/run-uniflow-pipeline-on-compute-cluster.md): Submit and monitor a Uniflow pipeline on a registered cluster

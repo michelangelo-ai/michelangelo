@@ -1,12 +1,15 @@
 ---
-sidebar_position: 5
+sidebar_position: 1
+sidebar_label: Models
 ---
 
 # Model Management
 
-Michelangelo AI provides four gRPC services for managing ML models and their associated resources: `ModelService` for registered model artifacts, `ModelFamilyService` for grouping related model versions, `CachedOutputService` for intermediate pipeline outputs and training checkpoints, and `EvaluationReportService` for model evaluation reports. All services follow the same CRUD-plus-list pattern; watch and cross-namespace list are not supported on any of them.
+Michelangelo AI provides four gRPC services for managing ML models and their associated resources: `ModelService` for registered model artifacts, `ModelFamilyService` for grouping related model versions, `CachedOutputService` for intermediate pipeline outputs and training checkpoints, and `EvaluationReportService` for model evaluation reports.
 
 Proto sources: `proto/api/v2/model_svc.proto`, `proto/api/v2/model_family_svc.proto`, `proto/api/v2/cached_output_svc.proto`, `proto/api/v2/evaluation_report_svc.proto`.
+
+> New to this reference? See [How to Read the gRPC API Reference](./conventions.md) for the shared CRUD-plus-list pattern, the Required column, and how undocumented fields are shown.
 
 ---
 
@@ -27,7 +30,7 @@ Create a new Model with the given spec.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `model` | `Model` | Yes | The metadata and spec of the Model to be created. |
-| `create_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.CreateOptions` | No | No description provided in source. |
+| `create_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.CreateOptions` | No | — |
 
 **Response fields**
 
@@ -49,7 +52,7 @@ Get the specified Model.
 |-------|------|----------|-------------|
 | `name` | `string` | Yes | Name of the Model. |
 | `namespace` | `string` | Yes | Object name and auth scope. |
-| `get_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.GetOptions` | No | No description provided in source. |
+| `get_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.GetOptions` | No | — |
 
 **Response fields**
 
@@ -70,7 +73,7 @@ Update a Model with the given spec.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `model` | `Model` | Yes | The metadata and spec of the Model to be updated. |
-| `update_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.UpdateOptions` | No | No description provided in source. |
+| `update_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.UpdateOptions` | No | — |
 
 **Response fields**
 
@@ -92,7 +95,7 @@ Delete a Model.
 |-------|------|----------|-------------|
 | `name` | `string` | Yes | Name of the Model. |
 | `namespace` | `string` | Yes | Object name and auth scope. |
-| `delete_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.DeleteOptions` | No | No description provided in source. |
+| `delete_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.DeleteOptions` | No | — |
 
 **Response fields**
 
@@ -111,8 +114,8 @@ Delete collection of Model.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `namespace` | `string` | Yes | Object name and auth scope. |
-| `delete_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.DeleteOptions` | No | No description provided in source. |
-| `list_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.ListOptions` | No | No description provided in source. |
+| `delete_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.DeleteOptions` | No | — |
+| `list_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.ListOptions` | No | — |
 
 **Response fields**
 
@@ -132,15 +135,15 @@ List objects of type Model.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `namespace` | `string` | Yes | No description provided in source. |
-| `list_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.ListOptions` | No | No description provided in source. |
-| `list_options_ext` | `michelangelo.api.ListOptionsExt` | No | No description provided in source. |
+| `namespace` | `string` | Yes | — |
+| `list_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.ListOptions` | No | — |
+| `list_options_ext` | `michelangelo.api.ListOptionsExt` | No | — |
 
 **Response fields**
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `model_list` | `ModelList` | No description provided in source. |
+| `model_list` | `ModelList` | — |
 
 ---
 
@@ -161,7 +164,7 @@ Create a new ModelFamily with the given spec.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `model_family` | `ModelFamily` | Yes | The metadata and spec of the ModelFamily to be created. |
-| `create_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.CreateOptions` | No | No description provided in source. |
+| `create_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.CreateOptions` | No | — |
 
 **Response fields**
 
@@ -183,7 +186,7 @@ Get the specified ModelFamily.
 |-------|------|----------|-------------|
 | `name` | `string` | Yes | Name of the ModelFamily. |
 | `namespace` | `string` | Yes | Object name and auth scope. |
-| `get_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.GetOptions` | No | No description provided in source. |
+| `get_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.GetOptions` | No | — |
 
 **Response fields**
 
@@ -204,7 +207,7 @@ Update a ModelFamily with the given spec.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `model_family` | `ModelFamily` | Yes | The metadata and spec of the ModelFamily to be updated. |
-| `update_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.UpdateOptions` | No | No description provided in source. |
+| `update_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.UpdateOptions` | No | — |
 
 **Response fields**
 
@@ -226,7 +229,7 @@ Delete a ModelFamily.
 |-------|------|----------|-------------|
 | `name` | `string` | Yes | Name of the ModelFamily. |
 | `namespace` | `string` | Yes | Object name and auth scope. |
-| `delete_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.DeleteOptions` | No | No description provided in source. |
+| `delete_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.DeleteOptions` | No | — |
 
 **Response fields**
 
@@ -245,8 +248,8 @@ Delete collection of ModelFamily.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `namespace` | `string` | Yes | Object name and auth scope. |
-| `delete_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.DeleteOptions` | No | No description provided in source. |
-| `list_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.ListOptions` | No | No description provided in source. |
+| `delete_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.DeleteOptions` | No | — |
+| `list_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.ListOptions` | No | — |
 
 **Response fields**
 
@@ -266,15 +269,15 @@ List objects of type ModelFamily.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `namespace` | `string` | Yes | No description provided in source. |
-| `list_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.ListOptions` | No | No description provided in source. |
-| `list_options_ext` | `michelangelo.api.ListOptionsExt` | No | No description provided in source. |
+| `namespace` | `string` | Yes | — |
+| `list_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.ListOptions` | No | — |
+| `list_options_ext` | `michelangelo.api.ListOptionsExt` | No | — |
 
 **Response fields**
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `model_family_list` | `ModelFamilyList` | No description provided in source. |
+| `model_family_list` | `ModelFamilyList` | — |
 
 ---
 
@@ -295,7 +298,7 @@ Create a new CachedOutput with the given spec.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `cached_output` | `CachedOutput` | Yes | The metadata and spec of the CachedOutput to be created. |
-| `create_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.CreateOptions` | No | No description provided in source. |
+| `create_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.CreateOptions` | No | — |
 
 **Response fields**
 
@@ -317,7 +320,7 @@ Get the specified CachedOutput.
 |-------|------|----------|-------------|
 | `name` | `string` | Yes | Name of the CachedOutput. |
 | `namespace` | `string` | Yes | Object name and auth scope. |
-| `get_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.GetOptions` | No | No description provided in source. |
+| `get_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.GetOptions` | No | — |
 
 **Response fields**
 
@@ -338,7 +341,7 @@ Update a CachedOutput with the given spec.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `cached_output` | `CachedOutput` | Yes | The metadata and spec of the CachedOutput to be updated. |
-| `update_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.UpdateOptions` | No | No description provided in source. |
+| `update_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.UpdateOptions` | No | — |
 
 **Response fields**
 
@@ -360,7 +363,7 @@ Delete a CachedOutput.
 |-------|------|----------|-------------|
 | `name` | `string` | Yes | Name of the CachedOutput. |
 | `namespace` | `string` | Yes | Object name and auth scope. |
-| `delete_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.DeleteOptions` | No | No description provided in source. |
+| `delete_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.DeleteOptions` | No | — |
 
 **Response fields**
 
@@ -379,8 +382,8 @@ Delete collection of CachedOutput.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `namespace` | `string` | Yes | Object name and auth scope. |
-| `delete_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.DeleteOptions` | No | No description provided in source. |
-| `list_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.ListOptions` | No | No description provided in source. |
+| `delete_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.DeleteOptions` | No | — |
+| `list_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.ListOptions` | No | — |
 
 **Response fields**
 
@@ -400,15 +403,15 @@ List objects of type CachedOutput.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `namespace` | `string` | Yes | No description provided in source. |
-| `list_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.ListOptions` | No | No description provided in source. |
-| `list_options_ext` | `michelangelo.api.ListOptionsExt` | No | No description provided in source. |
+| `namespace` | `string` | Yes | — |
+| `list_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.ListOptions` | No | — |
+| `list_options_ext` | `michelangelo.api.ListOptionsExt` | No | — |
 
 **Response fields**
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `cached_output_list` | `CachedOutputList` | No description provided in source. |
+| `cached_output_list` | `CachedOutputList` | — |
 
 ---
 
@@ -429,7 +432,7 @@ Create a new EvaluationReport with the given spec.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `evaluation_report` | `EvaluationReport` | Yes | The metadata and spec of the EvaluationReport to be created. |
-| `create_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.CreateOptions` | No | No description provided in source. |
+| `create_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.CreateOptions` | No | — |
 
 **Response fields**
 
@@ -451,7 +454,7 @@ Get the specified EvaluationReport.
 |-------|------|----------|-------------|
 | `name` | `string` | Yes | Name of the EvaluationReport. |
 | `namespace` | `string` | Yes | Object name and auth scope. |
-| `get_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.GetOptions` | No | No description provided in source. |
+| `get_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.GetOptions` | No | — |
 
 **Response fields**
 
@@ -472,7 +475,7 @@ Update an EvaluationReport with the given spec.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `evaluation_report` | `EvaluationReport` | Yes | The metadata and spec of the EvaluationReport to be updated. |
-| `update_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.UpdateOptions` | No | No description provided in source. |
+| `update_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.UpdateOptions` | No | — |
 
 **Response fields**
 
@@ -494,7 +497,7 @@ Delete an EvaluationReport.
 |-------|------|----------|-------------|
 | `name` | `string` | Yes | Name of the EvaluationReport. |
 | `namespace` | `string` | Yes | Object name and auth scope. |
-| `delete_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.DeleteOptions` | No | No description provided in source. |
+| `delete_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.DeleteOptions` | No | — |
 
 **Response fields**
 
@@ -513,8 +516,8 @@ Delete a collection of EvaluationReport objects.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `namespace` | `string` | Yes | Object name and auth scope. |
-| `delete_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.DeleteOptions` | No | No description provided in source. |
-| `list_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.ListOptions` | No | No description provided in source. |
+| `delete_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.DeleteOptions` | No | — |
+| `list_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.ListOptions` | No | — |
 
 **Response fields**
 
@@ -534,14 +537,19 @@ List objects of type EvaluationReport.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `namespace` | `string` | Yes | No description provided in source. |
-| `list_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.ListOptions` | No | No description provided in source. |
-| `list_options_ext` | `michelangelo.api.ListOptionsExt` | No | No description provided in source. |
+| `namespace` | `string` | Yes | — |
+| `list_options` | `k8s.io.apimachinery.pkg.apis.meta.v1.ListOptions` | No | — |
+| `list_options_ext` | `michelangelo.api.ListOptionsExt` | No | — |
 
 **Response fields**
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `evaluation_report_list` | `EvaluationReportList` | No description provided in source. |
+| `evaluation_report_list` | `EvaluationReportList` | — |
 
 ---
+
+## Next Steps
+
+* [Model Registry](../../operator-guides/components/model-registry.md): Operate the built-in model registry — storage, RBAC, and CI/CD integration
+* [API Reference Home](../index.md): Browse the Python SDK reference too

@@ -1,0 +1,9 @@
+{
+  "label": "gRPC Service Reference",
+  "position": 1,
+  "collapsed": true,
+  "link": {
+    "type": "doc",
+    "id": "api-reference/grpc/conventions"
+  }
+}

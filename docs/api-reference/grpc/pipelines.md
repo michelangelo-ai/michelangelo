@@ -1,5 +1,5 @@
 ---
-sidebar_position: 5
+sidebar_position: 2
 sidebar_label: Pipelines
 ---
 
@@ -7,9 +7,7 @@ sidebar_label: Pipelines
 
 The Michelangelo AI pipelines API provides four gRPC services that cover the full ML pipeline lifecycle. **PipelineService** manages pipeline definitions — the workflow templates that describe how to train, evaluate, and deploy models. **PipelineRunService** manages individual executions of those pipelines. **TriggerRunService** manages scheduled or batch trigger executions that spawn pipeline runs. **ProjectService** manages projects, the logical grouping that organizes related ML resources.
 
-All four services expose the same six operations: Create, Get, Update, Delete, DeleteCollection, and List. Watch operations and cross-namespace listing are not supported on any service.
-
-> **Note on required fields:** Proto3 does not annotate fields as required at the protocol level. The Required column in each table reflects logical necessity inferred from field semantics and proto comments, not a proto-level constraint.
+> New to this reference? See [How to Read the gRPC API Reference](./conventions.md) for the shared CRUD-plus-list pattern, the Required column, and how undocumented fields are shown.
 
 ---
 
@@ -30,7 +28,7 @@ Create a new Pipeline with the given spec.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | pipeline | Pipeline | Yes | The metadata and spec of the Pipeline to be created. |
-| create_options | CreateOptions | No | No description provided in source. |
+| create_options | CreateOptions | No | — |
 
 **Response fields**
 
@@ -52,7 +50,7 @@ Get the specified Pipeline.
 |-------|------|----------|-------------|
 | name | string | Yes | Name of the Pipeline. |
 | namespace | string | Yes | Object name and auth scope. |
-| get_options | GetOptions | No | No description provided in source. |
+| get_options | GetOptions | No | — |
 
 **Response fields**
 
@@ -73,7 +71,7 @@ Update a Pipeline with the given spec.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | pipeline | Pipeline | Yes | The metadata and spec of the Pipeline to be updated. |
-| update_options | UpdateOptions | No | No description provided in source. |
+| update_options | UpdateOptions | No | — |
 
 **Response fields**
 
@@ -95,7 +93,7 @@ Delete a Pipeline.
 |-------|------|----------|-------------|
 | name | string | Yes | Name of the Pipeline. |
 | namespace | string | Yes | Object name and auth scope. |
-| delete_options | DeleteOptions | No | No description provided in source. |
+| delete_options | DeleteOptions | No | — |
 
 **Response fields**
 
@@ -114,8 +112,8 @@ Delete collection of Pipeline.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | namespace | string | Yes | Object name and auth scope. |
-| delete_options | DeleteOptions | No | No description provided in source. |
-| list_options | ListOptions | No | No description provided in source. |
+| delete_options | DeleteOptions | No | — |
+| list_options | ListOptions | No | — |
 
 **Response fields**
 
@@ -135,15 +133,15 @@ List objects of type Pipeline.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| namespace | string | Yes | No description provided in source. |
-| list_options | ListOptions | No | No description provided in source. |
-| list_options_ext | ListOptionsExt | No | No description provided in source. |
+| namespace | string | Yes | — |
+| list_options | ListOptions | No | — |
+| list_options_ext | ListOptionsExt | No | — |
 
 **Response fields**
 
 | Field | Type | Description |
 |-------|------|-------------|
-| pipeline_list | PipelineList | No description provided in source. |
+| pipeline_list | PipelineList | — |
 
 ---
 
@@ -164,7 +162,7 @@ Create a new PipelineRun with the given spec.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | pipeline_run | PipelineRun | Yes | The metadata and spec of the PipelineRun to be created. |
-| create_options | CreateOptions | No | No description provided in source. |
+| create_options | CreateOptions | No | — |
 
 **Response fields**
 
@@ -186,7 +184,7 @@ Get the specified PipelineRun.
 |-------|------|----------|-------------|
 | name | string | Yes | Name of the PipelineRun. |
 | namespace | string | Yes | Object name and auth scope. |
-| get_options | GetOptions | No | No description provided in source. |
+| get_options | GetOptions | No | — |
 
 **Response fields**
 
@@ -207,7 +205,7 @@ Update a PipelineRun with the given spec.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | pipeline_run | PipelineRun | Yes | The metadata and spec of the PipelineRun to be updated. |
-| update_options | UpdateOptions | No | No description provided in source. |
+| update_options | UpdateOptions | No | — |
 
 **Response fields**
 
@@ -229,7 +227,7 @@ Delete a PipelineRun.
 |-------|------|----------|-------------|
 | name | string | Yes | Name of the PipelineRun. |
 | namespace | string | Yes | Object name and auth scope. |
-| delete_options | DeleteOptions | No | No description provided in source. |
+| delete_options | DeleteOptions | No | — |
 
 **Response fields**
 
@@ -248,8 +246,8 @@ Delete collection of PipelineRun.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | namespace | string | Yes | Object name and auth scope. |
-| delete_options | DeleteOptions | No | No description provided in source. |
-| list_options | ListOptions | No | No description provided in source. |
+| delete_options | DeleteOptions | No | — |
+| list_options | ListOptions | No | — |
 
 **Response fields**
 
@@ -269,15 +267,15 @@ List objects of type PipelineRun.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| namespace | string | Yes | No description provided in source. |
-| list_options | ListOptions | No | No description provided in source. |
-| list_options_ext | ListOptionsExt | No | No description provided in source. |
+| namespace | string | Yes | — |
+| list_options | ListOptions | No | — |
+| list_options_ext | ListOptionsExt | No | — |
 
 **Response fields**
 
 | Field | Type | Description |
 |-------|------|-------------|
-| pipeline_run_list | PipelineRunList | No description provided in source. |
+| pipeline_run_list | PipelineRunList | — |
 
 ---
 
@@ -298,7 +296,7 @@ Create a new TriggerRun with the given spec.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | trigger_run | TriggerRun | Yes | The metadata and spec of the TriggerRun to be created. |
-| create_options | CreateOptions | No | No description provided in source. |
+| create_options | CreateOptions | No | — |
 
 **Response fields**
 
@@ -320,7 +318,7 @@ Get the specified TriggerRun.
 |-------|------|----------|-------------|
 | name | string | Yes | Name of the TriggerRun. |
 | namespace | string | Yes | Object name and auth scope. |
-| get_options | GetOptions | No | No description provided in source. |
+| get_options | GetOptions | No | — |
 
 **Response fields**
 
@@ -341,7 +339,7 @@ Update a TriggerRun with the given spec.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | trigger_run | TriggerRun | Yes | The metadata and spec of the TriggerRun to be updated. |
-| update_options | UpdateOptions | No | No description provided in source. |
+| update_options | UpdateOptions | No | — |
 
 **Response fields**
 
@@ -363,7 +361,7 @@ Delete a TriggerRun.
 |-------|------|----------|-------------|
 | name | string | Yes | Name of the TriggerRun. |
 | namespace | string | Yes | Object name and auth scope. |
-| delete_options | DeleteOptions | No | No description provided in source. |
+| delete_options | DeleteOptions | No | — |
 
 **Response fields**
 
@@ -382,8 +380,8 @@ Delete collection of TriggerRun.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | namespace | string | Yes | Object name and auth scope. |
-| delete_options | DeleteOptions | No | No description provided in source. |
-| list_options | ListOptions | No | No description provided in source. |
+| delete_options | DeleteOptions | No | — |
+| list_options | ListOptions | No | — |
 
 **Response fields**
 
@@ -403,15 +401,15 @@ List objects of type TriggerRun.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| namespace | string | Yes | No description provided in source. |
-| list_options | ListOptions | No | No description provided in source. |
-| list_options_ext | ListOptionsExt | No | No description provided in source. |
+| namespace | string | Yes | — |
+| list_options | ListOptions | No | — |
+| list_options_ext | ListOptionsExt | No | — |
 
 **Response fields**
 
 | Field | Type | Description |
 |-------|------|-------------|
-| trigger_run_list | TriggerRunList | No description provided in source. |
+| trigger_run_list | TriggerRunList | — |
 
 ---
 
@@ -432,7 +430,7 @@ Create a new Project with the given spec.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | project | Project | Yes | The metadata and spec of the Project to be created. |
-| create_options | CreateOptions | No | No description provided in source. |
+| create_options | CreateOptions | No | — |
 
 **Response fields**
 
@@ -454,7 +452,7 @@ Get the specified Project.
 |-------|------|----------|-------------|
 | name | string | Yes | Name of the Project. |
 | namespace | string | Yes | Object name and auth scope. |
-| get_options | GetOptions | No | No description provided in source. |
+| get_options | GetOptions | No | — |
 
 **Response fields**
 
@@ -475,7 +473,7 @@ Update a Project with the given spec.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | project | Project | Yes | The metadata and spec of the Project to be updated. |
-| update_options | UpdateOptions | No | No description provided in source. |
+| update_options | UpdateOptions | No | — |
 
 **Response fields**
 
@@ -497,7 +495,7 @@ Delete a Project.
 |-------|------|----------|-------------|
 | name | string | Yes | Name of the Project. |
 | namespace | string | Yes | Object name and auth scope. |
-| delete_options | DeleteOptions | No | No description provided in source. |
+| delete_options | DeleteOptions | No | — |
 
 **Response fields**
 
@@ -516,8 +514,8 @@ Delete collection of Project.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | namespace | string | Yes | Object name and auth scope. |
-| delete_options | DeleteOptions | No | No description provided in source. |
-| list_options | ListOptions | No | No description provided in source. |
+| delete_options | DeleteOptions | No | — |
+| list_options | ListOptions | No | — |
 
 **Response fields**
 
@@ -537,14 +535,19 @@ List objects of type Project.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| namespace | string | Yes | No description provided in source. |
-| list_options | ListOptions | No | No description provided in source. |
-| list_options_ext | ListOptionsExt | No | No description provided in source. |
+| namespace | string | Yes | — |
+| list_options | ListOptions | No | — |
+| list_options_ext | ListOptionsExt | No | — |
 
 **Response fields**
 
 | Field | Type | Description |
 |-------|------|-------------|
-| project_list | ProjectList | No description provided in source. |
+| project_list | ProjectList | — |
 
 ---
+
+## Next Steps
+
+* [Run a Pipeline on a Compute Cluster](../../operator-guides/jobs/run-uniflow-pipeline-on-compute-cluster.md): Submit and monitor a Uniflow pipeline on a registered cluster
+* [Cascade Delete](../../operator-guides/cascade-delete.md): How deleting a Pipeline propagates to its PipelineRuns

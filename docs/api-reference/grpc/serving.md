@@ -1,11 +1,13 @@
 ---
-sidebar_position: 10
-sidebar_label: API Reference
+sidebar_position: 3
+sidebar_label: Serving
 ---
 
 # Serving gRPC API Reference
 
-The Michelangelo AI serving control plane exposes five gRPC services that manage the full lifecycle of inference infrastructure and model deployments. All services are defined in `proto/api/v2/` and follow a uniform CRUD pattern: Create, Get, Update, Delete, DeleteCollection, and List. Watch and cross-namespace listing are not supported by any of these services.
+The Michelangelo AI serving control plane exposes five gRPC services that manage the full lifecycle of inference infrastructure and model deployments. All services are defined in `proto/api/v2/`.
+
+> New to this reference? See [How to Read the gRPC API Reference](./conventions.md) for the shared CRUD-plus-list pattern, the Required column, and how undocumented fields are shown. For the architecture these services implement, see [Serving Overview](../../operator-guides/serving/index.md).
 
 ---
 
@@ -24,7 +26,7 @@ Create a new InferenceServer with the given spec.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | inference_server | InferenceServer | Yes | The metadata and spec of the InferenceServer to be created. |
-| create_options | k8s.io.apimachinery.pkg.apis.meta.v1.CreateOptions | No | No description provided in source. |
+| create_options | k8s.io.apimachinery.pkg.apis.meta.v1.CreateOptions | No | — |
 
 **Response fields**
 
@@ -46,7 +48,7 @@ Get the specified InferenceServer.
 |-------|------|----------|-------------|
 | name | string | Yes | Name of the InferenceServer. |
 | namespace | string | Yes | Object name and auth scope. |
-| get_options | k8s.io.apimachinery.pkg.apis.meta.v1.GetOptions | No | No description provided in source. |
+| get_options | k8s.io.apimachinery.pkg.apis.meta.v1.GetOptions | No | — |
 
 **Response fields**
 
@@ -67,7 +69,7 @@ Update a InferenceServer with the given spec.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | inference_server | InferenceServer | Yes | The metadata and spec of the InferenceServer to be updated. |
-| update_options | k8s.io.apimachinery.pkg.apis.meta.v1.UpdateOptions | No | No description provided in source. |
+| update_options | k8s.io.apimachinery.pkg.apis.meta.v1.UpdateOptions | No | — |
 
 **Response fields**
 
@@ -89,7 +91,7 @@ Delete a InferenceServer.
 |-------|------|----------|-------------|
 | name | string | Yes | Name of the InferenceServer. |
 | namespace | string | Yes | Object name and auth scope. |
-| delete_options | k8s.io.apimachinery.pkg.apis.meta.v1.DeleteOptions | No | No description provided in source. |
+| delete_options | k8s.io.apimachinery.pkg.apis.meta.v1.DeleteOptions | No | — |
 
 **Response fields**
 
@@ -108,8 +110,8 @@ Delete collection of InferenceServer.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | namespace | string | Yes | Object name and auth scope. |
-| delete_options | k8s.io.apimachinery.pkg.apis.meta.v1.DeleteOptions | No | No description provided in source. |
-| list_options | k8s.io.apimachinery.pkg.apis.meta.v1.ListOptions | No | No description provided in source. |
+| delete_options | k8s.io.apimachinery.pkg.apis.meta.v1.DeleteOptions | No | — |
+| list_options | k8s.io.apimachinery.pkg.apis.meta.v1.ListOptions | No | — |
 
 **Response fields**
 
@@ -129,15 +131,15 @@ List objects of type InferenceServer.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| namespace | string | Yes | No description provided in source. |
-| list_options | k8s.io.apimachinery.pkg.apis.meta.v1.ListOptions | No | No description provided in source. |
-| list_options_ext | michelangelo.api.ListOptionsExt | No | No description provided in source. |
+| namespace | string | Yes | — |
+| list_options | k8s.io.apimachinery.pkg.apis.meta.v1.ListOptions | No | — |
+| list_options_ext | michelangelo.api.ListOptionsExt | No | — |
 
 **Response fields**
 
 | Field | Type | Description |
 |-------|------|-------------|
-| inference_server_list | InferenceServerList | No description provided in source. |
+| inference_server_list | InferenceServerList | — |
 
 ---
 
@@ -156,7 +158,7 @@ Create a new Deployment with the given spec.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | deployment | Deployment | Yes | The metadata and spec of the Deployment to be created. |
-| create_options | k8s.io.apimachinery.pkg.apis.meta.v1.CreateOptions | No | No description provided in source. |
+| create_options | k8s.io.apimachinery.pkg.apis.meta.v1.CreateOptions | No | — |
 
 **Response fields**
 
@@ -178,7 +180,7 @@ Get the specified Deployment.
 |-------|------|----------|-------------|
 | name | string | Yes | Name of the Deployment. |
 | namespace | string | Yes | Object name and auth scope. |
-| get_options | k8s.io.apimachinery.pkg.apis.meta.v1.GetOptions | No | No description provided in source. |
+| get_options | k8s.io.apimachinery.pkg.apis.meta.v1.GetOptions | No | — |
 
 **Response fields**
 
@@ -199,7 +201,7 @@ Update a Deployment with the given spec.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | deployment | Deployment | Yes | The metadata and spec of the Deployment to be updated. |
-| update_options | k8s.io.apimachinery.pkg.apis.meta.v1.UpdateOptions | No | No description provided in source. |
+| update_options | k8s.io.apimachinery.pkg.apis.meta.v1.UpdateOptions | No | — |
 
 **Response fields**
 
@@ -221,7 +223,7 @@ Delete a Deployment.
 |-------|------|----------|-------------|
 | name | string | Yes | Name of the Deployment. |
 | namespace | string | Yes | Object name and auth scope. |
-| delete_options | k8s.io.apimachinery.pkg.apis.meta.v1.DeleteOptions | No | No description provided in source. |
+| delete_options | k8s.io.apimachinery.pkg.apis.meta.v1.DeleteOptions | No | — |
 
 **Response fields**
 
@@ -240,8 +242,8 @@ Delete collection of Deployment.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | namespace | string | Yes | Object name and auth scope. |
-| delete_options | k8s.io.apimachinery.pkg.apis.meta.v1.DeleteOptions | No | No description provided in source. |
-| list_options | k8s.io.apimachinery.pkg.apis.meta.v1.ListOptions | No | No description provided in source. |
+| delete_options | k8s.io.apimachinery.pkg.apis.meta.v1.DeleteOptions | No | — |
+| list_options | k8s.io.apimachinery.pkg.apis.meta.v1.ListOptions | No | — |
 
 **Response fields**
 
@@ -261,15 +263,15 @@ List objects of type Deployment.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| namespace | string | Yes | No description provided in source. |
-| list_options | k8s.io.apimachinery.pkg.apis.meta.v1.ListOptions | No | No description provided in source. |
-| list_options_ext | michelangelo.api.ListOptionsExt | No | No description provided in source. |
+| namespace | string | Yes | — |
+| list_options | k8s.io.apimachinery.pkg.apis.meta.v1.ListOptions | No | — |
+| list_options_ext | michelangelo.api.ListOptionsExt | No | — |
 
 **Response fields**
 
 | Field | Type | Description |
 |-------|------|-------------|
-| deployment_list | DeploymentList | No description provided in source. |
+| deployment_list | DeploymentList | — |
 
 ---
 
@@ -288,7 +290,7 @@ Create a new Revision with the given spec.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | revision | Revision | Yes | The metadata and spec of the Revision to be created. |
-| create_options | k8s.io.apimachinery.pkg.apis.meta.v1.CreateOptions | No | No description provided in source. |
+| create_options | k8s.io.apimachinery.pkg.apis.meta.v1.CreateOptions | No | — |
 
 **Response fields**
 
@@ -310,7 +312,7 @@ Get the specified Revision.
 |-------|------|----------|-------------|
 | name | string | Yes | Name of the Revision. |
 | namespace | string | Yes | Object name and auth scope. |
-| get_options | k8s.io.apimachinery.pkg.apis.meta.v1.GetOptions | No | No description provided in source. |
+| get_options | k8s.io.apimachinery.pkg.apis.meta.v1.GetOptions | No | — |
 
 **Response fields**
 
@@ -331,7 +333,7 @@ Update a Revision with the given spec.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | revision | Revision | Yes | The metadata and spec of the Revision to be updated. |
-| update_options | k8s.io.apimachinery.pkg.apis.meta.v1.UpdateOptions | No | No description provided in source. |
+| update_options | k8s.io.apimachinery.pkg.apis.meta.v1.UpdateOptions | No | — |
 
 **Response fields**
 
@@ -353,7 +355,7 @@ Delete a Revision.
 |-------|------|----------|-------------|
 | name | string | Yes | Name of the Revision. |
 | namespace | string | Yes | Object name and auth scope. |
-| delete_options | k8s.io.apimachinery.pkg.apis.meta.v1.DeleteOptions | No | No description provided in source. |
+| delete_options | k8s.io.apimachinery.pkg.apis.meta.v1.DeleteOptions | No | — |
 
 **Response fields**
 
@@ -372,8 +374,8 @@ Delete collection of Revision.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | namespace | string | Yes | Object name and auth scope. |
-| delete_options | k8s.io.apimachinery.pkg.apis.meta.v1.DeleteOptions | No | No description provided in source. |
-| list_options | k8s.io.apimachinery.pkg.apis.meta.v1.ListOptions | No | No description provided in source. |
+| delete_options | k8s.io.apimachinery.pkg.apis.meta.v1.DeleteOptions | No | — |
+| list_options | k8s.io.apimachinery.pkg.apis.meta.v1.ListOptions | No | — |
 
 **Response fields**
 
@@ -393,15 +395,15 @@ List objects of type Revision.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| namespace | string | Yes | No description provided in source. |
-| list_options | k8s.io.apimachinery.pkg.apis.meta.v1.ListOptions | No | No description provided in source. |
-| list_options_ext | michelangelo.api.ListOptionsExt | No | No description provided in source. |
+| namespace | string | Yes | — |
+| list_options | k8s.io.apimachinery.pkg.apis.meta.v1.ListOptions | No | — |
+| list_options_ext | michelangelo.api.ListOptionsExt | No | — |
 
 **Response fields**
 
 | Field | Type | Description |
 |-------|------|-------------|
-| revision_list | RevisionList | No description provided in source. |
+| revision_list | RevisionList | — |
 
 ---
 
@@ -420,7 +422,7 @@ Create a new Cluster with the given spec.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | cluster | Cluster | Yes | The metadata and spec of the Cluster to be created. |
-| create_options | k8s.io.apimachinery.pkg.apis.meta.v1.CreateOptions | No | No description provided in source. |
+| create_options | k8s.io.apimachinery.pkg.apis.meta.v1.CreateOptions | No | — |
 
 **Response fields**
 
@@ -442,7 +444,7 @@ Get the specified Cluster.
 |-------|------|----------|-------------|
 | name | string | Yes | Name of the Cluster. |
 | namespace | string | Yes | Object name and auth scope. |
-| get_options | k8s.io.apimachinery.pkg.apis.meta.v1.GetOptions | No | No description provided in source. |
+| get_options | k8s.io.apimachinery.pkg.apis.meta.v1.GetOptions | No | — |
 
 **Response fields**
 
@@ -463,7 +465,7 @@ Update a Cluster with the given spec.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | cluster | Cluster | Yes | The metadata and spec of the Cluster to be updated. |
-| update_options | k8s.io.apimachinery.pkg.apis.meta.v1.UpdateOptions | No | No description provided in source. |
+| update_options | k8s.io.apimachinery.pkg.apis.meta.v1.UpdateOptions | No | — |
 
 **Response fields**
 
@@ -485,7 +487,7 @@ Delete a Cluster.
 |-------|------|----------|-------------|
 | name | string | Yes | Name of the Cluster. |
 | namespace | string | Yes | Object name and auth scope. |
-| delete_options | k8s.io.apimachinery.pkg.apis.meta.v1.DeleteOptions | No | No description provided in source. |
+| delete_options | k8s.io.apimachinery.pkg.apis.meta.v1.DeleteOptions | No | — |
 
 **Response fields**
 
@@ -504,8 +506,8 @@ Delete collection of Cluster.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | namespace | string | Yes | Object name and auth scope. |
-| delete_options | k8s.io.apimachinery.pkg.apis.meta.v1.DeleteOptions | No | No description provided in source. |
-| list_options | k8s.io.apimachinery.pkg.apis.meta.v1.ListOptions | No | No description provided in source. |
+| delete_options | k8s.io.apimachinery.pkg.apis.meta.v1.DeleteOptions | No | — |
+| list_options | k8s.io.apimachinery.pkg.apis.meta.v1.ListOptions | No | — |
 
 **Response fields**
 
@@ -525,15 +527,15 @@ List objects of type Cluster.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| namespace | string | Yes | No description provided in source. |
-| list_options | k8s.io.apimachinery.pkg.apis.meta.v1.ListOptions | No | No description provided in source. |
-| list_options_ext | michelangelo.api.ListOptionsExt | No | No description provided in source. |
+| namespace | string | Yes | — |
+| list_options | k8s.io.apimachinery.pkg.apis.meta.v1.ListOptions | No | — |
+| list_options_ext | michelangelo.api.ListOptionsExt | No | — |
 
 **Response fields**
 
 | Field | Type | Description |
 |-------|------|-------------|
-| cluster_list | ClusterList | No description provided in source. |
+| cluster_list | ClusterList | — |
 
 ---
 
@@ -552,7 +554,7 @@ Create a new RayCluster with the given spec.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | ray_cluster | RayCluster | Yes | The metadata and spec of the RayCluster to be created. |
-| create_options | k8s.io.apimachinery.pkg.apis.meta.v1.CreateOptions | No | No description provided in source. |
+| create_options | k8s.io.apimachinery.pkg.apis.meta.v1.CreateOptions | No | — |
 
 **Response fields**
 
@@ -574,7 +576,7 @@ Get the specified RayCluster.
 |-------|------|----------|-------------|
 | name | string | Yes | Name of the RayCluster. |
 | namespace | string | Yes | Object name and auth scope. |
-| get_options | k8s.io.apimachinery.pkg.apis.meta.v1.GetOptions | No | No description provided in source. |
+| get_options | k8s.io.apimachinery.pkg.apis.meta.v1.GetOptions | No | — |
 
 **Response fields**
 
@@ -595,7 +597,7 @@ Update a RayCluster with the given spec.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | ray_cluster | RayCluster | Yes | The metadata and spec of the RayCluster to be updated. |
-| update_options | k8s.io.apimachinery.pkg.apis.meta.v1.UpdateOptions | No | No description provided in source. |
+| update_options | k8s.io.apimachinery.pkg.apis.meta.v1.UpdateOptions | No | — |
 
 **Response fields**
 
@@ -617,7 +619,7 @@ Delete a RayCluster.
 |-------|------|----------|-------------|
 | name | string | Yes | Name of the RayCluster. |
 | namespace | string | Yes | Object name and auth scope. |
-| delete_options | k8s.io.apimachinery.pkg.apis.meta.v1.DeleteOptions | No | No description provided in source. |
+| delete_options | k8s.io.apimachinery.pkg.apis.meta.v1.DeleteOptions | No | — |
 
 **Response fields**
 
@@ -636,8 +638,8 @@ Delete collection of RayCluster.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | namespace | string | Yes | Object name and auth scope. |
-| delete_options | k8s.io.apimachinery.pkg.apis.meta.v1.DeleteOptions | No | No description provided in source. |
-| list_options | k8s.io.apimachinery.pkg.apis.meta.v1.ListOptions | No | No description provided in source. |
+| delete_options | k8s.io.apimachinery.pkg.apis.meta.v1.DeleteOptions | No | — |
+| list_options | k8s.io.apimachinery.pkg.apis.meta.v1.ListOptions | No | — |
 
 **Response fields**
 
@@ -657,14 +659,19 @@ List objects of type RayCluster.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| namespace | string | Yes | No description provided in source. |
-| list_options | k8s.io.apimachinery.pkg.apis.meta.v1.ListOptions | No | No description provided in source. |
-| list_options_ext | michelangelo.api.ListOptionsExt | No | No description provided in source. |
+| namespace | string | Yes | — |
+| list_options | k8s.io.apimachinery.pkg.apis.meta.v1.ListOptions | No | — |
+| list_options_ext | michelangelo.api.ListOptionsExt | No | — |
 
 **Response fields**
 
 | Field | Type | Description |
 |-------|------|-------------|
-| ray_cluster_list | RayClusterList | No description provided in source. |
+| ray_cluster_list | RayClusterList | — |
 
 ---
+
+## Next Steps
+
+* [Serving Overview](../../operator-guides/serving/index.md): Architecture, controller lifecycles, and core concepts for InferenceServer and Deployment
+* [Cluster Setup for Serving](../../operator-guides/serving/cluster-setup.md): Configure a cluster for inference
