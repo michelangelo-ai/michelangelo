@@ -48,6 +48,9 @@ describe('Model detail page', () => {
 
       expect(screen.getByText('fraud-classifier')).toBeInTheDocument();
       expect(await screen.findByText('Source pipeline run')).toBeInTheDocument();
+      for (const link of screen.getAllByRole('link', { name: 'fraud-classifier-run-1' })) {
+        expect(link).toHaveAttribute('href', '/myproject/train/runs/fraud-classifier-run-1');
+      }
       expect(screen.getByText('Trained by')).toBeInTheDocument();
       expect(screen.getByText('Creation time')).toBeInTheDocument();
       expect(screen.getByText('Last updated')).toBeInTheDocument();
@@ -118,10 +121,9 @@ describe('Model detail page', () => {
     it('renders the source pipeline run link in Useful links', async () => {
       renderInformationTab();
 
-      expect(await screen.findByRole('link', { name: 'fraud-classifier-run-1' })).toHaveAttribute(
-        'href',
-        '/myproject/train/runs/fraud-classifier-run-1'
-      );
+      for (const link of await screen.findAllByRole('link', { name: 'fraud-classifier-run-1' })) {
+        expect(link).toHaveAttribute('href', '/myproject/train/runs/fraud-classifier-run-1');
+      }
     });
 
     it('renders the description', async () => {

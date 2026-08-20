@@ -13,7 +13,7 @@ export const MODEL_DETAIL_CONFIG: DetailViewConfig = {
       id: 'spec.sourcePipelineRun.name',
       label: 'Source pipeline run',
       type: CellType.LINK,
-      url: '/${studio.projectId}/${studio.phase}/runs/${row.spec.sourcePipelineRun.name}',
+      url: '/${studio.projectId}/${studio.phase}/runs/${page.spec.sourcePipelineRun.name}',
     },
     { id: 'spec.owner.name', label: 'Trained by', type: CellType.TEXT },
     { id: 'metadata.creationTimestamp.seconds', label: 'Creation time', type: CellType.DATE },
