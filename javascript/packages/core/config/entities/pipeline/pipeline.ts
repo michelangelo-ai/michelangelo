@@ -3,6 +3,7 @@ import { interpolate } from '#core/interpolation/interpolate';
 import { CreatePipelineRunForm } from './create-pipeline-run-form';
 import { PIPELINE_DETAIL_CONFIG } from './detail';
 import { PIPELINE_LIST_CONFIG } from './list';
+import { SchedulePipelineForm } from './schedule-pipeline-form';
 
 import type { PhaseEntityConfig } from '#core/types/common/studio-types';
 import type { Pipeline } from './types';
@@ -18,6 +19,11 @@ export const PIPELINE_ENTITY_CONFIG: PhaseEntityConfig = {
       display: { label: 'Run', icon: 'playerPlay' },
       hierarchy: ActionHierarchy.PRIMARY,
       modal: { type: 'custom', component: CreatePipelineRunForm },
+    },
+    {
+      display: { label: 'Schedule', icon: 'calendarRepeat' },
+      hierarchy: ActionHierarchy.SECONDARY,
+      modal: { type: 'custom', component: SchedulePipelineForm },
     },
     {
       display: { label: 'Delete', icon: 'trashCan' },

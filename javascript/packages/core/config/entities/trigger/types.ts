@@ -16,6 +16,43 @@ export type Trigger = {
   };
 };
 
+/**
+ * A trigger declared in a pipeline's manifest (`PipelineManifest.trigger_map`), as
+ * protobuf-es decodes the proto `Trigger` message: the `oneof trigger_type` becomes a
+ * tagged `{ case, value }` union.
+ *
+ * Only the schedule is modelled, because that is all the dropdown needs to label an
+ * option. The whole object is copied verbatim into {@link ScheduledTriggerRun.spec.trigger}
+ * on submit, so the fields left out here (parametersMap, batchPolicy, maxConcurrency,
+ * proxyUser) still survive the round trip.
+ */
+export type ManifestTrigger = {
+  triggerType?:
+    | { case: 'cronSchedule'; value: { cron?: string } }
+    | { case: 'intervalSchedule'; value: { interval?: { seconds?: bigint | number | string } } }
+    | { case: 'batchRerun'; value: unknown };
+};
+
+/**
+ * Payload for `CreateTriggerRun` when scheduling a pipeline from a manifest trigger.
+ *
+ * `spec.trigger` carries the schedule and is what actually drives execution — the
+ * reconciler reads it directly (`GetTriggerType` in go/components/triggerrun/util.go) and
+ * falls through to `TriggerTypeUnknown` if it is absent, leaving the TriggerRun inert.
+ * `spec.sourceTriggerName` is provenance only; nothing on the backend resolves it.
+ */
+export type ScheduledTriggerRun = {
+  metadata: {
+    name: string;
+    namespace: string;
+  };
+  spec: {
+    pipeline: { name: string; namespace: string };
+    trigger: ManifestTrigger;
+    sourceTriggerName: string;
+  };
+};
+
 export type TriggerRun = {
   metadata: {
     name: string;

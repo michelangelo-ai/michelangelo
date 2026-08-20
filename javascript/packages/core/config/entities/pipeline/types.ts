@@ -1,4 +1,5 @@
 import type { PipelineRun } from '#core/config/entities/run/types';
+import type { ManifestTrigger } from '#core/config/entities/trigger/types';
 
 export interface Pipeline {
   metadata: {
@@ -8,6 +9,14 @@ export interface Pipeline {
   spec: {
     owner: {
       name: string;
+    };
+    /**
+     * Only present on a `GetPipeline` response — list rows carry no manifest, so the
+     * scheduling form has to fetch the pipeline before it can offer any triggers.
+     */
+    manifest?: {
+      /** Named triggers declared for this pipeline, keyed by trigger name. */
+      triggerMap?: Record<string, ManifestTrigger>;
     };
   };
 }
@@ -24,4 +33,14 @@ export type PipelineRunFormValues = PipelineRun & {
   notifyOnCompletion?: boolean;
   notificationEmails?: string[];
   notificationSlackDestinations?: string[];
+};
+
+/**
+ * Values held by {@link SchedulePipelineForm} — the dropdown selection, and nothing else.
+ *
+ * Declared as a type alias rather than an interface so it satisfies the `FormData`
+ * (`Record<string, unknown>`) constraint on `FormDialog`.
+ */
+export type SchedulePipelineFormValues = {
+  sourceTriggerName: string;
 };
