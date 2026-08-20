@@ -7,11 +7,13 @@ lazily (only once FSDP2 is requested) rather than at top level.
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import ray
-import torch
 from pytorch_lightning.strategies import ModelParallelStrategy
+
+if TYPE_CHECKING:
+    import torch
 
 _logger = logging.getLogger(__name__)
 

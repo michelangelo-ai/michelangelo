@@ -455,10 +455,10 @@ class LightningTrainerWithStateDict(LightningTrainer):
                 )
             elif used_model_parallel:
                 # Private torch API, re-verify on torch upgrade.
+                from torch.distributed.checkpoint import FileSystemReader
                 from torch.distributed.checkpoint.state_dict_loader import (
                     _load_state_dict_from_keys,
                 )
-                from torch.distributed.checkpoint import FileSystemReader
 
                 loaded = _load_state_dict_from_keys(
                     {"state_dict"},
@@ -469,9 +469,7 @@ class LightningTrainerWithStateDict(LightningTrainer):
                     raise RuntimeError(
                         f"FSDP2 sharded checkpoint from {lightning_ckpt_path!r} has no 'state_dict' keys."
                     )
-                _logger.info(
-                    "Loaded FSDP2 model weights from %s", lightning_ckpt_path
-                )
+                _logger.info("Loaded FSDP2 model weights from %s", lightning_ckpt_path)
             else:
                 # DDP checkpoint
                 checkpoint = torch.load(lightning_ckpt_path, map_location="cpu")

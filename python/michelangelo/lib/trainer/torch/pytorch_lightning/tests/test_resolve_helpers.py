@@ -92,32 +92,30 @@ class TestResolveStrategy:
     @pytest.mark.parametrize("name", ["fsdp2", "FSDP2", "Fsdp2"])
     def test_fsdp2_string_routes_to_model_parallel_strategy(self, name):
         """The string ``"fsdp2"`` lazily imports and returns ``RayModelParallelStrategy``."""
-        _MP_MODULE = "michelangelo.lib.trainer.torch.pytorch_lightning._private.model_parallel"
-        with patch(f"{_MP_MODULE}.RayModelParallelStrategy") as mock_cls:
-            with patch(
-                f"{_UTIL_MODULE}.RayModelParallelStrategy",
-                mock_cls,
-                create=True,
-            ):
-                # Patch the lazy import inside _resolve_strategy
-                import importlib
-                import michelangelo.lib.trainer.torch.pytorch_lightning._private.model_parallel as mp_mod
+        mp_module = (
+            "michelangelo.lib.trainer.torch.pytorch_lightning._private.model_parallel"
+        )
+        import michelangelo.lib.trainer.torch.pytorch_lightning._private.model_parallel as mp_mod
 
-                with patch.dict(
-                    "sys.modules",
-                    {_MP_MODULE: mp_mod},
-                ):
-                    with patch.object(mp_mod, "RayModelParallelStrategy", mock_cls):
-                        result = _resolve_strategy(name)
+        with (
+            patch(f"{mp_module}.RayModelParallelStrategy") as mock_cls,
+            patch.dict("sys.modules", {mp_module: mp_mod}),
+            patch.object(mp_mod, "RayModelParallelStrategy", mock_cls),
+        ):
+            result = _resolve_strategy(name)
         mock_cls.assert_called_once_with()
         assert result is mock_cls.return_value
 
     def test_fsdp2_raises_when_class_unavailable(self):
         """FSDP2 on pytorch-lightning < 2.3 raises ``ValueError``, not ``ImportError``."""
-        _MP_MODULE = "michelangelo.lib.trainer.torch.pytorch_lightning._private.model_parallel"
-        with patch.dict("sys.modules", {_MP_MODULE: None}):
-            with pytest.raises(ValueError, match="requires pytorch-lightning >= 2.3"):
-                _resolve_strategy("fsdp2")
+        mp_module = (
+            "michelangelo.lib.trainer.torch.pytorch_lightning._private.model_parallel"
+        )
+        with (
+            patch.dict("sys.modules", {mp_module: None}),
+            pytest.raises(ValueError, match="requires pytorch-lightning >= 2.3"),
+        ):
+            _resolve_strategy("fsdp2")
 
     def test_invalid_strategy_kwargs_type_raises(self):
         """``strategy_kwargs`` must be a dict."""
@@ -134,16 +132,20 @@ class TestIsModelParallelStrategy:
     """Guard function for FSDP2 detection."""
 
     def test_string_fsdp2_is_true(self):
+        """``"fsdp2"`` is recognized as model-parallel."""
         assert _is_model_parallel_strategy("fsdp2") is True
 
     def test_other_strategy_strings_are_false(self):
+        """Non-FSDP2 strategy strings are not model-parallel."""
         for name in ("ddp", "fsdp", "deepspeed"):
             assert _is_model_parallel_strategy(name) is False, name
 
     def test_none_is_false(self):
+        """``None`` is not model-parallel."""
         assert _is_model_parallel_strategy(None) is False
 
     def test_non_model_parallel_instance_is_false(self):
+        """A generic ``Strategy`` instance is not model-parallel."""
         from pytorch_lightning.strategies import Strategy
 
         assert _is_model_parallel_strategy(MagicMock(spec=Strategy)) is False
@@ -158,21 +160,26 @@ class TestIsDeepSpeedStrategy:
     """Guard function for DeepSpeed detection."""
 
     def test_string_deepspeed_is_true(self):
+        """``"deepspeed"`` is recognized."""
         assert _is_deepspeed_strategy("deepspeed") is True
 
     def test_deepspeed_instance_is_true(self):
+        """A ``RayDeepSpeedStrategy`` instance is recognized."""
         from ray.train.lightning import RayDeepSpeedStrategy
 
         assert _is_deepspeed_strategy(MagicMock(spec=RayDeepSpeedStrategy)) is True
 
     def test_other_strategy_strings_are_false(self):
+        """Non-DeepSpeed strategy strings are not DeepSpeed."""
         for name in ("ddp", "fsdp", "fsdp2", "some_custom"):
             assert _is_deepspeed_strategy(name) is False, name
 
     def test_none_is_false(self):
+        """``None`` is not DeepSpeed."""
         assert _is_deepspeed_strategy(None) is False
 
     def test_non_deepspeed_instance_is_false(self):
+        """A non-DeepSpeed strategy instance is not DeepSpeed."""
         assert _is_deepspeed_strategy(RayDDPStrategy()) is False
 
 
@@ -189,6 +196,7 @@ class TestPrepareTrainerForRay:
     @patch(_IS_MP, return_value=False)
     @patch("ray.train.lightning.prepare_trainer")
     def test_non_model_parallel_defers_to_ray(self, mock_prepare, _mock_is_mp):
+        """Non-MP strategies delegate to ``ray.train.lightning.prepare_trainer``."""
         trainer = MagicMock()
         result = _prepare_trainer_for_ray(trainer)
         mock_prepare.assert_called_once_with(trainer)
@@ -196,6 +204,7 @@ class TestPrepareTrainerForRay:
 
     @patch(_IS_MP, return_value=True)
     def test_model_parallel_with_ray_env_returns_trainer(self, _mock_is_mp):
+        """MP with ``RayLightningEnvironment`` returns the trainer unchanged."""
         env = RayLightningEnvironment.__new__(RayLightningEnvironment)
         trainer = MagicMock()
         trainer.strategy.cluster_environment = env
@@ -203,6 +212,7 @@ class TestPrepareTrainerForRay:
 
     @patch(_IS_MP, return_value=True)
     def test_model_parallel_with_wrong_cluster_env_raises(self, _mock_is_mp):
+        """MP with an unexpected cluster environment raises ``RuntimeError``."""
         trainer = MagicMock()
         trainer.strategy.cluster_environment = object()
         with pytest.raises(RuntimeError):
@@ -210,6 +220,7 @@ class TestPrepareTrainerForRay:
 
     @patch(_IS_MP, return_value=True)
     def test_model_parallel_with_no_cluster_env_returns_trainer(self, _mock_is_mp):
+        """MP with no cluster environment returns the trainer unchanged."""
         trainer = MagicMock()
         trainer.strategy.cluster_environment = None
         assert _prepare_trainer_for_ray(trainer) is trainer

@@ -435,9 +435,9 @@ class TestLightningTrainerWithStateDict:
 
         # Stub the DCP loader module
         loader_mod = types.ModuleType("torch.distributed.checkpoint.state_dict_loader")
-        loader_mod._load_state_dict_from_keys = (
-            lambda _keys, **_kw: {"state_dict": fake_state}
-        )
+        loader_mod._load_state_dict_from_keys = lambda _keys, **_kw: {
+            "state_dict": fake_state
+        }
         dcp_mod = types.ModuleType("torch.distributed.checkpoint")
         dcp_mod.FileSystemReader = MagicMock()
 
@@ -478,15 +478,17 @@ class TestLightningTrainerWithStateDict:
         dcp_mod = types.ModuleType("torch.distributed.checkpoint")
         dcp_mod.FileSystemReader = MagicMock()
 
-        with patch.dict(
-            sys.modules,
-            {
-                "torch.distributed.checkpoint.state_dict_loader": loader_mod,
-                "torch.distributed.checkpoint": dcp_mod,
-            },
+        with (
+            patch.dict(
+                sys.modules,
+                {
+                    "torch.distributed.checkpoint.state_dict_loader": loader_mod,
+                    "torch.distributed.checkpoint": dcp_mod,
+                },
+            ),
+            pytest.raises(RuntimeError, match="no 'state_dict' keys"),
         ):
-            with pytest.raises(RuntimeError, match="no 'state_dict' keys"):
-                trainer.update_model_state_dict(torch_model)
+            trainer.update_model_state_dict(torch_model)
 
 
 # -----------------------------------------------------------------------------
