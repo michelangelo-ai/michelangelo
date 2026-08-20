@@ -646,7 +646,11 @@ func decodePipelineManifestContent(pipelineSpec v2.PipelineSpec) (map[string]int
 
 func (a *ExecuteWorkflowActor) addTaskCacheEnv(ctx context.Context, pipelineRun *v2.PipelineRun, envs map[string]interface{}) error {
 	logger := a.logger.With(zap.String("pipelineRun", fmt.Sprintf("%s/%s", pipelineRun.Namespace, pipelineRun.Name)))
-	envs[cacheEnabledVarName] = "false"
+	// Cache is scoped per pipeline run via cacheVersionVarName below (defaults to
+	// pipelineRun.Name), so enabling it by default does not cause cross-run cache hits.
+	// This lets tasks that already succeeded skip re-execution when a manual retry's
+	// Temporal Reset forces concurrent sibling tasks to replay.
+	envs[cacheEnabledVarName] = "true"
 	envs[cacheVersionVarName] = pipelineRun.Name
 	if pipelineRun.Spec.Resume == nil || pipelineRun.Spec.Resume.PipelineRun == nil {
 		return nil
@@ -1142,6 +1146,11 @@ func (a *ExecuteWorkflowActor) processManualRetrySpec(ctx context.Context, pipel
 		return fmt.Errorf("failed to find reset event ID for activity %s: %w", retryInfo.ActivityId, err)
 	}
 
+	// Force a cache-miss for the task being retried, so "retry" always means a real
+	// re-execution of this task regardless of any cached output left over from an earlier
+	// attempt in this same run. Sibling tasks' cached outputs are left untouched.
+	a.invalidateCachedOutputForActivity(ctx, pipelineRun, activityID, logger)
+
 	// Perform workflow reset
 	resetOptions := clientInterfaces.ResetWorkflowOptions{
 		WorkflowID: pipelineRun.Status.WorkflowId,
@@ -1208,6 +1217,40 @@ func (a *ExecuteWorkflowActor) processManualRetrySpec(ctx context.Context, pipel
 	}
 
 	return nil
+}
+
+// invalidateCachedOutputForActivity deletes any CachedOutput CR recorded for the sub-step
+// matching activityID, so a manual retry can never short-circuit through a stale cached
+// result left over from an earlier attempt of the same task. Sibling sub-steps (and their
+// CachedOutputs) are left untouched. Deletion failures are logged and otherwise ignored -
+// they must not block the retry itself.
+func (a *ExecuteWorkflowActor) invalidateCachedOutputForActivity(ctx context.Context, pipelineRun *v2.PipelineRun, activityID string, logger *zap.Logger) {
+	executeWorkflowStep := pipelinerunutils.GetStep(pipelineRun, pipelinerunutils.ExecuteWorkflowStepName)
+	if executeWorkflowStep == nil {
+		return
+	}
+
+	for _, subStep := range executeWorkflowStep.SubSteps {
+		if subStep.ActivityId != activityID || subStep.StepCachedOutputs == nil {
+			continue
+		}
+
+		refs := append(append(append([]*apipb.ResourceIdentifier{},
+			subStep.StepCachedOutputs.IntermediateVars...),
+			subStep.StepCachedOutputs.Checkpoints...),
+			subStep.StepCachedOutputs.RawModels...)
+
+		for _, ref := range refs {
+			co := &v2.CachedOutput{ObjectMeta: metav1.ObjectMeta{Namespace: ref.Namespace, Name: ref.Name}}
+			if err := a.apiHandler.Delete(ctx, co, &metav1.DeleteOptions{}); err != nil {
+				logger.Warn("failed to invalidate cached output for retried task",
+					zap.String("activityId", activityID),
+					zap.String("cachedOutputName", ref.Name),
+					zap.Error(err))
+			}
+		}
+		return
+	}
 }
 
 // structFromMap converts a map[string]interface{} to a *pbtypes.Struct.
