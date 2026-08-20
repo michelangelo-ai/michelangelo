@@ -43,6 +43,9 @@ from michelangelo.lib.trainer.torch.pytorch_lightning._private.callbacks import 
     RayTrainReportCallback,
     RayTrainReportPerNodeCallback,
 )
+from michelangelo.lib.trainer.torch.pytorch_lightning._private.torch_compile import (
+    apply_torch_compile,
+)
 
 if TYPE_CHECKING:
     from michelangelo.lib.trainer.torch.pytorch_lightning.schema import (
@@ -1223,6 +1226,10 @@ def _train_loop_per_worker(train_loop_config):
     trainer_kwargs.setdefault("max_epochs", num_epochs if num_epochs is not None else 1)
     trainer_kwargs.setdefault("num_sanity_val_steps", 0)
     trainer_kwargs.setdefault("enable_progress_bar", False)
+
+    torch_compile_config = train_loop_config.get("torch_compile")
+    if torch_compile_config:
+        apply_torch_compile(model, torch_compile_config)
 
     if "enable_checkpointing" in trainer_kwargs:
         _logger.warning(
