@@ -322,7 +322,9 @@ class TestBuildProfiler:
     def test_pytorch_profiler_resolves_on_trace_ready(self, in_tmp_cwd, patched_ray):
         """A dotted ``on_trace_ready`` path is resolved via ``get_module_attr``."""
         handler = MagicMock(name="handler")
-        with patch(f"{_PROFILER_MODULE}.get_module_attr", return_value=handler) as resolver:
+        with patch(
+            f"{_PROFILER_MODULE}.get_module_attr", return_value=handler
+        ) as resolver:
             _build_profiler(
                 {"pytorch": {"on_trace_ready": "some.module.handler"}},
                 steps_per_epoch=30,
@@ -409,7 +411,9 @@ class TestResolveProfiler:
         self, in_tmp_cwd, patched_ray
     ):
         """Row count, batch size, world size, and trainer kwargs all feed in."""
-        with patch(f"{_PROFILER_MODULE}._build_profiler", return_value=(None, "")) as build:
+        with patch(
+            f"{_PROFILER_MODULE}._build_profiler", return_value=(None, "")
+        ) as build:
             _resolve_profiler(
                 {"pytorch": {}},
                 {"limit_train_batches": 0.5},
@@ -423,7 +427,9 @@ class TestResolveProfiler:
 
     def test_unknown_row_count_passes_none_through(self, in_tmp_cwd, patched_ray):
         """An unknown row count leaves the schedule to its unbounded default."""
-        with patch(f"{_PROFILER_MODULE}._build_profiler", return_value=(None, "")) as build:
+        with patch(
+            f"{_PROFILER_MODULE}._build_profiler", return_value=(None, "")
+        ) as build:
             _resolve_profiler({"pytorch": {}}, {}, None, 8, 1, 0)
         build.assert_called_once_with({"pytorch": {}}, None)
 

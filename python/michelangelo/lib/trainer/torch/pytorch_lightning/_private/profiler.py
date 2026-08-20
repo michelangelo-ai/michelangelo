@@ -6,10 +6,12 @@ import glob
 import logging
 import math
 import os
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-import pytorch_lightning as pl
 import ray
+
+if TYPE_CHECKING:
+    import pytorch_lightning as pl
 
 from michelangelo._internal.utils.reflection_utils import get_module_attr
 from michelangelo.lib._internal.errors import UserInputError
