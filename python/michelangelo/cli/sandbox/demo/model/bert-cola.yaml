@@ -1,0 +1,11 @@
+apiVersion: michelangelo.api/v2
+kind: Model
+metadata:
+  name: bert-cola
+  namespace: ma-dev-test
+spec:
+  owner:
+    name: demo-user
+  description: Demo BERT CoLA classifier model
+  modelFamily:
+    name: test-model-family

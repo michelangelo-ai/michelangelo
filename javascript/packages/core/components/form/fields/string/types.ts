@@ -1,7 +1,15 @@
 import type { SharedFieldConfig } from '../types';
 import type { BaseFieldProps } from '../types';
 
-export type SingleStringFieldProps = BaseFieldProps<string> & { multi?: false };
+export type SingleStringFieldProps = BaseFieldProps<string> & {
+  multi?: false;
+  /**
+   * Limits input length and displays a character counter in the label row.
+   * When `labelEndEnhancer` is also provided, the counter appears first
+   * followed by the enhancer content.
+   */
+  maxLength?: number;
+};
 export type MultiStringFieldProps = BaseFieldProps<string[]> & { multi: true };
 
 export type StringFieldProps = SingleStringFieldProps | MultiStringFieldProps;

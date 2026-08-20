@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react';
+
 export interface PageHeaderProps {
   /**
    * Icon name from the icon provider system.
@@ -19,4 +21,9 @@ export interface PageHeaderProps {
    * When provided with description, renders a "Learn more" button with arrow icon.
    */
   docUrl?: string;
+
+  /**
+   * Arbitrary content rendered at the far right of the header (e.g. a create button).
+   */
+  actions?: ReactNode;
 }

@@ -1,0 +1,11 @@
+apiVersion: michelangelo.api/v2
+kind: Model
+metadata:
+  name: sentiment-model
+  namespace: ma-dev-test
+spec:
+  owner:
+    name: demo-user
+  description: Demo sentiment classifier model
+  modelFamily:
+    name: test-model-family
