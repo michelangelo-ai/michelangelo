@@ -137,6 +137,7 @@ func TestMapKubeRayClusterState(t *testing.T) {
 		{name: "ready state", input: rayv1.Ready, expected: v2pb.RAY_CLUSTER_STATE_READY},
 		{name: "failed state", input: rayv1.Failed, expected: v2pb.RAY_CLUSTER_STATE_FAILED},
 		{name: "unhealthy state", input: _unhealthyState, expected: v2pb.RAY_CLUSTER_STATE_UNHEALTHY},
+		{name: "suspended state", input: rayv1.Suspended, expected: v2pb.RAY_CLUSTER_STATE_SUSPENDED},
 		{name: "empty state", input: "", expected: v2pb.RAY_CLUSTER_STATE_UNKNOWN},
 		{name: "unknown state string", input: "SomeNewState", expected: v2pb.RAY_CLUSTER_STATE_UNKNOWN},
 	}
@@ -253,6 +254,63 @@ func TestRayClusterEventHandler_UnknownWithTerminalPodErrors(t *testing.T) {
 	require.NotNil(t, succeededCond)
 	assert.Equal(t, apipb.CONDITION_STATUS_FALSE, succeededCond.Status)
 	assert.Equal(t, "ClusterFailedWithPodErrors", succeededCond.Reason)
+}
+
+func TestRayClusterEventHandler_Suspended(t *testing.T) {
+	// Suspension (KubeRay status.state=suspended, e.g. Kueue admission gating)
+	// is non-terminal: even with a genuinely terminal pod error already
+	// recorded, a suspended cluster must keep being monitored (State=SUSPENDED)
+	// and must never be marked failed. Guards against the UNKNOWN + terminal
+	// pod-error path tearing down suspended clusters (#1700).
+	globalCluster := &v2pb.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
+		Status: v2pb.RayClusterStatus{
+			State:     v2pb.RAY_CLUSTER_STATE_PROVISIONING,
+			PodErrors: []*v2pb.PodErrors{{Reason: "CrashLoopBackOff"}},
+		},
+	}
+	r := setupWatcherTest(t, globalCluster)
+
+	r.rayClusterEventHandler(newKubeRayCluster(rayClusterName, rayv1.Suspended))
+
+	updated := getUpdatedCluster(t, r)
+	assert.Equal(t, v2pb.RAY_CLUSTER_STATE_SUSPENDED, updated.Status.State)
+
+	succeededCond := findCondition(updated.Status.StatusConditions, SucceededCondition)
+	if succeededCond != nil {
+		assert.NotEqual(t, apipb.CONDITION_STATUS_FALSE, succeededCond.Status,
+			"suspended cluster must not be marked failed")
+	}
+}
+
+func TestRayClusterEventHandler_SuspendedViaSpec(t *testing.T) {
+	// status.state lags spec.suspend when a cluster is suspended at creation
+	// (its admission webhook sets spec.suspend before KubeRay writes state).
+	// The watcher must report SUSPENDED from spec intent even though the empty
+	// status.state would otherwise map to UNKNOWN and, with a terminal pod
+	// error, force FAILED.
+	globalCluster := &v2pb.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
+		Status: v2pb.RayClusterStatus{
+			State:     v2pb.RAY_CLUSTER_STATE_PROVISIONING,
+			PodErrors: []*v2pb.PodErrors{{Reason: "CrashLoopBackOff"}},
+		},
+	}
+	r := setupWatcherTest(t, globalCluster)
+
+	local := newKubeRayCluster(rayClusterName, "") // empty state maps to UNKNOWN without suspend intent
+	suspend := true
+	local.Spec.Suspend = &suspend
+	r.rayClusterEventHandler(local)
+
+	updated := getUpdatedCluster(t, r)
+	assert.Equal(t, v2pb.RAY_CLUSTER_STATE_SUSPENDED, updated.Status.State)
+
+	succeededCond := findCondition(updated.Status.StatusConditions, SucceededCondition)
+	if succeededCond != nil {
+		assert.NotEqual(t, apipb.CONDITION_STATUS_FALSE, succeededCond.Status,
+			"cluster suspended via spec.suspend must not be marked failed")
+	}
 }
 
 func TestRayClusterEventHandler_InvalidObject(t *testing.T) {

@@ -395,6 +395,14 @@ func (r *Reconciler) rayClusterEventHandler(obj interface{}) {
 
 	newState := mapKubeRayClusterState(local.Status.State)
 
+	// Suspension is visible in spec/conditions before status.state catches up
+	// (e.g. a cluster suspended by its admission webhook at creation still has
+	// state ""); report SUSPENDED for the whole window. Mirrors
+	// k8sengine.convertRayV1ClusterStatusToV2.
+	if isSuspended(local) {
+		newState = v2pb.RAY_CLUSTER_STATE_SUSPENDED
+	}
+
 	// Cache re-sync gives Update events even when the local cluster did not
 	// change. Exit early if global already reflects the local state to avoid
 	// unnecessary CRD writes.
@@ -447,6 +455,13 @@ func (r *Reconciler) rayClusterEventHandler(obj interface{}) {
 						Reason:     "ClusterFailedWithPodErrors",
 					})
 				}
+			case v2pb.RAY_CLUSTER_STATE_SUSPENDED:
+				// Suspension (RayCluster.spec.suspend, e.g. Kueue admission
+				// gating) is non-terminal: pods are intentionally absent until
+				// the cluster is unsuspended, so keep monitoring without
+				// touching the Succeeded condition. Deliberately no
+				// terminal-pod-error check here — while suspended, pod-level
+				// signals carry no meaning. Mirrors #1700's controller handling.
 			}
 		}, &metav1.UpdateOptions{
 			FieldManager: "rayClusterEventHandler",
@@ -466,9 +481,42 @@ func mapKubeRayClusterState(state rayv1.ClusterState) v2pb.RayClusterState {
 		return v2pb.RAY_CLUSTER_STATE_FAILED
 	case "unhealthy":
 		return v2pb.RAY_CLUSTER_STATE_UNHEALTHY
+	case rayv1.Suspended:
+		return v2pb.RAY_CLUSTER_STATE_SUSPENDED
 	default:
 		return v2pb.RAY_CLUSTER_STATE_UNKNOWN
 	}
+}
+
+// KubeRay writes these condition types while suspending/resuming a cluster
+// (RayCluster.spec.suspend). The vendored ray-operator API (v1.2.2) predates
+// their constants, so they are string-matched here. Mirrors k8sengine.
+const (
+	rayClusterSuspendingConditionType = "RayClusterSuspending"
+	rayClusterSuspendedConditionType  = "RayClusterSuspended"
+)
+
+// isSuspended reports whether the cluster is suspended or being suspended
+// (spec.suspend=true, e.g. set by a queueing/admission controller such as
+// Kueue). Spec intent, reported state, and conditions are all checked because
+// status.state lags spec.suspend when a cluster is suspended at creation.
+// Mirrors k8sengine.isSuspended so the watcher and the mapper agree.
+func isSuspended(rc *rayv1.RayCluster) bool {
+	if rc.Spec.Suspend != nil && *rc.Spec.Suspend {
+		return true
+	}
+	if rc.Status.State == rayv1.Suspended {
+		return true
+	}
+	for _, cond := range rc.Status.Conditions {
+		if cond.Status != metav1.ConditionTrue {
+			continue
+		}
+		if cond.Type == rayClusterSuspendingConditionType || cond.Type == rayClusterSuspendedConditionType {
+			return true
+		}
+	}
+	return false
 }
 
 // Helper functions for extracting head pod information.
