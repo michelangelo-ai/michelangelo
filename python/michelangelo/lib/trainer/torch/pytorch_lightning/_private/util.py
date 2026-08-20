@@ -57,19 +57,9 @@ CHECKPOINT_FILENAME = "checkpoint.ckpt"
 
 _logger = logging.getLogger(__name__)
 
-# Re-export profiler helpers so existing callers that import from this module
-# continue to work. The canonical definitions now live in ``profiler.py``.
-from michelangelo.lib.trainer.torch.pytorch_lightning._private.profiler import (  # noqa: E402, F401
-    _build_profiler,
-    _build_pytorch_profiler,
-    _compute_default_schedule,
-    _compute_steps_per_epoch,
+from michelangelo.lib.trainer.torch.pytorch_lightning._private.profiler import (
     _maybe_export_profiler_results,
-    _profiler_output,
     _resolve_profiler,
-    _validate_profiler_schedule,
-    comet_profiler_sink,
-    mlflow_profiler_sink,
 )
 
 
