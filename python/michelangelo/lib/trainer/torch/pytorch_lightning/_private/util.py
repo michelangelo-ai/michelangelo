@@ -47,6 +47,10 @@ if TYPE_CHECKING:
         TrainingObserver,
     )
 
+from michelangelo.lib.trainer.torch.pytorch_lightning._private.profiler import (
+    _maybe_export_profiler_results,
+    _resolve_profiler,
+)
 
 # Plugin types accepted by the PyTorch Lightning Trainer.
 # See: https://github.com/Lightning-AI/pytorch-lightning/blob/2129fdf3622e39ba46be4e1139af408e7e951cf3/src/lightning/pytorch/trainer/trainer.py#L126
@@ -56,11 +60,6 @@ CALLBACK_REPORT_PER_NODE = "callback_report_per_node"
 CHECKPOINT_FILENAME = "checkpoint.ckpt"
 
 _logger = logging.getLogger(__name__)
-
-from michelangelo.lib.trainer.torch.pytorch_lightning._private.profiler import (
-    _maybe_export_profiler_results,
-    _resolve_profiler,
-)
 
 
 def _load_weights_from_path(model: torch.nn.Module, path: str) -> None:
@@ -748,5 +747,3 @@ def _train_loop_per_worker(train_loop_config):
         upload_profiler_results,
         train_loop_config.get("profiler_sink"),
     )
-
-

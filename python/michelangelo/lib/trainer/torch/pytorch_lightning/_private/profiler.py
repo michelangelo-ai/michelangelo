@@ -1,9 +1,4 @@
-"""Profiler helpers for the PyTorch Lightning trainer.
-
-Extracted from ``util.py`` to keep that module focused on strategy / plugin /
-logger / callback resolution. Public APIs live in
-``michelangelo.lib.trainer.torch.pytorch_lightning.lightning_trainer``.
-"""
+"""Profiler helpers for the PyTorch Lightning trainer."""
 
 from __future__ import annotations
 
