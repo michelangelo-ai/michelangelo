@@ -295,6 +295,52 @@ def build_mlflow_logger(
     )
 
 
+def _is_model_parallel_strategy(strategy: str | Strategy | None) -> bool:
+    """True if ``strategy`` is the string "fsdp2" or a ``ModelParallelStrategy`` instance.
+
+    The guarded import returns False on pytorch-lightning < 2.3, where the class does not exist.
+    """
+    if strategy is None:
+        return False
+    if isinstance(strategy, str):
+        return strategy.lower() == "fsdp2"
+    try:
+        from pytorch_lightning.strategies import ModelParallelStrategy
+    except ImportError:
+        return False
+    return isinstance(strategy, ModelParallelStrategy)
+
+
+def _is_deepspeed_strategy(strategy: str | Strategy | None) -> bool:
+    """True if ``strategy`` is the string "deepspeed" or a ``RayDeepSpeedStrategy`` instance."""
+    if strategy is None:
+        return False
+    if isinstance(strategy, str):
+        return strategy.lower() == "deepspeed"
+    return isinstance(strategy, RayDeepSpeedStrategy)
+
+
+def _prepare_trainer_for_ray(trainer: pl.Trainer) -> pl.Trainer:
+    """Prepare a Lightning Trainer for Ray, tolerating ModelParallelStrategy (FSDP2).
+
+    Ray's ``prepare_trainer`` hard-rejects any strategy that is not
+    ``RayDDPStrategy``/``RayFSDPStrategy``/``RayDeepSpeedStrategy``. For FSDP2 we replicate
+    its only meaningful check -- that the cluster environment is ``RayLightningEnvironment`` --
+    and return the trainer unchanged; for the supported strategies we defer to Ray.
+    """
+    if _is_model_parallel_strategy(trainer.strategy):
+        cluster_env = getattr(trainer.strategy, "cluster_environment", None)
+        if cluster_env is not None and not isinstance(
+            cluster_env, RayLightningEnvironment
+        ):
+            raise RuntimeError(
+                f"Invalid cluster environment plugin. The expected class is "
+                f"`RayLightningEnvironment` but got {type(cluster_env)}!"
+            )
+        return trainer
+    return ray.train.lightning.prepare_trainer(trainer)
+
+
 def _resolve_strategy(
     strategy: str | Strategy | None = None,
     strategy_kwargs: dict[str, Any] | None = None,
@@ -320,9 +366,20 @@ def _resolve_strategy(
         return RayDeepSpeedStrategy(**strategy_kwargs)
     elif strategy.lower() == "fsdp":
         return RayFSDPStrategy(**strategy_kwargs)
+    elif strategy.lower() == "fsdp2":
+        try:
+            from michelangelo.lib.trainer.torch.pytorch_lightning._private.model_parallel import (
+                RayModelParallelStrategy,
+            )
+        except ImportError as e:
+            raise ValueError(
+                "strategy 'fsdp2' requires pytorch-lightning >= 2.3 (ModelParallelStrategy). "
+                "Please check the version of pytorch-lightning installed."
+            ) from e
+        return RayModelParallelStrategy(**strategy_kwargs)
     else:
         raise ValueError(
-            f"Unsupported strategy: {strategy!r}; expected 'ddp', 'deepspeed', 'fsdp', or None"
+            f"Unsupported strategy: {strategy!r}; expected 'ddp', 'deepspeed', 'fsdp', 'fsdp2', or None"
         )
 
 
@@ -507,10 +564,12 @@ def _resolve_callbacks(
     )
 
     # Always append a callback that calls ray.train.report() to report metrics and checkpoint.
-    # Per-node reporting is required for model-parallel strategies (DeepSpeed ZeRO, FSDP) because
+    # Per-node reporting is required for model-parallel strategies (DeepSpeed ZeRO, FSDP, FSDP2) because
     # each node holds shards of the model and must upload its own checkpoint shard.
-    _use_per_node = per_node_callback_kwargs is not None or isinstance(
-        strategy, (RayDeepSpeedStrategy, RayFSDPStrategy)
+    _use_per_node = (
+        per_node_callback_kwargs is not None
+        or isinstance(strategy, (RayDeepSpeedStrategy, RayFSDPStrategy))
+        or _is_model_parallel_strategy(strategy)
     )
     if _use_per_node:
         per_node_callback_kwargs = per_node_callback_kwargs or {}
@@ -1272,7 +1331,7 @@ def _train_loop_per_worker(train_loop_config):
     trainer = pl.Trainer(
         **trainer_kwargs,
     )
-    trainer = ray.train.lightning.prepare_trainer(trainer)
+    trainer = _prepare_trainer_for_ray(trainer)
 
     checkpoint = ray.train.get_checkpoint()
     if checkpoint is None:
