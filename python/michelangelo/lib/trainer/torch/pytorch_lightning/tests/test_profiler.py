@@ -1,4 +1,4 @@
-"""Tests for the profiler subsystem in ``_private/util.py``.
+"""Tests for the profiler subsystem in ``_private/profiler.py``.
 
 Covers step-count estimation, ``pytorch`` profiler construction, schedule
 defaults and validation, config resolution, and the post-``fit``
@@ -29,7 +29,7 @@ from pytorch_lightning.profilers import (  # noqa: E402
 )
 
 from michelangelo.lib._internal.errors import UserInputError  # noqa: E402
-from michelangelo.lib.trainer.torch.pytorch_lightning._private.util import (  # noqa: E402
+from michelangelo.lib.trainer.torch.pytorch_lightning._private.profiler import (  # noqa: E402
     _build_profiler,
     _compute_default_schedule,
     _compute_steps_per_epoch,
@@ -41,7 +41,7 @@ from michelangelo.lib.trainer.torch.pytorch_lightning._private.util import (  # 
     mlflow_profiler_sink,
 )
 
-_UTIL_MODULE = "michelangelo.lib.trainer.torch.pytorch_lightning._private.util"
+_PROFILER_MODULE = "michelangelo.lib.trainer.torch.pytorch_lightning._private.profiler"
 
 
 @pytest.fixture
@@ -54,7 +54,7 @@ def in_tmp_cwd(tmp_path, monkeypatch):
 @pytest.fixture
 def patched_ray(monkeypatch):
     """Patch ``ray`` in the util module with world rank 0 / local rank 0."""
-    with patch(f"{_UTIL_MODULE}.ray") as ray_mod:
+    with patch(f"{_PROFILER_MODULE}.ray") as ray_mod:
         ctx = ray_mod.train.get_context.return_value
         ctx.get_world_rank.return_value = 0
         ctx.get_local_rank.return_value = 0
@@ -322,7 +322,7 @@ class TestBuildProfiler:
     def test_pytorch_profiler_resolves_on_trace_ready(self, in_tmp_cwd, patched_ray):
         """A dotted ``on_trace_ready`` path is resolved via ``get_module_attr``."""
         handler = MagicMock(name="handler")
-        with patch(f"{_UTIL_MODULE}.get_module_attr", return_value=handler) as resolver:
+        with patch(f"{_PROFILER_MODULE}.get_module_attr", return_value=handler) as resolver:
             _build_profiler(
                 {"pytorch": {"on_trace_ready": "some.module.handler"}},
                 steps_per_epoch=30,
@@ -350,7 +350,7 @@ class TestBuildProfiler:
         name rather than a real second profiler.
         """
         with (
-            patch(f"{_UTIL_MODULE}._PROFILER_SHORTHANDS", ("pytorch", "other")),
+            patch(f"{_PROFILER_MODULE}._PROFILER_SHORTHANDS", ("pytorch", "other")),
             pytest.raises(UserInputError, match="Multiple were set"),
         ):
             _build_profiler({"pytorch": {}, "other": {}})
@@ -409,7 +409,7 @@ class TestResolveProfiler:
         self, in_tmp_cwd, patched_ray
     ):
         """Row count, batch size, world size, and trainer kwargs all feed in."""
-        with patch(f"{_UTIL_MODULE}._build_profiler", return_value=(None, "")) as build:
+        with patch(f"{_PROFILER_MODULE}._build_profiler", return_value=(None, "")) as build:
             _resolve_profiler(
                 {"pytorch": {}},
                 {"limit_train_batches": 0.5},
@@ -423,7 +423,7 @@ class TestResolveProfiler:
 
     def test_unknown_row_count_passes_none_through(self, in_tmp_cwd, patched_ray):
         """An unknown row count leaves the schedule to its unbounded default."""
-        with patch(f"{_UTIL_MODULE}._build_profiler", return_value=(None, "")) as build:
+        with patch(f"{_PROFILER_MODULE}._build_profiler", return_value=(None, "")) as build:
             _resolve_profiler({"pytorch": {}}, {}, None, 8, 1, 0)
         build.assert_called_once_with({"pytorch": {}}, None)
 
