@@ -79,7 +79,7 @@ def train(
     # Define training arguments
     training_args = transformers.TrainingArguments(
         output_dir=output_dir,
-        evaluation_strategy="epoch",
+        eval_strategy="epoch",
         save_strategy="epoch",
         save_total_limit=1,  # Keep only the best checkpoint
         metric_for_best_model="eval_loss",  # Customize based on your needs
