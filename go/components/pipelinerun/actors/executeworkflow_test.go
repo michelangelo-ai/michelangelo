@@ -11,8 +11,10 @@ import (
 	"github.com/stretchr/testify/require"
 	uberconfig "go.uber.org/config"
 	"go.uber.org/zap/zaptest"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/michelangelo-ai/michelangelo/go/api"
@@ -1666,8 +1668,8 @@ func TestResumeFromPipelineRun(t *testing.T) {
 					_ = kwargs
 					capturedEnvs := envs
 
-					// Verify cache is disabled
-					require.Equal(t, "false", capturedEnvs["CACHE_ENABLED"])
+					// Verify cache is enabled by default (scoped to this pipeline run via CACHE_VERSION)
+					require.Equal(t, "true", capturedEnvs["CACHE_ENABLED"])
 					require.Equal(t, "test-pipeline-run-no-resume", capturedEnvs["CACHE_VERSION"])
 
 					return &clientInterfaces.WorkflowExecution{
@@ -1676,7 +1678,7 @@ func TestResumeFromPipelineRun(t *testing.T) {
 					}, nil
 				})
 			},
-			expectedCacheEnabled:       false,
+			expectedCacheEnabled:       true,
 			expectedCacheVersionVars:   map[string]string{},
 			expectedResumeFromDisabled: []string{},
 		},
@@ -3408,4 +3410,93 @@ func TestExecuteWorkflowStepRetryHistory(t *testing.T) {
 		// The live step should be RUNNING
 		require.Equal(t, v2.PIPELINE_RUN_STEP_STATE_RUNNING, executeStep.State)
 	})
+}
+
+// TestProcessManualRetrySpecInvalidatesCachedOutput verifies that manual retry deletes the
+// CachedOutput belonging to the task being retried (so "retry" always forces real
+// re-execution), while leaving a concurrent sibling task's CachedOutput untouched.
+func TestProcessManualRetrySpecInvalidatesCachedOutput(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockWorkflowClient := workflowclientMock.NewMockWorkflowClient(ctrl)
+	mockBlobStore := blobstoreMock.NewMockBlobStoreClient(ctrl)
+	mockWorkflowClient.EXPECT().GetActivityTaskScheduledEventType().Return("ActivityTaskScheduled").AnyTimes()
+	mockWorkflowClient.EXPECT().GetActivityTaskCompletedEventType().Return("ActivityTaskCompleted").AnyTimes()
+	mockWorkflowClient.EXPECT().GetDecisionTaskCompletedEventType().Return("DecisionTaskCompleted").AnyTimes()
+	mockWorkflowClient.EXPECT().GetWorkflowExecutionHistory(
+		gomock.Any(), "test-workflow-id", "current-run-id", gomock.Any(), int32(5000),
+	).Return(&clientInterfaces.WorkflowHistory{
+		Events: []clientInterfaces.HistoryEvent{
+			{EventID: 1, EventType: "ActivityTaskCompleted"},
+			{EventID: 2, EventType: "ActivityTaskScheduled", Details: map[string]interface{}{"activity_id": "failed-activity"}},
+		},
+	}, nil)
+	mockWorkflowClient.EXPECT().ResetWorkflow(gomock.Any(), gomock.Any()).Return(
+		&clientInterfaces.WorkflowExecution{ID: "test-workflow-id", RunID: "new-run-id"}, nil,
+	)
+
+	scheme := runtime.NewScheme()
+	require.NoError(t, v2.AddToScheme(scheme))
+	k8sClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+
+	retriedTaskOutput := &v2.CachedOutput{ObjectMeta: v1.ObjectMeta{Namespace: "default", Name: "uf-vars-retried"}}
+	siblingTaskOutput := &v2.CachedOutput{ObjectMeta: v1.ObjectMeta{Namespace: "default", Name: "uf-vars-sibling"}}
+	require.NoError(t, k8sClient.Create(context.Background(), retriedTaskOutput))
+	require.NoError(t, k8sClient.Create(context.Background(), siblingTaskOutput))
+
+	actor := setUpExecuteWorkflowActor(t, mockWorkflowClient, mockBlobStore, apiHandler.NewFakeAPIHandler(k8sClient))
+
+	pipelineRun := &v2.PipelineRun{
+		ObjectMeta: v1.ObjectMeta{Name: "test-pipeline-run", Namespace: "default"},
+		Spec: v2.PipelineRunSpec{
+			RetryInfo: &v2.RetryInfo{
+				ActivityId:    "failed-activity",
+				WorkflowId:    "test-workflow-id",
+				WorkflowRunId: "current-run-id",
+				Reason:        "Test retry",
+			},
+		},
+		Status: v2.PipelineRunStatus{
+			WorkflowId:    "test-workflow-id",
+			WorkflowRunId: "current-run-id",
+			Steps: []*v2.PipelineRunStepInfo{
+				{
+					Name:  pipelinerunutils.ExecuteWorkflowStepName,
+					State: v2.PIPELINE_RUN_STEP_STATE_FAILED,
+					SubSteps: []*v2.PipelineRunStepInfo{
+						{
+							Name:       "retried-task",
+							State:      v2.PIPELINE_RUN_STEP_STATE_FAILED,
+							ActivityId: "failed-activity",
+							StepCachedOutputs: &v2.PipelineRunStepCachedOutputs{
+								IntermediateVars: []*apipb.ResourceIdentifier{
+									{Namespace: "default", Name: "uf-vars-retried"},
+								},
+							},
+						},
+						{
+							Name:       "sibling-task",
+							State:      v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED,
+							ActivityId: "sibling-activity",
+							StepCachedOutputs: &v2.PipelineRunStepCachedOutputs{
+								IntermediateVars: []*apipb.ResourceIdentifier{
+									{Namespace: "default", Name: "uf-vars-sibling"},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	require.NoError(t, actor.processManualRetrySpec(context.Background(), pipelineRun))
+
+	err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: "default", Name: "uf-vars-retried"}, &v2.CachedOutput{})
+	require.Error(t, err)
+	require.True(t, k8serrors.IsNotFound(err), "expected retried task's CachedOutput to be deleted, got: %v", err)
+
+	require.NoError(t, k8sClient.Get(context.Background(), client.ObjectKey{Namespace: "default", Name: "uf-vars-sibling"}, &v2.CachedOutput{}),
+		"sibling task's CachedOutput should be left untouched")
 }
