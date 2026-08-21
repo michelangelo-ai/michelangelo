@@ -390,8 +390,8 @@ github.com/twmb/murmur3 v1.1.8/go.mod h1:Qq/R7NUyOfr65zD+6Q5IHKsJLwP7exErjN6lyyq
 github.com/uber-go/mapdecode v1.0.0 h1:euUEFM9KnuCa1OBixz1xM+FIXmpixyay5DLymceOVrU=
 github.com/uber-go/mapdecode v1.0.0/go.mod h1:b5nP15FwXTgpjTjeA9A2uTHXV5UJCl4arwKpP0FP1Hw=
 github.com/uber-go/tally v3.3.12+incompatible/go.mod h1:YDTIBxdXyOU/sCWilKB4bgyufu1cEi0jdVnRdxvjnmU=
-github.com/uber-go/tally v3.5.10+incompatible h1:PDkAMvnVYOdJtvyCZQURmHtOakCiWAWFVKejrrvOMBo=
-github.com/uber-go/tally v3.5.10+incompatible/go.mod h1:YDTIBxdXyOU/sCWilKB4bgyufu1cEi0jdVnRdxvjnmU=
+github.com/uber-go/tally v5.0.0+incompatible h1:74zRlWs/k8FpgU8QlYhN51zkemZPuPfX6iJudMCmNWM=
+github.com/uber-go/tally v5.0.0+incompatible/go.mod h1:YDTIBxdXyOU/sCWilKB4bgyufu1cEi0jdVnRdxvjnmU=
 github.com/uber-go/tally/v4 v4.1.1 h1:jhy6WOZp4nHyCqeV43x3Wz370LXUGBhgW2JmzOIHCWI=
 github.com/uber-go/tally/v4 v4.1.1/go.mod h1:aXeSTDMl4tNosyf6rdU8jlgScHyjEGGtfJ/uwCIf/vM=
 github.com/uber/cadence-idl v0.0.0-20250616185004-cc6f52f87bc6 h1:YJlEu9Unzifwdn6SuE4rrl4zJ5lop5gBfSX8AyodTww=
