@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "michelangelo"
-version = "0.9.0-rc.1"
+version = "0.9.0-rc.2"
 description = "Michelangelo AI is an end-to-end model lifecycle management system at large scale"
 authors = ["Michelangelo AI Team <michelangelo-oss-group@uber.com>"]
 readme = "README.md"
