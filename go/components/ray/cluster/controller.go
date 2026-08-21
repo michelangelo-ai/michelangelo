@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"reflect"
 	"time"
 
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 
 	"github.com/go-logr/logr"
+	"github.com/uber-go/tally"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -55,6 +55,7 @@ type Reconciler struct {
 	schedulerQueue    scheduler.JobQueue                  // Queue for enqueuing jobs to scheduler
 	federatedClient   jobsclient.FederatedClient          // Client for creating clusters on remote K8s
 	clusterCache      jobscluster.RegisteredClustersCache // Cache for looking up assigned clusters
+	metricsScope      tally.Scope                         // Metrics scope for telemetry
 }
 
 // NewReconciler constructs a Reconciler with required dependencies.
@@ -68,6 +69,7 @@ func NewReconciler(
 	schedulerQueue scheduler.JobQueue,
 	federatedClient jobsclient.FederatedClient,
 	clusterCache jobscluster.RegisteredClustersCache,
+	metricsScope tally.Scope,
 ) *Reconciler {
 	return &Reconciler{
 		logger:            logger,
@@ -76,6 +78,7 @@ func NewReconciler(
 		schedulerQueue:    schedulerQueue,
 		federatedClient:   federatedClient,
 		clusterCache:      clusterCache,
+		metricsScope:      metricsScope,
 	}
 }
 
@@ -101,9 +104,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		logger.Error(err, "failed to get ray cluster")
 		return ctrl.Result{RequeueAfter: requeueAfter}, err
 	}
-
-	// Create a copy of the original RayCluster for comparison
-	originalRayCluster := rayCluster.DeepCopy()
 
 	// Check for termination
 	if r.shouldTerminateCluster(&rayCluster) {
@@ -191,39 +191,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{RequeueAfter: requeueAfter}, nil
 	}
 
-	// Monitor state till RayCluster is ready
-	// TODO(#605): Remove after introducing Federated Watcher for watching RayCluster
-	clusterStatus, err := r.getClusterStatus(ctx, logger, assignedCluster, &rayCluster)
-	if err != nil {
-		if utils.IsNotFoundError(err) {
-			logger.Info("cluster not found on remote cluster, requeue")
-			return ctrl.Result{RequeueAfter: requeueAfter}, nil
-		}
-		logger.Error(err, "failed to get cluster status")
-		return ctrl.Result{RequeueAfter: requeueAfter}, err
-	}
+	// Status is now synced by the federated watcher event handlers.
+	// No polling required once the cluster is launched.
 
-	if err := r.applyRayClusterStatus(&rayCluster, clusterStatus, logger, &res); err != nil {
-		logger.Error(err, "failed to apply cluster status")
-		return ctrl.Result{RequeueAfter: requeueAfter}, err
-	}
-
-	// Update the RayCluster status if any changes occurred
-	if !reflect.DeepEqual(originalRayCluster.Status, rayCluster.Status) {
-		if err := jobsutils.UpdateStatusWithRetries(
-			ctx, r, &rayCluster,
-			func(obj client.Object) {
-				cluster := obj.(*v2pb.RayCluster)
-				cluster.Status = rayCluster.Status
-			},
-			&metav1.UpdateOptions{},
-		); err != nil {
-			logger.Error(err, "failed to update ray cluster status")
-			return res, fmt.Errorf("update ray cluster status for %q: %w", req.NamespacedName, err)
-		}
-	}
-
-	logger.Info("Reconcile finished", "requeueAfter", res.RequeueAfter)
+	logger.Info("Reconcile finished")
 	return res, nil
 }
 
@@ -235,6 +206,12 @@ func (r *Reconciler) Register(mgr ctrl.Manager) error {
 		return err
 	}
 	r.Handler = handler
+
+	federatedWatcher := r.getFederatedWatcher()
+	go func() {
+		<-mgr.Elected()
+		federatedWatcher.Start(context.TODO())
+	}()
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v2pb.RayCluster{}). // Watch for changes in RayCluster custom resources
@@ -429,8 +406,9 @@ func (r *Reconciler) cleanupCluster(
 		}
 	}
 
-	// Update status to terminated
-	// TODO(#605): Mark the cluster as killing and once federated watcher is introduced, the watcher will mark the cluster as killed after RayCluster is terminated in the compute cluster.
+	// Update status to terminated.
+	// The federated watcher will handle the killing->killed transition
+	// when the RayCluster is actually deleted from the compute cluster.
 	if err := jobsutils.UpdateStatusWithRetries(ctx, r, cluster,
 		func(obj client.Object) {
 			cluster := obj.(*v2pb.RayCluster)
@@ -538,139 +516,4 @@ func (r *Reconciler) getClusterIfScheduled(cluster *v2pb.RayCluster) *v2pb.Clust
 
 	assignedCluster := r.clusterCache.GetCluster(cluster.Status.Assignment.Cluster)
 	return assignedCluster
-}
-
-// getClusterStatus retrieves the current status of a RayCluster resource from the federated cluster
-func (r *Reconciler) getClusterStatus(ctx context.Context, log logr.Logger, assignedKubeCluster *v2pb.Cluster, rayCluster *v2pb.RayCluster) (*matypes.JobClusterStatus, error) {
-	// Use the federated client to get the status from the remote cluster
-	clusterStatus, err := r.federatedClient.GetJobClusterStatus(ctx, rayCluster, assignedKubeCluster)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get cluster status: %w", err)
-	}
-
-	log.V(1).Info("retrieved cluster status",
-		"cluster", rayCluster.GetName(),
-		"namespace", rayCluster.GetNamespace(),
-		"state", clusterStatus.Ray.State)
-
-	return clusterStatus, nil
-}
-
-// applyRayClusterStatus updates the RayCluster status and conditions based on the cluster state from KubeRay.
-func (r *Reconciler) applyRayClusterStatus(
-	rayCluster *v2pb.RayCluster,
-	clusterStatus *matypes.JobClusterStatus,
-	logger logr.Logger,
-	res *ctrl.Result,
-) error {
-	if clusterStatus == nil || clusterStatus.Ray == nil {
-		return fmt.Errorf("received nil cluster status")
-	}
-
-	// Extract state from the typed status
-	newState := clusterStatus.Ray.State
-
-	// Update cluster state
-	rayCluster.Status.State = newState
-	res.RequeueAfter = requeueAfter
-
-	// Copy log_url through from the mapper. The mapper owns its computation
-	// (it knows the LogPersistenceConfig, the local cluster name, and the
-	// compute-cluster Ray namespace); the controller just surfaces the value
-	// onto the v2 RayClusterStatus so callers see it.
-	if clusterStatus.Ray.LogUrl != "" {
-		rayCluster.Status.LogUrl = clusterStatus.Ray.LogUrl
-	}
-
-	if len(clusterStatus.Ray.PodErrors) > 0 {
-		rayCluster.Status.PodErrors = clusterStatus.Ray.PodErrors
-	}
-
-	// Extract reason for condition updates
-	reasonStr := clusterStatus.Reason
-	// Handle state-specific logic and condition updates
-	succeededCond := jobsutils.GetCondition(&rayCluster.Status.StatusConditions, SucceededCondition, rayCluster.Generation)
-	launchedCond := jobsutils.GetCondition(&rayCluster.Status.StatusConditions, LaunchedCondition, rayCluster.Generation)
-
-	switch newState {
-	case v2pb.RAY_CLUSTER_STATE_READY:
-		logger.Info("cluster is ready", "state", newState, "reason", reasonStr)
-		jobsutils.UpdateCondition(launchedCond, jobsutils.ConditionUpdateParams{
-			Status:     apipb.CONDITION_STATUS_TRUE,
-			Generation: rayCluster.Generation,
-			Reason:     "ClusterReady",
-		})
-		res.RequeueAfter = time.Duration(0)
-
-	case v2pb.RAY_CLUSTER_STATE_FAILED:
-		logger.Error(nil, "cluster has failed, marking for termination",
-			"state", newState,
-			"reason", reasonStr,
-		)
-
-		// Mark succeeded condition as false to trigger termination
-		if reasonStr == "" {
-			reasonStr = "ClusterFailed"
-		}
-		jobsutils.UpdateCondition(succeededCond, jobsutils.ConditionUpdateParams{
-			Status:     apipb.CONDITION_STATUS_FALSE,
-			Generation: rayCluster.Generation,
-			Reason:     reasonStr,
-		})
-
-	case v2pb.RAY_CLUSTER_STATE_UNHEALTHY:
-		logger.Info("cluster is unhealthy, marking for termination",
-			"state", newState,
-			"reason", reasonStr,
-		)
-		// Mark succeeded condition as false to trigger termination
-		if reasonStr == "" {
-			reasonStr = "ClusterUnhealthy"
-		}
-		jobsutils.UpdateCondition(succeededCond, jobsutils.ConditionUpdateParams{
-			Status:     apipb.CONDITION_STATUS_FALSE,
-			Generation: rayCluster.Generation,
-			Reason:     reasonStr,
-		})
-
-	case v2pb.RAY_CLUSTER_STATE_UNKNOWN:
-		if jobsutils.HasTerminalPodErrors(clusterStatus.Ray.PodErrors) {
-			logger.Error(nil, "cluster state is unknown with terminal pod errors, marking as failed",
-				"state", newState,
-				"reason", reasonStr,
-				"podErrors", clusterStatus.Ray.PodErrors,
-			)
-			rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_FAILED
-			if reasonStr == "" {
-				reasonStr = "ClusterFailedWithPodErrors"
-			}
-			jobsutils.UpdateCondition(succeededCond, jobsutils.ConditionUpdateParams{
-				Status:     apipb.CONDITION_STATUS_FALSE,
-				Generation: rayCluster.Generation,
-				Reason:     reasonStr,
-			})
-		} else {
-			logger.Info("cluster state is unknown, will continue monitoring",
-				"state", newState,
-				"reason", reasonStr,
-				"podErrors", clusterStatus.Ray.PodErrors)
-		}
-
-	case v2pb.RAY_CLUSTER_STATE_SUSPENDED:
-		// Suspension (RayCluster.spec.suspend, e.g. Kueue admission gating) is
-		// non-terminal: pods are intentionally absent until the cluster is
-		// unsuspended, so keep monitoring without touching the Succeeded
-		// condition. Deliberately no terminal-pod-error check here — while
-		// suspended, pod-level signals carry no meaning.
-		logger.Info("cluster is suspended (queued for admission), continuing to monitor",
-			"state", newState,
-			"reason", reasonStr)
-
-	default:
-		logger.Info("cluster in transitional state, continuing to monitor",
-			"state", newState.String(),
-			"reason", reasonStr)
-	}
-
-	return nil
 }

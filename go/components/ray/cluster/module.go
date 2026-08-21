@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"github.com/go-logr/logr"
+	"github.com/uber-go/tally"
 	"go.uber.org/fx"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
@@ -26,6 +27,7 @@ func register(
 	schedulerQueue scheduler.JobQueue,
 	federatedClient client.FederatedClient,
 	clusterCache cluster.RegisteredClustersCache,
+	metricsScope tally.Scope,
 ) error {
 	return NewReconciler(
 		logger,
@@ -34,5 +36,6 @@ func register(
 		schedulerQueue,
 		federatedClient,
 		clusterCache,
+		metricsScope,
 	).Register(mgr)
 }
