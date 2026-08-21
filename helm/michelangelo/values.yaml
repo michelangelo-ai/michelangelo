@@ -399,17 +399,19 @@ controllermgr:
     # revision store (see revision.Manager).
     revisioningEnabled: false
 
-  # Inference serving Gateway API details. The InferenceServer controller's
-  # EndpointPublish step reads the Istio-materialized Service for this Gateway
-  # (named '<gateway>-istio') to publish per-cluster EndpointSlices.
+  # Gateway API details for inference serving. The InferenceServer
+  # controller's EndpointPublish step reads the Istio-materialized Service
+  # for this Gateway (named '<gateway>-istio') to publish per-cluster
+  # EndpointSlices.
   inferenceServer:
     gateway:
       # Name of the k8s Gateway resource that HTTPRoutes attach to via parentRefs.
       name: ma-gateway
 
-      # Istio's Gateway controller materializes a Service named '<gateway>-istio'
-      # for each Gateway resource; the IS controller reads its NodePort + node
-      # InternalIP to publish per-cluster EndpointSlices in the control plane.
+      # Istio's Gateway controller materializes a Service named
+      # '<gateway>-istio' for each Gateway resource; the IS controller reads
+      # its NodePort + node InternalIP to publish per-cluster EndpointSlices
+      # in the control plane.
       serviceName: ma-gateway-istio
       serviceNamespace: default
       portName: http
