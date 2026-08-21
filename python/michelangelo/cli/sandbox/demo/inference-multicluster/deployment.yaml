@@ -5,7 +5,7 @@ metadata:
   namespace: default
 spec:
   desiredRevision:
-    name: bert-cola-38
+    name: bert-cola-37
   inferenceServer:
     name: inference-server-multicluster
   strategy:

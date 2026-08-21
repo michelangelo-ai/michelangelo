@@ -115,7 +115,6 @@ def _helm_chart_ports(workflow: str) -> list[str]:
 # Remote k3d clusters created for `ma sandbox demo inference-multicluster`.
 _inference_compute_cluster_names = [
     "inference-cluster-1",
-    "inference-cluster-2",
 ]
 
 

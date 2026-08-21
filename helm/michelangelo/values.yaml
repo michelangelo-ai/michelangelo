@@ -353,6 +353,24 @@ notification:
   senderEmail: ""
 
 # -----------------------------------------------------------------------------
+# inferenceServer — settings the InferenceServer controller needs to publish
+# and route traffic to inference servers.
+# -----------------------------------------------------------------------------
+inferenceServer:
+  gateway:
+    # name is the Gateway resource that HTTPRoutes attach to via parentRefs.
+    name: ma-gateway
+
+    # Istio's Gateway controller materializes a Service named '<gateway>-istio'
+    # for each Gateway resource. The endpoint provider reads this Service's
+    # NodePort and a node InternalIP to publish per-cluster EndpointSlices.
+    # Leaving serviceName empty makes endpoint publishing fail with
+    # "resource name may not be empty".
+    serviceName: ma-gateway-istio
+    serviceNamespace: default
+    portName: http
+
+# -----------------------------------------------------------------------------
 # controllermgr — Kubernetes controller manager for Michelangelo CRDs.
 # -----------------------------------------------------------------------------
 controllermgr:

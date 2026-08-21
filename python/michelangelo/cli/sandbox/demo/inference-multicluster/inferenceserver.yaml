@@ -38,9 +38,3 @@ spec:
       port: "6443"
       tokenTag: cluster-inference-cluster-1-is-token
       caDataTag: cluster-inference-cluster-1-ca-data
-  - clusterId: inference-cluster-2
-    kubernetes:
-      host: https://k3d-inference-cluster-2-server-0
-      port: "6443"
-      tokenTag: cluster-inference-cluster-2-is-token
-      caDataTag: cluster-inference-cluster-2-ca-data
