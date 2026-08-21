@@ -402,7 +402,6 @@ controllermgr:
   # Gateway API config read by InferenceServer's EndpointPublish step to publish per-cluster EndpointSlices.
   inferenceServer:
     gateway:
-      # Name of the k8s Gateway resource that HTTPRoutes attach to via parentRefs.
       name: ma-gateway
 
       # Istio's Gateway controller names the resulting Service '<gateway>-istio'.
