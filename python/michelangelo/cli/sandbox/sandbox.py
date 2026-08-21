@@ -112,6 +112,7 @@ def _helm_chart_ports(workflow: str) -> list[str]:
         ports.append(f"{host_port}:{node}")
     return ports
 
+
 # Remote k3d clusters created for `ma sandbox demo inference-multicluster`.
 _inference_compute_cluster_names = [
     "inference-cluster-1",
@@ -228,7 +229,8 @@ def init_arguments(p: argparse.ArgumentParser):
     _ = demo_sp.add_parser("pipeline", help="Create pipeline demo resources")
     _ = demo_sp.add_parser("inference", help="Create inference server demo resources")
     _ = demo_sp.add_parser(
-        "inference-multicluster",help=("Create a multi-cluster inference server demo."),
+        "inference-multicluster",
+        help=("Create a multi-cluster inference server demo."),
     )
 
     delete_p = sp.add_parser("delete", help="Delete the cluster.")
@@ -2023,9 +2025,7 @@ def _setup_inference_server_remote_secrets(cluster_name: str):
             f.flush()
             _exec("kubectl", "--context", sandbox_ctx, "apply", "-f", f.name)
 
-    print(
-        f"Created IS-token + CA-data Secrets in sandbox for cluster '{cluster_name}'"
-    )
+    print(f"Created IS-token + CA-data Secrets in sandbox for cluster '{cluster_name}'")
 
 
 def _setup_inference_server_secrets():
@@ -2274,8 +2274,10 @@ def _create_inference_multicluster_demo_crs():
 
     print("\n🎉 Multi-cluster inference demo created successfully!")
     print("📋 What was set up:")
-    print(f"  • Sandbox cluster + remote clusters: "
-          f"{', '.join(_inference_compute_cluster_names)}")
+    print(
+        f"  • Sandbox cluster + remote clusters: "
+        f"{', '.join(_inference_compute_cluster_names)}"
+    )
     print("  • Istio + Gateway API on every cluster")
     print("  • inference-server-manager RBAC + bearer-token Secrets per target")
     print("  • Multi-cluster Triton InferenceServer (per-cluster Tritons)")

@@ -64,8 +64,9 @@ def list_pod_addresses(service: str) -> list[str]:
         headers={"Authorization": f"Bearer {token}"},
     )
     try:
-        with urllib.request.urlopen(req, context=ctx,
-                                    timeout=HTTP_TIMEOUT_SECONDS) as resp:
+        with urllib.request.urlopen(
+            req, context=ctx, timeout=HTTP_TIMEOUT_SECONDS
+        ) as resp:
             data = json.loads(resp.read())
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as e:
         print(f"  failed to list endpoints for {service}: {e}")
@@ -229,8 +230,15 @@ def configure_aws() -> None:
     """Write AWS credentials and S3 endpoint into the awscli config."""
     endpoint = os.environ["AWS_ENDPOINT_URL"]
     print(f"configuring aws cli for endpoint {endpoint}")
-    run(["aws", "configure", "set", "aws_access_key_id",
-         os.environ["AWS_ACCESS_KEY_ID"]])
+    run(
+        [
+            "aws",
+            "configure",
+            "set",
+            "aws_access_key_id",
+            os.environ["AWS_ACCESS_KEY_ID"],
+        ]
+    )
     run(
         [
             "aws",
