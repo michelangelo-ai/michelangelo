@@ -431,7 +431,20 @@ def _sync(ns: argparse.Namespace):
             *helm_args,
         )
 
-    _helm_wait(ns)
+    try:
+        _helm_wait(ns)
+    finally:
+        # _create() registers the Cadence domain after cluster setup, but
+        # _sync() skipped it entirely — leaving the domain absent when sync
+        # is used as the recovery path for a failed create, and every
+        # PipelineRun fails immediately with
+        # EntityNotExistsError{Domain default does not exist}.
+        # Run this in a finally block (not just after _helm_wait()) so it
+        # still happens even if _helm_wait() itself times out waiting on
+        # pods. _create_cadence_domain() treats "domain already exists" as
+        # success, so calling it here on a healthy sync is a safe no-op.
+        if ns.workflow == "cadence":
+            _create_cadence_domain([])
 
 
 def _refresh_mysql_schema():
