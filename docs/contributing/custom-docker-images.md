@@ -134,6 +134,13 @@ kubectl rollout status  deployment/michelangelo-worker
 
 - **Pod stuck in `ImagePullBackOff`**: The default `pullPolicy` is `IfNotPresent`. If k3d can't find the image, make sure you ran `k3d image import` after building. Check with `k3d image ls -c michelangelo-sandbox | grep local-dev`.
 - **`exec format error`**: Architecture mismatch — you built for `arm64` but the k3d node is `amd64` (or vice versa). Rebuild with the correct `ARCH`.
+- **`fatal error: fault` or a `runtime.sigpanic` stack trace**: also an architecture mismatch, but one that emulation lets start before it dies. When binfmt emulation is registered (as it is under Colima), a mismatched binary launches and then faults inside the Go runtime instead of failing with `exec format error`. Verify by extracting the image's entrypoint and checking it against the node's architecture:
+
+  ```bash
+  cid=$(docker create <image>); docker cp "$cid:/app" ./app-bin; docker rm -f "$cid"
+  file ./app-bin    # want aarch64 on Apple Silicon, x86-64 on Intel/Linux
+  kubectl get nodes -o jsonpath='{.items[*].status.nodeInfo.architecture}'
+  ```
 - **Bazel Go binary not found**: Run any `./tools/bazel build` target first to trigger the SDK download, then re-run the `find` command.
 
 ### Cleanup
