@@ -2093,6 +2093,21 @@ def _setup_inference_server_secrets():
     print(f"Created inference server credentials for cluster '{cluster_name}'")
 
 
+def _apply_demo_model(demo_dir: Path):
+    """Register the demo's Model CR in the sandbox (control-plane) cluster.
+
+    The deployment controller resolves `spec.desiredRevision` to this CR and reads the
+    artifact location from `spec.deployableArtifactUri`, so the Model has to exist
+    before a Deployment referencing it is applied.
+    """
+    model_path = demo_dir / "model.yaml"
+    if not model_path.exists():
+        _err_exit(f"❌ Model CR not found at {model_path}, exiting...")
+
+    print("✅ Registering demo Model...")
+    _kube_apply(model_path)
+
+
 def _create_inference_demo_crs():
     """Create an inference server for the sandbox cluster for demo purposes."""
     print("🚀 Setting up Michelangelo AI Inference Demo...")
@@ -2106,6 +2121,8 @@ def _create_inference_demo_crs():
     _setup_inference_server_secrets()
 
     inference_demo_dir = _dir / "demo" / "inference"
+    _apply_demo_model(inference_demo_dir)
+
     # Create inference server CR
     inference_server_path = inference_demo_dir / "inferenceserver.yaml"
     if not inference_server_path.exists():
@@ -2225,6 +2242,8 @@ def _create_inference_multicluster_demo_crs():
         _setup_inference_server_remote_secrets(cluster_name)
 
     inference_demo_dir = _dir / "demo" / "inference-multicluster"
+    _apply_demo_model(inference_demo_dir)
+
     inference_server_path = inference_demo_dir / "inferenceserver.yaml"
     if not inference_server_path.exists():
         _err_exit(

@@ -11,8 +11,12 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+	goapi "github.com/michelangelo-ai/michelangelo/go/api"
+	"github.com/michelangelo-ai/michelangelo/go/api/handler"
 	osscommon "github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends/backendsmocks"
@@ -29,6 +33,9 @@ const (
 	testNamespace      = "default"
 	testISName         = "test-server"
 	testModelName      = "model-v1"
+	// Deliberately not the legacy s3://deploy-models/{name}/ layout, so the tests fail
+	// if the actor ever falls back to deriving the path from the model name.
+	testModelStoragePath = "s3://custom-bucket/artifacts/model-v1/"
 )
 
 type clientErrors struct {
@@ -43,6 +50,27 @@ type rolloutMocks struct {
 	backend             *backendsmocks.MockBackend
 	modelConfigProvider *modelconfigmocks.MockModelConfigProvider
 	backendRegistry     *backends.Registry
+	// controlPlane serves the Model the actor resolves the storage path from.
+	controlPlane goapi.Handler
+}
+
+// newControlPlaneClient builds a control-plane API handler seeded with the supplied objects.
+func newControlPlaneClient(t *testing.T, objects ...client.Object) goapi.Handler {
+	t.Helper()
+	scheme := runtime.NewScheme()
+	require.NoError(t, v2pb.AddToScheme(scheme))
+	return handler.NewFakeAPIHandler(fake.NewClientBuilder().WithScheme(scheme).WithObjects(objects...).Build())
+}
+
+// testModel is the Triton-packaged Model CR the canonical test Deployment points at.
+func testModel() *v2pb.Model {
+	return &v2pb.Model{
+		ObjectMeta: metav1.ObjectMeta{Name: testModelName, Namespace: testNamespace},
+		Spec: v2pb.ModelSpec{
+			PackageType:           v2pb.DEPLOYABLE_MODEL_PACKAGE_TYPE_TRITON,
+			DeployableArtifactUri: []string{testModelStoragePath},
+		},
+	}
 }
 
 // newRolloutFixture builds a target wired to the supplied mocks. clientErrs lets a test
@@ -60,6 +88,7 @@ func newRolloutFixture(t *testing.T, clientErrs clientErrors, registerBackend bo
 		factory:             clientfactorymocks.NewMockClientFactory(ctrl),
 		backend:             backendsmocks.NewMockBackend(ctrl),
 		modelConfigProvider: modelconfigmocks.NewMockModelConfigProvider(ctrl),
+		controlPlane:        newControlPlaneClient(t, testModel()),
 	}
 
 	mocks.factory.EXPECT().GetClient(gomock.Any(), gomock.Any()).
@@ -177,7 +206,7 @@ func TestRollingRolloutActor_Retrieve(t *testing.T) {
 				require.NoError(t, osscommon.WriteModelLoadedFlag(condition))
 			}
 
-			actor := NewRollingRolloutActor(mocks.factory, mocks.backendRegistry, mocks.modelConfigProvider, zap.NewNop(), target)
+			actor := NewRollingRolloutActor(mocks.factory, mocks.controlPlane, mocks.backendRegistry, mocks.modelConfigProvider, zap.NewNop(), target)
 			got, err := actor.Retrieve(context.Background(), rolloutDeployment(""), condition)
 
 			require.NoError(t, err)
@@ -201,6 +230,7 @@ func TestRollingRolloutActor_Run(t *testing.T) {
 		name              string
 		clientErrs        clientErrors
 		setupMocks        func(*rolloutMocks)
+		controlPlane      goapi.Handler // when set, replaces the default model-seeded handler
 		expectedStatus    apipb.ConditionStatus
 		expectedReasonSub string
 		expectEntry       *modelconfig.ModelConfigEntry // when set, asserted against the captured AddModelToConfig arg
@@ -222,14 +252,34 @@ func TestRollingRolloutActor_Run(t *testing.T) {
 			expectedReasonSub: "apply failed",
 		},
 		{
-			name: "happy path",
+			name:              "model CR missing",
+			setupMocks:        func(*rolloutMocks) {}, // AddModelToConfig must not be reached
+			controlPlane:      newControlPlaneClient(t),
+			expectedStatus:    apipb.CONDITION_STATUS_FALSE,
+			expectedReasonSub: "model default/model-v1 not found",
+		},
+		{
+			name:       "model CR is not Triton-packaged",
+			setupMocks: func(*rolloutMocks) {},
+			controlPlane: newControlPlaneClient(t, &v2pb.Model{
+				ObjectMeta: metav1.ObjectMeta{Name: testModelName, Namespace: testNamespace},
+				Spec: v2pb.ModelSpec{
+					PackageType:           v2pb.DEPLOYABLE_MODEL_PACKAGE_TYPE_SPARK_PIPELINE,
+					DeployableArtifactUri: []string{testModelStoragePath},
+				},
+			}),
+			expectedStatus:    apipb.CONDITION_STATUS_FALSE,
+			expectedReasonSub: "want DEPLOYABLE_MODEL_PACKAGE_TYPE_TRITON",
+		},
+		{
+			name: "happy path uses the storage path from the Model CR",
 			setupMocks: func(m *rolloutMocks) {
 				m.modelConfigProvider.EXPECT().AddModelToConfig(gomock.Any(), gomock.Any(), gomock.Any(),
 					testISName, testNamespace, gomock.Any()).
 					DoAndReturn(func(_ context.Context, _ *zap.Logger, _ client.Client, _, _ string, entry modelconfig.ModelConfigEntry) error {
 						assert.Equal(t, modelconfig.ModelConfigEntry{
 							Name:        testModelName,
-							StoragePath: "s3://deploy-models/" + testModelName + "/",
+							StoragePath: testModelStoragePath,
 						}, entry)
 						return nil
 					})
@@ -242,9 +292,12 @@ func TestRollingRolloutActor_Run(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mocks, target := newRolloutFixture(t, tt.clientErrs, true)
+			if tt.controlPlane != nil {
+				mocks.controlPlane = tt.controlPlane
+			}
 			tt.setupMocks(mocks)
 
-			actor := NewRollingRolloutActor(mocks.factory, mocks.backendRegistry, mocks.modelConfigProvider, zap.NewNop(), target)
+			actor := NewRollingRolloutActor(mocks.factory, mocks.controlPlane, mocks.backendRegistry, mocks.modelConfigProvider, zap.NewNop(), target)
 			got, err := actor.Run(context.Background(), rolloutDeployment(""), &apipb.Condition{})
 
 			require.NoError(t, err)
@@ -258,6 +311,6 @@ func TestRollingRolloutActor_Run(t *testing.T) {
 
 func TestRollingRolloutActor_GetType(t *testing.T) {
 	mocks, target := newRolloutFixture(t, clientErrors{}, true)
-	actor := NewRollingRolloutActor(mocks.factory, mocks.backendRegistry, mocks.modelConfigProvider, zap.NewNop(), target)
+	actor := NewRollingRolloutActor(mocks.factory, mocks.controlPlane, mocks.backendRegistry, mocks.modelConfigProvider, zap.NewNop(), target)
 	assert.Equal(t, "RollingRolloutComplete-"+testCluster, actor.GetType())
 }

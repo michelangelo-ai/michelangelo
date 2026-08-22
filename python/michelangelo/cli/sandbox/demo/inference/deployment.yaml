@@ -6,6 +6,7 @@ metadata:
 spec:
   desiredRevision:
     name: bert-cola-37
+    namespace: default
   inferenceServer:
     name: inference-server-example
   strategy:

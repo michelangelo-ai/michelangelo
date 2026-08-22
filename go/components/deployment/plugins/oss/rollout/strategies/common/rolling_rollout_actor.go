@@ -2,10 +2,12 @@ package common
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"go.uber.org/zap"
 
+	goapi "github.com/michelangelo-ai/michelangelo/go/api"
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	conditionsutil "github.com/michelangelo-ai/michelangelo/go/base/conditions/utils"
 	osscommon "github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
@@ -21,7 +23,10 @@ var _ conditionInterfaces.ConditionActor[*v2pb.Deployment] = &RollingRolloutActo
 // RollingRolloutActor loads a model into a single target cluster's inference server. One
 // instance is created per cluster at actor-chain construction time.
 type RollingRolloutActor struct {
-	clientFactory       clientfactory.ClientFactory
+	clientFactory clientfactory.ClientFactory
+	// apiHandler reads the Model, which lives in the control plane rather than in the
+	// target cluster this actor rolls out to, and may be served from metadata storage.
+	apiHandler          goapi.Handler
 	backendRegistry     *backends.Registry
 	modelConfigProvider modelconfig.ModelConfigProvider
 	logger              *zap.Logger
@@ -31,6 +36,7 @@ type RollingRolloutActor struct {
 // NewRollingRolloutActor creates a RollingRolloutActor for the given cluster.
 func NewRollingRolloutActor(
 	clientFactory clientfactory.ClientFactory,
+	apiHandler goapi.Handler,
 	backendRegistry *backends.Registry,
 	modelConfigProvider modelconfig.ModelConfigProvider,
 	logger *zap.Logger,
@@ -38,6 +44,7 @@ func NewRollingRolloutActor(
 ) *RollingRolloutActor {
 	return &RollingRolloutActor{
 		clientFactory:       clientFactory,
+		apiHandler:          apiHandler,
 		backendRegistry:     backendRegistry,
 		modelConfigProvider: modelConfigProvider,
 		logger:              logger,
@@ -102,8 +109,15 @@ func (a *RollingRolloutActor) Run(ctx context.Context, deployment *v2pb.Deployme
 	inferenceServerName := deployment.Spec.GetInferenceServer().GetName()
 	modelName := deployment.Spec.GetDesiredRevision().GetName()
 
-	// TODO(#696): make the storage path configurable w.r.t. storage client and location.
-	storagePath := fmt.Sprintf("s3://deploy-models/%s/", modelName)
+	storagePath, err := osscommon.ResolveDeploymentModelStoragePath(ctx, a.apiHandler, deployment)
+	if err != nil {
+		var resolutionErr *osscommon.ModelResolutionError
+		if errors.As(err, &resolutionErr) {
+			return conditionsutil.GenerateFalseCondition(condition, resolutionErr.Reason, resolutionErr.Message), nil
+		}
+		return conditionsutil.GenerateFalseCondition(condition, "ModelResolutionFailed", err.Error()), nil
+	}
+
 	if err := a.modelConfigProvider.AddModelToConfig(ctx, a.logger, kubeClient, inferenceServerName, deployment.Namespace, modelconfig.ModelConfigEntry{
 		Name:        modelName,
 		StoragePath: storagePath,

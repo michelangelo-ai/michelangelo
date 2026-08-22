@@ -12,6 +12,8 @@ import re
 import ssl
 import subprocess
 import sys
+import tarfile
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -141,6 +143,53 @@ def has_valid_model_structure(model_dir: str) -> bool:
     return False
 
 
+def safe_extractall(tar: tarfile.TarFile, dest: str) -> None:
+    """Extract a tar archive into dest without path-traversal risk.
+
+    Uses filter="data" on Python 3.12+ (PEP 706), which strips absolute paths, ".."
+    traversal components, and unsafe symlinks. Older runtimes get an equivalent
+    manual member check.
+    """
+    if sys.version_info >= (3, 12):
+        tar.extractall(dest, filter="data")
+        return
+    real_dest = os.path.realpath(dest)
+    safe_members = []
+    for member in tar.getmembers():
+        if not member.name:
+            continue
+        member_path = os.path.realpath(os.path.join(dest, member.name))
+        if not member_path.startswith(real_dest + os.sep):
+            raise ValueError(
+                f"refusing to extract '{member.name}': path escapes '{dest}'"
+            )
+        safe_members.append(member)
+    tar.extractall(dest, members=safe_members)
+
+
+def extract_tar_model(storage_path: str, model_dir: str, endpoint_url: str) -> None:
+    """Download a tar-archived model artifact and unpack it into model_dir.
+
+    The packaging step archives directory artifacts before upload, so a pipeline-pushed
+    Triton model arrives as one object instead of a prefix. Its members are stored
+    relative to the model root, so extracting here yields the layout Triton expects.
+    """
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        archive = os.path.join(tmp_dir, "model.tar")
+        result = run(
+            ["aws", "s3", "cp", storage_path, archive, "--endpoint-url", endpoint_url],
+            check=False,
+        )
+        if result.returncode != 0 or not os.path.isfile(archive):
+            print(f"  failed to download {storage_path}: {result.stderr.strip()}")
+            return
+        try:
+            with tarfile.open(archive) as tar:
+                safe_extractall(tar, model_dir)
+        except (tarfile.TarError, ValueError) as e:
+            print(f"  failed to extract {storage_path}: {e}")
+
+
 def sync_model(storage_path: str, model_dir: str, endpoint_url: str) -> None:
     """Re-download a model from S3 into model_dir, replacing any prior contents."""
     print(f"  syncing {storage_path} -> {model_dir}")
@@ -148,6 +197,9 @@ def sync_model(storage_path: str, model_dir: str, endpoint_url: str) -> None:
         # Stale or partial download; remove and re-fetch to avoid mixed-version state.
         run(["rm", "-rf", model_dir])
     os.makedirs(model_dir, exist_ok=True)
+    if storage_path.endswith(".tar"):
+        extract_tar_model(storage_path, model_dir, endpoint_url)
+        return
     run(
         [
             "aws",
