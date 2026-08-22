@@ -161,7 +161,7 @@ apiserver:
   # its own write-time sentinel ("unspecified") rather than a guessed real
   # environment — see helm/michelangelo/README.md#values-reference.
   pipelineRunDefaults:
-    environment: ""
+    environment: "development"
 
   # Resource requests and limits. Override per-service if you need different
   # allocations than the global `resources` block below.
