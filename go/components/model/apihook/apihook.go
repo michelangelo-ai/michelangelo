@@ -3,8 +3,8 @@
 // go/components/pipelinerun/apihook and go/components/triggerrun/apihook for
 // the sibling packages this one follows the shape of.
 //
-// Phase 1 scope: this hook implements ONLY api.EnvironmentLabel
-// defaulting/inheritance. It deliberately does not implement
+// This hook implements ONLY api.EnvironmentLabel defaulting/inheritance. It
+// deliberately does not implement
 // description-length validation, pipeline-type label copy, owner/LDAP
 // validation, or revision/pipeline-name label copy — those have no obvious
 // OSS-generic equivalent and are out of scope here.
