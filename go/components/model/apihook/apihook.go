@@ -4,11 +4,16 @@
 // the sibling packages this one follows the shape of.
 //
 // Phase 1 scope: this hook implements ONLY api.EnvironmentLabel
-// defaulting/inheritance, ported from the label-only subset of internal
-// apiserver/pkg/model/hook.go's validateAndProcess. It deliberately does NOT
-// port that function's description-length validation, pipeline-type label
-// copy, owner/LDAP validation, or revision/pipeline-name label copy — those
-// have no obvious OSS-generic equivalent and are out of scope here.
+// defaulting/inheritance. It deliberately does not implement
+// description-length validation, pipeline-type label copy, owner/LDAP
+// validation, or revision/pipeline-name label copy — those have no obvious
+// OSS-generic equivalent and are out of scope here.
+//
+// BeforeUpdate re-derives the label from Spec.SourcePipelineRun on every
+// update, the same as BeforeCreate: the source PipelineRun's label is the
+// source of truth, so a manual edit to a Model's label is overwritten again
+// on the next update if a source is still set. This is intentional, not an
+// oversight.
 package apihook
 
 import (
@@ -52,9 +57,8 @@ func (a apiHook) BeforeUpdate(ctx context.Context, request *v2.UpdateModelReques
 // applyEnvironmentLabel sets api.EnvironmentLabel to the configured default
 // (or api.UnspecifiedEnvironment when unconfigured) if absent, then
 // overrides it with the source PipelineRun's value when one is set,
-// resolvable, and itself carries the label. Mirrors internal
-// apiserver/pkg/model/hook.go:90-98's ordering (default first, then
-// overwrite-if-present-on-source), porting only its EnvironmentLabel lines.
+// resolvable, and itself carries the label — default first, then
+// overwrite-if-present-on-source.
 func (a apiHook) applyEnvironmentLabel(ctx context.Context, model *v2.Model) error {
 	setIfAbsent(model, api.EnvironmentLabel, a.defaultEnvironment())
 
