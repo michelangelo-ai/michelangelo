@@ -8,6 +8,7 @@ import (
 
 	"github.com/cadence-workflow/starlark-worker/workflow"
 	pbtypes "github.com/gogo/protobuf/types"
+	mgapi "github.com/michelangelo-ai/michelangelo/go/api"
 	"github.com/michelangelo-ai/michelangelo/go/components/triggerrun"
 	"github.com/michelangelo-ai/michelangelo/go/components/utils"
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/trigger"
@@ -43,9 +44,6 @@ var (
 
 	// TriggerredByLabel stores the name of the TriggerRun which triggered the pipeline_run
 	TriggerredByLabel = "pipelinerun.michelangelo/triggered-by"
-
-	// EnvironmentLabel stores the environment of the pipeline_run
-	EnvironmentLabel = "pipelinerun.michelangelo/environment"
 
 	// SourceTriggerLabel stores the original trigger associated with the pipeline_run.
 	// For resume run, source-trigger is copied over from previous run
@@ -306,10 +304,10 @@ func generatePipelineRunRequest(
 		SourceTriggerLabel:                 triggerRun.Name,
 		PipelineNameLabel:                  triggerRun.Spec.Pipeline.Name,
 	}
-	if env, ok := triggerRun.ObjectMeta.Labels[EnvironmentLabel]; ok {
-		labels[EnvironmentLabel] = env
+	if env, ok := triggerRun.ObjectMeta.Labels[mgapi.EnvironmentLabel]; ok {
+		labels[mgapi.EnvironmentLabel] = env
 	} else {
-		labels[EnvironmentLabel] = "production"
+		labels[mgapi.EnvironmentLabel] = "production"
 	}
 	annotations := map[string]string{
 		"michelangelo.uber.com/pipelinerun.engine": "condition",

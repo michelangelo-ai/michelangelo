@@ -6,6 +6,7 @@ import (
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/gogo/protobuf/types"
+	mgapi "github.com/michelangelo-ai/michelangelo/go/api"
 	api "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"github.com/stretchr/testify/assert"
@@ -60,7 +61,7 @@ func TestGeneratePipelineRunRequest(t *testing.T) {
 					Namespace: "test-namespace",
 					Name:      "test-trigger",
 					Labels: map[string]string{
-						EnvironmentLabel: "development",
+						mgapi.EnvironmentLabel: "development",
 					},
 				},
 				Spec: v2pb.TriggerRunSpec{

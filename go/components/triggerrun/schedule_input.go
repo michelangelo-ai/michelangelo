@@ -6,12 +6,12 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/michelangelo-ai/michelangelo/go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
-	scheduleInputEnvironmentLabel          = "pipelinerun.michelangelo/environment"
 	scheduleInputPipelineManifestTypeLabel = "pipeline.michelangelo/PipelineManifestType"
 )
 
@@ -58,7 +58,7 @@ func scheduleWorkflowInput(triggerRun *v2pb.TriggerRun) *v2pb.TriggerRun {
 func scheduleInputLabels(labels map[string]string) map[string]string {
 	relevant := make(map[string]string, 2)
 	for _, key := range []string{
-		scheduleInputEnvironmentLabel,
+		api.EnvironmentLabel,
 		scheduleInputPipelineManifestTypeLabel,
 	} {
 		if value, ok := labels[key]; ok {
