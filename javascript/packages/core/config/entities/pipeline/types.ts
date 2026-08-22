@@ -1,4 +1,4 @@
-import type { PipelineRun, PipelineRunNotification } from '#core/config/entities/run/types';
+import type { PipelineRun } from '#core/config/entities/run/types';
 
 export interface Pipeline {
   metadata: {
@@ -13,20 +13,16 @@ export interface Pipeline {
 }
 
 /**
- * Form-only shape of a notification entry: `emails`/`slack_destinations` are wrapped
- * in `{ value }` objects because `ArrayFormRow` items must be objects, not scalars.
- * Flattened back to plain string arrays before submitting.
+ * Form-only shape submitted by {@link CreatePipelineRunForm}.
+ *
+ * The notification fields here have no proto counterpart — `notifyOnCompletion` is a UI-only
+ * toggle, and the email/Slack lists are wrapped in `{ value }` objects because `ArrayFormRow`
+ * items must be objects, not scalars. All three are read out of the form values and discarded;
+ * `handleRunSubmit` builds the real `PipelineRunNotification[]` from them instead of forwarding
+ * them as-is.
  */
-export type NotificationFormValue = Omit<
-  PipelineRunNotification,
-  'emails' | 'slack_destinations'
-> & {
-  emails?: { value: string }[];
-  slack_destinations?: { value: string }[];
-};
-
-export type PipelineRunFormValues = Omit<PipelineRun, 'spec'> & {
-  spec: Omit<PipelineRun['spec'], 'notifications'> & {
-    notifications?: NotificationFormValue[];
-  };
+export type PipelineRunFormValues = PipelineRun & {
+  notifyOnCompletion?: boolean;
+  notificationEmails?: { value: string }[];
+  notificationSlackDestinations?: { value: string }[];
 };

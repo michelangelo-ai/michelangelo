@@ -1,9 +1,11 @@
 import { FormDialog } from '#core/components/form/components/form-dialog/form-dialog';
 import { StringField } from '#core/components/form/fields/string/string-field';
 import { TextareaField } from '#core/components/form/fields/textarea/textarea-field';
-import { ArrayFormGroup } from '#core/components/form/layout/array-form-group/array-form-group';
 import { FormGroup } from '#core/components/form/layout/form-group/form-group';
-import { NotificationFields } from '#core/config/entities/pipeline/notification-fields';
+import {
+  ALL_PIPELINE_RUN_EVENT_TYPES,
+  NotificationSection,
+} from '#core/config/entities/pipeline/notification-section';
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
 import { useStudioMutation } from '#core/hooks/use-studio-mutation/use-studio-mutation';
 import { generateSuffix } from '#core/utils/name-utils';
@@ -11,7 +13,7 @@ import { ResumeRunFields } from './resume-run-fields';
 
 import type { ActionComponentProps } from '#core/components/actions/types';
 import type { Pipeline, PipelineRunFormValues } from '#core/config/entities/pipeline/types';
-import type { PipelineRun } from '#core/config/entities/run/types';
+import type { PipelineRun, PipelineRunNotification } from '#core/config/entities/run/types';
 
 export const CreatePipelineRunForm = ({ record, onClose }: ActionComponentProps<Pipeline>) => {
   const { projectId } = useStudioParams('base');
@@ -31,12 +33,7 @@ export const CreatePipelineRunForm = ({ record, onClose }: ActionComponentProps<
       ...payload,
       spec: {
         ...payload.spec,
-        notifications: values.spec.notifications?.map((notification) => ({
-          ...notification,
-          resource_type: 'RESOURCE_TYPE_PIPELINE_RUN',
-          emails: notification.emails?.map(({ value }) => value) ?? [],
-          slack_destinations: notification.slack_destinations?.map(({ value }) => value) ?? [],
-        })),
+        notifications: values.notifyOnCompletion ? buildNotifications(values) : [],
       },
     });
   };
@@ -74,18 +71,8 @@ export const CreatePipelineRunForm = ({ record, onClose }: ActionComponentProps<
         description="Optional. Helps identify this run in the pipeline run list."
       />
 
-      <FormGroup
-        title="Set Up Notifications (Optional)"
-        description="Get notified by email or Slack when this run changes state."
-        collapsible
-      >
-        <ArrayFormGroup
-          rootFieldPath="spec.notifications"
-          groupLabel="Notification"
-          addLabel="Add notification"
-        >
-          {(indexedFieldPath) => <NotificationFields indexedFieldPath={indexedFieldPath} />}
-        </ArrayFormGroup>
+      <FormGroup title="Set Up Notifications (Optional)">
+        <NotificationSection />
       </FormGroup>
     </FormDialog>
   );
@@ -120,4 +107,43 @@ function buildPayload(values: PipelineRun, projectId: string): PipelineRun {
       },
     },
   };
+}
+
+/**
+ * Turns the form's email/Slack lists into the `Notification` messages the API expects: one
+ * per destination type that has at least one non-empty entry, each covering every event type
+ * since the form has no event-type picker.
+ */
+function buildNotifications(values: PipelineRunFormValues): PipelineRunNotification[] {
+  // An untouched ArrayFormRow item is pushed as `{}`, not `{ value: '' }` — `value` can be
+  // undefined here even though the field type says otherwise.
+  const nonEmptyValues = (entries: { value?: string }[] | undefined): string[] =>
+    entries?.map(({ value }) => value ?? '').filter((value) => value.trim() !== '') ?? [];
+
+  const emails = nonEmptyValues(values.notificationEmails);
+  const slackDestinations = nonEmptyValues(values.notificationSlackDestinations);
+
+  const notifications: PipelineRunNotification[] = [];
+
+  if (emails.length > 0) {
+    notifications.push({
+      notification_type: 'NOTIFICATION_TYPE_EMAIL',
+      event_types: ALL_PIPELINE_RUN_EVENT_TYPES,
+      resource_type: 'RESOURCE_TYPE_PIPELINE_RUN',
+      emails,
+      slack_destinations: [],
+    });
+  }
+
+  if (slackDestinations.length > 0) {
+    notifications.push({
+      notification_type: 'NOTIFICATION_TYPE_SLACK',
+      event_types: ALL_PIPELINE_RUN_EVENT_TYPES,
+      resource_type: 'RESOURCE_TYPE_PIPELINE_RUN',
+      emails: [],
+      slack_destinations: slackDestinations,
+    });
+  }
+
+  return notifications;
 }
