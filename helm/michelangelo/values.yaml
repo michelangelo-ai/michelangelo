@@ -150,11 +150,18 @@ apiserver:
     qps: 300
     burst: 600
 
-  # Apiserver-specific config knobs. 
+  # Apiserver-specific config knobs.
   metadataStorage:
     enable: false
   crdSync:
     enableUpdate: true
+
+  # Default values applied when creating PipelineRun/Model objects that don't
+  # set them explicitly. Empty (the default) means the apiserver falls back to
+  # its own write-time sentinel ("unspecified") rather than a guessed real
+  # environment — see helm/michelangelo/README.md#values-reference.
+  pipelineRunDefaults:
+    environment: ""
 
   # Resource requests and limits. Override per-service if you need different
   # allocations than the global `resources` block below.
