@@ -290,6 +290,31 @@ class ModelMetadata:
 
 
 @dataclass
+class DatasetMetadata:
+    """Typed metadata carried by a ``DatasetVariable`` through workflow tasks.
+
+    Currently scoped to the one field ``tabular_native_transform`` needs to
+    record; extend with additional fields as more tasks need to annotate
+    dataset variables (mirroring how ``ModelMetadata`` grew field-by-field
+    per task).
+
+    Attributes:
+        derived_features: Names of output columns present in the dataset
+            that were not present in its original input (i.e. produced by a
+            transform), in sorted order. Empty when no transform was
+            applied, or when every output column overlaps an input column
+            name.
+
+    Example:
+        >>> meta = DatasetMetadata(derived_features=["scaled_amount"])
+        >>> meta.derived_features
+        ['scaled_amount']
+    """
+
+    derived_features: list[str] = field(default_factory=list)
+
+
+@dataclass
 class FeaturePackageMetadata:
     """Typed metadata carried by a feature-package artifact.
 

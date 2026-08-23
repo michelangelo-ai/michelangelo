@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from michelangelo.workflow.variables.metadata import (
     FeaturePackageMetadata,
     ModelMetadata,
 )
+
+if TYPE_CHECKING:
+    from michelangelo.workflow.variables._private.dataset import DatasetVariable
+    from michelangelo.workflow.variables._private.model import ModelVariable
 
 
 @dataclass
@@ -109,6 +113,37 @@ class AssembledModel:
     raw_model: ModelArtifact
     deployable_model: ModelArtifact | None = None
     feature_package: FeaturePackageArtifact | None = None
+
+
+@dataclass
+class NativeTransformResult:
+    """The result of the native transform task (``tabular_native_transform``).
+
+    Contains the transformed datasets and the PyTorch transform module
+    (model). For incremental-training flows, the transform spec and feature
+    stats are stored on ``model.metadata`` (``transform_spec`` and
+    ``feature_stats``) so downstream tasks (assembler, pusher) can persist
+    them as a transform checkpoint for a future incremental run.
+
+    Attributes:
+        transformed_datasets: Mapping of dataset name (e.g. ``"train"``,
+            ``"validation"``, ``"test"``) to its transformed
+            ``DatasetVariable``. Datasets that had no transform spec applied
+            (empty inputs) are passed through unchanged.
+        model: The materialized transform module, wrapped as a
+            ``ModelVariable``, or ``None`` when the transform spec produced
+            no layers (e.g. an empty spec).
+
+    Example:
+        >>> result = NativeTransformResult(
+        ...     transformed_datasets={"train": DatasetVariable.create(None)},
+        ... )
+        >>> result.model is None
+        True
+    """
+
+    transformed_datasets: dict[str, DatasetVariable] = field(default_factory=dict)
+    model: ModelVariable | None = None
 
 
 @dataclass
