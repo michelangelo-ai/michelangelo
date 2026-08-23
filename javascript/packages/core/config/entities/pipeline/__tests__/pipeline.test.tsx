@@ -363,6 +363,15 @@ describe('PIPELINE_ENTITY_CONFIG: Triggers tab', () => {
               },
               status: { state: 1 },
             },
+            {
+              metadata: { name: 'other-20240101-120000-ffff9999', namespace: 'ma-dev-test' },
+              spec: {
+                pipeline: { name: 'training-pipeline', namespace: 'ma-dev-test' },
+                actor: { name: 'me' },
+                trigger: { triggerType: { case: 'cronSchedule', value: { cron: '0 3 * * *' } } },
+              },
+              status: { state: 1 },
+            },
           ],
         },
       },
@@ -385,17 +394,19 @@ describe('PIPELINE_ENTITY_CONFIG: Triggers tab', () => {
       await screen.findByRole('tab', { name: 'Triggers', selected: true })
     ).toBeInTheDocument();
 
+    // TriggerRun has no pipeline-name label, so the pipeline scoping happens client-side on
+    // spec.pipeline.name rather than through a labelSelector on the request.
     await waitFor(() => {
       expect(mockRequest).toHaveBeenCalledWith(
         'ListTriggerRun',
-        expect.objectContaining({
-          listOptions: expect.objectContaining({
-            labelSelector: 'pipeline.michelangelo/name=eval-pipeline',
-          }) as unknown,
-        }),
+        expect.not.objectContaining({ listOptions: expect.anything() as unknown }),
         {}
       );
     });
+
+    expect(
+      screen.queryByRole('link', { name: 'other-20240101-120000-ffff9999' })
+    ).not.toBeInTheDocument();
 
     const nameLink = await screen.findByRole('link', { name: 'nightly-20240101-120000-abcd1234' });
     expect(nameLink).toHaveAttribute(

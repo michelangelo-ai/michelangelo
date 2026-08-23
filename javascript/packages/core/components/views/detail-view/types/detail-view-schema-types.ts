@@ -27,7 +27,22 @@ export interface TableDetailPageConfig<T extends object = object> extends BaseDe
   /** Query configuration for fetching data to display in the table */
   queryConfig: QueryConfig;
 
+  /**
+   * Narrows the fetched rows client-side. Use for relationships the API exposes as a spec
+   * field rather than a label, which `queryConfig.serviceOptions.listOptions.labelSelector`
+   * cannot express.
+   */
+  filter?: TableDetailPageFilter;
+
   tableConfig: TableConfig<T>;
+}
+
+export interface TableDetailPageFilter {
+  /** Dot path read from each row, e.g. `spec.pipeline.name` */
+  field: string;
+
+  /** Row is kept when the value at `field` matches this */
+  equals: string;
 }
 
 export interface CustomDetailPageConfig<T extends object = object> extends BaseDetailPageConfig {

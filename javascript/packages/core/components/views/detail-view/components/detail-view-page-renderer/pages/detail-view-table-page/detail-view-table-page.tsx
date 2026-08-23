@@ -3,6 +3,7 @@ import { Table } from '#core/components/table/table';
 import { adaptTableConfigToTableProps } from '#core/components/views/utils/table-view-adapter';
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
 import { useStudioQuery } from '#core/hooks/use-studio-query';
+import { getObjectValue } from '#core/utils/object-utils';
 import { capitalizeFirstLetter } from '#core/utils/string-utils';
 
 import type { DetailViewTablePageProps } from './types';
@@ -30,6 +31,7 @@ import type { DetailViewTablePageProps } from './types';
 export function DetailViewTablePage<T extends object = object>({
   isDetailViewLoading = false,
   queryConfig,
+  filter,
   tableConfig,
   pageId,
 }: DetailViewTablePageProps<T>) {
@@ -52,8 +54,13 @@ export function DetailViewTablePage<T extends object = object>({
     filterSettingsId: `${projectId}/${phase}/${entity}/${pageId}`,
   });
 
+  const items = data?.[`${queryConfig.service}List`]?.items ?? [];
+  const rows = filter
+    ? items.filter((item) => getObjectValue<unknown>(item, filter.field) === filter.equals)
+    : items;
+
   const tableProps = adaptTableConfigToTableProps<T>(tableConfig, {
-    data: data?.[`${queryConfig.service}List`]?.items ?? [],
+    data: rows,
     loading: isLoading || isDetailViewLoading,
     error: error ?? undefined,
   });

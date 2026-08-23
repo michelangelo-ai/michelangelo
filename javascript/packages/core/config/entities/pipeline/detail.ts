@@ -59,14 +59,14 @@ export const PIPELINE_DETAIL_CONFIG: DetailViewConfig = {
       queryConfig: {
         endpoint: 'list',
         service: 'triggerRun',
-        serviceOptions: {
-          listOptions: {
-            // Same label convention as the Pipeline Runs tab above, scoped one level up:
-            // every TriggerRun references its pipeline via `spec.pipeline` (see
-            // TriggerRunSpec.pipeline in proto/api/v2/trigger_run.proto).
-            labelSelector: 'pipeline.michelangelo/name=${page.metadata.name}',
-          },
-        },
+        serviceOptions: {},
+      },
+      // TriggerRun carries no `pipeline.michelangelo/name` label — the apiserver records the
+      // relationship as an ownerReference and in `spec.pipeline` (see TriggerRunSpec.pipeline
+      // in proto/api/v2/trigger_run.proto), so a labelSelector cannot express it.
+      filter: {
+        field: 'spec.pipeline.name',
+        equals: '${page.metadata.name}',
       },
       tableConfig: {
         columns: [
