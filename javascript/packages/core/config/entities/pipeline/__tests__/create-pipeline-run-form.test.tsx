@@ -129,10 +129,7 @@ describe('CreatePipelineRunForm', () => {
         name: 'Do you want to receive notifications when pipeline run completed?',
       })
     );
-    await user.type(
-      within(dialog).getByPlaceholderText('name@example.com'),
-      'oncall@example.com'
-    );
+    await user.type(within(dialog).getByPlaceholderText('name@example.com'), 'oncall@example.com');
     await user.click(within(dialog).getByRole('button', { name: 'Run' }));
 
     await waitFor(() => {
@@ -185,10 +182,7 @@ describe('CreatePipelineRunForm', () => {
         name: 'Do you want to receive notifications when pipeline run completed?',
       })
     );
-    await user.type(
-      within(dialog).getByPlaceholderText('name@example.com'),
-      'oncall@example.com'
-    );
+    await user.type(within(dialog).getByPlaceholderText('name@example.com'), 'oncall@example.com');
     await user.type(within(dialog).getByPlaceholderText('#channel or @user'), '#ml-oncall');
     await user.click(within(dialog).getByRole('button', { name: 'Run' }));
 
