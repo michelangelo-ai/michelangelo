@@ -59,6 +59,8 @@ async function createHandlers() {
     UpdatePipelineRun: (record: PipelineRun, headers?: Record<string, string>) =>
       services.PipelineRunService.updatePipelineRun({ pipelineRun: record }, headers),
     ListModel: unary(services.ModelService.listModel),
+    GetModel: unary(services.ModelService.getModel),
+    GetEvaluationReport: unary(services.EvaluationReportService.getEvaluationReport),
   } as const;
 }
 
