@@ -3,10 +3,22 @@ import { interpolate } from '#core/interpolation/interpolate';
 import { CreatePipelineRunForm } from './create-pipeline-run-form';
 import { PIPELINE_DETAIL_CONFIG } from './detail';
 import { PIPELINE_LIST_CONFIG } from './list';
-import { SchedulePipelineForm } from './schedule-pipeline-form';
+import { RunTriggerForm } from './run-trigger-form';
 
 import type { PhaseEntityConfig } from '#core/types/common/studio-types';
 import type { Pipeline } from './types';
+
+/**
+ * `spec.manifest` is only present on a `GetPipeline` response — list rows carry no manifest
+ * (see run-trigger-form.tsx) — so an absent manifest means "unknown", not "no triggers".
+ * Only disable once the manifest has actually loaded and it declares none.
+ */
+const hasNoTriggers = (record: unknown): boolean => {
+  // cast: record is unknown from the action predicate context; always Pipeline in this entity
+  // config; see #1425
+  const manifest = (record as Pipeline).spec?.manifest;
+  return !!manifest && Object.keys(manifest.triggerMap ?? {}).length === 0;
+};
 
 export const PIPELINE_ENTITY_CONFIG: PhaseEntityConfig = {
   id: 'pipelines',
@@ -21,9 +33,15 @@ export const PIPELINE_ENTITY_CONFIG: PhaseEntityConfig = {
       modal: { type: 'custom', component: CreatePipelineRunForm },
     },
     {
-      display: { label: 'Schedule', icon: 'calendarRepeat' },
+      display: { label: 'Run trigger', icon: 'calendarRepeat' },
       hierarchy: ActionHierarchy.SECONDARY,
-      modal: { type: 'custom', component: SchedulePipelineForm },
+      disabled: [
+        {
+          condition: interpolate(({ data }) => hasNoTriggers(data)),
+          message: 'No triggers defined for this pipeline',
+        },
+      ],
+      modal: { type: 'custom', component: RunTriggerForm },
     },
     {
       display: { label: 'Delete', icon: 'trashCan' },

@@ -36,11 +36,21 @@ export type PipelineRunFormValues = PipelineRun & {
 };
 
 /**
- * Values held by {@link SchedulePipelineForm} — the dropdown selection, and nothing else.
+ * Values held by {@link RunTriggerForm}.
+ *
+ * `isBackfill`, `startTimestamp`, `endTimestamp`, `selectedParams`, and
+ * `maxConcurrencyOverride` only matter once `isBackfill` is set — the backfill fields are
+ * hidden otherwise and never reach the submit handler with a meaningful value.
  *
  * Declared as a type alias rather than an interface so it satisfies the `FormData`
  * (`Record<string, unknown>`) constraint on `FormDialog`.
  */
-export type SchedulePipelineFormValues = {
+export type RunTriggerFormValues = {
   sourceTriggerName: string;
+  autoFlip?: boolean;
+  isBackfill?: boolean;
+  startTimestamp?: string;
+  endTimestamp?: string;
+  selectedParams?: string[];
+  maxConcurrencyOverride?: number;
 };
