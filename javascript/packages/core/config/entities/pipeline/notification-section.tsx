@@ -43,7 +43,6 @@ export const NotificationSection = () => {
             {(itemPath) => (
               <StringField
                 name={`${itemPath}.value`}
-                label="Email"
                 validate={regex(EMAIL_REGEX, 'Must be a valid email.')}
                 placeholder="name@example.com"
               />
@@ -57,11 +56,7 @@ export const NotificationSection = () => {
             addLabel="Add Slack channel or user"
           >
             {(itemPath) => (
-              <StringField
-                name={`${itemPath}.value`}
-                label="Slack channel or user"
-                placeholder="#channel or @user"
-              />
+              <StringField name={`${itemPath}.value`} placeholder="#channel or @user" />
             )}
           </ArrayFormRow>
         </>
