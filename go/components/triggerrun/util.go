@@ -515,18 +515,22 @@ func generateSuccessorTriggerRunSpec(backfillTriggerRun *v2pb.TriggerRun) (*v2pb
 		return nil, fmt.Errorf("backfill trigger run %s/%s has no cron schedule to resume from",
 			backfillTriggerRun.Namespace, backfillTriggerRun.Name)
 	}
-	successor := backfillTriggerRun.DeepCopy()
-	successor.Name = generateSuccessorTriggerRunName(backfillTriggerRun.Name)
-	successor.ResourceVersion = ""
-	successor.UID = ""
-	successor.CreationTimestamp = metav1.Time{}
-	successor.OwnerReferences = nil
-	successor.Finalizers = nil
-	successor.Annotations = nil
-	successor.Status = v2pb.TriggerRunStatus{}
-	successor.Spec.StartTimestamp = nil
-	successor.Spec.EndTimestamp = nil
-	successor.Spec.Kill = false
-	successor.Spec.Action = v2pb.TRIGGER_RUN_ACTION_NO_ACTION
-	return successor, nil
+	// Carry over the spec onto a brand new run rather than copying the backfill
+	// and stripping it: nothing outside the spec can then leak into the successor
+	// by omission (status, ownerRefs, finalizers, the successor annotation itself).
+	copied := backfillTriggerRun.DeepCopy()
+	// A successor is a live recurring schedule, not another backfill, and the
+	// timestamp pair is exactly what GetTriggerType keys on.
+	copied.Spec.StartTimestamp = nil
+	copied.Spec.EndTimestamp = nil
+	return &v2pb.TriggerRun{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      generateSuccessorTriggerRunName(backfillTriggerRun.Name),
+			Namespace: backfillTriggerRun.Namespace,
+			// Labels carry the environment and pipeline-manifest-type that feed
+			// the recurring schedule's input hash (see scheduleInputLabels).
+			Labels: copied.Labels,
+		},
+		Spec: copied.Spec,
+	}, nil
 }
