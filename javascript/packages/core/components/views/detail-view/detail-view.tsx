@@ -18,7 +18,14 @@ export function DetailView({
   const [css, theme] = useStyletron();
 
   return (
-    <div className={css({ display: 'flex', flexDirection: 'column', gap: theme.sizing.scale800 })}>
+    <div
+      className={css({
+        display: 'flex',
+        flexDirection: 'column',
+        gap: theme.sizing.scale800,
+        marginTop: theme.sizing.scale600,
+      })}
+    >
       <DetailViewHeader
         title={title}
         subtitle={subtitle}

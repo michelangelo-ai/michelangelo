@@ -104,6 +104,41 @@ describe('Model list page', () => {
 });
 
 describe('Model detail page', () => {
+  describe('header metadata row', () => {
+    it('renders source pipeline run, owner, timestamps, and type', async () => {
+      render(
+        <EntityDetailRoute phases={{ train: TRAIN_PHASE }} />,
+        buildWrapper([
+          getErrorProviderWrapper(),
+          getRouterWrapper({ location: '/myproject/train/models/fraud-classifier/information' }),
+          getServiceProviderWrapper({
+            request: createQueryMockRouter({
+              GetModel: {
+                model: {
+                  metadata: {
+                    name: 'fraud-classifier',
+                    creationTimestamp: { seconds: 1700000000 },
+                    labels: { 'michelangelo/SpecUpdateTimestamp': '1700500000' },
+                  },
+                  spec: {
+                    sourcePipelineRun: { name: 'run-42' },
+                    owner: { name: 'model-owner' },
+                    kind: 3, // MODEL_KIND_BINARY_CLASSIFICATION
+                  },
+                },
+              },
+            }),
+          }),
+        ])
+      );
+
+      const runLinks = await screen.findAllByRole('link', { name: 'run-42' });
+      expect(runLinks[0]).toHaveAttribute('href', '/myproject/train/runs/run-42');
+      expect(screen.getByText('model-owner')).toBeInTheDocument();
+      expect(screen.getByText('Binary Classification')).toBeInTheDocument();
+    });
+  });
+
   describe('information tab', () => {
     const buildModel = (overrides = {}) => ({
       metadata: { name: 'fraud-classifier' },
@@ -160,10 +195,12 @@ describe('Model detail page', () => {
         ])
       );
 
-      expect(await screen.findByRole('link', { name: 'run-42' })).toHaveAttribute(
-        'href',
-        '/myproject/train/runs/run-42'
-      );
+      // The source pipeline run link appears both in the page header metadata row and in
+      // this tab's "Useful links" section, matching internal's behavior of surfacing it in
+      // both places.
+      const runLinks = await screen.findAllByRole('link', { name: 'run-42' });
+      expect(runLinks.length).toBeGreaterThanOrEqual(1);
+      expect(runLinks[0]).toHaveAttribute('href', '/myproject/train/runs/run-42');
     });
   });
 
