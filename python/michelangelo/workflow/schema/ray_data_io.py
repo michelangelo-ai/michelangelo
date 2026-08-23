@@ -13,6 +13,8 @@ __all__ = [
     "BatchIterConfig",
     "DataloadingConfig",
     "ParquetReadConfig",
+    "RayDataContextConfig",
+    "WriteConfig",
 ]
 
 
@@ -94,3 +96,64 @@ class DataloadingConfig:
 
     parquet_read_config: ParquetReadConfig | None = None
     batch_iter_config: BatchIterConfig | None = None
+
+
+@dataclass
+class RayDataContextConfig:
+    """Ray ``DataContext`` tuning for workflow tasks that use Ray Data I/O.
+
+    Forwarded to
+    :func:`~michelangelo.uniflow.plugins.ray.data_context.set_ray_data_context`.
+
+    Attributes:
+        min_block_size: Target minimum Ray Data block size in bytes. ``None``
+            uses Ray's default.
+        max_block_size: Target maximum Ray Data block size in bytes. ``None``
+            uses Ray's default.
+        retried_io_errors: Extra error-message substrings appended to Ray's
+            ``retried_io_errors``. ``None`` uses the built-in patterns in
+            :data:`~michelangelo.uniflow.plugins.ray.data_context.RETRIED_IO_ERRORS`;
+            pass ``[]`` to skip adding extras beyond Ray's defaults.
+        object_store_memory_limit: Upper bound in bytes on the object store
+            memory the streaming executor may use for buffered (pending)
+            blocks across all operators. ``None`` leaves Ray's default
+            (unbounded, i.e. capped only by the physical object store).
+        wait_for_min_actors_s: Seconds the executor blocks for an actor-pool
+            operator's actors to finish provisioning before it begins
+            scheduling upstream read tasks. ``None`` keeps Ray's default (no
+            wait).
+
+    Example:
+        >>> RayDataContextConfig(min_block_size=32 * 1024 * 1024)
+        RayDataContextConfig(min_block_size=33554432, ...)
+    """
+
+    min_block_size: int | None = None
+    max_block_size: int | None = None
+    retried_io_errors: list[str] | None = None
+    object_store_memory_limit: int | None = None
+    wait_for_min_actors_s: int | None = None
+
+
+@dataclass
+class WriteConfig:
+    """Output file sizing for Ray Dataset write operations.
+
+    These parameters are format-agnostic (supported by ``write_parquet``,
+    ``write_csv``, ``write_json``, etc.) via Ray's ``FileBasedDatasink``.
+
+    Attributes:
+        max_rows_per_file: Max rows per output file. Caps individual file
+            size by splitting large blocks, preventing oversized files in
+            downstream steps. ``None`` uses Ray's default.
+        min_rows_per_file: Min rows per output file. Buffers small blocks
+            into fewer, larger files, reducing write task overhead and
+            storage metadata calls. ``None`` uses Ray's default.
+
+    Example:
+        >>> WriteConfig(max_rows_per_file=1_000_000)
+        WriteConfig(max_rows_per_file=1000000, min_rows_per_file=None)
+    """
+
+    max_rows_per_file: int | None = None
+    min_rows_per_file: int | None = None
