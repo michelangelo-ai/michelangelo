@@ -30,7 +30,9 @@ export function ProjectList() {
 
   return (
     <div className={css({ marginTop: theme.sizing.scale400 })}>
-      <div className={css({ paddingTop: '10px', paddingBottom: '10px' })}>
+      <div
+        className={css({ paddingTop: theme.sizing.scale400, paddingBottom: theme.sizing.scale400 })}
+      >
         <PageHeader label="All Projects" />
       </div>
       <Table
