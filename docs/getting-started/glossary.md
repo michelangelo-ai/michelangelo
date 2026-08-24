@@ -70,7 +70,7 @@ A handle returned by `concurrent_run()` representing an in-progress task. The wo
 ## I
 
 ### Inference Server
-The host process that serves online predictions. Michelangelo AI supports Triton Inference Server (for traditional models) and vLLM / SGLang (for LLM serving). Managed by the InferenceServer Controller on the control plane.
+The host process that serves online predictions. Michelangelo AI's InferenceServer Controller manages Triton, LLM-D, Dynamo, and TorchServe backends. vLLM is also available (`pip install michelangelo[vllm]`) for calling directly from your own Ray/Uniflow tasks, such as for offline batch inference.
 
 ### Incremental Training
 A training pattern where a new model revision is trained starting from the weights of a prior revision, rather than from scratch. Each iteration produces a new revision (revision 0 → revision 1 → …).
