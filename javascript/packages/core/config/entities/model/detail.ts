@@ -1,7 +1,6 @@
 import { CellType } from '#core/components/cell/constants';
-import { TAG_COLOR } from '#core/components/tag/constants';
 import { getCrdUpdatedSeconds } from '#core/utils/crd-utils';
-import { dataQualityAccessor, MODEL_KIND_TEXT_MAP } from './constants';
+import { MODEL_KIND_TEXT_MAP } from './constants';
 import { ModelInfoPage } from './model-info-page';
 
 import type { DetailViewConfig } from '#core/components/views/types';
@@ -31,13 +30,6 @@ export const MODEL_DETAIL_CONFIG: DetailViewConfig = {
       },
     },
     { id: 'spec.kind', label: 'Type', type: CellType.TYPE, typeTextMap: MODEL_KIND_TEXT_MAP },
-    {
-      id: 'dataQuality',
-      label: 'Data Quality',
-      type: CellType.STATE,
-      accessor: dataQualityAccessor,
-      stateColorMap: { Passed: TAG_COLOR.green, Failed: TAG_COLOR.red },
-    },
   ],
   pages: [
     {

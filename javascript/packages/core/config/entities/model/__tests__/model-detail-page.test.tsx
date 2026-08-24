@@ -56,33 +56,6 @@ describe('Model detail page', () => {
       expect(screen.getByText('Last updated')).toBeInTheDocument();
       expect(screen.getByText('Type')).toBeInTheDocument();
       expect(screen.getByText('Binary Classification')).toBeInTheDocument();
-      expect(screen.getByText('Data Quality')).toBeInTheDocument();
-    });
-
-    it('shows Passed when the overall quality score is truthy', async () => {
-      renderDetail(
-        buildModel({
-          spec: {
-            ...buildModel().spec,
-            qualityScores: [{ name: 'overall_quality_score', value: 1 }],
-          },
-        })
-      );
-
-      expect(await screen.findByText('Passed')).toBeInTheDocument();
-    });
-
-    it('shows Failed when the overall quality score is falsy', async () => {
-      renderDetail(
-        buildModel({
-          spec: {
-            ...buildModel().spec,
-            qualityScores: [{ name: 'overall_quality_score', value: 0 }],
-          },
-        })
-      );
-
-      expect(await screen.findByText('Failed')).toBeInTheDocument();
     });
   });
 

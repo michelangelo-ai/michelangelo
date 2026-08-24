@@ -33,23 +33,3 @@ export const MODEL_KIND_TEXT_MAP: Record<number, string> = {
   [MODEL_KIND.LLM_CHAT_COMPLETION]: 'LLM Chat',
   [MODEL_KIND.LLM_EMBEDDING]: 'LLM Embedding',
 };
-
-/**
- * Resolves the "Data Quality" summary for a model's detail header from the
- * `overall_quality_score` entry in `spec.qualityScores`. A truthy score value reads as
- * "Passed"; a falsy one as "Failed"; a missing entry as "".
- */
-export const dataQualityAccessor = (model: unknown): string => {
-  // cast: accessor receives unknown data; narrowing to expected proto shape for property
-  // access; see #1425
-  const record = model as {
-    spec?: { qualityScores?: { name?: string; value?: number }[] };
-  };
-  const overallScore = record?.spec?.qualityScores?.find(
-    (score) => score.name === 'overall_quality_score'
-  );
-  if (overallScore) {
-    return overallScore.value ? 'Passed' : 'Failed';
-  }
-  return '';
-};
