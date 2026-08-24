@@ -1668,8 +1668,9 @@ func TestResumeFromPipelineRun(t *testing.T) {
 					_ = kwargs
 					capturedEnvs := envs
 
-					// Verify cache is enabled by default (scoped to this pipeline run via CACHE_VERSION)
-					require.Equal(t, "true", capturedEnvs["CACHE_ENABLED"])
+					// Verify cache defaults to disabled with no resume spec and no concurrent
+					// task groups declared in the manifest (scoped via CACHE_VERSION regardless)
+					require.Equal(t, "false", capturedEnvs["CACHE_ENABLED"])
 					require.Equal(t, "test-pipeline-run-no-resume", capturedEnvs["CACHE_VERSION"])
 
 					return &clientInterfaces.WorkflowExecution{
@@ -1678,7 +1679,7 @@ func TestResumeFromPipelineRun(t *testing.T) {
 					}, nil
 				})
 			},
-			expectedCacheEnabled:       true,
+			expectedCacheEnabled:       false,
 			expectedCacheVersionVars:   map[string]string{},
 			expectedResumeFromDisabled: []string{},
 		},
@@ -2053,6 +2054,63 @@ func TestConvertKwArgsMapToList(t *testing.T) {
 				// For non-map inputs, compare directly
 				require.Equal(t, testCase.expected, result)
 			}
+		})
+	}
+}
+
+func TestConcurrentGroupTaskNames(t *testing.T) {
+	testCases := []struct {
+		name               string
+		pipelineConfigMap  map[string]interface{}
+		expectedTaskNames  []string
+	}{
+		{
+			name:              "No concurrent_groups key",
+			pipelineConfigMap: map[string]interface{}{},
+			expectedTaskNames: nil,
+		},
+		{
+			name: "Single two-task concurrent group",
+			pipelineConfigMap: map[string]interface{}{
+				WorkflowConcurrentGroupsKey: []interface{}{
+					[]interface{}{"task_a", "task_b"},
+				},
+			},
+			expectedTaskNames: []string{"task_a", "task_b"},
+		},
+		{
+			name: "Sequential (a,b) -> (c,d): two separate groups, both auto-enabled",
+			pipelineConfigMap: map[string]interface{}{
+				WorkflowConcurrentGroupsKey: []interface{}{
+					[]interface{}{"task_a", "task_b"},
+					[]interface{}{"task_c", "task_d"},
+				},
+			},
+			expectedTaskNames: []string{"task_a", "task_b", "task_c", "task_d"},
+		},
+		{
+			name: "Standalone single-member group ignored",
+			pipelineConfigMap: map[string]interface{}{
+				WorkflowConcurrentGroupsKey: []interface{}{
+					[]interface{}{"solo_task"},
+					[]interface{}{"task_a", "task_b"},
+				},
+			},
+			expectedTaskNames: []string{"task_a", "task_b"},
+		},
+		{
+			name: "Malformed groups value ignored, not a crash",
+			pipelineConfigMap: map[string]interface{}{
+				WorkflowConcurrentGroupsKey: "not-a-list",
+			},
+			expectedTaskNames: nil,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			result := concurrentGroupTaskNames(testCase.pipelineConfigMap)
+			require.Equal(t, testCase.expectedTaskNames, result)
 		})
 	}
 }
@@ -2904,6 +2962,119 @@ func TestFindTaskResetEventIDByActivityID(t *testing.T) {
 			},
 			expectedEventID: 0,
 			expectedError:   "could not find safe reset boundary before first activity test-activity-1",
+		},
+		{
+			name:            "Walks back past a preceding cache-check wave",
+			workflowID:      "test-workflow-id",
+			runID:           "test-run-id",
+			firstActivityID: "test-activity-1",
+			mockFunc: func(workflowClient *workflowclientMock.MockWorkflowClient) {
+				workflowClient.EXPECT().GetActivityTaskScheduledEventType().Return("ActivityTaskScheduled").AnyTimes()
+				workflowClient.EXPECT().GetActivityTaskCompletedEventType().Return("ActivityTaskCompleted").AnyTimes()
+				workflowClient.EXPECT().GetDecisionTaskCompletedEventType().Return("DecisionTaskCompleted").AnyTimes()
+
+				mockHistory := &clientInterfaces.WorkflowHistory{
+					Events: []clientInterfaces.HistoryEvent{
+						{EventID: 1, EventType: "WorkflowExecutionStarted"},
+						{EventID: 2, EventType: "DecisionTaskStarted"},
+						{EventID: 3, EventType: "DecisionTaskCompleted"},
+						{
+							EventID:   4,
+							EventType: "ActivityTaskScheduled",
+							Details: map[string]interface{}{
+								"activity_id":   "cache-a",
+								"activity_type": "github.com/michelangelo-ai/michelangelo/go/worker/activities/cachedoutput.(*activities).ListCachedOutput",
+							},
+						},
+						{
+							EventID:   5,
+							EventType: "ActivityTaskScheduled",
+							Details: map[string]interface{}{
+								"activity_id":   "cache-b",
+								"activity_type": "github.com/michelangelo-ai/michelangelo/go/worker/activities/cachedoutput.(*activities).ListCachedOutput",
+							},
+						},
+						{
+							EventID:   6,
+							EventType: "ActivityTaskCompleted",
+							Details:   map[string]interface{}{"scheduled_event_id": int64(4)},
+						},
+						{
+							EventID:   7,
+							EventType: "ActivityTaskCompleted",
+							Details:   map[string]interface{}{"scheduled_event_id": int64(5)},
+						},
+						{EventID: 8, EventType: "DecisionTaskStarted"},
+						{EventID: 9, EventType: "DecisionTaskCompleted"},
+						{
+							EventID:   10,
+							EventType: "ActivityTaskScheduled",
+							Details: map[string]interface{}{
+								"activity_id":   "test-activity-1",
+								"activity_type": "github.com/michelangelo-ai/michelangelo/go/worker/activities/spark.(*activities).CreateSparkJob",
+							},
+						},
+					},
+				}
+				workflowClient.EXPECT().GetWorkflowExecutionHistory(
+					gomock.Any(),
+					"test-workflow-id",
+					"test-run-id",
+					gomock.Any(),
+					int32(5000),
+				).Return(mockHistory, nil)
+			},
+			expectedEventID: 3,
+			expectedError:   "",
+		},
+		{
+			name:            "Stops at an unrelated real activity, does not over-reach",
+			workflowID:      "test-workflow-id",
+			runID:           "test-run-id",
+			firstActivityID: "test-activity-1",
+			mockFunc: func(workflowClient *workflowclientMock.MockWorkflowClient) {
+				workflowClient.EXPECT().GetActivityTaskScheduledEventType().Return("ActivityTaskScheduled").AnyTimes()
+				workflowClient.EXPECT().GetActivityTaskCompletedEventType().Return("ActivityTaskCompleted").AnyTimes()
+				workflowClient.EXPECT().GetDecisionTaskCompletedEventType().Return("DecisionTaskCompleted").AnyTimes()
+
+				mockHistory := &clientInterfaces.WorkflowHistory{
+					Events: []clientInterfaces.HistoryEvent{
+						{EventID: 1, EventType: "WorkflowExecutionStarted"},
+						{EventID: 2, EventType: "DecisionTaskCompleted"},
+						{
+							EventID:   3,
+							EventType: "ActivityTaskScheduled",
+							Details: map[string]interface{}{
+								"activity_id":   "seq-task",
+								"activity_type": "github.com/michelangelo-ai/michelangelo/go/worker/activities/spark.(*activities).CreateSparkJob",
+							},
+						},
+						{
+							EventID:   4,
+							EventType: "ActivityTaskCompleted",
+							Details:   map[string]interface{}{"scheduled_event_id": int64(3)},
+						},
+						{EventID: 5, EventType: "DecisionTaskCompleted"},
+						{
+							EventID:   6,
+							EventType: "ActivityTaskScheduled",
+							Details: map[string]interface{}{
+								"activity_id":   "test-activity-1",
+								"activity_type": "github.com/michelangelo-ai/michelangelo/go/worker/activities/spark.(*activities).CreateSparkJob",
+							},
+						},
+					},
+				}
+				workflowClient.EXPECT().GetWorkflowExecutionHistory(
+					gomock.Any(),
+					"test-workflow-id",
+					"test-run-id",
+					gomock.Any(),
+					int32(5000),
+				).Return(mockHistory, nil)
+			},
+			expectedEventID: 5,
+			expectedError:   "",
 		},
 	}
 

@@ -10,6 +10,7 @@ import inspect
 import json
 import logging
 import os
+import textwrap
 from contextlib import contextmanager
 from typing import Any, Callable, Optional
 
@@ -385,6 +386,156 @@ class ConfigBuilder:
         _logger.info("Extracted workflow environ: %s", environ)
         return environ
 
+    def get_workflow_concurrent_groups(self) -> list:
+        """Detect groups of task functions dispatched together via concurrent_run/batch_run.
+
+        Statically analyzes the workflow function's own source (not the whole module) to
+        find task names passed to `concurrent.run`/`concurrent.batch_run` that are
+        dispatched together, i.e. before any of their futures' `.result()`/`.get()` is
+        awaited. Only top-level statements in the workflow function are considered - calls
+        inside nested `def`s, loops, or conditionals are not analyzed and will simply not
+        contribute a group (safe default: no auto-enabled caching for those tasks).
+
+        This is used to auto-enable caching only for tasks that can be forced to replay by
+        an unrelated manual retry within the same Cadence/Temporal workflow history, since
+        concurrent tasks share one workflow execution.
+
+        Returns:
+            list: List of groups, each a list of task function names dispatched together.
+                Groups with a single member are still included; callers should ignore them.
+        """
+        groups: list = []
+        try:
+            source = textwrap.dedent(inspect.getsource(self._workflow_function_obj))
+            tree = ast.parse(source)
+            func_def = tree.body[0]
+            if not isinstance(func_def, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                return groups
+
+            # The workflow function is typically decorated (e.g. @uniflow.workflow()),
+            # so self._workflow_function_obj is the wrapper closure defined inside the
+            # decorator module - its __globals__ would be that module's namespace, not
+            # the pipeline's. Unwrap to the original function to read the right globals.
+            module_globals = getattr(
+                inspect.unwrap(self._workflow_function_obj), "__globals__", {}
+            )
+
+            def resolve_binding(name: str) -> Optional[str]:
+                candidate = module_globals.get(name)
+                if candidate is None:
+                    return None
+                binding = getattr(candidate, "_uf_star_plugin_binding", None)
+                if binding is None:
+                    wrapped = getattr(candidate, "__wrapped__", None)
+                    binding = getattr(wrapped, "_uf_star_plugin_binding", None)
+                return binding
+
+            def task_name_from_call(call: ast.Call) -> Optional[str]:
+                if call.args and isinstance(call.args[0], ast.Name):
+                    return call.args[0].id
+                return None
+
+            def is_future_wait(node: ast.AST) -> bool:
+                return (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr in ("result", "get")
+                )
+
+            # Maps a local variable name bound to `new_callable(task_fn, ...)` back to the
+            # wrapped task's function name, so batch_run([c1, c2, ...]) can be resolved.
+            callable_task_names: dict = {}
+            # Maps a local variable name bound to a literal list of new_callable(...)
+            # calls (e.g. `callables = [new_callable(task_a), new_callable(task_b)]`)
+            # to the resolved task names, so batch_run(callables) can be resolved too.
+            list_task_names: dict = {}
+            current_wave: list = []
+
+            def close_wave():
+                nonlocal current_wave
+                if current_wave:
+                    groups.append(current_wave)
+                current_wave = []
+
+            def resolve_new_callable_list(list_node: ast.List) -> Optional[list]:
+                names = []
+                for elt in list_node.elts:
+                    if isinstance(elt, ast.Name) and elt.id in callable_task_names:
+                        names.append(callable_task_names[elt.id])
+                    elif (
+                        isinstance(elt, ast.Call)
+                        and isinstance(elt.func, ast.Name)
+                        and resolve_binding(elt.func.id) == "concurrent.new_callable"
+                    ):
+                        task_name = task_name_from_call(elt)
+                        if task_name is None:
+                            return None
+                        names.append(task_name)
+                    else:
+                        return None
+                return names or None
+
+            def resolve_batch_run_names(call: ast.Call) -> Optional[list]:
+                if not call.args:
+                    return None
+                arg = call.args[0]
+                if isinstance(arg, ast.List):
+                    return resolve_new_callable_list(arg)
+                if isinstance(arg, ast.Name) and arg.id in list_task_names:
+                    return list_task_names[arg.id]
+                return None
+
+            for stmt in func_def.body:
+                if (
+                    isinstance(stmt, ast.Assign)
+                    and len(stmt.targets) == 1
+                    and isinstance(stmt.targets[0], ast.Name)
+                    and isinstance(stmt.value, ast.List)
+                ):
+                    resolved_list = resolve_new_callable_list(stmt.value)
+                    if resolved_list:
+                        list_task_names[stmt.targets[0].id] = resolved_list
+
+                found_wave_member = False
+                for node in ast.walk(stmt):
+                    if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)):
+                        continue
+                    binding = resolve_binding(node.func.id)
+                    if binding == "concurrent.run":
+                        task_name = task_name_from_call(node)
+                        if task_name:
+                            current_wave.append(task_name)
+                            found_wave_member = True
+                    elif binding == "concurrent.new_callable":
+                        task_name = task_name_from_call(node)
+                        if (
+                            task_name
+                            and isinstance(stmt, ast.Assign)
+                            and len(stmt.targets) == 1
+                            and isinstance(stmt.targets[0], ast.Name)
+                        ):
+                            callable_task_names[stmt.targets[0].id] = task_name
+                    elif binding == "concurrent.batch_run":
+                        batch_names = resolve_batch_run_names(node)
+                        if batch_names:
+                            groups.append(batch_names)
+                            found_wave_member = True
+
+                if not found_wave_member and any(
+                    is_future_wait(node) for node in ast.walk(stmt)
+                ):
+                    close_wave()
+
+            close_wave()
+        except Exception as e:
+            _logger.warning(
+                "Could not extract concurrent task groups from workflow: %s", e
+            )
+            return []
+
+        _logger.info("Extracted workflow concurrent groups: %s", groups)
+        return groups
+
     def get_workflow_config_as_manifest_content(self) -> dict:
         """Get workflow configuration formatted for manifest content.
 
@@ -395,4 +546,5 @@ class ConfigBuilder:
             "args": self.get_workflow_args(),
             "kwargs": [[k, v] for k, v in self.get_workflow_kwargs().items()],
             "environ": self.get_workflow_environ(),
+            "concurrent_groups": self.get_workflow_concurrent_groups(),
         }
