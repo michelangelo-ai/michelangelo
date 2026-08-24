@@ -1,5 +1,6 @@
 import { CellType } from '#core/components/cell/constants';
 import { TASK_STATE } from '#core/components/views/execution/constants';
+import { RunConfigurationPage } from './run-configuration-page';
 import { SHARED_RUN_CELL_CONFIG } from './shared';
 
 import type { DetailViewConfig } from '#core/components/views/types';
@@ -123,6 +124,12 @@ export const RUN_DETAIL_CONFIG: DetailViewConfig = {
           }
         },
       },
+    },
+    {
+      id: 'configuration',
+      label: 'Pipeline Configuration',
+      type: 'custom',
+      component: RunConfigurationPage,
     },
   ],
 };

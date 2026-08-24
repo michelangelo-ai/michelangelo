@@ -3,5 +3,6 @@ export type TextEditorProps = {
   language?: 'json';
   readOnly?: boolean;
   height?: string;
+  foldGutter?: boolean;
   onChange?: (value: string) => void;
 };
