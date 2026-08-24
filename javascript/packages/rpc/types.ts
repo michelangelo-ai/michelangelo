@@ -7,6 +7,7 @@ import type {
   MessageShape,
 } from '@bufbuild/protobuf';
 import type { DeploymentService } from './gen/michelangelo/api/v2/deployment_svc_pb';
+import type { EvaluationReportService } from './gen/michelangelo/api/v2/evaluation_report_svc_pb';
 import type { InferenceServerService } from './gen/michelangelo/api/v2/inference_server_svc_pb';
 import type { ModelService } from './gen/michelangelo/api/v2/model_svc_pb';
 import type { PipelineRunService } from './gen/michelangelo/api/v2/pipeline_run_svc_pb';
@@ -67,6 +68,7 @@ export type Services = {
   PipelineRunService: ServiceClient<typeof PipelineRunService>;
   TriggerRunService: ServiceClient<typeof TriggerRunService>;
   ModelService: ServiceClient<typeof ModelService>;
+  EvaluationReportService: ServiceClient<typeof EvaluationReportService>;
 };
 
 /**

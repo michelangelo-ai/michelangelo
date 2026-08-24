@@ -3,6 +3,7 @@ import { create, createRegistry, fromJson, toJson } from '@bufbuild/protobuf';
 import { createFetchTransport } from './create-fetch-transport';
 import { TypedStructSchema } from './gen/michelangelo/api/typed_struct_pb';
 import { DeploymentService } from './gen/michelangelo/api/v2/deployment_svc_pb';
+import { EvaluationReportService } from './gen/michelangelo/api/v2/evaluation_report_svc_pb';
 import { InferenceServerService } from './gen/michelangelo/api/v2/inference_server_svc_pb';
 import { ModelService } from './gen/michelangelo/api/v2/model_svc_pb';
 import { PipelineRunService } from './gen/michelangelo/api/v2/pipeline_run_svc_pb';
@@ -66,6 +67,7 @@ async function createServices(): Promise<Services> {
     PipelineRunService: createServiceClient(PipelineRunService, transport),
     TriggerRunService: createServiceClient(TriggerRunService, transport),
     ModelService: createServiceClient(ModelService, transport),
+    EvaluationReportService: createServiceClient(EvaluationReportService, transport),
   } as const;
 }
 
