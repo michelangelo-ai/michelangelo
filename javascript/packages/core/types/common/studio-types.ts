@@ -134,6 +134,12 @@ export interface PhaseConfig {
   state: PhaseState;
   /** List of entities (like pipelines, models) that belong to this phase */
   entities: PhaseEntityConfig[];
+  /**
+   * Restricts this phase's pipeline-derived entities (pipelines, runs, triggers) to
+   * these pipeline type values (e.g. `['PIPELINE_TYPE_TRAIN', 'PIPELINE_TYPE_EVAL']`).
+   * Omit to show all pipeline types.
+   */
+  pipelineTypes?: string[];
 }
 
 /**

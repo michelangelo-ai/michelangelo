@@ -1,4 +1,4 @@
-import type { BaseFieldProps } from '../types';
+import type { BaseFieldProps, SharedFieldConfig } from '../types';
 
 export interface TextareaFieldProps extends BaseFieldProps<string> {
   rows?: number;
@@ -14,3 +14,8 @@ export interface MaxLengthLabelEnhancerProps {
   maxLength: number;
   currentLength: number;
 }
+
+export type TextareaFieldConfig<T = string> = SharedFieldConfig<T, string> &
+  Pick<TextareaFieldProps, 'rows' | 'maxLength'> & {
+    type: 'textarea';
+  };

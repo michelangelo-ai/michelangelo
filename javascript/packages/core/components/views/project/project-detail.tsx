@@ -1,6 +1,7 @@
 import { useStyletron } from 'baseui';
 
 import { Box } from '#core/components/box/box';
+import { CellType } from '#core/components/cell/constants';
 import { Row } from '#core/components/row/row';
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
 import { useStudioQuery } from '#core/hooks/use-studio-query';
@@ -24,6 +25,7 @@ export function ProjectDetail({ phases }: { phases: PhaseConfig[] }) {
           owningTeam: string;
         };
         tier: string;
+        gitRepo: string;
       };
     };
   }>({
@@ -33,6 +35,20 @@ export function ProjectDetail({ phases }: { phases: PhaseConfig[] }) {
       namespace: projectId,
     },
   });
+
+  const gitRepo = data?.project?.spec?.gitRepo;
+  const overviewCellConfig = gitRepo
+    ? [
+        ...SHARED_PROJECT_CELL_CONFIG,
+        {
+          id: 'spec.gitRepo',
+          label: 'Source Code',
+          type: CellType.LINK,
+          url: gitRepo,
+          accessor: () => 'Link',
+        },
+      ]
+    : SHARED_PROJECT_CELL_CONFIG;
 
   return (
     <div
@@ -55,14 +71,14 @@ export function ProjectDetail({ phases }: { phases: PhaseConfig[] }) {
           },
         }}
       >
-        <Row items={SHARED_PROJECT_CELL_CONFIG} record={data?.project} />
+        <Row items={overviewCellConfig} record={data?.project} />
       </Box>
 
       <div
         className={css({
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-          gap: theme.sizing.scale600,
+          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+          gap: theme.sizing.scale500,
           padding: theme.sizing.scale400,
         })}
       >

@@ -76,163 +76,308 @@ describe('Deployment list page', () => {
 });
 
 describe('Deployment detail page', () => {
-  const buildDeployment = (overrides = {}) => ({
-    metadata: {
-      name: 'sentiment-deployment',
-      creationTimestamp: { seconds: 1746000000 },
-      labels: { 'michelangelo/owner': 'user-example' },
-    },
-    status: {
-      state: DEPLOYMENT_STATE.HEALTHY,
-      stage: DEPLOYMENT_STAGE.ROLLOUT_COMPLETE,
-      conditions: [] as object[],
-    },
-    ...overrides,
-  });
+  describe('header', () => {
+    const buildDeployment = (overrides = {}) => ({
+      metadata: {
+        name: 'sentiment-deployment',
+        creationTimestamp: { seconds: 1746000000 },
+        labels: { 'michelangelo/owner': 'user-example' },
+      },
+      status: {
+        state: DEPLOYMENT_STATE.HEALTHY,
+        stage: DEPLOYMENT_STAGE.ROLLOUT_COMPLETE,
+        conditions: [] as object[],
+      },
+      ...overrides,
+    });
 
-  it('renders details for deployment', async () => {
-    render(
-      <EntityDetailRoute phases={{ deploy: DEPLOY_PHASE }} />,
-      buildWrapper([
-        getErrorProviderWrapper(),
-        getRouterWrapper({
-          location: '/myproject/deploy/deployments/sentiment-deployment/ongoing-operations',
-        }),
-        getServiceProviderWrapper({
-          request: createQueryMockRouter({
-            GetDeployment: { deployment: buildDeployment() },
+    it('renders details for deployment', async () => {
+      render(
+        <EntityDetailRoute phases={{ deploy: DEPLOY_PHASE }} />,
+        buildWrapper([
+          getErrorProviderWrapper(),
+          getRouterWrapper({
+            location: '/myproject/deploy/deployments/sentiment-deployment/stages',
           }),
-        }),
-      ])
-    );
+          getServiceProviderWrapper({
+            request: createQueryMockRouter({
+              GetDeployment: { deployment: buildDeployment() },
+            }),
+          }),
+        ])
+      );
 
-    expect(screen.getByText('sentiment-deployment')).toBeInTheDocument();
-    expect(await screen.findByText('Created')).toBeInTheDocument();
-    expect(screen.getByText('Owner')).toBeInTheDocument();
-    expect(screen.getByText('Stage')).toBeInTheDocument();
-    expect(screen.getByText('State')).toBeInTheDocument();
+      expect(screen.getByText('sentiment-deployment')).toBeInTheDocument();
+      expect(await screen.findByText('Created')).toBeInTheDocument();
+      expect(screen.getByText('Owner')).toBeInTheDocument();
+      expect(screen.getByText('Stage')).toBeInTheDocument();
+      expect(screen.getByText('State')).toBeInTheDocument();
+    });
   });
 
-  it('renders the stages for the deployment', async () => {
-    render(
-      <EntityDetailRoute phases={{ deploy: DEPLOY_PHASE }} />,
-      buildWrapper([
-        getErrorProviderWrapper(),
-        getRouterWrapper({
-          location: '/myproject/deploy/deployments/sentiment-deployment/ongoing-operations',
-        }),
-        getServiceProviderWrapper({
-          request: createQueryMockRouter({
-            GetDeployment: {
-              deployment: buildDeployment({
-                status: {
-                  state: DEPLOYMENT_STATE.HEALTHY,
-                  stage: DEPLOYMENT_STAGE.ROLLOUT_COMPLETE,
-                  conditions: [
-                    {
-                      type: 'Validation',
-                      status: DEPLOYMENT_CONDITION_STATUS.TRUE,
-                      lastUpdatedTimestamp: '1746000600000',
-                    },
-                    {
-                      type: 'Placement',
-                      status: DEPLOYMENT_CONDITION_STATUS.UNKNOWN,
-                      message: 'Placing on inference server.',
-                      reason: 'PlacementInProgress',
-                      lastUpdatedTimestamp: '1746002400000',
-                    },
-                  ],
+  describe('information tab', () => {
+    const buildDeployment = () => ({
+      metadata: {
+        name: 'sentiment-deployment',
+        creationTimestamp: { seconds: 1746000000 },
+        labels: { 'michelangelo/owner': 'user-example' },
+      },
+      spec: {
+        definition: { type: 1 },
+        strategy: { rolloutStrategy: { case: 'rolling', value: {} } },
+        target: { case: 'inferenceServer', value: { name: 'triton-server' } },
+        desiredRevision: { name: 'sentiment-model-rev-3' },
+        resourceLinks: { Dashboard: 'https://grafana.example.com/d/abc' },
+      },
+      status: {
+        state: DEPLOYMENT_STATE.HEALTHY,
+        stage: DEPLOYMENT_STAGE.ROLLOUT_COMPLETE,
+        message: 'Rollout completed successfully.',
+        currentRevision: { name: 'sentiment-model-rev-2' },
+        conditions: [] as object[],
+      },
+    });
+
+    const infoTabResponses = () => ({
+      GetDeployment: { deployment: buildDeployment() },
+    });
+
+    it('renders the configuration details', async () => {
+      render(
+        <EntityDetailRoute phases={{ deploy: DEPLOY_PHASE }} />,
+        buildWrapper([
+          getErrorProviderWrapper(),
+          getRouterWrapper({
+            location: '/myproject/deploy/deployments/sentiment-deployment/info',
+          }),
+          getServiceProviderWrapper({ request: createQueryMockRouter(infoTabResponses()) }),
+        ])
+      );
+
+      expect(await screen.findByText('Configuration')).toBeInTheDocument();
+      expect(await screen.findByLabelText('Type of deployment')).toHaveDisplayValue('Online');
+    });
+
+    it('renders the target link in useful links', async () => {
+      render(
+        <EntityDetailRoute phases={{ deploy: DEPLOY_PHASE }} />,
+        buildWrapper([
+          getErrorProviderWrapper(),
+          getRouterWrapper({
+            location: '/myproject/deploy/deployments/sentiment-deployment/info',
+          }),
+          getServiceProviderWrapper({ request: createQueryMockRouter(infoTabResponses()) }),
+        ])
+      );
+
+      expect(await screen.findByRole('link', { name: 'triton-server' })).toHaveAttribute(
+        'href',
+        '/myproject/deploy/targets/triton-server'
+      );
+    });
+
+    it('shows a loading state until the deployment data resolves', async () => {
+      render(
+        <EntityDetailRoute phases={{ deploy: DEPLOY_PHASE }} />,
+        buildWrapper([
+          getErrorProviderWrapper(),
+          getRouterWrapper({
+            location: '/myproject/deploy/deployments/sentiment-deployment/info',
+          }),
+          getServiceProviderWrapper({
+            // Never resolves, so the page stays in its loading state.
+            request: vi.fn().mockReturnValue(new Promise<never>(() => undefined)),
+          }),
+        ])
+      );
+
+      expect(await screen.findByText('Configuration')).toBeInTheDocument();
+      expect(screen.queryByLabelText('Type of deployment')).not.toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'triton-server' })).not.toBeInTheDocument();
+    });
+
+    it('renders the revision references on the deployment', async () => {
+      render(
+        <EntityDetailRoute phases={{ deploy: DEPLOY_PHASE }} />,
+        buildWrapper([
+          getErrorProviderWrapper(),
+          getRouterWrapper({
+            location: '/myproject/deploy/deployments/sentiment-deployment/info',
+          }),
+          getServiceProviderWrapper({ request: createQueryMockRouter(infoTabResponses()) }),
+        ])
+      );
+
+      expect(await screen.findByText('sentiment-model-rev-2')).toBeInTheDocument();
+      expect(screen.getByText('Current model in production')).toBeInTheDocument();
+      expect(screen.getByText('sentiment-model-rev-3')).toBeInTheDocument();
+      expect(screen.getByText('No model currently being deployed')).toBeInTheDocument();
+    });
+
+    it('renders empty states when no revisions are set', async () => {
+      render(
+        <EntityDetailRoute phases={{ deploy: DEPLOY_PHASE }} />,
+        buildWrapper([
+          getErrorProviderWrapper(),
+          getRouterWrapper({
+            location: '/myproject/deploy/deployments/sentiment-deployment/info',
+          }),
+          getServiceProviderWrapper({
+            request: createQueryMockRouter({
+              GetDeployment: {
+                deployment: {
+                  metadata: { name: 'sentiment-deployment' },
+                  spec: { definition: { type: 1 } },
+                  status: { state: DEPLOYMENT_STATE.EMPTY, stage: DEPLOYMENT_STAGE.INVALID },
                 },
-              }),
-            },
+              },
+            }),
           }),
-        }),
-      ])
-    );
+        ])
+      );
 
-    expect(await screen.findByRole('tab', { name: 'Ongoing operations' })).toBeInTheDocument();
-    await screen.findAllByText('Validation');
-    await screen.findAllByText('Placement');
+      expect(await screen.findByText('No currently deployed model')).toBeInTheDocument();
+      expect(screen.getByText('No model currently being deployed')).toBeInTheDocument();
+      expect(screen.getByText('No model configured to be deployed')).toBeInTheDocument();
+    });
   });
 
-  it('renders the Information and Details fields within a deployment stage', async () => {
-    render(
-      <EntityDetailRoute phases={{ deploy: DEPLOY_PHASE }} />,
-      buildWrapper([
-        getErrorProviderWrapper(),
-        getRouterWrapper({
-          location: '/myproject/deploy/deployments/sentiment-deployment/ongoing-operations',
-        }),
-        getServiceProviderWrapper({
-          request: createQueryMockRouter({
-            GetDeployment: {
-              deployment: buildDeployment({
-                status: {
-                  state: DEPLOYMENT_STATE.HEALTHY,
-                  stage: DEPLOYMENT_STAGE.ROLLOUT_COMPLETE,
-                  conditions: [
-                    {
-                      type: 'Placement',
-                      status: DEPLOYMENT_CONDITION_STATUS.UNKNOWN,
-                      message: 'Placing on inference server.',
-                      reason: 'PlacementInProgress',
-                      lastUpdatedTimestamp: '1746002400000',
-                    },
-                  ],
-                },
-              }),
-            },
+  describe('ongoing operations tab', () => {
+    const buildDeployment = (overrides = {}) => ({
+      metadata: {
+        name: 'sentiment-deployment',
+        creationTimestamp: { seconds: 1746000000 },
+        labels: { 'michelangelo/owner': 'user-example' },
+      },
+      status: {
+        state: DEPLOYMENT_STATE.HEALTHY,
+        stage: DEPLOYMENT_STAGE.ROLLOUT_COMPLETE,
+        conditions: [] as object[],
+      },
+      ...overrides,
+    });
+
+    it('renders the stages for the deployment', async () => {
+      render(
+        <EntityDetailRoute phases={{ deploy: DEPLOY_PHASE }} />,
+        buildWrapper([
+          getErrorProviderWrapper(),
+          getRouterWrapper({
+            location: '/myproject/deploy/deployments/sentiment-deployment/ongoing-operations',
           }),
-        }),
-      ])
-    );
-
-    expect(await screen.findByText('Information')).toBeInTheDocument();
-    expect(screen.getByText('Placing on inference server.')).toBeInTheDocument();
-    expect(screen.getByText('Details')).toBeInTheDocument();
-    expect(screen.getByText('PlacementInProgress')).toBeInTheDocument();
-  });
-
-  it('renders stages when rollout has failed', async () => {
-    render(
-      <EntityDetailRoute phases={{ deploy: DEPLOY_PHASE }} />,
-      buildWrapper([
-        getErrorProviderWrapper(),
-        getRouterWrapper({
-          location: '/myproject/deploy/deployments/sentiment-deployment/ongoing-operations',
-        }),
-        getServiceProviderWrapper({
-          request: createQueryMockRouter({
-            GetDeployment: {
-              deployment: buildDeployment({
-                status: {
-                  state: DEPLOYMENT_STATE.UNHEALTHY,
-                  stage: DEPLOYMENT_STAGE.ROLLOUT_FAILED,
-                  conditions: [],
-                  conditionsSnapshot: [
-                    {
-                      type: 'SnapshotValidation',
-                      status: DEPLOYMENT_CONDITION_STATUS.TRUE,
-                      lastUpdatedTimestamp: '1746000600000',
-                    },
-                    {
-                      type: 'SnapshotPlacement',
-                      status: DEPLOYMENT_CONDITION_STATUS.FALSE,
-                      message: 'Failed to place on inference server.',
-                      reason: 'NoCapacity',
-                      lastUpdatedTimestamp: '1746001200000',
-                    },
-                  ],
-                },
-              }),
-            },
+          getServiceProviderWrapper({
+            request: createQueryMockRouter({
+              GetDeployment: {
+                deployment: buildDeployment({
+                  status: {
+                    state: DEPLOYMENT_STATE.HEALTHY,
+                    stage: DEPLOYMENT_STAGE.ROLLOUT_COMPLETE,
+                    conditions: [
+                      {
+                        type: 'Validation',
+                        status: DEPLOYMENT_CONDITION_STATUS.TRUE,
+                        lastUpdatedTimestamp: '1746000600000',
+                      },
+                      {
+                        type: 'Placement',
+                        status: DEPLOYMENT_CONDITION_STATUS.UNKNOWN,
+                        message: 'Placing on inference server.',
+                        reason: 'PlacementInProgress',
+                        lastUpdatedTimestamp: '1746002400000',
+                      },
+                    ],
+                  },
+                }),
+              },
+            }),
           }),
-        }),
-      ])
-    );
+        ])
+      );
 
-    await screen.findAllByText('SnapshotValidation');
-    await screen.findAllByText('SnapshotPlacement');
-    await screen.findByText('NoCapacity');
+      expect(await screen.findByRole('tab', { name: 'Ongoing operations' })).toBeInTheDocument();
+      await screen.findAllByText('Validation');
+      await screen.findAllByText('Placement');
+    });
+
+    it('renders the Information and Details fields within a deployment stage', async () => {
+      render(
+        <EntityDetailRoute phases={{ deploy: DEPLOY_PHASE }} />,
+        buildWrapper([
+          getErrorProviderWrapper(),
+          getRouterWrapper({
+            location: '/myproject/deploy/deployments/sentiment-deployment/ongoing-operations',
+          }),
+          getServiceProviderWrapper({
+            request: createQueryMockRouter({
+              GetDeployment: {
+                deployment: buildDeployment({
+                  status: {
+                    state: DEPLOYMENT_STATE.HEALTHY,
+                    stage: DEPLOYMENT_STAGE.ROLLOUT_COMPLETE,
+                    conditions: [
+                      {
+                        type: 'Placement',
+                        status: DEPLOYMENT_CONDITION_STATUS.UNKNOWN,
+                        message: 'Placing on inference server.',
+                        reason: 'PlacementInProgress',
+                        lastUpdatedTimestamp: '1746002400000',
+                      },
+                    ],
+                  },
+                }),
+              },
+            }),
+          }),
+        ])
+      );
+
+      expect(await screen.findByText('Placing on inference server.')).toBeInTheDocument();
+      expect(screen.getAllByText('Information').length).toBeGreaterThan(1);
+      expect(screen.getByText('Details')).toBeInTheDocument();
+      expect(screen.getByText('PlacementInProgress')).toBeInTheDocument();
+    });
+
+    it('renders stages when rollout has failed', async () => {
+      render(
+        <EntityDetailRoute phases={{ deploy: DEPLOY_PHASE }} />,
+        buildWrapper([
+          getErrorProviderWrapper(),
+          getRouterWrapper({
+            location: '/myproject/deploy/deployments/sentiment-deployment/ongoing-operations',
+          }),
+          getServiceProviderWrapper({
+            request: createQueryMockRouter({
+              GetDeployment: {
+                deployment: buildDeployment({
+                  status: {
+                    state: DEPLOYMENT_STATE.UNHEALTHY,
+                    stage: DEPLOYMENT_STAGE.ROLLOUT_FAILED,
+                    conditions: [],
+                    conditionsSnapshot: [
+                      {
+                        type: 'SnapshotValidation',
+                        status: DEPLOYMENT_CONDITION_STATUS.TRUE,
+                        lastUpdatedTimestamp: '1746000600000',
+                      },
+                      {
+                        type: 'SnapshotPlacement',
+                        status: DEPLOYMENT_CONDITION_STATUS.FALSE,
+                        message: 'Failed to place on inference server.',
+                        reason: 'NoCapacity',
+                        lastUpdatedTimestamp: '1746001200000',
+                      },
+                    ],
+                  },
+                }),
+              },
+            }),
+          }),
+        ])
+      );
+
+      await screen.findAllByText('SnapshotValidation');
+      await screen.findAllByText('SnapshotPlacement');
+      await screen.findByText('NoCapacity');
+    });
   });
 });

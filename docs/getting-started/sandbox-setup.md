@@ -253,6 +253,16 @@ For the full story on local vs. remote execution, building Docker images, config
 
 ---
 
+## Optional: set a custom dev identity
+
+The UI shows a placeholder "Local Developer" user (name, email, and avatar) in the nav bar. To swap in your own GitHub name, email, and photo, visit the sandbox URL with a `?ghUser=<your-github-username>` query param, e.g. `http://localhost:8090/?ghUser=<username>` (optionally add `&email=<your-email>` to set a specific email). On that first visit, the app fetches your public GitHub profile (no auth needed) and caches your name, email, and avatar in your browser's `localStorage`, so **no UI rebuild or backend restart is needed** — a normal page reload afterward keeps showing them.
+
+`yarn set-avatar <your-github-username> [--email <your-email>]` (run from `javascript/`) is a shortcut that prints this URL for you; editing the URL directly works the same way. Most GitHub profiles don't expose a public email, so pass `--email` (or add `&email=` to the URL yourself) if you want a real one shown — otherwise it falls back to your local git email (only works against `yarn dev`, not the built sandbox) or a placeholder.
+
+To go back to the default placeholder identity, use **Sign out** from the user menu — in the sandbox it just clears the cached profile and strips `ghUser`/`email` from the URL (there's no real auth here), so a manual `localStorage` edit alone won't stick if those params are still in the URL.
+
+---
+
 ## Troubleshooting
 
 ### `command not found: ma`
@@ -428,5 +438,5 @@ Add those exports to your `~/.zshrc` to make them permanent.
 ## What's next?
 
 - **Build your first pipeline** -- Follow [Getting Started with ML Pipelines](../user-guides/getting-started/getting-started.md) to create a training workflow (~30 min)
-- **Explore example projects** -- Try [California Housing XGBoost](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/pipelines/california_housing_xgb), [BERT Text Classification](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/bert_cola), or [GPT Fine-tuning](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/gpt_oss_20b_finetune)
+- **Explore example projects** -- Try [California Housing XGBoost (`xgb_train`)](https://github.com/michelangelo-ai/michelangelo-examples/tree/main/src/michelangelo_examples/california_housing/pipelines/xgb_train) or [California Housing PyTorch Lightning (`pytorch_train`)](https://github.com/michelangelo-ai/michelangelo-examples/tree/main/src/michelangelo_examples/california_housing/pipelines/pytorch_train) in [michelangelo-examples](https://github.com/michelangelo-ai/michelangelo-examples), [BERT Text Classification](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/bert_cola), or [GPT Fine-tuning](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/gpt_oss_20b_finetune)
 - **Learn the CLI** -- See the [CLI Reference](../user-guides/reference/cli.md) for managing pipelines and projects

@@ -24,9 +24,9 @@ const (
 // and lets each test script the Progress terminal result and per-method errors.
 // (Terminal/started state lives in the DrainState the test passes to
 // RunDrainStep.) Its mutating methods update the wrapped object exactly as a real
-// adapter would (RequestCancel stamps the drain-counted token; CompleteDrain
-// clears it + removes the finalizer), so the driver's token-driven gauge
-// accounting is exercised end-to-end.
+// adapter would for metadata (RequestCancel stamps the drain-counted token;
+// CompleteDrain clears it + removes the finalizer), so the driver's token-driven
+// gauge accounting is exercised end-to-end.
 //
 // The active-drain gauge is asserted behaviorally rather than by reading the
 // prometheus value: prometheus testutil pulls in client_model, which is not
@@ -85,7 +85,7 @@ func (f *fakeTarget) RequestCancel(_ context.Context) error {
 	if f.requestCancelErr != nil {
 		return f.requestCancelErr
 	}
-	// Atomic: cancel + drain-counted token in one persisted update.
+	// Mirror the token persisted by the real adapter before RequestCancel returns.
 	MarkDrainCounted(f.obj)
 	// Mirror drain.go: on the first loop, IncDrainActive runs exactly once,
 	// immediately after RequestCancel returns nil.
@@ -233,7 +233,7 @@ func TestRunDrainStepFirstLoopRequestsCancel(t *testing.T) {
 	require.Equal(t, 1, f.requestCancelCalls, "first loop must RequestCancel")
 	require.Zero(t, f.progressCalls, "first loop must not Progress")
 	require.Zero(t, f.completeDrainCalls, "first loop must not finalize")
-	// RequestCancel stamped the token (the atomic cancel+count), and
+	// RequestCancel stamped the token before the active drain was counted, and
 	// IncDrainActive ran exactly once (the gauge now owes a matching decrement at
 	// finish).
 	require.True(t, IsDrainCounted(run))

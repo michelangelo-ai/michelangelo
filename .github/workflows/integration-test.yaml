@@ -153,4 +153,44 @@ jobs:
           MICHELANGELO_EXAMPLES_DIR: ${{ github.workspace }}/michelangelo-examples
           PYTHONPATH: ${{ github.workspace }}/integration-test
 
+      - name: Seed browser test data
+        # Project + pipeline only (not models/deployments) - that's all the
+        # browser tests reference. Both calls are cheap no-ops if the data
+        # already exists from a prior run.
+        run: |
+          $GITHUB_WORKSPACE/python/.venv/bin/python -c "
+          from functional.api.check_prerequisites import check_project, check_pipeline
+          from fixtures.common_fixture import PIPELINE_RUN_CRUD_PIPELINE_NAME
+          check_project()
+          check_pipeline(PIPELINE_RUN_CRUD_PIPELINE_NAME)"
+        working-directory: ${{ github.workspace }}/integration-test
+        env:
+          MA_API_SERVER: localhost:15566
+          PYTHONPATH: ${{ github.workspace }}/integration-test
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.18.0
+
+      - name: Install browser test dependencies
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+        working-directory: ${{ github.workspace }}/integration-test/browser
+
+      - name: Run browser tests
+        run: npm test
+        working-directory: ${{ github.workspace }}/integration-test/browser
+        env:
+          MA_UI_URL: http://localhost:8090
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: integration-test/browser/playwright-report/
+          retention-days: 7
+
       # Infrastructure is intentionally kept running between CI runs.

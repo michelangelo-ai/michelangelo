@@ -11,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
+	k8sptr "k8s.io/utils/ptr"
 
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
@@ -373,6 +374,7 @@ func TestMapLocalClusterStatusToGlobal_WithConditions(t *testing.T) {
 		name            string
 		kubeRayState    rayv1.ClusterState
 		statusReason    string
+		suspend         *bool
 		conditions      []metav1.Condition
 		expectState     v2pb.RayClusterState
 		expectPodErrors int
@@ -431,9 +433,98 @@ func TestMapLocalClusterStatusToGlobal_WithConditions(t *testing.T) {
 			expectReason:    "",
 		},
 		{
-			name:         "Suspended state maps to UNKNOWN",
+			name:         "Suspended state maps to SUSPENDED",
 			kubeRayState: rayv1.Suspended,
-			expectState:  v2pb.RAY_CLUSTER_STATE_UNKNOWN,
+			expectState:  v2pb.RAY_CLUSTER_STATE_SUSPENDED,
+			expectReason: "ClusterSuspended",
+		},
+		{
+			name:         "spec.suspend alone maps to SUSPENDED before status catches up",
+			kubeRayState: "",
+			suspend:      k8sptr.To(true),
+			expectState:  v2pb.RAY_CLUSTER_STATE_SUSPENDED,
+			expectReason: "ClusterSuspended",
+		},
+		{
+			name:         "spec.suspend=false does not suspend",
+			kubeRayState: rayv1.Ready,
+			suspend:      k8sptr.To(false),
+			expectState:  v2pb.RAY_CLUSTER_STATE_READY,
+		},
+		{
+			// The Kueue admission-gating window: pods are intentionally absent,
+			// so HeadPodNotFound must not surface as a (terminal) pod error.
+			name:         "suspended cluster suppresses HeadPodNotFound pod errors",
+			kubeRayState: rayv1.Suspended,
+			suspend:      k8sptr.To(true),
+			conditions: []metav1.Condition{
+				{
+					Type:    string(rayv1.HeadPodReady),
+					Status:  metav1.ConditionFalse,
+					Reason:  "HeadPodNotFound",
+					Message: "head pod not found",
+				},
+			},
+			expectState:     v2pb.RAY_CLUSTER_STATE_SUSPENDED,
+			expectPodErrors: 0,
+			expectReason:    "ClusterSuspended",
+		},
+		{
+			name:         "suspended cluster suppresses ReplicaFailure pod errors",
+			kubeRayState: rayv1.Suspended,
+			conditions: []metav1.Condition{
+				{
+					Type:   string(rayv1.RayClusterReplicaFailure),
+					Status: metav1.ConditionTrue,
+					Reason: "FailedDeleteHeadPod",
+				},
+			},
+			expectState:     v2pb.RAY_CLUSTER_STATE_SUSPENDED,
+			expectPodErrors: 0,
+			expectReason:    "ClusterSuspended",
+		},
+		{
+			name:         "RayClusterSuspending condition maps to SUSPENDED with suspending reason",
+			kubeRayState: "",
+			conditions: []metav1.Condition{
+				{
+					Type:   rayClusterSuspendingConditionType,
+					Status: metav1.ConditionTrue,
+					Reason: "RayClusterSuspending",
+				},
+			},
+			expectState:  v2pb.RAY_CLUSTER_STATE_SUSPENDED,
+			expectReason: "ClusterSuspending",
+		},
+		{
+			name:         "RayClusterSuspended condition maps to SUSPENDED",
+			kubeRayState: "",
+			conditions: []metav1.Condition{
+				{
+					Type:   rayClusterSuspendedConditionType,
+					Status: metav1.ConditionTrue,
+					Reason: "RayClusterSuspended",
+				},
+			},
+			expectState:  v2pb.RAY_CLUSTER_STATE_SUSPENDED,
+			expectReason: "ClusterSuspended",
+		},
+		{
+			// Regression guard: once a cluster is NOT suspended, HeadPodNotFound
+			// is a real failure again.
+			name:         "HeadPodNotFound without suspension stays a failure",
+			kubeRayState: "",
+			conditions: []metav1.Condition{
+				{
+					Type:    string(rayv1.HeadPodReady),
+					Status:  metav1.ConditionFalse,
+					Reason:  "HeadPodNotFound",
+					Message: "head pod not found",
+				},
+			},
+			expectState:     v2pb.RAY_CLUSTER_STATE_UNKNOWN,
+			expectPodErrors: 1,
+			expectReason:    "HeadPodNotFound",
 		},
 		{
 			name:         "condition reason takes priority over deprecated Status.Reason",
@@ -504,6 +595,9 @@ func TestMapLocalClusterStatusToGlobal_WithConditions(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			rayCluster := &rayv1.RayCluster{
+				Spec: rayv1.RayClusterSpec{
+					Suspend: tt.suspend,
+				},
 				Status: rayv1.RayClusterStatus{
 					State:      tt.kubeRayState,
 					Reason:     tt.statusReason,

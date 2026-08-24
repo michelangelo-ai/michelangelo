@@ -106,6 +106,12 @@ enum RayClusterState {
 
   // The cluster state is unhealthy.
   RAY_CLUSTER_STATE_UNHEALTHY = 7;
+
+  // The cluster is suspended (RayCluster.spec.suspend=true, e.g. set by a
+  // queueing/admission controller such as Kueue). Pods are intentionally
+  // absent while suspended. Mirrors the KubeRay ClusterState "suspended".
+  // Non-terminal: the cluster resumes provisioning when unsuspended.
+  RAY_CLUSTER_STATE_SUSPENDED = 8;
 }
 
 // Specification for RayHeadNodeInfo

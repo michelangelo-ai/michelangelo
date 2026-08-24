@@ -15,6 +15,7 @@
     "build": "yarn workspaces run build",
     "dev": "yarn workspace @michelangelo/app dev",
     "dev-production": "yarn workspace @michelangelo-ai/core build && yarn workspace @michelangelo/app dev-production",
+    "set-avatar": "yarn workspace @michelangelo/app set-avatar",
     "format": "prettier --check .",
     "generate": "../tools/gen-grpc-client.sh --clients javascript",
     "lint": "eslint . --cache",

@@ -69,6 +69,17 @@ func TestStartWorkflow(t *testing.T) {
 	}
 }
 
+func TestStartWorkflowRejectsStartPaused(t *testing.T) {
+	client := &CadenceClient{Client: &cadencemocks.Client{}}
+	_, err := client.StartWorkflow(
+		context.Background(),
+		clientInterface.StartWorkflowOptions{StartPaused: true},
+		"testWorkflow",
+	)
+
+	assert.EqualError(t, err, "starting a paused workflow is not supported by Cadence")
+}
+
 func TestGetWorkflowExecutionInfo(t *testing.T) {
 	workflowID := "testWorkflowID"
 	runID := "testRunID"
@@ -746,6 +757,20 @@ func TestUpdateTrigger(t *testing.T) {
 	}
 	err := client.UpdateTrigger(context.Background(), workflowID, newCronSchedule, nil, nil)
 	assert.NoError(t, err)
+}
+
+func TestUpdateTriggerRejectsPauseForCadence(t *testing.T) {
+	client := &CadenceClient{Client: &cadencemocks.Client{}}
+
+	paused := true
+	err := client.UpdateTrigger(context.Background(), "testWorkflowID", "", &paused, nil)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "PauseTrigger not supported")
+
+	paused = false
+	err = client.UpdateTrigger(context.Background(), "testWorkflowID", "", &paused, nil)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "UnpauseTrigger not supported")
 }
 
 // Mock implementation of cadence history iterator

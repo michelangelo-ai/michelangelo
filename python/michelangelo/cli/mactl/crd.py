@@ -2,6 +2,7 @@
 
 import json
 from argparse import ArgumentParser
+from collections import OrderedDict
 from collections.abc import Iterator, MutableMapping, Sequence
 from contextlib import redirect_stdout
 from copy import deepcopy
@@ -24,7 +25,7 @@ from grpc import (
     StatusCode,
 )
 from typing_extensions import NotRequired
-from yaml import YAMLError
+from yaml import SafeDumper, YAMLError
 from yaml import safe_dump as yaml_safe_dump
 from yaml import safe_load as yaml_safe_load
 
@@ -36,6 +37,15 @@ from michelangelo.cli.mactl.grpc_tools import (
 
 _LOG = getLogger(__name__)
 METADATA_STUB = []
+
+# MessageToDict emits collections.OrderedDict when it walks a
+# google.protobuf.Any so `@type` sorts first (see json_format._Printer).
+# yaml.SafeDumper only registers a representer for plain dict, so any Any
+# field in a get/list response makes `-o yaml` raise RepresenterError.
+SafeDumper.add_representer(
+    OrderedDict,
+    lambda dumper, data: dumper.represent_dict(data.items()),
+)
 
 
 class Criterion(TypedDict):
@@ -379,7 +389,11 @@ def get_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Mess
         if not namespace:
             raise ValueError("--namespace is required when fetching a resource by name")
         call_res = _self._get(namespace=namespace, name=name)
-        _render_single_item(call_res, output)
+        _render_single_item(
+            call_res,
+            output,
+            extra_columns=getattr(_self, "additional_columns", ()),
+        )
         return call_res
 
     if not namespace and not all_namespaces:
@@ -498,8 +512,33 @@ def _render_list_items(
         print_list_formatted(items, extra_columns=extra_columns)
 
 
-def _render_single_item(msg: Message, output_format: str) -> None:
-    """Render a single CRD message in the requested output format."""
+def _unwrap_single_field_response(msg: Message) -> Message:
+    """Return the inner resource from a single-field wrapper response.
+
+    `GetXxxResponse` messages wrap the resource in one message-typed field
+    (e.g. `GetPipelineResponse.pipeline`). The table formatter needs the
+    resource itself so it can read `metadata.namespace` and friends. Non-
+    wrapper messages (already the resource, or a shape we don't recognize)
+    pass through unchanged.
+    """
+    fields = msg.DESCRIPTOR.fields
+    if len(fields) == 1 and fields[0].message_type is not None:
+        return getattr(msg, fields[0].name)
+    return msg
+
+
+def _render_single_item(
+    msg: Message,
+    output_format: str,
+    extra_columns: Sequence[dict] = (),
+) -> None:
+    """Render a single CRD message in the requested output format.
+
+    Table output prints a one-row table using the same columns as `list`,
+    matching kubectl's `get <resource> <name>` behavior. Prior versions
+    printed the raw proto text_format, which rendered `google.protobuf.Any`
+    payloads (e.g. `spec.manifest.content`) as escaped byte strings.
+    """
     if output_format == "yaml":
         print(
             yaml_safe_dump(
@@ -509,7 +548,9 @@ def _render_single_item(msg: Message, output_format: str) -> None:
     elif output_format == "json":
         print(MessageToJson(msg, preserving_proto_field_name=True))
     else:
-        print(msg)
+        print_list_formatted(
+            [_unwrap_single_field_response(msg)], extra_columns=extra_columns
+        )
 
 
 def _resolve_criteria(spec, bound_args: dict, arg_dest: str) -> list[Criterion]:

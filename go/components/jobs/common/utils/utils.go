@@ -159,8 +159,17 @@ func IsRegionalCluster(cluster *v2pb.Cluster) bool {
 }
 
 var terminalPodErrorReasons = map[string]bool{
-	// KubeRay condition-level reasons (from HeadPodReady / ReplicaFailure)
-	"HeadPodNotFound":       true,
+	// KubeRay condition-level reasons (from HeadPodReady / ReplicaFailure).
+	//
+	// "HeadPodNotFound" is intentionally NOT terminal. KubeRay reports
+	// HeadPodReady=False / reason=HeadPodNotFound during the brief window
+	// between a RayCluster being created and its head pod being scheduled.
+	// Treating it as terminal races the ray cluster controller against KubeRay
+	// and tears down freshly-created clusters before the head pod ever exists
+	// (observed intermittently on the second task of a multi-task Uniflow
+	// pipeline). A head pod that genuinely never comes up is still bounded by
+	// the workflow's cluster-readiness timeout, and real creation failures
+	// surface as FailedCreateHeadPod / FailedCreateWorkerPod below.
 	"FailedCreateHeadPod":   true,
 	"FailedCreateWorkerPod": true,
 	// Kubernetes container-level reasons (if KubeRay exposes them in future versions)

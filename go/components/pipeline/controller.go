@@ -83,8 +83,8 @@ func NewReconciler(
 //   - Transitioning the pipeline state to READY
 //   - Persisting status updates back to Kubernetes
 //
-// When Config.RevisioningEnabled is true, it also snapshots a Revision CR and
-// sets pipeline.Status.LatestRevision to point at it.
+// When Config.RevisioningEnabled is true, it also snapshots a Revision CR and,
+// for main/master commits, sets pipeline.Status.LatestRevision to point at it.
 //
 // The reconcile loop will requeue non-terminal pipelines at regular intervals
 // to ensure continuous monitoring. Terminal states (READY, ERROR) do not requeue.
@@ -116,9 +116,15 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	logger.Info("Reconciling pipeline", zap.Any("PipelineStatusState", state.String()))
 
 	if r.config.RevisioningEnabled && pipeline.Spec.Commit != nil {
-		pipeline.Status.LatestRevision = &apipb.ResourceIdentifier{
-			Name:      formatRevisionName(pipeline),
-			Namespace: pipeline.Namespace,
+		// Only default-branch commits advance status.latestRevision. Feature-branch
+		// applies still snapshot a Revision CR below — they just must not rewrite
+		// what "latest" means for consumers that resolve it.
+		branch := pipeline.Spec.Commit.GetBranch()
+		if branch == "main" || branch == "master" {
+			pipeline.Status.LatestRevision = &apipb.ResourceIdentifier{
+				Name:      formatRevisionName(pipeline),
+				Namespace: pipeline.Namespace,
+			}
 		}
 	}
 	pipeline.Status.State = v2pb.PIPELINE_STATE_READY

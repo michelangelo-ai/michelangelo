@@ -1,5 +1,6 @@
 import { CellType } from '#core/components/cell/constants';
 import { TASK_STATE } from '#core/components/views/execution/constants';
+import { DeploymentInfoPage } from './deployment-info-page';
 import {
   DEPLOYMENT_CONDITION_STATUS,
   DEPLOYMENT_STAGE,
@@ -18,6 +19,12 @@ export const DEPLOYMENT_DETAIL_CONFIG: DetailViewConfig = {
     DEPLOYMENT_STATE_CELL,
   ],
   pages: [
+    {
+      id: 'info',
+      label: 'Information',
+      type: 'custom',
+      component: DeploymentInfoPage,
+    },
     {
       id: 'ongoing-operations',
       label: 'Ongoing operations',

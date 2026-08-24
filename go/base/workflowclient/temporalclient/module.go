@@ -9,11 +9,13 @@ import (
 	workflowfx "github.com/michelangelo-ai/michelangelo/go/worker/workflowfx"
 	temporalClient "go.temporal.io/sdk/client"
 	"go.uber.org/fx"
+	"go.uber.org/zap"
 )
 
 type TemporalClientIn struct {
 	fx.In
 	Config    baseconfig.WorkflowClientConfig
+	Logger    *zap.Logger `optional:"true"`
 	TLSConfig *tls.Config `optional:"true"`
 }
 
@@ -29,10 +31,14 @@ var Module = fx.Options(
 // NewTemporalClient creates a new TemporalClient
 func NewTemporalClient(in TemporalClientIn) (TemporalClientOut, error) {
 	defaultTemporalClientFactory := workflowfx.DefaultTemporalClientFactory{}
+	logger := in.Logger
+	if logger == nil {
+		logger = zap.NewNop()
+	}
 	opts := temporalClient.Options{
 		HostPort:      in.Config.Host,
 		Namespace:     in.Config.Domain,
-		DataConverter: temporal.DataConverter{}, // using temporal.DataConverter{} from the starlark-worker package since it supports starlark types
+		DataConverter: temporal.DataConverter{Logger: logger}, // using temporal.DataConverter{} from the starlark-worker package since it supports starlark types
 	}
 
 	// Add TLS connection options if UseTLS is enabled
@@ -57,6 +63,7 @@ func NewTemporalClient(in TemporalClientIn) (TemporalClientOut, error) {
 	return TemporalClientOut{
 		TemporalClient: &TemporalClient{
 			Client:   client,
+			Logger:   logger,
 			Provider: "temporal",
 			Domain:   in.Config.Domain,
 		},

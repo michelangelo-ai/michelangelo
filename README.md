@@ -2,6 +2,7 @@
 [![License](https://img.shields.io/github/license/michelangelo-ai/michelangelo)](http://www.apache.org/licenses/LICENSE-2.0)
 [![codecov](https://codecov.io/gh/michelangelo-ai/michelangelo/graph/badge.svg?token=HKJDT0I6CW)](https://codecov.io/gh/michelangelo-ai/michelangelo)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/11481/badge)](https://www.bestpractices.dev/projects/11481)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/michelangelo-ai/michelangelo/badge)](https://scorecard.dev/viewer/?uri=github.com/michelangelo-ai/michelangelo)
 [![Docs](https://img.shields.io/badge/docs-michelangelo--ai.org-blue)](https://michelangelo-ai.org)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/michelangelo-ai/michelangelo)
 

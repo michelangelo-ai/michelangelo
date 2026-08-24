@@ -3,8 +3,8 @@ import type { FieldRenderer } from '#core/components/form/types/config-types';
 /**
  * @description
  * The form context provided to the application to extend built-in field
- * renderers with custom ones. Custom renderers are checked first before
- * falling back to built-in behavior.
+ * renderers with custom ones. Custom renderers are checked
+ * first before falling back to built-in behavior.
  */
 export type FormContextType = {
   /**

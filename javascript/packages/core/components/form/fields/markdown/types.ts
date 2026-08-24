@@ -1,4 +1,4 @@
-import type { BaseFieldProps } from '../types';
+import type { BaseFieldProps, SharedFieldConfig } from '../types';
 
 export interface MarkdownFieldProps extends BaseFieldProps<string> {
   rows?: number;
@@ -9,3 +9,8 @@ export interface MarkdownFieldProps extends BaseFieldProps<string> {
    */
   maxLength?: number;
 }
+
+export type MarkdownFieldConfig<T = string> = SharedFieldConfig<T, string> &
+  Pick<MarkdownFieldProps, 'rows' | 'maxLength'> & {
+    type: 'markdown';
+  };

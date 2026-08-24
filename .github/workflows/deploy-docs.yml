@@ -31,7 +31,7 @@ jobs:
           bun-version: latest
 
       - name: Cache bun dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.bun/install/cache
           key: bun-${{ runner.os }}-${{ hashFiles('website/bun.lock') }}
@@ -45,7 +45,7 @@ jobs:
         run: bun run build
 
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: website/build
 

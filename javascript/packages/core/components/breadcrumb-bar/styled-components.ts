@@ -17,8 +17,8 @@ export const TopLevelNavLink = styled(Link, ({ $theme }) => ({
   paddingLeft: $theme.sizing.scale600,
   paddingRight: $theme.sizing.scale700,
   textDecoration: 'none',
-  // Override the default visited link color
-  ':visited': { color: $theme.colors.contentPrimary },
+  // Override default browser link coloring
+  color: $theme.colors.contentPrimary,
   ':hover': { backgroundColor: $theme.colors.menuFillHover },
 }));
 

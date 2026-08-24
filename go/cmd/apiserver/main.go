@@ -7,6 +7,7 @@ import (
 	baseconfig "github.com/michelangelo-ai/michelangelo/go/base/config"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	"github.com/michelangelo-ai/michelangelo/go/base/zapfx"
+	modelapihook "github.com/michelangelo-ai/michelangelo/go/components/model/apihook"
 	pipelinerunapihook "github.com/michelangelo-ai/michelangelo/go/components/pipelinerun/apihook"
 	projectapihook "github.com/michelangelo-ai/michelangelo/go/components/project/apihook"
 	triggerrunapihook "github.com/michelangelo-ai/michelangelo/go/components/triggerrun/apihook"
@@ -49,6 +50,7 @@ func opts() fx.Option {
 		// Cascade-delete: stamp the owning Pipeline ownerReference on runs at creation.
 		fx.Invoke(pipelinerunapihook.RegisterPipelineRunAPIHook),
 		fx.Invoke(triggerrunapihook.RegisterTriggerRunAPIHook),
+		fx.Invoke(modelapihook.RegisterModelAPIHook),
 		v2pb.CachedOutputSvcModule,
 		v2pb.ClusterSvcModule,
 		v2pb.DeploymentSvcModule,

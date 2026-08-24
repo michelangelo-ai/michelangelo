@@ -13,6 +13,7 @@ export const TRAIN_PHASE: PhaseConfig = {
   docUrl:
     'https://michelangelo-ai.org/docs/user-guides/train-and-deploy-models/train-and-register-a-model',
   state: 'active' as const,
+  pipelineTypes: ['PIPELINE_TYPE_TRAIN', 'PIPELINE_TYPE_EVAL'],
   entities: [
     PIPELINE_ENTITY_CONFIG,
     RUN_ENTITY_CONFIG,
@@ -20,14 +21,14 @@ export const TRAIN_PHASE: PhaseConfig = {
     MODEL_ENTITY_CONFIG,
     {
       id: 'evaluations',
-      name: 'evaluations',
+      name: 'Evaluations',
       state: 'disabled',
       service: 'evaluationReport',
       views: [],
     },
     {
       id: 'notebooks',
-      name: 'notebooks',
+      name: 'Notebooks',
       state: 'disabled',
       service: 'notebook',
       views: [],

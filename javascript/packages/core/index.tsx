@@ -26,6 +26,7 @@ type Props = {
     theme: IconProviderContext;
     navigationBar?: {
       links?: NavigationLink[];
+      onSignOut?: () => void;
     };
     user?: UserContextType;
   };
@@ -40,7 +41,10 @@ export function CoreApp({ dependencies }: Props) {
             <ErrorProvider {...dependencies.error}>
               <IconProvider icons={dependencies.theme.icons}>
                 <UserProvider {...(dependencies.user ?? { timeZone: TimeZone.Local })}>
-                  <NavigationBar links={dependencies.navigationBar?.links} />
+                  <NavigationBar
+                    links={dependencies.navigationBar?.links}
+                    onSignOut={dependencies.navigationBar?.onSignOut}
+                  />
                   <Router />
                 </UserProvider>
               </IconProvider>

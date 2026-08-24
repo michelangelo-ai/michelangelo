@@ -43,7 +43,7 @@ jobs:
           df -h
 
       - name: Mount bazel cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cache/bazel
@@ -101,6 +101,14 @@ jobs:
             echo "COVERAGE=0" >> $GITHUB_ENV
             echo "total: (statements) 0%" > coverage.txt
           fi
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          files: coverage.dat
+          flags: go
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
 
       - name: "Check coverage threshold (baseline: 60%)"
         run: |

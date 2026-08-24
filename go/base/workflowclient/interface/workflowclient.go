@@ -11,6 +11,8 @@ type StartWorkflowOptions struct {
 	ExecutionStartToCloseTimeout    time.Duration
 	DecisionTaskStartToCloseTimeout time.Duration
 	CronSchedule                    string
+	// StartPaused creates a recurring schedule without allowing its first action to fire.
+	StartPaused bool
 }
 
 type WorkflowExecutionStatus int32

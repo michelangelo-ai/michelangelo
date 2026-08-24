@@ -64,6 +64,7 @@ export function MenuDrawer({ phases, projectId, topLevelLinks }: Props) {
         }}
       >
         <nav
+          aria-label="Phase navigation"
           className={css({ display: 'flex', flexDirection: 'column', gap: theme.sizing.scale400 })}
         >
           {topLevelLinks && topLevelLinks.length > 0 && (
@@ -73,7 +74,7 @@ export function MenuDrawer({ phases, projectId, topLevelLinks }: Props) {
                   <li key={link.path}>
                     <TopLevelNavLink to={link.path} onClick={() => setIsMenuOpen(false)}>
                       {link.label}
-                      <Icon name="chevronRight" title="" />
+                      <Icon name="chevronRight" size={theme.sizing.scale600} title="" />
                     </TopLevelNavLink>
                   </li>
                 ))}

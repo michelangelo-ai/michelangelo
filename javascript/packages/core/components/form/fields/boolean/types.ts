@@ -1,4 +1,4 @@
-import type { BaseFieldProps } from '../types';
+import type { BaseFieldProps, SharedFieldConfig } from '../types';
 
 export interface BooleanFieldProps extends BaseFieldProps<boolean> {
   /**
@@ -15,3 +15,8 @@ export interface BooleanFieldProps extends BaseFieldProps<boolean> {
    */
   toggle?: boolean;
 }
+
+export type BooleanFieldConfig<T = boolean> = SharedFieldConfig<T, boolean> &
+  Pick<BooleanFieldProps, 'checkboxLabel' | 'toggle'> & {
+    type: 'boolean';
+  };

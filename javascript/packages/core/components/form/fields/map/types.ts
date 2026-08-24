@@ -1,5 +1,5 @@
 import type { SIZE } from 'baseui/input';
-import type { BaseFieldProps } from '#core/components/form/fields/types';
+import type { BaseFieldProps, SharedFieldConfig } from '#core/components/form/fields/types';
 
 export interface KeyValueEntry {
   /** Stable React key — monotonically increasing, never reused after deletion. */
@@ -35,3 +35,20 @@ export interface MapFieldOwnProps extends KeyValueRowConfig {
 }
 
 export type MapFieldProps = MapFieldOwnProps & BaseFieldProps<Record<string, string>>;
+
+export type MapFieldConfig<T = Record<string, string>> = SharedFieldConfig<
+  T,
+  Record<string, string>
+> &
+  Pick<
+    MapFieldOwnProps & KeyValueRowConfig,
+    | 'singleValue'
+    | 'creatable'
+    | 'emptyMessage'
+    | 'keyConfig'
+    | 'valueConfig'
+    | 'deletable'
+    | 'size'
+  > & {
+    type: 'map';
+  };

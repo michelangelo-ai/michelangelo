@@ -71,8 +71,9 @@ type DrainState struct {
 // method mutates the child and persists the change via the controller's client;
 // RunDrainStep itself holds no client.
 type DrainTarget interface {
-	// RequestCancel begins cancellation AND stamps MarkDrainCounted in ONE
-	// persisted update.
+	// RequestCancel begins cancellation and stamps MarkDrainCounted, both durably
+	// persisted before returning. Kinds whose cancellation is carried in status
+	// MUST persist it through the status subresource.
 	RequestCancel(ctx context.Context) error
 	// Progress advances an in-flight cancellation by one step and persists
 	// status, returning whether the run is now terminal. For a synchronous
@@ -102,8 +103,9 @@ type DrainTarget interface {
 //     finalize regardless of state so GC cannot wedge forever.
 //   - run active but its workflow never started: there is nothing to cancel —
 //     drive it straight to terminal KILLED (no token) and finalize.
-//   - first drain loop (no drain-counted token yet): request cancellation
-//     atomically with the token, count the active drain, and requeue.
+//   - first drain loop (no drain-counted token yet): request cancellation and
+//     durably persist it with the drain-counted token, then count the active drain
+//     and requeue.
 //   - subsequent loop: progress the cancellation; finalize when terminal, else
 //     requeue.
 func RunDrainStep(ctx context.Context, st DrainState, t DrainTarget, requeue time.Duration) (ctrl.Result, error) {
@@ -139,9 +141,8 @@ func RunDrainStep(ctx context.Context, st DrainState, t DrainTarget, requeue tim
 		return ctrl.Result{}, finish(ctx, st, t)
 	}
 
-	// First drain loop: request workflow cancellation once, recording the
-	// drain-counted token in the same persisted update, then count the drain as
-	// active and requeue.
+	// First drain loop: request workflow cancellation once and durably persist it
+	// with the drain-counted token, then count the drain as active and requeue.
 	if !IsDrainCounted(obj) {
 		if err := t.RequestCancel(ctx); err != nil {
 			return ctrl.Result{}, err

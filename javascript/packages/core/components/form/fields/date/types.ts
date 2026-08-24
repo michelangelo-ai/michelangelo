@@ -1,4 +1,4 @@
-import type { BaseFieldProps } from '../types';
+import type { BaseFieldProps, SharedFieldConfig } from '../types';
 
 export interface DateFieldProps extends BaseFieldProps<string, Date | null> {
   /** @default DateFormat.ISO_DATE_STRING */
@@ -21,3 +21,8 @@ export enum DateFormat {
    */
   ISO_DATE_STRING = 'iso',
 }
+
+export type DateFieldConfig<T = string> = SharedFieldConfig<T, Date | null> &
+  Pick<DateFieldProps, 'dateFormat' | 'noFutureDate'> & {
+    type: 'date';
+  };

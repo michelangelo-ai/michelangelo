@@ -16,6 +16,7 @@ import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import KeyboardBackspaceIcon from '@mui/icons-material/KeyboardBackspace';
 import Launch from '@mui/icons-material/Launch';
+import LightbulbIcon from '@mui/icons-material/Lightbulb';
 import MenuIcon from '@mui/icons-material/Menu';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
@@ -24,6 +25,7 @@ import SettingsIcon from '@mui/icons-material/Settings';
 import ShowChartIcon from '@mui/icons-material/ShowChart';
 import SkipNextIcon from '@mui/icons-material/SkipNext';
 import StopCircleIcon from '@mui/icons-material/StopCircle';
+import VisibilityIcon from '@mui/icons-material/Visibility';
 
 import { createMuiIconAdapter } from './mui-icon-adapter';
 
@@ -45,7 +47,9 @@ export const ICONS = {
   deleteAlt: createMuiIconAdapter(CancelIcon),
   diamondEmpty: createMuiIconAdapter(CropSquareIcon),
   stopCircle: createMuiIconAdapter(StopCircleIcon),
+  lightbulb: createMuiIconAdapter(LightbulbIcon),
   menu: createMuiIconAdapter(MenuIcon),
+  monitor: createMuiIconAdapter(VisibilityIcon),
   overflowMenu: createMuiIconAdapter(MoreVertIcon),
   playerNext: createMuiIconAdapter(SkipNextIcon),
   playerPlay: createMuiIconAdapter(PlayArrowIcon),

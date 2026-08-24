@@ -247,6 +247,10 @@ StateMachine:
 			"state", status.State,
 			"execution_workflow_id", status.ExecutionWorkflowId)
 		triggerRun.Status = status
+		if triggerRun.Spec.Action == v2pb.TRIGGER_RUN_ACTION_PAUSE &&
+			status.State == v2pb.TRIGGER_RUN_STATE_PAUSED {
+			triggerRun.Spec.Action = v2pb.TRIGGER_RUN_ACTION_NO_ACTION
+		}
 	case v2pb.TRIGGER_RUN_STATE_RUNNING:
 		log.Info("TRIGGER_RUN_STATE_RUNNING")
 
@@ -484,8 +488,8 @@ func triggerRunWorkStarted(run *v2pb.TriggerRun) bool {
 	return run.Status.State != v2pb.TRIGGER_RUN_STATE_INVALID
 }
 
-// RequestCancel stops the recurring cron (idempotent kill) and stamps the
-// drain-counted token in one persisted update.
+// RequestCancel stops the recurring cron (idempotent kill), persists the terminal
+// status through the status subresource, and stamps the drain-counted token.
 func (t *triggerRunDrainTarget) RequestCancel(ctx context.Context) error {
 	runner := t.r.getRunner(t.run)
 	status, err := runner.Kill(ctx, t.run)
@@ -493,6 +497,12 @@ func (t *triggerRunDrainTarget) RequestCancel(ctx context.Context) error {
 		return fmt.Errorf("kill trigger run %s/%s during drain: %w", t.run.Namespace, t.run.Name, err)
 	}
 	t.run.Status = status
+	if err := t.r.UpdateStatus(ctx, t.run, &metav1.UpdateOptions{}); err != nil {
+		return fmt.Errorf("persist killed status for trigger run %s/%s during drain: %w", t.run.Namespace, t.run.Name, err)
+	}
+	// Kubernetes ignores status on the main resource endpoint when the status
+	// subresource is enabled, so persist the drain-counted annotation separately
+	// after the terminal status is durable.
 	cascadedelete.MarkDrainCounted(t.run)
 	if err := t.r.Update(ctx, t.run, &metav1.UpdateOptions{}); err != nil {
 		return fmt.Errorf("begin drain for trigger run %s/%s: %w", t.run.Namespace, t.run.Name, err)

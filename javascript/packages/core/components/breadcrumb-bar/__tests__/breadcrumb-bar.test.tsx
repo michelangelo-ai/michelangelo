@@ -274,7 +274,7 @@ describe('BreadcrumbBar — menu drawer', () => {
     await userEvent.click(screen.getByRole('button', { name: /menu/i }));
 
     expect(screen.getByText('Train & Evaluate')).toBeInTheDocument();
-    expect(screen.getByText('Trained models')).toBeInTheDocument();
+    expect(screen.getByText('trained models')).toBeInTheDocument();
   });
 
   it('navigates to the entity route when an active entity is clicked', async () => {
@@ -312,7 +312,7 @@ describe('BreadcrumbBar — menu drawer', () => {
     );
 
     await userEvent.click(screen.getByRole('button', { name: /menu/i }));
-    await userEvent.click(screen.getByText('Trained models'));
+    await userEvent.click(screen.getByText('trained models'));
 
     expect(screen.getByText(/\/my-project\/train\/models/)).toBeInTheDocument();
   });
@@ -352,7 +352,7 @@ describe('BreadcrumbBar — menu drawer', () => {
     );
 
     await userEvent.click(screen.getByRole('button', { name: /menu/i }));
-    await userEvent.click(screen.getByText('Pipelines'));
+    await userEvent.click(screen.getByText('pipelines'));
 
     expect(screen.queryByText(/\/my-project\/train/)).not.toBeInTheDocument();
   });

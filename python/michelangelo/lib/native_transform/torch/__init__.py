@@ -33,6 +33,7 @@ from michelangelo.lib.native_transform.torch.constants import (
     TORCH_TYPE_TO_TORCH_DTYPE_CLASS_NAME_MAP,
 )
 from michelangelo.lib.native_transform.torch.duration import TimeDuration
+from michelangelo.lib.native_transform.torch.io import TransformSpecIO
 from michelangelo.lib.native_transform.torch.scale import ClipAndScale
 from michelangelo.lib.native_transform.torch.stats_layers import (
     Bucketization,
@@ -84,6 +85,7 @@ __all__ = [
     "TorchTransformBaseLayer",
     "TorchTransformModule",
     "TransformSpec",
+    "TransformSpecIO",
     "generate_cast_transformation",
     "generate_concatenation_transformation",
     "generate_duration_transformation",

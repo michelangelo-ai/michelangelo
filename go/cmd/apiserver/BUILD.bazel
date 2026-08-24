@@ -19,6 +19,7 @@ go_library(
         "//go/base/config:go_default_library",
         "//go/base/env:go_default_library",
         "//go/base/zapfx:go_default_library",
+        "//go/components/model/apihook:go_default_library",
         "//go/components/pipelinerun/apihook:go_default_library",
         "//go/components/project/apihook:go_default_library",
         "//go/components/triggerrun/apihook:go_default_library",

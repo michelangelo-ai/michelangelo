@@ -41,6 +41,15 @@ use_repo(oci, "distroless_base", "distroless_base_linux_amd64", "distroless_base
 
 go_deps = use_extension("@bazel_gazelle//:extensions.bzl", "go_deps")
 go_deps.from_file(go_mod = "//go:go.mod")
+
+# golang.org/x/tools >= v0.30 makes cmd/goimports depend on
+# golang.org/x/telemetry, which module graph pruning keeps out of go/go.mod.
+# Declare it explicitly so the dirty-check goimports build can resolve it.
+go_deps.module(
+    path = "golang.org/x/telemetry",
+    sum = "h1:HjU6IWBiAgRIdAJ9/y1rwCn+UELEmwV+VsTLzj/W4sE=",
+    version = "v0.0.0-20260508192327-42602be52be6",
+)
 use_repo(
     go_deps,
     "com_github_cadence_workflow_starlark_worker",
@@ -68,6 +77,7 @@ use_repo(
     "com_github_tidwall_sjson",
     "com_github_uber_go_tally",
     "com_github_uber_go_tally_v4",
+    "com_google_cloud_go_storage",
     "io_k8s_api",
     "io_k8s_apiextensions_apiserver",
     "io_k8s_apimachinery",
@@ -80,6 +90,7 @@ use_repo(
     "io_temporal_go_sdk",
     "io_temporal_go_sdk_contrib_tally",
     "net_starlark_go",
+    "org_golang_google_api",
     "org_golang_google_genproto",
     "org_golang_google_grpc",
     "org_golang_google_protobuf",

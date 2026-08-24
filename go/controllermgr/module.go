@@ -19,6 +19,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
+	"github.com/michelangelo-ai/michelangelo/go/base/blobstore/gcs"
 	"github.com/michelangelo-ai/michelangelo/go/base/blobstore/minio"
 	"github.com/michelangelo-ai/michelangelo/go/kubeproto/metrics"
 )
@@ -29,6 +30,7 @@ import (
 var Module = fx.Options(
 	blobstore.Module,
 	minio.Module,
+	gcs.Module,
 	fx.Provide(newConfig),
 	fx.Provide(create),
 	fx.Invoke(start),

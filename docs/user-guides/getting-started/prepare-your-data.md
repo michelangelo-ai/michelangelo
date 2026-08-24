@@ -137,10 +137,10 @@ def use_prepared_data(datasets: dict):
 
 ```py
 trainer_param = LightningTrainerParam(
-    create_model=create_model_function,
-    model_kwargs=model_config,
+    create_model_fn=create_model_function,
+    create_model_fn_kwargs=model_config,
     train_data=train_dv.value,
-    validation_data=val_dv.value,
+    val_data=val_dv.value,
     batch_size=32,
     num_epochs=10
 )

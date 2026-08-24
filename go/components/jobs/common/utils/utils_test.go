@@ -125,6 +125,17 @@ func TestHasTerminalPodErrors(t *testing.T) {
 			expected: true,
 		},
 		{
+			// KubeRay reports this transiently after a RayCluster is created but
+			// before its head pod is scheduled; it must not be treated as
+			// terminal or the controller races KubeRay and tears the cluster
+			// down before the head pod ever exists.
+			name: "HeadPodNotFound is not terminal (transient provisioning window)",
+			errors: []*v2pb.PodErrors{
+				{Name: "HeadPodReady", Reason: "HeadPodNotFound", Message: "Head Pod not found"},
+			},
+			expected: false,
+		},
+		{
 			name: "OOMKilled is terminal",
 			errors: []*v2pb.PodErrors{
 				{Reason: "OOMKilled"},

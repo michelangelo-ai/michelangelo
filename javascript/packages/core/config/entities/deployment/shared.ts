@@ -31,6 +31,21 @@ export const DEPLOYMENT_STATE = {
   EMPTY: 4,
 } as const;
 
+export const TARGET_TYPE = {
+  INVALID: 0,
+  INFERENCE_SERVER: 1,
+  OFFLINE: 2,
+  MOBILE: 3,
+  SELF_HOSTED: 4,
+} as const;
+
+export const TARGET_TYPE_LABELS: Record<number, string> = {
+  [TARGET_TYPE.INFERENCE_SERVER]: 'Online',
+  [TARGET_TYPE.OFFLINE]: 'Offline',
+  [TARGET_TYPE.MOBILE]: 'Mobile',
+  [TARGET_TYPE.SELF_HOSTED]: 'Self-hosted',
+};
+
 export const DEPLOYMENT_STAGE_CELL: Cell = {
   id: 'status.stage',
   label: 'Stage',

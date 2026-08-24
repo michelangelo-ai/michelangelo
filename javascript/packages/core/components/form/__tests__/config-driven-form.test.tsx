@@ -7,6 +7,7 @@ import { FormProvider } from '#core/providers/form-provider/form-provider';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getBaseProviderWrapper } from '#core/test/wrappers/get-base-provider-wrapper';
 import { getIconProviderWrapper } from '#core/test/wrappers/get-icon-provider-wrapper';
+import { getRouterWrapper } from '#core/test/wrappers/get-router-wrapper';
 
 import type { FieldRendererProps, FormConfig } from '#core/components/form/types/config-types';
 
@@ -15,15 +16,40 @@ describe('ConfigDrivenForm', () => {
     const config: FormConfig = {
       fields: {
         name: { type: 'string', label: 'Name' },
-        email: { type: 'string', label: 'Email' },
+        age: { type: 'number', label: 'Age' },
+        active: { type: 'boolean', label: 'Active', checkboxLabel: 'Is Active' },
+        role: { type: 'select', label: 'Role', options: [{ id: 'admin', label: 'Admin' }] },
+        permissions: {
+          type: 'checkbox',
+          label: 'Permissions',
+          options: [{ id: 'read', label: 'Read' }],
+        },
+        size: { type: 'radio', label: 'Size', options: [{ value: 'sm', label: 'Small' }] },
+        startDate: { type: 'date', label: 'Start Date', placeholder: 'MM/DD/YYYY' },
+        notes: { type: 'textarea', label: 'Notes' },
+        website: { type: 'url', label: 'Website', placeholder: 'No URL' },
+        tags: { type: 'map', label: 'Tags' },
+        content: { type: 'markdown', label: 'Content' },
       },
-      layout: ['name', 'email'],
+      layout: [
+        'name',
+        'age',
+        'active',
+        'role',
+        'permissions',
+        'size',
+        'startDate',
+        'notes',
+        'website',
+        'tags',
+        'content',
+      ],
     };
 
     beforeEach(() => {
       render(
         <ConfigDrivenForm config={config} onSubmit={vi.fn()} />,
-        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getRouterWrapper()])
       );
     });
 
@@ -31,9 +57,50 @@ describe('ConfigDrivenForm', () => {
       expect(screen.getByLabelText('Name')).toBeInTheDocument();
     });
 
-    it('renders all configured fields', () => {
-      expect(screen.getByLabelText('Name')).toBeInTheDocument();
-      expect(screen.getByLabelText('Email')).toBeInTheDocument();
+    it('renders a number field', () => {
+      expect(screen.getByLabelText('Age')).toBeInTheDocument();
+    });
+
+    it('renders a boolean field', () => {
+      expect(screen.getByRole('checkbox', { name: 'Is Active' })).toBeInTheDocument();
+    });
+
+    it('renders a select field', async () => {
+      const user = userEvent.setup();
+      await user.click(screen.getByText('Select...'));
+
+      expect(screen.getByRole('option', { name: 'Admin' })).toBeInTheDocument();
+    });
+
+    it('renders a checkbox field', () => {
+      expect(screen.getByRole('checkbox', { name: 'Read' })).toBeInTheDocument();
+    });
+
+    it('renders a radio field', () => {
+      expect(screen.getByRole('radio', { name: 'Small' })).toBeInTheDocument();
+    });
+
+    it('renders a date field', () => {
+      expect(screen.getByPlaceholderText('MM/DD/YYYY')).toBeInTheDocument();
+    });
+
+    it('renders a textarea field', () => {
+      expect(screen.getByLabelText('Notes')).toBeInTheDocument();
+    });
+
+    it('renders a url field', () => {
+      expect(screen.getByText('No URL')).toBeInTheDocument();
+    });
+
+    it('renders a map field', async () => {
+      const user = userEvent.setup();
+      await user.click(screen.getByRole('button', { name: 'Add more' }));
+
+      expect(screen.getAllByRole('textbox', { name: '' }).length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('renders a markdown field', () => {
+      expect(screen.getByLabelText('Content')).toBeInTheDocument();
     });
   });
 
@@ -290,5 +357,172 @@ describe('ConfigDrivenForm', () => {
 
       expect(screen.getByLabelText('Name')).toHaveValue('Pre-filled');
     });
+  });
+
+  describe('validation', () => {
+    it('shows minLength error after field is touched', async () => {
+      const user = userEvent.setup();
+
+      const config: FormConfig = {
+        fields: {
+          name: { type: 'string', label: 'Name', validation: { minLength: 5 } },
+        },
+        layout: ['name'],
+      };
+
+      render(
+        <ConfigDrivenForm config={config} onSubmit={vi.fn()} />,
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      );
+
+      await user.type(screen.getByLabelText('Name'), 'abc');
+      await user.tab();
+
+      await waitFor(() => {
+        expect(screen.getByText('Must be at least 5 characters.')).toBeInTheDocument();
+      });
+    });
+
+    it('shows maxLength error after field is touched', async () => {
+      const user = userEvent.setup();
+
+      const config: FormConfig = {
+        fields: {
+          name: { type: 'string', label: 'Name', validation: { maxLength: 3 } },
+        },
+        layout: ['name'],
+      };
+
+      render(
+        <ConfigDrivenForm config={config} onSubmit={vi.fn()} />,
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      );
+
+      await user.type(screen.getByLabelText('Name'), 'toolong');
+      await user.tab();
+
+      await waitFor(() => {
+        expect(screen.getByText('Must be at most 3 characters.')).toBeInTheDocument();
+      });
+    });
+
+    it('clears error when value becomes valid', async () => {
+      const user = userEvent.setup();
+
+      const config: FormConfig = {
+        fields: {
+          name: { type: 'string', label: 'Name', validation: { minLength: 3 } },
+        },
+        layout: ['name'],
+      };
+
+      render(
+        <ConfigDrivenForm config={config} onSubmit={vi.fn()} />,
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      );
+
+      const input = screen.getByLabelText('Name');
+      await user.type(input, 'ab');
+      await user.tab();
+
+      await waitFor(() => {
+        expect(screen.getByText('Must be at least 3 characters.')).toBeInTheDocument();
+      });
+
+      await user.clear(input);
+      await user.type(input, 'valid');
+
+      await waitFor(() => {
+        expect(screen.queryByText('Must be at least 3 characters.')).not.toBeInTheDocument();
+      });
+    });
+
+    it('supports custom validate function', async () => {
+      const user = userEvent.setup();
+
+      const config: FormConfig = {
+        fields: {
+          name: {
+            type: 'string',
+            label: 'Name',
+            validation: {
+              validate: (value: unknown) => (value === 'bad' ? 'Invalid value' : undefined),
+            },
+          },
+        },
+        layout: ['name'],
+      };
+
+      render(
+        <ConfigDrivenForm config={config} onSubmit={vi.fn()} />,
+        buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      );
+
+      await user.type(screen.getByLabelText('Name'), 'bad');
+      await user.tab();
+
+      await waitFor(() => {
+        expect(screen.getByText('Invalid value')).toBeInTheDocument();
+      });
+    });
+  });
+
+  it('shows conditional items when the triggering field value matches', async () => {
+    const user = userEvent.setup();
+
+    const config: FormConfig = {
+      fields: {
+        mode: { type: 'string', label: 'Mode' },
+        advanced: { type: 'string', label: 'Advanced Setting' },
+      },
+      layout: ['mode', { type: 'condition', when: 'mode', is: 'advanced', items: ['advanced'] }],
+    };
+
+    render(
+      <ConfigDrivenForm config={config} onSubmit={vi.fn()} />,
+      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+    );
+
+    expect(screen.queryByLabelText('Advanced Setting')).not.toBeInTheDocument();
+
+    await user.type(screen.getByLabelText('Mode'), 'advanced');
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Advanced Setting')).toBeInTheDocument();
+    });
+  });
+
+  it('does not submit values left over from a field hidden by a condition', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+
+    const config: FormConfig = {
+      fields: {
+        mode: { type: 'string', label: 'Mode' },
+        advanced: { type: 'string', label: 'Advanced Setting' },
+      },
+      layout: ['mode', { type: 'condition', when: 'mode', is: 'advanced', items: ['advanced'] }],
+    };
+
+    render(
+      <ConfigDrivenForm config={config} onSubmit={onSubmit} />,
+      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+    );
+
+    await user.type(screen.getByLabelText('Mode'), 'advanced');
+    await waitFor(() => expect(screen.getByLabelText('Advanced Setting')).toBeInTheDocument());
+
+    await user.type(screen.getByLabelText('Advanced Setting'), 'stale value');
+    await user.clear(screen.getByLabelText('Mode'));
+    await user.type(screen.getByLabelText('Mode'), 'basic');
+    await waitFor(() =>
+      expect(screen.queryByLabelText('Advanced Setting')).not.toBeInTheDocument()
+    );
+
+    fireEvent.submit(screen.getByLabelText('Mode'));
+
+    await waitFor(() =>
+      expect(onSubmit).toHaveBeenCalledWith({ mode: 'basic' }, expect.anything(), expect.anything())
+    );
   });
 });

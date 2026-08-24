@@ -24,6 +24,8 @@ export type { CellContextType } from '#core/providers/cell-provider/types';
 // Components
 export { Box } from '#core/components/box/box';
 export * from '#core/components/box/styled-components';
+export { BreadcrumbBar } from '#core/components/breadcrumb-bar/breadcrumb-bar';
+export type { NavLink } from '#core/components/breadcrumb-bar/types';
 export { DateTime } from '#core/components/date-time/date-time';
 export { DescriptionText } from '#core/components/description-text';
 export { HelpTooltip } from '#core/components/help-tooltip';

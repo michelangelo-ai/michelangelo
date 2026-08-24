@@ -44,6 +44,9 @@ type CadenceClient struct {
 var _ clientInterface.WorkflowClient = &CadenceClient{}
 
 func (c *CadenceClient) StartWorkflow(ctx context.Context, options clientInterface.StartWorkflowOptions, workflowName string, args ...interface{}) (*clientInterface.WorkflowExecution, error) {
+	if options.StartPaused {
+		return nil, fmt.Errorf("starting a paused workflow is not supported by Cadence")
+	}
 
 	cadenceOptions := cadenceClient.StartWorkflowOptions{
 		ID:                              options.ID,
@@ -303,9 +306,16 @@ func (c *CadenceClient) DeleteTrigger(ctx context.Context, workflowID string, ru
 	return c.Client.TerminateWorkflow(ctx, workflowID, runID, "trigger killed", nil)
 }
 
-// UpdateTrigger is a no-op for Cadence (schedule updates are a Temporal feature).
-// In Cadence, cron schedules are embedded in the workflow and cannot be updated in place.
-// Returns nil to indicate success - the operation is silently skipped.
-func (c *CadenceClient) UpdateTrigger(_ context.Context, _ string, _ string, _ *bool, _ []interface{}) error {
+// UpdateTrigger is a no-op for Cadence cron/args updates because cron schedules are embedded
+// in workflows. Pause/resume requests return an explicit unsupported-operation error so the
+// controller cannot incorrectly report that a Cadence trigger changed state.
+func (c *CadenceClient) UpdateTrigger(_ context.Context, workflowID string, _ string, paused *bool, _ []interface{}) error {
+	if paused != nil {
+		action := "PauseTrigger"
+		if !*paused {
+			action = "UnpauseTrigger"
+		}
+		return fmt.Errorf("%s not supported by Cadence provider (workflowID: %s)", action, workflowID)
+	}
 	return nil
 }

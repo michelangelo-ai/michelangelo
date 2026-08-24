@@ -1,4 +1,5 @@
-import { FORM_ERROR, getIn } from 'final-form';
+import { FORM_ERROR } from 'final-form';
+import { get } from 'lodash';
 
 import { useFormContext } from '#core/components/form/form-context';
 import { useFormState } from '#core/components/form/hooks/use-form-state';
@@ -31,7 +32,7 @@ export function useFormErrorList(): ErrorEntry[] {
   for (const [fieldPath, isTouched] of Object.entries(touched ?? {})) {
     if (!isTouched) continue;
 
-    const errorMessage: unknown = getIn(errors, fieldPath);
+    const errorMessage: unknown = get(errors, fieldPath);
     if (typeof errorMessage !== 'string') continue;
 
     fieldEntries.push({

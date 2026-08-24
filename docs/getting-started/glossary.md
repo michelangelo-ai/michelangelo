@@ -43,14 +43,14 @@ A pool of hardware resources (CPU, GPU, memory) registered with the Michelangelo
 A cross-backend dataset reference that allows tasks on different compute backends (Spark and Ray) to pass datasets to each other. A Spark task wraps its output in a `DatasetVariable` and saves it; a Ray task receives the reference and loads it in its own format.
 
 ### Deployment
-A running instance of a model revision, loaded into a target inference environment. A deployment provides a human-readable name for accessing a specific model version and supports traffic splitting and canary rollout.
+A running instance of a model revision, loaded into a target inference environment. A deployment provides a human-readable name for accessing a specific model version and is rolled out with a rolling strategy; additional rollout strategies are on the roadmap.
 
 ---
 
 ## E
 
 ### Endpoint
-The routing layer that directs prediction requests to one or more deployments. Endpoints support traffic splitting across model revisions (e.g., for A/B testing) and are the entry point for online inference.
+The routing layer that directs prediction requests to one or more deployments. Endpoints route requests by inference server and deployment name and are the entry point for online inference; traffic splitting across model revisions (e.g., for A/B testing) is on the roadmap.
 
 ### Evaluation Report
 A structured collection of model metrics produced after a training or evaluation run. Common report types include model performance, feature importance, and data quality reports.

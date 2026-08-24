@@ -1,10 +1,15 @@
 [tool.poetry]
 name = "michelangelo"
-version = "0.8.0"
+version = "0.9.0"
 description = "Michelangelo AI is an end-to-end model lifecycle management system at large scale"
 authors = ["Michelangelo AI Team <michelangelo-oss-group@uber.com>"]
 readme = "README.md"
-exclude = ["michelangelo/example", "michelangelo/tests", "michelangelo/tools"]    # TODO: temporary exclude all codes in package building
+exclude = [
+    "michelangelo/**/tests",
+    "michelangelo/**/*_test.py",
+    "michelangelo/**/test_*.py",
+    "michelangelo/**/conftest.py",
+]
 packages = [
     { include = "michelangelo" },
 ]
@@ -54,15 +59,17 @@ numpy = { version = "^1.26.0", optional = true }
 pandas = { version = "^2.1.0", optional = true }
 pyarrow = { version = "^19.0.0", optional = true }
 s3fs = { version = "2024.9.0", optional = true }
-torch = { version = "2.6.0", optional = true }
+torch = { version = "2.7.0", optional = true }
 einops = { version = "0.8.0", optional = true }
-transformers = { version = "4.48.2", optional = true }
+transformers = { version = "4.51.3", optional = true }
 comet_ml = { version = "^3.49.0", optional = true }
 deepspeed = { version = "^0.14.0", optional = true }
 xgboost_ray = {version = "0.1.19", optional = true }
-xgboost = {version = "2.1.4", optional = true }
 kaggle = { version = "^1.6.17", optional = true }
 scikit-learn = { version = "^1.5.2", optional = true }
+
+# For the XGBoost trainer (michelangelo.lib.trainer.xgboost)
+xgboost = {version = "2.1.4", optional = true }
 
 # For MLflow model packaging
 mlflow = { version = "^2.0.0", optional = true }
@@ -73,8 +80,8 @@ peft = { version = "^0.3.0", optional = true }
 minio = { version = ">=7.2,<8", optional = true }
 
 # For VLLM
-setuptools = { version = "74.1.1", optional = true }
-vllm = { version = "0.8.1", optional = true }
+setuptools = { version = "79.0.1", optional = true }
+vllm = { version = "0.9.2", optional = true, python = "<3.13" }
 
 
 
@@ -83,7 +90,7 @@ ma = 'michelangelo.cli.cli:main'
 
 
 [tool.poetry.extras]
-dev = ["pytest", "pytest-cov", "coverage", "ruff", "jinja2", "pre-commit", "docker", "torch", "pandas", "numpy", "transformers", "pyarrow", "pytorch_lightning", "ray", "polars"]
+dev = ["pytest", "pytest-cov", "coverage", "ruff", "jinja2", "pre-commit", "docker", "torch", "pandas", "numpy", "transformers", "pyarrow", "pytorch_lightning", "ray", "polars", "xgboost"]
 plugin = ["ray", "pyspark"]
 ray-polars = ["ray", "polars"]  # Polars fallback for PyArrow nested-data bug (ray-project/ray#61675)
 example = ["accelerate", "datasets", "numpy", "pandas", "pyarrow", "ray", "s3fs", "torch", "transformers", "pytorch_lightning", "einops", "xgboost", "xgboost_ray", "kaggle", "scikit-learn", "chronon-ai", "thrift", "sqlglot", "pyspark", "ray", "mlflow", "boto3", "peft", "minio"]
@@ -93,6 +100,7 @@ mactl = []
 trainer = ["ray", "torch", "pytorch_lightning", "transformers", "numpy"]
 trainer-comet = ["comet_ml"]
 trainer-mlflow = ["mlflow"]
+trainer-xgboost = ["ray", "xgboost", "numpy", "pandas"]
 trainer-deepspeed = ["deepspeed"]
 
 [tool.pytest.ini_options]
