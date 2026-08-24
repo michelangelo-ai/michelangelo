@@ -1,12 +1,11 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: DaemonSet
 metadata:
   name: model-sync
   namespace: default
   labels:
     app: model-sync
 spec:
-  replicas: 1
   selector:
     matchLabels:
       app: model-sync
@@ -15,19 +14,10 @@ spec:
       labels:
         app: model-sync
     spec:
-      # Schedule on the same node as the inference server pod so /mnt/models is shared via hostPath.
-      affinity:
-        podAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-          - labelSelector:
-              matchExpressions:
-              - key: app
-                operator: In
-                values:
-                - triton-${IS_NAME}
-            topologyKey: kubernetes.io/hostname
-            namespaces:
-            - default
+      # The model repository is a hostPath, so a Triton pod can only read what was
+      # downloaded onto its own node. Running one daemon per node keeps every node that
+      # schedules a Triton replica supplied, rather than only the node the daemon
+      # happened to land on. Each daemon reconciles just the Triton pods on its node.
       serviceAccountName: model-sync
       containers:
       - name: model-sync

@@ -1354,13 +1354,13 @@ def _kube_apply(path: Path):
 
 
 def _apply_model_sync(is_name: str, context: Optional[str] = None):
-    """Apply the model-sync ConfigMap (Python script) and Deployment for one IS.
+    """Apply the model-sync ConfigMap (Python script) and DaemonSet for one IS.
 
     Two-step apply:
     - (1) idempotently load resources/sync-models.py into the
     `model-sync-script` ConfigMap,
-    - (2) render IS_NAME into model-sync.yaml.tmpl and apply the resulting Deployment.
-    Waits for the resulting Deployment to roll out.
+    - (2) render IS_NAME into model-sync.yaml.tmpl and apply the resulting DaemonSet.
+    Waits for the resulting DaemonSet to roll out.
     """
     script_path = _dir / "resources" / "sync-models.py"
     template_path = _dir / "resources" / "model-sync.yaml.tmpl"
@@ -1408,7 +1408,7 @@ def _apply_model_sync(is_name: str, context: Optional[str] = None):
             *base_kubectl,
             "rollout",
             "status",
-            "deployment/model-sync",
+            "daemonset/model-sync",
             "-n",
             "default",
             "--timeout=120s",
@@ -1416,9 +1416,9 @@ def _apply_model_sync(is_name: str, context: Optional[str] = None):
         )
     except subprocess.CalledProcessError:
         _err_exit(
-            "Model-sync Deployment failed to become ready.\n"
+            "Model-sync DaemonSet failed to become ready.\n"
             f"Check logs: kubectl {' '.join(base_kubectl[1:])} "
-            "logs deployment/model-sync -n default"
+            "logs daemonset/model-sync -n default"
         )
 
 
@@ -2300,7 +2300,7 @@ def _create_inference_multicluster_demo_crs():
     print("  • Istio + Gateway API on every cluster")
     print("  • inference-server-manager RBAC + bearer-token Secrets per target")
     print("  • Multi-cluster Triton InferenceServer (per-cluster Tritons)")
-    print("  • model-sync Deployment in every target cluster")
+    print("  • model-sync DaemonSet in every target cluster")
     print(
         f"\n🌐 Endpoint (sandbox-side fanout): "
         f"http://localhost:8880/{inference_server_name}/<deployment-name>/infer"

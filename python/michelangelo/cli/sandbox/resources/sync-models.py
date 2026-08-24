@@ -4,6 +4,10 @@
 Talks directly to each Triton pod backing the inference Service rather than the
 Service VIP, so model load/unload state matches across all replicas instead of
 landing on whichever pod the Service round-robins to.
+
+Runs as a DaemonSet. Each instance owns the model repository on its own node and
+reconciles only the Triton pods scheduled there, so every replica is served by the
+daemon sharing its hostPath.
 """
 
 import json
@@ -56,8 +60,11 @@ def http_post_json(url: str, payload: dict) -> tuple[int, str]:
         return e.code, e.read().decode("utf-8", errors="replace")
 
 
-def list_pod_addresses(service: str) -> list[str]:
-    """Return pod IPs backing the given Service via its Endpoints object."""
+def list_pod_addresses(service: str, node_name: str | None = None) -> list[str]:
+    """Return pod IPs backing the given Service via its Endpoints object.
+
+    When node_name is given, only pods scheduled on that node are returned.
+    """
     with open(SA_TOKEN_PATH) as f:
         token = f.read().strip()
     ctx = ssl.create_default_context(cafile=SA_CA_PATH)
@@ -77,6 +84,7 @@ def list_pod_addresses(service: str) -> list[str]:
         addr["ip"]
         for subset in data.get("subsets") or []
         for addr in subset.get("addresses") or []
+        if node_name is None or addr.get("nodeName") == node_name
     ]
 
 
@@ -254,9 +262,21 @@ def reconcile_pod(pod_ip: str, desired: dict) -> None:
         load_model(pod_ip, name)
 
 
-def reconcile_server(server: str, endpoint_url: str) -> None:
-    """One reconcile pass for an inference server: sync S3, then load/unload per pod."""
+def reconcile_server(server: str, endpoint_url: str, node_name: str) -> None:
+    """One reconcile pass for an inference server: sync S3, then load/unload per pod.
+
+    Scoped to the Triton pods on this node. The model repository is a hostPath, so a pod
+    can only load what this node's daemon downloaded; peer daemons cover other nodes.
+    Nodes running no Triton pod skip the download entirely rather than pulling artifacts
+    nothing will read.
+    """
     print(f"--- {server} ---")
+    pod_ips = list_pod_addresses(f"{server}-inference-service", node_name)
+    if not pod_ips:
+        print(f"  no Triton pods on node {node_name}, nothing to do")
+        return
+    print(f"  pods on this node: {pod_ips}")
+
     config = read_model_list(server)
     desired = {entry["name"]: entry for entry in config if entry.get("name")}
     print(f"  desired: {sorted(desired)}")
@@ -269,11 +289,6 @@ def reconcile_server(server: str, endpoint_url: str) -> None:
         if not has_valid_model_structure(model_dir):
             sync_model(storage_path, model_dir, endpoint_url)
 
-    pod_ips = list_pod_addresses(f"{server}-inference-service")
-    if not pod_ips:
-        print("  no Triton pods found, skipping load/unload reconcile")
-        return
-    print(f"  pods: {pod_ips}")
     for pod_ip in pod_ips:
         reconcile_pod(pod_ip, desired)
 
@@ -305,18 +320,26 @@ def configure_aws() -> None:
 
 def main() -> int:
     """Entrypoint: sync loop, one pass per SYNC_INTERVAL_SECONDS over all servers."""
+    node_name = os.environ.get("NODE_NAME")
+    if not node_name:
+        print(
+            "NODE_NAME is not set, so the daemon cannot tell which Triton pods share "
+            "this node's model repository. Set it from spec.nodeName."
+        )
+        return 1
+
     configure_aws()
     os.makedirs(MODEL_BASE_DIR, exist_ok=True)
 
     servers = read_servers(INFERENCE_SERVERS_FILE)
-    print(f"sync daemon on node {os.environ.get('NODE_NAME', '?')}, servers: {servers}")
+    print(f"sync daemon on node {node_name}, servers: {servers}")
 
     endpoint_url = os.environ["AWS_ENDPOINT_URL"]
     while True:
         print("=" * 40)
         for server in servers:
             try:
-                reconcile_server(server, endpoint_url)
+                reconcile_server(server, endpoint_url, node_name)
             except Exception as e:
                 print(f"  {server}: reconcile failed: {e}")
         print(f"sleeping {SYNC_INTERVAL_SECONDS}s")
