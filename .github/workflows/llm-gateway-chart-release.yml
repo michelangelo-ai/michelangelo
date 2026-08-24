@@ -1,9 +1,7 @@
 name: Publish LLM gateway chart
 
 on:
-  push:
-    tags:
-      - 'michelangelo-llm-gateway-v*'
+  workflow_call:
 
 permissions:
   contents: read
@@ -34,11 +32,6 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Verify release source
-        run: |
-          git fetch --no-tags origin main:refs/remotes/origin/main
-          git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/main
-
       - name: Set up Helm
         uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
         with:
@@ -59,9 +52,14 @@ jobs:
         run: |
           set -euo pipefail
 
-          version="${GITHUB_REF_NAME#michelangelo-llm-gateway-v}"
-          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
-            echo "Invalid chart release tag: $GITHUB_REF_NAME" >&2
+          if [[ "$GITHUB_REF_TYPE" != 'tag' ]]; then
+            echo "Gateway publishing requires a tag ref, got $GITHUB_REF_TYPE $GITHUB_REF_NAME" >&2
+            exit 1
+          fi
+
+          version="${GITHUB_REF_NAME#v}"
+          if [[ "$GITHUB_REF_NAME" != v* || ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid Michelangelo release tag: $GITHUB_REF_NAME" >&2
             exit 1
           fi
 
@@ -146,25 +144,6 @@ jobs:
           verify_image "$RUNTIME_REPOSITORY" "$RUNTIME_TAG" "$RUNTIME_DIGEST"
           verify_image "$TEST_REPOSITORY" "$TEST_TAG" "$TEST_DIGEST"
 
-      - name: Reject an existing version
-        env:
-          VERSION: ${{ steps.metadata.outputs.version }}
-        shell: bash
-        run: |
-          set +e
-          output="$(helm show chart "$OCI_ROOT/$CHART_NAME" --version "$VERSION" 2>&1)"
-          status=$?
-          set -e
-
-          if [[ "$status" -eq 0 ]]; then
-            echo "Chart version $VERSION already exists; refusing to overwrite it." >&2
-            exit 1
-          fi
-          if [[ "$output" != *'not found'* && "$output" != *'manifest unknown'* ]]; then
-            echo "$output" >&2
-            exit "$status"
-          fi
-
       - name: Package
         env:
           VERSION: ${{ steps.metadata.outputs.version }}
@@ -177,7 +156,38 @@ jobs:
           package_contents="$(tar tzf "$package")"
           [[ "$package_contents" == *'charts/litellm-helm/Chart.yaml'* ]]
 
+      - name: Check existing package
+        id: package-state
+        env:
+          VERSION: ${{ steps.metadata.outputs.version }}
+        shell: bash
+        run: |
+          set +e
+          check_output="$(helm show chart "$OCI_ROOT/$CHART_NAME" --version "$VERSION" 2>&1)"
+          check_status=$?
+          set -e
+
+          if [[ "$check_status" -eq 0 ]]; then
+            local_root=/tmp/llm-gateway-local
+            remote_root=/tmp/llm-gateway-remote
+            remote_package=/tmp/llm-gateway-existing
+            mkdir -p "$local_root" "$remote_root" "$remote_package"
+            tar xzf "/tmp/llm-gateway-package/$CHART_NAME-$VERSION.tgz" -C "$local_root"
+            helm pull "$OCI_ROOT/$CHART_NAME" --version "$VERSION" --destination "$remote_package"
+            tar xzf "$remote_package/$CHART_NAME-$VERSION.tgz" -C "$remote_root"
+            diff --recursive --brief "$local_root/$CHART_NAME" "$remote_root/$CHART_NAME"
+            echo "Chart version $VERSION is already published with matching content."
+            echo 'publish=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [[ "$check_output" != *'not found'* && "$check_output" != *'manifest unknown'* ]]; then
+            echo "$check_output" >&2
+            exit "$check_status"
+          fi
+          echo 'publish=true' >> "$GITHUB_OUTPUT"
+
       - name: Push
+        if: steps.package-state.outputs.publish == 'true'
         env:
           VERSION: ${{ steps.metadata.outputs.version }}
         run: |

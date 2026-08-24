@@ -7,7 +7,9 @@ on:
       - '.github/scripts/validate-llm-gateway-chart.sh'
       - '.github/workflows/llm-gateway-chart-ci.yml'
       - '.github/workflows/llm-gateway-chart-release.yml'
+      - '.github/workflows/release.yaml'
       - 'helm/michelangelo-llm-gateway/**'
+      - 'scripts/version-bump.sh'
   push:
     branches:
       - main
@@ -15,7 +17,9 @@ on:
       - '.github/scripts/validate-llm-gateway-chart.sh'
       - '.github/workflows/llm-gateway-chart-ci.yml'
       - '.github/workflows/llm-gateway-chart-release.yml'
+      - '.github/workflows/release.yaml'
       - 'helm/michelangelo-llm-gateway/**'
+      - 'scripts/version-bump.sh'
 
 permissions:
   contents: read
@@ -69,9 +73,14 @@ jobs:
       - name: Check shell
         run: shellcheck .github/scripts/validate-llm-gateway-chart.sh
 
+      - name: Check release versions
+        if: matrix.helm-version == '3.17.0'
+        run: bash scripts/version-bump.sh --check
+
       - name: Check workflows
         if: matrix.helm-version == '3.17.0'
         run: |
           go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 \
             .github/workflows/llm-gateway-chart-ci.yml \
-            .github/workflows/llm-gateway-chart-release.yml
+            .github/workflows/llm-gateway-chart-release.yml \
+            .github/workflows/release.yaml

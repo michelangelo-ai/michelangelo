@@ -2,7 +2,7 @@
 
 This chart installs LiteLLM as Michelangelo's independently operated LLM gateway data plane. It wraps the official `litellm-helm` chart instead of maintaining a second implementation of the LiteLLM Deployment and supporting resources.
 
-The gateway is installed, upgraded, and rolled back separately from the Michelangelo control-plane chart. This keeps inference traffic, database migrations, scaling, and availability outside the control-plane release lifecycle.
+The gateway and control-plane charts are published with the same Michelangelo version so operators and integration tests have one compatibility coordinate. The gateway is still installed, upgraded, and rolled back as a separate Helm release, keeping inference traffic, database migrations, scaling, and availability outside the control-plane runtime lifecycle.
 
 ## Ownership
 
@@ -237,7 +237,9 @@ helm uninstall litellm --namespace litellm --wait
 
 ## Release
 
-The wrapper is versioned independently from both Michelangelo and LiteLLM. A tag such as `michelangelo-llm-gateway-v0.1.0` publishes the self-contained chart to:
+The wrapper is published alongside the Michelangelo control-plane chart from the same `vX.Y.Z` release tag. Both packages use `X.Y.Z` as their chart version, while this chart's `appVersion` identifies the pinned LiteLLM runtime. Shared artifact versioning does not combine their Helm releases or runtime lifecycles.
+
+Future integration tests should install both OCI charts at the same version, then exercise independent gateway and control-plane upgrades explicitly. The self-contained gateway chart is published to:
 
 ```text
 oci://ghcr.io/michelangelo-ai/michelangelo/charts/michelangelo-llm-gateway
