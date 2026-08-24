@@ -18,7 +18,7 @@ Ready to get hands-on? Follow these guides in order. You'll have a working local
 
 1. **[Sandbox Setup](./sandbox-setup.md)** — Set up a local Michelangelo AI cluster with all services running (~20 min)
 2. **[Getting Started with Pipelines](../user-guides/getting-started/getting-started.md)** — Build and run your first ML pipeline (~30 min)
-3. **[Browse Examples](../user-guides/examples/index.md)** — 9 end-to-end workflows: XGBoost, BERT, GPT fine-tuning, batch inference, and more
+3. **[Browse Examples](../user-guides/examples/index.md)** — 10 end-to-end workflows: XGBoost, BERT, GPT fine-tuning, batch inference, and more
 
 ### Reference
 
