@@ -3,6 +3,7 @@
 from unittest import TestCase
 
 from michelangelo.lib.model_manager._private.schema.triton import (
+    normalize_scalar_shapes,
     validate_model_schema,
     validate_model_schema_item,
 )
@@ -178,3 +179,67 @@ class ValidateSchemaTest(TestCase):
                 "optional=True)"
             ),
         )
+
+
+class NormalizeScalarShapesTest(TestCase):
+    """Tests ``normalize_scalar_shapes``."""
+
+    def test_empty_shape_defaulted_to_scalar(self):
+        """A shape-less item (e.g. from ``ColumnConfig('torch.float32')``) -> [1]."""
+        schema = ModelSchema(
+            input_schema=[ModelSchemaItem(name="x", data_type=DataType.FLOAT, shape=[])]
+        )
+        result = normalize_scalar_shapes(schema)
+        self.assertEqual(result.input_schema[0].shape, [1])
+
+    def test_non_empty_shape_left_unchanged(self):
+        """An item with an explicit shape is untouched."""
+        item = ModelSchemaItem(name="x", data_type=DataType.FLOAT, shape=[10])
+        schema = ModelSchema(input_schema=[item])
+        result = normalize_scalar_shapes(schema)
+        self.assertEqual(result.input_schema[0].shape, [10])
+        self.assertIs(result.input_schema[0], item)
+
+    def test_normalizes_all_three_schema_components(self):
+        """Input, feature-store, and output schemas are all normalized."""
+        schema = ModelSchema(
+            input_schema=[
+                ModelSchemaItem(name="a", data_type=DataType.FLOAT, shape=[])
+            ],
+            feature_store_features_schema=[
+                ModelSchemaItem(name="b", data_type=DataType.FLOAT, shape=[])
+            ],
+            output_schema=[
+                ModelSchemaItem(name="c", data_type=DataType.FLOAT, shape=[])
+            ],
+        )
+        result = normalize_scalar_shapes(schema)
+        self.assertEqual(result.input_schema[0].shape, [1])
+        self.assertEqual(result.feature_store_features_schema[0].shape, [1])
+        self.assertEqual(result.output_schema[0].shape, [1])
+
+    def test_normalized_schema_passes_validation(self):
+        """A schema failing validation with empty shapes passes once normalized."""
+        schema = ModelSchema(
+            input_schema=[
+                ModelSchemaItem(name="x", data_type=DataType.FLOAT, shape=[])
+            ],
+            output_schema=[
+                ModelSchemaItem(name="y", data_type=DataType.FLOAT, shape=[])
+            ],
+        )
+        is_valid, error = validate_model_schema(schema)
+        self.assertFalse(is_valid)
+
+        is_valid, error = validate_model_schema(normalize_scalar_shapes(schema))
+        self.assertTrue(is_valid)
+        self.assertIsNone(error)
+
+    def test_returns_new_model_schema_object(self):
+        """The result is a new ``ModelSchema``, not the input mutated in place."""
+        schema = ModelSchema(
+            input_schema=[ModelSchemaItem(name="x", data_type=DataType.FLOAT, shape=[])]
+        )
+        result = normalize_scalar_shapes(schema)
+        self.assertIsNot(result, schema)
+        self.assertEqual(schema.input_schema[0].shape, [])

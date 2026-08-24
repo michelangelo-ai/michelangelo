@@ -1,5 +1,7 @@
 """Schema validation module."""
 
+from dataclasses import replace
+
 from michelangelo.lib.model_manager._private.schema.triton.data_type import (
     DATA_TYPE_MAPPING,
 )
@@ -7,6 +9,41 @@ from michelangelo.lib.model_manager.schema import (
     ModelSchema,
     ModelSchemaItem,
 )
+
+
+def normalize_scalar_shapes(model_schema: ModelSchema) -> ModelSchema:
+    """Return a copy of ``model_schema`` with empty item shapes defaulted to ``[1]``.
+
+    A scalar column declared upstream with no explicit shape (e.g.
+    ``ColumnConfig("torch.float32")``, the documented way to declare a
+    single-value feature in ``tabular_trainer``) produces a
+    ``ModelSchemaItem`` with ``shape=[]``. Triton packaging requires a
+    non-empty shape on every item (see ``validate_model_schema_item``), so
+    packagers normalize through here before validating: an empty shape is
+    treated as an implicit scalar (``[1]``), matching this module's own
+    documented scalar example (``ModelSchemaItem(..., shape=[1])``).
+
+    Args:
+        model_schema: Schema to normalize.
+
+    Returns:
+        A new ``ModelSchema`` with the same items, except any item whose
+        ``shape`` is empty has ``shape=[1]`` instead. Items with a
+        non-empty shape are returned unchanged.
+    """
+
+    def _normalize_items(items: list[ModelSchemaItem]) -> list[ModelSchemaItem]:
+        return [
+            replace(item, shape=[1]) if not item.shape else item for item in items
+        ]
+
+    return ModelSchema(
+        input_schema=_normalize_items(model_schema.input_schema),
+        feature_store_features_schema=_normalize_items(
+            model_schema.feature_store_features_schema
+        ),
+        output_schema=_normalize_items(model_schema.output_schema),
+    )
 
 
 def validate_model_schema(model_schema: ModelSchema) -> tuple[bool, Exception]:

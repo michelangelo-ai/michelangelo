@@ -17,6 +17,7 @@ from michelangelo.lib.model_manager._private.packager.template_renderer import (
 )
 from michelangelo.lib.model_manager._private.schema.triton import (
     convert_model_schema,
+    normalize_scalar_shapes,
     validate_model_schema,
 )
 from michelangelo.lib.model_manager._private.utils.data_utils import (
@@ -146,6 +147,8 @@ class CustomTritonPackager:
         if not model_schema:
             raise ValueError("model_schema is required")
 
+        model_schema = normalize_scalar_shapes(model_schema)
+
         is_schema_valid, error = validate_model_schema(model_schema)
 
         if not is_schema_valid:
@@ -254,6 +257,8 @@ class CustomTritonPackager:
 
         if not model_schema:
             raise ValueError("model_schema is required")
+
+        model_schema = normalize_scalar_shapes(model_schema)
 
         is_schema_valid, error = validate_model_schema(model_schema)
 
