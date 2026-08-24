@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.9.0] - 2026-08-24
 
 
 ### Bug Fixes
@@ -170,6 +170,9 @@ All notable changes to this project will be documented in this file.
 - Revert getting-started.md tutorial to xgb_train (pytorch_train crashes on Apple Silicon) (#1871)
 
 
+- Update CHANGELOG.md for v0.9.0-rc.2 (#1906)
+
+
 ### Features
 
 
@@ -294,6 +297,9 @@ All notable changes to this project will be documented in this file.
 
 
 - Bump version to 0.9.0-rc.2 (#1905)
+
+
+- Release 0.9.0 (#1923)
 
 
 ### Refactoring
