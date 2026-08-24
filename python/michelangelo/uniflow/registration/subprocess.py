@@ -189,7 +189,11 @@ def main():
                 final_environ.update(json.loads(args.environ))
 
             prepare_uniflow_input(
-                final_args, final_kwargs_dict, final_environ, args.output_dir
+                final_args,
+                final_kwargs_dict,
+                final_environ,
+                args.output_dir,
+                workflow_config["concurrent_groups"],
             )
 
         _logger.info("Registration completed successfully")

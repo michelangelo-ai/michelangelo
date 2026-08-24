@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"text/template"
 	"time"
 
@@ -38,9 +39,10 @@ const (
 	DefaultWorkSpaceRootURL = "s3://default" // TODO(#547): make this configurable
 
 	// Workflow input parameter keys for uniflow pipeline
-	WorkflowEnvironKey = "environ"
-	WorkflowKWArgsKey  = "kw_args"
-	WorkflowArgsKey    = "args"
+	WorkflowEnvironKey          = "environ"
+	WorkflowKWArgsKey           = "kw_args"
+	WorkflowArgsKey             = "args"
+	WorkflowConcurrentGroupsKey = "concurrent_groups"
 
 	// Workflow input parameter keys for canvas flex pipeline
 	WorkflowTaskConfigsKey = "task_configs"
@@ -646,12 +648,31 @@ func decodePipelineManifestContent(pipelineSpec v2.PipelineSpec) (map[string]int
 
 func (a *ExecuteWorkflowActor) addTaskCacheEnv(ctx context.Context, pipelineRun *v2.PipelineRun, envs map[string]interface{}) error {
 	logger := a.logger.With(zap.String("pipelineRun", fmt.Sprintf("%s/%s", pipelineRun.Namespace, pipelineRun.Name)))
-	// Cache is scoped per pipeline run via cacheVersionVarName below (defaults to
-	// pipelineRun.Name), so enabling it by default does not cause cross-run cache hits.
-	// This lets tasks that already succeeded skip re-execution when a manual retry's
-	// Temporal Reset forces concurrent sibling tasks to replay.
-	envs[cacheEnabledVarName] = "true"
+	envs[cacheEnabledVarName] = "false"
 	envs[cacheVersionVarName] = pipelineRun.Name
+
+	// Tasks that are dispatched together via concurrent_run/batch_run share a single
+	// Cadence workflow history with every other task in the pipeline. A manual retry of
+	// any one task truncates that shared history (see findTaskResetEventIDByActivityID),
+	// forcing every task scheduled after the reset boundary - concurrent siblings and any
+	// later stage - to be replayed for real. Auto-enable caching for exactly those tasks
+	// (never for standalone sequential tasks, which keep the "false" default above) so an
+	// untouched task forced to replay by someone else's retry can skip via its own
+	// already-existing CachedOutput instead of fully re-executing. Group membership is
+	// computed statically from the pipeline's Python source at compile time, because
+	// CACHE_ENABLED is fixed for the life of the workflow's history and can't be toggled
+	// retroactively "just for a retry".
+	if pipeline := pipelineRun.Status.SourcePipeline.Pipeline; pipeline != nil {
+		pipelineConfigMap, err := decodePipelineManifestContent(pipeline.Spec)
+		if err != nil {
+			logger.Warn("failed to decode pipeline manifest content for concurrent group detection", zap.Error(err))
+		} else {
+			for _, taskName := range concurrentGroupTaskNames(pipelineConfigMap) {
+				envs[fmt.Sprintf("%s_%s", cacheEnabledVarName, taskName)] = "true"
+			}
+		}
+	}
+
 	if pipelineRun.Spec.Resume == nil || pipelineRun.Spec.Resume.PipelineRun == nil {
 		return nil
 	}
@@ -688,6 +709,36 @@ func (a *ExecuteWorkflowActor) addTaskCacheEnv(ctx context.Context, pipelineRun 
 		}
 	}
 	return nil
+}
+
+// concurrentGroupTaskNames flattens the "concurrent_groups" manifest key (a list of
+// task-name groups dispatched together via concurrent_run/batch_run, statically detected
+// by the Python compiler) into the set of task names that belong to any group with more
+// than one member. Standalone/single-member groups are ignored, since those tasks aren't
+// exposed to another task's retry via a shared decision boundary.
+func concurrentGroupTaskNames(pipelineConfigMap map[string]interface{}) []string {
+	rawGroups, ok := pipelineConfigMap[WorkflowConcurrentGroupsKey]
+	if !ok {
+		return nil
+	}
+	groups, ok := rawGroups.([]interface{})
+	if !ok {
+		return nil
+	}
+
+	var taskNames []string
+	for _, rawGroup := range groups {
+		group, ok := rawGroup.([]interface{})
+		if !ok || len(group) <= 1 {
+			continue
+		}
+		for _, rawTaskName := range group {
+			if taskName, ok := rawTaskName.(string); ok && taskName != "" {
+				taskNames = append(taskNames, taskName)
+			}
+		}
+	}
+	return taskNames
 }
 
 func getTaskCacheVersionFromResumePipelineRun(taskCacheVersion map[string]string, resumePipelineRun *v2.PipelineRun) {
@@ -1071,24 +1122,37 @@ func (a *ExecuteWorkflowActor) findTaskResetEventIDByActivityID(ctx context.Cont
 	}
 
 	// Find the decision/workflow task completed event immediately before the first activity
-	var resetEventID int64
-	for i := len(history.Events) - 1; i >= 0; i-- {
-		event := history.Events[i]
-
-		// Stop when we reach the first activity scheduled event
-		if event.EventID >= firstActivityScheduledEventID {
-			continue
-		}
-
-		// Look for the decision/activity task completed event just before
-		if event.EventType == a.workflowClient.GetActivityTaskCompletedEventType() || event.EventType == a.workflowClient.GetDecisionTaskCompletedEventType() {
-			resetEventID = event.EventID
-			break
-		}
-	}
-
+	resetEventID := a.nearestSafeBoundaryBefore(history, firstActivityScheduledEventID)
 	if resetEventID == 0 {
 		return 0, fmt.Errorf("could not find safe reset boundary before first activity %s", firstActivityID)
+	}
+
+	// Uniflow's concurrent-task cache check (cachedoutput.ListCachedOutput) runs once, up
+	// front, for every sibling in the same concurrent_run/batch_run batch, before any of them
+	// schedule their real work. If the boundary above lands right after that cache-check wave
+	// (as it does whenever caching is enabled), a Reset would freeze the pre-existing miss
+	// decision forever and no sibling could ever hit its cache on replay. Walk the boundary
+	// further back, past the entire contiguous run of ListCachedOutput activities that
+	// directly precedes the target, so a retry re-triggers those checks too.
+	for {
+		// The boundary above is often a DecisionTaskCompleted event sealing in whatever
+		// activities completed just before it - inspect the nearest activity completion at or
+		// before that point to see whether it was a cache check.
+		completedEventID := a.nearestActivityCompletedAtOrBefore(history, resetEventID)
+		if completedEventID == 0 {
+			break
+		}
+
+		scheduledEventID, activityType, ok := a.resolveCompletedActivitySchedule(history, completedEventID)
+		if !ok || !strings.Contains(activityType, "ListCachedOutput") {
+			break
+		}
+
+		earlier := a.nearestSafeBoundaryBefore(history, scheduledEventID)
+		if earlier == 0 || earlier >= resetEventID {
+			break
+		}
+		resetEventID = earlier
 	}
 
 	logger.Info("found precise reset boundary using activity ID",
@@ -1096,6 +1160,72 @@ func (a *ExecuteWorkflowActor) findTaskResetEventIDByActivityID(ctx context.Cont
 		zap.Int64("resetEventID", resetEventID))
 
 	return resetEventID, nil
+}
+
+// nearestSafeBoundaryBefore returns the EventID of the nearest ActivityTaskCompleted or
+// DecisionTaskCompleted event strictly before beforeEventID, or 0 if none exists.
+func (a *ExecuteWorkflowActor) nearestSafeBoundaryBefore(history *clientInterfaces.WorkflowHistory, beforeEventID int64) int64 {
+	for i := len(history.Events) - 1; i >= 0; i-- {
+		event := history.Events[i]
+		if event.EventID >= beforeEventID {
+			continue
+		}
+		if event.EventType == a.workflowClient.GetActivityTaskCompletedEventType() || event.EventType == a.workflowClient.GetDecisionTaskCompletedEventType() {
+			return event.EventID
+		}
+	}
+	return 0
+}
+
+// nearestActivityCompletedAtOrBefore returns the EventID of the nearest ActivityTaskCompleted
+// event with EventID <= atOrBeforeEventID, or 0 if none exists.
+func (a *ExecuteWorkflowActor) nearestActivityCompletedAtOrBefore(history *clientInterfaces.WorkflowHistory, atOrBeforeEventID int64) int64 {
+	for i := len(history.Events) - 1; i >= 0; i-- {
+		event := history.Events[i]
+		if event.EventID > atOrBeforeEventID {
+			continue
+		}
+		if event.EventType == a.workflowClient.GetActivityTaskCompletedEventType() {
+			return event.EventID
+		}
+	}
+	return 0
+}
+
+// resolveCompletedActivitySchedule checks whether eventID identifies an ActivityTaskCompleted
+// event, and if so returns the EventID and activity_type of the ActivityTaskScheduled event it
+// completed. ok is false if eventID isn't an ActivityTaskCompleted event, or its originating
+// scheduled event can't be found.
+func (a *ExecuteWorkflowActor) resolveCompletedActivitySchedule(history *clientInterfaces.WorkflowHistory, eventID int64) (scheduledEventID int64, activityType string, ok bool) {
+	var completed *clientInterfaces.HistoryEvent
+	for i := range history.Events {
+		if history.Events[i].EventID == eventID {
+			completed = &history.Events[i]
+			break
+		}
+	}
+	if completed == nil || completed.EventType != a.workflowClient.GetActivityTaskCompletedEventType() {
+		return 0, "", false
+	}
+
+	switch v := completed.Details["scheduled_event_id"].(type) {
+	case int64:
+		scheduledEventID = v
+	case int32:
+		scheduledEventID = int64(v)
+	case int:
+		scheduledEventID = int64(v)
+	default:
+		return 0, "", false
+	}
+
+	for _, event := range history.Events {
+		if event.EventID == scheduledEventID && event.EventType == a.workflowClient.GetActivityTaskScheduledEventType() {
+			activityType, _ = event.Details["activity_type"].(string)
+			return scheduledEventID, activityType, true
+		}
+	}
+	return 0, "", false
 }
 
 // processManualRetrySpec checks for manual retry spec field and triggers retry if present
