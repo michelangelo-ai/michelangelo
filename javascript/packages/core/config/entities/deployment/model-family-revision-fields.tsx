@@ -46,7 +46,9 @@ const modelFamilyListOptionsExt = (modelFamilyName: string) => ({
         operator: CRITERION_OPERATOR_EQUAL,
         matchValue: {
           typeUrl: 'type.googleapis.com/google.protobuf.StringValue',
-          value: Array.from(toBinary(StringValueSchema, create(StringValueSchema, { value: modelFamilyName }))),
+          value: Array.from(
+            toBinary(StringValueSchema, create(StringValueSchema, { value: modelFamilyName }))
+          ),
         },
       },
     ],
@@ -66,10 +68,13 @@ export const ModelFamilyRevisionFields = () => {
 
   // Model itself isn't a form field (there's no `model` key in DeploymentCreateInput) — it drives
   // spec.desiredRevision.name below, so validation is attached there and surfaced on the Model control.
-  const { input: revisionInput, meta: revisionMeta } = useField<string>('spec.desiredRevision.name', {
-    required: true,
-    label: 'Model',
-  });
+  const { input: revisionInput, meta: revisionMeta } = useField<string>(
+    'spec.desiredRevision.name',
+    {
+      required: true,
+      label: 'Model',
+    }
+  );
 
   const { data: modelFamilyData, isLoading: isModelFamilyLoading } =
     useStudioQuery<ModelFamilyListResult>({
@@ -127,7 +132,10 @@ export const ModelFamilyRevisionFields = () => {
   };
 
   return (
-    <FormGroup title="Model" description="The latest revision of the selected model will be deployed">
+    <FormGroup
+      title="Model"
+      description="The latest revision of the selected model will be deployed"
+    >
       <FormControl label="Model family" caption="Model family the deployed model belongs to">
         <Select
           options={modelFamilyOptions}

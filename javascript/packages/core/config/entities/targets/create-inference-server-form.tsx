@@ -85,7 +85,12 @@ export const CreateInferenceServerForm = ({ onClose }: CreateActionComponentProp
         placeholder="my-inference-server"
       />
 
-      <StringField name="targetTypeDisplay" label="Target type" defaultValue="Inference Server" readOnly />
+      <StringField
+        name="targetTypeDisplay"
+        label="Target type"
+        defaultValue="Inference Server"
+        readOnly
+      />
 
       <SelectField
         name="spec.initSpec.servingSpec.containerBuildTemplate"
