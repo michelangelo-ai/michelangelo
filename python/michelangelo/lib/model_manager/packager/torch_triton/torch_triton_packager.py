@@ -16,7 +16,6 @@ from michelangelo.lib.model_manager._private.packager.torch_triton import (
     validate_raw_model_package,
 )
 from michelangelo.lib.model_manager._private.schema.triton import (
-    normalize_scalar_shapes,
     validate_model_schema,
 )
 from michelangelo.lib.model_manager._private.utils.data_utils import (
@@ -160,8 +159,6 @@ class TorchTritonPackager:
         if not model_schema:
             raise ValueError("model_schema is required")
 
-        model_schema = normalize_scalar_shapes(model_schema)
-
         if backend is not None and backend not in _SUPPORTED_BACKENDS:
             raise ValueError(
                 f"Unsupported backend: '{backend}'. Supported backends are: "
@@ -298,8 +295,6 @@ class TorchTritonPackager:
 
         if not model_schema:
             raise ValueError("model_schema is required")
-
-        model_schema = normalize_scalar_shapes(model_schema)
 
         is_schema_valid, error = validate_model_schema(model_schema)
 

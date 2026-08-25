@@ -4,7 +4,6 @@
 from .config_schema import convert_model_schema, convert_schema_to_dict, convert_shape
 from .data_type import DATA_TYPE_MAPPING, convert_data_type
 from .validate_schema import (
-    normalize_scalar_shapes,
     validate_model_schema,
     validate_model_schema_item,
     validate_output_schema_item,

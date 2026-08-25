@@ -334,9 +334,10 @@ class CustomTritonPackagerTest(TestCase):
 
         ``ColumnConfig("torch.float32")`` -- the documented way to declare a
         scalar feature in ``tabular_trainer`` -- produces a
-        ``ModelSchemaItem`` with ``shape=[]``. The packager must treat that
-        as an implicit scalar (``[1]``) rather than rejecting it, since
-        Triton itself requires a non-empty shape.
+        ``ModelSchemaItem`` with ``shape=[]``. That's a legitimate true
+        scalar (no non-batch dimensions) rather than an error state: the
+        batch dimension is applied separately and flexibly by Triton, so an
+        empty item shape must not be rejected or padded to ``[1]``.
         """
         scalar_schema = ModelSchema(
             input_schema=[

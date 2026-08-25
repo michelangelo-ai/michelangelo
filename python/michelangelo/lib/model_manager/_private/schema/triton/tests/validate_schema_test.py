@@ -3,7 +3,6 @@
 from unittest import TestCase
 
 from michelangelo.lib.model_manager._private.schema.triton import (
-    normalize_scalar_shapes,
     validate_model_schema,
     validate_model_schema_item,
 )
@@ -50,8 +49,14 @@ class ValidateSchemaTest(TestCase):
             ),
         )
 
-    def test_validate_model_schema_item_invalid_shape(self):
-        """It rejects schema items without shapes."""
+    def test_validate_model_schema_item_empty_shape_is_valid(self):
+        """An empty shape is a valid true scalar (no non-batch dimensions).
+
+        item.shape excludes the batch dimension, which Triton applies
+        separately and flexibly (config.pbtxt `dims` never includes it), so
+        there is nothing to reject here -- a feature with no non-batch
+        dimensions at all is a legitimate schema item, not an error state.
+        """
         schema_item = ModelSchemaItem(
             name="ft1",
             data_type=DataType.INT,
@@ -59,26 +64,16 @@ class ValidateSchemaTest(TestCase):
         )
 
         is_valid, error = validate_model_schema_item(schema_item)
-        self.assertFalse(is_valid)
-        self.assertIsInstance(error, ValueError)
-        self.assertEqual(
-            str(error),
-            "Shape must be provided for item: ModelSchemaItem(name='ft1', "
-            "data_type=<DataType.INT: 18>, shape=[], optional=None)",
-        )
+        self.assertTrue(is_valid)
+        self.assertIsNone(error)
 
         schema_item = ModelSchemaItem(
             name="ft1",
             data_type=DataType.INT,
         )
         is_valid, error = validate_model_schema_item(schema_item)
-        self.assertFalse(is_valid)
-        self.assertIsInstance(error, ValueError)
-        self.assertEqual(
-            str(error),
-            "Shape must be provided for item: ModelSchemaItem(name='ft1', "
-            "data_type=<DataType.INT: 18>, shape=None, optional=None)",
-        )
+        self.assertTrue(is_valid)
+        self.assertIsNone(error)
 
     def test_validate_model_schema_success(self):
         """It accepts schemas with valid items."""
@@ -141,7 +136,22 @@ class ValidateSchemaTest(TestCase):
         self.assertIsInstance(error, ValueError)
 
     def test_validate_model_schema_output_schema_error(self):
-        """It rejects output schema items missing a shape."""
+        """It rejects output schema items with an unsupported data type."""
+        model_schema = ModelSchema(
+            output_schema=[
+                ModelSchemaItem(
+                    name="ft1",
+                    data_type=DataType.UNKNOWN,
+                    shape=[],
+                ),
+            ],
+        )
+        is_valid, error = validate_model_schema(model_schema)
+        self.assertFalse(is_valid)
+        self.assertIsInstance(error, ValueError)
+
+    def test_validate_model_schema_output_schema_empty_shape_is_valid(self):
+        """An empty shape (true scalar) is valid for output schema items too."""
         model_schema = ModelSchema(
             output_schema=[
                 ModelSchemaItem(
@@ -152,8 +162,8 @@ class ValidateSchemaTest(TestCase):
             ],
         )
         is_valid, error = validate_model_schema(model_schema)
-        self.assertFalse(is_valid)
-        self.assertIsInstance(error, ValueError)
+        self.assertTrue(is_valid)
+        self.assertIsNone(error)
 
     def test_validate_model_schema_output_schema_with_optional(self):
         """It rejects optional output schema items."""
@@ -179,67 +189,3 @@ class ValidateSchemaTest(TestCase):
                 "optional=True)"
             ),
         )
-
-
-class NormalizeScalarShapesTest(TestCase):
-    """Tests ``normalize_scalar_shapes``."""
-
-    def test_empty_shape_defaulted_to_scalar(self):
-        """A shape-less item (e.g. from ``ColumnConfig('torch.float32')``) -> [1]."""
-        schema = ModelSchema(
-            input_schema=[ModelSchemaItem(name="x", data_type=DataType.FLOAT, shape=[])]
-        )
-        result = normalize_scalar_shapes(schema)
-        self.assertEqual(result.input_schema[0].shape, [1])
-
-    def test_non_empty_shape_left_unchanged(self):
-        """An item with an explicit shape is untouched."""
-        item = ModelSchemaItem(name="x", data_type=DataType.FLOAT, shape=[10])
-        schema = ModelSchema(input_schema=[item])
-        result = normalize_scalar_shapes(schema)
-        self.assertEqual(result.input_schema[0].shape, [10])
-        self.assertIs(result.input_schema[0], item)
-
-    def test_normalizes_all_three_schema_components(self):
-        """Input, feature-store, and output schemas are all normalized."""
-        schema = ModelSchema(
-            input_schema=[
-                ModelSchemaItem(name="a", data_type=DataType.FLOAT, shape=[])
-            ],
-            feature_store_features_schema=[
-                ModelSchemaItem(name="b", data_type=DataType.FLOAT, shape=[])
-            ],
-            output_schema=[
-                ModelSchemaItem(name="c", data_type=DataType.FLOAT, shape=[])
-            ],
-        )
-        result = normalize_scalar_shapes(schema)
-        self.assertEqual(result.input_schema[0].shape, [1])
-        self.assertEqual(result.feature_store_features_schema[0].shape, [1])
-        self.assertEqual(result.output_schema[0].shape, [1])
-
-    def test_normalized_schema_passes_validation(self):
-        """A schema failing validation with empty shapes passes once normalized."""
-        schema = ModelSchema(
-            input_schema=[
-                ModelSchemaItem(name="x", data_type=DataType.FLOAT, shape=[])
-            ],
-            output_schema=[
-                ModelSchemaItem(name="y", data_type=DataType.FLOAT, shape=[])
-            ],
-        )
-        is_valid, error = validate_model_schema(schema)
-        self.assertFalse(is_valid)
-
-        is_valid, error = validate_model_schema(normalize_scalar_shapes(schema))
-        self.assertTrue(is_valid)
-        self.assertIsNone(error)
-
-    def test_returns_new_model_schema_object(self):
-        """The result is a new ``ModelSchema``, not the input mutated in place."""
-        schema = ModelSchema(
-            input_schema=[ModelSchemaItem(name="x", data_type=DataType.FLOAT, shape=[])]
-        )
-        result = normalize_scalar_shapes(schema)
-        self.assertIsNot(result, schema)
-        self.assertEqual(schema.input_schema[0].shape, [])

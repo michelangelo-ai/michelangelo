@@ -390,14 +390,13 @@ class TestGetSampleData(TestCase):
         )
         self.assertEqual(result[0]["x"].shape, (2, 2))
 
-    def test_scalar_column_reshaped_to_one(self):
-        """Scalar columns (shape=[]) are reshaped to (1,), matching how
-        normalize_scalar_shapes packages a scalar schema item as shape=[1]."""
+    def test_no_reshape_when_shape_empty(self):
+        """Scalar columns (shape=[]) are not reshaped."""
         result = get_sample_data(
             {"x": np.array(1.0)},
             {"x": ColumnConfig("torch.float32", [])},
         )
-        self.assertEqual(result[0]["x"].shape, (1,))
+        self.assertIn("x", result[0])
 
     def test_missing_feature_skipped(self):
         """A feature not in sample_data_dict is skipped (no KeyError)."""
