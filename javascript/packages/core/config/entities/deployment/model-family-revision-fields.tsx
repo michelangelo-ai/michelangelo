@@ -1,16 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useForm } from 'react-final-form';
 import { create, toBinary } from '@bufbuild/protobuf';
 import { StringValueSchema } from '@bufbuild/protobuf/wkt';
-import { Select } from 'baseui/select';
 
-import { FormControl } from '#core/components/form/components/form-control';
 import { SelectField } from '#core/components/form/fields/select/select-field';
 import { useField } from '#core/components/form/hooks/use-field';
 import { FormGroup } from '#core/components/form/layout/form-group/form-group';
 import { useStudioQuery } from '#core/hooks/use-studio-query';
 
-import type { OnChangeParams } from 'baseui/select';
 import type { ModelFamilyListResult, ModelListResult } from './types';
 
 // CriterionOperator.CRITERION_OPERATOR_EQUAL — see michelangelo/api/list.proto.
@@ -43,20 +40,9 @@ const modelFamilyListOptionsExt = (modelFamilyName: string) => ({
  */
 export const ModelFamilyRevisionFields = () => {
   const form = useForm();
-  const [modelName, setModelName] = useState('');
 
   const { input: modelFamilyInput } = useField<string>('spec.modelFamilyName');
   const modelFamilyName = modelFamilyInput.value ?? '';
-
-  // Model itself isn't a form field (there's no `model` key in DeploymentCreateInput) — it drives
-  // spec.desiredRevision.name below, so validation is attached there and surfaced on the Model control.
-  const { input: revisionInput, meta: revisionMeta } = useField<string>(
-    'spec.desiredRevision.name',
-    {
-      required: true,
-      label: 'Model',
-    }
-  );
 
   const { data: modelFamilyData, isLoading: isModelFamilyLoading } =
     useStudioQuery<ModelFamilyListResult>({
@@ -81,16 +67,8 @@ export const ModelFamilyRevisionFields = () => {
 
   // Reset the downstream Model selection whenever the Model family changes.
   useEffect(() => {
-    setModelName('');
     form.change('spec.desiredRevision.name', '');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [modelFamilyName]);
-
-  const handleModelChange = (params: OnChangeParams) => {
-    const nextModelName = String(params.value[0]?.id ?? '');
-    setModelName(nextModelName);
-    form.change('spec.desiredRevision.name', nextModelName);
-  };
+  }, [form, modelFamilyName]);
 
   return (
     <FormGroup title="Model" description="The selected model will be deployed">
@@ -103,23 +81,17 @@ export const ModelFamilyRevisionFields = () => {
         clearable={false}
       />
 
-      <FormControl
+      <SelectField
+        name="spec.desiredRevision.name"
         label="Model"
         required
         caption="Search and select the model to deploy"
-        error={revisionMeta.touched && revisionMeta.error ? revisionMeta.error : undefined}
-      >
-        <Select
-          options={modelOptions}
-          value={modelOptions.filter((option) => option.id === modelName)}
-          onChange={handleModelChange}
-          onBlur={revisionInput.onBlur}
-          isLoading={isModelLoading}
-          disabled={!modelFamilyName}
-          clearable={false}
-          placeholder="Search model to deploy"
-        />
-      </FormControl>
+        options={modelOptions}
+        isLoading={isModelLoading}
+        disabled={!modelFamilyName}
+        clearable={false}
+        placeholder="Search model to deploy"
+      />
     </FormGroup>
   );
 };

@@ -14,7 +14,7 @@ export const DEPLOYMENT_DETAIL_CONFIG: DetailViewConfig = {
   type: 'detail',
   metadata: [
     { id: 'metadata.creationTimestamp.seconds', label: 'Created', type: CellType.DATE },
-    { id: 'metadata.labels["michelangelo/owner"]', label: 'Owner', type: CellType.TEXT },
+    { id: 'spec.owner.name', label: 'Owner', type: CellType.TEXT },
     DEPLOYMENT_STAGE_CELL,
     DEPLOYMENT_STATE_CELL,
   ],
