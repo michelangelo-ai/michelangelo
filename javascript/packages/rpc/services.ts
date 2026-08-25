@@ -1,4 +1,5 @@
 import { create, createRegistry, fromJson, toJson } from '@bufbuild/protobuf';
+import { StringValueSchema } from '@bufbuild/protobuf/wkt';
 
 import { createFetchTransport } from './create-fetch-transport';
 import { TypedStructSchema } from './gen/michelangelo/api/typed_struct_pb';
@@ -15,7 +16,10 @@ import { getRuntimeConfig } from './runtime-config';
 import type { DescService } from '@bufbuild/protobuf';
 import type { FetchTransport, ServiceClient, Services } from './types';
 
-const typeRegistry = createRegistry(TypedStructSchema);
+// StringValueSchema is registered so criteria that wrap a matchValue in a
+// google.protobuf.Any (e.g. ListOptionsExt filters) can be JSON-encoded — protobuf-es
+// resolves an Any's typeUrl against this registry to serialize it as a well-known type.
+const typeRegistry = createRegistry(TypedStructSchema, StringValueSchema);
 
 /**
  * Builds a service client whose methods JSON-encode the request, POST it

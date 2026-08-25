@@ -80,7 +80,7 @@ export function PhaseEntityView<T extends object = object>({
         createAction.display.icon && (
           <Icon
             name={createAction.display.icon}
-            size="16px"
+            size={theme.sizing.scale600}
             color={theme.colors.buttonPrimaryText}
           />
         )

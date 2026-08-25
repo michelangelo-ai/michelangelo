@@ -37,10 +37,11 @@ export const CreateDeploymentForm = ({ onClose }: CreateActionComponentProps) =>
 
   const handleCreate = async (values: DeploymentCreateInput) => {
     if (createDeploymentMutation.isPending) return;
+    const { modelFamilyName: _modelFamilyName, ...specRest } = values.spec;
     await createDeploymentMutation.mutateAsync({
       ...values,
       spec: {
-        ...values.spec,
+        ...specRest,
         desiredRevision: { ...values.spec.desiredRevision, namespace: projectId },
         target: {
           case: 'inferenceServer',

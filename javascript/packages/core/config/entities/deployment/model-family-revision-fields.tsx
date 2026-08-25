@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-final-form';
 import { create, toBinary } from '@bufbuild/protobuf';
 import { StringValueSchema } from '@bufbuild/protobuf/wkt';
 import { Select } from 'baseui/select';
 
 import { FormControl } from '#core/components/form/components/form-control';
+import { SelectField } from '#core/components/form/fields/select/select-field';
 import { useField } from '#core/components/form/hooks/use-field';
 import { FormGroup } from '#core/components/form/layout/form-group/form-group';
 import { useStudioQuery } from '#core/hooks/use-studio-query';
@@ -42,8 +43,10 @@ const modelFamilyListOptionsExt = (modelFamilyName: string) => ({
  */
 export const ModelFamilyRevisionFields = () => {
   const form = useForm();
-  const [modelFamilyName, setModelFamilyName] = useState('');
   const [modelName, setModelName] = useState('');
+
+  const { input: modelFamilyInput } = useField<string>('spec.modelFamilyName');
+  const modelFamilyName = modelFamilyInput.value ?? '';
 
   // Model itself isn't a form field (there's no `model` key in DeploymentCreateInput) — it drives
   // spec.desiredRevision.name below, so validation is attached there and surfaced on the Model control.
@@ -76,11 +79,12 @@ export const ModelFamilyRevisionFields = () => {
     label: item.metadata.name,
   }));
 
-  const handleModelFamilyChange = (params: OnChangeParams) => {
-    setModelFamilyName(String(params.value[0]?.id ?? ''));
+  // Reset the downstream Model selection whenever the Model family changes.
+  useEffect(() => {
     setModelName('');
     form.change('spec.desiredRevision.name', '');
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modelFamilyName]);
 
   const handleModelChange = (params: OnChangeParams) => {
     const nextModelName = String(params.value[0]?.id ?? '');
@@ -90,15 +94,14 @@ export const ModelFamilyRevisionFields = () => {
 
   return (
     <FormGroup title="Model" description="The selected model will be deployed">
-      <FormControl label="Model family" caption="Model family the deployed model belongs to">
-        <Select
-          options={modelFamilyOptions}
-          value={modelFamilyOptions.filter((option) => option.id === modelFamilyName)}
-          onChange={handleModelFamilyChange}
-          isLoading={isModelFamilyLoading}
-          clearable={false}
-        />
-      </FormControl>
+      <SelectField
+        name="spec.modelFamilyName"
+        label="Model family"
+        caption="Model family the deployed model belongs to"
+        options={modelFamilyOptions}
+        isLoading={isModelFamilyLoading}
+        clearable={false}
+      />
 
       <FormControl
         label="Model"

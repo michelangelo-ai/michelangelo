@@ -37,8 +37,13 @@ async function createHandlers() {
   return {
     ListDeployment: unary(services.DeploymentService.listDeployment),
     GetDeployment: unary(services.DeploymentService.getDeployment),
-    CreateDeployment: (record: Deployment, headers?: Record<string, string>) =>
-      services.DeploymentService.createDeployment({ deployment: record }, headers),
+    CreateDeployment: (record: Deployment, headers?: Record<string, string>) => {
+      const actorName = headers?.['x-user-name'];
+      if (actorName && record.spec) {
+        record.spec.owner = create(UserInfoSchema, { name: actorName });
+      }
+      return services.DeploymentService.createDeployment({ deployment: record }, headers);
+    },
     ListInferenceServer: unary(services.InferenceServerService.listInferenceServer),
     GetInferenceServer: unary(services.InferenceServerService.getInferenceServer),
     ListProject: unary(services.ProjectService.listProject),
