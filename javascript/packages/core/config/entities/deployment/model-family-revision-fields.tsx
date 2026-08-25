@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useForm } from 'react-final-form';
 import { create, toBinary } from '@bufbuild/protobuf';
 import { StringValueSchema } from '@bufbuild/protobuf/wkt';
@@ -10,7 +10,7 @@ import { FormGroup } from '#core/components/form/layout/form-group/form-group';
 import { useStudioQuery } from '#core/hooks/use-studio-query';
 
 import type { OnChangeParams } from 'baseui/select';
-import type { ModelFamilyListResult, ModelListResult, RevisionListResult } from './types';
+import type { ModelFamilyListResult, ModelListResult } from './types';
 
 // CriterionOperator.CRITERION_OPERATOR_EQUAL — see michelangelo/api/list.proto.
 const CRITERION_OPERATOR_EQUAL = 1;
@@ -56,10 +56,12 @@ const modelFamilyListOptionsExt = (modelFamilyName: string) => ({
 });
 
 /**
- * Resolves the Revision field from a Model Family -> Model cascade instead of asking for a
- * Revision name directly: selecting a Model auto-fills spec.desiredRevision.name with that
- * model's most recently created Revision. Must be rendered inside FormDialog's <Form> so
- * useForm() can write to the Revision field.
+ * Resolves spec.desiredRevision.name from a Model Family -> Model cascade. The deployment
+ * controller's AssetPreparationActor fetches this name directly as a Model CR (see
+ * go/components/deployment/plugins/common/model.go's FetchModel), so despite the field's
+ * name and proto annotation (resource_reference type "michelangelo.uber.com/Revision"),
+ * it must be set to the selected Model's own name, not a Revision's. Must be rendered
+ * inside FormDialog's <Form> so useForm() can write to that field.
  */
 export const ModelFamilyRevisionFields = () => {
   const form = useForm();
@@ -87,11 +89,6 @@ export const ModelFamilyRevisionFields = () => {
     serviceOptions: { listOptionsExt: modelFamilyListOptionsExt(modelFamilyName) },
   });
 
-  const { data: revisionData } = useStudioQuery<RevisionListResult>({
-    queryName: 'ListRevision',
-    serviceOptions: {},
-  });
-
   const modelFamilyOptions = (modelFamilyData?.modelFamilyList.items ?? []).map((item) => ({
     id: item.metadata.name,
     label: item.spec.name || item.metadata.name,
@@ -102,40 +99,20 @@ export const ModelFamilyRevisionFields = () => {
     label: item.metadata.name,
   }));
 
-  useEffect(() => {
-    if (!modelName) {
-      form.change('spec.desiredRevision.name', '');
-      return;
-    }
-
-    const latestRevision = (revisionData?.revisionList.items ?? [])
-      .filter((item) => item.spec.baseResource?.name === modelName)
-      .reduce<RevisionListResult['revisionList']['items'][number] | undefined>(
-        (latest, candidate) => {
-          const latestTime = latest?.metadata.creationTimestamp?.toDate().getTime() ?? 0;
-          const candidateTime = candidate.metadata.creationTimestamp?.toDate().getTime() ?? 0;
-          return candidateTime >= latestTime ? candidate : latest;
-        },
-        undefined
-      );
-
-    form.change('spec.desiredRevision.name', latestRevision?.metadata.name ?? '');
-  }, [modelName, revisionData, form]);
-
   const handleModelFamilyChange = (params: OnChangeParams) => {
     setModelFamilyName(String(params.value[0]?.id ?? ''));
     setModelName('');
+    form.change('spec.desiredRevision.name', '');
   };
 
   const handleModelChange = (params: OnChangeParams) => {
-    setModelName(String(params.value[0]?.id ?? ''));
+    const nextModelName = String(params.value[0]?.id ?? '');
+    setModelName(nextModelName);
+    form.change('spec.desiredRevision.name', nextModelName);
   };
 
   return (
-    <FormGroup
-      title="Model"
-      description="The latest revision of the selected model will be deployed"
-    >
+    <FormGroup title="Model" description="The selected model will be deployed">
       <FormControl label="Model family" caption="Model family the deployed model belongs to">
         <Select
           options={modelFamilyOptions}

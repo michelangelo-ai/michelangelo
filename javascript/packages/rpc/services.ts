@@ -9,7 +9,6 @@ import { ModelService } from './gen/michelangelo/api/v2/model_svc_pb';
 import { PipelineRunService } from './gen/michelangelo/api/v2/pipeline_run_svc_pb';
 import { PipelineService } from './gen/michelangelo/api/v2/pipeline_svc_pb';
 import { ProjectService } from './gen/michelangelo/api/v2/project_svc_pb';
-import { RevisionService } from './gen/michelangelo/api/v2/revision_svc_pb';
 import { TriggerRunService } from './gen/michelangelo/api/v2/trigger_run_svc_pb';
 import { getRuntimeConfig } from './runtime-config';
 
@@ -69,7 +68,6 @@ async function createServices(): Promise<Services> {
     TriggerRunService: createServiceClient(TriggerRunService, transport),
     ModelService: createServiceClient(ModelService, transport),
     ModelFamilyService: createServiceClient(ModelFamilyService, transport),
-    RevisionService: createServiceClient(RevisionService, transport),
   } as const;
 }
 

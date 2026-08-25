@@ -64,7 +64,6 @@ async function createHandlers() {
     ListModel: unary(services.ModelService.listModel),
     GetModel: unary(services.ModelService.getModel),
     ListModelFamily: unary(services.ModelFamilyService.listModelFamily),
-    ListRevision: unary(services.RevisionService.listRevision),
   } as const;
 }
 

@@ -39,15 +39,6 @@ export type ModelListResult = {
   };
 };
 
-export type RevisionListResult = {
-  revisionList: {
-    items: Array<{
-      metadata: { name: string; creationTimestamp?: { toDate: () => Date } };
-      spec: { baseResource?: { name: string } };
-    }>;
-  };
-};
-
 export type DeploymentRecord = {
   metadata?: {
     labels?: Record<string, string>;

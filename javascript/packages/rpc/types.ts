@@ -13,7 +13,6 @@ import type { ModelService } from './gen/michelangelo/api/v2/model_svc_pb';
 import type { PipelineRunService } from './gen/michelangelo/api/v2/pipeline_run_svc_pb';
 import type { PipelineService } from './gen/michelangelo/api/v2/pipeline_svc_pb';
 import type { ProjectService } from './gen/michelangelo/api/v2/project_svc_pb';
-import type { RevisionService } from './gen/michelangelo/api/v2/revision_svc_pb';
 import type { TriggerRunService } from './gen/michelangelo/api/v2/trigger_run_svc_pb';
 import type { getRpcHandlers } from './handlers';
 
@@ -70,7 +69,6 @@ export type Services = {
   TriggerRunService: ServiceClient<typeof TriggerRunService>;
   ModelService: ServiceClient<typeof ModelService>;
   ModelFamilyService: ServiceClient<typeof ModelFamilyService>;
-  RevisionService: ServiceClient<typeof RevisionService>;
 };
 
 /**
