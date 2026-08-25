@@ -33,15 +33,18 @@ jobs:
 
       # Cache Bazel outputs — tools/gen-descriptors.sh builds
       # //proto/api/v2:v2_proto to produce the descriptor set it resolves
-      # services.ts's references against. Shares main.yml's cache key.
+      # services.ts's references against. Shares main.yml's cache key, but
+      # this workflow can't `needs:` a job in another workflow, so it may
+      # race main.yml's bazel-build for that key. No restore-keys fallback —
+      # falling back to a stale cache from an older commit can mismatch the
+      # current MODULE.bazel/gazelle version and produce bogus Bazel
+      # "no such package" errors; a cold cache miss is safer.
       - name: Restore Bazel Cache
         uses: actions/cache/restore@v4
         with:
           path: |
             ~/.cache/bazel
           key: bazel-main-${{ runner.os }}-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock') }}
-          restore-keys: |
-            bazel-main-${{ runner.os }}-
 
       - name: Set up buf
         uses: bufbuild/buf-setup-action@v1
