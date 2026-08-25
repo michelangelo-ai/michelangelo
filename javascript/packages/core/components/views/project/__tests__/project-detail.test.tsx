@@ -59,7 +59,7 @@ describe('ProjectDetail', () => {
             id: 'train',
             name: 'Train & Evaluate',
             state: 'active',
-            entities: [buildEntity({ id: 'pipelines', name: 'pipelines' })],
+            entities: [buildEntity({ id: 'pipelines', name: 'Pipelines' })],
           }),
           buildPhase({ id: 'deploy', name: 'Deploy & Predict', state: 'comingSoon' }),
         ]}
@@ -102,9 +102,9 @@ describe('ProjectDetail', () => {
             name: 'Prepare & Analyze Data',
             state: 'disabled',
             entities: [
-              buildEntity({ id: 'pipelines', name: 'pipelines', state: 'disabled' }),
-              buildEntity({ id: 'runs', name: 'pipeline runs', state: 'disabled' }),
-              buildEntity({ id: 'datasources', name: 'data sources', state: 'disabled' }),
+              buildEntity({ id: 'pipelines', name: 'Pipelines', state: 'disabled' }),
+              buildEntity({ id: 'runs', name: 'Pipeline runs', state: 'disabled' }),
+              buildEntity({ id: 'datasources', name: 'Data sources', state: 'disabled' }),
             ],
           }),
         ]}
@@ -147,7 +147,7 @@ describe('ProjectDetail', () => {
             id: 'deploy',
             name: 'Deploy & Predict',
             state: 'comingSoon',
-            entities: [buildEntity({ id: 'endpoints', name: 'endpoints' })],
+            entities: [buildEntity({ id: 'endpoints', name: 'Endpoints' })],
           }),
         ]}
       />,
@@ -218,12 +218,12 @@ describe('ProjectDetail', () => {
       name: 'Train & Evaluate',
       state: 'active',
       entities: [
-        buildEntity({ id: 'pipelines', name: 'pipelines' }),
-        buildEntity({ id: 'runs', name: 'pipeline runs' }),
-        buildEntity({ id: 'triggers', name: 'triggers' }),
-        buildEntity({ id: 'models', name: 'trained models' }),
-        buildEntity({ id: 'evaluations', name: 'evaluations', state: 'disabled' }),
-        buildEntity({ id: 'notebooks', name: 'notebooks', state: 'disabled' }),
+        buildEntity({ id: 'pipelines', name: 'Pipelines' }),
+        buildEntity({ id: 'runs', name: 'Pipeline runs' }),
+        buildEntity({ id: 'triggers', name: 'Triggers' }),
+        buildEntity({ id: 'models', name: 'Trained models' }),
+        buildEntity({ id: 'evaluations', name: 'Evaluations', state: 'disabled' }),
+        buildEntity({ id: 'notebooks', name: 'Notebooks', state: 'disabled' }),
       ],
     });
 
@@ -303,8 +303,8 @@ describe('ProjectDetail', () => {
               name: 'Train & Evaluate',
               state: 'active',
               entities: [
-                buildEntity({ id: 'pipelines', name: 'pipelines', state: 'disabled' }),
-                buildEntity({ id: 'runs', name: 'pipeline runs', state: 'disabled' }),
+                buildEntity({ id: 'pipelines', name: 'Pipelines', state: 'disabled' }),
+                buildEntity({ id: 'runs', name: 'Pipeline runs', state: 'disabled' }),
               ],
             }),
           ]}
