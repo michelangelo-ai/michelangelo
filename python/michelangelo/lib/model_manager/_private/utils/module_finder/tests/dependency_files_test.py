@@ -122,6 +122,30 @@ class DependencyFilesTest(TestCase):
 
         self.assertEqual(cleaned_files, expected_files)
 
+    def test_find_imported_module_files_with_attribute_error_package(self):
+        """It returns partially discovered files even if a submodule's
+        import-time side effects raise something other than
+        ImportError/TypeError/SystemExit (regression: CPython's own
+        ``test.__main__`` raised AttributeError patching
+        ``torch.distributed.config.__file__`` while walking a real model's
+        dependency tree)."""
+        files = find_dependency_files(
+            "michelangelo.lib.model_manager._private.utils.module_finder.tests.fixtures.module_with_attribute_error_imports",
+            prefixes=["michelangelo"],
+        )
+
+        cleaned_files = {
+            m: os.path.join("", *f.split("/")[-2:]) for m, f in files.items()
+        }
+        prefix = self.module_prefix
+
+        expected_files = {
+            f"{prefix}module_with_attribute_error_imports": "fixtures/module_with_attribute_error_imports.py",  # noqa: E501
+            f"{prefix}attribute_error_package.__init__": "attribute_error_package/__init__.py",  # noqa: E501
+        }
+
+        self.assertEqual(cleaned_files, expected_files)
+
     def test_find_imported_module_files_with_relative_imports(self):
         """It handles relative imports correctly."""
         files = find_dependency_files(
