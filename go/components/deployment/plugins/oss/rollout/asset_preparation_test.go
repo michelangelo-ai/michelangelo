@@ -4,17 +4,21 @@ import (
 	"context"
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	goapi "github.com/michelangelo-ai/michelangelo/go/api"
+	"github.com/michelangelo-ai/michelangelo/go/api/apimocks"
 	"github.com/michelangelo-ai/michelangelo/go/api/handler"
-	osscommon "github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
+	plugincommon "github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/common"
 	"github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
@@ -84,28 +88,28 @@ func TestAssetPreparationRetrieve(t *testing.T) {
 			name:                    "model CR does not exist",
 			deployment:              assetDeployment(&api.ResourceIdentifier{Name: assetModelName}),
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
-			expectedCode:            osscommon.ReasonModelNotFound,
+			expectedCode:            plugincommon.ReasonModelNotFound,
 		},
 		{
 			name:                    "model is packaged for another backend",
 			deployment:              assetDeployment(&api.ResourceIdentifier{Name: assetModelName}),
 			objects:                 []client.Object{assetModel(v2pb.DEPLOYABLE_MODEL_PACKAGE_TYPE_SPARK_PIPELINE, "s3://bucket/models/bert_cola/")},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
-			expectedCode:            osscommon.ReasonModelPackageTypeMismatch,
+			expectedCode:            plugincommon.ReasonModelPackageTypeMismatch,
 		},
 		{
 			name:                    "model has no deployable artifact",
 			deployment:              assetDeployment(&api.ResourceIdentifier{Name: assetModelName}),
 			objects:                 []client.Object{assetModel(v2pb.DEPLOYABLE_MODEL_PACKAGE_TYPE_TRITON)},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
-			expectedCode:            osscommon.ReasonNoDeployableArtifact,
+			expectedCode:            plugincommon.ReasonNoDeployableArtifact,
 		},
 		{
 			name:                    "artifact URI uses an unsupported scheme",
 			deployment:              assetDeployment(&api.ResourceIdentifier{Name: assetModelName}),
 			objects:                 []client.Object{assetModel(v2pb.DEPLOYABLE_MODEL_PACKAGE_TYPE_TRITON, "gs://bucket/models/bert_cola/")},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
-			expectedCode:            osscommon.ReasonUnsupportedArtifactScheme,
+			expectedCode:            plugincommon.ReasonUnsupportedArtifactScheme,
 		},
 	}
 
@@ -126,6 +130,35 @@ func TestAssetPreparationRetrieve(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestAssetPreparationRetrieveReadFailure covers a read that fails for a reason other than
+// the model being absent, which has to be reported as a read failure rather than as one of
+// the resolver's model-shaped reasons.
+func TestAssetPreparationRetrieveReadFailure(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	apiHandler := apimocks.NewMockHandler(ctrl)
+	apiHandler.EXPECT().
+		Get(gomock.Any(), assetNamespace, assetModelName, gomock.Any(), gomock.Any()).
+		Return(status.Error(codes.Unavailable, "metadata storage unreachable"))
+
+	actor := &AssetPreparationActor{apiHandler: apiHandler, logger: zap.NewNop()}
+
+	condition, err := actor.Retrieve(context.Background(),
+		assetDeployment(&api.ResourceIdentifier{Name: assetModelName}), &api.Condition{})
+
+	require.NoError(t, err)
+	assert.Equal(t, api.CONDITION_STATUS_FALSE, condition.Status)
+	assert.Equal(t, "ModelResolutionFailed", condition.Message)
+	assert.Contains(t, condition.Reason, "metadata storage unreachable")
+}
+
+func TestAssetPreparationGetType(t *testing.T) {
+	actor := &AssetPreparationActor{logger: zap.NewNop()}
+
+	assert.Equal(t, "AssetsPrepared", actor.GetType())
 }
 
 func TestAssetPreparationRun(t *testing.T) {

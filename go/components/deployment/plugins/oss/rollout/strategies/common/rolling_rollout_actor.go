@@ -10,6 +10,7 @@ import (
 	goapi "github.com/michelangelo-ai/michelangelo/go/api"
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	conditionsutil "github.com/michelangelo-ai/michelangelo/go/base/conditions/utils"
+	plugincommon "github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/common"
 	osscommon "github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory"
@@ -109,9 +110,9 @@ func (a *RollingRolloutActor) Run(ctx context.Context, deployment *v2pb.Deployme
 	inferenceServerName := deployment.Spec.GetInferenceServer().GetName()
 	modelName := deployment.Spec.GetDesiredRevision().GetName()
 
-	storagePath, err := osscommon.ResolveDeploymentModelStoragePath(ctx, a.apiHandler, deployment)
+	storagePath, err := plugincommon.ResolveDeploymentModelStoragePath(ctx, a.apiHandler, deployment)
 	if err != nil {
-		var resolutionErr *osscommon.ModelResolutionError
+		var resolutionErr *plugincommon.ModelResolutionError
 		if errors.As(err, &resolutionErr) {
 			return conditionsutil.GenerateFalseCondition(condition, resolutionErr.Reason, resolutionErr.Message), nil
 		}

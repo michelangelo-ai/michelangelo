@@ -9,7 +9,8 @@ import (
 	goapi "github.com/michelangelo-ai/michelangelo/go/api"
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	conditionsutil "github.com/michelangelo-ai/michelangelo/go/base/conditions/utils"
-	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
+	plugincommon "github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/common"
+	osscommon "github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
@@ -24,7 +25,7 @@ type AssetPreparationActor struct {
 
 // GetType returns the condition type identifier for asset preparation.
 func (a *AssetPreparationActor) GetType() string {
-	return common.ActorTypeAssetPreparation
+	return osscommon.ActorTypeAssetPreparation
 }
 
 // Retrieve resolves the desired revision to a Model CR and checks that it points at
@@ -48,9 +49,9 @@ func (a *AssetPreparationActor) Retrieve(ctx context.Context, deployment *v2pb.D
 	// the prefix would establish presence and layout together, turning a malformed model
 	// into a condition here rather than an opaque Triton "failed to poll from model
 	// repository" midway through the rollout.
-	storagePath, err := common.ResolveDeploymentModelStoragePath(ctx, a.apiHandler, deployment)
+	storagePath, err := plugincommon.ResolveDeploymentModelStoragePath(ctx, a.apiHandler, deployment)
 	if err != nil {
-		var resolutionErr *common.ModelResolutionError
+		var resolutionErr *plugincommon.ModelResolutionError
 		if errors.As(err, &resolutionErr) {
 			return conditionsutil.GenerateFalseCondition(condition, resolutionErr.Reason, resolutionErr.Message), nil
 		}

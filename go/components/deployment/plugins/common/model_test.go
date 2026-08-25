@@ -2,28 +2,34 @@ package common
 
 import (
 	"context"
+	"errors"
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	goapi "github.com/michelangelo-ai/michelangelo/go/api"
+	"github.com/michelangelo-ai/michelangelo/go/api/apimocks"
 	"github.com/michelangelo-ai/michelangelo/go/api/handler"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
 const (
+	testNamespace   = "default"
 	testModelName   = "model-v1"
 	testOtherNS     = "other-ns"
 	testArtifactURI = "s3://bucket/artifacts/model-v1/"
 )
 
-func newModelClient(t *testing.T, objects ...client.Object) goapi.Handler {
+func newAPIHandler(t *testing.T, objects ...client.Object) goapi.Handler {
 	t.Helper()
 	scheme := runtime.NewScheme()
 	require.NoError(t, v2pb.AddToScheme(scheme))
@@ -40,7 +46,7 @@ func newModel(namespace string, packageType v2pb.DeployableModelPackageType, uri
 	}
 }
 
-func newModelDeployment(revision *apipb.ResourceIdentifier) *v2pb.Deployment {
+func newDeployment(revision *apipb.ResourceIdentifier) *v2pb.Deployment {
 	return &v2pb.Deployment{
 		ObjectMeta: metav1.ObjectMeta{Name: "dep", Namespace: testNamespace},
 		Spec:       v2pb.DeploymentSpec{DesiredRevision: revision},
@@ -95,7 +101,7 @@ func TestFetchModel(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := FetchModel(context.Background(), newModelClient(t, tt.objects...), newModelDeployment(tt.revision))
+			got, err := FetchModel(context.Background(), newAPIHandler(t, tt.objects...), newDeployment(tt.revision))
 
 			if tt.wantReason != "" {
 				require.Error(t, err)
@@ -178,11 +184,40 @@ func TestResolveModelStoragePath(t *testing.T) {
 	}
 }
 
+func TestFetchModelUnreachableAPI(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	apiHandler := apimocks.NewMockHandler(ctrl)
+	apiHandler.EXPECT().
+		Get(gomock.Any(), testNamespace, testModelName, gomock.Any(), gomock.Any()).
+		Return(status.Error(codes.Unavailable, "metadata storage unreachable"))
+
+	_, err := FetchModel(context.Background(), apiHandler,
+		newDeployment(&apipb.ResourceIdentifier{Name: testModelName}))
+
+	// Only a NotFound means the model is absent. Any other failure has to stay a plain
+	// error so the condition reports the read failing rather than the model missing.
+	require.Error(t, err)
+	var resErr *ModelResolutionError
+	assert.False(t, errors.As(err, &resErr))
+	assert.Contains(t, err.Error(), "metadata storage unreachable")
+}
+
+func TestModelResolutionErrorMessage(t *testing.T) {
+	err := &ModelResolutionError{
+		Reason:  ReasonNoDeployableArtifact,
+		Message: "model default/model-v1 has no deployable artifact URI",
+	}
+
+	assert.EqualError(t, err, "model default/model-v1 has no deployable artifact URI")
+}
+
 func TestResolveDeploymentModelStoragePath(t *testing.T) {
-	c := newModelClient(t, newModel(testNamespace, v2pb.DEPLOYABLE_MODEL_PACKAGE_TYPE_TRITON, testArtifactURI))
+	c := newAPIHandler(t, newModel(testNamespace, v2pb.DEPLOYABLE_MODEL_PACKAGE_TYPE_TRITON, testArtifactURI))
 
 	got, err := ResolveDeploymentModelStoragePath(context.Background(), c,
-		newModelDeployment(&apipb.ResourceIdentifier{Name: testModelName}))
+		newDeployment(&apipb.ResourceIdentifier{Name: testModelName}))
 
 	require.NoError(t, err)
 	assert.Equal(t, testArtifactURI, got)

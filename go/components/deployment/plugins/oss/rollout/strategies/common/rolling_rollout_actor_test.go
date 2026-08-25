@@ -10,12 +10,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	goapi "github.com/michelangelo-ai/michelangelo/go/api"
+	"github.com/michelangelo-ai/michelangelo/go/api/apimocks"
 	"github.com/michelangelo-ai/michelangelo/go/api/handler"
 	osscommon "github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
@@ -60,6 +63,18 @@ func newControlPlaneClient(t *testing.T, objects ...client.Object) goapi.Handler
 	scheme := runtime.NewScheme()
 	require.NoError(t, v2pb.AddToScheme(scheme))
 	return handler.NewFakeAPIHandler(fake.NewClientBuilder().WithScheme(scheme).WithObjects(objects...).Build())
+}
+
+// newUnreachableControlPlane builds a control-plane handler whose reads fail outright,
+// standing in for metadata storage being unavailable rather than the Model being absent.
+func newUnreachableControlPlane(t *testing.T) goapi.Handler {
+	t.Helper()
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+	apiHandler := apimocks.NewMockHandler(ctrl)
+	apiHandler.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(status.Error(codes.Unavailable, "metadata storage unreachable"))
+	return apiHandler
 }
 
 // testModel is the Triton-packaged Model CR the canonical test Deployment points at.
@@ -270,6 +285,13 @@ func TestRollingRolloutActor_Run(t *testing.T) {
 			}),
 			expectedStatus:    apipb.CONDITION_STATUS_FALSE,
 			expectedReasonSub: "want DEPLOYABLE_MODEL_PACKAGE_TYPE_TRITON",
+		},
+		{
+			name:              "model read fails outright",
+			setupMocks:        func(*rolloutMocks) {}, // AddModelToConfig must not be reached
+			controlPlane:      newUnreachableControlPlane(t),
+			expectedStatus:    apipb.CONDITION_STATUS_FALSE,
+			expectedReasonSub: "metadata storage unreachable",
 		},
 		{
 			name: "happy path uses the storage path from the Model CR",
