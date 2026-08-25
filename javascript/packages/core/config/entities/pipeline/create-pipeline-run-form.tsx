@@ -115,10 +115,8 @@ function buildPayload(values: PipelineRun, projectId: string): PipelineRun {
  * since the form has no event-type picker.
  */
 function buildNotifications(values: PipelineRunFormValues): PipelineRunNotification[] {
-  // An untouched ArrayFormRow item is pushed as `{}`, not `{ value: '' }` — `value` can be
-  // undefined here even though the field type says otherwise.
-  const nonEmptyValues = (entries: { value?: string }[] | undefined): string[] =>
-    entries?.map(({ value }) => value ?? '').filter((value) => value.trim() !== '') ?? [];
+  const nonEmptyValues = (entries: string[] | undefined): string[] =>
+    entries?.filter((value) => value.trim() !== '') ?? [];
 
   const emails = nonEmptyValues(values.notificationEmails);
   const slackDestinations = nonEmptyValues(values.notificationSlackDestinations);

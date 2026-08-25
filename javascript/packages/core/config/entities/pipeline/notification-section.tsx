@@ -1,12 +1,17 @@
 import { BooleanField } from '#core/components/form/fields/boolean/boolean-field';
 import { StringField } from '#core/components/form/fields/string/string-field';
 import { useField } from '#core/components/form/hooks/use-field';
-import { ArrayFormRow } from '#core/components/form/layout/array-form-row/array-form-row';
-import { regex } from '#core/components/form/validation/validators';
 
+import type { FieldValidator } from '#core/components/form/validation/types';
 import type { NotificationEventType } from '#core/config/entities/run/types';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const validateEmails: FieldValidator = (value) => {
+  const emails = Array.isArray(value) ? value : [];
+  const allValid = emails.every((email) => typeof email === 'string' && EMAIL_REGEX.test(email));
+  return allValid ? undefined : 'Must be a valid email.';
+};
 
 /**
  * Every implemented event a pipeline run can notify on. The form has no event-type picker —
@@ -34,31 +39,20 @@ export const NotificationSection = () => {
 
       {notifyOnCompletion.value ? (
         <>
-          <ArrayFormRow
-            name="Emails"
-            rootFieldPath="notificationEmails"
-            minItems={1}
-            addLabel="Add email"
-          >
-            {(itemPath) => (
-              <StringField
-                name={`${itemPath}.value`}
-                validate={regex(EMAIL_REGEX, 'Must be a valid email.')}
-                placeholder="name@example.com"
-              />
-            )}
-          </ArrayFormRow>
+          <StringField
+            name="notificationEmails"
+            label="Emails"
+            multi
+            validate={validateEmails}
+            placeholder="name@example.com"
+          />
 
-          <ArrayFormRow
-            name="Slack Channels or Users"
-            rootFieldPath="notificationSlackDestinations"
-            minItems={1}
-            addLabel="Add Slack channel or user"
-          >
-            {(itemPath) => (
-              <StringField name={`${itemPath}.value`} placeholder="#channel or @user" />
-            )}
-          </ArrayFormRow>
+          <StringField
+            name="notificationSlackDestinations"
+            label="Slack Channels or Users"
+            multi
+            placeholder="#channel or @user"
+          />
         </>
       ) : null}
     </>
