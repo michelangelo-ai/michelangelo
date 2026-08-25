@@ -15,29 +15,6 @@ import type { ModelFamilyListResult, ModelListResult } from './types';
 // CriterionOperator.CRITERION_OPERATOR_EQUAL — see michelangelo/api/list.proto.
 const CRITERION_OPERATOR_EQUAL = 1;
 
-// Filters the ListModel RPC to the given model family server-side, via
-// ListOptionsExt.operation, instead of fetching every Model and filtering in JS.
-// go/storage/mysql/mysql.go's indexPathToKeyMaps is nil in this deployment (OSS
-// default, "permissive" mode), so field names pass straight through to SQL after
-// stripping the "model." CRD prefix — the fieldName must equal the actual MySQL
-// column name. Model.spec.model_family is a composite ResourceIdentifier index
-// (proto/api/v2/model.proto: `key: "model_family"`), which go/kubeproto/util/index.go
-// flattens into "model_family_name"/"model_family_namespace" columns, so the
-// namespaced subfield here is "model.model_family_name".
-//
-// matchValue is built as a plain {typeUrl, value} object rather than a real Any
-// message (e.g. via anyPack): serviceOptions passes through useStudioQuery's
-// interpolation resolver, which walks every plain object/array in the payload
-// (resolve-interpolations.ts's isRecord treats any non-array object as walkable) —
-// including a Uint8Array's own enumerable index properties — and rebuilds it as a
-// plain `{0: byte, 1: byte, ...}` object, losing its ArrayBuffer backing. A plain
-// number array survives that walk untouched, and @bufbuild/protobuf's create()
-// converts it back into a real Uint8Array when building the request message.
-// value must hold the serialized StringValue bytes (not the bare model family
-// string) since Any.value is itself a length-delimited proto-encoded field.
-// Encoding that Any to JSON also requires StringValueSchema to be registered in
-// packages/rpc/services.ts's typeRegistry — without it, toJson throws
-// "cannot encode message google.protobuf.Any to JSON" before any request fires.
 const modelFamilyListOptionsExt = (modelFamilyName: string) => ({
   operation: {
     criterion: [

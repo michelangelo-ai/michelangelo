@@ -1,8 +1,0 @@
-apiVersion: michelangelo.api/v2
-kind: ModelFamily
-metadata:
-  name: test-model-family
-  namespace: ma-dev-test
-spec:
-  name: test-model-family
-  description: Demo model family for Create deployment sandbox testing
