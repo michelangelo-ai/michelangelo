@@ -77,15 +77,7 @@ def find_dependency_files_internal(
 
     try:
         package = importlib.import_module(module_name)
-    except (Exception, SystemExit):
-        # Broad on purpose: this is the entry point every recursive call
-        # re-enters through, so it's the one guard that actually bounds the
-        # walk -- a problematic submodule's import-time side effects can
-        # raise anything (SyntaxError, AttributeError, etc.), not just
-        # ImportError/TypeError, and an uncaught exception here propagates
-        # through every parent stack frame since the recursive call sites
-        # below don't wrap this call themselves. See the matching except
-        # clause below for concrete examples hit in practice.
+    except (ImportError, TypeError, SystemExit):
         return None
 
     # if the module is a package
@@ -112,20 +104,7 @@ def find_dependency_files_internal(
                 try:
                     sub_module = importlib.import_module(full_name)
                     files[full_name] = inspect.getfile(sub_module)
-                except (Exception, SystemExit):
-                    # Broad on purpose: a submodule's import-time side effects
-                    # can raise anything, not just ImportError/TypeError (e.g.
-                    # stdlib test.__main__ runs CPython's own test-suite
-                    # bootstrap on import, which has raised AttributeError
-                    # trying to patch torch.distributed.config.__file__ --
-                    # torch's ConfigModule disallows arbitrary attribute
-                    # writes; numpy.f2py.__main__ calls sys.exit() after
-                    # printing its CLI help). SystemExit is listed separately
-                    # since it subclasses BaseException, not Exception. One
-                    # such unrelated, unimportable submodule should not abort
-                    # dependency discovery for the rest of the package -- same
-                    # reasoning as the SkipTest handling already in place
-                    # around this walk.
+                except (ImportError, TypeError, SystemExit):
                     pass
 
                 init_file = os.path.join(importer.path, "__init__.py")
