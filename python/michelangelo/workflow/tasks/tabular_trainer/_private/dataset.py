@@ -335,8 +335,11 @@ def get_sample_data(
         target_dtype = _map_torch_dtype_to_numpy(cfg.data_type)
         data = np.asarray(raw, dtype=target_dtype)
 
-        expected = tuple(cfg.shape)
-        if expected and data.shape != expected:
+        # A scalar column (cfg.shape == []) packages with shape [1] --
+        # see normalize_scalar_shapes -- so its sample data must match with
+        # a (1,)-shaped array rather than a bare 0-D one.
+        expected = tuple(cfg.shape) if cfg.shape else (1,)
+        if data.shape != expected:
             if data.size == np.prod(expected):
                 data = data.reshape(expected)
                 _logger.debug("Reshaped '%s' to %s.", feature_name, expected)
