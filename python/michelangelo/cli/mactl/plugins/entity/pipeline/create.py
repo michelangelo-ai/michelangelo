@@ -441,6 +441,7 @@ def populate_pipeline_spec_with_workflow_inputs(
                 "args": [],
                 "environ": input_dict.get("environ", {}),
                 "kwargs": input_dict.get("kwargs", []),
+                "concurrent_groups": input_dict.get("concurrent_groups", []),
             }
         )
 

@@ -98,4 +98,4 @@ def retry_cache_workflow(fail_b: bool = False):
 
 if __name__ == "__main__":
     ctx = uniflow.create_context()
-    ctx.run(retry_cache_workflow, fail_b=True)
+    ctx.run(retry_cache_workflow, fail_b=False)
