@@ -41,7 +41,7 @@ describe('Model list page', () => {
                 {
                   metadata: {
                     name: 'fraud-classifier',
-                    labels: { 'michelangelo/environment': 'production' },
+                    labels: { 'pipelinerun.michelangelo/environment': 'production' },
                     creationTimestamp: { seconds: 1700000000 },
                   },
                   spec: {
@@ -56,7 +56,7 @@ describe('Model list page', () => {
                 {
                   metadata: {
                     name: 'demand-forecaster',
-                    labels: { 'michelangelo/environment': 'development' },
+                    labels: { 'pipelinerun.michelangelo/environment': 'development' },
                     creationTimestamp: { seconds: 1700000000 },
                   },
                   spec: {
@@ -68,7 +68,7 @@ describe('Model list page', () => {
                 {
                   metadata: {
                     name: 'user-segmenter',
-                    labels: { 'michelangelo/environment': 'testing' },
+                    labels: { 'pipelinerun.michelangelo/environment': 'testing' },
                     creationTimestamp: { seconds: 1700000000 },
                   },
                   spec: {
