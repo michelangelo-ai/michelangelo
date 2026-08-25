@@ -8,7 +8,7 @@ export const DEPLOY_PHASE: PhaseConfig = {
   icon: 'deploy',
   name: 'Deploy & Predict',
   description: 'Deploy your models and predict new data',
-  state: 'active' as const,
+  state: 'comingSoon' as const,
   pipelineTypes: ['PIPELINE_TYPE_PREDICTION', 'PIPELINE_TYPE_SCORER'],
   entities: [TARGET_ENTITY_CONFIG, DEPLOYMENT_ENTITY_CONFIG],
 };
