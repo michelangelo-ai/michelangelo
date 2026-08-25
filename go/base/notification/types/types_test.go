@@ -3,6 +3,7 @@ package types
 import (
 	"testing"
 
+	"github.com/michelangelo-ai/michelangelo/go/api"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"github.com/stretchr/testify/assert"
@@ -113,8 +114,8 @@ func TestGenerateText(t *testing.T) {
 			Name:      "test-run",
 			Namespace: "test-project",
 			Labels: map[string]string{
-				SourcePipelineTypeLabelName:         "PIPELINE_TYPE_TRAIN",
-				sourcePipelineManifestTypeLabelName: "PIPELINE_MANIFEST_TYPE_ASL",
+				api.SourcePipelineTypeLabelName:         "PIPELINE_TYPE_TRAIN",
+				api.SourcePipelineManifestTypeLabelName: "PIPELINE_MANIFEST_TYPE_ASL",
 			},
 		},
 		Status: v2pb.PipelineRunStatus{

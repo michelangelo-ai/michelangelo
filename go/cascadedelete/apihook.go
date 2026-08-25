@@ -7,7 +7,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	notificationtypes "github.com/michelangelo-ai/michelangelo/go/base/notification/types"
+	"github.com/michelangelo-ai/michelangelo/go/api"
 )
 
 // StampOwnerRefOnCreate stamps owner as the controller ownerReference on child
@@ -41,7 +41,7 @@ func StampOwnerRefOnCreate(ctx context.Context, logger *zap.Logger, scheme *runt
 
 // StampSourcePipelineTypeLabelOnCreate stamps pipelineType (e.g.
 // "PIPELINE_TYPE_TRAIN") onto child under
-// notificationtypes.SourcePipelineTypeLabelName. No-op if pipelineType is empty.
+// api.SourcePipelineTypeLabelName. No-op if pipelineType is empty.
 func StampSourcePipelineTypeLabelOnCreate(child client.Object, pipelineType string) {
 	if pipelineType == "" {
 		return
@@ -51,6 +51,6 @@ func StampSourcePipelineTypeLabelOnCreate(child client.Object, pipelineType stri
 	if labels == nil {
 		labels = map[string]string{}
 	}
-	labels[notificationtypes.SourcePipelineTypeLabelName] = pipelineType
+	labels[api.SourcePipelineTypeLabelName] = pipelineType
 	child.SetLabels(labels)
 }

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/michelangelo-ai/michelangelo/go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -30,13 +31,6 @@ const (
 	// without hanging until their 60h ExecutionStartToCloseTimeout. Remove once all
 	// operators have rolled past this release.
 	DeprecatedPRNotificationWorkflowName = "PRNotificationWorkflow"
-
-	// SourcePipelineTypeLabelName is the Kubernetes label key that identifies the
-	// pipeline type (e.g. PIPELINE_TYPE_TRAIN).
-	SourcePipelineTypeLabelName = "michelangelo/SourcePipelineType"
-	// sourcePipelineManifestTypeLabelName is the Kubernetes label key that identifies
-	// the pipeline manifest type (e.g. PIPELINE_MANIFEST_TYPE_ASL).
-	sourcePipelineManifestTypeLabelName = "pipeline.michelangelo/PipelineManifestType"
 
 	// pipelineManifestTypeASL identifies ASL (Amazon States Language) pipelines.
 	// These use Cadence as the workflow engine, so the notification includes a
@@ -134,8 +128,8 @@ func GenerateBody(pipelineRun *v2pb.PipelineRun, studioBaseURL string, phaseReso
 	if phaseResolver == nil {
 		phaseResolver = DefaultPhaseResolver
 	}
-	pipelineType := pipelineRun.Labels[SourcePipelineTypeLabelName]
-	pipelineManifestType := pipelineRun.Labels[sourcePipelineManifestTypeLabelName]
+	pipelineType := pipelineRun.Labels[api.SourcePipelineTypeLabelName]
+	pipelineManifestType := pipelineRun.Labels[api.SourcePipelineManifestTypeLabelName]
 	state := strings.TrimPrefix(pipelineRun.Status.State.String(), "PIPELINE_RUN_STATE_")
 	pipelineTypeStr := strings.TrimPrefix(pipelineType, "PIPELINE_TYPE_")
 
@@ -179,8 +173,8 @@ func GenerateText(pipelineRun *v2pb.PipelineRun, textType v2pb.Notification_Noti
 	if phaseResolver == nil {
 		phaseResolver = DefaultPhaseResolver
 	}
-	pipelineType := pipelineRun.Labels[SourcePipelineTypeLabelName]
-	pipelineManifestType := pipelineRun.Labels[sourcePipelineManifestTypeLabelName]
+	pipelineType := pipelineRun.Labels[api.SourcePipelineTypeLabelName]
+	pipelineManifestType := pipelineRun.Labels[api.SourcePipelineManifestTypeLabelName]
 	state := strings.TrimPrefix(pipelineRun.Status.State.String(), "PIPELINE_RUN_STATE_")
 	pipelineTypeStr := strings.TrimPrefix(pipelineType, "PIPELINE_TYPE_")
 

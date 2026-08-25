@@ -13,8 +13,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
+	mlapi "github.com/michelangelo-ai/michelangelo/go/api"
 	apimocks "github.com/michelangelo-ai/michelangelo/go/api/apimocks"
-	notificationtypes "github.com/michelangelo-ai/michelangelo/go/base/notification/types"
 	api "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2 "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
@@ -52,7 +52,7 @@ func TestBeforeCreateStampsSourcePipelineTypeLabel(t *testing.T) {
 
 	require.NoError(t, h.BeforeCreate(context.Background(), request))
 	require.Equal(t, "PIPELINE_TYPE_TRAIN",
-		request.TriggerRun.GetLabels()[notificationtypes.SourcePipelineTypeLabelName])
+		request.TriggerRun.GetLabels()[mlapi.SourcePipelineTypeLabelName])
 }
 
 func TestBeforeCreatePipelineNotFoundDoesNotFailCreation(t *testing.T) {

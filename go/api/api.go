@@ -50,6 +50,14 @@ const (
 	// UpdateTimestampLabel is used to record the last time the object is updated.
 	// The time is stored in Unix microseconds.
 	UpdateTimestampLabel = "michelangelo/UpdateTimestamp"
+
+	// SourcePipelineTypeLabelName is the Kubernetes label key that identifies the
+	// pipeline type (e.g. PIPELINE_TYPE_TRAIN).
+	SourcePipelineTypeLabelName = "michelangelo/SourcePipelineType"
+
+	// SourcePipelineManifestTypeLabelName is the Kubernetes label key that identifies
+	// the pipeline manifest type (e.g. PIPELINE_MANIFEST_TYPE_ASL).
+	SourcePipelineManifestTypeLabelName = "pipeline.michelangelo/PipelineManifestType"
 )
 
 // DefaultContextTimeout defines the default timeout for the context

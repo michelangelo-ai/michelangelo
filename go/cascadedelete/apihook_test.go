@@ -10,7 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	notificationtypes "github.com/michelangelo-ai/michelangelo/go/base/notification/types"
+	"github.com/michelangelo-ai/michelangelo/go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
@@ -74,7 +74,7 @@ func TestStampSourcePipelineTypeLabelOnCreateHappyPath(t *testing.T) {
 
 	StampSourcePipelineTypeLabelOnCreate(child, "PIPELINE_TYPE_TRAIN")
 
-	require.Equal(t, "PIPELINE_TYPE_TRAIN", child.GetLabels()[notificationtypes.SourcePipelineTypeLabelName])
+	require.Equal(t, "PIPELINE_TYPE_TRAIN", child.GetLabels()[api.SourcePipelineTypeLabelName])
 }
 
 func TestStampSourcePipelineTypeLabelOnCreatePreservesExistingLabels(t *testing.T) {
@@ -88,7 +88,7 @@ func TestStampSourcePipelineTypeLabelOnCreatePreservesExistingLabels(t *testing.
 	StampSourcePipelineTypeLabelOnCreate(child, "PIPELINE_TYPE_TRAIN")
 
 	labels := child.GetLabels()
-	require.Equal(t, "PIPELINE_TYPE_TRAIN", labels[notificationtypes.SourcePipelineTypeLabelName])
+	require.Equal(t, "PIPELINE_TYPE_TRAIN", labels[api.SourcePipelineTypeLabelName])
 	require.Equal(t, "keep-me", labels["other-label"])
 }
 

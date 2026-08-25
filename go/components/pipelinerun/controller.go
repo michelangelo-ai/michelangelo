@@ -31,7 +31,6 @@ import (
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	defaultEngine "github.com/michelangelo-ai/michelangelo/go/base/conditions/engine"
-	notificationtypes "github.com/michelangelo-ai/michelangelo/go/base/notification/types"
 	clientInterface "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
 	"github.com/michelangelo-ai/michelangelo/go/cascadedelete"
 	"github.com/michelangelo-ai/michelangelo/go/components/pipelinerun/notification"
@@ -620,7 +619,7 @@ func extractMetricLabels(pipelineRun *v2pb.PipelineRun) PipelineRunMetricLabels 
 // michelangelo/SourcePipelineType label. Returns "unknown" if absent.
 func getPipelineType(pipelineRun *v2pb.PipelineRun) string {
 	if pipelineRun.Labels != nil {
-		if pipelineType, ok := pipelineRun.Labels[notificationtypes.SourcePipelineTypeLabelName]; ok {
+		if pipelineType, ok := pipelineRun.Labels[api.SourcePipelineTypeLabelName]; ok {
 			return pipelineType
 		}
 	}
