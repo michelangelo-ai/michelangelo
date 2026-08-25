@@ -2,67 +2,71 @@ import { CellType } from '#core/components/cell/constants';
 
 import type { Cell } from '#core/components/cell/types';
 
-export const DEPLOYMENT_CONDITION_STATUS = {
-  UNKNOWN: 0,
-  TRUE: 1,
-  FALSE: 2,
-} as const;
-
-export const DEPLOYMENT_STAGE = {
-  INVALID: 0,
-  VALIDATION: 1,
-  PLACEMENT: 2,
-  RESOURCE_ACQUISITION: 3,
-  ROLLOUT_COMPLETE: 4,
-  ROLLOUT_FAILED: 5,
-  ROLLBACK_IN_PROGRESS: 6,
-  ROLLBACK_COMPLETE: 7,
-  ROLLBACK_FAILED: 8,
-  CLEAN_UP_IN_PROGRESS: 9,
-  CLEAN_UP_COMPLETE: 10,
-  CLEAN_UP_FAILED: 11,
-} as const;
-
-export const DEPLOYMENT_STATE = {
-  INVALID: 0,
-  INITIALIZING: 1,
-  HEALTHY: 2,
-  UNHEALTHY: 3,
-  EMPTY: 4,
-} as const;
-
-export const TARGET_TYPE = {
-  INVALID: 0,
-  INFERENCE_SERVER: 1,
-  OFFLINE: 2,
-  MOBILE: 3,
-  SELF_HOSTED: 4,
-} as const;
-
-export const TARGET_TYPE_LABELS: Record<number, string> = {
-  [TARGET_TYPE.INFERENCE_SERVER]: 'Online',
-  [TARGET_TYPE.OFFLINE]: 'Offline',
-  [TARGET_TYPE.MOBILE]: 'Mobile',
-  [TARGET_TYPE.SELF_HOSTED]: 'Self-hosted',
+export const TARGET_TYPE_LABELS: Record<string, string> = {
+  TARGET_TYPE_INFERENCE_SERVER: 'Online',
+  TARGET_TYPE_OFFLINE: 'Offline',
+  TARGET_TYPE_MOBILE: 'Mobile',
+  TARGET_TYPE_SELF_HOSTED: 'Self-hosted',
 };
+
+/**
+ * Mirrors the generated proto DeploymentStage enum (deployment.proto). Colocated here until core
+ * has access to the shared generated package — swapping the import path is the only change
+ * needed then, since usage sites reference `DeploymentStage.ROLLOUT_FAILED` etc.
+ */
+export const DeploymentStage = {
+  INVALID: 'DEPLOYMENT_STAGE_INVALID',
+  VALIDATION: 'DEPLOYMENT_STAGE_VALIDATION',
+  PLACEMENT: 'DEPLOYMENT_STAGE_PLACEMENT',
+  RESOURCE_ACQUISITION: 'DEPLOYMENT_STAGE_RESOURCE_ACQUISITION',
+  ROLLOUT_COMPLETE: 'DEPLOYMENT_STAGE_ROLLOUT_COMPLETE',
+  ROLLOUT_FAILED: 'DEPLOYMENT_STAGE_ROLLOUT_FAILED',
+  ROLLBACK_IN_PROGRESS: 'DEPLOYMENT_STAGE_ROLLBACK_IN_PROGRESS',
+  ROLLBACK_COMPLETE: 'DEPLOYMENT_STAGE_ROLLBACK_COMPLETE',
+  ROLLBACK_FAILED: 'DEPLOYMENT_STAGE_ROLLBACK_FAILED',
+  CLEAN_UP_IN_PROGRESS: 'DEPLOYMENT_STAGE_CLEAN_UP_IN_PROGRESS',
+  CLEAN_UP_COMPLETE: 'DEPLOYMENT_STAGE_CLEAN_UP_COMPLETE',
+  CLEAN_UP_FAILED: 'DEPLOYMENT_STAGE_CLEAN_UP_FAILED',
+} as const;
+
+/**
+ * Mirrors the generated proto DeploymentState enum (deployment.proto). See DeploymentStage above.
+ */
+export const DeploymentState = {
+  INVALID: 'DEPLOYMENT_STATE_INVALID',
+  INITIALIZING: 'DEPLOYMENT_STATE_INITIALIZING',
+  HEALTHY: 'DEPLOYMENT_STATE_HEALTHY',
+  UNHEALTHY: 'DEPLOYMENT_STATE_UNHEALTHY',
+  EMPTY: 'DEPLOYMENT_STATE_EMPTY',
+} as const;
+
+/**
+ * Mirrors the generated proto DeploymentConditionStatus enum (deployment.proto). See
+ * DeploymentStage above.
+ */
+export const DeploymentConditionStatus = {
+  TRUE: 'CONDITION_STATUS_TRUE',
+  FALSE: 'CONDITION_STATUS_FALSE',
+  UNKNOWN: 'CONDITION_STATUS_UNKNOWN',
+} as const;
 
 export const DEPLOYMENT_STAGE_CELL: Cell = {
   id: 'status.stage',
   label: 'Stage',
   type: CellType.TYPE,
   typeTextMap: {
-    [DEPLOYMENT_STAGE.INVALID]: 'Invalid',
-    [DEPLOYMENT_STAGE.VALIDATION]: 'Validation',
-    [DEPLOYMENT_STAGE.PLACEMENT]: 'Placement',
-    [DEPLOYMENT_STAGE.RESOURCE_ACQUISITION]: 'Resource acquisition',
-    [DEPLOYMENT_STAGE.ROLLOUT_COMPLETE]: 'Rollout complete',
-    [DEPLOYMENT_STAGE.ROLLOUT_FAILED]: 'Rollout failed',
-    [DEPLOYMENT_STAGE.ROLLBACK_IN_PROGRESS]: 'Rollback in progress',
-    [DEPLOYMENT_STAGE.ROLLBACK_COMPLETE]: 'Rollback complete',
-    [DEPLOYMENT_STAGE.ROLLBACK_FAILED]: 'Rollback failed',
-    [DEPLOYMENT_STAGE.CLEAN_UP_IN_PROGRESS]: 'Clean up in progress',
-    [DEPLOYMENT_STAGE.CLEAN_UP_COMPLETE]: 'Clean up complete',
-    [DEPLOYMENT_STAGE.CLEAN_UP_FAILED]: 'Clean up failed',
+    [DeploymentStage.INVALID]: 'Invalid',
+    [DeploymentStage.VALIDATION]: 'Validation',
+    [DeploymentStage.PLACEMENT]: 'Placement',
+    [DeploymentStage.RESOURCE_ACQUISITION]: 'Resource acquisition',
+    [DeploymentStage.ROLLOUT_COMPLETE]: 'Rollout complete',
+    [DeploymentStage.ROLLOUT_FAILED]: 'Rollout failed',
+    [DeploymentStage.ROLLBACK_IN_PROGRESS]: 'Rollback in progress',
+    [DeploymentStage.ROLLBACK_COMPLETE]: 'Rollback complete',
+    [DeploymentStage.ROLLBACK_FAILED]: 'Rollback failed',
+    [DeploymentStage.CLEAN_UP_IN_PROGRESS]: 'Clean up in progress',
+    [DeploymentStage.CLEAN_UP_COMPLETE]: 'Clean up complete',
+    [DeploymentStage.CLEAN_UP_FAILED]: 'Clean up failed',
   },
 };
 
@@ -71,17 +75,17 @@ export const DEPLOYMENT_STATE_CELL: Cell = {
   label: 'State',
   type: CellType.STATE,
   stateTextMap: {
-    [DEPLOYMENT_STATE.INVALID]: 'Invalid',
-    [DEPLOYMENT_STATE.INITIALIZING]: 'Initializing',
-    [DEPLOYMENT_STATE.HEALTHY]: 'Healthy',
-    [DEPLOYMENT_STATE.UNHEALTHY]: 'Unhealthy',
-    [DEPLOYMENT_STATE.EMPTY]: 'Empty',
+    [DeploymentState.INVALID]: 'Invalid',
+    [DeploymentState.INITIALIZING]: 'Initializing',
+    [DeploymentState.HEALTHY]: 'Healthy',
+    [DeploymentState.UNHEALTHY]: 'Unhealthy',
+    [DeploymentState.EMPTY]: 'Empty',
   },
   stateColorMap: {
-    [DEPLOYMENT_STATE.INVALID]: 'gray',
-    [DEPLOYMENT_STATE.INITIALIZING]: 'blue',
-    [DEPLOYMENT_STATE.HEALTHY]: 'green',
-    [DEPLOYMENT_STATE.UNHEALTHY]: 'red',
-    [DEPLOYMENT_STATE.EMPTY]: 'gray',
+    [DeploymentState.INVALID]: 'gray',
+    [DeploymentState.INITIALIZING]: 'blue',
+    [DeploymentState.HEALTHY]: 'green',
+    [DeploymentState.UNHEALTHY]: 'red',
+    [DeploymentState.EMPTY]: 'gray',
   },
 };
