@@ -634,7 +634,7 @@ func getPipelineType(pipelineRun *v2pb.PipelineRun) string {
 // Returns "unknown" if not set
 func getEnvironment(pipelineRun *v2pb.PipelineRun) string {
 	if pipelineRun.Labels != nil {
-		if env, ok := pipelineRun.Labels["pipelinerun.michelangelo/environment"]; ok {
+		if env, ok := pipelineRun.Labels["michelangelo/environment"]; ok {
 			return env
 		}
 	}

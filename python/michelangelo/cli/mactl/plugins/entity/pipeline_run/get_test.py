@@ -148,10 +148,10 @@ class RenderEnvTest(TestCase):
     @patch("michelangelo.cli.mactl.plugins.entity.pipeline_run.get._env_label")
     def test_label_present(self, mock_label):
         """Configured label present → value returned."""
-        mock_label.return_value = "pipelinerun.michelangelo/environment"
+        mock_label.return_value = "michelangelo/environment"
         item = SimpleNamespace(
             metadata=SimpleNamespace(
-                labels={"pipelinerun.michelangelo/environment": "prod"}
+                labels={"michelangelo/environment": "prod"}
             )
         )
         self.assertEqual(_render_env(item), "prod")
@@ -159,7 +159,7 @@ class RenderEnvTest(TestCase):
     @patch("michelangelo.cli.mactl.plugins.entity.pipeline_run.get._env_label")
     def test_label_missing(self, mock_label):
         """Configured label absent → empty string."""
-        mock_label.return_value = "pipelinerun.michelangelo/environment"
+        mock_label.return_value = "michelangelo/environment"
         item = SimpleNamespace(metadata=SimpleNamespace(labels={}))
         self.assertEqual(_render_env(item), "")
 
