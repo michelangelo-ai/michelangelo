@@ -1,11 +1,11 @@
+import { Field } from 'react-final-form';
+
 import { FormDialog } from '#core/components/form/components/form-dialog/form-dialog';
+import { BooleanField } from '#core/components/form/fields/boolean/boolean-field';
 import { StringField } from '#core/components/form/fields/string/string-field';
 import { TextareaField } from '#core/components/form/fields/textarea/textarea-field';
 import { FormGroup } from '#core/components/form/layout/form-group/form-group';
-import {
-  ALL_PIPELINE_RUN_EVENT_TYPES,
-  NotificationSection,
-} from '#core/config/entities/pipeline/notification-section';
+import { validateEmails } from '#core/config/entities/pipeline/utils/validate-emails';
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
 import { useStudioMutation } from '#core/hooks/use-studio-mutation/use-studio-mutation';
 import { generateSuffix } from '#core/utils/name-utils';
@@ -13,7 +13,24 @@ import { ResumeRunFields } from './resume-run-fields';
 
 import type { ActionComponentProps } from '#core/components/actions/types';
 import type { Pipeline, PipelineRunFormValues } from '#core/config/entities/pipeline/types';
-import type { PipelineRun, PipelineRunNotification } from '#core/config/entities/run/types';
+import type {
+  NotificationEventType,
+  PipelineRun,
+  PipelineRunNotification,
+} from '#core/config/entities/run/types';
+
+/**
+ * Every implemented event a pipeline run can notify on. The form has no event-type picker —
+ * whoever opts in gets notified for all of them — so this is the fixed `event_types` value
+ * for every notification the form produces.
+ */
+export const ALL_PIPELINE_RUN_EVENT_TYPES: NotificationEventType[] = [
+  'EVENT_TYPE_PIPELINE_RUN_STATE_STARTED',
+  'EVENT_TYPE_PIPELINE_RUN_STATE_SUCCEEDED',
+  'EVENT_TYPE_PIPELINE_RUN_STATE_FAILED',
+  'EVENT_TYPE_PIPELINE_RUN_STATE_KILLED',
+  'EVENT_TYPE_PIPELINE_RUN_STATE_SKIPPED',
+];
 
 export const CreatePipelineRunForm = ({ record, onClose }: ActionComponentProps<Pipeline>) => {
   const { projectId } = useStudioParams('base');
@@ -72,7 +89,34 @@ export const CreatePipelineRunForm = ({ record, onClose }: ActionComponentProps<
       />
 
       <FormGroup title="Set Up Notifications (Optional)">
-        <NotificationSection />
+        <BooleanField
+          name="notifyOnCompletion"
+          checkboxLabel="Do you want to receive notifications when pipeline run completed?"
+          toggle
+        />
+
+        <Field name="notifyOnCompletion" subscription={{ value: true }}>
+          {({ input }) =>
+            input.value ? (
+              <>
+                <StringField
+                  name="notificationEmails"
+                  label="Emails"
+                  multi
+                  validate={validateEmails}
+                  placeholder="name@example.com"
+                />
+
+                <StringField
+                  name="notificationSlackDestinations"
+                  label="Slack Channels or Users"
+                  multi
+                  placeholder="#channel or @user"
+                />
+              </>
+            ) : null
+          }
+        </Field>
       </FormGroup>
     </FormDialog>
   );
