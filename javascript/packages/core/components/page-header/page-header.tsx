@@ -24,7 +24,7 @@ import type { PageHeaderProps } from './types';
  * <PageHeader label="My Page Title" />
  * ```
  */
-export function PageHeader({ icon, docUrl, label, description, actions }: PageHeaderProps) {
+export function PageHeader({ icon, docUrl, label, description }: PageHeaderProps) {
   const [css, theme] = useStyletron();
 
   return (
@@ -73,7 +73,6 @@ export function PageHeader({ icon, docUrl, label, description, actions }: PageHe
           </DescriptionText>
         )}
       </div>
-      {actions}
     </div>
   );
 }

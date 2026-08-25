@@ -4,10 +4,12 @@ import { createFetchTransport } from './create-fetch-transport';
 import { TypedStructSchema } from './gen/michelangelo/api/typed_struct_pb';
 import { DeploymentService } from './gen/michelangelo/api/v2/deployment_svc_pb';
 import { InferenceServerService } from './gen/michelangelo/api/v2/inference_server_svc_pb';
+import { ModelFamilyService } from './gen/michelangelo/api/v2/model_family_svc_pb';
 import { ModelService } from './gen/michelangelo/api/v2/model_svc_pb';
 import { PipelineRunService } from './gen/michelangelo/api/v2/pipeline_run_svc_pb';
 import { PipelineService } from './gen/michelangelo/api/v2/pipeline_svc_pb';
 import { ProjectService } from './gen/michelangelo/api/v2/project_svc_pb';
+import { RevisionService } from './gen/michelangelo/api/v2/revision_svc_pb';
 import { TriggerRunService } from './gen/michelangelo/api/v2/trigger_run_svc_pb';
 import { getRuntimeConfig } from './runtime-config';
 
@@ -66,6 +68,8 @@ async function createServices(): Promise<Services> {
     PipelineRunService: createServiceClient(PipelineRunService, transport),
     TriggerRunService: createServiceClient(TriggerRunService, transport),
     ModelService: createServiceClient(ModelService, transport),
+    ModelFamilyService: createServiceClient(ModelFamilyService, transport),
+    RevisionService: createServiceClient(RevisionService, transport),
   } as const;
 }
 
