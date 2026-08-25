@@ -15,7 +15,7 @@ import (
 
 	pbtypes "github.com/gogo/protobuf/types"
 
-	"github.com/michelangelo-ai/michelangelo/go/api"
+	mlapi "github.com/michelangelo-ai/michelangelo/go/api"
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2 "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
@@ -404,7 +404,7 @@ func TestBeforeCreate_MatchingPipelineAndRevisionSucceeds(t *testing.T) {
 // interceptGetHandler optionally fails Get for selected object kinds so tests
 // can exercise the soft-fail path that the fake client cannot produce.
 type interceptGetHandler struct {
-	api.Handler
+	mlapi.Handler
 	failPipeline error
 }
 
@@ -525,4 +525,17 @@ func TestBeforeCreate_PipelineGetTransientErrorIsSoft(t *testing.T) {
 	require.NoError(t, hook.BeforeCreate(context.Background(), request))
 	assert.Nil(t, request.PipelineRun.Spec.Revision)
 	assert.Nil(t, request.PipelineRun.Spec.PipelineSpec)
+}
+
+func TestBeforeCreate_StampsSourcePipelineTypeLabel(t *testing.T) {
+	live := &v2.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-pipeline", Namespace: testNamespace},
+		Spec:       v2.PipelineSpec{Type: v2.PIPELINE_TYPE_TRAIN},
+	}
+	hook := setUpHook(t, live)
+
+	request := newPipelineRefRequest("test-pipeline")
+	require.NoError(t, hook.BeforeCreate(context.Background(), request))
+	assert.Equal(t, "PIPELINE_TYPE_TRAIN",
+		request.PipelineRun.GetLabels()[mlapi.SourcePipelineTypeLabelName])
 }

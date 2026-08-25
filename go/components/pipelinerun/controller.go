@@ -615,15 +615,11 @@ func extractMetricLabels(pipelineRun *v2pb.PipelineRun) PipelineRunMetricLabels 
 	return labels
 }
 
-// getPipelineType extracts the pipeline type from the pipeline run
-// Returns "unknown" if the type cannot be determined
+// getPipelineType reads the pipeline type from the pipeline run's
+// michelangelo/SourcePipelineType label. Returns "unknown" if absent.
 func getPipelineType(pipelineRun *v2pb.PipelineRun) string {
-	// The pipeline type would need to be extracted from the source pipeline
-	// or from labels/annotations. For now, return unknown.
-	// In a full implementation, you would fetch the Pipeline resource
-	// and extract the type from pipeline.Spec.Type
 	if pipelineRun.Labels != nil {
-		if pipelineType, ok := pipelineRun.Labels["pipelinerun.michelangelo/pipeline-type"]; ok {
+		if pipelineType, ok := pipelineRun.Labels[api.SourcePipelineTypeLabelName]; ok {
 			return pipelineType
 		}
 	}

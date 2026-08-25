@@ -65,6 +65,14 @@ const (
 	// whose label is genuinely absent when read — that fallback means "could
 	// not be determined"; this one means "no default was configured."
 	UnspecifiedEnvironment = "unspecified"
+
+	// SourcePipelineTypeLabelName is the Kubernetes label key that identifies the
+	// pipeline type (e.g. PIPELINE_TYPE_TRAIN).
+	SourcePipelineTypeLabelName = "michelangelo/SourcePipelineType"
+
+	// SourcePipelineManifestTypeLabelName is the Kubernetes label key that identifies
+	// the pipeline manifest type (e.g. PIPELINE_MANIFEST_TYPE_ASL).
+	SourcePipelineManifestTypeLabelName = "pipeline.michelangelo/PipelineManifestType"
 )
 
 // DefaultContextTimeout defines the default timeout for the context
