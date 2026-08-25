@@ -32,8 +32,8 @@ export function RunConfigurationPage({ data, isLoading }: { data?: object; isLoa
       <Signpost
         illustration={
           <CircleExclamationMark
-            height="64px"
-            width="64px"
+            height={theme.sizing.scale1600}
+            width={theme.sizing.scale1600}
             kind={CircleExclamationMarkKind.PRIMARY}
           />
         }
