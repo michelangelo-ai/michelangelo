@@ -387,14 +387,16 @@ class ConfigBuilder:
         return environ
 
     def get_workflow_concurrent_groups(self) -> list:
-        """Detect groups of task functions dispatched together via concurrent_run/batch_run.
+        """Detect groups of task functions dispatched together via concurrent_run.
 
         Statically analyzes the workflow function's own source (not the whole module) to
-        find task names passed to `concurrent.run`/`concurrent.batch_run` that are
-        dispatched together, i.e. before any of their futures' `.result()`/`.get()` is
-        awaited. Only top-level statements in the workflow function are considered - calls
-        inside nested `def`s, loops, or conditionals are not analyzed and will simply not
-        contribute a group (safe default: no auto-enabled caching for those tasks).
+        find task names passed to `concurrent.run` that are dispatched together, i.e.
+        before any of their futures' `.result()`/`.get()` is awaited. Only top-level
+        statements in the workflow function are considered - calls inside nested `def`s,
+        loops, or conditionals are not analyzed and will simply not contribute a group
+        (safe default: no auto-enabled caching for those tasks). `concurrent.batch_run` is
+        intentionally not detected - pipelines using it don't get auto-cache-protection
+        from this pass, same as before this detector existed.
 
         This is used to auto-enable caching only for tasks that can be forced to replay by
         an unrelated manual retry within the same Cadence/Temporal workflow history, since
@@ -442,13 +444,6 @@ class ConfigBuilder:
                     and node.func.attr in ("result", "get")
                 )
 
-            # Maps a local variable name bound to `new_callable(task_fn, ...)` back to the
-            # wrapped task's function name, so batch_run([c1, c2, ...]) can be resolved.
-            callable_task_names: dict = {}
-            # Maps a local variable name bound to a literal list of new_callable(...)
-            # calls (e.g. `callables = [new_callable(task_a), new_callable(task_b)]`)
-            # to the resolved task names, so batch_run(callables) can be resolved too.
-            list_task_names: dict = {}
             current_wave: list = []
 
             def close_wave():
@@ -457,69 +452,17 @@ class ConfigBuilder:
                     groups.append(current_wave)
                 current_wave = []
 
-            def resolve_new_callable_list(list_node: ast.List) -> Optional[list]:
-                names = []
-                for elt in list_node.elts:
-                    if isinstance(elt, ast.Name) and elt.id in callable_task_names:
-                        names.append(callable_task_names[elt.id])
-                    elif (
-                        isinstance(elt, ast.Call)
-                        and isinstance(elt.func, ast.Name)
-                        and resolve_binding(elt.func.id) == "concurrent.new_callable"
-                    ):
-                        task_name = task_name_from_call(elt)
-                        if task_name is None:
-                            return None
-                        names.append(task_name)
-                    else:
-                        return None
-                return names or None
-
-            def resolve_batch_run_names(call: ast.Call) -> Optional[list]:
-                if not call.args:
-                    return None
-                arg = call.args[0]
-                if isinstance(arg, ast.List):
-                    return resolve_new_callable_list(arg)
-                if isinstance(arg, ast.Name) and arg.id in list_task_names:
-                    return list_task_names[arg.id]
-                return None
-
             for stmt in func_def.body:
-                if (
-                    isinstance(stmt, ast.Assign)
-                    and len(stmt.targets) == 1
-                    and isinstance(stmt.targets[0], ast.Name)
-                    and isinstance(stmt.value, ast.List)
-                ):
-                    resolved_list = resolve_new_callable_list(stmt.value)
-                    if resolved_list:
-                        list_task_names[stmt.targets[0].id] = resolved_list
-
                 found_wave_member = False
                 for node in ast.walk(stmt):
                     if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)):
                         continue
-                    binding = resolve_binding(node.func.id)
-                    if binding == "concurrent.run":
-                        task_name = task_name_from_call(node)
-                        if task_name:
-                            current_wave.append(task_name)
-                            found_wave_member = True
-                    elif binding == "concurrent.new_callable":
-                        task_name = task_name_from_call(node)
-                        if (
-                            task_name
-                            and isinstance(stmt, ast.Assign)
-                            and len(stmt.targets) == 1
-                            and isinstance(stmt.targets[0], ast.Name)
-                        ):
-                            callable_task_names[stmt.targets[0].id] = task_name
-                    elif binding == "concurrent.batch_run":
-                        batch_names = resolve_batch_run_names(node)
-                        if batch_names:
-                            groups.append(batch_names)
-                            found_wave_member = True
+                    if resolve_binding(node.func.id) != "concurrent.run":
+                        continue
+                    task_name = task_name_from_call(node)
+                    if task_name:
+                        current_wave.append(task_name)
+                        found_wave_member = True
 
                 if not found_wave_member and any(
                     is_future_wait(node) for node in ast.walk(stmt)

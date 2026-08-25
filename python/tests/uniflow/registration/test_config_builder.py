@@ -65,22 +65,16 @@ def decorated_concurrent_wave(fail_b: bool = False):
     return {"a": future_a.result(), "b": future_b.result()}
 
 
-def batch_run_with_dynamic_callables():
-    callables = []
-    for fn in (task_a, task_b):
-        callables.append(new_callable(fn))
-    batch = batch_run(callables)
-    return batch.get()
-
-
 class TestGetWorkflowConcurrentGroups(unittest.TestCase):
     def test_simple_concurrent_wave(self):
         groups = ConfigBuilder(simple_concurrent_wave).get_workflow_concurrent_groups()
         self.assertEqual([["task_a", "task_b"]], groups)
 
-    def test_batch_run_wave(self):
+    def test_batch_run_not_detected(self):
+        # concurrent.batch_run is intentionally not detected (keeps the AST pass small) -
+        # safe default is no group, same as before this detector existed.
         groups = ConfigBuilder(batch_run_wave).get_workflow_concurrent_groups()
-        self.assertEqual([["task_a", "task_b"]], groups)
+        self.assertEqual([], groups)
 
     def test_sequential_then_concurrent_pairs(self):
         # (a,b) -> (c,d): two separate waves, both should be reported so caching
@@ -98,14 +92,6 @@ class TestGetWorkflowConcurrentGroups(unittest.TestCase):
 
     def test_purely_sequential_yields_no_groups(self):
         groups = ConfigBuilder(purely_sequential).get_workflow_concurrent_groups()
-        self.assertEqual([], groups)
-
-    def test_batch_run_dynamic_callables_falls_back_to_no_group(self):
-        # callables list built via a loop can't be statically resolved - safe default
-        # is to skip emitting a group rather than guessing wrong.
-        groups = ConfigBuilder(
-            batch_run_with_dynamic_callables
-        ).get_workflow_concurrent_groups()
         self.assertEqual([], groups)
 
 
