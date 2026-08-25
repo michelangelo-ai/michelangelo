@@ -19,7 +19,7 @@ _LOG = getLogger(__name__)
 
 _STATE_PREFIX = "PIPELINE_RUN_STATE_"
 _DEFAULT_STATE_PB2_MODULE = "michelangelo.gen.api.v2.pipeline_run_pb2"
-_DEFAULT_ENV_LABEL = "pipelinerun.michelangelo/environment"
+_DEFAULT_ENV_LABEL = "michelangelo/environment"
 
 _CRITERION_OPERATOR_EQUAL = 1
 _CRITERION_OPERATOR_LIKE = 9

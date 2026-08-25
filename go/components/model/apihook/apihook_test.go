@@ -23,7 +23,7 @@ func TestBeforeCreate_DefaultsEnvironmentLabelWhenAbsent(t *testing.T) {
 	err := hook.BeforeCreate(context.Background(), request)
 
 	assert.NoError(t, err)
-	assert.Equal(t, "staging", request.Model.Labels["pipelinerun.michelangelo/environment"])
+	assert.Equal(t, "staging", request.Model.Labels["michelangelo/environment"])
 }
 
 func TestBeforeCreate_DefaultsToUnspecifiedWhenUnconfigured(t *testing.T) {
@@ -33,7 +33,7 @@ func TestBeforeCreate_DefaultsToUnspecifiedWhenUnconfigured(t *testing.T) {
 	err := hook.BeforeCreate(context.Background(), request)
 
 	assert.NoError(t, err)
-	assert.Equal(t, "unspecified", request.Model.Labels["pipelinerun.michelangelo/environment"])
+	assert.Equal(t, "unspecified", request.Model.Labels["michelangelo/environment"])
 }
 
 func TestBeforeCreate_InheritsFromSourcePipelineRun(t *testing.T) {
@@ -43,7 +43,7 @@ func TestBeforeCreate_InheritsFromSourcePipelineRun(t *testing.T) {
 		Get(gomock.Any(), "test-namespace", "source-run", gomock.Any(), gomock.Any()).
 		DoAndReturn(func(_ context.Context, _, _ string, _ *metav1.GetOptions, obj interface{}) error {
 			run := obj.(*v2.PipelineRun)
-			run.ObjectMeta.Labels = map[string]string{"pipelinerun.michelangelo/environment": "staging"}
+			run.ObjectMeta.Labels = map[string]string{"michelangelo/environment": "staging"}
 			return nil
 		})
 
@@ -60,7 +60,7 @@ func TestBeforeCreate_InheritsFromSourcePipelineRun(t *testing.T) {
 	err := hook.BeforeCreate(context.Background(), request)
 
 	assert.NoError(t, err)
-	assert.Equal(t, "staging", request.Model.Labels["pipelinerun.michelangelo/environment"])
+	assert.Equal(t, "staging", request.Model.Labels["michelangelo/environment"])
 }
 
 func TestBeforeCreate_PreservesExplicitEnvironmentLabel(t *testing.T) {
@@ -68,7 +68,7 @@ func TestBeforeCreate_PreservesExplicitEnvironmentLabel(t *testing.T) {
 	request := &v2.CreateModelRequest{
 		Model: &v2.Model{
 			ObjectMeta: metav1.ObjectMeta{
-				Labels: map[string]string{"pipelinerun.michelangelo/environment": "staging"},
+				Labels: map[string]string{"michelangelo/environment": "staging"},
 			},
 		},
 	}
@@ -76,7 +76,7 @@ func TestBeforeCreate_PreservesExplicitEnvironmentLabel(t *testing.T) {
 	err := hook.BeforeCreate(context.Background(), request)
 
 	assert.NoError(t, err)
-	assert.Equal(t, "staging", request.Model.Labels["pipelinerun.michelangelo/environment"])
+	assert.Equal(t, "staging", request.Model.Labels["michelangelo/environment"])
 }
 
 func TestBeforeCreate_SourcePipelineRunNotFound(t *testing.T) {
@@ -99,7 +99,7 @@ func TestBeforeCreate_SourcePipelineRunNotFound(t *testing.T) {
 	err := hook.BeforeCreate(context.Background(), request)
 
 	assert.NoError(t, err)
-	assert.Equal(t, "production", request.Model.Labels["pipelinerun.michelangelo/environment"])
+	assert.Equal(t, "production", request.Model.Labels["michelangelo/environment"])
 }
 
 func TestBeforeCreate_SourcePipelineRunGetErrors(t *testing.T) {
@@ -125,7 +125,7 @@ func TestBeforeCreate_SourcePipelineRunGetErrors(t *testing.T) {
 	// propagated: this is a best-effort label-inheritance lookup and must not
 	// block Model creation. See package doc / applyEnvironmentLabel comment.
 	assert.NoError(t, err)
-	assert.Equal(t, "production", request.Model.Labels["pipelinerun.michelangelo/environment"])
+	assert.Equal(t, "production", request.Model.Labels["michelangelo/environment"])
 }
 
 func TestBeforeCreate_SourcePipelineRunHasNoEnvironmentLabel(t *testing.T) {
@@ -152,7 +152,7 @@ func TestBeforeCreate_SourcePipelineRunHasNoEnvironmentLabel(t *testing.T) {
 	err := hook.BeforeCreate(context.Background(), request)
 
 	assert.NoError(t, err)
-	assert.Equal(t, "production", request.Model.Labels["pipelinerun.michelangelo/environment"])
+	assert.Equal(t, "production", request.Model.Labels["michelangelo/environment"])
 }
 
 func TestBeforeUpdate_MirrorsBeforeCreate(t *testing.T) {
@@ -162,7 +162,7 @@ func TestBeforeUpdate_MirrorsBeforeCreate(t *testing.T) {
 		Get(gomock.Any(), "test-namespace", "source-run", gomock.Any(), gomock.Any()).
 		DoAndReturn(func(_ context.Context, _, _ string, _ *metav1.GetOptions, obj interface{}) error {
 			run := obj.(*v2.PipelineRun)
-			run.ObjectMeta.Labels = map[string]string{"pipelinerun.michelangelo/environment": "staging"}
+			run.ObjectMeta.Labels = map[string]string{"michelangelo/environment": "staging"}
 			return nil
 		})
 
@@ -179,7 +179,7 @@ func TestBeforeUpdate_MirrorsBeforeCreate(t *testing.T) {
 	err := hook.BeforeUpdate(context.Background(), request)
 
 	assert.NoError(t, err)
-	assert.Equal(t, "staging", request.Model.Labels["pipelinerun.michelangelo/environment"])
+	assert.Equal(t, "staging", request.Model.Labels["michelangelo/environment"])
 }
 
 func TestRegisterModelAPIHook(t *testing.T) {

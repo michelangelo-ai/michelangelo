@@ -13,6 +13,17 @@ import (
 
 const (
 	scheduleInputPipelineManifestTypeLabel = "pipeline.michelangelo/PipelineManifestType"
+
+	// scheduleInputLegacyEnvironmentLabel is the pre-rename api.EnvironmentLabel key.
+	//
+	// Deprecated: transitional fallback only, kept alongside the
+	// cron_trigger_workflows.go dual-read for consistency. Safe to remove
+	// no earlier than 2 minor releases after the rename ships, per
+	// CONTRIBUTING.md's Deprecation Policy.
+	// TODO: file a tracking issue and remove this constant and both
+	// dual-read call sites (schedule_input.go, cron_trigger_workflows.go)
+	// together.
+	scheduleInputLegacyEnvironmentLabel = "pipelinerun.michelangelo/environment"
 )
 
 // scheduleInputHash returns a deterministic hash of the TriggerRun data consumed by
@@ -57,13 +68,13 @@ func scheduleWorkflowInput(triggerRun *v2pb.TriggerRun) *v2pb.TriggerRun {
 
 func scheduleInputLabels(labels map[string]string) map[string]string {
 	relevant := make(map[string]string, 2)
-	for _, key := range []string{
-		api.EnvironmentLabel,
-		scheduleInputPipelineManifestTypeLabel,
-	} {
-		if value, ok := labels[key]; ok {
-			relevant[key] = value
-		}
+	if value, ok := labels[api.EnvironmentLabel]; ok {
+		relevant[api.EnvironmentLabel] = value
+	} else if value, ok := labels[scheduleInputLegacyEnvironmentLabel]; ok {
+		relevant[api.EnvironmentLabel] = value
+	}
+	if value, ok := labels[scheduleInputPipelineManifestTypeLabel]; ok {
+		relevant[scheduleInputPipelineManifestTypeLabel] = value
 	}
 	if len(relevant) == 0 {
 		return nil

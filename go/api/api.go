@@ -55,7 +55,7 @@ const (
 	// a PipelineRun or Model belongs to. This is the single canonical
 	// definition, shared by go/worker's trigger-fire path, go/components/triggerrun,
 	// go/components/pipelinerun, and go/components/model/apihook.
-	EnvironmentLabel = "pipelinerun.michelangelo/environment"
+	EnvironmentLabel = "michelangelo/environment"
 
 	// UnspecifiedEnvironment is the write-time sentinel written to
 	// EnvironmentLabel by create/propagation logic when the operator has
