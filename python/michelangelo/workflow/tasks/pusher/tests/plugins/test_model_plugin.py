@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import itertools
+import os
 import re
 from unittest import TestCase
 from unittest.mock import MagicMock, patch
@@ -149,6 +150,59 @@ class TestModelPusherPluginExecute(TestCase):
         self.assertIn("deployable_artifact_uri", result)
         self.assertIn("push_id", result)
         self.assertIn("registrations", result)
+
+    def test_remote_artifact_uri_downloaded_before_upload(self):
+        """A URI artifact.path (e.g. from torch_assembler's own prior upload)
+        is downloaded to a local path before being handed to upload() --
+        upload() requires an actual local filesystem path, so passing a
+        remote URI straight through raises inside the backend. The temp
+        download is cleaned up after execute() returns, so existence is
+        checked from within the upload() call itself, not afterward."""
+        backend = _mock_backend()
+        artifact = AssembledModel(
+            raw_model=ModelArtifact(path="s3://bucket/tabular_assembler/x/raw"),
+            deployable_model=ModelArtifact(
+                path="s3://bucket/tabular_assembler/x/deployable"
+            ),
+        )
+
+        def _fake_download(uri, local_path):
+            with open(local_path, "w") as f:
+                f.write("fake artifact content")
+
+        backend.download.side_effect = _fake_download
+
+        upload_time_existence = []
+
+        def _fake_upload(local_path, destination_key):
+            upload_time_existence.append(os.path.isfile(local_path))
+            return f"s3://uploaded/{destination_key}"
+
+        backend.upload.side_effect = _fake_upload
+
+        _plugin(artifact=artifact, backend=backend).execute()
+
+        self.assertEqual(backend.download.call_count, 2)
+        raw_local_path = backend.upload.call_args_list[0][0][0]
+        dep_local_path = backend.upload.call_args_list[1][0][0]
+        self.assertNotEqual(raw_local_path, "s3://bucket/tabular_assembler/x/raw")
+        self.assertNotEqual(
+            dep_local_path, "s3://bucket/tabular_assembler/x/deployable"
+        )
+        self.assertEqual(upload_time_existence, [True, True])
+
+    def test_local_artifact_path_uploaded_directly_without_download(self):
+        """A plain local path (no URI scheme) is passed straight to upload(),
+        even if it doesn't exist yet (e.g. in tests with a mocked backend) --
+        only a `scheme://` prefix triggers the download-first path."""
+        backend = _mock_backend()
+        artifact = _assembled()
+
+        _plugin(artifact=artifact, backend=backend).execute()
+
+        self.assertEqual(backend.download.call_count, 0)
+        raw_local_path = backend.upload.call_args_list[0][0][0]
+        self.assertEqual(raw_local_path, artifact.raw_model.path)
 
     def test_uses_config_model_name(self):
         """It registers the model under the name set in ModelPluginConfig."""
