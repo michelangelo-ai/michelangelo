@@ -1,0 +1,9 @@
+[
+  "michelangelo.api.v2.DeploymentService",
+  "michelangelo.api.v2.InferenceServerService",
+  "michelangelo.api.v2.ModelService",
+  "michelangelo.api.v2.PipelineRunService",
+  "michelangelo.api.v2.PipelineService",
+  "michelangelo.api.v2.ProjectService",
+  "michelangelo.api.v2.TriggerRunService"
+]

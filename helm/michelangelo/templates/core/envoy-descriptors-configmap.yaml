@@ -9,6 +9,6 @@ metadata:
 binaryData:
   # FileDescriptorSet consumed by the grpc_json_transcoder filter (envoy-configmap.yaml)
   # so it can transcode JSON<->binary proto without any Go-side jsonpb involvement.
-  # Regenerate with tools/gen-grpc-client.sh.
+  # Regenerate with tools/gen-descriptors.sh.
   descriptors.pb: {{ .Files.Get "files/descriptors.pb" | b64enc }}
 {{- end }}

@@ -25,7 +25,10 @@ After editing any `.proto` file, regenerate the Go bindings:
 2. Run `tools/gazelle` to update BUILD targets
 3. Run `bazel build //proto/...` to compile
 4. Run `tools/gen-proto-go.sh` to regenerate alias `BUILD.bazel` files under `proto-go/`, sync dependency versions from `go/go.mod` into `proto-go/go.mod`, and run `go mod tidy` in `proto-go/`
-5. Check in both the `.proto` changes and the generated `proto-go/` changes
+5. Run `tools/gen-descriptors.sh` to regenerate `helm/michelangelo/files/descriptors.pb`, the descriptor set Envoy's `grpc_json_transcoder` filter reads. Run this on every proto change, even a Go-only one — CI enforces it in `main.yml`'s `dirty-check` job. See [gen-descriptors.sh](shell-scripts.md#gen-descriptorssh) for how it works.
+6. Check in the `.proto` changes and both generated outputs: `proto-go/` and `helm/michelangelo/files/descriptors.pb`.
+
+If the change adds, removes, or renames a service the JS client should use, also update `javascript/packages/rpc/services.ts` and re-run `tools/gen-descriptors.sh` — see [gen-descriptors.sh](shell-scripts.md#gen-descriptorssh) for why this list stays narrower than every service under `proto/api`. Client language bindings are a separate step; see [gen-grpc-client.sh](shell-scripts.md#gen-grpc-clientsh).
 
 ## Service Pattern
 

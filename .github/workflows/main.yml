@@ -89,20 +89,27 @@ jobs:
 
   dirty-check:
     runs-on: ubuntu-latest
+    # Ordered after bazel-build so its exact-key cache is guaranteed to be
+    # saved before this job restores it — without this, both jobs race to
+    # restore the same key, and a miss here falls back to a stale cache from
+    # an older commit whose external repo layout can mismatch the current
+    # MODULE.bazel/gazelle version (surfaces as bogus "no such package"
+    # Bazel errors that don't reproduce locally).
+    needs: bazel-build
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Restore-only: reuse the cache saved by bazel-build (no redundant save)
+      # Restore-only: reuse the cache saved by bazel-build. No restore-keys
+      # fallback — an incompatible cache from a different commit is worse
+      # than a cold cache (see the `needs` comment above).
       - name: Restore Bazel Cache
         uses: actions/cache/restore@v6
         with:
           path: |
             ~/.cache/bazel
           key: bazel-main-${{ runner.os }}-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock') }}
-          restore-keys: |
-            bazel-main-${{ runner.os }}-
 
       - name: Run Gazelle
         run: |
@@ -123,3 +130,17 @@ jobs:
         run: |
           tools/gen-proto-go.sh
           git diff --exit-code || (echo "proto-go is out of date. Please run tools/gen-proto-go.sh before commit." && exit 1)
+
+      # Runs on every proto/go change, not just javascript/ changes — a
+      # Go-only proto edit can still affect how an existing, JS-consumed
+      # service resolves in the shared descriptor set.
+      - name: Set up buf
+        uses: bufbuild/buf-setup-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check transcoder descriptor artifacts are up to date
+        run: |
+          tools/gen-descriptors.sh
+          git diff --exit-code -- helm/michelangelo/files/descriptors.pb helm/michelangelo/files/transcoder-services.json \
+            || (echo "helm/michelangelo/files/descriptors.pb or transcoder-services.json is out of date. Please run tools/gen-descriptors.sh before commit." && exit 1)
