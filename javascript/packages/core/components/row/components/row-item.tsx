@@ -1,6 +1,7 @@
 import { useStyletron } from 'baseui';
 
 import { DefaultCellRenderer } from '#core/components/cell/renderers/default-cell-renderer';
+import { useInterpolationResolver } from '#core/interpolation/use-interpolation-resolver';
 import { getObjectValue } from '#core/utils/object-utils';
 import { RowLabel } from './row-label';
 
@@ -13,7 +14,9 @@ export const RowItem = (props: {
   CellComponent?: CellRenderer<unknown>;
 }) => {
   const [css, theme] = useStyletron();
-  const { record, item, CellComponent = DefaultCellRenderer } = props;
+  const { record, CellComponent = DefaultCellRenderer } = props;
+  const resolver = useInterpolationResolver();
+  const item = resolver(props.item, { row: record });
 
   const value = getObjectValue(record, item.accessor ?? item.id);
   return (

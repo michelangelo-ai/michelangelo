@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react';
 
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getBaseProviderWrapper } from '#core/test/wrappers/get-base-provider-wrapper';
+import { getRouterWrapper } from '#core/test/wrappers/get-router-wrapper';
 import { LinksBox } from '../links-box';
 
 describe('LinksBox', () => {
@@ -14,7 +15,7 @@ describe('LinksBox', () => {
           { name: 'Logs', url: 'https://logs.example.com/app' },
         ]}
       />,
-      buildWrapper([getBaseProviderWrapper()])
+      buildWrapper([getBaseProviderWrapper(), getRouterWrapper()])
     );
 
     expect(screen.getByText('Useful links')).toBeInTheDocument();
@@ -38,7 +39,7 @@ describe('LinksBox', () => {
           { name: 'No URL', url: undefined },
         ]}
       />,
-      buildWrapper([getBaseProviderWrapper()])
+      buildWrapper([getBaseProviderWrapper(), getRouterWrapper()])
     );
 
     expect(screen.getByRole('link', { name: 'Valid' })).toBeInTheDocument();
@@ -52,7 +53,7 @@ describe('LinksBox', () => {
         title="Related dashboards"
         links={[{ name: 'Valid', url: 'https://example.com' }]}
       />,
-      buildWrapper([getBaseProviderWrapper()])
+      buildWrapper([getBaseProviderWrapper(), getRouterWrapper()])
     );
 
     expect(screen.getByText('Related dashboards')).toBeInTheDocument();
@@ -62,7 +63,7 @@ describe('LinksBox', () => {
   it('renders an empty box when all links are incomplete', () => {
     render(
       <LinksBox title="Useful links" links={[{ name: undefined, url: undefined }]} />,
-      buildWrapper([getBaseProviderWrapper()])
+      buildWrapper([getBaseProviderWrapper(), getRouterWrapper()])
     );
 
     expect(screen.getByText('Useful links')).toBeInTheDocument();
