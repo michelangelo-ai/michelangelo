@@ -6,13 +6,16 @@ import { maxLength, regex, required } from '#core/components/form/validation/val
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
 import { useStudioMutation } from '#core/hooks/use-studio-mutation/use-studio-mutation';
 import { useStudioQuery } from '#core/hooks/use-studio-query';
+import {
+  K8S_NAME_MAX_LENGTH,
+  K8S_NAME_PATTERN,
+  K8S_NAME_RULES_MESSAGE,
+} from '#core/utils/crd-utils';
 import { ModelFamilyRevisionFields } from './model-family-revision-fields';
 import { TARGET_TYPE } from './shared';
 
 import type { CreateActionComponentProps } from '#core/components/actions/types';
 import type { DeploymentCreateInput, InferenceServerListResult } from './types';
-
-const K8S_NAME_PATTERN = /^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/;
 
 export const CreateDeploymentForm = ({ onClose }: CreateActionComponentProps) => {
   const { projectId } = useStudioParams('base');
@@ -77,16 +80,13 @@ export const CreateDeploymentForm = ({ onClose }: CreateActionComponentProps) =>
         name="metadata.name"
         label="Name"
         required
-        maxLength={63}
+        maxLength={K8S_NAME_MAX_LENGTH}
         validate={combineValidators(
           required(),
-          maxLength(63),
-          regex(
-            K8S_NAME_PATTERN,
-            'Must only contain lowercase alphanumeric characters, "-", and must start and end with an alphanumeric character'
-          )
+          maxLength(K8S_NAME_MAX_LENGTH),
+          regex(K8S_NAME_PATTERN, K8S_NAME_RULES_MESSAGE)
         )}
-        caption="Must only contain lowercase alphanumeric characters, '-', and must start and end with an alphanumeric character"
+        caption={K8S_NAME_RULES_MESSAGE}
         placeholder="my-deployment"
       />
 
