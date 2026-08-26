@@ -15,7 +15,7 @@ import (
 
 	pbtypes "github.com/gogo/protobuf/types"
 
-	mlapi "github.com/michelangelo-ai/michelangelo/go/api"
+	"github.com/michelangelo-ai/michelangelo/go/api"
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2 "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
@@ -404,7 +404,7 @@ func TestBeforeCreate_MatchingPipelineAndRevisionSucceeds(t *testing.T) {
 // interceptGetHandler optionally fails Get for selected object kinds so tests
 // can exercise the soft-fail path that the fake client cannot produce.
 type interceptGetHandler struct {
-	mlapi.Handler
+	api.Handler
 	failPipeline error
 }
 
