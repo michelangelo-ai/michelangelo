@@ -104,14 +104,14 @@ export const CreatePipelineRunForm = ({ record, onClose }: ActionComponentProps<
                   label="Emails"
                   multi
                   validate={validateEmails}
-                  placeholder="name@example.com"
+                  placeholder="e.g., name@example.com"
                 />
 
                 <StringField
                   name="notificationSlackDestinations"
                   label="Slack Channels or Users"
                   multi
-                  placeholder="#channel or @user"
+                  placeholder="e.g., #channel or @user"
                 />
               </>
             ) : null
