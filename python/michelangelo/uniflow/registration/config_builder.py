@@ -17,6 +17,7 @@ from typing import Any, Callable, Optional
 import yaml
 
 from michelangelo.lib.shared.json_data import JSONData
+from michelangelo.uniflow.core.lib.concurrent import Future as _ConcurrentFuture
 from michelangelo.uniflow.core.utils import import_attribute
 
 _logger = logging.getLogger(__name__)
@@ -387,16 +388,22 @@ class ConfigBuilder:
         return environ
 
     def get_workflow_concurrent_groups(self) -> list:
-        """Detect groups of task functions dispatched together via concurrent_run.
+        """Detect groups of task functions dispatched together via a concurrency plugin.
 
         Statically analyzes the workflow function's own source (not the whole module) to
-        find task names passed to `concurrent.run` that are dispatched together, i.e.
-        before any of their futures' `.result()`/`.get()` is awaited. Only top-level
-        statements in the workflow function are considered - calls inside nested `def`s,
-        loops, or conditionals are not analyzed and will simply not contribute a group
-        (safe default: no auto-enabled caching for those tasks). `concurrent.batch_run` is
-        intentionally not detected - pipelines using it don't get auto-cache-protection
-        from this pass, same as before this detector existed.
+        find task names passed as the first positional argument to any `concurrent.*`
+        plugin call that immediately dispatches a single task and hands back a `Future`
+        (per its return type annotation) - e.g. `concurrent.run` - that are dispatched
+        together, i.e. before any of their futures' `.result()`/`.get()` is awaited.
+        Matching is by plugin namespace plus return-type contract rather than a hardcoded
+        function name, so new single-task dispatch primitives added to the `concurrent`
+        plugin family are picked up automatically. `concurrent.batch_run` returns a
+        `BatchFuture` for a list of `new_callable(...)` wrappers rather than a `Future` for
+        one task, so it doesn't match this contract and pipelines using it don't get
+        auto-cache-protection from this pass, same as before this detector existed. Only
+        top-level statements in the workflow function are considered - calls inside nested
+        `def`s, loops, or conditionals are not analyzed and will simply not contribute a
+        group (safe default: no auto-enabled caching for those tasks).
 
         This is used to auto-enable caching only for tasks that can be forced to replay by
         an unrelated manual retry within the same Cadence/Temporal workflow history, since
@@ -422,15 +429,22 @@ class ConfigBuilder:
                 inspect.unwrap(self._workflow_function_obj), "__globals__", {}
             )
 
-            def resolve_binding(name: str) -> Optional[str]:
+            def is_concurrent_dispatch_call(name: str) -> bool:
                 candidate = module_globals.get(name)
                 if candidate is None:
-                    return None
+                    return False
+                underlying = candidate
                 binding = getattr(candidate, "_uf_star_plugin_binding", None)
                 if binding is None:
-                    wrapped = getattr(candidate, "__wrapped__", None)
-                    binding = getattr(wrapped, "_uf_star_plugin_binding", None)
-                return binding
+                    underlying = getattr(candidate, "__wrapped__", None)
+                    binding = getattr(underlying, "_uf_star_plugin_binding", None)
+                if not (isinstance(binding, str) and binding.startswith("concurrent.")):
+                    return False
+                try:
+                    return_annotation = inspect.signature(underlying).return_annotation
+                except (TypeError, ValueError):
+                    return False
+                return return_annotation is _ConcurrentFuture
 
             def task_name_from_call(call: ast.Call) -> Optional[str]:
                 if call.args and isinstance(call.args[0], ast.Name):
@@ -457,7 +471,7 @@ class ConfigBuilder:
                 for node in ast.walk(stmt):
                     if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)):
                         continue
-                    if resolve_binding(node.func.id) != "concurrent.run":
+                    if not is_concurrent_dispatch_call(node.func.id):
                         continue
                     task_name = task_name_from_call(node)
                     if task_name:
