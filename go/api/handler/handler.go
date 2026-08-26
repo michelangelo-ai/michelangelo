@@ -47,6 +47,24 @@ func NewFakeAPIHandler(k8sClient ctrlRTClient.Client) api.Handler {
 	}
 }
 
+// NewFakeAPIHandlerWithDefaultEnvironment is NewFakeAPIHandler with an
+// explicit operator-configured PipelineRun environment default. This is
+// used for unit test only.
+func NewFakeAPIHandlerWithDefaultEnvironment(k8sClient ctrlRTClient.Client, defaultEnvironment string) api.Handler {
+	return &apiHandler{
+		conf: storage.MetadataStorageConfig{
+			EnableMetadataStorage: false,
+		},
+		logger:             zapr.NewLogger(zap.NewNop()),
+		metrics:            tally.NoopScope,
+		defaultEnvironment: defaultEnvironment,
+		k8sHandler:         NewK8sHandler(k8sClient),
+		metadataHandler:    NewMetadataHandler(nil, nil, zapr.NewLogger(zap.NewNop())),
+		blobHandler:        NewBlobHandler(nil),
+		validationHandler:  NewValidationHandler(),
+	}
+}
+
 // apiHandler is an api.Handler that abstracts the API operations from the underlying systems (i.e. k8s/ETCD + MetadataStorage).
 type apiHandler struct {
 	// storage library configuration
@@ -55,6 +73,13 @@ type apiHandler struct {
 	logger logr.Logger
 
 	metrics tally.Scope
+
+	// defaultEnvironment is the operator-configured default value for
+	// api.EnvironmentLabel, applied to PipelineRun objects created without
+	// one. Empty means the operator configured no default; Create falls
+	// back to api.UnspecifiedEnvironment rather than treating empty as a
+	// valid label value.
+	defaultEnvironment string
 
 	// Focused handlers for better separation of concerns
 	k8sHandler        K8sHandler        `optional:"true"`
@@ -90,6 +115,7 @@ func (handler *apiHandler) Create(ctx context.Context, obj ctrlRTClient.Object, 
 		return metadataErr
 	}
 
+	setDefaultEnvironmentLabel(obj, kind, handler.defaultEnvironment)
 	setUpdateTimestamp(obj, true)
 
 	_, err = checkDryRun(opts.DryRun)
@@ -485,6 +511,33 @@ func (handler *apiHandler) hasSpecChange(ctx context.Context, objForUpdate ctrlR
 	}
 
 	return false, nil
+}
+
+// setDefaultEnvironmentLabel sets api.EnvironmentLabel on a newly created
+// PipelineRun when the caller did not already provide one. It is a no-op
+// for every other kind, and it never overwrites an explicitly-provided
+// value. When defaultEnv is empty (the operator has configured no default),
+// the write-time sentinel api.UnspecifiedEnvironment is used instead, so a
+// PipelineRun and a Model created with no configured default agree on what
+// "no default" means.
+func setDefaultEnvironmentLabel(obj ctrlRTClient.Object, kind string, defaultEnv string) {
+	if kind != "PipelineRun" {
+		return
+	}
+
+	labels := obj.GetLabels()
+	if labels == nil {
+		labels = map[string]string{}
+	}
+	if _, ok := labels[api.EnvironmentLabel]; ok {
+		return
+	}
+
+	if defaultEnv == "" {
+		defaultEnv = api.UnspecifiedEnvironment
+	}
+	labels[api.EnvironmentLabel] = defaultEnv
+	obj.SetLabels(labels)
 }
 
 func setUpdateTimestamp(obj ctrlRTClient.Object, hasSpecChange bool) {

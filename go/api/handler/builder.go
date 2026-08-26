@@ -37,7 +37,8 @@ type APIHandlerBuilder struct {
 	blobStorage     storage.BlobStorage
 
 	// Configuration
-	storageConfig storage.MetadataStorageConfig
+	storageConfig      storage.MetadataStorageConfig
+	defaultEnvironment string
 
 	// Observability
 	logger  logr.Logger
@@ -72,6 +73,15 @@ func (b *APIHandlerBuilder) WithMetadataStorage(storage storage.MetadataStorage,
 // WithBlobStorage enables and configures blob storage.
 func (b *APIHandlerBuilder) WithBlobStorage(storage storage.BlobStorage) *APIHandlerBuilder {
 	b.blobStorage = storage
+	return b
+}
+
+// WithDefaultEnvironment sets the operator-configured default value for
+// api.EnvironmentLabel, applied to PipelineRun objects created without one.
+// An empty string means "no configured default" -- Create falls back to
+// api.UnspecifiedEnvironment rather than treating empty as a valid value.
+func (b *APIHandlerBuilder) WithDefaultEnvironment(defaultEnvironment string) *APIHandlerBuilder {
+	b.defaultEnvironment = defaultEnvironment
 	return b
 }
 
@@ -110,9 +120,10 @@ func (b *APIHandlerBuilder) Build() (api.Handler, error) {
 
 	// Create the main handler using existing apiHandler but with focused dependencies
 	handler := &apiHandler{
-		conf:    b.storageConfig,
-		logger:  b.logger,
-		metrics: b.metrics,
+		conf:               b.storageConfig,
+		logger:             b.logger,
+		metrics:            b.metrics,
+		defaultEnvironment: b.defaultEnvironment,
 		// Inject focused handlers to reduce coupling
 		k8sHandler:        k8sHandler,
 		metadataHandler:   metadataHandler,
@@ -150,7 +161,8 @@ func NewAPIServerHandler(params Params) (api.Handler, error) {
 	builder := NewAPIHandlerBuilder().
 		WithK8sClient(k8sClient).
 		WithZapLogger(params.Logger).
-		WithMetrics(params.Metrics)
+		WithMetrics(params.Metrics).
+		WithDefaultEnvironment(params.Config.PipelineRunDefaultEnvironment)
 
 	// Configure metadata storage if enabled
 	if params.StorageConfig.EnableMetadataStorage && params.MetadataStorage != nil {
@@ -175,7 +187,8 @@ func NewCtrlManagerHandler(params Params) (api.Handler, error) {
 	builder := NewAPIHandlerBuilder().
 		WithK8sClient(params.Manager.GetClient()).
 		WithZapLogger(params.Logger).
-		WithMetrics(params.Metrics)
+		WithMetrics(params.Metrics).
+		WithDefaultEnvironment(params.Config.PipelineRunDefaultEnvironment)
 
 	// Configure metadata storage if enabled
 	if params.StorageConfig.EnableMetadataStorage && params.MetadataStorage != nil {
