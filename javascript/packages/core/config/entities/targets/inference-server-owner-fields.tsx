@@ -24,19 +24,17 @@ export function InferenceServerOwnerFields() {
         label="Owning team"
         required
         validate={required()}
-        description="uOwn asset UUID for the team that owns this inference server."
+        description="UUID for the team that owns this inference server."
       />
       <StringField
         name="spec.ownerSpec.ownerInfo.owners"
         label="Owners"
         multi
-        placeholder="Add an LDAP username and press Enter…"
       />
       <StringField
         name="spec.ownerSpec.ownerInfo.ownerGroups"
         label="Owner groups"
         multi
-        placeholder="Add an LDAP group and press Enter…"
       />
       <SelectField
         name="spec.ownerSpec.tier"
