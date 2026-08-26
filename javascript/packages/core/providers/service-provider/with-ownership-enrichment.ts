@@ -1,24 +1,5 @@
 import type { ProjectResponse, ProjectWithOwner, ServiceContextType, TeamInfo } from './types';
 
-function collectOwningTeamUuids(projects: ProjectWithOwner[]): string[] {
-  const uuids = new Set<string>();
-  for (const project of projects) {
-    const uuid = project.spec?.owner?.owningTeam;
-    if (uuid) uuids.add(uuid);
-  }
-  return [...uuids];
-}
-
-function applyTeams(projects: ProjectWithOwner[], teams: Record<string, TeamInfo>) {
-  for (const project of projects) {
-    const uuid = project.spec?.owner?.owningTeam;
-    const team = uuid ? teams[uuid] : undefined;
-    if (team && project.spec?.owner) {
-      project.spec.owner.team = team;
-    }
-  }
-}
-
 /**
  * Wraps a `request` function to enrich GetProject/ListProject responses with team display
  * info, resolved from owner UUIDs via `resolveTeams`. On resolver failure or a UUID missing
@@ -50,4 +31,23 @@ export function withOwnershipEnrichment(
 
     return response;
   };
+}
+
+function collectOwningTeamUuids(projects: ProjectWithOwner[]): string[] {
+  const uuids = new Set<string>();
+  for (const project of projects) {
+    const uuid = project.spec?.owner?.owningTeam;
+    if (uuid) uuids.add(uuid);
+  }
+  return [...uuids];
+}
+
+function applyTeams(projects: ProjectWithOwner[], teams: Record<string, TeamInfo>) {
+  for (const project of projects) {
+    const uuid = project.spec?.owner?.owningTeam;
+    const team = uuid ? teams[uuid] : undefined;
+    if (team && project.spec?.owner) {
+      project.spec.owner.team = team;
+    }
+  }
 }

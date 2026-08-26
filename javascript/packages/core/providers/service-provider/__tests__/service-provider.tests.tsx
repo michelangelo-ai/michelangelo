@@ -1,33 +1,45 @@
-import { withOwnershipEnrichment } from '../with-ownership-enrichment';
+import { renderHook } from '@testing-library/react';
 
-describe('withOwnershipEnrichment', () => {
-  it('passes through unchanged when no resolver is registered', async () => {
+import { ServiceProvider } from '../service-provider';
+import { useServiceProvider } from '../use-service-provider';
+
+function renderRequest(props: Parameters<typeof ServiceProvider>[0]) {
+  const { result } = renderHook(() => useServiceProvider(), {
+    wrapper: ({ children }) => <ServiceProvider {...props}>{children}</ServiceProvider>,
+  });
+  return result.current.request;
+}
+
+describe('ServiceProvider ownership enrichment', () => {
+  it('passes requests through unchanged when no team resolver is registered', async () => {
     const request = vi
       .fn()
       .mockResolvedValue({ project: { spec: { owner: { owningTeam: 'uuid-1' } } } });
-    const wrapped = withOwnershipEnrichment(request);
 
-    const response = await wrapped('GetProject', {});
+    const response = await renderRequest({ children: null, request })('GetProject', {});
 
     expect(response).toEqual({ project: { spec: { owner: { owningTeam: 'uuid-1' } } } });
   });
 
-  it('enriches a GetProject response with the resolved team', async () => {
-    const team = { id: 'team-1', displayName: 'Team One', url: 'https://example.com/team-1' };
+  it('enriches a GetProject response with the team resolved via a registered resolver', async () => {
+    const team = { id: 'uuid-1', displayName: 'Team One', url: 'https://example.com/team-1' };
     const request = vi
       .fn()
       .mockResolvedValue({ project: { spec: { owner: { owningTeam: 'uuid-1' } } } });
     const resolveTeams = vi.fn().mockResolvedValue({ 'uuid-1': team });
-    const wrapped = withOwnershipEnrichment(request, resolveTeams);
 
-    const response = await wrapped('GetProject', {});
+    const response = await renderRequest({
+      children: null,
+      request,
+      resolvers: { team: resolveTeams },
+    })('GetProject', {});
 
     expect(resolveTeams).toHaveBeenCalledWith(['uuid-1']);
     expect(response).toEqual({ project: { spec: { owner: { owningTeam: 'uuid-1', team } } } });
   });
 
-  it('batches all owning team UUIDs in a single resolver call for ListProject', async () => {
-    const team = { id: 'team-1', displayName: 'Team One', url: 'https://example.com/team-1' };
+  it('batches all owning team UUIDs into a single resolver call for ListProject', async () => {
+    const team = { id: 'uuid-1', displayName: 'Team One', url: 'https://example.com/team-1' };
     const request = vi.fn().mockResolvedValue({
       projectList: {
         items: [
@@ -37,9 +49,12 @@ describe('withOwnershipEnrichment', () => {
       },
     });
     const resolveTeams = vi.fn().mockResolvedValue({ 'uuid-1': team, 'uuid-2': team });
-    const wrapped = withOwnershipEnrichment(request, resolveTeams);
 
-    const response = await wrapped('ListProject', {});
+    const response = await renderRequest({
+      children: null,
+      request,
+      resolvers: { team: resolveTeams },
+    })('ListProject', {});
 
     expect(resolveTeams).toHaveBeenCalledTimes(1);
     expect(resolveTeams).toHaveBeenCalledWith(['uuid-1', 'uuid-2']);
@@ -58,21 +73,27 @@ describe('withOwnershipEnrichment', () => {
       .fn()
       .mockResolvedValue({ project: { spec: { owner: { owningTeam: 'uuid-1' } } } });
     const resolveTeams = vi.fn().mockRejectedValue(new Error('lookup failed'));
-    const wrapped = withOwnershipEnrichment(request, resolveTeams);
 
-    const response = await wrapped('GetProject', {});
+    const response = await renderRequest({
+      children: null,
+      request,
+      resolvers: { team: resolveTeams },
+    })('GetProject', {});
 
     expect(response).toEqual({ project: { spec: { owner: { owningTeam: 'uuid-1' } } } });
   });
 
-  it('leaves the raw owningTeam UUID in place when the resolver omits a UUID', async () => {
+  it('leaves the raw owningTeam UUID in place when the resolver omits it from the result', async () => {
     const request = vi
       .fn()
       .mockResolvedValue({ project: { spec: { owner: { owningTeam: 'uuid-1' } } } });
     const resolveTeams = vi.fn().mockResolvedValue({});
-    const wrapped = withOwnershipEnrichment(request, resolveTeams);
 
-    const response = await wrapped('GetProject', {});
+    const response = await renderRequest({
+      children: null,
+      request,
+      resolvers: { team: resolveTeams },
+    })('GetProject', {});
 
     expect(response).toEqual({ project: { spec: { owner: { owningTeam: 'uuid-1' } } } });
   });
@@ -80,9 +101,12 @@ describe('withOwnershipEnrichment', () => {
   it('does not enrich responses for other RPCs', async () => {
     const request = vi.fn().mockResolvedValue({ pipeline: { spec: {} } });
     const resolveTeams = vi.fn();
-    const wrapped = withOwnershipEnrichment(request, resolveTeams);
 
-    const response = await wrapped('GetPipeline', {});
+    const response = await renderRequest({
+      children: null,
+      request,
+      resolvers: { team: resolveTeams },
+    })('GetPipeline', {});
 
     expect(resolveTeams).not.toHaveBeenCalled();
     expect(response).toEqual({ pipeline: { spec: {} } });
