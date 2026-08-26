@@ -18,6 +18,12 @@
 # gazelle:resolve proto k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto @io_k8s_apimachinery//pkg/apis/meta/v1:v1_proto
 # gazelle:resolve proto go k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto @io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library
 
+# gazelle:resolve proto k8s.io/apimachinery/pkg/api/resource/generated.proto @io_k8s_apimachinery//pkg/api/resource:resource_proto
+# gazelle:resolve proto go k8s.io/apimachinery/pkg/api/resource/generated.proto @io_k8s_apimachinery//pkg/api/resource:go_default_library
+
+# gazelle:resolve proto k8s.io/apimachinery/pkg/util/intstr/generated.proto @io_k8s_apimachinery//pkg/util/intstr:intstr_proto
+# gazelle:resolve proto go k8s.io/apimachinery/pkg/util/intstr/generated.proto @io_k8s_apimachinery//pkg/util/intstr:go_default_library
+
 # gazelle:resolve proto gogoproto/gogo.proto @com_github_gogo_protobuf//gogoproto:gogoproto_proto
 # gazelle:resolve proto go gogoproto/gogo.proto @com_github_gogo_protobuf//gogoproto:go_default_library
 
