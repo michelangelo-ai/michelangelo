@@ -1,4 +1,5 @@
 import { create, createRegistry, fromJson, toJson } from '@bufbuild/protobuf';
+import { StringValueSchema } from '@bufbuild/protobuf/wkt';
 
 import { createFetchTransport } from './create-fetch-transport';
 import { TypedStructSchema } from './gen/michelangelo/api/typed_struct_pb';
@@ -14,7 +15,13 @@ import { getRuntimeConfig } from './runtime-config';
 import type { DescService } from '@bufbuild/protobuf';
 import type { FetchTransport, ServiceClient, Services } from './types';
 
-const typeRegistry = createRegistry(TypedStructSchema);
+/**
+ * Types that appear inside `google.protobuf.Any` fields. Encoding or decoding an `Any`
+ * fails outright unless its packed type is registered here.
+ *
+ * `StringValue` is how a `ListOptionsExt` criterion carries a string `matchValue`.
+ */
+const typeRegistry = createRegistry(TypedStructSchema, StringValueSchema);
 
 /**
  * Builds a service client whose methods JSON-encode the request, POST it

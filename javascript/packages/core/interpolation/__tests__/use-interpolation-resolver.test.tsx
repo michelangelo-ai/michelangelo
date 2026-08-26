@@ -342,6 +342,31 @@ describe('useInterpolationResolver', () => {
     });
   });
 
+  describe('Binary payloads', () => {
+    test('passes typed arrays through without rebuilding them as plain objects', () => {
+      const { result } = renderHook(
+        () => useInterpolationResolver(),
+        buildWrapper([getRouterWrapper()])
+      );
+
+      // A packed `google.protobuf.Any` carries its message as bytes. Mapping over those
+      // would yield `{0: …, 1: …}` and the request would fail to encode.
+      const bytes = new Uint8Array([10, 13, 98, 101, 114, 116]);
+      const payload = {
+        matchValue: { typeUrl: 'type.googleapis.com/google.protobuf.StringValue', value: bytes },
+        fieldName: interpolate('${data.column}'),
+      };
+
+      const resolved = result.current<typeof payload>(payload, {
+        row: { column: 'pipeline_name' },
+      });
+
+      expect(resolved.fieldName).toBe('pipeline_name');
+      expect(resolved.matchValue.value).toBeInstanceOf(Uint8Array);
+      expect(Array.from(resolved.matchValue.value)).toEqual([10, 13, 98, 101, 114, 116]);
+    });
+  });
+
   describe('Performance and caching behavior', () => {
     test('caches page and initialValues across multiple resolutions', () => {
       const { result } = renderHook(
