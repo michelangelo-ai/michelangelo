@@ -48,6 +48,38 @@ test('renders project names from API response', async () => {
   expect(screen.getByText('recommendation-engine')).toBeInTheDocument();
 });
 
+test('resolves the Owner column to a linked display name via a registered team resolver', async () => {
+  const mockRequest = createQueryMockRouter({
+    ListProject: {
+      projectList: {
+        items: [
+          {
+            metadata: { name: 'fraud-detection' },
+            spec: { description: 'Detects fraud', owner: { owningTeam: 'ml-team' }, tier: 'P0' },
+          },
+        ],
+      },
+    },
+  });
+  const resolveTeams = vi.fn().mockResolvedValue({
+    'ml-team': { id: 'ml-team', displayName: 'ML Team', url: 'https://example.com/ml-team' },
+  });
+
+  render(
+    <ProjectList />,
+    buildWrapper([
+      getBaseProviderWrapper(),
+      getErrorProviderWrapper(),
+      getIconProviderWrapper(),
+      getRouterWrapper({ location: '/' }),
+      getServiceProviderWrapper({ request: mockRequest, resolvers: { team: resolveTeams } }),
+    ])
+  );
+
+  const link = await screen.findByRole('link', { name: 'ML Team' });
+  expect(link).toHaveAttribute('href', 'https://example.com/ml-team');
+});
+
 test('renders column headers when no projects exist', async () => {
   const mockRequest = createQueryMockRouter({
     ListProject: { projectList: { items: [] } },

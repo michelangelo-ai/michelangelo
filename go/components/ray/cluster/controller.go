@@ -656,6 +656,16 @@ func (r *Reconciler) applyRayClusterStatus(
 				"podErrors", clusterStatus.Ray.PodErrors)
 		}
 
+	case v2pb.RAY_CLUSTER_STATE_SUSPENDED:
+		// Suspension (RayCluster.spec.suspend, e.g. Kueue admission gating) is
+		// non-terminal: pods are intentionally absent until the cluster is
+		// unsuspended, so keep monitoring without touching the Succeeded
+		// condition. Deliberately no terminal-pod-error check here — while
+		// suspended, pod-level signals carry no meaning.
+		logger.Info("cluster is suspended (queued for admission), continuing to monitor",
+			"state", newState,
+			"reason", reasonStr)
+
 	default:
 		logger.Info("cluster in transitional state, continuing to monitor",
 			"state", newState.String(),

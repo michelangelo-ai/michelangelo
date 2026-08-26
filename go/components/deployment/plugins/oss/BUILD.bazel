@@ -9,6 +9,7 @@ go_library(
     importpath = "github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss",
     visibility = ["//visibility:public"],
     deps = [
+        "//go/api:go_default_library",
         "//go/base/blobstore:go_default_library",
         "//go/base/conditions/interfaces:go_default_library",
         "//go/base/pluginmanager:go_default_library",

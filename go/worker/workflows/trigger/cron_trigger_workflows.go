@@ -8,6 +8,7 @@ import (
 
 	"github.com/cadence-workflow/starlark-worker/workflow"
 	pbtypes "github.com/gogo/protobuf/types"
+	mgapi "github.com/michelangelo-ai/michelangelo/go/api"
 	"github.com/michelangelo-ai/michelangelo/go/components/triggerrun"
 	"github.com/michelangelo-ai/michelangelo/go/components/utils"
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/trigger"
@@ -44,8 +45,20 @@ var (
 	// TriggerredByLabel stores the name of the TriggerRun which triggered the pipeline_run
 	TriggerredByLabel = "pipelinerun.michelangelo/triggered-by"
 
-	// EnvironmentLabel stores the environment of the pipeline_run
-	EnvironmentLabel = "pipelinerun.michelangelo/environment"
+	// legacyEnvironmentLabel is the pre-rename mgapi.EnvironmentLabel key.
+	//
+	// Deprecated: transitional fallback only, for in-flight CronTrigger
+	// workflow executions started before the EnvironmentLabel rename
+	// (pipelinerun.michelangelo/environment -> michelangelo/environment).
+	// Not a general external-compatibility shim - no known adopter still
+	// writes this key. Safe to remove once no CronTrigger workflow
+	// execution whose history predates the rename can still be replayed -
+	// no earlier than 2 minor releases after this rename ships, per
+	// CONTRIBUTING.md's Deprecation Policy.
+	// TODO(https://github.com/michelangelo-ai/michelangelo/issues/1939): remove
+	// this constant and both dual-read call sites (schedule_input.go,
+	// cron_trigger_workflows.go) together.
+	legacyEnvironmentLabel = "pipelinerun.michelangelo/environment"
 
 	// SourceTriggerLabel stores the original trigger associated with the pipeline_run.
 	// For resume run, source-trigger is copied over from previous run
@@ -306,10 +319,14 @@ func generatePipelineRunRequest(
 		SourceTriggerLabel:                 triggerRun.Name,
 		PipelineNameLabel:                  triggerRun.Spec.Pipeline.Name,
 	}
-	if env, ok := triggerRun.ObjectMeta.Labels[EnvironmentLabel]; ok {
-		labels[EnvironmentLabel] = env
+	if env, ok := triggerRun.ObjectMeta.Labels[mgapi.EnvironmentLabel]; ok {
+		labels[mgapi.EnvironmentLabel] = env
+	} else if env, ok := triggerRun.ObjectMeta.Labels[legacyEnvironmentLabel]; ok {
+		// Falls back to the pre-rename key so a TriggerRun frozen into
+		// workflow history before the rename still replays deterministically.
+		labels[mgapi.EnvironmentLabel] = env
 	} else {
-		labels[EnvironmentLabel] = "production"
+		labels[mgapi.EnvironmentLabel] = "production"
 	}
 	annotations := map[string]string{
 		"michelangelo.uber.com/pipelinerun.engine": "condition",

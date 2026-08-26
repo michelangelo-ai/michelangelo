@@ -32,6 +32,7 @@ Before you begin, make sure you have the following installed. Install commands b
 | Tool | Install (macOS) | Install (Linux) | Verify |
 |------|-----------------|-----------------|--------|
 | **Docker** | [Docker Desktop](https://docs.docker.com/get-started/get-docker) or [Colima](https://github.com/abiosoft/colima) | [Docker Engine](https://docs.docker.com/engine/install/) | `docker info` |
+| **docker buildx** | `brew install docker-buildx` (see note below) | usually bundled with Docker Engine | `docker buildx version` |
 | **kubectl** | `brew install kubectl` | [official guide](https://kubernetes.io/docs/tasks/tools/#kubectl) | `kubectl version --client` |
 | **k3d** | `brew install k3d` | [official guide](https://k3d.io/#installation) | `k3d --version` |
 | **Helm** | `brew install helm` | [official guide](https://helm.sh/docs/intro/install/) | `helm version` |
@@ -43,27 +44,46 @@ Before you begin, make sure you have the following installed. Install commands b
 
 > **Docker daemon note:** `docker info` (the verify command above) requires the Docker daemon to be running — unlike `docker --version`, which only checks the binary. If `docker info` fails, start Docker Desktop or Colima before continuing.
 
+> **buildx note (Homebrew):** `brew install docker` installs the Docker CLI only — the buildx plugin is a separate formula. Without it, `scripts/kuberay/build-kuberay-images.sh` fails with `unknown flag: --platform`. After installing, link the plugin so the CLI can find it:
+>
+> ```bash
+> mkdir -p ~/.docker/cli-plugins
+> ln -sfn /opt/homebrew/opt/docker-buildx/bin/docker-buildx ~/.docker/cli-plugins/docker-buildx
+> ```
+
+> **Poetry install note (macOS, python.org builds):** if the Poetry install command aborts with `ssl.SSLCertVerificationError: [SSL: CERTIFICATE_VERIFY_FAILED]`, your interpreter has no CA bundle wired into `ssl` — python.org framework builds ship one but do not install it. Run the bundled installer once, then retry:
+>
+> ```bash
+> "/Applications/Python 3.11/Install Certificates.command"
+> ```
+>
+> Alternatively, `brew install poetry` avoids the issue entirely.
+
 ### Colima resource requirements (macOS only)
 
 If you are on macOS and using Colima as your Docker runtime, the default VM resources are too limited for the sandbox. Start Colima with at least:
 
 ```bash
-colima start --cpu 4 --memory 8 --disk 60
+colima start --cpu 6 --memory 12 --disk 100
 ```
 
 | Resource | Minimum | Recommended |
 |----------|---------|-------------|
 | CPU cores | 4 | 6 |
-| Memory (GB) | 8 | 12 |
+| Memory (GiB) | 12 | 12 |
 | Disk (GB) | 60 | 100 |
 
 > **Warning:** Starting Colima with the default settings (2 CPU, 2 GB RAM) will cause pods to crash or fail to schedule. Always pass explicit resource flags.
+
+> **Memory is not a soft limit.** `--memory 8` yields `Total Memory: 7.737GiB` (the flag is GiB), and at that size the `bert_cola` example in `python/examples/` fails: its data-prep task succeeds, then the training task is killed by Ray's memory monitor with `Task was killed due to the node running low on memory ... 7.35GB / 7.74GB (0.950357), which exceeds the memory usage threshold of 0.95`. The same pipeline succeeds unchanged at `--memory 12`. Because the VM needs 12 GiB and macOS needs the rest, a 16 GB host is effectively the floor for running the bundled examples.
+
+> **Apple Silicon:** add `--vz-rosetta` to your `colima start` command. Colima defaults to `rosetta: false`, and some published images run amd64 binaries that fall back to QEMU emulation, where the Go runtime can die with `fatal error: fault` — typically seen as `michelangelo-apiserver` in `CrashLoopBackOff`.
 
 If Colima is already running with insufficient resources, stop it and restart with the new settings:
 
 ```bash
 colima stop
-colima start --cpu 4 --memory 8 --disk 60
+colima start --cpu 6 --memory 12 --disk 100
 ```
 
 ### Configure `host.docker.internal`
@@ -106,6 +126,8 @@ ma sandbox create
 # 4. Verify everything works by running the demo pipeline
 ma sandbox demo pipeline
 ```
+
+> **Note on step 2:** the build script also imports the images it builds into your k3d clusters, but those clusters do not exist until step 3. It will report that cluster `michelangelo-compute-0` was not found and skip it, which is expected. If `history-server` later sits in `ImagePullBackOff`, re-run the script after `ma sandbox create` — the images are already built, so the second run only performs the import.
 
 > **Tip:** If you prefer not to activate the venv, prefix each `ma` command with `poetry run` (e.g., `poetry run ma sandbox create`). If you see `zsh: command not found: ma`, you either skipped step 1 or need to use `poetry run`. See [troubleshooting](#command-not-found-ma) below.
 
@@ -394,7 +416,12 @@ A service is starting but immediately crashing. Check its logs:
 kubectl logs <pod-name>
 ```
 
-If a single service is wedged, the simplest recovery is to delete the pod and let Kubernetes recreate it:
+Before escalating, rule out the two causes that deleting and recreating will **not** fix:
+
+- **Architecture mismatch.** If the log ends in `fatal error: fault` or a `runtime.sigpanic` stack trace, the container is running a binary built for another architecture under emulation. Compare the binary against the node: `kubectl get nodes -o jsonpath='{.items[*].status.nodeInfo.architecture}'`, then extract the image's entrypoint and check it with `file`. On Apple Silicon, start Colima with `--vz-rosetta`.
+- **Memory.** If the pod is OOM-killed (`kubectl describe pod <pod-name>` shows `Reason: OOMKilled`, or Ray reports `Task was killed due to the node running low on memory`), the VM is too small — see [Colima resource requirements](#colima-resource-requirements-macos-only).
+
+If neither applies, the pod may simply be wedged. The simplest recovery is to delete it and let Kubernetes recreate it:
 
 ```bash
 kubectl delete pod <pod-name>
@@ -438,5 +465,5 @@ Add those exports to your `~/.zshrc` to make them permanent.
 ## What's next?
 
 - **Build your first pipeline** -- Follow [Getting Started with ML Pipelines](../user-guides/getting-started/getting-started.md) to create a training workflow (~30 min)
-- **Explore example projects** -- Try [California Housing XGBoost](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/pipelines/california_housing_xgb), [BERT Text Classification](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/bert_cola), or [GPT Fine-tuning](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/gpt_oss_20b_finetune)
+- **Explore example projects** -- Try [California Housing XGBoost (`xgb_train`)](https://github.com/michelangelo-ai/michelangelo-examples/tree/main/src/michelangelo_examples/california_housing/pipelines/xgb_train) or [California Housing PyTorch Lightning (`pytorch_train`)](https://github.com/michelangelo-ai/michelangelo-examples/tree/main/src/michelangelo_examples/california_housing/pipelines/pytorch_train) in [michelangelo-examples](https://github.com/michelangelo-ai/michelangelo-examples), [BERT Text Classification](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/bert_cola), or [GPT Fine-tuning](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/gpt_oss_20b_finetune)
 - **Learn the CLI** -- See the [CLI Reference](../user-guides/reference/cli.md) for managing pipelines and projects

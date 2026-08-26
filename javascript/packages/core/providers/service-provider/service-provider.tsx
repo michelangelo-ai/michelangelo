@@ -1,4 +1,7 @@
+import { useMemo } from 'react';
+
 import { ServiceContext } from './service-context';
+import { withOwnershipEnrichment } from './with-ownership-enrichment';
 
 import type { ServiceContextType } from './types';
 
@@ -19,7 +22,13 @@ import type { ServiceContextType } from './types';
  */
 export const ServiceProvider = ({
   children,
-  ...serviceContext
+  request,
+  resolvers,
 }: { children: React.ReactNode } & ServiceContextType) => {
-  return <ServiceContext.Provider value={serviceContext}>{children}</ServiceContext.Provider>;
+  const value = useMemo(
+    () => ({ request: withOwnershipEnrichment(request, resolvers?.team), resolvers }),
+    [request, resolvers]
+  );
+
+  return <ServiceContext.Provider value={value}>{children}</ServiceContext.Provider>;
 };

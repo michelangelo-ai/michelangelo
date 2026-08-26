@@ -412,6 +412,97 @@ class RenderHelpersTest(TestCase):
 
         self.assertIn("name: x", buf.getvalue())
 
+    @patch("michelangelo.cli.mactl.crd.MessageToDict")
+    def test_render_single_item_yaml_handles_ordereddict(self, mock_to_dict):
+        """OrderedDict from unpacked google.protobuf.Any dumps without error.
+
+        MessageToDict emits OrderedDict when it walks an Any field so `@type`
+        sorts first. yaml.SafeDumper has no representer for OrderedDict by
+        default, so this would raise RepresenterError before the fix.
+        """
+        from collections import OrderedDict
+
+        from michelangelo.cli.mactl.crd import _render_single_item
+
+        mock_to_dict.return_value = {
+            "spec": {
+                "manifest": {
+                    "content": OrderedDict(
+                        [
+                            ("@type", "type.googleapis.com/foo.Bar"),
+                            ("value", {"nested": OrderedDict([("k", "v")])}),
+                        ]
+                    ),
+                }
+            }
+        }
+
+        import io
+        from contextlib import redirect_stdout
+
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            _render_single_item(Mock(), "yaml")
+
+        out = buf.getvalue()
+        self.assertIn("'@type': type.googleapis.com/foo.Bar", out)
+        self.assertIn("k: v", out)
+
+    @patch("michelangelo.cli.mactl.crd.print_list_formatted")
+    def test_render_single_item_table_uses_list_formatter(self, mock_print):
+        """Default (table) output delegates to print_list_formatted.
+
+        Previously printed raw proto text_format, which rendered
+        google.protobuf.Any payloads (e.g. spec.manifest.content) as escaped
+        byte strings. New behavior matches kubectl's `get <res> <name>`:
+        the same one-row table as `list`.
+        """
+        from michelangelo.cli.mactl.crd import _render_single_item
+
+        # Non-wrapper message: single field but scalar-typed → no unwrap.
+        msg = self._mock_item("ns", "x")
+        msg.DESCRIPTOR = Mock()
+        msg.DESCRIPTOR.fields = []
+        _render_single_item(msg, "table")
+
+        mock_print.assert_called_once_with([msg], extra_columns=())
+
+    @patch("michelangelo.cli.mactl.crd.print_list_formatted")
+    def test_render_single_item_table_forwards_extra_columns(self, mock_print):
+        """extra_columns from the CRD passes through to the table formatter."""
+        from michelangelo.cli.mactl.crd import _render_single_item
+
+        extras = [{"column_name": "OWNER", "retrieve_func": lambda m: "u"}]
+        msg = self._mock_item("ns", "x")
+        msg.DESCRIPTOR = Mock()
+        msg.DESCRIPTOR.fields = []
+        _render_single_item(msg, "table", extra_columns=extras)
+
+        mock_print.assert_called_once_with([msg], extra_columns=extras)
+
+    @patch("michelangelo.cli.mactl.crd.print_list_formatted")
+    def test_render_single_item_table_unwraps_wrapper_response(self, mock_print):
+        """GetXxxResponse (one message-typed field) is unwrapped for the table.
+
+        `_get` returns e.g. `GetPipelineResponse` with a single `pipeline`
+        field. The table formatter expects the resource itself so it can
+        read `metadata.namespace`.
+        """
+        from michelangelo.cli.mactl.crd import _render_single_item
+
+        inner = self._mock_item("ns", "x")
+        wrapper = Mock()
+        wrapper.DESCRIPTOR = Mock()
+        field = Mock()
+        field.name = "pipeline"
+        field.message_type = Mock()  # truthy → treated as message field
+        wrapper.DESCRIPTOR.fields = [field]
+        wrapper.pipeline = inner
+
+        _render_single_item(wrapper, "table")
+
+        mock_print.assert_called_once_with([inner], extra_columns=())
+
 
 class DeleteFuncImplTest(TestCase):
     """Test cases for delete_func_impl function."""
@@ -443,7 +534,8 @@ class DeleteFuncImplTest(TestCase):
 class GetFuncImplTest(TestCase):
     """Test cases for get_func_impl function."""
 
-    def test_get_func_impl_with_name_calls_get(self):
+    @patch("michelangelo.cli.mactl.crd._render_single_item")
+    def test_get_func_impl_with_name_calls_get(self, _mock_render):
         """Test get_func_impl with name calls _self._get and prints result."""
         mock_crd = Mock()
         mock_response = Mock()
@@ -464,7 +556,8 @@ class GetFuncImplTest(TestCase):
         mock_crd._get.assert_called_once_with(namespace="ns", name="proj")
         self.assertEqual(result, mock_response)
 
-    def test_get_func_impl_with_name_flag_calls_get(self):
+    @patch("michelangelo.cli.mactl.crd._render_single_item")
+    def test_get_func_impl_with_name_flag_calls_get(self, _mock_render):
         """`--name X` (dest=name_flag) routes through _get just like positional."""
         mock_crd = Mock()
         mock_response = Mock()
@@ -492,7 +585,8 @@ class GetFuncImplTest(TestCase):
         mock_crd._get.assert_called_once_with(namespace="ns", name="proj")
         self.assertEqual(result, mock_response)
 
-    def test_get_func_impl_positional_overrides_name_flag(self):
+    @patch("michelangelo.cli.mactl.crd._render_single_item")
+    def test_get_func_impl_positional_overrides_name_flag(self, _mock_render):
         """Positional `name` wins when both are supplied."""
         mock_crd = Mock()
         mock_crd._get.return_value = Mock()
@@ -1465,10 +1559,11 @@ class GenerateGetTest(TestCase):
         self.assertTrue(hasattr(crd, "_get"))
         self.assertTrue(callable(crd._get))
 
+    @patch("michelangelo.cli.mactl.crd._render_single_item")
     @patch("michelangelo.cli.mactl.crd.crd_method_call_kwargs")
     @patch.object(CRD, "_extract_method_info")
     def test_generate_get_execution(
-        self, mock_extract_method_info, mock_crd_method_call_kwargs
+        self, mock_extract_method_info, mock_crd_method_call_kwargs, _mock_render
     ):
         """Test the generated get method can be executed with correct arguments."""
         mock_channel = Mock()
@@ -1486,10 +1581,11 @@ class GenerateGetTest(TestCase):
         self.assertEqual(call_args.kwargs["namespace"], "test-ns")
         self.assertEqual(call_args.kwargs["name"], "test-name")
 
+    @patch("michelangelo.cli.mactl.crd._render_single_item")
     @patch("michelangelo.cli.mactl.crd.crd_method_call_kwargs")
     @patch.object(CRD, "_extract_method_info")
     def test_generate_get_execution_via_name_flag(
-        self, mock_extract_method_info, mock_crd_method_call_kwargs
+        self, mock_extract_method_info, mock_crd_method_call_kwargs, _mock_render
     ):
         """Generated `get` resolves the --name flag (dest=name_flag) like positional.
 

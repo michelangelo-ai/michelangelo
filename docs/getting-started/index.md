@@ -2,6 +2,8 @@
 
 Welcome to Michelangelo AI! Whether you're evaluating the platform or ready to build your first ML pipeline, you're in the right place.
 
+Want a single ordered path instead of a menu? The **[Learning Paths](./learning-paths.md)** page sequences the docs into three role-based tracks — ML Engineer, Operator, and Contributor — each with time estimates and a clear endpoint.
+
 ## Choose your path
 
 ### I want to understand what Michelangelo AI does
@@ -18,7 +20,7 @@ Ready to get hands-on? Follow these guides in order. You'll have a working local
 
 1. **[Sandbox Setup](./sandbox-setup.md)** — Set up a local Michelangelo AI cluster with all services running (~20 min)
 2. **[Getting Started with Pipelines](../user-guides/getting-started/getting-started.md)** — Build and run your first ML pipeline (~30 min)
-3. **[Browse Examples](../user-guides/examples/index.md)** — 9 end-to-end workflows: XGBoost, BERT, GPT fine-tuning, batch inference, and more
+3. **[Browse Examples](../user-guides/examples/index.md)** — 10 end-to-end workflows: XGBoost, BERT, GPT fine-tuning, batch inference, and more
 
 ### Reference
 

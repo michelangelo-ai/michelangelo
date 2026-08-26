@@ -48,4 +48,4 @@ New to Michelangelo AI? Follow this path:
 
 ## Examples
 
-Browse the full **[Examples Gallery](./examples/index.md)** — 9 end-to-end workflows covering training, inference, recommendation systems, and model packaging, organized by use case with difficulty levels.
+Browse the full **[Examples Gallery](./examples/index.md)** — 10 end-to-end workflows covering training, inference, recommendation systems, and model packaging, organized by use case with difficulty levels.

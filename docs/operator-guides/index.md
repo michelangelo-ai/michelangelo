@@ -76,3 +76,4 @@ Michelangelo AI is designed to run alongside existing ML infrastructure. The gui
 |-------|-------------|
 | [API Framework](api-framework.md) | Architecture overview of the Michelangelo AI API and control plane |
 | [SQL Key Concepts and Terms](sql-key-concepts-and-terms.md) | Metadata schema, table naming, indexed fields, and SQL query patterns |
+| [gRPC API Reference](../api-reference/grpc/conventions.md) | Full RPC and field reference for all 15 resource services, generated from `proto/api/v2/` |

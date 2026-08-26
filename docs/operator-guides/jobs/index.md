@@ -90,4 +90,9 @@ Job submission and lifecycle are backed by two gRPC services defined in `proto/a
 | `RayJobService` | `ray_job_svc.proto` | Submit, track, and cancel Ray training or batch inference jobs |
 | `SparkJobService` | `spark_job_svc.proto` | Submit, track, and cancel Spark ETL and batch processing jobs |
 
-Both services follow the standard CRUD pattern (Create, Get, List, Update, Delete) and also expose `DeleteXxxCollection` for bulk deletion. See the proto definitions for request/response schema and status fields.
+Both services follow the standard CRUD pattern (Create, Get, List, Update, Delete) and also expose `DeleteXxxCollection` for bulk deletion. See the [full API reference](../../api-reference/grpc/jobs.md) for complete request/response schema and status fields.
+
+## Next Steps
+
+* [Full gRPC API Reference](../../api-reference/grpc/jobs.md): Complete RPC and field reference for RayJobService and SparkJobService
+* [Run a Pipeline on a Compute Cluster](./run-uniflow-pipeline-on-compute-cluster.md): Submit and monitor a Uniflow pipeline on a registered cluster

@@ -48,6 +48,9 @@ cd michelangelo/python
 poetry install
 source .venv/bin/activate
 
+# Build the local-only images the sandbox needs
+cd .. && bash scripts/kuberay/build-kuberay-images.sh
+
 # Spin up a local sandbox cluster
 ma sandbox create
 
@@ -69,6 +72,8 @@ def train(learning_rate: float = 0.01) -> str:
 def my_pipeline(learning_rate: float = 0.01):
     model = train(learning_rate=learning_rate)
 ```
+
+See the [Sandbox Setup](https://michelangelo-ai.org/docs/getting-started/sandbox-setup/) guide for prerequisites (including `docker buildx`) and platform-specific notes before running the above.
 
 For a full walkthrough, see the [Getting Started with ML Pipelines](https://michelangelo-ai.org/docs/user-guides/getting-started/getting-started) guide.
 

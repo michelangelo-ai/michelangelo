@@ -50,6 +50,21 @@ const (
 	// UpdateTimestampLabel is used to record the last time the object is updated.
 	// The time is stored in Unix microseconds.
 	UpdateTimestampLabel = "michelangelo/UpdateTimestamp"
+
+	// EnvironmentLabel records the environment (e.g. "staging", "production")
+	// a PipelineRun or Model belongs to. This is the single canonical
+	// definition, shared by go/worker's trigger-fire path, go/components/triggerrun,
+	// go/components/pipelinerun, and go/components/model/apihook.
+	EnvironmentLabel = "michelangelo/environment"
+
+	// UnspecifiedEnvironment is the write-time sentinel written to
+	// EnvironmentLabel by create/propagation logic when the operator has
+	// configured no default value. It is distinct from the pre-existing,
+	// read-time "unknown" fallback used elsewhere (e.g.
+	// go/components/pipelinerun/controller.go's getEnvironment) for objects
+	// whose label is genuinely absent when read — that fallback means "could
+	// not be determined"; this one means "no default was configured."
+	UnspecifiedEnvironment = "unspecified"
 )
 
 // DefaultContextTimeout defines the default timeout for the context

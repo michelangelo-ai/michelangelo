@@ -2,6 +2,8 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { CellType } from '#core/components/cell/constants';
+import { buildWrapper } from '#core/test/wrappers/build-wrapper';
+import { getRouterWrapper } from '#core/test/wrappers/get-router-wrapper';
 import { TaskBodyMetadata } from '../task-body-metadata';
 
 describe('TaskBodyMetadata', () => {
@@ -22,7 +24,8 @@ describe('TaskBodyMetadata', () => {
           { id: 'duration', label: 'Duration', type: CellType.TEXT, accessor: 'duration' },
           { id: 'startTime', label: 'Started', type: CellType.DATE, accessor: 'startTime' },
         ]}
-      />
+      />,
+      buildWrapper([getRouterWrapper()])
     );
 
     const accordionButton = screen.getByRole('button', { name: /Task Metadata/ });
@@ -46,7 +49,8 @@ describe('TaskBodyMetadata', () => {
           { id: 'duration', label: 'Duration', type: CellType.TEXT, accessor: 'duration' },
           { id: 'startTime', label: 'Started', type: CellType.DATE, accessor: 'startTime' },
         ]}
-      />
+      />,
+      buildWrapper([getRouterWrapper()])
     );
 
     const accordionButton = screen.getByRole('button', { name: /Empty Metadata/ });
@@ -82,7 +86,8 @@ describe('TaskBodyMetadata', () => {
           { id: 'duration', label: 'Duration', type: CellType.TEXT, accessor: 'duration' },
           { id: 'startTime', label: 'Started', type: CellType.DATE, accessor: 'startTime' },
         ]}
-      />
+      />,
+      buildWrapper([getRouterWrapper()])
     );
 
     const accordionButton = screen.getByRole('button', { name: /Partial Metadata/ });
@@ -113,7 +118,10 @@ describe('TaskBodyMetadata', () => {
 
     const stateData = { state: 'SUCCESS' };
 
-    render(<TaskBodyMetadata label="State Metadata" value={stateData} cells={cellsWithStates} />);
+    render(
+      <TaskBodyMetadata label="State Metadata" value={stateData} cells={cellsWithStates} />,
+      buildWrapper([getRouterWrapper()])
+    );
 
     const accordionButton = screen.getByRole('button', { name: /State Metadata/ });
     await user.click(accordionButton);

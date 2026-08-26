@@ -1,0 +1,32 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    srcs = ["apihook.go"],
+    importpath = "github.com/michelangelo-ai/michelangelo/go/components/model/apihook",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go/api:go_default_library",
+        "//go/api/utils:go_default_library",
+        "//proto/api/v2:go_default_library",
+        "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
+        "@org_uber_go_zap//:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["apihook_test.go"],
+    embed = [":go_default_library"],
+    deps = [
+        "//go/api/apimocks:go_default_library",
+        "//proto/api:go_default_library",
+        "//proto/api/v2:go_default_library",
+        "@com_github_golang_mock//gomock:go_default_library",
+        "@com_github_stretchr_testify//assert:go_default_library",
+        "@io_k8s_apimachinery//pkg/api/errors:go_default_library",
+        "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
+        "@io_k8s_apimachinery//pkg/runtime/schema:go_default_library",
+        "@org_uber_go_zap//:go_default_library",
+    ],
+)

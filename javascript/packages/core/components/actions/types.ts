@@ -117,6 +117,21 @@ export type CustomModalConfig<T> = {
   component: ComponentType<ActionComponentProps<T>>;
 };
 
+/**
+ * A page-level action rendered in a phase entity's header (e.g. "Create inference server").
+ * Unlike {@link ActionConfig}, it has no associated record — it opens a custom component
+ * that owns its own submit flow, same as {@link CustomModalConfig}.
+ */
+export type CreateActionConfig = {
+  display: ActionTriggerDisplay;
+  component: ComponentType<CreateActionComponentProps>;
+};
+
+/** Props passed to a component rendered by {@link CreateActionConfig}. */
+export type CreateActionComponentProps = {
+  onClose: () => void;
+};
+
 export type BannerConfig = {
   content: ReactNode;
   kind?: BannerProps['kind'];
@@ -163,7 +178,7 @@ export type ResolvedActionItem = {
  *
  * @note icon is a string reference to an icon in the icon provider
  */
-type ActionTriggerDisplay = {
+export type ActionTriggerDisplay = {
   label: string;
   icon?: string;
 };

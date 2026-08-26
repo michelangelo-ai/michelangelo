@@ -34,13 +34,13 @@ jobs:
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Checkout Repository
         uses: actions/checkout@v4  # https://github.com/actions/checkout
 
       - name: Cache Bazel Outputs
-        uses: actions/cache@v4  # https://github.com/actions/cache
+        uses: actions/cache@v6  # https://github.com/actions/cache
         with:
           path: ~/.cache/bazel
           key: bazel-release-${{ runner.os }}-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock') }}

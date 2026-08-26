@@ -7,6 +7,8 @@ sidebar_label: "Roadmap"
 
 Michelangelo AI is under active development. This page captures the current state of the platform and the direction we're headed. Things will shift as priorities evolve and the community gives feedback.
 
+This page looks forward; for what has already shipped in each release, see the **[Changelog](../about/changelog.md)**.
+
 ## Release Milestones
 
 The OSS release is staged so each version makes a specific, scoped promise rather than trying to be everything at once.

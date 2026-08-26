@@ -3,6 +3,7 @@ import { create } from '@bufbuild/protobuf';
 import { UserInfoSchema } from './gen/michelangelo/api/v2/user_pb';
 import { getServices } from './services';
 
+import type { Deployment } from './gen/michelangelo/api/v2/deployment_pb';
 import type { PipelineRun } from './gen/michelangelo/api/v2/pipeline_run_pb';
 import type { TriggerRun } from './gen/michelangelo/api/v2/trigger_run_pb';
 import type { ExtractUnaryRpc } from './types';
@@ -36,6 +37,13 @@ async function createHandlers() {
   return {
     ListDeployment: unary(services.DeploymentService.listDeployment),
     GetDeployment: unary(services.DeploymentService.getDeployment),
+    CreateDeployment: (record: Deployment, headers?: Record<string, string>) => {
+      const actorName = headers?.['x-user-name'];
+      if (actorName && record.spec) {
+        record.spec.owner = create(UserInfoSchema, { name: actorName });
+      }
+      return services.DeploymentService.createDeployment({ deployment: record }, headers);
+    },
     ListInferenceServer: unary(services.InferenceServerService.listInferenceServer),
     GetInferenceServer: unary(services.InferenceServerService.getInferenceServer),
     ListProject: unary(services.ProjectService.listProject),
@@ -59,6 +67,8 @@ async function createHandlers() {
     UpdatePipelineRun: (record: PipelineRun, headers?: Record<string, string>) =>
       services.PipelineRunService.updatePipelineRun({ pipelineRun: record }, headers),
     ListModel: unary(services.ModelService.listModel),
+    GetModel: unary(services.ModelService.getModel),
+    ListModelFamily: unary(services.ModelFamilyService.listModelFamily),
   } as const;
 }
 

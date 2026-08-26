@@ -156,10 +156,28 @@ func (m Mapper) mapRayCluster(rayCluster *v2pb.RayCluster) (runtime.Object, erro
 	return rayV1Cluster, nil
 }
 
+// nonNilRayStartParams returns params unchanged when non-nil, otherwise an
+// empty (non-nil) map. KubeRay's HeadGroupSpec/WorkerGroupSpec.RayStartParams
+// field has no `omitempty`, so a nil map serializes to JSON `null` — and the
+// RayCluster CRD rejects `null` ("rayStartParams in body must be of type
+// object"). Michelangelo's v2 API omits rayStartParams by default (and proto3
+// drops empty maps on the wire, so callers cannot force `{}` from the request),
+// which leaves this field nil here. The bug stays latent until an admission
+// webhook re-serializes the RayCluster on create — notably Kueue's mutating
+// webhook, which decodes the object and marshals it whole, turning the omitted
+// map into an explicit `null` that the CRD then rejects. Emitting `{}` instead
+// is always valid and is the equivalent of "no extra ray start params".
+func nonNilRayStartParams(params map[string]string) map[string]string {
+	if params == nil {
+		return map[string]string{}
+	}
+	return params
+}
+
 func getHeadGroupSpec(head *v2pb.RayHeadSpec) rayv1.HeadGroupSpec {
 	return rayv1.HeadGroupSpec{
 		ServiceType:    corev1.ServiceType(head.GetServiceType()),
-		RayStartParams: head.GetRayStartParams(),
+		RayStartParams: nonNilRayStartParams(head.GetRayStartParams()),
 		Template:       k8sptr.Deref(head.GetPod(), corev1.PodTemplateSpec{}),
 	}
 }
@@ -172,7 +190,7 @@ func getWorkerGroupSpecs(clusterName string, workers []*v2pb.RayWorkerSpec) []ra
 			Replicas:       &workerGroup.MinInstances,
 			MinReplicas:    &workerGroup.MinInstances,
 			MaxReplicas:    &workerGroup.MaxInstances,
-			RayStartParams: workerGroup.RayStartParams,
+			RayStartParams: nonNilRayStartParams(workerGroup.GetRayStartParams()),
 			Template:       k8sptr.Deref(workerGroup.Pod, corev1.PodTemplateSpec{}),
 		}
 		workerGroupSpecsJSON[i] = wg
@@ -426,13 +444,43 @@ func getRayClusterStateFromKubeRayState(kubeRayState rayv1.ClusterState) v2pb.Ra
 	case "unhealthy":
 		return v2pb.RAY_CLUSTER_STATE_UNHEALTHY
 	case rayv1.Suspended:
-		return v2pb.RAY_CLUSTER_STATE_UNKNOWN
+		return v2pb.RAY_CLUSTER_STATE_SUSPENDED
 	case "": // Empty state means unknown
 		return v2pb.RAY_CLUSTER_STATE_UNKNOWN
 	default:
 		// For any future states we don't recognize, default to unknown
 		return v2pb.RAY_CLUSTER_STATE_UNKNOWN
 	}
+}
+
+// KubeRay writes these condition types while suspending/resuming a cluster
+// (RayCluster.spec.suspend). The vendored ray-operator API (v1.2.2) predates
+// their constants, so they are string-matched here.
+const (
+	rayClusterSuspendingConditionType = "RayClusterSuspending"
+	rayClusterSuspendedConditionType  = "RayClusterSuspended"
+)
+
+// isSuspended reports whether the cluster is suspended or being suspended
+// (spec.suspend=true, e.g. set by a queueing/admission controller such as
+// Kueue). Spec intent, reported state, and conditions are all checked because
+// status.state lags spec.suspend when a cluster is suspended at creation.
+func isSuspended(rc *rayv1.RayCluster) bool {
+	if rc.Spec.Suspend != nil && *rc.Spec.Suspend {
+		return true
+	}
+	if rc.Status.State == rayv1.Suspended {
+		return true
+	}
+	for _, cond := range rc.Status.Conditions {
+		if cond.Status != metav1.ConditionTrue {
+			continue
+		}
+		if cond.Type == rayClusterSuspendingConditionType || cond.Type == rayClusterSuspendedConditionType {
+			return true
+		}
+	}
+	return false
 }
 
 func isFailureCondition(cond metav1.Condition) bool {
@@ -448,9 +496,15 @@ func isFailureCondition(cond metav1.Condition) bool {
 	}
 }
 
-func extractPodErrorsFromConditions(conditions []metav1.Condition) []*v2pb.PodErrors {
+func extractPodErrorsFromConditions(rc *rayv1.RayCluster) []*v2pb.PodErrors {
+	// Pods are intentionally absent while a cluster is suspended, so pod-level
+	// failure conditions (HeadPodReady=False, ReplicaFailure) are not errors in
+	// that window. Once unsuspended they count again.
+	if isSuspended(rc) {
+		return nil
+	}
 	var podErrors []*v2pb.PodErrors
-	for _, cond := range conditions {
+	for _, cond := range rc.Status.Conditions {
 		if !isFailureCondition(cond) {
 			continue
 		}
@@ -463,14 +517,22 @@ func extractPodErrorsFromConditions(conditions []metav1.Condition) []*v2pb.PodEr
 	return podErrors
 }
 
-func deriveReasonFromConditions(conditions []metav1.Condition) string {
-	for _, cond := range conditions {
+func deriveReasonFromConditions(rc *rayv1.RayCluster) string {
+	if isSuspended(rc) {
+		for _, cond := range rc.Status.Conditions {
+			if cond.Type == rayClusterSuspendingConditionType && cond.Status == metav1.ConditionTrue {
+				return "ClusterSuspending"
+			}
+		}
+		return "ClusterSuspended"
+	}
+	for _, cond := range rc.Status.Conditions {
 		if rayv1.RayClusterConditionType(cond.Type) == rayv1.RayClusterReplicaFailure &&
 			cond.Status == metav1.ConditionTrue && cond.Reason != "" {
 			return cond.Reason
 		}
 	}
-	for _, cond := range conditions {
+	for _, cond := range rc.Status.Conditions {
 		if rayv1.RayClusterConditionType(cond.Type) == rayv1.HeadPodReady &&
 			cond.Status == metav1.ConditionFalse && cond.Reason != "" &&
 			cond.Reason != rayv1.RayClusterPodsProvisioning {
@@ -487,6 +549,13 @@ func convertRayV1ClusterStatusToV2(rayV1Cluster *rayv1.RayCluster) *v2pb.RayClus
 	// Map state using the conversion function
 	status.State = getRayClusterStateFromKubeRayState(rayV1Cluster.Status.State)
 
+	// Suspension is visible in spec/conditions before status.state catches up
+	// (e.g. a cluster suspended by its admission webhook at creation still has
+	// state ""); report SUSPENDED for the whole window.
+	if isSuspended(rayV1Cluster) {
+		status.State = v2pb.RAY_CLUSTER_STATE_SUSPENDED
+	}
+
 	// Map last update time
 	if rayV1Cluster.Status.LastUpdateTime != nil && !rayV1Cluster.Status.LastUpdateTime.IsZero() {
 		status.LastUpdateTime = rayV1Cluster.Status.LastUpdateTime
@@ -500,7 +569,7 @@ func convertRayV1ClusterStatusToV2(rayV1Cluster *rayv1.RayCluster) *v2pb.RayClus
 	}
 
 	if len(rayV1Cluster.Status.Conditions) > 0 {
-		status.PodErrors = extractPodErrorsFromConditions(rayV1Cluster.Status.Conditions)
+		status.PodErrors = extractPodErrorsFromConditions(rayV1Cluster)
 	}
 
 	return status

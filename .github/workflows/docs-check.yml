@@ -7,6 +7,7 @@ on:
     paths:
       - 'docs/**'
       - 'website/**'
+      - 'CHANGELOG.md'
 
 permissions:
   contents: read
@@ -28,6 +29,9 @@ jobs:
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
+
+      - name: Sync changelog page
+        run: ./sync-changelog.sh
 
       - name: Check for relative links without .md extension
         working-directory: .

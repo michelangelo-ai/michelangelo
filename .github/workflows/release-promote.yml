@@ -113,15 +113,15 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Comment on tracking issue
+      - name: Comment on and close tracking issue
         run: |
           ISSUE_NUMBER=$(gh issue list --search "in:title \"Release v${{ steps.vars.outputs.version }}\"" --state open --json number,title \
             --jq '.[] | select(.title == "Release v${{ steps.vars.outputs.version }}") | .number' | head -1)
           if [ -z "$ISSUE_NUMBER" ]; then
             echo "WARNING: no open tracking issue found for Release v${{ steps.vars.outputs.version }}"
           else
-            gh issue comment "$ISSUE_NUMBER" \
-              --body "Promoted to final: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ steps.vars.outputs.tag }}. Artifact publish run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            gh issue close "$ISSUE_NUMBER" \
+              --comment "Promoted to final: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ steps.vars.outputs.tag }}. Artifact publish run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

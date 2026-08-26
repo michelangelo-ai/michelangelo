@@ -150,11 +150,18 @@ apiserver:
     qps: 300
     burst: 600
 
-  # Apiserver-specific config knobs. 
+  # Apiserver-specific config knobs.
   metadataStorage:
     enable: false
   crdSync:
     enableUpdate: true
+
+  # Default values applied when creating PipelineRun/Model objects that don't
+  # set them explicitly. Empty (the default) means the apiserver falls back to
+  # its own write-time sentinel ("unspecified") rather than a guessed real
+  # environment — see helm/michelangelo/README.md#values-reference.
+  pipelineRunDefaults:
+    environment: ""
 
   # Resource requests and limits. Override per-service if you need different
   # allocations than the global `resources` block below.
@@ -351,6 +358,24 @@ notification:
 
   # From address for outgoing email notifications.
   senderEmail: ""
+
+# -----------------------------------------------------------------------------
+# inferenceServer — settings the InferenceServer controller needs to publish
+# and route traffic to inference servers.
+# -----------------------------------------------------------------------------
+inferenceServer:
+  gateway:
+    # name is the Gateway resource that HTTPRoutes attach to via parentRefs.
+    name: ma-gateway
+
+    # Istio's Gateway controller materializes a Service named '<gateway>-istio'
+    # for each Gateway resource. The endpoint provider reads this Service's
+    # NodePort and a node InternalIP to publish per-cluster EndpointSlices.
+    # Leaving serviceName empty makes endpoint publishing fail with
+    # "resource name may not be empty".
+    serviceName: ma-gateway-istio
+    serviceNamespace: default
+    portName: http
 
 # -----------------------------------------------------------------------------
 # controllermgr — Kubernetes controller manager for Michelangelo CRDs.

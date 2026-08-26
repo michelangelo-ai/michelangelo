@@ -1,0 +1,13 @@
+apiVersion: michelangelo.api/v2
+kind: Deployment
+metadata:
+  name: deployment-multicluster-example
+  namespace: default
+spec:
+  desiredRevision:
+    name: bert-cola-37
+    namespace: default
+  inferenceServer:
+    name: inference-server-multicluster
+  strategy:
+    rolling: {}

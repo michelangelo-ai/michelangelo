@@ -22,7 +22,7 @@ export function PhaseCard(props: PhaseConfig & { projectId: string }) {
     <Box
       overrides={{
         BoxContainer: {
-          style: { minHeight: '220px' },
+          style: { backgroundColor: theme.colors.backgroundAccentLight, minHeight: '220px' },
         },
       }}
       title={
@@ -30,7 +30,7 @@ export function PhaseCard(props: PhaseConfig & { projectId: string }) {
           <Icon name={icon} size={theme.sizing.scale500} />
           {name}
           {isComingSoon && (
-            <Tag color={TAG_COLOR.blue} size={TAG_SIZE.xSmall} closeable={false}>
+            <Tag color={TAG_COLOR.gray} size={TAG_SIZE.xSmall} closeable={false}>
               Coming soon
             </Tag>
           )}
@@ -95,9 +95,17 @@ export function PhaseCard(props: PhaseConfig & { projectId: string }) {
             navigate(`/${projectId}/${id}/${firstActiveEntity.id}`);
           }}
           shape={SHAPE.circle}
-          overrides={{ BaseButton: { style: { marginTop: 'auto' } } }}
+          overrides={{
+            BaseButton: {
+              style: {
+                marginTop: 'auto',
+                backgroundColor: theme.colors.accent,
+                ':hover': { backgroundColor: theme.colors.accent600 },
+              },
+            },
+          }}
         >
-          <Icon name="chevronRight" size={theme.sizing.scale700} />
+          <Icon name="chevronRight" size={theme.sizing.scale700} color={theme.colors.white} />
         </Button>
       )}
     </Box>
