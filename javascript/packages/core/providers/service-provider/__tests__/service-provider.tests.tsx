@@ -38,8 +38,9 @@ describe('ServiceProvider ownership enrichment', () => {
     expect(response).toEqual({ project: { spec: { owner: { owningTeam: 'uuid-1', team } } } });
   });
 
-  it('batches all owning team UUIDs into a single resolver call for ListProject', async () => {
-    const team = { id: 'uuid-1', displayName: 'Team One', url: 'https://example.com/team-1' };
+  it('batches all owning team UUIDs into a single resolver call for ListProject and assigns each project its own team', async () => {
+    const teamOne = { id: 'uuid-1', displayName: 'Team One', url: 'https://example.com/team-1' };
+    const teamTwo = { id: 'uuid-2', displayName: 'Team Two', url: 'https://example.com/team-2' };
     const request = vi.fn().mockResolvedValue({
       projectList: {
         items: [
@@ -48,7 +49,7 @@ describe('ServiceProvider ownership enrichment', () => {
         ],
       },
     });
-    const resolveTeams = vi.fn().mockResolvedValue({ 'uuid-1': team, 'uuid-2': team });
+    const resolveTeams = vi.fn().mockResolvedValue({ 'uuid-1': teamOne, 'uuid-2': teamTwo });
 
     const response = await renderRequest({
       children: null,
@@ -61,8 +62,8 @@ describe('ServiceProvider ownership enrichment', () => {
     expect(response).toEqual({
       projectList: {
         items: [
-          { spec: { owner: { owningTeam: 'uuid-1', team } } },
-          { spec: { owner: { owningTeam: 'uuid-2', team } } },
+          { spec: { owner: { owningTeam: 'uuid-1', team: teamOne } } },
+          { spec: { owner: { owningTeam: 'uuid-2', team: teamTwo } } },
         ],
       },
     });
