@@ -500,21 +500,10 @@ class ModelPusherPlugin(PusherPluginBase):
     def _ensure_local(self, path: str, tmp_root: str, name: str) -> str:
         """Return a local filesystem path for ``path``.
 
-        ``AssembledModel.raw_model.path``/``deployable_model.path`` may
-        already be a local path (e.g. the ``ModelPusherPlugin`` docstring's
-        own toy example) or a URI from a prior ``upload()`` on some other
-        ``StorageBackend`` instance (e.g. ``torch_assembler()`` uploads its
-        packaged artifacts before handing off an ``AssembledModel``, so
-        ``self._storage_backend.upload()`` -- which requires an actual local
-        path -- can't be called on it directly). Download it into ``tmp_root``
-        first when it's a URI; ``self._storage_backend.download()`` creates a
-        directory or copies a file as appropriate for the source artifact, so
-        the caller doesn't need to know which in advance.
-
-        A URI is detected by the presence of a ``scheme://`` prefix (e.g.
-        ``s3://``), not by checking whether the path exists on disk -- a
-        genuinely local path may not exist yet at this point in tests using a
-        mocked backend, and must still be passed through unchanged.
+        ``path`` may already be local, or a URI from a prior upload to some
+        other ``StorageBackend``. A URI (detected via a ``scheme://`` prefix,
+        not by checking disk existence) is downloaded into ``tmp_root``
+        first; a local path is returned unchanged.
 
         Args:
             path: Local path or storage-backend URI to resolve.

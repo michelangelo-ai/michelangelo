@@ -152,13 +152,10 @@ class TestModelPusherPluginExecute(TestCase):
         self.assertIn("registrations", result)
 
     def test_remote_artifact_uri_downloaded_before_upload(self):
-        """A URI artifact.path is downloaded before being uploaded.
+        """A URI artifact.path is downloaded to a local path before upload().
 
-        e.g. from torch_assembler's own prior upload -- upload() requires an
-        actual local filesystem path, so passing a remote URI straight
-        through raises inside the backend. The temp download is cleaned up
-        after execute() returns, so existence is checked from within the
-        upload() call itself, not afterward.
+        The temp download is cleaned up after execute() returns, so
+        existence is checked from within the upload() call itself.
         """
         backend = _mock_backend()
         artifact = AssembledModel(
@@ -194,12 +191,7 @@ class TestModelPusherPluginExecute(TestCase):
         self.assertEqual(upload_time_existence, [True, True])
 
     def test_local_artifact_path_uploaded_directly_without_download(self):
-        """A plain local path is passed straight to upload() without download.
-
-        No URI scheme means it's used as-is, even if it doesn't exist yet
-        (e.g. in tests with a mocked backend) -- only a `scheme://` prefix
-        triggers the download-first path.
-        """
+        """A plain local path is passed straight to upload() without download."""
         backend = _mock_backend()
         artifact = _assembled()
 
