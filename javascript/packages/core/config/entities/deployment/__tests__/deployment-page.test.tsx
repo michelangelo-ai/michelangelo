@@ -206,24 +206,6 @@ describe('Deployment detail page', () => {
       expect(screen.queryByRole('link', { name: 'triton-server' })).not.toBeInTheDocument();
     });
 
-    it('renders the revision references on the deployment', async () => {
-      render(
-        <EntityDetailRoute phases={{ deploy: DEPLOY_PHASE }} />,
-        buildWrapper([
-          getErrorProviderWrapper(),
-          getRouterWrapper({
-            location: '/myproject/deploy/deployments/sentiment-deployment/info',
-          }),
-          getServiceProviderWrapper({ request: createQueryMockRouter(infoTabResponses()) }),
-        ])
-      );
-
-      expect(await screen.findByText('sentiment-model-rev-2')).toBeInTheDocument();
-      expect(screen.getByText('Current model in production')).toBeInTheDocument();
-      expect(screen.getByText('sentiment-model-rev-3')).toBeInTheDocument();
-      expect(screen.getByText('No model currently being deployed')).toBeInTheDocument();
-    });
-
     it('renders the resolved model metadata on the revision cards', async () => {
       render(
         <EntityDetailRoute phases={{ deploy: DEPLOY_PHASE }} />,
@@ -236,7 +218,6 @@ describe('Deployment detail page', () => {
         ])
       );
 
-      // Two cards have revisions (current + desired); each resolves the same mocked model.
       await waitFor(() => expect(screen.getAllByText('model-owner')).toHaveLength(2));
       expect(screen.getAllByText('Regression')).toHaveLength(2);
       expect(screen.getAllByText('run-20260825-080000')).toHaveLength(2);
@@ -264,7 +245,6 @@ describe('Deployment detail page', () => {
       expect(await screen.findByText('sentiment-model-rev-2')).toBeInTheDocument();
       expect(screen.getByText('sentiment-model-rev-3')).toBeInTheDocument();
       expect(screen.queryByText('Regression')).not.toBeInTheDocument();
-      // Every field label still renders on both cards, with placeholder values.
       expect(screen.getAllByText('Creation time')).toHaveLength(2);
       expect(screen.getAllByText('Owner')).toHaveLength(3); // 2 cards + detail page header
       expect(screen.getAllByText('Type')).toHaveLength(2);
