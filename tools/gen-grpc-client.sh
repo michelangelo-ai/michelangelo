@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Generate gRPC client code from protobuf files
+# Generate gRPC client language bindings (Python and JavaScript classes)
+# from protobuf files via buf's remote codegen plugins.
 set -e
 set -x
 
@@ -72,11 +73,22 @@ trap "rm -rf $TMP_DIR" EXIT
 mkdir -p "${TMP_DIR}/michelangelo"
 cp -r "${WORKSPACE_ROOT}/proto/api" "${TMP_DIR}/michelangelo"
 
+# k8s.io/apimachinery and k8s.io/api types come from proto/vendor/k8s.io
+# (a verbatim copy of the same generated.proto files Bazel compiles for the
+# Go backend from the pinned k8s.io/apimachinery and k8s.io/api Go module
+# versions), not an external BSR module — a third-party BSR mirror
+# (buf.build/coscene-io/kubernetes-apis) previously used here had
+# redefined ObjectMeta.creationTimestamp/ManagedFieldsEntry.time as
+# google.protobuf.Timestamp instead of the real upstream's
+# k8s.io.apimachinery.pkg.apis.meta.v1.Time, causing the generated client
+# to expect an RFC3339 string for a field the server sends as
+# {seconds, nanos}. Vendoring the exact backend proto source makes that
+# drift impossible. See proto/vendor/k8s.io/README.md.
+cp -r "${WORKSPACE_ROOT}/proto/vendor/k8s.io" "${TMP_DIR}/k8s.io"
+
 # prepare buf configuration files
 cat << EOF > "${TMP_DIR}/buf.yaml"
 version: v2
-deps:
-  - buf.build/coscene-io/kubernetes-apis
 lint:
   use:
     - STANDARD
@@ -103,13 +115,7 @@ plugins:
 EOF
 
 # generate gRPC code
-buf dep update "${TMP_DIR}"
 buf generate --template "${TMP_DIR}/buf.gen.yaml" "${TMP_DIR}" -o "${TMP_DIR}"
-
-# build a FileDescriptorSet so Envoy's grpc_json_transcoder filter can
-# transcode JSON<->binary proto without any Go-side jsonpb involvement
-mkdir -p "${WORKSPACE_ROOT}/helm/michelangelo/files"
-buf build "${TMP_DIR}" --exclude-source-info -o "${WORKSPACE_ROOT}/helm/michelangelo/files/descriptors.pb"
 
 # copy generated code to requesting client directories
 IFS=',' read -ra CLIENT_ARRAY <<< "$CLIENTS"

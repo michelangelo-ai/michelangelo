@@ -14,7 +14,9 @@ Shell scripts in `tools/` automate code generation and development workflows. Th
 | Script | Purpose | When to run |
 |--------|---------|-------------|
 | `tools/gen-proto-go.sh` | Regenerates `proto-go/` from `.proto` sources | After any `.proto` file change |
-| `tools/gen-grpc-client.sh` | Generates gRPC client code (Python and JavaScript) from protobuf files | After proto changes that affect client stubs |
+| `tools/gen-descriptors.sh` | Builds `helm/michelangelo/files/descriptors.pb` and `transcoder-services.json` | After any `.proto` file change — same trigger point as `gen-proto-go.sh`, CI-enforced |
+| `tools/check-transcoder-services.sh` | Checks that `transcoder-services.json` matches `services.ts` | For a `services.ts`-only change; run locally to reproduce a CI failure |
+| `tools/gen-grpc-client.sh` | Generates gRPC **client language bindings** (Python and JavaScript classes) from protobuf files | Runs automatically during the JS build — you rarely need to run it by hand, see below |
 | `tools/grpc-svc-gen.sh [Entity]` | Scaffolds a new gRPC service definition for a CRD type | When adding a new API resource |
 | `tools/gazelle` | Updates Bazel BUILD files for Go packages and proto targets | After adding/removing Go files or proto definitions |
 | `tools/goimports` | Bazel wrapper that runs goimports for Go import formatting | When reformatting Go imports |
@@ -29,9 +31,33 @@ tools/gen-proto-go.sh
 
 Builds `//proto/...` with Bazel, copies the generated `.pb.go` files into `proto-go/`, generates alias `BUILD.bazel` files under `proto-go/`, syncs dependency versions from `go/go.mod` into `proto-go/go.mod`, and runs `go mod tidy` in `proto-go/`.
 
-Check in both the proto change and the generated output together.
+Check in both the proto change and the generated output together. Also run `tools/gen-descriptors.sh` (below) — it uses the same Bazel build, just a different output.
 
 See [Protocol Buffers](protobuf.md) for the full code generation workflow.
+
+## gen-descriptors.sh
+
+```bash
+tools/gen-descriptors.sh [output-dir]
+```
+
+Builds `helm/michelangelo/files/descriptors.pb`, the compiled proto `FileDescriptorSet` Envoy's `grpc_json_transcoder` filter reads to resolve message and enum names. It runs `bazel build //proto/api/v2:v2_proto` — the same compile step `gen-proto-go.sh` uses — so it needs no network access and produces a byte-identical file on repeat runs.
+
+It also writes `transcoder-services.json`: the services `javascript/packages/rpc/services.ts` actually imports, matched against the descriptor set. This list is deliberately narrower than every service under `proto/api` — Envoy exposes anything on it over plain JSON/HTTP, so a Go-only service shouldn't become web-reachable just because its proto compiles. The script fails if a `services.ts` import doesn't resolve to a real service, or if `services.ts` references none at all.
+
+**Run this on every proto change**, even one that looks Go-only or JS-only — `descriptors.pb` covers the whole proto tree in one file, so a change to a shared type can affect how an already-used service resolves. CI enforces this in `main.yml`'s `dirty-check` job.
+
+Both files are committed, not build output — `helm install` never runs Bazel or buf. As a last-resort check, the Envoy ConfigMap template fails at render time if `transcoder-services.json` is missing, empty, or malformed.
+
+The allowlist is scoped to this repo's bundled JS UI, not to JSON/HTTP clients in general. `services.ts` is the only input the script reads, so a non-JS client has no supported path onto the allowlist. Today, adding one means either adding an import to `services.ts` (even if no JS code calls it) or hand-editing `transcoder-services.json` directly — the Helm template only checks that the file is valid JSON, so a hand edit works, but it is not an officially supported workflow and the next `gen-descriptors.sh` run overwrites it.
+
+## check-transcoder-services.sh
+
+```bash
+tools/check-transcoder-services.sh
+```
+
+A narrow backstop: it runs `gen-descriptors.sh` into a scratch directory and diffs the result against the committed files. It exists because `main.yml`'s `dirty-check` doesn't run on `javascript/**`-only changes — without it, a `services.ts` edit with no proto change would slip through uncaught. Run it locally to reproduce a CI failure.
 
 ## grpc-svc-gen.sh
 
@@ -61,7 +87,11 @@ See [Bazel Build System](bazel.md) for context on when to run Gazelle.
 tools/gen-grpc-client.sh
 ```
 
-Generates gRPC client stubs for Python and JavaScript from the compiled proto definitions. Run this after proto changes when client-side stubs need to be regenerated.
+This script generates gRPC **client language bindings** — the generated TS/Python classes under `javascript/packages/rpc/gen/` and `python/michelangelo/gen/`. It uses buf's remote codegen plugins, so it needs network access to buf.build.
+
+This is separate from `gen-descriptors.sh` above. It does not touch `descriptors.pb` or `transcoder-services.json`. Those files regenerate on the proto-build trigger described above, not on this one. A plain `yarn build` or `yarn setup` stays free of a new Bazel dependency this way.
+
+**You rarely need to run this directly.** `javascript/package.json` wires it in as `yarn generate`. This runs automatically as a `prebuild` and `setup` step, so `yarn build`, `yarn dev`, and `yarn setup` all regenerate the client classes for you.
 
 ## goimports
 

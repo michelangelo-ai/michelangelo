@@ -31,6 +31,8 @@ Internet
 
 The Envoy proxy sits in front of the API server for browser clients. It handles HTTP/1.1 → gRPC transcoding and CORS.
 
+The chart's own Envoy config uses the `envoy.filters.http.grpc_json_transcoder` filter, which converts plain JSON over HTTP into binary gRPC. This is a different wire protocol from `envoy.filters.http.grpc_web` (binary grpc-web framing) — if you run your own Envoy in front of this chart's API server, match the transcoder filter shown below, not grpc-web, or the bundled JS UI cannot talk to it.
+
 ### CORS Configuration
 
 Add your UI domain to Envoy's CORS allowed origins. This is required for the browser-based UI to call the API. In the Envoy ConfigMap:
@@ -63,9 +65,16 @@ static_resources:
                             cluster: michelangelo-apiserver
                             max_grpc_timeout: 0s
                 http_filters:
-                  - name: envoy.filters.http.grpc_web
+                  - name: envoy.filters.http.grpc_json_transcoder
                     typed_config:
-                      "@type": type.googleapis.com/envoy.extensions.filters.http.grpc_web.v3.GrpcWeb
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.grpc_json_transcoder.v3.GrpcJsonTranscoder
+                      proto_descriptor: "/etc/envoy-descriptors/descriptors.pb"
+                      services:
+                        - michelangelo.api.v2.PipelineService
+                        # ... one entry per service on the allowlist
+                      auto_mapping: true
+                      match_incoming_request_route: true
+                      convert_grpc_status: true
                   - name: envoy.filters.http.cors
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.cors.v3.Cors
@@ -96,6 +105,8 @@ static_resources:
 | `allow_origin_string_match.regex` | Replace with your UI domain regex |
 | `socket_address.address` | API server Kubernetes service name (default: `michelangelo-apiserver`) |
 | `socket_address.port_value` | API server port (default: `15566`) |
+
+The transcoder filter needs two inputs beyond this config: a compiled proto descriptor set (`descriptors.pb`) and a services allowlist. Both come from `tools/gen-descriptors.sh` in this repo and ship as `helm/michelangelo/files/descriptors.pb` and `helm/michelangelo/files/transcoder-services.json`. The allowlist covers only the services this repo's bundled JS UI calls — see [gen-descriptors.sh](../../contributing/dev/shell-scripts.md#gen-descriptorssh) for the scope limit and why there is no path for a non-JS client to be added to it today.
 
 ### Envoy TLS Termination
 

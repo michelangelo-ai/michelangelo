@@ -152,6 +152,10 @@ ui:
   apiBaseUrl: https://michelangelo.example.com/api    # match your Envoy/Ingress URL
 ```
 
+### Custom transcoder allowlist or descriptor set
+
+`helm/michelangelo/files/transcoder-services.json` and `helm/michelangelo/files/descriptors.pb` are generated files, not `values.yaml` settings — there is no override key for either one today. If you need a different allowlist or descriptor set, edit those files directly in a fork or checkout before packaging the chart. See [gen-descriptors.sh](../contributing/dev/shell-scripts.md#gen-descriptorssh) for what generates them and the current scope limits.
+
 ### Enable TLS on the API server
 
 The apiserver gRPC port supports TLS via `apiserver.tls.*`:

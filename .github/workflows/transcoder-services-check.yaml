@@ -1,0 +1,55 @@
+name: Transcoder services check
+
+# Narrow: catches a javascript/packages/rpc/services.ts change with no
+# matching transcoder-services.json regen. Proto-side staleness is caught
+# unconditionally by main.yml's dirty-check job instead, which doesn't run
+# on javascript/**-only changes — that's the gap this job covers.
+on:
+  pull_request:
+    paths:
+      - 'javascript/packages/rpc/services.ts'
+      - 'helm/michelangelo/files/**'
+      - 'tools/gen-descriptors.sh'
+      - 'tools/check-transcoder-services.sh'
+  push:
+    branches:
+      - main
+    paths:
+      - 'javascript/packages/rpc/services.ts'
+      - 'helm/michelangelo/files/**'
+      - 'tools/gen-descriptors.sh'
+      - 'tools/check-transcoder-services.sh'
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Verify transcoder-services.json matches services.ts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Cache Bazel outputs — tools/gen-descriptors.sh builds
+      # //proto/api/v2:v2_proto to produce the descriptor set it resolves
+      # services.ts's references against. Shares main.yml's cache key, but
+      # this workflow can't `needs:` a job in another workflow, so it may
+      # race main.yml's bazel-build for that key. No restore-keys fallback —
+      # falling back to a stale cache from an older commit can mismatch the
+      # current MODULE.bazel/gazelle version and produce bogus Bazel
+      # "no such package" errors; a cold cache miss is safer.
+      - name: Restore Bazel Cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.cache/bazel
+          key: bazel-main-${{ runner.os }}-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock') }}
+
+      - name: Set up buf
+        uses: bufbuild/buf-setup-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check transcoder-services.json is up to date
+        run: tools/check-transcoder-services.sh
