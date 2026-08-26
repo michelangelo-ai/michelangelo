@@ -10,7 +10,7 @@ export function TextEditor({
   language,
   readOnly = false,
   height = '300px',
-  foldGutter = false,
+  foldable = false,
   onChange,
 }: TextEditorProps) {
   const [css] = useStyletron();
@@ -50,7 +50,7 @@ export function TextEditor({
         editable={!readOnly}
         basicSetup={{
           lineNumbers: true,
-          foldGutter,
+          foldGutter: foldable,
           dropCursor: false,
           allowMultipleSelections: false,
           indentOnInput: false,

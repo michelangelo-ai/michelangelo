@@ -53,7 +53,7 @@ export function RunConfigurationPage({ data, isLoading }: { data?: object; isLoa
           value={JSON.stringify(config, null, 2)}
           language="json"
           readOnly
-          foldGutter
+          foldable
           height="auto"
         />
       </Box>
