@@ -54,7 +54,7 @@ func (a apiHook) BeforeCreate(ctx context.Context, request *v2.CreateTriggerRunR
 	}
 
 	if pipelineType := pipeline.Spec.GetType(); pipelineType != v2.PIPELINE_TYPE_INVALID {
-		cascadedelete.StampSourcePipelineTypeLabelOnCreate(request.TriggerRun, pipelineType.String())
+		api.StampSourcePipelineTypeLabelOnCreate(request.TriggerRun, pipelineType.String())
 	}
 
 	return cascadedelete.StampOwnerRefOnCreate(ctx, a.logger, a.scheme, request.TriggerRun, pipeline)

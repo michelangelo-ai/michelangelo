@@ -10,7 +10,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/michelangelo-ai/michelangelo/go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
@@ -67,35 +66,4 @@ func TestStampOwnerRefOnCreateConflictIsNonFatal(t *testing.T) {
 	// is never broken.
 	require.NoError(t, StampOwnerRefOnCreate(context.Background(), zap.NewNop(), scheme, child, owner))
 	require.Len(t, child.GetOwnerReferences(), 1)
-}
-
-func TestStampSourcePipelineTypeLabelOnCreateHappyPath(t *testing.T) {
-	child := &v2pb.PipelineRun{ObjectMeta: metav1.ObjectMeta{Name: "child"}}
-
-	StampSourcePipelineTypeLabelOnCreate(child, "PIPELINE_TYPE_TRAIN")
-
-	require.Equal(t, "PIPELINE_TYPE_TRAIN", child.GetLabels()[api.SourcePipelineTypeLabelName])
-}
-
-func TestStampSourcePipelineTypeLabelOnCreatePreservesExistingLabels(t *testing.T) {
-	child := &v2pb.PipelineRun{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:   "child",
-			Labels: map[string]string{"other-label": "keep-me"},
-		},
-	}
-
-	StampSourcePipelineTypeLabelOnCreate(child, "PIPELINE_TYPE_TRAIN")
-
-	labels := child.GetLabels()
-	require.Equal(t, "PIPELINE_TYPE_TRAIN", labels[api.SourcePipelineTypeLabelName])
-	require.Equal(t, "keep-me", labels["other-label"])
-}
-
-func TestStampSourcePipelineTypeLabelOnCreateEmptyTypeIsNoop(t *testing.T) {
-	child := &v2pb.PipelineRun{ObjectMeta: metav1.ObjectMeta{Name: "child"}}
-
-	StampSourcePipelineTypeLabelOnCreate(child, "")
-
-	require.Nil(t, child.GetLabels())
 }

@@ -7,6 +7,7 @@ import (
 	"google.golang.org/grpc/status"
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
@@ -146,4 +147,20 @@ func Validate(obj interface{}) error {
 		return v.Validate("")
 	}
 	return nil
+}
+
+// StampSourcePipelineTypeLabelOnCreate stamps pipelineType (e.g.
+// "PIPELINE_TYPE_TRAIN") onto child under
+// SourcePipelineTypeLabelName. No-op if pipelineType is empty.
+func StampSourcePipelineTypeLabelOnCreate(child client.Object, pipelineType string) {
+	if pipelineType == "" {
+		return
+	}
+
+	labels := child.GetLabels()
+	if labels == nil {
+		labels = map[string]string{}
+	}
+	labels[SourcePipelineTypeLabelName] = pipelineType
+	child.SetLabels(labels)
 }
