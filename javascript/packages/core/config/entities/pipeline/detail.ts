@@ -61,7 +61,7 @@ export const PIPELINE_DETAIL_CONFIG: DetailViewConfig = {
         service: 'triggerRun',
         serviceOptions: {
           listOptions: {
-            fieldSelector: 'spec.pipeline.name=${page.metadata.name}',
+            fieldSelector: 'pipeline_name=${page.metadata.name}',
           },
         },
       },

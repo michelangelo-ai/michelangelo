@@ -347,7 +347,7 @@ describe('PIPELINE_DETAIL_CONFIG: runs tab', () => {
 });
 
 describe('PIPELINE_ENTITY_CONFIG: Triggers tab', () => {
-  const TRIGGER_RUN_SELECTOR = 'spec.pipeline.name=eval-pipeline';
+  const TRIGGER_RUN_SELECTOR = 'pipeline_name=eval-pipeline';
 
   it('lists trigger runs scoped to this pipeline, linking each to its detail page', async () => {
     const user = userEvent.setup();
