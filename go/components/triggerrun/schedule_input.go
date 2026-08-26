@@ -20,9 +20,9 @@ const (
 	// cron_trigger_workflows.go dual-read for consistency. Safe to remove
 	// no earlier than 2 minor releases after the rename ships, per
 	// CONTRIBUTING.md's Deprecation Policy.
-	// TODO: file a tracking issue and remove this constant and both
-	// dual-read call sites (schedule_input.go, cron_trigger_workflows.go)
-	// together.
+	// TODO(https://github.com/michelangelo-ai/michelangelo/issues/1939): remove
+	// this constant and both dual-read call sites (schedule_input.go,
+	// cron_trigger_workflows.go) together.
 	scheduleInputLegacyEnvironmentLabel = "pipelinerun.michelangelo/environment"
 )
 
