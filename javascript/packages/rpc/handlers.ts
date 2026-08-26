@@ -4,6 +4,7 @@ import { UserInfoSchema } from './gen/michelangelo/api/v2/user_pb';
 import { getServices } from './services';
 
 import type { Deployment } from './gen/michelangelo/api/v2/deployment_pb';
+import type { InferenceServer } from './gen/michelangelo/api/v2/inference_server_pb';
 import type { PipelineRun } from './gen/michelangelo/api/v2/pipeline_run_pb';
 import type { TriggerRun } from './gen/michelangelo/api/v2/trigger_run_pb';
 import type { ExtractUnaryRpc } from './types';
@@ -46,6 +47,8 @@ async function createHandlers() {
     },
     ListInferenceServer: unary(services.InferenceServerService.listInferenceServer),
     GetInferenceServer: unary(services.InferenceServerService.getInferenceServer),
+    CreateInferenceServer: (record: InferenceServer, headers?: Record<string, string>) =>
+      services.InferenceServerService.createInferenceServer({ inferenceServer: record }, headers),
     ListProject: unary(services.ProjectService.listProject),
     GetProject: unary(services.ProjectService.getProject),
     GetPipeline: unary(services.PipelineService.getPipeline),
