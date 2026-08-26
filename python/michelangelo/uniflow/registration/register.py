@@ -44,22 +44,18 @@ def prepare_uniflow_input(
     kwargs_or_output_dir=None,
     environ=None,
     output_dir=None,
-    concurrent_groups=None,
 ):
     """Prepare uniflow input file for workflow registration.
 
     This function supports two calling patterns:
     1. New pattern: prepare_uniflow_input(config_builder, output_dir)
-    2. Legacy pattern: prepare_uniflow_input(args, kwargs, environ, output_dir, concurrent_groups)
+    2. Legacy pattern: prepare_uniflow_input(args, kwargs, environ, output_dir)
 
     Args:
         config_builder_or_args: Either ConfigBuilder instance or positional args (legacy)
         kwargs_or_output_dir: Either output directory (new) or kwargs dict (legacy)
         environ: Environment variables (legacy only)
         output_dir: Output directory (legacy only)
-        concurrent_groups: Groups of task names dispatched together via
-            concurrent_run/batch_run (legacy only) - see
-            ConfigBuilder.get_workflow_concurrent_groups.
 
     Returns:
         str: Path to the created input file
@@ -95,7 +91,6 @@ def prepare_uniflow_input(
             "args": args or (),
             "kwargs": _kwargs,
             "environ": environ or {},
-            "concurrent_groups": concurrent_groups or [],
         }
 
         inputs_path = os.path.join(output_dir, "uniflow_input.txt")
@@ -234,8 +229,7 @@ def register(
         )
 
         # Prepare the input configuration
-        concurrent_groups = ConfigBuilder(fn).get_workflow_concurrent_groups()
-        prepare_uniflow_input(args, kwargs, environ, output_dir, concurrent_groups)
+        prepare_uniflow_input(args, kwargs, environ, output_dir)
 
         _logger.info("Registration completed successfully")
         _logger.info("Tarball uploaded to: %s", remote_path)

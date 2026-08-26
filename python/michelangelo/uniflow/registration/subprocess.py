@@ -193,7 +193,6 @@ def main():
                 final_kwargs_dict,
                 final_environ,
                 args.output_dir,
-                workflow_config["concurrent_groups"],
             )
 
         _logger.info("Registration completed successfully")

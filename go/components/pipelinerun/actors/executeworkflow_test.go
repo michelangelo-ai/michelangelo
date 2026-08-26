@@ -1668,9 +1668,9 @@ func TestResumeFromPipelineRun(t *testing.T) {
 					_ = kwargs
 					capturedEnvs := envs
 
-					// Verify cache defaults to disabled with no resume spec and no concurrent
-					// task groups declared in the manifest (scoped via CACHE_VERSION regardless)
-					require.Equal(t, "false", capturedEnvs["CACHE_ENABLED"])
+					// Verify cache defaults to enabled even with no resume spec, scoped safely
+					// per-run via CACHE_VERSION and per-task input hash.
+					require.Equal(t, "true", capturedEnvs["CACHE_ENABLED"])
 					require.Equal(t, "test-pipeline-run-no-resume", capturedEnvs["CACHE_VERSION"])
 
 					return &clientInterfaces.WorkflowExecution{
@@ -1679,7 +1679,7 @@ func TestResumeFromPipelineRun(t *testing.T) {
 					}, nil
 				})
 			},
-			expectedCacheEnabled:       false,
+			expectedCacheEnabled:       true,
 			expectedCacheVersionVars:   map[string]string{},
 			expectedResumeFromDisabled: []string{},
 		},
@@ -2054,63 +2054,6 @@ func TestConvertKwArgsMapToList(t *testing.T) {
 				// For non-map inputs, compare directly
 				require.Equal(t, testCase.expected, result)
 			}
-		})
-	}
-}
-
-func TestConcurrentGroupTaskNames(t *testing.T) {
-	testCases := []struct {
-		name               string
-		pipelineConfigMap  map[string]interface{}
-		expectedTaskNames  []string
-	}{
-		{
-			name:              "No concurrent_groups key",
-			pipelineConfigMap: map[string]interface{}{},
-			expectedTaskNames: nil,
-		},
-		{
-			name: "Single two-task concurrent group",
-			pipelineConfigMap: map[string]interface{}{
-				WorkflowConcurrentGroupsKey: []interface{}{
-					[]interface{}{"task_a", "task_b"},
-				},
-			},
-			expectedTaskNames: []string{"task_a", "task_b"},
-		},
-		{
-			name: "Sequential (a,b) -> (c,d): two separate groups, both auto-enabled",
-			pipelineConfigMap: map[string]interface{}{
-				WorkflowConcurrentGroupsKey: []interface{}{
-					[]interface{}{"task_a", "task_b"},
-					[]interface{}{"task_c", "task_d"},
-				},
-			},
-			expectedTaskNames: []string{"task_a", "task_b", "task_c", "task_d"},
-		},
-		{
-			name: "Standalone single-member group ignored",
-			pipelineConfigMap: map[string]interface{}{
-				WorkflowConcurrentGroupsKey: []interface{}{
-					[]interface{}{"solo_task"},
-					[]interface{}{"task_a", "task_b"},
-				},
-			},
-			expectedTaskNames: []string{"task_a", "task_b"},
-		},
-		{
-			name: "Malformed groups value ignored, not a crash",
-			pipelineConfigMap: map[string]interface{}{
-				WorkflowConcurrentGroupsKey: "not-a-list",
-			},
-			expectedTaskNames: nil,
-		},
-	}
-
-	for _, testCase := range testCases {
-		t.Run(testCase.name, func(t *testing.T) {
-			result := concurrentGroupTaskNames(testCase.pipelineConfigMap)
-			require.Equal(t, testCase.expectedTaskNames, result)
 		})
 	}
 }

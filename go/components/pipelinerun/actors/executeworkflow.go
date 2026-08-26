@@ -39,10 +39,9 @@ const (
 	DefaultWorkSpaceRootURL = "s3://default" // TODO(#547): make this configurable
 
 	// Workflow input parameter keys for uniflow pipeline
-	WorkflowEnvironKey          = "environ"
-	WorkflowKWArgsKey           = "kw_args"
-	WorkflowArgsKey             = "args"
-	WorkflowConcurrentGroupsKey = "concurrent_groups"
+	WorkflowEnvironKey = "environ"
+	WorkflowKWArgsKey  = "kw_args"
+	WorkflowArgsKey    = "args"
 
 	// Workflow input parameter keys for canvas flex pipeline
 	WorkflowTaskConfigsKey = "task_configs"
@@ -648,30 +647,16 @@ func decodePipelineManifestContent(pipelineSpec v2.PipelineSpec) (map[string]int
 
 func (a *ExecuteWorkflowActor) addTaskCacheEnv(ctx context.Context, pipelineRun *v2.PipelineRun, envs map[string]interface{}) error {
 	logger := a.logger.With(zap.String("pipelineRun", fmt.Sprintf("%s/%s", pipelineRun.Namespace, pipelineRun.Name)))
-	envs[cacheEnabledVarName] = "false"
+	// Cache is scoped per pipeline run via cacheVersionVarName below (defaults to
+	// pipelineRun.Name) and keyed by each task's input hash, so enabling it by default
+	// doesn't cause cross-run or cross-input cache hits - same reasoning as the resume-from
+	// path below. This lets any task that already succeeded skip re-execution when a manual
+	// retry's Temporal/Cadence Reset forces it to replay (concurrent siblings and downstream
+	// tasks alike). The task actually named in RetryInfo has its own CachedOutput explicitly
+	// invalidated in processManualRetrySpec before the Reset, so a retry always means a real
+	// re-execution of that task regardless of this default.
+	envs[cacheEnabledVarName] = "true"
 	envs[cacheVersionVarName] = pipelineRun.Name
-
-	// Tasks that are dispatched together via concurrent_run/batch_run share a single
-	// Cadence workflow history with every other task in the pipeline. A manual retry of
-	// any one task truncates that shared history (see findTaskResetEventIDByActivityID),
-	// forcing every task scheduled after the reset boundary - concurrent siblings and any
-	// later stage - to be replayed for real. Auto-enable caching for exactly those tasks
-	// (never for standalone sequential tasks, which keep the "false" default above) so an
-	// untouched task forced to replay by someone else's retry can skip via its own
-	// already-existing CachedOutput instead of fully re-executing. Group membership is
-	// computed statically from the pipeline's Python source at compile time, because
-	// CACHE_ENABLED is fixed for the life of the workflow's history and can't be toggled
-	// retroactively "just for a retry".
-	if pipeline := pipelineRun.Status.SourcePipeline.Pipeline; pipeline != nil {
-		pipelineConfigMap, err := decodePipelineManifestContent(pipeline.Spec)
-		if err != nil {
-			logger.Warn("failed to decode pipeline manifest content for concurrent group detection", zap.Error(err))
-		} else {
-			for _, taskName := range concurrentGroupTaskNames(pipelineConfigMap) {
-				envs[fmt.Sprintf("%s_%s", cacheEnabledVarName, taskName)] = "true"
-			}
-		}
-	}
 
 	if pipelineRun.Spec.Resume == nil || pipelineRun.Spec.Resume.PipelineRun == nil {
 		return nil
@@ -709,36 +694,6 @@ func (a *ExecuteWorkflowActor) addTaskCacheEnv(ctx context.Context, pipelineRun 
 		}
 	}
 	return nil
-}
-
-// concurrentGroupTaskNames flattens the "concurrent_groups" manifest key (a list of
-// task-name groups dispatched together via concurrent_run/batch_run, statically detected
-// by the Python compiler) into the set of task names that belong to any group with more
-// than one member. Standalone/single-member groups are ignored, since those tasks aren't
-// exposed to another task's retry via a shared decision boundary.
-func concurrentGroupTaskNames(pipelineConfigMap map[string]interface{}) []string {
-	rawGroups, ok := pipelineConfigMap[WorkflowConcurrentGroupsKey]
-	if !ok {
-		return nil
-	}
-	groups, ok := rawGroups.([]interface{})
-	if !ok {
-		return nil
-	}
-
-	var taskNames []string
-	for _, rawGroup := range groups {
-		group, ok := rawGroup.([]interface{})
-		if !ok || len(group) <= 1 {
-			continue
-		}
-		for _, rawTaskName := range group {
-			if taskName, ok := rawTaskName.(string); ok && taskName != "" {
-				taskNames = append(taskNames, taskName)
-			}
-		}
-	}
-	return taskNames
 }
 
 func getTaskCacheVersionFromResumePipelineRun(taskCacheVersion map[string]string, resumePipelineRun *v2.PipelineRun) {
