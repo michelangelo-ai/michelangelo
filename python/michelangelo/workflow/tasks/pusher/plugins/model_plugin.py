@@ -90,7 +90,6 @@ from __future__ import annotations
 
 import logging
 import os
-import shutil
 import tempfile
 import uuid
 from pathlib import Path
@@ -423,8 +422,7 @@ class ModelPusherPlugin(PusherPluginBase):
         base_labels = self._build_labels()
         base_metadata = self._build_metadata()
 
-        tmp_root = tempfile.mkdtemp(prefix="model_pusher_")
-        try:
+        with tempfile.TemporaryDirectory(prefix="model_pusher_") as tmp_root:
             _logger.info(
                 "Uploading raw model artifact for '%s' (push %s).", model_name, push_id
             )
@@ -451,8 +449,6 @@ class ModelPusherPlugin(PusherPluginBase):
                     f"models/{model_name}/{push_id}/deployable/"
                     f"{Path(deployable_local_path).name}",
                 )
-        finally:
-            shutil.rmtree(tmp_root, ignore_errors=True)
 
         registrations: list[RegistrationResult] = []
         for registry in self._registries:
