@@ -26,16 +26,8 @@ export function InferenceServerOwnerFields() {
         validate={required()}
         description="UUID for the team that owns this inference server."
       />
-      <StringField
-        name="spec.ownerSpec.ownerInfo.owners"
-        label="Owners"
-        multi
-      />
-      <StringField
-        name="spec.ownerSpec.ownerInfo.ownerGroups"
-        label="Owner groups"
-        multi
-      />
+      <StringField name="spec.ownerSpec.ownerInfo.owners" label="Owners" multi />
+      <StringField name="spec.ownerSpec.ownerInfo.ownerGroups" label="Owner groups" multi />
       <SelectField
         name="spec.ownerSpec.tier"
         label="Tier"
