@@ -23,7 +23,6 @@ export function DetailViewPageRenderer<T extends object = object>({
         <DetailViewTablePage<T>
           isDetailViewLoading={isLoading}
           queryConfig={tablePage.queryConfig}
-          filter={tablePage.filter}
           tableConfig={tablePage.tableConfig}
           pageId={tablePage.id}
         />
