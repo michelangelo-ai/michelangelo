@@ -13,24 +13,6 @@ import {
 } from '#core/test/wrappers/get-service-provider-wrapper';
 
 describe('Pipeline run "Triggered by"', () => {
-  function buildTriggeredRun() {
-    return {
-      metadata: {
-        name: 'triggered-run',
-        namespace: 'myproject',
-        labels: { [TRIGGERED_BY_LABEL]: 'nightly-trigger' },
-      },
-      status: { state: 3 },
-    };
-  }
-
-  function buildManualRun() {
-    return {
-      metadata: { name: 'manual-run', namespace: 'myproject' },
-      status: { state: 3 },
-    };
-  }
-
   it('links a triggered run back to its trigger in the runs list', async () => {
     render(
       <PhaseListRoute phases={{ train: TRAIN_PHASE }} />,
@@ -39,7 +21,20 @@ describe('Pipeline run "Triggered by"', () => {
         getRouterWrapper({ location: '/myproject/train/runs' }),
         getServiceProviderWrapper({
           request: createQueryMockRouter({
-            ListPipelineRun: { pipelineRunList: { items: [buildTriggeredRun()] } },
+            ListPipelineRun: {
+              pipelineRunList: {
+                items: [
+                  {
+                    metadata: {
+                      name: 'triggered-run',
+                      namespace: 'myproject',
+                      labels: { [TRIGGERED_BY_LABEL]: 'nightly-trigger' },
+                    },
+                    status: { state: 3 },
+                  },
+                ],
+              },
+            },
           }),
         }),
       ])
@@ -59,7 +54,16 @@ describe('Pipeline run "Triggered by"', () => {
         getRouterWrapper({ location: '/myproject/train/runs' }),
         getServiceProviderWrapper({
           request: createQueryMockRouter({
-            ListPipelineRun: { pipelineRunList: { items: [buildManualRun()] } },
+            ListPipelineRun: {
+              pipelineRunList: {
+                items: [
+                  {
+                    metadata: { name: 'manual-run', namespace: 'myproject' },
+                    status: { state: 3 },
+                  },
+                ],
+              },
+            },
           }),
         }),
       ])
@@ -79,7 +83,16 @@ describe('Pipeline run "Triggered by"', () => {
         getRouterWrapper({ location: '/myproject/train/runs/triggered-run' }),
         getServiceProviderWrapper({
           request: createQueryMockRouter({
-            GetPipelineRun: { pipelineRun: buildTriggeredRun() },
+            GetPipelineRun: {
+              pipelineRun: {
+                metadata: {
+                  name: 'triggered-run',
+                  namespace: 'myproject',
+                  labels: { [TRIGGERED_BY_LABEL]: 'nightly-trigger' },
+                },
+                status: { state: 3 },
+              },
+            },
           }),
         }),
       ])

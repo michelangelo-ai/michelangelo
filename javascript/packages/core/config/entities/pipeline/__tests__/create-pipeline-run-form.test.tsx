@@ -491,14 +491,6 @@ describe('CreatePipelineRunForm', () => {
       );
     }
 
-    function buildRequest() {
-      return createQueryMockRouter({
-        CreatePipelineRun: {},
-        ListPipelineRun: runListResponse,
-        GetPipelineRun: sourceRunResponse,
-      });
-    }
-
     async function openResumeGroup(user: ReturnType<typeof userEvent.setup>) {
       await user.click(screen.getByText('Select run to resume from'));
     }
@@ -510,7 +502,13 @@ describe('CreatePipelineRunForm', () => {
 
     it('offers only finished runs of this pipeline', async () => {
       const user = userEvent.setup();
-      renderForm(buildRequest());
+      renderForm(
+        createQueryMockRouter({
+          CreatePipelineRun: {},
+          ListPipelineRun: runListResponse,
+          GetPipelineRun: sourceRunResponse,
+        })
+      );
 
       await screen.findByRole('dialog', { name: 'Start new pipeline run' });
       await openResumeGroup(user);
@@ -524,7 +522,13 @@ describe('CreatePipelineRunForm', () => {
 
     it('populates the step picker from Execute Workflow sub-steps once a run is chosen', async () => {
       const user = userEvent.setup();
-      renderForm(buildRequest());
+      renderForm(
+        createQueryMockRouter({
+          CreatePipelineRun: {},
+          ListPipelineRun: runListResponse,
+          GetPipelineRun: sourceRunResponse,
+        })
+      );
 
       await screen.findByRole('dialog', { name: 'Start new pipeline run' });
       await openResumeGroup(user);
@@ -546,7 +550,11 @@ describe('CreatePipelineRunForm', () => {
 
     it('submits resumeFrom using step displayName, not the task path', async () => {
       const user = userEvent.setup();
-      const mockRequest = buildRequest();
+      const mockRequest = createQueryMockRouter({
+        CreatePipelineRun: {},
+        ListPipelineRun: runListResponse,
+        GetPipelineRun: sourceRunResponse,
+      });
       renderForm(mockRequest);
 
       const dialog = await screen.findByRole('dialog', { name: 'Start new pipeline run' });
@@ -579,7 +587,11 @@ describe('CreatePipelineRunForm', () => {
 
     it('submits resume without resumeFrom when no step is picked', async () => {
       const user = userEvent.setup();
-      const mockRequest = buildRequest();
+      const mockRequest = createQueryMockRouter({
+        CreatePipelineRun: {},
+        ListPipelineRun: runListResponse,
+        GetPipelineRun: sourceRunResponse,
+      });
       renderForm(mockRequest);
 
       const dialog = await screen.findByRole('dialog', { name: 'Start new pipeline run' });
@@ -603,7 +615,11 @@ describe('CreatePipelineRunForm', () => {
 
     it('omits the resume spec entirely when the group is opened but nothing is chosen', async () => {
       const user = userEvent.setup();
-      const router = buildRequest();
+      const router = createQueryMockRouter({
+        CreatePipelineRun: {},
+        ListPipelineRun: runListResponse,
+        GetPipelineRun: sourceRunResponse,
+      });
 
       // Captures the payload so the assertion can check for the *absence* of a key,
       // which call matchers express poorly.
