@@ -191,8 +191,8 @@ class TorchAssemblerTest(_LocalBackendTestCase):
         self.assertTrue(os.path.exists(assembled.deployable_model.path))
         self.assertTrue(os.path.exists(assembled.raw_model.path))
 
-        # Deployable is a single archived file; raw stays loose files.
-        self.assertTrue(os.path.isfile(assembled.deployable_model.path))
+        # Default: both deployable and raw are uploaded as loose files.
+        self.assertTrue(os.path.isdir(assembled.deployable_model.path))
         self.assertTrue(os.path.isdir(assembled.raw_model.path))
 
         mock_create_model.assert_called_once()
@@ -208,6 +208,37 @@ class TorchAssemblerTest(_LocalBackendTestCase):
         self.assertEqual(raw_kwargs["model_path_source_type"], StorageType.LOCAL)
         self.assertIsNone(raw_kwargs["transform_spec"])
         self.assertIsNone(raw_kwargs["transform_feature_stats"])
+
+    @patch(f"{_ASSEMBLER_MODULE}.TorchTritonPackager.create_model_package")
+    @patch(f"{_ASSEMBLER_MODULE}.TorchTritonPackager.create_raw_model_package")
+    def test_archive_deployable_package_uploads_single_tar(
+        self, mock_create_raw, mock_create_model
+    ):
+        """archive_deployable_package=True uploads one tar, not loose files."""
+        mock_create_model.side_effect = _fake_create_package("deployable")
+        mock_create_raw.side_effect = _fake_create_package("raw")
+
+        config = TabularAssemblerConfig(
+            torch=TorchAssemblerConfig(archive_deployable_package=True)
+        )
+        raw_model = ModelArtifact(
+            path=self._upload_raw_model_source(),
+            metadata=ModelMetadata(
+                model_class="test.SimpleTorchModel",
+                training_framework=TRAINING_FRAMEWORK_PYTORCH,
+                _hyperparameters=BytesIO(pickle.dumps({})),
+                _schema=BytesIO(pickle.dumps(_make_schema())),
+                _sample_data=BytesIO(pickle.dumps([{"input": np.array([[1.0, 2.0]])}])),
+            ),
+        )
+
+        assembled = torch_assembler(
+            config, raw_model, storage_backend=self.storage_backend
+        )
+
+        self.assertTrue(os.path.isfile(assembled.deployable_model.path))
+        self.assertTrue(assembled.deployable_model.path.endswith("model.tar"))
+        self.assertTrue(os.path.isdir(assembled.raw_model.path))
 
     @patch(f"{_ASSEMBLER_MODULE}.TorchTritonPackager.create_model_package")
     @patch(f"{_ASSEMBLER_MODULE}.TorchTritonPackager.create_raw_model_package")

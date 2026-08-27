@@ -5,6 +5,7 @@ from __future__ import annotations
 import itertools
 import os
 import re
+import tempfile
 from unittest import TestCase
 from unittest.mock import MagicMock, patch
 
@@ -194,13 +195,8 @@ class TestModelPusherPluginExecute(TestCase):
         # not leak into the destination storage key.
         raw_key = backend.upload.call_args_list[0][0][1]
         dep_key = backend.upload.call_args_list[1][0][1]
-        self.assertEqual(
-            raw_key, f"models/{result['model_name']}/{result['push_id']}/raw"
-        )
-        self.assertEqual(
-            dep_key,
-            f"models/{result['model_name']}/{result['push_id']}/deployable/model.tar",
-        )
+        self.assertEqual(raw_key, f"models/{result['model_name']}/raw")
+        self.assertEqual(dep_key, f"models/{result['model_name']}/deployable/model.tar")
 
     def test_local_artifact_path_uploaded_directly_without_download(self):
         """A plain local path is passed straight to upload() without download."""
@@ -254,8 +250,13 @@ class TestModelPusherPluginExecute(TestCase):
         gen.assert_called_once_with("model")
         self.assertEqual(result["model_name"], "model-20260721-114130-2d9c959d")
 
-    def test_storage_key_includes_push_id_for_uniqueness(self):
-        """Each execute() call uses a unique push_id in the storage key."""
+    def test_storage_key_is_stable_across_calls_with_same_model_name(self):
+        """Two execute() calls with the same model_name reuse the same key.
+
+        This is a deliberate tradeoff: storage keys have no per-push
+        differentiator, so re-pushing the same model_name overwrites the
+        previous push's storage objects.
+        """
         backend1 = _mock_backend(raw_uri="s3://b/raw1", dep_uri="s3://b/dep1")
         backend2 = _mock_backend(raw_uri="s3://b/raw2", dep_uri="s3://b/dep2")
         _plugin(model_name="m", backend=backend1).execute()
@@ -263,9 +264,8 @@ class TestModelPusherPluginExecute(TestCase):
 
         key1_raw = backend1.upload.call_args_list[0][0][1]
         key2_raw = backend2.upload.call_args_list[0][0][1]
-        self.assertTrue(key1_raw.startswith("models/m/"))
-        self.assertTrue(key2_raw.startswith("models/m/"))
-        self.assertNotEqual(key1_raw, key2_raw)
+        self.assertEqual(key1_raw, "models/m/raw")
+        self.assertEqual(key2_raw, "models/m/raw")
 
     def test_description_forwarded_to_register_model(self):
         """It passes config.description to register_model(description=...)."""
@@ -662,7 +662,7 @@ class TestModelPusherPluginMultiRegistry(TestCase):
 
 
 class TestModelPusherPluginPushId(TestCase):
-    """Tests for push_id uniqueness, presence in result, and storage-only scope."""
+    """Tests for push_id presence/uniqueness in the result and its scope."""
 
     def test_push_id_present_in_result(self):
         """execute() result contains a 'push_id' key."""
@@ -670,15 +670,15 @@ class TestModelPusherPluginPushId(TestCase):
         self.assertIn("push_id", result)
         self.assertEqual(len(result["push_id"]), 16)
 
-    def test_push_id_in_storage_key(self):
-        """The push_id returned in result matches the storage key segment."""
+    def test_push_id_not_in_storage_key(self):
+        """push_id is a per-call correlation token only, absent from storage keys."""
         backend = _mock_backend()
         result = _plugin(model_name="m", backend=backend).execute()
         raw_key = backend.upload.call_args_list[0][0][1]
-        self.assertIn(result["push_id"], raw_key)
+        self.assertNotIn(result["push_id"], raw_key)
 
     def test_push_id_not_in_registry_labels_or_metadata(self):
-        """push_id is a storage-layer token — absent from both labels and metadata."""
+        """push_id is a correlation token — absent from labels and metadata."""
         registry = _mock_registry(name="m")
         _plugin(model_name="m", registry=registry).execute()
         labels = registry.register_model.call_args.kwargs["labels"]
@@ -700,29 +700,59 @@ class TestModelPusherPluginStorageKey(TestCase):
     def test_raw_key_is_fixed_regardless_of_artifact_filename(self):
         """Raw upload key is fixed and does not echo the artifact's filename."""
         backend = _mock_backend()
-        result = ModelPusherPlugin(
+        ModelPusherPlugin(
             config=ModelPluginConfig(model_name="m"),
             artifact=AssembledModel(raw_model=ModelArtifact(path="/tmp/model.ubj")),
             storage_backend=backend,
             registry_client=_mock_registry(),
         ).execute()
         raw_key = backend.upload.call_args_list[0][0][1]
-        self.assertEqual(raw_key, f"models/m/{result['push_id']}/raw")
+        self.assertEqual(raw_key, "models/m/raw")
 
     def test_deployable_key_is_fixed_regardless_of_artifact_filename(self):
-        """Deployable upload key is fixed and does not echo the artifact's filename."""
+        """Deployable upload key is fixed and does not echo the artifact's filename.
+
+        A real file is used for the deployable path (rather than the
+        fake nonexistent paths used elsewhere in this module) because the
+        raw-vs-deployable key format now depends on whether the artifact is
+        actually a file or a directory on disk.
+        """
         backend = _mock_backend()
-        result = ModelPusherPlugin(
-            config=ModelPluginConfig(model_name="m"),
-            artifact=AssembledModel(
-                raw_model=ModelArtifact(path="/tmp/model.ubj"),
-                deployable_model=ModelArtifact(path="/tmp/serving_model.zip"),
-            ),
-            storage_backend=backend,
-            registry_client=_mock_registry(),
-        ).execute()
+        with tempfile.NamedTemporaryFile(suffix="serving_model.zip") as f:
+            ModelPusherPlugin(
+                config=ModelPluginConfig(model_name="m"),
+                artifact=AssembledModel(
+                    raw_model=ModelArtifact(path="/tmp/model.ubj"),
+                    deployable_model=ModelArtifact(path=f.name),
+                ),
+                storage_backend=backend,
+                registry_client=_mock_registry(),
+            ).execute()
         dep_key = backend.upload.call_args_list[1][0][1]
-        self.assertEqual(dep_key, f"models/m/{result['push_id']}/deployable/model.tar")
+        self.assertEqual(dep_key, "models/m/deployable/model.tar")
+
+    def test_deployable_key_has_no_model_tar_suffix_for_directory_artifact(self):
+        """A deployable artifact that's a directory gets no /model.tar suffix.
+
+        The assembler can hand off the deployable package as loose files
+        (the default) instead of a single tar (see
+        TorchAssemblerConfig.archive_deployable_package) -- the pusher must
+        key it like the raw model in that case, not assume it's always a
+        tar.
+        """
+        backend = _mock_backend()
+        with tempfile.TemporaryDirectory() as d:
+            ModelPusherPlugin(
+                config=ModelPluginConfig(model_name="m"),
+                artifact=AssembledModel(
+                    raw_model=ModelArtifact(path="/tmp/model.ubj"),
+                    deployable_model=ModelArtifact(path=d),
+                ),
+                storage_backend=backend,
+                registry_client=_mock_registry(),
+            ).execute()
+        dep_key = backend.upload.call_args_list[1][0][1]
+        self.assertEqual(dep_key, "models/m/deployable")
 
     def test_raw_key_unaffected_by_source_path_shape(self):
         """A source path ending in a category-like segment doesn't alter the key.
@@ -734,7 +764,7 @@ class TestModelPusherPluginStorageKey(TestCase):
         matter what the source path looks like.
         """
         backend = _mock_backend()
-        result = ModelPusherPlugin(
+        ModelPusherPlugin(
             config=ModelPluginConfig(model_name="m"),
             artifact=AssembledModel(
                 raw_model=ModelArtifact(path="/tmp/checkpoints/run1/raw")
@@ -743,7 +773,7 @@ class TestModelPusherPluginStorageKey(TestCase):
             registry_client=_mock_registry(),
         ).execute()
         raw_key = backend.upload.call_args_list[0][0][1]
-        self.assertEqual(raw_key, f"models/m/{result['push_id']}/raw")
+        self.assertEqual(raw_key, "models/m/raw")
 
     def test_push_id_unique_across_calls(self):
         """Consecutive execute() calls produce different push_ids."""
@@ -761,7 +791,7 @@ class TestModelPusherPluginStorageKey(TestCase):
 
         backend.download.side_effect = _fake_download
 
-        result = ModelPusherPlugin(
+        ModelPusherPlugin(
             config=ModelPluginConfig(model_name="m"),
             artifact=AssembledModel(
                 raw_model=ModelArtifact(path="s3://bucket/tabular_assembler/x/raw")
@@ -770,7 +800,7 @@ class TestModelPusherPluginStorageKey(TestCase):
             registry_client=_mock_registry(),
         ).execute()
         raw_key = backend.upload.call_args_list[0][0][1]
-        self.assertEqual(raw_key, f"models/m/{result['push_id']}/raw")
+        self.assertEqual(raw_key, "models/m/raw")
 
 
 # ---------------------------------------------------------------------------

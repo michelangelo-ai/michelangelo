@@ -185,13 +185,23 @@ class ModelPushResult(TypedDict):
         deployable_artifact_uri: URI of the uploaded deployable artifact, or
             ``None`` when ``artifact.deployable_model`` is ``None``. The same
             URI is sent to every registry.
-        push_id: 16-character hex token identifying this specific upload.
-            Appears in storage keys (``models/{name}/{push_id}/raw``).
+        push_id: 16-character hex token unique to this ``execute()`` call, for
+            correlating its log lines and result. Not part of any storage key
+            or the registry.
+
+            .. warning::
+                Storage keys are ``models/{model_name}/raw`` and
+                ``models/{model_name}/deployable/model.tar`` — fixed per
+                ``model_name``, with no per-push differentiator. Calling
+                ``execute()`` again with the same ``model_name`` overwrites
+                the previous push's storage objects (the registry still
+                records each push as a separate version, but their
+                artifact URIs then point at the same, now-overwritten
+                content). Use a unique ``model_name`` per push if that
+                matters for your use case.
 
             .. note::
-                ``push_id`` is a storage-layer correlation token only — it
-                does not appear in the registry. Use
-                ``registrations[*].version`` and
+                Use ``registrations[*].version`` and
                 ``registrations[*].registry_uri`` to identify the model in
                 the registry. To store the push_id in the registry, pass it
                 via ``config.labels`` (e.g.
@@ -318,9 +328,9 @@ class ModelPusherPlugin(PusherPluginBase):
         #     "model_name": "my-classifier",
         #     "version": "1",
         #     "push_id": "a1b2c3d4e5f6a7b8",
-        #     "raw_artifact_uri": "/store/models/my-classifier/<push_id>/raw",
+        #     "raw_artifact_uri": "/store/models/my-classifier/raw",
         #     "deployable_artifact_uri":
-        #         "/store/models/my-classifier/<push_id>/deployable/model.tar",
+        #         "/store/models/my-classifier/deployable/model.tar",
         #     "registrations": [
         #         {"version": "1", "registry_uri": "memory://my-classifier/1"}
         #     ],
@@ -380,10 +390,13 @@ class ModelPusherPlugin(PusherPluginBase):
         """Upload both model artifacts and register the model in all registries.
 
         Resolves the model name (``config.model_name`` → auto-generated when
-        ``None``), generates a unique 16-hex-character push ID to avoid storage
-        key collisions across versions, uploads the raw artifact first, then
-        the deployable artifact, and calls ``register_model()`` on each
-        configured registry with both URIs, description, labels, and metadata.
+        ``None``), uploads the raw artifact first, then the deployable
+        artifact, and calls ``register_model()`` on each configured registry
+        with both URIs, description, labels, and metadata.
+
+        Storage keys are fixed per ``model_name`` (see the ``push_id``
+        warning below) — re-running with the same ``model_name`` overwrites
+        the previous push's storage objects.
 
         Returns:
             A :class:`ModelPushResult` dict with:
@@ -394,8 +407,8 @@ class ModelPusherPlugin(PusherPluginBase):
             - ``"raw_artifact_uri"``: URI of the uploaded raw model artifact.
             - ``"deployable_artifact_uri"``: URI of the uploaded deployable
               artifact.
-            - ``"push_id"``: 16-character hex token embedded in the
-              storage keys for this upload.
+            - ``"push_id"``: 16-character hex token unique to this call, for
+              log/result correlation only — not part of any storage key.
             - ``"registrations"``: list of per-registry dicts, each containing
               ``"version"`` and ``"registry_uri"``. One entry per registry.
 
@@ -429,7 +442,7 @@ class ModelPusherPlugin(PusherPluginBase):
                 self._artifact.raw_model.path, tmp_root, "raw"
             )
             raw_uri = self._storage_backend.upload(
-                raw_local_path, f"models/{model_name}/{push_id}/raw"
+                raw_local_path, f"models/{model_name}/raw"
             )
 
             deployable_uri: str | None = None
@@ -442,9 +455,16 @@ class ModelPusherPlugin(PusherPluginBase):
                 deployable_local_path = self._ensure_local(
                     self._artifact.deployable_model.path, tmp_root, "deployable"
                 )
+                # The assembler may hand off the deployable package either as
+                # a single archive or as loose files (see
+                # TorchAssemblerConfig.archive_deployable_package) -- key
+                # accordingly, matching the same file-vs-directory handling
+                # already used for the raw model.
+                deployable_key = f"models/{model_name}/deployable"
+                if os.path.isfile(deployable_local_path):
+                    deployable_key = f"{deployable_key}/model.tar"
                 deployable_uri = self._storage_backend.upload(
-                    deployable_local_path,
-                    f"models/{model_name}/{push_id}/deployable/model.tar",
+                    deployable_local_path, deployable_key
                 )
 
         registrations: list[RegistrationResult] = []
