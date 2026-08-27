@@ -647,7 +647,12 @@ class TestTorchCompileConfig(TestCase):
 
     def test_valid_modes_accepted(self):
         """All ``TorchCompileMode`` values are accepted."""
-        for mode in ("default", "reduce-overhead", "max-autotune", "max-autotune-no-cudagraphs"):
+        for mode in (
+            "default",
+            "reduce-overhead",
+            "max-autotune",
+            "max-autotune-no-cudagraphs",
+        ):
             with self.subTest(mode=mode):
                 cfg = TorchCompileConfig(mode=mode)
                 self.assertEqual(cfg.mode, mode)
