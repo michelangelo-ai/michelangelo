@@ -8,11 +8,14 @@ Runtime exception hierarchy for the pusher module.
 Defines `PusherError` and its runtime subclasses (`ArtifactNotFoundError`,
 `PusherPluginError`). These are raised during `push()` execution.
 
-`ConfigurationError` is a schema-layer exception, raised by config dataclass
-`__post_init__` validation before any push execution begins — not by the
-runtime — which is why it's intentionally *not* a subclass of `PusherError`.
-It lives in `michelangelo.workflow.schema.exceptions`, which isn't part of
-this generated reference yet, so it isn't documented on this page.
+`ConfigurationError` is a schema-layer exception defined in
+`michelangelo.workflow.schema.exceptions` and re-exported here for backwards
+compatibility, so `from michelangelo.workflow.tasks.pusher.exceptions import
+ConfigurationError` works. It is intentionally *not* a subclass of
+`PusherError`, since it's raised by config dataclass `__post_init__`
+validation before any push execution begins, not by the runtime.
+`michelangelo.workflow.schema.exceptions` isn't part of this generated
+reference yet, so `ConfigurationError` itself isn't documented on this page.
 
 ## PusherError Objects
 
