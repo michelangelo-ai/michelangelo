@@ -161,17 +161,15 @@ def custom_assembler(
             include_import_prefixes=include_import_prefixes,
         )
 
-        # The deployable package is archived into a single tar before upload
-        # -- it's a self-contained serving bundle meant to be handed off as
-        # one unit, unlike the raw model (uploaded as loose files, since
-        # nothing needs to move it around as a single blob).
+        # Archived into a single tar -- a self-contained serving bundle,
+        # unlike the raw model, which is uploaded as loose files.
         deployable_tar_path = shutil.make_archive(
             os.path.join(temp_dir, "deployable_package"), "tar", model_package_path
         )
 
         upload_prefix = f"tabular_assembler/{uuid.uuid4().hex}"
         deployable_uri = storage_backend.upload(
-            deployable_tar_path, f"{upload_prefix}/deployable"
+            deployable_tar_path, f"{upload_prefix}/deployable/model.tar"
         )
         raw_uri = storage_backend.upload(raw_model_package_path, f"{upload_prefix}/raw")
 

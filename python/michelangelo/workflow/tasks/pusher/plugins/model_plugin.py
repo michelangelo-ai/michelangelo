@@ -320,7 +320,7 @@ class ModelPusherPlugin(PusherPluginBase):
         #     "push_id": "a1b2c3d4e5f6a7b8",
         #     "raw_artifact_uri": "/store/models/my-classifier/<push_id>/raw",
         #     "deployable_artifact_uri":
-        #         "/store/models/my-classifier/<push_id>/deployable",
+        #         "/store/models/my-classifier/<push_id>/deployable/model.tar",
         #     "registrations": [
         #         {"version": "1", "registry_uri": "memory://my-classifier/1"}
         #     ],
@@ -444,7 +444,7 @@ class ModelPusherPlugin(PusherPluginBase):
                 )
                 deployable_uri = self._storage_backend.upload(
                     deployable_local_path,
-                    f"models/{model_name}/{push_id}/deployable",
+                    f"models/{model_name}/{push_id}/deployable/model.tar",
                 )
 
         registrations: list[RegistrationResult] = []

@@ -198,7 +198,8 @@ class TestModelPusherPluginExecute(TestCase):
             raw_key, f"models/{result['model_name']}/{result['push_id']}/raw"
         )
         self.assertEqual(
-            dep_key, f"models/{result['model_name']}/{result['push_id']}/deployable"
+            dep_key,
+            f"models/{result['model_name']}/{result['push_id']}/deployable/model.tar",
         )
 
     def test_local_artifact_path_uploaded_directly_without_download(self):
@@ -721,7 +722,7 @@ class TestModelPusherPluginStorageKey(TestCase):
             registry_client=_mock_registry(),
         ).execute()
         dep_key = backend.upload.call_args_list[1][0][1]
-        self.assertEqual(dep_key, f"models/m/{result['push_id']}/deployable")
+        self.assertEqual(dep_key, f"models/m/{result['push_id']}/deployable/model.tar")
 
     def test_raw_key_unaffected_by_source_path_shape(self):
         """A source path ending in a category-like segment doesn't alter the key.
