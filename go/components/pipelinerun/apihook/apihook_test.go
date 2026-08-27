@@ -505,6 +505,52 @@ func TestBeforeCreate_RevisionNamespaceFallsBackToPipelineRun(t *testing.T) {
 	assert.Equal(t, "revision X", request.PipelineRun.Spec.PipelineSpec.Description)
 }
 
+func TestBeforeCreate_DefaultsEnvironmentLabelWhenAbsent(t *testing.T) {
+	hook := setUpHook(t)
+	hook.defaultEnv = "staging"
+
+	request := &v2.CreatePipelineRunRequest{
+		PipelineRun: &v2.PipelineRun{
+			ObjectMeta: metav1.ObjectMeta{Name: "test-run", Namespace: testNamespace},
+		},
+	}
+	require.NoError(t, hook.BeforeCreate(context.Background(), request))
+	assert.Equal(t, "staging", request.PipelineRun.Labels[api.EnvironmentLabel])
+}
+
+func TestBeforeCreate_DefaultsToUnspecifiedWhenUnconfigured(t *testing.T) {
+	hook := setUpHook(t)
+
+	request := &v2.CreatePipelineRunRequest{
+		PipelineRun: &v2.PipelineRun{
+			ObjectMeta: metav1.ObjectMeta{Name: "test-run", Namespace: testNamespace},
+		},
+	}
+	require.NoError(t, hook.BeforeCreate(context.Background(), request))
+	assert.Equal(t, api.UnspecifiedEnvironment, request.PipelineRun.Labels[api.EnvironmentLabel])
+}
+
+func TestBeforeCreate_PreservesExplicitEnvironmentLabel(t *testing.T) {
+	hook := setUpHook(t)
+	hook.defaultEnv = "production"
+
+	request := &v2.CreatePipelineRunRequest{
+		PipelineRun: &v2.PipelineRun{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-run",
+				Namespace: testNamespace,
+				Labels:    map[string]string{api.EnvironmentLabel: "staging"},
+			},
+		},
+	}
+	require.NoError(t, hook.BeforeCreate(context.Background(), request))
+	assert.Equal(t, "staging", request.PipelineRun.Labels[api.EnvironmentLabel])
+}
+
+func TestRegisterPipelineRunAPIHook(t *testing.T) {
+	RegisterPipelineRunAPIHook(zaptest.NewLogger(t), nil, runtime.NewScheme(), "production")
+}
+
 func TestBeforeCreate_PipelineGetTransientErrorIsSoft(t *testing.T) {
 	live := &v2.Pipeline{
 		ObjectMeta: metav1.ObjectMeta{Name: "test-pipeline", Namespace: testNamespace},

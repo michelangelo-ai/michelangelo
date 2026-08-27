@@ -3,7 +3,6 @@ package handler
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net"
 	"reflect"
 	"strings"
@@ -1041,73 +1040,4 @@ func TestUpdateEchoesCallerSpecForMetadataOnlyObjects(t *testing.T) {
 		"the object returned to the client keeps the URI it sent, though it was not persisted")
 	assert.Equal(t, "8", incoming.GetResourceVersion(),
 		"the new resource version must still reach the caller")
-}
-
-func TestCreate_EnvironmentLabelDefaulting(t *testing.T) {
-	tests := []struct {
-		name          string
-		defaultEnv    string
-		initialLabels map[string]string
-		wantEnvLabel  string
-	}{
-		{
-			name:         "no label, configured default is applied",
-			defaultEnv:   "staging",
-			wantEnvLabel: "staging",
-		},
-		{
-			name:         "no label, unconfigured default falls back to sentinel",
-			defaultEnv:   "",
-			wantEnvLabel: api.UnspecifiedEnvironment,
-		},
-		{
-			name:          "explicit label is preserved, not overwritten",
-			defaultEnv:    "staging",
-			initialLabels: map[string]string{api.EnvironmentLabel: "production"},
-			wantEnvLabel:  "production",
-		},
-	}
-
-	for i, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			client, err := setupK8s()
-			assert.NoError(t, err)
-			handler := NewFakeAPIHandlerWithDefaultEnvironment(client, tt.defaultEnv)
-
-			pr := &v2pb.PipelineRun{
-				ObjectMeta: metav1.ObjectMeta{
-					Namespace: "default",
-					Name:      fmt.Sprintf("pr-env-defaulting-%d", i),
-					Labels:    tt.initialLabels,
-				},
-			}
-			err = handler.Create(context.Background(), pr, &metav1.CreateOptions{})
-			assert.NoError(t, err)
-			assert.Equal(t, tt.wantEnvLabel, pr.Labels[api.EnvironmentLabel])
-		})
-	}
-}
-
-// TestCreate_NonPipelineRunObjectUnaffected guards against
-// setDefaultEnvironmentLabel's kind gate being too broad: a RayJob (or any
-// other non-PipelineRun kind) must never get an injected EnvironmentLabel.
-func TestCreate_NonPipelineRunObjectUnaffected(t *testing.T) {
-	client, err := setupK8s()
-	assert.NoError(t, err)
-	handler := NewFakeAPIHandlerWithDefaultEnvironment(client, "staging")
-
-	job := &v2pb.RayJob{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: "default",
-			Name:      "rayjob-env-defaulting-unaffected",
-		},
-		Spec: v2pb.RayJobSpec{
-			JobId: "rayjob-env-defaulting-unaffected",
-		},
-	}
-	err = handler.Create(context.Background(), job, &metav1.CreateOptions{})
-	assert.NoError(t, err)
-	_, ok := job.Labels[api.EnvironmentLabel]
-	assert.False(t, ok, "non-PipelineRun kinds must never get an injected EnvironmentLabel")
 }

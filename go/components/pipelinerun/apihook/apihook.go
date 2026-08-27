@@ -27,12 +27,16 @@ const pipelineKind = "Pipeline"
 // Pipeline as the controller ownerReference on PipelineRuns at creation, and
 // stamps the owning Pipeline's type as the michelangelo/SourcePipelineType
 // label. Both are best-effort: if the owning Pipeline can't be resolved,
-// creation proceeds without them.
-func RegisterPipelineRunAPIHook(logger *zap.Logger, apiHandler api.Handler, scheme *runtime.Scheme) {
+// creation proceeds without them. It also defaults api.EnvironmentLabel when
+// the caller did not supply one. defaultEnv is the operator-configured
+// default environment label value (empty when unconfigured, in which case
+// api.UnspecifiedEnvironment is used instead).
+func RegisterPipelineRunAPIHook(logger *zap.Logger, apiHandler api.Handler, scheme *runtime.Scheme, defaultEnv string) {
 	v2.RegisterPipelineRunAPIHook(apiHook{
 		logger:     logger,
 		apiHandler: apiHandler,
 		scheme:     scheme,
+		defaultEnv: defaultEnv,
 	})
 }
 
@@ -41,9 +45,12 @@ type apiHook struct {
 	logger     *zap.Logger
 	apiHandler api.Handler
 	scheme     *runtime.Scheme
+	defaultEnv string
 }
 
 func (a apiHook) BeforeCreate(ctx context.Context, request *v2.CreatePipelineRunRequest) error {
+	setIfAbsent(request.PipelineRun, api.EnvironmentLabel, a.defaultEnvironment())
+
 	// Fetch the live Pipeline once when a pipeline ref is present. Used both to
 	// optionally pin status.latestRevision and to stamp ownerRef / notifications.
 	pipeline := a.getReferencedPipeline(ctx, request)
@@ -273,4 +280,22 @@ func (a apiHook) resolveRevision(ctx context.Context, request *v2.CreatePipeline
 		zap.String("pipelinerun", request.PipelineRun.GetName()))
 
 	return nil
+}
+
+// defaultEnvironment returns the configured default, or
+// api.UnspecifiedEnvironment when the operator has configured none.
+func (a apiHook) defaultEnvironment() string {
+	if a.defaultEnv == "" {
+		return api.UnspecifiedEnvironment
+	}
+	return a.defaultEnv
+}
+
+func setIfAbsent(run *v2.PipelineRun, key, value string) {
+	if run.ObjectMeta.Labels == nil {
+		run.ObjectMeta.Labels = map[string]string{}
+	}
+	if _, ok := run.ObjectMeta.Labels[key]; !ok {
+		run.ObjectMeta.Labels[key] = value
+	}
 }

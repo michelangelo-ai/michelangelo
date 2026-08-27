@@ -49,8 +49,12 @@ func opts() fx.Option {
 		fx.Provide(getScheme),
 		fx.Provide(apihandler.NewConfig),
 		fx.Invoke(projectapihook.RegisterProjectAPIHook),
-		// Cascade-delete: stamp the owning Pipeline ownerReference on runs at creation.
-		fx.Invoke(pipelinerunapihook.RegisterPipelineRunAPIHook),
+		// Cascade-delete: stamp the owning Pipeline ownerReference on runs at
+		// creation. Also defaults api.EnvironmentLabel from the
+		// operator-configured PipelineRunDefaultEnvironment.
+		fx.Invoke(func(logger *zap.Logger, apiHandler api.Handler, scheme *runtime.Scheme, conf apihandler.Config) {
+			pipelinerunapihook.RegisterPipelineRunAPIHook(logger, apiHandler, scheme, conf.PipelineRunDefaultEnvironment)
+		}),
 		fx.Invoke(triggerrunapihook.RegisterTriggerRunAPIHook),
 		fx.Invoke(func(logger *zap.Logger, apiHandler api.Handler, conf apihandler.Config) {
 			modelapihook.RegisterModelAPIHook(logger, apiHandler, conf.PipelineRunDefaultEnvironment)
