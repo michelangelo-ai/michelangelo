@@ -249,7 +249,8 @@ describe('Deployment detail page', () => {
       expect(screen.getAllByText('Owner')).toHaveLength(3); // 2 cards + detail page header
       expect(screen.getAllByText('Type')).toHaveLength(2);
       expect(screen.getAllByText('Source pipeline run')).toHaveLength(2);
-      expect(screen.getAllByText('—')).toHaveLength(8);
+      // 4 unresolved fields per card × 2 cards, plus the detail page header's empty Owner
+      expect(screen.getAllByText('—')).toHaveLength(9);
     });
 
     it('renders empty states when no revisions are set', async () => {
