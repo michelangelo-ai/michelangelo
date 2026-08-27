@@ -1,6 +1,6 @@
 ---
 sidebar_label: context
-title: uniflow.core.context
+title: michelangelo.uniflow.core.context
 ---
 
 Workflow execution context for local and remote runs.
@@ -19,28 +19,32 @@ The context system provides:
 
 **Example**:
 
-  Local workflow execution::
-  
-  from michelangelo.uniflow.core.context import create_context
-  from michelangelo.uniflow.core.decorator import workflow
-  
-  @workflow()
-  def my_workflow():
-  return &quot;Hello, World!&quot;
-  
-  if __name__ == &quot;__main__&quot;:
-  ctx = create_context()
-  ctx.run(my_workflow)
-  
-  Remote workflow execution::
-  
-  # Command line:
-  # python my_workflow.py remote-run \\
-  #     --storage-url s3://bucket/storage \\
-  #     --image my-image:latest
-  
-  ctx = create_context()  # Automatically detects remote-run mode
-  ctx.run(my_workflow)
+Local workflow execution:
+
+```python
+from michelangelo.uniflow.core.context import create_context
+from michelangelo.uniflow.core.decorator import workflow
+
+@workflow()
+def my_workflow():
+    return "Hello, World!"
+
+if __name__ == "__main__":
+    ctx = create_context()
+    ctx.run(my_workflow)
+```
+
+Remote workflow execution:
+
+```python
+# Command line:
+# python my_workflow.py remote-run \
+#     --storage-url s3://bucket/storage \
+#     --image my-image:latest
+
+ctx = create_context()  # Automatically detects remote-run mode
+ctx.run(my_workflow)
+```
 
 ## Context Objects
 
@@ -54,8 +58,8 @@ Represents the context for running a workflow, either locally or in-cluster.
 **Attributes**:
 
 - `_args` - Command-line arguments for the run.
-- `_target` - The mode of the workflow execution. It can be &quot;local-run&quot; or
-  &quot;remote-run&quot;.
+- `_target` - The mode of the workflow execution. It can be "local-run" or
+  "remote-run".
 - `environ` - Environment variables to set during execution.
 
 #### is\_local\_run
@@ -99,25 +103,26 @@ to local-run.
 **Returns**:
 
   A Context instance configured for the requested execution mode.
-  
 
 **Raises**:
 
 - `AssertionError` - If an unsupported execution target is specified.
-  
 
 **Example**:
 
-  Creating context for local execution::
-  
-  # python my_workflow.py
-  # or: python my_workflow.py local-run
-  ctx = create_context()
-  assert ctx.is_local_run()
-  
-  Creating context for remote execution::
-  
-  # python my_workflow.py remote-run --storage-url s3://... --image ...
-  ctx = create_context()
-  assert not ctx.is_local_run()
+Creating context for local execution:
 
+```python
+# python my_workflow.py
+# or: python my_workflow.py local-run
+ctx = create_context()
+assert ctx.is_local_run()
+```
+
+Creating context for remote execution:
+
+```python
+# python my_workflow.py remote-run --storage-url s3://... --image ...
+ctx = create_context()
+assert not ctx.is_local_run()
+```

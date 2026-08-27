@@ -1,6 +1,6 @@
 ---
 sidebar_label: io_registry
-title: uniflow.core.io_registry
+title: michelangelo.uniflow.core.io_registry
 ---
 
 I/O plugin system for serializing and deserializing Python objects.
@@ -15,33 +15,41 @@ The core components are:
 - IORegistry: Registry mapping Python types to their corresponding I/O handlers
 - BytesIOIO: Built-in I/O handler for BytesIO objects
 
+`default_io` is the module-level `IORegistry` singleton — pre-populated with a
+handler for `BytesIO` — that `@task` uses for argument and result serialization
+unless you pass a different registry via its `io` parameter.
+
 **Example**:
 
-  Registering a custom I/O handler::
-  
-  from michelangelo.uniflow.core.io_registry import IO, default_io
-  import pandas as pd
-  
-  class PandasIO(IO[pd.DataFrame]):
-  def write(self, url: str, value: pd.DataFrame):
-  value.to_parquet(url)
-  return None
-  
-  def read(self, url: str, metadata):
-  return pd.read_parquet(url)
-  
-  # Register the handler
-  default_io.set(pd.DataFrame, PandasIO())
-  
-  Using the I/O registry::
-  
-  import pandas as pd
-  from michelangelo.uniflow.core.io_registry import default_io
-  
-  df = pd.DataFrame({&quot;a&quot;: [1, 2, 3]})
-  io_handler = default_io[pd.DataFrame]
-  io_handler.write(&quot;s3://bucket/data.parquet&quot;, df)
-  loaded_df = io_handler.read(&quot;s3://bucket/data.parquet&quot;, None)
+Registering a custom I/O handler:
+
+```python
+from michelangelo.uniflow.core.io_registry import IO, default_io
+import pandas as pd
+
+class PandasIO(IO[pd.DataFrame]):
+    def write(self, url: str, value: pd.DataFrame):
+        value.to_parquet(url)
+        return None
+
+    def read(self, url: str, metadata):
+        return pd.read_parquet(url)
+
+# Register the handler
+default_io.set(pd.DataFrame, PandasIO())
+```
+
+Using the I/O registry:
+
+```python
+import pandas as pd
+from michelangelo.uniflow.core.io_registry import default_io
+
+df = pd.DataFrame({"a": [1, 2, 3]})
+io_handler = default_io[pd.DataFrame]
+io_handler.write("s3://bucket/data.parquet", df)
+loaded_df = io_handler.read("s3://bucket/data.parquet", None)
+```
 
 ## IO Objects
 
@@ -60,17 +68,19 @@ T: The Python type that this I/O handler manages.
 
 **Example**:
 
-  Implementing a custom I/O handler::
-  
-  class MyDataIO(IO[MyData]):
-  def write(self, url: str, value: MyData) -&gt; Optional[Any]:
-  with fsspec.open(url, &#x27;wb&#x27;) as f:
-  pickle.dump(value, f)
-  return None
-  
-  def read(self, url: str, metadata: Optional[Any]) -&gt; MyData:
-  with fsspec.open(url, &#x27;rb&#x27;) as f:
-  return pickle.load(f)
+Implementing a custom I/O handler:
+
+```python
+class MyDataIO(IO[MyData]):
+    def write(self, url: str, value: MyData) -> Optional[Any]:
+        with fsspec.open(url, 'wb') as f:
+            pickle.dump(value, f)
+        return None
+
+    def read(self, url: str, metadata: Optional[Any]) -> MyData:
+        with fsspec.open(url, 'rb') as f:
+            return pickle.load(f)
+```
 
 #### write
 
@@ -100,7 +110,6 @@ deserialization logic for the serialized value.
 
 - `url` - The URL where the value should be saved.
 - `value` - The value to be serialized and saved.
-  
 
 **Returns**:
 
@@ -128,7 +137,6 @@ or pyarrow) to properly handle I/O for the given URL.
 - `url` - The URL from where the object should be loaded.
 - `metadata` - Optional metadata to facilitate the value deserialization
   and loading logic.
-  
 
 **Returns**:
 
@@ -148,15 +156,17 @@ and reads it back into a new BytesIO instance.
 
 **Example**:
 
-  Writing and reading BytesIO objects::
-  
-  from io import BytesIO
-  from michelangelo.uniflow.core.io_registry import default_io
-  
-  buffer = BytesIO(b&quot;Hello, World!&quot;)
-  io_handler = default_io[BytesIO]
-  io_handler.write(&quot;file:///tmp/data.bin&quot;, buffer)
-  loaded = io_handler.read(&quot;file:///tmp/data.bin&quot;, None)
+Writing and reading BytesIO objects:
+
+```python
+from io import BytesIO
+from michelangelo.uniflow.core.io_registry import default_io
+
+buffer = BytesIO(b"Hello, World!")
+io_handler = default_io[BytesIO]
+io_handler.write("file:///tmp/data.bin", buffer)
+loaded = io_handler.read("file:///tmp/data.bin", None)
+```
 
 #### write
 
@@ -170,7 +180,6 @@ Write BytesIO buffer to the specified URL.
 
 - `url` - The URL where the binary content should be saved.
 - `value` - The BytesIO object containing the binary data to write.
-  
 
 **Returns**:
 
@@ -187,8 +196,7 @@ Read binary content from URL into a BytesIO buffer.
 **Arguments**:
 
 - `url` - The URL from where the binary content should be loaded.
-- `_metadata` - Unused metadata parameter (BytesIO doesn&#x27;t need metadata).
-  
+- `_metadata` - Unused metadata parameter (BytesIO doesn't need metadata).
 
 **Returns**:
 
@@ -210,24 +218,25 @@ Order).
 **Attributes**:
 
 - `_registry` - Internal dictionary mapping types to I/O handlers or factories.
-  
 
 **Example**:
 
-  Creating and using a custom registry::
-  
-  from michelangelo.uniflow.core.io_registry import IORegistry, BytesIOIO
-  from io import BytesIO
-  
-  # Create a new registry
-  custom_io = IORegistry({BytesIO: BytesIOIO()})
-  
-  # Register additional handlers
-  custom_io.set(pd.DataFrame, PandasIO())
-  
-  # Lookup and use handlers
-  handler = custom_io[BytesIO]
-  handler.write(&quot;s3://bucket/data.bin&quot;, my_bytes)
+Creating and using a custom registry:
+
+```python
+from michelangelo.uniflow.core.io_registry import IORegistry, BytesIOIO
+from io import BytesIO
+
+# Create a new registry
+custom_io = IORegistry({BytesIO: BytesIOIO()})
+
+# Register additional handlers
+custom_io.set(pd.DataFrame, PandasIO())
+
+# Lookup and use handlers
+handler = custom_io[BytesIO]
+handler.write("s3://bucket/data.bin", my_bytes)
+```
 
 #### \_\_init\_\_
 
@@ -257,27 +266,26 @@ Register an I/O handler for a specific type.
   I/O handler.
 - `force` - If True, overwrites existing registrations. If False, raises
   KeyError if the type is already registered. Defaults to False.
-  
 
 **Returns**:
 
   The IORegistry instance (for method chaining).
-  
 
 **Raises**:
 
 - `KeyError` - If the type is already registered and force=False.
-  
 
 **Example**:
 
-  Registering a new I/O handler::
-  
-  from michelangelo.uniflow.core.io_registry import default_io
-  
-  default_io.set(MyType, MyTypeIO())
-  # Or use a lazy factory
-  default_io.set(MyType, lambda: MyTypeIO())
+Registering a new I/O handler:
+
+```python
+from michelangelo.uniflow.core.io_registry import default_io
+
+default_io.set(MyType, MyTypeIO())
+# Or use a lazy factory
+default_io.set(MyType, lambda: MyTypeIO())
+```
 
 #### update
 
@@ -291,26 +299,25 @@ Register multiple I/O handlers at once.
 
 - `io_dict` - Dictionary mapping types to I/O handlers or factories.
 - `force` - If True, overwrites existing registrations. Defaults to False.
-  
 
 **Returns**:
 
   The IORegistry instance (for method chaining).
-  
 
 **Raises**:
 
 - `KeyError` - If any type is already registered and force=False.
-  
 
 **Example**:
 
-  Bulk registration::
-  
-  default_io.update({
-- `pd.DataFrame` - PandasIO(),
-- `np.ndarray` - NumpyIO(),
-  })
+Bulk registration:
+
+```python
+default_io.update({
+    pd.DataFrame: PandasIO(),
+    np.ndarray: NumpyIO(),
+})
+```
 
 #### copy
 
@@ -323,14 +330,15 @@ Create a shallow copy of the registry.
 **Returns**:
 
   A new IORegistry instance with a copy of the internal registry dict.
-  
 
 **Example**:
 
-  Creating a custom registry from the default::
-  
-  custom_io = default_io.copy()
-  custom_io.set(MyType, MyTypeIO())
+Creating a custom registry from the default:
+
+```python
+custom_io = default_io.copy()
+custom_io.set(MyType, MyTypeIO())
+```
 
 #### \_\_repr\_\_
 
@@ -352,34 +360,33 @@ def __getitem__(_type: type) -> IO
 
 Retrieve the I/O handler for a given type.
 
-Performs inheritance-based lookup through the type&#x27;s MRO. If a lazy factory
+Performs inheritance-based lookup through the type's MRO. If a lazy factory
 is registered, it will be instantiated and cached.
 
 **Arguments**:
 
 - `_type` - The Python type to lookup the I/O handler for.
-  
 
 **Returns**:
 
   The I/O handler instance for the given type.
-  
 
 **Raises**:
 
 - `KeyError` - If no I/O handler is registered for the type or any of its
   base classes.
-  
 
 **Example**:
 
-  Looking up I/O handlers::
-  
-  from io import BytesIO
-  from michelangelo.uniflow.core.io_registry import default_io
-  
-  handler = default_io[BytesIO]
-  handler.write(&quot;file:///tmp/data.bin&quot;, my_buffer)
+Looking up I/O handlers:
+
+```python
+from io import BytesIO
+from michelangelo.uniflow.core.io_registry import default_io
+
+handler = default_io[BytesIO]
+handler.write("file:///tmp/data.bin", my_buffer)
+```
 
 #### \_\_setitem\_\_
 
@@ -393,18 +400,18 @@ Register an I/O handler using dictionary syntax.
 
 - `_type` - The Python type to register the handler for.
 - `io` - The I/O handler instance or factory callable.
-  
 
 **Raises**:
 
 - `KeyError` - If the type is already registered.
-  
 
 **Example**:
 
-  Dictionary-style registration::
-  
-  default_io[MyType] = MyTypeIO()
+Dictionary-style registration:
+
+```python
+default_io[MyType] = MyTypeIO()
+```
 
 #### \_\_contains\_\_
 
@@ -414,28 +421,28 @@ def __contains__(_type: type) -> bool
 
 Check if an I/O handler is registered for a type.
 
-Performs inheritance-based lookup through the type&#x27;s MRO.
+Performs inheritance-based lookup through the type's MRO.
 
 **Arguments**:
 
 - `_type` - The Python type to check.
-  
 
 **Returns**:
 
   True if a handler is registered for the type or any base class,
   False otherwise.
-  
 
 **Example**:
 
-  Checking for registered handlers::
-  
-  from io import BytesIO
-  from michelangelo.uniflow.core.io_registry import default_io
-  
-  if BytesIO in default_io:
-  print(&quot;BytesIO handler is available&quot;)
+Checking for registered handlers:
+
+```python
+from io import BytesIO
+from michelangelo.uniflow.core.io_registry import default_io
+
+if BytesIO in default_io:
+    print("BytesIO handler is available")
+```
 
 #### io\_registry
 
@@ -445,10 +452,8 @@ def io_registry() -> IORegistry
 
 Return the default I/O registry.
 
-.. deprecated::
-Use :data:`default_io` directly instead of calling this function.
+**Deprecated**: Use `default_io` directly instead of calling this function.
 
 **Returns**:
 
   The global default_io registry instance.
-

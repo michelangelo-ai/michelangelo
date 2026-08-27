@@ -5,9 +5,18 @@ sidebar_label: Overview
 
 # Python SDK Reference
 
-Auto-generated reference for the `michelangelo` Python package, generated from source docstrings via `pydoc-markdown` (config at repo root: `pydoc-markdown.yml`). Run `bun run docs:api` from the `website/` directory to regenerate the pages below after docstring changes.
+Auto-generated reference for the `michelangelo` Python package — task and workflow
+decorators, compute-backend plugins, trainer utilities, and workflow variable types.
+Start here if you're authoring pipelines with the Python SDK.
 
-Some modules below aren't linked yet — coming soon.
+> New to Michelangelo AI? See [Core Concepts and Key Terms](../../getting-started/core-concepts-and-key-terms.md)
+> for what a task, a workflow, and Uniflow actually are before diving into the raw
+> signatures below.
+
+Some modules below aren't linked yet — coming soon. Two modules referenced elsewhere
+in this reference, the XGBoost trainer and `LightningTrainer` itself, aren't in the
+current generator config and have no page yet either; only the Torch collate-function
+utilities under **Trainer** are covered so far.
 
 ## Uniflow — Tasks & Workflows
 
@@ -46,7 +55,8 @@ The pusher component for CanvasFlex template-driven workflows.
 
 ## Trainer
 
-PyTorch training utilities used with `LightningTrainer`.
+PyTorch training utilities used with `LightningTrainer` (`LightningTrainer` itself
+isn't generated into this reference yet — see the note above).
 
 | Module | Description |
 |--------|-------------|
@@ -71,3 +81,13 @@ Typed dataset and metadata variables for pipeline IO.
 |--------|-------------|
 | `workflow.variables.types` | `DatasetVariable` and related types |
 | `workflow.variables.metadata` | Variable metadata types |
+
+## Regenerating this reference
+
+This section is generated from source docstrings via `pydoc-markdown`, configured by
+`pydoc-markdown.yml` at the repo root. If you're updating docstrings, regenerate the
+pages above by running `bun run docs:api` from the `website/` directory.
+
+`pydoc-markdown` isn't currently declared as a project dependency, so on a fresh
+checkout you may need to install it yourself (`pip install pydoc-markdown`) before
+the script succeeds.

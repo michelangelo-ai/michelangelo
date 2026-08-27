@@ -1,6 +1,6 @@
 ---
 sidebar_label: task
-title: uniflow.plugins.ray.task
+title: michelangelo.uniflow.plugins.ray.task
 ---
 
 Ray task configuration and execution for Uniflow workflows.
@@ -33,19 +33,42 @@ while worker nodes perform distributed computation.
 **Attributes**:
 
 - `head_cpu` - Number of CPUs allocated to the head node.
-- `head_memory` - Memory allocation for the head node (e.g., &quot;4G&quot;, &quot;512M&quot;).
-- `head_disk` - Disk space allocation for the head node (e.g., &quot;10G&quot;).
+- `head_memory` - Memory allocation for the head node (e.g., "4G", "512M").
+- `head_disk` - Disk space allocation for the head node (e.g., "10G").
 - `head_gpu` - Number of GPUs allocated to the head node.
 - `head_object_store_memory` - Object store memory for the head node in bytes.
 - `worker_cpu` - Number of CPUs allocated per worker node.
-- `worker_memory` - Memory allocation per worker node (e.g., &quot;4G&quot;, &quot;512M&quot;).
-- `worker_disk` - Disk space allocation per worker node (e.g., &quot;10G&quot;).
+- `worker_memory` - Memory allocation per worker node (e.g., "4G", "512M").
+- `worker_disk` - Disk space allocation per worker node (e.g., "10G").
 - `worker_gpu` - Number of GPUs allocated per worker node.
 - `worker_object_store_memory` - Object store memory per worker node in bytes.
-- `head_memory`0 - Number of worker instances to launch.
-- `head_memory`1 - If True, enables breakpoint debugging for the task.
-- `head_memory`2 - Runtime environment configuration dict for Ray
+- `worker_instances` - Number of worker instances to launch.
+- `breakpoint` - If True, enables breakpoint debugging for the task.
+- `runtime_env` - Runtime environment configuration dict for Ray
   (packages, env vars, etc.).
+
+All fields default to `None` (unset); the Starlark orchestration function
+supplies defaults for anything you don't specify.
+
+**Example**:
+
+```python
+from michelangelo.uniflow.core.decorator import task
+from michelangelo.uniflow.plugins.ray.task import RayTask
+
+@task(
+    config=RayTask(
+        head_cpu=2,
+        head_memory="4Gi",
+        worker_cpu=4,
+        worker_memory="8Gi",
+        worker_instances=2,
+    )
+)
+def process_batch(data_path: str) -> dict:
+    # Runs inside a Ray cluster sized per the config above
+    return {"status": "complete"}
+```
 
 #### get\_binding
 
@@ -95,4 +118,3 @@ def post_run()
 Shut down the Ray cluster after task execution.
 
 Ensures proper cleanup of Ray resources by shutting down the Ray runtime.
-

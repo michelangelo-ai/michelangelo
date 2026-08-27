@@ -1,6 +1,6 @@
 ---
 sidebar_label: task_config
-title: uniflow.core.task_config
+title: michelangelo.uniflow.core.task_config
 ---
 
 Task configuration and dependencies for Uniflow workflows.
@@ -17,30 +17,32 @@ Key components:
 
 **Example**:
 
-  Creating a custom task configuration::
-  
-  from pathlib import Path
-  from michelangelo.uniflow.core.task_config import TaskConfig, TaskBinding
-  
-  @dataclass
-  class MyTask(TaskConfig):
-- `cpu` - int = 1
-- `memory` - str = &quot;4Gi&quot;
-  
-  def get_binding(self) -&gt; TaskBinding:
-  return TaskBinding(
-  star_file=Path(__file__).parent / &quot;my_task.star&quot;,
-  function=&quot;my_task&quot;,
-  export=&quot;__my_task&quot;
-  )
-  
-  def pre_run(self):
-  # Setup code
-  pass
-  
-  def post_run(self):
-  # Cleanup code
-  pass
+Creating a custom task configuration:
+
+```python
+from pathlib import Path
+from michelangelo.uniflow.core.task_config import TaskConfig, TaskBinding
+
+@dataclass
+class MyTask(TaskConfig):
+    cpu: int = 1
+    memory: str = "4Gi"
+
+    def get_binding(self) -> TaskBinding:
+        return TaskBinding(
+            star_file=Path(__file__).parent / "my_task.star",
+            function="my_task",
+            export="__my_task"
+        )
+
+    def pre_run(self):
+        # Setup code
+        pass
+
+    def post_run(self):
+        # Cleanup code
+        pass
+```
 
 ## Dependencies Objects
 
@@ -64,15 +66,16 @@ necessary code into the workflow tarball.
 - `star_attributes` - Maps alias to (star_file_path, attribute_name) tuples.
 - `star_plugins` - Maps alias to plugin identifier.
 - `py_functions` - Maps alias to Python callable objects.
-  
 
 **Example**:
 
-  &gt;&gt;&gt; deps = Dependencies()
-  &gt;&gt;&gt; deps.add_star_attribute(&quot;__ray_task&quot;, Path(&quot;ray.star&quot;), &quot;ray_task&quot;)
-  &gt;&gt;&gt; deps.add_py_function(&quot;helper&quot;, my_helper_function)
-  &gt;&gt;&gt; len(deps.py_functions)
-  1
+```python
+>>> deps = Dependencies()
+>>> deps.add_star_attribute("__ray_task", Path("ray.star"), "ray_task")
+>>> deps.add_py_function("helper", my_helper_function)
+>>> len(deps.py_functions)
+1
+```
 
 #### \_\_init\_\_
 
@@ -98,12 +101,13 @@ loaded in the generated Starlark code.
 - `alias` - The name to use when loading the attribute.
 - `star_file` - Path to the .star file containing the attribute.
 - `attribute` - Name of the attribute to load from the file.
-  
 
 **Example**:
 
-  &gt;&gt;&gt; deps.add_star_attribute(&quot;__ray_task&quot;, Path(&quot;ray.star&quot;), &quot;ray_task&quot;)
-  &gt;&gt;&gt; # Generates: load(&quot;ray.star&quot;, __ray_task=&quot;ray_task&quot;)
+```python
+>>> deps.add_star_attribute("__ray_task", Path("ray.star"), "ray_task")
+>>> # Generates: load("ray.star", __ray_task="ray_task")
+```
 
 #### add\_star\_plugin
 
@@ -118,13 +122,14 @@ Registers a plugin from the @plugin module that needs to be loaded.
 **Arguments**:
 
 - `alias` - The alias to use for the plugin.
-- `plugin_id` - The plugin identifier (e.g., &quot;chronon&quot;).
-  
+- `plugin_id` - The plugin identifier (e.g., "chronon").
 
 **Example**:
 
-  &gt;&gt;&gt; deps.add_star_plugin(&quot;__chronon__&quot;, &quot;chronon&quot;)
-  &gt;&gt;&gt; # Generates: load(&quot;@plugin&quot;, __chronon__=&quot;chronon&quot;)
+```python
+>>> deps.add_star_plugin("__chronon__", "chronon")
+>>> # Generates: load("@plugin", __chronon__="chronon")
+```
 
 #### add\_py\_function
 
@@ -141,13 +146,14 @@ to be transpiled and included in the package.
 
 - `alias` - The name to use for the function.
 - `fn` - The Python callable to include.
-  
 
 **Example**:
 
-  &gt;&gt;&gt; def my_workflow():
-  ...     pass
-  &gt;&gt;&gt; deps.add_py_function(&quot;my_workflow&quot;, my_workflow)
+```python
+>>> def my_workflow():
+...     pass
+>>> deps.add_py_function("my_workflow", my_workflow)
+```
 
 ## TaskBinding Objects
 
@@ -162,25 +168,28 @@ Links a Python task configuration class to the Starlark function that
 handles the actual task execution. Used during transpilation to generate
 proper load statements.
 
-The binding generates a Starlark load statement in the format::
+The binding generates a Starlark load statement in the format:
 
-load(star_file, export=&quot;function&quot;)
+```
+load(star_file, export="function")
+```
 
 **Attributes**:
 
 - `star_file` - Path to the .star file containing the orchestration function.
 - `function` - Name of the Starlark function in the file.
 - `export` - Name to use when importing the function (typically with __ prefix).
-  
 
 **Example**:
 
-  &gt;&gt;&gt; binding = TaskBinding(
-  ...     star_file=Path(&quot;ray/task.star&quot;),
-  ...     function=&quot;ray_task&quot;,
-  ...     export=&quot;__ray_task&quot;
-  ... )
-  &gt;&gt;&gt; # Generates: load(&quot;ray/task.star&quot;, __ray_task=&quot;ray_task&quot;)
+```python
+>>> binding = TaskBinding(
+...     star_file=Path("ray/task.star"),
+...     function="ray_task",
+...     export="__ray_task"
+... )
+>>> # Generates: load("ray/task.star", __ray_task="ray_task")
+```
 
 #### star\_file
 
@@ -213,26 +222,28 @@ options. These fields are automatically converted to Starlark keywords.
 
 **Example**:
 
-  &gt;&gt;&gt; from dataclasses import dataclass
-  &gt;&gt;&gt; @dataclass
-  ... class RayTask(TaskConfig):
-  ...     head_cpu: int = 1
-  ...     head_memory: str = &quot;4Gi&quot;
-  ...
-  ...     def get_binding(self) -&gt; TaskBinding:
-  ...         return TaskBinding(
-  ...             star_file=Path(__file__).parent / &quot;task.star&quot;,
-  ...             function=&quot;ray_task&quot;,
-  ...             export=&quot;__ray_task&quot;
-  ...         )
-  ...
-  ...     def pre_run(self):
-  ...         # Initialize Ray cluster
-  ...         pass
-  ...
-  ...     def post_run(self):
-  ...         # Cleanup Ray resources
-  ...         pass
+```python
+>>> from dataclasses import dataclass
+>>> @dataclass
+... class RayTask(TaskConfig):
+...     head_cpu: int = 1
+...     head_memory: str = "4Gi"
+...
+...     def get_binding(self) -> TaskBinding:
+...         return TaskBinding(
+...             star_file=Path(__file__).parent / "task.star",
+...             function="ray_task",
+...             export="__ray_task"
+...         )
+...
+...     def pre_run(self):
+...         # Initialize Ray cluster
+...         pass
+...
+...     def post_run(self):
+...         # Cleanup Ray resources
+...         pass
+```
 
 #### get\_binding
 
@@ -249,21 +260,21 @@ handle task orchestration for this configuration type.
 **Returns**:
 
   TaskBinding specifying the star file, function name, and export name.
-  
 
 **Example**:
 
-  &gt;&gt;&gt; def get_binding(self) -&gt; TaskBinding:
-  ...     return TaskBinding(
-  ...         star_file=Path(__file__).parent / &quot;ray_task.star&quot;,
-  ...         function=&quot;ray_task&quot;,
-  ...         export=&quot;__ray_task&quot;
-  ...     )
-  
+```python
+>>> def get_binding(self) -> TaskBinding:
+...     return TaskBinding(
+...         star_file=Path(__file__).parent / "ray_task.star",
+...         function="ray_task",
+...         export="__ray_task"
+...     )
+```
 
 **Notes**:
 
-  Use a double underscore prefix for export names (e.g., &quot;__ray_task&quot;)
+  Use a double underscore prefix for export names (e.g., `__ray_task`)
   to avoid naming conflicts with user code.
 
 #### get\_config\_binding
@@ -281,18 +292,19 @@ Used during transpilation when the TaskConfig class is referenced.
 
 **Returns**:
 
-  TaskBinding for the configuration&#x27;s Starlark representation.
-  
+  TaskBinding for the configuration's Starlark representation.
 
 **Example**:
 
-  &gt;&gt;&gt; @classmethod
-  ... def get_config_binding(cls) -&gt; TaskBinding:
-  ...     return TaskBinding(
-  ...         star_file=Path(__file__).parent / &quot;config.star&quot;,
-  ...         function=&quot;ray_config&quot;,
-  ...         export=&quot;__ray_config&quot;
-  ...     )
+```python
+>>> @classmethod
+... def get_config_binding(cls) -> TaskBinding:
+...     return TaskBinding(
+...         star_file=Path(__file__).parent / "config.star",
+...         function="ray_config",
+...         export="__ray_config"
+...     )
+```
 
 #### pre\_run
 
@@ -303,15 +315,17 @@ def pre_run()
 
 Execute setup code before the task function runs.
 
-Called by the task execution framework before invoking the user&#x27;s
+Called by the task execution framework before invoking the user's
 task function. Use this to initialize resources, set up environments,
 or perform validation.
 
 **Example**:
 
-  &gt;&gt;&gt; def pre_run(self):
-  ...     # Initialize Spark session
-  ...     self.spark = SparkSession.builder.getOrCreate()
+```python
+>>> def pre_run(self):
+...     # Initialize Spark session
+...     self.spark = SparkSession.builder.getOrCreate()
+```
 
 #### post\_run
 
@@ -322,16 +336,18 @@ def post_run()
 
 Execute cleanup code after the task function completes.
 
-Called by the task execution framework after the user&#x27;s task function
+Called by the task execution framework after the user's task function
 returns, even if an exception occurred. Use this to release resources,
 close connections, or perform cleanup.
 
 **Example**:
 
-  &gt;&gt;&gt; def post_run(self):
-  ...     # Stop Spark session
-  ...     if self.spark:
-  ...         self.spark.stop()
+```python
+>>> def post_run(self):
+...     # Stop Spark session
+...     if self.spark:
+...         self.spark.stop()
+```
 
 #### to\_keywords
 
@@ -348,19 +364,18 @@ Starlark function call with configuration parameters.
 **Returns**:
 
   List of ast.keyword nodes for non-None configuration fields.
-  
 
 **Example**:
 
-  For a RayTask with head_cpu=4 and head_memory=&quot;8Gi&quot;::
-  
-  keywords = config.to_keywords()
-  # Generates AST equivalent to:
-  # __ray_task__(head_cpu=4, head_memory=&quot;8Gi&quot;)
-  
+For a RayTask with `head_cpu=4` and `head_memory="8Gi"`:
+
+```python
+keywords = config.to_keywords()
+# Generates AST equivalent to:
+# __ray_task__(head_cpu=4, head_memory="8Gi")
+```
 
 **Notes**:
 
   Only includes fields with non-None values. This allows optional
   configuration parameters to be omitted from the generated code.
-

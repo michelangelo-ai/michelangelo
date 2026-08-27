@@ -1,6 +1,6 @@
 ---
 sidebar_label: task
-title: uniflow.plugins.spark.task
+title: michelangelo.uniflow.plugins.spark.task
 ---
 
 Spark task configuration and execution for Uniflow workflows.
@@ -39,14 +39,34 @@ runtime overrides of the default settings.
 **Attributes**:
 
 - `driver_cpu` - Number of CPUs allocated to the driver node.
-- `driver_memory` - Memory allocation for the driver node (e.g., &quot;4G&quot;, &quot;512M&quot;).
-- `driver_disk` - Disk space allocation for the driver node (e.g., &quot;10G&quot;).
+- `driver_memory` - Memory allocation for the driver node (e.g., "4G", "512M").
+- `driver_disk` - Disk space allocation for the driver node (e.g., "10G").
 - `driver_gpu` - Number of GPUs allocated to the driver node.
 - `executor_cpu` - Number of CPUs allocated per executor.
-- `executor_memory` - Memory allocation per executor (e.g., &quot;4G&quot;, &quot;512M&quot;).
-- `executor_disk` - Disk space allocation per executor (e.g., &quot;10G&quot;).
+- `executor_memory` - Memory allocation per executor (e.g., "4G", "512M").
+- `executor_disk` - Disk space allocation per executor (e.g., "10G").
 - `executor_gpu` - Number of GPUs allocated per executor.
 - `executor_instances` - Number of executor instances to launch.
+
+**Example**:
+
+```python
+from michelangelo.uniflow.core.decorator import task
+from michelangelo.uniflow.plugins.spark.task import SparkTask
+
+@task(
+    config=SparkTask(
+        driver_cpu=2,
+        driver_memory="4G",
+        executor_cpu=4,
+        executor_memory="8G",
+        executor_instances=4,
+    )
+)
+def aggregate_events(input_path: str) -> dict:
+    # Runs inside a Spark session started by SparkTask.pre_run()
+    return {"status": "complete"}
+```
 
 #### get\_binding
 
@@ -97,4 +117,3 @@ Stop the Spark session after task execution.
 
 Ensures proper cleanup of Spark resources by stopping the active
 session if one exists.
-

@@ -1,6 +1,6 @@
 ---
 sidebar_label: decorator
-title: uniflow.core.decorator
+title: michelangelo.uniflow.core.decorator
 ---
 
 Task and workflow decorators for Uniflow.
@@ -15,23 +15,27 @@ functions as workflow entry points.
 
 **Example**:
 
-  Basic task definition::
-  
-  from michelangelo.uniflow.core import task
-  from michelangelo.uniflow.plugins.ray import RayTask
-  
-  @task(config=RayTask(head_cpu=2, head_memory=&quot;4Gi&quot;))
-  def process_data(input_file: str) -&gt; dict:
-  # Process data and return results
-  return {&quot;status&quot;: &quot;complete&quot;}
-  
-  Workflow with multiple tasks::
-  
-  @workflow()
-  def my_workflow():
-  data = load_data()
-  result = process_data(data)
-  return result
+Basic task definition:
+
+```python
+from michelangelo.uniflow.core import task
+from michelangelo.uniflow.plugins.ray import RayTask
+
+@task(config=RayTask(head_cpu=2, head_memory="4Gi"))
+def process_data(input_file: str) -> dict:
+    # Process data and return results
+    return {"status": "complete"}
+```
+
+Workflow with multiple tasks:
+
+```python
+@workflow()
+def my_workflow():
+    data = load_data()
+    result = process_data(data)
+    return result
+```
 
 ## TaskFunction Objects
 
@@ -58,14 +62,15 @@ instantiated directly.
 - `cache_version` - Optional version identifier for cached results.
 - `retry_attempts` - Number of times to retry failed executions.
 - `image_spec` - Optional container image specification.
-  
 
 **Example**:
 
-  &gt;&gt;&gt; @task(config=RayTask(head_cpu=1))
-  ... def my_task(x: int) -&gt; int:
-  ...     return x * 2
-  &gt;&gt;&gt; result = my_task(5)  # Executes wrapped function
+```python
+>>> @task(config=RayTask(head_cpu=1))
+... def my_task(x: int) -> int:
+...     return x * 2
+>>> result = my_task(5)  # Executes wrapped function
+```
 
 #### \_\_init\_\_
 
@@ -145,12 +150,10 @@ Manages the complete task execution lifecycle:
 - `**kwargs` - Keyword arguments to pass to the wrapped function.
   Special keyword _uf_result_url can be used to specify
   where to write the result.
-  
 
 **Returns**:
 
   The result of executing the wrapped function, wrapped in a Ref.
-  
 
 **Raises**:
 
@@ -175,28 +178,36 @@ running the same task with different resource allocations.
 **Arguments**:
 
 - `alias` - Optional alternative task name. If not provided, uses original alias.
-- `config` - Optional task configuration. If provided, this configuration will be
-  merged with the original configuration. For example, if the original
-  config specifies head_cpu=4 and head_memory=&quot;16Gi&quot;, and the new
-  config specifies head_cpu=8, the result will have head_cpu=8 and
-  head_memory=&quot;16Gi&quot;.
+- `config` - Optional task configuration. If provided, this configuration
+  **fully replaces** the original configuration — fields are not merged
+  field-by-field. For example, if the original config specifies
+  `head_cpu=4` and `head_memory="16Gi"`, and the new config specifies only
+  `head_cpu=8`, the result has `head_cpu=8` and `head_memory=None` (the
+  original `head_memory` value is not carried over). Pass every field you
+  want the override to keep.
 - `retry_attempts` - Optional retry count. If not provided, uses original value.
-  
 
 **Returns**:
 
   A new TaskFunction instance with the specified overrides.
-  
+
+**Caveat**: `with_overrides()` has no `image_spec` parameter, and it does not
+carry the original task's `image_spec` forward either — the returned
+`TaskFunction` always has `image_spec=None`. If the task depends on a custom
+container image, re-declare it with a fresh `@task(...)` definition instead
+of `with_overrides()`.
 
 **Example**:
 
-  &gt;&gt;&gt; @task(config=RayTask(head_cpu=2))
-  ... def my_task(x):
-  ...     return x * 2
-  &gt;&gt;&gt; high_cpu_task = my_task.with_overrides(
-  ...     alias=&quot;my_task_8cpu&quot;,
-  ...     config=RayTask(head_cpu=8)
-  ... )
+```python
+>>> @task(config=RayTask(head_cpu=2))
+... def my_task(x):
+...     return x * 2
+>>> high_cpu_task = my_task.with_overrides(
+...     alias="my_task_8cpu",
+...     config=RayTask(head_cpu=8),
+... )
+```
 
 #### task
 
@@ -232,45 +243,49 @@ or distributed across Ray/Spark clusters depending on the config.
   (no retries).
 - `image_spec` - Optional container image specification. Allows specifying custom
   container images and build targets for the task execution environment.
-  
 
 **Returns**:
 
   A decorator that converts a function into a TaskFunction.
-  
 
 **Example**:
 
-  Basic task with caching::
-  
-  @task(config=RayTask(head_cpu=2), cache_enabled=True)
-  def process_data(input_path: str) -&gt; dict:
-  # Process data
-  return {&quot;status&quot;: &quot;complete&quot;}
-  
-  Task with custom image::
-  
-  @task(
-  config=RayTask(head_cpu=4, head_memory=&quot;8Gi&quot;),
-  image_spec=ImageSpec(
-  container_image=&quot;my-image:latest&quot;,
-  recipe=&quot;bazel://path/to:target&quot;
-  )
-  )
-  def train_model(data: pd.DataFrame) -&gt; Model:
-  # Train model
-  return trained_model
-  
-  Task with alias and retry::
-  
-  @task(
-  config=SparkTask(driver_cpu=2, executor_cpu=4),
-  alias=&quot;preprocess_v2&quot;,
-  retry_attempts=3
-  )
-  def preprocess(df: DataFrame) -&gt; DataFrame:
-  # Preprocess DataFrame
-  return processed_df
+Basic task with caching:
+
+```python
+@task(config=RayTask(head_cpu=2), cache_enabled=True)
+def process_data(input_path: str) -> dict:
+    # Process data
+    return {"status": "complete"}
+```
+
+Task with custom image:
+
+```python
+@task(
+    config=RayTask(head_cpu=4, head_memory="8Gi"),
+    image_spec=ImageSpec(
+        container_image="my-image:latest",
+        recipe="bazel://path/to:target"
+    )
+)
+def train_model(data: pd.DataFrame) -> Model:
+    # Train model
+    return trained_model
+```
+
+Task with alias and retry:
+
+```python
+@task(
+    config=SparkTask(driver_cpu=2, executor_cpu=4),
+    alias="preprocess_v2",
+    retry_attempts=3
+)
+def preprocess(df: DataFrame) -> DataFrame:
+    # Preprocess DataFrame
+    return processed_df
+```
 
 #### workflow
 
@@ -287,40 +302,43 @@ are always executed locally and serve as the coordination layer.
 **Returns**:
 
   A decorator that marks a function as a workflow.
-  
 
 **Example**:
 
-  Simple workflow::
-  
-  @workflow()
-  def my_workflow(input_file: str):
-  # Load data
-  data = load_task(input_file)
-  
-  # Process data
-  result = process_task(data)
-  
-  # Save results
-  save_task(result)
-  
-  return result
-  
-  Workflow with multiple stages::
-  
-  @workflow()
-  def training_pipeline(dataset_path: str, model_type: str):
-  # Data preparation stage
-  raw_data = load_data(dataset_path)
-  clean_data = clean_data_task(raw_data)
-  
-  # Training stage
-  model = train_model_task(clean_data, model_type)
-  
-  # Evaluation stage
-  metrics = evaluate_model_task(model, clean_data)
-  
-  return {&quot;model&quot;: model, &quot;metrics&quot;: metrics}
+Simple workflow:
+
+```python
+@workflow()
+def my_workflow(input_file: str):
+    # Load data
+    data = load_task(input_file)
+
+    # Process data
+    result = process_task(data)
+
+    # Save results
+    save_task(result)
+
+    return result
+```
+
+Workflow with multiple stages:
+
+```python
+@workflow()
+def training_pipeline(dataset_path: str, model_type: str):
+    # Data preparation stage
+    raw_data = load_data(dataset_path)
+    clean_data = clean_data_task(raw_data)
+
+    # Training stage
+    model = train_model_task(clean_data, model_type)
+
+    # Evaluation stage
+    metrics = evaluate_model_task(model, clean_data)
+
+    return {"model": model, "metrics": metrics}
+```
 
 #### star\_plugin
 
@@ -337,19 +355,19 @@ functionality into the Starlark execution environment.
 **Arguments**:
 
 - `binding` - The binding name to use in Starlark.
-  
 
 **Returns**:
 
   A decorator that marks a function as a Starlark plugin.
-  
 
 **Example**:
 
-  &gt;&gt;&gt; @star_plugin(binding=&quot;custom_transform&quot;)
-  ... def transform_data(data: dict) -&gt; dict:
-  ...     # Transform logic
-  ...     return transformed
+```python
+>>> @star_plugin(binding="custom_transform")
+... def transform_data(data: dict) -> dict:
+...     # Transform logic
+...     return transformed
+```
 
 #### is\_star\_plugin
 
@@ -362,7 +380,6 @@ Check if a function is a Starlark plugin.
 **Arguments**:
 
 - `fn` - Function to check.
-  
 
 **Returns**:
 
@@ -379,7 +396,6 @@ Check if a function is a workflow.
 **Arguments**:
 
 - `fn` - Function to check.
-  
 
 **Returns**:
 
@@ -396,12 +412,10 @@ Get the Starlark binding name for a plugin function.
 **Arguments**:
 
 - `fn` - Function to get binding from.
-  
 
 **Returns**:
 
   The binding name string.
-  
 
 **Raises**:
 
@@ -422,9 +436,7 @@ specified filesystem URL.
 
 - `url` - Filesystem URL where to write the result.
 - `value` - The value to serialize and write.
-  
 
 **Raises**:
 
 - `IOError` - If writing to the URL fails.
-
