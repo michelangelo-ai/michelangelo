@@ -49,21 +49,6 @@ function buildFailedRun(overrides: Record<string, unknown> = {}) {
   };
 }
 
-/** Captures CreatePipelineRun payloads with a real type, so assertions stay type-safe. */
-function buildRequestCapture() {
-  const submitted: Record<string, unknown>[] = [];
-  const request = (name: string, payload: unknown) => {
-    if (name === 'CreatePipelineRun') {
-      submitted.push(payload as Record<string, unknown>);
-      return Promise.resolve({
-        pipelineRun: { metadata: { name: NEW_RUN, namespace: NAMESPACE } },
-      });
-    }
-    return Promise.resolve({});
-  };
-  return { submitted, request };
-}
-
 async function openRetryDialog(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole('button', { name: 'Actions' }));
   await user.click(await screen.findByRole('option', { name: 'Retry' }));
@@ -73,7 +58,16 @@ async function openRetryDialog(user: ReturnType<typeof userEvent.setup>) {
 describe('RUN_ENTITY_CONFIG: retry action', () => {
   it('creates a new run that resumes from the run being retried', async () => {
     const user = userEvent.setup();
-    const { submitted, request } = buildRequestCapture();
+    const submitted: Record<string, unknown>[] = [];
+    const request = (name: string, payload: unknown) => {
+      if (name === 'CreatePipelineRun') {
+        submitted.push(payload as Record<string, unknown>);
+        return Promise.resolve({
+          pipelineRun: { metadata: { name: NEW_RUN, namespace: NAMESPACE } },
+        });
+      }
+      return Promise.resolve({});
+    };
     const record = buildFailedRun();
 
     render(
@@ -114,7 +108,16 @@ describe('RUN_ENTITY_CONFIG: retry action', () => {
 
   it('strips the server-owned fields the API rejects or overwrites on create', async () => {
     const user = userEvent.setup();
-    const { submitted, request } = buildRequestCapture();
+    const submitted: Record<string, unknown>[] = [];
+    const request = (name: string, payload: unknown) => {
+      if (name === 'CreatePipelineRun') {
+        submitted.push(payload as Record<string, unknown>);
+        return Promise.resolve({
+          pipelineRun: { metadata: { name: NEW_RUN, namespace: NAMESPACE } },
+        });
+      }
+      return Promise.resolve({});
+    };
     const record = buildFailedRun();
 
     render(
@@ -154,7 +157,16 @@ describe('RUN_ENTITY_CONFIG: retry action', () => {
 
   it('drops resumeFrom inherited from a run that was itself resumed', async () => {
     const user = userEvent.setup();
-    const { submitted, request } = buildRequestCapture();
+    const submitted: Record<string, unknown>[] = [];
+    const request = (name: string, payload: unknown) => {
+      if (name === 'CreatePipelineRun') {
+        submitted.push(payload as Record<string, unknown>);
+        return Promise.resolve({
+          pipelineRun: { metadata: { name: NEW_RUN, namespace: NAMESPACE } },
+        });
+      }
+      return Promise.resolve({});
+    };
 
     // Retrying a resumed run must not re-force the steps that run was asked to re-execute;
     // it should reuse every cached success instead.
@@ -197,7 +209,16 @@ describe('RUN_ENTITY_CONFIG: retry action', () => {
 
   it('confirms with a toast linking to the newly created run', async () => {
     const user = userEvent.setup();
-    const { request } = buildRequestCapture();
+    const submitted: Record<string, unknown>[] = [];
+    const request = (name: string, payload: unknown) => {
+      if (name === 'CreatePipelineRun') {
+        submitted.push(payload as Record<string, unknown>);
+        return Promise.resolve({
+          pipelineRun: { metadata: { name: NEW_RUN, namespace: NAMESPACE } },
+        });
+      }
+      return Promise.resolve({});
+    };
     const record = buildFailedRun();
 
     render(
