@@ -547,6 +547,36 @@ func TestBeforeCreate_PreservesExplicitEnvironmentLabel(t *testing.T) {
 	assert.Equal(t, "staging", request.PipelineRun.Labels[api.EnvironmentLabel])
 }
 
+func TestBeforeUpdate_DefaultsEnvironmentLabelWhenAbsent(t *testing.T) {
+	hook := setUpHook(t)
+	hook.defaultEnv = "staging"
+
+	request := &v2.UpdatePipelineRunRequest{
+		PipelineRun: &v2.PipelineRun{
+			ObjectMeta: metav1.ObjectMeta{Name: "test-run", Namespace: testNamespace},
+		},
+	}
+	require.NoError(t, hook.BeforeUpdate(context.Background(), request))
+	assert.Equal(t, "staging", request.PipelineRun.Labels[api.EnvironmentLabel])
+}
+
+func TestBeforeUpdate_PreservesExplicitEnvironmentLabel(t *testing.T) {
+	hook := setUpHook(t)
+	hook.defaultEnv = "production"
+
+	request := &v2.UpdatePipelineRunRequest{
+		PipelineRun: &v2.PipelineRun{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-run",
+				Namespace: testNamespace,
+				Labels:    map[string]string{api.EnvironmentLabel: "staging"},
+			},
+		},
+	}
+	require.NoError(t, hook.BeforeUpdate(context.Background(), request))
+	assert.Equal(t, "staging", request.PipelineRun.Labels[api.EnvironmentLabel])
+}
+
 func TestRegisterPipelineRunAPIHook(t *testing.T) {
 	RegisterPipelineRunAPIHook(zaptest.NewLogger(t), nil, runtime.NewScheme(), "production")
 }

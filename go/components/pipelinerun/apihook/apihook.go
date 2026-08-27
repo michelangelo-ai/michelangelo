@@ -100,6 +100,16 @@ func (a apiHook) BeforeCreate(ctx context.Context, request *v2.CreatePipelineRun
 	return cascadedelete.StampOwnerRefOnCreate(ctx, a.logger, a.scheme, request.PipelineRun, pipeline)
 }
 
+// BeforeUpdate defaults api.EnvironmentLabel when the caller did not supply
+// one, the same as BeforeCreate. It is intentionally narrow: unlike Model's
+// BeforeUpdate, PipelineRun has no source resource to inherit the label
+// from, so this only ever fills in the configured default when the label is
+// absent and never overwrites a value the caller (or a prior update) set.
+func (a apiHook) BeforeUpdate(_ context.Context, request *v2.UpdatePipelineRunRequest) error {
+	setIfAbsent(request.PipelineRun, api.EnvironmentLabel, a.defaultEnvironment())
+	return nil
+}
+
 // getReferencedPipeline loads Spec.Pipeline when set. Any Get failure (including
 // not-found) returns nil: latestRevision pinning then no-ops (live fallback),
 // and ownerRef/notification stamping is skipped.
