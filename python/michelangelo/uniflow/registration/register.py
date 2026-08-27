@@ -87,11 +87,7 @@ def prepare_uniflow_input(
         _logger.info("Preparing uniflow input JSON using legacy pattern")
 
         _kwargs = list(kwargs.items()) if kwargs else []
-        inputs = {
-            "args": args or (),
-            "kwargs": _kwargs,
-            "environ": environ or {},
-        }
+        inputs = {"args": args or (), "kwargs": _kwargs, "environ": environ or {}}
 
         inputs_path = os.path.join(output_dir, "uniflow_input.txt")
         with open(inputs_path, "w") as f:
