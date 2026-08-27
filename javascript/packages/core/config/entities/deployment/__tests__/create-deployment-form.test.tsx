@@ -45,9 +45,13 @@ describe('CreateDeploymentForm', () => {
   it('submits the deployment with the entered data', async () => {
     const user = userEvent.setup();
     const mockRequest = createQueryMockRouter({
-      ListInferenceServer: { inferenceServerList: { items: [{ metadata: { name: 'triton-server' } }] } },
+      ListInferenceServer: {
+        inferenceServerList: { items: [{ metadata: { name: 'triton-server' } }] },
+      },
       ListModelFamily: {
-        modelFamilyList: { items: [{ metadata: { name: 'family-1' }, spec: { name: 'Family One' } }] },
+        modelFamilyList: {
+          items: [{ metadata: { name: 'family-1' }, spec: { name: 'Family One' } }],
+        },
       },
       ListModel: { modelList: { items: [{ metadata: { name: 'model-1' } }] } },
       CreateDeployment: {},
