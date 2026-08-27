@@ -467,14 +467,17 @@ func setupBackfillTrigger(t *testing.T, workflowClient clientInterface.WorkflowC
 }
 
 func TestBackfillTrigger_Update(t *testing.T) {
+	expectedStatus := v2pb.TriggerRunStatus{
+		State:               v2pb.TRIGGER_RUN_STATE_RUNNING,
+		ExecutionWorkflowId: "test-workflow-id",
+		LogUrl:              "http://localhost:8080/namespaces/default/workflows/test-workflow-id",
+	}
 	triggerRun := &v2pb.TriggerRun{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "test-namespace",
 			Name:      "test-triggerrun",
 		},
-		Status: v2pb.TriggerRunStatus{
-			State: v2pb.TRIGGER_RUN_STATE_RUNNING,
-		},
+		Status: expectedStatus,
 	}
 
 	logger := zapr.NewLogger(zap.NewNop())
@@ -487,5 +490,5 @@ func TestBackfillTrigger_Update(t *testing.T) {
 	status, _, err := backfillTrigger.Update(context.Background(), triggerRun, v2pb.TRIGGER_RUN_ACTION_NO_ACTION)
 
 	assert.NoError(t, err)
-	assert.Equal(t, v2pb.TRIGGER_RUN_STATE_RUNNING, status.State)
+	assert.Equal(t, expectedStatus, status)
 }
