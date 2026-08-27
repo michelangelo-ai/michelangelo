@@ -191,6 +191,12 @@ class TorchAssemblerTest(_LocalBackendTestCase):
         self.assertTrue(os.path.exists(assembled.deployable_model.path))
         self.assertTrue(os.path.exists(assembled.raw_model.path))
 
+        # The deployable package is a single archived file, uploaded as a
+        # self-contained serving bundle -- unlike the raw model, which is a
+        # directory uploaded as loose files.
+        self.assertTrue(os.path.isfile(assembled.deployable_model.path))
+        self.assertTrue(os.path.isdir(assembled.raw_model.path))
+
         mock_create_model.assert_called_once()
         kwargs = mock_create_model.call_args.kwargs
         self.assertIsNone(kwargs["backend"])

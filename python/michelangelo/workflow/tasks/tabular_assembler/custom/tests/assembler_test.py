@@ -184,6 +184,12 @@ class CustomAssemblerTest(unittest.TestCase):
         self.assertTrue(os.path.exists(assembled.deployable_model.path))
         self.assertTrue(os.path.exists(assembled.raw_model.path))
 
+        # The deployable package is a single archived file, uploaded as a
+        # self-contained serving bundle -- unlike the raw model, which is a
+        # directory uploaded as loose files.
+        self.assertTrue(os.path.isfile(assembled.deployable_model.path))
+        self.assertTrue(os.path.isdir(assembled.raw_model.path))
+
         pkg_kwargs = mock_create_model.call_args.kwargs
         self.assertTrue(
             np.array_equal(
