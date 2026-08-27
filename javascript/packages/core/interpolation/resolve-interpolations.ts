@@ -64,6 +64,13 @@ export function resolveInterpolations(args: {
     );
   }
 
+  // Binary payloads read as records to `isRecord`, and mapping over one would rebuild it
+  // as a plain object and destroy the buffer — a packed `google.protobuf.Any` then fails to
+  // encode. Nothing inside is interpolatable, so pass it through untouched.
+  if (ArrayBuffer.isView(variable) || variable instanceof ArrayBuffer) {
+    return variable;
+  }
+
   if (isRecord(variable)) {
     const symbols = getObjectSymbols(variable);
     const mappedValues = mapValues(variable, (value, key) => {

@@ -53,7 +53,7 @@ A: Multiple sources:
 
 **Q: Can I use feature stores with Michelangelo AI?**
 
-A: Yes, Michelangelo AI integrates with feature stores or you can manage features within the platform using the data prep pipelines and inference.
+A: Not yet. A feature store (online and offline) is on the [roadmap](./roadmap.md). Today you prepare features with the data prep pipelines and reference existing datasets in the data catalog.
 
 **Q: What data formats are supported?**
 

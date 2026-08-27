@@ -19,7 +19,7 @@ The focus is simplicity: **you control your training logic**, Michelangelo AI pr
 
 - **A running sandbox** — Remote training runs require a local Kubernetes cluster. Follow the [Sandbox Setup](../../getting-started/sandbox-setup.md) guide if you haven't done this yet.
 - **A prepared dataset** — Training tasks expect datasets passed as `DatasetVariable`. See [Data Preparation](../getting-started/prepare-your-data.md) for how to produce them.
-- **Python 3.11+, Poetry, and the Michelangelo AI SDK installed** — Run `cd python && poetry install` from the repo root.
+- **Python 3.11+, Poetry, and the Michelangelo AI SDK installed** — Run `cd python && poetry install -E example` from the repo root (the `example` extra pulls the ML dependencies the bundled examples import).
 - **For distributed training:** A Docker image with your workflow code. See [Running Uniflow Pipelines](../ml-pipelines/running-uniflow.md) for image build steps.
 
 ## Understanding Training Inputs
@@ -86,10 +86,10 @@ To scale training across CPUs/GPUs, wrap your training task using **RayTask**.
 
 ```py
 from michelangelo.lib.trainer.torch.pytorch_lightning.lightning_trainer import (
-    LightningTrainer, LightningTrainerParam, create_run_config, create_scaling_config
+    LightningTrainer, LightningTrainerParam
 )
-from michelangelo.uniflow.plugins.ray import RayTask
-from ray.train import CheckpointConfig
+from michelangelo.uniflow.plugins.ray import RayTask, create_run_config
+from ray.train import CheckpointConfig, ScalingConfig
 
 @uniflow.task(
     config=RayTask(
@@ -119,9 +119,9 @@ def train_distributed_model(
     validation_data = validation_dv.value
 
     # Scaling config
-    scaling_config = create_scaling_config(
-        trainer_cpu=2,
-        cpu_per_worker=4,
+    scaling_config = ScalingConfig(
+        trainer_resources={"CPU": 2},
+        resources_per_worker={"CPU": 4},
         num_workers=num_workers,
         use_gpu=use_gpu,
     )
@@ -138,13 +138,13 @@ def train_distributed_model(
 
     # Lightning trainer parameters
     trainer_param = LightningTrainerParam(
-        create_model=create_model_function,
-        model_kwargs={
+        create_model_fn=create_model_function,
+        create_model_fn_kwargs={
             "model_name": model_name,
             "learning_rate": learning_rate,
         },
         train_data=train_data,
-        validation_data=validation_data,
+        val_data=validation_data,
         batch_size=batch_size,
         num_epochs=num_epochs,
         lightning_trainer_kwargs={

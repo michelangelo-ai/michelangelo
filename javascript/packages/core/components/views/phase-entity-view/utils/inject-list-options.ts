@@ -1,10 +1,8 @@
 import type { QueryConfig } from '#core/types/query-types';
 import type { InjectedListOptions } from '../types';
 
-/**
- * Derives the RPC-level listOptions needed to restrict an entity's list query to a
- * phase's pipeline types.
- */
+const SOURCE_PIPELINE_TYPE_LABEL = 'michelangelo/SourcePipelineType';
+
 export function injectListOptions(
   service: QueryConfig['service'],
   pipelineTypes?: string[]
@@ -14,6 +12,12 @@ export function injectListOptions(
   if (service === 'pipeline') {
     return {
       fieldSelector: `pipeline_type in (${pipelineTypes.join(',')})`,
+    };
+  }
+
+  if (service === 'pipelineRun' || service === 'triggerRun') {
+    return {
+      labelSelector: `${SOURCE_PIPELINE_TYPE_LABEL} in (${pipelineTypes.join(',')})`,
     };
   }
 

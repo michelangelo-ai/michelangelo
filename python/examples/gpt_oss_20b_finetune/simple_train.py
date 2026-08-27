@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 import mlflow
 from pytorch_lightning.loggers import MLFlowLogger
-from ray.train import CheckpointConfig
+from ray.train import CheckpointConfig, ScalingConfig
 from ray.train.lightning import RayFSDPStrategy
 
 import michelangelo.uniflow.core as uniflow
@@ -14,10 +14,8 @@ from examples.gpt_oss_20b_finetune.model import create_gpt_model
 from michelangelo.lib.trainer.torch.pytorch_lightning.lightning_trainer import (
     LightningTrainer,
     LightningTrainerParam,
-    create_run_config,
-    create_scaling_config,
 )
-from michelangelo.uniflow.plugins.ray import RayTask
+from michelangelo.uniflow.plugins.ray import RayTask, create_run_config
 from michelangelo.workflow.variables import DatasetVariable
 
 if TYPE_CHECKING:
@@ -124,9 +122,9 @@ def simple_train_gpt(
         log.info("No CUDA available - using CPU")
 
     # Create scaling configuration for Ray
-    scaling_config = create_scaling_config(
-        trainer_cpu=1,
-        cpu_per_worker=2,
+    scaling_config = ScalingConfig(
+        trainer_resources={"CPU": 1},
+        resources_per_worker={"CPU": 2},
         num_workers=num_workers,
         use_gpu=use_gpu,
     )
@@ -212,15 +210,15 @@ def simple_train_gpt(
 
     # Create Lightning trainer parameters
     trainer_param = LightningTrainerParam(
-        create_model=create_gpt_model,
-        model_kwargs={
+        create_model_fn=create_gpt_model,
+        create_model_fn_kwargs={
             "model_name": model_name,
             "learning_rate": learning_rate,
             "use_lora": use_lora,
             "lora_rank": lora_rank,
         },
         train_data=train_data,
-        validation_data=validation_data,
+        val_data=validation_data,
         batch_size=batch_size,
         num_epochs=num_epochs,
         lightning_trainer_kwargs=lightning_trainer_kwargs,
@@ -248,9 +246,7 @@ def simple_train_gpt(
     log.info(f"✅ Training completed, MLflow run: {run_id}")
 
     # Return checkpoint path for evaluation (much simpler!)
-    checkpoint = (
-        result.get_best_checkpoint(metric="val_loss", mode="min") or result.checkpoint
-    )
+    checkpoint = result["checkpoint_path"]
 
     # Convert Checkpoint object to directory path
     if hasattr(checkpoint, "as_directory"):

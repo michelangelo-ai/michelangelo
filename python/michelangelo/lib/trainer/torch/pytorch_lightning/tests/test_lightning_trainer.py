@@ -349,38 +349,6 @@ class TestLightningTrainerWithStateDict:
         with pytest.raises(ValueError, match="No checkpoint available"):
             trainer.update_model_state_dict(MagicMock())
 
-    def test_is_deepspeed_strategy_none(self):
-        """No strategy → not DeepSpeed."""
-        trainer = self._build()
-        assert trainer._is_deepspeed_strategy() is False
-
-    def test_is_deepspeed_strategy_string(self):
-        """A string strategy of ``deepspeed`` is recognized (case-insensitive)."""
-        for name in ("deepspeed", "DeepSpeed", "DEEPSPEED"):
-            trainer = self._build(lightning_trainer_kwargs={"strategy": name})
-            assert trainer._is_deepspeed_strategy() is True
-
-    def test_is_deepspeed_strategy_other_string(self):
-        """A string strategy other than ``deepspeed`` is not DeepSpeed."""
-        trainer = self._build(lightning_trainer_kwargs={"strategy": "ddp"})
-        assert trainer._is_deepspeed_strategy() is False
-
-    def test_is_deepspeed_strategy_class(self):
-        """A ``RayDeepSpeedStrategy`` instance is recognized."""
-        try:
-            from ray.train.lightning import RayDeepSpeedStrategy
-        except ImportError:
-            pytest.skip("ray.train.lightning.RayDeepSpeedStrategy not available")
-
-        strategy = MagicMock(spec=RayDeepSpeedStrategy)
-        trainer = self._build(lightning_trainer_kwargs={"strategy": strategy})
-        assert trainer._is_deepspeed_strategy() is True
-
-    def test_is_deepspeed_strategy_other_class(self):
-        """An arbitrary non-DeepSpeed strategy instance is not DeepSpeed."""
-        trainer = self._build(lightning_trainer_kwargs={"strategy": MagicMock()})
-        assert trainer._is_deepspeed_strategy() is False
-
     def test_update_state_dict_ddp_path(self, tmp_path):
         """DDP path loads the state_dict from a torch checkpoint file."""
         trainer = self._build()  # no strategy → DDP path
@@ -442,6 +410,85 @@ class TestLightningTrainerWithStateDict:
         torch_model.load_state_dict.assert_called_once_with(fake_state, strict=False)
         # The env var the context manager sets must be torn down on exit.
         assert "TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD" not in os.environ
+
+    def test_update_state_dict_model_parallel_path(self, tmp_path):
+        """FSDP2 path: read the sharded (DCP) weights and load them into the serving model."""
+        import sys
+        import types
+
+        trainer = self._build(lightning_trainer_kwargs={"strategy": "fsdp2"})
+
+        from michelangelo.lib.trainer.torch.pytorch_lightning.lightning_trainer import (
+            CHECKPOINT_NAME,
+        )
+
+        ckpt_dir = tmp_path
+        (ckpt_dir / CHECKPOINT_NAME).mkdir()
+
+        fake_state = {"layer.weight": "tensor_data"}
+        torch_model = MagicMock(name="torch_model")
+
+        ray_ckpt = MagicMock()
+        ray_ckpt.as_directory.return_value.__enter__ = lambda _: str(ckpt_dir)
+        ray_ckpt.as_directory.return_value.__exit__ = lambda *_: None
+        trainer.checkpoint = ray_ckpt
+
+        # Stub the DCP loader module
+        loader_mod = types.ModuleType("torch.distributed.checkpoint.state_dict_loader")
+        loader_mod._load_state_dict_from_keys = lambda _keys, **_kw: {
+            "state_dict": fake_state
+        }
+        dcp_mod = types.ModuleType("torch.distributed.checkpoint")
+        dcp_mod.FileSystemReader = MagicMock()
+
+        with patch.dict(
+            sys.modules,
+            {
+                "torch.distributed.checkpoint.state_dict_loader": loader_mod,
+                "torch.distributed.checkpoint": dcp_mod,
+            },
+        ):
+            trainer.update_model_state_dict(torch_model)
+
+        torch_model.load_state_dict.assert_called_once_with(fake_state, strict=False)
+
+    def test_update_state_dict_model_parallel_empty_raises(self, tmp_path):
+        """FSDP2 path: an empty state_dict raises rather than silently loading nothing."""
+        import sys
+        import types
+
+        trainer = self._build(lightning_trainer_kwargs={"strategy": "fsdp2"})
+
+        from michelangelo.lib.trainer.torch.pytorch_lightning.lightning_trainer import (
+            CHECKPOINT_NAME,
+        )
+
+        ckpt_dir = tmp_path
+        (ckpt_dir / CHECKPOINT_NAME).mkdir()
+
+        torch_model = MagicMock(name="torch_model")
+
+        ray_ckpt = MagicMock()
+        ray_ckpt.as_directory.return_value.__enter__ = lambda _: str(ckpt_dir)
+        ray_ckpt.as_directory.return_value.__exit__ = lambda *_: None
+        trainer.checkpoint = ray_ckpt
+
+        loader_mod = types.ModuleType("torch.distributed.checkpoint.state_dict_loader")
+        loader_mod._load_state_dict_from_keys = lambda _keys, **_kw: {"state_dict": {}}
+        dcp_mod = types.ModuleType("torch.distributed.checkpoint")
+        dcp_mod.FileSystemReader = MagicMock()
+
+        with (
+            patch.dict(
+                sys.modules,
+                {
+                    "torch.distributed.checkpoint.state_dict_loader": loader_mod,
+                    "torch.distributed.checkpoint": dcp_mod,
+                },
+            ),
+            pytest.raises(RuntimeError, match="no 'state_dict' keys"),
+        ):
+            trainer.update_model_state_dict(torch_model)
 
 
 # -----------------------------------------------------------------------------

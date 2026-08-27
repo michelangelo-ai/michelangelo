@@ -52,6 +52,12 @@ apiserver:
   service:
     type: NodePort
     nodePort: 30009
+  # Sandbox is a local dev environment — set the environment-label default
+  # explicitly rather than relying on the chart's own "unspecified" sentinel,
+  # since a sandbox genuinely is "development" (unlike a real, unconfigured
+  # OSS install, which should never guess a real environment).
+  pipelineRunDefaults:
+    environment: "development"
 
 envoy:
   corsOrigins: "http://localhost:[0-9]+"

@@ -2,6 +2,317 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.0] - 2026-08-24
+
+
+### Bug Fixes
+
+
+- Reword ma-design-interview skill to reduce duration (#1714)
+
+
+- **build:** Bump Go SDK to 1.26.3 + rules_go to 0.57.0 (CVE Scan fix, step 1/2) (#1567)
+
+
+- **python:** Restore ColumnConfig.shape optional default (#1762)
+
+
+- **ci:** Skip JavaScript coverage PR comment on fork pull requests (#1756)
+
+
+- **python:** Wire up workflowClient.executionUrlFormat for the sandbox (#1761)
+
+
+- **core:** Correct Model list columns for description, environment, type, last updated (#1673)
+
+
+- **storage/mysql:** Validate criterion field name before SQL interpolation (#1707)
+
+
+- **storage/mysql:** Implement directUpdate for the generic Update RPC (#1645)
+
+
+- **ui:** Block entity navigation for disabled/coming-soon phases in menu drawer (#1791)
+
+
+- **release:** Mark -rc tags as prereleases in GitHub releases (#1678)
+
+
+- **api:** Log blob-storage delete failure only when it fails (#1679)
+
+
+- **helm:** Drop placeholder signKey annotation from chart metadata (#1768)
+
+
+- **api:** Use status.Error for non-format error messages (#1782)
+
+
+- **core:** Exempt barrel files and test infra from react-refresh export rule (#1807)
+
+
+- **go:** Sync paused TriggerRun schedules (#1827)
+
+
+- **python:** Stop shipping test files in wheels and sdists (#1832)
+
+
+- Create TriggerRun schedules paused (#1828)
+
+
+- Make TriggerRun deletion idempotent (#1688)
+
+
+- **ui:** Tighten breadcrumb menu drawer close button and icons (#1799)
+
+
+- **core:** Stop capitalizing entity/phase names (#1846)
+
+
+- **core:** Title-case Data Sources, Evaluations, and Notebooks entity names (#1857)
+
+
+- **python:** Use __spec__.name for dot_path() under python -m (#1754)
+
+
+- **go:** Pipelinerun revision resolve and pipeline latest revision (#1797)
+
+
+- **python:** Render <crd> get <name> as table and fix -o yaml OrderedDict crash (#1822)
+
+
+- **python:** Rename evaluation_strategy to eval_strategy in bert_cola example (#1883)
+
+
+- **docs,examples:** Correct Lightning trainer imports and parameters (#1787)
+
+
+- Plumb RayTask gpu, disk and object store memory into the cluster spec (#1801)
+
+
+- **release:** Align website version and add it to version-bump.sh (#1849)
+
+
+- **ci:** Pin release.yaml's Go setup to go.mod (cherry-pick for v0.9.0-rc.1) (#1898)
+
+
+### CI/CD
+
+
+- Bump actions/setup-go from 5 to 7 (#1743)
+
+
+- Bump actions/setup-python from 5 to 7 (#1744)
+
+
+- Bump aquasecurity/trivy-action from 0.32.0 to 0.36.0 in the actions-minor-and-patch group (#1742)
+
+
+- Add least-privilege permissions to workflows missing them (#1711)
+
+
+- Pin third-party GitHub Actions to commit SHAs (#1757)
+
+
+- Pin the golangci-lint installer script to the version it installs (#1767)
+
+
+- Pin apidiff to a Go 1.24-compatible x/exp pseudo-version (#1781)
+
+
+- **go:** Migrate golangci-lint config off deprecated options (#1755)
+
+
+- **integration-test:** Run Playwright browser tests in sandbox-e2e (#1838)
+
+
+- Upload coverage reports to Codecov (#1834)
+
+
+- Add OpenSSF Scorecard workflow and badge (#1835)
+
+
+- Build examples image without pushing on fork PRs (#1802)
+
+
+- Pin sticky-pull-request-comment in javascript-coverage to a full SHA (#1810)
+
+
+- Remove unused attestations permission from release workflows (#1811)
+
+
+- Bump actions/cache from 4 to 6 (#1825)
+
+
+- Bump azure/setup-helm from 4 to 5 (#1823)
+
+
+### Documentation
+
+
+- Fix community on-ramps in CONTRIBUTING and docs (#1713)
+
+
+- **core:** Document action rendering surfaces and mutation payload flow (#1722)
+
+
+- **core:** Consolidate javascript skills into CLAUDE.md (#1724)
+
+
+- Correct Ray Tune and Ray autoscaling claims (#1788)
+
+
+- Repoint california_housing doc references to michelangelo-examples (#1749)
+
+
+- Add a migration guide for KubeRay users (#1783)
+
+
+- Revert getting-started.md tutorial to xgb_train (pytorch_train crashes on Apple Silicon) (#1871)
+
+
+- Update CHANGELOG.md for v0.9.0-rc.2 (#1906)
+
+
+### Features
+
+
+- Export success operations from core (#1716)
+
+
+- **native_transform:** Add fitted-statistics layers (PR B3) (#1683)
+
+
+- **native_transform:** Add IDHashTokenizer wrapper layer (PR B4) (#1684)
+
+
+- **native_transform:** Add Pydantic layer specs (PR B5) (#1685)
+
+
+- **js:** Config-driven form engine skeleton (#1650)
+
+
+- **native_transform:** Add TransformSpec DAG engine + TorchTransformModule (PR B6) (#1730)
+
+
+- **native_transform:** Add auxiliary transform helpers (PR B8) (#1729)
+
+
+- **ui:** Show Coming soon badge on phase cards (#1785)
+
+
+- **ui:** Change steps to ongoing operations (#1784)
+
+
+- **ui:** Add delete pipeline functionality (#1792)
+
+
+- **trainer:** Add an XGBoost trainer built on Ray Train (#1793)
+
+
+- **js:** Schema-aware wrappers for all field types (#1651)
+
+
+- **js:** Declarative validation for form config (#1652)
+
+
+- **native_transform:** Add schema bridge for fitted transform DAGs (PR B7) (#1772)
+
+
+- **native_transform:** Add TransformSpecIO + usage guide (PR E) (#1774)
+
+
+- **ui:** Add deployment information tab (#1708)
+
+
+- **ui:** Add status cards to deployment detail page (#1709)
+
+
+- **ui:** Add source code link (#1826)
+
+
+- Add GitHub-backed dev identity override to sandbox UI (#1819)
+
+
+- **core:** Add Experiment & Productionize phase (#1813)
+
+
+- **core:** Add Monitor & Debug coming-soon phase (#1815)
+
+
+- Let EntityTable own phase pipeline-type filtering (#1830)
+
+
+- **form:** Add conditional layout with the `is` operator (#1804)
+
+
+- **form:** Add isNot/isEmpty/containsAny condition operators (#1805)
+
+
+- **model:** Add Model API-hook wiring skeleton (Phase 0) (#1728)
+
+
+- **native_transform:** Add Ray execution adapter (PR C) (#1773)
+
+
+- **blobstore:** Add a native GCS backend (#1837)
+
+
+- **train:** Add FSDP2 strategy to the Lightning trainer (#1877)
+
+
+### Miscellaneous
+
+
+- Add ma-sandbox-test-plan Claude Code skill (#1641)
+
+
+- Add dependabot config for weekly grouped dependency updates (#1691)
+
+
+- Bump gazelle 0.40.0 to 0.52.2, compatible with rules_go 0.57.0 (#1747)
+
+
+- **lib:** Update california_housing example references in model_manager registry docstrings/tests (#1750)
+
+
+- Add Algolia crawler domain verification token to robots.txt (#1766)
+
+
+- Merge back release/v0.8 to main (#1721)
+
+
+- Add CODEOWNERS file (#1796)
+
+
+- Route major feature requests to the enhancements RFC process (#1803)
+
+
+- Bump vllm to 0.9.2 to shed known CVEs (#1812)
+
+
+- Support the KubeRay suspended cluster state in the MA API (#1700)
+
+
+- Bump version to 0.9.0-rc.1 (#1889)
+
+
+- Bump version to 0.9.0-rc.2 (#1905)
+
+
+- Release 0.9.0 (#1923)
+
+
+### Refactoring
+
+
+- Delete dead code in python/michelangelo/canvas/ (#1727)
+
+
+- **js:** Move form types to types directory (#1671)
+
+
+- **core:** Rename ErrorView to Signpost (#1786)
+
 ## [0.8.0] - 2026-08-10
 
 ### ⚠ Breaking Changes

@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-logr/zapr"
 	"github.com/golang/mock/gomock"
+	mgapi "github.com/michelangelo-ai/michelangelo/go/api"
 	interfaceMock "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface/interface_mock"
 	api "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
@@ -60,7 +61,7 @@ func TestScheduleInputHashTracksEffectiveInput(t *testing.T) {
 		{
 			name: "environment label",
 			mutate: func(triggerRun *v2pb.TriggerRun) {
-				triggerRun.Labels[scheduleInputEnvironmentLabel] = "staging"
+				triggerRun.Labels[mgapi.EnvironmentLabel] = "staging"
 			},
 		},
 		{
@@ -258,7 +259,7 @@ func scheduleInputTestTriggerRun() *v2pb.TriggerRun {
 			Namespace: "test-namespace",
 			Name:      "test-trigger",
 			Labels: map[string]string{
-				scheduleInputEnvironmentLabel: "production",
+				mgapi.EnvironmentLabel: "production",
 			},
 		},
 		Spec: v2pb.TriggerRunSpec{

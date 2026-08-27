@@ -147,6 +147,43 @@ class TorchTritonPackagerTest(TestCase):
             self.assertTrue(os.path.isdir(result))
             self.assertTrue(os.path.isfile(os.path.join(result, "model", "model.pt")))
 
+    def test_create_raw_model_package_with_scalar_shapes(self):
+        """A schema with shape-less (scalar) items packages successfully.
+
+        ``ColumnConfig("torch.float32")`` -- the documented way to declare a
+        scalar feature in ``tabular_trainer`` -- produces a
+        ``ModelSchemaItem`` with ``shape=[]``. That's a legitimate true
+        scalar (no non-batch dimensions) rather than an error state: the
+        batch dimension is applied separately and flexibly by Triton, so an
+        empty item shape must not be rejected or padded to ``[1]``.
+        """
+        model_class = (
+            "michelangelo.lib.model_manager._private.packager.torch_triton."
+            "tests.fixtures.simple_model.SimpleModel"
+        )
+        scalar_schema = ModelSchema(
+            input_schema=[
+                ModelSchemaItem(name="x", data_type=DataType.FLOAT, shape=[]),
+            ],
+            output_schema=[
+                ModelSchemaItem(name="y", data_type=DataType.FLOAT, shape=[]),
+            ],
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            model_path = os.path.join(tmp, "model.pt")
+            save_state_dict(model_path)
+            dest = os.path.join(tmp, "pkg")
+
+            result = self.packager.create_raw_model_package(
+                model_path=model_path,
+                model_class=model_class,
+                model_schema=scalar_schema,
+                dest_model_path=dest,
+                include_import_prefixes=["michelangelo"],
+            )
+
+            self.assertTrue(os.path.isdir(result))
+
     def test_create_model_package_invalid_schema_raises(self):
         """create_model_package raises when schema is invalid."""
         from michelangelo.lib.model_manager.schema import ModelSchema

@@ -1,8 +1,10 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom-v5-compat';
 import { useStyletron } from 'baseui';
+import { Button, KIND } from 'baseui/button';
 import { Tab, Tabs } from 'baseui/tabs-motion';
 
+import { Icon } from '#core/components/icon/icon';
 import { CircleExclamationMark } from '#core/components/illustrations/circle-exclamation-mark/circle-exclamation-mark';
 import { CircleExclamationMarkKind } from '#core/components/illustrations/circle-exclamation-mark/types';
 import { PageHeader } from '#core/components/page-header/page-header';
@@ -26,6 +28,7 @@ export function PhaseEntityView<T extends object = object>({
   const [css, theme] = useStyletron();
   const navigate = useNavigate();
   const { projectId, entity: currentEntity } = useStudioParams('list');
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
 
   useEffect(() => {
     if (!currentEntity) {
@@ -67,6 +70,26 @@ export function PhaseEntityView<T extends object = object>({
     );
   }
 
+  const { createAction } = currentEntityConfig;
+
+  const createActionButton = createAction && (
+    <Button
+      kind={KIND.primary}
+      onClick={() => setIsCreateOpen(true)}
+      startEnhancer={
+        createAction.display.icon && (
+          <Icon
+            name={createAction.display.icon}
+            size={theme.sizing.scale600}
+            color={theme.colors.buttonPrimaryText}
+          />
+        )
+      }
+    >
+      {createAction.display.label}
+    </Button>
+  );
+
   return (
     <div className={css({ marginTop: theme.sizing.scale800 })}>
       <PageHeader
@@ -75,6 +98,9 @@ export function PhaseEntityView<T extends object = object>({
         description={phaseConfig.description}
         docUrl={phaseConfig.docUrl}
       />
+      {createAction && isCreateOpen && (
+        <createAction.component onClose={() => setIsCreateOpen(false)} />
+      )}
       <Tabs
         activeKey={activeKey}
         onChange={handleEntityTabChange}
@@ -97,6 +123,7 @@ export function PhaseEntityView<T extends object = object>({
                 }}
                 tableSettingsId={`${phaseConfig.id}/${entity.id}`}
                 pipelineTypes={phaseConfig.pipelineTypes}
+                trailingActions={createActionButton}
               />
             )}
           </Tab>

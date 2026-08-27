@@ -45,6 +45,8 @@ from pytorch_lightning.utilities.deepspeed import (
 from ray.train.torch import TorchTrainer
 
 from michelangelo.lib.trainer.torch.pytorch_lightning._private.util import (
+    _is_deepspeed_strategy,
+    _is_model_parallel_strategy,
     _train_loop_per_worker,
 )
 
@@ -409,26 +411,9 @@ class LightningTrainerWithStateDict(LightningTrainer):
 
     After ``train()`` completes, callers can pass an initialized ``torch.nn.Module``
     to :meth:`update_model_state_dict` and have it populated from the latest
-    checkpoint. Supports both DDP single-file checkpoints and DeepSpeed ZeRO
-    sharded directories.
+    checkpoint. Supports DDP single-file checkpoints, DeepSpeed ZeRO sharded
+    directories, and FSDP2 distributed checkpoints.
     """
-
-    def _is_deepspeed_strategy(self) -> bool:
-        """Return ``True`` if the configured strategy is DeepSpeed."""
-        strategy = self.trainer_param.lightning_trainer_kwargs.get("strategy")
-        if strategy is None:
-            return False
-
-        # DeepSpeed was used if the strategy is "deepspeed" or a RayDeepSpeedStrategy instance
-        if isinstance(strategy, str):
-            return strategy.lower() == "deepspeed"
-
-        try:
-            from ray.train.lightning import RayDeepSpeedStrategy
-
-            return isinstance(strategy, RayDeepSpeedStrategy)
-        except ImportError:
-            return False
 
     def update_model_state_dict(self, torch_model: torch.nn.Module) -> None:
         """Populate ``torch_model`` in-place from the latest training checkpoint.
@@ -443,8 +428,9 @@ class LightningTrainerWithStateDict(LightningTrainer):
             raise ValueError(
                 "No checkpoint available. Please call train() first to generate a checkpoint."
             )
-        used_deepspeed = self._is_deepspeed_strategy()
-        # use the ray checkpoint as_directory() to get the local temp checkpoint directory
+        strategy = self.trainer_param.lightning_trainer_kwargs.get("strategy")
+        used_deepspeed = _is_deepspeed_strategy(strategy)
+        used_model_parallel = _is_model_parallel_strategy(strategy)
         with self.checkpoint.as_directory() as d:
             _logger.info(
                 "Saving Ray Checkpoint to local temp Checkpoint directory: %s", d
@@ -468,6 +454,23 @@ class LightningTrainerWithStateDict(LightningTrainer):
                     lightning_ckpt_path,
                     local_model_path,
                 )
+            elif used_model_parallel:
+                # Private torch API, re-verify on torch upgrade.
+                from torch.distributed.checkpoint import FileSystemReader
+                from torch.distributed.checkpoint.state_dict_loader import (
+                    _load_state_dict_from_keys,
+                )
+
+                loaded = _load_state_dict_from_keys(
+                    {"state_dict"},
+                    storage_reader=FileSystemReader(lightning_ckpt_path),
+                )
+                model_state_dict = loaded.get("state_dict")
+                if not model_state_dict:
+                    raise RuntimeError(
+                        f"FSDP2 sharded checkpoint from {lightning_ckpt_path!r} has no 'state_dict' keys."
+                    )
+                _logger.info("Loaded FSDP2 model weights from %s", lightning_ckpt_path)
             else:
                 # DDP checkpoint
                 checkpoint = torch.load(lightning_ckpt_path, map_location="cpu")

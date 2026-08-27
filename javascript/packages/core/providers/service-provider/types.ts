@@ -9,4 +9,28 @@
  */
 export type ServiceContextType = {
   request: (requestId: string, args: unknown, headers?: Record<string, string>) => Promise<unknown>;
+  /** Resolvers the RPC layer applies to enrich responses before consumers see them, keyed by concern. */
+  resolvers?: {
+    team?: (uuids: string[]) => Promise<Record<string, TeamInfo>>;
+  };
 };
+
+export interface TeamInfo {
+  id: string;
+  displayName: string;
+  url: string;
+}
+
+export interface ProjectWithOwner {
+  spec?: {
+    owner?: {
+      owningTeam?: string;
+      team?: TeamInfo;
+    };
+  };
+}
+
+export interface ProjectResponse {
+  project?: ProjectWithOwner;
+  projectList?: { items?: ProjectWithOwner[] };
+}

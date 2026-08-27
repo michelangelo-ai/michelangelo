@@ -89,6 +89,8 @@ To implement a custom registry, subclass ``ModelRegistryClient``::
 from __future__ import annotations
 
 import logging
+import os
+import tempfile
 import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypedDict
@@ -420,23 +422,33 @@ class ModelPusherPlugin(PusherPluginBase):
         base_labels = self._build_labels()
         base_metadata = self._build_metadata()
 
-        _logger.info(
-            "Uploading raw model artifact for '%s' (push %s).", model_name, push_id
-        )
-        raw_uri = self._storage_backend.upload(
-            self._artifact.raw_model.path,
-            f"models/{model_name}/{push_id}/raw/{Path(self._artifact.raw_model.path).name}",
-        )
-
-        deployable_uri: str | None = None
-        if self._artifact.deployable_model is not None:
+        with tempfile.TemporaryDirectory(prefix="model_pusher_") as tmp_root:
             _logger.info(
-                "Uploading deployable artifact for '%s' (push %s).", model_name, push_id
+                "Uploading raw model artifact for '%s' (push %s).", model_name, push_id
             )
-            deployable_uri = self._storage_backend.upload(
-                self._artifact.deployable_model.path,
-                f"models/{model_name}/{push_id}/deployable/{Path(self._artifact.deployable_model.path).name}",
+            raw_local_path = self._ensure_local(
+                self._artifact.raw_model.path, tmp_root, "raw"
             )
+            raw_uri = self._storage_backend.upload(
+                raw_local_path,
+                f"models/{model_name}/{push_id}/raw/{Path(raw_local_path).name}",
+            )
+
+            deployable_uri: str | None = None
+            if self._artifact.deployable_model is not None:
+                _logger.info(
+                    "Uploading deployable artifact for '%s' (push %s).",
+                    model_name,
+                    push_id,
+                )
+                deployable_local_path = self._ensure_local(
+                    self._artifact.deployable_model.path, tmp_root, "deployable"
+                )
+                deployable_uri = self._storage_backend.upload(
+                    deployable_local_path,
+                    f"models/{model_name}/{push_id}/deployable/"
+                    f"{Path(deployable_local_path).name}",
+                )
 
         registrations: list[RegistrationResult] = []
         for registry in self._registries:
@@ -484,6 +496,28 @@ class ModelPusherPlugin(PusherPluginBase):
             push_id=push_id,
             registrations=registrations,
         )
+
+    def _ensure_local(self, path: str, tmp_root: str, name: str) -> str:
+        """Return a local filesystem path for ``path``.
+
+        ``path`` may already be local, or a URI from a prior upload to some
+        other ``StorageBackend``. A URI (detected via a ``scheme://`` prefix,
+        not by checking disk existence) is downloaded into ``tmp_root``
+        first; a local path is returned unchanged.
+
+        Args:
+            path: Local path or storage-backend URI to resolve.
+            tmp_root: Existing local directory to download into, if needed.
+            name: Filename/dirname to use under ``tmp_root`` for the download.
+
+        Returns:
+            A local filesystem path pointing at the artifact.
+        """
+        if "://" not in path:
+            return path
+        local_path = os.path.join(tmp_root, name)
+        self._storage_backend.download(path, local_path)
+        return local_path
 
     def _build_labels(self) -> dict[str, str]:
         """Build the indexed labels dict from artifact metadata and config labels.

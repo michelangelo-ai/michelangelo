@@ -25,6 +25,8 @@ The platform is modular: adopt the full stack or integrate individual components
 
 ## Get started
 
+Prefer an ordered path over a menu? **[Learning Paths](./getting-started/learning-paths.md)** sequences the docs into three role-based tracks (ML Engineer, Operator, Contributor) with time estimates.
+
 ### I'm evaluating Michelangelo AI
 
 Understand what the platform does, how it compares to your current stack, and whether it fits your use case.
@@ -39,7 +41,7 @@ Get a local environment running and build an end-to-end ML pipeline.
 
 - **[Sandbox Setup](./getting-started/sandbox-setup.md)** — Set up a local Michelangelo AI cluster (~20 min)
 - **[Getting Started with Pipelines](./user-guides/getting-started/getting-started.md)** — Build your first pipeline from scratch (~30 min)
-- **[Example Projects](./user-guides/examples/index.md)** — 9 end-to-end workflows: XGBoost, BERT, GPT fine-tuning, batch inference, and more
+- **[Example Projects](./user-guides/examples/index.md)** — 10 end-to-end workflows: XGBoost, BERT, GPT fine-tuning, batch inference, and more
 
 ### I'm deploying or operating the platform
 

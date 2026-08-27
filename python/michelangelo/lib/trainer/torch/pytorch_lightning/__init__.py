@@ -24,7 +24,7 @@ Public surface re-exported below:
   that ships profiler output to an MLflow run.
 """
 
-from michelangelo.lib.trainer.torch.pytorch_lightning._private.util import (
+from michelangelo.lib.trainer.torch.pytorch_lightning._private.profiler import (
     comet_profiler_sink,
     mlflow_profiler_sink,
 )

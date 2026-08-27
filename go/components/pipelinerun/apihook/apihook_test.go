@@ -526,3 +526,16 @@ func TestBeforeCreate_PipelineGetTransientErrorIsSoft(t *testing.T) {
 	assert.Nil(t, request.PipelineRun.Spec.Revision)
 	assert.Nil(t, request.PipelineRun.Spec.PipelineSpec)
 }
+
+func TestBeforeCreate_StampsSourcePipelineTypeLabel(t *testing.T) {
+	live := &v2.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-pipeline", Namespace: testNamespace},
+		Spec:       v2.PipelineSpec{Type: v2.PIPELINE_TYPE_TRAIN},
+	}
+	hook := setUpHook(t, live)
+
+	request := newPipelineRefRequest("test-pipeline")
+	require.NoError(t, hook.BeforeCreate(context.Background(), request))
+	assert.Equal(t, "PIPELINE_TYPE_TRAIN",
+		request.PipelineRun.GetLabels()[api.SourcePipelineTypeLabelName])
+}

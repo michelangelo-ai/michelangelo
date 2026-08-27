@@ -40,3 +40,11 @@ minio:
 #   storageAccount: "mystorageaccount"
 #   sasToken: "sv=2022-11-02&ss=b&srt=sco&sp=rwdlacupx&se=2024-12-31T23:59:59Z&st=2023-01-01T00:00:00Z&spr=https&sig=..."
 #   endpoint: ""  # Optional: Custom endpoint (defaults to https://{storageAccount}.blob.core.windows.net)
+
+# Google Cloud Storage configuration. Optional: with no gcs block at all,
+# gs:// reads use Application Default Credentials (e.g. GKE workload
+# identity), so most GCP deployments need no configuration here.
+# gcs:
+#   credentialsFile: ""  # Optional: path to a service account JSON key; leave empty for ADC
+#   endpoint: ""         # Optional: custom endpoint (private Google access or a local emulator)
+#   anonymous: false     # Optional: disable auth entirely (public buckets, emulators)

@@ -54,8 +54,12 @@ def validate_model_schema_item(item: ModelSchemaItem) -> tuple[bool, Exception]:
             f"Triton models: {supported_types}"
         )
 
-    if not item.shape or len(item.shape) == 0:
-        return False, ValueError(f"Shape must be provided for item: {item}")
+    # item.shape excludes the batch dimension, which is applied separately
+    # and flexibly (Triton's config.pbtxt `dims` never includes it; batching
+    # is controlled independently via max_batch_size/dynamic_batching). An
+    # empty shape is a legitimate, fully-supported case: a true scalar
+    # feature with no non-batch dimensions at all, not an error state to be
+    # padded/defaulted away.
 
     return True, None
 
