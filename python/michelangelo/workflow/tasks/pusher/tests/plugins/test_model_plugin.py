@@ -694,24 +694,24 @@ class TestModelPusherPluginPushId(TestCase):
 
 
 class TestModelPusherPluginStorageKey(TestCase):
-    """Tests for artifact filename inclusion in S3 storage keys."""
+    """Tests for the fixed destination-key format used for raw/deployable uploads."""
 
-    def test_raw_key_includes_artifact_filename(self):
-        """Raw upload key ends with the artifact's filename."""
+    def test_raw_key_is_fixed_regardless_of_artifact_filename(self):
+        """Raw upload key is fixed and does not echo the artifact's filename."""
         backend = _mock_backend()
-        ModelPusherPlugin(
+        result = ModelPusherPlugin(
             config=ModelPluginConfig(model_name="m"),
             artifact=AssembledModel(raw_model=ModelArtifact(path="/tmp/model.ubj")),
             storage_backend=backend,
             registry_client=_mock_registry(),
         ).execute()
         raw_key = backend.upload.call_args_list[0][0][1]
-        self.assertTrue(raw_key.endswith("/model.ubj"), raw_key)
+        self.assertEqual(raw_key, f"models/m/{result['push_id']}/raw")
 
-    def test_deployable_key_includes_artifact_filename(self):
-        """Deployable upload key ends with the artifact's filename."""
+    def test_deployable_key_is_fixed_regardless_of_artifact_filename(self):
+        """Deployable upload key is fixed and does not echo the artifact's filename."""
         backend = _mock_backend()
-        ModelPusherPlugin(
+        result = ModelPusherPlugin(
             config=ModelPluginConfig(model_name="m"),
             artifact=AssembledModel(
                 raw_model=ModelArtifact(path="/tmp/model.ubj"),
@@ -721,22 +721,28 @@ class TestModelPusherPluginStorageKey(TestCase):
             registry_client=_mock_registry(),
         ).execute()
         dep_key = backend.upload.call_args_list[1][0][1]
-        self.assertTrue(dep_key.endswith("/serving_model.zip"), dep_key)
+        self.assertEqual(dep_key, f"models/m/{result['push_id']}/deployable")
 
-    def test_raw_key_with_trailing_slash_path_uses_name(self):
-        """Trailing-slash path produces a non-empty filename segment in the key."""
+    def test_raw_key_unaffected_by_source_path_shape(self):
+        """A source path ending in a category-like segment doesn't alter the key.
+
+        Regression: previously, a local download directory name could leak
+        into the destination key, producing a doubled segment (e.g.
+        ``.../raw/raw``) when the source artifact's own path also ended in
+        ``raw``/``deployable``. The destination key must stay fixed no
+        matter what the source path looks like.
+        """
         backend = _mock_backend()
-        ModelPusherPlugin(
+        result = ModelPusherPlugin(
             config=ModelPluginConfig(model_name="m"),
             artifact=AssembledModel(
-                raw_model=ModelArtifact(path="/tmp/checkpoints/run1/")
+                raw_model=ModelArtifact(path="/tmp/checkpoints/run1/raw")
             ),
             storage_backend=backend,
             registry_client=_mock_registry(),
         ).execute()
         raw_key = backend.upload.call_args_list[0][0][1]
-        # Path("/tmp/checkpoints/run1/").name == "run1" — not empty
-        self.assertTrue(raw_key.endswith("/run1"), raw_key)
+        self.assertEqual(raw_key, f"models/m/{result['push_id']}/raw")
 
     def test_push_id_unique_across_calls(self):
         """Consecutive execute() calls produce different push_ids."""
@@ -744,14 +750,8 @@ class TestModelPusherPluginStorageKey(TestCase):
         r2 = _plugin(model_name="m", backend=_mock_backend()).execute()
         self.assertNotEqual(r1["push_id"], r2["push_id"])
 
-    def test_downloaded_artifact_key_has_no_redundant_name_segment(self):
-        """A URI artifact's key has no trailing name segment (regression).
-
-        A source URI whose final path segment happens to match the
-        category name used in the destination key template (e.g. a raw
-        artifact stored at a path ending in ``.../raw``) must not produce
-        a doubled segment like ``.../raw/raw`` in the destination key.
-        """
+    def test_downloaded_artifact_key_is_fixed(self):
+        """A downloaded URI artifact's key is fixed, matching the local-path case."""
         backend = _mock_backend()
 
         def _fake_download(uri, local_path):
@@ -760,7 +760,7 @@ class TestModelPusherPluginStorageKey(TestCase):
 
         backend.download.side_effect = _fake_download
 
-        ModelPusherPlugin(
+        result = ModelPusherPlugin(
             config=ModelPluginConfig(model_name="m"),
             artifact=AssembledModel(
                 raw_model=ModelArtifact(path="s3://bucket/tabular_assembler/x/raw")
@@ -769,8 +769,7 @@ class TestModelPusherPluginStorageKey(TestCase):
             registry_client=_mock_registry(),
         ).execute()
         raw_key = backend.upload.call_args_list[0][0][1]
-        self.assertTrue(raw_key.endswith("/raw"), raw_key)
-        self.assertFalse(raw_key.endswith("/raw/raw"), raw_key)
+        self.assertEqual(raw_key, f"models/m/{result['push_id']}/raw")
 
 
 # ---------------------------------------------------------------------------
