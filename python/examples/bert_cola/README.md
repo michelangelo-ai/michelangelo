@@ -14,9 +14,12 @@ Fine-tuning BERT for linguistic acceptability classification using the Corpus of
 
 ```bash
 cd michelangelo-ai/michelangelo/python
+poetry install -E example   # installs torch, transformers, datasets, ray
 source .venv/bin/activate
 poetry run python examples/bert_cola/bert_cola.py
 ```
+
+> The `example` extra is required. A plain `poetry install` omits it, and the module then fails to import with `No module named 'datasets'`.
 
 ## Expected Output
 

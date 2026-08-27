@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { BaseFieldProps, SharedFieldConfig } from '../types';
 
 export interface SelectOption<V = string | number> {
@@ -17,6 +18,14 @@ interface SelectFieldOwnProps<V> {
    * By default there is no limit.
    */
   visibleOptionLimit?: number;
+  /**
+   * Renders richer content for each dropdown row — multiple columns of metadata, for
+   * instance — instead of the plain `option.label`.
+   *
+   * Only affects the dropdown menu. Selected values always render `option.label`, so a
+   * multi-select's tags stay compact no matter how detailed the rows are.
+   */
+  getOptionContent?: (option: SelectOption<V>) => ReactNode;
 }
 
 export type SelectFieldProps<V = string | number> =

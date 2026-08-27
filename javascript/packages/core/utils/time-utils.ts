@@ -69,6 +69,34 @@ export function getEpochSecondsFromDate(date: Date): number {
 }
 
 /**
+ * Formats the elapsed time between two epoch-second timestamps.
+ *
+ * Returns null when either bound is missing — a step that has not started, or one
+ * still running — so callers can render their own placeholder.
+ *
+ * @example
+ * formatElapsedSeconds('1720656638', '1720656690') // "52s"
+ * formatElapsedSeconds('1720656638', undefined) // null
+ */
+export function formatElapsedSeconds(
+  startSeconds?: string | number,
+  endSeconds?: string | number
+): string | null {
+  if (isNil(startSeconds) || isNil(endSeconds)) {
+    return null;
+  }
+
+  const start = Number(startSeconds);
+  const end = Number(endSeconds);
+
+  if (isNaN(start) || isNaN(end)) {
+    return null;
+  }
+
+  return `${Math.round(end - start)}s`;
+}
+
+/**
  * Parses an ISO string into date and time components.
  *
  * @param isoString - ISO date string like "2024-01-01T12:00:00.000Z"

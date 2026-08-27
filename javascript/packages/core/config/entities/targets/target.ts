@@ -1,3 +1,4 @@
+import { CreateInferenceServerForm } from './create-inference-server-form';
 import { TARGET_DETAIL_CONFIG } from './detail';
 import { TARGET_LIST_CONFIG } from './list';
 
@@ -9,4 +10,8 @@ export const TARGET_ENTITY_CONFIG: PhaseEntityConfig = {
   service: 'inferenceServer',
   state: 'active',
   views: [TARGET_LIST_CONFIG, TARGET_DETAIL_CONFIG],
+  createAction: {
+    display: { label: 'Create target', icon: 'plus' },
+    component: CreateInferenceServerForm,
+  },
 };

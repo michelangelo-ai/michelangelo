@@ -2,6 +2,16 @@ const UPDATE_TIMESTAMP_LABEL_KEY = 'michelangelo/SpecUpdateTimestamp';
 const MICROSECONDS_PER_SECOND = 1_000_000;
 
 /**
+ * Naming rules for CRD-backed entities, per Kubernetes RFC 1123 label names
+ * (metadata.name): lowercase alphanumerics and '-', starting and ending with
+ * an alphanumeric, at most 63 characters.
+ */
+export const K8S_NAME_MAX_LENGTH = 63;
+export const K8S_NAME_PATTERN = /^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/;
+export const K8S_NAME_RULES_MESSAGE =
+  "Must only contain lowercase alphanumeric characters, '-', and must start and end with an alphanumeric character";
+
+/**
  * Resolves the epoch-seconds timestamp to display as an entity's "last updated" time.
  *
  * CRD-backed entities record spec updates via a `michelangelo/SpecUpdateTimestamp` metadata label

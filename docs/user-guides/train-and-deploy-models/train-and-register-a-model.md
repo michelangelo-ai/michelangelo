@@ -19,7 +19,7 @@ The focus is simplicity: **you control your training logic**, Michelangelo AI pr
 
 - **A running sandbox** — Remote training runs require a local Kubernetes cluster. Follow the [Sandbox Setup](../../getting-started/sandbox-setup.md) guide if you haven't done this yet.
 - **A prepared dataset** — Training tasks expect datasets passed as `DatasetVariable`. See [Data Preparation](../getting-started/prepare-your-data.md) for how to produce them.
-- **Python 3.11+, Poetry, and the Michelangelo AI SDK installed** — Run `cd python && poetry install` from the repo root.
+- **Python 3.11+, Poetry, and the Michelangelo AI SDK installed** — Run `cd python && poetry install -E example` from the repo root (the `example` extra pulls the ML dependencies the bundled examples import).
 - **For distributed training:** A Docker image with your workflow code. See [Running Uniflow Pipelines](../ml-pipelines/running-uniflow.md) for image build steps.
 
 ## Understanding Training Inputs

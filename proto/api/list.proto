@@ -3,6 +3,11 @@ syntax = "proto3";
 package michelangelo.api;
 
 import "google/protobuf/any.proto";
+// Not referenced by any message here, but Criterion.match_value is an Any and callers
+// pack a StringValue into it. Envoy's grpc_json_transcoder can only resolve a type URL
+// present in the FileDescriptorSet it is given, so this import is what puts StringValue
+// there and lets a JSON client send a string criterion.
+import "google/protobuf/wrappers.proto";
 
 option go_package = "api";
 

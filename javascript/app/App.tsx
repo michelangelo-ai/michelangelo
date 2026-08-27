@@ -12,6 +12,18 @@ import { ICONS } from './icons/icons';
 const engine = new Styletron();
 const queryClient = new QueryClient();
 
+// Sandbox/demo-only: fakes Tier-2 ownership resolution (see packages/core's Owner column
+// config) by returning a fixed team for any UUID, rather than wiring a real resolver backend.
+const FAKE_TEAM = {
+  id: 'michelangelo',
+  displayName: 'Michelangelo',
+  url: 'https://github.com/michelangelo-ai/michelangelo',
+};
+
+function resolveTeams(uuids: string[]) {
+  return Promise.resolve(Object.fromEntries(uuids.map((uuid) => [uuid, FAKE_TEAM])));
+}
+
 export function App() {
   const devProfile = useDevProfile();
 
@@ -24,6 +36,9 @@ export function App() {
     },
     service: {
       request,
+      resolvers: {
+        team: resolveTeams,
+      },
     },
     navigationBar: {
       links: [{ label: 'Docs', href: 'https://michelangelo-ai.github.io/michelangelo/' }],

@@ -556,4 +556,32 @@ describe('SelectField', () => {
       )
     );
   });
+
+  it('renders rich dropdown rows via getOptionContent while tags keep the plain label', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <SelectField
+        multi
+        name="priority"
+        label="Priority"
+        options={options}
+        getOptionContent={(option) => <span>{`${option.label} — extra detail`}</span>}
+      />,
+      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getFormProviderWrapper({})])
+    );
+
+    await user.click(screen.getByRole('combobox', { name: 'Priority' }));
+
+    // Dropdown rows render the supplied content, not the bare label
+    expect(await screen.findByText('Low Priority — extra detail')).toBeInTheDocument();
+
+    await user.click(screen.getByText('Medium Priority — extra detail'));
+
+    // The selected value falls back to the plain label so the tag stays compact
+    await waitFor(() => {
+      expect(screen.getByTitle('Medium Priority')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Medium Priority — extra detail')).not.toBeInTheDocument();
+  });
 });

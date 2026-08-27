@@ -1,6 +1,8 @@
 import { CellType } from '#core/components/cell/constants';
 import { TASK_STATE } from '#core/components/views/execution/constants';
-import { SHARED_RUN_CELL_CONFIG } from './shared';
+import { formatElapsedSeconds } from '#core/utils/time-utils';
+import { RunConfigurationPage } from './run-configuration-page';
+import { SHARED_RUN_CELL_CONFIG, STEP_STATE_COLOR_MAP, STEP_STATE_TEXT_MAP } from './shared';
 
 import type { DetailViewConfig } from '#core/components/views/types';
 
@@ -39,16 +41,7 @@ export const RUN_DETAIL_CONFIG: DetailViewConfig = {
               accessor: (record: {
                 startTime: { seconds: string };
                 endTime: { seconds: string };
-              }) => {
-                if (record.startTime?.seconds && record.endTime?.seconds) {
-                  const start = parseInt(record.startTime.seconds) * 1000;
-                  const end = parseInt(record.endTime.seconds) * 1000;
-                  const durationMs = end - start;
-                  const durationSec = Math.round(durationMs / 1000);
-                  return `${durationSec}s`;
-                }
-                return null;
-              },
+              }) => formatElapsedSeconds(record.startTime?.seconds, record.endTime?.seconds),
             },
             {
               id: 'logUrl',
@@ -58,24 +51,8 @@ export const RUN_DETAIL_CONFIG: DetailViewConfig = {
               id: 'state',
               label: 'Status',
               type: CellType.STATE,
-              stateTextMap: {
-                0: 'Pending',
-                1: 'Pending',
-                2: 'Running',
-                3: 'Success',
-                4: 'Killed',
-                5: 'Failed',
-                6: 'Skipped',
-              },
-              stateColorMap: {
-                0: 'gray',
-                1: 'blue',
-                2: 'blue',
-                3: 'green',
-                4: 'red',
-                5: 'red',
-                6: 'gray',
-              },
+              stateTextMap: STEP_STATE_TEXT_MAP,
+              stateColorMap: STEP_STATE_COLOR_MAP,
             },
             {
               id: 'retry',
@@ -123,6 +100,12 @@ export const RUN_DETAIL_CONFIG: DetailViewConfig = {
           }
         },
       },
+    },
+    {
+      id: 'configuration',
+      label: 'Pipeline Configuration',
+      type: 'custom',
+      component: RunConfigurationPage,
     },
   ],
 };

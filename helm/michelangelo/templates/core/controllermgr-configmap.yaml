@@ -49,6 +49,15 @@ data:
     pipeline:
       revisioningEnabled: {{ dig "pipeline" "revisioningEnabled" false .Values.controllermgr }}
 
+    {{- with .Values.inferenceServer }}
+    inferenceServer:
+      gateway:
+        name: {{ .gateway.name | quote }}
+        serviceName: {{ .gateway.serviceName | quote }}
+        serviceNamespace: {{ .gateway.serviceNamespace | quote }}
+        portName: {{ .gateway.portName | quote }}
+    {{- end }}
+
     workflowClient:
       {{- if eq .Values.workflow.engine "cadence" }}
       service: cadence-frontend

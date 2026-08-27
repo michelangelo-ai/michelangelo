@@ -156,10 +156,28 @@ func (m Mapper) mapRayCluster(rayCluster *v2pb.RayCluster) (runtime.Object, erro
 	return rayV1Cluster, nil
 }
 
+// nonNilRayStartParams returns params unchanged when non-nil, otherwise an
+// empty (non-nil) map. KubeRay's HeadGroupSpec/WorkerGroupSpec.RayStartParams
+// field has no `omitempty`, so a nil map serializes to JSON `null` — and the
+// RayCluster CRD rejects `null` ("rayStartParams in body must be of type
+// object"). Michelangelo's v2 API omits rayStartParams by default (and proto3
+// drops empty maps on the wire, so callers cannot force `{}` from the request),
+// which leaves this field nil here. The bug stays latent until an admission
+// webhook re-serializes the RayCluster on create — notably Kueue's mutating
+// webhook, which decodes the object and marshals it whole, turning the omitted
+// map into an explicit `null` that the CRD then rejects. Emitting `{}` instead
+// is always valid and is the equivalent of "no extra ray start params".
+func nonNilRayStartParams(params map[string]string) map[string]string {
+	if params == nil {
+		return map[string]string{}
+	}
+	return params
+}
+
 func getHeadGroupSpec(head *v2pb.RayHeadSpec) rayv1.HeadGroupSpec {
 	return rayv1.HeadGroupSpec{
 		ServiceType:    corev1.ServiceType(head.GetServiceType()),
-		RayStartParams: head.GetRayStartParams(),
+		RayStartParams: nonNilRayStartParams(head.GetRayStartParams()),
 		Template:       k8sptr.Deref(head.GetPod(), corev1.PodTemplateSpec{}),
 	}
 }
@@ -172,7 +190,7 @@ func getWorkerGroupSpecs(clusterName string, workers []*v2pb.RayWorkerSpec) []ra
 			Replicas:       &workerGroup.MinInstances,
 			MinReplicas:    &workerGroup.MinInstances,
 			MaxReplicas:    &workerGroup.MaxInstances,
-			RayStartParams: workerGroup.RayStartParams,
+			RayStartParams: nonNilRayStartParams(workerGroup.GetRayStartParams()),
 			Template:       k8sptr.Deref(workerGroup.Pod, corev1.PodTemplateSpec{}),
 		}
 		workerGroupSpecsJSON[i] = wg
