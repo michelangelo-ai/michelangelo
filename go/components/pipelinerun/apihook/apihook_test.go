@@ -537,5 +537,5 @@ func TestBeforeCreate_StampsSourcePipelineTypeLabel(t *testing.T) {
 	request := newPipelineRefRequest("test-pipeline")
 	require.NoError(t, hook.BeforeCreate(context.Background(), request))
 	assert.Equal(t, "PIPELINE_TYPE_TRAIN",
-		request.PipelineRun.GetLabels()[mlapi.SourcePipelineTypeLabelName])
+		request.PipelineRun.GetLabels()[api.SourcePipelineTypeLabelName])
 }
