@@ -1668,8 +1668,12 @@ func TestResumeFromPipelineRun(t *testing.T) {
 					_ = kwargs
 					capturedEnvs := envs
 
-					// Verify cache defaults to enabled even with no resume spec, scoped safely
-					// per-run via CACHE_VERSION and per-task input hash.
+					// Verify cache defaults to enabled even with no resume spec, scoped
+					// safely per-run via CACHE_VERSION (defaults to pipelineRun.Name)
+					// and per-task input hash. This must default "true" here because
+					// StartWorkflow only runs once, before RetryInfo could ever be
+					// set - see the long comment on addTaskCacheEnv for why "true
+					// only for retry" cannot work at this call site.
 					require.Equal(t, "true", capturedEnvs["CACHE_ENABLED"])
 					require.Equal(t, "test-pipeline-run-no-resume", capturedEnvs["CACHE_VERSION"])
 

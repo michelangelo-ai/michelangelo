@@ -647,14 +647,46 @@ func decodePipelineManifestContent(pipelineSpec v2.PipelineSpec) (map[string]int
 
 func (a *ExecuteWorkflowActor) addTaskCacheEnv(ctx context.Context, pipelineRun *v2.PipelineRun, envs map[string]interface{}) error {
 	logger := a.logger.With(zap.String("pipelineRun", fmt.Sprintf("%s/%s", pipelineRun.Namespace, pipelineRun.Name)))
-	// Cache is scoped per pipeline run via cacheVersionVarName below (defaults to
-	// pipelineRun.Name) and keyed by each task's input hash, so enabling it by default
-	// doesn't cause cross-run or cross-input cache hits - same reasoning as the resume-from
-	// path below. This lets any task that already succeeded skip re-execution when a manual
-	// retry's Temporal/Cadence Reset forces it to replay (concurrent siblings and downstream
-	// tasks alike). The task actually named in RetryInfo has its own CachedOutput explicitly
-	// invalidated in processManualRetrySpec before the Reset, so a retry always means a real
-	// re-execution of that task regardless of this default.
+	// CACHE_ENABLED must default to "true" here, unconditionally - this is NOT a
+	// blanket "always cache" choice, it's a hard consequence of when this function
+	// runs and what Cadence's Reset API can and cannot do. Read all of this before
+	// changing the default again.
+	//
+	// This function (via StartWorkflow) only ever runs ONCE per pipeline run: the
+	// very first time it starts, while pipelineRun.Status.WorkflowRunId is still
+	// empty. A manual retry does NOT call StartWorkflow again - processManualRetrySpec
+	// (below) triggers it via a.workflowClient.ResetWorkflow, which maps directly to
+	// Cadence's ResetWorkflowExecution API. That API's request only carries a
+	// WorkflowExecution identity, a DecisionFinishEventId to replay from, a Reason,
+	// and a RequestId (see cadenceclient.go's ResetWorkflow) - there is no field to
+	// supply new input/environ. Reset works by truncating history at that event and
+	// replaying forward with the SAME workflow input that was set at the one and
+	// only StartWorkflowExecution call, including this environ map. So by the time
+	// pipelineRun.Spec.RetryInfo is ever non-nil, the environ has already been fixed
+	// and can never be changed for that run again, at any code point, by any means -
+	// this was tried directly in the sandbox (checking RetryInfo here, defaulting to
+	// "false" otherwise) and confirmed dead code: the retried run's SparkJobs still
+	// showed CACHE_ENABLED=false, because Reset simply doesn't call this function.
+	//
+	// Given that constraint, defaulting to "true" here is actually safe, not just
+	// convenient: CACHE_VERSION below defaults to pipelineRun.Name, which is unique
+	// per run, so a fresh run's cache reads can only ever hit a CachedOutput written
+	// under that SAME run's own name - i.e. only from an earlier attempt of that
+	// exact run (a retry or resume of it). A genuinely new pipeline run has zero
+	// CachedOutput entries under its own name regardless of this flag, so the
+	// default has no observable effect until a retry or resume actually happens.
+	// (Writing to CachedOutput, in create_cached_output/commons.star, is itself
+	// unconditional on task success - only the read/skip check is gated by this
+	// flag - so a task always leaves a cache entry behind for a later retry to find,
+	// no matter what this default is.) The task actually named in RetryInfo has its
+	// own CachedOutput explicitly invalidated in processManualRetrySpec before the
+	// Reset, so a retry always means a real re-execution of that specific task
+	// regardless of this default - only its untouched concurrent siblings benefit
+	// from the cache hit this default enables.
+	//
+	// Do not attempt to scope this to "true only when RetryInfo is set" again
+	// without a fundamentally different mechanism than checking pipelineRun.Spec at
+	// this call site - see above for why that specific approach cannot work.
 	envs[cacheEnabledVarName] = "true"
 	envs[cacheVersionVarName] = pipelineRun.Name
 
