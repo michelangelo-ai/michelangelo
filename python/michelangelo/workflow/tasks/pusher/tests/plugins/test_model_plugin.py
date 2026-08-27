@@ -179,7 +179,7 @@ class TestModelPusherPluginExecute(TestCase):
 
         backend.upload.side_effect = _fake_upload
 
-        _plugin(artifact=artifact, backend=backend).execute()
+        result = _plugin(artifact=artifact, backend=backend).execute()
 
         self.assertEqual(backend.download.call_count, 2)
         raw_local_path = backend.upload.call_args_list[0][0][0]
@@ -189,6 +189,17 @@ class TestModelPusherPluginExecute(TestCase):
             dep_local_path, "s3://bucket/tabular_assembler/x/deployable"
         )
         self.assertEqual(upload_time_existence, [True, True])
+
+        # The local download directory name (an implementation detail) must
+        # not leak into the destination storage key.
+        raw_key = backend.upload.call_args_list[0][0][1]
+        dep_key = backend.upload.call_args_list[1][0][1]
+        self.assertEqual(
+            raw_key, f"models/{result['model_name']}/{result['push_id']}/raw"
+        )
+        self.assertEqual(
+            dep_key, f"models/{result['model_name']}/{result['push_id']}/deployable"
+        )
 
     def test_local_artifact_path_uploaded_directly_without_download(self):
         """A plain local path is passed straight to upload() without download."""
@@ -732,6 +743,34 @@ class TestModelPusherPluginStorageKey(TestCase):
         r1 = _plugin(model_name="m", backend=_mock_backend()).execute()
         r2 = _plugin(model_name="m", backend=_mock_backend()).execute()
         self.assertNotEqual(r1["push_id"], r2["push_id"])
+
+    def test_downloaded_artifact_key_has_no_redundant_name_segment(self):
+        """A URI artifact's key has no trailing name segment (regression).
+
+        A source URI whose final path segment happens to match the
+        category name used in the destination key template (e.g. a raw
+        artifact stored at a path ending in ``.../raw``) must not produce
+        a doubled segment like ``.../raw/raw`` in the destination key.
+        """
+        backend = _mock_backend()
+
+        def _fake_download(uri, local_path):
+            with open(local_path, "w") as f:
+                f.write("fake artifact content")
+
+        backend.download.side_effect = _fake_download
+
+        ModelPusherPlugin(
+            config=ModelPluginConfig(model_name="m"),
+            artifact=AssembledModel(
+                raw_model=ModelArtifact(path="s3://bucket/tabular_assembler/x/raw")
+            ),
+            storage_backend=backend,
+            registry_client=_mock_registry(),
+        ).execute()
+        raw_key = backend.upload.call_args_list[0][0][1]
+        self.assertTrue(raw_key.endswith("/raw"), raw_key)
+        self.assertFalse(raw_key.endswith("/raw/raw"), raw_key)
 
 
 # ---------------------------------------------------------------------------
