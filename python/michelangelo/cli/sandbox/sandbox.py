@@ -355,6 +355,8 @@ def _sync(ns: argparse.Namespace):
     # Upgrade or install the control plane via Helm.
     # Infrastructure (mysql, cadence, minio, grafana, prometheus) is left running.
 
+    mysql_pod_recreated = _ensure_mysql_pod_running()
+
     _refresh_mysql_schema()
 
     _ensure_credentials_secret()
@@ -443,6 +445,70 @@ def _sync(ns: argparse.Namespace):
         )
 
     _helm_wait(ns)
+
+    # Ad hoc stopgap: if the bare mysql Pod above had to be recreated, its
+    # emptyDir data (no PVC backs this Pod) was wiped, which drops the
+    # `cadence`/`cadence_visibility` databases along with the Cadence domain
+    # registration record. The `helm upgrade`/`install` above already
+    # recreates the schema itself (values-k3d.yaml: the cadence subchart's
+    # schema-server Job auto-creates cadence/cadence_visibility), but domain
+    # registration is a one-off `cadence domain register` CLI call that only
+    # ever runs from `_create()` — redo it here so `ma pipeline run` doesn't
+    # fail with "domain not found" after a Pod recreation.
+    #
+    # This is not a full fix: any other cluster-side state that lived only in
+    # the wiped mysql data (e.g. previously-applied CRs' rows in the
+    # `michelangelo` DB — already handled by `_refresh_mysql_schema`, but
+    # anything outside that schema) is not restored. The durable fix (back
+    # the mysql Pod with a PVC, or a full reinit path) is tracked separately.
+    if mysql_pod_recreated and ns.workflow == "cadence":
+        _create_cadence_domain([])
+
+
+def _ensure_mysql_pod_running():
+    """Revive the bare `mysql` Pod if it isn't in the `Running` phase.
+
+    `_sync()`'s fast path leaves infrastructure Pods running rather than
+    recreating them, which assumes the previous sync's `mysql` Pod is still
+    alive. On a long-lived host, a node-level container-runtime restart can
+    leave a bare Pod (no Deployment/ReplicaSet to self-heal it) stuck in a
+    terminal phase (`Succeeded`/`Failed`) even though its containers never
+    exited on their own — `kubectl exec` then fails outright. Detect that
+    and delete+reapply the Pod manifest before `_refresh_mysql_schema()`
+    tries to exec into it.
+
+    Returns True if the Pod had to be deleted and recreated (meaning its
+    emptyDir data, including Cadence's schema/domain state, was wiped),
+    False if the existing Pod was already healthy.
+    """
+    phase_result = subprocess.run(
+        ["kubectl", "get", "pod", "mysql", "-o", "jsonpath={.status.phase}"],
+        capture_output=True,
+        text=True,
+    )
+    phase = phase_result.stdout.strip()
+
+    if phase_result.returncode == 0 and phase == "Running":
+        return False
+
+    print(
+        f"mysql Pod is not Running (phase={phase or 'missing'}) — "
+        "recreating it before refreshing the schema."
+    )
+    subprocess.run(
+        ["kubectl", "delete", "pod", "mysql", "--ignore-not-found=true", "--wait=true"],
+        check=False,
+    )
+    _kube_apply(_dir / "resources" / "mysql.yaml")
+    _exec(
+        "kubectl",
+        "wait",
+        "--for=condition=ready",
+        "pod",
+        "mysql",
+        "--timeout=180s",
+    )
+    return True
 
 
 def _refresh_mysql_schema():
