@@ -150,9 +150,7 @@ class RenderEnvTest(TestCase):
         """Configured label present → value returned."""
         mock_label.return_value = "pipelinerun.michelangelo/environment"
         item = SimpleNamespace(
-            metadata=SimpleNamespace(
-                labels={"pipelinerun.michelangelo/environment": "prod"}
-            )
+            metadata=SimpleNamespace(labels={"pipelinerun.michelangelo/environment": "prod"})
         )
         self.assertEqual(_render_env(item), "prod")
 
