@@ -577,6 +577,20 @@ func TestBeforeUpdate_PreservesExplicitEnvironmentLabel(t *testing.T) {
 	assert.Equal(t, "staging", request.PipelineRun.Labels[api.EnvironmentLabel])
 }
 
+func TestBeforeUpdate_NilAnnotationsReplacedWithEmptyMap(t *testing.T) {
+	hook := setUpHook(t)
+
+	request := &v2.UpdatePipelineRunRequest{
+		PipelineRun: &v2.PipelineRun{
+			ObjectMeta: metav1.ObjectMeta{Name: "test-run", Namespace: testNamespace},
+		},
+	}
+	require.Nil(t, request.PipelineRun.Annotations)
+	require.NoError(t, hook.BeforeUpdate(context.Background(), request))
+	assert.NotNil(t, request.PipelineRun.Annotations)
+	assert.Empty(t, request.PipelineRun.Annotations)
+}
+
 func TestRegisterPipelineRunAPIHook(t *testing.T) {
 	RegisterPipelineRunAPIHook(zaptest.NewLogger(t), nil, runtime.NewScheme(), "production")
 }

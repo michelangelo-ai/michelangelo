@@ -104,8 +104,16 @@ func (a apiHook) BeforeCreate(ctx context.Context, request *v2.CreatePipelineRun
 // one, the same as BeforeCreate. It is intentionally narrow: unlike Model's
 // BeforeUpdate, PipelineRun has no source resource to inherit the label
 // from, so this only ever fills in the configured default when the label is
-// absent and never overwrites a value the caller (or a prior update) set.
+// absent and never overwrites a value the caller (or a prior update) set. It
+// also guards against a nil Annotations map, since callers/serialization can
+// leave it unset and later merges into the map would otherwise panic.
 func (a apiHook) BeforeUpdate(_ context.Context, request *v2.UpdatePipelineRunRequest) error {
+	if request.PipelineRun.Annotations == nil {
+		request.PipelineRun.Annotations = map[string]string{}
+		a.logger.Warn("BeforeUpdate: pipeline run annotations are nil, creating a new map",
+			zap.String("pipelinerun", request.PipelineRun.GetName()))
+	}
+
 	setIfAbsent(request.PipelineRun, api.EnvironmentLabel, a.defaultEnvironment())
 	return nil
 }
