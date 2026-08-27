@@ -3,6 +3,11 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { CreatePipelineRunForm } from '#core/config/entities/pipeline/create-pipeline-run-form';
+import {
+  NotificationEventType,
+  NotificationResourceType,
+  NotificationType,
+} from '#core/config/entities/run/types';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getBaseProviderWrapper } from '#core/test/wrappers/get-base-provider-wrapper';
 import { getErrorProviderWrapper } from '#core/test/wrappers/get-error-provider-wrapper';
@@ -142,17 +147,17 @@ describe('CreatePipelineRunForm', () => {
           spec: expect.objectContaining({
             notifications: [
               {
-                notification_type: 'NOTIFICATION_TYPE_EMAIL',
-                event_types: [
-                  'EVENT_TYPE_PIPELINE_RUN_STATE_STARTED',
-                  'EVENT_TYPE_PIPELINE_RUN_STATE_SUCCEEDED',
-                  'EVENT_TYPE_PIPELINE_RUN_STATE_FAILED',
-                  'EVENT_TYPE_PIPELINE_RUN_STATE_KILLED',
-                  'EVENT_TYPE_PIPELINE_RUN_STATE_SKIPPED',
+                notificationType: NotificationType.EMAIL,
+                eventTypes: [
+                  NotificationEventType.PIPELINE_RUN_STATE_STARTED,
+                  NotificationEventType.PIPELINE_RUN_STATE_SUCCEEDED,
+                  NotificationEventType.PIPELINE_RUN_STATE_FAILED,
+                  NotificationEventType.PIPELINE_RUN_STATE_KILLED,
+                  NotificationEventType.PIPELINE_RUN_STATE_SKIPPED,
                 ],
-                resource_type: 'RESOURCE_TYPE_PIPELINE_RUN',
+                resourceType: NotificationResourceType.PIPELINE_RUN,
                 emails: ['oncall@example.com'],
-                slack_destinations: [],
+                slackDestinations: [],
               },
             ],
           }) as Record<string, unknown>,
@@ -199,12 +204,12 @@ describe('CreatePipelineRunForm', () => {
           spec: expect.objectContaining({
             notifications: [
               expect.objectContaining({
-                notification_type: 'NOTIFICATION_TYPE_EMAIL',
+                notificationType: NotificationType.EMAIL,
                 emails: ['oncall@example.com'],
               }) as Record<string, unknown>,
               expect.objectContaining({
-                notification_type: 'NOTIFICATION_TYPE_SLACK',
-                slack_destinations: ['#ml-oncall'],
+                notificationType: NotificationType.SLACK,
+                slackDestinations: ['#ml-oncall'],
               }) as Record<string, unknown>,
             ],
           }) as Record<string, unknown>,

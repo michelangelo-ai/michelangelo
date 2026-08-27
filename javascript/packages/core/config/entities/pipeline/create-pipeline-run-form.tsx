@@ -6,6 +6,11 @@ import { StringField } from '#core/components/form/fields/string/string-field';
 import { TextareaField } from '#core/components/form/fields/textarea/textarea-field';
 import { FormGroup } from '#core/components/form/layout/form-group/form-group';
 import { validateEmails } from '#core/config/entities/pipeline/utils/validate-emails';
+import {
+  NotificationEventType,
+  NotificationResourceType,
+  NotificationType,
+} from '#core/config/entities/run/types';
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
 import { useStudioMutation } from '#core/hooks/use-studio-mutation/use-studio-mutation';
 import { generateSuffix } from '#core/utils/name-utils';
@@ -13,23 +18,19 @@ import { ResumeRunFields } from './resume-run-fields';
 
 import type { ActionComponentProps } from '#core/components/actions/types';
 import type { Pipeline, PipelineRunFormValues } from '#core/config/entities/pipeline/types';
-import type {
-  NotificationEventType,
-  PipelineRun,
-  PipelineRunNotification,
-} from '#core/config/entities/run/types';
+import type { PipelineRun, PipelineRunNotification } from '#core/config/entities/run/types';
 
 /**
  * Every implemented event a pipeline run can notify on. The form has no event-type picker —
- * whoever opts in gets notified for all of them — so this is the fixed `event_types` value
+ * whoever opts in gets notified for all of them — so this is the fixed `eventTypes` value
  * for every notification the form produces.
  */
 export const ALL_PIPELINE_RUN_EVENT_TYPES: NotificationEventType[] = [
-  'EVENT_TYPE_PIPELINE_RUN_STATE_STARTED',
-  'EVENT_TYPE_PIPELINE_RUN_STATE_SUCCEEDED',
-  'EVENT_TYPE_PIPELINE_RUN_STATE_FAILED',
-  'EVENT_TYPE_PIPELINE_RUN_STATE_KILLED',
-  'EVENT_TYPE_PIPELINE_RUN_STATE_SKIPPED',
+  NotificationEventType.PIPELINE_RUN_STATE_STARTED,
+  NotificationEventType.PIPELINE_RUN_STATE_SUCCEEDED,
+  NotificationEventType.PIPELINE_RUN_STATE_FAILED,
+  NotificationEventType.PIPELINE_RUN_STATE_KILLED,
+  NotificationEventType.PIPELINE_RUN_STATE_SKIPPED,
 ];
 
 export const CreatePipelineRunForm = ({ record, onClose }: ActionComponentProps<Pipeline>) => {
@@ -47,7 +48,7 @@ export const CreatePipelineRunForm = ({ record, onClose }: ActionComponentProps<
 
     const payload = buildPayload(values, projectId);
     await createPipelineRunMutation.mutateAsync({
-      ...payload,
+      metadata: payload.metadata,
       spec: {
         ...payload.spec,
         notifications: values.notifyOnCompletion ? buildNotifications(values) : [],
@@ -169,21 +170,21 @@ function buildNotifications(values: PipelineRunFormValues): PipelineRunNotificat
 
   if (emails.length > 0) {
     notifications.push({
-      notification_type: 'NOTIFICATION_TYPE_EMAIL',
-      event_types: ALL_PIPELINE_RUN_EVENT_TYPES,
-      resource_type: 'RESOURCE_TYPE_PIPELINE_RUN',
+      notificationType: NotificationType.EMAIL,
+      eventTypes: ALL_PIPELINE_RUN_EVENT_TYPES,
+      resourceType: NotificationResourceType.PIPELINE_RUN,
       emails,
-      slack_destinations: [],
+      slackDestinations: [],
     });
   }
 
   if (slackDestinations.length > 0) {
     notifications.push({
-      notification_type: 'NOTIFICATION_TYPE_SLACK',
-      event_types: ALL_PIPELINE_RUN_EVENT_TYPES,
-      resource_type: 'RESOURCE_TYPE_PIPELINE_RUN',
+      notificationType: NotificationType.SLACK,
+      eventTypes: ALL_PIPELINE_RUN_EVENT_TYPES,
+      resourceType: NotificationResourceType.PIPELINE_RUN,
       emails: [],
-      slack_destinations: slackDestinations,
+      slackDestinations,
     });
   }
 
