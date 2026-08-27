@@ -1,5 +1,10 @@
 import { create, createRegistry, fromJson, toJson } from '@bufbuild/protobuf';
-import { StringValueSchema } from '@bufbuild/protobuf/wkt';
+import {
+  BoolValueSchema,
+  DoubleValueSchema,
+  Int64ValueSchema,
+  StringValueSchema,
+} from '@bufbuild/protobuf/wkt';
 
 import { createFetchTransport } from './create-fetch-transport';
 import { TypedStructSchema } from './gen/michelangelo/api/typed_struct_pb';
@@ -11,15 +16,23 @@ import { PipelineRunService } from './gen/michelangelo/api/v2/pipeline_run_svc_p
 import { PipelineService } from './gen/michelangelo/api/v2/pipeline_svc_pb';
 import { ProjectService } from './gen/michelangelo/api/v2/project_svc_pb';
 import { TriggerRunService } from './gen/michelangelo/api/v2/trigger_run_svc_pb';
+import { packAnyFields } from './pack-any-fields';
 import { getRuntimeConfig } from './runtime-config';
 
 import type { DescService } from '@bufbuild/protobuf';
 import type { FetchTransport, ServiceClient, Services } from './types';
 
-// StringValueSchema is registered so criteria that wrap a matchValue in a
-// google.protobuf.Any (e.g. ListOptionsExt filters) can be JSON-encoded — protobuf-es
-// resolves an Any's typeUrl against this registry to serialize it as a well-known type.
-const typeRegistry = createRegistry(TypedStructSchema, StringValueSchema);
+// These wrapper schemas are registered so criteria that wrap a matchValue in a
+// google.protobuf.Any (e.g. ListOptionsExt filters, packed by packAnyFields) can be
+// JSON-encoded — protobuf-es resolves an Any's typeUrl against this registry to serialize
+// it as a well-known type.
+const typeRegistry = createRegistry(
+  TypedStructSchema,
+  StringValueSchema,
+  BoolValueSchema,
+  Int64ValueSchema,
+  DoubleValueSchema
+);
 
 /**
  * Builds a service client whose methods JSON-encode the request, POST it
@@ -40,7 +53,10 @@ function createServiceClient<T extends DescService>(
     if (method.methodKind !== 'unary') continue;
 
     client[method.localName] = async (request, headers) => {
-      const message = create(method.input, request);
+      // cast: packAnyFields recurses generically over `unknown`; called with a Record it
+      // returns one, just with Any fields packed into the shape create() expects
+      const packedRequest = packAnyFields(method.input, request) as Record<string, unknown>;
+      const message = create(method.input, packedRequest);
       const requestJson = toJson(method.input, message, { registry: typeRegistry });
       const responseJson = await transport.callUnary(
         service.typeName,

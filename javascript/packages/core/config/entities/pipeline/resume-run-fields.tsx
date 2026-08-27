@@ -1,6 +1,4 @@
 import { useMemo, useState } from 'react';
-import { create } from '@bufbuild/protobuf';
-import { anyPack, StringValueSchema } from '@bufbuild/protobuf/wkt';
 
 import { SelectField } from '#core/components/form/fields/select/select-field';
 import { useField } from '#core/components/form/hooks/use-field';
@@ -54,10 +52,7 @@ function buildPipelineCriterion(pipelineName: string) {
           {
             fieldName: 'pipeline_run.pipeline_name',
             operator: CRITERION_OPERATOR_EQUAL,
-            matchValue: anyPack(
-              StringValueSchema,
-              create(StringValueSchema, { value: pipelineName })
-            ),
+            matchValue: pipelineName,
           },
         ],
       },

@@ -1,7 +1,5 @@
 import { useEffect } from 'react';
 import { useForm } from 'react-final-form';
-import { create, toBinary } from '@bufbuild/protobuf';
-import { StringValueSchema } from '@bufbuild/protobuf/wkt';
 
 import { SelectField } from '#core/components/form/fields/select/select-field';
 import { useField } from '#core/components/form/hooks/use-field';
@@ -19,12 +17,7 @@ const modelFamilyListOptionsExt = (modelFamilyName: string) => ({
       {
         fieldName: 'model.model_family_name',
         operator: CRITERION_OPERATOR_EQUAL,
-        matchValue: {
-          typeUrl: 'type.googleapis.com/google.protobuf.StringValue',
-          value: Array.from(
-            toBinary(StringValueSchema, create(StringValueSchema, { value: modelFamilyName }))
-          ),
-        },
+        matchValue: modelFamilyName,
       },
     ],
   },
