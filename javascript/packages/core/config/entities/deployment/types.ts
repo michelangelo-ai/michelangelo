@@ -8,6 +8,8 @@ export type DeploymentCreateInput = {
   spec: {
     /** UI-only: filters the Model dropdown by family. Stripped before submission in handleCreate. */
     modelFamilyName?: string;
+    /** UI-only: drives the disabled "Type of deployment" radio. Stripped before submission in handleCreate. */
+    deploymentType?: string;
     desiredRevision: { name: string; namespace?: string };
     target: {
       case: 'inferenceServer';

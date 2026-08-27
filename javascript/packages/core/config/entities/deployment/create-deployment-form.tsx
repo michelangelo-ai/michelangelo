@@ -1,4 +1,5 @@
 import { FormDialog } from '#core/components/form/components/form-dialog/form-dialog';
+import { RadioField } from '#core/components/form/fields/radio/radio-field';
 import { SelectField } from '#core/components/form/fields/select/select-field';
 import { StringField } from '#core/components/form/fields/string/string-field';
 import { combineValidators } from '#core/components/form/validation/combine-validators';
@@ -12,10 +13,18 @@ import {
   K8S_NAME_RULES_MESSAGE,
 } from '#core/utils/crd-utils';
 import { ModelFamilyRevisionFields } from './model-family-revision-fields';
-import { TARGET_TYPE } from './shared';
+import { TARGET_TYPE, TARGET_TYPE_LABELS } from './shared';
 
 import type { CreateActionComponentProps } from '#core/components/actions/types';
 import type { DeploymentCreateInput, InferenceServerListResult } from './types';
+
+const DEPLOYMENT_TYPE_OPTIONS = [
+  { value: 'online', label: TARGET_TYPE_LABELS[TARGET_TYPE.INFERENCE_SERVER] },
+  { value: 'offline', label: TARGET_TYPE_LABELS[TARGET_TYPE.OFFLINE] },
+];
+
+const parseDeploymentType = (value?: string) =>
+  value === 'offline' ? TARGET_TYPE.OFFLINE : TARGET_TYPE.INFERENCE_SERVER;
 
 export const CreateDeploymentForm = ({ onClose }: CreateActionComponentProps) => {
   const { projectId } = useStudioParams('base');
@@ -40,7 +49,7 @@ export const CreateDeploymentForm = ({ onClose }: CreateActionComponentProps) =>
 
   const handleCreate = async (values: DeploymentCreateInput) => {
     if (createDeploymentMutation.isPending) return;
-    const { modelFamilyName: _modelFamilyName, ...specRest } = values.spec;
+    const { modelFamilyName: _modelFamilyName, deploymentType, ...specRest } = values.spec;
     await createDeploymentMutation.mutateAsync({
       ...values,
       spec: {
@@ -50,6 +59,7 @@ export const CreateDeploymentForm = ({ onClose }: CreateActionComponentProps) =>
           case: 'inferenceServer',
           value: { ...values.spec.target.value, namespace: projectId },
         },
+        definition: { type: parseDeploymentType(deploymentType) },
       },
     });
   };
@@ -60,6 +70,7 @@ export const CreateDeploymentForm = ({ onClose }: CreateActionComponentProps) =>
       namespace: projectId,
     },
     spec: {
+      deploymentType: 'online',
       desiredRevision: { name: '', namespace: projectId },
       target: { case: 'inferenceServer', value: { name: '', namespace: projectId } },
       strategy: { rolloutStrategy: { case: 'rolling', value: { incrementPercentage: 0 } } },
@@ -88,6 +99,14 @@ export const CreateDeploymentForm = ({ onClose }: CreateActionComponentProps) =>
         )}
         caption={K8S_NAME_RULES_MESSAGE}
         placeholder="my-deployment"
+      />
+
+      <RadioField
+        name="spec.deploymentType"
+        label="Type of deployment"
+        required
+        disabled
+        options={DEPLOYMENT_TYPE_OPTIONS}
       />
 
       <SelectField
