@@ -24,10 +24,68 @@ This tool helps you create and manage a sandbox cluster directly on your machine
 
 _dir = Path(__file__).parent
 
-_michelangelo_sandbox_kube_cluster_name = "michelangelo-sandbox"
+_default_sandbox_name = "sandbox"
 
 _cadence_domain = "default"
 _default_compute_kube_cluster_name = "michelangelo-compute-0"
+
+
+def _cluster_name(name: str) -> str:
+    """Return the k3d cluster name backing a given sandbox instance.
+
+    All sandbox instances share a single k3d cluster
+    (michelangelo-{_default_sandbox_name}) — a named sandbox is isolated by
+    Kubernetes namespace and Helm release within that shared cluster, not by
+    a separate k3d cluster, so this always resolves to the shared cluster
+    regardless of ``name``.
+    """
+    return f"michelangelo-{_default_sandbox_name}"
+
+
+def _namespace(name: str) -> str:
+    """Return the Kubernetes namespace for a given sandbox instance name.
+
+    The default sandbox keeps using the `default` namespace, unchanged from
+    before. Named sandboxes get their own namespace (same as their name) so
+    multiple instances can share the cluster without colliding.
+    """
+    if name == _default_sandbox_name:
+        return "default"
+    return name
+
+
+def _helm_release(name: str) -> str:
+    """Return the Helm release name for a given sandbox instance name.
+
+    Always "michelangelo": Helm 3 scopes releases to namespaces, so
+    namespace-isolated sandboxes don't need a different release name to
+    avoid collisions.
+    """
+    return "michelangelo"
+
+
+def _kube_context(name: str) -> str:
+    """Return the kubectl context for a given sandbox instance name.
+
+    Follows k3d's own naming convention (k3d-{cluster_name}). All sandbox
+    instances share the same cluster/context — see _cluster_name().
+    """
+    return f"k3d-{_cluster_name(name)}"
+
+
+def _default_compute_cluster_name(name: str) -> str:
+    """Return the default compute-cluster name for a given sandbox instance.
+
+    Preserves the historical default ("michelangelo-compute-0") for the
+    unnamed/default sandbox so existing workflows are unaffected; named
+    sandboxes get a name prefixed with "michelangelo-{name}" (not derived
+    from _cluster_name(), which now always resolves to the shared cluster)
+    so multiple instances don't collide.
+    """
+    if name == _default_sandbox_name:
+        return _default_compute_kube_cluster_name
+    return f"michelangelo-{name}-compute-0"
+
 
 # Path to the Michelangelo Helm chart (relative to this file)
 _chart_dir = Path(__file__).parent.parent.parent.parent.parent / "helm" / "michelangelo"
@@ -80,6 +138,37 @@ def _loopback(port_spec: str) -> str:
     return f"127.0.0.1:{port_spec}"
 
 
+def _offset_port_spec(port_spec: str, offset: int) -> str:
+    """Add ``offset`` to the host side of a 'host:node' port spec.
+
+    NodePorts (right of the colon) are cluster-internal and stay fixed;
+    only the host-side binding (left of the colon) needs to move so that
+    multiple sandbox instances can bind distinct host ports.
+    """
+    if not offset:
+        return port_spec
+    host, node = port_spec.split(":", 1)
+    return f"{int(host) + offset}:{node}"
+
+
+def _offset_ports(port_specs: list[str], offset: int) -> list[str]:
+    return [_offset_port_spec(p, offset) for p in port_specs]
+
+
+def _read_values_k3d_path(path: tuple[str, ...]):
+    """Read a dotted path out of values-k3d.yaml (single source of truth)."""
+    with open(_values_k3d_path) as f:
+        values = yaml.safe_load(f) or {}
+    node = values
+    for key in path:
+        node = (node or {}).get(key)
+    if node is None:
+        raise ValueError(
+            f"values-k3d.yaml is missing a value at {'.'.join(str(k) for k in path)}"
+        )
+    return node
+
+
 def _helm_chart_ports(workflow: str) -> list[str]:
     """Read control plane NodePorts from values-k3d.yaml.
 
@@ -119,11 +208,40 @@ _inference_compute_cluster_names = [
 ]
 
 
+def _add_name_arg(parser: argparse.ArgumentParser):
+    parser.add_argument(
+        "--name",
+        default=_default_sandbox_name,
+        help=(
+            f'Name of the sandbox instance. The default ("{_default_sandbox_name}") '
+            "gets its own k3d cluster, unchanged from before. Any other name is "
+            "deployed as a lightweight, namespace-isolated Helm release inside "
+            "the default sandbox's cluster, sharing its MySQL/MinIO/workflow "
+            f"engine (default: {_default_sandbox_name})."
+        ),
+    )
+
+
+def _add_port_offset_arg(parser: argparse.ArgumentParser):
+    parser.add_argument(
+        "--port-offset",
+        type=int,
+        default=0,
+        help=(
+            "Offset applied to every host-side port so multiple sandbox "
+            "instances can run simultaneously without port conflicts "
+            "(default: 0)."
+        ),
+    )
+
+
 def init_arguments(p: argparse.ArgumentParser):
     """Initialize command-line arguments for the sandbox CLI."""
     sp = p.add_subparsers(dest="action", required=True)
 
     create_p = sp.add_parser("create", help="Create and start the cluster.")
+    _add_name_arg(create_p)
+    _add_port_offset_arg(create_p)
     create_p.add_argument(
         "--exclude",
         help=(
@@ -167,11 +285,12 @@ def init_arguments(p: argparse.ArgumentParser):
     )
     create_p.add_argument(
         "--compute-cluster-name",
-        default=_default_compute_kube_cluster_name,
+        default=None,
         help=(
-            f"Name of the compute cluster to create when "
-            f"--create-compute-cluster is used "
-            f"(default: {_default_compute_kube_cluster_name})."
+            "Name of the compute cluster to create when "
+            "--create-compute-cluster is used "
+            "(default: michelangelo-compute-0 for the default sandbox, "
+            "michelangelo-{name}-compute-0 for named sandboxes)."
         ),
     )
 
@@ -183,6 +302,8 @@ def init_arguments(p: argparse.ArgumentParser):
             "exist."
         ),
     )
+    _add_name_arg(sync_p)
+    _add_port_offset_arg(sync_p)
     sync_p.add_argument(
         "--exclude",
         help=(
@@ -223,28 +344,38 @@ def init_arguments(p: argparse.ArgumentParser):
     demo_p = sp.add_parser(
         "demo", help="Create demo project and pipelines in the sandbox cluster."
     )
+    _add_name_arg(demo_p)
     demo_sp = demo_p.add_subparsers(
         dest="demo_action", required=True, help="Demo type to create"
     )
-    _ = demo_sp.add_parser("pipeline", help="Create pipeline demo resources")
-    _ = demo_sp.add_parser("inference", help="Create inference server demo resources")
-    _ = demo_sp.add_parser(
+    pipeline_p = demo_sp.add_parser("pipeline", help="Create pipeline demo resources")
+    _add_name_arg(pipeline_p)
+    inference_p = demo_sp.add_parser(
+        "inference", help="Create inference server demo resources"
+    )
+    _add_name_arg(inference_p)
+    inference_multicluster_p = demo_sp.add_parser(
         "inference-multicluster",
         help=("Create a multi-cluster inference server demo."),
     )
+    _add_name_arg(inference_multicluster_p)
 
     delete_p = sp.add_parser("delete", help="Delete the cluster.")
+    _add_name_arg(delete_p)
     delete_p.add_argument(
         "--compute-cluster-name",
-        default=_default_compute_kube_cluster_name,
+        default=None,
         help=(
-            f"Name of the compute cluster to delete when "
-            f"--create-compute-cluster is used "
-            f"(default: {_default_compute_kube_cluster_name})."
+            "Name of the compute cluster to delete when "
+            "--create-compute-cluster is used "
+            "(default: michelangelo-compute-0 for the default sandbox, "
+            "michelangelo-{name}-compute-0 for named sandboxes)."
         ),
     )
-    _ = sp.add_parser("start", help="Start the cluster.")
-    _ = sp.add_parser("stop", help="Stop the cluster.")
+    start_p = sp.add_parser("start", help="Start the cluster.")
+    _add_name_arg(start_p)
+    stop_p = sp.add_parser("stop", help="Stop the cluster.")
+    _add_name_arg(stop_p)
 
 
 def main(args=None):
@@ -282,15 +413,41 @@ def run(ns: argparse.Namespace):
 
 def _create(ns: argparse.Namespace):
     assert ns
-    infra_ports = [
-        p for p in _infra_ports if _infra_port_owner.get(p) not in ns.exclude
-    ]
-    ports = infra_ports + _helm_chart_ports(ns.workflow)
+
+    if ns.name != _default_sandbox_name:
+        # Named sandboxes are namespace-isolated within the default
+        # sandbox's k3d cluster rather than getting a cluster of their
+        # own (a separate k3d cluster per sandbox OOMs laptops), so there
+        # is no k3d cluster to create here — just make sure the shared
+        # cluster the namespace will live in already exists.
+        cluster_name = _cluster_name(ns.name)
+        cluster_exists = (
+            subprocess.run(
+                ["k3d", "cluster", "get", cluster_name], capture_output=True
+            ).returncode
+            == 0
+        )
+        if not cluster_exists:
+            _err_exit(
+                f"Shared cluster '{cluster_name}' not found. Named sandboxes "
+                "are deployed as a namespace inside the default sandbox's "
+                "cluster — run 'ma sandbox create' (no --name) first."
+            )
+        _exec("k3d", "cluster", "start", cluster_name)
+        _deploy_services(ns)
+        return
+
+    offset = getattr(ns, "port_offset", 0)
+    infra_ports = _offset_ports(
+        [p for p in _infra_ports if _infra_port_owner.get(p) not in ns.exclude],
+        offset,
+    )
+    ports = infra_ports + _offset_ports(_helm_chart_ports(ns.workflow), offset)
     args = [
         "k3d",
         "cluster",
         "create",
-        _michelangelo_sandbox_kube_cluster_name,
+        _cluster_name(ns.name),
         "--servers",
         "1",
         "--agents",
@@ -322,9 +479,16 @@ def _sync(ns: argparse.Namespace):
     """
     assert ns
 
+    name = ns.name
+    is_default = name == _default_sandbox_name
+    namespace = _namespace(name)
+    cluster_name = _cluster_name(name)
+    context = _kube_context(name)
+    release = _helm_release(name)
+
     cluster_exists = (
         subprocess.run(
-            ["k3d", "cluster", "get", _michelangelo_sandbox_kube_cluster_name],
+            ["k3d", "cluster", "get", cluster_name],
             capture_output=True,
         ).returncode
         == 0
@@ -334,17 +498,26 @@ def _sync(ns: argparse.Namespace):
         print("No existing cluster found — performing a full create.")
         return _create(ns)
 
-    print(
-        "Existing cluster found — restarting app services "
-        "(leaving infrastructure running)."
-    )
+    if is_default:
+        print(
+            "Existing cluster found — restarting app services "
+            "(leaving infrastructure running)."
+        )
+    else:
+        print(
+            f"Syncing lightweight sandbox '{name}' — only the app-layer Helm "
+            f"release in namespace '{namespace}' is touched, shared infra is "
+            "left running."
+        )
 
     # Start the cluster in case it was stopped at the end of a previous run.
-    _exec("k3d", "cluster", "start", _michelangelo_sandbox_kube_cluster_name)
+    _exec("k3d", "cluster", "start", cluster_name)
 
     # Wait for the API server to become reachable after start.
     _exec(
         "kubectl",
+        "--context",
+        context,
         "wait",
         "--for=condition=ready",
         "node",
@@ -355,97 +528,127 @@ def _sync(ns: argparse.Namespace):
     # Upgrade or install the control plane via Helm.
     # Infrastructure (mysql, cadence, minio, grafana, prometheus) is left running.
 
-    _refresh_mysql_schema()
+    if is_default:
+        _refresh_mysql_schema(name)
+    else:
+        # Named sandboxes share the default sandbox's MySQL/MinIO/Cadence —
+        # only their own namespace and app-layer config need to exist.
+        _ensure_namespace_exists(namespace, name)
+        _deploy_michelangelo_config(name)
 
-    _ensure_credentials_secret()
+    _ensure_credentials_secret(name)
     _helm_ensure_repos()
     helm_args = _build_helm_set_args(ns)
 
     # Check if there is a healthy deployed release we can upgrade.
-    status_result = subprocess.run(
-        ["helm", "status", "michelangelo", "-o", "json"],
-        capture_output=True,
-        text=True,
-    )
+    status_args = ["helm", "status", release, "--kube-context", context, "-o", "json"]
+    if not is_default:
+        status_args += ["--namespace", namespace]
+    status_result = subprocess.run(status_args, capture_output=True, text=True)
     release_healthy = (
         status_result.returncode == 0 and '"status":"deployed"' in status_result.stdout
     )
 
     if release_healthy:
         # Healthy release: upgrade in-place, keeping infra running.
-        _exec(
+        upgrade_args = [
             "helm",
             "upgrade",
-            "michelangelo",
+            release,
             str(_chart_dir),
+            "--kube-context",
+            context,
             "-f",
             str(_chart_dir / "values-k3d.yaml"),
             "--dependency-update",
             "--reuse-values",
-            *helm_args,
-        )
+        ]
+        if not is_default:
+            upgrade_args += ["--namespace", namespace]
+        upgrade_args += helm_args
+        _exec(*upgrade_args)
         # Force-restart app deployments so they always pick up the latest
         # configmap values (helm upgrade only restarts pods when the pod
         # template spec changes, but values-only changes may not alter it).
         for deploy in (
-            "michelangelo-apiserver",
-            "michelangelo-controllermgr",
-            "michelangelo-worker",
+            f"{release}-apiserver",
+            f"{release}-controllermgr",
+            f"{release}-worker",
         ):
             subprocess.run(
                 [
                     "kubectl",
+                    "--context",
+                    context,
                     "rollout",
                     "restart",
                     f"deployment/{deploy}",
                     "-n",
-                    "default",
+                    namespace,
                 ],
                 capture_output=True,
             )
         # Wait for the restarted rollouts to complete before proceeding.
         for deploy in (
-            "michelangelo-apiserver",
-            "michelangelo-controllermgr",
-            "michelangelo-worker",
+            f"{release}-apiserver",
+            f"{release}-controllermgr",
+            f"{release}-worker",
         ):
             subprocess.run(
                 [
                     "kubectl",
+                    "--context",
+                    context,
                     "rollout",
                     "status",
                     f"deployment/{deploy}",
                     "-n",
-                    "default",
+                    namespace,
                     "--timeout=300s",
                 ],
                 capture_output=False,
             )
     else:
         # Missing or broken release: uninstall cleanly, then reinstall from scratch.
-        subprocess.run(
-            ["helm", "uninstall", "michelangelo", "--ignore-not-found", "--wait"],
-            capture_output=False,
-        )
+        uninstall_args = [
+            "helm",
+            "uninstall",
+            release,
+            "--kube-context",
+            context,
+            "--ignore-not-found",
+            "--wait",
+        ]
+        if not is_default:
+            uninstall_args += ["--namespace", namespace]
+        subprocess.run(uninstall_args, capture_output=False)
         # After uninstall, force-delete any remaining Services from the chart
         # to free their NodePorts before reinstalling.
-        _helm_delete_services(helm_args)
-        _helm_adopt_orphaned_resources(helm_args)
-        _exec(
+        _helm_delete_services(helm_args, name)
+        _helm_adopt_orphaned_resources(helm_args, name)
+        install_args = [
             "helm",
             "install",
-            "michelangelo",
+            release,
             str(_chart_dir),
+            "--kube-context",
+            context,
             "-f",
             str(_chart_dir / "values-k3d.yaml"),
             "--dependency-update",
-            *helm_args,
-        )
+        ]
+        if not is_default:
+            install_args += ["--namespace", namespace, "--create-namespace"]
+        install_args += helm_args
+        _exec(*install_args)
 
     _helm_wait(ns)
 
+    if not is_default:
+        _setup_app_port_forwards(ns)
 
-def _refresh_mysql_schema():
+
+def _refresh_mysql_schema(name: str = _default_sandbox_name):
     """Drop and recreate the michelangelo database from the current schema.
 
     The schema lives in mysql-ingester.yaml as a ConfigMap that an init Job
@@ -456,9 +659,12 @@ def _refresh_mysql_schema():
     re-apply the init Job.
     """
     print("Refreshing MySQL schema (drop + recreate michelangelo database)...")
+    context = _kube_context(name)
     subprocess.run(
         [
             "kubectl",
+            "--context",
+            context,
             "exec",
             "mysql",
             "--",
@@ -474,14 +680,24 @@ def _refresh_mysql_schema():
     # kubectl apply on a Completed Job is a no-op (Job spec is immutable),
     # so we have to delete it before re-apply.
     subprocess.run(
-        ["kubectl", "delete", "job", "ingester-schema-init", "--ignore-not-found=true"],
+        [
+            "kubectl",
+            "--context",
+            context,
+            "delete",
+            "job",
+            "ingester-schema-init",
+            "--ignore-not-found=true",
+        ],
         check=False,
     )
-    _kube_apply(_dir / "resources" / "mysql-ingester.yaml")
+    _kube_apply(_dir / "resources" / "mysql-ingester.yaml", name)
     print("Waiting for ingester-schema-init Job to complete...")
     subprocess.run(
         [
             "kubectl",
+            "--context",
+            context,
             "wait",
             "--for=condition=complete",
             "job/ingester-schema-init",
@@ -509,20 +725,24 @@ def _helm_ensure_repos():
         _exec("helm", "repo", "add", "temporal", "https://go.temporal.io/helm-charts")
 
 
-def _helm_delete_services(helm_args: list[str]):
+def _helm_delete_services(helm_args: list[str], name: str = _default_sandbox_name):
     """Delete Services that would conflict with the chart's NodePorts.
 
     After helm uninstall, old Services (possibly with different names from
     a previous install structure) can still hold NodePorts. We scan all
     Services in the cluster for conflicting NodePorts and delete them.
     """
+    context = _kube_context(name)
+    release = _helm_release(name)
     # Collect the NodePorts the chart wants to allocate.
     result = subprocess.run(
         [
             "helm",
             "template",
-            "michelangelo",
+            release,
             str(_chart_dir),
+            "--namespace",
+            _namespace(name),
             "-f",
             str(_chart_dir / "values-k3d.yaml"),
             *helm_args,
@@ -551,6 +771,8 @@ def _helm_delete_services(helm_args: list[str]):
     all_svcs = subprocess.run(
         [
             "kubectl",
+            "--context",
+            context,
             "get",
             "service",
             "--all-namespaces",
@@ -564,20 +786,22 @@ def _helm_delete_services(helm_args: list[str]):
         if ":" not in entry:
             continue
         ns_name, ports_str = entry.split(":", 1)
-        namespace, name = ns_name.split("/", 1)
+        namespace, svc_name = ns_name.split("/", 1)
         for p in ports_str.split():
             try:
                 if int(p) in wanted_ports:
                     print(
                         f"[sandbox] deleting conflicting service"
-                        f" {namespace}/{name} (NodePort {p})"
+                        f" {namespace}/{svc_name} (NodePort {p})"
                     )
                     subprocess.run(
                         [
                             "kubectl",
+                            "--context",
+                            context,
                             "delete",
                             "service",
-                            name,
+                            svc_name,
                             "-n",
                             namespace,
                             "--ignore-not-found=true",
@@ -589,7 +813,9 @@ def _helm_delete_services(helm_args: list[str]):
                 pass
 
 
-def _helm_adopt_orphaned_resources(helm_args: list[str]):
+def _helm_adopt_orphaned_resources(
+    helm_args: list[str], name: str = _default_sandbox_name
+):
     """Clean up resources that would block helm upgrade --install.
 
     Helm 3 refuses to manage resources missing its ownership annotations.
@@ -598,12 +824,16 @@ def _helm_adopt_orphaned_resources(helm_args: list[str]):
     recreate it cleanly. Resources already managed by Helm (correct labels)
     are left untouched.
     """
+    context = _kube_context(name)
+    release = _helm_release(name)
     result = subprocess.run(
         [
             "helm",
             "template",
-            "michelangelo",
+            release,
             str(_chart_dir),
+            "--namespace",
+            _namespace(name),
             "-f",
             str(_chart_dir / "values-k3d.yaml"),
             *helm_args,
@@ -617,16 +847,18 @@ def _helm_adopt_orphaned_resources(helm_args: list[str]):
         if not doc:
             continue
         kind = doc.get("kind", "")
-        name = (doc.get("metadata") or {}).get("name", "")
-        namespace = (doc.get("metadata") or {}).get("namespace", "default")
-        if not kind or not name:
+        resource_name = (doc.get("metadata") or {}).get("name", "")
+        namespace = (doc.get("metadata") or {}).get("namespace", _namespace(name))
+        if not kind or not resource_name:
             continue
         # Check if this resource exists and lacks Helm ownership annotations.
         get_result = subprocess.run(
             [
                 "kubectl",
+                "--context",
+                context,
                 "get",
-                f"{kind.lower()}/{name}",
+                f"{kind.lower()}/{resource_name}",
                 "-n",
                 namespace,
                 "-o",
@@ -637,14 +869,16 @@ def _helm_adopt_orphaned_resources(helm_args: list[str]):
         )
         if get_result.returncode != 0:
             continue  # resource doesn't exist — no action needed
-        if get_result.stdout.strip() == "michelangelo":
+        if get_result.stdout.strip() == release:
             continue  # already owned by this release — leave it
         # Resource exists but is not owned by Helm — delete it so Helm can recreate.
         subprocess.run(
             [
                 "kubectl",
+                "--context",
+                context,
                 "delete",
-                f"{kind.lower()}/{name}",
+                f"{kind.lower()}/{resource_name}",
                 "-n",
                 namespace,
                 "--ignore-not-found=true",
@@ -655,16 +889,24 @@ def _helm_adopt_orphaned_resources(helm_args: list[str]):
 
 def _deploy_app_services(ns: argparse.Namespace):
     """Install the Michelangelo control plane via Helm."""
-    _ensure_credentials_secret()
+    name = ns.name
+    context = _kube_context(name)
+    release = _helm_release(name)
+    _ensure_credentials_secret(name)
     _helm_ensure_repos()
     helm_args = _build_helm_set_args(ns)
-    _helm_adopt_orphaned_resources(helm_args)
+    _helm_adopt_orphaned_resources(helm_args, name)
     _exec(
         "helm",
         "upgrade",
         "--install",
-        "michelangelo",
+        release,
         str(_chart_dir),
+        "--kube-context",
+        context,
+        "--namespace",
+        _namespace(name),
+        "--create-namespace",
         "-f",
         str(_chart_dir / "values-k3d.yaml"),
         "--dependency-update",
@@ -684,12 +926,18 @@ def _helm_wait(ns: argparse.Namespace):
     2. Wait for all remaining Helm-managed Deployments to become Available.
     """
     timeout = getattr(ns, "wait_timeout", 600)
-    instance_selector = "app.kubernetes.io/instance=michelangelo"
+    context = _kube_context(ns.name)
+    namespace = _namespace(ns.name)
+    instance_selector = f"app.kubernetes.io/instance={_helm_release(ns.name)}"
 
     # Stage 1: apiserver Deployment (schema-init can take 30-60s)
     print("Waiting for apiserver to become available (schema-init runs first)...")
     _exec(
         "kubectl",
+        "--context",
+        context,
+        "-n",
+        namespace,
         "wait",
         "deployment",
         "-l",
@@ -702,6 +950,10 @@ def _helm_wait(ns: argparse.Namespace):
     print("Waiting for remaining control plane services...")
     _exec(
         "kubectl",
+        "--context",
+        context,
+        "-n",
+        namespace,
         "wait",
         "deployment",
         "-l",
@@ -729,33 +981,36 @@ def _build_helm_set_args(ns: argparse.Namespace) -> list[str]:
     # The equivalent Temporal Web path below is unverified against a live
     # Temporal-backed sandbox — flagging until someone confirms it the same
     # way the Cadence path was confirmed.
+    offset = getattr(ns, "port_offset", 0)
     if ns.workflow == "temporal":
         args += [
             "--set",
             "workflow.engine=temporal",
             "--set",
-            "workflow.endpoint=michelangelo-temporal-frontend:7233",
+            f"workflow.endpoint={_helm_release(ns.name)}-temporal-frontend:7233",
             "--set",
             "cadence.enabled=false",  # ensure cadence subchart is off
             "--set",
             "temporal.enabled=true",  # enable temporal subchart
             "--set-string",
             "controllermgr.workflowClient.executionUrlFormat="
-            "http://localhost:8080/namespaces/{{.Domain}}/workflows/{{.ExecutionID}}",
+            f"http://localhost:{8080 + offset}"
+            "/namespaces/{{.Domain}}/workflows/{{.ExecutionID}}",
         ]
     else:
         args += [
             "--set",
             "workflow.engine=cadence",
             "--set",
-            "workflow.endpoint=michelangelo-cadence-frontend:7833",
+            f"workflow.endpoint={_helm_release(ns.name)}-cadence-frontend:7833",
             "--set",
             "temporal.enabled=false",  # ensure temporal subchart is off
             "--set",
             "cadence.enabled=true",
             "--set-string",
             "controllermgr.workflowClient.executionUrlFormat="
-            "http://localhost:8088/domains/{{.Domain}}/workflows/{{.ExecutionID}}/{{.RunID}}/summary",
+            f"http://localhost:{8088 + offset}"
+            "/domains/{{.Domain}}/workflows/{{.ExecutionID}}/{{.RunID}}/summary",
         ]
 
     # Service exclusions → enabled=false toggles
@@ -773,6 +1028,47 @@ def _build_helm_set_args(ns: argparse.Namespace) -> list[str]:
     if "ui" in getattr(ns, "exclude", []):
         args += ["--set", "envoy.enabled=false"]
 
+    if ns.name != _default_sandbox_name:
+        # Non-default sandboxes are a lightweight app-only Helm release
+        # layered into the existing shared cluster/namespace — they don't
+        # get their own MySQL/MinIO/Cadence/Temporal, they share the
+        # default sandbox's, reached via cross-namespace Service DNS.
+        # These --set flags are appended after the workflow block above so
+        # they win over it (cadence.enabled/temporal.enabled/workflow.endpoint
+        # all get overridden here), and before the arbitrary passthrough
+        # below so a caller-supplied --set still has the final say.
+        default_release = _helm_release(_default_sandbox_name)
+        args += [
+            "--set",
+            "cadence.enabled=false",
+            "--set",
+            "temporal.enabled=false",
+            "--set",
+            "metadataStorage.host=mysql.default.svc.cluster.local",
+            "--set",
+            "objectStorage.endpoint=minio.default.svc.cluster.local:9091",
+        ]
+        if ns.workflow == "temporal":
+            args += [
+                "--set",
+                f"workflow.endpoint={default_release}-temporal-frontend"
+                ".default.svc.cluster.local:7233",
+            ]
+        else:
+            args += [
+                "--set",
+                f"workflow.endpoint={default_release}-cadence-frontend"
+                ".default.svc.cluster.local:7833",
+            ]
+
+        # NodePorts are unique cluster-wide, so the app-only release needs
+        # its own NodePort values, offset the same way as everything else.
+        for _host_port, path in _helm_nodeport_map:
+            if path[0] not in ("apiserver", "envoy", "ui"):
+                continue  # cadence/temporal Web aren't part of this release
+            base_node_port = int(_read_values_k3d_path(path))
+            args += ["--set", f"{'.'.join(path)}={base_node_port + offset}"]
+
     # Arbitrary --set passthrough from the caller (e.g. CI workflow)
     for kv in getattr(ns, "helm_set", []):
         args += ["--set", kv]
@@ -782,6 +1078,19 @@ def _build_helm_set_args(ns: argparse.Namespace) -> list[str]:
 
 def _deploy_services(ns: argparse.Namespace):
     assert ns
+    name = ns.name
+
+    if name != _default_sandbox_name:
+        # Named sandboxes are namespace-isolated app-only releases inside
+        # the shared cluster — see _deploy_lightweight_services().
+        return _deploy_lightweight_services(ns)
+
+    context = _kube_context(name)
+    offset = getattr(ns, "port_offset", 0)
+
+    def _url(port: int) -> str:
+        return f"http://localhost:{port + offset}"
+
     resources = [
         "boot.yaml",
         "mysql.yaml",  # MySQL database
@@ -801,7 +1110,7 @@ def _deploy_services(ns: argparse.Namespace):
         links.append(
             (
                 "Cadence Web UI",
-                "http://localhost:8088",
+                _url(8088),
                 "",
             )
         )
@@ -810,6 +1119,8 @@ def _deploy_services(ns: argparse.Namespace):
         subprocess.run(
             [
                 "kubectl",
+                "--context",
+                context,
                 "delete",
                 "pod",
                 "cadence",
@@ -821,7 +1132,15 @@ def _deploy_services(ns: argparse.Namespace):
             check=False,
         )
         subprocess.run(
-            ["kubectl", "delete", "svc", "cadence", "--ignore-not-found=true"],
+            [
+                "kubectl",
+                "--context",
+                context,
+                "delete",
+                "svc",
+                "cadence",
+                "--ignore-not-found=true",
+            ],
             capture_output=True,
             check=False,
         )
@@ -832,7 +1151,7 @@ def _deploy_services(ns: argparse.Namespace):
     links.append(
         (
             "MinIO Console",
-            "http://localhost:9090",
+            _url(9090),
             "[Username: minioadmin; Password: minioadmin]",
         )
     )
@@ -842,7 +1161,7 @@ def _deploy_services(ns: argparse.Namespace):
     links.append(
         (
             "Ray History Server",
-            "http://localhost:3001",
+            _url(3001),
             "",
         )
     )
@@ -854,7 +1173,7 @@ def _deploy_services(ns: argparse.Namespace):
         links.append(
             (
                 "Prometheus",
-                "http://localhost:9092",
+                _url(9092),
                 "",
             )
         )
@@ -863,7 +1182,7 @@ def _deploy_services(ns: argparse.Namespace):
         links.append(
             (
                 "Grafana Dashboard",
-                "http://localhost:3000",
+                _url(3000),
                 "[Username: admin; Password: admin]",
             )
         )
@@ -876,7 +1195,7 @@ def _deploy_services(ns: argparse.Namespace):
         links.append(
             (
                 "Michelangelo UI",
-                "http://localhost:8090",
+                _url(8090),
                 "",
             )
         )
@@ -886,7 +1205,7 @@ def _deploy_services(ns: argparse.Namespace):
         links.append(
             (
                 "MLflow Tracking Server",
-                "http://localhost:5001",
+                _url(5001),
                 "",
             )
         )
@@ -898,14 +1217,14 @@ def _deploy_services(ns: argparse.Namespace):
         print("🪣 Adding MLflow bucket to S3 setup")
 
     # Create bucket setup with dynamic bucket list
-    _create_bucket_setup(bucket_names)
+    _create_bucket_setup(bucket_names, name)
     for r in resources:
-        _kube_apply(_dir / "resources" / r)
+        _kube_apply(_dir / "resources" / r, name)
 
     # Create credentials secrets only if they don't already exist.
-    _ensure_credentials_secret()
+    _ensure_credentials_secret(name)
     # Patch michelangelo-config to match the live secret values.
-    _sync_config_from_secret()
+    _sync_config_from_secret(name)
 
     _assert_command(
         "helm", "Helm not found, please install it: https://helm.sh/docs/intro/install/"
@@ -920,12 +1239,12 @@ def _deploy_services(ns: argparse.Namespace):
         helm_existing_repos = ""
 
     if "ray" not in ns.exclude:
-        _create_kuberay_operator(helm_existing_repos)
+        _create_kuberay_operator(helm_existing_repos, name)
 
     if "spark" not in ns.exclude:
-        _create_spark_operator(helm_existing_repos)
+        _create_spark_operator(helm_existing_repos, name)
 
-    _kube_wait(timeout=getattr(ns, "wait_timeout", 600))
+    _kube_wait(name, timeout=getattr(ns, "wait_timeout", 600))
 
     # Install the Michelangelo control plane (apiserver, envoy, ui, worker,
     # controllermgr, and Cadence or Temporal subchart) via Helm.
@@ -934,26 +1253,26 @@ def _deploy_services(ns: argparse.Namespace):
     _deploy_app_services(ns)
 
     if ns.workflow == "cadence":
-        _create_cadence_domain(links)
+        _create_cadence_domain(links, name)
 
     # Create separate compute cluster if requested
     create_compute_cluster = getattr(ns, "create_compute_cluster", False)
     compute_cluster_name = getattr(
-        ns, "compute_cluster_name", _default_compute_kube_cluster_name
-    )
+        ns, "compute_cluster_name", None
+    ) or _default_compute_cluster_name(name)
     if create_compute_cluster:
-        _create_compute_cluster(compute_cluster_name)
-        _create_compute_cluster_crd(compute_cluster_name)
+        _create_compute_cluster(compute_cluster_name, name, port_offset=offset)
+        _create_compute_cluster_crd(compute_cluster_name, name)
         _apply_compute_cluster_rbac(compute_cluster_name)
-        _create_compute_cluster_secrets(compute_cluster_name)
+        _create_compute_cluster_secrets(compute_cluster_name, name)
     else:
         # Use the control plane cluster as the default compute cluster if a
         # dedicated compute cluster is not requested
-        _create_compute_cluster_crd(_michelangelo_sandbox_kube_cluster_name)
-        _apply_compute_cluster_rbac(_michelangelo_sandbox_kube_cluster_name)
-        _create_compute_cluster_secrets(_michelangelo_sandbox_kube_cluster_name)
+        _create_compute_cluster_crd(_cluster_name(name), name)
+        _apply_compute_cluster_rbac(_cluster_name(name))
+        _create_compute_cluster_secrets(_cluster_name(name), name)
 
-    _kube_wait()
+    _kube_wait(name)
 
     print(
         "\n🚀 Sandbox created successfully. "
@@ -965,7 +1284,123 @@ def _deploy_services(ns: argparse.Namespace):
     print()
 
 
-def _create_bucket_setup(bucket_names):
+# Component -> (host port, in-cluster Service port) for the app-layer
+# Services a namespaced sandbox exposes via kubectl port-forward, since it
+# has no k3d NodePort mapping of its own. Host ports match the default
+# sandbox's NodePort-mapped host ports (see _helm_nodeport_map) before
+# --port-offset is applied.
+_app_port_forwards = [
+    ("apiserver", 15566, 15566),
+    ("envoy", 8081, 8081),
+    ("ui", 8090, 80),  # UI Service port is 80; NodePort/host side is 8090
+]
+
+
+def _deploy_michelangelo_config(name: str = _default_sandbox_name):
+    """Apply the michelangelo-config ConfigMap.
+
+    Consumed via envFrom by the Helm-managed worker/controllermgr
+    Deployments. The default sandbox applies it unmodified — everything lives in the
+    same namespace so the in-cluster short Service names resolve. Named
+    sandboxes share MinIO/apiserver from the default namespace instead, so
+    the endpoints are rewritten to fully-qualified Service names that
+    resolve across namespaces. Without this, worker/controllermgr pods in a
+    named sandbox's namespace would reference a ConfigMap that either
+    doesn't exist there or points at unreachable in-namespace short names.
+    """
+    config_path = _dir / "resources" / "michelangelo-config.yaml"
+    if name == _default_sandbox_name:
+        _kube_apply(config_path, name)
+        return
+
+    with open(config_path) as f:
+        doc = yaml.safe_load(f)
+    doc["data"]["AWS_ENDPOINT_URL"] = "http://minio.default.svc.cluster.local:9091"
+    doc["data"]["REGISTRY_ENDPOINT"] = f"{_helm_release(name)}-apiserver:15566"
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as tmp:
+        yaml.dump(doc, tmp)
+        tmp.flush()
+        _kube_apply(Path(tmp.name), name)
+
+
+def _deploy_lightweight_services(ns: argparse.Namespace):
+    """Deploy a namespace-isolated, infra-sharing sandbox instance.
+
+    Named sandboxes don't get their own k3d cluster or copy of
+    MySQL/MinIO/Cadence/Temporal — they're a second Helm release of just the
+    Michelangelo app layer (apiserver/envoy/ui/worker/controllermgr),
+    deployed into their own namespace inside the shared michelangelo-sandbox
+    cluster, pointed at the default namespace's shared infra via
+    cross-namespace Service DNS (see _build_helm_set_args()).
+    """
+    name = ns.name
+    namespace = _namespace(name)
+    offset = getattr(ns, "port_offset", 0)
+
+    _ensure_namespace_exists(namespace, name)
+    # Namespaced Secrets/ConfigMaps don't cross namespaces, so this release
+    # needs its own copies even though they point at shared infra.
+    _deploy_michelangelo_config(name)
+    _ensure_credentials_secret(name)
+    _sync_config_from_secret(name)
+
+    _assert_command(
+        "helm", "Helm not found, please install it: https://helm.sh/docs/intro/install/"
+    )
+
+    # Install the Michelangelo app layer via Helm. Infra (MySQL, MinIO,
+    # Cadence/Temporal, Prometheus, Grafana, kuberay, spark-operator) is
+    # shared from the default sandbox and is not deployed here.
+    _deploy_app_services(ns)
+
+    _setup_app_port_forwards(ns)
+
+    print(
+        f"\n🚀 Sandbox '{name}' deployed into namespace '{namespace}' "
+        "(sharing infra from the default sandbox). "
+        "To access the services, please use the following links:\n"
+    )
+    for component, host_port, _svc_port in _app_port_forwards:
+        print(f"  - {component}: http://localhost:{host_port + offset}")
+    print()
+
+
+def _setup_app_port_forwards(ns: argparse.Namespace):
+    """Port-forward a namespaced sandbox's app Services to the host.
+
+    Named sandboxes don't get their own k3d host-port mapping — k3d can't
+    add port mappings to a cluster after it's created, and NodePorts are
+    unique cluster-wide so the app-only release already runs on different
+    NodePort values (see _build_helm_set_args()). `kubectl port-forward`
+    bridges the two: it works against any Service regardless of type, so
+    host access doesn't depend on the NodePort value at all. This mirrors
+    the background port-forward already used for the inference demo
+    gateway in _setup_istio_with_gateway_api().
+    """
+    name = ns.name
+    context = _kube_context(name)
+    namespace = _namespace(name)
+    release = _helm_release(name)
+    offset = getattr(ns, "port_offset", 0)
+
+    for component, host_port, svc_port in _app_port_forwards:
+        subprocess.Popen(
+            [
+                "kubectl",
+                "--context",
+                context,
+                "-n",
+                namespace,
+                "port-forward",
+                f"svc/{release}-{component}",
+                f"{host_port + offset}:{svc_port}",
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+
+def _create_bucket_setup(bucket_names, name: str = _default_sandbox_name):
     """Create S3 bucket setup job with the provided bucket list."""
     bucket_names_str = ",".join(bucket_names)
 
@@ -988,12 +1423,14 @@ def _create_bucket_setup(bucket_names):
         temp_file.flush()
 
         # Apply the modified bucket setup
-        _exec("kubectl", "apply", "-f", temp_file.name)
+        _exec(
+            "kubectl", "--context", _kube_context(name), "apply", "-f", temp_file.name
+        )
 
     print(f"📦 Created bucket setup job with buckets: {bucket_names_str}")
 
 
-def _create_spark_operator(helm_existing_repos):
+def _create_spark_operator(helm_existing_repos, name: str = _default_sandbox_name):
     if "spark-operator" not in helm_existing_repos:
         _exec(
             "helm",
@@ -1010,6 +1447,8 @@ def _create_spark_operator(helm_existing_repos):
         "--install",
         "spark-operator",
         "spark-operator/spark-operator",
+        "--kube-context",
+        _kube_context(name),
         "--namespace",
         "spark-operator",
         "--create-namespace",
@@ -1019,7 +1458,7 @@ def _create_spark_operator(helm_existing_repos):
     )
 
 
-def _create_kuberay_operator(helm_existing_repos):
+def _create_kuberay_operator(helm_existing_repos, name: str = _default_sandbox_name):
     """Create the KubeRay operator using Helm.
 
     Reference:
@@ -1042,6 +1481,8 @@ def _create_kuberay_operator(helm_existing_repos):
         "--install",
         "kuberay-operator",
         "kuberay/kuberay-operator",
+        "--kube-context",
+        _kube_context(name),
         "--version",
         "1.4.2",
         "--namespace",
@@ -1052,7 +1493,7 @@ def _create_kuberay_operator(helm_existing_repos):
         "20m",
     )
 
-    _import_kuberay_images()
+    _import_kuberay_images(name)
 
 
 _KUBERAY_IMAGES = [
@@ -1061,7 +1502,7 @@ _KUBERAY_IMAGES = [
 ]
 
 
-def _import_kuberay_images():
+def _import_kuberay_images(name: str = _default_sandbox_name):
     """Pull kuberay images from GHCR and import them into k3d.
 
     Non-fatal: prints a warning on failure since the collector sidecar and
@@ -1083,7 +1524,7 @@ def _import_kuberay_images():
                 "import",
                 image,
                 "-c",
-                _michelangelo_sandbox_kube_cluster_name,
+                _cluster_name(name),
             ],
             capture_output=True,
         )
@@ -1093,17 +1534,21 @@ def _import_kuberay_images():
             print(f"Successfully imported {image} into k3d.")
 
 
-def _create_cadence_domain(links):
+def _create_cadence_domain(links, name: str = _default_sandbox_name):
     """Register the Cadence domain, treating 'already exists' as success.
 
     On a fresh cluster the Cadence frontend takes 60-90 s to start, so we
     retry up to 20 times.  When infrastructure is kept running between CI
     runs the domain will already be registered; that is not an error.
     """
+    context = _kube_context(name)
+    release = _helm_release(name)
     # Wait for Cadence frontend to be ready before registering domain.
     print("Waiting for Cadence frontend to be ready...")
     _exec(
         "kubectl",
+        "--context",
+        context,
         "wait",
         "--for=condition=available",
         "deployment",
@@ -1114,6 +1559,8 @@ def _create_cadence_domain(links):
     pod_name = uuid.uuid4().hex
     args = [
         "kubectl",
+        "--context",
+        context,
         "run",
         pod_name,
         "--restart=Never",
@@ -1121,7 +1568,7 @@ def _create_cadence_domain(links):
         "--stdin",
         "--image",
         "ubercadence/cli:v1.2.6",
-        "--env=CADENCE_CLI_ADDRESS=michelangelo-cadence-frontend:7933",
+        f"--env=CADENCE_CLI_ADDRESS={release}-cadence-frontend:7933",
         "--command",
         "--",
         "cadence",
@@ -1158,27 +1605,30 @@ def _create_demo_crs(ns: argparse.Namespace):
     if ns.demo_action not in ("pipeline", "inference", "inference-multicluster"):
         raise ValueError(f"Unsupported demo action: {ns.demo_action}")
 
+    name = ns.name
+    cluster_name = _cluster_name(name)
+    context = _kube_context(name)
+
     # Check if cluster exists
     try:
         _exec(
             "k3d",
             "cluster",
             "get",
-            _michelangelo_sandbox_kube_cluster_name,
+            cluster_name,
             raise_error=True,
         )
     except subprocess.CalledProcessError:
         _err_exit(
-            f"Cluster {_michelangelo_sandbox_kube_cluster_name} not found. "
-            "Please run 'ma sandbox create' first."
+            f"Cluster {cluster_name} not found. Please run 'ma sandbox create' first."
         )
 
     # Check if cluster is running
     try:
-        _exec("kubectl", "cluster-info", raise_error=True)
+        _exec("kubectl", "--context", context, "cluster-info", raise_error=True)
     except subprocess.CalledProcessError:
         _err_exit(
-            f"Cluster {_michelangelo_sandbox_kube_cluster_name} is not running. "
+            f"Cluster {cluster_name} is not running. "
             "Please run 'ma sandbox start' first."
         )
 
@@ -1192,42 +1642,63 @@ def _create_demo_crs(ns: argparse.Namespace):
     namespace = project_yaml.get("metadata", {}).get("namespace", "default")
 
     # Ensure namespace exists
-    _ensure_namespace_exists(namespace)
+    _ensure_namespace_exists(namespace, name)
 
     # Create Project CR
     # Note: The Project CRD is essentially the "parent" of other CRDs. Under
     # normal circumstances, users must create a project CR before creating other CRs.
     if project_yaml_path.exists():
-        _kube_apply(project_yaml_path)
+        _kube_apply(project_yaml_path, name)
     else:
         _err_exit(f"❌ Project CR not found at {project_yaml_path}, exiting...")
 
     if ns.demo_action == "pipeline":
-        _create_pipeline_demo_crs()
+        _create_pipeline_demo_crs(name)
     elif ns.demo_action == "inference":
-        _create_inference_demo_crs()
+        _create_inference_demo_crs(ns)
     elif ns.demo_action == "inference-multicluster":
-        _create_inference_multicluster_demo_crs()
+        _create_inference_multicluster_demo_crs(ns)
     else:
         raise ValueError(f"Unsupported demo action: {ns.demo_action}")
 
 
 def _delete(ns: argparse.Namespace):
     assert ns
+    name = ns.name
+    context = _kube_context(name)
+    release = _helm_release(name)
+    is_default = name == _default_sandbox_name
+
     # Uninstall the michelangelo Helm release if present.
     # Credential Secrets have resource-policy: keep so they survive uninstall.
-    subprocess.run(
-        ["helm", "uninstall", "michelangelo"],
-        capture_output=True,
-        check=False,
-    )
+    uninstall_args = ["helm", "uninstall", release, "--kube-context", context]
+    if not is_default:
+        uninstall_args += ["--namespace", _namespace(name)]
+    subprocess.run(uninstall_args, capture_output=True, check=False)
+
+    if not is_default:
+        # Named sandboxes only ever own their namespace in the shared
+        # cluster — deleting it removes everything the release created
+        # without touching the cluster or the default sandbox's infra.
+        namespace = _namespace(name)
+        subprocess.run(
+            [
+                "kubectl",
+                "--context",
+                context,
+                "delete",
+                "namespace",
+                namespace,
+                "--ignore-not-found=true",
+            ],
+            capture_output=True,
+            check=False,
+        )
+        print(f"Deleted namespace '{namespace}' — shared cluster left running.")
+        return
 
     # Determine which compute cluster to check for
-    compute_cluster = (
-        ns.compute_cluster_name
-        if ns.compute_cluster_name
-        else _default_compute_kube_cluster_name
-    )
+    compute_cluster = ns.compute_cluster_name or _default_compute_cluster_name(name)
 
     # Tear down any remote inference clusters created by
     # `ma sandbox demo inference-multicluster`.
@@ -1255,24 +1726,46 @@ def _delete(ns: argparse.Namespace):
         print(f"Compute cluster '{compute_cluster}' not found, skipping deletion.")
 
     # Always try to delete the main sandbox cluster
-    _exec("k3d", "cluster", "delete", _michelangelo_sandbox_kube_cluster_name)
+    _exec("k3d", "cluster", "delete", _cluster_name(name))
 
 
 def _start(ns: argparse.Namespace):
     assert ns
-    _exec("k3d", "cluster", "start", _michelangelo_sandbox_kube_cluster_name)
+    if ns.name != _default_sandbox_name:
+        print(
+            f"'{ns.name}' is a namespace in the shared sandbox cluster, not a "
+            "separate cluster — nothing to start. Use "
+            f"'ma sandbox create --name {ns.name}' to (re)deploy it."
+        )
+        return
+    _exec("k3d", "cluster", "start", _cluster_name(ns.name))
 
 
 def _stop(ns: argparse.Namespace):
     assert ns
-    _exec("k3d", "cluster", "stop", _michelangelo_sandbox_kube_cluster_name)
+    if ns.name != _default_sandbox_name:
+        print(
+            f"'{ns.name}' is a namespace in the shared sandbox cluster, not a "
+            "separate cluster — nothing to stop independently."
+        )
+        return
+    _exec("k3d", "cluster", "stop", _cluster_name(ns.name))
 
 
-def _kube_create(path: Path):
-    _exec("kubectl", "create", "-f", str(path))
+def _kube_create(path: Path, name: str = _default_sandbox_name):
+    _exec(
+        "kubectl",
+        "--context",
+        _kube_context(name),
+        "-n",
+        _namespace(name),
+        "create",
+        "-f",
+        str(path),
+    )
 
 
-def _ensure_credentials_secret():
+def _ensure_credentials_secret(name: str = _default_sandbox_name):
     """Create object-storage-credentials and aws-credentials Secrets only if absent.
 
     This is deliberately create-only: a sandbox VM that was pre-configured
@@ -1280,6 +1773,8 @@ def _ensure_credentials_secret():
     values across every ``ma sandbox sync`` run.  Local dev gets the
     default minioadmin credentials from the YAML files on first create.
     """
+    context = _kube_context(name)
+    namespace = _namespace(name)
     for secret_name, yaml_file in [
         ("object-storage-credentials", "object-storage-credentials.yaml"),
         ("aws-credentials", "aws-credentials.yaml"),
@@ -1287,14 +1782,23 @@ def _ensure_credentials_secret():
     ]:
         exists = (
             subprocess.run(
-                ["kubectl", "get", "secret", secret_name],
+                [
+                    "kubectl",
+                    "--context",
+                    context,
+                    "-n",
+                    namespace,
+                    "get",
+                    "secret",
+                    secret_name,
+                ],
                 capture_output=True,
             ).returncode
             == 0
         )
         if not exists:
             print(f"Creating {secret_name} Secret from defaults...")
-            _kube_apply(_dir / "resources" / yaml_file)
+            _kube_apply(_dir / "resources" / yaml_file, name)
         else:
             print(
                 f"Secret '{secret_name}' already exists — "
@@ -1302,7 +1806,7 @@ def _ensure_credentials_secret():
             )
 
 
-def _sync_config_from_secret():
+def _sync_config_from_secret(name: str = _default_sandbox_name):
     """Patch michelangelo-config ConfigMap credentials from object-storage-credentials.
 
     Ray pods consume the michelangelo-config ConfigMap via envFrom. After the
@@ -1311,9 +1815,15 @@ def _sync_config_from_secret():
     is actually in the object-storage-credentials Secret, so all consumers see
     the same credentials.
     """
+    context = _kube_context(name)
+    namespace = _namespace(name)
     result = subprocess.run(
         [
             "kubectl",
+            "--context",
+            context,
+            "-n",
+            namespace,
             "get",
             "secret",
             "object-storage-credentials",
@@ -1338,6 +1848,10 @@ def _sync_config_from_secret():
     subprocess.run(
         [
             "kubectl",
+            "--context",
+            context,
+            "-n",
+            namespace,
             "patch",
             "configmap",
             "michelangelo-config",
@@ -1349,8 +1863,28 @@ def _sync_config_from_secret():
     )
 
 
-def _kube_apply(path: Path):
-    _exec("kubectl", "apply", "-f", str(path))
+def _kube_apply(path: Path, name: str = _default_sandbox_name):
+    """Apply a manifest via kubectl into the sandbox's namespace.
+
+    Resource files under resources/ hardcode (or omit) metadata.namespace
+    for the default sandbox's "default" namespace. Named sandboxes get
+    their own namespace within the shared cluster, so the manifest's
+    namespace has to be rewritten to match — kubectl refuses to apply an
+    object whose baked-in namespace disagrees with -n.
+    """
+    if name == _default_sandbox_name:
+        _exec("kubectl", "--context", _kube_context(name), "apply", "-f", str(path))
+        return
+
+    namespace = _namespace(name)
+    with open(path) as f:
+        docs = [d for d in yaml.safe_load_all(f) if d]
+    for doc in docs:
+        doc.setdefault("metadata", {})["namespace"] = namespace
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as tmp:
+        yaml.dump_all(docs, tmp)
+        tmp.flush()
+        _exec("kubectl", "--context", _kube_context(name), "apply", "-f", tmp.name)
 
 
 def _apply_model_sync(is_name: str, context: Optional[str] = None):
@@ -1422,7 +1956,9 @@ def _apply_model_sync(is_name: str, context: Optional[str] = None):
         )
 
 
-def _deploy_model_sync_for_inference_server(is_yaml_path: Path, is_name: str):
+def _deploy_model_sync_for_inference_server(
+    is_yaml_path: Path, is_name: str, name: str = _default_sandbox_name
+):
     """Deploy model-sync to every cluster listed in the IS spec's clusterTargets.
 
     For non-local clusters, also creates the prerequisite michelangelo-config
@@ -1435,26 +1971,39 @@ def _deploy_model_sync_for_inference_server(is_yaml_path: Path, is_name: str):
         is_yaml = yaml.safe_load(f)
     cluster_targets = is_yaml.get("spec", {}).get("clusterTargets") or []
 
+    local_ctx = _kube_context(name)
+
     if not cluster_targets:
         print("⚠ No clusterTargets in IS spec, deploying model-sync to local cluster")
-        _apply_model_sync(is_name)
+        _apply_model_sync(is_name, context=local_ctx)
         return
 
     for target in cluster_targets:
         cluster_id = target["clusterId"]
-        is_local = cluster_id == _michelangelo_sandbox_kube_cluster_name
-        ctx = f"k3d-{cluster_id}"
+        is_local = cluster_id == _cluster_name(name)
+        ctx = local_ctx if is_local else f"k3d-{cluster_id}"
         print(f"✅ Deploying model-sync to cluster '{cluster_id}'...")
         if not is_local:
-            _create_config_in_compute_cluster(cluster_id)
+            _create_config_in_compute_cluster(cluster_id, name)
             _create_aws_credentials_in_cluster(cluster_id)
         _apply_model_sync(is_name, context=ctx)
 
 
-def _kube_wait(pods: bool = True, jobs: bool = True, timeout: int = 600):
+def _kube_wait(
+    name: str = _default_sandbox_name,
+    pods: bool = True,
+    jobs: bool = True,
+    timeout: int = 600,
+):
+    context = _kube_context(name)
+    namespace = _namespace(name)
     if pods:
         _exec(
             "kubectl",
+            "--context",
+            context,
+            "-n",
+            namespace,
             "wait",
             "--for=condition=ready",
             "pod",
@@ -1465,6 +2014,10 @@ def _kube_wait(pods: bool = True, jobs: bool = True, timeout: int = 600):
     if jobs:
         _exec(
             "kubectl",
+            "--context",
+            context,
+            "-n",
+            namespace,
             "wait",
             "--all",
             "jobs",
@@ -1496,12 +2049,15 @@ def _kube_run(
     command: list[str],
     env: Optional[dict[str, str]] = None,
     retry_attempts: int = 0,
+    name: str = _default_sandbox_name,
 ):
     assert image
     assert command
 
     args = [
         "kubectl",
+        "--context",
+        _kube_context(name),
         "run",
         uuid.uuid4().hex,  # Pod's name.
         "--restart=Never",  # The restart policy for the Pod.
@@ -1591,7 +2147,11 @@ def _err_exit(err_message: str, code: int = 1):
     sys.exit(code)
 
 
-def _create_compute_cluster(cluster_name: str):
+def _create_compute_cluster(
+    cluster_name: str,
+    sandbox_name: str = _default_sandbox_name,
+    port_offset: int = 0,
+):
     """Create a dedicated compute cluster for running Ray jobs.
 
     This function sets up a separate Kubernetes cluster specifically for executing
@@ -1615,6 +2175,9 @@ def _create_compute_cluster(cluster_name: str):
 
     Args:
         cluster_name: Name of the k3d cluster to create
+        sandbox_name: Name of the parent sandbox instance whose network this
+            compute cluster joins
+        port_offset: Offset applied to the host side of the Ray ports
     """
     args = [
         "k3d",
@@ -1627,12 +2190,12 @@ def _create_compute_cluster(cluster_name: str):
         "2",  # More worker nodes for Ray
         "--kubeconfig-switch-context=false",  # Don't switch kubectl context
         "--network",
-        f"k3d-{_michelangelo_sandbox_kube_cluster_name}",
+        _kube_context(sandbox_name),
         # Use the same network as the control plane
     ]
 
     # Add port mappings for Ray
-    for p in _ray_ports:
+    for p in _offset_ports(_ray_ports, port_offset):
         args += ["-p", f"{_loopback(p)}@agent:0"]
 
     _exec(*args)
@@ -1656,7 +2219,7 @@ def _create_compute_cluster(cluster_name: str):
     )
 
     # Create michelangelo-config ConfigMap pointing to control plane's MinIO
-    _create_config_in_compute_cluster(cluster_name)
+    _create_config_in_compute_cluster(cluster_name, sandbox_name)
 
     # Create aws-credentials Secret
     _create_aws_credentials_in_cluster(cluster_name)
@@ -1667,7 +2230,9 @@ def _create_compute_cluster(cluster_name: str):
     )
 
 
-def _create_config_in_compute_cluster(cluster_name: str):
+def _create_config_in_compute_cluster(
+    cluster_name: str, sandbox_name: str = _default_sandbox_name
+):
     """Create michelangelo-config ConfigMap in compute cluster."""
     config_path = _dir / "resources" / "michelangelo-config.yaml"
 
@@ -1675,11 +2240,11 @@ def _create_config_in_compute_cluster(cluster_name: str):
         config_data = yaml.safe_load(f)
 
     # Update MinIO endpoint to point to the control plane's MinIO within the shared
-    # network k3d-michelangelo-sandbox-agent-0 is the hostname of the control plane's
-    # agent node. 30007 is the NodePort for MinIO API service.
+    # network. k3d-michelangelo-{sandbox_name}-agent-0 is the hostname of the
+    # control plane's agent node. 30007 is the NodePort for MinIO API service.
     if "data" in config_data:
         config_data["data"]["AWS_ENDPOINT_URL"] = (
-            f"http://k3d-{_michelangelo_sandbox_kube_cluster_name}-agent-0:30007"
+            f"http://{_kube_context(sandbox_name)}-agent-0:30007"
         )
 
     with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as temp_config:
@@ -1711,15 +2276,16 @@ def _create_aws_credentials_in_cluster(cluster_name: str):
     print(f"Created aws-credentials Secret in cluster '{cluster_name}'")
 
 
-def _ensure_namespace_exists(namespace: str):
+def _ensure_namespace_exists(namespace: str, name: str = _default_sandbox_name):
     """Ensure the namespace exists in the sandbox cluster."""
+    context = _kube_context(name)
     try:
         # Check if namespace already exists
         subprocess.check_output(
             [
                 "kubectl",
                 "--context",
-                f"k3d-{_michelangelo_sandbox_kube_cluster_name}",
+                context,
                 "get",
                 "namespace",
                 namespace,
@@ -1732,7 +2298,7 @@ def _ensure_namespace_exists(namespace: str):
         _exec(
             "kubectl",
             "--context",
-            f"k3d-{_michelangelo_sandbox_kube_cluster_name}",
+            context,
             "create",
             "namespace",
             namespace,
@@ -1741,10 +2307,12 @@ def _ensure_namespace_exists(namespace: str):
 
 
 # Given a cluster name, create a Cluster CRD in the sandbox cluster
-def _create_compute_cluster_crd(cluster_name: str):
+def _create_compute_cluster_crd(
+    cluster_name: str, sandbox_name: str = _default_sandbox_name
+):
     """Create a Cluster CRD for the Ray jobs cluster in the sandbox cluster."""
     # Ensure ma-system namespace exists
-    _ensure_namespace_exists("ma-system")
+    _ensure_namespace_exists("ma-system", sandbox_name)
 
     # Get kubeconfig for the Ray jobs cluster
     kubeconfig = subprocess.check_output(
@@ -1795,7 +2363,7 @@ def _create_compute_cluster_crd(cluster_name: str):
         _exec(
             "kubectl",
             "--context",
-            f"k3d-{_michelangelo_sandbox_kube_cluster_name}",
+            _kube_context(sandbox_name),
             "apply",
             "-f",
             crd_file.name,
@@ -1807,7 +2375,9 @@ def _create_compute_cluster_crd(cluster_name: str):
         print(f"Server URL: {server_url}")
 
 
-def _create_compute_cluster_secrets(cluster_name: str):
+def _create_compute_cluster_secrets(
+    cluster_name: str, sandbox_name: str = _default_sandbox_name
+):
     """Create Kubernetes secrets for the kubeconfig of the given cluster name."""
     # Get kubeconfig for the cluster
     kubeconfig = subprocess.check_output(
@@ -1842,7 +2412,7 @@ def _create_compute_cluster_secrets(cluster_name: str):
         _exec(
             "kubectl",
             "--context",
-            f"k3d-{_michelangelo_sandbox_kube_cluster_name}",
+            _kube_context(sandbox_name),
             "apply",
             "-f",
             ca_file.name,
@@ -1889,7 +2459,7 @@ def _create_compute_cluster_secrets(cluster_name: str):
         _exec(
             "kubectl",
             "--context",
-            f"k3d-{_michelangelo_sandbox_kube_cluster_name}",
+            _kube_context(sandbox_name),
             "apply",
             "-f",
             token_file.name,
@@ -1898,7 +2468,9 @@ def _create_compute_cluster_secrets(cluster_name: str):
     print(f"\nCreated secrets for cluster '{cluster_name}' in the sandbox cluster")
 
 
-def _create_inference_compute_cluster(cluster_name: str):
+def _create_inference_compute_cluster(
+    cluster_name: str, name: str = _default_sandbox_name
+):
     """Create a k3d cluster used as a remote target by the inference controller.
 
     Idempotent: if the k3d
@@ -1926,20 +2498,22 @@ def _create_inference_compute_cluster(cluster_name: str):
             "1",
             "--kubeconfig-switch-context=false",
             # Share the docker network with the sandbox so pods can reach
-            # MinIO at k3d-michelangelo-sandbox-agent-0:30007 and so the
+            # MinIO at k3d-<sandbox cluster>-agent-0:30007 and so the
             # control plane can reach this cluster's API server at
             # https://k3d-<cluster_name>-server-0:6443.
             "--network",
-            f"k3d-{_michelangelo_sandbox_kube_cluster_name}",
+            f"k3d-{_cluster_name(name)}",
         )
 
     # Always re-run the storage prereqs so re-applies pick up MinIO endpoint
     # changes and the Triton image-pull buffering has the AWS secret available.
-    _create_config_in_compute_cluster(cluster_name)
+    _create_config_in_compute_cluster(cluster_name, name)
     _create_aws_credentials_in_cluster(cluster_name)
 
 
-def _setup_inference_server_remote_secrets(cluster_name: str):
+def _setup_inference_server_remote_secrets(
+    cluster_name: str, name: str = _default_sandbox_name
+):
     """Provision IS-token + CA-data Secrets in the SANDBOX cluster for a remote target.
 
     The inference controller runs in the sandbox cluster and reads these
@@ -1956,7 +2530,7 @@ def _setup_inference_server_remote_secrets(cluster_name: str):
        into the SANDBOX cluster (control plane).
     """
     remote_ctx = f"k3d-{cluster_name}"
-    sandbox_ctx = f"k3d-{_michelangelo_sandbox_kube_cluster_name}"
+    sandbox_ctx = _kube_context(name)
 
     print(f"Setting up inference-server-manager RBAC in '{cluster_name}'...")
     _exec(
@@ -2028,7 +2602,7 @@ def _setup_inference_server_remote_secrets(cluster_name: str):
     print(f"Created IS-token + CA-data Secrets in sandbox for cluster '{cluster_name}'")
 
 
-def _setup_inference_server_secrets():
+def _setup_inference_server_secrets(name: str = _default_sandbox_name):
     """Create RBAC and credentials for inference server cluster access.
 
     Applies an inference-server-manager ServiceAccount with permissions to
@@ -2036,16 +2610,17 @@ def _setup_inference_server_secrets():
     Stores a long-lived bearer token as a Secret so the clientfactory can build
     a remote kube client for the sandbox cluster using kubernetes.default.svc:443.
 
-    The CA secret (cluster-michelangelo-sandbox-ca-data) is already created by
-    the sandbox create flow; we only need to provision the token here.
+    The CA secret (cluster-{cluster_name}-ca-data) is already created by the
+    sandbox create flow; we only need to provision the token here.
     """
-    cluster_name = _michelangelo_sandbox_kube_cluster_name
+    cluster_name = _cluster_name(name)
+    context = _kube_context(name)
     token_secret_name = f"cluster-{cluster_name}-is-token"
 
     # Check if the token secret already exists to make this idempotent.
     exists = (
         subprocess.run(
-            ["kubectl", "get", "secret", token_secret_name],
+            ["kubectl", "--context", context, "get", "secret", token_secret_name],
             capture_output=True,
         ).returncode
         == 0
@@ -2058,7 +2633,7 @@ def _setup_inference_server_secrets():
         return
 
     # Apply ServiceAccount + ClusterRole + ClusterRoleBinding.
-    _kube_apply(_dir / "resources" / "rbac-inferenceserver.yaml")
+    _kube_apply(_dir / "resources" / "rbac-inferenceserver.yaml", name)
 
     # Mint a long-lived token (same duration as ray-manager) so the sandbox
     # does not require frequent re-creation.
@@ -2066,6 +2641,8 @@ def _setup_inference_server_secrets():
         subprocess.check_output(
             [
                 "kubectl",
+                "--context",
+                context,
                 "create",
                 "token",
                 "inference-server-manager",
@@ -2088,12 +2665,12 @@ def _setup_inference_server_secrets():
     with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
         yaml.dump(token_secret, f)
         f.flush()
-        _exec("kubectl", "apply", "-f", f.name)
+        _exec("kubectl", "--context", context, "apply", "-f", f.name)
 
     print(f"Created inference server credentials for cluster '{cluster_name}'")
 
 
-def _apply_demo_model(demo_dir: Path):
+def _apply_demo_model(demo_dir: Path, name: str = _default_sandbox_name):
     """Register the demo's Model CR in the sandbox (control-plane) cluster.
 
     The deployment controller resolves `spec.desiredRevision` to this CR and reads the
@@ -2105,23 +2682,26 @@ def _apply_demo_model(demo_dir: Path):
         _err_exit(f"❌ Model CR not found at {model_path}, exiting...")
 
     print("✅ Registering demo Model...")
-    _kube_apply(model_path)
+    _kube_apply(model_path, name)
 
 
-def _create_inference_demo_crs():
+def _create_inference_demo_crs(ns: argparse.Namespace):
     """Create an inference server for the sandbox cluster for demo purposes."""
+    name = getattr(ns, "name", _default_sandbox_name)
+    context = _kube_context(name)
+
     print("🚀 Setting up Michelangelo AI Inference Demo...")
 
     # Setup istio with Gateway API
     # This allows usage of HTTPRoutes to route traffic to the inference server.
-    _setup_istio_with_gateway_api()
+    _setup_istio_with_gateway_api(name, offset=getattr(ns, "port_offset", 0))
 
     # Create the SA, RBAC, and token secret that the clientfactory uses to
     # connect to the sandbox cluster as a ClusterTarget.
-    _setup_inference_server_secrets()
+    _setup_inference_server_secrets(name)
 
     inference_demo_dir = _dir / "demo" / "inference"
-    _apply_demo_model(inference_demo_dir)
+    _apply_demo_model(inference_demo_dir, name)
 
     # Create inference server CR
     inference_server_path = inference_demo_dir / "inferenceserver.yaml"
@@ -2131,7 +2711,7 @@ def _create_inference_demo_crs():
         )
 
     print("✅ Creating Triton Inference Server...")
-    _kube_apply(inference_server_path)
+    _kube_apply(inference_server_path, name)
 
     # Wait for inference server to reach SERVING state (image pull may take time)
     with open(inference_server_path) as f:
@@ -2147,6 +2727,8 @@ def _create_inference_demo_crs():
     try:
         _exec(
             "kubectl",
+            "--context",
+            context,
             "wait",
             "--for=jsonpath=.status.state=INFERENCE_SERVER_STATE_SERVING",
             f"inferenceservers.michelangelo.api/{inference_server_name}",
@@ -2169,7 +2751,7 @@ def _create_inference_demo_crs():
 
     # Deploy model-sync to every cluster the IS targets (single or multi).
     _deploy_model_sync_for_inference_server(
-        inference_server_path, inference_server_name
+        inference_server_path, inference_server_name, name
     )
 
     print("✅ Inference demo resources created successfully")
@@ -2212,7 +2794,7 @@ def _create_inference_demo_crs():
     print("}'")
 
 
-def _create_inference_multicluster_demo_crs():
+def _create_inference_multicluster_demo_crs(ns: argparse.Namespace):
     """Create a multi-cluster inference server demo.
 
     End-to-end orchestration:
@@ -2228,21 +2810,24 @@ def _create_inference_multicluster_demo_crs():
     4. Wait for status to reach SERVING.
     5. Deploy model-sync to every clusterTarget via the shared helper.
     """
+    name = getattr(ns, "name", _default_sandbox_name)
+    offset = getattr(ns, "port_offset", 0)
+
     print("🚀 Setting up Michelangelo AI Multi-Cluster Inference Demo...")
 
     # Local sandbox: Istio + Gateway API + IS RBAC/credentials.
-    _setup_istio_with_gateway_api()
-    _setup_inference_server_secrets()
+    _setup_istio_with_gateway_api(name, offset=offset)
+    _setup_inference_server_secrets(name)
 
     # Each remote cluster: k3d, Istio + Gateway API, IS RBAC + token + CA.
     for cluster_name in _inference_compute_cluster_names:
         print(f"\n— Bringing up remote cluster '{cluster_name}' —")
-        _create_inference_compute_cluster(cluster_name)
-        _setup_istio_with_gateway_api(context=f"k3d-{cluster_name}")
-        _setup_inference_server_remote_secrets(cluster_name)
+        _create_inference_compute_cluster(cluster_name, name)
+        _setup_istio_with_gateway_api(name, context=f"k3d-{cluster_name}")
+        _setup_inference_server_remote_secrets(cluster_name, name)
 
     inference_demo_dir = _dir / "demo" / "inference-multicluster"
-    _apply_demo_model(inference_demo_dir)
+    _apply_demo_model(inference_demo_dir, name)
 
     inference_server_path = inference_demo_dir / "inferenceserver.yaml"
     if not inference_server_path.exists():
@@ -2251,7 +2836,7 @@ def _create_inference_multicluster_demo_crs():
         )
 
     print("\n✅ Creating multi-cluster Triton InferenceServer...")
-    _kube_apply(inference_server_path)
+    _kube_apply(inference_server_path, name)
 
     with open(inference_server_path) as f:
         inference_server_yaml = yaml.safe_load(f)
@@ -2268,6 +2853,8 @@ def _create_inference_multicluster_demo_crs():
     try:
         _exec(
             "kubectl",
+            "--context",
+            _kube_context(name),
             "wait",
             "--for=jsonpath=.status.state=INFERENCE_SERVER_STATE_SERVING",
             f"inferenceservers.michelangelo.api/{inference_server_name}",
@@ -2288,7 +2875,7 @@ def _create_inference_multicluster_demo_crs():
 
     # Per-cluster model-sync (the helper iterates spec.clusterTargets).
     _deploy_model_sync_for_inference_server(
-        inference_server_path, inference_server_name
+        inference_server_path, inference_server_name, name
     )
 
     print("\n🎉 Multi-cluster inference demo created successfully!")
@@ -2307,7 +2894,11 @@ def _create_inference_multicluster_demo_crs():
     )
 
 
-def _setup_istio_with_gateway_api(context: Optional[str] = None):
+def _setup_istio_with_gateway_api(
+    name: str = _default_sandbox_name,
+    context: Optional[str] = None,
+    offset: int = 0,
+):
     """Install Istio service mesh with Kubernetes Gateway API support.
 
     This function:
@@ -2321,10 +2912,11 @@ def _setup_istio_with_gateway_api(context: Optional[str] = None):
     context is provided (i.e. for the default sandbox cluster).
     """
     target_label = context or "local sandbox cluster"
+    resolved_context = context or _kube_context(name)
     print(f"Setting up Istio service mesh with Gateway API on {target_label}...")
 
-    helm_ctx = ["--kube-context", context] if context else []
-    kubectl_ctx = ["--context", context] if context else []
+    helm_ctx = ["--kube-context", resolved_context]
+    kubectl_ctx = ["--context", resolved_context]
 
     # Fetch existing Helm repositories
     try:
@@ -2447,11 +3039,12 @@ def _setup_istio_with_gateway_api(context: Optional[str] = None):
         subprocess.Popen(
             [
                 "kubectl",
+                *kubectl_ctx,
                 "-n",
                 "default",
                 "port-forward",
                 "svc/ma-gateway-istio",
-                "8880:80",
+                f"{8880 + offset}:80",
             ],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
@@ -2460,11 +3053,11 @@ def _setup_istio_with_gateway_api(context: Optional[str] = None):
     print(f"✅ Istio with Gateway API setup complete on {target_label}")
 
 
-def _create_pipeline_demo_crs():
+def _create_pipeline_demo_crs(name: str = _default_sandbox_name):
     """Create a pipeline demo for the sandbox cluster for demo purposes."""
     pipeline_demo_dir = _dir / "demo" / "pipeline"
     for yaml_file in pipeline_demo_dir.glob("*.yaml"):
-        _kube_apply(yaml_file)
+        _kube_apply(yaml_file, name)
 
     print("✅ Pipeline demo resources created successfully")
     print("📋 What was set up:")

@@ -2,13 +2,13 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: {{ include "michelangelo.fullname" . }}
+  name: {{ include "michelangelo.fullname" . }}-{{ .Release.Namespace }}
   labels:
     {{- include "michelangelo.labels" . | nindent 4 }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: {{ include "michelangelo.fullname" . }}
+  name: {{ include "michelangelo.fullname" . }}-{{ .Release.Namespace }}
 subjects:
   - kind: ServiceAccount
     name: {{ include "michelangelo.serviceAccountName" . }}
