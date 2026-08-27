@@ -39,8 +39,6 @@ from __future__ import annotations
 import logging
 import os
 import shutil
-import sys
-import tarfile
 import tempfile
 
 from michelangelo.lib.artifact_manager.storage_backend import StorageBackend
@@ -50,50 +48,22 @@ _logger = logging.getLogger(__name__)
 
 __all__ = ["MinioStorageBackend"]
 
-_DIR_TAR_SUFFIX = "/__dir__.tar"
-
-
-def _safe_extractall(tar: tarfile.TarFile, dest: str) -> None:
-    """Extract a tar archive into ``dest`` without path-traversal risk.
-
-    Uses ``filter="data"`` on Python 3.12+ (PEP 706), which strips absolute
-    paths, ``..`` traversal components, and unsafe symlinks. On older runtimes
-    a manual member check provides the same protection.
-
-    Raises:
-        ValueError: If a member's resolved path escapes ``dest`` (Python < 3.12).
-    """
-    if sys.version_info >= (3, 12):
-        tar.extractall(dest, filter="data")
-    else:
-        real_dest = os.path.realpath(dest)
-        safe_members = []
-        for member in tar.getmembers():
-            if not member.name:  # skip the empty-name root entry from arcname=""
-                continue
-            member_path = os.path.realpath(os.path.join(dest, member.name))
-            if not member_path.startswith(real_dest + os.sep):
-                raise ValueError(
-                    f"Refusing to extract '{member.name}': path would escape "
-                    f"the destination directory '{dest}'."
-                )
-            safe_members.append(member)
-        tar.extractall(dest, members=safe_members)
-
 
 class MinioStorageBackend(StorageBackend):
     """StorageBackend backed by MinIO or any S3-compatible object store.
 
-    Artifacts are stored as objects under the configured bucket. Directory
-    artifacts are transparently tar-archived before upload and extracted on
-    download — callers interact with local filesystem paths on both sides.
+    Artifacts are stored as objects under the configured bucket — callers
+    interact with local filesystem paths on both sides.
 
-    **Directory vs. file sentinel:** When ``upload()`` is called on a directory,
-    the archive is stored with the key suffix ``/__dir__.tar``
-    (e.g. ``"models/clf/v1/raw/__dir__.tar"``). The returned URI encodes this
-    suffix; ``download()`` reads it to decide whether to extract or copy. A
-    plain ``.tar`` file uploaded directly (not a directory) is stored as-is and
-    delivered as-is on download.
+    **Directory vs. file:** A directory artifact is uploaded as one object per
+    file, each stored under ``destination_key`` as a prefix (e.g. a local
+    directory containing ``weights.bin`` uploaded to ``"models/clf/v1/raw"``
+    stores an object at ``"models/clf/v1/raw/weights.bin"``), preserving any
+    nested subdirectory structure. A plain file is stored at
+    ``destination_key`` directly. ``download()`` distinguishes the two by
+    checking whether an object exists at the exact key: if so, it's a file;
+    otherwise every object under ``key + "/"`` is downloaded, reconstructing
+    the original directory structure.
 
     **Bucket creation:** By default the backend does *not* attempt to create the
     bucket. Set ``create_bucket_if_missing=True`` for local sandbox environments
@@ -201,20 +171,18 @@ class MinioStorageBackend(StorageBackend):
     def upload(self, local_path: str, destination_key: str) -> str:
         """Upload a local file or directory to the configured MinIO bucket.
 
-        Directory artifacts are tar-archived and stored with the key suffix
-        ``/__dir__.tar`` (e.g. ``destination_key + "/__dir__.tar"``); the
-        returned URI encodes this suffix so ``download()`` can extract them
-        correctly. Plain files are stored at ``destination_key`` as-is.
+        A directory is uploaded as one object per file, each stored under
+        ``destination_key`` as a prefix, preserving nested subdirectory
+        structure. A plain file is stored at ``destination_key`` as-is.
 
         Args:
             local_path: Absolute path to the local file or directory to upload.
-            destination_key: Object key within the bucket
+            destination_key: Object key (for a file) or key prefix (for a
+                directory) within the bucket
                 (e.g. ``"models/my-clf/a1b2c3d4e5f6a7b8/raw"``).
 
         Returns:
-            URI in the form ``s3://{bucket}/{key}`` where ``key`` is
-            ``destination_key`` for files or ``destination_key/__dir__.tar``
-            for directories.
+            URI in the form ``s3://{bucket}/{destination_key}``.
 
         Raises:
             ValueError: If ``destination_key`` is empty.
@@ -226,9 +194,7 @@ class MinioStorageBackend(StorageBackend):
                 "Provide a key such as 'models/classifier/v1'."
             )
         if os.path.isdir(local_path):
-            dir_key = destination_key + _DIR_TAR_SUFFIX
-            self._upload_directory(local_path, dir_key)
-            return f"s3://{self._bucket}/{dir_key}"
+            self._upload_directory(local_path, destination_key)
         else:
             _logger.debug(
                 "Uploading file '%s' to s3://%s/%s.",
@@ -247,9 +213,10 @@ class MinioStorageBackend(StorageBackend):
     def download(self, uri: str, local_path: str) -> None:
         """Download an artifact from MinIO to a local path.
 
-        If the URI ends with ``/__dir__.tar`` (produced by uploading a
-        directory), the archive is extracted to ``local_path`` as a directory.
-        Otherwise the object is copied as a plain file.
+        Checks whether an object exists at the exact key first: if so, it's
+        downloaded as a plain file. Otherwise every object under
+        ``key + "/"`` is downloaded, reconstructing the original directory
+        structure under ``local_path``.
 
         Args:
             uri: URI returned by a previous :meth:`upload` call on any
@@ -262,24 +229,27 @@ class MinioStorageBackend(StorageBackend):
         Raises:
             ValueError: If ``uri`` is not a valid ``s3://`` URI with a
                 non-empty bucket and key.
-            OSError: If the download or extraction fails.
+            OSError: If the download fails, or neither a file nor a directory
+                exists at ``key``.
         """
         bucket, key = self._parse_uri(uri)
-        is_directory = key.endswith(_DIR_TAR_SUFFIX)
+        try:
+            self._client.stat_object(bucket, key)
+        except self._S3Error as exc:
+            if exc.code != "NoSuchKey":
+                raise OSError(f"MinIO download failed for {uri!r}: {exc}") from exc
+            self._download_directory(bucket, key, local_path)
+            return
+
+        _logger.debug("Downloading s3://%s/%s to '%s'.", bucket, key, local_path)
         tmp_fd, tmp_path = tempfile.mkstemp()
         os.close(tmp_fd)
         try:
-            _logger.debug("Downloading s3://%s/%s to '%s'.", bucket, key, local_path)
             try:
                 self._client.fget_object(bucket, key, tmp_path)
             except self._S3Error as exc:
                 raise OSError(f"MinIO download failed for {uri!r}: {exc}") from exc
-            if is_directory:
-                os.makedirs(local_path, exist_ok=True)
-                with tarfile.open(tmp_path, "r") as tar:
-                    _safe_extractall(tar, local_path)
-            else:
-                shutil.copy2(tmp_path, local_path)
+            shutil.copy2(tmp_path, local_path)
         finally:
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)
@@ -298,28 +268,49 @@ class MinioStorageBackend(StorageBackend):
     # ── Private helpers ──────────────────────────────────────────────────────
 
     def _upload_directory(self, local_path: str, destination_key: str) -> None:
-        """Tar ``local_path`` and upload the archive as ``destination_key``."""
-        tmp_fd, tmp_path = tempfile.mkstemp(suffix=".tar")
-        os.close(tmp_fd)
-        try:
-            _logger.debug(
-                "Archiving directory '%s' before upload to s3://%s/%s.",
-                local_path,
-                self._bucket,
-                destination_key,
-            )
-            with tarfile.open(tmp_path, "w") as tar:
-                for entry in os.scandir(local_path):
-                    tar.add(entry.path, arcname=entry.name)
+        """Upload every file under ``local_path`` to a matching object key.
+
+        Each file is stored under the ``destination_key`` prefix, preserving
+        nested subdirectory structure.
+        """
+        for root, _dirs, files in os.walk(local_path):
+            for filename in files:
+                file_path = os.path.join(root, filename)
+                rel_path = os.path.relpath(file_path, local_path).replace(os.sep, "/")
+                object_key = f"{destination_key}/{rel_path}"
+                _logger.debug(
+                    "Uploading file '%s' to s3://%s/%s.",
+                    file_path,
+                    self._bucket,
+                    object_key,
+                )
+                try:
+                    self._client.fput_object(self._bucket, object_key, file_path)
+                except self._S3Error as exc:
+                    raise OSError(
+                        f"MinIO upload failed for key {object_key!r}: {exc}"
+                    ) from exc
+
+    def _download_directory(self, bucket: str, key: str, local_path: str) -> None:
+        """Download every object under the ``key`` prefix into ``local_path``.
+
+        Reconstructs the original directory structure.
+        """
+        prefix = key + "/"
+        objects = list(self._client.list_objects(bucket, prefix=prefix, recursive=True))
+        if not objects:
+            raise OSError(f"No object or directory found at s3://{bucket}/{key}.")
+        os.makedirs(local_path, exist_ok=True)
+        for obj in objects:
+            rel_path = obj.object_name[len(prefix) :]
+            dest_path = os.path.join(local_path, *rel_path.split("/"))
+            os.makedirs(os.path.dirname(dest_path), exist_ok=True)
             try:
-                self._client.fput_object(self._bucket, destination_key, tmp_path)
+                self._client.fget_object(bucket, obj.object_name, dest_path)
             except self._S3Error as exc:
                 raise OSError(
-                    f"MinIO upload failed for key {destination_key!r}: {exc}"
+                    f"MinIO download failed for s3://{bucket}/{obj.object_name}: {exc}"
                 ) from exc
-        finally:
-            if os.path.exists(tmp_path):
-                os.unlink(tmp_path)
 
     def _ensure_bucket(self) -> None:
         """Create the target bucket if it does not already exist.
