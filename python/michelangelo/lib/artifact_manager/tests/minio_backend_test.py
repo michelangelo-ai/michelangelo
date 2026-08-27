@@ -281,6 +281,14 @@ class TestMinioStorageBackendUpload(TestCase):
         with self.assertRaises(OSError):
             backend.upload(self._make_tmp_file(), "models/clf/raw")
 
+    def test_upload_directory_wraps_s3error_as_oserror(self):
+        """It converts S3Error from fput_object into OSError for directories."""
+        mock_client = MagicMock()
+        mock_client.fput_object.side_effect = _FakeS3Error("access denied")
+        backend = self._backend(mock_client)
+        with self.assertRaises(OSError):
+            backend.upload(self._make_tmp_dir(), "models/clf/raw")
+
 
 class TestMinioStorageBackendDownload(TestCase):
     """Tests for MinioStorageBackend.download()."""
@@ -426,3 +434,18 @@ class TestMinioStorageBackendDownload(TestCase):
         backend = self._backend(mock_client)
         with self.assertRaises(OSError):
             backend.download("s3://test-bucket/models/clf/raw", "/tmp/out")
+
+    def test_download_directory_wraps_s3error_as_oserror(self):
+        """It converts S3Error from fget_object into OSError for directories."""
+        mock_client = MagicMock()
+        mock_client.stat_object.side_effect = _FakeS3Error(
+            "not found", code="NoSuchKey"
+        )
+        mock_client.list_objects.return_value = [_FakeObject("models/clf/raw/w.bin")]
+        mock_client.fget_object.side_effect = _FakeS3Error("access denied")
+        backend = self._backend(mock_client)
+
+        dest = tempfile.mkdtemp()
+        self._tmp_dirs.append(dest)
+        with self.assertRaises(OSError):
+            backend.download("s3://test-bucket/models/clf/raw", dest)
