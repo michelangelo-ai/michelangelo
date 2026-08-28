@@ -101,6 +101,21 @@ tester.run('no-module-scope-test-setup', rule, {
       name: 'object literal inside arrow function at describe scope',
       code: `describe('suite', () => { const build = () => { const data = { name: 'test' }; return data; }; });`,
     },
+    // render() called directly inside a test — not wrapped in a helper
+    {
+      name: 'render() inside it()',
+      code: `it('renders', () => { render(el, getWrapper()); });`,
+    },
+    {
+      name: 'module-scope helper unrelated to render',
+      code: `function buildRequest() { return createQueryMockRouter({}); }`,
+    },
+    // render() only occurs inside a nested closure the helper defines but never itself
+    // invokes — the outer helper's own body never calls render, so it isn't flagged
+    {
+      name: 'render() only inside a nested inner closure, not called by the outer helper itself',
+      code: `function setup() { const helper = () => render(el, getWrapper()); return helper; }`,
+    },
   ],
 
   invalid: [
@@ -177,6 +192,86 @@ tester.run('no-module-scope-test-setup', rule, {
       name: 'wrapper helper function at top-level describe scope',
       code: `describe('suite', () => { function buildTestWrapper(req) { return buildWrapper([getBaseProviderWrapper()]); } });`,
       errors: [{ messageId: 'noModuleScopeWrapperHelper', data: { name: 'buildTestWrapper' } }],
+    },
+    // render-within-render: function declaration wrapping render() at module scope
+    // (uses getWrapper() rather than buildWrapper() so the buildWrapper-helper check
+    // above doesn't take priority — that case is covered by the existing subset check)
+    {
+      name: 'function declaration wrapping render() at module scope',
+      code: `function renderDetail(req) { render(el, getWrapper()); }`,
+      errors: [{ messageId: 'noRenderWithinRenderHelper', data: { name: 'renderDetail' } }],
+    },
+    // arrow function variable wrapping render() at module scope
+    {
+      name: 'arrow function variable wrapping render() at module scope',
+      code: `const renderDetail = (req) => { render(el, getWrapper()); };`,
+      errors: [{ messageId: 'noRenderWithinRenderHelper', data: { name: 'renderDetail' } }],
+    },
+    // render-within-render at top-level describe scope
+    {
+      name: 'function declaration wrapping render() at top-level describe scope',
+      code: `describe('suite', () => { function renderDetail(req) { render(el, getWrapper()); } });`,
+      errors: [{ messageId: 'noRenderWithinRenderHelper', data: { name: 'renderDetail' } }],
+    },
+    // render-within-render inside a NESTED describe — unlike shared literals, this is still flagged
+    // because wrapping render() in another helper is unnecessary indirection at any nesting depth
+    {
+      name: 'function declaration wrapping render() inside a nested describe',
+      code: `describe('outer', () => { describe('inner', () => { function renderDetail(req) { render(el, buildWrapper([getBaseProviderWrapper()])); } }); });`,
+      errors: [{ messageId: 'noRenderWithinRenderHelper', data: { name: 'renderDetail' } }],
+    },
+    {
+      name: 'arrow function variable wrapping render() inside a nested describe',
+      code: `describe('outer', () => { describe('inner', () => { const renderDetail = (req) => { render(el, buildWrapper([getBaseProviderWrapper()])); }; }); });`,
+      errors: [{ messageId: 'noRenderWithinRenderHelper', data: { name: 'renderDetail' } }],
+    },
+    // render() call is nested inside another call passed to the helper — still detected
+    {
+      name: 'render() call nested as an argument inside the helper body',
+      code: `function renderDetail(req) { return someWrapperFn(render(el, getWrapper())); }`,
+      errors: [{ messageId: 'noRenderWithinRenderHelper', data: { name: 'renderDetail' } }],
+    },
+    // returning the render() call directly is still a render-within-render
+    {
+      name: 'function declaration that returns render() directly',
+      code: `function setup() { return render(el, getWrapper()); }`,
+      errors: [{ messageId: 'noRenderWithinRenderHelper', data: { name: 'setup' } }],
+    },
+    // render() hidden behind an if statement
+    {
+      name: 'render() called inside an if statement',
+      code: `function renderDetail(cond) { if (cond) { render(el, getWrapper()); } }`,
+      errors: [{ messageId: 'noRenderWithinRenderHelper', data: { name: 'renderDetail' } }],
+    },
+    // render() hidden behind an if/else statement's alternate branch
+    {
+      name: 'render() called inside an if/else alternate branch',
+      code: `function renderDetail(cond) { if (cond) { doSomethingElse(); } else { render(el, getWrapper()); } }`,
+      errors: [{ messageId: 'noRenderWithinRenderHelper', data: { name: 'renderDetail' } }],
+    },
+    // render() hidden behind a ternary
+    {
+      name: 'render() called inside a ternary expression',
+      code: `function renderDetail(cond) { cond ? render(el, getWrapper()) : null; }`,
+      errors: [{ messageId: 'noRenderWithinRenderHelper', data: { name: 'renderDetail' } }],
+    },
+    // render() hidden behind a logical && short-circuit
+    {
+      name: 'render() called behind a logical && short-circuit',
+      code: `function renderDetail(cond) { cond && render(el, getWrapper()); }`,
+      errors: [{ messageId: 'noRenderWithinRenderHelper', data: { name: 'renderDetail' } }],
+    },
+    // render() hidden inside a try block
+    {
+      name: 'render() called inside a try block',
+      code: `function renderDetail() { try { render(el, getWrapper()); } catch (e) { handleError(e); } }`,
+      errors: [{ messageId: 'noRenderWithinRenderHelper', data: { name: 'renderDetail' } }],
+    },
+    // render() assigned to an intermediate variable before being used
+    {
+      name: 'render() called via an intermediate variable declaration',
+      code: `function renderDetail() { const result = render(el, getWrapper()); return result; }`,
+      errors: [{ messageId: 'noRenderWithinRenderHelper', data: { name: 'renderDetail' } }],
     },
   ],
 });
