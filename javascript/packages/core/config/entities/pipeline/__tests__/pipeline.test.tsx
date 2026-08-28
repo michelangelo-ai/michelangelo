@@ -256,17 +256,7 @@ describe('PIPELINE_ENTITY_CONFIG: Run trigger action', () => {
   });
 
   describe('list view', () => {
-    /**
-     * List rows come from `ListPipeline`, which carries no `spec.manifest` (only a
-     * `GetPipeline` response does — see run-trigger-form.tsx). An absent manifest means
-     * "unknown," not "no triggers," so the action must not be disabled here.
-     */
-    it('stays enabled, since trigger data has not loaded', async () => {
-      const user = userEvent.setup();
-      const mockRequest = createQueryMockRouter({
-        ListPipeline: { pipelineList: { items: [buildPipeline()] } },
-      });
-
+    function renderList(items: object[], extraResponses: Record<string, object> = {}) {
       render(
         <PhaseListRoute phases={buildTestPhases()} />,
         buildWrapper([
@@ -275,16 +265,39 @@ describe('PIPELINE_ENTITY_CONFIG: Run trigger action', () => {
           getIconProviderWrapper(),
           getInterpolationProviderWrapper(),
           getRouterWrapper({ location: '/ma-dev-test/train/pipelines' }),
-          getServiceProviderWrapper({ request: mockRequest }),
+          getServiceProviderWrapper({
+            request: createQueryMockRouter({
+              ListPipeline: { pipelineList: { items } },
+              ...extraResponses,
+            }),
+          }),
           getSnackbarProviderWrapper(),
         ])
       );
+    }
+
+    // `ListPipeline` rows carry `spec.manifest` just like a `GetPipeline` response, so the
+    // disabled rule evaluates against real trigger data in the list view too.
+    it('is disabled with an explanatory tooltip when the row declares a manifest with no triggers', async () => {
+      const user = userEvent.setup();
+      renderList([
+        { ...buildPipeline(), spec: { ...buildPipeline().spec, manifest: { triggerMap: {} } } },
+      ]);
 
       await user.click(await screen.findByRole('button', { name: 'Actions' }));
-      expect(await screen.findByRole('option', { name: 'Run trigger' })).not.toHaveAttribute(
-        'aria-disabled',
-        'true'
-      );
+      await user.hover(await screen.findByRole('option', { name: 'Run trigger' }));
+      expect(await screen.findByText('No triggers defined for this pipeline')).toBeInTheDocument();
+    });
+
+    // A row without a manifest means "unknown" (a pipeline can be registered without one),
+    // not "no triggers" — fail open and let the dialog explain an empty trigger list.
+    it('stays enabled when the row carries no manifest', async () => {
+      const user = userEvent.setup();
+      renderList([buildPipeline()], { GetPipeline: { pipeline: buildPipeline() } });
+
+      await user.click(await screen.findByRole('button', { name: 'Actions' }));
+      await user.click(await screen.findByRole('option', { name: 'Run trigger' }));
+      expect(await screen.findByRole('dialog', { name: 'Run trigger' })).toBeInTheDocument();
     });
   });
 });

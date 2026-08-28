@@ -11,8 +11,8 @@ export interface Pipeline {
       name: string;
     };
     /**
-     * Only present on a `GetPipeline` response — list rows carry no manifest, so the
-     * scheduling form has to fetch the pipeline before it can offer any triggers.
+     * Returned by both `GetPipeline` and `ListPipeline`; optional because a pipeline can be
+     * registered without a manifest.
      */
     manifest?: {
       /** Named triggers declared for this pipeline, keyed by trigger name. */

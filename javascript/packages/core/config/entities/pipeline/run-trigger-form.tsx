@@ -17,9 +17,10 @@ import type { Pipeline, RunTriggerFormValues } from './types';
  * Runs a pipeline from one of the triggers declared in its manifest — either on the
  * trigger's own schedule, or as a one-off backfill over a chosen time window.
  *
- * The trigger list is not part of the row data the action was opened from — only a
- * `GetPipeline` response carries `spec.manifest` — so the dropdown is populated from a
- * fetch made when the dialog opens.
+ * The dropdown is populated from a `GetPipeline` fetch made when the dialog opens, rather
+ * than from the record the action was opened with: the whole trigger definition is copied
+ * into the created TriggerRun, so it should come from the pipeline's current manifest, not
+ * from a row that may have been sitting in a stale list.
  */
 export const RunTriggerForm = ({ record, onClose }: ActionComponentProps<Pipeline>) => {
   const { projectId } = useStudioParams('base');
@@ -105,8 +106,10 @@ export const RunTriggerForm = ({ record, onClose }: ActionComponentProps<Pipelin
 
 /**
  * Names the created TriggerRun after the type of run it represents, so it's identifiable in
- * the "Triggered by" column: a backfill takes priority over the trigger's own schedule type,
- * since a backfill run of a cron trigger is still a backfill, not a cron run.
+ * the "Triggered by" column. The prefix mirrors how the reconciler will actually classify
+ * the run (`GetTriggerType` in go/components/triggerrun/util.go, same priority order): a
+ * batch rerun stays a batch rerun even with a backfill window set, while a backfill window
+ * on a cron or interval trigger makes the run a backfill.
  */
 function buildTriggerRunName(trigger: ManifestTrigger, isBackfill: boolean | undefined): string {
   const typePrefix = resolveTriggerRunTypePrefix(trigger, isBackfill);
@@ -117,15 +120,9 @@ function resolveTriggerRunTypePrefix(
   trigger: ManifestTrigger,
   isBackfill: boolean | undefined
 ): string {
+  if (trigger.triggerType?.case === 'batchRerun') return 'batch-rerun';
   if (isBackfill) return 'backfill';
-  switch (trigger.triggerType?.case) {
-    case 'batchRerun':
-      return 'batch-rerun';
-    case 'intervalSchedule':
-      return 'interval';
-    default:
-      return 'cron';
-  }
+  return trigger.triggerType?.case === 'intervalSchedule' ? 'interval' : 'cron';
 }
 
 function buildTriggerOverride(

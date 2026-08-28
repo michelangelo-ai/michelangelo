@@ -9,9 +9,10 @@ import type { PhaseEntityConfig } from '#core/types/common/studio-types';
 import type { Pipeline } from './types';
 
 /**
- * `spec.manifest` is only present on a `GetPipeline` response — list rows carry no manifest
- * (see run-trigger-form.tsx) — so an absent manifest means "unknown", not "no triggers".
- * Only disable once the manifest has actually loaded and it declares none.
+ * Both `GetPipeline` and `ListPipeline` responses carry `spec.manifest`, so this evaluates
+ * against real data in the list view and on the detail page alike. A record without a
+ * manifest (still loading, or a pipeline registered without one) means "unknown", not
+ * "no triggers" — fail open and let the dialog explain an empty trigger list.
  */
 const hasNoTriggers = (record: unknown): boolean => {
   // cast: record is unknown from the action predicate context; always Pipeline in this entity

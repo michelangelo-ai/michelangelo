@@ -26,8 +26,10 @@ describe('RunTriggerForm', () => {
   }
 
   /**
-   * Only `GetPipeline` carries `spec.manifest`, so this response is the sole source of the
-   * dropdown's options — the record the action opens with has no triggers on it.
+   * The form populates the dropdown from a fresh `GetPipeline` fetch rather than from the
+   * record it opened with (see run-trigger-form.tsx), so this response — not the record —
+   * is the source of the options. The record below deliberately carries no manifest to pin
+   * that: options appearing at all proves they came from the fetch.
    */
   function buildPipelineResponse(triggerMap: Record<string, unknown>) {
     return {

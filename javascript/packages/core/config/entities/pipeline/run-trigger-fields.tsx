@@ -14,8 +14,10 @@ import type { ManifestTrigger } from '#core/config/entities/trigger/types';
  * split out so those reads don't force the whole dialog (including the async trigger fetch)
  * to re-render on every keystroke.
  *
- * `autoFlip` is shown but always disabled — that feature hasn't launched yet — so the form
- * always sends `autoFlip: false` (see run-trigger-form.tsx) regardless of the selected radio.
+ * `autoFlip` is shown but disabled — that feature hasn't launched yet. The submit handler
+ * sends the field's value (see run-trigger-form.tsx), which stays at its initial `false`
+ * because the disabled radio can't be changed; enabling the radio is all it takes to make
+ * the choice real once the feature ships.
  */
 export function RunTriggerFields({ triggerMap }: { triggerMap: Record<string, ManifestTrigger> }) {
   const { input: sourceTriggerNameField } = useField<string>('sourceTriggerName');
