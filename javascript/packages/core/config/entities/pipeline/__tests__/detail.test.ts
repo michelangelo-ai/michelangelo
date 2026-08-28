@@ -1,18 +1,22 @@
 import { PIPELINE_DETAIL_CONFIG } from '../detail';
 
+import type { TableDetailPageConfig } from '#core/components/views/detail-view/types/detail-view-schema-types';
+
 describe('PIPELINE_DETAIL_CONFIG', () => {
-  const runsPage = PIPELINE_DETAIL_CONFIG.pages?.find((p) => p.id === 'runs');
+  const runsPage = PIPELINE_DETAIL_CONFIG.pages?.find(
+    (p): p is TableDetailPageConfig => p.id === 'runs' && p.type === 'table'
+  );
 
   it('has a Runs page', () => {
     expect(runsPage).toBeDefined();
   });
 
   it('queries the pipelineRun service', () => {
-    expect(runsPage?.queryConfig?.service).toBe('pipelineRun');
+    expect(runsPage?.queryConfig.service).toBe('pipelineRun');
   });
 
   it('filters by fieldSelector on pipeline_name, not a labelSelector', () => {
-    const listOptions = (runsPage?.queryConfig?.serviceOptions as Record<string, unknown>)
+    const listOptions = (runsPage?.queryConfig.serviceOptions as Record<string, unknown>)
       ?.listOptions as Record<string, string> | undefined;
 
     expect(listOptions).toBeDefined();
