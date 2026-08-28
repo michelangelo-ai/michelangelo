@@ -98,6 +98,12 @@ class ModelPluginConfig:
             field takes precedence over the ``registry_client=`` constructor
             argument. Use an empty list (the default) to rely on the
             injected ``registry_client`` instead.
+        tar_deployable_package: When ``True`` and the deployable artifact is
+            a directory, it's archived into a single tar file
+            (``.../deployable/model.tar``) before the final upload. Default
+            ``False`` uploads it as loose files under a directory prefix
+            (``.../deployable/...``), preserving its internal structure. Has
+            no effect when the deployable artifact is already a single file.
 
             .. warning::
                 This field holds live Python objects and is **not
@@ -135,6 +141,7 @@ class ModelPluginConfig:
     run_id: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
     registry_clients: list[ModelRegistryClient] = field(default_factory=list)
+    tar_deployable_package: bool = False
 
 
 @dataclass

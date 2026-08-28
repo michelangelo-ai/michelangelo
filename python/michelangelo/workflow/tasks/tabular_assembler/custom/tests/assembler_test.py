@@ -206,35 +206,6 @@ class CustomAssemblerTest(unittest.TestCase):
 
     @patch(f"{_ASSEMBLER_MODULE}.CustomTritonPackager.create_model_package")
     @patch(f"{_ASSEMBLER_MODULE}.CustomTritonPackager.create_raw_model_package")
-    def test_tar_deployable_package_uploads_single_tar(
-        self, mock_create_raw, mock_create_model
-    ):
-        """tar_deployable_package=True uploads one tar, not loose files."""
-        mock_create_model.side_effect = _fake_create_package("deployable")
-        mock_create_raw.side_effect = _fake_create_package("raw")
-
-        config = TabularAssemblerConfig(
-            custom=CustomAssemblerConfig(tar_deployable_package=True)
-        )
-        raw_model = ModelArtifact(
-            path=self._upload_raw_model_source(),
-            metadata=ModelMetadata(
-                model_class=CUSTOM_MODEL_CLASS_PATH,
-                _schema=BytesIO(pickle.dumps(_make_schema())),
-                _sample_data=BytesIO(pickle.dumps([{"input": np.array([[1.0, 2.0]])}])),
-            ),
-        )
-
-        assembled = custom_assembler(
-            config, raw_model, storage_backend=self.storage_backend
-        )
-
-        self.assertTrue(os.path.isfile(assembled.deployable_model.path))
-        self.assertTrue(assembled.deployable_model.path.endswith("model.tar"))
-        self.assertTrue(os.path.isdir(assembled.raw_model.path))
-
-    @patch(f"{_ASSEMBLER_MODULE}.CustomTritonPackager.create_model_package")
-    @patch(f"{_ASSEMBLER_MODULE}.CustomTritonPackager.create_raw_model_package")
     def test_downloads_raw_model_locally_before_packaging(
         self, mock_create_raw, mock_create_model
     ):

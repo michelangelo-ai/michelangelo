@@ -90,6 +90,7 @@ from __future__ import annotations
 
 import logging
 import os
+import shutil
 import tempfile
 import uuid
 from typing import TYPE_CHECKING, Any, TypedDict
@@ -455,11 +456,18 @@ class ModelPusherPlugin(PusherPluginBase):
                 deployable_local_path = self._ensure_local(
                     self._artifact.deployable_model.path, tmp_root, "deployable"
                 )
-                # The assembler may hand off the deployable package either as
-                # a single archive or as loose files (see
-                # TorchAssemblerConfig.tar_deployable_package) -- key
-                # accordingly, matching the same file-vs-directory handling
-                # already used for the raw model.
+                if self._config.tar_deployable_package and os.path.isdir(
+                    deployable_local_path
+                ):
+                    deployable_local_path = shutil.make_archive(
+                        os.path.join(tmp_root, "deployable_package"),
+                        "tar",
+                        deployable_local_path,
+                    )
+                # A directory deployable artifact is keyed like the raw
+                # model (loose files under a prefix); a file (already a
+                # single archive, or just tarred above) gets a model.tar
+                # leaf name.
                 deployable_key = f"models/{model_name}/deployable"
                 if os.path.isfile(deployable_local_path):
                     deployable_key = f"{deployable_key}/model.tar"

@@ -734,11 +734,12 @@ class TestModelPusherPluginStorageKey(TestCase):
     def test_deployable_key_has_no_model_tar_suffix_for_directory_artifact(self):
         """A deployable artifact that's a directory gets no /model.tar suffix.
 
-        The assembler can hand off the deployable package as loose files
-        (the default) instead of a single tar (see
-        TorchAssemblerConfig.tar_deployable_package) -- the pusher must
-        key it like the raw model in that case, not assume it's always a
-        tar.
+        The assembler always hands off the deployable package as loose
+        files (tarring, when requested via
+        ModelPluginConfig.tar_deployable_package, is the pusher's job) --
+        with tar_deployable_package left at its default (False) here, a
+        directory artifact must be keyed like the raw model, not assumed
+        to always be a tar.
         """
         backend = _mock_backend()
         with tempfile.TemporaryDirectory() as d:
@@ -753,6 +754,55 @@ class TestModelPusherPluginStorageKey(TestCase):
             ).execute()
         dep_key = backend.upload.call_args_list[1][0][1]
         self.assertEqual(dep_key, "models/m/deployable")
+
+    def test_tar_deployable_package_archives_directory_before_upload(self):
+        """tar_deployable_package=True archives a directory deployable artifact.
+
+        Tarring a directory deployable artifact (rather than uploading it
+        as loose files) is the pusher's decision, driven by
+        ModelPluginConfig.tar_deployable_package -- the assembler always
+        hands off loose files regardless.
+        """
+        backend = _mock_backend()
+        upload_time_is_file: list[bool] = []
+
+        def _fake_upload(local_path, destination_key):
+            upload_time_is_file.append(os.path.isfile(local_path))
+            return f"s3://uploaded/{destination_key}"
+
+        backend.upload.side_effect = _fake_upload
+
+        with tempfile.TemporaryDirectory() as d:
+            with open(os.path.join(d, "config.pbtxt"), "w") as f:
+                f.write('name: "m"')
+            ModelPusherPlugin(
+                config=ModelPluginConfig(model_name="m", tar_deployable_package=True),
+                artifact=AssembledModel(
+                    raw_model=ModelArtifact(path="/tmp/model.ubj"),
+                    deployable_model=ModelArtifact(path=d),
+                ),
+                storage_backend=backend,
+                registry_client=_mock_registry(),
+            ).execute()
+        dep_key = backend.upload.call_args_list[1][0][1]
+        self.assertEqual(upload_time_is_file, [False, True])
+        self.assertEqual(dep_key, "models/m/deployable/model.tar")
+
+    def test_tar_deployable_package_has_no_effect_on_file_artifact(self):
+        """tar_deployable_package=True is a no-op when already a single file."""
+        backend = _mock_backend()
+        with tempfile.NamedTemporaryFile() as f:
+            ModelPusherPlugin(
+                config=ModelPluginConfig(model_name="m", tar_deployable_package=True),
+                artifact=AssembledModel(
+                    raw_model=ModelArtifact(path="/tmp/model.ubj"),
+                    deployable_model=ModelArtifact(path=f.name),
+                ),
+                storage_backend=backend,
+                registry_client=_mock_registry(),
+            ).execute()
+        dep_key = backend.upload.call_args_list[1][0][1]
+        self.assertEqual(dep_key, "models/m/deployable/model.tar")
 
     def test_raw_key_unaffected_by_source_path_shape(self):
         """A source path ending in a category-like segment doesn't alter the key.

@@ -12,7 +12,6 @@ from __future__ import annotations
 import io
 import os
 import pickle
-import shutil
 import tempfile
 import uuid
 from typing import TYPE_CHECKING
@@ -90,9 +89,6 @@ def torch_assembler(
     backend = config.torch.backend if config and config.torch else None
     include_import_prefixes = (
         config.torch.include_import_prefixes if config and config.torch else None
-    )
-    tar_deployable_package = (
-        config.torch.tar_deployable_package if config and config.torch else False
     )
     model_class = raw_model.metadata.model_class
     hyperparameters = raw_model.metadata.hyperparameters or {}
@@ -228,19 +224,9 @@ def torch_assembler(
         )
 
         upload_prefix = f"tabular_assembler/{uuid.uuid4().hex}"
-        if tar_deployable_package:
-            # A single tar -- a self-contained serving bundle -- rather than
-            # the default loose files, only when explicitly requested.
-            deployable_tar_path = shutil.make_archive(
-                os.path.join(temp_dir, "deployable_package"), "tar", model_package_path
-            )
-            deployable_uri = storage_backend.upload(
-                deployable_tar_path, f"{upload_prefix}/deployable/model.tar"
-            )
-        else:
-            deployable_uri = storage_backend.upload(
-                model_package_path, f"{upload_prefix}/deployable"
-            )
+        deployable_uri = storage_backend.upload(
+            model_package_path, f"{upload_prefix}/deployable"
+        )
         raw_uri = storage_backend.upload(raw_model_package_path, f"{upload_prefix}/raw")
 
     e2e_schema = fuse_e2e_schema(

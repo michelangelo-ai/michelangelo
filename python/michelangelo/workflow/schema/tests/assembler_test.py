@@ -49,7 +49,6 @@ class TestCustomAssemblerConfig(TestCase):
                 "custom_batch_processing": True,
                 "additional_import_prefixes": None,
                 "include_import_prefixes": None,
-                "tar_deployable_package": False,
             },
         )
 
@@ -79,11 +78,7 @@ class TestTorchAssemblerConfig(TestCase):
         cfg = TorchAssemblerConfig(backend="pytorch")
         self.assertEqual(
             asdict(cfg),
-            {
-                "backend": "pytorch",
-                "include_import_prefixes": None,
-                "tar_deployable_package": False,
-            },
+            {"backend": "pytorch", "include_import_prefixes": None},
         )
 
 
@@ -139,7 +134,6 @@ class TestTabularAssemblerConfig(TestCase):
                     "custom_batch_processing": True,
                     "additional_import_prefixes": None,
                     "include_import_prefixes": None,
-                    "tar_deployable_package": False,
                 },
                 "torch": None,
             },

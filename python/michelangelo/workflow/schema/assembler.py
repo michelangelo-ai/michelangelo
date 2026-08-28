@@ -41,13 +41,6 @@ class CustomAssemblerConfig:
             actually matter for the model (e.g. ``["mypkg.models"]`` if the
             model class and its real dependencies all live under that one
             package).
-        tar_deployable_package: When ``True``, the deployable package is
-            archived into a single tar file before upload (one storage
-            object, e.g. ``.../deployable/model.tar``) instead of the
-            default: uploaded as loose files under a directory prefix (e.g.
-            ``.../deployable/model/1/model.pt``), preserving its internal
-            structure. Enable this only if whatever consumes the deployable
-            artifact expects a single downloadable archive.
 
     Example:
         >>> CustomAssemblerConfig(custom_batch_processing=True).custom_batch_processing
@@ -57,7 +50,6 @@ class CustomAssemblerConfig:
     custom_batch_processing: bool | None = None
     additional_import_prefixes: list[str] | None = None
     include_import_prefixes: list[str] | None = None
-    tar_deployable_package: bool = False
 
 
 @dataclass
@@ -79,13 +71,6 @@ class TorchAssemblerConfig:
             importable module graph — set this to scope the walk to the
             module prefixes that actually matter for the model. Mirrors
             ``CustomAssemblerConfig.include_import_prefixes``.
-        tar_deployable_package: When ``True``, the deployable package is
-            archived into a single tar file before upload (one storage
-            object, e.g. ``.../deployable/model.tar``) instead of the
-            default: uploaded as loose files under a directory prefix (e.g.
-            ``.../deployable/model/1/model.pt``), preserving its internal
-            structure. Enable this only if whatever consumes the deployable
-            artifact expects a single downloadable archive.
 
     Example:
         >>> TorchAssemblerConfig(backend="onnxruntime")
@@ -94,7 +79,6 @@ class TorchAssemblerConfig:
 
     backend: str | None = None
     include_import_prefixes: list[str] | None = None
-    tar_deployable_package: bool = False
 
 
 @dataclass
