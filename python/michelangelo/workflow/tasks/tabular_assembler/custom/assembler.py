@@ -106,8 +106,8 @@ def custom_assembler(
         if config.custom and config.custom.include_import_prefixes is not None
         else None
     )
-    archive_deployable_package = (
-        config.custom.archive_deployable_package if config.custom else False
+    tar_deployable_package = (
+        config.custom.tar_deployable_package if config.custom else False
     )
     packager = CustomTritonPackager(custom_batch_processing=custom_batch_processing)
     model_class = resolve_model_class(
@@ -165,7 +165,7 @@ def custom_assembler(
         )
 
         upload_prefix = f"tabular_assembler/{uuid.uuid4().hex}"
-        if archive_deployable_package:
+        if tar_deployable_package:
             # A single tar -- a self-contained serving bundle -- rather than
             # the default loose files, only when explicitly requested.
             deployable_tar_path = shutil.make_archive(

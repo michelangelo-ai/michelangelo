@@ -736,7 +736,7 @@ class TestModelPusherPluginStorageKey(TestCase):
 
         The assembler can hand off the deployable package as loose files
         (the default) instead of a single tar (see
-        TorchAssemblerConfig.archive_deployable_package) -- the pusher must
+        TorchAssemblerConfig.tar_deployable_package) -- the pusher must
         key it like the raw model in that case, not assume it's always a
         tar.
         """

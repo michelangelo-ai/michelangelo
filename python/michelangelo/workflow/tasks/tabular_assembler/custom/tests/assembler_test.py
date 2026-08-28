@@ -206,15 +206,15 @@ class CustomAssemblerTest(unittest.TestCase):
 
     @patch(f"{_ASSEMBLER_MODULE}.CustomTritonPackager.create_model_package")
     @patch(f"{_ASSEMBLER_MODULE}.CustomTritonPackager.create_raw_model_package")
-    def test_archive_deployable_package_uploads_single_tar(
+    def test_tar_deployable_package_uploads_single_tar(
         self, mock_create_raw, mock_create_model
     ):
-        """archive_deployable_package=True uploads one tar, not loose files."""
+        """tar_deployable_package=True uploads one tar, not loose files."""
         mock_create_model.side_effect = _fake_create_package("deployable")
         mock_create_raw.side_effect = _fake_create_package("raw")
 
         config = TabularAssemblerConfig(
-            custom=CustomAssemblerConfig(archive_deployable_package=True)
+            custom=CustomAssemblerConfig(tar_deployable_package=True)
         )
         raw_model = ModelArtifact(
             path=self._upload_raw_model_source(),

@@ -91,8 +91,8 @@ def torch_assembler(
     include_import_prefixes = (
         config.torch.include_import_prefixes if config and config.torch else None
     )
-    archive_deployable_package = (
-        config.torch.archive_deployable_package if config and config.torch else False
+    tar_deployable_package = (
+        config.torch.tar_deployable_package if config and config.torch else False
     )
     model_class = raw_model.metadata.model_class
     hyperparameters = raw_model.metadata.hyperparameters or {}
@@ -228,7 +228,7 @@ def torch_assembler(
         )
 
         upload_prefix = f"tabular_assembler/{uuid.uuid4().hex}"
-        if archive_deployable_package:
+        if tar_deployable_package:
             # A single tar -- a self-contained serving bundle -- rather than
             # the default loose files, only when explicitly requested.
             deployable_tar_path = shutil.make_archive(

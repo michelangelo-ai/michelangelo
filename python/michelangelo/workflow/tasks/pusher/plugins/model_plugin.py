@@ -457,7 +457,7 @@ class ModelPusherPlugin(PusherPluginBase):
                 )
                 # The assembler may hand off the deployable package either as
                 # a single archive or as loose files (see
-                # TorchAssemblerConfig.archive_deployable_package) -- key
+                # TorchAssemblerConfig.tar_deployable_package) -- key
                 # accordingly, matching the same file-vs-directory handling
                 # already used for the raw model.
                 deployable_key = f"models/{model_name}/deployable"

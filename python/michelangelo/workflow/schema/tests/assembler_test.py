@@ -49,7 +49,7 @@ class TestCustomAssemblerConfig(TestCase):
                 "custom_batch_processing": True,
                 "additional_import_prefixes": None,
                 "include_import_prefixes": None,
-                "archive_deployable_package": False,
+                "tar_deployable_package": False,
             },
         )
 
@@ -82,7 +82,7 @@ class TestTorchAssemblerConfig(TestCase):
             {
                 "backend": "pytorch",
                 "include_import_prefixes": None,
-                "archive_deployable_package": False,
+                "tar_deployable_package": False,
             },
         )
 
@@ -139,7 +139,7 @@ class TestTabularAssemblerConfig(TestCase):
                     "custom_batch_processing": True,
                     "additional_import_prefixes": None,
                     "include_import_prefixes": None,
-                    "archive_deployable_package": False,
+                    "tar_deployable_package": False,
                 },
                 "torch": None,
             },
