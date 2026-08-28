@@ -16,7 +16,7 @@ export const PIPELINE_DETAIL_CONFIG: DetailViewConfig = {
   pages: [
     {
       id: 'runs',
-      label: 'Pipeline Runs',
+      label: 'Runs',
       type: 'table',
       queryConfig: {
         endpoint: 'list',
