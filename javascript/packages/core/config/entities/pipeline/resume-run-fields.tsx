@@ -165,10 +165,11 @@ export const ResumeRunFields = ({ pipelineName }: { pipelineName: string }) => {
  * The pipeline filter is repeated here even though {@link buildPipelineCriterion} already
  * asks for it server-side: `ListOptionsExt` is honored only when metadata storage is
  * enabled and is otherwise silently ignored, so relying on it alone would widen the picker
- * to other pipelines' runs rather than narrowing it. (The label selector the pipeline
- * detail page uses, `pipeline.michelangelo/name`, is written by nothing in the platform,
- * so it is not an alternative.) This pass also does the terminal-state gating, newest-first
- * ordering, and cap, none of which the criterion expresses.
+ * to other pipelines' runs rather than narrowing it. (The pipeline detail page filters
+ * via `fieldSelector` on `pipeline_name`, which works reliably but uses a different
+ * mechanism than the criterion here, and neither replaces this client-side pass.) This
+ * pass also does the terminal-state gating, newest-first ordering, and cap, none of
+ * which the criterion expresses.
  */
 function buildSourceRunOptions(
   items: PipelineRunSummary[] | undefined,

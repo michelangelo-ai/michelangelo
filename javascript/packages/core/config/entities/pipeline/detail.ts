@@ -23,8 +23,11 @@ export const PIPELINE_DETAIL_CONFIG: DetailViewConfig = {
         service: 'pipelineRun',
         serviceOptions: {
           listOptions: {
-            // Filter runs to only those belonging to the current pipeline
-            labelSelector: 'pipeline.michelangelo/name=${page.metadata.name}',
+            // Filter runs to only those belonging to the current pipeline.
+            // pipeline_name is the indexed column the metadata store generates
+            // from the spec.pipeline ResourceIdentifier on PipelineRun
+            // (proto index key "pipeline", sub-key "name").
+            fieldSelector: 'pipeline_name=${page.metadata.name}',
           },
         },
       },
