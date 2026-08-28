@@ -7,6 +7,8 @@ Support workflow parameters via dict or Starlark-compatible parameters.
 
 import michelangelo.uniflow.core as uniflow
 from examples.bert_cola.data import load_data
+from examples.bert_cola.package import package_model
+from examples.bert_cola.push import push_step
 from examples.bert_cola.train import train
 from michelangelo.uniflow.plugins.ray import UF_PLUGIN_RAY_USE_FSSPEC
 
@@ -24,12 +26,25 @@ def train_workflow(path="nyu-mll/glue", name="cola", tokenizer_max_length=128):
         name=name,
         tokenizer_max_length=tokenizer_max_length,
     )
-    result = train(
+    train_result, output_dir = train(
         train_data,
         validation_data,
         test_data,
     )
-    print("result:", result)
+    print("train_result:", train_result)
+
+    assembled = package_model(
+        output_dir,
+        # Must match train.py's hardcoded lr/eps -- train() doesn't return
+        # them, since they're training config, not a training result.
+        lr=2e-5,
+        eps=1e-8,
+        tokenizer_max_length=tokenizer_max_length,
+    )
+    print("assembled model:", assembled)
+
+    push_results = push_step(assembled)
+    print("push results:", push_results)
     print("ok.")
 
 

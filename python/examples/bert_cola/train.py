@@ -58,7 +58,10 @@ def train(
         test_data: Ray Dataset containing test examples.
 
     Returns:
-        Dictionary containing training metrics and model save path.
+        Tuple of ``(train_result, output_dir)``: the HuggingFace
+        ``TrainOutput`` from ``trainer.train()``, and the local directory the
+        fine-tuned model and tokenizer were saved to via
+        ``trainer.save_model()``.
     """
     log.info("Starting training...")
 
@@ -104,13 +107,9 @@ def train(
     train_result = trainer.train()
     trainer.save_model(output_dir)
 
-    log.info("Training complete. Best model saved.")
+    log.info("Training complete. Best model saved to %s.", output_dir)
 
-    # Get the best checkpoint path
-    best_checkpoint = training_args.output_dir + "/checkpoint-best"
-    log.info(f"Best checkpoint path: {best_checkpoint}")
-
-    return train_result, best_checkpoint
+    return train_result, output_dir
 
 
 def _compute_metrics(eval_pred):
