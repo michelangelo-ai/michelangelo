@@ -12,6 +12,7 @@ import (
 	gomock "github.com/golang/mock/gomock"
 	v2 "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	dynamic "k8s.io/client-go/dynamic"
+	rest "k8s.io/client-go/rest"
 	client "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -81,4 +82,19 @@ func (m *MockClientFactory) GetHTTPClient(ctx context.Context, cluster *v2.Clust
 func (mr *MockClientFactoryMockRecorder) GetHTTPClient(ctx, cluster interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHTTPClient", reflect.TypeOf((*MockClientFactory)(nil).GetHTTPClient), ctx, cluster)
+}
+
+// GetRESTConfig mocks base method.
+func (m *MockClientFactory) GetRESTConfig(ctx context.Context, cluster *v2.ClusterTarget) (*rest.Config, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetRESTConfig", ctx, cluster)
+	ret0, _ := ret[0].(*rest.Config)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetRESTConfig indicates an expected call of GetRESTConfig.
+func (mr *MockClientFactoryMockRecorder) GetRESTConfig(ctx, cluster interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRESTConfig", reflect.TypeOf((*MockClientFactory)(nil).GetRESTConfig), ctx, cluster)
 }

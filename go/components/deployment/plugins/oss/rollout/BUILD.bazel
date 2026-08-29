@@ -13,6 +13,7 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//go/api:go_default_library",
+        "//go/base/blobstore:go_default_library",
         "//go/base/conditions/interfaces:go_default_library",
         "//go/base/conditions/utils:go_default_library",
         "//go/components/common/routing:go_default_library",

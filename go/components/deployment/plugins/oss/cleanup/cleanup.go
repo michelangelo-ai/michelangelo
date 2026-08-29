@@ -38,7 +38,7 @@ func (a *CleanupActor) GetType() string {
 func (a *CleanupActor) Retrieve(ctx context.Context, deployment *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
 	// check if model still exists in inference server
 	if exists, err := common.CheckModelExists(ctx, a.Logger, a.ModelConfigProvider, a.Client, deployment.Status.GetCurrentRevision().GetName(), deployment.Spec.GetInferenceServer().GetName(), deployment.GetNamespace()); err != nil {
-		return conditionUtils.GenerateFalseCondition(condition, "UnableToCheckModelExists", fmt.Sprintf("Unable to check if model %s exists in Inference Server: %v", deployment.Status.CurrentRevision.Name, err)), nil
+		return conditionUtils.GenerateFalseCondition(condition, "UnableToCheckModelExists", fmt.Sprintf("Unable to check if model %s exists in Inference Server: %v", deployment.Status.GetCurrentRevision().GetName(), err)), nil
 	} else if exists {
 		return conditionUtils.GenerateFalseCondition(condition, "ModelStillExistsInInferenceServer", fmt.Sprintf("Model %s still exists in Inference Server", deployment.Status.CurrentRevision.Name)), nil
 	}
@@ -87,8 +87,8 @@ func (a *CleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, condi
 
 	a.Logger.Info("Cleaning up model artifacts and ConfigMaps", zap.String("deployment", resource.Name))
 
-	currentModel := resource.Status.CurrentRevision.Name
-	isName := resource.Spec.GetInferenceServer().Name
+	currentModel := resource.Status.GetCurrentRevision().GetName()
+	isName := resource.Spec.GetInferenceServer().GetName()
 
 	a.Logger.Info("Starting model cleanup",
 		zap.String("current_model", currentModel),

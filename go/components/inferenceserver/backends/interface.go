@@ -8,6 +8,7 @@ import (
 
 	"go.uber.org/zap"
 
+	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
@@ -32,4 +33,9 @@ type Backend interface {
 	IsHealthy(ctx context.Context, logger *zap.Logger, kubeClient client.Client, inferenceServerName string, namespace string) (bool, error)
 	// CheckModelStatus reports whether a model is loaded and ready for inference.
 	CheckModelStatus(ctx context.Context, logger *zap.Logger, kubeClient client.Client, httpClient *http.Client, apiServerURL string, inferenceServerName string, namespace string, modelName string) (bool, error)
+	// LoadModel stages a packaged model into the inference server's model repository and
+	// triggers the server to load it. modelPackage is the raw bytes of a tar archive whose
+	// members are already laid out as the backend's model-repository entry (e.g. for Triton:
+	// config.pbtxt, a numbered version directory, etc.) for the model named modelName.
+	LoadModel(ctx context.Context, logger *zap.Logger, kubeClient client.Client, restConfig *rest.Config, httpClient *http.Client, apiServerURL string, inferenceServerName string, namespace string, modelName string, modelPackage []byte) error
 }

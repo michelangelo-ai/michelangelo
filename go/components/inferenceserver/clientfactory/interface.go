@@ -9,6 +9,7 @@ import (
 	"net/http"
 
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
@@ -28,4 +29,8 @@ type ClientFactory interface {
 	// GetDynamicClient returns a dynamic client for the given cluster. Use this for
 	// resources addressed by GVR rather than typed Go structs (e.g., Gateway API HTTPRoute).
 	GetDynamicClient(ctx context.Context, cluster *v2pb.ClusterTarget) (dynamic.Interface, error)
+
+	// GetRESTConfig returns a *rest.Config for the given cluster, for client-go APIs that
+	// need a REST config directly (e.g. pod exec via remotecommand).
+	GetRESTConfig(ctx context.Context, cluster *v2pb.ClusterTarget) (*rest.Config, error)
 }
