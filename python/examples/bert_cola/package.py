@@ -43,11 +43,10 @@ _TOKENIZER_NAME = "bert-base-cased"
 
 
 def _resolve_storage_backend(tmp_prefix: str):
-    """Select MinIO (remote) or a local temp directory.
+    """Select a storage backend based on environment configuration.
 
-    Mirrors ``examples.pipelines.california_housing_xgb.push.push_step``'s
-    backend selection: ``AWS_ENDPOINT_URL`` set -> MinIO/S3-compatible remote
-    storage; unset -> a local temp directory (development and CI).
+    ``AWS_ENDPOINT_URL`` set -> MinIO/S3-compatible remote storage; unset ->
+    a local temp directory (development and CI).
     """
     s3_endpoint = os.environ.get("AWS_ENDPOINT_URL", "")
     if s3_endpoint:

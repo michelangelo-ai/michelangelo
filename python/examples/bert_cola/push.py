@@ -3,8 +3,7 @@
 Registers the assembled model (produced by ``package_model``) in a model
 registry via ``ModelPusherPlugin``. Constructs its own storage backend and
 registry client, independently of ``package.py`` -- uniflow tasks can't
-share live objects across the workflow boundary (same reasoning documented
-in ``examples.pipelines.california_housing_xgb.push.push_step``).
+share live objects across the workflow boundary.
 """
 
 from __future__ import annotations
@@ -24,8 +23,7 @@ from michelangelo.workflow.tasks.pusher import push
 
 # Kept top-level (not TYPE_CHECKING) despite only being used in annotations --
 # uniflow's @uniflow.task needs these resolvable as real objects at the
-# workflow boundary, matching
-# examples.pipelines.california_housing_xgb.push.push_step's same choice.
+# workflow boundary.
 from michelangelo.workflow.variables.types import (  # noqa: TC001
     AssembledModel,
     PusherResult,
@@ -131,6 +129,7 @@ def push_step(assembled: AssembledModel) -> list[PusherResult]:
                 model_plugin=ModelPluginConfig(
                     description="BERT fine-tuned for CoLA linguistic acceptability",
                     labels={"framework": "transformers"},
+                    tar_deployable_package=True,
                 ),
             ),
         ]

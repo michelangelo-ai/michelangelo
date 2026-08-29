@@ -35,8 +35,7 @@ def train_workflow(path="nyu-mll/glue", name="cola", tokenizer_max_length=128):
 
     assembled = package_model(
         output_dir,
-        # Must match train.py's hardcoded lr/eps -- train() doesn't return
-        # them, since they're training config, not a training result.
+        # Must match train.py's hardcoded lr/eps.
         lr=2e-5,
         eps=1e-8,
         tokenizer_max_length=tokenizer_max_length,

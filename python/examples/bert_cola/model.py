@@ -4,10 +4,9 @@ Wraps a HuggingFace ``AutoModelForSequenceClassification`` + tokenizer as a
 ``michelangelo.lib.model_manager.interface.custom_model.Model`` so it can be
 packaged via ``CustomTritonPackager``/``custom_assembler``. BERT takes
 multiple named tensor inputs (``input_ids``, ``attention_mask``,
-``token_type_ids``), which isn't a good TorchScript-tracing fit -- the custom
-(Python-backend) path avoids tracing entirely and just calls the HF model
-directly in ``predict()``, mirroring
-``examples.model_manager.simple_custom.model.DummyEchoModel``.
+``token_type_ids``), which isn't a good TorchScript-tracing fit, so this
+avoids tracing entirely and just calls the HF model directly in
+``predict()``.
 """
 
 from __future__ import annotations
@@ -43,12 +42,7 @@ class BertColaModel(Model):
         self._model.eval()
 
     def save(self, path: str) -> None:
-        """Persist the model and tokenizer under ``path`` via HF's own format.
-
-        Uses ``save_pretrained()`` rather than ``torch.save``/pickle, per the
-        ``Model.save()`` contract's guidance to prefer format-specific
-        serialization.
-        """
+        """Persist the model and tokenizer under ``path`` via HF's own format."""
         self._model.save_pretrained(path)
         self._tokenizer.save_pretrained(path)
 
