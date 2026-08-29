@@ -1,0 +1,13 @@
+# Custom Triton serving image for the bert_cola demo.
+#
+# The stock nvcr.io/nvidia/tritonserver image's python backend has no ML
+# framework deps installed, so a custom python-backend model (produced by
+# CustomTritonPackager -- see examples/bert_cola/assembler.py) that imports
+# torch/transformers at load time fails with ModuleNotFoundError. This adds
+# just those two packages on top of the stock image; nothing else changes.
+#
+# Versions match python/pyproject.toml's "example" extra so the serving
+# runtime matches what BertColaModel was trained/tokenized against.
+FROM nvcr.io/nvidia/tritonserver:23.04-py3
+
+RUN pip install --no-cache-dir torch==2.7.0 transformers==4.51.3
