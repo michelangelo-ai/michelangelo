@@ -142,26 +142,33 @@ type StepTimestamp = {
   seconds?: string;
 };
 
-/** The subset of `PipelineRunStepInfo` the resume step picker reads. */
+/** The subset of `PipelineRunStepInfo` the resume step picker and information tab read. */
 export type PipelineRunStepInfo = {
   name?: string;
   displayName?: string;
   state?: number;
   startTime?: StepTimestamp;
   endTime?: StepTimestamp;
+  logUrl?: string;
   subSteps?: PipelineRunStepInfo[];
 };
 
-/** The subset of a PipelineRun the resume fields read from list and get responses. */
+/** The subset of a PipelineRun the resume fields and information tab read from list and get responses. */
 export type PipelineRunSummary = {
   metadata?: {
     name?: string;
     namespace?: string;
     creationTimestamp?: StepTimestamp;
+    labels?: Record<string, string>;
   };
   spec?: {
     pipeline?: {
       name?: string;
+    };
+    resume?: {
+      pipelineRun?: {
+        name?: string;
+      };
     };
   };
   status?: {
