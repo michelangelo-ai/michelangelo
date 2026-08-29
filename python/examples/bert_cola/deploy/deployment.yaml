@@ -1,0 +1,13 @@
+apiVersion: michelangelo.api/v2
+kind: Deployment
+metadata:
+  name: bert-cola-deployment
+  namespace: ma-dev-test
+spec:
+  desiredRevision:
+    name: model-20260829-194020-da8ae7f7
+    namespace: ma-dev-test
+  inferenceServer:
+    name: bert-cola-is
+  strategy:
+    rolling: {}
