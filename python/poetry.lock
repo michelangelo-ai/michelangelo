@@ -3605,7 +3605,7 @@ description = "Lightweight in-process concurrent programming"
 optional = true
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "(extra == \"example\" or extra == \"trainer-mlflow\") and (python_version < \"3.12\" or platform_machine == \"aarch64\" or platform_machine == \"ppc64le\" or platform_machine == \"x86_64\" or platform_machine == \"amd64\" or platform_machine == \"AMD64\" or platform_machine == \"win32\" or platform_machine == \"WIN32\") and (platform_machine == \"x86_64\" or platform_machine == \"amd64\" or platform_machine == \"aarch64\" or platform_machine == \"ppc64le\" or platform_machine == \"AMD64\" or platform_machine == \"win32\" or platform_machine == \"WIN32\") and python_version >= \"3.10\""
+markers = "(platform_machine == \"x86_64\" or platform_machine == \"amd64\" or platform_machine == \"aarch64\" or platform_machine == \"ppc64le\" or platform_machine == \"AMD64\" or platform_machine == \"win32\" or platform_machine == \"WIN32\") and (extra == \"example\" or extra == \"trainer-mlflow\") and python_version >= \"3.10\""
 files = [
     {file = "greenlet-3.5.2-cp310-cp310-macosx_11_0_universal2.whl", hash = "sha256:9df9daae96848508450011d0d86ed7c95f8829a354ce438284a77b24896fd1f8"},
     {file = "greenlet-3.5.2-cp310-cp310-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:01e32e9d2b1714a2b06184cb3071ff2a2fd9bc7d065e39198ab21f7253dad421"},
@@ -4924,7 +4924,7 @@ description = "Bindings for the Low-level Guidance (llguidance) Rust library for
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "extra == \"vllm\" and (platform_machine == \"x86_64\" or platform_machine == \"arm64\" or platform_machine == \"aarch64\") and python_version <= \"3.12\""
+markers = "extra == \"vllm\" and python_version <= \"3.12\" and (platform_machine == \"x86_64\" or platform_machine == \"arm64\" or platform_machine == \"aarch64\")"
 files = [
     {file = "llguidance-0.7.30-cp39-abi3-macosx_10_12_x86_64.whl", hash = "sha256:c80af02c118d2b0526bcecaab389af2ed094537a069b0fc724cd2a2f2ba3990f"},
     {file = "llguidance-0.7.30-cp39-abi3-macosx_11_0_arm64.whl", hash = "sha256:00a256d532911d2cf5ba4ef63e182944e767dd2402f38d63002016bc37755958"},
@@ -5779,7 +5779,7 @@ description = "A framework for machine learning on Apple silicon."
 optional = true
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "platform_system == \"Darwin\" and python_version <= \"3.12\" and extra == \"vllm\" and platform_machine == \"arm64\" and python_version >= \"3.10\""
+markers = "platform_system == \"Darwin\" and platform_machine == \"arm64\" and python_version <= \"3.12\" and extra == \"vllm\" and python_version >= \"3.10\""
 files = [
     {file = "mlx-0.32.0-cp310-cp310-macosx_14_0_arm64.whl", hash = "sha256:c6feb17e32160b70c7634aab925cf3f8c5c7bebbf99f227c48450478e1008af2"},
     {file = "mlx-0.32.0-cp310-cp310-macosx_15_0_arm64.whl", hash = "sha256:73303259f2bda7fb4a0c782a7299e0e28a2890b9b6fbfc4b635fb8032208ec7e"},
@@ -5877,7 +5877,7 @@ description = "A framework for machine learning on Apple silicon."
 optional = true
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "platform_system == \"Darwin\" and python_version <= \"3.12\" and extra == \"vllm\" and platform_machine == \"arm64\" and python_version >= \"3.10\""
+markers = "platform_system == \"Darwin\" and platform_machine == \"arm64\" and python_version <= \"3.12\" and extra == \"vllm\" and python_version >= \"3.10\""
 files = [
     {file = "mlx_metal-0.32.0-py3-none-macosx_14_0_arm64.whl", hash = "sha256:5b64b20ac24b0c401f489de01e8209edc4d372125201f19314e6f39e385322aa"},
     {file = "mlx_metal-0.32.0-py3-none-macosx_15_0_arm64.whl", hash = "sha256:1bd94a1ce5b03a0c898771a3e759f0124300c6ab5155127906a1d50b1f3fcf19"},
@@ -11712,7 +11712,7 @@ description = "Easily download, build, install, upgrade, and uninstall Python pa
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version < \"3.11\" and platform_machine == \"x86_64\" and platform_system == \"Linux\" and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-deepspeed\") or python_version == \"3.9\" and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\") or python_version < \"3.11\" and (extra == \"example\" or extra == \"vllm\") or extra == \"vllm\" and python_version >= \"3.10\" or python_version >= \"3.12\" and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-deepspeed\" or extra == \"trainer-comet\") or python_version >= \"3.10\" and platform_system == \"Linux\" and platform_machine == \"x86_64\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"trainer-deepspeed\")"
+markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\") or python_version == \"3.9\" and platform_system == \"Linux\" and platform_machine == \"x86_64\" and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-deepspeed\") or extra == \"vllm\" and python_version >= \"3.10\" or python_version == \"3.10\" and (extra == \"vllm\" or extra == \"example\") or python_version >= \"3.12\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"trainer-deepspeed\" or extra == \"trainer-comet\") or platform_system == \"Linux\" and platform_machine == \"x86_64\" and python_version >= \"3.10\" and (extra == \"vllm\" or extra == \"example\" or extra == \"dev\" or extra == \"trainer\" or extra == \"trainer-deepspeed\") or python_version == \"3.10\" and platform_system == \"Linux\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"trainer-deepspeed\") and platform_machine == \"x86_64\""
 files = [
     {file = "setuptools-79.0.1-py3-none-any.whl", hash = "sha256:e147c0549f27767ba362f9da434eab9c5dc0045d5304feb602a0af001089fc51"},
     {file = "setuptools-79.0.1.tar.gz", hash = "sha256:128ce7b8f33c3079fd1b067ecbb4051a66e8526e7b65f6cec075dfc650ddfa88"},
@@ -13643,7 +13643,7 @@ description = "Efficient, Flexible and Portable Structured Generation"
 optional = true
 python-versions = "<4,>=3.8"
 groups = ["main"]
-markers = "extra == \"vllm\" and (platform_machine == \"x86_64\" or platform_machine == \"aarch64\" or platform_machine == \"arm64\") and python_version <= \"3.12\""
+markers = "extra == \"vllm\" and python_version <= \"3.12\" and (platform_machine == \"x86_64\" or platform_machine == \"aarch64\" or platform_machine == \"arm64\")"
 files = [
     {file = "xgrammar-0.1.19-cp310-cp310-macosx_10_14_x86_64.whl", hash = "sha256:b9e770afe040969d4d2be1b4a8086927c12c89f3145e3601433467bb940d3ef3"},
     {file = "xgrammar-0.1.19-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:a393827a63bb85e2e53ad5994db7e93359041ca5a46fa7e71e7a90312029969f"},
@@ -14192,7 +14192,7 @@ type = ["pytest-mypy (>=1.0.1) ; platform_python_implementation != \"PyPy\""]
 
 [extras]
 dev = ["coverage", "docker", "jinja2", "numpy", "pandas", "polars", "pre-commit", "pyarrow", "pytest", "pytest-cov", "pytorch_lightning", "ray", "ray", "ruff", "torch", "transformers", "xgboost"]
-example = ["accelerate", "boto3", "chronon-ai", "datasets", "einops", "kaggle", "minio", "mlflow", "numpy", "pandas", "peft", "pyarrow", "pyspark", "pytorch_lightning", "ray", "ray", "ray", "ray", "s3fs", "scikit-learn", "sqlglot", "thrift", "torch", "transformers", "xgboost", "xgboost_ray"]
+example = ["accelerate", "boto3", "chronon-ai", "datasets", "einops", "importlib-resources", "kaggle", "minio", "mlflow", "numpy", "pandas", "peft", "pyarrow", "pyspark", "pytorch_lightning", "ray", "ray", "ray", "ray", "s3fs", "scikit-learn", "sqlglot", "thrift", "torch", "transformers", "xgboost", "xgboost_ray"]
 mactl = []
 minio = ["minio"]
 plugin = ["pyspark", "ray", "ray"]
@@ -14207,4 +14207,4 @@ vllm = ["accelerate", "datasets", "einops", "numpy", "pandas", "pyarrow", "pytor
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.9.0"
-content-hash = "00974e038bed2eed3e7830a2c501ae32bb21ca3ad4bf252b27175325e25e7d7f"
+content-hash = "20aeac2c857d56697b5ce838bc0c13504c4f1eb3dd07d4cbd0eb44776c0d868a"
