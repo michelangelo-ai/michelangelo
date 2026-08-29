@@ -11,7 +11,11 @@ workflowClient:
   domain: default
   # taskList is a used as a fallback if project.Metatdata.Annotations["michelangelo/worker_queue"] is empty
   taskList: default # TODO(#934): MaCTL support for adding project.Metatdata.Annotations["michelangelo/worker_queue"] to project CRD
-  executionUrlFormat: http://localhost:8088/namespaces/{{.Domain}}/workflows/{{.ExecutionID}}
+  # cluster0 segment and trailing /{{.RunID}}/summary match cadence-web's
+  # actual route (/domains/<domain>/<cluster>/workflows/<id>/<runId>/summary);
+  # a format missing RunID resolves to a listing rather than a specific
+  # execution.
+  executionUrlFormat: "http://localhost:8088/domains/{{.Domain}}/cluster0/workflows/{{.ExecutionID}}/{{.RunID}}/summary"
 
 k8s:
   qps: 300
