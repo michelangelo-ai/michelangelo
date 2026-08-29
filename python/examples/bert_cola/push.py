@@ -129,7 +129,6 @@ def push_step(assembled: AssembledModel) -> list[PusherResult]:
             PusherPluginConfig(
                 name="model",
                 model_plugin=ModelPluginConfig(
-                    model_name="bert-cola",
                     description="BERT fine-tuned for CoLA linguistic acceptability",
                     labels={"framework": "transformers"},
                 ),
