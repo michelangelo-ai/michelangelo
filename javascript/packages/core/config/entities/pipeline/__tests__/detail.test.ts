@@ -16,9 +16,9 @@ describe('PIPELINE_DETAIL_CONFIG', () => {
   });
 
   it('filters by fieldSelector on pipeline_name, not a labelSelector', () => {
-    const listOptions = (
-      runsPage?.queryConfig.serviceOptions as Record<string, unknown> | undefined
-    )?.listOptions as Record<string, string> | undefined;
+    const listOptions = runsPage?.queryConfig.serviceOptions?.listOptions as
+      | Record<string, string>
+      | undefined;
 
     expect(listOptions).toBeDefined();
     expect(listOptions?.fieldSelector).toBe('pipeline_name=${page.metadata.name}');
