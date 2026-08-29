@@ -1,6 +1,9 @@
 """Training task for fine-tuning a BERT model on the CoLA dataset."""
 
 import logging
+import os
+import tempfile
+from urllib.parse import urlparse
 
 import numpy as np
 import torch
@@ -12,6 +15,54 @@ import michelangelo.uniflow.core as uniflow
 from michelangelo.uniflow.plugins.ray import RayTask
 
 log = logging.getLogger(__name__)
+
+
+def _resolve_storage_backend(tmp_prefix: str):
+    """Select a storage backend based on environment configuration.
+
+    ``AWS_ENDPOINT_URL`` set -> MinIO/S3-compatible remote storage; unset ->
+    a local temp directory (development and CI). Mirrors
+    ``examples.bert_cola.assembler._resolve_storage_backend``: train() and
+    assembler() run as separate Ray jobs with no shared filesystem, so the
+    checkpoint must go through shared storage rather than a local path.
+    """
+    s3_endpoint = os.environ.get("AWS_ENDPOINT_URL", "")
+    if s3_endpoint:
+        parsed = urlparse(s3_endpoint)
+        endpoint = parsed.netloc
+        if not endpoint:
+            raise ValueError(
+                f"AWS_ENDPOINT_URL={s3_endpoint!r} is missing a scheme. "
+                "Use a full URL like http://minio:9091"
+            )
+        bucket = (
+            os.environ.get("AWS_S3_BUCKET")
+            or os.environ.get("MA_FILE_SYSTEM", "s3://default")
+            .removeprefix("s3://")
+            .split("/")[0]
+        )
+        from michelangelo.lib.artifact_manager.minio_backend import MinioStorageBackend
+
+        storage_backend = MinioStorageBackend(
+            endpoint=endpoint,
+            bucket=bucket,
+            access_key=os.environ.get("AWS_ACCESS_KEY_ID", ""),
+            secret_key=os.environ.get("AWS_SECRET_ACCESS_KEY", ""),
+            secure=parsed.scheme == "https",
+            create_bucket_if_missing=True,
+        )
+        log.info(
+            "train: using MinioStorageBackend (remote) -> %s",
+            storage_backend.get_storage_location(),
+        )
+        return storage_backend
+
+    from michelangelo.lib.artifact_manager.storage_backend import LocalStorageBackend
+
+    local_dir = tempfile.mkdtemp(prefix=tmp_prefix)
+    storage_backend = LocalStorageBackend(local_dir)
+    log.info("train: using LocalStorageBackend (local/CI) -> %s", local_dir)
+    return storage_backend
 
 
 # Model creation function
@@ -58,10 +109,13 @@ def train(
         test_data: Ray Dataset containing test examples.
 
     Returns:
-        Tuple of ``(train_result, output_dir)``: the HuggingFace
-        ``TrainOutput`` from ``trainer.train()``, and the local directory the
-        fine-tuned model and tokenizer were saved to via
-        ``trainer.save_model()``.
+        Tuple of ``(train_result, checkpoint_uri)``: the HuggingFace
+        ``TrainOutput`` from ``trainer.train()``, and the storage URI the
+        fine-tuned model and tokenizer were uploaded to (train() and
+        assembler() run as separate Ray jobs with no shared local
+        filesystem, so the checkpoint saved via ``trainer.save_model()`` is
+        uploaded through a storage backend rather than returned as a bare
+        local path).
     """
     log.info("Starting training...")
 
@@ -107,9 +161,13 @@ def train(
     train_result = trainer.train()
     trainer.save_model(output_dir)
 
-    log.info("Training complete. Best model saved to %s.", output_dir)
+    storage_backend = _resolve_storage_backend("bert_cola_train_")
+    run_name = os.environ.get("MA_PIPELINE_RUN_NAME", "bert_cola")
+    checkpoint_uri = storage_backend.upload(output_dir, f"bert_cola_train/{run_name}/checkpoint")
 
-    return train_result, output_dir
+    log.info("Training complete. Best model saved to %s.", checkpoint_uri)
+
+    return train_result, checkpoint_uri
 
 
 def _compute_metrics(eval_pred):
