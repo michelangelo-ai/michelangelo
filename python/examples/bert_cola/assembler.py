@@ -1,6 +1,6 @@
 """Assembler step for the BERT CoLA fine-tuning workflow.
 
-Turns the locally-saved HuggingFace checkpoint from ``train()`` into a
+Turns the trained checkpoint from ``train()`` (a ``ModelVariable``) into a
 deployable + raw Triton package via ``custom_assembler`` (the Python-backend
 assembler path -- BERT's multi-input ``forward()`` isn't a good TorchScript
 fit, so this doesn't use ``torch_assembler``).
@@ -13,8 +13,10 @@ import logging
 import os
 import pickle
 import tempfile
+from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
+import fsspec
 import numpy as np
 import transformers
 
@@ -34,11 +36,13 @@ from michelangelo.workflow.variables.metadata import (
 )
 from michelangelo.workflow.variables.types import AssembledModel, ModelArtifact
 
+if TYPE_CHECKING:
+    from michelangelo.workflow.variables import ModelVariable
+
 log = logging.getLogger(__name__)
 
 __all__ = ["assembler"]
 
-_MODEL_CLASS = "examples.bert_cola.model.BertColaModel"
 _TOKENIZER_NAME = "bert-base-cased"
 
 
@@ -125,22 +129,20 @@ def _sample_data(
     config=RayTask(head_cpu=1, head_memory="2Gi", worker_instances=0),
 )
 def assembler(
-    train_output_dir: str,
+    model_variable: ModelVariable,
     lr: float,
     eps: float,
     tokenizer_max_length: int = 128,
 ) -> AssembledModel:
     """Assemble the fine-tuned BERT checkpoint into deployable and raw Triton packages.
 
-    ``CustomTritonPackager`` (invoked via ``custom_assembler``) only
-    understands locally-resident model artifacts, and the raw checkpoint is
-    already local (``train()`` writes it via ``trainer.save_model()``), so
-    this uploads it once through this task's own storage backend to obtain a
-    URI ``custom_assembler`` can download back from.
-
     Args:
-        train_output_dir: Local directory ``train()`` saved the fine-tuned
-            model and tokenizer to (via ``Trainer.save_model()``).
+        model_variable: Result of ``train()`` -- a ``ModelVariable`` wrapping
+            the fine-tuned model and tokenizer, persisted under
+            ``UF_STORAGE_URL``. Not yet a ``StorageBackend`` URI
+            ``custom_assembler`` can pull from directly, so this downloads it
+            via the same fsspec mechanism ``ModelVariable`` itself uses, then
+            re-uploads it through this task's own storage backend.
         lr: Learning rate used for training, recorded as a hyperparameter.
         eps: Adam epsilon used for training, recorded as a hyperparameter.
         tokenizer_max_length: Max sequence length used for tokenization --
@@ -156,10 +158,15 @@ def assembler(
     schema = _schema(tokenizer_max_length)
     sample_data = _sample_data(tokenizer, tokenizer_max_length)
 
-    raw_model_uri = storage_backend.upload(train_output_dir, "raw_model")
+    local_dir = tempfile.mkdtemp(prefix="bert_cola_assembler_model_")
+    model_path = os.path.join(local_dir, "model")
+    fs, remote_path = fsspec.core.url_to_fs(model_variable.path)
+    fs.get(remote_path, model_path, recursive=True)
+
+    raw_model_uri = storage_backend.upload(model_path, "raw_model")
     metadata = ModelMetadata(
         training_framework=TRAINING_FRAMEWORK_CUSTOM,
-        model_class=_MODEL_CLASS,
+        model_class=model_variable.metadata.model_class,
         _schema=io.BytesIO(pickle.dumps(schema)),
         _sample_data=io.BytesIO(pickle.dumps(sample_data)),
     )

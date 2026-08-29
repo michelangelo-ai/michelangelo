@@ -26,7 +26,7 @@ def train_workflow(path="nyu-mll/glue", name="cola", tokenizer_max_length=128):
         name=name,
         tokenizer_max_length=tokenizer_max_length,
     )
-    train_result, output_dir = train(
+    train_result, model_variable = train(
         train_data,
         validation_data,
         test_data,
@@ -34,7 +34,7 @@ def train_workflow(path="nyu-mll/glue", name="cola", tokenizer_max_length=128):
     print("train_result:", train_result)
 
     assembled = assembler(
-        output_dir,
+        model_variable,
         # Must match train.py's hardcoded lr/eps.
         lr=2e-5,
         eps=1e-8,

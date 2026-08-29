@@ -9,7 +9,9 @@ from datasets import Dataset as HFDataset
 from ray.data import Dataset
 
 import michelangelo.uniflow.core as uniflow
+from examples.bert_cola.model import BertColaModel
 from michelangelo.uniflow.plugins.ray import RayTask
+from michelangelo.workflow.variables import ModelVariable
 
 log = logging.getLogger(__name__)
 
@@ -58,10 +60,12 @@ def train(
         test_data: Ray Dataset containing test examples.
 
     Returns:
-        Tuple of ``(train_result, output_dir)``: the HuggingFace
-        ``TrainOutput`` from ``trainer.train()``, and the local directory the
-        fine-tuned model and tokenizer were saved to via
-        ``trainer.save_model()``.
+        Tuple of ``(train_result, model_variable)``: the HuggingFace
+        ``TrainOutput`` from ``trainer.train()``, and a ``ModelVariable``
+        wrapping the fine-tuned model and tokenizer, persisted under
+        ``UF_STORAGE_URL`` -- this task and the ones downstream of it aren't
+        guaranteed to share a filesystem, so the local save path itself
+        isn't returned.
     """
     log.info("Starting training...")
 
@@ -95,21 +99,24 @@ def train(
         load_best_model_at_end=True,
     )
 
+    tokenizer = transformers.AutoTokenizer.from_pretrained("bert-base-cased")
     trainer = transformers.Trainer(
         model=model,
         args=training_args,
         train_dataset=train_data,
         eval_dataset=validation_data,
-        tokenizer=transformers.AutoTokenizer.from_pretrained("bert-base-cased"),
+        tokenizer=tokenizer,
         compute_metrics=_compute_metrics,
     )
 
     train_result = trainer.train()
-    trainer.save_model(output_dir)
 
-    log.info("Training complete. Best model saved to %s.", output_dir)
+    model_variable = ModelVariable.create(BertColaModel(model, tokenizer))
+    model_variable.save()
 
-    return train_result, output_dir
+    log.info("Training complete. Best model uploaded to %s.", model_variable.path)
+
+    return train_result, model_variable
 
 
 def _compute_metrics(eval_pred):
