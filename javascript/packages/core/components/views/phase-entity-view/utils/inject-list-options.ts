@@ -9,13 +9,7 @@ export function injectListOptions(
 ): InjectedListOptions | undefined {
   if (!pipelineTypes?.length) return undefined;
 
-  if (service === 'pipeline') {
-    return {
-      fieldSelector: `pipeline_type in (${pipelineTypes.join(',')})`,
-    };
-  }
-
-  if (service === 'pipelineRun' || service === 'triggerRun') {
+  if (service === 'pipeline' || service === 'pipelineRun' || service === 'triggerRun') {
     return {
       labelSelector: `${SOURCE_PIPELINE_TYPE_LABEL} in (${pipelineTypes.join(',')})`,
     };

@@ -9,6 +9,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	"github.com/michelangelo-ai/michelangelo/go/base/zapfx"
 	modelapihook "github.com/michelangelo-ai/michelangelo/go/components/model/apihook"
+	pipelineapihook "github.com/michelangelo-ai/michelangelo/go/components/pipeline/apihook"
 	pipelinerunapihook "github.com/michelangelo-ai/michelangelo/go/components/pipelinerun/apihook"
 	projectapihook "github.com/michelangelo-ai/michelangelo/go/components/project/apihook"
 	triggerrunapihook "github.com/michelangelo-ai/michelangelo/go/components/triggerrun/apihook"
@@ -49,6 +50,9 @@ func opts() fx.Option {
 		fx.Provide(getScheme),
 		fx.Provide(apihandler.NewConfig),
 		fx.Invoke(projectapihook.RegisterProjectAPIHook),
+		// Stamps a Pipeline's own type onto itself as a label, so it can be
+		// queried with the same label selector used for PipelineRun/TriggerRun.
+		fx.Invoke(pipelineapihook.RegisterPipelineAPIHook),
 		// Cascade-delete: stamp the owning Pipeline ownerReference on runs at
 		// creation. Also defaults api.EnvironmentLabel from the
 		// operator-configured PipelineRunDefaultEnvironment.
