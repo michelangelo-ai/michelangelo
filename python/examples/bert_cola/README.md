@@ -35,7 +35,7 @@ push results: [PusherResult(name='model', plugin='model_plugin', success=True, .
 ok.
 ```
 
-After training, `package_model` packages the fine-tuned checkpoint into a
+After training, `assembler` packages the fine-tuned checkpoint into a
 deployable Triton package + a raw package (via the custom, Python-backend
 assembler path -- BERT's multi-input `forward()` isn't TorchScript-friendly),
 and `push_step` registers it in a model registry (`InMemoryRegistryClient` by

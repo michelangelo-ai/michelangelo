@@ -1,8 +1,8 @@
 """Pusher step for the BERT CoLA fine-tuning workflow.
 
-Registers the assembled model (produced by ``package_model``) in a model
+Registers the assembled model (produced by ``assembler``) in a model
 registry via ``ModelPusherPlugin``. Constructs its own storage backend and
-registry client, independently of ``package.py`` -- uniflow tasks can't
+registry client, independently of ``assembler.py`` -- uniflow tasks can't
 share live objects across the workflow boundary.
 """
 
@@ -41,7 +41,7 @@ def push_step(assembled: AssembledModel) -> list[PusherResult]:
     """Push the assembled BERT CoLA model to storage and the model registry.
 
     Args:
-        assembled: Result of ``package_model`` -- deployable and raw Triton
+        assembled: Result of ``assembler`` -- deployable and raw Triton
             packages for the fine-tuned classifier.
 
     Returns:

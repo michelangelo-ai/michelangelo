@@ -1,4 +1,4 @@
-"""Packaging task for the BERT CoLA fine-tuning workflow.
+"""Assembler step for the BERT CoLA fine-tuning workflow.
 
 Turns the locally-saved HuggingFace checkpoint from ``train()`` into a
 deployable + raw Triton package via ``custom_assembler`` (the Python-backend
@@ -36,7 +36,7 @@ from michelangelo.workflow.variables.types import AssembledModel, ModelArtifact
 
 log = logging.getLogger(__name__)
 
-__all__ = ["package_model"]
+__all__ = ["assembler"]
 
 _MODEL_CLASS = "examples.bert_cola.model.BertColaModel"
 _TOKENIZER_NAME = "bert-base-cased"
@@ -74,7 +74,7 @@ def _resolve_storage_backend(tmp_prefix: str):
             create_bucket_if_missing=True,
         )
         log.info(
-            "package_model: using MinioStorageBackend (remote) -> %s",
+            "assembler: using MinioStorageBackend (remote) -> %s",
             storage_backend.get_storage_location(),
         )
         return storage_backend
@@ -83,7 +83,7 @@ def _resolve_storage_backend(tmp_prefix: str):
 
     local_dir = tempfile.mkdtemp(prefix=tmp_prefix)
     storage_backend = LocalStorageBackend(local_dir)
-    log.info("package_model: using LocalStorageBackend (local/CI) -> %s", local_dir)
+    log.info("assembler: using LocalStorageBackend (local/CI) -> %s", local_dir)
     return storage_backend
 
 
@@ -124,13 +124,13 @@ def _sample_data(
 @uniflow.task(
     config=RayTask(head_cpu=1, head_memory="2Gi", worker_instances=0),
 )
-def package_model(
+def assembler(
     train_output_dir: str,
     lr: float,
     eps: float,
     tokenizer_max_length: int = 128,
 ) -> AssembledModel:
-    """Package the fine-tuned BERT checkpoint into deployable and raw Triton packages.
+    """Assemble the fine-tuned BERT checkpoint into deployable and raw Triton packages.
 
     ``CustomTritonPackager`` (invoked via ``custom_assembler``) only
     understands locally-resident model artifacts, and the raw checkpoint is
@@ -150,7 +150,7 @@ def package_model(
     Returns:
         ``AssembledModel`` with the deployable and raw packaged artifacts.
     """
-    storage_backend = _resolve_storage_backend("bert_cola_package_")
+    storage_backend = _resolve_storage_backend("bert_cola_assembler_")
 
     tokenizer = transformers.AutoTokenizer.from_pretrained(_TOKENIZER_NAME)
     schema = _schema(tokenizer_max_length)
@@ -174,7 +174,7 @@ def package_model(
         storage_backend=storage_backend,
     )
     log.info(
-        "package_model: deployable=%s raw=%s",
+        "assembler: deployable=%s raw=%s",
         assembled.deployable_model.path,
         assembled.raw_model.path,
     )
