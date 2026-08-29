@@ -6,8 +6,10 @@
 # torch/transformers at load time fails with ModuleNotFoundError. This adds
 # just those two packages on top of the stock image; nothing else changes.
 #
-# Versions match python/pyproject.toml's "example" extra so the serving
-# runtime matches what BertColaModel was trained/tokenized against.
+# The 23.04 image ships Python 3.8, which caps how new a torch/transformers we
+# can install (torch 2.4.1 is the last release with 3.8 wheels; transformers
+# dropped 3.8 support after the 4.44 series) -- these are close to but not
+# exactly python/pyproject.toml's "example" extra versions for that reason.
 FROM nvcr.io/nvidia/tritonserver:23.04-py3
 
-RUN pip install --no-cache-dir torch==2.7.0 transformers==4.51.3
+RUN pip install --no-cache-dir torch==2.4.1 transformers==4.44.2

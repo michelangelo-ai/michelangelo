@@ -115,6 +115,7 @@ func (p *Plugin) GetRolloutPlugin(ctx context.Context, deployment *v2pb.Deployme
 		RouteManager:        p.routeManager,
 		BackendRegistry:     p.backendRegistry,
 		ModelConfigProvider: p.modelConfigProvider,
+		BlobStore:           p.blobstore,
 		Logger:              p.logger,
 	}, deployment)
 	if err != nil {

@@ -10,6 +10,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	goapi "github.com/michelangelo-ai/michelangelo/go/api"
+	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	"github.com/michelangelo-ai/michelangelo/go/components/common/routing"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/rollout/strategies"
@@ -37,6 +38,7 @@ type Params struct {
 	RouteManager        routing.Manager
 	BackendRegistry     *backends.Registry
 	ModelConfigProvider modelconfig.ModelConfigProvider
+	BlobStore           *blobstore.BlobStore
 	Logger              *zap.Logger
 }
 
@@ -69,6 +71,7 @@ func NewRolloutPlugin(ctx context.Context, p Params, deployment *v2pb.Deployment
 		RouteManager:        p.RouteManager,
 		BackendRegistry:     p.BackendRegistry,
 		ModelConfigProvider: p.ModelConfigProvider,
+		BlobStore:           p.BlobStore,
 		Logger:              p.Logger,
 	}, deployment)
 	if err != nil {

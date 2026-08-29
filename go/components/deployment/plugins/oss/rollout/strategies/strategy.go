@@ -10,6 +10,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	goapi "github.com/michelangelo-ai/michelangelo/go/api"
+	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	"github.com/michelangelo-ai/michelangelo/go/components/common/routing"
 	osscommon "github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
@@ -27,6 +28,7 @@ type Params struct {
 	RouteManager        routing.Manager
 	BackendRegistry     *backends.Registry
 	ModelConfigProvider modelconfig.ModelConfigProvider
+	BlobStore           *blobstore.BlobStore
 	Logger              *zap.Logger
 
 	// DynamicClient is the dynamic client for the control-plane cluster. Retained so that
@@ -84,7 +86,7 @@ func getRollingActors(params Params, deployment *v2pb.Deployment) ([]conditionIn
 
 	for _, target := range targets {
 		actors = append(actors,
-			strategiesCommon.NewRollingRolloutActor(params.ClientFactory, params.APIHandler, params.BackendRegistry, params.ModelConfigProvider, params.Logger, target),
+			strategiesCommon.NewRollingRolloutActor(params.ClientFactory, params.APIHandler, params.BackendRegistry, params.ModelConfigProvider, params.BlobStore, params.Logger, target),
 			strategiesCommon.NewTrafficRoutingActor(params.ClientFactory, params.RouteManager, target),
 		)
 	}

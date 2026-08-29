@@ -8,6 +8,7 @@ import (
 	"go.uber.org/zap"
 
 	goapi "github.com/michelangelo-ai/michelangelo/go/api"
+	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	conditionsutil "github.com/michelangelo-ai/michelangelo/go/base/conditions/utils"
 	plugincommon "github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/common"
@@ -30,6 +31,7 @@ type RollingRolloutActor struct {
 	apiHandler          goapi.Handler
 	backendRegistry     *backends.Registry
 	modelConfigProvider modelconfig.ModelConfigProvider
+	blobStore           *blobstore.BlobStore
 	logger              *zap.Logger
 	target              *v2pb.ClusterTarget
 }
@@ -40,6 +42,7 @@ func NewRollingRolloutActor(
 	apiHandler goapi.Handler,
 	backendRegistry *backends.Registry,
 	modelConfigProvider modelconfig.ModelConfigProvider,
+	blobStore *blobstore.BlobStore,
 	logger *zap.Logger,
 	target *v2pb.ClusterTarget,
 ) *RollingRolloutActor {
@@ -48,6 +51,7 @@ func NewRollingRolloutActor(
 		apiHandler:          apiHandler,
 		backendRegistry:     backendRegistry,
 		modelConfigProvider: modelConfigProvider,
+		blobStore:           blobStore,
 		logger:              logger,
 		target:              target,
 	}
@@ -99,12 +103,28 @@ func (a *RollingRolloutActor) Retrieve(ctx context.Context, deployment *v2pb.Dep
 	return conditionsutil.GenerateTrueCondition(condition), nil
 }
 
-// Run registers the desired model in the cluster's inference server ConfigMap, triggering the
-// server to begin loading it. Returns UNKNOWN so the engine continues polling via Retrieve.
+// Run registers the desired model in the cluster's inference server ConfigMap, fetches the
+// packaged model artifact, and stages+loads it into the backend's inference server. Returns
+// UNKNOWN so the engine continues polling via Retrieve.
 func (a *RollingRolloutActor) Run(ctx context.Context, deployment *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
 	kubeClient, err := a.clientFactory.GetClient(ctx, a.target)
 	if err != nil {
 		return conditionsutil.GenerateFalseCondition(condition, "ClientUnavailable", err.Error()), nil
+	}
+
+	restConfig, err := a.clientFactory.GetRESTConfig(ctx, a.target)
+	if err != nil {
+		return conditionsutil.GenerateFalseCondition(condition, "ClientUnavailable", err.Error()), nil
+	}
+
+	httpClient, err := a.clientFactory.GetHTTPClient(ctx, a.target)
+	if err != nil {
+		return conditionsutil.GenerateFalseCondition(condition, "HTTPClientUnavailable", err.Error()), nil
+	}
+
+	backend, err := a.backendRegistry.GetBackend(v2pb.BACKEND_TYPE_TRITON)
+	if err != nil {
+		return conditionsutil.GenerateFalseCondition(condition, "BackendUnavailable", err.Error()), nil
 	}
 
 	inferenceServerName := deployment.Spec.GetInferenceServer().GetName()
@@ -124,6 +144,16 @@ func (a *RollingRolloutActor) Run(ctx context.Context, deployment *v2pb.Deployme
 		StoragePath: storagePath,
 	}); err != nil {
 		return conditionsutil.GenerateFalseCondition(condition, "AddModelToConfigFailed", err.Error()), nil
+	}
+
+	modelPackage, err := a.blobStore.Get(ctx, storagePath)
+	if err != nil {
+		return conditionsutil.GenerateFalseCondition(condition, "ModelArtifactFetchFailed", err.Error()), nil
+	}
+
+	apiServerURL := osscommon.APIServerURLFromTarget(a.target)
+	if err := backend.LoadModel(ctx, a.logger, kubeClient, restConfig, httpClient, apiServerURL, inferenceServerName, deployment.Namespace, modelName, modelPackage); err != nil {
+		return conditionsutil.GenerateFalseCondition(condition, "ModelLoadFailed", err.Error()), nil
 	}
 
 	return conditionsutil.GenerateUnknownCondition(condition, "ModelLoading", fmt.Sprintf("model %s loading in cluster %s", modelName, a.target.GetClusterId())), nil

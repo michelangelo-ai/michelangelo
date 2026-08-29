@@ -14,12 +14,15 @@ import (
 	"google.golang.org/grpc/status"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	goapi "github.com/michelangelo-ai/michelangelo/go/api"
 	"github.com/michelangelo-ai/michelangelo/go/api/apimocks"
 	"github.com/michelangelo-ai/michelangelo/go/api/handler"
+	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
+	mock_blobstore "github.com/michelangelo-ai/michelangelo/go/base/blobstore/blobstore_mocks"
 	osscommon "github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends/backendsmocks"
@@ -44,6 +47,7 @@ const (
 type clientErrors struct {
 	getClient     error
 	getHTTPClient error
+	getRESTConfig error
 }
 
 // rolloutMocks groups every mock used by both rolling-rollout and model-cleanup tests so
@@ -53,6 +57,8 @@ type rolloutMocks struct {
 	backend             *backendsmocks.MockBackend
 	modelConfigProvider *modelconfigmocks.MockModelConfigProvider
 	backendRegistry     *backends.Registry
+	blobStoreClient     *mock_blobstore.MockBlobStoreClient
+	blobStore           *blobstore.BlobStore
 	// controlPlane serves the Model the actor resolves the storage path from.
 	controlPlane goapi.Handler
 }
@@ -99,10 +105,15 @@ func newRolloutFixture(t *testing.T, clientErrs clientErrors, registerBackend bo
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
+	blobStoreClient := mock_blobstore.NewMockBlobStoreClient(ctrl)
+	blobStoreClient.EXPECT().Scheme().Return("s3").AnyTimes()
+
 	mocks := &rolloutMocks{
 		factory:             clientfactorymocks.NewMockClientFactory(ctrl),
 		backend:             backendsmocks.NewMockBackend(ctrl),
 		modelConfigProvider: modelconfigmocks.NewMockModelConfigProvider(ctrl),
+		blobStoreClient:     blobStoreClient,
+		blobStore:           &blobstore.BlobStore{Clients: map[string]blobstore.BlobStoreClient{"s3": blobStoreClient}},
 		controlPlane:        newControlPlaneClient(t, testModel()),
 	}
 
@@ -110,6 +121,8 @@ func newRolloutFixture(t *testing.T, clientErrs clientErrors, registerBackend bo
 		Return(client.Client(nil), clientErrs.getClient).AnyTimes()
 	mocks.factory.EXPECT().GetHTTPClient(gomock.Any(), gomock.Any()).
 		Return((*http.Client)(nil), clientErrs.getHTTPClient).AnyTimes()
+	mocks.factory.EXPECT().GetRESTConfig(gomock.Any(), gomock.Any()).
+		Return((*rest.Config)(nil), clientErrs.getRESTConfig).AnyTimes()
 
 	mocks.backendRegistry = backends.NewRegistry()
 	if registerBackend {
@@ -221,7 +234,7 @@ func TestRollingRolloutActor_Retrieve(t *testing.T) {
 				require.NoError(t, osscommon.WriteModelLoadedFlag(condition))
 			}
 
-			actor := NewRollingRolloutActor(mocks.factory, mocks.controlPlane, mocks.backendRegistry, mocks.modelConfigProvider, zap.NewNop(), target)
+			actor := NewRollingRolloutActor(mocks.factory, mocks.controlPlane, mocks.backendRegistry, mocks.modelConfigProvider, mocks.blobStore, zap.NewNop(), target)
 			got, err := actor.Retrieve(context.Background(), rolloutDeployment(""), condition)
 
 			require.NoError(t, err)
@@ -305,6 +318,9 @@ func TestRollingRolloutActor_Run(t *testing.T) {
 						}, entry)
 						return nil
 					})
+				m.blobStoreClient.EXPECT().Get(gomock.Any(), testModelStoragePath).Return([]byte("tar-bytes"), nil)
+				m.backend.EXPECT().LoadModel(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
+					testISName, testNamespace, testModelName, []byte("tar-bytes")).Return(nil)
 			},
 			expectedStatus:    apipb.CONDITION_STATUS_UNKNOWN,
 			expectedReasonSub: "model model-v1 loading in cluster c1",
@@ -319,7 +335,7 @@ func TestRollingRolloutActor_Run(t *testing.T) {
 			}
 			tt.setupMocks(mocks)
 
-			actor := NewRollingRolloutActor(mocks.factory, mocks.controlPlane, mocks.backendRegistry, mocks.modelConfigProvider, zap.NewNop(), target)
+			actor := NewRollingRolloutActor(mocks.factory, mocks.controlPlane, mocks.backendRegistry, mocks.modelConfigProvider, mocks.blobStore, zap.NewNop(), target)
 			got, err := actor.Run(context.Background(), rolloutDeployment(""), &apipb.Condition{})
 
 			require.NoError(t, err)
@@ -333,6 +349,6 @@ func TestRollingRolloutActor_Run(t *testing.T) {
 
 func TestRollingRolloutActor_GetType(t *testing.T) {
 	mocks, target := newRolloutFixture(t, clientErrors{}, true)
-	actor := NewRollingRolloutActor(mocks.factory, mocks.controlPlane, mocks.backendRegistry, mocks.modelConfigProvider, zap.NewNop(), target)
+	actor := NewRollingRolloutActor(mocks.factory, mocks.controlPlane, mocks.backendRegistry, mocks.modelConfigProvider, mocks.blobStore, zap.NewNop(), target)
 	assert.Equal(t, "RollingRolloutComplete-"+testCluster, actor.GetType())
 }

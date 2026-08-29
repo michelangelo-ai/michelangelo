@@ -13,6 +13,7 @@ import (
 	backends "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	v2 "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	zap "go.uber.org/zap"
+	rest "k8s.io/client-go/rest"
 	client "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -111,4 +112,18 @@ func (m *MockBackend) IsHealthy(ctx context.Context, logger *zap.Logger, kubeCli
 func (mr *MockBackendMockRecorder) IsHealthy(ctx, logger, kubeClient, inferenceServerName, namespace interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsHealthy", reflect.TypeOf((*MockBackend)(nil).IsHealthy), ctx, logger, kubeClient, inferenceServerName, namespace)
+}
+
+// LoadModel mocks base method.
+func (m *MockBackend) LoadModel(ctx context.Context, logger *zap.Logger, kubeClient client.Client, restConfig *rest.Config, httpClient *http.Client, apiServerURL, inferenceServerName, namespace, modelName string, modelPackage []byte) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LoadModel", ctx, logger, kubeClient, restConfig, httpClient, apiServerURL, inferenceServerName, namespace, modelName, modelPackage)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// LoadModel indicates an expected call of LoadModel.
+func (mr *MockBackendMockRecorder) LoadModel(ctx, logger, kubeClient, restConfig, httpClient, apiServerURL, inferenceServerName, namespace, modelName, modelPackage interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadModel", reflect.TypeOf((*MockBackend)(nil).LoadModel), ctx, logger, kubeClient, restConfig, httpClient, apiServerURL, inferenceServerName, namespace, modelName, modelPackage)
 }
