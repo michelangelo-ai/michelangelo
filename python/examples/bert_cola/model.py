@@ -20,8 +20,6 @@ from michelangelo.lib.model_manager.interface.custom_model import Model
 
 __all__ = ["BertColaModel"]
 
-_PRETRAINED_MODEL_NAME = "bert-base-cased"
-
 
 class BertColaModel(Model):
     """Fine-tuned BERT sequence classifier for the CoLA linguistic-acceptability task.
