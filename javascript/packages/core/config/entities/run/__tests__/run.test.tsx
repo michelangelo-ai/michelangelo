@@ -1,7 +1,9 @@
 import { render, screen } from '@testing-library/react';
+import { vi } from 'vitest';
 
 import { TRAIN_PHASE } from '#core/config/phases/train';
 import { EntityDetailRoute } from '#core/router/entity-detail-route';
+import { PhaseListRoute } from '#core/router/phase-list-route';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getErrorProviderWrapper } from '#core/test/wrappers/get-error-provider-wrapper';
 import { getRouterWrapper } from '#core/test/wrappers/get-router-wrapper';
@@ -9,6 +11,110 @@ import {
   createQueryMockRouter,
   getServiceProviderWrapper,
 } from '#core/test/wrappers/get-service-provider-wrapper';
+
+describe('Run list page', () => {
+  it('renders column headers in the expected order', async () => {
+    render(
+      <PhaseListRoute phases={{ train: TRAIN_PHASE }} />,
+      buildWrapper([
+        getErrorProviderWrapper(),
+        getRouterWrapper({ location: '/myproject/train/runs' }),
+        getServiceProviderWrapper({
+          request: vi.fn().mockResolvedValue({ pipelineRunList: { items: [] } }),
+        }),
+      ])
+    );
+
+    const expectedHeaders = [
+      'Pipeline run name',
+      'Pipeline',
+      'Last Updated',
+      'Created',
+      'Environment',
+      'Started by',
+      'State',
+    ];
+
+    const firstHeader = await screen.findByRole('columnheader', { name: expectedHeaders[0] });
+    expect(firstHeader).toBeInTheDocument();
+
+    for (const label of expectedHeaders.slice(1)) {
+      expect(screen.getByRole('columnheader', { name: label })).toBeInTheDocument();
+    }
+
+    const allHeaders = screen.getAllByRole('columnheader');
+    const headerLabels = allHeaders.map((h) => h.textContent).filter(Boolean);
+    expect(headerLabels).toEqual(expectedHeaders);
+  });
+
+  it('renders environment labels and run data for list rows', async () => {
+    render(
+      <PhaseListRoute phases={{ train: TRAIN_PHASE }} />,
+      buildWrapper([
+        getErrorProviderWrapper(),
+        getRouterWrapper({ location: '/myproject/train/runs' }),
+        getServiceProviderWrapper({
+          request: vi.fn().mockResolvedValue({
+            pipelineRunList: {
+              items: [
+                {
+                  metadata: {
+                    name: 'train-fraud-run',
+                    labels: { 'michelangelo/environment': 'production' },
+                    creationTimestamp: { seconds: 1700000000 },
+                  },
+                  spec: {
+                    description: 'training run for fraud detection',
+                    pipeline: { name: 'fraud-pipeline' },
+                    revision: { name: 'rev-1' },
+                    actor: { name: 'alice' },
+                  },
+                  status: { state: 3 },
+                },
+                {
+                  metadata: {
+                    name: 'eval-demand-run',
+                    labels: { 'michelangelo/environment': 'development' },
+                    creationTimestamp: { seconds: 1700000000 },
+                  },
+                  spec: {
+                    description: 'eval run for demand model',
+                    pipeline: { name: 'demand-pipeline' },
+                    revision: { name: 'rev-2' },
+                    actor: { name: 'bob' },
+                  },
+                  status: { state: 2 },
+                },
+                {
+                  metadata: {
+                    name: 'test-segment-run',
+                    creationTimestamp: { seconds: 1700000000 },
+                  },
+                  spec: {
+                    description: 'segment run',
+                    pipeline: { name: 'segment-pipeline' },
+                    actor: { name: 'carol' },
+                  },
+                  status: { state: 5 },
+                },
+              ],
+            },
+          }),
+        }),
+      ])
+    );
+
+    expect(await screen.findByRole('link', { name: 'train-fraud-run' })).toBeInTheDocument();
+    expect(screen.getByText('Production')).toBeInTheDocument();
+    expect(screen.getByText('fraud-pipeline')).toBeInTheDocument();
+    expect(screen.getByText('alice')).toBeInTheDocument();
+
+    expect(screen.getByRole('link', { name: 'eval-demand-run' })).toBeInTheDocument();
+    expect(screen.getByText('Development')).toBeInTheDocument();
+
+    expect(screen.getByRole('link', { name: 'test-segment-run' })).toBeInTheDocument();
+  });
+});
 
 describe('Run detail page', () => {
   describe('configuration tab', () => {
