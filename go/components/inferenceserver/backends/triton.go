@@ -26,17 +26,19 @@ import (
 var _ Backend = &tritonBackend{}
 
 const (
-	// defaultTritonImageTag is the stock nvcr.io/nvidia/tritonserver image used
-	// by every InferenceServer that doesn't override it. Pinned to 25.01 --
-	// not the latest available -- to match the Triton version already running
-	// in production internally (Uber's ml_gpu_base), rather than adopting a
-	// version with no internal production track record. A real TorchScript
-	// model (california_housing's pytorch_libtorch model) was verified to
-	// load and produce bit-for-bit identical output on 23.04 vs 26.08
-	// CPU-only; 25.01 sits inside that already-checked range. See
-	// docker/triton-serving.Dockerfile, whose FROM should stay in sync with
-	// this even though it isn't wired to any running InferenceServer today.
-	defaultTritonImageTag = "25.01-py3"
+	// defaultTritonImage is Michelangelo's default Triton serving image: the stock
+	// nvcr.io/nvidia/tritonserver image plus the ML framework deps (torch,
+	// transformers) its python-backend environment otherwise lacks -- see
+	// docker/triton-serving.Dockerfile and .github/workflows/build-triton-image.yaml,
+	// which build and push this exact tag. Pinned to 25.01 -- not the latest
+	// available -- to match the Triton version already running in production
+	// internally (Uber's ml_gpu_base), rather than adopting a version with no
+	// internal production track record. A real TorchScript model
+	// (california_housing's pytorch_libtorch model) was verified to load and
+	// produce bit-for-bit identical output on 23.04 vs 26.08 CPU-only; 25.01
+	// sits inside that already-checked range. The Dockerfile's FROM must stay
+	// in sync with this tag.
+	defaultTritonImage = "ghcr.io/michelangelo-ai/triton-serving:25.01-py3-torch"
 
 	// tritonLoadTimeout bounds the explicit model-load call. It's set well above the
 	// shared client's general-purpose httpClientTimeout because loading a Python-backend
@@ -54,16 +56,14 @@ const (
 	tritonServicePortName = "http"
 )
 
-// tritonImage returns the Triton container image to run for inferenceServer. The stock
-// nvcr.io/nvidia/tritonserver image has no ML framework deps (torch, transformers, ...) in its
-// python-backend environment, so a custom python-backend model needs a custom image with those
-// preinstalled. ServingSpec.ContainerBuildTemplate, otherwise unused, is repurposed as that
-// per-InferenceServer image override; the default is used when it's unset.
+// tritonImage returns the Triton container image to run for inferenceServer: defaultTritonImage
+// unless ServingSpec.ContainerBuildTemplate is set, which lets an InferenceServer opt into a
+// different image for a model whose deps fall outside what defaultTritonImage provides.
 func tritonImage(inferenceServer *v2pb.InferenceServer) string {
 	if override := inferenceServer.Spec.GetInitSpec().GetServingSpec().GetContainerBuildTemplate(); override != "" {
 		return override
 	}
-	return fmt.Sprintf("nvcr.io/nvidia/tritonserver:%s", defaultTritonImageTag)
+	return defaultTritonImage
 }
 
 // Triton Server Management
