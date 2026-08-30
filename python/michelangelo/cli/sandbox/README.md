@@ -34,8 +34,8 @@ ma sandbox --help
 | `ma sandbox stop` | Stop the k3d cluster (preserves data) |
 | `ma sandbox demo pipeline` | Run the pipeline demo against a running sandbox |
 | `ma sandbox demo inference` | Run the inference demo against a running sandbox |
-| `ma sandbox snapshot create` | Capture every Michelangelo CRD in the cluster to `snapshots/<timestamp>/` |
-| `ma sandbox snapshot restore <timestamp>` | Replay a previously captured snapshot into the cluster |
+| `ma sandbox snapshot create` | Capture every Michelangelo CRD and the Helm release's settings to `snapshots/<timestamp>/` |
+| `ma sandbox snapshot restore <timestamp>` | Replay a previously captured snapshot's CRDs into the cluster, and print a diff of its Helm settings against the live sandbox |
 
 ## Architecture
 
@@ -104,12 +104,16 @@ ma sandbox create --include-experimental fluent-bit mlflow
 
 `ma sandbox snapshot create` captures every Michelangelo custom resource (`Project`, `Pipeline`, `Model`, etc. — anything under the `michelangelo.api` group) in the cluster to `snapshots/<timestamp>/`, one YAML file per kind. Volatile fields (`resourceVersion`, `uid`, `ownerReferences`, etc.) are stripped so the snapshot can be re-applied cleanly; `status` is kept for reference.
 
+It also captures the michelangelo Helm release's live settings (`helm get values -a`) to `helm-values.yaml` in the same directory — workflow engine, metadata storage (including the `EnableMetadataStorage` toggle and the MySQL host/port/user/database/password it resolves to), per-service `--exclude` toggles, and any `--set` passthrough. `metadataStorage.rootPassword` is redacted to `<redacted>` before writing.
+
 ```bash
 ma sandbox snapshot create
 ma sandbox snapshot restore 20260807-143000
 ```
 
-This is useful for capturing "here's what reproduces this issue" for a test plan or PR description — the resulting directory can be committed alongside a bug report, or just kept locally and restored later. It's scoped to CRDs only: MinIO artifacts, MySQL rows, Secrets/ConfigMaps, and workflow engine history are not captured.
+`snapshot restore` replays the captured CRDs, then prints a diff between the snapshot's `helm-values.yaml` and the current sandbox's live settings — useful for spotting "this colleague's sandbox has metadata storage on and I don't" at a glance. **Settings are report-only**: restore never changes the live sandbox's Helm configuration, even when a diff is shown. (Actually reconfiguring the cluster to match is a possible future `--apply-settings` flag, not implemented yet.)
+
+This is useful for capturing "here's what reproduces this issue" for a test plan or PR description — the resulting directory can be committed alongside a bug report, or just kept locally and restored later. Resource scope is CRDs + Helm settings only: MinIO artifacts, MySQL rows, raw Secrets/ConfigMaps, and workflow engine history are not captured — and neither are `--include-experimental` flags (e.g. `mlflow`, applied outside Helm) or k3d cluster topology (port mappings, `--create-compute-cluster`), since neither is tracked by Helm.
 
 ## Pinning Image Tags
 

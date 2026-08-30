@@ -15,12 +15,15 @@ class SnapshotCreateTest(TestCase):
     """Test cases for `ma sandbox snapshot create`."""
 
     def test_create_on_empty_sandbox_writes_no_files(self):
-        """No Michelangelo CRDs in the cluster -> snapshot dir has no yaml files."""
+        """No Michelangelo CRDs in the cluster -> snapshot dir has no CRD yaml files."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             with (
                 patch.object(sandbox, "_dir", Path(tmp_dir)),
                 patch.object(sandbox, "_assert_sandbox_cluster_running"),
                 patch.object(sandbox.subprocess, "run") as mock_run,
+                patch.object(
+                    sandbox, "_snapshot_capture_helm_values", return_value=False
+                ),
             ):
                 mock_run.return_value = Mock(stdout="", returncode=0)
                 sandbox._snapshot_create(argparse.Namespace())
@@ -66,8 +69,10 @@ class SnapshotCreateTest(TestCase):
 
         def fake_run(args, **kwargs):
             if "api-resources" in args:
-                return Mock(stdout="pipelines.michelangelo.api\n")
-            return Mock(stdout=raw_pipeline_list)
+                return Mock(stdout="pipelines.michelangelo.api\n", returncode=0)
+            if args[:3] == ["helm", "get", "values"]:
+                return Mock(stdout="{}\n", returncode=0)
+            return Mock(stdout=raw_pipeline_list, returncode=0)
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             with (
@@ -97,6 +102,65 @@ class SnapshotCreateTest(TestCase):
             self.assertEqual(annotations, {"michelangelo/worker_queue": "default"})
             self.assertEqual(item["spec"], {"type": "PIPELINE_TYPE_EVAL"})
             self.assertEqual(item["status"], {"state": "PIPELINE_STATE_READY"})
+
+    def test_create_captures_and_redacts_helm_values(self):
+        """helm-values.yaml is written with rootPassword redacted."""
+        helm_values = yaml.safe_dump(
+            {
+                "workflow": {"engine": "cadence"},
+                "metadataStorage": {
+                    "host": "mysql",
+                    "rootPassword": "super-secret",
+                },
+            }
+        )
+
+        def fake_run(args, **kwargs):
+            if "api-resources" in args:
+                return Mock(stdout="", returncode=0)
+            if args[:3] == ["helm", "get", "values"]:
+                return Mock(stdout=helm_values, returncode=0)
+            return Mock(stdout="", returncode=0)
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            with (
+                patch.object(sandbox, "_dir", Path(tmp_dir)),
+                patch.object(sandbox, "_assert_sandbox_cluster_running"),
+                patch.object(sandbox.subprocess, "run", side_effect=fake_run),
+            ):
+                sandbox._snapshot_create(argparse.Namespace())
+
+            written_files = list(Path(tmp_dir).glob("snapshots/*/helm-values.yaml"))
+            self.assertEqual(len(written_files), 1)
+
+            with open(written_files[0]) as f:
+                written = yaml.safe_load(f)
+
+            self.assertEqual(written["metadataStorage"]["rootPassword"], "<redacted>")
+            self.assertEqual(written["metadataStorage"]["host"], "mysql")
+            self.assertEqual(written["workflow"], {"engine": "cadence"})
+
+    def test_create_continues_when_helm_get_values_fails(self):
+        """A broken/missing Helm release warns and skips settings, doesn't abort."""
+
+        def fake_run(args, **kwargs):
+            if "api-resources" in args:
+                return Mock(stdout="", returncode=0)
+            if args[:3] == ["helm", "get", "values"]:
+                return Mock(stdout="", stderr="release: not found", returncode=1)
+            return Mock(stdout="", returncode=0)
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            with (
+                patch.object(sandbox, "_dir", Path(tmp_dir)),
+                patch.object(sandbox, "_assert_sandbox_cluster_running"),
+                patch.object(sandbox.subprocess, "run", side_effect=fake_run),
+            ):
+                # Should not raise even though the helm release is missing.
+                sandbox._snapshot_create(argparse.Namespace())
+
+            written_files = list(Path(tmp_dir).glob("snapshots/*/helm-values.yaml"))
+            self.assertEqual(written_files, [])
 
 
 class SnapshotRestoreTest(TestCase):
@@ -193,3 +257,111 @@ class SnapshotRestoreTest(TestCase):
         ):
             sandbox._snapshot_restore(argparse.Namespace(timestamp="does-not-exist"))
         mock_err.assert_called_once()
+
+    def test_restore_never_applies_helm_values_file(self):
+        """helm-values.yaml is not a manifest and must never be kubectl-applied."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            snapshot_dir = Path(tmp_dir) / "snapshots" / "20260101-000000"
+            snapshot_dir.mkdir(parents=True)
+            self._write_kind_file(snapshot_dir, "pipelines.yaml", [])
+            with open(snapshot_dir / "helm-values.yaml", "w") as f:
+                yaml.safe_dump({"workflow": {"engine": "cadence"}}, f)
+
+            with (
+                patch.object(sandbox, "_dir", Path(tmp_dir)),
+                patch.object(sandbox, "_assert_sandbox_cluster_running"),
+                patch.object(sandbox, "_kube_apply") as mock_apply,
+                patch.object(sandbox, "_helm_get_values", return_value=None),
+            ):
+                sandbox._snapshot_restore(
+                    argparse.Namespace(timestamp="20260101-000000")
+                )
+
+            applied_paths = {call.args[0].name for call in mock_apply.call_args_list}
+            self.assertEqual(applied_paths, {"pipelines.yaml"})
+
+    def test_restore_prints_diff_between_captured_and_live_helm_values(self):
+        """A settings difference between snapshot and live sandbox is surfaced."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            snapshot_dir = Path(tmp_dir) / "snapshots" / "20260101-000000"
+            snapshot_dir.mkdir(parents=True)
+            with open(snapshot_dir / "helm-values.yaml", "w") as f:
+                yaml.safe_dump(
+                    {"metadataStorage": {"enable": False}}, f, sort_keys=False
+                )
+
+            with (
+                patch.object(sandbox, "_dir", Path(tmp_dir)),
+                patch.object(sandbox, "_assert_sandbox_cluster_running"),
+                patch.object(sandbox, "_kube_apply"),
+                patch.object(
+                    sandbox,
+                    "_helm_get_values",
+                    return_value={"metadataStorage": {"enable": True}},
+                ),
+                patch("builtins.print") as mock_print,
+            ):
+                sandbox._snapshot_restore(
+                    argparse.Namespace(timestamp="20260101-000000")
+                )
+
+            printed = "\n".join(str(call.args[0]) for call in mock_print.call_args_list)
+            self.assertIn("differ", printed)
+            self.assertIn("enable: false", printed)
+            self.assertIn("enable: true", printed)
+
+    def test_restore_diff_ignores_redacted_password_noise(self):
+        """A redacted field never shows up as a spurious diff on its own.
+
+        The captured file always has rootPassword redacted, but the live
+        release never does — without redacting the live side too, every
+        restore would show a rootPassword diff line even with no real
+        settings drift.
+        """
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            snapshot_dir = Path(tmp_dir) / "snapshots" / "20260101-000000"
+            snapshot_dir.mkdir(parents=True)
+            with open(snapshot_dir / "helm-values.yaml", "w") as f:
+                yaml.safe_dump(
+                    {"metadataStorage": {"rootPassword": "<redacted>"}},
+                    f,
+                    sort_keys=False,
+                )
+
+            with (
+                patch.object(sandbox, "_dir", Path(tmp_dir)),
+                patch.object(sandbox, "_assert_sandbox_cluster_running"),
+                patch.object(sandbox, "_kube_apply"),
+                patch.object(
+                    sandbox,
+                    "_helm_get_values",
+                    return_value={"metadataStorage": {"rootPassword": "root"}},
+                ),
+                patch("builtins.print") as mock_print,
+            ):
+                sandbox._snapshot_restore(
+                    argparse.Namespace(timestamp="20260101-000000")
+                )
+
+            printed = "\n".join(str(call.args[0]) for call in mock_print.call_args_list)
+            self.assertIn("match the live sandbox", printed)
+            self.assertNotIn("differ from", printed)
+
+    def test_restore_reports_no_helm_values_file_silently(self):
+        """An old snapshot lacking helm-values.yaml restores with no settings diff."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            snapshot_dir = Path(tmp_dir) / "snapshots" / "20260101-000000"
+            snapshot_dir.mkdir(parents=True)
+            self._write_kind_file(snapshot_dir, "pipelines.yaml", [])
+
+            with (
+                patch.object(sandbox, "_dir", Path(tmp_dir)),
+                patch.object(sandbox, "_assert_sandbox_cluster_running"),
+                patch.object(sandbox, "_kube_apply"),
+                patch.object(sandbox, "_helm_get_values") as mock_helm_values,
+            ):
+                sandbox._snapshot_restore(
+                    argparse.Namespace(timestamp="20260101-000000")
+                )
+
+            mock_helm_values.assert_not_called()

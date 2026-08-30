@@ -2,6 +2,7 @@
 
 import argparse
 import base64
+import difflib
 import shutil
 import string
 import subprocess
@@ -101,6 +102,16 @@ _snapshot_strip_annotations = [
     "kubectl.kubernetes.io/last-applied-configuration",
     "michelangelo/MetadataStoragePrimaryKey",
 ]
+
+# Helm values keys redacted from a snapshot's captured settings before
+# writing to disk — dotted path into the nested values dict. `helm get
+# values -a` doesn't redact secrets on its own, so this mirrors
+# `_strip_volatile_fields`'s "strip before writing" pattern for the one
+# credential a sandbox's values commonly carry.
+_snapshot_redact_helm_value_keys = [
+    "metadataStorage.rootPassword",
+]
+_snapshot_redacted_placeholder = "<redacted>"
 
 
 def _loopback(port_spec: str) -> str:
@@ -266,14 +277,28 @@ def init_arguments(p: argparse.ArgumentParser):
     )
 
     snapshot_p = sp.add_parser(
-        "snapshot", help="Capture or restore Michelangelo CRD state."
+        "snapshot", help="Capture or restore Michelangelo CRD state and Helm settings."
     )
     snapshot_sp = snapshot_p.add_subparsers(dest="snapshot_action", required=True)
     _ = snapshot_sp.add_parser(
-        "create", help="Capture all Michelangelo CRDs in the cluster to disk."
+        "create",
+        help=(
+            "Capture all Michelangelo CRDs and the michelangelo Helm "
+            "release's settings (workflow engine, metadata storage, "
+            "per-service excludes, etc.) to disk. Does NOT capture "
+            "--include-experimental flags (e.g. mlflow) or k3d cluster "
+            "topology (port mappings, --create-compute-cluster) — neither "
+            "is tracked by Helm."
+        ),
     )
     restore_p = snapshot_sp.add_parser(
-        "restore", help="Replay a previously captured snapshot into the cluster."
+        "restore",
+        help=(
+            "Replay a previously captured snapshot's CRDs into the cluster "
+            "and print a diff between its captured Helm settings and the "
+            "live sandbox's settings. Settings are report-only: restoring "
+            "never changes the live sandbox's Helm configuration."
+        ),
     )
     restore_p.add_argument(
         "timestamp",
@@ -1322,6 +1347,58 @@ def _strip_volatile_fields(item: dict):
             metadata.pop("annotations", None)
 
 
+def _helm_get_values() -> Optional[dict]:
+    """Return the michelangelo release's merged Helm values, or None if unavailable."""
+    result = subprocess.run(
+        ["helm", "get", "values", "michelangelo", "-a", "-o", "yaml"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return None
+    return yaml.safe_load(result.stdout) or {}
+
+
+def _redact_helm_values(values: dict):
+    """Redact known-sensitive keys from a Helm values dict in place.
+
+    `helm get values -a` doesn't redact secrets on its own, so this is the
+    settings-file counterpart to `_strip_volatile_fields`.
+    """
+    for dotted_key in _snapshot_redact_helm_value_keys:
+        node = values
+        parts = dotted_key.split(".")
+        for part in parts[:-1]:
+            node = node.get(part) if isinstance(node, dict) else None
+            if not isinstance(node, dict):
+                break
+        if isinstance(node, dict) and parts[-1] in node:
+            node[parts[-1]] = _snapshot_redacted_placeholder
+
+
+def _snapshot_capture_helm_values(out_dir: Path) -> bool:
+    """Capture the michelangelo Helm release's live settings to disk.
+
+    Settings like EnableMetadataStorage, workflow engine, and per-service
+    excludes all resolve to Helm values, so this needs no new
+    state-tracking — Helm already persists the release's effective values
+    as a Secret in the cluster. Returns False (after printing a warning)
+    if the release can't be read, without aborting the CRD capture.
+    """
+    values = _helm_get_values()
+    if values is None:
+        print(
+            "⚠️  Could not read Helm values for release 'michelangelo' — "
+            "skipping settings capture (is it installed?)."
+        )
+        return False
+
+    _redact_helm_values(values)
+    with open(out_dir / "helm-values.yaml", "w") as f:
+        yaml.safe_dump(values, f, sort_keys=False)
+    return True
+
+
 def _snapshot_create(ns: argparse.Namespace):
     """Capture every Michelangelo CRD in the cluster to a timestamped directory."""
     assert ns
@@ -1357,6 +1434,8 @@ def _snapshot_create(ns: argparse.Namespace):
             )
         captured_kinds.append(kind_name)
 
+    helm_values_captured = _snapshot_capture_helm_values(out_dir)
+
     print(f"\n📸 Snapshot captured at {out_dir}")
     if captured_kinds:
         print("Captured kinds:")
@@ -1364,6 +1443,50 @@ def _snapshot_create(ns: argparse.Namespace):
             print(f"  - {kind_name}")
     else:
         print("No Michelangelo resources found in the cluster.")
+    if helm_values_captured:
+        print("Captured Helm settings: helm-values.yaml")
+
+
+def _snapshot_report_helm_values_diff(snapshot_path: Path):
+    """Print a diff between a snapshot's captured settings and the live release.
+
+    Report-only in this version: nothing here mutates the cluster. Actually
+    reconfiguring a live sandbox to match a captured snapshot's settings
+    (e.g. via `helm upgrade --reuse-values`) is deferred to a future
+    `--apply-settings` flag.
+    """
+    helm_values_file = snapshot_path / "helm-values.yaml"
+    if not helm_values_file.exists():
+        return
+
+    with open(helm_values_file) as f:
+        captured_text = f.read()
+
+    live_values = _helm_get_values()
+    if live_values is None:
+        print(
+            "\n⚠️  Could not read live Helm values to diff against "
+            f"{helm_values_file.name} (is the release installed?)."
+        )
+        return
+
+    # Redact the live side the same way the snapshot was redacted, so a
+    # redacted key never shows up as a spurious diff line.
+    _redact_helm_values(live_values)
+    live_text = yaml.safe_dump(live_values, sort_keys=False)
+    diff = list(
+        difflib.unified_diff(
+            captured_text.splitlines(keepends=True),
+            live_text.splitlines(keepends=True),
+            fromfile="snapshot helm-values.yaml",
+            tofile="live helm values",
+        )
+    )
+    if diff:
+        print("\n⚙️  Helm settings differ from the live sandbox:")
+        print("".join(diff))
+    else:
+        print("\n⚙️  Helm settings match the live sandbox — no differences.")
 
 
 def _snapshot_restore(ns: argparse.Namespace):
@@ -1374,7 +1497,8 @@ def _snapshot_restore(ns: argparse.Namespace):
     with projects. Every other `<kind>.yaml` file is then applied in any
     order; nothing in the cluster enforces that a Project must exist before
     other CRs are created, so this ordering is a courtesy, not a correctness
-    requirement.
+    requirement. `helm-values.yaml` (if present) is never applied — it's not
+    a Kubernetes manifest; see `_snapshot_report_helm_values_diff`.
     """
     assert ns
     _assert_sandbox_cluster_running()
@@ -1398,11 +1522,13 @@ def _snapshot_restore(ns: argparse.Namespace):
         _kube_apply(projects_file, context=context)
 
     for yaml_file in sorted(snapshot_path.glob("*.yaml")):
-        if yaml_file == projects_file:
+        if yaml_file == projects_file or yaml_file.name == "helm-values.yaml":
             continue
         _kube_apply(yaml_file, context=context)
 
     print(f"\n✅ Restored snapshot from {snapshot_path}")
+
+    _snapshot_report_helm_values_diff(snapshot_path)
 
 
 def _delete(ns: argparse.Namespace):
