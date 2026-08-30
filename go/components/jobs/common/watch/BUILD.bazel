@@ -1,0 +1,40 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    srcs = ["federated_watcher.go"],
+    importpath = "github.com/michelangelo-ai/michelangelo/go/components/jobs/common/watch",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go/components/jobs/client:go_default_library",
+        "//go/components/jobs/cluster:go_default_library",
+        "//go/components/jobs/common/constants:go_default_library",
+        "//go/components/jobs/metrics:go_default_library",
+        "//proto/api/v2:go_default_library",
+        "@com_github_go_logr_logr//:go_default_library",
+        "@com_github_uber_go_tally//:go_default_library",
+        "@io_k8s_apimachinery//pkg/util/wait:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["federated_watcher_test.go"],
+    embed = [":go_default_library"],
+    deps = [
+        "//go/components/jobs/client:go_default_library",
+        "//go/components/jobs/client/clientmocks:go_default_library",
+        "//go/components/jobs/cluster:go_default_library",
+        "//go/components/jobs/cluster/clustermocks:go_default_library",
+        "//go/components/jobs/common/constants:go_default_library",
+        "//go/components/jobs/metrics:go_default_library",
+        "//proto/api/v2:go_default_library",
+        "@com_github_go_logr_zapr//:go_default_library",
+        "@com_github_golang_mock//gomock:go_default_library",
+        "@com_github_stretchr_testify//require:go_default_library",
+        "@com_github_uber_go_tally//:go_default_library",
+        "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
+        "@org_uber_go_zap//:go_default_library",
+        "@org_uber_go_zap//zaptest:go_default_library",
+    ],
+)
