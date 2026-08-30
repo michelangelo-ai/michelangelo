@@ -1,17 +1,23 @@
-name: Build Triton bert_cola serving image
+name: Build Triton serving image
 
-# Builds the custom Triton image used to serve the bert_cola demo model --
-# the stock nvcr.io/nvidia/tritonserver image has no torch/transformers, which
-# the custom python-backend package (examples/bert_cola/assembler.py) needs at
-# load time. Single-arch (linux/amd64) since it's only used against the
-# scala-hello-test sandbox cluster's amd64 nodes; manual trigger since the
-# base image + pinned deps rarely change.
+# Rebuild and push Michelangelo's default Triton serving image whenever its
+# Dockerfile changes. Consumed by go/components/inferenceserver/backends/
+# triton.go's tritonImage() as the default image for Triton-backed
+# InferenceServers, so the pushed tag must stay in sync with what triton.go
+# hardcodes.
+#
+# nvcr.io/nvidia/tritonserver is amd64-only, so this doesn't need the
+# multi-arch QEMU/buildx-merge dance used by build-examples-image.yaml.
 on:
+  push:
+    branches: [main]
+    paths:
+      - "docker/triton-serving.Dockerfile"
   workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository_owner }}/tritonserver-bert-cola
+  IMAGE_NAME: ${{ github.repository_owner }}/triton-serving
 
 jobs:
   build:
@@ -44,13 +50,11 @@ jobs:
             type=sha,prefix=sha-
 
       - name: Build and push
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
-          context: ./python/examples/bert_cola/deploy
-          file: ./python/examples/bert_cola/deploy/Dockerfile.triton
+          context: .
+          file: docker/triton-serving.Dockerfile
           platforms: linux/amd64
-          push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          push: true

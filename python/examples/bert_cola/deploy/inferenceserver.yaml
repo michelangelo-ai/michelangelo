@@ -16,7 +16,6 @@ spec:
       memory: "2Gi"
     servingSpec:
       version: "latest"
-      containerBuildTemplate: "tritonserver-bert-cola:23.04-py3-torch"
     numInstances: 1
   decomSpec:
     decommission: false
