@@ -125,7 +125,7 @@ def _sample_data(
     config=RayTask(head_cpu=1, head_memory="2Gi", worker_instances=0),
 )
 def assembler(
-    train_output_dir: str,
+    train_output_uri: str,
     lr: float,
     eps: float,
     tokenizer_max_length: int = 128,
@@ -133,14 +133,16 @@ def assembler(
     """Assemble the fine-tuned BERT checkpoint into deployable and raw Triton packages.
 
     ``CustomTritonPackager`` (invoked via ``custom_assembler``) only
-    understands locally-resident model artifacts, and the raw checkpoint is
-    already local (``train()`` writes it via ``trainer.save_model()``), so
-    this uploads it once through this task's own storage backend to obtain a
-    URI ``custom_assembler`` can download back from.
+    understands locally-resident model artifacts. train() and assembler()
+    run as separate Ray jobs with no shared local filesystem, so train()
+    already uploads the checkpoint through a storage backend and passes the
+    resulting URI here; ``custom_assembler`` downloads it back from that URI
+    via this task's own storage backend.
 
     Args:
-        train_output_dir: Local directory ``train()`` saved the fine-tuned
-            model and tokenizer to (via ``Trainer.save_model()``).
+        train_output_uri: Storage URI train() uploaded the fine-tuned model
+            and tokenizer to (via its own storage backend, after
+            ``Trainer.save_model()``).
         lr: Learning rate used for training, recorded as a hyperparameter.
         eps: Adam epsilon used for training, recorded as a hyperparameter.
         tokenizer_max_length: Max sequence length used for tokenization --
@@ -156,7 +158,7 @@ def assembler(
     schema = _schema(tokenizer_max_length)
     sample_data = _sample_data(tokenizer, tokenizer_max_length)
 
-    raw_model_uri = storage_backend.upload(train_output_dir, "raw_model")
+    raw_model_uri = train_output_uri
     metadata = ModelMetadata(
         training_framework=TRAINING_FRAMEWORK_CUSTOM,
         model_class=_MODEL_CLASS,

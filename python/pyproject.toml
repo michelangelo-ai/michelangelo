@@ -79,6 +79,12 @@ peft = { version = "^0.3.0", optional = true }
 # For MinIO storage backend
 minio = { version = ">=7.2,<8", optional = true }
 
+# matplotlib (pulled in transitively via pytorch_lightning -> torchmetrics on
+# Python < 3.10) needs importlib-resources at runtime; make it explicit so it
+# isn't silently dropped in a leaner install (see examples:main image bug
+# where `torchmetrics.utilities.plot` failed with ModuleNotFoundError).
+importlib-resources = { version = ">=6.5.2", optional = true, python = "<3.10" }
+
 # For VLLM
 setuptools = { version = "79.0.1", optional = true }
 vllm = { version = "0.9.2", optional = true, python = "<3.13" }
@@ -93,7 +99,7 @@ ma = 'michelangelo.cli.cli:main'
 dev = ["pytest", "pytest-cov", "coverage", "ruff", "jinja2", "pre-commit", "docker", "torch", "pandas", "numpy", "transformers", "pyarrow", "pytorch_lightning", "ray", "polars", "xgboost"]
 plugin = ["ray", "pyspark"]
 ray-polars = ["ray", "polars"]  # Polars fallback for PyArrow nested-data bug (ray-project/ray#61675)
-example = ["accelerate", "datasets", "numpy", "pandas", "pyarrow", "ray", "s3fs", "torch", "transformers", "pytorch_lightning", "einops", "xgboost", "xgboost_ray", "kaggle", "scikit-learn", "chronon-ai", "thrift", "sqlglot", "pyspark", "ray", "mlflow", "boto3", "peft", "minio"]
+example = ["accelerate", "datasets", "numpy", "pandas", "pyarrow", "ray", "s3fs", "torch", "transformers", "pytorch_lightning", "einops", "xgboost", "xgboost_ray", "kaggle", "scikit-learn", "chronon-ai", "thrift", "sqlglot", "pyspark", "ray", "mlflow", "boto3", "peft", "minio", "importlib-resources"]
 minio = ["minio"]
 vllm = ["accelerate", "datasets", "numpy", "pandas", "pyarrow", "ray", "s3fs", "torch", "transformers", "pytorch_lightning", "einops", "vllm", "setuptools"]
 mactl = []

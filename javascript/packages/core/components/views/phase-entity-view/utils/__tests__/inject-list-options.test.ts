@@ -12,10 +12,10 @@ describe('injectListOptions', () => {
     expected: ReturnType<typeof injectListOptions>;
   }>([
     {
-      name: 'pipeline with pipeline types builds a fieldSelector',
+      name: 'pipeline with pipeline types builds a labelSelector',
       service: 'pipeline',
       pipelineTypes: ['batch', 'streaming'],
-      expected: { fieldSelector: 'pipeline_type in (batch,streaming)' },
+      expected: { labelSelector: 'michelangelo/SourcePipelineType in (batch,streaming)' },
     },
     {
       name: 'pipeline with no pipeline types is undefined',

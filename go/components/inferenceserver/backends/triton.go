@@ -1,9 +1,12 @@
 package backends
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net/http"
+	"time"
 
 	"go.uber.org/zap"
 	appsv1 "k8s.io/api/apps/v1"
@@ -11,6 +14,10 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/remotecommand"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
@@ -21,6 +28,12 @@ var _ Backend = &tritonBackend{}
 const (
 	defaultTritonImageTag = "23.04-py3"
 
+	// tritonLoadTimeout bounds the explicit model-load call. It's set well above the
+	// shared client's general-purpose httpClientTimeout because loading a Python-backend
+	// model (importing torch/transformers, materializing weights) can take well over 30s
+	// on a cold start, unlike the fast health/status checks that client is otherwise used for.
+	tritonLoadTimeout = 5 * time.Minute
+
 	// k8sProgressDeadlineExceeded is the Kubernetes DeploymentCondition reason string
 	// that signals a rolling update has stalled. Named constant prevents silent
 	// breakage if the comparison string drifts from the Kubernetes API.
@@ -30,6 +43,18 @@ const (
 	// fronts Triton's HTTP API.
 	tritonServicePortName = "http"
 )
+
+// tritonImage returns the Triton container image to run for inferenceServer. The stock
+// nvcr.io/nvidia/tritonserver image has no ML framework deps (torch, transformers, ...) in its
+// python-backend environment, so a custom python-backend model needs a custom image with those
+// preinstalled. ServingSpec.ContainerBuildTemplate, otherwise unused, is repurposed as that
+// per-InferenceServer image override; the default is used when it's unset.
+func tritonImage(inferenceServer *v2pb.InferenceServer) string {
+	if override := inferenceServer.Spec.GetInitSpec().GetServingSpec().GetContainerBuildTemplate(); override != "" {
+		return override
+	}
+	return fmt.Sprintf("nvcr.io/nvidia/tritonserver:%s", defaultTritonImageTag)
+}
 
 // Triton Server Management
 type tritonBackend struct{}
@@ -213,6 +238,114 @@ func (b *tritonBackend) CheckModelStatus(ctx context.Context, logger *zap.Logger
 	return ready, nil
 }
 
+// LoadModel stages modelPackage's contents into the Triton pod's model repository at
+// /mnt/models/<modelName> (via pod exec, since Triton's model-store is a hostPath the
+// controller has no other filesystem access to) and triggers Triton to load the model
+// through its explicit model-control HTTP API.
+func (b *tritonBackend) LoadModel(ctx context.Context, logger *zap.Logger, kubeClient client.Client, restConfig *rest.Config, httpClient *http.Client, apiServerURL string, inferenceServerName string, namespace string, modelName string, modelPackage []byte) error {
+	deploymentName := generateK8sDeploymentName(inferenceServerName)
+
+	podList := &corev1.PodList{}
+	if err := kubeClient.List(ctx, podList, client.InNamespace(namespace), client.MatchingLabels{"app": deploymentName}); err != nil {
+		return fmt.Errorf("list pods for inference server %s/%s: %w", namespace, inferenceServerName, err)
+	}
+	var podName string
+	for _, pod := range podList.Items {
+		if pod.Status.Phase == corev1.PodRunning {
+			podName = pod.Name
+			break
+		}
+	}
+	if podName == "" {
+		return fmt.Errorf("no running Triton pod found for inference server %s/%s", namespace, inferenceServerName)
+	}
+
+	if err := stageModelPackage(restConfig, namespace, podName, modelName, modelPackage); err != nil {
+		return fmt.Errorf("stage model %s into pod %s/%s: %w", modelName, namespace, podName, err)
+	}
+
+	if err := triggerTritonLoad(ctx, httpClient, apiServerURL, inferenceServerName, namespace, modelName); err != nil {
+		return fmt.Errorf("trigger Triton load for model %s: %w", modelName, err)
+	}
+
+	logger.Info("Staged model and triggered Triton load",
+		zap.String("model", modelName),
+		zap.String("pod", podName),
+		zap.String("inferenceServer", inferenceServerName))
+	return nil
+}
+
+// stageModelPackage execs into the Triton pod and extracts modelPackage (a tar archive
+// whose members are already laid out as a Triton model-repository entry, e.g. config.pbtxt
+// and a numbered version directory) under /mnt/models/<modelName>.
+func stageModelPackage(restConfig *rest.Config, namespace string, podName string, modelName string, modelPackage []byte) error {
+	clientset, err := kubernetes.NewForConfig(restConfig)
+	if err != nil {
+		return fmt.Errorf("build clientset: %w", err)
+	}
+
+	modelDir := fmt.Sprintf("/mnt/models/%s", modelName)
+	req := clientset.CoreV1().RESTClient().Post().
+		Resource("pods").
+		Name(podName).
+		Namespace(namespace).
+		SubResource("exec").
+		VersionedParams(&corev1.PodExecOptions{
+			Container: "triton",
+			Command:   []string{"sh", "-c", fmt.Sprintf("mkdir -p %s && tar -xf - -C %s", modelDir, modelDir)},
+			Stdin:     true,
+			Stdout:    true,
+			Stderr:    true,
+		}, scheme.ParameterCodec)
+
+	executor, err := remotecommand.NewSPDYExecutor(restConfig, "POST", req.URL())
+	if err != nil {
+		return fmt.Errorf("create SPDY executor: %w", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	if err := executor.StreamWithContext(context.Background(), remotecommand.StreamOptions{
+		Stdin:  bytes.NewReader(modelPackage),
+		Stdout: &stdout,
+		Stderr: &stderr,
+	}); err != nil {
+		return fmt.Errorf("exec tar extraction: %w (stderr: %s)", err, stderr.String())
+	}
+	return nil
+}
+
+// triggerTritonLoad calls Triton's explicit model-control load API for modelName, dispatched
+// through the Kubernetes API server's service proxy (see CheckModelStatus for why).
+func triggerTritonLoad(ctx context.Context, httpClient *http.Client, apiServerURL string, inferenceServerName string, namespace string, modelName string) error {
+	serviceName := generateK8sServiceName(inferenceServerName)
+	loadURL := fmt.Sprintf(
+		"%s/api/v1/namespaces/%s/services/%s:%s/proxy/v2/repository/models/%s/load",
+		apiServerURL, namespace, serviceName, tritonServicePortName, modelName,
+	)
+
+	req, err := http.NewRequestWithContext(ctx, "POST", loadURL, bytes.NewReader([]byte("{}")))
+	if err != nil {
+		return fmt.Errorf("create load request for model %s: %w", modelName, err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	loadClient := &http.Client{
+		Transport: httpClient.Transport,
+		Timeout:   tritonLoadTimeout,
+	}
+	resp, err := loadClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("call Triton load endpoint for model %s: %w", modelName, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("Triton load endpoint for model %s returned %s: %s", modelName, resp.Status, string(body))
+	}
+	return nil
+}
+
 func (b *tritonBackend) createTritonDeployment(ctx context.Context, logger *zap.Logger, kubeClient client.Client, inferenceServer *v2pb.InferenceServer) error {
 	deploymentName := generateK8sDeploymentName(inferenceServer.Name)
 
@@ -252,7 +385,7 @@ func (b *tritonBackend) createTritonDeployment(ctx context.Context, logger *zap.
 					Containers: []corev1.Container{
 						{
 							Name:  "triton",
-							Image: fmt.Sprintf("nvcr.io/nvidia/tritonserver:%s", defaultTritonImageTag),
+							Image: tritonImage(inferenceServer),
 							Ports: []corev1.ContainerPort{
 								{ContainerPort: 8000, Name: "http"},
 								{ContainerPort: 8001, Name: "grpc"},
