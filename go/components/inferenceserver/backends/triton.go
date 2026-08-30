@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"go.uber.org/zap"
 	appsv1 "k8s.io/api/apps/v1"
@@ -36,6 +37,12 @@ const (
 	// docker/triton-serving.Dockerfile, whose FROM should stay in sync with
 	// this even though it isn't wired to any running InferenceServer today.
 	defaultTritonImageTag = "25.01-py3"
+
+	// tritonLoadTimeout bounds the explicit model-load call. It's set well above the
+	// shared client's general-purpose httpClientTimeout because loading a Python-backend
+	// model (importing torch/transformers, materializing weights) can take well over 30s
+	// on a cold start, unlike the fast health/status checks that client is otherwise used for.
+	tritonLoadTimeout = 5 * time.Minute
 
 	// k8sProgressDeadlineExceeded is the Kubernetes DeploymentCondition reason string
 	// that signals a rolling update has stalled. Named constant prevents silent
@@ -332,7 +339,11 @@ func triggerTritonLoad(ctx context.Context, httpClient *http.Client, apiServerUR
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := httpClient.Do(req)
+	loadClient := &http.Client{
+		Transport: httpClient.Transport,
+		Timeout:   tritonLoadTimeout,
+	}
+	resp, err := loadClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("call Triton load endpoint for model %s: %w", modelName, err)
 	}
