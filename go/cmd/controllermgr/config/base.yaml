@@ -42,6 +42,11 @@ controllers:
   rayCluster:
     k8sQps: 300
     k8sBurst: 600
+  rayJob:
+    # finishedJobTtlSeconds is how long a terminal RayJob is retained in the
+    # compute cluster before the controller deletes its KubeRay RayJob.
+    # Unset or non-positive falls back to the controller default (24h).
+    # finishedJobTtlSeconds: 86400
 
 # k8sengine mapper config — consumed by go/components/jobs/client/k8sengine.
 # logPersistence drives both the collector-sidecar injection (mapRayCluster)

@@ -62,6 +62,15 @@ func (m *mockClusterCache) addCluster(name string, cluster *v2pb.Cluster) {
 	m.clusters[name] = cluster
 }
 
+func findCondition(job *v2pb.RayJob, condType string) *apipb.Condition {
+	for _, c := range job.Status.StatusConditions {
+		if c.Type == condType {
+			return c
+		}
+	}
+	return nil
+}
+
 func TestReconciler_Reconcile(t *testing.T) {
 	ctx := context.Background()
 
@@ -73,6 +82,7 @@ func TestReconciler_Reconcile(t *testing.T) {
 	// Test cases
 	tests := []struct {
 		name             string
+		ttl              time.Duration
 		setup            func() []client.Object
 		setupMocks       func(*gomock.Controller, *clientmocks.MockFederatedClient, *mockClusterCache)
 		expectedState    v2pb.RayJobState
@@ -617,11 +627,14 @@ func TestReconciler_Reconcile(t *testing.T) {
 			expectedMessage: "",
 			errorAssertion:  require.NoError,
 			postCheck: func(res ctrl.Result) {
-				// Terminal state, should not requeue
-				assert.Equal(t, time.Duration(0), res.RequeueAfter)
+				// Terminal state: schedule cleanup after the retention window.
+				assert.Equal(t, _defaultFinishedJobTTL, res.RequeueAfter)
 			},
 			verifyConditions: func(t *testing.T, job *v2pb.RayJob) {
 				assert.Equal(t, "SUCCEEDED", job.Status.JobStatus)
+				cleanup := findCondition(job, "RemoteJobCleanedUp")
+				require.NotNil(t, cleanup)
+				assert.Equal(t, apipb.CONDITION_STATUS_FALSE, cleanup.Status)
 			},
 		},
 		{
@@ -686,7 +699,8 @@ func TestReconciler_Reconcile(t *testing.T) {
 			expectedMessage: "Job execution failed",
 			errorAssertion:  require.NoError,
 			postCheck: func(res ctrl.Result) {
-				assert.Equal(t, time.Duration(0), res.RequeueAfter)
+				// Terminal state: schedule cleanup after the retention window.
+				assert.Equal(t, _defaultFinishedJobTTL, res.RequeueAfter)
 			},
 			verifyConditions: func(t *testing.T, job *v2pb.RayJob) {
 				assert.Equal(t, "FAILED", job.Status.JobStatus)
@@ -754,7 +768,8 @@ func TestReconciler_Reconcile(t *testing.T) {
 			expectedMessage: "Job was stopped",
 			errorAssertion:  require.NoError,
 			postCheck: func(res ctrl.Result) {
-				assert.Equal(t, time.Duration(0), res.RequeueAfter)
+				// Terminal state: schedule cleanup after the retention window.
+				assert.Equal(t, _defaultFinishedJobTTL, res.RequeueAfter)
 			},
 			verifyConditions: func(t *testing.T, job *v2pb.RayJob) {
 				assert.Equal(t, "STOPPED", job.Status.JobStatus)
@@ -943,6 +958,219 @@ func TestReconciler_Reconcile(t *testing.T) {
 				assert.Equal(t, apipb.CONDITION_STATUS_TRUE, launchedCond.Status)
 			},
 		},
+		{
+			name: "finished job is deleted from compute cluster after TTL",
+			ttl:  time.Minute,
+			setup: func() []client.Object {
+				objects := make([]client.Object, 0)
+				rayJob := &v2pb.RayJob{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       rayJobName,
+						Namespace:  testNamespace,
+						Generation: 1,
+						Finalizers: []string{_rayJobCleanupFinalizer},
+					},
+					Spec: v2pb.RayJobSpec{
+						Cluster: &apipb.ResourceIdentifier{
+							Name:      "existing-cluster",
+							Namespace: testNamespace,
+						},
+						Entrypoint: "echo Hello World",
+					},
+					Status: v2pb.RayJobStatus{
+						State:     v2pb.RAY_JOB_STATE_SUCCEEDED,
+						JobStatus: "SUCCEEDED",
+						StatusConditions: []*apipb.Condition{
+							{Type: "Launched", Status: apipb.CONDITION_STATUS_TRUE},
+							{
+								// Finished over an hour ago, well past the 1m TTL.
+								Type:                 "RemoteJobCleanedUp",
+								Status:               apipb.CONDITION_STATUS_FALSE,
+								LastUpdatedTimestamp: time.Now().Add(-time.Hour).Unix(),
+							},
+						},
+					},
+				}
+				cluster := &v2pb.RayCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "existing-cluster",
+						Namespace:  testNamespace,
+						Generation: 1,
+					},
+					Status: v2pb.RayClusterStatus{
+						State: v2pb.RAY_CLUSTER_STATE_READY,
+						Assignment: &v2pb.AssignmentInfo{
+							Cluster: assignedCluster,
+						},
+					},
+				}
+				objects = append(objects, rayJob, cluster)
+				return objects
+			},
+			setupMocks: func(ctrl *gomock.Controller, mfc *clientmocks.MockFederatedClient, mcc *mockClusterCache) {
+				mcc.addCluster(assignedCluster, &v2pb.Cluster{
+					ObjectMeta: metav1.ObjectMeta{Name: assignedCluster},
+				})
+				// Status must not be re-polled for an already-terminal job, only deleted.
+				mfc.EXPECT().DeleteJob(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+			},
+			expectedState:  v2pb.RAY_JOB_STATE_SUCCEEDED,
+			errorAssertion: require.NoError,
+			postCheck: func(res ctrl.Result) {
+				assert.Equal(t, time.Duration(0), res.RequeueAfter)
+			},
+			verifyConditions: func(t *testing.T, job *v2pb.RayJob) {
+				cleanup := findCondition(job, "RemoteJobCleanedUp")
+				require.NotNil(t, cleanup)
+				assert.Equal(t, apipb.CONDITION_STATUS_TRUE, cleanup.Status)
+			},
+		},
+		{
+			name: "finished job within TTL is not deleted yet",
+			ttl:  time.Hour,
+			setup: func() []client.Object {
+				objects := make([]client.Object, 0)
+				rayJob := &v2pb.RayJob{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       rayJobName,
+						Namespace:  testNamespace,
+						Generation: 1,
+						Finalizers: []string{_rayJobCleanupFinalizer},
+					},
+					Spec: v2pb.RayJobSpec{
+						Cluster: &apipb.ResourceIdentifier{
+							Name:      "existing-cluster",
+							Namespace: testNamespace,
+						},
+						Entrypoint: "echo Hello World",
+					},
+					Status: v2pb.RayJobStatus{
+						State:     v2pb.RAY_JOB_STATE_SUCCEEDED,
+						JobStatus: "SUCCEEDED",
+						StatusConditions: []*apipb.Condition{
+							{Type: "Launched", Status: apipb.CONDITION_STATUS_TRUE},
+							{
+								Type:                 "RemoteJobCleanedUp",
+								Status:               apipb.CONDITION_STATUS_FALSE,
+								LastUpdatedTimestamp: time.Now().Unix(),
+							},
+						},
+					},
+				}
+				objects = append(objects, rayJob)
+				return objects
+			},
+			setupMocks: func(ctrl *gomock.Controller, mfc *clientmocks.MockFederatedClient, mcc *mockClusterCache) {
+				// Neither status polling nor deletion should occur within the TTL window.
+			},
+			expectedState:  v2pb.RAY_JOB_STATE_SUCCEEDED,
+			errorAssertion: require.NoError,
+			postCheck: func(res ctrl.Result) {
+				assert.Greater(t, res.RequeueAfter, time.Duration(0))
+				assert.LessOrEqual(t, res.RequeueAfter, time.Hour)
+			},
+			verifyConditions: func(t *testing.T, job *v2pb.RayJob) {
+				cleanup := findCondition(job, "RemoteJobCleanedUp")
+				require.NotNil(t, cleanup)
+				assert.Equal(t, apipb.CONDITION_STATUS_FALSE, cleanup.Status)
+			},
+		},
+		{
+			name: "already cleaned up terminal job is skipped",
+			setup: func() []client.Object {
+				objects := make([]client.Object, 0)
+				rayJob := &v2pb.RayJob{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       rayJobName,
+						Namespace:  testNamespace,
+						Generation: 1,
+						Finalizers: []string{_rayJobCleanupFinalizer},
+					},
+					Spec: v2pb.RayJobSpec{
+						Cluster: &apipb.ResourceIdentifier{
+							Name:      "existing-cluster",
+							Namespace: testNamespace,
+						},
+						Entrypoint: "echo Hello World",
+					},
+					Status: v2pb.RayJobStatus{
+						State:     v2pb.RAY_JOB_STATE_SUCCEEDED,
+						JobStatus: "SUCCEEDED",
+						StatusConditions: []*apipb.Condition{
+							{Type: "Launched", Status: apipb.CONDITION_STATUS_TRUE},
+							{Type: "RemoteJobCleanedUp", Status: apipb.CONDITION_STATUS_TRUE},
+						},
+					},
+				}
+				objects = append(objects, rayJob)
+				return objects
+			},
+			setupMocks: func(ctrl *gomock.Controller, mfc *clientmocks.MockFederatedClient, mcc *mockClusterCache) {
+				// No remote calls expected for a fully cleaned-up job.
+			},
+			expectedState:  v2pb.RAY_JOB_STATE_SUCCEEDED,
+			errorAssertion: require.NoError,
+			postCheck: func(res ctrl.Result) {
+				assert.Equal(t, time.Duration(0), res.RequeueAfter)
+			},
+			verifyConditions: func(t *testing.T, job *v2pb.RayJob) {
+				cleanup := findCondition(job, "RemoteJobCleanedUp")
+				require.NotNil(t, cleanup)
+				assert.Equal(t, apipb.CONDITION_STATUS_TRUE, cleanup.Status)
+			},
+		},
+		{
+			name: "deletion triggers compute-cluster cleanup",
+			setup: func() []client.Object {
+				objects := make([]client.Object, 0)
+				now := metav1.Now()
+				rayJob := &v2pb.RayJob{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:              rayJobName,
+						Namespace:         testNamespace,
+						Generation:        1,
+						Finalizers:        []string{_rayJobCleanupFinalizer},
+						DeletionTimestamp: &now,
+					},
+					Spec: v2pb.RayJobSpec{
+						Cluster: &apipb.ResourceIdentifier{
+							Name:      "existing-cluster",
+							Namespace: testNamespace,
+						},
+						Entrypoint: "echo Hello World",
+					},
+					Status: v2pb.RayJobStatus{
+						State: v2pb.RAY_JOB_STATE_RUNNING,
+					},
+				}
+				cluster := &v2pb.RayCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "existing-cluster",
+						Namespace:  testNamespace,
+						Generation: 1,
+					},
+					Status: v2pb.RayClusterStatus{
+						State: v2pb.RAY_CLUSTER_STATE_READY,
+						Assignment: &v2pb.AssignmentInfo{
+							Cluster: assignedCluster,
+						},
+					},
+				}
+				objects = append(objects, rayJob, cluster)
+				return objects
+			},
+			setupMocks: func(ctrl *gomock.Controller, mfc *clientmocks.MockFederatedClient, mcc *mockClusterCache) {
+				mcc.addCluster(assignedCluster, &v2pb.Cluster{
+					ObjectMeta: metav1.ObjectMeta{Name: assignedCluster},
+				})
+				mfc.EXPECT().DeleteJob(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+			},
+			errorAssertion: require.NoError,
+			postCheck: func(res ctrl.Result) {
+				assert.Equal(t, time.Duration(0), res.RequeueAfter)
+			},
+			verifyConditions: func(t *testing.T, job *v2pb.RayJob) {},
+		},
 	}
 
 	for _, tc := range tests {
@@ -962,6 +1190,7 @@ func TestReconciler_Reconcile(t *testing.T) {
 				Client:          fakeClient,
 				federatedClient: mockFedClient,
 				clusterCache:    mockCache,
+				finishedJobTTL:  tc.ttl,
 			}
 
 			requestRayJob := types.NamespacedName{

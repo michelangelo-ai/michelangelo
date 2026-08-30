@@ -10,6 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
@@ -26,6 +27,15 @@ import (
 const (
 	requeueAfter = time.Second * 10
 	apiVersion   = "ray.io/v1"
+
+	// _defaultFinishedJobTTL is the retention window applied to a terminal
+	// RayJob before its KubeRay counterpart in the compute cluster is deleted,
+	// when no TTL is configured.
+	_defaultFinishedJobTTL = 24 * time.Hour
+
+	// _rayJobCleanupFinalizer ensures the controller gets a chance to delete the
+	// compute-cluster KubeRay RayJob before the RayJob object is removed.
+	_rayJobCleanupFinalizer = "rayjobs.michelangelo.uber.com/finalizer"
 )
 
 // Reconciler reconciles a Ray Job object
@@ -35,6 +45,10 @@ type Reconciler struct {
 	federatedClient jobsclient.FederatedClient
 	clusterCache    jobscluster.RegisteredClustersCache
 	env             env.Context
+	// finishedJobTTL is how long a terminal RayJob is retained in the compute
+	// cluster before its KubeRay RayJob is deleted. Non-positive values fall
+	// back to _defaultFinishedJobTTL.
+	finishedJobTTL time.Duration
 }
 
 // NewReconciler constructs a Reconciler with required dependencies.
@@ -47,6 +61,7 @@ func NewReconciler(
 	env env.Context,
 	federatedClient jobsclient.FederatedClient,
 	clusterCache jobscluster.RegisteredClustersCache,
+	finishedJobTTL time.Duration,
 ) *Reconciler {
 	return &Reconciler{
 		logger:          logger,
@@ -54,6 +69,7 @@ func NewReconciler(
 		federatedClient: federatedClient,
 		clusterCache:    clusterCache,
 		env:             env,
+		finishedJobTTL:  finishedJobTTL,
 	}
 }
 
@@ -74,6 +90,25 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		res.RequeueAfter = requeueAfter
 		return res, err
 	}
+
+	// If the object is being deleted, clean up the compute-cluster KubeRay
+	// RayJob before releasing our finalizer.
+	if !rayJob.GetDeletionTimestamp().IsZero() {
+		return r.reconcileDelete(ctx, logger, &rayJob)
+	}
+
+	// Register our finalizer so we get a chance to delete the compute-cluster
+	// RayJob when this object is deleted. The update re-triggers reconciliation,
+	// but we continue this pass so status reconciliation is not delayed.
+	if !controllerutil.ContainsFinalizer(&rayJob, _rayJobCleanupFinalizer) {
+		controllerutil.AddFinalizer(&rayJob, _rayJobCleanupFinalizer)
+		if err := r.Update(ctx, &rayJob); err != nil {
+			logger.Error(err, "failed to add finalizer")
+			res.RequeueAfter = requeueAfter
+			return res, err
+		}
+	}
+
 	// original copy of ray job to determine if we need to update the status
 	originalRayJob := rayJob.DeepCopy()
 	// Initialize status conditions, as they will be nil for new jobs
@@ -116,6 +151,15 @@ func (r *Reconciler) Register(mgr ctrl.Manager) error {
 
 // reconcileRayJobWithCluster handles the reconciliation logic when cluster spec is provided.
 func (r *Reconciler) reconcileRayJobWithCluster(ctx context.Context, logger logr.Logger, rayJob *v2pb.RayJob, res *ctrl.Result) {
+	// Once the job is terminal, the only remaining work is garbage-collecting
+	// the compute-cluster RayJob after the retention window. Skip fetching the
+	// (possibly already deleted) RayCluster and re-polling status, which would
+	// otherwise clobber the terminal state.
+	if isTerminalRayJobState(rayJob.Status.State) {
+		r.handleFinishedJobCleanup(ctx, logger, rayJob, res)
+		return
+	}
+
 	rayCluster := r.fetchRayCluster(ctx, logger, rayJob, res)
 	if rayCluster == nil {
 		return // Error already handled in fetchRayCluster
@@ -239,6 +283,12 @@ func (r *Reconciler) updateJobStatusIfLaunched(ctx context.Context, logger logr.
 	}
 
 	r.applyRayJobStatus(logger, rayJob, jobStatus, res)
+
+	// If the job just transitioned to a terminal state, start the cleanup
+	// lifecycle so the compute-cluster RayJob is eventually garbage-collected.
+	if isTerminalRayJobState(rayJob.Status.State) {
+		r.handleFinishedJobCleanup(ctx, logger, rayJob, res)
+	}
 }
 
 func (r *Reconciler) applyRayJobStatus(
@@ -270,4 +320,124 @@ func isTerminalRayJobState(state v2pb.RayJobState) bool {
 	default:
 		return false
 	}
+}
+
+// effectiveFinishedJobTTL returns the configured retention window, defaulting
+// to _defaultFinishedJobTTL when unset (non-positive).
+func (r *Reconciler) effectiveFinishedJobTTL() time.Duration {
+	if r.finishedJobTTL <= 0 {
+		return _defaultFinishedJobTTL
+	}
+	return r.finishedJobTTL
+}
+
+// handleFinishedJobCleanup drives the post-termination garbage collection of the
+// compute-cluster KubeRay RayJob. It records when the job first finished, waits
+// out the retention window, then deletes the remote resource exactly once.
+func (r *Reconciler) handleFinishedJobCleanup(ctx context.Context, logger logr.Logger, rayJob *v2pb.RayJob, res *ctrl.Result) {
+	cleanup := jobsutils.GetCondition(&rayJob.Status.StatusConditions, constants.RayJobCleanedUpCondition, rayJob.Generation)
+	if cleanup.Status == apipb.CONDITION_STATUS_TRUE {
+		// Already cleaned up; nothing further to do and no need to requeue.
+		return
+	}
+
+	ttl := r.effectiveFinishedJobTTL()
+
+	// First terminal observation: record the anchor timestamp and wait out the
+	// retention window. The condition's LastUpdatedTimestamp is the anchor.
+	if cleanup.Status == apipb.CONDITION_STATUS_UNKNOWN {
+		jobsutils.UpdateCondition(cleanup, jobsutils.ConditionUpdateParams{
+			Status:     apipb.CONDITION_STATUS_FALSE,
+			Generation: rayJob.Generation,
+			Reason:     "PendingCleanup",
+			Message:    fmt.Sprintf("compute-cluster ray job will be deleted after %s", ttl),
+		})
+		res.RequeueAfter = ttl
+		logger.Info("ray job finished, scheduling compute-cluster cleanup", "ttl", ttl)
+		return
+	}
+
+	// Retention window in progress: requeue for the remaining duration.
+	finishedAt := time.Unix(cleanup.GetLastUpdatedTimestamp(), 0)
+	if remaining := ttl - time.Since(finishedAt); remaining > 0 {
+		res.RequeueAfter = remaining
+		return
+	}
+
+	// Retention window elapsed: delete the compute-cluster RayJob.
+	if err := r.deleteRemoteJob(ctx, logger, rayJob); err != nil {
+		logger.Error(err, "failed to clean up finished ray job, will retry")
+		res.RequeueAfter = requeueAfter
+		return
+	}
+
+	jobsutils.UpdateCondition(cleanup, jobsutils.ConditionUpdateParams{
+		Status:     apipb.CONDITION_STATUS_TRUE,
+		Generation: rayJob.Generation,
+		Reason:     "CleanedUp",
+		Message:    "compute-cluster ray job deleted",
+	})
+	res.RequeueAfter = 0
+	logger.Info("compute-cluster ray job cleaned up")
+}
+
+// reconcileDelete deletes the compute-cluster RayJob and removes the finalizer
+// so the RayJob object can be garbage-collected.
+func (r *Reconciler) reconcileDelete(ctx context.Context, logger logr.Logger, rayJob *v2pb.RayJob) (ctrl.Result, error) {
+	if !controllerutil.ContainsFinalizer(rayJob, _rayJobCleanupFinalizer) {
+		return ctrl.Result{}, nil
+	}
+
+	logger.Info("ray job is being deleted, cleaning up compute-cluster job")
+	if err := r.deleteRemoteJob(ctx, logger, rayJob); err != nil {
+		logger.Error(err, "failed to delete compute-cluster ray job, will retry")
+		return ctrl.Result{RequeueAfter: requeueAfter}, err
+	}
+
+	controllerutil.RemoveFinalizer(rayJob, _rayJobCleanupFinalizer)
+	if err := r.Update(ctx, rayJob); err != nil {
+		logger.Error(err, "failed to remove finalizer")
+		return ctrl.Result{RequeueAfter: requeueAfter}, err
+	}
+
+	return ctrl.Result{}, nil
+}
+
+// deleteRemoteJob deletes the KubeRay RayJob from the assigned compute cluster.
+// A missing remote job is treated as success (idempotent). If the assigned
+// cluster cannot be resolved (e.g. the RayCluster is already gone), it logs and
+// returns nil so deletion is not blocked indefinitely.
+func (r *Reconciler) deleteRemoteJob(ctx context.Context, logger logr.Logger, rayJob *v2pb.RayJob) error {
+	assignedCluster := r.resolveAssignedCluster(ctx, logger, rayJob)
+	if assignedCluster == nil {
+		logger.Info("could not resolve assigned cluster, skipping compute-cluster ray job deletion")
+		return nil
+	}
+
+	if err := r.federatedClient.DeleteJob(ctx, rayJob, assignedCluster); err != nil && !apiErrors.IsNotFound(err) {
+		return fmt.Errorf("delete compute-cluster ray job: %w", err)
+	}
+
+	logger.Info("deleted compute-cluster ray job", "cluster", assignedCluster.GetName())
+	return nil
+}
+
+// resolveAssignedCluster looks up the physical cluster a RayJob was scheduled
+// to, via its referenced RayCluster. Returns nil if it cannot be determined.
+func (r *Reconciler) resolveAssignedCluster(ctx context.Context, logger logr.Logger, rayJob *v2pb.RayJob) *v2pb.Cluster {
+	clusterRef := rayJob.GetSpec().Cluster
+	if clusterRef == nil {
+		return nil
+	}
+
+	rayCluster := &v2pb.RayCluster{}
+	if err := r.Get(ctx, types.NamespacedName{
+		Namespace: clusterRef.GetNamespace(),
+		Name:      clusterRef.GetName(),
+	}, rayCluster); err != nil {
+		logger.Info("could not get ray cluster while resolving assigned cluster", "error", err.Error())
+		return nil
+	}
+
+	return r.getAssignedCluster(logger, rayCluster)
 }

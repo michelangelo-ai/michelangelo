@@ -9,6 +9,11 @@ import (
 // These are valid condition types of a Ray Job
 const (
 	RayClusterReadyCondition string = "RayClusterReady"
+	// RayJobCleanedUpCondition tracks whether the compute-cluster KubeRay RayJob
+	// has been deleted after the RayJob reached a terminal state. While false,
+	// the condition's LastUpdatedTimestamp marks when the job first finished and
+	// acts as the anchor for the retention (TTL) window.
+	RayJobCleanedUpCondition string = "RemoteJobCleanedUp"
 )
 
 // These are valid condition types of a Spark Job
