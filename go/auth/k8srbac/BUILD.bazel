@@ -1,0 +1,30 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    srcs = ["k8srbac.go"],
+    importpath = "github.com/michelangelo-ai/michelangelo/go/auth/k8srbac",
+    visibility = ["//visibility:public"],
+    deps = [
+        "@io_k8s_apimachinery//pkg/util/wait:go_default_library",
+        "@io_k8s_apiserver//pkg/authorization/authorizer:go_default_library",
+        "@io_k8s_apiserver//pkg/authorization/authorizerfactory:go_default_library",
+        "@io_k8s_client_go//kubernetes/typed/authorization/v1:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["k8srbac_test.go"],
+    embed = [":go_default_library"],
+    deps = [
+        "@com_github_stretchr_testify//assert:go_default_library",
+        "@com_github_stretchr_testify//require:go_default_library",
+        "@io_k8s_api//authorization/v1:go_default_library",
+        "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
+        "@io_k8s_apiserver//pkg/authentication/user:go_default_library",
+        "@io_k8s_apiserver//pkg/authorization/authorizer:go_default_library",
+        "@io_k8s_client_go//kubernetes:go_default_library",
+        "@io_k8s_client_go//rest:go_default_library",
+    ],
+)
