@@ -26,7 +26,10 @@ RUN yarn setup
 RUN yarn workspace @michelangelo/app build
 
 # Production image
-FROM nginx:alpine
+# Pinned by digest (rather than the floating `alpine` tag) so Dependabot can
+# track and propose base-image updates -- see .github/dependabot.yml's
+# "docker" entry.
+FROM nginx:alpine@sha256:db35bfc6b2951e7f8a72db5db120288c127ffaeeb4a6d4b95a26fead017d5913
 
 # Copy built app to nginx
 COPY --from=builder /workspace/javascript/app/dist /usr/share/nginx/html
