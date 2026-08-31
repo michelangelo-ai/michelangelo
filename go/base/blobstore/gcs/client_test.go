@@ -178,11 +178,47 @@ func TestGcsClient_Get_NotFoundAgainstFake(t *testing.T) {
 }
 
 func TestNewClient_ProvidesBlobStoreClient(t *testing.T) {
-	out := newClient(Config{Anonymous: true})
+	out, err := newClient(Config{Anonymous: true})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
 	if out.BlobStoreClient == nil {
 		t.Fatal("expected BlobStoreClient to be set, got nil")
 	}
 	if out.BlobStoreClient.Scheme() != "gs" {
 		t.Errorf("expected scheme gs, got %s", out.BlobStoreClient.Scheme())
+	}
+}
+
+func TestNewClient_LazyWithoutConfigSection(t *testing.T) {
+	// Even with a credentials file that cannot be read, construction must
+	// succeed when no gcs config section was declared: the storage client
+	// stays lazy so non-GCS deployments never fail startup.
+	out, err := newClient(Config{CredentialsFile: "/nonexistent/credentials.json"})
+	if err != nil {
+		t.Fatalf("expected no error for lazy construction, got %v", err)
+	}
+	if got := out.BlobStoreClient.(*gcsBlobClient).client; got != nil {
+		t.Error("expected storage client to remain unconstructed, got non-nil")
+	}
+}
+
+func TestNewClient_EagerWithConfigSection(t *testing.T) {
+	out, err := newClient(Config{Anonymous: true, configured: true})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if got := out.BlobStoreClient.(*gcsBlobClient).client; got == nil {
+		t.Error("expected storage client to be constructed eagerly, got nil")
+	}
+}
+
+func TestNewClient_EagerConstructionFailureSurfacesAtStartup(t *testing.T) {
+	_, err := newClient(Config{CredentialsFile: "/nonexistent/credentials.json", configured: true})
+	if err == nil {
+		t.Fatal("expected eager construction error, got nil")
+	}
+	if !strings.Contains(err.Error(), "failed to create gcs client") {
+		t.Errorf("expected wrapped construction error, got %q", err.Error())
 	}
 }
