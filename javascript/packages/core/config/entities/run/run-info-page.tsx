@@ -24,7 +24,7 @@ const EXECUTE_WORKFLOW_STEP_NAME = 'Execute Workflow';
 /** Label key stamped on every run by the create/update API hooks. */
 const ENVIRONMENT_LABEL = 'michelangelo/environment';
 
-export function RunInformationPage({ data, isLoading }: { data?: object; isLoading: boolean }) {
+export function RunInfoPage({ data, isLoading }: { data?: object; isLoading: boolean }) {
   const [css, theme] = useStyletron();
   const { projectId, phase } = useStudioParams('detail');
 

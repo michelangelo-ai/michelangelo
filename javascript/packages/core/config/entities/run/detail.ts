@@ -2,7 +2,7 @@ import { CellType } from '#core/components/cell/constants';
 import { TASK_STATE } from '#core/components/views/execution/constants';
 import { formatElapsedSeconds } from '#core/utils/time-utils';
 import { RunConfigurationPage } from './run-configuration-page';
-import { RunInformationPage } from './run-information-page';
+import { RunInfoPage } from './run-info-page';
 import { SHARED_RUN_CELL_CONFIG, STEP_STATE_COLOR_MAP, STEP_STATE_TEXT_MAP } from './shared';
 
 import type { DetailViewConfig } from '#core/components/views/types';
@@ -15,7 +15,7 @@ export const RUN_DETAIL_CONFIG: DetailViewConfig = {
       id: 'information',
       label: 'Information',
       type: 'custom',
-      component: RunInformationPage,
+      component: RunInfoPage,
     },
     {
       id: 'steps',
