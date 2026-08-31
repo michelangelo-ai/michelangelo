@@ -97,6 +97,12 @@ func (a apiHook) BeforeCreate(ctx context.Context, request *v2.CreatePipelineRun
 		api.StampSourcePipelineTypeLabelOnCreate(request.PipelineRun, pipelineType.String())
 	}
 
+	// setIfAbsent: trigger-created runs already carry this label (stamped by
+	// the trigger workflow before CreatePipelineRun is called); this covers
+	// every other creation path (e.g. the manual "Run" action) so the
+	// Pipeline detail page's runs list can filter on it uniformly.
+	setIfAbsent(request.PipelineRun, api.PipelineNameLabelName, pipeline.Name)
+
 	return cascadedelete.StampOwnerRefOnCreate(ctx, a.logger, a.scheme, request.PipelineRun, pipeline)
 }
 

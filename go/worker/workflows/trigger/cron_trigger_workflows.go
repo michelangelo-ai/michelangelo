@@ -73,8 +73,10 @@ var (
 	// PipelineManifestTypeLabel is to indicate the manifest type of this pipeline
 	PipelineManifestTypeLabel = "pipeline.michelangelo/PipelineManifestType"
 
-	// PipelineNameLabel stores the pipeline name for filtering pipeline runs
-	PipelineNameLabel = "pipelinerun.michelangelo/pipeline-name"
+	// PipelineNameLabel stores the pipeline name for filtering pipeline runs.
+	// Kept in sync with mgapi.PipelineNameLabelName, which apihook.go also
+	// stamps for non-trigger-created runs.
+	PipelineNameLabel = mgapi.PipelineNameLabelName
 
 	// activityOptionsDefault is the default activity options for the trigger workflow
 	activityOptionsDefault = workflow.ActivityOptions{

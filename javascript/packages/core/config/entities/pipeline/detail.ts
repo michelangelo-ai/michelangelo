@@ -23,8 +23,11 @@ export const PIPELINE_DETAIL_CONFIG: DetailViewConfig = {
         service: 'pipelineRun',
         serviceOptions: {
           listOptions: {
-            // Filter runs to only those belonging to the current pipeline
-            labelSelector: 'pipeline.michelangelo/name=${page.metadata.name}',
+            // Filter runs to only those belonging to the current pipeline. Stamped by
+            // apiHook.BeforeCreate (go/components/pipelinerun/apihook/apihook.go) on every
+            // PipelineRun creation path, including trigger-created runs (already set before
+            // creation by the trigger workflow, and left alone there).
+            labelSelector: 'pipelinerun.michelangelo/pipeline-name=${page.metadata.name}',
           },
         },
       },

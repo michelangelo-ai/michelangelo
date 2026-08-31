@@ -629,3 +629,30 @@ func TestBeforeCreate_StampsSourcePipelineTypeLabel(t *testing.T) {
 	assert.Equal(t, "PIPELINE_TYPE_TRAIN",
 		request.PipelineRun.GetLabels()[api.SourcePipelineTypeLabelName])
 }
+
+func TestBeforeCreate_StampsPipelineNameLabel(t *testing.T) {
+	live := &v2.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-pipeline", Namespace: testNamespace},
+	}
+	hook := setUpHook(t, live)
+
+	request := newPipelineRefRequest("test-pipeline")
+	require.NoError(t, hook.BeforeCreate(context.Background(), request))
+	assert.Equal(t, "test-pipeline",
+		request.PipelineRun.GetLabels()[api.PipelineNameLabelName])
+}
+
+func TestBeforeCreate_DoesNotOverwriteExistingPipelineNameLabel(t *testing.T) {
+	live := &v2.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-pipeline", Namespace: testNamespace},
+	}
+	hook := setUpHook(t, live)
+
+	request := newPipelineRefRequest("test-pipeline")
+	request.PipelineRun.ObjectMeta.Labels = map[string]string{
+		api.PipelineNameLabelName: "pre-stamped-value",
+	}
+	require.NoError(t, hook.BeforeCreate(context.Background(), request))
+	assert.Equal(t, "pre-stamped-value",
+		request.PipelineRun.GetLabels()[api.PipelineNameLabelName])
+}
