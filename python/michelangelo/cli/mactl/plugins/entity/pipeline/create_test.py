@@ -225,10 +225,10 @@ class PipelineCreateTest(TestCase):
     @patch(
         "michelangelo.cli.mactl.plugins.entity.pipeline.create.get_pipeline_config_and_tar"
     )
-    def test_handle_workflow_inputs_retrieval_runtime_error_graceful_degradation(
+    def test_handle_workflow_inputs_retrieval_runtime_error_generic(
         self, mock_get_config
     ):
-        """Graceful degradation when registration fails with generic RuntimeError."""
+        """Generic RuntimeError during registration surfaces as a ValueError."""
         repo_root = Path("/fake/repo")
         config_file_relative_path = "pipelines/pipeline.yaml"
         project = "test-project"
@@ -237,14 +237,12 @@ class PipelineCreateTest(TestCase):
         # Mock RuntimeError that doesn't match specific patterns
         mock_get_config.side_effect = RuntimeError("Some registration error")
 
-        # Should return empty values instead of raising
-        result = handle_workflow_inputs_retrieval(
-            repo_root, config_file_relative_path, project, pipeline
-        )
+        with self.assertRaises(ValueError) as context:
+            handle_workflow_inputs_retrieval(
+                repo_root, config_file_relative_path, project, pipeline
+            )
 
-        self.assertIsNone(result[0])
-        self.assertEqual(result[1], "")
-        self.assertEqual(result[2], "")
+        self.assertIn("Pipeline registration failed", str(context.exception))
 
     @patch(
         "michelangelo.cli.mactl.plugins.entity.pipeline.create.run_subprocess_registration"

@@ -21,9 +21,9 @@ metadata:
 data:
   crd-metrics.json: |
     {
-      "dashboard": {
-        "id": null,
-        "title": "Michelangelo CRD Metrics",
+      "id": null,
+      "uid": "crd-metrics",
+      "title": "Michelangelo CRD Metrics",
         "tags": ["michelangelo", "kubernetes", "crd"],
         "style": "dark",
         "timezone": "browser",
@@ -79,12 +79,11 @@ data:
             "gridPos": {"h": 8, "w": 24, "x": 0, "y": 8}
           }
         ],
-        "time": {
-          "from": "now-1h",
-          "to": "now"
-        },
-        "refresh": "5s"
-      }
+      "time": {
+        "from": "now-1h",
+        "to": "now"
+      },
+      "refresh": "5s"
     }
 
 ---
@@ -185,9 +184,9 @@ metadata:
 data:
   controllermgr.json: |
     {
-      "dashboard": {
-        "id": null,
-        "title": "controllermgr",
+      "id": null,
+      "uid": "adgpdn8",
+      "title": "controllermgr",
         "tags": [
           "michelangelo",
           "controllermgr"
@@ -644,7 +643,7 @@ data:
             },
             "targets": [
               {
-                "expr": "sum by(pipeline_run) (rate(pipelinerun_reconcile_success_total[5m]))",
+                "expr": "sum by(pipeline_run) (rate(pipelinerun_reconcile_success_total{pipeline_run=~\"$pipeline_run\"}[5m]))",
                 "legendFormat": "{{pipeline_run}}",
                 "refId": "A"
               }
@@ -666,7 +665,7 @@ data:
             },
             "targets": [
               {
-                "expr": "pipelinerun_reconcile_errors_total",
+                "expr": "pipelinerun_reconcile_errors_total{pipeline_run=~\"$pipeline_run\"}",
                 "legendFormat": "{{pipeline_run}}",
                 "refId": "A",
                 "format": "table",
@@ -674,6 +673,25 @@ data:
               }
             ]
           }
-        ]
-      }
+        ],
+        "templating": {
+          "list": [
+            {
+              "name": "pipeline_run",
+              "type": "query",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "Prometheus"
+              },
+              "query": "label_values(pipelinerun_reconcile_success_total, pipeline_run)",
+              "includeAll": true,
+              "multi": true,
+              "current": {
+                "text": "All",
+                "value": "$__all"
+              },
+              "refresh": 2
+            }
+          ]
+        }
     }
