@@ -43,6 +43,12 @@ Public API
 
     from michelangelo.workflow.tasks.pusher import default_registry, PluginRegistry
 
+**Registry client implementations (optional extras):**
+
+.. code-block:: python
+
+    from michelangelo.workflow.tasks.pusher import MLflowRegistryClient
+
 **Exceptions:**
 
 .. code-block:: python
@@ -68,6 +74,9 @@ from michelangelo.workflow.tasks.pusher.exceptions import (
     PusherError,
     PusherPluginError,
 )
+from michelangelo.workflow.tasks.pusher.implementations import (
+    MLflowRegistryClient,
+)
 from michelangelo.workflow.tasks.pusher.plugins import (
     DatasetPusherPlugin,
     EvalReportPusherPlugin,
@@ -87,6 +96,7 @@ __all__ = [
     "DatasetPusherPlugin",
     "EvalReportPluginConfig",
     "EvalReportPusherPlugin",
+    "MLflowRegistryClient",
     "ModelPluginConfig",
     "ModelPushResult",
     "ModelPusherPlugin",
