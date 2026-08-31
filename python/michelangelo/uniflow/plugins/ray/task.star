@@ -15,12 +15,12 @@ RAY_ENV = {
 }
 RAY_DEFAULT_HEAD_CPU = os.environ.get("RAY_DEFAULT_HEAD_CPU", "8")
 RAY_DEFAULT_HEAD_MEMORY = os.environ.get("RAY_DEFAULT_HEAD_MEMORY", "32Gi")
-RAY_DEFAULT_HEAD_DISK = os.environ.get("RAY_DEFAULT_HEAD_DISK", "512Gi")
+RAY_DEFAULT_HEAD_DISK = os.environ.get("RAY_DEFAULT_HEAD_DISK", "")
 RAY_DEFAULT_HEAD_GPU = os.environ.get("RAY_DEFAULT_HEAD_GPU", "0")
 
 RAY_DEFAULT_WORKER_CPU = os.environ.get("RAY_DEFAULT_WORKER_CPU", "8")
 RAY_DEFAULT_WORKER_MEMORY = os.environ.get("RAY_DEFAULT_WORKER_MEMORY", "32Gi")
-RAY_DEFAULT_WORKER_DISK = os.environ.get("RAY_DEFAULT_WORKER_DISK", "512Gi")
+RAY_DEFAULT_WORKER_DISK = os.environ.get("RAY_DEFAULT_WORKER_DISK", "")
 RAY_DEFAULT_WORKER_GPU = os.environ.get("RAY_DEFAULT_WORKER_GPU", "0")
 RAY_DEFAULT_WORKER_INSTANCES = os.environ.get("RAY_DEFAULT_WORKER_INSTANCES", "1")
 
@@ -164,12 +164,9 @@ def task(
         cluster_image = get_task_image(task_name)
         print("ray | create cluster:", "ns:", cluster_namespace, "image:", cluster_image, "task_name:", task_name)
 
-        # Forward disk only when it differs from the shipped default. The
-        # default (512Gi) has never reached the pod spec, so honoring it now
-        # would suddenly attach a large ephemeral-storage request to every
-        # existing RayTask; an explicit parameter or env override still wins.
-        _head_disk_request = _head_disk if _head_disk != RAY_DEFAULT_HEAD_DISK else None
-        _worker_disk_request = _worker_disk if _worker_disk != RAY_DEFAULT_WORKER_DISK else None
+        # Forward any non-empty disk value; empty means no explicit request.
+        _head_disk_request = _head_disk if _head_disk else None
+        _worker_disk_request = _worker_disk if _worker_disk else None
 
         cluster = ray_cluster_spec(
             namespace = cluster_namespace,

@@ -148,7 +148,8 @@ class TestTaskResourcePlumbing(TestCase):
     regression surface of the silently-dropped gpu/disk/object-store settings.
     """
 
-    _DEFAULT_DISK = "512Gi"
+    # The shipped default: empty string means "no explicit disk request".
+    _DEFAULT_DISK = ""
 
     def _run_task(self, environ: dict | None = None, **task_kwargs):
         captured = {}
@@ -246,12 +247,34 @@ class TestTaskResourcePlumbing(TestCase):
             "1000000000",
         )
 
-    def test_default_disk_is_not_forwarded(self):
-        """Passing exactly the shipped default disk keeps requests unchanged."""
-        cluster = self._run_task(head_disk=self._DEFAULT_DISK)
+    def test_no_disk_parameter_adds_no_request(self):
+        """Without a disk parameter no ephemeral-storage request renders."""
+        cluster = self._run_task()
 
-        head, _ = self._containers(cluster)
+        head, workers = self._containers(cluster)
         self.assertNotIn("ephemeral-storage", head["resources"]["requests"])
+        self.assertNotIn("ephemeral-storage", workers["resources"]["requests"])
+
+    def test_explicit_512gi_disk_forwards(self):
+        """A user asking for exactly 512Gi gets it.
+
+        Regression test: the old guard compared against a 512Gi shipped
+        default and silently dropped an explicit request for that one value.
+        """
+        cluster = self._run_task(head_disk="512Gi", worker_disk="512Gi")
+
+        head, workers = self._containers(cluster)
+        self.assertEqual(head["resources"]["requests"]["ephemeral-storage"], "512Gi")
+        self.assertEqual(workers["resources"]["requests"]["ephemeral-storage"], "512Gi")
+
+    def test_env_configured_default_disk_reaches_the_pod(self):
+        """A deployment-level RAY_DEFAULT_*_DISK now reaches the pod spec."""
+        self._DEFAULT_DISK = "256Gi"
+        cluster = self._run_task()
+
+        head, workers = self._containers(cluster)
+        self.assertEqual(head["resources"]["requests"]["ephemeral-storage"], "256Gi")
+        self.assertEqual(workers["resources"]["requests"]["ephemeral-storage"], "256Gi")
 
     def test_env_override_gpu_reaches_the_pod(self):
         """A RAY_OVERRIDE_*_GPU env var flows through like the parameter."""
