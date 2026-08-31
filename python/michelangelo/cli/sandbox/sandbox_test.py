@@ -32,6 +32,54 @@ class SnapshotCreateTest(TestCase):
             written = list(snapshots_dir.glob("*/*.yaml"))
             self.assertEqual(written, [])
 
+    def test_create_reports_discovered_but_empty_kinds_separately(self):
+        """A CRD kind with zero live objects is reported, not silently dropped.
+
+        Discovery is dynamic (`kubectl api-resources`) — a kind with no
+        objects yet (e.g. a fresh sandbox with no PipelineRuns) must not
+        look identical to a kind that was never discovered at all.
+        """
+
+        def fake_run(args, **kwargs):
+            if "api-resources" in args:
+                return Mock(
+                    stdout="pipelines.michelangelo.api\npipelineruns.michelangelo.api\n",
+                    returncode=0,
+                )
+            if "pipelineruns.michelangelo.api" in args:
+                return Mock(stdout=yaml.safe_dump({"items": []}), returncode=0)
+            return Mock(
+                stdout=yaml.safe_dump(
+                    {
+                        "items": [
+                            {
+                                "metadata": {"name": "p1", "namespace": "ns"},
+                                "spec": {},
+                            }
+                        ]
+                    }
+                ),
+                returncode=0,
+            )
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            with (
+                patch.object(sandbox, "_dir", Path(tmp_dir)),
+                patch.object(sandbox, "_assert_sandbox_cluster_running"),
+                patch.object(sandbox.subprocess, "run", side_effect=fake_run),
+                patch.object(
+                    sandbox, "_snapshot_capture_helm_values", return_value=False
+                ),
+                patch("builtins.print") as mock_print,
+            ):
+                sandbox._snapshot_create(argparse.Namespace())
+
+            written_files = {p.name for p in Path(tmp_dir).glob("snapshots/*/*.yaml")}
+            self.assertEqual(written_files, {"pipelines.yaml"})
+
+            printed = "\n".join(str(call.args[0]) for call in mock_print.call_args_list)
+            self.assertIn("Checked but empty: pipelineruns", printed)
+
     def test_create_writes_stripped_resource_and_keeps_status(self):
         """Volatile fields are stripped from a captured resource, status kept."""
         raw_pipeline_list = yaml.safe_dump(

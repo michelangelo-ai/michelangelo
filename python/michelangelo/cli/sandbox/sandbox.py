@@ -1410,6 +1410,7 @@ def _snapshot_create(ns: argparse.Namespace):
     out_dir.mkdir(parents=True, exist_ok=True)
 
     captured_kinds = []
+    empty_kinds = []
     for kind in _discover_michelangelo_kinds(context):
         result = subprocess.run(
             ["kubectl", "--context", context, "get", kind, "-A", "-o", "yaml"],
@@ -1419,13 +1420,14 @@ def _snapshot_create(ns: argparse.Namespace):
         )
         doc = yaml.safe_load(result.stdout) or {}
         items = doc.get("items") or []
+        kind_name = kind.split(".", 1)[0]
         if not items:
+            empty_kinds.append(kind_name)
             continue
 
         for item in items:
             _strip_volatile_fields(item)
 
-        kind_name = kind.split(".", 1)[0]
         with open(out_dir / f"{kind_name}.yaml", "w") as f:
             yaml.safe_dump(
                 {"apiVersion": "v1", "kind": "List", "items": items},
@@ -1443,6 +1445,11 @@ def _snapshot_create(ns: argparse.Namespace):
             print(f"  - {kind_name}")
     else:
         print("No Michelangelo resources found in the cluster.")
+    # Distinguish "found this CRD kind, but zero live objects" from "this CRD
+    # kind doesn't exist" — both looked identical before this line existed,
+    # which read as a discovery gap when it was really just an empty kind.
+    if empty_kinds:
+        print(f"Checked but empty: {', '.join(empty_kinds)}")
     if helm_values_captured:
         print("Captured Helm settings: helm-values.yaml")
 
