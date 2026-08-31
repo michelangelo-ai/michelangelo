@@ -8,6 +8,7 @@ import { TERMINAL_RUN_STATES } from '#core/config/entities/run/types';
 import { useStudioQuery } from '#core/hooks/use-studio-query';
 import { timestampToString } from '#core/utils/time-utils';
 import { ResumeStepOption } from './resume-step-option';
+import { CRITERION_OPERATOR_EQUAL, PIPELINE_RUN_PIPELINE_NAME_FIELD } from './shared';
 
 import type { SelectOption } from '#core/components/form/fields/select/types';
 import type {
@@ -30,27 +31,18 @@ const EXECUTE_WORKFLOW_STEP_NAME = 'Execute Workflow';
 /** Keeps the picker scannable; older runs stay reachable through search. */
 const MAX_SOURCE_RUN_OPTIONS = 25;
 
-/** `CRITERION_OPERATOR_EQUAL` from `proto/api/list.proto`. */
-const CRITERION_OPERATOR_EQUAL = 1;
-
 /**
- * Narrows the run list to one pipeline server-side.
- *
- * `pipeline_name` is the column the metadata store generates from the `spec.pipeline`
- * index annotation on `PipelineRun`, and it is indexed alongside `pipeline_namespace`.
- * Note the flat column form rather than the dotted proto path used elsewhere
- * (`pipeline_run.spec.actor.name`): criterion field names are resolved straight to SQL
- * columns, and a name still containing dots after the CRD prefix is stripped is rejected.
+ * Filters PipelineRuns to a single pipeline via `listOptionsExt` criterion.
  *
  * This narrows the query but cannot be relied on alone — see {@link buildSourceRunOptions}.
  */
-function buildPipelineCriterion(pipelineName: string) {
+function buildPipelineRunFilter(pipelineName: string) {
   return {
     listOptionsExt: {
       operation: {
         criterion: [
           {
-            fieldName: 'pipeline_run.pipeline_name',
+            fieldName: PIPELINE_RUN_PIPELINE_NAME_FIELD,
             operator: CRITERION_OPERATOR_EQUAL,
             matchValue: pipelineName,
           },
@@ -80,7 +72,7 @@ export const ResumeRunFields = ({ pipelineName }: { pipelineName: string }) => {
 
   const { data: runListData, isLoading: isLoadingRuns } = useStudioQuery<ListPipelineRunResponse>({
     queryName: 'ListPipelineRun',
-    serviceOptions: buildPipelineCriterion(pipelineName),
+    serviceOptions: buildPipelineRunFilter(pipelineName),
     clientOptions: { enabled: expanded },
   });
 
@@ -162,13 +154,11 @@ export const ResumeRunFields = ({ pipelineName }: { pipelineName: string }) => {
 /**
  * Finished runs of this pipeline, newest first.
  *
- * The pipeline filter is repeated here even though {@link buildPipelineCriterion} already
- * asks for it server-side: `ListOptionsExt` is honored only when metadata storage is
+ * The pipeline filter is repeated here even though {@link buildPipelineRunFilter} already
+ * asks for it server-side: `listOptionsExt` is honored only when metadata storage is
  * enabled and is otherwise silently ignored, so relying on it alone would widen the picker
- * to other pipelines' runs rather than narrowing it. (The label selector the pipeline
- * detail page uses, `pipeline.michelangelo/name`, is written by nothing in the platform,
- * so it is not an alternative.) This pass also does the terminal-state gating, newest-first
- * ordering, and cap, none of which the criterion expresses.
+ * to other pipelines' runs rather than narrowing it. This pass also does the terminal-state
+ * gating, newest-first ordering, and cap, none of which the criterion expresses.
  */
 function buildSourceRunOptions(
   items: PipelineRunSummary[] | undefined,

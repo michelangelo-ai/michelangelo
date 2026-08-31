@@ -1,6 +1,11 @@
 import { CellType } from '#core/components/cell/constants';
 import { SHARED_RUN_CELL_CONFIG } from '#core/config/entities/run/shared';
-import { PIPELINE_STATE_CELL, PIPELINE_TYPE_CELL } from './shared';
+import {
+  CRITERION_OPERATOR_EQUAL,
+  PIPELINE_RUN_PIPELINE_NAME_FIELD,
+  PIPELINE_STATE_CELL,
+  PIPELINE_TYPE_CELL,
+} from './shared';
 
 import type { DetailViewConfig } from '#core/components/views/types';
 
@@ -22,9 +27,16 @@ export const PIPELINE_DETAIL_CONFIG: DetailViewConfig = {
         endpoint: 'list',
         service: 'pipelineRun',
         serviceOptions: {
-          listOptions: {
-            // Filter runs to only those belonging to the current pipeline
-            labelSelector: 'pipeline.michelangelo/name=${page.metadata.name}',
+          listOptionsExt: {
+            operation: {
+              criterion: [
+                {
+                  fieldName: PIPELINE_RUN_PIPELINE_NAME_FIELD,
+                  operator: CRITERION_OPERATOR_EQUAL,
+                  matchValue: '${page.metadata.name}',
+                },
+              ],
+            },
           },
         },
       },

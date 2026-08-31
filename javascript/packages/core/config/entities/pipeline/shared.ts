@@ -2,6 +2,12 @@ import { CellType } from '#core/components/cell/constants';
 
 import type { Cell } from '#core/components/cell/types';
 
+/** `CRITERION_OPERATOR_EQUAL` from `proto/api/list.proto`. */
+export const CRITERION_OPERATOR_EQUAL = 1;
+
+/** Criterion field name for the pipeline a PipelineRun belongs to. */
+export const PIPELINE_RUN_PIPELINE_NAME_FIELD = 'pipeline_run.pipeline_name';
+
 export const PIPELINE_STATE_CELL: Cell = {
   id: 'status.state',
   label: 'State',
