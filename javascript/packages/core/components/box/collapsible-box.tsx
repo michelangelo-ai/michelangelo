@@ -71,7 +71,10 @@ export const CollapsibleBox: React.FC<CollapsibleBoxProps> = ({
           },
           Header: {
             style: {
-              padding: 0,
+              paddingTop: 0,
+              paddingBottom: 0,
+              paddingLeft: 0,
+              paddingRight: 0,
             },
           },
           Content: {

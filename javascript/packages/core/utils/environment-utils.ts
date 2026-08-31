@@ -1,4 +1,4 @@
-const ENVIRONMENT_LABEL_KEY = 'michelangelo/environment';
+export const ENVIRONMENT_LABEL_KEY = 'michelangelo/environment';
 
 const ENVIRONMENT_LABEL_MAP: Record<string, 'Development' | 'Production' | 'Testing'> = {
   development: 'Development',
