@@ -12,6 +12,7 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//go/api:go_default_library",
+        "//go/base/config:go_default_library",
         "//go/components/jobs/common/constants:go_default_library",
         "//proto/api:go_default_library",
         "//proto/api/v2:go_default_library",
@@ -35,6 +36,7 @@ go_test(
     ],
     embed = [":go_default_library"],
     deps = [
+        "//go/base/config:go_default_library",
         "//go/components/jobs/common/constants:go_default_library",
         "//proto/api:go_default_library",
         "//proto/api/v2:go_default_library",

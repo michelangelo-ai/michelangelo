@@ -493,7 +493,14 @@ func TestReconcilerReconcile(t *testing.T) {
 			postCheck: func(res ctrl.Result) {
 				assert.Equal(t, time.Duration(0), res.RequeueAfter)
 			},
-			verifyConditions: func(t *testing.T, cluster *v2pb.RayCluster) {},
+			verifyConditions: func(t *testing.T, cluster *v2pb.RayCluster) {
+				// A cluster that was never suspended must not grow a Queued
+				// condition when it becomes ready.
+				for _, cond := range cluster.Status.StatusConditions {
+					assert.NotEqual(t, QueuedCondition, cond.Type,
+						"never-suspended cluster must not grow a Queued condition")
+				}
+			},
 		},
 		{
 			name: "Cluster launched - failed state",
@@ -625,12 +632,90 @@ func TestReconcilerReconcile(t *testing.T) {
 				assert.Equal(t, requeueAfter, res.RequeueAfter)
 			},
 			verifyConditions: func(t *testing.T, cluster *v2pb.RayCluster) {
+				var queuedCond *apipb.Condition
 				for _, cond := range cluster.Status.StatusConditions {
 					if cond.Type == SucceededCondition {
 						assert.NotEqual(t, apipb.CONDITION_STATUS_FALSE, cond.Status,
 							"suspended cluster must not be marked failed")
 					}
+					if cond.Type == QueuedCondition {
+						queuedCond = cond
+					}
 				}
+				// The wait for admission is surfaced as a Queued condition.
+				assert.NotNil(t, queuedCond, "QueuedCondition should exist while suspended")
+				assert.Equal(t, apipb.CONDITION_STATUS_TRUE, queuedCond.Status)
+				assert.Equal(t, "AwaitingAdmission", queuedCond.Reason)
+				assert.Equal(t, "ClusterSuspended", queuedCond.Message)
+			},
+		},
+		{
+			name: "Cluster admitted after suspension - Queued condition flips",
+			setup: func() []client.Object {
+				objects := make([]client.Object, 0)
+				cluster := &v2pb.RayCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       rayClusterName,
+						Namespace:  testNamespace,
+						Generation: 1,
+					},
+					Spec: createRayClusterSpec(),
+					Status: v2pb.RayClusterStatus{
+						State: v2pb.RAY_CLUSTER_STATE_SUSPENDED,
+						StatusConditions: []*apipb.Condition{
+							{
+								Type:   EnqueuedCondition,
+								Status: apipb.CONDITION_STATUS_TRUE,
+							},
+							{
+								Type:   ScheduledCondition,
+								Status: apipb.CONDITION_STATUS_TRUE,
+							},
+							{
+								Type:   LaunchedCondition,
+								Status: apipb.CONDITION_STATUS_TRUE,
+							},
+							{
+								Type:   QueuedCondition,
+								Status: apipb.CONDITION_STATUS_TRUE,
+								Reason: "AwaitingAdmission",
+							},
+						},
+						Assignment: &v2pb.AssignmentInfo{
+							Cluster: assignedCluster,
+						},
+					},
+				}
+				objects = append(objects, cluster)
+				return objects
+			},
+			setupMocks: func(mfc *clientmocks.MockFederatedClient, mcc *mockClusterCache, msq *mockSchedulerQueue) {
+				mcc.addCluster(assignedCluster, &v2pb.Cluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: assignedCluster,
+					},
+				})
+				mfc.EXPECT().GetJobClusterStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(
+					&matypes.JobClusterStatus{
+						Ray: &v2pb.RayClusterStatus{State: v2pb.RAY_CLUSTER_STATE_READY},
+					}, nil)
+			},
+			expectedState:   v2pb.RAY_CLUSTER_STATE_READY,
+			expectedMessage: "",
+			errorAssertion:  require.NoError,
+			postCheck: func(res ctrl.Result) {
+				assert.Equal(t, time.Duration(0), res.RequeueAfter)
+			},
+			verifyConditions: func(t *testing.T, cluster *v2pb.RayCluster) {
+				var queuedCond *apipb.Condition
+				for _, cond := range cluster.Status.StatusConditions {
+					if cond.Type == QueuedCondition {
+						queuedCond = cond
+					}
+				}
+				assert.NotNil(t, queuedCond, "QueuedCondition should still exist after admission")
+				assert.Equal(t, apipb.CONDITION_STATUS_FALSE, queuedCond.Status)
+				assert.Equal(t, "ClusterAdmitted", queuedCond.Reason)
 			},
 		},
 		{

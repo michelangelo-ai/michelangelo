@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/michelangelo-ai/michelangelo/go/api"
+	maconfig "github.com/michelangelo-ai/michelangelo/go/base/config"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/constants"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	corev1 "k8s.io/api/core/v1"
@@ -36,6 +37,38 @@ func GetProjectNameFromLabels(labels map[string]string) (string, error) {
 		return val, nil
 	}
 	return "", fmt.Errorf("could not find out the project name from the labels: %v", labels)
+}
+
+// ProjectNameForJob returns a job's project identity for control-plane
+// decisions: the ma/project-name label when set, otherwise the job's
+// namespace — Michelangelo jobs run in their project's namespace, and unlike
+// labels the namespace is bound by authorization, so it cannot be forged by
+// the job author. Returns "" only when neither is available.
+func ProjectNameForJob(labels map[string]string, namespace string) string {
+	if name, err := GetProjectNameFromLabels(labels); err == nil && name != "" {
+		return name
+	}
+	return namespace
+}
+
+// DefaultLocalQueueTemplate is the LocalQueue naming convention applied when
+// jobs.scheduler.kueue.localQueueTemplate is not configured.
+const DefaultLocalQueueTemplate = "ma-{project}"
+
+// ResolveLocalQueueName resolves a project's Kueue LocalQueue name on the
+// target cluster: an explicit per-project override wins, otherwise "{project}"
+// in the template (default "ma-{project}") is substituted with the project
+// name. The resolution is control-plane-side by design so the queue a job
+// lands in can never be chosen by user-supplied labels.
+func ResolveLocalQueueName(cfg maconfig.KueueConfig, project string) string {
+	if name, ok := cfg.LocalQueueOverrides[project]; ok && name != "" {
+		return name
+	}
+	tmpl := cfg.LocalQueueTemplate
+	if tmpl == "" {
+		tmpl = DefaultLocalQueueTemplate
+	}
+	return strings.ReplaceAll(tmpl, "{project}", project)
 }
 
 // GetErrorFromPodStatus attempts to extract an error from the pod status

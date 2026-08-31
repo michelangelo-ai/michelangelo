@@ -437,6 +437,26 @@ controllermgr:
   # The History Server can then replay the Ray Dashboard for torn-down clusters.
   # Ref: https://github.com/ray-project/kuberay/tree/master/historyserver
   jobs:
+    # Job admission backend. Mirrors the Go config path: jobs.scheduler
+    scheduler:
+      # "default": the in-process scheduler assigns and dispatches directly.
+      # "kueue": jobs headed for compute clusters marked with
+      # scheduler_type: SCHEDULER_TYPE_KUEUE are validated against their
+      # project's Kueue LocalQueue before dispatch, and the dispatched
+      # RayCluster carries the kueue.x-k8s.io/queue-name label so Kueue on the
+      # compute cluster gang-admits it. Clusters without the marker behave
+      # exactly as "default".
+      backend: default
+      kueue:
+        # LocalQueue naming convention; "{project}" is replaced with the
+        # job's project. Empty uses the built-in default "ma-{project}".
+        localQueueTemplate: ""
+        # kueue.x-k8s.io API version on the compute clusters, for the
+        # LocalQueue existence check. Empty uses the built-in default
+        # "v1beta2" (Kueue v0.15+); set "v1beta1" for older Kueue releases.
+        apiVersion: ""
+        # Per-project LocalQueue overrides, e.g. {team-a: shared-queue}.
+        localQueueOverrides: {}
     k8sengine:
       mapper:
         logPersistence:

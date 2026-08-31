@@ -30,6 +30,13 @@ _michelangelo_sandbox_kube_cluster_name = "michelangelo-sandbox"
 _cadence_domain = "default"
 _default_compute_kube_cluster_name = "michelangelo-compute-0"
 
+# Kueue release installed on demo compute clusters. 0.15+ serves
+# kueue.x-k8s.io/v1beta2, matching the control plane's default apiVersion for
+# the LocalQueue existence check, and enables the RayCluster integration in
+# its default configuration.
+_kueue_version = "0.15.0"
+_kueue_demo_dir = _dir / "demo" / "kueue"
+
 # Path to the Michelangelo Helm chart (relative to this file)
 _chart_dir = Path(__file__).parent.parent.parent.parent.parent / "helm" / "michelangelo"
 
@@ -263,6 +270,22 @@ def init_arguments(p: argparse.ArgumentParser):
     _ = demo_sp.add_parser(
         "inference-multicluster",
         help=("Create a multi-cluster inference server demo."),
+    )
+    kueue_p = demo_sp.add_parser(
+        "kueue",
+        help=(
+            "Mark a registered compute cluster as Kueue-managed: install Kueue "
+            "on it, create the demo ClusterQueue/LocalQueue, and set "
+            "scheduler_type on its Cluster CR."
+        ),
+    )
+    kueue_p.add_argument(
+        "--compute-cluster-name",
+        default=_michelangelo_sandbox_kube_cluster_name,
+        help=(
+            "k3d cluster to Kueue-manage (default: the sandbox cluster itself, "
+            "which doubles as the default compute cluster)."
+        ),
     )
 
     snapshot_p = sp.add_parser(
@@ -1233,7 +1256,7 @@ def _assert_sandbox_cluster_running():
 def _create_demo_crs(ns: argparse.Namespace):
     """Create demo Custom Resources (CRs) for the sandbox environment."""
     assert ns
-    if ns.demo_action != "pipeline" and ns.demo_action != "inference":
+    if ns.demo_action not in ("pipeline", "inference", "kueue"):
         raise ValueError(f"Unsupported demo action: {ns.demo_action}")
 
     _assert_sandbox_cluster_running()
@@ -1264,6 +1287,8 @@ def _create_demo_crs(ns: argparse.Namespace):
         _create_inference_demo_crs()
     elif ns.demo_action == "inference-multicluster":
         _create_inference_multicluster_demo_crs()
+    elif ns.demo_action == "kueue":
+        _create_kueue_demo_crs(ns)
     else:
         raise ValueError(f"Unsupported demo action: {ns.demo_action}")
 
@@ -1938,7 +1963,7 @@ def _ensure_namespace_exists(namespace: str):
 
 
 # Given a cluster name, create a Cluster CRD in the sandbox cluster
-def _create_compute_cluster_crd(cluster_name: str):
+def _create_compute_cluster_crd(cluster_name: str, scheduler_type: str = ""):
     """Create a Cluster CRD for the Ray jobs cluster in the sandbox cluster."""
     # Ensure ma-system namespace exists
     _ensure_namespace_exists("ma-system")
@@ -1982,6 +2007,8 @@ def _create_compute_cluster_crd(cluster_name: str):
             }
         },
     }
+    if scheduler_type:
+        cluster_crd["spec"]["schedulerType"] = scheduler_type
 
     # Create a temporary file for the Cluster CRD
     with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as crd_file:
@@ -2655,6 +2682,63 @@ def _setup_istio_with_gateway_api(context: Optional[str] = None):
         )
 
     print(f"✅ Istio with Gateway API setup complete on {target_label}")
+
+
+def _create_kueue_demo_crs(ns: argparse.Namespace):
+    """Turn a registered compute cluster into a Kueue-managed one.
+
+    Installs Kueue on the target cluster (its default configuration already
+    enables the RayCluster integration), creates a demo ClusterQueue plus the
+    demo project's LocalQueue, and re-applies the cluster's Cluster CR with
+    scheduler_type: SCHEDULER_TYPE_KUEUE so the control plane labels
+    dispatched RayClusters with their LocalQueue.
+    """
+    cluster_name = ns.compute_cluster_name
+    context = f"k3d-{cluster_name}"
+
+    print(f"\n📦 Installing Kueue {_kueue_version} on {cluster_name}...")
+    _exec(
+        "helm",
+        "upgrade",
+        "--install",
+        "kueue",
+        "oci://registry.k8s.io/kueue/charts/kueue",
+        "--kube-context",
+        context,
+        "--version",
+        _kueue_version,
+        "--namespace",
+        "kueue-system",
+        "--create-namespace",
+        "--wait",
+        "--timeout",
+        "5m",
+    )
+
+    # Demo quota: one ClusterQueue for the cluster, one LocalQueue for the
+    # demo project, in the namespace where dispatched RayClusters land.
+    _exec(
+        "kubectl",
+        "--context",
+        context,
+        "apply",
+        "-f",
+        str(_kueue_demo_dir / "queues.yaml"),
+    )
+
+    # Mark the Cluster CR as Kueue-managed.
+    _create_compute_cluster_crd(cluster_name, scheduler_type="SCHEDULER_TYPE_KUEUE")
+
+    print("\n✅ Kueue demo setup complete!")
+    print(f"  • Kueue {_kueue_version} installed on {cluster_name}")
+    print("  • ClusterQueue 'cluster-queue' and LocalQueue 'ma-ma-dev-test' created")
+    print(
+        f"  • Cluster CR '{cluster_name}' marked scheduler_type: SCHEDULER_TYPE_KUEUE"
+    )
+    print()
+    print("Enable the backend on the control plane (the controllermgr restarts")
+    print("automatically on the config change):")
+    print("  ma sandbox sync --set controllermgr.jobs.scheduler.backend=kueue")
 
 
 def _create_pipeline_demo_crs():
