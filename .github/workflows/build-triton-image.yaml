@@ -1,0 +1,60 @@
+name: Build Triton serving image
+
+# Rebuild and push Michelangelo's default Triton serving image whenever its
+# Dockerfile changes. Consumed by go/components/inferenceserver/backends/
+# triton.go's tritonImage() as the default image for Triton-backed
+# InferenceServers, so the pushed tag must stay in sync with what triton.go
+# hardcodes.
+#
+# nvcr.io/nvidia/tritonserver is amd64-only, so this doesn't need the
+# multi-arch QEMU/buildx-merge dance used by build-examples-image.yaml.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docker/triton-serving.Dockerfile"
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/triton-serving
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Extract image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=23.04-py3-torch
+            type=sha,prefix=sha-
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/triton-serving.Dockerfile
+          platforms: linux/amd64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          push: true
