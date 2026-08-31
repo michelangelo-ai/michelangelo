@@ -55,37 +55,53 @@ export const RUN_STATE_COLOR_MAP: Record<number, TagColor> = {
   6: 'gray',
 };
 
+/** Created-date cell, shared between the run list and detail pages. */
+export const RUN_CREATED_COLUMN: Cell = {
+  id: 'metadata.creationTimestamp.seconds',
+  label: 'Created',
+  type: CellType.DATE,
+};
+
+/** Pipeline (and revision) cell, shared between the run list and detail pages. */
+export const RUN_PIPELINE_COLUMN: Cell = {
+  id: 'spec.pipeline.name',
+  label: 'Pipeline',
+  items: [
+    {
+      id: 'spec.pipeline.name',
+      type: CellType.TEXT,
+    },
+    {
+      id: 'spec.revision.name',
+      type: CellType.DESCRIPTION,
+    },
+  ],
+};
+
+/** Run actor cell, shared between the run list and detail pages. */
+export const RUN_STARTED_BY_COLUMN: Cell = {
+  id: 'spec.actor.name',
+  label: 'Started by',
+  type: CellType.TEXT,
+};
+
+/** Run state cell, shared between the run list and detail pages. */
+export const RUN_STATE_COLUMN: Cell = {
+  id: 'status.state',
+  label: 'State',
+  type: CellType.STATE,
+  stateTextMap: RUN_STATE_TEXT_MAP,
+  stateColorMap: RUN_STATE_COLOR_MAP,
+};
+
 /**
  * Cell configurations rendered for Pipeline Runs:
  *  - Columns for list view
  *  - Header metadata for detail view
  */
 export const SHARED_RUN_CELL_CONFIG: Cell[] = [
-  { id: 'metadata.creationTimestamp.seconds', label: 'Created', type: CellType.DATE },
-  {
-    id: 'spec.pipeline.name',
-    label: 'Pipeline',
-    items: [
-      {
-        id: 'spec.pipeline.name',
-        type: CellType.TEXT,
-      },
-      {
-        id: 'spec.revision.name',
-        type: CellType.DESCRIPTION,
-      },
-    ],
-  },
-  {
-    id: 'spec.actor.name',
-    label: 'Started by',
-    type: CellType.TEXT,
-  },
-  {
-    id: 'status.state',
-    label: 'State',
-    type: CellType.STATE,
-    stateTextMap: RUN_STATE_TEXT_MAP,
-    stateColorMap: RUN_STATE_COLOR_MAP,
-  },
+  RUN_CREATED_COLUMN,
+  RUN_PIPELINE_COLUMN,
+  RUN_STARTED_BY_COLUMN,
+  RUN_STATE_COLUMN,
 ];

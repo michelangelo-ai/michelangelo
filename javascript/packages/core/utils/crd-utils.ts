@@ -1,4 +1,5 @@
-const UPDATE_TIMESTAMP_LABEL_KEY = 'michelangelo/SpecUpdateTimestamp';
+const SPEC_UPDATE_TIMESTAMP_LABEL_KEY = 'michelangelo/SpecUpdateTimestamp';
+const UPDATE_TIMESTAMP_LABEL_KEY = 'michelangelo/UpdateTimestamp';
 const MICROSECONDS_PER_SECOND = 1_000_000;
 
 /**
@@ -35,6 +36,34 @@ export const K8S_NAME_RULES_MESSAGE =
  * }) // 1650000000 (label absent, falls back to creation time)
  */
 export function getCrdUpdatedSeconds(data: {
+  metadata?: { labels?: Record<string, string>; creationTimestamp?: { seconds: number } };
+}): number | undefined {
+  const label = data.metadata?.labels?.[SPEC_UPDATE_TIMESTAMP_LABEL_KEY];
+  if (label) return Number(label) / MICROSECONDS_PER_SECOND;
+  return data.metadata?.creationTimestamp?.seconds;
+}
+
+/**
+ * Resolves the epoch-seconds timestamp to display as an entity's "last updated" time,
+ * counting any update — not just a spec change — unlike {@link getCrdUpdatedSeconds}.
+ *
+ * Some CRD-backed entities (e.g. a pipeline run) have a `status` that changes continuously
+ * while their `spec` is effectively immutable after creation. For those, `getCrdUpdatedSeconds`'s
+ * spec-only label would render a value frozen at creation time for nearly every row, which
+ * defeats the point of a "last updated" column. This instead reads the `michelangelo/UpdateTimestamp`
+ * metadata label, which the apiserver refreshes on every update to the resource, with the same
+ * `metadata.creationTimestamp` fallback for rows that predate the label or have never been updated.
+ *
+ * @example
+ * getCrdLastUpdatedSeconds({
+ *   metadata: { labels: { 'michelangelo/UpdateTimestamp': '1700000000000000' } },
+ * }) // 1700000000
+ *
+ * getCrdLastUpdatedSeconds({
+ *   metadata: { creationTimestamp: { seconds: 1650000000 } },
+ * }) // 1650000000 (label absent, falls back to creation time)
+ */
+export function getCrdLastUpdatedSeconds(data: {
   metadata?: { labels?: Record<string, string>; creationTimestamp?: { seconds: number } };
 }): number | undefined {
   const label = data.metadata?.labels?.[UPDATE_TIMESTAMP_LABEL_KEY];
