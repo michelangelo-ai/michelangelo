@@ -82,8 +82,26 @@ data:
       {{- fail (printf "workflow.engine must be 'cadence' or 'temporal', got: %s" .Values.workflow.engine) }}
       {{- end }}
 
-    {{- with .Values.controllermgr.jobs.k8sengine.mapper.logPersistence }}
     jobs:
+      scheduler:
+        backend: {{ dig "scheduler" "backend" "default" .Values.controllermgr.jobs | quote }}
+        {{- $kueue := dig "scheduler" "kueue" dict .Values.controllermgr.jobs }}
+        {{- if or $kueue.localQueueTemplate $kueue.apiVersion $kueue.localQueueOverrides }}
+        kueue:
+          {{- with $kueue.localQueueTemplate }}
+          localQueueTemplate: {{ . | quote }}
+          {{- end }}
+          {{- with $kueue.apiVersion }}
+          apiVersion: {{ . | quote }}
+          {{- end }}
+          {{- with $kueue.localQueueOverrides }}
+          localQueueOverrides:
+            {{- range $k, $v := . }}
+            {{ $k }}: {{ $v | quote }}
+            {{- end }}
+          {{- end }}
+        {{- end }}
+      {{- with .Values.controllermgr.jobs.k8sengine.mapper.logPersistence }}
       k8sengine:
         mapper:
           logPersistence:
@@ -98,7 +116,7 @@ data:
             {{- with .logURLFormat }}
             logURLFormat: {{ . | quote }}
             {{- end }}
-    {{- end }}
+      {{- end }}
 
     notification:
       {{- $notif := default dict .Values.notification }}
