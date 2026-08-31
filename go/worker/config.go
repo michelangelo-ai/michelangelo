@@ -2,6 +2,7 @@ package worker
 
 import (
 	"crypto/tls"
+	"fmt"
 	"strings"
 
 	"go.uber.org/config"
@@ -12,7 +13,10 @@ import (
 	"go.uber.org/yarpc/peer/hostport"
 	"go.uber.org/yarpc/transport/grpc"
 	"google.golang.org/grpc/credentials"
+	"k8s.io/client-go/kubernetes"
 
+	baseconfig "github.com/michelangelo-ai/michelangelo/go/base/config"
+	"github.com/michelangelo-ai/michelangelo/go/worker/runnertoken"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
@@ -23,13 +27,18 @@ type Config struct {
 	MaAPIServiceName string `yaml:"maApiServiceName"`
 	Address          string `yaml:"address"`
 	UseTLS           bool   `yaml:"useTLS"`
+	// RunnerToken, when enabled, attaches per-project michelangelo-runner
+	// bearer tokens to outbound RPCs; disabled (the default) the worker's
+	// traffic is unchanged.
+	RunnerToken runnertoken.Config `yaml:"runnerToken"`
 }
 
 // Params provides dependencies for YARPC dispatcher.
 type Params struct {
 	fx.In
 
-	Config Config
+	Config   Config
+	Provider config.Provider
 }
 
 // ClientParams provides dependencies for creating YARPC clients.
@@ -75,16 +84,40 @@ func NewYARPCDispatcher(p Params) (*yarpc.Dispatcher, error) {
 		tran = grpc.NewTransport().NewSingleOutbound(p.Config.Address)
 	}
 
-	dispatcher := yarpc.NewDispatcher(yarpc.Config{
+	yarpcConfig := yarpc.Config{
 		Name:      p.Config.MaAPIServiceName,
 		Outbounds: yarpc.Outbounds{p.Config.MaAPIServiceName: {Unary: tran}},
-	})
+	}
+	if p.Config.RunnerToken.Enabled {
+		outboundMiddleware, err := newRunnerTokenMiddleware(p)
+		if err != nil {
+			return nil, err
+		}
+		yarpcConfig.OutboundMiddleware = yarpc.OutboundMiddleware{Unary: outboundMiddleware}
+	}
+
+	dispatcher := yarpc.NewDispatcher(yarpcConfig)
 
 	if err := dispatcher.Start(); err != nil {
 		return nil, err
 	}
 
 	return dispatcher, nil
+}
+
+// newRunnerTokenMiddleware builds the bearer-token middleware; the
+// Kubernetes client is constructed here, only when the feature is on, so a
+// disabled worker needs no cluster credentials.
+func newRunnerTokenMiddleware(p Params) (runnertoken.OutboundMiddleware, error) {
+	k8sConfig, err := baseconfig.GetK8sConfig(p.Provider)
+	if err != nil {
+		return runnertoken.OutboundMiddleware{}, fmt.Errorf("worker: runner-token middleware needs a kubernetes client: %w", err)
+	}
+	client, err := kubernetes.NewForConfig(k8sConfig)
+	if err != nil {
+		return runnertoken.OutboundMiddleware{}, fmt.Errorf("worker: runner-token middleware needs a kubernetes client: %w", err)
+	}
+	return runnertoken.NewOutboundMiddleware(runnertoken.NewMinter(client, p.Config.RunnerToken)), nil
 }
 
 // NewRayClusterServiceClient creates a RayClusterService YARPC client.

@@ -1,0 +1,35 @@
+{{- /*
+The worker's only cluster-wide grant for runner tokens: create on the
+serviceaccounts/token subresource, restricted by resourceNames to the
+michelangelo-runner ServiceAccount. Cluster-scoped because runner
+ServiceAccounts live across project namespaces; the resourceNames
+restriction keeps the worker unable to mint tokens for anything else.
+*/ -}}
+{{- if and .Values.worker.runnerToken.enabled .Values.serviceAccount.create }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "michelangelo.fullname" . }}-runner-token-minter
+  labels:
+    {{- include "michelangelo.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["serviceaccounts/token"]
+    resourceNames: ["michelangelo-runner"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "michelangelo.fullname" . }}-runner-token-minter
+  labels:
+    {{- include "michelangelo.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "michelangelo.fullname" . }}-runner-token-minter
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "michelangelo.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}

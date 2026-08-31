@@ -37,7 +37,7 @@ func opts() fx.Option {
 		zapfx.Module,
 		fx.Invoke(printConfig),
 		apihandler.APIServerModule,
-		auth.DummyAuthModule,
+		auth.AuthModule,
 		logging.DummyAuditLogModule,
 		fx.Provide(getTallyScope),
 		fx.Provide(baseconfig.GetK8sConfig),

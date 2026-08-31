@@ -11,6 +11,16 @@ data:
     worker:
       address: {{ include "michelangelo.componentFullname" (dict "context" . "component" "apiserver") }}:{{ .Values.apiserver.port }}
       maApiServiceName: ma-apiserver
+      {{- if .Values.worker.runnerToken.enabled }}
+      runnerToken:
+        enabled: true
+        {{- with .Values.worker.runnerToken.audiences }}
+        audiences:
+          {{- range . }}
+          - {{ . | quote }}
+          {{- end }}
+        {{- end }}
+      {{- end }}
 
     logging:
       level: {{ .Values.worker.logging.level | default "info" }}
