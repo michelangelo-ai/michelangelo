@@ -2,6 +2,11 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { PIPELINE_ENTITY_CONFIG } from '#core/config/entities/pipeline/pipeline';
+import {
+  CRITERION_OPERATOR_EQUAL,
+  PIPELINE_RUN_PIPELINE_NAME_FIELD,
+} from '#core/config/entities/pipeline/shared';
+import { PipelineRunState } from '#core/config/entities/run/types';
 import { EntityDetailRoute } from '#core/router/entity-detail-route';
 import { PhaseListRoute } from '#core/router/phase-list-route';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
@@ -182,5 +187,62 @@ describe('PIPELINE_ENTITY_CONFIG: delete action', () => {
       await within(dialog).findByText(/Test error/);
       expect(screen.getByRole('dialog', { name: 'Delete Pipeline' })).toBeInTheDocument();
     });
+  });
+});
+
+describe('PIPELINE_DETAIL_CONFIG: runs tab', () => {
+  it('filters runs by pipeline name via listOptionsExt criterion', async () => {
+    const mockRequest = createQueryMockRouter({
+      GetPipeline: { pipeline: { metadata: { name: 'eval-pipeline', namespace: 'ma-dev-test' } } },
+      ListPipelineRun: {
+        pipelineRunList: {
+          items: [
+            {
+              metadata: { name: 'eval-pipeline-run-1', creationTimestamp: { seconds: 1700000000 } },
+              spec: { pipeline: { name: 'eval-pipeline' }, actor: { name: 'me' } },
+              status: { state: PipelineRunState.SUCCEEDED },
+            },
+          ],
+        },
+      },
+    });
+
+    render(
+      <EntityDetailRoute phases={buildTestPhases()} />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getErrorProviderWrapper(),
+        getIconProviderWrapper(),
+        getInterpolationProviderWrapper(),
+        getRouterWrapper({ location: '/ma-dev-test/train/pipelines/eval-pipeline/runs' }),
+        getServiceProviderWrapper({ request: mockRequest }),
+        getSnackbarProviderWrapper(),
+      ])
+    );
+
+    await waitFor(() => {
+      expect(mockRequest).toHaveBeenCalledWith(
+        'ListPipelineRun',
+        expect.objectContaining({
+          listOptionsExt: {
+            operation: {
+              criterion: [
+                {
+                  fieldName: PIPELINE_RUN_PIPELINE_NAME_FIELD,
+                  operator: CRITERION_OPERATOR_EQUAL,
+                  matchValue: 'eval-pipeline',
+                },
+              ],
+            },
+          },
+        }),
+        {}
+      );
+    });
+
+    expect(await screen.findByRole('link', { name: 'eval-pipeline-run-1' })).toHaveAttribute(
+      'href',
+      '/ma-dev-test/train/runs/eval-pipeline-run-1'
+    );
   });
 });
