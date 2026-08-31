@@ -23,7 +23,8 @@ import (
 type (
 	// workflows struct encapsulates the trigger workflow
 	workflows struct {
-		workflow workflow.Workflow
+		workflow   workflow.Workflow
+		defaultEnv string
 	}
 
 	// Object alias for map[string]interface{}
@@ -107,6 +108,15 @@ var (
 	}
 )
 
+// defaultEnvironment returns the configured default environment label value,
+// or api.UnspecifiedEnvironment when the operator has configured none.
+func (r *workflows) defaultEnvironment() string {
+	if r.defaultEnv == "" {
+		return mgapi.UnspecifiedEnvironment
+	}
+	return r.defaultEnv
+}
+
 // CronTrigger workflow with provided trigger run spec
 func (r *workflows) CronTrigger(ctx workflow.Context, req triggerrun.CreateTriggerRequest) (map[string]any, error) {
 	ctx = workflow.WithBackend(ctx, r.workflow)
@@ -132,11 +142,12 @@ func (r *workflows) CronTrigger(ctx workflow.Context, req triggerrun.CreateTrigg
 		return nil, err
 	}
 	log.Info("cron trigger workflow started", zap.String("operation", "cron_trigger_workflow"))
+	defaultEnv := r.defaultEnvironment()
 	var err error
 	if tr.Spec.Trigger.MaxConcurrency > 0 {
-		err = concurrentRun(ctx, tr)
+		err = concurrentRun(ctx, tr, defaultEnv)
 	} else {
-		err = batchRun(ctx, tr)
+		err = batchRun(ctx, tr, defaultEnv)
 	}
 	if err != nil {
 		return nil, err
@@ -146,7 +157,7 @@ func (r *workflows) CronTrigger(ctx workflow.Context, req triggerrun.CreateTrigg
 }
 
 // batchRun executes trigger runs in batches with configurable wait times between batches
-func batchRun(ctx workflow.Context, tr *v2pb.TriggerRun) error {
+func batchRun(ctx workflow.Context, tr *v2pb.TriggerRun, defaultEnv string) error {
 	log := workflow.GetLogger(ctx).With(
 		zap.String("namespace", tr.Namespace),
 		zap.String("trigger_name", tr.Name),
@@ -170,7 +181,7 @@ func batchRun(ctx workflow.Context, tr *v2pb.TriggerRun) error {
 	}
 	for idx, batch := range batches {
 		for _, param := range batch {
-			if _err := runPipeline(ctx, tr, param, false); _err != nil {
+			if _err := runPipeline(ctx, tr, param, false, defaultEnv); _err != nil {
 				log.Error("failed to run pipeline in batch", zap.String("operation", "batch_run"), zap.String("param_id", param.ParamID), zap.Error(_err))
 				err = _err
 			}
@@ -184,7 +195,7 @@ func batchRun(ctx workflow.Context, tr *v2pb.TriggerRun) error {
 }
 
 // concurrentRun executes trigger runs concurrently with configurable max concurrency
-func concurrentRun(ctx workflow.Context, tr *v2pb.TriggerRun) error {
+func concurrentRun(ctx workflow.Context, tr *v2pb.TriggerRun, defaultEnv string) error {
 	log := workflow.GetLogger(ctx)
 	if len(tr.Spec.Trigger.ParametersMap) == 0 {
 		tr.Spec.Trigger.ParametersMap = map[string]*v2pb.PipelineExecutionParameters{
@@ -217,7 +228,7 @@ func concurrentRun(ctx workflow.Context, tr *v2pb.TriggerRun) error {
 	for i := 0; i < n; i++ {
 		param := params[i]
 		log.Info("starting pipeline run async", zap.String("operation", "concurrent_run"), zap.String("param_id", param.ParamID), zap.Int("param_idx", i))
-		f := runPipelineAsync(ctx, tr, param, true)
+		f := runPipelineAsync(ctx, tr, param, true, defaultEnv)
 		selector.AddFuture(f, futureF)
 	}
 	// Run rest of the params gradually
@@ -226,7 +237,7 @@ func concurrentRun(ctx workflow.Context, tr *v2pb.TriggerRun) error {
 		if n < t {
 			param := params[n]
 			log.Info("starting pipeline run async", zap.String("operation", "concurrent_run"), zap.String("param_id", param.ParamID), zap.Int("param_idx", n))
-			f := runPipelineAsync(ctx, tr, param, true)
+			f := runPipelineAsync(ctx, tr, param, true, defaultEnv)
 			selector.AddFuture(f, futureF)
 			n++
 		}
@@ -235,7 +246,7 @@ func concurrentRun(ctx workflow.Context, tr *v2pb.TriggerRun) error {
 }
 
 // runPipeline creates and optionally monitors a pipeline run
-func runPipeline(ctx workflow.Context, triggerRun *v2pb.TriggerRun, param parameter.Params, sensor bool) error {
+func runPipeline(ctx workflow.Context, triggerRun *v2pb.TriggerRun, param parameter.Params, sensor bool, defaultEnv string) error {
 	log := workflow.GetLogger(ctx)
 	name := generatePipelineRunName(workflow.Now(ctx))
 
@@ -249,7 +260,7 @@ func runPipeline(ctx workflow.Context, triggerRun *v2pb.TriggerRun, param parame
 	lastTs := prevScheduledTime(triggerRun.Spec.Trigger, executionTimestamp)
 
 	// Generate pipeline run request
-	createRequest, err := generatePipelineRunRequest(triggerRun, paramID, name, executionTimestamp, lastTs)
+	createRequest, err := generatePipelineRunRequest(triggerRun, paramID, name, executionTimestamp, lastTs, defaultEnv)
 	if err != nil {
 		log.Error("failed to generate pipeline run request",
 			zap.String("operation", "run_pipeline"),
@@ -299,19 +310,23 @@ func runPipeline(ctx workflow.Context, triggerRun *v2pb.TriggerRun, param parame
 }
 
 // runPipelineAsync runs a pipeline asynchronously and returns a Future
-func runPipelineAsync(ctx workflow.Context, triggerRun *v2pb.TriggerRun, param parameter.Params, sensor bool) workflow.Future {
+func runPipelineAsync(ctx workflow.Context, triggerRun *v2pb.TriggerRun, param parameter.Params, sensor bool, defaultEnv string) workflow.Future {
 	future, settable := workflow.NewFuture(ctx)
 	workflow.Go(ctx, func(ctx workflow.Context) {
-		err := runPipeline(ctx, triggerRun, param, sensor)
+		err := runPipeline(ctx, triggerRun, param, sensor, defaultEnv)
 		settable.SetError(err)
 	})
 	return future
 }
 
-// generatePipelineRunRequest generates a pipeline run request due to trigger run, parameter id and execution timestamp
+// generatePipelineRunRequest generates a pipeline run request due to trigger run, parameter id and execution timestamp.
+// defaultEnv is the operator-configured default environment label value, or
+// api.UnspecifiedEnvironment when the operator has configured none. It is used
+// only when the source TriggerRun carries no environment label under either the
+// current or legacy key.
 func generatePipelineRunRequest(
 	triggerRun *v2pb.TriggerRun, paramID string, pipelineRunName string, ts time.Time,
-	lastTs *time.Time,
+	lastTs *time.Time, defaultEnv string,
 ) (v2pb.CreatePipelineRunRequest, error) {
 	labels := map[string]string{
 		PipelineRunExecutionTimestampLabel: fmt.Sprintf("%d", ts.Unix()),
@@ -326,7 +341,7 @@ func generatePipelineRunRequest(
 		// workflow history before the rename still replays deterministically.
 		labels[mgapi.EnvironmentLabel] = env
 	} else {
-		labels[mgapi.EnvironmentLabel] = "production"
+		labels[mgapi.EnvironmentLabel] = defaultEnv
 	}
 	annotations := map[string]string{
 		"michelangelo.uber.com/pipelinerun.engine": "condition",

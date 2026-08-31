@@ -117,7 +117,7 @@ func TestGeneratePipelineRunRequest(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := generatePipelineRunRequest(tt.triggerRun, tt.paramID, tt.pipelineRunName, tt.ts, nil)
+			result, err := generatePipelineRunRequest(tt.triggerRun, tt.paramID, tt.pipelineRunName, tt.ts, nil, mgapi.UnspecifiedEnvironment)
 
 			if tt.expectedError != "" {
 				assert.Error(t, err)
@@ -158,7 +158,7 @@ func TestGeneratePipelineRunRequestFallsBackToLegacyEnvironmentLabel(t *testing.
 	}
 
 	result, err := generatePipelineRunRequest(
-		triggerRun, "", "test-pipeline-run-123", time.Date(2023, 1, 15, 10, 30, 45, 0, time.UTC), nil,
+		triggerRun, "", "test-pipeline-run-123", time.Date(2023, 1, 15, 10, 30, 45, 0, time.UTC), nil, mgapi.UnspecifiedEnvironment,
 	)
 
 	require.NoError(t, err)
@@ -433,6 +433,96 @@ func TestGenerateUniflowPRInput(t *testing.T) {
 	}
 }
 
+func TestGeneratePipelineRunRequestEnvironmentDefault(t *testing.T) {
+	ts := time.Date(2024, 1, 15, 10, 0, 0, 0, time.UTC)
+	baseTriggerRun := func(labels map[string]string) *v2pb.TriggerRun {
+		return &v2pb.TriggerRun{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: "test-ns",
+				Name:      "my-trigger",
+				Labels:    labels,
+			},
+			Spec: v2pb.TriggerRunSpec{
+				Pipeline: &api.ResourceIdentifier{Name: "my-pipeline", Namespace: "test-ns"},
+				Trigger:  &v2pb.Trigger{},
+			},
+		}
+	}
+
+	tests := []struct {
+		name       string
+		labels     map[string]string
+		defaultEnv string
+		wantEnv    string
+	}{
+		{
+			name:       "copies explicit environment label from TriggerRun",
+			labels:     map[string]string{mgapi.EnvironmentLabel: "production"},
+			defaultEnv: "staging",
+			wantEnv:    "production",
+		},
+		{
+			name:       "falls back to legacy label when current key is absent",
+			labels:     map[string]string{legacyEnvironmentLabel: "staging"},
+			defaultEnv: "development",
+			wantEnv:    "staging",
+		},
+		{
+			name:       "uses configured default when both keys are absent",
+			labels:     map[string]string{},
+			defaultEnv: "development",
+			wantEnv:    "development",
+		},
+		{
+			name:       "uses sentinel when both keys absent and no configured default",
+			labels:     nil,
+			defaultEnv: mgapi.UnspecifiedEnvironment,
+			wantEnv:    mgapi.UnspecifiedEnvironment,
+		},
+		{
+			name:       "prefers current key over legacy key when both are present",
+			labels:     map[string]string{mgapi.EnvironmentLabel: "production", legacyEnvironmentLabel: "staging"},
+			defaultEnv: "development",
+			wantEnv:    "production",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tr := baseTriggerRun(tt.labels)
+			req, err := generatePipelineRunRequest(tr, "", "run-env-test", ts, nil, tt.defaultEnv)
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantEnv, req.PipelineRun.ObjectMeta.Labels[mgapi.EnvironmentLabel])
+		})
+	}
+}
+
+func TestDefaultEnvironment(t *testing.T) {
+	tests := []struct {
+		name       string
+		defaultEnv string
+		want       string
+	}{
+		{
+			name:       "returns configured value when set",
+			defaultEnv: "production",
+			want:       "production",
+		},
+		{
+			name:       "returns UnspecifiedEnvironment when empty",
+			defaultEnv: "",
+			want:       mgapi.UnspecifiedEnvironment,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := &workflows{defaultEnv: tt.defaultEnv}
+			assert.Equal(t, tt.want, w.defaultEnvironment())
+		})
+	}
+}
+
 // TODO(#564): Add comprehensive workflow execution tests with activity mocking once starlark-worker
 // test framework supports Go workflows with Cadence/Temporal backend.
 // Currently, starlark-worker's test suite does not support Go workflows using workflow.Context.
@@ -573,7 +663,7 @@ func TestGeneratePipelineRunRequestInjectsLastExecutionTimestamp(t *testing.T) {
 	}
 
 	t.Run("lastTs injected into environ when provided", func(t *testing.T) {
-		req, err := generatePipelineRunRequest(triggerRun, "", "run-1", ts, &lastTs)
+		req, err := generatePipelineRunRequest(triggerRun, "", "run-1", ts, &lastTs, mgapi.UnspecifiedEnvironment)
 		require.NoError(t, err)
 		require.NotNil(t, req.PipelineRun.Spec.Input)
 
@@ -586,7 +676,7 @@ func TestGeneratePipelineRunRequestInjectsLastExecutionTimestamp(t *testing.T) {
 	})
 
 	t.Run("no environ injected when lastTs is nil", func(t *testing.T) {
-		req, err := generatePipelineRunRequest(triggerRun, "", "run-2", ts, nil)
+		req, err := generatePipelineRunRequest(triggerRun, "", "run-2", ts, nil, mgapi.UnspecifiedEnvironment)
 		require.NoError(t, err)
 		// Input may be nil or environ may be absent — either is correct
 		if req.PipelineRun.Spec.Input != nil {
@@ -612,7 +702,7 @@ func TestGeneratePipelineRunRequestInjectsLastExecutionTimestamp(t *testing.T) {
 				},
 			},
 		}
-		req, err := generatePipelineRunRequest(trWithParams, "default", "run-3", ts, &lastTs)
+		req, err := generatePipelineRunRequest(trWithParams, "default", "run-3", ts, &lastTs, mgapi.UnspecifiedEnvironment)
 		require.NoError(t, err)
 		require.NotNil(t, req.PipelineRun.Spec.Input)
 
