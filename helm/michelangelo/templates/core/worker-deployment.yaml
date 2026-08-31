@@ -39,6 +39,11 @@ spec:
           volumeMounts:
             - name: worker-config
               mountPath: /config
+            {{- if and .Values.gcsStorage.enabled .Values.gcsStorage.existingSecret }}
+            - name: gcs-credentials
+              mountPath: /etc/gcs
+              readOnly: true
+            {{- end }}
           {{- with (or .Values.worker.resources .Values.resources) }}
           resources:
             {{- toYaml . | nindent 12 }}
@@ -47,6 +52,11 @@ spec:
         - name: worker-config
           configMap:
             name: {{ include "michelangelo.componentFullname" (dict "context" . "component" "worker-config") }}
+        {{- if and .Values.gcsStorage.enabled .Values.gcsStorage.existingSecret }}
+        - name: gcs-credentials
+          secret:
+            secretName: {{ .Values.gcsStorage.existingSecret | quote }}
+        {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

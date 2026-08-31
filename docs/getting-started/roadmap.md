@@ -58,6 +58,7 @@ These capabilities are shipped and available in the current release. Individual 
 **Infrastructure & Compute**
 - Compute cluster registration
 - Storage management via any S3-compatible object store
+- Native GCS storage support (`gs://` reads via Application Default Credentials)
 
 **Automation & Self-Healing**
 - Revision-gated state transitions
@@ -104,7 +105,6 @@ These are capabilities we intend to build. Items closer to the top of each secti
 - Guardrail policies (input/output safety filtering, bias detection)
 
 **Infrastructure & Compute**
-- GCS storage support
 - Resource pool selection
 - Vector dataset management for embedding and RAG/similarity search
 
