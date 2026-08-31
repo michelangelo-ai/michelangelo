@@ -63,7 +63,7 @@ func TestHandleDeleteBlobStorageErrorLogging(t *testing.T) {
 				logLines = append(logLines, args)
 			}, funcr.Options{})
 
-			err := handleDelete(context.Background(), log, typeMeta, obj, metadataStorage, blobStorage)
+			err := handleDelete(context.Background(), log, typeMeta, obj, metadataStorage, NewBlobHandler(blobStorage))
 
 			assert.NoError(t, err)
 			assert.Len(t, logLines, tc.wantErrorLogs)
