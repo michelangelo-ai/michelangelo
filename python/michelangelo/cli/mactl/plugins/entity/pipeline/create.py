@@ -258,16 +258,10 @@ def handle_workflow_inputs_retrieval(
                 f"Please ensure {project}.{pipeline}_workflow exists and is importable."
             ) from e
         else:
-            # For other registration failures, continue with graceful degradation
-            _LOG.warning(
-                "Registration failed, continuing without uniflow artifacts: %s", e
-            )
+            raise ValueError(f"Pipeline registration failed: {e}") from e
     except Exception as e:
         _LOG.error("Unexpected error during registration: %s", e)
-        # For unexpected errors, also use graceful degradation
-        _LOG.warning(
-            "Unexpected registration failure, continuing without uniflow artifacts"
-        )
+        raise ValueError(f"Pipeline registration failed: {e}") from e
     return workflow_inputs, uniflow_tar_path, workflow_function_name
 
 
