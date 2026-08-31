@@ -48,6 +48,8 @@ class SnapshotCreateTest(TestCase):
                 )
             if "pipelineruns.michelangelo.api" in args:
                 return Mock(stdout=yaml.safe_dump({"items": []}), returncode=0)
+            if args[:2] == ["helm", "list"]:
+                return Mock(stdout=yaml.safe_dump([]), returncode=0)
             return Mock(
                 stdout=yaml.safe_dump(
                     {
@@ -120,6 +122,8 @@ class SnapshotCreateTest(TestCase):
                 return Mock(stdout="pipelines.michelangelo.api\n", returncode=0)
             if args[:3] == ["helm", "get", "values"]:
                 return Mock(stdout="{}\n", returncode=0)
+            if args[:2] == ["helm", "list"]:
+                return Mock(stdout=yaml.safe_dump([]), returncode=0)
             return Mock(stdout=raw_pipeline_list, returncode=0)
 
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -208,6 +212,74 @@ class SnapshotCreateTest(TestCase):
                 sandbox._snapshot_create(argparse.Namespace())
 
             written_files = list(Path(tmp_dir).glob("snapshots/*/helm-values.yaml"))
+            self.assertEqual(written_files, [])
+            status_files = list(Path(tmp_dir).glob("snapshots/*/helm-status.yaml"))
+            self.assertEqual(status_files, [])
+
+    def test_create_captures_helm_status(self):
+        """helm-status.yaml captures release/chart/revision, not raw resources."""
+        helm_list_output = yaml.safe_dump(
+            [
+                {
+                    "name": "michelangelo",
+                    "namespace": "default",
+                    "revision": "3",
+                    "updated": "2026-08-27 16:53:35.567346 -0700 PDT",
+                    "status": "deployed",
+                    "chart": "michelangelo-0.9.0",
+                    "app_version": "0.9.0",
+                }
+            ]
+        )
+
+        def fake_run(args, **kwargs):
+            if "api-resources" in args:
+                return Mock(stdout="", returncode=0)
+            if args[:3] == ["helm", "get", "values"]:
+                return Mock(stdout="", returncode=0)
+            if args[:2] == ["helm", "list"]:
+                return Mock(stdout=helm_list_output, returncode=0)
+            return Mock(stdout="", returncode=0)
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            with (
+                patch.object(sandbox, "_dir", Path(tmp_dir)),
+                patch.object(sandbox, "_assert_sandbox_cluster_running"),
+                patch.object(sandbox.subprocess, "run", side_effect=fake_run),
+            ):
+                sandbox._snapshot_create(argparse.Namespace())
+
+            written_files = list(Path(tmp_dir).glob("snapshots/*/helm-status.yaml"))
+            self.assertEqual(len(written_files), 1)
+
+            with open(written_files[0]) as f:
+                written = yaml.safe_load(f)
+
+            self.assertEqual(written["chart"], "michelangelo-0.9.0")
+            self.assertEqual(written["revision"], "3")
+            self.assertEqual(written["status"], "deployed")
+
+    def test_create_continues_when_helm_list_fails(self):
+        """A broken/missing Helm release warns and skips status, doesn't abort."""
+
+        def fake_run(args, **kwargs):
+            if "api-resources" in args:
+                return Mock(stdout="", returncode=0)
+            if args[:3] == ["helm", "get", "values"]:
+                return Mock(stdout="", returncode=0)
+            if args[:2] == ["helm", "list"]:
+                return Mock(stdout="", stderr="release: not found", returncode=1)
+            return Mock(stdout="", returncode=0)
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            with (
+                patch.object(sandbox, "_dir", Path(tmp_dir)),
+                patch.object(sandbox, "_assert_sandbox_cluster_running"),
+                patch.object(sandbox.subprocess, "run", side_effect=fake_run),
+            ):
+                sandbox._snapshot_create(argparse.Namespace())
+
+            written_files = list(Path(tmp_dir).glob("snapshots/*/helm-status.yaml"))
             self.assertEqual(written_files, [])
 
 
@@ -307,13 +379,15 @@ class SnapshotRestoreTest(TestCase):
         mock_err.assert_called_once()
 
     def test_restore_never_applies_helm_values_file(self):
-        """helm-values.yaml is not a manifest and must never be kubectl-applied."""
+        """helm-values.yaml/helm-status.yaml are not manifests, never applied."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             snapshot_dir = Path(tmp_dir) / "snapshots" / "20260101-000000"
             snapshot_dir.mkdir(parents=True)
             self._write_kind_file(snapshot_dir, "pipelines.yaml", [])
             with open(snapshot_dir / "helm-values.yaml", "w") as f:
                 yaml.safe_dump({"workflow": {"engine": "cadence"}}, f)
+            with open(snapshot_dir / "helm-status.yaml", "w") as f:
+                yaml.safe_dump({"chart": "michelangelo-0.9.0"}, f)
 
             with (
                 patch.object(sandbox, "_dir", Path(tmp_dir)),

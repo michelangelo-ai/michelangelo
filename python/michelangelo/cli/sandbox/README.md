@@ -106,6 +106,8 @@ ma sandbox create --include-experimental fluent-bit mlflow
 
 It also captures the michelangelo Helm release's live settings (`helm get values -a`) to `helm-values.yaml` in the same directory — workflow engine, metadata storage (including the `EnableMetadataStorage` toggle and the MySQL host/port/user/database/password it resolves to), per-service `--exclude` toggles, and any `--set` passthrough. `metadataStorage.rootPassword` is redacted to `<redacted>` before writing.
 
+It also captures release-level state (`helm list`, not `helm status`) to `helm-status.yaml` — chart version, app version, revision number, and deployment status. `helm status` was deliberately not used: it embeds every live resource verbatim (including rendered Secrets) and the full values a second time, which would duplicate `helm-values.yaml` and reopen the same redaction problem in a new place.
+
 ```bash
 ma sandbox snapshot create
 ma sandbox snapshot restore 20260807-143000

@@ -113,6 +113,11 @@ _snapshot_redact_helm_value_keys = [
 ]
 _snapshot_redacted_placeholder = "<redacted>"
 
+# Files written into a snapshot directory that describe the sandbox's Helm
+# release rather than a Kubernetes resource — `snapshot restore` must never
+# kubectl-apply these.
+_snapshot_non_crd_files = {"helm-values.yaml", "helm-status.yaml"}
+
 
 def _loopback(port_spec: str) -> str:
     """Prefix a 'host:node' k3d port spec with 127.0.0.1.
@@ -1399,6 +1404,40 @@ def _snapshot_capture_helm_values(out_dir: Path) -> bool:
     return True
 
 
+def _snapshot_capture_helm_status(out_dir: Path) -> bool:
+    """Capture the michelangelo Helm release's status to disk.
+
+    Uses `helm list`, not `helm status` — `helm status -o yaml/json` embeds
+    every live resource verbatim (including rendered Secrets) under
+    `info.resources` plus the full values under `config`, duplicating
+    helm-values.yaml and reintroducing the same secret-redaction problem in
+    a second place. `helm list` gives the same "what release, what chart
+    version, is it healthy" answer in a small, stable, secret-free shape.
+    """
+    result = subprocess.run(
+        ["helm", "list", "-o", "json", "--filter", "^michelangelo$"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        print(
+            "⚠️  Could not read Helm release status for 'michelangelo' — "
+            "skipping (is it installed?)."
+        )
+        return False
+
+    releases = yaml.safe_load(result.stdout) or []
+    if not releases:
+        print(
+            "⚠️  No Helm release named 'michelangelo' found — skipping status capture."
+        )
+        return False
+
+    with open(out_dir / "helm-status.yaml", "w") as f:
+        yaml.safe_dump(releases[0], f, sort_keys=False)
+    return True
+
+
 def _snapshot_create(ns: argparse.Namespace):
     """Capture every Michelangelo CRD in the cluster to a timestamped directory."""
     assert ns
@@ -1437,6 +1476,7 @@ def _snapshot_create(ns: argparse.Namespace):
         captured_kinds.append(kind_name)
 
     helm_values_captured = _snapshot_capture_helm_values(out_dir)
+    helm_status_captured = _snapshot_capture_helm_status(out_dir)
 
     print(f"\n📸 Snapshot captured at {out_dir}")
     if captured_kinds:
@@ -1452,6 +1492,8 @@ def _snapshot_create(ns: argparse.Namespace):
         print(f"Checked but empty: {', '.join(empty_kinds)}")
     if helm_values_captured:
         print("Captured Helm settings: helm-values.yaml")
+    if helm_status_captured:
+        print("Captured Helm status: helm-status.yaml")
 
 
 def _snapshot_report_helm_values_diff(snapshot_path: Path):
@@ -1504,8 +1546,9 @@ def _snapshot_restore(ns: argparse.Namespace):
     with projects. Every other `<kind>.yaml` file is then applied in any
     order; nothing in the cluster enforces that a Project must exist before
     other CRs are created, so this ordering is a courtesy, not a correctness
-    requirement. `helm-values.yaml` (if present) is never applied — it's not
-    a Kubernetes manifest; see `_snapshot_report_helm_values_diff`.
+    requirement. Files in `_snapshot_non_crd_files` (if present) are never
+    applied — they're not Kubernetes manifests; see
+    `_snapshot_report_helm_values_diff`.
     """
     assert ns
     _assert_sandbox_cluster_running()
@@ -1529,7 +1572,7 @@ def _snapshot_restore(ns: argparse.Namespace):
         _kube_apply(projects_file, context=context)
 
     for yaml_file in sorted(snapshot_path.glob("*.yaml")):
-        if yaml_file == projects_file or yaml_file.name == "helm-values.yaml":
+        if yaml_file == projects_file or yaml_file.name in _snapshot_non_crd_files:
             continue
         _kube_apply(yaml_file, context=context)
 
