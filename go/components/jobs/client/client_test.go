@@ -590,7 +590,9 @@ func TestCreateSecret(t *testing.T) {
 				CoreV1: c.RESTClient(),
 			}, test.getClientSetError)
 
-			provider := secrets.New(secrets.Params{}).SecretProvider
+			secretsResult, err := secrets.New(secrets.Params{})
+			require.NoError(t, err)
+			provider := secretsResult.SecretProvider
 
 			k8sc := Client{
 				factory:         f,
@@ -600,7 +602,7 @@ func TestCreateSecret(t *testing.T) {
 			}
 
 			// test
-			err := k8sc.CreateSecret(context.Background(), test.jobInput, &testCluster)
+			err = k8sc.CreateSecret(context.Background(), test.jobInput, &testCluster)
 			if test.wantError != "" {
 				require.NotNil(t, err)
 				require.Error(t, err)
