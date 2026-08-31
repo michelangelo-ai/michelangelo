@@ -1,7 +1,12 @@
 import { CellType } from '#core/components/cell/constants';
 import { getCrdLastUpdatedSeconds } from '#core/utils/crd-utils';
 import { readEnvironmentLabel } from '#core/utils/environment-utils';
-import { RUN_PIPELINE_COLUMN, RUN_STARTED_BY_COLUMN, RUN_STATE_COLUMN } from './shared';
+import {
+  RUN_CREATED_COLUMN,
+  RUN_PIPELINE_COLUMN,
+  RUN_STARTED_BY_COLUMN,
+  RUN_STATE_COLUMN,
+} from './shared';
 
 import type { ColumnConfig } from '#core/components/table/types/column-types';
 import type { ListViewConfig } from '#core/components/views/types';
@@ -35,6 +40,7 @@ export const PIPELINE_RUN_CELL_CONFIG: ColumnConfig<object>[] = [
       return getCrdLastUpdatedSeconds(row);
     },
   },
+  RUN_CREATED_COLUMN,
   {
     id: 'metadata.labels',
     label: 'Environment',

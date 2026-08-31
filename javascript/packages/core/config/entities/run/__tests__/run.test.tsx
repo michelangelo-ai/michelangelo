@@ -35,6 +35,7 @@ describe('Run list page', () => {
       'Pipeline run name',
       'Pipeline',
       'Last Updated',
+      'Created',
       'Environment',
       'Started by',
       'State',
@@ -59,7 +60,10 @@ describe('Run list page', () => {
                       'michelangelo/UpdateTimestamp': '1700000000000000',
                       'michelangelo/environment': 'production',
                     },
-                    creationTimestamp: { seconds: 1650000000 },
+                    // Distinct from run-without-labels' creationTimestamp below so this row's
+                    // Created value (which always reads creationTimestamp) doesn't collide with
+                    // the other row's Last Updated fallback (which also reads creationTimestamp).
+                    creationTimestamp: { seconds: 1660000000 },
                   },
                   spec: { actor: { name: 'jsmith' }, pipeline: { name: 'prediction-pipeline' } },
                   status: { state: 3 },
@@ -83,10 +87,13 @@ describe('Run list page', () => {
     expect(screen.getByText('Production')).toBeInTheDocument();
     // The UpdateTimestamp label (1700000000 seconds) is used over creationTimestamp.
     expect(screen.getByText('2023/11/14 22:13:20 (UTC)')).toBeInTheDocument();
+    // Created always reads creationTimestamp (1660000000 seconds), independent of Last Updated.
+    expect(screen.getByText('2022/08/08 23:06:40 (UTC)')).toBeInTheDocument();
 
     expect(screen.getByRole('link', { name: 'run-without-labels' })).toBeInTheDocument();
-    // No UpdateTimestamp label: falls back to creationTimestamp (1650000000 seconds).
-    expect(screen.getByText('2022/04/15 05:20:00 (UTC)')).toBeInTheDocument();
+    // No UpdateTimestamp label: Last Updated falls back to creationTimestamp (1650000000
+    // seconds), the same value Created reads directly — both cells render this text.
+    expect(screen.getAllByText('2022/04/15 05:20:00 (UTC)')).toHaveLength(2);
     // No environment label: renders no Environment text at all.
     expect(screen.queryByText('Development')).not.toBeInTheDocument();
     expect(screen.queryByText('Testing')).not.toBeInTheDocument();
