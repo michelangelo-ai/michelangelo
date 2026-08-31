@@ -536,19 +536,15 @@ def _render_single_item(
 
     All formats unwrap ``GetXxxResponse`` via
     ``_unwrap_single_field_response`` so the RPC envelope stays out of
-    user-visible output. JSON uses proto3-JSON defaults (lowerCamelCase)
-    to match kubectl / k8s CRD conventions; YAML keeps proto snake_case
-    to match hand-written YAML manifests. Table prints one row using the
-    same columns as ``list``.
+    user-visible output. YAML and JSON both use proto3-JSON defaults
+    (lowerCamelCase) — matching Go ``mactl``, ``kubectl``, and every
+    k8s tool that reads CRD output; the two formats differ only in
+    serialization, not casing. Table prints one row using the same
+    columns as ``list``.
     """
     inner = _unwrap_single_field_response(msg)
     if output_format == "yaml":
-        print(
-            yaml_safe_dump(
-                MessageToDict(inner, preserving_proto_field_name=True),
-                sort_keys=False,
-            )
-        )
+        print(yaml_safe_dump(MessageToDict(inner), sort_keys=False))
     elif output_format == "json":
         print(MessageToJson(inner))
     else:

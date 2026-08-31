@@ -495,6 +495,24 @@ class RenderHelpersTest(TestCase):
         self.assertIs(args[0], inner)
 
     @patch("michelangelo.cli.mactl.crd.MessageToDict")
+    def test_render_single_item_yaml_uses_proto3_camel_case(self, mock_to_dict):
+        """YAML path does not pass preserving_proto_field_name.
+
+        Proto3-JSON default is lowerCamelCase (`apiVersion`, `metadata`,
+        `revisionId`). Go ``mactl`` and ``kubectl`` both emit camelCase in
+        their YAML output (`sigs.k8s.io/yaml` marshals via JSON), so the
+        Python CLI aligns on camelCase to keep JSON and YAML internally
+        consistent and to match every other tool in the k8s ecosystem.
+        """
+        from michelangelo.cli.mactl.crd import _render_single_item
+
+        mock_to_dict.return_value = {}
+        _render_single_item(self._non_wrapper_msg(), "yaml")
+
+        _, kwargs = mock_to_dict.call_args
+        self.assertNotIn("preserving_proto_field_name", kwargs)
+
+    @patch("michelangelo.cli.mactl.crd.MessageToDict")
     def test_render_single_item_yaml_handles_ordereddict(self, mock_to_dict):
         """OrderedDict from unpacked google.protobuf.Any dumps without error.
 
