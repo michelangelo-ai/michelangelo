@@ -534,17 +534,12 @@ def _render_single_item(
 ) -> None:
     """Render a single CRD message in the requested output format.
 
-    All output formats unwrap ``GetXxxResponse`` first via
-    ``_unwrap_single_field_response``, so the wrapper field name never leaks
-    into user-visible output — the caller asked for the resource, not the
-    RPC envelope. JSON follows proto3-JSON defaults (lowerCamelCase), which
-    matches kubectl / k8s-native CRD conventions; YAML keeps the proto
-    snake_case field names, which matches the source-of-truth YAML manifests
-    users write. Table output prints a one-row table using the same columns
-    as ``list``, matching kubectl's ``get <resource> <name>`` behavior.
-    Prior versions printed the raw proto text_format, which rendered
-    ``google.protobuf.Any`` payloads (e.g. ``spec.manifest.content``) as
-    escaped byte strings.
+    All formats unwrap ``GetXxxResponse`` via
+    ``_unwrap_single_field_response`` so the RPC envelope stays out of
+    user-visible output. JSON uses proto3-JSON defaults (lowerCamelCase)
+    to match kubectl / k8s CRD conventions; YAML keeps proto snake_case
+    to match hand-written YAML manifests. Table prints one row using the
+    same columns as ``list``.
     """
     inner = _unwrap_single_field_response(msg)
     if output_format == "yaml":
