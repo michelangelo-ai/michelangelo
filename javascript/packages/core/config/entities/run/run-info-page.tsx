@@ -136,7 +136,7 @@ function formatRunDuration(run: PipelineRunSummary | undefined): string | null {
   }
 
   if (state === PipelineRunState.RUNNING) {
-    return `${formatDurationSeconds(Math.floor(Date.now() / 1000) - startSeconds)} (so far)`;
+    return formatDurationSeconds(Math.floor(Date.now() / 1000) - startSeconds);
   }
 
   // Queued or pending — nothing has run yet.
