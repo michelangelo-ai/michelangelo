@@ -182,6 +182,39 @@ Users are responsible for:
 
 ---
 
+## Auto-Resume with MlflowExperimentStore
+
+The [`michelangelo.lib.trainer.torch.pytorch_lightning`](https://github.com/michelangelo-ai/michelangelo/tree/main/python/michelangelo/lib/trainer/torch/pytorch_lightning) trainer supports automatic resumption of interrupted training runs through a pluggable `ExperimentStore`. By default, resume markers are written to the run's storage filesystem (`FsspecExperimentStore`). If your organization already runs an MLflow Tracking Server, `MlflowExperimentStore` records those markers as tagged runs on the MLflow server instead, which makes resume state centrally visible and works even when the storage path is not conveniently listable.
+
+Requires the `mlflow` package in the training image (the `trainer-mlflow` extra: `pip install 'michelangelo[trainer-mlflow]'`).
+
+```python
+from michelangelo.lib.trainer.torch.pytorch_lightning import (
+    LightningTrainerParam,
+    MlflowExperimentStore,
+)
+
+param = LightningTrainerParam(
+    create_model_fn=my_model_factory,
+    create_model_fn_kwargs={},
+    train_data=train_ds,
+    val_data=val_ds,
+    experiment_store=MlflowExperimentStore(
+        tracking_uri="http://mlflow.example.com:5000",
+        experiment_name="team-x-resume",
+    ),
+)
+```
+
+Behavior and configuration notes:
+
+- **Server and credentials follow MLflow's native environment contract.** If `tracking_uri` is omitted, the client resolves `MLFLOW_TRACKING_URI` from the environment. Authentication uses `MLFLOW_TRACKING_USERNAME` / `MLFLOW_TRACKING_PASSWORD` / `MLFLOW_TRACKING_TOKEN`, exactly as in Step 3 above. Credentials are deliberately not constructor arguments: the store is shipped to Ray workers inside the (logged) training loop config, so secrets must stay in the environment.
+- **Best-effort by design.** A marker write or lookup failure (unreachable server, missing `mlflow` package, auth error) is logged and swallowed. It never fails a training run; the run simply starts fresh instead of resuming.
+- **One marker run per training attempt.** Each attempt records a new, immediately terminated MLflow run tagged with the training run's identity; resume uses the most recent marker. Markers accumulate in the dedicated experiment (default name `michelangelo-resume`).
+- **Use a distinct `experiment_name` per project** when multiple teams share one MLflow server, so unrelated projects' markers stay in separate MLflow experiments.
+
+---
+
 ## MLflow Model Registry vs Michelangelo AI Model Registry
 
 MLflow includes its own model registry. Michelangelo AI also has a built-in model registry backed by a `Model` Kubernetes custom resource. The two are independent and can be used simultaneously.
