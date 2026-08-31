@@ -144,6 +144,8 @@ spec:
           mountPath: /etc/grafana/provisioning/dashboards
         - name: grafana-dashboard-crd-metrics
           mountPath: /var/lib/grafana/dashboards
+        - name: grafana-dashboard-controllermgr
+          mountPath: /var/lib/grafana/dashboards/controllermgr
       volumes:
       - name: grafana-storage
         emptyDir: {}
@@ -156,6 +158,9 @@ spec:
       - name: grafana-dashboard-crd-metrics
         configMap:
           name: grafana-dashboard-crd-metrics
+      - name: grafana-dashboard-controllermgr
+        configMap:
+          name: grafana-dashboard-controllermgr
 
 ---
 apiVersion: v1
@@ -171,3 +176,504 @@ spec:
     targetPort: 3000
     nodePort: 30012
   type: NodePort
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-controllermgr
+data:
+  controllermgr.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "controllermgr",
+        "tags": [
+          "michelangelo",
+          "controllermgr"
+        ],
+        "style": "dark",
+        "timezone": "browser",
+        "schemaVersion": 39,
+        "refresh": "10s",
+        "time": {
+          "from": "now-24h",
+          "to": "now"
+        },
+        "panels": [
+          {
+            "id": 1,
+            "type": "row",
+            "title": "Controller Reconciliation",
+            "gridPos": {
+              "h": 1,
+              "w": 24,
+              "x": 0,
+              "y": 0
+            },
+            "collapsed": false,
+            "panels": []
+          },
+          {
+            "id": 2,
+            "title": "Reconcile Rate by Controller & Result",
+            "type": "timeseries",
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 0,
+              "y": 1
+            },
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus"
+            },
+            "targets": [
+              {
+                "expr": "sum by(controller, result) (rate(controller_runtime_reconcile_total[5m]))",
+                "legendFormat": "{{controller}} - {{result}}",
+                "refId": "A"
+              }
+            ]
+          },
+          {
+            "id": 3,
+            "title": "Reconcile Error Rate by Controller",
+            "type": "timeseries",
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 12,
+              "y": 1
+            },
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus"
+            },
+            "targets": [
+              {
+                "expr": "sum by(controller) (rate(controller_runtime_reconcile_errors_total[5m]))",
+                "legendFormat": "{{controller}}",
+                "refId": "A"
+              }
+            ]
+          },
+          {
+            "id": 4,
+            "title": "Avg Reconcile Duration by Controller",
+            "type": "timeseries",
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 0,
+              "y": 9
+            },
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus"
+            },
+            "targets": [
+              {
+                "expr": "sum by(controller) (rate(controller_runtime_reconcile_time_seconds_sum[5m])) / sum by(controller) (rate(controller_runtime_reconcile_time_seconds_count[5m]))",
+                "legendFormat": "{{controller}}",
+                "refId": "A"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "s"
+              },
+              "overrides": []
+            }
+          },
+          {
+            "id": 5,
+            "title": "p99 Reconcile Duration by Controller",
+            "type": "timeseries",
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 12,
+              "y": 9
+            },
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus"
+            },
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.99, sum by(controller, le) (rate(controller_runtime_reconcile_time_seconds_bucket[5m])))",
+                "legendFormat": "{{controller}}",
+                "refId": "A"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "s"
+              },
+              "overrides": []
+            }
+          },
+          {
+            "id": 6,
+            "title": "Active Workers by Controller",
+            "type": "timeseries",
+            "gridPos": {
+              "h": 8,
+              "w": 8,
+              "x": 0,
+              "y": 17
+            },
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus"
+            },
+            "targets": [
+              {
+                "expr": "controller_runtime_active_workers",
+                "legendFormat": "{{controller}}",
+                "refId": "A"
+              }
+            ]
+          },
+          {
+            "id": 7,
+            "title": "Max Concurrent Reconciles by Controller",
+            "type": "timeseries",
+            "gridPos": {
+              "h": 8,
+              "w": 8,
+              "x": 8,
+              "y": 17
+            },
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus"
+            },
+            "targets": [
+              {
+                "expr": "controller_runtime_max_concurrent_reconciles",
+                "legendFormat": "{{controller}}",
+                "refId": "A"
+              }
+            ]
+          },
+          {
+            "id": 8,
+            "title": "Reconcile Panics by Controller",
+            "type": "timeseries",
+            "gridPos": {
+              "h": 8,
+              "w": 8,
+              "x": 16,
+              "y": 17
+            },
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus"
+            },
+            "targets": [
+              {
+                "expr": "sum by(controller) (rate(controller_runtime_reconcile_panics_total[5m]))",
+                "legendFormat": "{{controller}}",
+                "refId": "A"
+              }
+            ]
+          },
+          {
+            "id": 9,
+            "title": "Terminal Reconcile Errors by Controller",
+            "type": "timeseries",
+            "gridPos": {
+              "h": 8,
+              "w": 24,
+              "x": 0,
+              "y": 25
+            },
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus"
+            },
+            "targets": [
+              {
+                "expr": "sum by(controller) (rate(controller_runtime_terminal_reconcile_errors_total[5m]))",
+                "legendFormat": "{{controller}}",
+                "refId": "A"
+              }
+            ]
+          },
+          {
+            "id": 10,
+            "type": "row",
+            "title": "Workqueue",
+            "gridPos": {
+              "h": 1,
+              "w": 24,
+              "x": 0,
+              "y": 33
+            },
+            "collapsed": false,
+            "panels": []
+          },
+          {
+            "id": 11,
+            "title": "Workqueue Depth by Controller",
+            "type": "timeseries",
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 0,
+              "y": 34
+            },
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus"
+            },
+            "targets": [
+              {
+                "expr": "workqueue_depth",
+                "legendFormat": "{{controller}}",
+                "refId": "A"
+              }
+            ]
+          },
+          {
+            "id": 12,
+            "title": "Workqueue Add Rate by Controller",
+            "type": "timeseries",
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 12,
+              "y": 34
+            },
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus"
+            },
+            "targets": [
+              {
+                "expr": "sum by(controller) (rate(workqueue_adds_total[5m]))",
+                "legendFormat": "{{controller}}",
+                "refId": "A"
+              }
+            ]
+          },
+          {
+            "id": 13,
+            "title": "Workqueue Retry Rate by Controller",
+            "type": "timeseries",
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 0,
+              "y": 42
+            },
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus"
+            },
+            "targets": [
+              {
+                "expr": "sum by(controller) (rate(workqueue_retries_total[5m]))",
+                "legendFormat": "{{controller}}",
+                "refId": "A"
+              }
+            ]
+          },
+          {
+            "id": 14,
+            "title": "Workqueue Unfinished Work (s) by Controller",
+            "type": "timeseries",
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 12,
+              "y": 42
+            },
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus"
+            },
+            "targets": [
+              {
+                "expr": "workqueue_unfinished_work_seconds",
+                "legendFormat": "{{controller}}",
+                "refId": "A"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "s"
+              },
+              "overrides": []
+            }
+          },
+          {
+            "id": 15,
+            "title": "p99 Workqueue Queue Duration by Controller",
+            "type": "timeseries",
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 0,
+              "y": 50
+            },
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus"
+            },
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.99, sum by(controller, le) (rate(workqueue_queue_duration_seconds_bucket[5m])))",
+                "legendFormat": "{{controller}}",
+                "refId": "A"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "s"
+              },
+              "overrides": []
+            }
+          },
+          {
+            "id": 16,
+            "title": "p99 Workqueue Work Duration by Controller",
+            "type": "timeseries",
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 12,
+              "y": 50
+            },
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus"
+            },
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.99, sum by(controller, le) (rate(workqueue_work_duration_seconds_bucket[5m])))",
+                "legendFormat": "{{controller}}",
+                "refId": "A"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "s"
+              },
+              "overrides": []
+            }
+          },
+          {
+            "id": 17,
+            "title": "Workqueue Longest Running Processor (s) by Controller",
+            "type": "timeseries",
+            "gridPos": {
+              "h": 8,
+              "w": 24,
+              "x": 0,
+              "y": 58
+            },
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus"
+            },
+            "targets": [
+              {
+                "expr": "workqueue_longest_running_processor_seconds",
+                "legendFormat": "{{controller}}",
+                "refId": "A"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "s"
+              },
+              "overrides": []
+            }
+          },
+          {
+            "id": 18,
+            "type": "row",
+            "title": "Pipeline / PipelineRun Reconciliation",
+            "gridPos": {
+              "h": 1,
+              "w": 24,
+              "x": 0,
+              "y": 66
+            },
+            "collapsed": false,
+            "panels": []
+          },
+          {
+            "id": 19,
+            "title": "Pipeline Reconcile Success Rate",
+            "type": "timeseries",
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 0,
+              "y": 67
+            },
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus"
+            },
+            "targets": [
+              {
+                "expr": "sum by(pipeline) (rate(pipeline_reconcile_success_total[5m]))",
+                "legendFormat": "{{pipeline}}",
+                "refId": "A"
+              }
+            ]
+          },
+          {
+            "id": 20,
+            "title": "PipelineRun Reconcile Success Rate",
+            "type": "timeseries",
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 12,
+              "y": 67
+            },
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus"
+            },
+            "targets": [
+              {
+                "expr": "sum by(pipeline_run) (rate(pipelinerun_reconcile_success_total[5m]))",
+                "legendFormat": "{{pipeline_run}}",
+                "refId": "A"
+              }
+            ]
+          },
+          {
+            "id": 21,
+            "title": "PipelineRun Reconcile Errors (current)",
+            "type": "table",
+            "gridPos": {
+              "h": 8,
+              "w": 24,
+              "x": 0,
+              "y": 75
+            },
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus"
+            },
+            "targets": [
+              {
+                "expr": "pipelinerun_reconcile_errors_total",
+                "legendFormat": "{{pipeline_run}}",
+                "refId": "A",
+                "format": "table",
+                "instant": true
+              }
+            ]
+          }
+        ]
+      }
+    }
