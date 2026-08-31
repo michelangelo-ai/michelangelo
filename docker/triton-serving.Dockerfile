@@ -13,6 +13,6 @@
 #
 # A model needing deps/versions outside this image can still override it via
 # InferenceServer.spec.initSpec.servingSpec.containerBuildTemplate.
-FROM nvcr.io/nvidia/tritonserver:23.04-py3
+FROM nvcr.io/nvidia/tritonserver:26.08-py3
 
 RUN pip install --no-cache-dir torch==2.4.1 transformers==4.44.2
