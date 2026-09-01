@@ -31,6 +31,17 @@ type LogPersistenceConfig struct {
 	// v2 RayClusterStatus. Available template variables: Bucket, PathPrefix,
 	// ClusterName, RayLocalNamespace. Empty string disables log_url emission.
 	LogURLFormat string `yaml:"logURLFormat"`
+
+	// DashboardURLFormat is a Go text/template applied during local→global
+	// cluster status translation to produce the human-browsable *live* Ray
+	// dashboard URL surfaced on v2 RayClusterStatus.job_url. Unlike
+	// LogURLFormat (which points at persisted, post-hoc logs in object
+	// storage), this points at the running cluster's own dashboard, served
+	// by KubeRay's per-cluster head service on port 8265. Available
+	// template variables: ClusterName, RayLocalNamespace. Empty string
+	// disables job_url emission — it is independent of Enabled, since the
+	// live dashboard has nothing to do with log persistence.
+	DashboardURLFormat string `yaml:"dashboardURLFormat"`
 }
 
 func (m Mapper) mapRay(rayJob *v2pb.RayJob, jobClusterObject runtime.Object, cluster *v2pb.Cluster) (runtime.Object, error) {

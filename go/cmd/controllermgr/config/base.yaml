@@ -67,6 +67,10 @@ jobs:
         # {{.RayLocalNamespace}}. Sandbox default points at the in-cluster MinIO
         # console; production overlays point at OCI Object Storage / S3 console.
         logURLFormat: "http://localhost:9090/browser/{{.Bucket}}/{{.PathPrefix}}/{{.ClusterName}}_{{.RayLocalNamespace}}/"
+        # dashboardURLFormat is a Go text/template that builds the live
+        # KubeRay dashboard URL (job_url), independent of log persistence.
+        # Available vars: {{.ClusterName}}, {{.RayLocalNamespace}}.
+        dashboardURLFormat: "http://{{.ClusterName}}-head-svc.{{.RayLocalNamespace}}.svc.cluster.local:8265"
 
 minio:
   awsRegion: us-east-1

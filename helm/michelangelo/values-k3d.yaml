@@ -93,6 +93,7 @@ controllermgr:
           pathPrefix: log
           s3DisableSSL: true
           logURLFormat: "http://localhost:9090/browser/{{.Bucket}}/{{.PathPrefix}}/{{.ClusterName}}_{{.RayLocalNamespace}}/"
+          dashboardURLFormat: "http://{{.ClusterName}}-head-svc.{{.RayLocalNamespace}}.svc.cluster.local:8265"
 
 
 

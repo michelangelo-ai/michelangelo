@@ -582,6 +582,12 @@ func (r *Reconciler) applyRayClusterStatus(
 		rayCluster.Status.LogUrl = clusterStatus.Ray.LogUrl
 	}
 
+	// Copy job_url (live KubeRay dashboard URL) through from the mapper, same
+	// as log_url above.
+	if clusterStatus.Ray.JobUrl != "" {
+		rayCluster.Status.JobUrl = clusterStatus.Ray.JobUrl
+	}
+
 	if len(clusterStatus.Ray.PodErrors) > 0 {
 		rayCluster.Status.PodErrors = clusterStatus.Ray.PodErrors
 	}
