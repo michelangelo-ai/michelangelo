@@ -25,7 +25,7 @@ class TrainingObserver(Protocol):
     idempotent or guard on rank internally if side effects (DB writes,
     HTTP calls) should only happen once.
 
-    Example::
+    Example (observing training events)::
 
         from michelangelo.lib.trainer.torch.pytorch_lightning import (
             LightningTrainer,
@@ -246,21 +246,20 @@ class IncrementalTrainingSpec:
         override_incremental_training_epoch: Explicit starting epoch for the
             incremental run. ``None`` continues from the baseline's own epoch
             count.
-        fused_model_submodule: Optional submodule-prefix used to select a
-            slice of a fused checkpoint's combined state dict before loading
-            it (e.g. ``"predictor_module"`` for the DL predictor half of a
-            fused native-transform package). Schema-only in OSS today —
-            carried through for forward compatibility with internal
-            Michelangelo's warm-start config shape; no OSS code currently
-            strips or consumes this prefix. Defaults to ``None`` here,
-            unlike internal Michelangelo's ``"predictor_module"`` default —
-            reconcile this divergence deliberately once OSS implements the
-            stripping behavior (see the PR that ports it).
+        fused_model_submodule: Reserved for future use; has no effect today.
+            Intended as a submodule-prefix selecting a slice of a fused
+            checkpoint's combined state dict before loading it (e.g.
+            ``"predictor_module"`` for the DL predictor half of a fused
+            native-transform package). Nothing currently reads it — leave it
+            unset.
     """
 
     metadata: IncrementalTrainingMetadata
     load_optimizer_weights: bool = False
     override_incremental_training_epoch: int | None = None
+    # Maintainer note: defaults to None here, where internal Michelangelo AI
+    # defaults to "predictor_module". Reconcile this divergence deliberately if
+    # and when the prefix-stripping behavior is implemented here.
     fused_model_submodule: str | None = None
 
 
@@ -288,16 +287,12 @@ class TransferLearningSpec:
             gradient updates) after loading baseline weights.
         layer_names_to_freeze_regex: Regex patterns matching layer names to
             freeze after loading baseline weights.
-        fused_model_submodule: Optional submodule-prefix used to select a
-            slice of a fused checkpoint's combined state dict before loading
-            it (e.g. ``"predictor_module"`` for the DL predictor half of a
-            fused native-transform package). Schema-only in OSS today —
-            carried through for forward compatibility with internal
-            Michelangelo's warm-start config shape; no OSS code currently
-            strips or consumes this prefix. Defaults to ``None`` here,
-            unlike internal Michelangelo's ``"predictor_module"`` default —
-            reconcile this divergence deliberately once OSS implements the
-            stripping behavior (see the PR that ports it).
+        fused_model_submodule: Reserved for future use; has no effect today.
+            Intended as a submodule-prefix selecting a slice of a fused
+            checkpoint's combined state dict before loading it (e.g.
+            ``"predictor_module"`` for the DL predictor half of a fused
+            native-transform package). Nothing currently reads it — leave it
+            unset.
     """
 
     metadata: TransferLearningMetadata
@@ -307,4 +302,7 @@ class TransferLearningSpec:
     layer_names_to_inherit_regex: list[str] = field(default_factory=list)
     layer_names_to_freeze: list[str] = field(default_factory=list)
     layer_names_to_freeze_regex: list[str] = field(default_factory=list)
+    # Maintainer note: defaults to None here, where internal Michelangelo AI
+    # defaults to "predictor_module". Reconcile this divergence deliberately if
+    # and when the prefix-stripping behavior is implemented here.
     fused_model_submodule: str | None = None

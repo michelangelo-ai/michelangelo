@@ -34,7 +34,7 @@ import os
 import uuid
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 import ray
 import torch
@@ -69,7 +69,10 @@ CHECKPOINT_PATH_KEY = "checkpoint_path"
 # public ``Result.from_path`` is unimplemented and ``can_restore`` /
 # ``resume_from_checkpoint`` are deprecated.
 _CHECKPOINT_MANAGER_SNAPSHOT_FILENAME = "checkpoint_manager_snapshot.json"
-_UNSET = object()
+# Sentinel distinguishing "num_epochs never set" from an explicit None; replaced
+# with the real default in ``LightningTrainerParam.__post_init__``. Typed as Any
+# so it can stand in for the annotated field types it defaults.
+_UNSET: Any = object()
 
 
 @dataclass
@@ -126,8 +129,9 @@ class LightningTrainerParam:
             ``lightning_trainer_kwargs["profiler"]``, ``profiler_logs_path`` is
             the directory it wrote to, and ``logger`` is the resolved Lightning
             logger. Use it to ship profiler output to an experiment tracker;
-            :func:`~_private.util.comet_profiler_sink` does this for Comet and
-            :func:`~_private.util.mlflow_profiler_sink` does this for MLflow.
+            ``comet_profiler_sink`` does this for Comet and
+            ``mlflow_profiler_sink`` does this for MLflow (both importable from
+            ``michelangelo.lib.trainer.torch.pytorch_lightning``).
             Ignored when no profiler is configured or when the profiler config
             sets ``upload_profiler_results: False``. Exceptions raised by the sink are
             logged and swallowed. Must be picklable (serialized to workers).
@@ -141,7 +145,7 @@ class LightningTrainerParam:
     num_shuffle_batches: int = (
         10  # By default we reserve 10 batches in ray data shuffle buffer.
     )
-    num_epochs: int | None = field(default=_UNSET)  # type: ignore[assignment]  # sentinel replaced in __post_init__
+    num_epochs: int | None = field(default=_UNSET)
     data_collate_fn: Callable | None = None
     lightning_trainer_kwargs: dict = field(default_factory=dict)
 
