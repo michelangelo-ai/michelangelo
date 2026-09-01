@@ -16,6 +16,7 @@ import (
 // Mapper helps to map global to local crds and vice versa
 type Mapper struct {
 	LogPersistence       LogPersistenceConfig
+	RayObservability     RayObservabilityConfig
 	logURLTemplate       *template.Template
 	dashboardURLTemplate *template.Template
 }
@@ -30,6 +31,7 @@ type MapperResult struct {
 const _mapperName = "k8sengineMapper"
 
 const logPersistenceConfigKey = "jobs.k8sengine.mapper.logPersistence"
+const rayObservabilityConfigKey = "jobs.k8sengine.mapper.rayObservability"
 
 // NewLogPersistenceConfig loads LogPersistenceConfig from YAML config provider.
 func NewLogPersistenceConfig(provider config.Provider) (LogPersistenceConfig, error) {
@@ -42,10 +44,21 @@ func NewLogPersistenceConfig(provider config.Provider) (LogPersistenceConfig, er
 	return conf, nil
 }
 
+// NewRayObservabilityConfig loads RayObservabilityConfig from YAML config provider.
+func NewRayObservabilityConfig(provider config.Provider) (RayObservabilityConfig, error) {
+	conf := RayObservabilityConfig{}
+	err := provider.Get(rayObservabilityConfigKey).Populate(&conf)
+	if err != nil {
+		// Config is optional — return zero-value (disabled) if not present
+		return RayObservabilityConfig{}, nil
+	}
+	return conf, nil
+}
+
 // NewMapper constructs the Mapper. Panics if LogURLFormat or DashboardURLFormat
 // is set but does not parse as a valid Go text/template — config errors should
 // fail at startup.
-func NewMapper(logPersistence LogPersistenceConfig) MapperResult {
+func NewMapper(logPersistence LogPersistenceConfig, rayObservability RayObservabilityConfig) MapperResult {
 	var tmpl *template.Template
 	if logPersistence.Enabled && logPersistence.LogURLFormat != "" {
 		tmpl = template.Must(template.New("logURL").Parse(logPersistence.LogURLFormat))
@@ -57,6 +70,7 @@ func NewMapper(logPersistence LogPersistenceConfig) MapperResult {
 	return MapperResult{
 		Mapper: Mapper{
 			LogPersistence:       logPersistence,
+			RayObservability:     rayObservability,
 			logURLTemplate:       tmpl,
 			dashboardURLTemplate: dashboardTmpl,
 		},

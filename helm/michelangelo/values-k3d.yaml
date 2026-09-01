@@ -94,6 +94,15 @@ controllermgr:
           s3DisableSSL: true
           logURLFormat: "http://localhost:9090/browser/{{.Bucket}}/{{.PathPrefix}}/{{.ClusterName}}_{{.RayLocalNamespace}}/"
           dashboardURLFormat: "http://{{.ClusterName}}-head-svc.{{.RayLocalNamespace}}.svc.cluster.local:8265"
+        # rayObservability points Ray's built-in dashboard Metrics tab at the
+        # sandbox's in-cluster Grafana/Prometheus (see grafana.yaml,
+        # prometheus.yaml). grafanaIframeHost assumes the sandbox's default
+        # Grafana NodePort mapping (localhost:3000) — override it if your
+        # local sandbox exposes Grafana on a different host/port.
+        rayObservability:
+          grafanaHost: "http://grafana:3000"
+          grafanaIframeHost: "http://localhost:3000"
+          prometheusHost: "http://prometheus:9090"
 
 
 

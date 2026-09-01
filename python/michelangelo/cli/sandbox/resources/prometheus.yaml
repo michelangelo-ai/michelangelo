@@ -1,5 +1,33 @@
 ---
 apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prometheus
+automountServiceAccountToken: true
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: prometheus-pod-reader
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: prometheus
+subjects:
+- kind: ServiceAccount
+  name: prometheus
+  namespace: default
+roleRef:
+  kind: ClusterRole
+  name: prometheus-pod-reader
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
 kind: ConfigMap
 metadata:
   name: prometheus-config
@@ -13,6 +41,27 @@ data:
       - targets: ['michelangelo-controllermgr:8091']
       scrape_interval: 5s
       metrics_path: /metrics
+    # Discovers Ray head/worker pods by their "metrics" container port (set
+    # by the controllermgr's KubeRay mapper — see ray.go rayMetricsExportPort)
+    # so the Ray Grafana dashboards have live data.
+    - job_name: 'ray'
+      kubernetes_sd_configs:
+      - role: pod
+      relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_ray_io_cluster]
+        action: keep
+        regex: .+
+      - source_labels: [__meta_kubernetes_pod_container_port_name]
+        action: keep
+        regex: metrics
+      - source_labels: [__meta_kubernetes_namespace]
+        target_label: namespace
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: pod
+      - source_labels: [__meta_kubernetes_pod_label_ray_io_cluster]
+        target_label: ray_io_cluster
+      - source_labels: [__meta_kubernetes_pod_label_ray_io_node_type]
+        target_label: ray_io_node_type
 
 ---
 apiVersion: apps/v1
@@ -29,6 +78,7 @@ spec:
       labels:
         app: prometheus
     spec:
+      serviceAccountName: prometheus
       containers:
       - name: prometheus
         image: prom/prometheus:latest

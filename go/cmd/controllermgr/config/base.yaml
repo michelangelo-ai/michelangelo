@@ -71,6 +71,16 @@ jobs:
         # KubeRay dashboard URL (job_url), independent of log persistence.
         # Available vars: {{.ClusterName}}, {{.RayLocalNamespace}}.
         dashboardURLFormat: "http://{{.ClusterName}}-head-svc.{{.RayLocalNamespace}}.svc.cluster.local:8265"
+      # rayObservability wires the Ray dashboard's built-in Metrics tab (and
+      # Prometheus service discovery) to the sandbox's in-cluster Grafana and
+      # Prometheus. grafanaIframeHost is the browser-reachable URL (matches
+      # the sandbox's default Grafana NodePort mapping — see grafana.yaml);
+      # override it if your local sandbox exposes Grafana on a different
+      # host/port (e.g. a custom port-forward).
+      rayObservability:
+        grafanaHost: "http://grafana:3000"
+        grafanaIframeHost: "http://localhost:3000"
+        prometheusHost: "http://prometheus:9090"
 
 minio:
   awsRegion: us-east-1

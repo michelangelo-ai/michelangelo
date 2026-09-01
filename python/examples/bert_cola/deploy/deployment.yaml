@@ -4,10 +4,10 @@ metadata:
   name: bert-cola-deployment
   namespace: ma-dev-test
 spec:
-  desiredRevision:
-    name: model-20260829-194020-da8ae7f7
+  desired_revision:
+    name: model-20260901-023649-74b34e43
     namespace: ma-dev-test
-  inferenceServer:
+  inference_server:
     name: bert-cola-is
   strategy:
     rolling: {}

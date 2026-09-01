@@ -188,6 +188,35 @@ kubectl get configmap <inferenceserver-name>-model-config -o yaml
 
 ---
 
+## Pipeline succeeds but no model appears in the registry
+
+**Symptoms**: A training PipelineRun completes with `state: PIPELINE_RUN_STATE_SUCCEEDED` and every step (including the push/pusher step) shows `SUCCEEDED`, but no corresponding row shows up in the Model Registry (UI, `ma model list`, or the `model` table) for that run.
+
+**Diagnostics**:
+```bash
+# Inspect the push step's own output — look for the registry_uri scheme
+kubectl get pipelinerun <run-name> -n <namespace> -o json | \
+  jq '.status.steps[] | select(.subSteps) | .subSteps[] | select(.displayName | test("push"))'
+
+# A registry_uri starting with "memory://" (vs. an api:// / real registry URI)
+# means the model was only registered in-process and was discarded when the
+# task pod exited.
+
+# Check whether REGISTRY_ENDPOINT is set on the pipeline task pods'
+# environment ConfigMap
+kubectl get configmap michelangelo-config -o yaml | grep REGISTRY_ENDPOINT
+```
+
+**Likely cause**: the pusher task (e.g. `examples/bert_cola/push.py`, or any custom push step following the same pattern) falls back to an `InMemoryRegistryClient` whenever the `REGISTRY_ENDPOINT` env var is not present on the task pod — it only logs a warning (`REGISTRY_ENDPOINT not set -- using InMemoryRegistryClient. Model registration will not be persisted.`), which is easy to miss since the pipeline run still reports overall success. This typically happens when the `michelangelo-config` ConfigMap in a cluster predates the `REGISTRY_ENDPOINT` key being added, so a freshly-created cluster or a stale sandbox never picked it up.
+
+**Remedy**: ensure `REGISTRY_ENDPOINT: "<apiserver-service>:<port>"` (e.g. `michelangelo-apiserver:15566`) is present in the `michelangelo-config` ConfigMap that pipeline task pods read their environment from, then re-apply it:
+```bash
+kubectl apply -f python/michelangelo/cli/sandbox/resources/michelangelo-config.yaml
+```
+No pod restart is required — the env var is read fresh by each new task pod, so the fix takes effect on the next pipeline run.
+
+---
+
 ## S3 / object store errors
 
 **Symptoms**: Jobs fail with access denied or endpoint unreachable errors. Model downloads fail in the model-sync sidecar.
