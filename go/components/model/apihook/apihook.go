@@ -1,19 +1,13 @@
 // Package apihook registers the Model API hook used to default and inherit
-// the environment label on Models at create/update time. See
+// labels and metadata on Models at create/update time. See
 // go/components/pipelinerun/apihook and go/components/triggerrun/apihook for
 // the sibling packages this one follows the shape of.
 //
-// This hook implements ONLY api.EnvironmentLabel defaulting/inheritance. It
-// deliberately does not implement
-// description-length validation, pipeline-type label copy, owner/LDAP
-// validation, or revision/pipeline-name label copy — those have no obvious
-// OSS-generic equivalent and are out of scope here.
-//
-// BeforeUpdate re-derives the label from Spec.SourcePipelineRun on every
-// update, the same as BeforeCreate: the source PipelineRun's label is the
-// source of truth, so a manual edit to a Model's label is overwritten again
-// on the next update if a source is still set. This is intentional, not an
-// oversight.
+// BeforeUpdate re-derives inherited values from Spec.SourcePipelineRun on
+// every update, the same as BeforeCreate: the source PipelineRun is the
+// source of truth, so a manual edit to a Model's inherited label is
+// overwritten again on the next update if a source is still set. This is
+// intentional, not an oversight.
 package apihook
 
 import (
@@ -47,21 +41,35 @@ type apiHook struct {
 }
 
 func (a apiHook) BeforeCreate(ctx context.Context, request *v2.CreateModelRequest) error {
-	return a.applyEnvironmentLabel(ctx, request.Model)
+	return a.applyFromSourcePipelineRun(ctx, request.Model)
 }
 
 func (a apiHook) BeforeUpdate(ctx context.Context, request *v2.UpdateModelRequest) error {
-	return a.applyEnvironmentLabel(ctx, request.Model)
+	return a.applyFromSourcePipelineRun(ctx, request.Model)
 }
 
-// applyEnvironmentLabel sets api.EnvironmentLabel to the configured default
-// (or api.UnspecifiedEnvironment when unconfigured) if absent, then
-// overrides it with the source PipelineRun's value when one is set,
-// resolvable, and itself carries the label — default first, then
-// overwrite-if-present-on-source.
-func (a apiHook) applyEnvironmentLabel(ctx context.Context, model *v2.Model) error {
+// applyFromSourcePipelineRun resolves Spec.SourcePipelineRun once, then
+// applies all inherited labels from the resolved source. When the source
+// is unset, unresolvable, or the Get fails, label defaults are still
+// applied — the resolution is best-effort enrichment and never blocks
+// Model creation.
+func (a apiHook) applyFromSourcePipelineRun(ctx context.Context, model *v2.Model) error {
 	setIfAbsent(model, api.EnvironmentLabel, a.defaultEnvironment())
 
+	src := a.resolveSourcePipelineRun(ctx, model)
+	if src == nil {
+		return nil
+	}
+
+	a.applyEnvironmentLabel(model, src)
+	return nil
+}
+
+// resolveSourcePipelineRun fetches the PipelineRun referenced by
+// model.Spec.SourcePipelineRun. Returns nil when the reference is empty
+// or the Get fails (not-found and transient errors alike are logged and
+// swallowed).
+func (a apiHook) resolveSourcePipelineRun(ctx context.Context, model *v2.Model) *v2.PipelineRun {
 	srcRef := model.Spec.GetSourcePipelineRun()
 	if srcRef.GetName() == "" {
 		return nil
@@ -74,24 +82,23 @@ func (a apiHook) applyEnvironmentLabel(ctx context.Context, model *v2.Model) err
 	src := &v2.PipelineRun{}
 	if err := a.apiHandler.Get(ctx, namespace, srcRef.GetName(), &metav1.GetOptions{}, src); err != nil {
 		if utils.IsNotFoundError(err) {
-			a.logger.Warn("applyEnvironmentLabel: source PipelineRun not found, keeping default environment label",
+			a.logger.Warn("resolveSourcePipelineRun: source PipelineRun not found, keeping defaults",
 				zap.String("pipelineRun", srcRef.GetName()))
 			return nil
 		}
-		// Non-not-found errors (e.g. transient API-server failure) are logged
-		// and swallowed: this is a best-effort label-inheritance lookup and
-		// should never block Model creation, matching
-		// pipelinerun/apihook.go's precedent of treating Get failures as
-		// non-fatal for optional enrichment.
-		a.logger.Warn("applyEnvironmentLabel: failed to resolve source PipelineRun for environment-label inheritance",
+		a.logger.Warn("resolveSourcePipelineRun: failed to resolve source PipelineRun",
 			zap.String("pipelineRun", srcRef.GetName()), zap.Error(err))
 		return nil
 	}
+	return src
+}
 
+// applyEnvironmentLabel overrides api.EnvironmentLabel on the Model with
+// the source PipelineRun's value when the source carries the label.
+func (a apiHook) applyEnvironmentLabel(model *v2.Model, src *v2.PipelineRun) {
 	if val, ok := src.ObjectMeta.Labels[api.EnvironmentLabel]; ok {
 		setLabel(model, api.EnvironmentLabel, val)
 	}
-	return nil
 }
 
 // defaultEnvironment returns the configured default, or
