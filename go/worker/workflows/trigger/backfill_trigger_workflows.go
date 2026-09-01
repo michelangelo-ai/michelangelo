@@ -32,12 +32,11 @@ func (r *workflows) BackfillTrigger(ctx workflow.Context, req triggerrun.CreateT
 		return nil, err
 	}
 	log.Info("backfill trigger workflow started", zap.String("operation", "backfill_trigger_workflow"))
-	defaultEnv := r.defaultEnvironment()
 	var err error
 	if tr.Spec.Trigger.MaxConcurrency > 0 {
-		err = concurrentRun(ctx, tr, defaultEnv)
+		err = concurrentRun(ctx, tr)
 	} else {
-		err = batchRun(ctx, tr, defaultEnv)
+		err = batchRun(ctx, tr)
 	}
 	if err != nil {
 		return nil, err

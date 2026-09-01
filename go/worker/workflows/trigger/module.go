@@ -7,12 +7,11 @@ import (
 )
 
 var Module = fx.Options(
-	fx.Provide(NewConfig),
 	fx.Invoke(register),
 )
 
-func register(workers []worker.Worker, wf workflow.Workflow, conf Config) {
-	ws := workflows{workflow: wf, defaultEnv: conf.DefaultEnvironment}
+func register(workers []worker.Worker, workflow workflow.Workflow) {
+	ws := workflows{workflow: workflow}
 	for _, w := range workers {
 		w.RegisterWorkflow(ws.CronTrigger, "trigger.CronTrigger")
 		w.RegisterWorkflow(ws.BackfillTrigger, "trigger.BackfillTrigger")
