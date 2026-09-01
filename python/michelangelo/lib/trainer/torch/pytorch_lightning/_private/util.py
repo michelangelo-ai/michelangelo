@@ -27,7 +27,7 @@ from pytorch_lightning.plugins import (
     LayerSync,
     Precision,
 )
-from pytorch_lightning.strategies import Strategy
+from pytorch_lightning.strategies import SingleDeviceStrategy, Strategy
 from ray.train.lightning import (
     RayDDPStrategy,
     RayDeepSpeedStrategy,
@@ -302,14 +302,17 @@ def _is_deepspeed_strategy(strategy: str | Strategy | None) -> bool:
 
 
 def _prepare_trainer_for_ray(trainer: pl.Trainer) -> pl.Trainer:
-    """Prepare a Lightning Trainer for Ray, tolerating ModelParallelStrategy (FSDP2).
+    """Prepare a Lightning Trainer for Ray, tolerating strategies Ray doesn't know about.
 
     Ray's ``prepare_trainer`` hard-rejects any strategy that is not
-    ``RayDDPStrategy``/``RayFSDPStrategy``/``RayDeepSpeedStrategy``. For FSDP2 we replicate
-    its only meaningful check -- that the cluster environment is ``RayLightningEnvironment`` --
+    ``RayDDPStrategy``/``RayFSDPStrategy``/``RayDeepSpeedStrategy``. For FSDP2
+    (ModelParallelStrategy) and ``RaySingleDeviceStrategy`` we replicate its only
+    meaningful check -- that the cluster environment is ``RayLightningEnvironment`` --
     and return the trainer unchanged; for the supported strategies we defer to Ray.
     """
-    if _is_model_parallel_strategy(trainer.strategy):
+    if _is_model_parallel_strategy(trainer.strategy) or isinstance(
+        trainer.strategy, RaySingleDeviceStrategy
+    ):
         cluster_env = getattr(trainer.strategy, "cluster_environment", None)
         if cluster_env is not None and not isinstance(
             cluster_env, RayLightningEnvironment
@@ -322,11 +325,62 @@ def _prepare_trainer_for_ray(trainer: pl.Trainer) -> pl.Trainer:
     return ray.train.lightning.prepare_trainer(trainer)
 
 
+def _resolve_single_device() -> torch.device:
+    """Pick the best available single device: TPU > MPS > CUDA > CPU.
+
+    Mirrors Lightning's own auto-detection order:
+    https://github.com/Lightning-AI/pytorch-lightning/blob/411eec98d50368d700c45edd29d9c20b21e7be17/src/lightning/fabric/utilities/device_parser.py#L209-L221
+    """
+    try:
+        from lightning.fabric.accelerators.xla import XLAAccelerator
+
+        if XLAAccelerator.is_available():
+            return torch.device("xla")
+    except ImportError:
+        pass
+    if torch.backends.mps.is_available():
+        return torch.device("mps")
+    if torch.cuda.is_available():
+        return ray.train.torch.get_device()
+    return torch.device("cpu")
+
+
+class RaySingleDeviceStrategy(SingleDeviceStrategy):
+    """Ray glue for single-device training.
+
+    Resolves the best available device (CUDA if Ray assigned one, then MPS on
+    Apple Silicon, then CPU) so that Lightning's auto-detected accelerator and
+    the strategy agree on the device.
+    """
+
+    def __init__(self, **kwargs: Any):
+        device = _resolve_single_device()
+        super().__init__(device=device, **kwargs)
+
+
 def _resolve_strategy(
     strategy: str | Strategy | None = None,
     strategy_kwargs: dict[str, Any] | None = None,
 ) -> Strategy:
-    """Factory to create the correct Ray/Lightning strategy based on strategy name or instance."""
+    """Factory to create the correct Ray/Lightning strategy based on strategy name or instance.
+
+    When ``strategy`` is None the function checks the Ray world size: if there is
+    only one device (world_size == 1) it returns a ``SingleDeviceStrategy``; otherwise
+    it falls back to ``RayDDPStrategy``.
+
+    Args:
+        strategy: One of "ddp", "fsdp", "fsdp2", "deepspeed", "single_device", or
+            an existing Strategy instance.  None auto-selects based on world size.
+        strategy_kwargs: Keyword arguments forwarded to the strategy constructor. Ignored
+            when strategy is already a Strategy instance.
+
+    Returns:
+        A Strategy instance ready to pass to the Lightning Trainer.
+
+    Raises:
+        TypeError: If strategy or strategy_kwargs have an unexpected type.
+        ValueError: If strategy is a string that is not one of the supported values.
+    """
     if strategy is not None and not isinstance(strategy, (str, Strategy)):
         raise TypeError(
             f"strategy must be a str, Strategy instance, or None, got {type(strategy)!r}"
@@ -341,8 +395,15 @@ def _resolve_strategy(
 
     strategy_kwargs = strategy_kwargs or {}
 
-    if strategy is None or strategy.lower() == "ddp":
+    if strategy is None:
+        world_size = ray.train.get_context().get_world_size()
+        if world_size == 1:
+            return RaySingleDeviceStrategy(**strategy_kwargs)
         return RayDDPStrategy(**strategy_kwargs)
+    elif strategy.lower() == "ddp":
+        return RayDDPStrategy(**strategy_kwargs)
+    elif strategy.lower() == "single_device":
+        return RaySingleDeviceStrategy(**strategy_kwargs)
     elif strategy.lower() == "deepspeed":
         return RayDeepSpeedStrategy(**strategy_kwargs)
     elif strategy.lower() == "fsdp":
@@ -360,7 +421,7 @@ def _resolve_strategy(
         return RayModelParallelStrategy(**strategy_kwargs)
     else:
         raise ValueError(
-            f"Unsupported strategy: {strategy!r}; expected 'ddp', 'deepspeed', 'fsdp', 'fsdp2', or None"
+            f"Unsupported strategy: {strategy!r}; expected 'ddp', 'deepspeed', 'fsdp', 'fsdp2', 'single_device', or None"
         )
 
 
