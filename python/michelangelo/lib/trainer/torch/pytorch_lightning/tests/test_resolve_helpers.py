@@ -67,7 +67,9 @@ class TestResolveStrategy:
         mock_cls.assert_called_once_with()
         assert result is mock_cls.return_value
 
-    @pytest.mark.parametrize("name", ["single_device", "Single_Device", "SINGLE_DEVICE"])
+    @pytest.mark.parametrize(
+        "name", ["single_device", "Single_Device", "SINGLE_DEVICE"]
+    )
     def test_single_device_string_resolves_case_insensitively(self, name):
         """The string ``"single_device"`` routes to ``RaySingleDeviceStrategy``."""
         with patch(f"{_UTIL_MODULE}.RaySingleDeviceStrategy") as mock_cls:
@@ -226,13 +228,17 @@ class TestRaySingleDeviceStrategy:
 
     def test_root_device_from_resolve(self):
         """``root_device`` matches what ``_resolve_single_device`` returns."""
-        with patch(f"{_UTIL_MODULE}._resolve_single_device", return_value=torch.device("mps")):
+        with patch(
+            f"{_UTIL_MODULE}._resolve_single_device", return_value=torch.device("mps")
+        ):
             strategy = RaySingleDeviceStrategy()
         assert strategy.root_device == torch.device("mps")
 
     def test_cpu_device(self):
         """Works with CPU device."""
-        with patch(f"{_UTIL_MODULE}._resolve_single_device", return_value=torch.device("cpu")):
+        with patch(
+            f"{_UTIL_MODULE}._resolve_single_device", return_value=torch.device("cpu")
+        ):
             strategy = RaySingleDeviceStrategy()
         assert strategy.root_device == torch.device("cpu")
 
@@ -342,7 +348,9 @@ class TestPrepareTrainerForRay:
 
     def test_single_device_strategy_bypasses_ray_prepare(self):
         """``RaySingleDeviceStrategy`` bypasses Ray's strategy whitelist check."""
-        with patch(f"{_UTIL_MODULE}._resolve_single_device", return_value=torch.device("cpu")):
+        with patch(
+            f"{_UTIL_MODULE}._resolve_single_device", return_value=torch.device("cpu")
+        ):
             strategy = RaySingleDeviceStrategy()
         trainer = MagicMock()
         trainer.strategy = strategy
@@ -353,7 +361,9 @@ class TestPrepareTrainerForRay:
 
     def test_single_device_strategy_with_wrong_cluster_env_raises(self):
         """``RaySingleDeviceStrategy`` with an unexpected cluster environment raises."""
-        with patch(f"{_UTIL_MODULE}._resolve_single_device", return_value=torch.device("cpu")):
+        with patch(
+            f"{_UTIL_MODULE}._resolve_single_device", return_value=torch.device("cpu")
+        ):
             strategy = RaySingleDeviceStrategy()
         strategy.cluster_environment = object()
         trainer = MagicMock()
