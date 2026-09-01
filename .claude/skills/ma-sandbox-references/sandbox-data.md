@@ -22,10 +22,11 @@ ma sandbox demo inference      # inference server (only needed for deploy-phase 
 
 Both commands run `kubectl apply` on the YAML files under:
 - `python/michelangelo/cli/sandbox/demo/pipeline/`
-- `python/michelangelo/cli/sandbox/demo/trigger_run/`
 - `python/michelangelo/cli/sandbox/demo/inference/`
 
 Read those files directly to see exactly what entities get created, their names, and their specs. Both commands are **idempotent** — safe to re-run.
+
+Trigger runs are not created via standalone YAML — `ma sandbox demo pipeline` seeds a pipeline with a trigger attached (e.g. `training-pipeline-with-trigger.yaml`), and a trigger run is then created from that pipeline through the UI.
 
 **State after seeding**: entity state is set by the controller manager after apply — inspect with `kubectl get` to see actual current states rather than assuming.
 
