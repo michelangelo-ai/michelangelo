@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Compiles src/HelloScala.scala into target/HelloScala.jar.
+# Compiles src/ScalaTest.scala into target/ScalaTest.jar.
 #
 # Spark 3.5.x is built against Scala 2.12, whose stdlib is not binary
 # compatible with Scala 3 (NoSuchMethodError: ScalaRunTime$.wrapRefArray) —
@@ -21,15 +21,15 @@ if [[ ! -x "${SCALAC}" ]]; then
 fi
 
 BUILD_DIR="${SCRIPT_DIR}/target/classes"
-JAR_PATH="${SCRIPT_DIR}/target/HelloScala.jar"
+JAR_PATH="${SCRIPT_DIR}/target/ScalaTest.jar"
 
 rm -rf "${BUILD_DIR}"
 mkdir -p "${BUILD_DIR}"
 
-echo "Compiling HelloScala.scala with $(${SCALAC} -version 2>&1)..."
+echo "Compiling ScalaTest.scala with $(${SCALAC} -version 2>&1)..."
 JAVA_HOME="${JAVA_HOME}" PATH="${JAVA_HOME}/bin:${PATH}" \
   "${SCALAC}" -classpath "$("${PYSPARK_PYTHON}" -c 'import pyspark,os; print(os.path.join(os.path.dirname(pyspark.__file__), "jars", "*"))')" \
-  -d "${BUILD_DIR}" "${SCRIPT_DIR}/src/HelloScala.scala"
+  -d "${BUILD_DIR}" "${SCRIPT_DIR}/src/ScalaTest.scala"
 
 echo "Packaging ${JAR_PATH}..."
 JAVA_HOME="${JAVA_HOME}" "${JAVA_HOME}/bin/jar" --create --file "${JAR_PATH}" -C "${BUILD_DIR}" .

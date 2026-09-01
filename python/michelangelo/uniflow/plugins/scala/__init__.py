@@ -6,8 +6,8 @@ task body is not a Python function executed inside the driver — it is an
 external JAR that Spark invokes directly via ``spark-submit``.
 """
 
-from michelangelo.uniflow.plugins.scala.task import ScalaTask
+from michelangelo.uniflow.plugins.scala.task import ScalaSparkTask
 
 __all__ = [
-    "ScalaTask",
+    "ScalaSparkTask",
 ]

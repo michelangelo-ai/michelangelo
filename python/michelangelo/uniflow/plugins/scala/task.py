@@ -41,7 +41,7 @@ _config_binding = TaskBinding(
 
 
 @dataclass
-class ScalaTask(TaskConfig):
+class ScalaSparkTask(TaskConfig):
     """Configuration for running a pre-compiled Scala/JVM Spark job.
 
     Attributes:
