@@ -1,0 +1,15 @@
+apiVersion: michelangelo.api/v2
+kind: Deployment
+metadata:
+  name: bert-cola-deployment
+  namespace: ma-dev-test
+spec:
+  # Set this to the model registered by a real bert_cola.py run's push_step
+  # (see the model_name printed in that run's push results).
+  desiredRevision:
+    name: "<model-name-from-push-step>"
+    namespace: ma-dev-test
+  inferenceServer:
+    name: bert-cola-is
+  strategy:
+    rolling: {}

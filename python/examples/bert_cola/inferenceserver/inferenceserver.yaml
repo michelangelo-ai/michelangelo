@@ -1,0 +1,35 @@
+apiVersion: michelangelo.api/v2
+kind: InferenceServer
+metadata:
+  name: bert-cola-is
+  namespace: ma-dev-test
+  labels:
+    app: bert-cola
+spec:
+  tenancyType: TENANCY_TYPE_DEDICATED
+  backendType: BACKEND_TYPE_TRITON
+  ownerSpec:
+    tier: 4
+  initSpec:
+    resourceSpec:
+      cpu: 1
+      memory: "2Gi"
+    servingSpec:
+      version: "latest"
+      # Built by .github/workflows/build-example-triton-images.yaml from
+      # this project's own inferenceserver/requirements.txt and the shared
+      # docker/triton-serving.Dockerfile -- keep the image name in sync with
+      # that workflow's "<example-name>-triton-serving" convention.
+      containerBuildTemplate: "ghcr.io/michelangelo-ai/bert-cola-triton-serving:latest"
+    numInstances: 1
+  decomSpec:
+    decommission: false
+  owner:
+    name: "example-owner"
+  clusterTargets:
+  - clusterId: michelangelo-sandbox
+    kubernetes:
+      host: https://kubernetes.default.svc
+      port: "443"
+      tokenTag: cluster-michelangelo-sandbox-is-token
+      caDataTag: cluster-michelangelo-sandbox-ca-data

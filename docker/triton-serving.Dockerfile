@@ -12,7 +12,14 @@
 # dropped 3.8 support after the 4.44 series).
 #
 # A model needing deps/versions outside this image can still override it via
-# InferenceServer.spec.initSpec.servingSpec.containerBuildTemplate.
+# InferenceServer.spec.initSpec.servingSpec.containerBuildTemplate -- see
+# build-example-triton-images.yaml, which builds per-project images from this
+# same Dockerfile via EXTRA_PIP_PACKAGES instead of duplicating it per project.
 FROM nvcr.io/nvidia/tritonserver:23.04-py3
 
-RUN pip install --no-cache-dir torch==2.4.1 transformers==4.44.2
+# Space-separated pip requirement strings (e.g. "torch==2.4.1 transformers==4.44.2").
+# Defaults to this image's own baked-in deps so the shared default build
+# (build-triton-image.yaml) is unaffected.
+ARG EXTRA_PIP_PACKAGES="torch==2.4.1 transformers==4.44.2"
+
+RUN if [ -n "$EXTRA_PIP_PACKAGES" ]; then pip install --no-cache-dir $EXTRA_PIP_PACKAGES; fi

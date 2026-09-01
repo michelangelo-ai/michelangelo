@@ -1,0 +1,6 @@
+# Needed by BertColaModel.predict() at Triton load time (see ../assembler.py).
+# The stock nvcr.io/nvidia/tritonserver image ships Python 3.8, which caps
+# these versions: torch 2.4.1 is the last release with 3.8 wheels;
+# transformers dropped 3.8 support after the 4.44 series.
+torch==2.4.1
+transformers==4.44.2

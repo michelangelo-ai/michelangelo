@@ -41,3 +41,18 @@ assembler path -- BERT's multi-input `forward()` isn't TorchScript-friendly),
 and `push_step` registers it in a model registry (`InMemoryRegistryClient` by
 default; set `REGISTRY_ENDPOINT` for a real registry). Set `AWS_ENDPOINT_URL`
 to push to MinIO/S3-compatible storage instead of a local temp directory.
+
+## Deploying to Triton
+
+`inferenceserver/` holds this example's deploy manifests. Rather than a
+Dockerfile, `inferenceserver/requirements.txt` lists the packages the
+custom python-backend `assembler.py` produces needs -- CI
+(`.github/workflows/build-example-triton-images.yaml`) builds a per-project
+serving image from the shared `docker/triton-serving.Dockerfile` using that
+list, and `inferenceserver.yaml`'s `servingSpec.containerBuildTemplate`
+points at the result. No project ever writes or maintains a Dockerfile;
+only a plain dependency list.
+
+To deploy: apply `inferenceserver/inferenceserver.yaml`, then
+`inferenceserver/deployment.yaml` with `desiredRevision.name` set to the
+model name printed by a real `bert_cola.py` run's `push_step`.

@@ -31,6 +31,17 @@ const (
 	tritonServicePortName = "http"
 )
 
+// tritonImage returns the Triton container image to run for inferenceServer:
+// the stock nvcr.io/nvidia/tritonserver image unless ServingSpec.ContainerBuildTemplate
+// is set, which lets a project point at its own CI-built image (e.g. one that bakes in
+// the ML framework deps its custom python-backend model needs) instead.
+func tritonImage(inferenceServer *v2pb.InferenceServer) string {
+	if override := inferenceServer.Spec.GetInitSpec().GetServingSpec().GetContainerBuildTemplate(); override != "" {
+		return override
+	}
+	return fmt.Sprintf("nvcr.io/nvidia/tritonserver:%s", defaultTritonImageTag)
+}
+
 // Triton Server Management
 type tritonBackend struct{}
 
@@ -252,7 +263,7 @@ func (b *tritonBackend) createTritonDeployment(ctx context.Context, logger *zap.
 					Containers: []corev1.Container{
 						{
 							Name:  "triton",
-							Image: fmt.Sprintf("nvcr.io/nvidia/tritonserver:%s", defaultTritonImageTag),
+							Image: tritonImage(inferenceServer),
 							Ports: []corev1.ContainerPort{
 								{ContainerPort: 8000, Name: "http"},
 								{ContainerPort: 8001, Name: "grpc"},
