@@ -82,7 +82,7 @@ jobs:
             type=raw,value=${{ steps.bare_version.outputs.version }},enable=${{ steps.bare_version.outputs.is_tag }}
 
       - name: ${{ matrix.service }} / Build & Push Image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: docker/service.Dockerfile
