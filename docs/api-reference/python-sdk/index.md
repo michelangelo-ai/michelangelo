@@ -13,10 +13,7 @@ Start here if you're authoring pipelines with the Python SDK.
 > for what a task, a workflow, and Uniflow actually are before diving into the raw
 > signatures below.
 
-Some modules below aren't linked yet — coming soon. Two modules referenced elsewhere
-in this reference, the XGBoost trainer and `LightningTrainer` itself, aren't in the
-current generator config and have no page yet either; only the Torch collate-function
-utilities under **Trainer** are covered so far.
+Some modules below aren't linked yet — coming soon.
 
 ## Uniflow — Tasks & Workflows
 
@@ -55,13 +52,21 @@ The pusher component for CanvasFlex template-driven workflows.
 
 ## Trainer
 
-PyTorch training utilities used with `LightningTrainer` (`LightningTrainer` itself
-isn't generated into this reference yet — see the note above).
+Distributed trainers and the utilities used alongside them.
 
 | Module | Description |
 |--------|-------------|
+| [`lib.trainer.torch.pytorch_lightning.lightning_trainer`](reference/lib/trainer/torch/pytorch_lightning/lightning_trainer.md) | `LightningTrainer`, `LightningTrainerWithStateDict` and `LightningTrainerParam` |
+| [`lib.trainer.torch.pytorch_lightning.schema`](reference/lib/trainer/torch/pytorch_lightning/schema.md) | Warm-start schema types — `TransferLearningSpec`, `IncrementalTrainingSpec`, `ModelSpec`, `TrainingObserver`, `ExperimentStore` |
+| [`lib.trainer.torch.pytorch_lightning.experiment_store`](reference/lib/trainer/torch/pytorch_lightning/experiment_store.md) | `FsspecExperimentStore` — filesystem auto-resume backend |
+| [`lib.trainer.xgboost.xgboost_trainer`](reference/lib/trainer/xgboost/xgboost_trainer.md) | `XGBoostTrainer` and `XGBoostTrainerParam` |
 | [`lib.trainer.torch.data_collate_functions`](reference/lib/trainer/torch/data_collate_functions.md) | Collate functions for data loading |
 | `lib.trainer.torch.utils` | Trainer utilities |
+
+> Distributed strategy selection (DDP, FSDP, FSDP2) is passed through
+> `LightningTrainerParam.lightning_trainer_kwargs` to `pytorch_lightning.Trainer`, and the
+> strategy classes themselves are private, so they have no generated page here. See the
+> `lightning_trainer_kwargs` entry on `LightningTrainerParam` for how to set one.
 
 ## Native Transform
 
