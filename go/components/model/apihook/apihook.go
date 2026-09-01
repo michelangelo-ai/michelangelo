@@ -21,10 +21,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// RegisterModelAPIHook registers the API hook that defaults and inherits the
-// environment label on Models at create/update time. defaultEnv is the
-// operator-configured default (empty when unconfigured, in which case
-// api.UnspecifiedEnvironment is used instead).
+// RegisterModelAPIHook registers the API hook that defaults and inherits
+// labels and owner metadata on Models at create/update time. defaultEnv is
+// the operator-configured default environment (empty when unconfigured, in
+// which case api.UnspecifiedEnvironment is used instead).
 func RegisterModelAPIHook(logger *zap.Logger, apiHandler api.Handler, defaultEnv string) {
 	v2.RegisterModelAPIHook(apiHook{
 		logger:     logger,
@@ -49,12 +49,13 @@ func (a apiHook) BeforeUpdate(ctx context.Context, request *v2.UpdateModelReques
 }
 
 // applyFromSourcePipelineRun resolves Spec.SourcePipelineRun once, then
-// applies all inherited labels from the resolved source. When the source
-// is unset, unresolvable, or the Get fails, label defaults are still
-// applied — the resolution is best-effort enrichment and never blocks
-// Model creation.
+// applies all inherited labels and owner metadata from the resolved source.
+// When the source is unset, unresolvable, or the Get fails, label defaults
+// are still applied — the resolution is best-effort enrichment and never
+// blocks Model creation.
 func (a apiHook) applyFromSourcePipelineRun(ctx context.Context, model *v2.Model) error {
 	setIfAbsent(model, api.EnvironmentLabel, a.defaultEnvironment())
+	setIfAbsent(model, api.SourcePipelineTypeLabelName, api.DefaultSourcePipelineType)
 
 	src := a.resolveSourcePipelineRun(ctx, model)
 	if src == nil {
@@ -62,6 +63,10 @@ func (a apiHook) applyFromSourcePipelineRun(ctx context.Context, model *v2.Model
 	}
 
 	a.applyEnvironmentLabel(model, src)
+	a.applySourcePipelineTypeLabel(model, src)
+	a.applyOwnerFromActor(model, src)
+	a.applyPipelineNameLabel(model, src)
+	a.applyPipelineRevisionLabel(ctx, model, src)
 	return nil
 }
 
@@ -93,16 +98,64 @@ func (a apiHook) resolveSourcePipelineRun(ctx context.Context, model *v2.Model) 
 	return src
 }
 
-// applyEnvironmentLabel overrides api.EnvironmentLabel on the Model with
-// the source PipelineRun's value when the source carries the label.
 func (a apiHook) applyEnvironmentLabel(model *v2.Model, src *v2.PipelineRun) {
 	if val, ok := src.ObjectMeta.Labels[api.EnvironmentLabel]; ok {
 		setLabel(model, api.EnvironmentLabel, val)
 	}
 }
 
-// defaultEnvironment returns the configured default, or
-// api.UnspecifiedEnvironment when the operator has configured none.
+func (a apiHook) applySourcePipelineTypeLabel(model *v2.Model, src *v2.PipelineRun) {
+	if val, ok := src.ObjectMeta.Labels[api.SourcePipelineTypeLabelName]; ok {
+		setLabel(model, api.SourcePipelineTypeLabelName, val)
+	}
+}
+
+func (a apiHook) applyOwnerFromActor(model *v2.Model, src *v2.PipelineRun) {
+	actor := src.Spec.GetActor()
+	if actor.GetName() == "" && actor.GetProxyUser() == "" {
+		return
+	}
+	if model.Spec.Owner == nil {
+		model.Spec.Owner = &v2.UserInfo{}
+	}
+	if actor.GetName() != "" {
+		model.Spec.Owner.Name = actor.GetName()
+	}
+	if actor.GetProxyUser() != "" {
+		model.Spec.Owner.ProxyUser = actor.GetProxyUser()
+	}
+}
+
+func (a apiHook) applyPipelineNameLabel(model *v2.Model, src *v2.PipelineRun) {
+	if name := src.Spec.GetPipeline().GetName(); name != "" {
+		setLabel(model, api.ModelSourcePipelineName, name)
+	}
+}
+
+func (a apiHook) applyPipelineRevisionLabel(ctx context.Context, model *v2.Model, src *v2.PipelineRun) {
+	revRef := src.Spec.GetRevision()
+	if revRef.GetName() == "" {
+		return
+	}
+	namespace := revRef.GetNamespace()
+	if namespace == "" {
+		namespace = src.GetNamespace()
+	}
+
+	rev := &v2.Revision{}
+	if err := a.apiHandler.Get(ctx, namespace, revRef.GetName(), &metav1.GetOptions{}, rev); err != nil {
+		a.logger.Warn("applyPipelineRevisionLabel: failed to resolve Revision, skipping label",
+			zap.String("revision", revRef.GetName()), zap.Error(err))
+		return
+	}
+
+	if id := rev.Spec.GetRevisionId(); id != "" {
+		setLabel(model, api.ModelSourcePipelineRevision, id)
+	} else if ref := rev.Spec.GetGitCommit().GetGitRef(); ref != "" {
+		setLabel(model, api.ModelSourcePipelineRevision, ref)
+	}
+}
+
 func (a apiHook) defaultEnvironment() string {
 	if a.defaultEnv == "" {
 		return api.UnspecifiedEnvironment

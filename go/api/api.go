@@ -74,6 +74,19 @@ const (
 	// SourcePipelineManifestTypeLabelName is the Kubernetes label key that identifies
 	// the pipeline manifest type (e.g. PIPELINE_MANIFEST_TYPE_ASL).
 	SourcePipelineManifestTypeLabelName = "pipeline.michelangelo/PipelineManifestType"
+
+	// ModelSourcePipelineName records the name of the Pipeline whose
+	// PipelineRun produced a Model.
+	ModelSourcePipelineName = "model.michelangelo/source-pipeline-name"
+
+	// ModelSourcePipelineRevision records the revision identifier (RevisionId
+	// or GitRef fallback) of the Revision used by the PipelineRun that
+	// produced a Model.
+	ModelSourcePipelineRevision = "model.michelangelo/source-pipeline-revision"
+
+	// DefaultSourcePipelineType is the default value for
+	// SourcePipelineTypeLabelName when no source PipelineRun provides one.
+	DefaultSourcePipelineType = "PIPELINE_TYPE_TRAIN"
 )
 
 // DefaultContextTimeout defines the default timeout for the context
