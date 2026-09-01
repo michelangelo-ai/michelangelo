@@ -332,7 +332,7 @@ def _resolve_single_device() -> torch.device:
     https://github.com/Lightning-AI/pytorch-lightning/blob/411eec98d50368d700c45edd29d9c20b21e7be17/src/lightning/fabric/utilities/device_parser.py#L209-L221
     """
     try:
-        from lightning.fabric.accelerators.xla import XLAAccelerator
+        from pytorch_lightning.accelerators import XLAAccelerator
 
         if XLAAccelerator.is_available():
             return torch.device("xla")

@@ -170,21 +170,23 @@ class TestResolveStrategy:
 class TestResolveSingleDevice:
     """Device resolution: TPU > MPS > CUDA > CPU."""
 
+    _XLA = "pytorch_lightning.accelerators.XLAAccelerator.is_available"
+
     def test_cpu_fallback(self):
         """Falls back to CPU when no accelerator is available."""
         with (
+            patch(self._XLA, return_value=False),
             patch("torch.backends.mps.is_available", return_value=False),
             patch("torch.cuda.is_available", return_value=False),
-            patch.dict("sys.modules", {"lightning.fabric.accelerators.xla": None}),
         ):
             assert _resolve_single_device() == torch.device("cpu")
 
     def test_mps_preferred_over_cpu(self):
         """MPS is selected when available and CUDA is not."""
         with (
+            patch(self._XLA, return_value=False),
             patch("torch.backends.mps.is_available", return_value=True),
             patch("torch.cuda.is_available", return_value=False),
-            patch.dict("sys.modules", {"lightning.fabric.accelerators.xla": None}),
         ):
             assert _resolve_single_device() == torch.device("mps")
 
@@ -192,28 +194,28 @@ class TestResolveSingleDevice:
         """CUDA delegates to ``ray.train.torch.get_device()`` for the GPU index."""
         cuda_device = torch.device("cuda", 3)
         with (
+            patch(self._XLA, return_value=False),
             patch("torch.backends.mps.is_available", return_value=False),
             patch("torch.cuda.is_available", return_value=True),
             patch("ray.train.torch.get_device", return_value=cuda_device),
-            patch.dict("sys.modules", {"lightning.fabric.accelerators.xla": None}),
         ):
             assert _resolve_single_device() == cuda_device
 
     def test_mps_preferred_over_cuda(self):
         """MPS takes priority over CUDA (matches Lightning's order)."""
         with (
+            patch(self._XLA, return_value=False),
             patch("torch.backends.mps.is_available", return_value=True),
             patch("torch.cuda.is_available", return_value=True),
-            patch.dict("sys.modules", {"lightning.fabric.accelerators.xla": None}),
         ):
             assert _resolve_single_device() == torch.device("mps")
 
     def test_xla_import_failure_is_tolerated(self):
-        """When ``lightning.fabric.accelerators.xla`` cannot be imported, XLA is skipped."""
+        """When ``pytorch_lightning.accelerators.XLAAccelerator`` cannot be imported, XLA is skipped."""
         with (
             patch("torch.backends.mps.is_available", return_value=False),
             patch("torch.cuda.is_available", return_value=False),
-            patch.dict("sys.modules", {"lightning.fabric.accelerators.xla": None}),
+            patch.dict("sys.modules", {"pytorch_lightning.accelerators": None}),
         ):
             assert _resolve_single_device() == torch.device("cpu")
 
