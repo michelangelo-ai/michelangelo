@@ -325,8 +325,6 @@ func generatePipelineRunRequest(
 		// Falls back to the pre-rename key so a TriggerRun frozen into
 		// workflow history before the rename still replays deterministically.
 		labels[mgapi.EnvironmentLabel] = env
-	} else {
-		labels[mgapi.EnvironmentLabel] = "production"
 	}
 	annotations := map[string]string{
 		"michelangelo.uber.com/pipelinerun.engine": "condition",

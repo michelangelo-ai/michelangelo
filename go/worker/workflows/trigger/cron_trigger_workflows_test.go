@@ -433,6 +433,60 @@ func TestGenerateUniflowPRInput(t *testing.T) {
 	}
 }
 
+func TestGeneratePipelineRunRequestEnvironmentCopyForward(t *testing.T) {
+	ts := time.Date(2024, 1, 15, 10, 0, 0, 0, time.UTC)
+	baseTriggerRun := func(labels map[string]string) *v2pb.TriggerRun {
+		return &v2pb.TriggerRun{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: "test-ns",
+				Name:      "my-trigger",
+				Labels:    labels,
+			},
+			Spec: v2pb.TriggerRunSpec{
+				Pipeline: &api.ResourceIdentifier{Name: "my-pipeline", Namespace: "test-ns"},
+				Trigger:  &v2pb.Trigger{},
+			},
+		}
+	}
+
+	t.Run("copies explicit environment label from TriggerRun", func(t *testing.T) {
+		tr := baseTriggerRun(map[string]string{mgapi.EnvironmentLabel: "production"})
+		req, err := generatePipelineRunRequest(tr, "", "run-env-test", ts, nil)
+		require.NoError(t, err)
+		assert.Equal(t, "production", req.PipelineRun.ObjectMeta.Labels[mgapi.EnvironmentLabel])
+	})
+
+	t.Run("falls back to legacy label when current key is absent", func(t *testing.T) {
+		tr := baseTriggerRun(map[string]string{legacyEnvironmentLabel: "staging"})
+		req, err := generatePipelineRunRequest(tr, "", "run-env-test", ts, nil)
+		require.NoError(t, err)
+		assert.Equal(t, "staging", req.PipelineRun.ObjectMeta.Labels[mgapi.EnvironmentLabel])
+	})
+
+	t.Run("label absent when neither key is present — default is the API hook's job", func(t *testing.T) {
+		tr := baseTriggerRun(map[string]string{})
+		req, err := generatePipelineRunRequest(tr, "", "run-env-test", ts, nil)
+		require.NoError(t, err)
+		_, exists := req.PipelineRun.ObjectMeta.Labels[mgapi.EnvironmentLabel]
+		assert.False(t, exists, "EnvironmentLabel must not be set when source TriggerRun has no environment label")
+	})
+
+	t.Run("label absent when labels map is nil", func(t *testing.T) {
+		tr := baseTriggerRun(nil)
+		req, err := generatePipelineRunRequest(tr, "", "run-env-test", ts, nil)
+		require.NoError(t, err)
+		_, exists := req.PipelineRun.ObjectMeta.Labels[mgapi.EnvironmentLabel]
+		assert.False(t, exists, "EnvironmentLabel must not be set when source TriggerRun has nil labels")
+	})
+
+	t.Run("prefers current key over legacy key when both are present", func(t *testing.T) {
+		tr := baseTriggerRun(map[string]string{mgapi.EnvironmentLabel: "production", legacyEnvironmentLabel: "staging"})
+		req, err := generatePipelineRunRequest(tr, "", "run-env-test", ts, nil)
+		require.NoError(t, err)
+		assert.Equal(t, "production", req.PipelineRun.ObjectMeta.Labels[mgapi.EnvironmentLabel])
+	})
+}
+
 // TODO(#564): Add comprehensive workflow execution tests with activity mocking once starlark-worker
 // test framework supports Go workflows with Cadence/Temporal backend.
 // Currently, starlark-worker's test suite does not support Go workflows using workflow.Context.
