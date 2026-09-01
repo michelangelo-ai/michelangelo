@@ -668,7 +668,7 @@ func TestMapLocalClusterStatusToGlobal_JobUrl(t *testing.T) {
 		mr := NewMapper(LogPersistenceConfig{
 			Enabled:            false,
 			DashboardURLFormat: "http://{{.ClusterName}}-head-svc.{{.RayLocalNamespace}}.svc.cluster.local:8265",
-		})
+		}, RayObservabilityConfig{})
 		result, err := mr.Mapper.MapLocalClusterStatusToGlobal(rayCluster)
 		require.NoError(t, err)
 		assert.Equal(t, "http://my-cluster-head-svc."+RayLocalNamespace+".svc.cluster.local:8265", result.Ray.JobUrl)

@@ -477,6 +477,23 @@ controllermgr:
           # Empty string disables job_url emission.
           dashboardURLFormat: ""
 
+        # rayObservability wires the Ray dashboard's built-in Metrics tab and
+        # Prometheus service discovery to a Grafana/Prometheus deployment.
+        # All fields empty (the default) disables the wiring entirely — no
+        # env vars or fixed metrics port are injected into Ray pods.
+        rayObservability:
+          # Backend-reachable Grafana URL (e.g. "http://grafana:3000").
+          grafanaHost: ""
+
+          # Browser-reachable Grafana URL for embedded iframe panels. Only
+          # needed when it differs from grafanaHost (e.g. a NodePort or
+          # port-forward exposes Grafana to the browser on a different
+          # host/port than the in-cluster service name).
+          grafanaIframeHost: ""
+
+          # Backend-reachable Prometheus URL (e.g. "http://prometheus:9090").
+          prometheusHost: ""
+
   resources: {}
 
 # -----------------------------------------------------------------------------

@@ -9,3 +9,14 @@ spec:
   type: "PIPELINE_TYPE_TRAIN"
   manifest:
     filePath: examples.bert_cola.bert_cola
+    triggerMap:
+      monthly-run:
+        cronSchedule:
+          cron: "0 0 1 * *"
+        maxConcurrency: 1
+        parametersMap:
+          cola-monthly:
+            kwArgs:
+              path: 'nyu-mll/glue'
+              name: 'cola'
+              tokenizer_max_length: 128

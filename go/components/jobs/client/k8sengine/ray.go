@@ -44,6 +44,114 @@ type LogPersistenceConfig struct {
 	DashboardURLFormat string `yaml:"dashboardURLFormat"`
 }
 
+// RayObservabilityConfig holds platform-level configuration for wiring a Ray
+// cluster's built-in dashboard "Metrics" tab to the platform's Grafana and
+// Prometheus. Loaded from YAML under jobs.k8sengine.mapper.rayObservability.
+// A zero value disables the wiring entirely (no env vars or fixed metrics
+// port are injected), so existing clusters are unaffected until configured.
+type RayObservabilityConfig struct {
+	// GrafanaHost is the backend-reachable Grafana URL (e.g.
+	// "http://grafana:3000") the Ray dashboard head process uses for
+	// Grafana health checks. Read by Ray as RAY_GRAFANA_HOST.
+	GrafanaHost string `yaml:"grafanaHost"`
+
+	// GrafanaIframeHost is the browser-reachable Grafana URL used when the
+	// Ray dashboard UI embeds Grafana panels as iframes. It differs from
+	// GrafanaHost whenever Grafana is exposed to the browser via a
+	// different host/port than the in-cluster one the backend uses (e.g. a
+	// NodePort or local port-forward). Read by Ray as
+	// RAY_GRAFANA_IFRAME_HOST; falls back to GrafanaHost if left empty.
+	GrafanaIframeHost string `yaml:"grafanaIframeHost"`
+
+	// PrometheusHost is the backend-reachable Prometheus URL (e.g.
+	// "http://prometheus:9090") the Ray dashboard head process queries.
+	// Read by Ray as RAY_PROMETHEUS_HOST.
+	PrometheusHost string `yaml:"prometheusHost"`
+}
+
+// rayMetricsExportPort is the fixed port every Ray node in a cluster is
+// pinned to for its Prometheus metrics endpoint. Ray otherwise assigns each
+// node a random free port per session, which a Kubernetes-service-discovery
+// Prometheus scrape config can't target — pinning it lets Prometheus find it
+// by container port name (rayMetricsPortName) instead.
+const rayMetricsExportPort = 8080
+
+const rayMetricsPortName = "metrics"
+
+const rayStartParamMetricsExportPort = "metrics-export-port"
+
+// injectRayObservability wires a RayCluster's head and worker pod templates
+// into the platform's Grafana/Prometheus. It is a no-op when cfg is the zero
+// value, so clusters are unaffected unless RayObservabilityConfig is set.
+func injectRayObservability(headGroupSpec *rayv1.HeadGroupSpec, workerGroupSpecs []rayv1.WorkerGroupSpec, cfg RayObservabilityConfig) {
+	if cfg.GrafanaHost == "" && cfg.PrometheusHost == "" {
+		return
+	}
+
+	setMetricsExportPort(headGroupSpec.RayStartParams)
+	addMetricsContainerPort(&headGroupSpec.Template)
+	addRayObservabilityEnv(&headGroupSpec.Template, cfg)
+
+	for i := range workerGroupSpecs {
+		setMetricsExportPort(workerGroupSpecs[i].RayStartParams)
+		addMetricsContainerPort(&workerGroupSpecs[i].Template)
+	}
+}
+
+// setMetricsExportPort pins Ray's metrics-export-port to rayMetricsExportPort
+// unless the caller already set one explicitly.
+func setMetricsExportPort(rayStartParams map[string]string) {
+	if rayStartParams == nil {
+		return
+	}
+	if _, ok := rayStartParams[rayStartParamMetricsExportPort]; ok {
+		return
+	}
+	rayStartParams[rayStartParamMetricsExportPort] = strconv.Itoa(rayMetricsExportPort)
+}
+
+// addMetricsContainerPort exposes rayMetricsExportPort as a named "metrics"
+// container port on the pod's first (Ray) container, so Prometheus's
+// Kubernetes pod service discovery can find it by port name. A no-op if the
+// port is already declared or the pod template has no containers.
+func addMetricsContainerPort(podTemplate *corev1.PodTemplateSpec) {
+	if len(podTemplate.Spec.Containers) == 0 {
+		return
+	}
+	c := &podTemplate.Spec.Containers[0]
+	for _, p := range c.Ports {
+		if p.Name == rayMetricsPortName || p.ContainerPort == rayMetricsExportPort {
+			return
+		}
+	}
+	c.Ports = append(c.Ports, corev1.ContainerPort{
+		Name:          rayMetricsPortName,
+		ContainerPort: rayMetricsExportPort,
+		Protocol:      corev1.ProtocolTCP,
+	})
+}
+
+// addRayObservabilityEnv sets the env vars Ray's dashboard head process
+// reads to link its built-in Metrics tab to the platform's Grafana and
+// Prometheus. Follows the same "append to every existing container" pattern
+// as injectCollectorSidecar's eventExportEnvVars, since only the head
+// container (running `ray start --head`) actually reads them.
+func addRayObservabilityEnv(podTemplate *corev1.PodTemplateSpec, cfg RayObservabilityConfig) {
+	var env []corev1.EnvVar
+	if cfg.GrafanaHost != "" {
+		env = append(env, corev1.EnvVar{Name: "RAY_GRAFANA_HOST", Value: cfg.GrafanaHost})
+	}
+	if cfg.GrafanaIframeHost != "" {
+		env = append(env, corev1.EnvVar{Name: "RAY_GRAFANA_IFRAME_HOST", Value: cfg.GrafanaIframeHost})
+	}
+	if cfg.PrometheusHost != "" {
+		env = append(env, corev1.EnvVar{Name: "RAY_PROMETHEUS_HOST", Value: cfg.PrometheusHost})
+	}
+	for i := range podTemplate.Spec.Containers {
+		podTemplate.Spec.Containers[i].Env = append(podTemplate.Spec.Containers[i].Env, env...)
+	}
+}
+
 func (m Mapper) mapRay(rayJob *v2pb.RayJob, jobClusterObject runtime.Object, cluster *v2pb.Cluster) (runtime.Object, error) {
 	if jobClusterObject == nil {
 		return nil, fmt.Errorf("ray job requires associated RayCluster object")
@@ -141,6 +249,8 @@ func buildSubmitterPodTemplate(head corev1.PodTemplateSpec) *corev1.PodTemplateS
 func (m Mapper) mapRayCluster(rayCluster *v2pb.RayCluster) (runtime.Object, error) {
 	workerGroupSpecs := getWorkerGroupSpecs(rayCluster.GetName(), rayCluster.GetSpec().Workers)
 	headGroupSpec := getHeadGroupSpec(rayCluster.GetSpec().Head)
+
+	injectRayObservability(&headGroupSpec, workerGroupSpecs, m.RayObservability)
 
 	if m.LogPersistence.Enabled {
 		injectCollectorSidecar(&headGroupSpec.Template, m.LogPersistence, rayCluster.GetName(), RayLocalNamespace, "Head")
