@@ -2,11 +2,14 @@ package apihook
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -15,6 +18,51 @@ import (
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2 "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
+
+func TestBeforeCreate_RejectsOverlongDescription(t *testing.T) {
+	hook := apiHook{logger: zap.NewNop(), defaultEnv: "staging"}
+	longDesc := strings.Repeat("a", maxDescriptionLength+1)
+	request := &v2.CreateModelRequest{
+		Model: &v2.Model{
+			Spec: v2.ModelSpec{Description: longDesc},
+		},
+	}
+
+	err := hook.BeforeCreate(context.Background(), request)
+
+	assert.Error(t, err)
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+	assert.Contains(t, err.Error(), "model description exceeds maximum length")
+}
+
+func TestBeforeCreate_AcceptsDescriptionAtMaxLength(t *testing.T) {
+	hook := apiHook{logger: zap.NewNop(), defaultEnv: "staging"}
+	exactDesc := strings.Repeat("a", maxDescriptionLength)
+	request := &v2.CreateModelRequest{
+		Model: &v2.Model{
+			Spec: v2.ModelSpec{Description: exactDesc},
+		},
+	}
+
+	err := hook.BeforeCreate(context.Background(), request)
+
+	assert.NoError(t, err)
+}
+
+func TestBeforeUpdate_RejectsOverlongDescription(t *testing.T) {
+	hook := apiHook{logger: zap.NewNop(), defaultEnv: "staging"}
+	longDesc := strings.Repeat("a", maxDescriptionLength+1)
+	request := &v2.UpdateModelRequest{
+		Model: &v2.Model{
+			Spec: v2.ModelSpec{Description: longDesc},
+		},
+	}
+
+	err := hook.BeforeUpdate(context.Background(), request)
+
+	assert.Error(t, err)
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+}
 
 func TestBeforeCreate_DefaultsEnvironmentLabelWhenAbsent(t *testing.T) {
 	hook := apiHook{logger: zap.NewNop(), defaultEnv: "staging"}
