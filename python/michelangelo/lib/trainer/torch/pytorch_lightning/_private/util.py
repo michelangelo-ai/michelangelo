@@ -348,9 +348,9 @@ def _resolve_single_device() -> torch.device:
 class RaySingleDeviceStrategy(SingleDeviceStrategy):
     """Ray glue for single-device training.
 
-    Resolves the best available device (CUDA if Ray assigned one, then MPS on
-    Apple Silicon, then CPU) so that Lightning's auto-detected accelerator and
-    the strategy agree on the device.
+    Resolves the best available device (TPU, then MPS on Apple Silicon, then
+    CUDA if Ray assigned one, then CPU) so that Lightning's auto-detected
+    accelerator and the strategy agree on the device.
     """
 
     def __init__(self, **kwargs: Any):
