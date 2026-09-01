@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-logr/logr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -196,8 +197,19 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	clusterStatus, err := r.getClusterStatus(ctx, logger, assignedCluster, &rayCluster)
 	if err != nil {
 		if utils.IsNotFoundError(err) {
-			logger.Info("cluster not found on remote cluster, requeue")
-			return ctrl.Result{RequeueAfter: requeueAfter}, nil
+			// The RayCluster no longer exists on the remote compute cluster. This is a
+			// terminal, non-recoverable condition: there is nothing left to monitor or
+			// clean up. Mark it failed + immutable so the ingester freezes the object and
+			// we stop reconciling, instead of requeuing forever.
+			logger.Info("cluster not found on remote compute cluster, marking as failed and immutable")
+			if err := r.markClusterFailedImmutable(ctx, &rayCluster,
+				"ClusterNotFoundOnRemote",
+				"RayCluster no longer exists on the remote compute cluster",
+			); err != nil {
+				logger.Error(err, "failed to mark cluster as failed and immutable")
+				return ctrl.Result{RequeueAfter: requeueAfter}, err
+			}
+			return ctrl.Result{}, nil
 		}
 		logger.Error(err, "failed to get cluster status")
 		return ctrl.Result{RequeueAfter: requeueAfter}, err
@@ -554,6 +566,75 @@ func (r *Reconciler) getClusterStatus(ctx context.Context, log logr.Logger, assi
 		"state", clusterStatus.Ray.State)
 
 	return clusterStatus, nil
+}
+
+// markClusterFailedImmutable records a terminal failure for a RayCluster whose backing
+// resource has disappeared from the remote compute cluster and freezes the object so it
+// stops being reconciled.
+//
+// It first persists a fully-terminal status (State=FAILED, Succeeded=FALSE, Killing=FALSE,
+// Killed=TRUE). Setting the complete terminal condition set means a reconcile that races
+// the ingester's ETCD cleanup short-circuits processClusterTermination into a no-op rather
+// than issuing a pointless DeleteJobCluster against an already-gone remote cluster.
+//
+// It then sets the immutable annotation. The ingester moves the object to metadata storage
+// and deletes it from K8s/ETCD, after which the controller's Get returns NotFound and
+// reconciliation stops permanently.
+func (r *Reconciler) markClusterFailedImmutable(
+	ctx context.Context,
+	cluster *v2pb.RayCluster,
+	reason string,
+	message string,
+) error {
+	// Persist the terminal status via the status subresource.
+	if err := jobsutils.UpdateStatusWithRetries(
+		ctx, r, cluster,
+		func(obj client.Object) {
+			c := obj.(*v2pb.RayCluster)
+			c.Status.State = v2pb.RAY_CLUSTER_STATE_FAILED
+
+			succeededCond := jobsutils.GetCondition(&c.Status.StatusConditions, SucceededCondition, c.Generation)
+			jobsutils.UpdateCondition(succeededCond, jobsutils.ConditionUpdateParams{
+				Status:     apipb.CONDITION_STATUS_FALSE,
+				Generation: c.Generation,
+				Reason:     reason,
+				Message:    message,
+			})
+			killingCond := jobsutils.GetCondition(&c.Status.StatusConditions, KillingCondition, c.Generation)
+			jobsutils.UpdateCondition(killingCond, jobsutils.ConditionUpdateParams{
+				Status:     apipb.CONDITION_STATUS_FALSE,
+				Generation: c.Generation,
+			})
+			killedCond := jobsutils.GetCondition(&c.Status.StatusConditions, KilledCondition, c.Generation)
+			jobsutils.UpdateCondition(killedCond, jobsutils.ConditionUpdateParams{
+				Status:     apipb.CONDITION_STATUS_TRUE,
+				Generation: c.Generation,
+				Reason:     reason,
+			})
+		},
+		&metav1.UpdateOptions{FieldManager: "markClusterFailedImmutable"},
+	); err != nil {
+		return fmt.Errorf("failed to persist terminal status: %w", err)
+	}
+
+	// Mark the object immutable (metadata). This is a separate Update because annotations
+	// live on the object metadata, not the status subresource. Re-fetch the latest object
+	// to avoid a resourceVersion conflict with the status update above.
+	if err := retry.OnError(retry.DefaultRetry, jobsutils.IsRetriableError, func() error {
+		latest := &v2pb.RayCluster{}
+		if err := r.Get(ctx, cluster.Namespace, cluster.Name, &metav1.GetOptions{}, latest); err != nil {
+			return err
+		}
+		if utils.IsImmutable(latest) {
+			return nil
+		}
+		utils.MarkImmutable(latest)
+		return r.Update(ctx, latest, &metav1.UpdateOptions{})
+	}); err != nil {
+		return fmt.Errorf("failed to mark cluster immutable: %w", err)
+	}
+
+	return nil
 }
 
 // applyRayClusterStatus updates the RayCluster status and conditions based on the cluster state from KubeRay.

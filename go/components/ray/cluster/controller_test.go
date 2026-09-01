@@ -24,6 +24,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/client/clientmocks"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/cluster"
 	matypes "github.com/michelangelo-ai/michelangelo/go/components/jobs/common/types"
@@ -1276,6 +1277,79 @@ func TestReconcilerReconcile(t *testing.T) {
 							"SucceededCondition should stay UNKNOWN when no terminal errors")
 					}
 				}
+			},
+		},
+		{
+			name: "Cluster missing on remote compute cluster is marked failed and immutable",
+			setup: func() []client.Object {
+				objects := make([]client.Object, 0)
+				cluster := &v2pb.RayCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       rayClusterName,
+						Namespace:  testNamespace,
+						Generation: 1,
+					},
+					Spec: createRayClusterSpec(),
+					Status: v2pb.RayClusterStatus{
+						State: v2pb.RAY_CLUSTER_STATE_PROVISIONING,
+						StatusConditions: []*apipb.Condition{
+							{
+								Type:   EnqueuedCondition,
+								Status: apipb.CONDITION_STATUS_TRUE,
+							},
+							{
+								Type:   ScheduledCondition,
+								Status: apipb.CONDITION_STATUS_TRUE,
+							},
+							{
+								Type:   LaunchedCondition,
+								Status: apipb.CONDITION_STATUS_TRUE,
+							},
+						},
+						Assignment: &v2pb.AssignmentInfo{
+							Cluster: assignedCluster,
+						},
+					},
+				}
+				objects = append(objects, cluster)
+				return objects
+			},
+			setupMocks: func(mfc *clientmocks.MockFederatedClient, mcc *mockClusterCache, msq *mockSchedulerQueue) {
+				mcc.addCluster(assignedCluster, &v2pb.Cluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: assignedCluster,
+					},
+				})
+				// The RayCluster has vanished from the remote compute cluster.
+				mfc.EXPECT().GetJobClusterStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(
+					nil, apiErrors.NewNotFound(
+						schema.GroupResource{Group: "ray.io", Resource: "rayclusters"}, rayClusterName))
+			},
+			expectedState:   v2pb.RAY_CLUSTER_STATE_FAILED,
+			expectedMessage: "",
+			errorAssertion:  require.NoError,
+			postCheck: func(res ctrl.Result) {
+				// Terminal condition: the controller must not requeue.
+				assert.Equal(t, time.Duration(0), res.RequeueAfter)
+			},
+			verifyConditions: func(t *testing.T, cluster *v2pb.RayCluster) {
+				var succeededCond, killedCond *apipb.Condition
+				for _, cond := range cluster.Status.StatusConditions {
+					switch cond.Type {
+					case SucceededCondition:
+						succeededCond = cond
+					case KilledCondition:
+						killedCond = cond
+					}
+				}
+				require.NotNil(t, succeededCond, "SucceededCondition should exist")
+				assert.Equal(t, apipb.CONDITION_STATUS_FALSE, succeededCond.Status,
+					"SucceededCondition should be FALSE for a failed cluster")
+				require.NotNil(t, killedCond, "KilledCondition should exist")
+				assert.Equal(t, apipb.CONDITION_STATUS_TRUE, killedCond.Status,
+					"KilledCondition should be TRUE for a terminal cluster")
+				assert.True(t, utils.IsImmutable(cluster),
+					"cluster should be marked immutable so reconciliation stops")
 			},
 		},
 	}
