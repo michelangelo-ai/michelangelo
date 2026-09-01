@@ -80,8 +80,6 @@ export const PIPELINE_DETAIL_CONFIG: DetailViewConfig = {
             id: 'schedule',
             label: 'Schedule',
             type: CellType.TEXT,
-            // `triggerType` is a oneof, so one formatted column covers cron, interval, and
-            // batch-rerun triggers instead of a sparse column per case.
             // cast: accessor rows are untyped in table config; always a TriggerRun on this
             // tab's query; see #1425
             accessor: (row: unknown) => formatTriggerSchedule((row as TriggerRun).spec?.trigger),
