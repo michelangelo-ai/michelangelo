@@ -1,6 +1,7 @@
 import { CellType } from '#core/components/cell/constants';
 import { SHARED_RUN_CELL_CONFIG } from '#core/config/entities/run/shared';
 import { TRIGGER_STATE_CELL_CONFIG } from '#core/config/entities/trigger/shared';
+import { formatTriggerSchedule } from './format-trigger-schedule';
 import {
   CRITERION_OPERATOR_EQUAL,
   PIPELINE_RUN_PIPELINE_NAME_FIELD,
@@ -9,6 +10,7 @@ import {
 } from './shared';
 
 import type { DetailViewConfig } from '#core/components/views/types';
+import type { TriggerRun } from '#core/config/entities/trigger/types';
 
 export const PIPELINE_DETAIL_CONFIG: DetailViewConfig = {
   type: 'detail',
@@ -74,11 +76,15 @@ export const PIPELINE_DETAIL_CONFIG: DetailViewConfig = {
           },
           { id: 'metadata.creationTimestamp.seconds', label: 'Created', type: CellType.DATE },
           { id: 'spec.actor.name', label: 'Started by', type: CellType.TEXT },
-          { id: 'spec.trigger.triggerType.value.cron', label: 'Cron', type: CellType.TEXT },
           {
-            id: 'spec.trigger.triggerType.value.interval.seconds',
-            label: 'Interval seconds',
+            id: 'schedule',
+            label: 'Schedule',
             type: CellType.TEXT,
+            // `triggerType` is a oneof, so one formatted column covers cron, interval, and
+            // batch-rerun triggers instead of a sparse column per case.
+            // cast: accessor rows are untyped in table config; always a TriggerRun on this
+            // tab's query; see #1425
+            accessor: (row: unknown) => formatTriggerSchedule((row as TriggerRun).spec?.trigger),
           },
           TRIGGER_STATE_CELL_CONFIG,
         ],

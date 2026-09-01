@@ -137,6 +137,38 @@ describe('RunTriggerForm', () => {
     });
   });
 
+  // Errors raised inside the submit handler — a rejected mutation, or the guard that throws
+  // when the selected trigger vanished from the manifest — all travel the same FormDialog
+  // catch (see form-dialog.tsx), so this pins that they render in-dialog rather than escaping.
+  it('keeps the dialog open and shows the error when the submit fails', async () => {
+    const user = userEvent.setup();
+    const request = createQueryMockRouter({
+      GetPipeline: buildPipelineResponse({ nightly: buildCronTrigger() }),
+      CreateTriggerRun: new Error('Create failed'),
+    });
+
+    render(
+      <FormWrapper />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getIconProviderWrapper(),
+        getErrorProviderWrapper(),
+        getInterpolationProviderWrapper(),
+        getRouterWrapper({ location: '/ma-dev-test/train/pipelines' }),
+        getServiceProviderWrapper({ request }),
+      ])
+    );
+
+    await user.click(await screen.findByRole('combobox', { name: 'Trigger *' }));
+    await user.click(await screen.findByRole('option', { name: 'nightly — cron 0 2 * * *' }));
+
+    const dialog = screen.getByRole('dialog', { name: 'Run trigger' });
+    await user.click(within(dialog).getByRole('button', { name: 'Run' }));
+
+    await within(dialog).findByText(/Test error/);
+    expect(screen.getByRole('dialog', { name: 'Run trigger' })).toBeInTheDocument();
+  });
+
   it('shows the autoFlip choice as disabled and "Coming soon", and always sends autoFlip false', async () => {
     const user = userEvent.setup();
     const cronTrigger = buildCronTrigger();

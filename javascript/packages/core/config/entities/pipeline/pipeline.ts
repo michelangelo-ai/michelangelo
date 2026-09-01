@@ -9,10 +9,8 @@ import type { PhaseEntityConfig } from '#core/types/common/studio-types';
 import type { Pipeline } from './types';
 
 /**
- * Both `GetPipeline` and `ListPipeline` responses carry `spec.manifest`, so this evaluates
- * against real data in the list view and on the detail page alike. A record without a
- * manifest (still loading, or a pipeline registered without one) means "unknown", not
- * "no triggers" — fail open and let the dialog explain an empty trigger list.
+ * A record without a manifest (still loading, or a pipeline registered without one) means
+ * "unknown", not "no triggers" — fail open and let the dialog explain an empty trigger list.
  */
 const hasNoTriggers = (record: unknown): boolean => {
   // cast: record is unknown from the action predicate context; always Pipeline in this entity

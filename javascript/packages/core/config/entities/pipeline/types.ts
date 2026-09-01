@@ -10,10 +10,7 @@ export interface Pipeline {
     owner: {
       name: string;
     };
-    /**
-     * Returned by both `GetPipeline` and `ListPipeline`; optional because a pipeline can be
-     * registered without a manifest.
-     */
+    /** Optional because a pipeline can be registered without a manifest. */
     manifest?: {
       /** Named triggers declared for this pipeline, keyed by trigger name. */
       triggerMap?: Record<string, ManifestTrigger>;

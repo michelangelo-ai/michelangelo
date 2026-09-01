@@ -53,10 +53,13 @@ export const RunTriggerForm = ({ record, onClose }: ActionComponentProps<Pipelin
 
     const sourceTrigger = triggerMap[values.sourceTriggerName];
     if (!sourceTrigger) {
-      // Only reachable if the manifest changed under an open dialog. Surfacing it beats
-      // sending a TriggerRun with no schedule, which the reconciler would leave inert.
+      // Only reachable if the manifest changed under an open dialog. The backend accepts a
+      // TriggerRun without a schedule and the reconciler leaves it inert, so it would never
+      // error on its own — surface it here instead. FormDialog catches onSubmit rejections
+      // and renders them in the dialog, same as a failed mutation.
       throw new Error(
-        `Trigger "${values.sourceTriggerName}" is no longer defined on this pipeline.`
+        `Trigger "${values.sourceTriggerName}" is no longer defined on this pipeline. ` +
+          'Close this dialog and try again.'
       );
     }
 

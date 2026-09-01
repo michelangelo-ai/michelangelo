@@ -30,11 +30,21 @@ export type ManifestTrigger = {
   triggerType?:
     | { case: 'cronSchedule'; value: { cron?: string } }
     | { case: 'intervalSchedule'; value: { interval?: { seconds?: bigint | number | string } } }
-    | { case: 'batchRerun'; value: unknown };
+    | { case: 'batchRerun'; value: BatchRerun };
   /** Dynamic pipeline parameters this trigger can run with, keyed by parameter ID. */
   parametersMap?: Record<string, unknown>;
   /** Default cap on concurrent runs for this trigger; overridable for a backfill run. */
   maxConcurrency?: number;
+};
+
+/** Reruns a set of existing pipeline runs, optionally from/up to specific DAG nodes (proto `BatchRerun`). */
+export type BatchRerun = {
+  /** The pipeline runs to rerun. */
+  pipelineRuns?: { name?: string; namespace?: string }[];
+  /** DAG nodes execution resumes from. */
+  resumeFrom?: string[];
+  /** DAG nodes execution runs up to (inclusive). */
+  resumeUpTo?: string[];
 };
 
 /**
@@ -71,6 +81,8 @@ export type TriggerRun = {
     pipeline: { name: string; namespace: string };
     revision: { name: string; namespace: string };
     actor: { name: string };
+    /** The trigger definition this run executes; its `triggerType` decides the schedule. */
+    trigger?: ManifestTrigger;
     sourceTriggerName: string;
     autoFlip: boolean;
     notifications: unknown[];

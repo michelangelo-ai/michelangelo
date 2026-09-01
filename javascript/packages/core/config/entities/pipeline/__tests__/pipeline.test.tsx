@@ -276,8 +276,6 @@ describe('PIPELINE_ENTITY_CONFIG: Run trigger action', () => {
       );
     }
 
-    // `ListPipeline` rows carry `spec.manifest` just like a `GetPipeline` response, so the
-    // disabled rule evaluates against real trigger data in the list view too.
     it('is disabled with an explanatory tooltip when the row declares a manifest with no triggers', async () => {
       const user = userEvent.setup();
       renderList([
@@ -414,6 +412,10 @@ describe('PIPELINE_ENTITY_CONFIG: Triggers tab', () => {
       'href',
       '/ma-dev-test/train/triggers/nightly-20240101-120000-abcd1234'
     );
+
+    // One formatted Schedule column covers the triggerType oneof (cron/interval/batch rerun).
+    expect(screen.getByRole('columnheader', { name: 'Schedule' })).toBeInTheDocument();
+    expect(screen.getByText('cron 0 2 * * *')).toBeInTheDocument();
 
     await user.click(nameLink);
     expect(
