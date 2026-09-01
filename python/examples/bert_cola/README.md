@@ -44,14 +44,12 @@ to push to MinIO/S3-compatible storage instead of a local temp directory.
 
 ## Deploying to Triton
 
-`inferenceserver/` holds this example's own Triton serving image and deploy
-manifests -- each project owns its own serving image, built from whatever
-deps its models actually need, rather than relying on a single shared
-default. `inferenceserver/Dockerfile` adds torch/transformers (needed by the
-custom python-backend package `assembler.py` produces) on top of the stock
-`nvcr.io/nvidia/tritonserver` image; `.github/workflows/build-example-inferenceserver-images.yaml`
-discovers and builds every example's `inferenceserver/Dockerfile` (not just
-this one) and pushes it whenever that Dockerfile changes.
+`inferenceserver/` holds this example's deploy manifests. Rather than a
+custom serving image, `inferenceserver.yaml` declares the packages the
+custom python-backend `assembler.py` produces needs
+(`servingSpec.pythonDependencies`) -- the Triton pod installs them into a
+shared volume via an init container at startup, so no Dockerfile, registry,
+or CI build is required.
 
 To deploy: apply `inferenceserver/inferenceserver.yaml`, then
 `inferenceserver/deployment.yaml` with `desiredRevision.name` set to the

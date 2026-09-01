@@ -16,11 +16,13 @@ spec:
       memory: "2Gi"
     servingSpec:
       version: "latest"
-      # Built by .github/workflows/build-example-inferenceserver-images.yaml
-      # from this project's own inferenceserver/Dockerfile whenever it
-      # changes -- keep the image name in sync with that workflow's
-      # "<example-name>-triton-serving" convention.
-      containerBuildTemplate: "ghcr.io/michelangelo-ai/bert-cola-triton-serving:latest"
+      # Installed into the Triton pod via an init container -- see
+      # ServingSpec.python_dependencies. Needed by the custom python-backend
+      # package assembler.py produces (imports torch/transformers at load
+      # time, which the stock Triton image doesn't have).
+      pythonDependencies:
+        - "torch==2.4.1"
+        - "transformers==4.44.2"
     numInstances: 1
   decomSpec:
     decommission: false
