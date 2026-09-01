@@ -1,0 +1,89 @@
+name: Build example Triton serving images
+
+# Each example under python/examples/<name>/inferenceserver/ that ships its own
+# Dockerfile owns its own Triton serving image, built from whatever deps its
+# models actually need -- rather than relying on the single shared default
+# (see docker/triton-serving.Dockerfile / build-triton-image.yaml). This
+# workflow discovers every such Dockerfile and builds+pushes it as
+# ghcr.io/<owner>/<example-name>-triton-serving, so adding Triton serving to a
+# new example never requires adding a new workflow file here -- matches
+# build-examples-image.yaml's "one workflow covers the whole examples tree"
+# shape instead of one bespoke file per project.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "python/examples/*/inferenceserver/Dockerfile"
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.find.outputs.matrix }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Find example Triton serving Dockerfiles
+        id: find
+        run: |
+          entries=()
+          while IFS= read -r -d '' dockerfile; do
+            example=$(echo "$dockerfile" | awk -F'/' '{print $3}')
+            entries+=("{\"example\":\"$example\",\"dockerfile\":\"$dockerfile\",\"context\":\"python/examples/$example/inferenceserver\"}")
+          done < <(find python/examples -mindepth 3 -maxdepth 3 -path "*/inferenceserver/Dockerfile" -print0)
+
+          if [ ${#entries[@]} -eq 0 ]; then
+            echo "matrix=[]" >> "$GITHUB_OUTPUT"
+          else
+            matrix=$(printf '%s\n' "${entries[@]}" | jq -s -c '.')
+            echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    needs: discover
+    if: needs.discover.outputs.matrix != '[]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include: ${{ fromJson(needs.discover.outputs.matrix) }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Extract image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.example }}-triton-serving
+          tags: |
+            type=raw,value=latest
+            type=sha,prefix=sha-
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          push: true

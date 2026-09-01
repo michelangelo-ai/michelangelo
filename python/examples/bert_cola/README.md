@@ -41,3 +41,18 @@ assembler path -- BERT's multi-input `forward()` isn't TorchScript-friendly),
 and `push_step` registers it in a model registry (`InMemoryRegistryClient` by
 default; set `REGISTRY_ENDPOINT` for a real registry). Set `AWS_ENDPOINT_URL`
 to push to MinIO/S3-compatible storage instead of a local temp directory.
+
+## Deploying to Triton
+
+`inferenceserver/` holds this example's own Triton serving image and deploy
+manifests -- each project owns its own serving image, built from whatever
+deps its models actually need, rather than relying on a single shared
+default. `inferenceserver/Dockerfile` adds torch/transformers (needed by the
+custom python-backend package `assembler.py` produces) on top of the stock
+`nvcr.io/nvidia/tritonserver` image; `.github/workflows/build-example-inferenceserver-images.yaml`
+discovers and builds every example's `inferenceserver/Dockerfile` (not just
+this one) and pushes it whenever that Dockerfile changes.
+
+To deploy: apply `inferenceserver/inferenceserver.yaml`, then
+`inferenceserver/deployment.yaml` with `desiredRevision.name` set to the
+model name printed by a real `push_step` run.
