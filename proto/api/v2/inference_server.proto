@@ -25,7 +25,13 @@ message ServingSpec {
   // a default template will be used.
   string container_build_template = 2;
 
-  // TODO(#933): Add serving time dependencies.
+  // Resolves #933. Python package requirement strings (e.g. "torch==2.4.1"),
+  // installed into an isolated directory before the serving container starts
+  // and prepended to its PYTHONPATH -- no custom container image required.
+  // Applies once per InferenceServer (shared by every model it serves), not
+  // per model. Changing this list requires a new pod to pick up the change
+  // (see backends.tritonBackend.createTritonDeployment).
+  repeated string python_dependencies = 3;
 }
 
 // Ownership spec for the InferenceServer. Used for capacity attribution and

@@ -230,6 +230,100 @@ func (b *tritonBackend) createTritonDeployment(ctx context.Context, logger *zap.
 		replicas = 1
 	}
 
+	tritonImage := fmt.Sprintf("nvcr.io/nvidia/tritonserver:%s", defaultTritonImageTag)
+
+	tritonContainer := corev1.Container{
+		Name:  "triton",
+		Image: tritonImage,
+		Ports: []corev1.ContainerPort{
+			{ContainerPort: 8000, Name: "http"},
+			{ContainerPort: 8001, Name: "grpc"},
+			{ContainerPort: 8002, Name: "metrics"},
+		},
+		Resources: buildResourceRequirements(inferenceServer.Spec.InitSpec),
+		Args: []string{
+			"tritonserver",
+			"--model-store=/mnt/models",
+			"--grpc-port=8001",
+			"--http-port=8000",
+			"--allow-grpc=true",
+			"--allow-http=true",
+			"--allow-metrics=true",
+			"--metrics-port=8002",
+			"--model-control-mode=explicit",
+			"--strict-model-config=false",
+			"--exit-on-error=true",
+			"--log-error=true",
+			"--log-warning=true",
+			"--log-verbose=0",
+		},
+		VolumeMounts: []corev1.VolumeMount{
+			{
+				Name:      "workdir",
+				MountPath: "/mnt/models",
+			},
+		},
+	}
+
+	volumes := []corev1.Volume{
+		{
+			Name: "workdir",
+			VolumeSource: corev1.VolumeSource{
+				HostPath: &corev1.HostPathVolumeSource{
+					Path: fmt.Sprintf("/var/lib/michelangelo/models/%s", inferenceServer.Name),
+					Type: func() *corev1.HostPathType {
+						t := corev1.HostPathDirectoryOrCreate
+						return &t
+					}(),
+				},
+			},
+		},
+		{
+			Name: "model-config",
+			VolumeSource: corev1.VolumeSource{
+				ConfigMap: &corev1.ConfigMapVolumeSource{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: fmt.Sprintf("%s-model-config", inferenceServer.Name),
+					},
+				},
+			},
+		},
+	}
+
+	var initContainers []corev1.Container
+
+	// pythonDependencies lets an InferenceServer declare pip requirement strings
+	// (e.g. "torch==2.4.1") instead of building a custom serving image -- an init
+	// container installs them into a volume shared with the triton container,
+	// which prepends it to PYTHONPATH. See ServingSpec.python_dependencies (#933).
+	if deps := inferenceServer.Spec.GetInitSpec().GetServingSpec().GetPythonDependencies(); len(deps) > 0 {
+		volumes = append(volumes, corev1.Volume{
+			Name: "python-deps",
+			VolumeSource: corev1.VolumeSource{
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
+			},
+		})
+
+		initContainers = append(initContainers, corev1.Container{
+			Name:    "install-python-deps",
+			Image:   tritonImage,
+			Command: []string{"pip3", "install", "--no-cache-dir", "--target=/deps"},
+			Args:    deps,
+			VolumeMounts: []corev1.VolumeMount{
+				{Name: "python-deps", MountPath: "/deps"},
+			},
+		})
+
+		tritonContainer.VolumeMounts = append(tritonContainer.VolumeMounts, corev1.VolumeMount{
+			Name:      "python-deps",
+			MountPath: "/deps",
+		})
+		tritonContainer.Env = append(tritonContainer.Env, corev1.EnvVar{
+			Name:  "PYTHONPATH",
+			Value: "/deps",
+		})
+	}
+
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      deploymentName,
@@ -249,64 +343,9 @@ func (b *tritonBackend) createTritonDeployment(ctx context.Context, logger *zap.
 					},
 				},
 				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{
-						{
-							Name:  "triton",
-							Image: fmt.Sprintf("nvcr.io/nvidia/tritonserver:%s", defaultTritonImageTag),
-							Ports: []corev1.ContainerPort{
-								{ContainerPort: 8000, Name: "http"},
-								{ContainerPort: 8001, Name: "grpc"},
-								{ContainerPort: 8002, Name: "metrics"},
-							},
-							Resources: buildResourceRequirements(inferenceServer.Spec.InitSpec),
-							Args: []string{
-								"tritonserver",
-								"--model-store=/mnt/models",
-								"--grpc-port=8001",
-								"--http-port=8000",
-								"--allow-grpc=true",
-								"--allow-http=true",
-								"--allow-metrics=true",
-								"--metrics-port=8002",
-								"--model-control-mode=explicit",
-								"--strict-model-config=false",
-								"--exit-on-error=true",
-								"--log-error=true",
-								"--log-warning=true",
-								"--log-verbose=0",
-							},
-							VolumeMounts: []corev1.VolumeMount{
-								{
-									Name:      "workdir",
-									MountPath: "/mnt/models",
-								},
-							},
-						},
-					},
-					Volumes: []corev1.Volume{
-						{
-							Name: "workdir",
-							VolumeSource: corev1.VolumeSource{
-								HostPath: &corev1.HostPathVolumeSource{
-									Path: fmt.Sprintf("/var/lib/michelangelo/models/%s", inferenceServer.Name),
-									Type: func() *corev1.HostPathType {
-										t := corev1.HostPathDirectoryOrCreate
-										return &t
-									}(),
-								},
-							},
-						},
-						{
-							Name: "model-config",
-							VolumeSource: corev1.VolumeSource{
-								ConfigMap: &corev1.ConfigMapVolumeSource{
-									LocalObjectReference: corev1.LocalObjectReference{
-										Name: fmt.Sprintf("%s-model-config", inferenceServer.Name),
-									},
-								},
-							},
-						},
-					},
+					InitContainers: initContainers,
+					Containers:     []corev1.Container{tritonContainer},
+					Volumes:        volumes,
 				},
 			},
 		},
