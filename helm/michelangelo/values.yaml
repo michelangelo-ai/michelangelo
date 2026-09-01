@@ -470,6 +470,13 @@ controllermgr:
           # Example (sandbox MinIO console): "http://localhost:9090/browser/{{.Bucket}}/{{.PathPrefix}}/{{.ClusterName}}_{{.RayLocalNamespace}}/"
           logURLFormat: ""
 
+          # Go text/template for the live KubeRay dashboard URL written to
+          # RayClusterStatus.JobUrl, independent of log persistence (points at
+          # the running cluster's own dashboard, not persisted logs).
+          # Available vars: {{.ClusterName}}, {{.RayLocalNamespace}}.
+          # Empty string disables job_url emission.
+          dashboardURLFormat: ""
+
   resources: {}
 
 # -----------------------------------------------------------------------------

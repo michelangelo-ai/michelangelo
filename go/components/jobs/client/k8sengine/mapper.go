@@ -15,8 +15,9 @@ import (
 
 // Mapper helps to map global to local crds and vice versa
 type Mapper struct {
-	LogPersistence LogPersistenceConfig
-	logURLTemplate *template.Template
+	LogPersistence       LogPersistenceConfig
+	logURLTemplate       *template.Template
+	dashboardURLTemplate *template.Template
 }
 
 // MapperResult has Mapper result
@@ -41,17 +42,23 @@ func NewLogPersistenceConfig(provider config.Provider) (LogPersistenceConfig, er
 	return conf, nil
 }
 
-// NewMapper constructs the Mapper. Panics if LogURLFormat is set but does not
-// parse as a valid Go text/template — config errors should fail at startup.
+// NewMapper constructs the Mapper. Panics if LogURLFormat or DashboardURLFormat
+// is set but does not parse as a valid Go text/template — config errors should
+// fail at startup.
 func NewMapper(logPersistence LogPersistenceConfig) MapperResult {
 	var tmpl *template.Template
 	if logPersistence.Enabled && logPersistence.LogURLFormat != "" {
 		tmpl = template.Must(template.New("logURL").Parse(logPersistence.LogURLFormat))
 	}
+	var dashboardTmpl *template.Template
+	if logPersistence.DashboardURLFormat != "" {
+		dashboardTmpl = template.Must(template.New("dashboardURL").Parse(logPersistence.DashboardURLFormat))
+	}
 	return MapperResult{
 		Mapper: Mapper{
-			LogPersistence: logPersistence,
-			logURLTemplate: tmpl,
+			LogPersistence:       logPersistence,
+			logURLTemplate:       tmpl,
+			dashboardURLTemplate: dashboardTmpl,
 		},
 	}
 }
@@ -122,6 +129,7 @@ func (m Mapper) MapLocalClusterStatusToGlobal(localClusterObject runtime.Object)
 	case *rayv1.RayCluster:
 		v2Status := convertRayV1ClusterStatusToV2(obj)
 		v2Status.LogUrl = m.buildLogURL(obj.GetName())
+		v2Status.JobUrl = m.buildDashboardURL(obj.GetName())
 		reason := deriveReasonFromConditions(obj)
 		if reason == "" {
 			reason = obj.Status.Reason
@@ -153,6 +161,29 @@ func (m Mapper) buildLogURL(clusterName string) string {
 	}{
 		Bucket:            m.LogPersistence.Bucket,
 		PathPrefix:        m.LogPersistence.PathPrefix,
+		ClusterName:       clusterName,
+		RayLocalNamespace: RayLocalNamespace,
+	})
+	if err != nil {
+		return ""
+	}
+	return buf.String()
+}
+
+// buildDashboardURL renders LogPersistenceConfig.DashboardURLFormat against the
+// live KubeRay per-cluster head service (ClusterName, RayLocalNamespace).
+// Returns "" when no format is configured. Unlike buildLogURL, this is not
+// gated by LogPersistence.Enabled — the live dashboard has nothing to do with
+// log persistence.
+func (m Mapper) buildDashboardURL(clusterName string) string {
+	if m.dashboardURLTemplate == nil {
+		return ""
+	}
+	var buf bytes.Buffer
+	err := m.dashboardURLTemplate.Execute(&buf, struct {
+		ClusterName       string
+		RayLocalNamespace string
+	}{
 		ClusterName:       clusterName,
 		RayLocalNamespace: RayLocalNamespace,
 	})

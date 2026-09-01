@@ -650,3 +650,27 @@ func TestMapLocalClusterStatusToGlobal_WithConditions(t *testing.T) {
 		})
 	}
 }
+
+func TestMapLocalClusterStatusToGlobal_JobUrl(t *testing.T) {
+	rayCluster := &rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "my-cluster"},
+		Status:     rayv1.RayClusterStatus{State: rayv1.Ready},
+	}
+
+	t.Run("empty DashboardURLFormat yields no JobUrl", func(t *testing.T) {
+		m := Mapper{}
+		result, err := m.MapLocalClusterStatusToGlobal(rayCluster)
+		require.NoError(t, err)
+		assert.Empty(t, result.Ray.JobUrl)
+	})
+
+	t.Run("configured DashboardURLFormat renders JobUrl independent of LogPersistence.Enabled", func(t *testing.T) {
+		mr := NewMapper(LogPersistenceConfig{
+			Enabled:            false,
+			DashboardURLFormat: "http://{{.ClusterName}}-head-svc.{{.RayLocalNamespace}}.svc.cluster.local:8265",
+		})
+		result, err := mr.Mapper.MapLocalClusterStatusToGlobal(rayCluster)
+		require.NoError(t, err)
+		assert.Equal(t, "http://my-cluster-head-svc."+RayLocalNamespace+".svc.cluster.local:8265", result.Ray.JobUrl)
+	})
+}
