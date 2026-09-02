@@ -13,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/depsimage"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
@@ -32,10 +33,22 @@ const (
 )
 
 // Triton Server Management
-type tritonBackend struct{}
+type tritonBackend struct {
+	httpClient *http.Client
+
+	// depsImageExists/depsImageTriggerBuild default to depsimage.Exists/
+	// depsimage.TriggerBuild; overridable in tests so they don't hit the real
+	// registry/GitHub API.
+	depsImageExists       func(ctx context.Context, httpClient *http.Client, tag string) (bool, error)
+	depsImageTriggerBuild func(ctx context.Context, httpClient *http.Client, deps []string, tag string) error
+}
 
 func NewTritonBackend() *tritonBackend {
-	return &tritonBackend{}
+	return &tritonBackend{
+		httpClient:            http.DefaultClient,
+		depsImageExists:       depsimage.Exists,
+		depsImageTriggerBuild: depsimage.TriggerBuild,
+	}
 }
 
 func (b *tritonBackend) CreateServer(ctx context.Context, logger *zap.Logger, kubeClient client.Client, inferenceServer *v2pb.InferenceServer) (*ServerStatus, error) {
@@ -232,6 +245,32 @@ func (b *tritonBackend) createTritonDeployment(ctx context.Context, logger *zap.
 
 	tritonImage := fmt.Sprintf("nvcr.io/nvidia/tritonserver:%s", defaultTritonImageTag)
 
+	// pythonDependencies resolves to a shared, content-addressed image built by
+	// CI (see depsimage and .github/workflows/build-inferenceserver-deps-image.yaml)
+	// instead of installing packages into a running pod at startup. Any
+	// InferenceServer -- from any project -- declaring the same dependency set
+	// reuses the same image; nothing here is keyed by project name or reads
+	// from a project directory. See ServingSpec.python_dependencies (#933).
+	if deps := inferenceServer.Spec.GetInitSpec().GetServingSpec().GetPythonDependencies(); len(deps) > 0 {
+		tag := depsimage.Tag(deps)
+		exists, err := b.depsImageExists(ctx, b.httpClient, tag)
+		if err != nil {
+			return fmt.Errorf("failed to check dependency image for %s/%s: %w",
+				inferenceServer.Namespace, inferenceServer.Name, err)
+		}
+		if !exists {
+			if err := b.depsImageTriggerBuild(ctx, b.httpClient, deps, tag); err != nil {
+				return fmt.Errorf("failed to trigger dependency image build for %s/%s: %w",
+					inferenceServer.Namespace, inferenceServer.Name, err)
+			}
+			logger.Info("Dependency image not ready yet, build triggered; deferring Deployment creation",
+				zap.String("inferenceServer", inferenceServer.Name),
+				zap.String("tag", tag))
+			return nil
+		}
+		tritonImage = depsimage.Image(deps)
+	}
+
 	tritonContainer := corev1.Container{
 		Name:  "triton",
 		Image: tritonImage,
@@ -290,40 +329,6 @@ func (b *tritonBackend) createTritonDeployment(ctx context.Context, logger *zap.
 		},
 	}
 
-	var initContainers []corev1.Container
-
-	// pythonDependencies lets an InferenceServer declare pip requirement strings
-	// (e.g. "torch==2.4.1") instead of building a custom serving image -- an init
-	// container installs them into a volume shared with the triton container,
-	// which prepends it to PYTHONPATH. See ServingSpec.python_dependencies (#933).
-	if deps := inferenceServer.Spec.GetInitSpec().GetServingSpec().GetPythonDependencies(); len(deps) > 0 {
-		volumes = append(volumes, corev1.Volume{
-			Name: "python-deps",
-			VolumeSource: corev1.VolumeSource{
-				EmptyDir: &corev1.EmptyDirVolumeSource{},
-			},
-		})
-
-		initContainers = append(initContainers, corev1.Container{
-			Name:    "install-python-deps",
-			Image:   tritonImage,
-			Command: []string{"pip3", "install", "--no-cache-dir", "--target=/deps"},
-			Args:    deps,
-			VolumeMounts: []corev1.VolumeMount{
-				{Name: "python-deps", MountPath: "/deps"},
-			},
-		})
-
-		tritonContainer.VolumeMounts = append(tritonContainer.VolumeMounts, corev1.VolumeMount{
-			Name:      "python-deps",
-			MountPath: "/deps",
-		})
-		tritonContainer.Env = append(tritonContainer.Env, corev1.EnvVar{
-			Name:  "PYTHONPATH",
-			Value: "/deps",
-		})
-	}
-
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      deploymentName,
@@ -343,9 +348,8 @@ func (b *tritonBackend) createTritonDeployment(ctx context.Context, logger *zap.
 					},
 				},
 				Spec: corev1.PodSpec{
-					InitContainers: initContainers,
-					Containers:     []corev1.Container{tritonContainer},
-					Volumes:        volumes,
+					Containers: []corev1.Container{tritonContainer},
+					Volumes:    volumes,
 				},
 			},
 		},

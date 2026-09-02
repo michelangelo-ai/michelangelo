@@ -27,12 +27,14 @@ message ServingSpec {
 
   // Addresses the Python-dependency case from #933 (sidecar containers and
   // external-service dependencies from that issue are still open). Python
-  // package requirement strings (e.g. "torch==2.4.1"), installed into an
-  // isolated directory before the serving container starts and prepended to
-  // its PYTHONPATH -- no custom container image required. Applies once per
-  // InferenceServer (shared by every model it serves), not per model.
-  // Changing this list requires a new pod to pick up the change (see
-  // backends.tritonBackend.createTritonDeployment).
+  // package requirement strings (e.g. "torch==2.4.1") -- no custom container
+  // image or project-level Dockerfile required. Resolves to a shared,
+  // content-addressed image built on demand by CI: any InferenceServer, from
+  // any project, declaring the same dependency set reuses the same image
+  // (see go/components/inferenceserver/depsimage). Applies once per
+  // InferenceServer (shared by every model it serves), not per model. The
+  // first InferenceServer to request a new dependency set will see it in
+  // CREATE_PENDING state until that set's image finishes building.
   repeated string python_dependencies = 3;
 }
 
