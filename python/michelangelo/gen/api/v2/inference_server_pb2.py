@@ -31,7 +31,7 @@ from michelangelo.gen.api.v2 import project_pb2 as michelangelo_dot_api_dot_v2_d
 from michelangelo.gen.api.v2 import user_pb2 as michelangelo_dot_api_dot_v2_dot_user__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n*michelangelo/api/v2/inference_server.proto\x12\x13michelangelo.api.v2\x1a\x34k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto\x1a\x1emichelangelo/api/options.proto\x1a!michelangelo/api/conditions.proto\x1a$michelangelo/api/v2/kubernetes.proto\x1a\x1dmichelangelo/api/v2/pod.proto\x1a!michelangelo/api/v2/project.proto\x1a\x1emichelangelo/api/v2/user.proto\"a\n\x0bServingSpec\x12\x18\n\x07version\x18\x01 \x01(\tR\x07version\x12\x38\n\x18\x63ontainer_build_template\x18\x02 \x01(\tR\x16\x63ontainerBuildTemplate\"^\n\tOwnerSpec\x12=\n\nowner_info\x18\x01 \x01(\x0b\x32\x1e.michelangelo.api.v2.OwnerInfoR\townerInfo\x12\x12\n\x04tier\x18\x02 \x01(\x05R\x04tier\"\xbc\x01\n\x08InitSpec\x12\x46\n\rresource_spec\x18\x01 \x01(\x0b\x32!.michelangelo.api.v2.ResourceSpecR\x0cresourceSpec\x12\x43\n\x0cserving_spec\x18\x02 \x01(\x0b\x32 .michelangelo.api.v2.ServingSpecR\x0bservingSpec\x12#\n\rnum_instances\x18\x03 \x01(\x05R\x0cnumInstances\"/\n\tDecomSpec\x12\"\n\x0c\x64\x65\x63ommission\x18\x01 \x01(\x08R\x0c\x64\x65\x63ommission\"\x89\x01\n\rClusterTarget\x12\x1d\n\ncluster_id\x18\x01 \x01(\tR\tclusterId\x12\x45\n\nkubernetes\x18\x02 \x01(\x0b\x32#.michelangelo.api.v2.ConnectionSpecH\x00R\nkubernetesB\x12\n\nconnection\x12\x04\xe0\xc0\x03\x01\"\xdb\x03\n\x13InferenceServerSpec\x12\x43\n\x0ctenancy_type\x18\x01 \x01(\x0e\x32 .michelangelo.api.v2.TenancyTypeR\x0btenancyType\x12=\n\nowner_spec\x18\x02 \x01(\x0b\x32\x1e.michelangelo.api.v2.OwnerSpecR\townerSpec\x12:\n\tinit_spec\x18\x03 \x01(\x0b\x32\x1d.michelangelo.api.v2.InitSpecR\x08initSpec\x12=\n\ndecom_spec\x18\x04 \x01(\x0b\x32\x1e.michelangelo.api.v2.DecomSpecR\tdecomSpec\x12\x33\n\x05owner\x18\x05 \x01(\x0b\x32\x1d.michelangelo.api.v2.UserInfoR\x05owner\x12\x43\n\x0c\x62\x61\x63kend_type\x18\x06 \x01(\x0e\x32 .michelangelo.api.v2.BackendTypeR\x0b\x62\x61\x63kendType\x12K\n\x0f\x63luster_targets\x18\x07 \x03(\x0b\x32\".michelangelo.api.v2.ClusterTargetR\x0e\x63lusterTargets\"\xcc\x01\n\x13\x43lusterTargetStatus\x12\x1d\n\ncluster_id\x18\x01 \x01(\tR\tclusterId\x12?\n\x05state\x18\x02 \x01(\x0e\x32).michelangelo.api.v2.InferenceServerStateR\x05state\x12;\n\nconditions\x18\x03 \x03(\x0b\x32\x1b.michelangelo.api.ConditionR\nconditions\x12\x18\n\x07message\x18\x04 \x01(\tR\x07message\"\xf1\x03\n\x15InferenceServerStatus\x12.\n\x13inference_server_id\x18\x01 \x01(\tR\x11inferenceServerId\x12/\n\x13observed_generation\x18\x02 \x01(\x03R\x12observedGeneration\x12?\n\x05state\x18\x03 \x01(\x0e\x32).michelangelo.api.v2.InferenceServerStateR\x05state\x12+\n\x11provider_metadata\x18\x04 \x01(\tR\x10providerMetadata\x12\x1f\n\x0b\x63reate_time\x18\x05 \x01(\tR\ncreateTime\x12\x1f\n\x0bupdate_time\x18\x06 \x01(\tR\nupdateTime\x12;\n\nconditions\x18\x07 \x03(\x0b\x32\x1b.michelangelo.api.ConditionR\nconditions\x12\x35\n\x16\x61vailable_environments\x18\x08 \x03(\tR\x15\x61vailableEnvironments\x12S\n\x10\x63luster_statuses\x18\t \x03(\x0b\x32(.michelangelo.api.v2.ClusterTargetStatusR\x0f\x63lusterStatuses\"\xcb\x02\n\x0fInferenceServer\x12K\n\ttype_meta\x18\x01 \x01(\x0b\x32..k8s.io.apimachinery.pkg.apis.meta.v1.TypeMetaR\x08typeMeta\x12L\n\x08metadata\x18\x02 \x01(\x0b\x32\x30.k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMetaR\x08metadata\x12<\n\x04spec\x18\x03 \x01(\x0b\x32(.michelangelo.api.v2.InferenceServerSpecR\x04spec\x12\x42\n\x06status\x18\x04 \x01(\x0b\x32*.michelangelo.api.v2.InferenceServerStatusR\x06status:\x1b\x82\x42\x00\x8a\x42\x15\n\x0cstatus.state\x12\x05state\"\xef\x01\n\x13InferenceServerList\x12K\n\ttype_meta\x18\x01 \x01(\x0b\x32..k8s.io.apimachinery.pkg.apis.meta.v1.TypeMetaR\x08typeMeta\x12J\n\x08metadata\x18\x02 \x01(\x0b\x32..k8s.io.apimachinery.pkg.apis.meta.v1.ListMetaR\x08metadata\x12:\n\x05items\x18\x03 \x03(\x0b\x32$.michelangelo.api.v2.InferenceServerR\x05items:\x03\xfa\x41\x00*b\n\x0bTenancyType\x12\x18\n\x14TENANCY_TYPE_INVALID\x10\x00\x12\x1a\n\x16TENANCY_TYPE_DEDICATED\x10\x01\x12\x1d\n\x19TENANCY_TYPE_MULTI_TENANT\x10\x02*\x8e\x01\n\x0b\x42\x61\x63kendType\x12\x18\n\x14\x42\x41\x43KEND_TYPE_INVALID\x10\x00\x12\x17\n\x13\x42\x41\x43KEND_TYPE_TRITON\x10\x01\x12\x16\n\x12\x42\x41\x43KEND_TYPE_LLM_D\x10\x02\x12\x17\n\x13\x42\x41\x43KEND_TYPE_DYNAMO\x10\x03\x12\x1b\n\x17\x42\x41\x43KEND_TYPE_TORCHSERVE\x10\x04*\xed\x02\n\x14InferenceServerState\x12\"\n\x1eINFERENCE_SERVER_STATE_INVALID\x10\x00\x12&\n\"INFERENCE_SERVER_STATE_INITIALIZED\x10\x01\x12)\n%INFERENCE_SERVER_STATE_CREATE_PENDING\x10\x02\x12\"\n\x1eINFERENCE_SERVER_STATE_SERVING\x10\x03\x12!\n\x1dINFERENCE_SERVER_STATE_FAILED\x10\x04\x12)\n%INFERENCE_SERVER_STATE_DELETE_PENDING\x10\x05\x12#\n\x1fINFERENCE_SERVER_STATE_CREATING\x10\x06\x12#\n\x1fINFERENCE_SERVER_STATE_DELETING\x10\x07\x12\"\n\x1eINFERENCE_SERVER_STATE_DELETED\x10\x08\x42\x04Z\x02v2b\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n*michelangelo/api/v2/inference_server.proto\x12\x13michelangelo.api.v2\x1a\x34k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto\x1a\x1emichelangelo/api/options.proto\x1a!michelangelo/api/conditions.proto\x1a$michelangelo/api/v2/kubernetes.proto\x1a\x1dmichelangelo/api/v2/pod.proto\x1a!michelangelo/api/v2/project.proto\x1a\x1emichelangelo/api/v2/user.proto\"]\n\x0bServingSpec\x12\x0f\n\x07version\x18\x01 \x01(\t\x12 \n\x18\x63ontainer_build_template\x18\x02 \x01(\t\x12\x1b\n\x13python_dependencies\x18\x03 \x03(\t\"M\n\tOwnerSpec\x12\x32\n\nowner_info\x18\x01 \x01(\x0b\x32\x1e.michelangelo.api.v2.OwnerInfo\x12\x0c\n\x04tier\x18\x02 \x01(\x05\"\x93\x01\n\x08InitSpec\x12\x38\n\rresource_spec\x18\x01 \x01(\x0b\x32!.michelangelo.api.v2.ResourceSpec\x12\x36\n\x0cserving_spec\x18\x02 \x01(\x0b\x32 .michelangelo.api.v2.ServingSpec\x12\x15\n\rnum_instances\x18\x03 \x01(\x05\"!\n\tDecomSpec\x12\x14\n\x0c\x64\x65\x63ommission\x18\x01 \x01(\x08\"r\n\rClusterTarget\x12\x12\n\ncluster_id\x18\x01 \x01(\t\x12\x39\n\nkubernetes\x18\x02 \x01(\x0b\x32#.michelangelo.api.v2.ConnectionSpecH\x00\x42\x12\n\nconnection\x12\x04\xe0\xc0\x03\x01\"\x8a\x03\n\x13InferenceServerSpec\x12\x36\n\x0ctenancy_type\x18\x01 \x01(\x0e\x32 .michelangelo.api.v2.TenancyType\x12\x32\n\nowner_spec\x18\x02 \x01(\x0b\x32\x1e.michelangelo.api.v2.OwnerSpec\x12\x30\n\tinit_spec\x18\x03 \x01(\x0b\x32\x1d.michelangelo.api.v2.InitSpec\x12\x32\n\ndecom_spec\x18\x04 \x01(\x0b\x32\x1e.michelangelo.api.v2.DecomSpec\x12,\n\x05owner\x18\x05 \x01(\x0b\x32\x1d.michelangelo.api.v2.UserInfo\x12\x36\n\x0c\x62\x61\x63kend_type\x18\x06 \x01(\x0e\x32 .michelangelo.api.v2.BackendType\x12;\n\x0f\x63luster_targets\x18\x07 \x03(\x0b\x32\".michelangelo.api.v2.ClusterTarget\"\xa5\x01\n\x13\x43lusterTargetStatus\x12\x12\n\ncluster_id\x18\x01 \x01(\t\x12\x38\n\x05state\x18\x02 \x01(\x0e\x32).michelangelo.api.v2.InferenceServerState\x12/\n\nconditions\x18\x03 \x03(\x0b\x32\x1b.michelangelo.api.Condition\x12\x0f\n\x07message\x18\x04 \x01(\t\"\xe5\x02\n\x15InferenceServerStatus\x12\x1b\n\x13inference_server_id\x18\x01 \x01(\t\x12\x1b\n\x13observed_generation\x18\x02 \x01(\x03\x12\x38\n\x05state\x18\x03 \x01(\x0e\x32).michelangelo.api.v2.InferenceServerState\x12\x19\n\x11provider_metadata\x18\x04 \x01(\t\x12\x13\n\x0b\x63reate_time\x18\x05 \x01(\t\x12\x13\n\x0bupdate_time\x18\x06 \x01(\t\x12/\n\nconditions\x18\x07 \x03(\x0b\x32\x1b.michelangelo.api.Condition\x12\x1e\n\x16\x61vailable_environments\x18\x08 \x03(\t\x12\x42\n\x10\x63luster_statuses\x18\t \x03(\x0b\x32(.michelangelo.api.v2.ClusterTargetStatus\"\xa9\x02\n\x0fInferenceServer\x12\x41\n\ttype_meta\x18\x01 \x01(\x0b\x32..k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta\x12\x42\n\x08metadata\x18\x02 \x01(\x0b\x32\x30.k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta\x12\x36\n\x04spec\x18\x03 \x01(\x0b\x32(.michelangelo.api.v2.InferenceServerSpec\x12:\n\x06status\x18\x04 \x01(\x0b\x32*.michelangelo.api.v2.InferenceServerStatus:\x1b\x82\x42\x00\x8a\x42\x15\n\x0cstatus.state\x12\x05state\"\xd4\x01\n\x13InferenceServerList\x12\x41\n\ttype_meta\x18\x01 \x01(\x0b\x32..k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta\x12@\n\x08metadata\x18\x02 \x01(\x0b\x32..k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta\x12\x33\n\x05items\x18\x03 \x03(\x0b\x32$.michelangelo.api.v2.InferenceServer:\x03\xfa\x41\x00*b\n\x0bTenancyType\x12\x18\n\x14TENANCY_TYPE_INVALID\x10\x00\x12\x1a\n\x16TENANCY_TYPE_DEDICATED\x10\x01\x12\x1d\n\x19TENANCY_TYPE_MULTI_TENANT\x10\x02*\x8e\x01\n\x0b\x42\x61\x63kendType\x12\x18\n\x14\x42\x41\x43KEND_TYPE_INVALID\x10\x00\x12\x17\n\x13\x42\x41\x43KEND_TYPE_TRITON\x10\x01\x12\x16\n\x12\x42\x41\x43KEND_TYPE_LLM_D\x10\x02\x12\x17\n\x13\x42\x41\x43KEND_TYPE_DYNAMO\x10\x03\x12\x1b\n\x17\x42\x41\x43KEND_TYPE_TORCHSERVE\x10\x04*\xed\x02\n\x14InferenceServerState\x12\"\n\x1eINFERENCE_SERVER_STATE_INVALID\x10\x00\x12&\n\"INFERENCE_SERVER_STATE_INITIALIZED\x10\x01\x12)\n%INFERENCE_SERVER_STATE_CREATE_PENDING\x10\x02\x12\"\n\x1eINFERENCE_SERVER_STATE_SERVING\x10\x03\x12!\n\x1dINFERENCE_SERVER_STATE_FAILED\x10\x04\x12)\n%INFERENCE_SERVER_STATE_DELETE_PENDING\x10\x05\x12#\n\x1fINFERENCE_SERVER_STATE_CREATING\x10\x06\x12#\n\x1fINFERENCE_SERVER_STATE_DELETING\x10\x07\x12\"\n\x1eINFERENCE_SERVER_STATE_DELETED\x10\x08\x42\x04Z\x02v2b\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -45,30 +45,30 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_INFERENCESERVER']._serialized_options = b'\202B\000\212B\025\n\014status.state\022\005state'
   _globals['_INFERENCESERVERLIST']._loaded_options = None
   _globals['_INFERENCESERVERLIST']._serialized_options = b'\372A\000'
-  _globals['_TENANCYTYPE']._serialized_start=2660
-  _globals['_TENANCYTYPE']._serialized_end=2758
-  _globals['_BACKENDTYPE']._serialized_start=2761
-  _globals['_BACKENDTYPE']._serialized_end=2903
-  _globals['_INFERENCESERVERSTATE']._serialized_start=2906
-  _globals['_INFERENCESERVERSTATE']._serialized_end=3271
+  _globals['_TENANCYTYPE']._serialized_start=2239
+  _globals['_TENANCYTYPE']._serialized_end=2337
+  _globals['_BACKENDTYPE']._serialized_start=2340
+  _globals['_BACKENDTYPE']._serialized_end=2482
+  _globals['_INFERENCESERVERSTATE']._serialized_start=2485
+  _globals['_INFERENCESERVERSTATE']._serialized_end=2850
   _globals['_SERVINGSPEC']._serialized_start=324
-  _globals['_SERVINGSPEC']._serialized_end=421
-  _globals['_OWNERSPEC']._serialized_start=423
-  _globals['_OWNERSPEC']._serialized_end=517
-  _globals['_INITSPEC']._serialized_start=520
-  _globals['_INITSPEC']._serialized_end=708
-  _globals['_DECOMSPEC']._serialized_start=710
-  _globals['_DECOMSPEC']._serialized_end=757
-  _globals['_CLUSTERTARGET']._serialized_start=760
-  _globals['_CLUSTERTARGET']._serialized_end=897
-  _globals['_INFERENCESERVERSPEC']._serialized_start=900
-  _globals['_INFERENCESERVERSPEC']._serialized_end=1375
-  _globals['_CLUSTERTARGETSTATUS']._serialized_start=1378
-  _globals['_CLUSTERTARGETSTATUS']._serialized_end=1582
-  _globals['_INFERENCESERVERSTATUS']._serialized_start=1585
-  _globals['_INFERENCESERVERSTATUS']._serialized_end=2082
-  _globals['_INFERENCESERVER']._serialized_start=2085
-  _globals['_INFERENCESERVER']._serialized_end=2416
-  _globals['_INFERENCESERVERLIST']._serialized_start=2419
-  _globals['_INFERENCESERVERLIST']._serialized_end=2658
+  _globals['_SERVINGSPEC']._serialized_end=417
+  _globals['_OWNERSPEC']._serialized_start=419
+  _globals['_OWNERSPEC']._serialized_end=496
+  _globals['_INITSPEC']._serialized_start=499
+  _globals['_INITSPEC']._serialized_end=646
+  _globals['_DECOMSPEC']._serialized_start=648
+  _globals['_DECOMSPEC']._serialized_end=681
+  _globals['_CLUSTERTARGET']._serialized_start=683
+  _globals['_CLUSTERTARGET']._serialized_end=797
+  _globals['_INFERENCESERVERSPEC']._serialized_start=800
+  _globals['_INFERENCESERVERSPEC']._serialized_end=1194
+  _globals['_CLUSTERTARGETSTATUS']._serialized_start=1197
+  _globals['_CLUSTERTARGETSTATUS']._serialized_end=1362
+  _globals['_INFERENCESERVERSTATUS']._serialized_start=1365
+  _globals['_INFERENCESERVERSTATUS']._serialized_end=1722
+  _globals['_INFERENCESERVER']._serialized_start=1725
+  _globals['_INFERENCESERVER']._serialized_end=2022
+  _globals['_INFERENCESERVERLIST']._serialized_start=2025
+  _globals['_INFERENCESERVERLIST']._serialized_end=2237
 # @@protoc_insertion_point(module_scope)

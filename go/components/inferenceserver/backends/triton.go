@@ -13,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/depsimage"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
@@ -32,10 +33,22 @@ const (
 )
 
 // Triton Server Management
-type tritonBackend struct{}
+type tritonBackend struct {
+	httpClient *http.Client
+
+	// depsImageExists/depsImageTriggerBuild default to depsimage.Exists/
+	// depsimage.TriggerBuild; overridable in tests so they don't hit the real
+	// registry/GitHub API.
+	depsImageExists       func(ctx context.Context, httpClient *http.Client, tag string) (bool, error)
+	depsImageTriggerBuild func(ctx context.Context, httpClient *http.Client, deps []string, tag string) error
+}
 
 func NewTritonBackend() *tritonBackend {
-	return &tritonBackend{}
+	return &tritonBackend{
+		httpClient:            http.DefaultClient,
+		depsImageExists:       depsimage.Exists,
+		depsImageTriggerBuild: depsimage.TriggerBuild,
+	}
 }
 
 func (b *tritonBackend) CreateServer(ctx context.Context, logger *zap.Logger, kubeClient client.Client, inferenceServer *v2pb.InferenceServer) (*ServerStatus, error) {
@@ -230,6 +243,92 @@ func (b *tritonBackend) createTritonDeployment(ctx context.Context, logger *zap.
 		replicas = 1
 	}
 
+	tritonImage := fmt.Sprintf("nvcr.io/nvidia/tritonserver:%s", defaultTritonImageTag)
+
+	// pythonDependencies resolves to a shared, content-addressed image built by
+	// CI (see depsimage and .github/workflows/build-inferenceserver-deps-image.yaml)
+	// instead of installing packages into a running pod at startup. Any
+	// InferenceServer -- from any project -- declaring the same dependency set
+	// reuses the same image; nothing here is keyed by project name or reads
+	// from a project directory. See ServingSpec.python_dependencies (#933).
+	if deps := inferenceServer.Spec.GetInitSpec().GetServingSpec().GetPythonDependencies(); len(deps) > 0 {
+		tag := depsimage.Tag(deps)
+		exists, err := b.depsImageExists(ctx, b.httpClient, tag)
+		if err != nil {
+			return fmt.Errorf("failed to check dependency image for %s/%s: %w",
+				inferenceServer.Namespace, inferenceServer.Name, err)
+		}
+		if !exists {
+			if err := b.depsImageTriggerBuild(ctx, b.httpClient, deps, tag); err != nil {
+				return fmt.Errorf("failed to trigger dependency image build for %s/%s: %w",
+					inferenceServer.Namespace, inferenceServer.Name, err)
+			}
+			logger.Info("Dependency image not ready yet, build triggered; deferring Deployment creation",
+				zap.String("inferenceServer", inferenceServer.Name),
+				zap.String("tag", tag))
+			return nil
+		}
+		tritonImage = depsimage.Image(deps)
+	}
+
+	tritonContainer := corev1.Container{
+		Name:  "triton",
+		Image: tritonImage,
+		Ports: []corev1.ContainerPort{
+			{ContainerPort: 8000, Name: "http"},
+			{ContainerPort: 8001, Name: "grpc"},
+			{ContainerPort: 8002, Name: "metrics"},
+		},
+		Resources: buildResourceRequirements(inferenceServer.Spec.InitSpec),
+		Args: []string{
+			"tritonserver",
+			"--model-store=/mnt/models",
+			"--grpc-port=8001",
+			"--http-port=8000",
+			"--allow-grpc=true",
+			"--allow-http=true",
+			"--allow-metrics=true",
+			"--metrics-port=8002",
+			"--model-control-mode=explicit",
+			"--strict-model-config=false",
+			"--exit-on-error=true",
+			"--log-error=true",
+			"--log-warning=true",
+			"--log-verbose=0",
+		},
+		VolumeMounts: []corev1.VolumeMount{
+			{
+				Name:      "workdir",
+				MountPath: "/mnt/models",
+			},
+		},
+	}
+
+	volumes := []corev1.Volume{
+		{
+			Name: "workdir",
+			VolumeSource: corev1.VolumeSource{
+				HostPath: &corev1.HostPathVolumeSource{
+					Path: fmt.Sprintf("/var/lib/michelangelo/models/%s", inferenceServer.Name),
+					Type: func() *corev1.HostPathType {
+						t := corev1.HostPathDirectoryOrCreate
+						return &t
+					}(),
+				},
+			},
+		},
+		{
+			Name: "model-config",
+			VolumeSource: corev1.VolumeSource{
+				ConfigMap: &corev1.ConfigMapVolumeSource{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: fmt.Sprintf("%s-model-config", inferenceServer.Name),
+					},
+				},
+			},
+		},
+	}
+
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      deploymentName,
@@ -249,64 +348,8 @@ func (b *tritonBackend) createTritonDeployment(ctx context.Context, logger *zap.
 					},
 				},
 				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{
-						{
-							Name:  "triton",
-							Image: fmt.Sprintf("nvcr.io/nvidia/tritonserver:%s", defaultTritonImageTag),
-							Ports: []corev1.ContainerPort{
-								{ContainerPort: 8000, Name: "http"},
-								{ContainerPort: 8001, Name: "grpc"},
-								{ContainerPort: 8002, Name: "metrics"},
-							},
-							Resources: buildResourceRequirements(inferenceServer.Spec.InitSpec),
-							Args: []string{
-								"tritonserver",
-								"--model-store=/mnt/models",
-								"--grpc-port=8001",
-								"--http-port=8000",
-								"--allow-grpc=true",
-								"--allow-http=true",
-								"--allow-metrics=true",
-								"--metrics-port=8002",
-								"--model-control-mode=explicit",
-								"--strict-model-config=false",
-								"--exit-on-error=true",
-								"--log-error=true",
-								"--log-warning=true",
-								"--log-verbose=0",
-							},
-							VolumeMounts: []corev1.VolumeMount{
-								{
-									Name:      "workdir",
-									MountPath: "/mnt/models",
-								},
-							},
-						},
-					},
-					Volumes: []corev1.Volume{
-						{
-							Name: "workdir",
-							VolumeSource: corev1.VolumeSource{
-								HostPath: &corev1.HostPathVolumeSource{
-									Path: fmt.Sprintf("/var/lib/michelangelo/models/%s", inferenceServer.Name),
-									Type: func() *corev1.HostPathType {
-										t := corev1.HostPathDirectoryOrCreate
-										return &t
-									}(),
-								},
-							},
-						},
-						{
-							Name: "model-config",
-							VolumeSource: corev1.VolumeSource{
-								ConfigMap: &corev1.ConfigMapVolumeSource{
-									LocalObjectReference: corev1.LocalObjectReference{
-										Name: fmt.Sprintf("%s-model-config", inferenceServer.Name),
-									},
-								},
-							},
-						},
-					},
+					Containers: []corev1.Container{tritonContainer},
+					Volumes:    volumes,
 				},
 			},
 		},
