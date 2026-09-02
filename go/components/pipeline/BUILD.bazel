@@ -18,7 +18,6 @@ go_library(
         "//go/base/revision:go_default_library",
         "//proto/api:go_default_library",
         "//proto/api/v2:go_default_library",
-        "@com_github_gogo_protobuf//types:go_default_library",
         "@com_github_prometheus_client_golang//prometheus:go_default_library",
         "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
         "@io_k8s_sigs_controller_runtime//:go_default_library",

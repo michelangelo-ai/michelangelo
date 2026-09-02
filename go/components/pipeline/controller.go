@@ -18,7 +18,6 @@ import (
 
 	"go.uber.org/zap"
 
-	pbtypes "github.com/gogo/protobuf/types"
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
@@ -32,9 +31,7 @@ import (
 
 const (
 	// reconcileInterval defines how frequently non-terminal pipelines are reconciled.
-	reconcileInterval  = 10 * time.Second
-	pipelineAPIVersion = "michelangelo.api/v2"
-	pipelineKind       = "Pipeline"
+	reconcileInterval = 10 * time.Second
 )
 
 // Reconciler implements the controller-runtime Reconciler interface for Pipeline resources.
@@ -214,38 +211,17 @@ func (r *Reconciler) snapshotRevision(ctx context.Context, pipeline *v2pb.Pipeli
 		return nil
 	}
 
-	content, err := pbtypes.MarshalAny(pipeline)
-	if err != nil {
-		return fmt.Errorf("marshal pipeline content: %w", err)
+	input := revision.UpsertParams{
+		Name:       formatRevisionName(pipeline),
+		BaseCR:     pipeline,
+		Owner:      pipeline.Spec.GetOwner().GetName(),
+		RevisionID: pipeline.Spec.Commit.GitRef,
+		Source:     revision.SourceGit,
+		GitRef:     pipeline.Spec.Commit.GetGitRef(),
+		GitBranch:  pipeline.Spec.Commit.GetBranch(),
 	}
 
-	rev := &v2pb.Revision{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: pipelineAPIVersion,
-			Kind:       "Revision",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      formatRevisionName(pipeline),
-			Namespace: pipeline.Namespace,
-		},
-		Spec: v2pb.RevisionSpec{
-			BaseType: &metav1.TypeMeta{
-				Kind:       pipelineKind,
-				APIVersion: pipelineAPIVersion,
-			},
-			BaseResource: &apipb.ResourceIdentifier{
-				Name:      pipeline.Name,
-				Namespace: pipeline.Namespace,
-			},
-			Content:    content,
-			Owner:      pipeline.Spec.GetOwner(),
-			RevisionId: pipeline.Spec.Commit.GitRef,
-			Source:     revision.SourceGit,
-			GitCommit:  pipeline.Spec.Commit,
-		},
-	}
-
-	_, err = r.revisionManager.UpsertRevision(ctx, rev, revision.UpsertOpts{})
+	_, err := r.revisionManager.UpsertRevision(ctx, input, revision.UpsertOpts{})
 	return err
 }
 
@@ -264,7 +240,7 @@ func (r *Reconciler) Register(mgr ctrl.Manager) error {
 	}
 	r.Handler = handler
 	if r.revisionManager == nil {
-		r.revisionManager = revision.NewManager(handler, r.logger)
+		r.revisionManager = revision.NewManager(handler, mgr.GetScheme(), r.logger)
 	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v2pb.Pipeline{}).

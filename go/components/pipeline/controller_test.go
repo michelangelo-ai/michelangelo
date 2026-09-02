@@ -315,7 +315,7 @@ func setUpReconciler(t *testing.T, initialObjects []client.Object, env env.Conte
 	return &Reconciler{
 		Handler:         handler,
 		logger:          zaptest.NewLogger(t),
-		revisionManager: revision.NewManager(handler, zaptest.NewLogger(t)),
+		revisionManager: revision.NewManager(handler, scheme, zaptest.NewLogger(t)),
 		config:          cfg,
 	}
 }
