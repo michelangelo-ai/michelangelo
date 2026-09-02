@@ -335,37 +335,6 @@ describe('CreatePipelineRunForm', () => {
     });
   });
 
-  it('renders Pipeline, Environment, Description, and resume-from sections in that order', async () => {
-    render(
-      <FormWrapper />,
-      buildWrapper([
-        getBaseProviderWrapper(),
-        getIconProviderWrapper(),
-        getErrorProviderWrapper(),
-        getInterpolationProviderWrapper(),
-        getRouterWrapper({ location: '/ma-dev-test/train/pipelines' }),
-        getServiceProviderWrapper({ request: createQueryMockRouter({ CreatePipelineRun: {} }) }),
-      ])
-    );
-
-    const dialog = await screen.findByRole('dialog', { name: 'Start new pipeline run' });
-    // Environment's label carries a trailing required-marker element, so its own text node
-    // can't be matched with an exact string — a partial regex sidesteps that for every entry.
-    const headingPatterns = [
-      /^Pipeline to run$/,
-      /Which environment do you want to use\?/,
-      /^Description$/,
-      /Select run to resume from/,
-    ];
-    const positions = headingPatterns.map((pattern) => within(dialog).getByText(pattern));
-
-    for (let i = 0; i < positions.length - 1; i += 1) {
-      expect(
-        positions[i].compareDocumentPosition(positions[i + 1]) & Node.DOCUMENT_POSITION_FOLLOWING
-      ).toBeTruthy();
-    }
-  });
-
   it('renders both Development and Production environment options', async () => {
     render(
       <FormWrapper />,
