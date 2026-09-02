@@ -47,6 +47,7 @@ export type PipelineRun = {
   metadata: {
     name: string;
     namespace: string;
+    labels?: Record<string, string>;
   };
   spec: {
     /** Populated server-side from the `x-user-name` request header, not set by the client. */

@@ -2,6 +2,7 @@ import { Field } from 'react-final-form';
 
 import { FormDialog } from '#core/components/form/components/form-dialog/form-dialog';
 import { BooleanField } from '#core/components/form/fields/boolean/boolean-field';
+import { InlineRadioField } from '#core/components/form/fields/radio/inline-radio-field';
 import { StringField } from '#core/components/form/fields/string/string-field';
 import { TextareaField } from '#core/components/form/fields/textarea/textarea-field';
 import { FormGroup } from '#core/components/form/layout/form-group/form-group';
@@ -13,6 +14,7 @@ import {
 } from '#core/config/entities/run/types';
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
 import { useStudioMutation } from '#core/hooks/use-studio-mutation/use-studio-mutation';
+import { ENVIRONMENT_LABEL_KEY } from '#core/utils/environment-utils';
 import { generateSuffix } from '#core/utils/name-utils';
 import { ResumeRunFields } from './resume-run-fields';
 
@@ -80,7 +82,15 @@ export const CreatePipelineRunForm = ({ record, onClose }: ActionComponentProps<
     >
       <StringField name="spec.pipeline.name" label="Pipeline to run" readOnly />
 
-      <ResumeRunFields pipelineName={pipelineName} />
+      <InlineRadioField
+        name={`metadata.labels.${ENVIRONMENT_LABEL_KEY}`}
+        label="Which environment do you want to use?"
+        required
+        options={[
+          { value: 'development', label: 'Development' },
+          { value: 'production', label: 'Production' },
+        ]}
+      />
 
       <TextareaField
         name="spec.description"
@@ -88,6 +98,8 @@ export const CreatePipelineRunForm = ({ record, onClose }: ActionComponentProps<
         placeholder="Enter a description for this run…"
         description="Optional. Helps identify this run in the pipeline run list."
       />
+
+      <ResumeRunFields pipelineName={pipelineName} />
 
       <FormGroup title="Set Up Notifications (Optional)">
         <BooleanField
