@@ -326,18 +326,12 @@ def _prepare_trainer_for_ray(trainer: pl.Trainer) -> pl.Trainer:
 
 
 def _resolve_single_device() -> torch.device:
-    """Pick the best available single device: TPU > MPS > CUDA > CPU.
+    """Pick the best available single device: MPS > CUDA > CPU.
 
-    Mirrors Lightning's own auto-detection order:
+    Mirrors Lightning's own auto-detection order (minus TPU, which the
+    trainer SDK does not currently support):
     https://github.com/Lightning-AI/pytorch-lightning/blob/411eec98d50368d700c45edd29d9c20b21e7be17/src/lightning/fabric/utilities/device_parser.py#L209-L221
     """
-    try:
-        from pytorch_lightning.accelerators import XLAAccelerator
-
-        if XLAAccelerator.is_available():
-            return torch.device("xla")
-    except ImportError:
-        pass
     if torch.backends.mps.is_available():
         return torch.device("mps")
     if torch.cuda.is_available():
@@ -348,9 +342,9 @@ def _resolve_single_device() -> torch.device:
 class RaySingleDeviceStrategy(SingleDeviceStrategy):
     """Ray glue for single-device training.
 
-    Resolves the best available device (TPU, then MPS on Apple Silicon, then
-    CUDA if Ray assigned one, then CPU) so that Lightning's auto-detected
-    accelerator and the strategy agree on the device.
+    Resolves the best available device (MPS on Apple Silicon, then CUDA if
+    Ray assigned one, then CPU) so that Lightning's auto-detected accelerator
+    and the strategy agree on the device.
     """
 
     def __init__(self, **kwargs: Any):
