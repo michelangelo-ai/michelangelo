@@ -3023,6 +3023,52 @@ func TestFindTaskResetEventIDByActivityID(t *testing.T) {
 			expectedEventID: 5,
 			expectedError:   "",
 		},
+		{
+			name:            "Stops walking back when the cache-check wave has no earlier boundary",
+			workflowID:      "test-workflow-id",
+			runID:           "test-run-id",
+			firstActivityID: "test-activity-1",
+			mockFunc: func(workflowClient *workflowclientMock.MockWorkflowClient) {
+				workflowClient.EXPECT().GetActivityTaskScheduledEventType().Return("ActivityTaskScheduled").AnyTimes()
+				workflowClient.EXPECT().GetActivityTaskCompletedEventType().Return("ActivityTaskCompleted").AnyTimes()
+				workflowClient.EXPECT().GetDecisionTaskCompletedEventType().Return("DecisionTaskCompleted").AnyTimes()
+
+				mockHistory := &clientInterfaces.WorkflowHistory{
+					Events: []clientInterfaces.HistoryEvent{
+						{
+							EventID:   1,
+							EventType: "ActivityTaskScheduled",
+							Details: map[string]interface{}{
+								"activity_id":   "cache-a",
+								"activity_type": "github.com/michelangelo-ai/michelangelo/go/worker/activities/cachedoutput.(*activities).ListCachedOutput",
+							},
+						},
+						{
+							EventID:   2,
+							EventType: "ActivityTaskCompleted",
+							Details:   map[string]interface{}{"scheduled_event_id": int64(1)},
+						},
+						{
+							EventID:   3,
+							EventType: "ActivityTaskScheduled",
+							Details: map[string]interface{}{
+								"activity_id":   "test-activity-1",
+								"activity_type": "github.com/michelangelo-ai/michelangelo/go/worker/activities/spark.(*activities).CreateSparkJob",
+							},
+						},
+					},
+				}
+				workflowClient.EXPECT().GetWorkflowExecutionHistory(
+					gomock.Any(),
+					"test-workflow-id",
+					"test-run-id",
+					gomock.Any(),
+					int32(5000),
+				).Return(mockHistory, nil)
+			},
+			expectedEventID: 2,
+			expectedError:   "",
+		},
 	}
 
 	for _, testCase := range testCases {
@@ -3617,4 +3663,134 @@ func TestProcessManualRetrySpecInvalidatesCachedOutput(t *testing.T) {
 
 	require.NoError(t, k8sClient.Get(context.Background(), client.ObjectKey{Namespace: "default", Name: "uf-vars-sibling"}, &v2.CachedOutput{}),
 		"sibling task's CachedOutput should be left untouched")
+}
+
+func TestInvalidateCachedOutputForActivityLogsDeleteFailure(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockWorkflowClient := workflowclientMock.NewMockWorkflowClient(ctrl)
+	mockBlobStore := blobstoreMock.NewMockBlobStoreClient(ctrl)
+
+	scheme := runtime.NewScheme()
+	require.NoError(t, v2.AddToScheme(scheme))
+	// No CachedOutput objects are created, so the Delete call below fails with NotFound -
+	// this exercises the "deletion failure is logged and ignored" branch.
+	k8sClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+	actor := setUpExecuteWorkflowActor(t, mockWorkflowClient, mockBlobStore, apiHandler.NewFakeAPIHandler(k8sClient))
+
+	pipelineRun := &v2.PipelineRun{
+		ObjectMeta: v1.ObjectMeta{Name: "test-pipeline-run", Namespace: "default"},
+		Status: v2.PipelineRunStatus{
+			Steps: []*v2.PipelineRunStepInfo{
+				{
+					Name: pipelinerunutils.ExecuteWorkflowStepName,
+					SubSteps: []*v2.PipelineRunStepInfo{
+						{
+							Name:       "retried-task",
+							ActivityId: "failed-activity",
+							StepCachedOutputs: &v2.PipelineRunStepCachedOutputs{
+								IntermediateVars: []*apipb.ResourceIdentifier{
+									{Namespace: "default", Name: "does-not-exist"},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	// Must not panic or propagate the deletion error - it's logged and ignored.
+	actor.invalidateCachedOutputForActivity(context.Background(), pipelineRun, "failed-activity", zaptest.NewLogger(t))
+}
+
+func TestResolveCompletedActivitySchedule(t *testing.T) {
+	testCases := []struct {
+		name              string
+		history           *clientInterfaces.WorkflowHistory
+		eventID           int64
+		expectedScheduled int64
+		expectedActivity  string
+		expectedOK        bool
+	}{
+		{
+			name: "event ID not found in history",
+			history: &clientInterfaces.WorkflowHistory{
+				Events: []clientInterfaces.HistoryEvent{
+					{EventID: 1, EventType: "ActivityTaskCompleted", Details: map[string]interface{}{"scheduled_event_id": int64(1)}},
+				},
+			},
+			eventID:    99,
+			expectedOK: false,
+		},
+		{
+			name: "event found but is not an ActivityTaskCompleted event",
+			history: &clientInterfaces.WorkflowHistory{
+				Events: []clientInterfaces.HistoryEvent{
+					{EventID: 1, EventType: "DecisionTaskCompleted"},
+				},
+			},
+			eventID:    1,
+			expectedOK: false,
+		},
+		{
+			name: "scheduled_event_id has an unrecognized type",
+			history: &clientInterfaces.WorkflowHistory{
+				Events: []clientInterfaces.HistoryEvent{
+					{EventID: 1, EventType: "ActivityTaskCompleted", Details: map[string]interface{}{"scheduled_event_id": "not-a-number"}},
+				},
+			},
+			eventID:    1,
+			expectedOK: false,
+		},
+		{
+			name: "scheduled_event_id as int32 but scheduled event missing from history",
+			history: &clientInterfaces.WorkflowHistory{
+				Events: []clientInterfaces.HistoryEvent{
+					{EventID: 1, EventType: "ActivityTaskCompleted", Details: map[string]interface{}{"scheduled_event_id": int32(5)}},
+				},
+			},
+			eventID:    1,
+			expectedOK: false,
+		},
+		{
+			name: "scheduled_event_id as int, resolves successfully",
+			history: &clientInterfaces.WorkflowHistory{
+				Events: []clientInterfaces.HistoryEvent{
+					{EventID: 1, EventType: "ActivityTaskCompleted", Details: map[string]interface{}{"scheduled_event_id": int(2)}},
+					{EventID: 2, EventType: "ActivityTaskScheduled", Details: map[string]interface{}{"activity_type": "cachedoutput.ListCachedOutput"}},
+				},
+			},
+			eventID:           1,
+			expectedScheduled: 2,
+			expectedActivity:  "cachedoutput.ListCachedOutput",
+			expectedOK:        true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			mockWorkflowClient := workflowclientMock.NewMockWorkflowClient(ctrl)
+			mockWorkflowClient.EXPECT().GetActivityTaskScheduledEventType().Return("ActivityTaskScheduled").AnyTimes()
+			mockWorkflowClient.EXPECT().GetActivityTaskCompletedEventType().Return("ActivityTaskCompleted").AnyTimes()
+			mockBlobStore := blobstoreMock.NewMockBlobStoreClient(ctrl)
+
+			scheme := runtime.NewScheme()
+			require.NoError(t, v2.AddToScheme(scheme))
+			k8sClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+			actor := setUpExecuteWorkflowActor(t, mockWorkflowClient, mockBlobStore, apiHandler.NewFakeAPIHandler(k8sClient))
+
+			scheduledEventID, activityType, ok := actor.resolveCompletedActivitySchedule(tc.history, tc.eventID)
+
+			require.Equal(t, tc.expectedOK, ok)
+			if tc.expectedOK {
+				require.Equal(t, tc.expectedScheduled, scheduledEventID)
+				require.Equal(t, tc.expectedActivity, activityType)
+			}
+		})
+	}
 }
