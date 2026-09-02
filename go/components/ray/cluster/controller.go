@@ -115,6 +115,15 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			return ctrl.Result{RequeueAfter: requeueAfter}, err
 		}
 		logger.Info("processed cluster termination")
+
+		// Once termination has fully converged (kill/cleanup finished, or there was
+		// nothing to clean up), freeze the object so the ingester archives it and
+		// reconciliation stops for good. No-op if cleanup is still in progress; a later
+		// reconcile will pick this back up once it does.
+		if err := r.markImmutableIfTerminal(ctx, &rayCluster); err != nil {
+			logger.Error(err, "failed to mark cluster immutable after termination")
+			return ctrl.Result{RequeueAfter: requeueAfter}, err
+		}
 		return ctrl.Result{}, nil
 	}
 
@@ -568,18 +577,64 @@ func (r *Reconciler) getClusterStatus(ctx context.Context, log logr.Logger, assi
 	return clusterStatus, nil
 }
 
+// isClusterFullyTerminal reports whether cluster has fully converged to a terminal
+// outcome: Succeeded is decided (TRUE or FALSE) and any kill/cleanup processing it
+// triggers has completed (Killing back to FALSE with Killed TRUE).
+//
+// cleanupCluster and markClusterFailedImmutable are the only two places that produce
+// this combination, and both set Killing=FALSE/Killed=TRUE atomically alongside their
+// last piece of cleanup work (or, for markClusterFailedImmutable, with no cleanup needed
+// at all since the remote resource is already confirmed gone). So checking it on a
+// freshly-fetched object is race-free: there is no window where it reads true before
+// cleanup has actually finished.
+func isClusterFullyTerminal(cluster *v2pb.RayCluster) bool {
+	succeeded := jobsutils.GetCondition(&cluster.Status.StatusConditions, SucceededCondition, cluster.Generation)
+	if succeeded.Status == apipb.CONDITION_STATUS_UNKNOWN {
+		return false
+	}
+	killing := jobsutils.GetCondition(&cluster.Status.StatusConditions, KillingCondition, cluster.Generation)
+	killed := jobsutils.GetCondition(&cluster.Status.StatusConditions, KilledCondition, cluster.Generation)
+	return killing.Status == apipb.CONDITION_STATUS_FALSE && killed.Status == apipb.CONDITION_STATUS_TRUE
+}
+
+// markImmutableIfTerminal freezes cluster once it has fully converged to a terminal
+// outcome (see isClusterFullyTerminal), so the ingester moves it to metadata storage and
+// deletes it from K8s/ETCD; after that the controller's Get returns NotFound and
+// reconciliation stops for good. It is a no-op if the object is already immutable, or
+// has not yet reached that point (e.g. Killing is still TRUE while cleanup is in flight)
+// — a later reconcile will call this again once it has.
+//
+// It re-fetches the latest object first, since a status update may have just preceded
+// this call and annotations live on the object metadata, not the status subresource; the
+// re-fetch also avoids a resourceVersion conflict with that preceding update, and the
+// whole operation retries on conflict for the same reason.
+func (r *Reconciler) markImmutableIfTerminal(ctx context.Context, cluster *v2pb.RayCluster) error {
+	if err := retry.OnError(retry.DefaultRetry, jobsutils.IsRetriableError, func() error {
+		latest := &v2pb.RayCluster{}
+		if err := r.Get(ctx, cluster.Namespace, cluster.Name, &metav1.GetOptions{}, latest); err != nil {
+			return err
+		}
+		if utils.IsImmutable(latest) || !isClusterFullyTerminal(latest) {
+			return nil
+		}
+		utils.MarkImmutable(latest)
+		return r.Update(ctx, latest, &metav1.UpdateOptions{})
+	}); err != nil {
+		return fmt.Errorf("failed to mark cluster immutable: %w", err)
+	}
+	return nil
+}
+
 // markClusterFailedImmutable records a terminal failure for a RayCluster whose backing
-// resource has disappeared from the remote compute cluster and freezes the object so it
-// stops being reconciled.
+// resource has disappeared from the remote compute cluster, so it stops being monitored.
 //
-// It first persists a fully-terminal status (State=FAILED, Succeeded=FALSE, Killing=FALSE,
-// Killed=TRUE). Setting the complete terminal condition set means a reconcile that races
-// the ingester's ETCD cleanup short-circuits processClusterTermination into a no-op rather
-// than issuing a pointless DeleteJobCluster against an already-gone remote cluster.
-//
-// It then sets the immutable annotation. The ingester moves the object to metadata storage
-// and deletes it from K8s/ETCD, after which the controller's Get returns NotFound and
-// reconciliation stops permanently.
+// It persists the complete terminal condition set in one write (State=FAILED,
+// Succeeded=FALSE, Killing=FALSE, Killed=TRUE) rather than just setting Succeeded=FALSE
+// and letting processClusterTermination converge over further reconciles: the remote
+// resource is already confirmed gone, so there is nothing to clean up, and setting
+// Killing=FALSE directly means cleanupCluster will never issue a pointless
+// DeleteJobCluster against it. That same condition set is what markImmutableIfTerminal
+// looks for, so it freezes the object immediately after.
 func (r *Reconciler) markClusterFailedImmutable(
 	ctx context.Context,
 	cluster *v2pb.RayCluster,
@@ -617,24 +672,7 @@ func (r *Reconciler) markClusterFailedImmutable(
 		return fmt.Errorf("failed to persist terminal status: %w", err)
 	}
 
-	// Mark the object immutable (metadata). This is a separate Update because annotations
-	// live on the object metadata, not the status subresource. Re-fetch the latest object
-	// to avoid a resourceVersion conflict with the status update above.
-	if err := retry.OnError(retry.DefaultRetry, jobsutils.IsRetriableError, func() error {
-		latest := &v2pb.RayCluster{}
-		if err := r.Get(ctx, cluster.Namespace, cluster.Name, &metav1.GetOptions{}, latest); err != nil {
-			return err
-		}
-		if utils.IsImmutable(latest) {
-			return nil
-		}
-		utils.MarkImmutable(latest)
-		return r.Update(ctx, latest, &metav1.UpdateOptions{})
-	}); err != nil {
-		return fmt.Errorf("failed to mark cluster immutable: %w", err)
-	}
-
-	return nil
+	return r.markImmutableIfTerminal(ctx, cluster)
 }
 
 // applyRayClusterStatus updates the RayCluster status and conditions based on the cluster state from KubeRay.
