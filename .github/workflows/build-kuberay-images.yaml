@@ -42,7 +42,7 @@ jobs:
 
     steps:
       - name: Check out kuberay (upstream)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: ray-project/kuberay
           ref: ${{ github.event.inputs.kuberay_ref || env.KUBERAY_REF_DEFAULT }}
