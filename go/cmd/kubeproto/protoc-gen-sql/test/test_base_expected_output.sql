@@ -46,11 +46,13 @@ CREATE TABLE `test_base_annotations`
 CREATE TABLE `test_base_test_wrapper_unmarshaled`
 (
     `test_wrapper_uid` VARCHAR(255) NOT NULL,
+    `name`    VARCHAR(255),
     `test_name`    VARCHAR(255),
     `test_ref_namespace`    VARCHAR(255),
     `test_ref_name`    VARCHAR(255),
     `test_count`    INT,
     PRIMARY KEY (`test_wrapper_uid`),
+    KEY    `test_base_test_wrapper_unmarshaled_name` (`name`),
     KEY    `test_base_test_wrapper_unmarshaled_test_name` (`test_name`),
     KEY    `test_base_test_wrapper_unmarshaled_test_ref` (`test_ref_namespace`, `test_ref_name`),
     KEY    `test_base_test_wrapper_unmarshaled_test_count` (`test_count`)
