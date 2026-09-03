@@ -113,7 +113,7 @@ export const TRIGGERED_BY_LABEL = 'pipelinerun.michelangelo/triggered-by';
  * That case is the majority, so it is handled explicitly here instead of relying on a
  * failed string interpolation.
  */
-export const TRIGGERED_BY_CELL_CONFIG: Cell = {
+export const RUN_TRIGGERED_BY_COLUMN: Cell = {
   id: `metadata.labels['${TRIGGERED_BY_LABEL}']`,
   label: 'Triggered by',
   type: CellType.LINK,
@@ -136,6 +136,6 @@ export const SHARED_RUN_CELL_CONFIG: Cell[] = [
   RUN_CREATED_COLUMN,
   RUN_PIPELINE_COLUMN,
   RUN_STARTED_BY_COLUMN,
-  TRIGGERED_BY_CELL_CONFIG,
+  RUN_TRIGGERED_BY_COLUMN,
   RUN_STATE_COLUMN,
 ];
