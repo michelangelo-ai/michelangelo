@@ -20,7 +20,7 @@ message TestBaseStatus {
 
 // TestBase is a revisioned base type. It opts into the "test_wrapper" wrapper
 // kind only (not "test_draft") via revisioned_in, so the sidecar table
-// "test_base_test_wrapper_unmarshaled" is generated for test_wrapper. Under
+// "test_base_test_wrapper_unmarshalled" is generated for test_wrapper. Under
 // mirror-all, that sidecar materializes TestBase's FULL michelangelo.api.index
 // set: a primitive (spec.name), a composite ResourceIdentifier (spec.ref), and a
 // status field (status.count) — the last proving every base index is mirrored,

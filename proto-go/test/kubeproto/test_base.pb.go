@@ -1223,7 +1223,7 @@ func (m *TestBase) RevisionedIndexSpecs() []storage.RevisionedIndexSpec {
 			WrapperKind: "test_wrapper",
 			ContentPath: "spec.content",
 			BaseKind: "TestBase",
-			Table: "test_base_test_wrapper_unmarshaled",
+			Table: "test_base_test_wrapper_unmarshalled",
 			UIDCol: "test_wrapper_uid",
 			Fields: []storage.RevisionedIndexField{
 				{Path: "spec.content.metadata.name", Column: "name"},

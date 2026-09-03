@@ -22,7 +22,7 @@ message TestWrapperStatus {
 
 // TestWrapper is an ordinary CRD that serves as the "test_wrapper" wrapper.
 // Because TestBase opts into "test_wrapper" via revisioned_in, the
-// "test_base_test_wrapper_unmarshaled" sidecar is generated off TestBase;
+// "test_base_test_wrapper_unmarshalled" sidecar is generated off TestBase;
 // TestWrapper itself needs no special annotation.
 message TestWrapper {
   option (michelangelo.api.resource) = {};

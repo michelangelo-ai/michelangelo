@@ -108,7 +108,7 @@ func ParseIndexedFields(crdRootMsg *protogen.Message, crdOptions *pboptions.Opti
 // RevisionedIndex describes a revisioned base CRD's index set and the wrapper
 // kinds it is mirrored into. A base CRD that lists resource.revisioned_in has
 // its full michelangelo.api.index set materialized into a
-// "<base>_<kind>_unmarshaled" sidecar table for each listed kind, so
+// "<base>_<kind>_unmarshalled" sidecar table for each listed kind, so
 // List<Wrapper> can filter on the wrapped base resource's fields server-side.
 // Every listed kind mirrors the same base index set, so Fields is shared across
 // all Kinds rather than duplicated per kind.
@@ -125,7 +125,7 @@ type RevisionedIndex struct {
 // ParseRevisionedIndex returns the base CRD's michelangelo.api.index set,
 // with a synthesized "name" field (metadata.name) always prepended, together
 // with the wrapper kinds listed in resource.revisioned_in that mirror it into
-// "<base>_<kind>_unmarshaled" sidecar tables. Each index path resolves against
+// "<base>_<kind>_unmarshalled" sidecar tables. Each index path resolves against
 // the base CRD message itself, which is what each wrapper stores at
 // spec.content, so every kind mirrors the same base index set. The base
 // object's own SQL table always carries a "name" column regardless of
@@ -174,7 +174,7 @@ func ParseRevisionedIndex(crdRootMsg *protogen.Message, crdOptions *pboptions.Op
 }
 
 // Sidecar names the storage artifacts of one (base table, wrapper kind) pair:
-// the "<base>_<kind>_unmarshaled" table and its "<kind>_uid" primary-key column.
+// the "<base>_<kind>_unmarshalled" table and its "<kind>_uid" primary-key column.
 // protoc-gen-sql emits the CREATE TABLE under these names and
 // protoc-gen-kubeproto bakes them into the generated RevisionedIndexSpecs, so
 // both generators MUST derive them from SidecarFor — the runtime queries
@@ -186,10 +186,10 @@ type Sidecar struct {
 }
 
 // SidecarFor derives the sidecar identity for a (base table, wrapper kind) pair,
-// e.g. ("pipeline", "revision") -> {pipeline_revision_unmarshaled, revision_uid}.
+// e.g. ("pipeline", "revision") -> {pipeline_revision_unmarshalled, revision_uid}.
 func SidecarFor(baseTableName, kind string) Sidecar {
 	return Sidecar{
-		Table:     baseTableName + "_" + kind + "_unmarshaled",
+		Table:     baseTableName + "_" + kind + "_unmarshalled",
 		UIDColumn: kind + "_uid",
 	}
 }

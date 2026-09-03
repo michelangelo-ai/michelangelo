@@ -84,31 +84,31 @@ func generateSQLSchema(crdRootMsg *protogen.Message, crdOptions *pboptions.Optio
 	templates.CRDMySQLLabelAnnotationTable.Execute(&buf, typeInfo)
 
 	// If this CRD is a revisioned base type (resource.revisioned_in is non-empty),
-	// emit one sidecar "<base>_<wrapper>_unmarshaled" table per wrapper kind it
+	// emit one sidecar "<base>_<wrapper>_unmarshalled" table per wrapper kind it
 	// opts into. The wrapper kind resolves to a wrapper CRD by convention
 	// (e.g. "revision" -> keyed on revision_uid; the wrapped resource lives at
 	// spec.content).
 	if revisioned := util.ParseRevisionedIndex(crdRootMsg, crdOptions); revisioned != nil {
 		for _, kind := range revisioned.Kinds {
-			emitUnmarshaledTable(&buf, crdTableName, revisioned.Fields, kind)
+			emitUnmarshalledTable(&buf, crdTableName, revisioned.Fields, kind)
 		}
 	}
 	return buf.Bytes()
 }
 
-// emitUnmarshaledTable writes one revisioned-index sidecar table for a (base, wrapper)
+// emitUnmarshalledTable writes one revisioned-index sidecar table for a (base, wrapper)
 // pair, with a column per mirrored base index field:
 //
-//	CREATE TABLE `<base>_<wrapper>_unmarshaled` (
+//	CREATE TABLE `<base>_<wrapper>_unmarshalled` (
 //	    `<wrapper>_uid`  VARCHAR(255) NOT NULL,
 //	    `<key>`      <type>, ...
 //	    PRIMARY KEY (`<wrapper>_uid`),
 //	    KEY `..._<key>` (`<key>`), ...
 //	);
-func emitUnmarshaledTable(buf *bytes.Buffer, baseTableName string, fields []util.IndexedField, wrapperKind string) {
+func emitUnmarshalledTable(buf *bytes.Buffer, baseTableName string, fields []util.IndexedField, wrapperKind string) {
 	sidecar := util.SidecarFor(baseTableName, wrapperKind)
 
-	templates.CRDMySQLUnmarshaledTable.Execute(buf, struct {
+	templates.CRDMySQLUnmarshalledTable.Execute(buf, struct {
 		TableName string
 		UIDColumn string
 	}{sidecar.Table, sidecar.UIDColumn})

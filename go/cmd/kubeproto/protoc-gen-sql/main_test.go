@@ -33,7 +33,7 @@ func TestSqlGen(t *testing.T) {
 		"testobject.pb.sql": testObjectSQL,
 		"indexing.pb.sql":   testIndexingSQL,
 		// TestBase opts into "test_wrapper" via revisioned_in: its output must
-		// include the test_base_test_wrapper_unmarshaled sidecar mirroring the
+		// include the test_base_test_wrapper_unmarshalled sidecar mirroring the
 		// full base index set.
 		"test_base.pb.sql": testBaseSQL,
 		// The wrappers themselves are ordinary CRDs: no sidecar of their own.
