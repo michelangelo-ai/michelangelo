@@ -33,7 +33,7 @@ The `state` property controls individual entity behavior within a phase:
 // From: config/entities/run/run.ts
 export const RUN_ENTITY_CONFIG: PhaseEntityConfig = {
   id: 'runs',
-  name: 'Pipeline Runs',
+  name: 'Runs',
   service: 'pipelineRun',
   state: 'active',
   views: [RUN_LIST_CONFIG, RUN_DETAIL_CONFIG],
@@ -52,7 +52,7 @@ export const RUN_ENTITY_CONFIG: PhaseEntityConfig = {
 ### `name`
 - Display name shown in navigation and headers
 - Recommended: plural, descriptive
-- Examples: `"Pipeline Runs"`, `"Pipelines"`, `"Trained Models"`
+- Examples: `"Runs"`, `"Pipelines"`, `"Trained Models"`
 - Can be intentionally not pluralized for special cases (e.g., `"Feature Consistency"`)
 
 ### `service`
@@ -109,7 +109,7 @@ service PipelineRunService {
 // Entity config
 {
   id: 'runs',
-  name: 'Pipeline Runs',
+  name: 'Runs',
   service: 'pipelineRun', // ← Must match root field name
   // ...
 }

@@ -46,7 +46,7 @@ See [`javascript/packages/core/config/phases`](https://github.com/michelangelo-a
 // Example: config/entities/run/run.ts
 export const RUN_ENTITY_CONFIG: PhaseEntityConfig = {
   id: 'runs',
-  name: 'Pipeline Runs',
+  name: 'Runs',
   service: 'pipelineRun',
   state: 'active',
   views: [RUN_LIST_CONFIG, RUN_DETAIL_CONFIG],
