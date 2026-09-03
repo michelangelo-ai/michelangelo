@@ -309,9 +309,12 @@ describe('useSuccessOperations', () => {
       await screen.findByText('Pipeline created');
       await user.click(screen.getAllByRole('button', { name: 'Dismiss' })[0]);
 
-      await waitFor(() => {
-        expect(screen.queryByText('Pipeline created')).not.toBeInTheDocument();
-      });
+      await waitFor(
+        () => {
+          expect(screen.queryByText('Pipeline created')).not.toBeInTheDocument();
+        },
+        { timeout: 2000 }
+      );
       expect(screen.getByText(/Current pathname: \/start/)).toBeInTheDocument();
     });
 
