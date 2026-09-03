@@ -7,6 +7,7 @@ import { Cell, Grid } from 'baseui/layout-grid';
 
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
 import { Phase } from '#core/types/common/studio-types';
+import { toTitleCase } from '#core/utils/string-utils';
 import { MenuDrawer } from './menu-drawer';
 import { BreadcrumbContainer, PlainLink } from './styled-components';
 import { useScrollingNavbarShadow } from './use-scrolling-navbar-shadow';
@@ -124,7 +125,8 @@ function EntityBreadcrumb({ categories }: { categories: CategoryConfig[] }) {
   // TODO #909
   // eslint-disable-next-line @typescript-eslint/no-unsafe-enum-comparison
   const currentPhase = categories.flatMap((c) => c.phases).find((p) => p.id === phase);
-  const entityName = currentPhase?.entities.find((e) => e.id === entity)?.name ?? entity;
+  const configuredEntityName = currentPhase?.entities.find((e) => e.id === entity)?.name;
+  const entityName = configuredEntityName ? toTitleCase(configuredEntityName) : entity;
 
   return entityId ? (
     <PlainLink to={`/${projectId}/${phase}/${entity}`} data-tracking-name="entity">
