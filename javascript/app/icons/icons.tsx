@@ -11,6 +11,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import CropSquareIcon from '@mui/icons-material/CropSquare';
 import Delete from '@mui/icons-material/Delete';
 import ErrorIcon from '@mui/icons-material/Error';
+import EventRepeatIcon from '@mui/icons-material/EventRepeat';
 import Info from '@mui/icons-material/Info';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
@@ -33,6 +34,7 @@ export const ICONS = {
   arrowCircular: createMuiIconAdapter(AutorenewIcon),
   arrowLaunch: createMuiIconAdapter(Launch),
   arrowLeft: createMuiIconAdapter(KeyboardBackspaceIcon),
+  calendarRepeat: createMuiIconAdapter(EventRepeatIcon),
   chartLine: createMuiIconAdapter(ShowChartIcon),
   check: createMuiIconAdapter(CheckIcon),
   chevronDown: createMuiIconAdapter(KeyboardArrowDownIcon),

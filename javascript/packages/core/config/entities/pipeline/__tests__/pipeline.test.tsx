@@ -7,6 +7,7 @@ import {
   PIPELINE_RUN_PIPELINE_NAME_FIELD,
 } from '#core/config/entities/pipeline/shared';
 import { PipelineRunState } from '#core/config/entities/run/types';
+import { TRIGGER_ENTITY_CONFIG } from '#core/config/entities/trigger/trigger';
 import { EntityDetailRoute } from '#core/router/entity-detail-route';
 import { PhaseListRoute } from '#core/router/phase-list-route';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
@@ -37,7 +38,7 @@ function buildTestPhases(): Record<string, PhaseConfig> {
       icon: 'train',
       name: 'Train',
       state: 'active',
-      entities: [PIPELINE_ENTITY_CONFIG],
+      entities: [PIPELINE_ENTITY_CONFIG, TRIGGER_ENTITY_CONFIG],
     },
   };
 }
@@ -190,6 +191,115 @@ describe('PIPELINE_ENTITY_CONFIG: delete action', () => {
   });
 });
 
+describe('PIPELINE_ENTITY_CONFIG: Run trigger action', () => {
+  describe('pipeline detail page', () => {
+    function renderDetail(mockRequest: ReturnType<typeof createQueryMockRouter>) {
+      render(
+        <EntityDetailRoute phases={buildTestPhases()} />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getErrorProviderWrapper(),
+          getIconProviderWrapper(),
+          getInterpolationProviderWrapper(),
+          getRouterWrapper({ location: '/ma-dev-test/train/pipelines/eval-pipeline/runs' }),
+          getServiceProviderWrapper({ request: mockRequest }),
+          getSnackbarProviderWrapper(),
+        ])
+      );
+    }
+
+    it('is greyed out with an explanatory tooltip when the pipeline declares no triggers', async () => {
+      const user = userEvent.setup();
+      const mockRequest = createQueryMockRouter({
+        GetPipeline: {
+          pipeline: { ...buildPipeline(), spec: { ...buildPipeline().spec, manifest: {} } },
+        },
+        ListPipelineRun: { pipelineRunList: { items: [] } },
+      });
+
+      renderDetail(mockRequest);
+
+      const runTriggerButton = await screen.findByRole('button', { name: 'Run trigger' });
+      expect(runTriggerButton).toBeDisabled();
+
+      await user.hover(runTriggerButton);
+      expect(await screen.findByText('No triggers defined for this pipeline')).toBeInTheDocument();
+    });
+
+    it('stays enabled once the pipeline declares a trigger', async () => {
+      const user = userEvent.setup();
+      const mockRequest = createQueryMockRouter({
+        GetPipeline: {
+          pipeline: {
+            ...buildPipeline(),
+            spec: {
+              ...buildPipeline().spec,
+              manifest: {
+                triggerMap: {
+                  nightly: { triggerType: { case: 'cronSchedule', value: { cron: '0 2 * * *' } } },
+                },
+              },
+            },
+          },
+        },
+        ListPipelineRun: { pipelineRunList: { items: [] } },
+      });
+
+      renderDetail(mockRequest);
+
+      const runTriggerButton = await screen.findByRole('button', { name: 'Run trigger' });
+      expect(runTriggerButton).toBeEnabled();
+
+      await user.click(runTriggerButton);
+      expect(await screen.findByRole('dialog', { name: 'Run trigger' })).toBeInTheDocument();
+    });
+  });
+
+  describe('list view', () => {
+    function renderList(items: object[], extraResponses: Record<string, object> = {}) {
+      render(
+        <PhaseListRoute phases={buildTestPhases()} />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getErrorProviderWrapper(),
+          getIconProviderWrapper(),
+          getInterpolationProviderWrapper(),
+          getRouterWrapper({ location: '/ma-dev-test/train/pipelines' }),
+          getServiceProviderWrapper({
+            request: createQueryMockRouter({
+              ListPipeline: { pipelineList: { items } },
+              ...extraResponses,
+            }),
+          }),
+          getSnackbarProviderWrapper(),
+        ])
+      );
+    }
+
+    it('is disabled with an explanatory tooltip when the row declares a manifest with no triggers', async () => {
+      const user = userEvent.setup();
+      renderList([
+        { ...buildPipeline(), spec: { ...buildPipeline().spec, manifest: { triggerMap: {} } } },
+      ]);
+
+      await user.click(await screen.findByRole('button', { name: 'Actions' }));
+      await user.hover(await screen.findByRole('option', { name: 'Run trigger' }));
+      expect(await screen.findByText('No triggers defined for this pipeline')).toBeInTheDocument();
+    });
+
+    // A row without a manifest means "unknown" (a pipeline can be registered without one),
+    // not "no triggers" — fail open and let the dialog explain an empty trigger list.
+    it('stays enabled when the row carries no manifest', async () => {
+      const user = userEvent.setup();
+      renderList([buildPipeline()], { GetPipeline: { pipeline: buildPipeline() } });
+
+      await user.click(await screen.findByRole('button', { name: 'Actions' }));
+      await user.click(await screen.findByRole('option', { name: 'Run trigger' }));
+      expect(await screen.findByRole('dialog', { name: 'Run trigger' })).toBeInTheDocument();
+    });
+  });
+});
+
 describe('PIPELINE_DETAIL_CONFIG: runs tab', () => {
   it('filters runs by pipeline name via listOptionsExt criterion', async () => {
     const mockRequest = createQueryMockRouter({
@@ -244,5 +354,72 @@ describe('PIPELINE_DETAIL_CONFIG: runs tab', () => {
       'href',
       '/ma-dev-test/train/runs/eval-pipeline-run-1'
     );
+  });
+});
+
+describe('PIPELINE_ENTITY_CONFIG: Triggers tab', () => {
+  const TRIGGER_RUN_SELECTOR = 'pipeline_name=eval-pipeline';
+
+  it('lists trigger runs scoped to this pipeline, linking each to its detail page', async () => {
+    const user = userEvent.setup();
+    const mockRequest = createQueryMockRouter({
+      GetPipeline: { pipeline: buildPipeline() },
+      [`ListTriggerRun:{"listOptions":{"fieldSelector":"${TRIGGER_RUN_SELECTOR}"},"namespace":"ma-dev-test"}`]:
+        {
+          triggerRunList: {
+            items: [
+              {
+                metadata: { name: 'nightly-20240101-120000-abcd1234', namespace: 'ma-dev-test' },
+                spec: {
+                  pipeline: { name: 'eval-pipeline', namespace: 'ma-dev-test' },
+                  actor: { name: 'me' },
+                  trigger: { triggerType: { case: 'cronSchedule', value: { cron: '0 2 * * *' } } },
+                },
+                status: { state: 1 },
+              },
+            ],
+          },
+        },
+    });
+
+    render(
+      <EntityDetailRoute phases={buildTestPhases()} />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getErrorProviderWrapper(),
+        getIconProviderWrapper(),
+        getInterpolationProviderWrapper(),
+        getRouterWrapper({ location: '/ma-dev-test/train/pipelines/eval-pipeline/triggers' }),
+        getServiceProviderWrapper({ request: mockRequest }),
+        getSnackbarProviderWrapper(),
+      ])
+    );
+
+    expect(
+      await screen.findByRole('tab', { name: 'Triggers', selected: true })
+    ).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(mockRequest).toHaveBeenCalledWith(
+        'ListTriggerRun',
+        { namespace: 'ma-dev-test', listOptions: { fieldSelector: TRIGGER_RUN_SELECTOR } },
+        {}
+      );
+    });
+
+    const nameLink = await screen.findByRole('link', { name: 'nightly-20240101-120000-abcd1234' });
+    expect(nameLink).toHaveAttribute(
+      'href',
+      '/ma-dev-test/train/triggers/nightly-20240101-120000-abcd1234'
+    );
+
+    // One formatted Schedule column covers the triggerType oneof (cron/interval/batch rerun).
+    expect(screen.getByRole('columnheader', { name: 'Schedule' })).toBeInTheDocument();
+    expect(screen.getByText('cron 0 2 * * *')).toBeInTheDocument();
+
+    await user.click(nameLink);
+    expect(
+      await screen.findByText(/Current pathname: \/ma-dev-test\/train\/triggers\/nightly/)
+    ).toBeInTheDocument();
   });
 });

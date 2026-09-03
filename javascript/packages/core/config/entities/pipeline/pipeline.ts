@@ -3,9 +3,21 @@ import { interpolate } from '#core/interpolation/interpolate';
 import { CreatePipelineRunForm } from './create-pipeline-run-form';
 import { PIPELINE_DETAIL_CONFIG } from './detail';
 import { PIPELINE_LIST_CONFIG } from './list';
+import { RunTriggerForm } from './run-trigger-form';
 
 import type { PhaseEntityConfig } from '#core/types/common/studio-types';
 import type { Pipeline } from './types';
+
+/**
+ * A record without a manifest (still loading, or a pipeline registered without one) means
+ * "unknown", not "no triggers" — fail open and let the dialog explain an empty trigger list.
+ */
+const hasNoTriggers = (record: unknown): boolean => {
+  // cast: record is unknown from the action predicate context; always Pipeline in this entity
+  // config; see #1425
+  const manifest = (record as Pipeline).spec?.manifest;
+  return !!manifest && Object.keys(manifest.triggerMap ?? {}).length === 0;
+};
 
 export const PIPELINE_ENTITY_CONFIG: PhaseEntityConfig = {
   id: 'pipelines',
@@ -18,6 +30,17 @@ export const PIPELINE_ENTITY_CONFIG: PhaseEntityConfig = {
       display: { label: 'Run', icon: 'playerPlay' },
       hierarchy: ActionHierarchy.PRIMARY,
       modal: { type: 'custom', component: CreatePipelineRunForm },
+    },
+    {
+      display: { label: 'Run trigger', icon: 'calendarRepeat' },
+      hierarchy: ActionHierarchy.SECONDARY,
+      disabled: [
+        {
+          condition: interpolate(({ data }) => hasNoTriggers(data)),
+          message: 'No triggers defined for this pipeline',
+        },
+      ],
+      modal: { type: 'custom', component: RunTriggerForm },
     },
     {
       display: { label: 'Delete', icon: 'trashCan' },
