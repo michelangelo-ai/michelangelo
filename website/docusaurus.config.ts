@@ -79,8 +79,6 @@ const config: Config = {
       logo: {
         alt: 'Michelangelo Logo',
         src: 'img/logo.svg',
-        width: 204,
-        height: 129,
       },
       items: [
         {
