@@ -5,9 +5,9 @@ sidebar_label: "Distributed Training"
 
 # Distributed Training with LightningTrainer
 
-`LightningTrainer` runs a PyTorch Lightning training loop across a Ray cluster. It is a subclass of Ray's `TorchTrainer` that handles worker setup, dataset sharding, distributed strategy wiring, and checkpointing, so your code only supplies a `LightningModule` factory and two Ray Datasets.
+This guide is for ML engineers and data scientists who have already trained a model with the SDK and now need to scale it across multiple workers or GPUs — by the end, you'll know exactly which `LightningTrainerParam` knob to reach for, whether that's picking a distributed strategy, warm-starting from existing weights, or recovering an interrupted run. If you haven't run a training task yet, start with the [Model Training Guide](./train-and-register-a-model.md) — this page picks up where its Lightning section leaves off.
 
-This guide is for ML engineers and data scientists who have trained a model with the SDK and now need to scale it across multiple workers or GPUs. If you haven't run a training task yet, start with the [Model Training Guide](./train-and-register-a-model.md) — this page picks up where its Lightning section leaves off.
+`LightningTrainer` is Michelangelo AI's trainer SDK for running a PyTorch Lightning training loop across a Ray cluster. It is a subclass of Ray's `TorchTrainer` that handles worker setup, dataset sharding, distributed strategy wiring, and checkpointing, so your code only supplies a `LightningModule` factory and two Ray Datasets.
 
 ## What you'll learn
 
@@ -134,11 +134,12 @@ def train(train_dv: DatasetVariable, val_dv: DatasetVariable):
 | --- | --- | --- |
 | `batch_size` | `8` | Per-worker training batch size |
 | `num_shuffle_batches` | `10` | Batches held in the Ray Data local shuffle buffer. `0` disables shuffling |
+| `num_epochs` | `1` | Deprecated — use `lightning_trainer_kwargs={"max_epochs": N}` instead; see warning below |
 | `data_collate_fn` | `None` | Custom collate function; defaults to Ray Data's column-tensor output |
 | `lightning_trainer_kwargs` | `{}` | Forwarded to `pytorch_lightning.Trainer(...)` — see below |
 | `initial_weights_path` | `None` | State dict to warm-start from (local, `s3://`, `gs://`, …) |
-| `transfer_learning_spec` | `None` | Layer inheritance and freezing — see [Warm starts](#warm-starts) |
-| `incremental_training_spec` | `None` | Continue training from a registered baseline model |
+| `transfer_learning_spec` | `None` | Freeze layers after construction — see [Warm starts](#warm-starts). Only the freeze half is implemented in OSS today |
+| `incremental_training_spec` | `None` | Not implemented in OSS today — see [Warm starts](#warm-starts) |
 | `training_observer` | `None` | Callbacks for training events — see [Observing a run](#observing-a-run) |
 | `experiment_store` | `None` | Enables opt-in auto-resume — see [Auto-resume](#auto-resume-across-runs) |
 | `profiler_sink` | `None` | Ships profiler output to an experiment tracker |
@@ -220,15 +221,15 @@ Weights load with `strict=False`, so a checkpoint that does not cover every laye
 
 ## Warm starts
 
-Three mechanisms start a run from existing weights, in increasing order of structure.
+Two mechanisms start a run from existing weights.
 
-**`initial_weights_path`** — the simplest. Rank 0 downloads the state dict and broadcasts it to the other workers:
+**`initial_weights_path`** — the simplest, and the only one that actually loads a baseline model's weights today. Rank 0 downloads the state dict and broadcasts it to the other workers:
 
 ```python
 LightningTrainerParam(..., initial_weights_path="s3://my-bucket/baseline/model.pt")
 ```
 
-**`TransferLearningSpec`** — inherit a subset of layers from a registered baseline and optionally freeze them:
+**`TransferLearningSpec`** — freezes layers after `create_model_fn` returns:
 
 ```python
 from michelangelo.lib.trainer.torch.pytorch_lightning import (
@@ -243,17 +244,20 @@ spec = TransferLearningSpec(
         learning_mode=LearningMode.TRANSFER_LEARNING,
         baseline_model=ModelSpec(project_name="my-project", model_name="base-encoder"),
     ),
-    layer_names_to_inherit_regex=[r"^encoder\..*"],
     layer_names_to_freeze_regex=[r"^encoder\.embeddings\..*"],
 )
 ```
 
-Both exact-name (`layer_names_to_inherit`, `layer_names_to_freeze`) and regex variants are available, and `model_loader_function` accepts a dotted path to override the default baseline loader.
+:::warning
+Only the freeze half of `TransferLearningSpec` is implemented in OSS today. `layer_names_to_freeze` and `layer_names_to_freeze_regex` are read by the trainer and applied after `create_model_fn` returns. The inherit-from-baseline half — `metadata.baseline_model`, `model_loader_function`, and `layer_names_to_inherit` / `layer_names_to_inherit_regex` — is schema-only: nothing in the training loop reads it, so setting it does not load or copy any layers. `ModelSpec` (`project_name`, `model_name`, `revision_id`) mirrors how a model is identified once it's in the [Model Registry](./model-registry-guide.md), but that identity isn't wired to anything here yet.
 
-**`IncrementalTrainingSpec`** — continue training a baseline model, optionally restoring optimizer state via `load_optimizer_weights=True` and overriding the starting epoch with `override_incremental_training_epoch`.
+To combine warm-starting with freezing today, load the full baseline state dict yourself via `initial_weights_path`, then use `layer_names_to_freeze` / `layer_names_to_freeze_regex` to freeze the subset you don't want to keep training.
+:::
+
+**`IncrementalTrainingSpec`** — not implemented in OSS today. `incremental_training_spec`, `load_optimizer_weights`, and `override_incremental_training_epoch` are accepted by `LightningTrainerParam`, but the training loop never reads them, so setting `incremental_training_spec` has no effect on a run. Leave it unset until this ships.
 
 :::info
-Both specs carry a `fused_model_submodule` field. It is reserved for future use and has no effect today — nothing currently reads it. Leave it unset.
+Both specs also carry a `fused_model_submodule` field. It is reserved for future use and has no effect today — nothing currently reads it. Leave it unset.
 :::
 
 ## Auto-resume across runs
@@ -318,7 +322,11 @@ from michelangelo.lib.trainer.torch.pytorch_lightning import (
 LightningTrainerParam(..., profiler_sink=mlflow_profiler_sink)
 ```
 
-The sink is ignored when no profiler is configured, and exceptions it raises are logged and swallowed rather than failing the run.
+The sink is skipped when no profiler is configured or when the profiler config sets `upload_profiler_results: False`; exceptions it raises are logged and swallowed rather than failing the run.
+
+:::warning
+`comet_profiler_sink` and `mlflow_profiler_sink` read the Lightning logger's `.experiment` property, which Lightning restricts to **global** rank 0 — on every other worker it silently returns a no-op dummy object and the upload is dropped. In a multi-node run, only the node holding global rank 0 actually exports its profile; the other nodes' `profiler_logs` directories are written but never shipped. Pass a custom sink built on a directly-constructed client if you need per-node profiles.
+:::
 
 ## Troubleshooting
 
@@ -336,4 +344,4 @@ The sink is ignored when no profiler is configured, and exceptions it raises are
 - [**Model Registry**](./model-registry-guide.md) — version and store the trained model
 - [**Deploy a Model**](./deploy-a-model.md) — serve it for inference
 - [**Examples**](../examples/index.md) — working distributed runs, including GPT fine-tuning with LoRA and Nomic embedding training
-- [**Python SDK Reference**](../../api-reference/python-sdk/index.md) — generated signatures for the trainer and the wider SDK surface
+- [**Python SDK Reference**](../../api-reference/python-sdk/index.md) — generated signatures for the wider SDK surface (tasks, workflows, plugins); `LightningTrainer` itself isn't in the generated reference yet

@@ -206,9 +206,9 @@ This example covers the common case. For the full configuration surface — ever
 
 Your models are now ready to move forward:
 
-* Go deeper on [**Distributed Training**](./distributed-training.md) for strategies, warm starts, and auto-resume
 * Continue to [**Model Registry**](./model-registry-guide.md) to save and version
 * Continue to [**Deploy a Model**](./deploy-a-model.md) for inference
+* Optional: go deeper on [**Distributed Training**](./distributed-training.md) for strategies, warm starts, and auto-resume
 
 ## Troubleshooting
 
