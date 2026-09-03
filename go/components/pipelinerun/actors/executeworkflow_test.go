@@ -14,10 +14,12 @@ import (
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/michelangelo-ai/michelangelo/go/api"
+	"github.com/michelangelo-ai/michelangelo/go/api/apimocks"
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
 	blobstoreMock "github.com/michelangelo-ai/michelangelo/go/base/blobstore/blobstore_mocks"
@@ -3576,9 +3578,11 @@ func TestExecuteWorkflowStepRetryHistory(t *testing.T) {
 	})
 }
 
-// TestProcessManualRetrySpecInvalidatesCachedOutput verifies that manual retry deletes the
-// CachedOutput belonging to the task being retried (so "retry" always forces real
-// re-execution), while leaving a concurrent sibling task's CachedOutput untouched.
+// TestProcessManualRetrySpecInvalidatesCachedOutput verifies that manual retry deletes only
+// the CachedOutput belonging to the exact task being retried, leaving every other task -
+// whether it ran before or after the retried one - untouched. A genuine downstream consumer
+// of the retried task's output is expected to miss cache on its own via a changed input_hash;
+// an independent task (whether earlier or later) keeps its cache hit.
 func TestProcessManualRetrySpecInvalidatesCachedOutput(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -3604,10 +3608,12 @@ func TestProcessManualRetrySpecInvalidatesCachedOutput(t *testing.T) {
 	require.NoError(t, v2.AddToScheme(scheme))
 	k8sClient := fake.NewClientBuilder().WithScheme(scheme).Build()
 
+	earlierTaskOutput := &v2.CachedOutput{ObjectMeta: v1.ObjectMeta{Namespace: "default", Name: "uf-vars-earlier"}}
 	retriedTaskOutput := &v2.CachedOutput{ObjectMeta: v1.ObjectMeta{Namespace: "default", Name: "uf-vars-retried"}}
-	siblingTaskOutput := &v2.CachedOutput{ObjectMeta: v1.ObjectMeta{Namespace: "default", Name: "uf-vars-sibling"}}
+	laterTaskOutput := &v2.CachedOutput{ObjectMeta: v1.ObjectMeta{Namespace: "default", Name: "uf-vars-later"}}
+	require.NoError(t, k8sClient.Create(context.Background(), earlierTaskOutput))
 	require.NoError(t, k8sClient.Create(context.Background(), retriedTaskOutput))
-	require.NoError(t, k8sClient.Create(context.Background(), siblingTaskOutput))
+	require.NoError(t, k8sClient.Create(context.Background(), laterTaskOutput))
 
 	actor := setUpExecuteWorkflowActor(t, mockWorkflowClient, mockBlobStore, apiHandler.NewFakeAPIHandler(k8sClient))
 
@@ -3630,6 +3636,16 @@ func TestProcessManualRetrySpecInvalidatesCachedOutput(t *testing.T) {
 					State: v2.PIPELINE_RUN_STEP_STATE_FAILED,
 					SubSteps: []*v2.PipelineRunStepInfo{
 						{
+							Name:       "earlier-task",
+							State:      v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED,
+							ActivityId: "earlier-activity",
+							StepCachedOutputs: &v2.PipelineRunStepCachedOutputs{
+								IntermediateVars: []*apipb.ResourceIdentifier{
+									{Namespace: "default", Name: "uf-vars-earlier"},
+								},
+							},
+						},
+						{
 							Name:       "retried-task",
 							State:      v2.PIPELINE_RUN_STEP_STATE_FAILED,
 							ActivityId: "failed-activity",
@@ -3640,12 +3656,12 @@ func TestProcessManualRetrySpecInvalidatesCachedOutput(t *testing.T) {
 							},
 						},
 						{
-							Name:       "sibling-task",
+							Name:       "later-task",
 							State:      v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED,
-							ActivityId: "sibling-activity",
+							ActivityId: "later-activity",
 							StepCachedOutputs: &v2.PipelineRunStepCachedOutputs{
 								IntermediateVars: []*apipb.ResourceIdentifier{
-									{Namespace: "default", Name: "uf-vars-sibling"},
+									{Namespace: "default", Name: "uf-vars-later"},
 								},
 							},
 						},
@@ -3661,8 +3677,13 @@ func TestProcessManualRetrySpecInvalidatesCachedOutput(t *testing.T) {
 	require.Error(t, err)
 	require.True(t, k8serrors.IsNotFound(err), "expected retried task's CachedOutput to be deleted, got: %v", err)
 
-	require.NoError(t, k8sClient.Get(context.Background(), client.ObjectKey{Namespace: "default", Name: "uf-vars-sibling"}, &v2.CachedOutput{}),
-		"sibling task's CachedOutput should be left untouched")
+	require.NoError(t, k8sClient.Get(context.Background(), client.ObjectKey{Namespace: "default", Name: "uf-vars-earlier"}, &v2.CachedOutput{}),
+		"task that ran before the retried one should be left untouched")
+
+	require.NoError(t, k8sClient.Get(context.Background(), client.ObjectKey{Namespace: "default", Name: "uf-vars-later"}, &v2.CachedOutput{}),
+		"task that ran after the retried one, but is not itself the retried task, should be left untouched - "+
+			"a genuine downstream consumer of the retried task's output naturally misses cache on its own "+
+			"changed input_hash; an independent sibling correctly keeps its cache hit")
 }
 
 func TestInvalidateCachedOutputForActivityLogsDeleteFailure(t *testing.T) {
@@ -3702,6 +3723,58 @@ func TestInvalidateCachedOutputForActivityLogsDeleteFailure(t *testing.T) {
 	}
 
 	// Must not panic or propagate the deletion error - it's logged and ignored.
+	actor.invalidateCachedOutputForActivity(context.Background(), pipelineRun, "failed-activity", zaptest.NewLogger(t))
+}
+
+// TestInvalidateCachedOutputForActivityWaitsForDeleteToBecomeVisible verifies that
+// invalidateCachedOutputForActivity does not race ahead of an async deletion (the
+// mark-and-sweep-via-ingester path apiHandler.Delete takes when metadata storage is
+// enabled): it must keep polling Get until the object is confirmed gone before returning.
+func TestInvalidateCachedOutputForActivityWaitsForDeleteToBecomeVisible(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockWorkflowClient := workflowclientMock.NewMockWorkflowClient(ctrl)
+	mockBlobStore := blobstoreMock.NewMockBlobStoreClient(ctrl)
+	mockAPIHandler := apimocks.NewMockHandler(ctrl)
+
+	mockAPIHandler.EXPECT().Delete(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+
+	// Simulate the object still being visible for the first two polls (as it would be
+	// while the async ingester hasn't yet processed the deletion), then confirmed gone.
+	gomock.InOrder(
+		mockAPIHandler.EXPECT().Get(gomock.Any(), "default", "uf-vars-retried", gomock.Any(), gomock.Any()).Return(nil),
+		mockAPIHandler.EXPECT().Get(gomock.Any(), "default", "uf-vars-retried", gomock.Any(), gomock.Any()).Return(nil),
+		mockAPIHandler.EXPECT().Get(gomock.Any(), "default", "uf-vars-retried", gomock.Any(), gomock.Any()).
+			Return(k8serrors.NewNotFound(schema.GroupResource{}, "uf-vars-retried")),
+	)
+
+	actor := setUpExecuteWorkflowActor(t, mockWorkflowClient, mockBlobStore, mockAPIHandler)
+
+	pipelineRun := &v2.PipelineRun{
+		ObjectMeta: v1.ObjectMeta{Name: "test-pipeline-run", Namespace: "default"},
+		Status: v2.PipelineRunStatus{
+			Steps: []*v2.PipelineRunStepInfo{
+				{
+					Name: pipelinerunutils.ExecuteWorkflowStepName,
+					SubSteps: []*v2.PipelineRunStepInfo{
+						{
+							Name:       "retried-task",
+							ActivityId: "failed-activity",
+							StepCachedOutputs: &v2.PipelineRunStepCachedOutputs{
+								IntermediateVars: []*apipb.ResourceIdentifier{
+									{Namespace: "default", Name: "uf-vars-retried"},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	// If invalidateCachedOutputForActivity returned before all 3 Get calls above were
+	// consumed, ctrl.Finish() (deferred above) would fail with unmet expectations.
 	actor.invalidateCachedOutputForActivity(context.Background(), pipelineRun, "failed-activity", zaptest.NewLogger(t))
 }
 

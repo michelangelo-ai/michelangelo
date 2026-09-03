@@ -49,17 +49,23 @@ var cascadeRetainKinds = []string{"PipelineRun", "TriggerRun"}
 
 // scheme provides a Kubernetes runtime.Scheme object.
 //
-// This function creates a new Kubernetes runtime scheme and registers both the standard Kubernetes API types
-// (via the k8s.io/client-go/kubernetes/scheme package) and custom API types defined in the proto/api/v2 package.
+// This registers the custom API types defined in proto/api/v2 onto the shared
+// k8s.io/client-go/kubernetes/scheme.Scheme global (which already carries the standard
+// Kubernetes API types) rather than a freshly-constructed scheme, matching the pattern
+// cmd/apiserver/main.go's getScheme() uses. This matters beyond the returned value: the
+// shared api/handler package's metadata-storage code path (MetadataHandlerImpl's
+// getObjectTypeMeta/getObjectTypeMetaFromList in api/handler/metadata_handler.go) looks up
+// object kinds via that exact global var, independent of whatever scheme this function
+// returns for the k8s client/manager. Registering v2 types only on a private
+// runtime.NewScheme() left that global without them in the controllermgr process, so any
+// Delete/List against metadata storage for a v2 CRD (e.g. invalidating a CachedOutput
+// already evicted from etcd) failed with "no kind is registered ... in scheme".
 //
 // Returns:
 //   - *runtime.Scheme: A runtime scheme containing registered Kubernetes API and custom CRD types.
 //   - error: An error if there is a failure during scheme registration.
 func scheme() (*runtime.Scheme, error) {
-	scheme := runtime.NewScheme()
-	if err := kubescheme.AddToScheme(scheme); err != nil {
-		return nil, err
-	}
+	scheme := kubescheme.Scheme
 	if err := v2pb.AddToScheme(scheme); err != nil {
 		return nil, err
 	}

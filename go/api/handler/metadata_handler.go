@@ -119,7 +119,10 @@ func handleUpdate(ctx context.Context, obj ctrlRTClient.Object, metadataStorage 
 // 3. Deletes the object in blob storage
 func handleDelete(ctx context.Context, log logr.Logger, typeMeta *metav1.TypeMeta, object ctrlRTClient.Object,
 	metadataStorage storage.MetadataStorage, handler storage.BlobStorage) error {
-	if handler.IsObjectInteresting(object) {
+	// handler is nil whenever blob storage isn't configured (WithBlobStorage is only called
+	// conditionally in api/handler/builder.go) - unlike BlobHandler, storage.BlobStorage has no
+	// null-object wrapper, so guard directly here instead of panicking on a nil interface call.
+	if handler != nil && handler.IsObjectInteresting(object) {
 		// TODO(#556): if blob annotations are already available, this Get is not needed
 		getErr := metadataStorage.GetByID(ctx, string(object.GetUID()), object)
 		if err := metadataStorage.Delete(ctx, typeMeta, object.GetNamespace(), object.GetName()); err != nil {
