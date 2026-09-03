@@ -65,7 +65,9 @@ export enum Phase {
 export interface PhaseEntityConfig<T extends object = object> {
   /**
    * Name of the entity as it appears within MA Studio. Should be plural, lower case
-   * version of the name.
+   * version of the name. BreadcrumbBar applies its own Title Case transform
+   * (see `toTitleCase` in `#core/utils/string-utils`) when displaying this value, so
+   * config authors should supply the plain lower case form and not pre-case it.
    *
    * @example
    * trained models

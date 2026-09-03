@@ -55,7 +55,7 @@ describe('BreadcrumbBar — project page', () => {
   it('does not render category, phase, or entity breadcrumbs', () => {
     expect(screen.queryByText('Core ML')).not.toBeInTheDocument();
     expect(screen.queryByText('Train & Evaluate')).not.toBeInTheDocument();
-    expect(screen.queryByText('trained models')).not.toBeInTheDocument();
+    expect(screen.queryByText('Trained Models')).not.toBeInTheDocument();
   });
 });
 
@@ -112,8 +112,8 @@ describe('BreadcrumbBar — phase entity page', () => {
   });
 
   it('renders the entity name as plain text when there is no entity ID', () => {
-    expect(screen.getByText('trained models')).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'trained models' })).not.toBeInTheDocument();
+    expect(screen.getByText('Trained Models')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Trained Models' })).not.toBeInTheDocument();
   });
 });
 
@@ -154,7 +154,7 @@ describe('BreadcrumbBar — entity detail page', () => {
   });
 
   it('renders the entity name as a link', () => {
-    expect(screen.getByRole('link', { name: 'trained models' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Trained Models' })).toHaveAttribute(
       'href',
       '/my-project/train/models'
     );
@@ -211,6 +211,46 @@ describe('BreadcrumbBar — unknown phase/entity fallback', () => {
       ])
     );
     expect(screen.getByText('unknown-models')).toBeInTheDocument();
+  });
+});
+
+describe('BreadcrumbBar — entity name casing', () => {
+  it('title-cases the configured entity name and preserves known acronyms', () => {
+    render(
+      <BreadcrumbBar
+        categories={[
+          {
+            id: 'core-ml',
+            name: 'Core ML',
+            phases: [
+              {
+                id: 'agents',
+                name: 'Agents',
+                icon: '',
+                state: 'active',
+                entities: [
+                  {
+                    id: 'ai-agents',
+                    name: 'ai agents',
+                    state: 'active',
+                    service: 'agent',
+                    views: [],
+                  },
+                ],
+              },
+            ],
+          },
+        ]}
+      />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getIconProviderWrapper(),
+        getRouterWrapper({ location: '/my-project/agents/ai-agents' }),
+      ])
+    );
+
+    expect(screen.getByText('AI Agents')).toBeInTheDocument();
+    expect(screen.queryByText('ai agents')).not.toBeInTheDocument();
   });
 });
 
@@ -274,7 +314,7 @@ describe('BreadcrumbBar — menu drawer', () => {
     await userEvent.click(screen.getByRole('button', { name: /menu/i }));
 
     expect(screen.getByText('Train & Evaluate')).toBeInTheDocument();
-    expect(screen.getByText('trained models')).toBeInTheDocument();
+    expect(screen.getByText('Trained Models')).toBeInTheDocument();
   });
 
   it('navigates to the entity route when an active entity is clicked', async () => {
@@ -312,7 +352,7 @@ describe('BreadcrumbBar — menu drawer', () => {
     );
 
     await userEvent.click(screen.getByRole('button', { name: /menu/i }));
-    await userEvent.click(screen.getByText('trained models'));
+    await userEvent.click(screen.getByText('Trained Models'));
 
     expect(screen.getByText(/\/my-project\/train\/models/)).toBeInTheDocument();
   });
@@ -352,7 +392,7 @@ describe('BreadcrumbBar — menu drawer', () => {
     );
 
     await userEvent.click(screen.getByRole('button', { name: /menu/i }));
-    await userEvent.click(screen.getByText('pipelines'));
+    await userEvent.click(screen.getByText('Pipelines'));
 
     expect(screen.queryByText(/\/my-project\/train/)).not.toBeInTheDocument();
   });
