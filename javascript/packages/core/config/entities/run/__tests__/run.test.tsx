@@ -38,6 +38,7 @@ describe('Run list page', () => {
       'Created',
       'Environment',
       'Started by',
+      'Triggered by',
       'State',
     ]);
   });

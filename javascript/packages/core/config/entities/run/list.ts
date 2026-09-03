@@ -6,6 +6,7 @@ import {
   RUN_PIPELINE_COLUMN,
   RUN_STARTED_BY_COLUMN,
   RUN_STATE_COLUMN,
+  RUN_TRIGGERED_BY_COLUMN,
 } from './shared';
 
 import type { ColumnConfig } from '#core/components/table/types/column-types';
@@ -53,6 +54,7 @@ export const PIPELINE_RUN_CELL_CONFIG: ColumnConfig<object>[] = [
     },
   },
   RUN_STARTED_BY_COLUMN,
+  RUN_TRIGGERED_BY_COLUMN,
   RUN_STATE_COLUMN,
 ];
 
