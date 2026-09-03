@@ -212,6 +212,18 @@ Local runs execute everything in your Python interpreter with zero additional in
 
 When you need more compute power or want to validate against production infrastructure, switch to a remote run.
 
+Steps 4 and 5 reference the Dockerfile, `project.yaml`, and `pipeline.yaml`
+that live in the `michelangelo-examples` repo's source tree — the
+`pip install` from Step 3 only installs the importable package, not these
+files. Clone the repo now:
+
+```bash
+git clone https://github.com/michelangelo-ai/michelangelo-examples.git
+cd michelangelo-examples
+```
+
+The commands below assume you're running them from this checkout.
+
 ### Build and push a Docker image
 
 ```bash
