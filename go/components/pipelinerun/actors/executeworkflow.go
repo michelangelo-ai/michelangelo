@@ -17,6 +17,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/michelangelo-ai/michelangelo/go/api"
+	apiutils "github.com/michelangelo-ai/michelangelo/go/api/utils"
 	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
 	defaultengine "github.com/michelangelo-ai/michelangelo/go/base/conditions/engine"
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
@@ -679,10 +680,13 @@ func (a *ExecuteWorkflowActor) addTaskCacheEnv(ctx context.Context, pipelineRun 
 	// unconditional on task success - only the read/skip check is gated by this
 	// flag - so a task always leaves a cache entry behind for a later retry to find,
 	// no matter what this default is.) The task actually named in RetryInfo has its
-	// own CachedOutput explicitly invalidated in processManualRetrySpec before the
-	// Reset, so a retry always means a real re-execution of that specific task
-	// regardless of this default - only its untouched concurrent siblings benefit
-	// from the cache hit this default enables.
+	// CachedOutput explicitly invalidated in processManualRetrySpec before the Reset, so
+	// a retry always means a real re-execution of that task regardless of this default.
+	// Every other task - upstream or downstream - keeps this "true" default: a genuine
+	// downstream consumer of the retried task's new output naturally misses cache on its
+	// own via a changed input_hash (see get_cache_keys/get_input_hash in commons.star),
+	// while an independent task correctly benefits from the cache hit this default
+	// enables.
 	//
 	// Do not attempt to scope this to "true only when RetryInfo is set" again
 	// without a fundamentally different mechanism than checking pipelineRun.Spec at
@@ -1264,8 +1268,10 @@ func (a *ExecuteWorkflowActor) processManualRetrySpec(ctx context.Context, pipel
 	}
 
 	// Force a cache-miss for the task being retried, so "retry" always means a real
-	// re-execution of this task regardless of any cached output left over from an earlier
-	// attempt in this same run. Sibling tasks' cached outputs are left untouched.
+	// re-execution of that specific task - never a silent cache hit on stale output for
+	// it. Every other task, earlier or later, is left untouched: a genuine downstream
+	// consumer of the retried task's output naturally misses cache on its own via a
+	// changed input_hash, while an independent task correctly keeps its cache hit.
 	a.invalidateCachedOutputForActivity(ctx, pipelineRun, activityID, logger)
 
 	// Perform workflow reset
@@ -1336,20 +1342,43 @@ func (a *ExecuteWorkflowActor) processManualRetrySpec(ctx context.Context, pipel
 	return nil
 }
 
-// invalidateCachedOutputForActivity deletes any CachedOutput CR recorded for the sub-step
-// matching activityID, so a manual retry can never short-circuit through a stale cached
-// result left over from an earlier attempt of the same task. Sibling sub-steps (and their
-// CachedOutputs) are left untouched. Deletion failures are logged and otherwise ignored -
-// they must not block the retry itself.
+// cachedOutputDeleteConfirmInterval/Timeout bound how long invalidateCachedOutputForActivity
+// waits for a CachedOutput deletion to become durably visible (see comment below) before
+// giving up on that one object and moving on.
+const (
+	cachedOutputDeleteConfirmInterval = 150 * time.Millisecond
+	cachedOutputDeleteConfirmTimeout  = 5 * time.Second
+)
+
+// invalidateCachedOutputForActivity deletes any CachedOutput CRs recorded for the sub-step
+// matching activityID, so a manual retry always forces a real re-execution of the retried
+// task itself - never a silent cache hit on stale output for that task. Sub-steps other than
+// the retried one are left untouched: a genuinely downstream task that actually consumes the
+// retried task's output as an argument will naturally miss cache on its own (its resolved
+// input_hash changes - see get_cache_keys/get_input_hash in commons.star), while an
+// independent sibling task correctly keeps its cache hit. Deletion failures are logged and
+// otherwise ignored - they must not block the retry itself.
 func (a *ExecuteWorkflowActor) invalidateCachedOutputForActivity(ctx context.Context, pipelineRun *v2.PipelineRun, activityID string, logger *zap.Logger) {
 	executeWorkflowStep := pipelinerunutils.GetStep(pipelineRun, pipelinerunutils.ExecuteWorkflowStepName)
 	if executeWorkflowStep == nil {
 		return
 	}
 
+	var retriedSubStep *v2.PipelineRunStepInfo
 	for _, subStep := range executeWorkflowStep.SubSteps {
-		if subStep.ActivityId != activityID || subStep.StepCachedOutputs == nil {
-			continue
+		if subStep.ActivityId == activityID {
+			retriedSubStep = subStep
+			break
+		}
+	}
+	if retriedSubStep == nil {
+		return
+	}
+
+	{
+		subStep := retriedSubStep
+		if subStep.StepCachedOutputs == nil {
+			return
 		}
 
 		refs := append(append(append([]*apipb.ResourceIdentifier{},
@@ -1364,9 +1393,36 @@ func (a *ExecuteWorkflowActor) invalidateCachedOutputForActivity(ctx context.Con
 					zap.String("activityId", activityID),
 					zap.String("cachedOutputName", ref.Name),
 					zap.Error(err))
+				continue
 			}
+
+			a.waitForCachedOutputDeleted(ctx, ref, activityID, logger)
 		}
-		return
+	}
+}
+
+// waitForCachedOutputDeleted blocks (up to cachedOutputDeleteConfirmTimeout) until the given
+// CachedOutput is confirmed gone from apiHandler's view. This exists because apiHandler.Delete
+// is not synchronous when metadata storage is enabled: it only marks the object for deletion
+// in K8s/ETCD and an async ingester reconciler performs the actual removal from metadata
+// storage. ListCachedOutput reads exclusively from metadata storage in that mode, so without
+// this wait, a task's cache-check can still see the "deleted" object and produce a stale hit -
+// exactly the outcome invalidateCachedOutputForActivity exists to prevent. On timeout, log a
+// warning and move on rather than blocking the retry indefinitely.
+func (a *ExecuteWorkflowActor) waitForCachedOutputDeleted(ctx context.Context, ref *apipb.ResourceIdentifier, activityID string, logger *zap.Logger) {
+	deadline := time.Now().Add(cachedOutputDeleteConfirmTimeout)
+	for {
+		err := a.apiHandler.Get(ctx, ref.Namespace, ref.Name, &metav1.GetOptions{}, &v2.CachedOutput{})
+		if apiutils.IsNotFoundError(err) {
+			return
+		}
+		if time.Now().After(deadline) {
+			logger.Warn("timed out waiting for cached output deletion to become visible",
+				zap.String("activityId", activityID),
+				zap.String("cachedOutputName", ref.Name))
+			return
+		}
+		time.Sleep(cachedOutputDeleteConfirmInterval)
 	}
 }
 
