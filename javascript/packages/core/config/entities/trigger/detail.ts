@@ -1,7 +1,7 @@
 import { CellType } from '#core/components/cell/constants';
 import {
+  RUN_TRIGGERED_BY_COLUMN,
   SHARED_RUN_CELL_CONFIG,
-  TRIGGERED_BY_CELL_CONFIG,
   TRIGGERED_BY_LABEL,
 } from '#core/config/entities/run/shared';
 import { TRIGGER_PIPELINE_CELL_CONFIG, TRIGGER_STATE_CELL_CONFIG } from './shared';
@@ -13,7 +13,7 @@ import type { DetailViewConfig } from '#core/components/views/types';
  * "Triggered by" column would repeat the page's own name and link back to itself.
  */
 const RUN_CELLS_EXCLUDING_TRIGGER = SHARED_RUN_CELL_CONFIG.filter(
-  (cell) => cell !== TRIGGERED_BY_CELL_CONFIG
+  (cell) => cell !== RUN_TRIGGERED_BY_COLUMN
 );
 
 export const TRIGGER_DETAIL_CONFIG: DetailViewConfig = {
