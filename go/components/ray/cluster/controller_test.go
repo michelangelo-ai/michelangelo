@@ -24,6 +24,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/client/clientmocks"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/cluster"
 	matypes "github.com/michelangelo-ai/michelangelo/go/components/jobs/common/types"
@@ -439,6 +440,8 @@ func TestReconcilerReconcile(t *testing.T) {
 				}
 				assert.NotNil(t, succeededCond, "SucceededCondition should exist")
 				assert.Equal(t, apipb.CONDITION_STATUS_FALSE, succeededCond.Status)
+				assert.False(t, utils.IsImmutable(cluster),
+					"cluster should not be immutable yet - cleanup has not run")
 			},
 		},
 		{
@@ -558,6 +561,8 @@ func TestReconcilerReconcile(t *testing.T) {
 				}
 				assert.NotNil(t, succeededCond, "SucceededCondition should exist")
 				assert.Equal(t, apipb.CONDITION_STATUS_FALSE, succeededCond.Status)
+				assert.False(t, utils.IsImmutable(cluster),
+					"cluster should not be immutable yet - this is a transient state on the way to termination")
 			},
 		},
 		{
@@ -676,6 +681,8 @@ func TestReconcilerReconcile(t *testing.T) {
 				}
 				assert.NotNil(t, succeededCond, "SucceededCondition should exist")
 				assert.Equal(t, apipb.CONDITION_STATUS_TRUE, succeededCond.Status)
+				assert.False(t, utils.IsImmutable(cluster),
+					"cluster should not be immutable yet - kill/cleanup has not converged")
 			},
 		},
 		{
@@ -721,6 +728,8 @@ func TestReconcilerReconcile(t *testing.T) {
 				}
 				assert.NotNil(t, succeededCond, "SucceededCondition should exist")
 				assert.Equal(t, apipb.CONDITION_STATUS_FALSE, succeededCond.Status)
+				assert.False(t, utils.IsImmutable(cluster),
+					"cluster should not be immutable yet - kill/cleanup has not converged")
 			},
 		},
 		{
@@ -775,6 +784,8 @@ func TestReconcilerReconcile(t *testing.T) {
 				}
 				assert.NotNil(t, killedCond, "KilledCondition should exist")
 				assert.Equal(t, apipb.CONDITION_STATUS_TRUE, killedCond.Status)
+				assert.True(t, utils.IsImmutable(cluster),
+					"cluster should be marked immutable once fully terminated")
 			},
 		},
 		{
@@ -842,6 +853,8 @@ func TestReconcilerReconcile(t *testing.T) {
 				}
 				assert.NotNil(t, killedCond, "KilledCondition should exist")
 				assert.Equal(t, apipb.CONDITION_STATUS_TRUE, killedCond.Status)
+				assert.True(t, utils.IsImmutable(cluster),
+					"cluster should be marked immutable once fully terminated")
 			},
 		},
 		{
@@ -918,6 +931,8 @@ func TestReconcilerReconcile(t *testing.T) {
 				assert.Equal(t, apipb.CONDITION_STATUS_TRUE, killedCond.Status)
 				assert.NotNil(t, killingCond, "KillingCondition should exist")
 				assert.Equal(t, apipb.CONDITION_STATUS_FALSE, killingCond.Status)
+				assert.True(t, utils.IsImmutable(cluster),
+					"cluster should be marked immutable once fully terminated")
 			},
 		},
 		{
@@ -991,6 +1006,8 @@ func TestReconcilerReconcile(t *testing.T) {
 				}
 				assert.NotNil(t, killedCond, "KilledCondition should exist")
 				assert.Equal(t, apipb.CONDITION_STATUS_TRUE, killedCond.Status)
+				assert.True(t, utils.IsImmutable(cluster),
+					"cluster should be marked immutable once fully terminated")
 			},
 		},
 		{
@@ -1068,6 +1085,8 @@ func TestReconcilerReconcile(t *testing.T) {
 				assert.Equal(t, "CrashLoopBackOff", succeededCond.Reason)
 				assert.Len(t, cluster.Status.PodErrors, 1)
 				assert.Equal(t, "CrashLoopBackOff", cluster.Status.PodErrors[0].Reason)
+				assert.False(t, utils.IsImmutable(cluster),
+					"cluster should not be immutable yet - this is a transient state on the way to termination")
 			},
 		},
 		{
@@ -1278,6 +1297,79 @@ func TestReconcilerReconcile(t *testing.T) {
 				}
 			},
 		},
+		{
+			name: "Cluster missing on remote compute cluster is marked failed and immutable",
+			setup: func() []client.Object {
+				objects := make([]client.Object, 0)
+				cluster := &v2pb.RayCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       rayClusterName,
+						Namespace:  testNamespace,
+						Generation: 1,
+					},
+					Spec: createRayClusterSpec(),
+					Status: v2pb.RayClusterStatus{
+						State: v2pb.RAY_CLUSTER_STATE_PROVISIONING,
+						StatusConditions: []*apipb.Condition{
+							{
+								Type:   EnqueuedCondition,
+								Status: apipb.CONDITION_STATUS_TRUE,
+							},
+							{
+								Type:   ScheduledCondition,
+								Status: apipb.CONDITION_STATUS_TRUE,
+							},
+							{
+								Type:   LaunchedCondition,
+								Status: apipb.CONDITION_STATUS_TRUE,
+							},
+						},
+						Assignment: &v2pb.AssignmentInfo{
+							Cluster: assignedCluster,
+						},
+					},
+				}
+				objects = append(objects, cluster)
+				return objects
+			},
+			setupMocks: func(mfc *clientmocks.MockFederatedClient, mcc *mockClusterCache, msq *mockSchedulerQueue) {
+				mcc.addCluster(assignedCluster, &v2pb.Cluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: assignedCluster,
+					},
+				})
+				// The RayCluster has vanished from the remote compute cluster.
+				mfc.EXPECT().GetJobClusterStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(
+					nil, apiErrors.NewNotFound(
+						schema.GroupResource{Group: "ray.io", Resource: "rayclusters"}, rayClusterName))
+			},
+			expectedState:   v2pb.RAY_CLUSTER_STATE_FAILED,
+			expectedMessage: "",
+			errorAssertion:  require.NoError,
+			postCheck: func(res ctrl.Result) {
+				// Terminal condition: the controller must not requeue.
+				assert.Equal(t, time.Duration(0), res.RequeueAfter)
+			},
+			verifyConditions: func(t *testing.T, cluster *v2pb.RayCluster) {
+				var succeededCond, killedCond *apipb.Condition
+				for _, cond := range cluster.Status.StatusConditions {
+					switch cond.Type {
+					case SucceededCondition:
+						succeededCond = cond
+					case KilledCondition:
+						killedCond = cond
+					}
+				}
+				require.NotNil(t, succeededCond, "SucceededCondition should exist")
+				assert.Equal(t, apipb.CONDITION_STATUS_FALSE, succeededCond.Status,
+					"SucceededCondition should be FALSE for a failed cluster")
+				require.NotNil(t, killedCond, "KilledCondition should exist")
+				assert.Equal(t, apipb.CONDITION_STATUS_TRUE, killedCond.Status,
+					"KilledCondition should be TRUE for a terminal cluster")
+				assert.True(t, utils.IsImmutable(cluster),
+					"cluster should be marked immutable so reconciliation stops")
+			},
+		},
 	}
 
 	for _, tc := range tests {
@@ -1328,4 +1420,71 @@ func TestReconcilerReconcile(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestReconcilerReconcile_KillConvergesToImmutable exercises a normal (non-NotFound)
+// termination across multiple reconciles: the first reconcile sets Succeeded and Killing
+// but cleanup has not run yet, so the object must stay mutable; only once cleanup
+// converges on Killing=FALSE/Killed=TRUE on the following reconcile should the object be
+// frozen. This is the "mark immutable for all terminal states" path, as opposed to the
+// single-shot NotFound-on-remote path covered by "Cluster missing on remote compute
+// cluster is marked failed and immutable" above.
+func TestReconcilerReconcile_KillConvergesToImmutable(t *testing.T) {
+	ctx := context.Background()
+
+	scheme := runtime.NewScheme()
+	kubescheme.AddToScheme(scheme)
+	v2pb.AddToScheme(scheme)
+
+	cluster := &v2pb.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       rayClusterName,
+			Namespace:  testNamespace,
+			Generation: 1,
+		},
+		Spec: v2pb.RayClusterSpec{
+			RayVersion: "2.3.1",
+			Head:       &v2pb.RayHeadSpec{},
+			Termination: &v2pb.TerminationSpec{
+				Type:   v2pb.TERMINATION_TYPE_SUCCEEDED,
+				Reason: "completed",
+			},
+		},
+	}
+	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(cluster).WithStatusSubresource(cluster).Build()
+
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+	mockFedClient := clientmocks.NewMockFederatedClient(mockCtrl)
+
+	r := &Reconciler{
+		Handler:         &mockAPIHandler{Client: fakeClient},
+		federatedClient: mockFedClient,
+		clusterCache:    newMockClusterCache(),
+		schedulerQueue:  &mockSchedulerQueue{},
+	}
+
+	req := ctrl.Request{NamespacedName: types.NamespacedName{Name: rayClusterName, Namespace: testNamespace}}
+
+	// First reconcile: Succeeded and Killing get set, but the cluster was never
+	// scheduled/launched so cleanup only sees the change on the next pass.
+	_, err := r.Reconcile(ctx, req)
+	require.NoError(t, err)
+
+	var afterFirst v2pb.RayCluster
+	require.NoError(t, fakeClient.Get(ctx, req.NamespacedName, &afterFirst))
+	assert.NotEqual(t, v2pb.RAY_CLUSTER_STATE_TERMINATED, afterFirst.Status.State)
+	assert.False(t, utils.IsImmutable(&afterFirst),
+		"cluster should not be immutable yet - cleanup has not converged")
+
+	// Second reconcile: cleanup now observes Killing=TRUE, completes, and the object
+	// should be frozen immediately after.
+	_, err = r.Reconcile(ctx, req)
+	require.NoError(t, err)
+
+	var afterSecond v2pb.RayCluster
+	require.NoError(t, fakeClient.Get(ctx, req.NamespacedName, &afterSecond))
+	assert.Equal(t, v2pb.RAY_CLUSTER_STATE_TERMINATED, afterSecond.Status.State)
+	assert.True(t, utils.IsImmutable(&afterSecond),
+		"cluster should be marked immutable once fully terminated")
 }
