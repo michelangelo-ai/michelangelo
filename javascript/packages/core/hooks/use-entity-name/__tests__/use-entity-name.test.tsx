@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 
-import { DisplayContext } from '#core/providers/display-context/display-context';
+import { DisplayProvider } from '#core/providers/display-provider/display-provider';
 import { formatEntityName, useEntityName } from '../use-entity-name';
 
 function EntityNameProbe({ name, casing }: { name: string; casing?: 'nav' | 'content' }) {
@@ -8,51 +8,51 @@ function EntityNameProbe({ name, casing }: { name: string; casing?: 'nav' | 'con
 }
 
 describe('useEntityName', () => {
-  it('title-cases the name inside a nav DisplayContext', () => {
+  it('title-cases the name inside a nav DisplayProvider', () => {
     render(
-      <DisplayContext type="nav">
+      <DisplayProvider type="nav">
         <EntityNameProbe name="trained models" />
-      </DisplayContext>
+      </DisplayProvider>
     );
     expect(screen.getByText('Trained Models')).toBeInTheDocument();
   });
 
-  it('passes the name through unchanged inside a content DisplayContext', () => {
+  it('passes the name through unchanged inside a content DisplayProvider', () => {
     render(
-      <DisplayContext type="content">
+      <DisplayProvider type="content">
         <EntityNameProbe name="trained models" />
-      </DisplayContext>
+      </DisplayProvider>
     );
     expect(screen.getByText('trained models')).toBeInTheDocument();
   });
 
-  it('passes the name through unchanged with no ambient DisplayContext', () => {
+  it('passes the name through unchanged with no ambient DisplayProvider', () => {
     render(<EntityNameProbe name="trained models" />);
     expect(screen.getByText('trained models')).toBeInTheDocument();
   });
 
-  it('the same entity name renders differently depending on the surrounding DisplayContext', () => {
+  it('the same entity name renders differently depending on the surrounding DisplayProvider', () => {
     const { rerender } = render(
-      <DisplayContext type="nav">
+      <DisplayProvider type="nav">
         <EntityNameProbe name="trained models" />
-      </DisplayContext>
+      </DisplayProvider>
     );
     expect(screen.getByText('Trained Models')).toBeInTheDocument();
 
     rerender(
-      <DisplayContext type="content">
+      <DisplayProvider type="content">
         <EntityNameProbe name="trained models" />
-      </DisplayContext>
+      </DisplayProvider>
     );
     expect(screen.queryByText('Trained Models')).not.toBeInTheDocument();
     expect(screen.getByText('trained models')).toBeInTheDocument();
   });
 
-  it('an explicit casing override beats the ambient DisplayContext', () => {
+  it('an explicit casing override beats the ambient DisplayProvider', () => {
     render(
-      <DisplayContext type="nav">
+      <DisplayProvider type="nav">
         <EntityNameProbe name="trained models" casing="content" />
-      </DisplayContext>
+      </DisplayProvider>
     );
     expect(screen.getByText('trained models')).toBeInTheDocument();
     expect(screen.queryByText('Trained Models')).not.toBeInTheDocument();
@@ -60,30 +60,30 @@ describe('useEntityName', () => {
 
   it('preserves acronyms already capitalized in the canonical name', () => {
     render(
-      <DisplayContext type="nav">
+      <DisplayProvider type="nav">
         <EntityNameProbe name="AI agents" />
-      </DisplayContext>
+      </DisplayProvider>
     );
     expect(screen.getByText('AI Agents')).toBeInTheDocument();
   });
 
   it('preserves hyphens rather than splitting them into separate words', () => {
     render(
-      <DisplayContext type="nav">
+      <DisplayProvider type="nav">
         <EntityNameProbe name="one-off predictions" />
-      </DisplayContext>
+      </DisplayProvider>
     );
     expect(screen.getByText('One-off Predictions')).toBeInTheDocument();
   });
 
-  it('a nested DisplayContext overrides its ancestor for the subtree inside it', () => {
+  it('a nested DisplayProvider overrides its ancestor for the subtree inside it', () => {
     render(
-      <DisplayContext type="nav">
+      <DisplayProvider type="nav">
         <EntityNameProbe name="trained models" />
-        <DisplayContext type="content">
+        <DisplayProvider type="content">
           <EntityNameProbe name="pipelines" />
-        </DisplayContext>
-      </DisplayContext>
+        </DisplayProvider>
+      </DisplayProvider>
     );
     expect(screen.getByText('Trained Models')).toBeInTheDocument();
     expect(screen.getByText('pipelines')).toBeInTheDocument();

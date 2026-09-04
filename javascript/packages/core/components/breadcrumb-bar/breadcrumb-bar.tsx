@@ -7,7 +7,7 @@ import { Cell, Grid } from 'baseui/layout-grid';
 
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
 import { useEntityName } from '#core/hooks/use-entity-name/use-entity-name';
-import { DisplayContext } from '#core/providers/display-context/display-context';
+import { DisplayProvider } from '#core/providers/display-provider/display-provider';
 import { Phase } from '#core/types/common/studio-types';
 import { MenuDrawer } from './menu-drawer';
 import { BreadcrumbContainer, PlainLink } from './styled-components';
@@ -51,7 +51,7 @@ export function BreadcrumbBar({
   const { isScrolled } = useScrollingNavbarShadow();
 
   return (
-    <DisplayContext type="nav">
+    <DisplayProvider type="nav">
       <BreadcrumbContainer $scrolled={isScrolled}>
         <Grid gridColumns={1} gridGutters={0} gridGaps={0}>
           <Cell>
@@ -80,7 +80,7 @@ export function BreadcrumbBar({
           </Cell>
         </Grid>
       </BreadcrumbContainer>
-    </DisplayContext>
+    </DisplayProvider>
   );
 }
 
