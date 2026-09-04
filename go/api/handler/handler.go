@@ -22,6 +22,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
+	apiuuid "k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/client-go/kubernetes/scheme"
 	ctrlRTClient "sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlRTApiutil "sigs.k8s.io/controller-runtime/pkg/client/apiutil"
@@ -61,6 +62,17 @@ type apiHandler struct {
 	metadataHandler   MetadataHandler   `optional:"true"`
 	blobHandler       BlobHandler       `optional:"true"`
 	validationHandler ValidationHandler `optional:"true"`
+
+	// mysqlPrimaryPolicy names the kinds that are created/updated directly in MetadataStorage,
+	// bypassing k8s/ETCD entirely. See storage.MySQLPrimaryPolicy.
+	mysqlPrimaryPolicy storage.MySQLPrimaryPolicy `optional:"true"`
+}
+
+// isMySQLPrimary reports whether the given kind should be created/updated directly in
+// MetadataStorage rather than in k8s/ETCD.
+func (handler *apiHandler) isMySQLPrimary(kind string) bool {
+	return handler.mysqlPrimaryPolicy != nil && storage.EnableMetadataStorage(&handler.conf) &&
+		handler.mysqlPrimaryPolicy.IsMySQLPrimary(kind)
 }
 
 // Create implements api.Handler.Create
@@ -86,6 +98,10 @@ func (handler *apiHandler) Create(ctx context.Context, obj ctrlRTClient.Object, 
 		return status.Error(codes.InvalidArgument, err.Error())
 	}
 
+	if handler.isMySQLPrimary(kind) {
+		return handler.createMySQLPrimary(ctx, obj, objMeta, opts)
+	}
+
 	if metadataErr := handler.handleMetadataStorageForCreate(ctx, obj, objMeta); metadataErr != nil {
 		return metadataErr
 	}
@@ -100,6 +116,39 @@ func (handler *apiHandler) Create(ctx context.Context, obj ctrlRTClient.Object, 
 	// If the object does not exist in MetadataStorage, create it in K8s/ETCD.
 	err = handler.k8sHandler.Create(ctx, obj, opts)
 
+	return surfaceGrpcError(err, "create", objMeta.GetNamespace(), objMeta.GetName())
+}
+
+// createMySQLPrimary creates an object of a MySQL-primary kind (see storage.MySQLPrimaryPolicy)
+// directly in MetadataStorage. Unlike the ordinary Create path, k8s/ETCD is never involved: there
+// is no etcd copy for the ingester to reconcile, so no IngesterFinalizer is added either. UID and
+// CreationTimestamp, normally assigned by the k8s API server, are assigned here instead.
+func (handler *apiHandler) createMySQLPrimary(ctx context.Context, obj ctrlRTClient.Object,
+	objMeta metav1.Object, opts *metav1.CreateOptions) error {
+	// Reject a name collision the same way handleMetadataStorageForCreate does for the etcd path.
+	if err := handler.metadataHandler.Get(ctx, objMeta.GetNamespace(), objMeta.GetName(), obj); err == nil {
+		return status.Errorf(codes.AlreadyExists,
+			"failed to create API object. An object of the same name already exists. namespace:%v, name: %v",
+			objMeta.GetNamespace(), objMeta.GetName())
+	}
+
+	if objMeta.GetUID() == "" {
+		objMeta.SetUID(apiuuid.NewUUID())
+	}
+	if creationTimestamp := objMeta.GetCreationTimestamp(); creationTimestamp.IsZero() {
+		objMeta.SetCreationTimestamp(metav1.Now())
+	}
+	setUpdateTimestamp(obj, true)
+
+	dryRun, err := checkDryRun(opts.DryRun)
+	if err != nil {
+		return err
+	}
+	if dryRun {
+		return nil
+	}
+
+	err = handler.metadataHandler.Create(ctx, obj)
 	return surfaceGrpcError(err, "create", objMeta.GetNamespace(), objMeta.GetName())
 }
 
@@ -148,6 +197,9 @@ func (handler *apiHandler) Get(
 func (handler *apiHandler) Update(ctx context.Context, obj ctrlRTClient.Object, opts *metav1.UpdateOptions) error {
 	start := time.Now()
 	kind := obj.GetObjectKind().GroupVersionKind().Kind
+	if typeMeta, err := utils.GetObjectTypeMetafromObject(obj, scheme.Scheme); err == nil {
+		kind = typeMeta.Kind
+	}
 	log, headers := initLogger(ctx, handler.logger, "Update", obj.GetNamespace(), obj.GetName(), kind)
 	defer emitAPIMetrics("Update", handler.metrics, log, start, kind, headers)
 	if handler.validationHandler != nil {
@@ -156,6 +208,10 @@ func (handler *apiHandler) Update(ctx context.Context, obj ctrlRTClient.Object, 
 		}
 	} else if err := api.Validate(obj); err != nil {
 		return err
+	}
+
+	if handler.isMySQLPrimary(kind) {
+		return handler.updateMySQLPrimary(ctx, obj, opts)
 	}
 
 	hasSpecChange, err := handler.hasSpecChange(ctx, obj)
@@ -195,11 +251,35 @@ func (handler *apiHandler) Update(ctx context.Context, obj ctrlRTClient.Object, 
 	return surfaceGrpcError(err, "update", tmpObj.GetNamespace(), tmpObj.GetName())
 }
 
+// updateMySQLPrimary applies a full spec/status/metadata update to an object of a MySQL-primary
+// kind (see storage.MySQLPrimaryPolicy). k8s/ETCD is never involved, and — unlike the etcd-evicted
+// immutable path — the incoming spec/status are actually written, under the same
+// resource-version optimistic-concurrency check used there. hasSpecChange is not computed (that
+// would require an etcd round trip that can never resolve for this kind); the spec-update
+// timestamp is stamped on every update instead.
+func (handler *apiHandler) updateMySQLPrimary(ctx context.Context, obj ctrlRTClient.Object, opts *metav1.UpdateOptions) error {
+	setUpdateTimestamp(obj, true)
+
+	dryRun, err := checkDryRun(opts.DryRun)
+	if err != nil {
+		return err
+	}
+	if dryRun {
+		return nil
+	}
+
+	err = handler.metadataHandler.UpdateFull(ctx, obj)
+	return surfaceGrpcError(err, "update", obj.GetNamespace(), obj.GetName())
+}
+
 // UpdateStatus implements api.Handler.UpdateStatus
 // Returns nil if successful, otherwise a gRPC status error is returned.
 func (handler *apiHandler) UpdateStatus(ctx context.Context, obj ctrlRTClient.Object, opts *metav1.UpdateOptions) error {
 	start := time.Now()
 	kind := obj.GetObjectKind().GroupVersionKind().Kind
+	if typeMeta, err := utils.GetObjectTypeMetafromObject(obj, scheme.Scheme); err == nil {
+		kind = typeMeta.Kind
+	}
 	log, headers := initLogger(ctx, handler.logger, "UpdateStatus", obj.GetNamespace(), obj.GetName(), kind)
 	defer emitAPIMetrics("UpdateStatus", handler.metrics, log, start, kind, headers)
 
@@ -211,20 +291,26 @@ func (handler *apiHandler) UpdateStatus(ctx context.Context, obj ctrlRTClient.Ob
 		return err
 	}
 
-	tmpObj, ok := obj.DeepCopyObject().(ctrlRTClient.Object)
-	if !ok {
-		return status.Errorf(codes.InvalidArgument, "object does not implement the controller-runtime client.Object interface")
-	}
-
 	setUpdateTimestamp(obj, false)
 
-	_, err := checkDryRun(opts.DryRun)
+	dryRun, err := checkDryRun(opts.DryRun)
 	if err != nil {
 		return err
 	}
+
+	// UpdateStatus has no k8s/ETCD copy to fall back from for a MySQL-primary kind, unlike Update
+	// and Delete: it must branch explicitly rather than relying on a k8s NotFound.
+	if handler.isMySQLPrimary(kind) {
+		if dryRun {
+			return nil
+		}
+		err = handler.metadataHandler.UpdateFull(ctx, obj)
+		return surfaceGrpcError(err, "updateStatus", obj.GetNamespace(), obj.GetName())
+	}
+
 	err = handler.k8sHandler.UpdateStatus(ctx, obj, opts)
 
-	return surfaceGrpcError(err, "updateStatus", tmpObj.GetNamespace(), tmpObj.GetName())
+	return surfaceGrpcError(err, "updateStatus", obj.GetNamespace(), obj.GetName())
 }
 
 // Delete implements api.Handler.Delete
@@ -247,6 +333,15 @@ func (handler *apiHandler) Delete(ctx context.Context, obj ctrlRTClient.Object,
 	dryRun, err := checkDryRun(opts.DryRun)
 	if err != nil {
 		return err
+	}
+
+	// A MySQL-primary object has no etcd copy to check, so skip straight to metadata storage
+	// rather than relying on the etcd-NotFound fallthrough below.
+	if handler.isMySQLPrimary(kind) {
+		if dryRun {
+			return nil
+		}
+		return deleteObjectFromMetadataStorage(ctx, obj, handler)
 	}
 
 	// Delete the object in K8s/ETCD

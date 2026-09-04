@@ -34,6 +34,17 @@ type MetadataStorage interface {
 	// for the MetadataStorage to build / update indexes.
 	Upsert(ctx context.Context, object runtime.Object, direct bool, indexedFields []IndexedField) error
 
+	// UpsertDirectFull performs a full-field update (spec, status and metadata) of an object whose
+	// only backing store is MetadataStorage (a "MySQL-primary" kind, see MySQLPrimaryPolicy),
+	// enforcing the same resource-version optimistic-concurrency check as Upsert with direct=true.
+	// Unlike direct=true — which only touches labels, annotations and resource version because that
+	// path is reached solely for objects evicted from etcd after being marked immutable — this
+	// method writes the full incoming object. It requires a row to already exist for the object's
+	// namespace/name (returns NotFound otherwise); initial creation of a MySQL-primary object goes
+	// through the ordinary Upsert(direct=false) path instead, which has no existing row to conflict
+	// with.
+	UpsertDirectFull(ctx context.Context, object runtime.Object, indexedFields []IndexedField) error
+
 	// GetByName retrieves an object by its namespace and name.
 	GetByName(ctx context.Context, namespace string, name string, object runtime.Object) error
 

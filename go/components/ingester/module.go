@@ -20,12 +20,13 @@ var Module = fx.Options(
 
 type registerParams struct {
 	fx.In
-	Manager         ctrl.Manager
-	Scheme          *runtime.Scheme
-	MetadataStorage storage.MetadataStorage `optional:"true"`
-	Config          Config                  `optional:"true"`
-	RetainPolicy    cascadedelete.RetainPolicy
-	Logger          *zap.Logger
+	Manager            ctrl.Manager
+	Scheme             *runtime.Scheme
+	MetadataStorage    storage.MetadataStorage    `optional:"true"`
+	Config             Config                     `optional:"true"`
+	RetainPolicy       cascadedelete.RetainPolicy
+	MySQLPrimaryPolicy storage.MySQLPrimaryPolicy `optional:"true"`
+	Logger             *zap.Logger
 }
 
 // register sets up ingester reconcilers for all configured CRD types
@@ -48,6 +49,13 @@ func register(p registerParams) error {
 		}
 		gvk := gvks[0]
 		log := p.Logger.With(zap.String("kind", gvk.Kind))
+
+		// MySQL-primary kinds are never written to etcd (see storage.MySQLPrimaryPolicy), so there
+		// is nothing in etcd for the ingester to reconcile or evict.
+		if isMySQLPrimaryKind(p.MySQLPrimaryPolicy, gvk.Kind) {
+			log.Info("Kind is MySQL-primary, skipping ingester controller setup")
+			continue
+		}
 
 		// Cast runtime.Object to client.Object
 		clientObj, ok := obj.(client.Object)
@@ -78,4 +86,11 @@ func register(p registerParams) error {
 	}
 
 	return nil
+}
+
+// isMySQLPrimaryKind reports whether the given kind is opted into MySQL-primary storage mode
+// (see storage.MySQLPrimaryPolicy), and thus should not get an ingester reconciler at all. A nil
+// policy (the default when nothing is wired at the composition root) opts nothing in.
+func isMySQLPrimaryKind(policy storage.MySQLPrimaryPolicy, kind string) bool {
+	return policy != nil && policy.IsMySQLPrimary(kind)
 }

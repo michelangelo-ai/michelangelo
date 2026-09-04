@@ -39,9 +39,22 @@ func (m *MetadataHandlerImpl) Get(ctx context.Context, namespace, name string, o
 	return m.storage.GetByName(ctx, namespace, name, obj)
 }
 
+// Create implements MetadataHandler.Create by delegating to the handleUpdate function with a
+// full (non-direct) upsert, since there is no existing row to conflict with.
+func (m *MetadataHandlerImpl) Create(ctx context.Context, obj ctrlRTClient.Object) error {
+	return handleUpdate(ctx, obj, m.storage, false, nil, m.blobStorage)
+}
+
 // Update implements MetadataHandler.Update by delegating to the handleUpdate function.
 func (m *MetadataHandlerImpl) Update(ctx context.Context, obj ctrlRTClient.Object) error {
 	return handleUpdate(ctx, obj, m.storage, true, nil, m.blobStorage)
+}
+
+// UpdateFull implements MetadataHandler.UpdateFull by delegating to
+// storage.MetadataStorage.UpsertDirectFull, which — unlike Update — persists the incoming
+// object's full spec and status under a resource-version optimistic-concurrency check.
+func (m *MetadataHandlerImpl) UpdateFull(ctx context.Context, obj ctrlRTClient.Object) error {
+	return m.storage.UpsertDirectFull(ctx, obj, nil)
 }
 
 // Delete implements MetadataHandler.Delete by delegating to the handleDelete function.
@@ -89,8 +102,18 @@ func (n *NullMetadataHandler) Get(ctx context.Context, namespace, name string, o
 	return apiErrors.NewNotFound(schema.GroupResource{}, name)
 }
 
+// Create implements MetadataHandler.Create as a no-op when metadata storage is disabled.
+func (n *NullMetadataHandler) Create(ctx context.Context, obj ctrlRTClient.Object) error {
+	return nil
+}
+
 // Update implements MetadataHandler.Update as a no-op when metadata storage is disabled.
 func (n *NullMetadataHandler) Update(ctx context.Context, obj ctrlRTClient.Object) error {
+	return nil
+}
+
+// UpdateFull implements MetadataHandler.UpdateFull as a no-op when metadata storage is disabled.
+func (n *NullMetadataHandler) UpdateFull(ctx context.Context, obj ctrlRTClient.Object) error {
 	return nil
 }
 

@@ -184,6 +184,53 @@ func (m *mysqlMetadataStorage) Upsert(ctx context.Context, object runtime.Object
 	return tx.Commit()
 }
 
+// UpsertDirectFull performs a full-field update of a MySQL-primary object under the same
+// optimistic-concurrency check as directUpdate, but — unlike directUpdate — writes the incoming
+// object's own spec/status rather than replaying the stored proto. See the MetadataStorage
+// interface doc for when to use this versus Upsert(direct=true) and Upsert(direct=false).
+func (m *mysqlMetadataStorage) UpsertDirectFull(ctx context.Context, object runtime.Object, indexedFields []storage.IndexedField) error {
+	metaObj, err := getObjectMeta(object)
+	if err != nil {
+		return err
+	}
+
+	tableName := m.getTableName(object)
+	if tableName == "" {
+		return status.Errorf(codes.InvalidArgument, "unable to determine table name for object type")
+	}
+
+	protoMsg, ok := object.(proto.Message)
+	if !ok {
+		return status.Errorf(codes.InvalidArgument, "object does not implement proto.Message")
+	}
+	protoBytes, err := proto.Marshal(protoMsg)
+	if err != nil {
+		return status.Errorf(codes.Internal, "failed to marshal object to proto: %v", err)
+	}
+	jsonBytes, err := json.Marshal(object)
+	if err != nil {
+		return status.Errorf(codes.Internal, "failed to marshal object to JSON: %v", err)
+	}
+
+	tx, err := m.db.BeginTx(ctx, nil)
+	if err != nil {
+		return status.Errorf(codes.Internal, "failed to begin transaction: %v", err)
+	}
+	defer tx.Rollback()
+
+	newResVersion, err := m.directFullUpdate(ctx, tx, tableName, metaObj, protoBytes, jsonBytes, indexedFields)
+	if err != nil {
+		return err
+	}
+	if err = tx.Commit(); err != nil {
+		return status.Errorf(codes.Internal, "failed to commit direct full update: %v", err)
+	}
+	// Hand the new resource version back through the object the caller passed in, only after a
+	// successful commit, mirroring Upsert's direct=true branch.
+	metaObj.SetResourceVersion(strconv.FormatUint(newResVersion, 10))
+	return nil
+}
+
 // GetByName retrieves an object by its namespace and name
 func (m *mysqlMetadataStorage) GetByName(ctx context.Context, namespace string, name string, object runtime.Object) error {
 	tableName := m.getTableName(object)
@@ -1422,6 +1469,83 @@ func (m *mysqlMetadataStorage) directUpdate(ctx context.Context, tx *sql.Tx, tab
 		return 0, err
 	}
 	if err = m.upsertAnnotations(ctx, tx, tableName, storedUID, storedMeta.GetAnnotations()); err != nil {
+		return 0, err
+	}
+
+	return newResVersion, nil
+}
+
+// directFullUpdate applies a full-field update (spec, status, metadata and indexed fields) to a
+// MySQL-primary object, and returns the resource version it assigned.
+//
+// It shares directUpdate's locking and optimistic-concurrency shape (SELECT ... FOR UPDATE, then
+// checkResourceVersionPrecondition), but unlike directUpdate it never reads the stored proto back:
+// the incoming object's own proto/json bytes are written as-is, because for a MySQL-primary kind
+// there is no etcd copy whose spec/status must be treated as authoritative.
+func (m *mysqlMetadataStorage) directFullUpdate(ctx context.Context, tx *sql.Tx, tableName string, metaObj metav1.Object,
+	protoBytes, jsonBytes []byte, indexedFields []storage.IndexedField) (uint64, error) {
+	// Lock and read the live row. Addressed by namespace+name for the same reason as directUpdate:
+	// callers of the generic Update RPC are not required to echo back a UID.
+	selectQuery := fmt.Sprintf(`
+		SELECT uid, res_version
+		FROM %s
+		WHERE namespace = ? AND name = ? AND delete_time IS NULL
+		LIMIT 1
+		FOR UPDATE
+	`, tableName)
+
+	var (
+		storedUID string
+		storedRV  uint64
+	)
+	err := tx.QueryRowContext(ctx, selectQuery, metaObj.GetNamespace(), metaObj.GetName()).
+		Scan(&storedUID, &storedRV)
+	if err == sql.ErrNoRows {
+		return 0, status.Errorf(codes.NotFound, "object not found or deleted: %s/%s",
+			metaObj.GetNamespace(), metaObj.GetName())
+	}
+	if err != nil {
+		return 0, status.Errorf(codes.Internal, "failed to load object for direct full update: %v", err)
+	}
+
+	if err = checkResourceVersionPrecondition(metaObj.GetResourceVersion(), storedRV); err != nil {
+		return 0, err
+	}
+	newResVersion := storedRV + 1
+
+	setClauses := []string{"res_version = ?", "update_time = ?", "proto = ?", "json = ?"}
+	args := []interface{}{newResVersion, time.Now().UTC(), protoBytes, jsonBytes}
+	for _, field := range indexedFields {
+		setClauses = append(setClauses, fmt.Sprintf("%s = ?", field.Key))
+		args = append(args, field.Value)
+	}
+	// The res_version guard is redundant under FOR UPDATE, but keeps this correct if the lock
+	// hint is ever dropped or the isolation level lowered.
+	args = append(args, storedUID, storedRV)
+
+	updateQuery := fmt.Sprintf(`
+		UPDATE %s
+		SET %s
+		WHERE uid = ? AND res_version = ? AND delete_time IS NULL
+	`, tableName, strings.Join(setClauses, ", "))
+	result, err := tx.ExecContext(ctx, updateQuery, args...)
+	if err != nil {
+		return 0, status.Errorf(codes.Internal, "failed to apply direct full update: %v", err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return 0, status.Errorf(codes.Internal, "failed to get rows affected: %v", err)
+	}
+	if rowsAffected != 1 {
+		return 0, status.Errorf(codes.Internal,
+			"direct full update affected %d rows, expected exactly 1", rowsAffected)
+	}
+
+	// Child rows are keyed by the uid actually stored on the row, matching directUpdate.
+	if err = m.upsertLabels(ctx, tx, tableName, storedUID, metaObj.GetLabels()); err != nil {
+		return 0, err
+	}
+	if err = m.upsertAnnotations(ctx, tx, tableName, storedUID, metaObj.GetAnnotations()); err != nil {
 		return 0, err
 	}
 
