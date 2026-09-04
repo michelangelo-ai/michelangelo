@@ -184,3 +184,29 @@ workflowClient:
 	assert.Equal(t, "grpc", conf.Transport)
 	assert.Equal(t, "cadence-frontend", conf.Service)
 }
+
+func TestGetSchedulerConfig(t *testing.T) {
+	yamlStr := `
+jobs:
+  scheduler:
+    backend: kueue
+    kueue:
+      localQueueTemplate: "ma-{project}"
+      localQueueOverrides:
+        some-project: custom-queue
+`
+	provider, err := config.NewYAML(config.Source(strings.NewReader(yamlStr)))
+	assert.NoError(t, err)
+	conf, err := GetSchedulerConfig(provider)
+	assert.NoError(t, err)
+	assert.Equal(t, "kueue", conf.Backend)
+	assert.Equal(t, "ma-{project}", conf.Kueue.LocalQueueTemplate)
+	assert.Equal(t, map[string]string{"some-project": "custom-queue"}, conf.Kueue.LocalQueueOverrides)
+
+	// Absent key: zero-value config selects the default backend.
+	providerEmpty, err := config.NewYAML(config.Source(strings.NewReader("foo: bar")))
+	assert.NoError(t, err)
+	conf, err = GetSchedulerConfig(providerEmpty)
+	assert.NoError(t, err)
+	assert.Equal(t, "", conf.Backend)
+}
