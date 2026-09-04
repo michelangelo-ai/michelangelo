@@ -65,15 +65,19 @@ export enum Phase {
 export interface PhaseEntityConfig<T extends object = object> {
   /**
    * Name of the entity as it appears within MA Studio. Should be plural, lower case
-   * version of the name. BreadcrumbBar applies its own Title Case transform
-   * (see `toTitleCase` in `#core/utils/string-utils`) when displaying this value, so
-   * config authors should supply the plain lower case form and not pre-case it.
+   * version of the name — casing is applied at render time based on the surrounding
+   * `DisplayContext` (see `useEntityName` in `#core/hooks/use-entity-name/use-entity-name`),
+   * so config authors should supply the plain lower case form and not pre-case it.
+   * An acronym that's part of the name (e.g. "AI") should still be written capitalized —
+   * `useEntityName` only lowercases nothing and only capitalizes the first letter of
+   * each word, so already-uppercase letters pass through unchanged.
    *
    * @example
    * trained models
    * pipelines
    * feature consistency (intentionally not pluralized since this entity is never referred
    *  to as "feature consistencies")
+   * AI agents
    */
   name: string;
   /**

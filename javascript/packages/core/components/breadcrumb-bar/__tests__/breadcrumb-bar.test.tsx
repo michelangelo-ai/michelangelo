@@ -215,7 +215,7 @@ describe('BreadcrumbBar — unknown phase/entity fallback', () => {
 });
 
 describe('BreadcrumbBar — entity name casing', () => {
-  it('title-cases the configured entity name and preserves known acronyms', () => {
+  it('title-cases the configured entity name and preserves an acronym already capitalized in the canonical name', () => {
     render(
       <BreadcrumbBar
         categories={[
@@ -231,7 +231,7 @@ describe('BreadcrumbBar — entity name casing', () => {
                 entities: [
                   {
                     id: 'ai-agents',
-                    name: 'ai agents',
+                    name: 'AI agents',
                     state: 'active',
                     service: 'agent',
                     views: [],
@@ -250,7 +250,7 @@ describe('BreadcrumbBar — entity name casing', () => {
     );
 
     expect(screen.getByText('AI Agents')).toBeInTheDocument();
-    expect(screen.queryByText('ai agents')).not.toBeInTheDocument();
+    expect(screen.queryByText('AI agents')).not.toBeInTheDocument();
   });
 });
 

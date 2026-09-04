@@ -1,31 +1,7 @@
-import startCase from 'lodash/startCase';
 import { isURL } from 'validator';
 
 export const capitalizeFirstLetter = (str: string): string =>
   str.charAt(0).toUpperCase() + str.slice(1);
-
-/**
- * Acronyms that should stay fully uppercase when title-cased, rather than
- * being rendered as e.g. "Ai" or "Llm".
- */
-const ACRONYMS = new Set(['AI', 'LLM', 'MES']);
-
-/**
- * @description
- * Converts a lower case, space/hyphen-delimited entity or category name into
- * Title Case for display, preserving known acronyms (e.g. AI, LLM, MES).
- *
- * @example
- * ```ts
- * toTitleCase('trained models'); // 'Trained Models'
- * toTitleCase('llm evaluations'); // 'LLM Evaluations'
- * ```
- */
-export const toTitleCase = (value: string): string =>
-  startCase(value)
-    .split(' ')
-    .map((word) => (ACRONYMS.has(word.toUpperCase()) ? word.toUpperCase() : word))
-    .join(' ');
 
 /**
  * Checks for absolute URLs, including localhost values without a public TLD.
