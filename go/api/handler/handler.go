@@ -138,6 +138,12 @@ func (handler *apiHandler) createMySQLPrimary(ctx context.Context, obj ctrlRTCli
 	if creationTimestamp := objMeta.GetCreationTimestamp(); creationTimestamp.IsZero() {
 		objMeta.SetCreationTimestamp(metav1.Now())
 	}
+	// There is no etcd here to assign an initial resource version, but res_version is a
+	// NOT NULL BIGINT UNSIGNED column in MySQL, so seed it the same way directFullUpdate's
+	// increment scheme expects: a base value that later updates increment from.
+	if objMeta.GetResourceVersion() == "" {
+		objMeta.SetResourceVersion("1")
+	}
 	setUpdateTimestamp(obj, true)
 
 	dryRun, err := checkDryRun(opts.DryRun)
