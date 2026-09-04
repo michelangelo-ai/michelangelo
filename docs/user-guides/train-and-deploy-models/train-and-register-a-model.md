@@ -183,6 +183,10 @@ You **do not** need to implement:
 
 The SDK automates all distributed concerns.
 
+:::tip
+This example covers the common case. For the full configuration surface — every `LightningTrainerParam` field, choosing between DDP/FSDP/FSDP2/DeepSpeed, warm starts, auto-resume, and loading trained weights back into a `torch.nn.Module` — see [Distributed Training with LightningTrainer](./distributed-training.md).
+:::
+
 ## Best Practices
 
 ### Recommended
@@ -204,6 +208,7 @@ Your models are now ready to move forward:
 
 * Continue to [**Model Registry**](./model-registry-guide.md) to save and version
 * Continue to [**Deploy a Model**](./deploy-a-model.md) for inference
+* Optional: go deeper on [**Distributed Training**](./distributed-training.md) for strategies, warm starts, and auto-resume
 
 ## Troubleshooting
 

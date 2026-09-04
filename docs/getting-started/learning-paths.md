@@ -26,8 +26,9 @@ From zero to a trained, deployed model.
 4. **[Getting Started with Pipelines](../user-guides/getting-started/getting-started.md)** — build and run your first pipeline (~30 min)
 5. **[Prepare Your Data](../user-guides/getting-started/prepare-your-data.md)** — load, clean, and split datasets with Ray and Spark
 6. **[Train and Register a Model](../user-guides/train-and-deploy-models/train-and-register-a-model.md)** — train at scale and register artifacts
-7. **[Deploy a Model](../user-guides/train-and-deploy-models/deploy-a-model.md)** — bind a registered model to an inference server
-8. **[Example Projects](../user-guides/examples/index.md)** — ten end-to-end workflows to adapt to your own use case
+7. **[Distributed Training with LightningTrainer](../user-guides/train-and-deploy-models/distributed-training.md)** — optional deep dive: strategies, warm starts, and auto-resume for larger runs
+8. **[Deploy a Model](../user-guides/train-and-deploy-models/deploy-a-model.md)** — bind a registered model to an inference server
+9. **[Example Projects](../user-guides/examples/index.md)** — ten end-to-end workflows to adapt to your own use case
 
 **You're done when:** you've run a pipeline that trains a model, registered it, deployed it, and know which example is closest to your real workload.
 
