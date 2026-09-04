@@ -151,6 +151,7 @@ class LightningTrainerParam:
     training_observer: TrainingObserver | None = None
     experiment_store: ExperimentStore | None = None
     profiler_sink: Callable | None = None
+    torch_compile: dict | None = None
 
     def __post_init__(self):
         """Apply default ``num_epochs`` and warn on the deprecated field usage."""

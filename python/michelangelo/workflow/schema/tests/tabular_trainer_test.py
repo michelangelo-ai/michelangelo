@@ -19,6 +19,7 @@ from michelangelo.workflow.schema.tabular_trainer import (
     MlflowConfig,
     ScalingConfig,
     TabularTrainerConfig,
+    TorchCompileConfig,
     TrackerConfig,
 )
 
@@ -626,3 +627,50 @@ class TestTabularTrainerConfig(TestCase):
             TabularTrainerConfig()
         self.assertIn("lightning", str(ctx.exception))
         self.assertIn("custom", str(ctx.exception))
+
+
+# ---------------------------------------------------------------------------
+# TorchCompileConfig
+# ---------------------------------------------------------------------------
+
+
+class TestTorchCompileConfig(TestCase):
+    """Validation for ``TorchCompileConfig``."""
+
+    def test_defaults(self):
+        """Default values: mode=default, fullgraph=True, dynamic=None."""
+        cfg = TorchCompileConfig()
+        self.assertEqual(cfg.mode, "default")
+        self.assertTrue(cfg.fullgraph)
+        self.assertIsNone(cfg.dynamic)
+        self.assertFalse(cfg.print_graph_breaks)
+
+    def test_valid_modes_accepted(self):
+        """All ``TorchCompileMode`` values are accepted."""
+        for mode in (
+            "default",
+            "reduce-overhead",
+            "max-autotune",
+            "max-autotune-no-cudagraphs",
+        ):
+            with self.subTest(mode=mode):
+                cfg = TorchCompileConfig(mode=mode)
+                self.assertEqual(cfg.mode, mode)
+
+    def test_invalid_mode_raises(self):
+        """An unrecognized mode raises ``ConfigurationError``."""
+        with self.assertRaises(ConfigurationError) as ctx:
+            TorchCompileConfig(mode="turbo")
+        self.assertIn("turbo", str(ctx.exception))
+
+    def test_fullgraph_explicit_values(self):
+        """``fullgraph`` accepts both ``True`` and ``False``."""
+        for val in (True, False):
+            with self.subTest(fullgraph=val):
+                self.assertEqual(TorchCompileConfig(fullgraph=val).fullgraph, val)
+
+    def test_dynamic_explicit_values(self):
+        """``dynamic`` accepts ``True``, ``False``, and ``None``."""
+        for val in (True, False, None):
+            with self.subTest(dynamic=val):
+                self.assertEqual(TorchCompileConfig(dynamic=val).dynamic, val)
