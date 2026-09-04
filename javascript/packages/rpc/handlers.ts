@@ -45,6 +45,13 @@ async function createHandlers() {
       }
       return services.DeploymentService.createDeployment({ deployment: record }, headers);
     },
+    UpdateDeployment: (record: Deployment, headers?: Record<string, string>) => {
+      const actorName = headers?.['x-user-name'];
+      if (actorName && record.spec) {
+        record.spec.owner = create(UserInfoSchema, { name: actorName });
+      }
+      return services.DeploymentService.updateDeployment({ deployment: record }, headers);
+    },
     ListInferenceServer: unary(services.InferenceServerService.listInferenceServer),
     GetInferenceServer: unary(services.InferenceServerService.getInferenceServer),
     CreateInferenceServer: (record: InferenceServer, headers?: Record<string, string>) =>

@@ -1,6 +1,9 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
 
+import { InterpolatableActionsPopover } from '#core/components/actions/interpolatable-actions-popover';
+import { DEPLOYMENT_ENTITY_CONFIG } from '#core/config/entities/deployment/deployment';
 import {
   DEPLOYMENT_CONDITION_STATUS,
   DEPLOYMENT_STAGE,
@@ -10,12 +13,18 @@ import { DEPLOY_PHASE } from '#core/config/phases/deploy';
 import { EntityDetailRoute } from '#core/router/entity-detail-route';
 import { PhaseListRoute } from '#core/router/phase-list-route';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
+import { getBaseProviderWrapper } from '#core/test/wrappers/get-base-provider-wrapper';
 import { getErrorProviderWrapper } from '#core/test/wrappers/get-error-provider-wrapper';
+import { getIconProviderWrapper } from '#core/test/wrappers/get-icon-provider-wrapper';
+import { getInterpolationProviderWrapper } from '#core/test/wrappers/get-interpolation-provider-wrapper';
 import { getRouterWrapper } from '#core/test/wrappers/get-router-wrapper';
 import {
   createQueryMockRouter,
   getServiceProviderWrapper,
 } from '#core/test/wrappers/get-service-provider-wrapper';
+import { getSnackbarProviderWrapper } from '#core/test/wrappers/get-snackbar-provider-wrapper';
+
+import type { ActionConfigSchema, Data } from '#core/components/actions/types';
 
 describe('Deployment list page', () => {
   it('renders the Deployments tab', () => {
@@ -418,5 +427,200 @@ describe('Deployment detail page', () => {
       await screen.findAllByText('SnapshotPlacement');
       await screen.findByText('NoCapacity');
     });
+  });
+});
+
+describe('Deployment retire action', () => {
+  const RETIRE_ACTIONS = DEPLOYMENT_ENTITY_CONFIG.actions as ActionConfigSchema<Data>[];
+
+  const DEPLOYMENT_NAME = 'test-retire-action';
+  const NAMESPACE = 'ma-dev-test';
+
+  function buildDeployedRecord(overrides: Record<string, unknown> = {}) {
+    return {
+      metadata: {
+        name: DEPLOYMENT_NAME,
+        namespace: NAMESPACE,
+        creationTimestamp: { seconds: 1757019547 },
+      },
+      spec: {
+        desiredRevision: { name: 'bert-cola-37', namespace: NAMESPACE },
+        target: { case: 'inferenceServer', value: { name: 'inference-server-example' } },
+      },
+      status: {
+        currentRevision: { name: 'bert-cola-37', namespace: NAMESPACE },
+      },
+      ...overrides,
+    };
+  }
+
+  function buildRequestCapture() {
+    const submitted: Record<string, unknown>[] = [];
+    const request = (name: string, payload: unknown) => {
+      if (name === 'UpdateDeployment') {
+        submitted.push(payload as Record<string, unknown>);
+        return Promise.resolve({
+          deployment: { metadata: { name: DEPLOYMENT_NAME, namespace: NAMESPACE } },
+        });
+      }
+      return Promise.resolve({});
+    };
+    return { submitted, request };
+  }
+
+  async function openRetireDialog(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(screen.getByRole('button', { name: 'Actions' }));
+    await user.click(await screen.findByRole('option', { name: 'Retire' }));
+    return screen.findByRole('dialog', {
+      name: `Are you sure you want to retire ${DEPLOYMENT_NAME}`,
+    });
+  }
+
+  it('updates the deployment with desiredRevision removed, leaving the rest of the spec intact', async () => {
+    const user = userEvent.setup();
+    const { submitted, request } = buildRequestCapture();
+
+    render(
+      <InterpolatableActionsPopover actions={RETIRE_ACTIONS} record={buildDeployedRecord()} />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getErrorProviderWrapper(),
+        getIconProviderWrapper(),
+        getInterpolationProviderWrapper(),
+        getRouterWrapper({ location: `/${NAMESPACE}/deploy/deployments/${DEPLOYMENT_NAME}` }),
+        getServiceProviderWrapper({ request }),
+        getSnackbarProviderWrapper(),
+      ])
+    );
+
+    const dialog = await openRetireDialog(user);
+    await user.click(within(dialog).getByRole('button', { name: 'Yes, retire' }));
+
+    await waitFor(() => expect(submitted).toHaveLength(1));
+
+    const payload = submitted[0] as {
+      metadata: { name: string };
+      spec: { desiredRevision?: unknown; target?: unknown };
+    };
+    // The absent desiredRevision is what tells the backend to run cleanup.
+    expect(payload.spec.desiredRevision).toBeUndefined();
+    expect(payload.spec.target).toEqual({
+      case: 'inferenceServer',
+      value: { name: 'inference-server-example' },
+    });
+    expect(payload.metadata.name).toBe(DEPLOYMENT_NAME);
+  });
+
+  it('shows the deployed/last-used timestamps in the confirm dialog', async () => {
+    const user = userEvent.setup();
+    const { request } = buildRequestCapture();
+
+    render(
+      <InterpolatableActionsPopover actions={RETIRE_ACTIONS} record={buildDeployedRecord()} />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getErrorProviderWrapper(),
+        getIconProviderWrapper(),
+        getInterpolationProviderWrapper(),
+        getRouterWrapper({ location: `/${NAMESPACE}/deploy/deployments/${DEPLOYMENT_NAME}` }),
+        getServiceProviderWrapper({ request }),
+        getSnackbarProviderWrapper(),
+      ])
+    );
+
+    const dialog = await openRetireDialog(user);
+    // No last-prediction annotation on the record → N/A.
+    expect(within(dialog).getByText(/Deployed at:/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/Last used at:/)).toBeInTheDocument();
+    expect(within(dialog).getByText('N/A')).toBeInTheDocument();
+    expect(within(dialog).getByText('This process might take a few minutes.')).toBeInTheDocument();
+  });
+
+  it('confirms with a toast naming the deployment being retired', async () => {
+    const user = userEvent.setup();
+    const { request } = buildRequestCapture();
+
+    render(
+      <InterpolatableActionsPopover actions={RETIRE_ACTIONS} record={buildDeployedRecord()} />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getErrorProviderWrapper(),
+        getIconProviderWrapper(),
+        getInterpolationProviderWrapper(),
+        getRouterWrapper({ location: `/${NAMESPACE}/deploy/deployments/${DEPLOYMENT_NAME}` }),
+        getServiceProviderWrapper({ request }),
+        getSnackbarProviderWrapper(),
+      ])
+    );
+
+    const dialog = await openRetireDialog(user);
+    await user.click(within(dialog).getByRole('button', { name: 'Yes, retire' }));
+
+    expect(
+      await screen.findByText(`Retirement for deployment ${DEPLOYMENT_NAME} has begun`)
+    ).toBeInTheDocument();
+  });
+
+  it('disables retire with a tooltip when the deployment has no revision to retire', async () => {
+    const user = userEvent.setup();
+    const request = vi.fn();
+
+    const record = buildDeployedRecord({
+      spec: { target: { case: 'inferenceServer', value: { name: 'inference-server-example' } } },
+      status: {},
+    });
+
+    render(
+      <InterpolatableActionsPopover actions={RETIRE_ACTIONS} record={record} />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getErrorProviderWrapper(),
+        getIconProviderWrapper(),
+        getInterpolationProviderWrapper(),
+        getRouterWrapper({ location: `/${NAMESPACE}/deploy/deployments/${DEPLOYMENT_NAME}` }),
+        getServiceProviderWrapper({ request }),
+        getSnackbarProviderWrapper(),
+      ])
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Actions' }));
+    await user.hover(await screen.findByRole('option', { name: 'Retire' }));
+    expect(await screen.findByText('Deployment has already been retired')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('option', { name: 'Retire' }));
+    expect(
+      screen.queryByRole('dialog', { name: `Are you sure you want to retire ${DEPLOYMENT_NAME}` })
+    ).not.toBeInTheDocument();
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it('stays enabled while a candidate revision is still rolling out', async () => {
+    const user = userEvent.setup();
+    const { submitted, request } = buildRequestCapture();
+
+    // desiredRevision already cleared but a candidate is mid-rollout — retiring must
+    // still be possible to abort the rollout, matching the backend's cleanup trigger.
+    const record = buildDeployedRecord({
+      spec: { target: { case: 'inferenceServer', value: { name: 'inference-server-example' } } },
+      status: { candidateRevision: { name: 'bert-cola-37', namespace: NAMESPACE } },
+    });
+
+    render(
+      <InterpolatableActionsPopover actions={RETIRE_ACTIONS} record={record} />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getErrorProviderWrapper(),
+        getIconProviderWrapper(),
+        getInterpolationProviderWrapper(),
+        getRouterWrapper({ location: `/${NAMESPACE}/deploy/deployments/${DEPLOYMENT_NAME}` }),
+        getServiceProviderWrapper({ request }),
+        getSnackbarProviderWrapper(),
+      ])
+    );
+
+    const dialog = await openRetireDialog(user);
+    await user.click(within(dialog).getByRole('button', { name: 'Yes, retire' }));
+
+    await waitFor(() => expect(submitted).toHaveLength(1));
   });
 });
