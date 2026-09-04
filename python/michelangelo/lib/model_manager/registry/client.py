@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from michelangelo.lib.model_manager.registry.pipeline_run import (
+    from michelangelo.lib.shared.pipeline_run import (
         SourcePipelineRun,
     )
 
@@ -191,7 +191,7 @@ class ModelRegistryClient(ABC):
             source_pipeline_run: Optional identity of the pipeline run that
                 produced this model, auto-derived from the pipeline worker's
                 pod-injected environment (see
-                ``michelangelo.lib.model_manager.registry.pipeline_run.
+                ``michelangelo.lib.shared.pipeline_run.
                 get_source_pipeline_run``). This is system-derived
                 provenance, not an author-settable field — callers should
                 not construct an arbitrary value for it. Implementations

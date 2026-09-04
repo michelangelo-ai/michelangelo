@@ -6,11 +6,11 @@ import os
 from unittest import TestCase
 from unittest.mock import patch
 
-from michelangelo.lib.model_manager.registry import pipeline_run
-from michelangelo.lib.model_manager.registry.pipeline_run import (
+from michelangelo.lib.shared.pipeline_run import (
     SourcePipelineRun,
     _reset_source_pipeline_run_cache,
     get_source_pipeline_run,
+    pipeline_run,
 )
 
 

@@ -14,7 +14,7 @@ from michelangelo.lib.model_manager.registry.api_client import (
     METADATA_ANNOTATION_KEY,
     APIRegistryClient,
 )
-from michelangelo.lib.model_manager.registry.pipeline_run import SourcePipelineRun
+from michelangelo.lib.shared.pipeline_run import SourcePipelineRun
 
 
 class _RpcError(grpc.RpcError):

@@ -96,7 +96,7 @@ import uuid
 from typing import TYPE_CHECKING, Any, TypedDict
 
 from michelangelo.api.v2.util import generate_random_name
-from michelangelo.lib.model_manager.registry.pipeline_run import (
+from michelangelo.lib.shared.pipeline_run import (
     get_source_pipeline_run,
 )
 from michelangelo.workflow.schema.exceptions import ConfigurationError

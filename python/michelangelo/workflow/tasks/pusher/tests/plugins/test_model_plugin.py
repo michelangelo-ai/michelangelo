@@ -10,7 +10,7 @@ from unittest import TestCase
 from unittest.mock import MagicMock, patch
 
 from michelangelo.lib.model_manager.registry.client import RegisteredModel
-from michelangelo.lib.model_manager.registry.pipeline_run import (
+from michelangelo.lib.shared.pipeline_run import (
     SourcePipelineRun,
     _reset_source_pipeline_run_cache,
 )

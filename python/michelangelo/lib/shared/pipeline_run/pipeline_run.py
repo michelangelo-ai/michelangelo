@@ -28,9 +28,9 @@ _cache: SourcePipelineRun | _Unset | None = _Unset()
 class SourcePipelineRun:
     """Identifies the pipeline run that produced a model.
 
-    Mirrors the shape of the registry's ``ResourceIdentifier`` reference type:
-    a required ``name`` and an optional ``namespace`` (when omitted, readers
-    fall back to the same namespace as the resource that carries the
+    Mirrors the shape of the model registry's ``ResourceIdentifier`` reference
+    type: a required ``name`` and an optional ``namespace`` (when omitted,
+    readers fall back to the same namespace as the resource that carries the
     reference).
 
     Attributes:

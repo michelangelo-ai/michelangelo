@@ -58,7 +58,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from michelangelo.api.v2.services.gen.model import ModelService as _ModelServiceType
-    from michelangelo.lib.model_manager.registry.pipeline_run import (
+    from michelangelo.lib.shared.pipeline_run import (
         SourcePipelineRun,
     )
 

@@ -12,7 +12,7 @@ from michelangelo.lib.model_manager.registry.client import (
     ModelRegistryClient,
     RegisteredModel,
 )
-from michelangelo.lib.model_manager.registry.pipeline_run import SourcePipelineRun
+from michelangelo.lib.shared.pipeline_run import SourcePipelineRun
 
 
 class TestRegisteredModel(TestCase):
