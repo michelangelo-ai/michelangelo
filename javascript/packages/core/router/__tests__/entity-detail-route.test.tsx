@@ -118,220 +118,195 @@ describe('EntityDetailRoute', () => {
     await screen.findAllByText('Model Training');
   });
 
-  test('renders custom detail pages and navigates between them', async () => {
-    const user = userEvent.setup();
+  describe('rendering custom detail pages', () => {
+    // Every test below fetches the same pipeline run; only the phase/page config under
+    // test differs, so the fetch response lives here instead of at the top of each test.
+    let mockRequest: ReturnType<typeof vi.fn>;
 
-    const testPhases = {
-      train: buildPhase({
-        id: 'train',
-        entities: [
-          buildEntity({
-            views: [
-              {
-                type: 'detail',
-                metadata: [{ id: 'status.state', label: 'State', type: CellType.STATE }],
-                pages: [
-                  {
-                    id: 'first-page',
-                    label: 'First page',
-                    type: 'custom',
-                    component: () => <div>First page component</div>,
-                  } as CustomDetailPageConfig,
-                  {
-                    id: 'second-page',
-                    label: 'Second page',
-                    type: 'custom',
-                    component: () => <div>Second page component</div>,
-                  } as CustomDetailPageConfig,
-                ],
-              },
-            ],
-          }),
-        ],
-      }),
-    };
-
-    const mockRequest = vi.fn().mockResolvedValue({
-      pipelineRun: {
-        metadata: {
-          creationTimestamp: {
-            seconds: 1640995200, // 2022-01-01
+    beforeEach(() => {
+      mockRequest = vi.fn().mockResolvedValue({
+        pipelineRun: {
+          metadata: {
+            creationTimestamp: {
+              seconds: 1640995200, // 2022-01-01
+            },
+          },
+          status: {
+            state: 'SUCCESS',
           },
         },
-        status: {
-          state: 'SUCCESS',
-        },
-      },
+      });
     });
 
-    render(
-      <EntityDetailRoute phases={testPhases} />,
-      buildWrapper([
-        getErrorProviderWrapper(),
-        getRouterWrapper({ location: '/myproject/train/runs/run-123' }),
-        getServiceProviderWrapper({ request: mockRequest }),
-      ])
-    );
+    test('renders custom detail pages and navigates between them', async () => {
+      const user = userEvent.setup();
 
-    await screen.findByText('First page component');
-    await user.click(await screen.findByText('Second page'));
-    await screen.findByText('Second page component');
-    expect(
-      screen.getByText('Current pathname: /myproject/train/runs/run-123/second-page')
-    ).toBeInTheDocument();
-  });
+      const testPhases = {
+        train: buildPhase({
+          id: 'train',
+          entities: [
+            buildEntity({
+              views: [
+                {
+                  type: 'detail',
+                  metadata: [{ id: 'status.state', label: 'State', type: CellType.STATE }],
+                  pages: [
+                    {
+                      id: 'first-page',
+                      label: 'First page',
+                      type: 'custom',
+                      component: () => <div>First page component</div>,
+                    } as CustomDetailPageConfig,
+                    {
+                      id: 'second-page',
+                      label: 'Second page',
+                      type: 'custom',
+                      component: () => <div>Second page component</div>,
+                    } as CustomDetailPageConfig,
+                  ],
+                },
+              ],
+            }),
+          ],
+        }),
+      };
 
-  test('handles unknown page types', () => {
-    const testPhases = {
-      train: buildPhase({
-        id: 'train',
-        entities: [
-          buildEntity({
-            views: [
-              {
-                type: 'detail',
-                metadata: [{ id: 'status.state', label: 'State', type: CellType.STATE }],
-                pages: [
-                  // cast: testing runtime behavior with an unknown page type; not representable in
-                  // the type-safe union
-                  { id: 'unknown-type', label: 'Unknown Type', type: 'some-unknown-type' } as never,
-                  {
-                    id: 'execution',
-                    label: 'Execution',
-                    ...buildExecutionSchema(),
-                  },
-                ],
-              },
-            ],
-          }),
-        ],
-      }),
-    };
+      render(
+        <EntityDetailRoute phases={testPhases} />,
+        buildWrapper([
+          getErrorProviderWrapper(),
+          getRouterWrapper({ location: '/myproject/train/runs/run-123' }),
+          getServiceProviderWrapper({ request: mockRequest }),
+        ])
+      );
 
-    const mockRequest = vi.fn().mockResolvedValue({
-      pipelineRun: {
-        metadata: {
-          creationTimestamp: {
-            seconds: 1640995200, // 2022-01-01
-          },
-        },
-        status: {
-          state: 'SUCCESS',
-        },
-      },
+      await screen.findByText('First page component');
+      await user.click(await screen.findByText('Second page'));
+      await screen.findByText('Second page component');
+      expect(
+        screen.getByText('Current pathname: /myproject/train/runs/run-123/second-page')
+      ).toBeInTheDocument();
     });
 
-    render(
-      <EntityDetailRoute phases={testPhases} />,
-      buildWrapper([
-        getErrorProviderWrapper(),
-        getRouterWrapper({ location: '/myproject/train/runs/run-123' }),
-        getServiceProviderWrapper({ request: mockRequest }),
-      ])
-    );
+    test('handles unknown page types', () => {
+      const testPhases = {
+        train: buildPhase({
+          id: 'train',
+          entities: [
+            buildEntity({
+              views: [
+                {
+                  type: 'detail',
+                  metadata: [{ id: 'status.state', label: 'State', type: CellType.STATE }],
+                  pages: [
+                    // cast: testing runtime behavior with an unknown page type; not representable in
+                    // the type-safe union
+                    {
+                      id: 'unknown-type',
+                      label: 'Unknown Type',
+                      type: 'some-unknown-type',
+                    } as never,
+                    {
+                      id: 'execution',
+                      label: 'Execution',
+                      ...buildExecutionSchema(),
+                    },
+                  ],
+                },
+              ],
+            }),
+          ],
+        }),
+      };
 
-    // Should render tabs even with unknown types
-    expect(screen.getByText('Unknown Type')).toBeInTheDocument();
-    expect(screen.getByText('Execution')).toBeInTheDocument();
+      render(
+        <EntityDetailRoute phases={testPhases} />,
+        buildWrapper([
+          getErrorProviderWrapper(),
+          getRouterWrapper({ location: '/myproject/train/runs/run-123' }),
+          getServiceProviderWrapper({ request: mockRequest }),
+        ])
+      );
 
-    expect(screen.getByText("Page type 'some-unknown-type' not yet supported")).toBeInTheDocument();
-  });
+      // Should render tabs even with unknown types
+      expect(screen.getByText('Unknown Type')).toBeInTheDocument();
+      expect(screen.getByText('Execution')).toBeInTheDocument();
 
-  test('handles empty pages array', async () => {
-    const testPhases = {
-      train: buildPhase({
-        id: 'train',
-        entities: [
-          buildEntity({
-            views: [
-              {
-                type: 'detail',
-                metadata: [{ id: 'status.state', label: 'State', type: CellType.STATE }],
-                pages: [],
-              },
-            ],
-          }),
-        ],
-      }),
-    };
-
-    const mockRequest = vi.fn().mockResolvedValue({
-      pipelineRun: {
-        metadata: {
-          creationTimestamp: {
-            seconds: 1640995200, // 2022-01-01
-          },
-        },
-        status: {
-          state: 'SUCCESS',
-        },
-      },
+      expect(
+        screen.getByText("Page type 'some-unknown-type' not yet supported")
+      ).toBeInTheDocument();
     });
 
-    render(
-      <EntityDetailRoute phases={testPhases} />,
-      buildWrapper([
-        getErrorProviderWrapper(),
-        getRouterWrapper({ location: '/myproject/train/runs/run-123' }),
-        getServiceProviderWrapper({ request: mockRequest }),
-      ])
-    );
+    test('handles empty pages array', async () => {
+      const testPhases = {
+        train: buildPhase({
+          id: 'train',
+          entities: [
+            buildEntity({
+              views: [
+                {
+                  type: 'detail',
+                  metadata: [{ id: 'status.state', label: 'State', type: CellType.STATE }],
+                  pages: [],
+                },
+              ],
+            }),
+          ],
+        }),
+      };
 
-    // Should still render header and metadata
-    expect(screen.getByText('Pipeline Runs')).toBeInTheDocument();
-    await screen.findByText('Success');
+      render(
+        <EntityDetailRoute phases={testPhases} />,
+        buildWrapper([
+          getErrorProviderWrapper(),
+          getRouterWrapper({ location: '/myproject/train/runs/run-123' }),
+          getServiceProviderWrapper({ request: mockRequest }),
+        ])
+      );
 
-    expect(screen.getByText('No tabs available')).toBeInTheDocument();
-  });
+      // Should still render header and metadata
+      expect(screen.getByText('Pipeline Runs')).toBeInTheDocument();
+      await screen.findByText('Success');
 
-  test('redirects to first tab if entityTab is invalid', async () => {
-    const testPhases = {
-      train: buildPhase({
-        id: 'train',
-        entities: [
-          buildEntity({
-            views: [
-              {
-                type: 'detail',
-                metadata: [{ id: 'status.state', label: 'State', type: CellType.STATE }],
-                pages: [
-                  {
-                    id: 'execution',
-                    label: 'Execution',
-                    ...buildExecutionSchema(),
-                  },
-                ],
-              },
-            ],
-          }),
-        ],
-      }),
-    };
-
-    const mockRequest = vi.fn().mockResolvedValue({
-      pipelineRun: {
-        metadata: {
-          creationTimestamp: {
-            seconds: 1640995200, // 2022-01-01
-          },
-        },
-        status: {
-          state: 'SUCCESS',
-        },
-      },
+      expect(screen.getByText('No tabs available')).toBeInTheDocument();
     });
 
-    render(
-      <EntityDetailRoute phases={testPhases} />,
-      buildWrapper([
-        getErrorProviderWrapper(),
-        getRouterWrapper({ location: '/myproject/train/runs/run-123/invalid-tab' }),
-        getServiceProviderWrapper({ request: mockRequest }),
-      ])
-    );
+    test('redirects to first tab if entityTab is invalid', async () => {
+      const testPhases = {
+        train: buildPhase({
+          id: 'train',
+          entities: [
+            buildEntity({
+              views: [
+                {
+                  type: 'detail',
+                  metadata: [{ id: 'status.state', label: 'State', type: CellType.STATE }],
+                  pages: [
+                    {
+                      id: 'execution',
+                      label: 'Execution',
+                      ...buildExecutionSchema(),
+                    },
+                  ],
+                },
+              ],
+            }),
+          ],
+        }),
+      };
 
-    await screen.findByText('Execution');
-    await screen.findByText('Current pathname: /myproject/train/runs/run-123/execution');
+      render(
+        <EntityDetailRoute phases={testPhases} />,
+        buildWrapper([
+          getErrorProviderWrapper(),
+          getRouterWrapper({ location: '/myproject/train/runs/run-123/invalid-tab' }),
+          getServiceProviderWrapper({ request: mockRequest }),
+        ])
+      );
+
+      await screen.findByText('Execution');
+      await screen.findByText('Current pathname: /myproject/train/runs/run-123/execution');
+    });
   });
 
   test('handles error when entity not found', async () => {

@@ -18,7 +18,7 @@ import {
 } from '#core/test/wrappers/get-service-provider-wrapper';
 
 describe('Deployment list page', () => {
-  it('renders the Deployments tab', () => {
+  beforeEach(() => {
     render(
       <PhaseListRoute phases={{ deploy: DEPLOY_PHASE }} />,
       buildWrapper([
@@ -29,22 +29,13 @@ describe('Deployment list page', () => {
         }),
       ])
     );
+  });
 
+  it('renders the Deployments tab', () => {
     expect(screen.getByRole('tab', { name: 'Deployments' })).toBeInTheDocument();
   });
 
   it('renders the correct column headers', async () => {
-    render(
-      <PhaseListRoute phases={{ deploy: DEPLOY_PHASE }} />,
-      buildWrapper([
-        getErrorProviderWrapper(),
-        getRouterWrapper({ location: '/myproject/deploy/deployments' }),
-        getServiceProviderWrapper({
-          request: vi.fn().mockResolvedValue({ deploymentList: { items: [] } }),
-        }),
-      ])
-    );
-
     expect(await screen.findByRole('columnheader', { name: 'Name' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Model' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Type' })).toBeInTheDocument();
