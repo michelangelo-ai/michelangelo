@@ -147,7 +147,7 @@ describe('CreatePipelineRunForm', () => {
       })
     );
     await user.type(
-      within(dialog).getByPlaceholderText('e.g., name@example.com'),
+      within(dialog).getByPlaceholderText('e.g. name@example.com'),
       'oncall@example.com'
     );
     await selectEnvironment(user, dialog, 'Development');
@@ -204,10 +204,10 @@ describe('CreatePipelineRunForm', () => {
       })
     );
     await user.type(
-      within(dialog).getByPlaceholderText('e.g., name@example.com'),
+      within(dialog).getByPlaceholderText('e.g. name@example.com'),
       'oncall@example.com'
     );
-    await user.type(within(dialog).getByPlaceholderText('e.g., #channel or @user'), '#ml-oncall');
+    await user.type(within(dialog).getByPlaceholderText('e.g. #channel or @user'), '#ml-oncall');
     await selectEnvironment(user, dialog, 'Development');
     await user.click(within(dialog).getByRole('button', { name: 'Run' }));
 

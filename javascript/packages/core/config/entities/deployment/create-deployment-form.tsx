@@ -87,7 +87,7 @@ export const CreateDeploymentForm = ({ onClose }: CreateActionComponentProps) =>
           regex(K8S_NAME_PATTERN, K8S_NAME_RULES_MESSAGE)
         )}
         caption={K8S_NAME_RULES_MESSAGE}
-        placeholder="my-deployment"
+        placeholder="e.g. my-deployment"
       />
 
       <SelectField

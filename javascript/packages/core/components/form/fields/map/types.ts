@@ -10,10 +10,20 @@ export interface KeyValueEntry {
 
 /** Props shared between MapField and KeyValueRow — controls how each row renders. */
 export interface KeyValueRowConfig {
-  /** Configuration for the key input column */
+  /**
+   * Configuration for the key input column.
+   *
+   * `placeholder` doubles as the column's accessible name, since individual rows have no visible
+   * label — see {@link BaseFieldProps.placeholder} for the general placeholder guidance.
+   */
   keyConfig?: { placeholder?: string; readOnly?: boolean };
 
-  /** Configuration for the value input column */
+  /**
+   * Configuration for the value input column.
+   *
+   * `placeholder` doubles as the column's accessible name, since individual rows have no visible
+   * label — see {@link BaseFieldProps.placeholder} for the general placeholder guidance.
+   */
   valueConfig?: { placeholder?: string };
 
   /** Show delete button per row. Defaults to true. */
