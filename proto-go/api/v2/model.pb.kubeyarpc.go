@@ -254,14 +254,6 @@ func (c modelServiceHandler) GetModel(
 		logging.EntityNameTag:   request.Name,
 	})
 
-	getOptions := &metav1.GetOptions{}
-	if request.GetOptions != nil {
-		getOptions = request.GetOptions
-	}
-
-	result := &Model{}
-	err = c.apiHandler.Get(ctx, request.Namespace, request.Name, getOptions, result)
-
 	defer c.auditLogEmitter.Emit(ctx, c.buildModelAuditLogEventForGet(
 		ctx,
 		request,
@@ -269,6 +261,32 @@ func (c modelServiceHandler) GetModel(
 		err,
 	),
 	)
+
+	// Authentication
+	userAuthenticated, err := c.auth.UserAuthenticated(ctx)
+	if !userAuthenticated {
+		logger.Error(err, "User is not authenticated")
+		metric.Counter("unauthenticated").Inc(1)
+		return nil, err
+	}
+
+	// Authorization
+	projectName := request.Namespace
+	userAuthorized, err := c.auth.UserAuthorized(ctx, projectName, authapi.Get, "Model")
+
+	if !userAuthorized {
+		logger.Error(err, "User is not authorized")
+		metric.Counter("unauthorized").Inc(1)
+		return nil, err
+	}
+
+	getOptions := &metav1.GetOptions{}
+	if request.GetOptions != nil {
+		getOptions = request.GetOptions
+	}
+
+	result := &Model{}
+	err = c.apiHandler.Get(ctx, request.Namespace, request.Name, getOptions, result)
 
 	if err != nil {
 		logger.Error(err, "Cannot get Model request info from k8s/ETCD", "error", err, "api_msg_tag", "GetModel")
@@ -534,6 +552,32 @@ func (c modelServiceHandler) ListModel(
 		logging.NamespaceTag:    request.Namespace,
 	})
 
+	defer c.auditLogEmitter.Emit(ctx, c.buildModelAuditLogEventForList(
+		ctx,
+		request,
+		resp,
+		err,
+	),
+	)
+
+	// Authentication
+	userAuthenticated, err := c.auth.UserAuthenticated(ctx)
+	if !userAuthenticated {
+		logger.Error(err, "User is not authenticated")
+		metric.Counter("unauthenticated").Inc(1)
+		return nil, err
+	}
+
+	// Authorization
+	projectName := request.Namespace
+	userAuthorized, err := c.auth.UserAuthorized(ctx, projectName, authapi.List, "Model")
+
+	if !userAuthorized {
+		logger.Error(err, "User is not authorized")
+		metric.Counter("unauthorized").Inc(1)
+		return nil, err
+	}
+
 	result := &ModelList{}
 	listOptions := &metav1.ListOptions{}
 	if request.ListOptions != nil {
@@ -544,14 +588,6 @@ func (c modelServiceHandler) ListModel(
 		listOptionsExt = request.ListOptionsExt
 	}
 	err = c.apiHandler.List(ctx, request.Namespace, listOptions, listOptionsExt, result)
-
-	defer c.auditLogEmitter.Emit(ctx, c.buildModelAuditLogEventForList(
-		ctx,
-		request,
-		resp,
-		err,
-	),
-	)
 
 	if err != nil {
 		logger.Error(err, "API Handler failed to List Model", "error", err, "api_msg_tag", "ListModel")

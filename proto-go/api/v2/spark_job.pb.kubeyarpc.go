@@ -255,14 +255,6 @@ func (c sparkJobServiceHandler) GetSparkJob(
 		logging.EntityNameTag:   request.Name,
 	})
 
-	getOptions := &metav1.GetOptions{}
-	if request.GetOptions != nil {
-		getOptions = request.GetOptions
-	}
-
-	result := &SparkJob{}
-	err = c.apiHandler.Get(ctx, request.Namespace, request.Name, getOptions, result)
-
 	defer c.auditLogEmitter.Emit(ctx, c.buildSparkJobAuditLogEventForGet(
 		ctx,
 		request,
@@ -270,6 +262,32 @@ func (c sparkJobServiceHandler) GetSparkJob(
 		err,
 	),
 	)
+
+	// Authentication
+	userAuthenticated, err := c.auth.UserAuthenticated(ctx)
+	if !userAuthenticated {
+		logger.Error(err, "User is not authenticated")
+		metric.Counter("unauthenticated").Inc(1)
+		return nil, err
+	}
+
+	// Authorization
+	projectName := request.Namespace
+	userAuthorized, err := c.auth.UserAuthorized(ctx, projectName, authapi.Get, "SparkJob")
+
+	if !userAuthorized {
+		logger.Error(err, "User is not authorized")
+		metric.Counter("unauthorized").Inc(1)
+		return nil, err
+	}
+
+	getOptions := &metav1.GetOptions{}
+	if request.GetOptions != nil {
+		getOptions = request.GetOptions
+	}
+
+	result := &SparkJob{}
+	err = c.apiHandler.Get(ctx, request.Namespace, request.Name, getOptions, result)
 
 	if err != nil {
 		logger.Error(err, "Cannot get SparkJob request info from k8s/ETCD", "error", err, "api_msg_tag", "GetSparkJob")
@@ -535,6 +553,32 @@ func (c sparkJobServiceHandler) ListSparkJob(
 		logging.NamespaceTag:    request.Namespace,
 	})
 
+	defer c.auditLogEmitter.Emit(ctx, c.buildSparkJobAuditLogEventForList(
+		ctx,
+		request,
+		resp,
+		err,
+	),
+	)
+
+	// Authentication
+	userAuthenticated, err := c.auth.UserAuthenticated(ctx)
+	if !userAuthenticated {
+		logger.Error(err, "User is not authenticated")
+		metric.Counter("unauthenticated").Inc(1)
+		return nil, err
+	}
+
+	// Authorization
+	projectName := request.Namespace
+	userAuthorized, err := c.auth.UserAuthorized(ctx, projectName, authapi.List, "SparkJob")
+
+	if !userAuthorized {
+		logger.Error(err, "User is not authorized")
+		metric.Counter("unauthorized").Inc(1)
+		return nil, err
+	}
+
 	result := &SparkJobList{}
 	listOptions := &metav1.ListOptions{}
 	if request.ListOptions != nil {
@@ -545,14 +589,6 @@ func (c sparkJobServiceHandler) ListSparkJob(
 		listOptionsExt = request.ListOptionsExt
 	}
 	err = c.apiHandler.List(ctx, request.Namespace, listOptions, listOptionsExt, result)
-
-	defer c.auditLogEmitter.Emit(ctx, c.buildSparkJobAuditLogEventForList(
-		ctx,
-		request,
-		resp,
-		err,
-	),
-	)
 
 	if err != nil {
 		logger.Error(err, "API Handler failed to List SparkJob", "error", err, "api_msg_tag", "ListSparkJob")
