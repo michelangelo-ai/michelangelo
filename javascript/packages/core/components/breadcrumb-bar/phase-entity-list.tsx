@@ -1,7 +1,8 @@
 import { useLocation, useNavigate } from 'react-router-dom-v5-compat';
 import { useStyletron } from 'baseui';
 
-import { toTitleCase } from '#core/utils/string-utils';
+import { formatEntityName } from '#core/hooks/use-entity-name/use-entity-name';
+import { useDisplayContext } from '#core/providers/display-context/use-display-context';
 import { EntityItem } from './styled-components';
 
 import type { PhaseConfig } from '#core/types/common/studio-types';
@@ -18,6 +19,7 @@ export function PhaseEntityList({
   const [css, theme] = useStyletron();
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  const displayContext = useDisplayContext();
 
   const pathParts = pathname.split('/').filter(Boolean);
   const currentPhase = pathParts[1];
@@ -46,7 +48,7 @@ export function PhaseEntityList({
                 color: isDisabled ? theme.colors.contentTertiary : undefined,
               })}
             >
-              {toTitleCase(entity.name)}
+              {formatEntityName(entity.name, displayContext)}
             </span>
           </EntityItem>
         );

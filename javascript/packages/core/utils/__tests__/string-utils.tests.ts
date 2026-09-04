@@ -4,7 +4,6 @@ import {
   isNavigableUrl,
   safeStringify,
   sentenceCaseEnumValue,
-  toTitleCase,
 } from '../string-utils';
 
 describe('capitalizeFirstLetter', () => {
@@ -18,34 +17,6 @@ describe('capitalizeFirstLetter', () => {
 
   it('should return an empty string if the string is empty', () => {
     expect(capitalizeFirstLetter('')).toBe('');
-  });
-});
-
-describe('toTitleCase', () => {
-  it('should title case a plain lower case name', () => {
-    expect(toTitleCase('trained models')).toBe('Trained Models');
-  });
-
-  it('should title case a single word', () => {
-    expect(toTitleCase('pipelines')).toBe('Pipelines');
-  });
-
-  it('should title case a hyphenated name', () => {
-    expect(toTitleCase('feature-consistency')).toBe('Feature Consistency');
-  });
-
-  it('should preserve known acronyms as fully uppercase', () => {
-    expect(toTitleCase('ai agents')).toBe('AI Agents');
-    expect(toTitleCase('llm evaluations')).toBe('LLM Evaluations');
-    expect(toTitleCase('mes integrations')).toBe('MES Integrations');
-  });
-
-  it('should preserve acronyms already provided in uppercase', () => {
-    expect(toTitleCase('AI agents')).toBe('AI Agents');
-  });
-
-  it('should return an empty string unchanged', () => {
-    expect(toTitleCase('')).toBe('');
   });
 });
 
