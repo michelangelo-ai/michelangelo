@@ -22,8 +22,8 @@ type registerParams struct {
 	fx.In
 	Manager            ctrl.Manager
 	Scheme             *runtime.Scheme
-	MetadataStorage    storage.MetadataStorage    `optional:"true"`
-	Config             Config                     `optional:"true"`
+	MetadataStorage    storage.MetadataStorage `optional:"true"`
+	Config             Config                  `optional:"true"`
 	RetainPolicy       cascadedelete.RetainPolicy
 	MySQLPrimaryPolicy storage.MySQLPrimaryPolicy `optional:"true"`
 	Logger             *zap.Logger
