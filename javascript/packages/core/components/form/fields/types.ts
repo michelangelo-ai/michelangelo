@@ -47,8 +47,15 @@ export interface BaseFieldProps<T = unknown, InputValue = T> {
   disabled?: boolean;
 
   /**
-   * Specifies a short hint that describes the expected value of the field
-   * **Placeholder text disappears after input is provided.**
+   * Example text shown when the field is empty. **Disappears once input is provided.**
+   *
+   * - Prefix with "e.g." — show an example, not an instruction (`"e.g. my-pipeline"`, not `"Enter pipeline name"`).
+   * - Never echo the field's `label`.
+   * - Never use action verbs ("Enter…", "Type…", "Select…", "Choose…").
+   * - Omit entirely when the label is self-explanatory — not every field needs one.
+   *
+   * See {@link https://www.nngroup.com/articles/form-design-placeholders/} and
+   * {@link https://www.w3.org/WAI/tutorials/forms/instructions/}.
    */
   placeholder?: string;
 

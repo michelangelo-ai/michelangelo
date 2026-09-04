@@ -51,6 +51,7 @@ export function KeyValueRow({
         onFocus={onFocus}
         onBlur={handleBlurIfFilled}
         placeholder={keyConfig?.placeholder ?? 'Key'}
+        aria-label={keyConfig?.placeholder ?? 'Key'}
         // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- false is a valid value, so || is needed to fall through to keyConfig?.readOnly
         readOnly={readOnly || keyConfig?.readOnly}
         disabled={disabled}
@@ -69,6 +70,7 @@ export function KeyValueRow({
         onFocus={onFocus}
         onBlur={handleBlurIfFilled}
         placeholder={valueConfig?.placeholder ?? 'Value'}
+        aria-label={valueConfig?.placeholder ?? 'Value'}
         readOnly={readOnly}
         disabled={disabled}
         size={size}

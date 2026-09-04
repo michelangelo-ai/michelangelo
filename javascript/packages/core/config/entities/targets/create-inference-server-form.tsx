@@ -82,7 +82,7 @@ export const CreateInferenceServerForm = ({ onClose }: CreateActionComponentProp
           regex(K8S_NAME_PATTERN, K8S_NAME_RULES_MESSAGE)
         )}
         caption={K8S_NAME_RULES_MESSAGE}
-        placeholder="e.g., my-inference-server"
+        placeholder="e.g. my-inference-server"
       />
 
       <StringField

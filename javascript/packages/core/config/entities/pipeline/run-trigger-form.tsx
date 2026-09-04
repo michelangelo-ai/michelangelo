@@ -91,7 +91,6 @@ export const RunTriggerForm = ({ record, onClose }: ActionComponentProps<Pipelin
       <SelectField
         name="sourceTriggerName"
         label="Trigger"
-        placeholder="Select a trigger…"
         options={triggerOptions}
         isLoading={isLoading}
         required

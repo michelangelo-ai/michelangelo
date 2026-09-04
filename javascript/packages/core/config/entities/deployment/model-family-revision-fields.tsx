@@ -83,7 +83,6 @@ export const ModelFamilyRevisionFields = () => {
         isLoading={isModelLoading}
         disabled={!modelFamilyName}
         clearable={false}
-        placeholder="Search model to deploy"
       />
     </FormGroup>
   );

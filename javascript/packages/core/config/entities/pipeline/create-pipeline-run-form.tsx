@@ -95,7 +95,6 @@ export const CreatePipelineRunForm = ({ record, onClose }: ActionComponentProps<
       <TextareaField
         name="spec.description"
         label="Description"
-        placeholder="Enter a description for this run…"
         description="Optional. Helps identify this run in the pipeline run list."
       />
 
@@ -117,14 +116,14 @@ export const CreatePipelineRunForm = ({ record, onClose }: ActionComponentProps<
                   label="Emails"
                   multi
                   validate={validateEmails}
-                  placeholder="e.g., name@example.com"
+                  placeholder="e.g. name@example.com"
                 />
 
                 <StringField
                   name="notificationSlackDestinations"
                   label="Slack Channels or Users"
                   multi
-                  placeholder="e.g., #channel or @user"
+                  placeholder="e.g. #channel or @user"
                 />
               </>
             ) : null

@@ -111,6 +111,14 @@ export const ResumeRunFields = ({ pipelineName }: { pipelineName: string }) => {
   const hasSourceRun = !!sourceRunName;
   const hasNoSteps = hasSourceRun && !isLoadingSteps && steps.length === 0;
 
+  let stepsCaption =
+    'Leave empty to continue from where the source run stopped, reusing all cached outputs.';
+  if (!hasSourceRun) {
+    stepsCaption = 'Choose a pipeline run above first.';
+  } else if (hasNoSteps) {
+    stepsCaption = 'This run has no recorded workflow tasks to resume from.';
+  }
+
   return (
     <FormGroup
       collapsible
@@ -121,7 +129,6 @@ export const ResumeRunFields = ({ pipelineName }: { pipelineName: string }) => {
       <SelectField
         name={SOURCE_RUN_FIELD}
         label="Pipeline run"
-        placeholder="Search runs…"
         options={sourceRunOptions}
         isLoading={isLoadingRuns}
         caption={
@@ -135,17 +142,12 @@ export const ResumeRunFields = ({ pipelineName }: { pipelineName: string }) => {
         multi
         name={RESUME_FROM_FIELD}
         label="Steps"
-        placeholder={hasSourceRun ? 'Search steps…' : 'Select a pipeline run first'}
         options={stepOptions}
         isLoading={isLoadingSteps}
         disabled={!hasSourceRun || hasNoSteps}
         creatable={false}
         getOptionContent={(option) => <ResumeStepOption step={stepsById.get(option.id)} />}
-        caption={
-          hasNoSteps
-            ? 'This run has no recorded workflow tasks to resume from.'
-            : 'Leave empty to continue from where the source run stopped, reusing all cached outputs.'
-        }
+        caption={stepsCaption}
       />
     </FormGroup>
   );
