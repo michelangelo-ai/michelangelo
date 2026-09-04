@@ -2,6 +2,521 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+
+### Bug Fixes
+
+
+- Reword ma-design-interview skill to reduce duration (#1714)
+
+
+- **build:** Bump Go SDK to 1.26.3 + rules_go to 0.57.0 (CVE Scan fix, step 1/2) (#1567)
+
+
+- **python:** Restore ColumnConfig.shape optional default (#1762)
+
+
+- **ci:** Skip JavaScript coverage PR comment on fork pull requests (#1756)
+
+
+- **python:** Wire up workflowClient.executionUrlFormat for the sandbox (#1761)
+
+
+- **core:** Correct Model list columns for description, environment, type, last updated (#1673)
+
+
+- **storage/mysql:** Validate criterion field name before SQL interpolation (#1707)
+
+
+- **storage/mysql:** Implement directUpdate for the generic Update RPC (#1645)
+
+
+- **ui:** Block entity navigation for disabled/coming-soon phases in menu drawer (#1791)
+
+
+- **release:** Mark -rc tags as prereleases in GitHub releases (#1678)
+
+
+- **api:** Log blob-storage delete failure only when it fails (#1679)
+
+
+- **helm:** Drop placeholder signKey annotation from chart metadata (#1768)
+
+
+- **api:** Use status.Error for non-format error messages (#1782)
+
+
+- **core:** Exempt barrel files and test infra from react-refresh export rule (#1807)
+
+
+- **go:** Sync paused TriggerRun schedules (#1827)
+
+
+- **python:** Stop shipping test files in wheels and sdists (#1832)
+
+
+- Create TriggerRun schedules paused (#1828)
+
+
+- Make TriggerRun deletion idempotent (#1688)
+
+
+- **ui:** Tighten breadcrumb menu drawer close button and icons (#1799)
+
+
+- **core:** Stop capitalizing entity/phase names (#1846)
+
+
+- **core:** Title-case Data Sources, Evaluations, and Notebooks entity names (#1857)
+
+
+- **python:** Use __spec__.name for dot_path() under python -m (#1754)
+
+
+- **go:** Pipelinerun revision resolve and pipeline latest revision (#1797)
+
+
+- **python:** Render <crd> get <name> as table and fix -o yaml OrderedDict crash (#1822)
+
+
+- **python:** Rename evaluation_strategy to eval_strategy in bert_cola example (#1883)
+
+
+- **docs,examples:** Correct Lightning trainer imports and parameters (#1787)
+
+
+- Plumb RayTask gpu, disk and object store memory into the cluster spec (#1801)
+
+
+- **release:** Align website version and add it to version-bump.sh (#1849)
+
+
+- **ci:** Pin release.yaml's Go setup to go.mod instead of a hardcoded version (#1897)
+
+
+- **go:** Bump Go SDK from 1.26.3 to 1.26.5 to close remaining CVE Scan findings (#1732)
+
+
+- **release:** Close tracking issue on final promotion (#1896)
+
+
+- **k8sengine:** Emit rayStartParams as {} not null for RayClusters (#1932)
+
+
+- **build:** Regenerate proto/api/BUILD.bazel with gazelle (#1953)
+
+
+- **python:** Allow shape=[] (true scalar) in Triton schema validation (#1934)
+
+
+- **python:** ModelPusherPlugin downloads remote artifact URIs before upload (#1948)
+
+
+- Preserve backfill TriggerRun status (#1957)
+
+
+- **rpc:** Auto-pack Any/enum fields at the RPC layer, not in UI config (#1959)
+
+
+- **python:** Pusher storage keys, push_id, and deployable-archive config (#1961)
+
+
+- **examples/bert_cola:** Pass the trained model as a ModelVariable, not a local path (#1974)
+
+
+- **python:** Accept inference-multicluster in sandbox demo guard (#1996)
+
+
+- **ui:** Use fieldSelector on pipeline_name for Pipeline detail Runs tab (#1967)
+
+
+- **go:** Simplify trigger-fire environment defaulting to copy-forward only (#1994)
+
+
+- Make website Bun installs reproducible (#2017)
+
+
+- **trainer:** Default to SingleDeviceStrategy when world size is 1 (#2005)
+
+
+### CI/CD
+
+
+- Bump actions/setup-go from 5 to 7 (#1743)
+
+
+- Bump actions/setup-python from 5 to 7 (#1744)
+
+
+- Bump aquasecurity/trivy-action from 0.32.0 to 0.36.0 in the actions-minor-and-patch group (#1742)
+
+
+- Add least-privilege permissions to workflows missing them (#1711)
+
+
+- Pin third-party GitHub Actions to commit SHAs (#1757)
+
+
+- Pin the golangci-lint installer script to the version it installs (#1767)
+
+
+- Pin apidiff to a Go 1.24-compatible x/exp pseudo-version (#1781)
+
+
+- **go:** Migrate golangci-lint config off deprecated options (#1755)
+
+
+- **integration-test:** Run Playwright browser tests in sandbox-e2e (#1838)
+
+
+- Upload coverage reports to Codecov (#1834)
+
+
+- Add OpenSSF Scorecard workflow and badge (#1835)
+
+
+- Build examples image without pushing on fork PRs (#1802)
+
+
+- Pin sticky-pull-request-comment in javascript-coverage to a full SHA (#1810)
+
+
+- Remove unused attestations permission from release workflows (#1811)
+
+
+- Bump actions/cache from 4 to 6 (#1825)
+
+
+- Bump azure/setup-helm from 4 to 5 (#1823)
+
+
+- Bump actions/upload-pages-artifact from 3 to 5 (#1910)
+
+
+- Bump docker/setup-buildx-action from 3 to 4 (#1911)
+
+
+- Bump peter-evans/create-pull-request from 6.1.0 to 8.1.1 (#1824)
+
+
+- Bump Trivy to v0.74.0 in CVE Scan workflow (#1950)
+
+
+- Run CVE Scan on schedule only, not on every main-branch release (#1951)
+
+
+- **codecov:** Mark project and patch status checks informational (#1850)
+
+
+- Pin base images by digest and track them via Dependabot (#1952)
+
+
+- Bump actions/download-artifact from 4 to 8 (#1971)
+
+
+- Bump docker/setup-qemu-action from 3 to 4 (#1969)
+
+
+### Documentation
+
+
+- Fix community on-ramps in CONTRIBUTING and docs (#1713)
+
+
+- **core:** Document action rendering surfaces and mutation payload flow (#1722)
+
+
+- **core:** Consolidate javascript skills into CLAUDE.md (#1724)
+
+
+- Correct Ray Tune and Ray autoscaling claims (#1788)
+
+
+- Repoint california_housing doc references to michelangelo-examples (#1749)
+
+
+- Add a migration guide for KubeRay users (#1783)
+
+
+- Revert getting-started.md tutorial to xgb_train (pytorch_train crashes on Apple Silicon) (#1871)
+
+
+- **security:** Update supported versions for 0.8.x (#1848)
+
+
+- **api-reference:** Add gRPC service reference for all 15 API services (#1862)
+
+
+- Correct batch endpoint, feature store, and traffic splitting claims (#1833)
+
+
+- Surface the release changelog on the docs site (#1887)
+
+
+- Add role-based learning paths sequencing the existing docs (#1885)
+
+
+- Correct sandbox setup prerequisites and resource sizing (#1909)
+
+
+- Point monitoring guide at the chart-managed observability resources (#1922)
+
+
+- **api-reference:** Generate Python SDK Reference from docstrings (#1956)
+
+
+- Correct A/B testing and inference backend claims (#1928)
+
+
+- **ui:** Update entity config examples for the Pipeline Runs → Runs rename (#2016)
+
+
+- Revert getting-started.md tutorial to pytorch_train (MPS fix merged) (#2026)
+
+
+### Features
+
+
+- Export success operations from core (#1716)
+
+
+- **native_transform:** Add fitted-statistics layers (PR B3) (#1683)
+
+
+- **native_transform:** Add IDHashTokenizer wrapper layer (PR B4) (#1684)
+
+
+- **native_transform:** Add Pydantic layer specs (PR B5) (#1685)
+
+
+- **js:** Config-driven form engine skeleton (#1650)
+
+
+- **native_transform:** Add TransformSpec DAG engine + TorchTransformModule (PR B6) (#1730)
+
+
+- **native_transform:** Add auxiliary transform helpers (PR B8) (#1729)
+
+
+- **ui:** Show Coming soon badge on phase cards (#1785)
+
+
+- **ui:** Change steps to ongoing operations (#1784)
+
+
+- **ui:** Add delete pipeline functionality (#1792)
+
+
+- **trainer:** Add an XGBoost trainer built on Ray Train (#1793)
+
+
+- **js:** Schema-aware wrappers for all field types (#1651)
+
+
+- **js:** Declarative validation for form config (#1652)
+
+
+- **native_transform:** Add schema bridge for fitted transform DAGs (PR B7) (#1772)
+
+
+- **native_transform:** Add TransformSpecIO + usage guide (PR E) (#1774)
+
+
+- **ui:** Add deployment information tab (#1708)
+
+
+- **ui:** Add status cards to deployment detail page (#1709)
+
+
+- **ui:** Add source code link (#1826)
+
+
+- Add GitHub-backed dev identity override to sandbox UI (#1819)
+
+
+- **core:** Add Experiment & Productionize phase (#1813)
+
+
+- **core:** Add Monitor & Debug coming-soon phase (#1815)
+
+
+- Let EntityTable own phase pipeline-type filtering (#1830)
+
+
+- **form:** Add conditional layout with the `is` operator (#1804)
+
+
+- **form:** Add isNot/isEmpty/containsAny condition operators (#1805)
+
+
+- **model:** Add Model API-hook wiring skeleton (Phase 0) (#1728)
+
+
+- **native_transform:** Add Ray execution adapter (PR C) (#1773)
+
+
+- **blobstore:** Add a native GCS backend (#1837)
+
+
+- **train:** Add FSDP2 strategy to the Lightning trainer (#1877)
+
+
+- **ui:** Add model detail page (#1881)
+
+
+- **ui:** Add "All Projects" title (#1903)
+
+
+- **ui:** Add color for phase card (#1845)
+
+
+- **sandbox:** Add demo commands for multi-cluster inference (#1175)
+
+
+- **deployment:** Resolve model storage path from the Model CR (#1907)
+
+
+- **core:** Add pipelines, triggers, and runs to the deploy phase (#1935)
+
+
+- **model:** Default and inherit the environment label on Models (#1912)
+
+
+- **ui:** Add deployment create form (#1899)
+
+
+- **core:** Pluggable ownership resolver for project views (#1947)
+
+
+- **ui:** Add configuration tab on run detail page (#1929)
+
+
+- **ui:** Support pipeline run resume from + retry (#1858)
+
+
+- **ui:** Add inference server create form (#1942)
+
+
+- **ui:** Add more detail on key status indicator for deployment (#1940)
+
+
+- Stamp SourcePipelineType label on PipelineRun/TriggerRun creation (#1936)
+
+
+- **core:** Filter pipeline runs and trigger runs by SourcePipelineType label (#1933)
+
+
+- **python:** Add ma sandbox snapshot create/restore for CRD state (#1715)
+
+
+- **api:** Default EnvironmentLabel on PipelineRun create and update (#1945)
+
+
+- **ui:** Reorder phase tabs (Triggers before Runs) and rename Pipeline Runs to Runs (#1964)
+
+
+- **examples:** Package and push the fine-tuned bert_cola model (#1966)
+
+
+- **ui:** Enable the Deploy & Predict phase (#1975)
+
+
+- **inferenceserver:** Add Triton serving image with torch/transformers (#1987)
+
+
+- **ui:** Add Information tab to pipeline run detail page (#1972)
+
+
+- **ui:** Add Environment field to run pipeline dialog (#1995)
+
+
+- **ui:** Add Last Updated and Environment columns to pipeline run list (#1993)
+
+
+- Reflect name to unmarshalled table (#1914)
+
+
+### Miscellaneous
+
+
+- Add ma-sandbox-test-plan Claude Code skill (#1641)
+
+
+- Add dependabot config for weekly grouped dependency updates (#1691)
+
+
+- Bump gazelle 0.40.0 to 0.52.2, compatible with rules_go 0.57.0 (#1747)
+
+
+- **lib:** Update california_housing example references in model_manager registry docstrings/tests (#1750)
+
+
+- Add Algolia crawler domain verification token to robots.txt (#1766)
+
+
+- Merge back release/v0.8 to main (#1721)
+
+
+- Add CODEOWNERS file (#1796)
+
+
+- Route major feature requests to the enhancements RFC process (#1803)
+
+
+- Bump vllm to 0.9.2 to shed known CVEs (#1812)
+
+
+- Support the KubeRay suspended cluster state in the MA API (#1700)
+
+
+- Merge release/v0.9 back to main (v0.9.0) (#1925)
+
+
+- Update index.md (#1926)
+
+
+- **go:** Link legacy env-label TODOs to tracking issue (#1941)
+
+
+- Add pipeline-run notification setup to Run Pipeline dialog (#1868)
+
+
+- Delete PR_1430_REVIEW_COMMENT_ANALYSIS.md (#1962)
+
+
+- Remove standalone trigger_run demo YAMLs from sandbox (#2001)
+
+
+- Upgrade website to TypeScript 7.0.2 (#2018)
+
+
+- Schedule pipelines from triggers, and link pipelines, triggers, and their runs together (#1870)
+
+
+- Bump version to 0.10.0-rc.1
+
+
+### Performance
+
+
+- **javascript:** Switch test environment from jsdom to happy-dom (#847)
+
+
+### Refactoring
+
+
+- Delete dead code in python/michelangelo/canvas/ (#1727)
+
+
+- **js:** Move form types to types directory (#1671)
+
+
+- **core:** Rename ErrorView to Signpost (#1786)
+
+
+- **train:** Extract profiler helpers from util.py into profiler.py (#1878)
+
 ## [0.9.0] - 2026-08-24
 
 
