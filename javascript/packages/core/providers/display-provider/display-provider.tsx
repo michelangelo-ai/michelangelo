@@ -1,26 +1,26 @@
-import { DisplayContextValue } from './display-context-context';
+import { DisplayContext } from './display-context';
 
 import type { DisplayContextType } from './types';
 
 /**
  * Declares the display region ("nav" or "content") for everything rendered
  * inside it, so components never decide their own entity-name casing — see
- * `useEntityName`. Nest a narrower `DisplayContext` to override a subregion,
+ * `useEntityName`. Nest a narrower `DisplayProvider` to override a subregion,
  * or pass an explicit casing to `useEntityName` for a one-off exception.
  *
  * @example
  * ```tsx
- * <DisplayContext type="nav">
+ * <DisplayProvider type="nav">
  *   <BreadcrumbBar ... />
- * </DisplayContext>
+ * </DisplayProvider>
  * ```
  */
-export function DisplayContext({
+export function DisplayProvider({
   type,
   children,
 }: {
   type: DisplayContextType;
   children: React.ReactNode;
 }) {
-  return <DisplayContextValue.Provider value={type}>{children}</DisplayContextValue.Provider>;
+  return <DisplayContext.Provider value={type}>{children}</DisplayContext.Provider>;
 }
