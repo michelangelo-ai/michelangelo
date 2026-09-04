@@ -1,5 +1,6 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { vi } from 'vitest';
 
 import { InterpolatableActionsPopover } from '#core/components/actions/interpolatable-actions-popover';
 import { RUN_ENTITY_CONFIG } from '#core/config/entities/run/run';
@@ -10,7 +11,10 @@ import { getErrorProviderWrapper } from '#core/test/wrappers/get-error-provider-
 import { getIconProviderWrapper } from '#core/test/wrappers/get-icon-provider-wrapper';
 import { getInterpolationProviderWrapper } from '#core/test/wrappers/get-interpolation-provider-wrapper';
 import { getRouterWrapper } from '#core/test/wrappers/get-router-wrapper';
-import { getServiceProviderWrapper } from '#core/test/wrappers/get-service-provider-wrapper';
+import {
+  createQueryMockRouter,
+  getServiceProviderWrapper,
+} from '#core/test/wrappers/get-service-provider-wrapper';
 import { getSnackbarProviderWrapper } from '#core/test/wrappers/get-snackbar-provider-wrapper';
 
 import type { ActionConfigSchema, Data } from '#core/components/actions/types';
@@ -55,19 +59,27 @@ async function openRetryDialog(user: ReturnType<typeof userEvent.setup>) {
   return screen.findByRole('dialog', { name: 'Retry Pipeline Run' });
 }
 
+/** Finds the payload sent in the (single) CreatePipelineRun call. */
+function getCreatePipelineRunPayload(request: ReturnType<typeof createQueryMockRouter>) {
+  const createCall = vi.mocked(request).mock.calls.find(([name]) => name === 'CreatePipelineRun');
+  expect(createCall).toBeDefined();
+  return createCall![1] as {
+    typeMeta?: unknown;
+    status?: unknown;
+    metadata: Record<string, unknown>;
+    spec: Record<string, unknown> & {
+      actor?: unknown;
+      resume?: { pipelineRun?: { name?: string; namespace?: string }; resumeFrom?: string[] };
+    };
+  };
+}
+
 describe('RUN_ENTITY_CONFIG: retry action', () => {
   it('creates a new run that resumes from the run being retried', async () => {
     const user = userEvent.setup();
-    const submitted: Record<string, unknown>[] = [];
-    const request = (name: string, payload: unknown) => {
-      if (name === 'CreatePipelineRun') {
-        submitted.push(payload as Record<string, unknown>);
-        return Promise.resolve({
-          pipelineRun: { metadata: { name: NEW_RUN, namespace: NAMESPACE } },
-        });
-      }
-      return Promise.resolve({});
-    };
+    const request = createQueryMockRouter({
+      CreatePipelineRun: { pipelineRun: { metadata: { name: NEW_RUN, namespace: NAMESPACE } } },
+    });
     const record = buildFailedRun();
 
     render(
@@ -90,12 +102,7 @@ describe('RUN_ENTITY_CONFIG: retry action', () => {
 
     await user.click(within(dialog).getByRole('button', { name: 'Retry' }));
 
-    await waitFor(() => expect(submitted).toHaveLength(1));
-
-    const payload = submitted[0] as {
-      metadata: { name: string; namespace: string };
-      spec: { resume?: { pipelineRun?: { name?: string; namespace?: string } } };
-    };
+    const payload = await waitFor(() => getCreatePipelineRunPayload(request));
 
     expect(payload.spec.resume?.pipelineRun).toEqual({
       name: SOURCE_RUN,
@@ -108,16 +115,9 @@ describe('RUN_ENTITY_CONFIG: retry action', () => {
 
   it('strips the server-owned fields the API rejects or overwrites on create', async () => {
     const user = userEvent.setup();
-    const submitted: Record<string, unknown>[] = [];
-    const request = (name: string, payload: unknown) => {
-      if (name === 'CreatePipelineRun') {
-        submitted.push(payload as Record<string, unknown>);
-        return Promise.resolve({
-          pipelineRun: { metadata: { name: NEW_RUN, namespace: NAMESPACE } },
-        });
-      }
-      return Promise.resolve({});
-    };
+    const request = createQueryMockRouter({
+      CreatePipelineRun: { pipelineRun: { metadata: { name: NEW_RUN, namespace: NAMESPACE } } },
+    });
     const record = buildFailedRun();
 
     render(
@@ -136,14 +136,7 @@ describe('RUN_ENTITY_CONFIG: retry action', () => {
     const dialog = await openRetryDialog(user);
     await user.click(within(dialog).getByRole('button', { name: 'Retry' }));
 
-    await waitFor(() => expect(submitted).toHaveLength(1));
-
-    const payload = submitted[0] as {
-      typeMeta?: unknown;
-      status?: unknown;
-      metadata: Record<string, unknown>;
-      spec: Record<string, unknown>;
-    };
+    const payload = await waitFor(() => getCreatePipelineRunPayload(request));
 
     expect(payload.status).toBeUndefined();
     expect(payload.typeMeta).toBeUndefined();
@@ -157,16 +150,9 @@ describe('RUN_ENTITY_CONFIG: retry action', () => {
 
   it('drops resumeFrom inherited from a run that was itself resumed', async () => {
     const user = userEvent.setup();
-    const submitted: Record<string, unknown>[] = [];
-    const request = (name: string, payload: unknown) => {
-      if (name === 'CreatePipelineRun') {
-        submitted.push(payload as Record<string, unknown>);
-        return Promise.resolve({
-          pipelineRun: { metadata: { name: NEW_RUN, namespace: NAMESPACE } },
-        });
-      }
-      return Promise.resolve({});
-    };
+    const request = createQueryMockRouter({
+      CreatePipelineRun: { pipelineRun: { metadata: { name: NEW_RUN, namespace: NAMESPACE } } },
+    });
 
     // Retrying a resumed run must not re-force the steps that run was asked to re-execute;
     // it should reuse every cached success instead.
@@ -196,11 +182,7 @@ describe('RUN_ENTITY_CONFIG: retry action', () => {
     const dialog = await openRetryDialog(user);
     await user.click(within(dialog).getByRole('button', { name: 'Retry' }));
 
-    await waitFor(() => expect(submitted).toHaveLength(1));
-
-    const payload = submitted[0] as {
-      spec: { resume?: { pipelineRun?: { name?: string }; resumeFrom?: string[] } };
-    };
+    const payload = await waitFor(() => getCreatePipelineRunPayload(request));
 
     expect(payload.spec.resume?.resumeFrom).toBeUndefined();
     // The new run resumes from the run just retried, not from that run's own ancestor.
@@ -209,16 +191,9 @@ describe('RUN_ENTITY_CONFIG: retry action', () => {
 
   it('confirms with a toast linking to the newly created run', async () => {
     const user = userEvent.setup();
-    const submitted: Record<string, unknown>[] = [];
-    const request = (name: string, payload: unknown) => {
-      if (name === 'CreatePipelineRun') {
-        submitted.push(payload as Record<string, unknown>);
-        return Promise.resolve({
-          pipelineRun: { metadata: { name: NEW_RUN, namespace: NAMESPACE } },
-        });
-      }
-      return Promise.resolve({});
-    };
+    const request = createQueryMockRouter({
+      CreatePipelineRun: { pipelineRun: { metadata: { name: NEW_RUN, namespace: NAMESPACE } } },
+    });
     const record = buildFailedRun();
 
     render(

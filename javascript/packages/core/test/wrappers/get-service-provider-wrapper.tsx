@@ -83,6 +83,9 @@ export function createServiceProviderTestContext(serviceProvider: Partial<Servic
 /**
  * Creates a query-aware mock request function that responds based on queryName and serviceOptions.
  *
+ * The returned function is a `vi.fn()`, so use `.mock.calls` or `toHaveBeenCalledWith` to assert
+ * on exactly what was sent — no separate request-capture helper is needed.
+ *
  * @param responses - Map of queryName or "queryName:serviceOptions" to response data or Error
  * @returns Mock function that routes requests based on queryName and optionally serviceOptions
  *
@@ -97,6 +100,15 @@ export function createServiceProviderTestContext(serviceProvider: Partial<Servic
  * });
  *
  * const wrapper = getServiceProviderWrapper({ request: mockRequest });
+ *
+ * // Assert on the payload sent to a mutation:
+ * expect(mockRequest).toHaveBeenCalledWith('CreatePipelineRun', expect.objectContaining({
+ *   spec: expect.objectContaining({ pipeline: { name: 'my-pipeline' } }),
+ * }));
+ *
+ * // For absence assertions (checking a field was NOT sent):
+ * const createCall = mockRequest.mock.calls.find(([name]) => name === 'CreatePipelineRun');
+ * expect((createCall[1] as Record<string, unknown>).spec.resume).toBeUndefined();
  * ```
  */
 export function createQueryMockRouter(
