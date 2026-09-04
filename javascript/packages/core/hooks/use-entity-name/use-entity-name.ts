@@ -10,10 +10,6 @@ import type { DisplayContextType } from '#core/providers/display-provider/types'
  * ambient context for a one-off exception; with no ambient context and no
  * override, `name` is returned unchanged.
  *
- * This replaces the old `startCaseEntityName`/`toSentenceCaseName` helpers —
- * casing is now a property of where a name is rendered, not a choice made by
- * whichever helper a call site happens to import.
- *
  * @example
  * ```tsx
  * // Inside <DisplayProvider type="nav">:
