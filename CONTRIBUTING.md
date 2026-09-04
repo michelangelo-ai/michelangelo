@@ -303,6 +303,23 @@ If soak testing finds a problem with an RC:
 
 For a fix to an already-released version, skip the RC flow: cherry-pick the fix to the release branch, update `CHANGELOG.md`, and tag `vX.Y.Z` directly — `release.yaml` publishes the patch the same way it does a final release.
 
+### Tag ancestry and merge-backs
+
+Merge-back PRs (`release/vX.Y` → `main`) are squash-merged, so the tagged
+release commits are **never ancestors of `main`** (`git merge-base
+--is-ancestor v0.8.0 main` returns false — see #1662). This is a known,
+accepted property of the branching model, with one rule attached:
+
+- Any tooling that scopes work between releases must use **explicit
+  tag-to-tag ranges** (`git log vA..vB`), which are well-defined regardless
+  of ancestry. Never resolve versions against `main` via `git describe`,
+  `git merge-base --is-ancestor <tag> main`, or git-cliff's ancestry-based
+  `--latest` — on this repo they will silently misbehave.
+
+`changelog.yml` already follows this rule: it picks the preceding final tag
+by commit timestamp and falls back to the previous release branch's fork
+point off `main` when that tag is not an ancestor.
+
 ## Creating a Pull Request
 
 If you want to fix a bug or propose a new feature you’ll do this through creating a Pull Request.

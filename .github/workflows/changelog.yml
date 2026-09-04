@@ -104,8 +104,21 @@ jobs:
           CURRENT_BRANCH="${{ steps.branch.outputs.base }}"
 
           if [ "$CURRENT_BRANCH" = "main" ]; then
-            echo "range=" >> "$GITHUB_OUTPUT"
-            echo "Tag is on main, not a release branch, and the preceding tag isn't an ancestor; falling back to --latest"
+            # Tags never land on main by policy (see CONTRIBUTING.md), so
+            # this is a defensive path for a mis-dispatched tag. git-cliff's
+            # --latest derives its range from tag ancestry, which squash
+            # merge-backs break on this repo (#1662) -- it would silently
+            # bucket the wrong commits. `git log A..B` is well-defined even
+            # when A is not an ancestor of B, so prefer the explicit
+            # tag-to-tag range whenever a preceding final tag exists and
+            # only fall back to --latest for the first tag ever.
+            if [ -n "$CANDIDATE" ]; then
+              echo "range=${CANDIDATE}..${CURRENT_TAG}" >> "$GITHUB_OUTPUT"
+              echo "Tag is on main and ${CANDIDATE} is not an ancestor; using explicit tag-to-tag range ${CANDIDATE}..${CURRENT_TAG} instead of ancestry-based --latest (#1662)"
+            else
+              echo "range=" >> "$GITHUB_OUTPUT"
+              echo "No preceding final tag exists (first release); falling back to --latest"
+            fi
             exit 0
           fi
 
