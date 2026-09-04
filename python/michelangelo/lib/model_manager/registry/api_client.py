@@ -58,6 +58,9 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from michelangelo.api.v2.services.gen.model import ModelService as _ModelServiceType
+    from michelangelo.lib.model_manager.registry.pipeline_run import (
+        SourcePipelineRun,
+    )
 
 _logger = logging.getLogger(__name__)
 
@@ -195,6 +198,7 @@ class APIRegistryClient(ModelRegistryClient):
         schema: dict[str, Any] | None = None,
         labels: Mapping[str, str] | None = None,
         metadata: Mapping[str, Any] | None = None,
+        source_pipeline_run: SourcePipelineRun | None = None,
     ) -> RegisteredModel:
         """Register a model via ``create_model``, falling back to ``update_model``.
 
@@ -210,6 +214,10 @@ class APIRegistryClient(ModelRegistryClient):
             labels: String key-value pairs stored in ``model.metadata.labels``.
             metadata: Arbitrary JSON-serializable key-value pairs stored under
                 the annotation ``michelangelo.io/metadata``.
+            source_pipeline_run: Optional identity of the pipeline run that
+                produced this model. When provided, stored as
+                ``model.spec.source_pipeline_run.name`` (and ``.namespace``,
+                when set). Left unset when ``None``.
 
         Returns:
             :class:`~michelangelo.lib.model_manager.registry.client.RegisteredModel`
@@ -228,6 +236,7 @@ class APIRegistryClient(ModelRegistryClient):
                 kind=kind,
                 labels=labels,
                 metadata=metadata,
+                source_pipeline_run=source_pipeline_run,
             )
             try:
                 _logger.info("Calling create_model for '%s'.", name)
@@ -302,6 +311,7 @@ class APIRegistryClient(ModelRegistryClient):
         kind: str | None,
         labels: Mapping[str, str] | None,
         metadata: Mapping[str, Any] | None,
+        source_pipeline_run: SourcePipelineRun | None = None,
     ) -> model_pb2.Model:
         model = model_pb2.Model()
         model.metadata.name = name
@@ -313,6 +323,10 @@ class APIRegistryClient(ModelRegistryClient):
         if description:
             model.spec.description = description
         model.spec.kind = _convert_model_kind(kind)
+        if source_pipeline_run:
+            model.spec.source_pipeline_run.name = source_pipeline_run.name
+            if source_pipeline_run.namespace:
+                model.spec.source_pipeline_run.namespace = source_pipeline_run.namespace
 
         # Kubernetes label values are capped at 63 characters and restricted
         # to alphanumerics/dashes/underscores/dots. Callers built on top of

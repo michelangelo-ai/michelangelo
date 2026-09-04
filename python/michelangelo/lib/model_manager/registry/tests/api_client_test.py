@@ -14,6 +14,7 @@ from michelangelo.lib.model_manager.registry.api_client import (
     METADATA_ANNOTATION_KEY,
     APIRegistryClient,
 )
+from michelangelo.lib.model_manager.registry.pipeline_run import SourcePipelineRun
 
 
 class _RpcError(grpc.RpcError):
@@ -253,6 +254,43 @@ class TestAPIRegistryClientRegisterModel(TestCase):
         self.assertEqual(
             created_model.spec.kind, model_pb2.MODEL_KIND_LLM_CHAT_COMPLETION
         )
+
+    def test_source_pipeline_run_set_on_model_proto(self):
+        """source_pipeline_run with a namespace sets both name and namespace."""
+        svc = _mock_svc()
+        _client(svc).register_model(
+            "m",
+            "s3://b/raw",
+            source_pipeline_run=SourcePipelineRun(name="run-1", namespace="ns-1"),
+        )
+        created_model = svc.create_model.call_args[0][0]
+        self.assertEqual(created_model.spec.source_pipeline_run.name, "run-1")
+        self.assertEqual(created_model.spec.source_pipeline_run.namespace, "ns-1")
+
+    def test_source_pipeline_run_without_namespace_leaves_namespace_unset(self):
+        """source_pipeline_run with namespace=None sets only .name."""
+        svc = _mock_svc()
+        _client(svc).register_model(
+            "m",
+            "s3://b/raw",
+            source_pipeline_run=SourcePipelineRun(name="run-1", namespace=None),
+        )
+        created_model = svc.create_model.call_args[0][0]
+        self.assertEqual(created_model.spec.source_pipeline_run.name, "run-1")
+        self.assertEqual(created_model.spec.source_pipeline_run.namespace, "")
+
+    def test_source_pipeline_run_none_leaves_field_unset(self):
+        """Omitting source_pipeline_run (the default) leaves the proto field unset.
+
+        Regression guard: every pre-existing register_model() call (none of
+        which pass this new parameter) must continue to produce a model with
+        no source_pipeline_run.
+        """
+        svc = _mock_svc()
+        _client(svc).register_model("m", "s3://b/raw")
+        created_model = svc.create_model.call_args[0][0]
+        self.assertEqual(created_model.spec.source_pipeline_run.name, "")
+        self.assertEqual(created_model.spec.source_pipeline_run.namespace, "")
 
 
 # ---------------------------------------------------------------------------

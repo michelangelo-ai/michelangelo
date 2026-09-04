@@ -9,6 +9,10 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+    from michelangelo.lib.model_manager.registry.pipeline_run import (
+        SourcePipelineRun,
+    )
+
 
 @dataclass
 class RegisteredModel:
@@ -100,6 +104,7 @@ class ModelRegistryClient(ABC):
                 schema: dict[str, Any] | None = None,
                 labels: Mapping[str, str] | None = None,
                 metadata: Mapping[str, Any] | None = None,
+                source_pipeline_run: SourcePipelineRun | None = None,
             ) -> RegisteredModel:
                 version = str(len(self._store.get(name, [])) + 1)
                 entry = RegisteredModel(
@@ -138,6 +143,7 @@ class ModelRegistryClient(ABC):
         schema: dict[str, Any] | None = None,
         labels: Mapping[str, str] | None = None,
         metadata: Mapping[str, Any] | None = None,
+        source_pipeline_run: SourcePipelineRun | None = None,
     ) -> RegisteredModel:
         """Register a model and its artifact URI in the registry.
 
@@ -182,6 +188,16 @@ class ModelRegistryClient(ABC):
                 native run linkage (e.g. MLflow) should extract
                 ``metadata["run_id"]`` and pass it to their native
                 version-creation API. Registry clients treat this as read-only.
+            source_pipeline_run: Optional identity of the pipeline run that
+                produced this model, auto-derived from the pipeline worker's
+                pod-injected environment (see
+                ``michelangelo.lib.model_manager.registry.pipeline_run.
+                get_source_pipeline_run``). This is system-derived
+                provenance, not an author-settable field — callers should
+                not construct an arbitrary value for it. Implementations
+                that do not support storing pipeline-run provenance **must**
+                silently accept and ignore this argument, following the same
+                convention as ``schema``.
 
         Returns:
             A ``RegisteredModel`` describing the created registration,
@@ -246,8 +262,14 @@ class InMemoryRegistryClient(ModelRegistryClient):
         schema: dict[str, Any] | None = None,
         labels: Mapping[str, str] | None = None,
         metadata: Mapping[str, Any] | None = None,
+        source_pipeline_run: SourcePipelineRun | None = None,
     ) -> RegisteredModel:
-        """Register a model version and store it in memory."""
+        """Register a model version and store it in memory.
+
+        ``schema`` and ``source_pipeline_run`` are silently ignored — this
+        in-memory store has no schema field or pipeline-run provenance field
+        to write them into.
+        """
         version_num = str(len(self._store.get(name, [])) + 1)
         entry = RegisteredModel(
             name=name,
