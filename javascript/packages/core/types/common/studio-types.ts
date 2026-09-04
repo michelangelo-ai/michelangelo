@@ -64,19 +64,14 @@ export enum Phase {
 
 export interface PhaseEntityConfig<T extends object = object> {
   /**
-   * Name of the entity as it appears within MA Studio. Should be plural, lower case
-   * version of the name — casing is applied at render time based on the surrounding
-   * `DisplayProvider` (see `useEntityName` in `#core/hooks/use-entity-name/use-entity-name`),
-   * so config authors should supply the plain lower case form and not pre-case it.
-   * An acronym that's part of the name (e.g. "AI") should still be written capitalized —
-   * `useEntityName` only lowercases nothing and only capitalizes the first letter of
-   * each word, so already-uppercase letters pass through unchanged.
+   * Name of the entity as it appears within MA Studio. Plural, lower case, and
+   * not pre-cased — a display context applies casing at render time. Acronyms
+   * (e.g. "AI") should still be capitalized in the name itself.
    *
    * @example
    * trained models
    * pipelines
-   * feature consistency (intentionally not pluralized since this entity is never referred
-   *  to as "feature consistencies")
+   * feature consistency (not pluralized — never referred to as "feature consistencies")
    * AI agents
    */
   name: string;
