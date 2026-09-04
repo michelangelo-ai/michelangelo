@@ -3,10 +3,8 @@ import { DisplayContext } from './display-context';
 import type { DisplayContextType } from './types';
 
 /**
- * Declares the display region ("nav" or "content") for everything rendered
- * inside it, so components never decide their own entity-name casing — see
- * `useEntityName`. Nest a narrower `DisplayProvider` to override a subregion,
- * or pass an explicit casing to `useEntityName` for a one-off exception.
+ * Declares the display region for everything rendered inside it. Nest a
+ * narrower `DisplayProvider` to override a subregion.
  *
  * @example
  * ```tsx

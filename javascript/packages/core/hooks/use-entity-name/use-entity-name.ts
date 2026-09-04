@@ -3,12 +3,9 @@ import { useDisplayContext } from '#core/providers/display-provider/use-display-
 import type { DisplayContextType } from '#core/providers/display-provider/types';
 
 /**
- * @description
- * Returns `name` cased for the surrounding `DisplayProvider` — Title Case in a
- * `"nav"` region, passed through as-is in a `"content"` region (the canonical
- * form is already lowercase/sentence case). Pass `casing` to override the
- * ambient context for a one-off exception; with no ambient context and no
- * override, `name` is returned unchanged.
+ * Returns `name` cased for the surrounding `DisplayProvider`. Pass `casing`
+ * to override the ambient context for a one-off exception; with no ambient
+ * context and no override, `name` is returned unchanged.
  *
  * @example
  * ```tsx
@@ -28,11 +25,10 @@ export function useEntityName(name: string, casing?: DisplayContextType): string
 }
 
 /**
- * Applies the display casing for a given context value directly, without
- * reading `DisplayProvider` from the component tree. `useEntityName` is a
- * thin wrapper around this for the common case; use this directly when
- * casing several names against a context read once — e.g. mapping a list —
- * since a hook can't be called once per loop iteration.
+ * Applies display casing for a given context value directly, without reading
+ * `DisplayProvider` from the component tree. Use this over `useEntityName`
+ * when casing several names against a context read once — e.g. mapping a
+ * list — since a hook can't be called once per loop iteration.
  */
 export function formatEntityName(name: string, casing: DisplayContextType | undefined): string {
   return casing === 'nav' ? toNavCase(name) : name;
@@ -40,10 +36,8 @@ export function formatEntityName(name: string, casing: DisplayContextType | unde
 
 /**
  * Capitalizes the first letter of each space-separated word. Splitting on
- * spaces only (not hyphens) preserves hyphenated names like "one-off" as a
- * single word, and capitalizing only the first character is a no-op on
- * already-uppercase letters, so acronyms stored in the canonical name (e.g.
- * "AI pipelines") survive untouched.
+ * spaces (not hyphens) keeps hyphenated names like "one-off" intact, and
+ * already-uppercase letters are untouched, so acronyms survive.
  */
 function toNavCase(name: string): string {
   return name
