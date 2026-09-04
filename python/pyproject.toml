@@ -102,6 +102,7 @@ trainer-comet = ["comet_ml"]
 trainer-mlflow = ["mlflow"]
 trainer-xgboost = ["ray", "xgboost", "numpy", "pandas"]
 trainer-deepspeed = ["deepspeed"]
+tuner = ["ray", "pandas", "pyarrow"]  # Ray Tune helper (michelangelo.lib.tuner.ray_tune)
 
 [tool.pytest.ini_options]
 pythonpath = [

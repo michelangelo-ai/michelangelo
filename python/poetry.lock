@@ -67,7 +67,7 @@ description = "Happy Eyeballs for asyncio"
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"trainer-xgboost\")"
+markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"trainer-xgboost\" or extra == \"tuner\")"
 files = [
     {file = "aiohappyeyeballs-2.6.1-py3-none-any.whl", hash = "sha256:f349ba8f4b75cb25c99c5c2d84e997e485204d2902a9597802b0371f09331fb8"},
     {file = "aiohappyeyeballs-2.6.1.tar.gz", hash = "sha256:c3f9d0113123803ccadfdf3f0faa505bc78e6a72d1cc4806cbd719826e943558"},
@@ -80,7 +80,7 @@ description = "Happy Eyeballs for asyncio"
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "python_version >= \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\")"
+markers = "python_version >= \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\")"
 files = [
     {file = "aiohappyeyeballs-2.6.2-py3-none-any.whl", hash = "sha256:4708045e2d7a6c6bdf8aafa8ed39649eaf926a4543b54560659129e3365953c4"},
     {file = "aiohappyeyeballs-2.6.2.tar.gz", hash = "sha256:e202810ee718bd01fc6ef49e8ea53d023d5cb6b581076d7925aa499fa55dbe64"},
@@ -93,7 +93,7 @@ description = "Async http client/server framework (asyncio)"
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"trainer-xgboost\")"
+markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"trainer-xgboost\" or extra == \"tuner\")"
 files = [
     {file = "aiohttp-3.13.5-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:02222e7e233295f40e011c1b00e3b0bd451f22cf853a0304c3595633ee47da4b"},
     {file = "aiohttp-3.13.5-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:bace460460ed20614fa6bc8cb09966c0b8517b8c58ad8046828c6078d25333b5"},
@@ -237,7 +237,7 @@ description = "Async http client/server framework (asyncio)"
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "python_version >= \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\")"
+markers = "python_version >= \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\")"
 files = [
     {file = "aiohttp-3.14.1-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:8f6bb621e5863cfe8fe5ff5468002d200ec31f30f1280b259dc505b02595099e"},
     {file = "aiohttp-3.14.1-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:4f7215cb3933784f79ed20e5f050e15984f390424339b22375d5a53c933a0491"},
@@ -381,7 +381,7 @@ description = "CORS support for aiohttp"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\""
+markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\""
 files = [
     {file = "aiohttp_cors-0.8.1-py3-none-any.whl", hash = "sha256:3180cf304c5c712d626b9162b195b1db7ddf976a2a25172b35bb2448b890a80d"},
     {file = "aiohttp_cors-0.8.1.tar.gz", hash = "sha256:ccacf9cb84b64939ea15f859a146af1f662a6b1d68175754a07315e305fb1403"},
@@ -413,7 +413,7 @@ description = "aiosignal: a list of registered asynchronous callbacks"
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"trainer-xgboost\") or extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\""
+markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"trainer-xgboost\" or extra == \"tuner\") or extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\""
 files = [
     {file = "aiosignal-1.4.0-py3-none-any.whl", hash = "sha256:053243f8b92b990551949e63930a839ff0cf0b0ebbe0597b0f3fb19e1a0fe82e"},
     {file = "aiosignal-1.4.0.tar.gz", hash = "sha256:f47eecd9468083c2029cc99945502cb7708b082c232f9aca65da147157b251c7"},
@@ -639,7 +639,7 @@ description = "Timeout context manager for asyncio programs"
 optional = false
 python-versions = ">=3.8"
 groups = ["main"]
-markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"trainer-xgboost\") or python_version < \"3.11\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\")"
+markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"trainer-xgboost\" or extra == \"tuner\") or python_version < \"3.11\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\")"
 files = [
     {file = "async_timeout-5.0.1-py3-none-any.whl", hash = "sha256:39e3809566ff85354557ec2398b55e096c8364bacac9405a7a1fa429e77fe76c"},
     {file = "async_timeout-5.0.1.tar.gz", hash = "sha256:d9321a7a3d5a6a5e187e824d2fa0793ce379a202935782d555d6e9d2735677d3"},
@@ -652,7 +652,7 @@ description = "Classes Without Boilerplate"
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-comet\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"trainer-xgboost\") or extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"trainer-comet\""
+markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-comet\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"trainer-xgboost\" or extra == \"tuner\") or extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\" or extra == \"trainer-comet\""
 files = [
     {file = "attrs-26.1.0-py3-none-any.whl", hash = "sha256:c647aa4a12dfbad9333ca4e71fe62ddc36f4e63b2d260a37a8b83d2f043ac309"},
     {file = "attrs-26.1.0.tar.gz", hash = "sha256:d03ceb89cb322a8fd706d4fb91940737b6642aa36998fe130a9bc96c985eff32"},
@@ -893,7 +893,7 @@ description = "Python package for providing Mozilla's CA Bundle."
 optional = true
 python-versions = ">=3.7"
 groups = ["main"]
-markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"trainer-mlflow\" or extra == \"trainer-comet\" or extra == \"minio\""
+markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\" or extra == \"trainer-mlflow\" or extra == \"trainer-comet\" or extra == \"minio\""
 files = [
     {file = "certifi-2026.6.17-py3-none-any.whl", hash = "sha256:2227dcbaafe0d2f59279d1762ddddc37783ed4354594f194ffc31d20f41fc3db"},
     {file = "certifi-2026.6.17.tar.gz", hash = "sha256:024c88eeec92ca068db80f02b8b07c9cef7b9fe261d1d535abfd5abd6f6af432"},
@@ -906,7 +906,7 @@ description = "Foreign Function Interface for Python calling C code."
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "platform_python_implementation != \"PyPy\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"trainer-mlflow\" or extra == \"minio\") or extra == \"example\" or extra == \"minio\" or (extra == \"example\" or extra == \"minio\" or extra == \"vllm\") and implementation_name == \"pypy\" and python_version <= \"3.12\""
+markers = "platform_python_implementation != \"PyPy\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\" or extra == \"trainer-mlflow\" or extra == \"minio\") or extra == \"example\" or extra == \"minio\" or (extra == \"example\" or extra == \"minio\" or extra == \"vllm\") and implementation_name == \"pypy\" and python_version <= \"3.12\""
 files = [
     {file = "cffi-2.0.0-cp310-cp310-macosx_10_13_x86_64.whl", hash = "sha256:0cf2d91ecc3fcc0625c2c530fe004f82c110405f101548512cce44322fa8ac44"},
     {file = "cffi-2.0.0-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:f73b96c41e3b2adedc34a7356e64c8eb96e03a3782b535e043a986276ce12a49"},
@@ -1030,7 +1030,7 @@ description = "The Real First Universal Charset Detector. Open, modern and activ
 optional = true
 python-versions = ">=3.7"
 groups = ["main"]
-markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"trainer-mlflow\" or extra == \"trainer-comet\""
+markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\" or extra == \"trainer-mlflow\" or extra == \"trainer-comet\""
 files = [
     {file = "charset_normalizer-3.4.7-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:cdd68a1fb318e290a2077696b7eb7a21a49163c455979c639bf5a5dcdc46617d"},
     {file = "charset_normalizer-3.4.7-cp310-cp310-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:e17b8d5d6a8c47c85e68ca8379def1303fd360c3e22093a807cd34a71cd082b8"},
@@ -1191,7 +1191,7 @@ description = "Composable command line interface toolkit"
 optional = false
 python-versions = ">=3.7"
 groups = ["main"]
-markers = "python_version == \"3.9\" and (extra == \"example\" or extra == \"vllm\" or extra == \"trainer-mlflow\" or extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"trainer\" or extra == \"trainer-xgboost\")"
+markers = "python_version == \"3.9\" and (extra == \"example\" or extra == \"vllm\" or extra == \"trainer-mlflow\" or extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\")"
 files = [
     {file = "click-8.1.8-py3-none-any.whl", hash = "sha256:63c132bbbed01578a06712a2d1f497bb62d9c1c0d329b7903a866228027263b2"},
     {file = "click-8.1.8.tar.gz", hash = "sha256:ed53c9d8990d83c2a27deae68e4ee337473f6330c040a31d4225c9574d16096a"},
@@ -1207,7 +1207,7 @@ description = "Composable command line interface toolkit"
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "python_version >= \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"trainer-mlflow\")"
+markers = "python_version >= \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\" or extra == \"trainer-mlflow\")"
 files = [
     {file = "click-8.4.2-py3-none-any.whl", hash = "sha256:e6f9f66136c816745b9d65817da91d61d957fb16e02e4dcd0552553c5a197b76"},
     {file = "click-8.4.2.tar.gz", hash = "sha256:9a6cea6e60b17ebe0a44c5cc636d94f09bd66142c1cd7d8b4cd731c4917a15f6"},
@@ -1236,7 +1236,7 @@ description = "Cross-platform colored terminal text."
 optional = false
 python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*,!=3.5.*,!=3.6.*,>=2.7"
 groups = ["main"]
-markers = "python_version <= \"3.12\" and platform_system == \"Windows\" and sys_platform == \"win32\" and (extra == \"dev\" or extra == \"vllm\" or extra == \"example\" or extra == \"trainer\" or extra == \"trainer-deepspeed\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"trainer-xgboost\" or extra == \"trainer-mlflow\") or python_version == \"3.9\" and platform_system == \"Windows\" and (extra == \"dev\" or extra == \"vllm\" or extra == \"example\" or extra == \"trainer\" or extra == \"trainer-deepspeed\" or extra == \"trainer-mlflow\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"trainer-xgboost\") or platform_system == \"Windows\" and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-deepspeed\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"trainer-xgboost\" or extra == \"trainer-mlflow\") or sys_platform == \"win32\" and (extra == \"dev\" or extra == \"vllm\") and python_version <= \"3.12\" or sys_platform == \"win32\" and extra == \"dev\""
+markers = "python_version <= \"3.12\" and platform_system == \"Windows\" and sys_platform == \"win32\" and (extra == \"dev\" or extra == \"vllm\" or extra == \"example\" or extra == \"trainer\" or extra == \"trainer-deepspeed\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"trainer-xgboost\" or extra == \"tuner\" or extra == \"trainer-mlflow\") or python_version == \"3.9\" and platform_system == \"Windows\" and (extra == \"dev\" or extra == \"vllm\" or extra == \"example\" or extra == \"trainer\" or extra == \"trainer-deepspeed\" or extra == \"trainer-mlflow\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"trainer-xgboost\" or extra == \"tuner\") or platform_system == \"Windows\" and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-deepspeed\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"trainer-xgboost\" or extra == \"tuner\" or extra == \"trainer-mlflow\") or sys_platform == \"win32\" and (extra == \"dev\" or extra == \"vllm\") and python_version <= \"3.12\" or sys_platform == \"win32\" and extra == \"dev\""
 files = [
     {file = "colorama-0.4.6-py2.py3-none-any.whl", hash = "sha256:4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6"},
     {file = "colorama-0.4.6.tar.gz", hash = "sha256:08695f5cb7ed6e0531a20572697297273c47b8cae5a63ffc6d6ed5c201be6e44"},
@@ -1267,7 +1267,7 @@ description = "Terminal string styling done right, in Python."
 optional = true
 python-versions = "*"
 groups = ["main"]
-markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\""
+markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\""
 files = [
     {file = "colorful-0.5.8-py2.py3-none-any.whl", hash = "sha256:a9381fdda3337fbaba5771991020abc69676afa102646650b759927892875992"},
     {file = "colorful-0.5.8.tar.gz", hash = "sha256:bb16502b198be2f1c42ba3c52c703d5f651d826076817185f0294c1a549a7445"},
@@ -1834,7 +1834,7 @@ description = "cryptography is a package which provides cryptographic recipes an
 optional = true
 python-versions = ">=3.7"
 groups = ["main"]
-markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"trainer-mlflow\")"
+markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\" or extra == \"trainer-mlflow\")"
 files = [
     {file = "cryptography-43.0.3-cp37-abi3-macosx_10_9_universal2.whl", hash = "sha256:bf7a1932ac4176486eab36a19ed4c0492da5d97123f1406cf15e41b05e787d2e"},
     {file = "cryptography-43.0.3-cp37-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:63efa177ff54aec6e1c0aefaa1a241232dcd37413835a9b674b6e3f0ae2bfd3e"},
@@ -1885,7 +1885,7 @@ description = "cryptography is a package which provides cryptographic recipes an
 optional = true
 python-versions = "!=3.9.0,!=3.9.1,>=3.9"
 groups = ["main"]
-markers = "python_version >= \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"trainer-mlflow\")"
+markers = "python_version >= \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\" or extra == \"trainer-mlflow\")"
 files = [
     {file = "cryptography-49.0.0-cp311-abi3-macosx_11_0_arm64.whl", hash = "sha256:966fe0e9c67490071f14c0d2b1cb2dfb3023c5ce39457343931415f08382f2db"},
     {file = "cryptography-49.0.0-cp311-abi3-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:36d1709f992593689b45bda411498d62c6e365f2ca00b84657d4dadd24de16db"},
@@ -2193,7 +2193,7 @@ description = "Distribution utilities"
 optional = true
 python-versions = "*"
 groups = ["main"]
-markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\""
+markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\""
 files = [
     {file = "distlib-0.4.3-py2.py3-none-any.whl", hash = "sha256:4b0ce306c966eb73bc3a7b6abad017c556dadd92c44701562cd528ac7fde4d5b"},
     {file = "distlib-0.4.3.tar.gz", hash = "sha256:f152097224a0ae24be5a0f6bae1b9359af82133bce63f98a95f86cae1aede9ed"},
@@ -2878,7 +2878,7 @@ description = "A platform independent file lock."
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version == \"3.9\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"trainer-deepspeed\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"trainer-xgboost\")"
+markers = "python_version == \"3.9\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"trainer-deepspeed\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"trainer-xgboost\" or extra == \"tuner\")"
 files = [
     {file = "filelock-3.19.1-py3-none-any.whl", hash = "sha256:d38e30481def20772f5baf097c122c3babc4fcdb7e14e57049eb9d88c6dc017d"},
     {file = "filelock-3.19.1.tar.gz", hash = "sha256:66eda1888b0171c998b35be2bcc0f6d75c388a7ce20c3f3f37aa8e96c2dddf58"},
@@ -2891,7 +2891,7 @@ description = "A platform independent file lock."
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "(python_version < \"3.12\" or extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"trainer-deepspeed\") and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"trainer-deepspeed\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"trainer-xgboost\") and python_version >= \"3.10\""
+markers = "(python_version < \"3.12\" or extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\" or extra == \"trainer-deepspeed\") and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"trainer-deepspeed\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"trainer-xgboost\" or extra == \"tuner\") and python_version >= \"3.10\""
 files = [
     {file = "filelock-3.29.4-py3-none-any.whl", hash = "sha256:dac1648087d5115554850d113e7dd8c83ab2d38e3435dde2d4f163847e57b767"},
     {file = "filelock-3.29.4.tar.gz", hash = "sha256:10cdb3656fc44541cdf30652a93fb10ec6b05325620eb316bd26893e4201538a"},
@@ -3097,7 +3097,7 @@ description = "A list-like structure which implements collections.abc.MutableSeq
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"trainer-xgboost\") or extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\""
+markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"trainer-xgboost\" or extra == \"tuner\") or extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\""
 files = [
     {file = "frozenlist-1.8.0-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:b37f6d31b3dcea7deb5e9696e529a6aa4a898adc33db82da12e4c60a7c4d2011"},
     {file = "frozenlist-1.8.0-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:ef2b7b394f208233e471abc541cc6991f907ffd47dc72584acee3147899d6565"},
@@ -3360,7 +3360,7 @@ description = "Google API client core library"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\")"
+markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\")"
 files = [
     {file = "google_api_core-2.30.3-py3-none-any.whl", hash = "sha256:a85761ba72c444dad5d611c2220633480b2b6be2521eca69cca2dbb3ffd6bfe8"},
     {file = "google_api_core-2.30.3.tar.gz", hash = "sha256:e601a37f148585319b26db36e219df68c5d07b6382cff2d580e83404e44d641b"},
@@ -3384,7 +3384,7 @@ description = "Google API client core library"
 optional = true
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "python_version >= \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\")"
+markers = "python_version >= \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\")"
 files = [
     {file = "google_api_core-2.31.0-py3-none-any.whl", hash = "sha256:ef79fb3784c71cbac89cbd03301ba0c8fb8ad2aa95d7f9204dd9628f7adf59ab"},
     {file = "google_api_core-2.31.0.tar.gz", hash = "sha256:2be84ee0f584c48e6bde1b36766e23348b361fb7e55e56135fc76ce1c397f9c2"},
@@ -3411,7 +3411,7 @@ description = "Google Authentication Library"
 optional = true
 python-versions = ">=3.8"
 groups = ["main"]
-markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"trainer-mlflow\")"
+markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\" or extra == \"trainer-mlflow\")"
 files = [
     {file = "google_auth-2.50.0-py3-none-any.whl", hash = "sha256:04382175e28b94f49694977f0a792688b59a668def1499e9d8de996dc9ce5b15"},
     {file = "google_auth-2.50.0.tar.gz", hash = "sha256:f35eafb191195328e8ce10a7883970877e7aeb49c2bfaa54aa0e394316d353d0"},
@@ -3440,7 +3440,7 @@ description = "Google Authentication Library"
 optional = true
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "python_version >= \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"trainer-mlflow\")"
+markers = "python_version >= \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\" or extra == \"trainer-mlflow\")"
 files = [
     {file = "google_auth-2.55.0-py3-none-any.whl", hash = "sha256:a17cef9dedf98c4ebae2fb0c48c8f75952c877cbc2efe09f329ef16c2783d88a"},
     {file = "google_auth-2.55.0.tar.gz", hash = "sha256:fcd3a130f575fa36403d38774af1c64a4fbfbca09215f0589d2372b5119697cb"},
@@ -3469,7 +3469,7 @@ description = "Common protobufs used in Google APIs"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\""
+markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\""
 files = [
     {file = "googleapis_common_protos-1.75.0-py3-none-any.whl", hash = "sha256:961ed60399c457ceb0ee8f285a84c870aabc9c6a832b9d37bb281b5bebde43ed"},
     {file = "googleapis_common_protos-1.75.0.tar.gz", hash = "sha256:53a062ff3c32552fbd62c11fe23768b78e4ddf0494d5e5fd97d3f4689c75fbbd"},
@@ -3605,7 +3605,7 @@ description = "Lightweight in-process concurrent programming"
 optional = true
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "(extra == \"example\" or extra == \"trainer-mlflow\") and (python_version < \"3.12\" or platform_machine == \"aarch64\" or platform_machine == \"ppc64le\" or platform_machine == \"x86_64\" or platform_machine == \"amd64\" or platform_machine == \"AMD64\" or platform_machine == \"win32\" or platform_machine == \"WIN32\") and (platform_machine == \"x86_64\" or platform_machine == \"amd64\" or platform_machine == \"aarch64\" or platform_machine == \"ppc64le\" or platform_machine == \"AMD64\" or platform_machine == \"win32\" or platform_machine == \"WIN32\") and python_version >= \"3.10\""
+markers = "(platform_machine == \"x86_64\" or platform_machine == \"amd64\" or platform_machine == \"aarch64\" or platform_machine == \"ppc64le\" or platform_machine == \"AMD64\" or platform_machine == \"win32\" or platform_machine == \"WIN32\") and (extra == \"example\" or extra == \"trainer-mlflow\") and python_version >= \"3.10\""
 files = [
     {file = "greenlet-3.5.2-cp310-cp310-macosx_11_0_universal2.whl", hash = "sha256:9df9daae96848508450011d0d86ed7c95f8829a354ce438284a77b24896fd1f8"},
     {file = "greenlet-3.5.2-cp310-cp310-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:01e32e9d2b1714a2b06184cb3071ff2a2fd9bc7d065e39198ab21f7253dad421"},
@@ -4168,7 +4168,7 @@ description = "Internationalized Domain Names in Applications (IDNA)"
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-mlflow\" or extra == \"trainer-comet\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"trainer-xgboost\") or extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"trainer-mlflow\" or extra == \"trainer-comet\""
+markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-mlflow\" or extra == \"trainer-comet\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"trainer-xgboost\" or extra == \"tuner\") or extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\" or extra == \"trainer-mlflow\" or extra == \"trainer-comet\""
 files = [
     {file = "idna-3.18-py3-none-any.whl", hash = "sha256:7f952cbe720b688055e3f87de14f5c3e5fdaa8bc3928985c4077ca689de849a2"},
     {file = "idna-3.18.tar.gz", hash = "sha256:ffb385a7e039654cef1ab9ef32c6fafe283c0c0467bba1d9029738ce4a14a848"},
@@ -4184,7 +4184,7 @@ description = "Read metadata from Python packages"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version == \"3.9\" and (extra == \"example\" or extra == \"trainer-mlflow\" or extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\")"
+markers = "python_version == \"3.9\" and (extra == \"example\" or extra == \"trainer-mlflow\" or extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\")"
 files = [
     {file = "importlib_metadata-8.7.1-py3-none-any.whl", hash = "sha256:5a1f80bf1daa489495071efbb095d75a634cf28a8bc299581244063b53176151"},
     {file = "importlib_metadata-8.7.1.tar.gz", hash = "sha256:49fef1ae6440c182052f407c8d34a68f72efc36db9ca90dc0113398f2fdde8bb"},
@@ -4475,7 +4475,7 @@ description = "An implementation of JSON Schema validation for Python"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"trainer-comet\")"
+markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\" or extra == \"trainer-comet\")"
 files = [
     {file = "jsonschema-4.25.1-py3-none-any.whl", hash = "sha256:3fba0169e345c7175110351d456342c364814cfcf3b964ba4587f22915230a63"},
     {file = "jsonschema-4.25.1.tar.gz", hash = "sha256:e4a9655ce0da0c0b67a085847e00a3a51449e1157f4f75e9fb5aa545e122eb85"},
@@ -4498,7 +4498,7 @@ description = "An implementation of JSON Schema validation for Python"
 optional = true
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "python_version >= \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"trainer-comet\")"
+markers = "python_version >= \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\" or extra == \"trainer-comet\")"
 files = [
     {file = "jsonschema-4.26.0-py3-none-any.whl", hash = "sha256:d489f15263b8d200f8387e64b4c3a75f06629559fb73deb8fdfb525f2dab50ce"},
     {file = "jsonschema-4.26.0.tar.gz", hash = "sha256:0c26707e2efad8aa1bfc5b7ce170f3fccc2e4918ff85989ba9ffa9facb2be326"},
@@ -4521,7 +4521,7 @@ description = "The JSON Schema meta-schemas and vocabularies, exposed as a Regis
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"trainer-comet\""
+markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\" or extra == \"trainer-comet\""
 files = [
     {file = "jsonschema_specifications-2025.9.1-py3-none-any.whl", hash = "sha256:98802fee3a11ee76ecaca44429fda8a41bff98b00a0f2838151b113f210cc6fe"},
     {file = "jsonschema_specifications-2025.9.1.tar.gz", hash = "sha256:b540987f239e745613c7a9176f3edb72b832a4ac465cf02712288397832b5e8d"},
@@ -4924,7 +4924,7 @@ description = "Bindings for the Low-level Guidance (llguidance) Rust library for
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "extra == \"vllm\" and (platform_machine == \"x86_64\" or platform_machine == \"arm64\" or platform_machine == \"aarch64\") and python_version <= \"3.12\""
+markers = "extra == \"vllm\" and python_version <= \"3.12\" and (platform_machine == \"x86_64\" or platform_machine == \"arm64\" or platform_machine == \"aarch64\")"
 files = [
     {file = "llguidance-0.7.30-cp39-abi3-macosx_10_12_x86_64.whl", hash = "sha256:c80af02c118d2b0526bcecaab389af2ed094537a069b0fc724cd2a2f2ba3990f"},
     {file = "llguidance-0.7.30-cp39-abi3-macosx_11_0_arm64.whl", hash = "sha256:00a256d532911d2cf5ba4ef63e182944e767dd2402f38d63002016bc37755958"},
@@ -5779,7 +5779,7 @@ description = "A framework for machine learning on Apple silicon."
 optional = true
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "platform_system == \"Darwin\" and python_version <= \"3.12\" and extra == \"vllm\" and platform_machine == \"arm64\" and python_version >= \"3.10\""
+markers = "platform_system == \"Darwin\" and platform_machine == \"arm64\" and python_version <= \"3.12\" and extra == \"vllm\" and python_version >= \"3.10\""
 files = [
     {file = "mlx-0.32.0-cp310-cp310-macosx_14_0_arm64.whl", hash = "sha256:c6feb17e32160b70c7634aab925cf3f8c5c7bebbf99f227c48450478e1008af2"},
     {file = "mlx-0.32.0-cp310-cp310-macosx_15_0_arm64.whl", hash = "sha256:73303259f2bda7fb4a0c782a7299e0e28a2890b9b6fbfc4b635fb8032208ec7e"},
@@ -5877,7 +5877,7 @@ description = "A framework for machine learning on Apple silicon."
 optional = true
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "platform_system == \"Darwin\" and python_version <= \"3.12\" and extra == \"vllm\" and platform_machine == \"arm64\" and python_version >= \"3.10\""
+markers = "platform_system == \"Darwin\" and platform_machine == \"arm64\" and python_version <= \"3.12\" and extra == \"vllm\" and python_version >= \"3.10\""
 files = [
     {file = "mlx_metal-0.32.0-py3-none-macosx_14_0_arm64.whl", hash = "sha256:5b64b20ac24b0c401f489de01e8209edc4d372125201f19314e6f39e385322aa"},
     {file = "mlx_metal-0.32.0-py3-none-macosx_15_0_arm64.whl", hash = "sha256:1bd94a1ce5b03a0c898771a3e759f0124300c6ab5155127906a1d50b1f3fcf19"},
@@ -5909,7 +5909,7 @@ description = "MessagePack serializer"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\")"
+markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\")"
 files = [
     {file = "msgpack-1.1.2-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:0051fffef5a37ca2cd16978ae4f0aef92f164df86823871b5162812bebecd8e2"},
     {file = "msgpack-1.1.2-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:a605409040f2da88676e9c9e5853b3449ba8011973616189ea5ee55ddbc5bc87"},
@@ -5982,7 +5982,7 @@ description = "MessagePack serializer"
 optional = true
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "python_version >= \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\")"
+markers = "python_version >= \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\")"
 files = [
     {file = "msgpack-1.2.1-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:8c7b398c56ff125feae96c2737abfec5595f1fa0aa186df60c56040b8accb95c"},
     {file = "msgpack-1.2.1-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:1548006a91aa93c5da81f3bdcebc1a0d10cea2d25969754fbe848da622b2b895"},
@@ -6195,7 +6195,7 @@ description = "multidict implementation"
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"trainer-xgboost\") or extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\""
+markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"trainer-xgboost\" or extra == \"tuner\") or extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\""
 files = [
     {file = "multidict-6.7.1-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:c93c3db7ea657dd4637d57e74ab73de31bccefe144d3d4ce370052035bc85fb5"},
     {file = "multidict-6.7.1-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:974e72a2474600827abaeda71af0c53d9ebbc3c2eb7da37b37d7829ae31232d8"},
@@ -7187,7 +7187,7 @@ description = "A stats collection and distributed tracing framework"
 optional = true
 python-versions = "*"
 groups = ["main"]
-markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\""
+markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\""
 files = [
     {file = "opencensus-0.11.4-py2.py3-none-any.whl", hash = "sha256:a18487ce68bc19900336e0ff4655c5a116daf10c1b3685ece8d971bddad6a864"},
     {file = "opencensus-0.11.4.tar.gz", hash = "sha256:cbef87d8b8773064ab60e5c2a1ced58bbaa38a6d052c41aec224958ce544eff2"},
@@ -7205,7 +7205,7 @@ description = "OpenCensus Runtime Context"
 optional = true
 python-versions = "*"
 groups = ["main"]
-markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\""
+markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\""
 files = [
     {file = "opencensus-context-0.1.3.tar.gz", hash = "sha256:a03108c3c10d8c80bb5ddf5c8a1f033161fa61972a9917f9b9b3a18517f0088c"},
     {file = "opencensus_context-0.1.3-py2.py3-none-any.whl", hash = "sha256:073bb0590007af276853009fac7e4bab1d523c3f03baf4cb4511ca38967c6039"},
@@ -7246,7 +7246,7 @@ description = "OpenTelemetry Python API"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"trainer-mlflow\")"
+markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\" or extra == \"trainer-mlflow\")"
 files = [
     {file = "opentelemetry_api-1.41.1-py3-none-any.whl", hash = "sha256:a22df900e75c76dc08440710e51f52f1aa6b451b429298896023e60db5b3139f"},
     {file = "opentelemetry_api-1.41.1.tar.gz", hash = "sha256:0ad1814d73b875f84494387dae86ce0b12c68556331ce6ce8fe789197c949621"},
@@ -7263,7 +7263,7 @@ description = "OpenTelemetry Python API"
 optional = true
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "python_version >= \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"trainer-mlflow\")"
+markers = "python_version >= \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\" or extra == \"trainer-mlflow\")"
 files = [
     {file = "opentelemetry_api-1.43.0-py3-none-any.whl", hash = "sha256:20acf45e9b21851926835292e4045d290acade1edd2ff3de86d2f069687ba1fd"},
     {file = "opentelemetry_api-1.43.0.tar.gz", hash = "sha256:107d0d03857ea8fc7c5fcbbbd83f800c281f0d560553d61c1d675fccfd1761c1"},
@@ -7279,7 +7279,7 @@ description = "Prometheus Metric Exporter for OpenTelemetry"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\")"
+markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\")"
 files = [
     {file = "opentelemetry_exporter_prometheus-0.62b1-py3-none-any.whl", hash = "sha256:7a0b8a6402e107e1f93e38f074a668797e1103936b189561959531a67ffeba55"},
     {file = "opentelemetry_exporter_prometheus-0.62b1.tar.gz", hash = "sha256:7ecbac9aa76e7abb44082ab0ff2983e0a573e4091c4653f7db483b02bae03506"},
@@ -7297,7 +7297,7 @@ description = "Prometheus Metric Exporter for OpenTelemetry"
 optional = true
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "python_version >= \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\")"
+markers = "python_version >= \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\")"
 files = [
     {file = "opentelemetry_exporter_prometheus-0.64b0-py3-none-any.whl", hash = "sha256:9979a15f8d007d442bc7a6e16f4cbde5e8e0c5e99689887ceb5f33da251f0655"},
     {file = "opentelemetry_exporter_prometheus-0.64b0.tar.gz", hash = "sha256:96fec79be9527cb9dc994d7e663051df35161eb936fe2d41954725e4595abbc1"},
@@ -7315,7 +7315,7 @@ description = "OpenTelemetry Python Proto"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\")"
+markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\")"
 files = [
     {file = "opentelemetry_proto-1.41.1-py3-none-any.whl", hash = "sha256:0496713b804d127a4147e32849fbaf5683fac8ee98550e8e7679cd706c289720"},
     {file = "opentelemetry_proto-1.41.1.tar.gz", hash = "sha256:4b9d2eb631237ea43b80e16c073af438554e32bc7e9e3f8ca4a9582f900020e5"},
@@ -7331,7 +7331,7 @@ description = "OpenTelemetry Python Proto"
 optional = true
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "python_version >= \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\")"
+markers = "python_version >= \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\")"
 files = [
     {file = "opentelemetry_proto-1.43.0-py3-none-any.whl", hash = "sha256:c58f1f7ef84bc7dc2834016c0c37fe0081dde7ca9f6339be1970fbf9cdaaa90d"},
     {file = "opentelemetry_proto-1.43.0.tar.gz", hash = "sha256:224778df17e1f3fafeaaa21d874236ca5f6ffc2f86e0899298ec7351aac27924"},
@@ -7347,7 +7347,7 @@ description = "OpenTelemetry Python SDK"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"trainer-mlflow\")"
+markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\" or extra == \"trainer-mlflow\")"
 files = [
     {file = "opentelemetry_sdk-1.41.1-py3-none-any.whl", hash = "sha256:edee379c126c1bce952b0c812b48fe8ff35b30df0eecf17e98afa4d598b7d85d"},
     {file = "opentelemetry_sdk-1.41.1.tar.gz", hash = "sha256:724b615e1215b5aeacda0abb8a6a8922c9a1853068948bd0bd225a56d0c792e6"},
@@ -7368,7 +7368,7 @@ description = "OpenTelemetry Python SDK"
 optional = true
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "python_version >= \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"trainer-mlflow\")"
+markers = "python_version >= \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\" or extra == \"trainer-mlflow\")"
 files = [
     {file = "opentelemetry_sdk-1.43.0-py3-none-any.whl", hash = "sha256:d1323a547c1ce69d6a069a17a44b7da82bb8b332051ecb074041f87642c86823"},
     {file = "opentelemetry_sdk-1.43.0.tar.gz", hash = "sha256:d8187c81c162df9913e4003dd6485f7390d9a24fc17026ec7387b8b8218b08e9"},
@@ -7389,7 +7389,7 @@ description = "OpenTelemetry Semantic Conventions"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"trainer-mlflow\")"
+markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\" or extra == \"trainer-mlflow\")"
 files = [
     {file = "opentelemetry_semantic_conventions-0.62b1-py3-none-any.whl", hash = "sha256:cf506938103d331fbb78eded0d9788095f7fd59016f2bda813c3324e5a74a93c"},
     {file = "opentelemetry_semantic_conventions-0.62b1.tar.gz", hash = "sha256:c5cc6e04a7f8c7cdd30be2ed81499fa4e75bfbd52c9cb70d40af1f9cd3619802"},
@@ -7406,7 +7406,7 @@ description = "OpenTelemetry Semantic Conventions"
 optional = true
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "python_version >= \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"trainer-mlflow\")"
+markers = "python_version >= \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\" or extra == \"trainer-mlflow\")"
 files = [
     {file = "opentelemetry_semantic_conventions-0.64b0-py3-none-any.whl", hash = "sha256:ea77e85e354b8f604ddbe5f3d9135216f982fa4d77e5859ac30f6d8a50505aa6"},
     {file = "opentelemetry_semantic_conventions-0.64b0.tar.gz", hash = "sha256:72f76fb2d1582d9d033dd1fcd84532e961e6ff3d90d24ba6fabc72975a83864c"},
@@ -7520,7 +7520,7 @@ description = "Powerful data structures for data analysis, time series, and stat
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "extra == \"example\" or extra == \"vllm\" or extra == \"dev\" or extra == \"trainer-xgboost\" or extra == \"trainer-mlflow\""
+markers = "extra == \"example\" or extra == \"vllm\" or extra == \"dev\" or extra == \"trainer-xgboost\" or extra == \"tuner\" or extra == \"trainer-mlflow\""
 files = [
     {file = "pandas-2.3.3-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:376c6446ae31770764215a6c937f72d917f214b43560603cd60da6408f183b6c"},
     {file = "pandas-2.3.3-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:e19d192383eab2f4ceb30b412b22ea30690c9e618f78870357ae1d682912015a"},
@@ -7901,7 +7901,7 @@ description = "A small Python package for determining appropriate platform-speci
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\")"
+markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\")"
 files = [
     {file = "platformdirs-4.4.0-py3-none-any.whl", hash = "sha256:abd01743f24e5287cd7a5db3752faf1a2d65353f38ec26d98e25a6db65958c85"},
     {file = "platformdirs-4.4.0.tar.gz", hash = "sha256:ca753cf4d81dc309bc67b0ea38fd15dc97bc30ce419a7f58d13eb3bf14c4febf"},
@@ -7919,7 +7919,7 @@ description = "A small Python package for determining appropriate platform-speci
 optional = true
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "python_version >= \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\")"
+markers = "python_version >= \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\")"
 files = [
     {file = "platformdirs-4.10.0-py3-none-any.whl", hash = "sha256:fb516cdb12eb0d857d0cd85a7c57cea4d060bee4578d6cf5a14dfdf8cbf8784a"},
     {file = "platformdirs-4.10.0.tar.gz", hash = "sha256:31e761a6a0ca04faf7353ea759bdba55652be214725111e5aac52dfa29d4bef7"},
@@ -8117,7 +8117,7 @@ description = "Python client for the Prometheus monitoring system."
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\""
+markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\""
 files = [
     {file = "prometheus_client-0.25.0-py3-none-any.whl", hash = "sha256:d5aec89e349a6ec230805d0df882f3807f74fd6c1a2fa86864e3c2279059fed1"},
     {file = "prometheus_client-0.25.0.tar.gz", hash = "sha256:5e373b75c31afb3c86f1a52fa1ad470c9aace18082d39ec0d2f918d11cc9ba28"},
@@ -8169,7 +8169,7 @@ description = "Accelerated property cache"
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"trainer-xgboost\")"
+markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"trainer-xgboost\" or extra == \"tuner\")"
 files = [
     {file = "propcache-0.4.1-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:7c2d1fa3201efaf55d730400d945b5b3ab6e672e100ba0f9a409d950ab25d7db"},
     {file = "propcache-0.4.1-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:1eb2994229cc8ce7fe9b3db88f5465f5fd8651672840b2e426b88cdb1a30aac8"},
@@ -8302,7 +8302,7 @@ description = "Accelerated property cache"
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "python_version >= \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\")"
+markers = "python_version >= \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\")"
 files = [
     {file = "propcache-0.5.2-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:d5a81be28596d6559f6131ef33e10200de6e17643b3c74ce03f9eb103be6ae8b"},
     {file = "propcache-0.5.2-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:29cbaac5ea0212663e6845e04b5e188d5a6ae6dd919810ac835bf1d3b42c3f4c"},
@@ -8434,7 +8434,7 @@ description = "Beautiful, Pythonic protocol buffers"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\")"
+markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\")"
 files = [
     {file = "proto_plus-1.27.2-py3-none-any.whl", hash = "sha256:6432f75893d3b9e70b9c412f1d2f03f65b11fb164b793d14ae2ca01821d22718"},
     {file = "proto_plus-1.27.2.tar.gz", hash = "sha256:b2adde53adadf75737c44d3dcb0104fde65250dfc83ad59168b4aa3e574b6a24"},
@@ -8453,7 +8453,7 @@ description = "Beautiful, Pythonic protocol buffers"
 optional = true
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "python_version >= \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\")"
+markers = "python_version >= \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\")"
 files = [
     {file = "proto_plus-1.28.0-py3-none-any.whl", hash = "sha256:a630604310899e73c59ec302e5765c058d412b2f090b9c79c8822589f14955b8"},
     {file = "proto_plus-1.28.0.tar.gz", hash = "sha256:38e5696342835b08fc116f30a25665b29531cda9d5d5643e9b81fc312385abd9"},
@@ -8541,7 +8541,7 @@ description = ""
 optional = true
 python-versions = "*"
 groups = ["main"]
-markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\""
+markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\""
 files = [
     {file = "py_spy-0.4.2-py2.py3-none-macosx_10_12_x86_64.macosx_11_0_arm64.macosx_10_12_universal2.whl", hash = "sha256:1ccf688393105111684435f035bc14ec3f22117dd2b85b2414612cf27a22755a"},
     {file = "py_spy-0.4.2-py2.py3-none-macosx_11_0_arm64.whl", hash = "sha256:a0e6f6810ccf0fc5e64e85e0182a5b626c4496eec01b14fb8755154b363a4831"},
@@ -8576,7 +8576,7 @@ description = "Python library for Apache Arrow"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "extra == \"example\" or extra == \"vllm\" or extra == \"dev\" or extra == \"trainer-mlflow\""
+markers = "extra == \"example\" or extra == \"vllm\" or extra == \"dev\" or extra == \"tuner\" or extra == \"trainer-mlflow\""
 files = [
     {file = "pyarrow-19.0.1-cp310-cp310-macosx_12_0_arm64.whl", hash = "sha256:fc28912a2dc924dddc2087679cc8b7263accc71b9ff025a1362b004711661a69"},
     {file = "pyarrow-19.0.1-cp310-cp310-macosx_12_0_x86_64.whl", hash = "sha256:fca15aabbe9b8355800d923cc2e82c8ef514af321e18b437c3d782aa884eaeec"},
@@ -8632,7 +8632,7 @@ description = "Pure-Python implementation of ASN.1 types and DER/BER/CER codecs 
 optional = true
 python-versions = ">=3.8"
 groups = ["main"]
-markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"trainer-mlflow\""
+markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\" or extra == \"trainer-mlflow\""
 files = [
     {file = "pyasn1-0.6.3-py3-none-any.whl", hash = "sha256:a80184d120f0864a52a073acc6fc642847d0be408e7c7252f31390c0f4eadcde"},
     {file = "pyasn1-0.6.3.tar.gz", hash = "sha256:697a8ecd6d98891189184ca1fa05d1bb00e2f84b5977c481452050549c8a72cf"},
@@ -8645,7 +8645,7 @@ description = "A collection of ASN.1-based protocols modules"
 optional = true
 python-versions = ">=3.8"
 groups = ["main"]
-markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"trainer-mlflow\""
+markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\" or extra == \"trainer-mlflow\""
 files = [
     {file = "pyasn1_modules-0.4.2-py3-none-any.whl", hash = "sha256:29253a9207ce32b64c3ac6600edc75368f98473906e8fd1043bd6b5b1de2c14a"},
     {file = "pyasn1_modules-0.4.2.tar.gz", hash = "sha256:677091de870a80aae844b1ca6134f54652fa2c8c5a52aa396440ac3106e941e6"},
@@ -8911,7 +8911,7 @@ description = "C parser in Python"
 optional = true
 python-versions = ">=3.8"
 groups = ["main"]
-markers = "(platform_python_implementation != \"PyPy\" or extra == \"example\" or extra == \"minio\" or extra == \"vllm\") and (platform_python_implementation != \"PyPy\" or extra == \"example\" or extra == \"minio\" or implementation_name == \"pypy\") and python_version == \"3.9\" and implementation_name != \"PyPy\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"trainer-mlflow\" or extra == \"minio\")"
+markers = "(platform_python_implementation != \"PyPy\" or extra == \"example\" or extra == \"minio\" or extra == \"vllm\") and (platform_python_implementation != \"PyPy\" or extra == \"example\" or extra == \"minio\" or implementation_name == \"pypy\") and python_version == \"3.9\" and implementation_name != \"PyPy\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\" or extra == \"trainer-mlflow\" or extra == \"minio\")"
 files = [
     {file = "pycparser-2.23-py3-none-any.whl", hash = "sha256:e5c6e8d3fbad53479cab09ac03729e0a9faf2bee3db8208a550daf5af81a5934"},
     {file = "pycparser-2.23.tar.gz", hash = "sha256:78816d4f24add8f10a06d6f05b4d424ad9e96cfebf68a4ddc99c65c0720d00c2"},
@@ -8924,7 +8924,7 @@ description = "C parser in Python"
 optional = true
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "(platform_python_implementation != \"PyPy\" or extra == \"example\" or extra == \"minio\" or implementation_name == \"pypy\") and (platform_python_implementation != \"PyPy\" or python_version <= \"3.12\" or extra == \"example\" or extra == \"minio\") and (platform_python_implementation != \"PyPy\" or extra == \"example\" or extra == \"minio\" or extra == \"vllm\") and python_version >= \"3.10\" and implementation_name != \"PyPy\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"trainer-mlflow\" or extra == \"minio\")"
+markers = "(platform_python_implementation != \"PyPy\" or extra == \"example\" or extra == \"minio\" or implementation_name == \"pypy\") and (platform_python_implementation != \"PyPy\" or python_version <= \"3.12\" or extra == \"example\" or extra == \"minio\") and (platform_python_implementation != \"PyPy\" or extra == \"example\" or extra == \"minio\" or extra == \"vllm\") and python_version >= \"3.10\" and implementation_name != \"PyPy\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\" or extra == \"trainer-mlflow\" or extra == \"minio\")"
 files = [
     {file = "pycparser-3.0-py3-none-any.whl", hash = "sha256:b727414169a36b7d524c1c3e31839a521725078d7b2ff038656844266160a992"},
     {file = "pycparser-3.0.tar.gz", hash = "sha256:600f49d217304a5902ac3c37e1281c9fe94e4d0489de643a9504c5cdfdfc6b29"},
@@ -9376,7 +9376,7 @@ description = "Extensions to the standard Python datetime module"
 optional = true
 python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,>=2.7"
 groups = ["main"]
-markers = "extra == \"example\" or extra == \"vllm\" or extra == \"dev\" or extra == \"trainer-xgboost\" or extra == \"trainer-mlflow\""
+markers = "extra == \"example\" or extra == \"vllm\" or extra == \"dev\" or extra == \"trainer-xgboost\" or extra == \"tuner\" or extra == \"trainer-mlflow\""
 files = [
     {file = "python-dateutil-2.9.0.post0.tar.gz", hash = "sha256:37dd54208da7e1cd875388217d5e00ebd4179249f90fb72437e91a35459a0ad3"},
     {file = "python_dateutil-2.9.0.post0-py2.py3-none-any.whl", hash = "sha256:a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427"},
@@ -9392,7 +9392,7 @@ description = "Python interpreter discovery"
 optional = true
 python-versions = ">=3.8"
 groups = ["main"]
-markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\""
+markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\""
 files = [
     {file = "python_discovery-1.4.2-py3-none-any.whl", hash = "sha256:475803f53b7b2ed6e490e27373f9d8340f7d2eebf9acdaf645d7d714c97bb500"},
     {file = "python_discovery-1.4.2.tar.gz", hash = "sha256:8f3746c4b4968d22afbb97d36e1a0e5b66e6c0f297290f2e95f05b9b8bf18690"},
@@ -9590,7 +9590,7 @@ description = "World timezone definitions, modern and historical"
 optional = true
 python-versions = "*"
 groups = ["main"]
-markers = "extra == \"example\" or extra == \"vllm\" or extra == \"dev\" or extra == \"trainer-xgboost\" or extra == \"trainer-mlflow\""
+markers = "extra == \"example\" or extra == \"vllm\" or extra == \"dev\" or extra == \"trainer-xgboost\" or extra == \"tuner\" or extra == \"trainer-mlflow\""
 files = [
     {file = "pytz-2026.2-py2.py3-none-any.whl", hash = "sha256:04156e608bee23d3792fd45c94ae47fae1036688e75032eea2e3bf0323d1f126"},
     {file = "pytz-2026.2.tar.gz", hash = "sha256:0e60b47b29f21574376f218fe21abc009894a2321ea16c6754f3cad6eb7cdd6a"},
@@ -9824,7 +9824,7 @@ description = "Ray provides a simple, universal API for building distributed app
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\")"
+markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\")"
 files = [
     {file = "ray-2.51.2-cp310-cp310-macosx_12_0_arm64.whl", hash = "sha256:eb9b995de9ba3110373f00e77dda86f6a55a80a58114b1eae5e6daf1f5697338"},
     {file = "ray-2.51.2-cp310-cp310-manylinux2014_aarch64.whl", hash = "sha256:983adacd9cecf2f74f7915560036f14c5d4fabdf6f65d959debc92820373729d"},
@@ -9953,7 +9953,7 @@ description = "Ray provides a simple, universal API for building distributed app
 optional = true
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "python_version >= \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\")"
+markers = "python_version >= \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\")"
 files = [
     {file = "ray-2.55.1-cp310-cp310-macosx_12_0_arm64.whl", hash = "sha256:2d5786661e192148719accc959def6cdcabd7a24cd9008005bf3d0e3c8cfd529"},
     {file = "ray-2.55.1-cp310-cp310-manylinux2014_aarch64.whl", hash = "sha256:baf2ec89df7838cabdef493ff9bdbec1e6a6452f8bc696ad0c1b8a6198721745"},
@@ -10028,7 +10028,7 @@ description = "JSON Referencing + Python"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"trainer-comet\")"
+markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\" or extra == \"trainer-comet\")"
 files = [
     {file = "referencing-0.36.2-py3-none-any.whl", hash = "sha256:e8699adbbf8b5c7de96d8ffa0eb5c158b3beafce084968e2ea8bb08c6794dcd0"},
     {file = "referencing-0.36.2.tar.gz", hash = "sha256:df2e89862cd09deabbdba16944cc3f10feb6b3e6f18e902f7cc25609a34775aa"},
@@ -10046,7 +10046,7 @@ description = "JSON Referencing + Python"
 optional = true
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "python_version >= \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"trainer-comet\")"
+markers = "python_version >= \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\" or extra == \"trainer-comet\")"
 files = [
     {file = "referencing-0.37.0-py3-none-any.whl", hash = "sha256:381329a9f99628c9069361716891d34ad94af76e461dcb0335825aecc7692231"},
     {file = "referencing-0.37.0.tar.gz", hash = "sha256:44aefc3142c5b842538163acb373e24cce6632bd54bdb01b21ad5863489f50d8"},
@@ -10331,7 +10331,7 @@ description = "Python HTTP for Humans."
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"trainer-mlflow\" or extra == \"trainer-comet\")"
+markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\" or extra == \"trainer-mlflow\" or extra == \"trainer-comet\")"
 files = [
     {file = "requests-2.32.5-py3-none-any.whl", hash = "sha256:2462f94637a34fd532264295e186976db0f5d453d1cdd31473c85a6a161affb6"},
     {file = "requests-2.32.5.tar.gz", hash = "sha256:dbba0bac56e100853db0ea71b82b4dfd5fe2bf6d3754a8893c3af500cec7d7cf"},
@@ -10354,7 +10354,7 @@ description = "Python HTTP for Humans."
 optional = true
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "python_version >= \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"trainer-mlflow\" or extra == \"trainer-comet\")"
+markers = "python_version >= \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\" or extra == \"trainer-mlflow\" or extra == \"trainer-comet\")"
 files = [
     {file = "requests-2.34.2-py3-none-any.whl", hash = "sha256:2a0d60c172f83ac6ab31e4554906c0f3b3588d37b5cb939b1c061f4907e278e0"},
     {file = "requests-2.34.2.tar.gz", hash = "sha256:f288924cae4e29463698d6d60bc6a4da69c89185ad1e0bcc4104f584e960b9ed"},
@@ -10596,7 +10596,7 @@ description = "Python bindings to Rust's persistent data structures (rpds)"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"trainer-comet\")"
+markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\" or extra == \"trainer-comet\")"
 files = [
     {file = "rpds_py-0.27.1-cp310-cp310-macosx_10_12_x86_64.whl", hash = "sha256:68afeec26d42ab3b47e541b272166a0b4400313946871cba3ed3a4fc0cab1cef"},
     {file = "rpds_py-0.27.1-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:74e5b2f7bb6fa38b1b10546d27acbacf2a022a8b5543efb06cfebc72a59c85be"},
@@ -10762,7 +10762,7 @@ description = "Python bindings to Rust's persistent data structures (rpds)"
 optional = true
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "python_version == \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"trainer-comet\")"
+markers = "python_version == \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\" or extra == \"trainer-comet\")"
 files = [
     {file = "rpds_py-0.30.0-cp310-cp310-macosx_10_12_x86_64.whl", hash = "sha256:679ae98e00c0e8d68a7fda324e16b90fd5260945b45d3b824c892cec9eea3288"},
     {file = "rpds_py-0.30.0-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:4cc2206b76b4f576934f0ed374b10d7ca5f457858b157ca52064bdfc26b9fc00"},
@@ -10888,7 +10888,7 @@ description = "Python bindings to Rust's persistent data structures (rpds)"
 optional = true
 python-versions = ">=3.11"
 groups = ["main"]
-markers = "python_version >= \"3.11\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"trainer-comet\")"
+markers = "python_version >= \"3.11\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\" or extra == \"trainer-comet\")"
 files = [
     {file = "rpds_py-2026.5.1-cp311-cp311-macosx_10_12_x86_64.whl", hash = "sha256:3397a5ed7174dc2786bb214030232fc36fe8e5584fec43a9952cc542b1a12036"},
     {file = "rpds_py-2026.5.1-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:99ab6ba7bfa2cb0f96a04e3652355bf04e3f51aceb1e943b8541dab7ba4828cc"},
@@ -11712,7 +11712,7 @@ description = "Easily download, build, install, upgrade, and uninstall Python pa
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version < \"3.11\" and platform_machine == \"x86_64\" and platform_system == \"Linux\" and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-deepspeed\") or python_version == \"3.9\" and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\") or python_version < \"3.11\" and (extra == \"example\" or extra == \"vllm\") or extra == \"vllm\" and python_version >= \"3.10\" or python_version >= \"3.12\" and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-deepspeed\" or extra == \"trainer-comet\") or python_version >= \"3.10\" and platform_system == \"Linux\" and platform_machine == \"x86_64\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"trainer-deepspeed\")"
+markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\") or python_version == \"3.9\" and platform_system == \"Linux\" and platform_machine == \"x86_64\" and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-deepspeed\") or extra == \"vllm\" and python_version >= \"3.10\" or python_version == \"3.10\" and (extra == \"vllm\" or extra == \"example\") or python_version >= \"3.12\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"trainer-deepspeed\" or extra == \"trainer-comet\") or platform_system == \"Linux\" and platform_machine == \"x86_64\" and python_version >= \"3.10\" and (extra == \"vllm\" or extra == \"example\" or extra == \"dev\" or extra == \"trainer\" or extra == \"trainer-deepspeed\") or python_version == \"3.10\" and platform_system == \"Linux\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"trainer-deepspeed\") and platform_machine == \"x86_64\""
 files = [
     {file = "setuptools-79.0.1-py3-none-any.whl", hash = "sha256:e147c0549f27767ba362f9da434eab9c5dc0045d5304feb602a0af001089fc51"},
     {file = "setuptools-79.0.1.tar.gz", hash = "sha256:128ce7b8f33c3079fd1b067ecbb4051a66e8526e7b65f6cec075dfc650ddfa88"},
@@ -11854,7 +11854,7 @@ description = "Python 2 and 3 compatibility utilities"
 optional = false
 python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,>=2.7"
 groups = ["main"]
-markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"trainer-mlflow\""
+markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\" or extra == \"trainer-mlflow\""
 files = [
     {file = "six-1.17.0-py2.py3-none-any.whl", hash = "sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274"},
     {file = "six-1.17.0.tar.gz", hash = "sha256:ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81"},
@@ -11867,7 +11867,7 @@ description = "Utils for streaming large files (S3, HDFS, GCS, SFTP, Azure Blob 
 optional = true
 python-versions = "<4.0,>=3.9"
 groups = ["main"]
-markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\")"
+markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\")"
 files = [
     {file = "smart_open-7.5.0-py3-none-any.whl", hash = "sha256:87e695c5148bbb988f15cec00971602765874163be85acb1c9fb8abc012e6599"},
     {file = "smart_open-7.5.0.tar.gz", hash = "sha256:f394b143851d8091011832ac8113ea4aba6b92e6c35f6e677ddaaccb169d7cb9"},
@@ -11894,7 +11894,7 @@ description = "Utils for streaming large files (S3, HDFS, GCS, SFTP, Azure Blob 
 optional = true
 python-versions = "<4.0,>=3.10"
 groups = ["main"]
-markers = "python_version >= \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\")"
+markers = "python_version >= \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\")"
 files = [
     {file = "smart_open-7.6.1-py3-none-any.whl", hash = "sha256:b4de6aebef023aca91cc9fb372052e1343ba3f152de215bd22391a663e3ddd21"},
     {file = "smart_open-7.6.1.tar.gz", hash = "sha256:4347996e7ba21db7cd1e059632e0b30395407e4f6c660d2ddffc8f2a9ae5f990"},
@@ -12744,7 +12744,7 @@ description = "Provider of IANA time zone data"
 optional = true
 python-versions = ">=2"
 groups = ["main"]
-markers = "extra == \"example\" or extra == \"vllm\" or extra == \"dev\" or extra == \"trainer-xgboost\" or extra == \"trainer-mlflow\""
+markers = "extra == \"example\" or extra == \"vllm\" or extra == \"dev\" or extra == \"trainer-xgboost\" or extra == \"tuner\" or extra == \"trainer-mlflow\""
 files = [
     {file = "tzdata-2026.2-py2.py3-none-any.whl", hash = "sha256:bbe9af844f658da81a5f95019480da3a89415801f6cc966806612cc7169bffe7"},
     {file = "tzdata-2026.2.tar.gz", hash = "sha256:9173fde7d80d9018e02a662e168e5a2d04f87c41ea174b139fbef642eda62d10"},
@@ -12757,7 +12757,7 @@ description = "HTTP library with thread-safe connection pooling, file post, and 
 optional = true
 python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*,!=3.5.*,>=2.7"
 groups = ["main"]
-markers = "python_version == \"3.9\" and (extra == \"example\" or extra == \"vllm\" or extra == \"dev\" or extra == \"trainer-mlflow\" or extra == \"trainer\" or extra == \"trainer-comet\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"trainer-xgboost\" or extra == \"minio\")"
+markers = "python_version == \"3.9\" and (extra == \"example\" or extra == \"vllm\" or extra == \"dev\" or extra == \"trainer-mlflow\" or extra == \"trainer\" or extra == \"trainer-comet\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"trainer-xgboost\" or extra == \"tuner\" or extra == \"minio\")"
 files = [
     {file = "urllib3-1.26.20-py2.py3-none-any.whl", hash = "sha256:0ed14ccfbf1c30a9072c7ca157e4319b70d65f623e91e7b32fadb2853431016e"},
     {file = "urllib3-1.26.20.tar.gz", hash = "sha256:40c2dc0c681e47eb8f90e7e27bf6ff7df2e677421fd46756da1161c39ca70d32"},
@@ -12775,7 +12775,7 @@ description = "HTTP library with thread-safe connection pooling, file post, and 
 optional = true
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "python_version >= \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"trainer-mlflow\" or extra == \"trainer-comet\" or extra == \"minio\")"
+markers = "python_version >= \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\" or extra == \"trainer-mlflow\" or extra == \"trainer-comet\" or extra == \"minio\")"
 files = [
     {file = "urllib3-2.7.0-py3-none-any.whl", hash = "sha256:9fb4c81ebbb1ce9531cce37674bbc6f1360472bc18ca9a553ede278ef7276897"},
     {file = "urllib3-2.7.0.tar.gz", hash = "sha256:231e0ec3b63ceb14667c67be60f2f2c40a518cb38b03af60abc813da26505f4c"},
@@ -12915,7 +12915,7 @@ description = "Virtual Python Environment builder"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\""
+markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\""
 files = [
     {file = "virtualenv-21.5.1-py3-none-any.whl", hash = "sha256:55aa670b67bbfb991b03fda39bd3276d92c419d702376e98c5df1c9989a26783"},
     {file = "virtualenv-21.5.1.tar.gz", hash = "sha256:dca3bf98275a59c652b69d68e73433e597d977c2da9198882479d1a7188009c8"},
@@ -13461,7 +13461,7 @@ description = "Module for decorators, wrappers and monkey patching."
 optional = true
 python-versions = ">=3.8"
 groups = ["main"]
-markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"trainer-comet\""
+markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\" or extra == \"trainer-comet\""
 files = [
     {file = "wrapt-1.17.3-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:88bbae4d40d5a46142e70d58bf664a89b6b4befaea7b2ecc14e03cedb8e06c04"},
     {file = "wrapt-1.17.3-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:e6b13af258d6a9ad602d57d889f83b9d5543acd471eee12eb51f5b01f8eb1bc2"},
@@ -13643,7 +13643,7 @@ description = "Efficient, Flexible and Portable Structured Generation"
 optional = true
 python-versions = "<4,>=3.8"
 groups = ["main"]
-markers = "extra == \"vllm\" and (platform_machine == \"x86_64\" or platform_machine == \"aarch64\" or platform_machine == \"arm64\") and python_version <= \"3.12\""
+markers = "extra == \"vllm\" and python_version <= \"3.12\" and (platform_machine == \"x86_64\" or platform_machine == \"aarch64\" or platform_machine == \"arm64\")"
 files = [
     {file = "xgrammar-0.1.19-cp310-cp310-macosx_10_14_x86_64.whl", hash = "sha256:b9e770afe040969d4d2be1b4a8086927c12c89f3145e3601433467bb940d3ef3"},
     {file = "xgrammar-0.1.19-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:a393827a63bb85e2e53ad5994db7e93359041ca5a46fa7e71e7a90312029969f"},
@@ -13889,7 +13889,7 @@ description = "Yet another URL library"
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"trainer-xgboost\")"
+markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"trainer-xgboost\" or extra == \"tuner\")"
 files = [
     {file = "yarl-1.22.0-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:c7bd6683587567e5a49ee6e336e0612bec8329be1b7d4c8af5687dcdeb67ee1e"},
     {file = "yarl-1.22.0-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:5cdac20da754f3a723cceea5b3448e1a2074866406adeb4ef35b469d089adb8f"},
@@ -14035,7 +14035,7 @@ description = "Yet another URL library"
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "python_version >= \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\")"
+markers = "python_version >= \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\")"
 files = [
     {file = "yarl-1.24.2-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:5249a113065c2b7a958bc699759e359cd61cfc81e3069662208f48f191b7ed12"},
     {file = "yarl-1.24.2-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:7f4425fa244fbf530b006d0c5f79ce920114cfff5b4f5f6056e669f8e160fdc0"},
@@ -14155,7 +14155,7 @@ description = "Backport of pathlib-compatible object wrapper for zip files"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version == \"3.9\" and (extra == \"example\" or extra == \"trainer-mlflow\" or extra == \"vllm\" or extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"trainer\" or extra == \"trainer-xgboost\")"
+markers = "python_version == \"3.9\" and (extra == \"example\" or extra == \"trainer-mlflow\" or extra == \"vllm\" or extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"tuner\")"
 files = [
     {file = "zipp-3.23.1-py3-none-any.whl", hash = "sha256:0b3596c50a5c700c9cb40ba8d86d9f2cc4807e9bedb06bcdf7fac85633e444dc"},
     {file = "zipp-3.23.1.tar.gz", hash = "sha256:32120e378d32cd9714ad503c1d024619063ec28aad2248dc6672ad13edfa5110"},
@@ -14202,9 +14202,10 @@ trainer-comet = ["comet_ml"]
 trainer-deepspeed = ["deepspeed"]
 trainer-mlflow = ["mlflow"]
 trainer-xgboost = ["numpy", "pandas", "ray", "ray", "xgboost"]
+tuner = ["pandas", "pyarrow", "ray", "ray"]
 vllm = ["accelerate", "datasets", "einops", "numpy", "pandas", "pyarrow", "pytorch_lightning", "ray", "ray", "s3fs", "setuptools", "torch", "transformers", "vllm"]
 
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.9.0"
-content-hash = "00974e038bed2eed3e7830a2c501ae32bb21ca3ad4bf252b27175325e25e7d7f"
+content-hash = "dbcb020fce627fbbac6f986b06bb7cbd4cd0eb34662c4be3c36e1da1c2bf370f"
