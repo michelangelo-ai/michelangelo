@@ -12,6 +12,7 @@ from michelangelo.lib.model_manager.registry.client import (
     ModelRegistryClient,
     RegisteredModel,
 )
+from michelangelo.lib.shared.pipeline_run import SourcePipelineRun
 
 
 class TestRegisteredModel(TestCase):
@@ -310,3 +311,13 @@ class TestInMemoryRegistryClient(TestCase):
         """Kind defaults to None when not provided."""
         reg = self.registry.register_model(name="clf", artifact_uri="s3://raw")
         self.assertIsNone(reg.kind)
+
+    def test_register_model_silently_ignores_source_pipeline_run(self):
+        """source_pipeline_run is accepted and ignored — no proto to write it into."""
+        reg = self.registry.register_model(
+            name="clf",
+            artifact_uri="s3://raw",
+            source_pipeline_run=SourcePipelineRun(name="run-1", namespace="ns-1"),
+        )
+        self.assertEqual(reg.name, "clf")
+        self.assertEqual(reg.version, "1")

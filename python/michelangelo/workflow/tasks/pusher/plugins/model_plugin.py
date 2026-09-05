@@ -96,6 +96,9 @@ import uuid
 from typing import TYPE_CHECKING, Any, TypedDict
 
 from michelangelo.api.v2.util import generate_random_name
+from michelangelo.lib.shared.pipeline_run import (
+    get_source_pipeline_run,
+)
 from michelangelo.workflow.schema.exceptions import ConfigurationError
 from michelangelo.workflow.tasks.pusher.plugins.base import PusherPluginBase
 
@@ -393,7 +396,10 @@ class ModelPusherPlugin(PusherPluginBase):
         Resolves the model name (``config.model_name`` → auto-generated when
         ``None``), uploads the raw artifact first, then the deployable
         artifact, and calls ``register_model()`` on each configured registry
-        with both URIs, description, labels, and metadata.
+        with both URIs, description, labels, metadata, and the pipeline-run
+        provenance derived from the process environment (see
+        ``get_source_pipeline_run()``) — ``None`` when running outside a
+        pipeline (e.g. local development).
 
         Storage keys are fixed per ``model_name`` (see the ``push_id``
         warning below) — re-running with the same ``model_name`` overwrites
@@ -434,6 +440,7 @@ class ModelPusherPlugin(PusherPluginBase):
         push_id = uuid.uuid4().hex[:16]
         base_labels = self._build_labels()
         base_metadata = self._build_metadata()
+        source_pipeline_run = get_source_pipeline_run()
 
         with tempfile.TemporaryDirectory(prefix="model_pusher_") as tmp_root:
             _logger.info(
@@ -491,6 +498,7 @@ class ModelPusherPlugin(PusherPluginBase):
                     metadata=dict(
                         base_metadata
                     ),  # shallow copy — prevents cross-registry mutation
+                    source_pipeline_run=source_pipeline_run,
                 )
             except Exception as exc:
                 if registrations:

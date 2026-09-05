@@ -10,6 +10,7 @@ from unittest import TestCase
 from unittest.mock import MagicMock, patch
 
 from michelangelo.lib.model_manager.registry.client import RegisteredModel
+from michelangelo.lib.shared.pipeline_run import SourcePipelineRun
 from michelangelo.workflow.schema.exceptions import ConfigurationError
 from michelangelo.workflow.schema.pusher import ModelPluginConfig
 from michelangelo.workflow.tasks.pusher.plugins.model_plugin import (
@@ -654,6 +655,70 @@ class TestModelPusherPluginMultiRegistry(TestCase):
                 storage_backend=_mock_backend(),
                 registry_client=registry,
             ).execute()
+
+
+# ---------------------------------------------------------------------------
+# Pipeline-run provenance
+# ---------------------------------------------------------------------------
+
+
+class TestModelPusherPluginSourcePipelineRun(TestCase):
+    """Tests for ModelPusherPlugin.execute() threading source_pipeline_run."""
+
+    def setUp(self) -> None:
+        """Isolate the pipeline-run env vars per test."""
+        self._env_patcher = patch.dict(os.environ, {}, clear=False)
+        self._env_patcher.start()
+        os.environ.pop("MA_PIPELINE_RUN_NAME", None)
+        os.environ.pop("MA_NAMESPACE", None)
+        self.addCleanup(self._env_patcher.stop)
+
+    def test_source_pipeline_run_passed_when_env_vars_set(self):
+        """execute() calls register_model() with source_pipeline_run from the env."""
+        os.environ["MA_PIPELINE_RUN_NAME"] = "run-1"
+        os.environ["MA_NAMESPACE"] = "ns-1"
+        registry = _mock_registry(name="clf")
+        _plugin(model_name="clf", registry=registry).execute()
+
+        call_kwargs = registry.register_model.call_args.kwargs
+        self.assertEqual(
+            call_kwargs["source_pipeline_run"],
+            SourcePipelineRun(name="run-1", namespace="ns-1"),
+        )
+
+    def test_source_pipeline_run_none_when_env_vars_unset(self):
+        """execute() passes source_pipeline_run=None outside a pipeline (local dev).
+
+        Regression guard: every other test in this file runs with neither env
+        var set and must keep working exactly as before this change.
+        """
+        registry = _mock_registry(name="clf")
+        _plugin(model_name="clf", registry=registry).execute()
+
+        call_kwargs = registry.register_model.call_args.kwargs
+        self.assertIsNone(call_kwargs["source_pipeline_run"])
+
+    def test_source_pipeline_run_sent_to_every_registry_in_fanout(self):
+        """Multi-registry fan-out: every registry receives the same value."""
+        os.environ["MA_PIPELINE_RUN_NAME"] = "run-2"
+        r1 = MagicMock()
+        r1.register_model.return_value = RegisteredModel(
+            name="m", version="1", registry_uri="a://m/1"
+        )
+        r2 = MagicMock()
+        r2.register_model.return_value = RegisteredModel(
+            name="m", version="1", registry_uri="b://m/1"
+        )
+        ModelPusherPlugin(
+            config=ModelPluginConfig(model_name="m", registry_clients=[r1, r2]),
+            artifact=_assembled(),
+            storage_backend=_mock_backend(),
+        ).execute()
+
+        expected = SourcePipelineRun(name="run-2", namespace=None)
+        for client in (r1, r2):
+            kw = client.register_model.call_args.kwargs
+            self.assertEqual(kw["source_pipeline_run"], expected)
 
 
 # ---------------------------------------------------------------------------
