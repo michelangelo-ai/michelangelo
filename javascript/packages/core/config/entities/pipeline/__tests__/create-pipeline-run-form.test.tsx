@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { vi } from 'vitest';
 
 import { CreatePipelineRunForm } from '#core/config/entities/pipeline/create-pipeline-run-form';
 import {
@@ -18,8 +19,6 @@ import {
   createQueryMockRouter,
   getServiceProviderWrapper,
 } from '#core/test/wrappers/get-service-provider-wrapper';
-
-import type { PipelineRun } from '#core/config/entities/run/types';
 
 describe('CreatePipelineRunForm', () => {
   // Mount-when-visible pattern: the dispatcher mounts the component while open and
@@ -491,14 +490,6 @@ describe('CreatePipelineRunForm', () => {
       );
     }
 
-    function buildRequest() {
-      return createQueryMockRouter({
-        CreatePipelineRun: {},
-        ListPipelineRun: runListResponse,
-        GetPipelineRun: sourceRunResponse,
-      });
-    }
-
     async function openResumeGroup(user: ReturnType<typeof userEvent.setup>) {
       await user.click(screen.getByText('Select run to resume from'));
     }
@@ -510,7 +501,13 @@ describe('CreatePipelineRunForm', () => {
 
     it('offers only finished runs of this pipeline', async () => {
       const user = userEvent.setup();
-      renderForm(buildRequest());
+      renderForm(
+        createQueryMockRouter({
+          CreatePipelineRun: {},
+          ListPipelineRun: runListResponse,
+          GetPipelineRun: sourceRunResponse,
+        })
+      );
 
       await screen.findByRole('dialog', { name: 'Start new pipeline run' });
       await openResumeGroup(user);
@@ -524,7 +521,13 @@ describe('CreatePipelineRunForm', () => {
 
     it('populates the step picker from Execute Workflow sub-steps once a run is chosen', async () => {
       const user = userEvent.setup();
-      renderForm(buildRequest());
+      renderForm(
+        createQueryMockRouter({
+          CreatePipelineRun: {},
+          ListPipelineRun: runListResponse,
+          GetPipelineRun: sourceRunResponse,
+        })
+      );
 
       await screen.findByRole('dialog', { name: 'Start new pipeline run' });
       await openResumeGroup(user);
@@ -546,7 +549,11 @@ describe('CreatePipelineRunForm', () => {
 
     it('submits resumeFrom using step displayName, not the task path', async () => {
       const user = userEvent.setup();
-      const mockRequest = buildRequest();
+      const mockRequest = createQueryMockRouter({
+        CreatePipelineRun: {},
+        ListPipelineRun: runListResponse,
+        GetPipelineRun: sourceRunResponse,
+      });
       renderForm(mockRequest);
 
       const dialog = await screen.findByRole('dialog', { name: 'Start new pipeline run' });
@@ -579,7 +586,11 @@ describe('CreatePipelineRunForm', () => {
 
     it('submits resume without resumeFrom when no step is picked', async () => {
       const user = userEvent.setup();
-      const mockRequest = buildRequest();
+      const mockRequest = createQueryMockRouter({
+        CreatePipelineRun: {},
+        ListPipelineRun: runListResponse,
+        GetPipelineRun: sourceRunResponse,
+      });
       renderForm(mockRequest);
 
       const dialog = await screen.findByRole('dialog', { name: 'Start new pipeline run' });
@@ -603,19 +614,13 @@ describe('CreatePipelineRunForm', () => {
 
     it('omits the resume spec entirely when the group is opened but nothing is chosen', async () => {
       const user = userEvent.setup();
-      const router = buildRequest();
+      const mockRequest = createQueryMockRouter({
+        CreatePipelineRun: {},
+        ListPipelineRun: runListResponse,
+        GetPipelineRun: sourceRunResponse,
+      });
 
-      // Captures the payload so the assertion can check for the *absence* of a key,
-      // which call matchers express poorly.
-      const submitted: PipelineRun[] = [];
-      const request: typeof router = (queryName, args, headers) => {
-        if (queryName === 'CreatePipelineRun') {
-          submitted.push(args as PipelineRun);
-        }
-        return router(queryName, args, headers);
-      };
-
-      renderForm(request);
+      renderForm(mockRequest);
 
       const dialog = await screen.findByRole('dialog', { name: 'Start new pipeline run' });
       await openResumeGroup(user);
@@ -623,9 +628,13 @@ describe('CreatePipelineRunForm', () => {
       await user.click(within(dialog).getByRole('button', { name: 'Run' }));
 
       await waitFor(() => {
-        expect(submitted).toHaveLength(1);
+        const createCall = vi
+          .mocked(mockRequest)
+          .mock.calls.find(([name]) => name === 'CreatePipelineRun');
+        expect(createCall).toBeDefined();
+        const payload = createCall![1] as Record<string, unknown>;
+        expect((payload.spec as Record<string, unknown>).resume).toBeUndefined();
       });
-      expect(submitted[0].spec.resume).toBeUndefined();
     });
   });
 });

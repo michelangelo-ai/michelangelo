@@ -3,8 +3,6 @@ import userEvent from '@testing-library/user-event';
 import { Alert } from 'baseui/icon';
 import { vi } from 'vitest';
 
-import { CellType } from '#core/components/cell/constants';
-import { buildTableConfigFactory } from '#core/components/views/__fixtures__/table-config-factory';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getErrorProviderWrapper } from '#core/test/wrappers/get-error-provider-wrapper';
 import { getIconProviderWrapper } from '#core/test/wrappers/get-icon-provider-wrapper';
@@ -16,72 +14,33 @@ import {
 } from '../__fixtures__/phase-config-factory';
 import { PhaseListRoute } from '../phase-list-route';
 
-import type { PhaseConfig } from '#core/types/common/studio-types';
-
 describe('PhaseListRoute', () => {
-  const buildEntity = buildEntityConfigFactory();
-  const buildPhase = buildPhaseConfigFactory();
-  const buildTableConfig = buildTableConfigFactory({
-    columns: [{ id: 'name', label: 'Name', type: CellType.TEXT }],
-  });
-
-  const buildTestPhaseEntityConfig = (): Record<string, PhaseConfig> => ({
-    train: buildPhase({
-      id: 'train',
-      icon: 'train',
-      name: 'Train',
-      entities: [
-        buildEntity({
-          id: 'pipelines',
-          name: 'Pipelines',
-          service: 'pipeline',
-        }),
-        buildEntity({
-          id: 'runs',
-          name: 'Pipeline Runs',
-          service: 'pipelineRun',
-        }),
-        buildEntity({
-          id: 'disabled-entity',
-          name: 'Disabled Entity',
-          service: 'disabled',
-          state: 'disabled',
-          views: [
-            {
-              type: 'list',
-              tableConfig: buildTableConfig(),
-            },
-          ],
-        }),
-      ],
-    }),
-    evaluate: buildPhase({
-      id: 'evaluate',
-      icon: 'evaluate',
-      name: 'Evaluate',
-      entities: [
-        buildEntity({
-          id: 'evaluations',
-          name: 'Evaluations',
-          service: 'evaluation',
-          views: [
-            {
-              type: 'list',
-              tableConfig: buildTableConfig(),
-            },
-          ],
-        }),
-      ],
-    }),
-  });
-
   test('renders tabs for active entities only, filtering out disabled ones', () => {
+    const buildEntity = buildEntityConfigFactory();
+    const buildPhase = buildPhaseConfigFactory();
+
     const mockRequest = vi.fn().mockResolvedValue({
       pipelineList: { items: [] },
     });
 
     render(
-      <PhaseListRoute phases={buildTestPhaseEntityConfig()} />,
+      <PhaseListRoute
+        phases={{
+          train: buildPhase({
+            id: 'train',
+            entities: [
+              buildEntity({ id: 'pipelines', name: 'Pipelines', service: 'pipeline' }),
+              buildEntity({ id: 'runs', name: 'Pipeline Runs', service: 'pipelineRun' }),
+              buildEntity({
+                id: 'disabled-entity',
+                name: 'Disabled Entity',
+                service: 'disabled',
+                state: 'disabled',
+              }),
+            ],
+          }),
+        }}
+      />,
       buildWrapper([
         getErrorProviderWrapper(),
         getRouterWrapper({ location: '/myproject/train/pipelines' }),
@@ -95,8 +54,15 @@ describe('PhaseListRoute', () => {
   });
 
   test('shows error message for unknown phase', () => {
+    const buildPhase = buildPhaseConfigFactory();
+
     render(
-      <PhaseListRoute phases={buildTestPhaseEntityConfig()} />,
+      <PhaseListRoute
+        phases={{
+          train: buildPhase({ id: 'train' }),
+          evaluate: buildPhase({ id: 'evaluate' }),
+        }}
+      />,
       buildWrapper([
         getErrorProviderWrapper(),
         getRouterWrapper({ location: '/myproject/unknown-phase/entity' }),
@@ -109,23 +75,18 @@ describe('PhaseListRoute', () => {
   });
 
   test('shows message when phase has no listable entities', () => {
+    const buildEntity = buildEntityConfigFactory();
+    const buildPhase = buildPhaseConfigFactory();
+
     const configWithNoListableEntities = {
       'no-listable': buildPhase({
         id: 'no-listable',
-        icon: 'no-listable',
-        name: 'No Listable',
         entities: [
           buildEntity({
             id: 'disabled-only',
             name: 'Disabled Only',
             service: 'disabled',
             state: 'disabled',
-            views: [
-              {
-                type: 'list',
-                tableConfig: buildTableConfig(),
-              },
-            ],
           }),
         ],
       }),
@@ -146,12 +107,22 @@ describe('PhaseListRoute', () => {
   });
 
   test('redirects to first entity when no entity in URL', async () => {
+    const buildEntity = buildEntityConfigFactory();
+    const buildPhase = buildPhaseConfigFactory();
+
     const mockRequest = vi.fn().mockResolvedValue({
       pipelineList: { items: [] },
     });
 
     render(
-      <PhaseListRoute phases={buildTestPhaseEntityConfig()} />,
+      <PhaseListRoute
+        phases={{
+          train: buildPhase({
+            id: 'train',
+            entities: [buildEntity({ id: 'pipelines', name: 'Pipelines', service: 'pipeline' })],
+          }),
+        }}
+      />,
       buildWrapper([
         getErrorProviderWrapper(),
         getRouterWrapper({ location: '/myproject/train' }),
@@ -163,12 +134,25 @@ describe('PhaseListRoute', () => {
   });
 
   test('shows correct tab as active when entity in URL', () => {
+    const buildEntity = buildEntityConfigFactory();
+    const buildPhase = buildPhaseConfigFactory();
+
     const mockRequest = vi.fn().mockResolvedValue({
       pipelineRunList: { items: [] },
     });
 
     render(
-      <PhaseListRoute phases={buildTestPhaseEntityConfig()} />,
+      <PhaseListRoute
+        phases={{
+          train: buildPhase({
+            id: 'train',
+            entities: [
+              buildEntity({ id: 'pipelines', name: 'Pipelines', service: 'pipeline' }),
+              buildEntity({ id: 'runs', name: 'Pipeline Runs', service: 'pipelineRun' }),
+            ],
+          }),
+        }}
+      />,
       buildWrapper([
         getErrorProviderWrapper(),
         getRouterWrapper({ location: '/myproject/train/runs' }),
@@ -187,12 +171,22 @@ describe('PhaseListRoute', () => {
   });
 
   test('shows error message for invalid entity in URL', () => {
+    const buildEntity = buildEntityConfigFactory();
+    const buildPhase = buildPhaseConfigFactory();
+
     const mockRequest = vi.fn().mockResolvedValue({
       pipelineList: { items: [] },
     });
 
     render(
-      <PhaseListRoute phases={buildTestPhaseEntityConfig()} />,
+      <PhaseListRoute
+        phases={{
+          train: buildPhase({
+            id: 'train',
+            entities: [buildEntity({ id: 'pipelines', name: 'Pipelines', service: 'pipeline' })],
+          }),
+        }}
+      />,
       buildWrapper([
         getErrorProviderWrapper(),
         getRouterWrapper({ location: '/myproject/train/invalid-entity' }),
@@ -204,10 +198,20 @@ describe('PhaseListRoute', () => {
   });
 
   test('handles data fetching failures gracefully', async () => {
+    const buildEntity = buildEntityConfigFactory();
+    const buildPhase = buildPhaseConfigFactory();
+
     const mockRequest = vi.fn().mockRejectedValue(new Error('Network error'));
 
     render(
-      <PhaseListRoute phases={buildTestPhaseEntityConfig()} />,
+      <PhaseListRoute
+        phases={{
+          train: buildPhase({
+            id: 'train',
+            entities: [buildEntity({ id: 'pipelines', name: 'Pipelines', service: 'pipeline' })],
+          }),
+        }}
+      />,
       buildWrapper([
         getErrorProviderWrapper(),
         getRouterWrapper({ location: '/myproject/train/pipelines' }),
@@ -222,6 +226,8 @@ describe('PhaseListRoute', () => {
   });
 
   test('switches tabs and updates data when clicking different tabs', async () => {
+    const buildEntity = buildEntityConfigFactory();
+    const buildPhase = buildPhaseConfigFactory();
     const user = userEvent.setup();
 
     const mockRequest = vi
@@ -238,7 +244,17 @@ describe('PhaseListRoute', () => {
       });
 
     render(
-      <PhaseListRoute phases={buildTestPhaseEntityConfig()} />,
+      <PhaseListRoute
+        phases={{
+          train: buildPhase({
+            id: 'train',
+            entities: [
+              buildEntity({ id: 'pipelines', name: 'Pipelines', service: 'pipeline' }),
+              buildEntity({ id: 'runs', name: 'Pipeline Runs', service: 'pipelineRun' }),
+            ],
+          }),
+        }}
+      />,
       buildWrapper([
         getErrorProviderWrapper(),
         getRouterWrapper({ location: '/myproject/train/pipelines' }),
@@ -273,6 +289,8 @@ describe('PhaseListRoute', () => {
   });
 
   test('handles configuration with empty entity arrays', () => {
+    const buildPhase = buildPhaseConfigFactory();
+
     const emptyConfig = {
       train: buildPhase({ id: 'train', entities: [] }),
       evaluate: buildPhase({ id: 'evaluate', entities: [] }),
@@ -293,6 +311,9 @@ describe('PhaseListRoute', () => {
   });
 
   test('filters out entities without list views', () => {
+    const buildEntity = buildEntityConfigFactory();
+    const buildPhase = buildPhaseConfigFactory();
+
     const configWithNonListViews = {
       train: buildPhase({
         id: 'train',
@@ -307,12 +328,6 @@ describe('PhaseListRoute', () => {
             id: 'pipelines',
             name: 'Pipelines',
             service: 'pipeline',
-            views: [
-              {
-                type: 'list',
-                tableConfig: buildTableConfig(),
-              },
-            ],
           }),
         ],
       }),
@@ -336,6 +351,8 @@ describe('PhaseListRoute', () => {
   });
 
   test('handles empty entities array gracefully', () => {
+    const buildPhase = buildPhaseConfigFactory();
+
     render(
       <PhaseListRoute phases={{ train: buildPhase({ id: 'train', entities: [] }) }} />,
       buildWrapper([
@@ -349,6 +366,9 @@ describe('PhaseListRoute', () => {
   });
 
   test('handles single entity', () => {
+    const buildEntity = buildEntityConfigFactory();
+    const buildPhase = buildPhaseConfigFactory();
+
     const singleEntityConfig = {
       train: buildPhase({
         id: 'train',
@@ -380,6 +400,9 @@ describe('PhaseListRoute', () => {
   });
 
   test('renders phase header with config metadata', () => {
+    const buildEntity = buildEntityConfigFactory();
+    const buildPhase = buildPhaseConfigFactory();
+
     const configWithDescription = {
       train: buildPhase({
         id: 'train',

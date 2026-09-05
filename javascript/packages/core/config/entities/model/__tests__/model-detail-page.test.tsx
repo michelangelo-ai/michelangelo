@@ -12,23 +12,7 @@ import {
 
 describe('Model detail page', () => {
   describe('header', () => {
-    const buildModel = (overrides: Record<string, unknown> = {}) => ({
-      metadata: {
-        name: 'fraud-classifier',
-        creationTimestamp: { seconds: 1700000000 },
-      },
-      spec: {
-        owner: { name: 'jsmith' },
-        // The generated proto client decodes enum fields to their numeric discriminant
-        // (MODEL_KIND_BINARY_CLASSIFICATION = 3), not the enum's string name.
-        kind: 3,
-        sourcePipelineRun: { name: 'fraud-classifier-run-1' },
-        description: 'Fraud detection model trained on transaction history.',
-      },
-      ...overrides,
-    });
-
-    function renderDetail(model: object) {
+    it('renders header metadata for the model', async () => {
       render(
         <EntityDetailRoute phases={{ train: TRAIN_PHASE }} />,
         buildWrapper([
@@ -37,14 +21,28 @@ describe('Model detail page', () => {
             location: '/myproject/train/models/fraud-classifier/information',
           }),
           getServiceProviderWrapper({
-            request: createQueryMockRouter({ GetModel: { model } }),
+            request: createQueryMockRouter({
+              GetModel: {
+                model: {
+                  metadata: {
+                    name: 'fraud-classifier',
+                    creationTimestamp: { seconds: 1700000000 },
+                  },
+                  spec: {
+                    owner: { name: 'jsmith' },
+                    // The generated proto client decodes enum fields to their numeric
+                    // discriminant (MODEL_KIND_BINARY_CLASSIFICATION = 3), not the enum's
+                    // string name.
+                    kind: 3,
+                    sourcePipelineRun: { name: 'fraud-classifier-run-1' },
+                    description: 'Fraud detection model trained on transaction history.',
+                  },
+                },
+              },
+            }),
           }),
         ])
       );
-    }
-
-    it('renders header metadata for the model', async () => {
-      renderDetail(buildModel());
 
       expect(screen.getByText('fraud-classifier')).toBeInTheDocument();
       expect(await screen.findByText('Source pipeline run')).toBeInTheDocument();
@@ -60,22 +58,6 @@ describe('Model detail page', () => {
   });
 
   describe('information tab', () => {
-    const buildModel = () => ({
-      metadata: { name: 'fraud-classifier', creationTimestamp: { seconds: 1700000000 } },
-      spec: {
-        owner: { name: 'jsmith' },
-        sourcePipelineRun: { name: 'fraud-classifier-run-1' },
-        description: 'Fraud detection model trained on transaction history.',
-        modelFamily: { name: 'fraud-classifier-family' },
-        trainingFramework: 'TensorFlow',
-        source: 'canvas',
-        predictionResult: {
-          trainTableName: 'fraud_classifier_train_eval',
-          testTableName: 'fraud_classifier_validation_eval',
-        },
-      },
-    });
-
     function renderInformationTab() {
       render(
         <EntityDetailRoute phases={{ train: TRAIN_PHASE }} />,
@@ -85,7 +67,28 @@ describe('Model detail page', () => {
             location: '/myproject/train/models/fraud-classifier/information',
           }),
           getServiceProviderWrapper({
-            request: createQueryMockRouter({ GetModel: { model: buildModel() } }),
+            request: createQueryMockRouter({
+              GetModel: {
+                model: {
+                  metadata: {
+                    name: 'fraud-classifier',
+                    creationTimestamp: { seconds: 1700000000 },
+                  },
+                  spec: {
+                    owner: { name: 'jsmith' },
+                    sourcePipelineRun: { name: 'fraud-classifier-run-1' },
+                    description: 'Fraud detection model trained on transaction history.',
+                    modelFamily: { name: 'fraud-classifier-family' },
+                    trainingFramework: 'TensorFlow',
+                    source: 'canvas',
+                    predictionResult: {
+                      trainTableName: 'fraud_classifier_train_eval',
+                      testTableName: 'fraud_classifier_validation_eval',
+                    },
+                  },
+                },
+              },
+            }),
           }),
         ])
       );

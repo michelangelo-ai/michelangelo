@@ -18,7 +18,7 @@ import {
 } from '#core/test/wrappers/get-service-provider-wrapper';
 
 describe('Deployment list page', () => {
-  it('renders the Deployments tab', () => {
+  beforeEach(() => {
     render(
       <PhaseListRoute phases={{ deploy: DEPLOY_PHASE }} />,
       buildWrapper([
@@ -29,22 +29,13 @@ describe('Deployment list page', () => {
         }),
       ])
     );
+  });
 
+  it('renders the Deployments tab', () => {
     expect(screen.getByRole('tab', { name: 'Deployments' })).toBeInTheDocument();
   });
 
   it('renders the correct column headers', async () => {
-    render(
-      <PhaseListRoute phases={{ deploy: DEPLOY_PHASE }} />,
-      buildWrapper([
-        getErrorProviderWrapper(),
-        getRouterWrapper({ location: '/myproject/deploy/deployments' }),
-        getServiceProviderWrapper({
-          request: vi.fn().mockResolvedValue({ deploymentList: { items: [] } }),
-        }),
-      ])
-    );
-
     expect(await screen.findByRole('columnheader', { name: 'Name' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Model' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Type' })).toBeInTheDocument();
@@ -77,20 +68,6 @@ describe('Deployment list page', () => {
 
 describe('Deployment detail page', () => {
   describe('header', () => {
-    const buildDeployment = (overrides = {}) => ({
-      metadata: {
-        name: 'sentiment-deployment',
-        creationTimestamp: { seconds: 1746000000 },
-        labels: { 'michelangelo/owner': 'user-example' },
-      },
-      status: {
-        state: DEPLOYMENT_STATE.HEALTHY,
-        stage: DEPLOYMENT_STAGE.ROLLOUT_COMPLETE,
-        conditions: [] as object[],
-      },
-      ...overrides,
-    });
-
     it('renders details for deployment', async () => {
       render(
         <EntityDetailRoute phases={{ deploy: DEPLOY_PHASE }} />,
@@ -101,12 +78,15 @@ describe('Deployment detail page', () => {
           }),
           getServiceProviderWrapper({
             request: createQueryMockRouter({
-              GetDeployment: { deployment: buildDeployment() },
+              GetDeployment: {
+                deployment: {},
+              },
             }),
           }),
         ])
       );
 
+      // The header title comes from the route's entity ID, not deployment.metadata.name.
       expect(screen.getByText('sentiment-deployment')).toBeInTheDocument();
       expect(await screen.findByText('Created')).toBeInTheDocument();
       expect(screen.getByText('Owner')).toBeInTheDocument();
@@ -116,42 +96,6 @@ describe('Deployment detail page', () => {
   });
 
   describe('information tab', () => {
-    const buildDeployment = () => ({
-      metadata: {
-        name: 'sentiment-deployment',
-        creationTimestamp: { seconds: 1746000000 },
-        labels: { 'michelangelo/owner': 'user-example' },
-      },
-      spec: {
-        definition: { type: 1 },
-        strategy: { rolloutStrategy: { case: 'rolling', value: {} } },
-        target: { case: 'inferenceServer', value: { name: 'triton-server' } },
-        desiredRevision: { name: 'sentiment-model-rev-3' },
-        resourceLinks: { Dashboard: 'https://grafana.example.com/d/abc' },
-      },
-      status: {
-        state: DEPLOYMENT_STATE.HEALTHY,
-        stage: DEPLOYMENT_STAGE.ROLLOUT_COMPLETE,
-        message: 'Rollout completed successfully.',
-        currentRevision: { name: 'sentiment-model-rev-2' },
-        conditions: [] as object[],
-      },
-    });
-
-    const buildModel = () => ({
-      metadata: { creationTimestamp: { seconds: 1746000000 } },
-      spec: {
-        owner: { name: 'model-owner' },
-        kind: 2,
-        sourcePipelineRun: { name: 'run-20260825-080000' },
-      },
-    });
-
-    const infoTabResponses = () => ({
-      GetDeployment: { deployment: buildDeployment() },
-      GetModel: { model: buildModel() },
-    });
-
     it('renders the configuration details', async () => {
       render(
         <EntityDetailRoute phases={{ deploy: DEPLOY_PHASE }} />,
@@ -160,7 +104,15 @@ describe('Deployment detail page', () => {
           getRouterWrapper({
             location: '/myproject/deploy/deployments/sentiment-deployment/info',
           }),
-          getServiceProviderWrapper({ request: createQueryMockRouter(infoTabResponses()) }),
+          getServiceProviderWrapper({
+            request: createQueryMockRouter({
+              GetDeployment: {
+                deployment: {
+                  spec: { definition: { type: 1 } },
+                },
+              },
+            }),
+          }),
         ])
       );
 
@@ -176,7 +128,17 @@ describe('Deployment detail page', () => {
           getRouterWrapper({
             location: '/myproject/deploy/deployments/sentiment-deployment/info',
           }),
-          getServiceProviderWrapper({ request: createQueryMockRouter(infoTabResponses()) }),
+          getServiceProviderWrapper({
+            request: createQueryMockRouter({
+              GetDeployment: {
+                deployment: {
+                  spec: {
+                    target: { case: 'inferenceServer', value: { name: 'triton-server' } },
+                  },
+                },
+              },
+            }),
+          }),
         ])
       );
 
@@ -214,7 +176,26 @@ describe('Deployment detail page', () => {
           getRouterWrapper({
             location: '/myproject/deploy/deployments/sentiment-deployment/info',
           }),
-          getServiceProviderWrapper({ request: createQueryMockRouter(infoTabResponses()) }),
+          getServiceProviderWrapper({
+            request: createQueryMockRouter({
+              GetDeployment: {
+                deployment: {
+                  spec: { desiredRevision: { name: 'sentiment-model-rev-3' } },
+                  status: { currentRevision: { name: 'sentiment-model-rev-2' } },
+                },
+              },
+              GetModel: {
+                model: {
+                  metadata: { creationTimestamp: { seconds: 1746000000 } },
+                  spec: {
+                    owner: { name: 'model-owner' },
+                    kind: 2,
+                    sourcePipelineRun: { name: 'run-20260825-080000' },
+                  },
+                },
+              },
+            }),
+          }),
         ])
       );
 
@@ -235,7 +216,12 @@ describe('Deployment detail page', () => {
           }),
           getServiceProviderWrapper({
             request: createQueryMockRouter({
-              GetDeployment: { deployment: buildDeployment() },
+              GetDeployment: {
+                deployment: {
+                  spec: { desiredRevision: { name: 'sentiment-model-rev-3' } },
+                  status: { currentRevision: { name: 'sentiment-model-rev-2' } },
+                },
+              },
               GetModel: {},
             }),
           }),
@@ -264,11 +250,7 @@ describe('Deployment detail page', () => {
           getServiceProviderWrapper({
             request: createQueryMockRouter({
               GetDeployment: {
-                deployment: {
-                  metadata: { name: 'sentiment-deployment' },
-                  spec: { definition: { type: 1 } },
-                  status: { state: DEPLOYMENT_STATE.EMPTY, stage: DEPLOYMENT_STAGE.INVALID },
-                },
+                deployment: {},
               },
             }),
           }),
@@ -283,11 +265,6 @@ describe('Deployment detail page', () => {
 
   describe('ongoing operations tab', () => {
     const buildDeployment = (overrides = {}) => ({
-      metadata: {
-        name: 'sentiment-deployment',
-        creationTimestamp: { seconds: 1746000000 },
-        labels: { 'michelangelo/owner': 'user-example' },
-      },
       status: {
         state: DEPLOYMENT_STATE.HEALTHY,
         stage: DEPLOYMENT_STAGE.ROLLOUT_COMPLETE,

@@ -14,7 +14,7 @@ import {
 } from '#core/test/wrappers/get-service-provider-wrapper';
 
 describe('Target list page', () => {
-  it('renders the Targets tab', () => {
+  beforeEach(() => {
     render(
       <PhaseListRoute phases={{ deploy: DEPLOY_PHASE }} />,
       buildWrapper([
@@ -25,22 +25,13 @@ describe('Target list page', () => {
         }),
       ])
     );
+  });
 
+  it('renders the Targets tab', () => {
     expect(screen.getByRole('tab', { name: 'Targets' })).toBeInTheDocument();
   });
 
   it('renders the correct column headers', async () => {
-    render(
-      <PhaseListRoute phases={{ deploy: DEPLOY_PHASE }} />,
-      buildWrapper([
-        getErrorProviderWrapper(),
-        getRouterWrapper({ location: '/myproject/deploy/targets' }),
-        getServiceProviderWrapper({
-          request: vi.fn().mockResolvedValue({ inferenceServerList: { items: [] } }),
-        }),
-      ])
-    );
-
     expect(await screen.findByRole('columnheader', { name: 'Target name' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Last updated' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Type' })).toBeInTheDocument();

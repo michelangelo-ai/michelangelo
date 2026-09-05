@@ -22,4 +22,4 @@ renderHook(
 
 #### RPC and External API Mocking
 
-Use `@test/utils/wrappers/get-service-provider-wrapper.tsx` for API mocking
+Mock RPC calls with `createQueryMockRouter({ MethodName: responseObject })` from `get-service-provider-wrapper` — it returns a `vi.fn()`, so use `.mock.calls` for payload assertions instead of writing custom capture helpers.
