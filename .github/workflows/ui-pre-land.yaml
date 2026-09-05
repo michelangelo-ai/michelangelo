@@ -22,7 +22,7 @@ jobs:
         working-directory: javascript
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           path: .
 
@@ -60,7 +60,7 @@ jobs:
         working-directory: javascript
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           path: .
 
@@ -87,7 +87,7 @@ jobs:
         working-directory: javascript
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           path: .
 

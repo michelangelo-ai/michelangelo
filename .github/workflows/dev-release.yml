@@ -37,7 +37,7 @@ jobs:
         uses: docker/setup-buildx-action@v4
 
       - name: Checkout Repository
-        uses: actions/checkout@v4  # https://github.com/actions/checkout
+        uses: actions/checkout@v7  # https://github.com/actions/checkout
 
       - name: Cache Bazel Outputs
         uses: actions/cache@v6  # https://github.com/actions/cache
