@@ -19,7 +19,17 @@ import (
 var _ Backend = &tritonBackend{}
 
 const (
-	defaultTritonImageTag = "23.04-py3"
+	// defaultTritonImageTag is the stock nvcr.io/nvidia/tritonserver image used
+	// by every InferenceServer that doesn't override it. Pinned to 25.01 --
+	// not the latest available -- to match the Triton version already running
+	// in production internally (Uber's ml_gpu_base), rather than adopting a
+	// version with no internal production track record. A real TorchScript
+	// model (california_housing's pytorch_libtorch model) was verified to
+	// load and produce bit-for-bit identical output on 23.04 vs 26.08
+	// CPU-only; 25.01 sits inside that already-checked range. See
+	// docker/triton-serving.Dockerfile, whose FROM should stay in sync with
+	// this even though it isn't wired to any running InferenceServer today.
+	defaultTritonImageTag = "25.01-py3"
 
 	// k8sProgressDeadlineExceeded is the Kubernetes DeploymentCondition reason string
 	// that signals a rolling update has stalled. Named constant prevents silent
