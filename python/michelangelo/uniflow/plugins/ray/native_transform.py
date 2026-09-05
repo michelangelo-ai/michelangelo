@@ -191,7 +191,9 @@ def compute_numerical_statistics(
     # ray_data_df.aggregate() with zero aggregators crashes inside Ray
     # (assert self._columns in table_block.py, surfaced as
     # RayTaskError(AssertionError)).
-    batch_count = -(-len(aggregate_fns) // numerical_statistics_batch_fn_size)
+    batch_count = (
+        len(aggregate_fns) + numerical_statistics_batch_fn_size - 1
+    ) // numerical_statistics_batch_fn_size
     for i in range(batch_count):
         batch = aggregate_fns[
             i * numerical_statistics_batch_fn_size : (i + 1)
