@@ -629,3 +629,21 @@ func TestBeforeCreate_StampsSourcePipelineTypeLabel(t *testing.T) {
 	assert.Equal(t, "PIPELINE_TYPE_TRAIN",
 		request.PipelineRun.GetLabels()[api.SourcePipelineTypeLabelName])
 }
+
+// When the owning Pipeline has no type set (proto3 zero value
+// PIPELINE_TYPE_INVALID), the label must still be stamped with the
+// explicit string "PIPELINE_TYPE_INVALID" rather than silently omitted.
+// This provides a greppable diagnostic value on every PipelineRun.
+func TestBeforeCreate_StampsSourcePipelineTypeLabelWhenTypeUnset(t *testing.T) {
+	live := &v2.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-pipeline", Namespace: testNamespace},
+		// Spec.Type deliberately omitted — defaults to PIPELINE_TYPE_INVALID (0).
+	}
+	hook := setUpHook(t, live)
+
+	request := newPipelineRefRequest("test-pipeline")
+	require.NoError(t, hook.BeforeCreate(context.Background(), request))
+	assert.Equal(t, "PIPELINE_TYPE_INVALID",
+		request.PipelineRun.GetLabels()[api.SourcePipelineTypeLabelName],
+		"label must be present even when the Pipeline has no type set")
+}
