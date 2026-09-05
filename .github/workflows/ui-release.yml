@@ -109,7 +109,7 @@ jobs:
           WORKSPACE_ROOT: ${{ github.workspace }}
 
       - name: Build & Push UI Image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: docker/ui-prebuilt.Dockerfile
