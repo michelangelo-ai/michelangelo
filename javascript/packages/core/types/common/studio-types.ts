@@ -64,14 +64,16 @@ export enum Phase {
 
 export interface PhaseEntityConfig<T extends object = object> {
   /**
-   * Name of the entity as it appears within MA Studio. Should be plural, lower case
-   * version of the name.
+   * Name of the entity as it appears within MA Studio. Plural, lower case, and
+   * not pre-cased — nav call sites apply Title Case via `formatEntityName` at
+   * render time. Acronyms (e.g. "AI") should still be capitalized in the name
+   * itself.
    *
    * @example
    * trained models
    * pipelines
-   * feature consistency (intentionally not pluralized since this entity is never referred
-   *  to as "feature consistencies")
+   * feature consistency (not pluralized — never referred to as "feature consistencies")
+   * AI agents
    */
   name: string;
   /**
