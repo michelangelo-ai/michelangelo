@@ -81,7 +81,7 @@ const RETRY_AS_RESUME_OPERATIONS: MiddlewareOperation[] = [
 
 export const RUN_ENTITY_CONFIG: PhaseEntityConfig = {
   id: 'runs',
-  name: 'Runs',
+  name: 'runs',
   service: 'pipelineRun',
   state: 'active',
   views: [RUN_LIST_CONFIG, RUN_DETAIL_CONFIG],
