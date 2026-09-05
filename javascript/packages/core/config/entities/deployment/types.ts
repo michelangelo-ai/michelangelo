@@ -43,6 +43,7 @@ export type ModelListResult = {
 
 export type DeploymentRecord = {
   metadata?: {
+    name?: string;
     labels?: Record<string, string>;
     annotations?: Record<string, string>;
   };
