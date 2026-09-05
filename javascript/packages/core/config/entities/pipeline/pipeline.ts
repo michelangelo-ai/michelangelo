@@ -21,7 +21,7 @@ const hasNoTriggers = (record: unknown): boolean => {
 
 export const PIPELINE_ENTITY_CONFIG: PhaseEntityConfig = {
   id: 'pipelines',
-  name: 'Pipelines',
+  name: 'pipelines',
   service: 'pipeline',
   state: 'active',
   views: [PIPELINE_LIST_CONFIG, PIPELINE_DETAIL_CONFIG],

@@ -6,7 +6,7 @@ import type { PhaseEntityConfig } from '#core/types/common/studio-types';
 
 export const DEPLOYMENT_ENTITY_CONFIG: PhaseEntityConfig = {
   id: 'deployments',
-  name: 'Deployments',
+  name: 'deployments',
   service: 'deployment',
   state: 'active',
   views: [DEPLOYMENT_LIST_CONFIG, DEPLOYMENT_DETAIL_CONFIG],
