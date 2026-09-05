@@ -6,6 +6,7 @@ import { timestampToString } from '#core/utils/time-utils';
 import { CreateDeploymentForm } from './create-deployment-form';
 import { DEPLOYMENT_DETAIL_CONFIG } from './detail';
 import { DEPLOYMENT_LIST_CONFIG } from './list';
+import { UpdateDeploymentForm } from './update-deployment-form';
 
 import type { PhaseEntityConfig } from '#core/types/common/studio-types';
 import type { DeploymentRecord } from './types';
@@ -38,6 +39,11 @@ export const DEPLOYMENT_ENTITY_CONFIG: PhaseEntityConfig = {
   state: 'active',
   views: [DEPLOYMENT_LIST_CONFIG, DEPLOYMENT_DETAIL_CONFIG],
   actions: [
+    {
+      display: { label: 'Update deployment', icon: 'pencil' },
+      hierarchy: ActionHierarchy.PRIMARY,
+      modal: { type: 'custom', component: UpdateDeploymentForm },
+    },
     {
       display: { label: 'Retire', icon: 'circleX' },
       hierarchy: ActionHierarchy.TERTIARY,

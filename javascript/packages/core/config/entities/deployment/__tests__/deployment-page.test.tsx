@@ -731,3 +731,201 @@ describe('Deployment delete action', () => {
     expect(submitted).toHaveLength(0);
   });
 });
+
+describe('Deployment update action', () => {
+  const DEPLOYMENT_ACTIONS = DEPLOYMENT_ENTITY_CONFIG.actions as ActionConfigSchema<Data>[];
+
+  const DEPLOYMENT_NAME = 'test-update-action';
+  const NAMESPACE = 'ma-dev-test';
+
+  function buildRecord() {
+    return {
+      metadata: {
+        name: DEPLOYMENT_NAME,
+        namespace: NAMESPACE,
+        creationTimestamp: { seconds: 1757019547 },
+      },
+      spec: {
+        desiredRevision: { name: 'bert-cola-37', namespace: NAMESPACE },
+        target: { case: 'inferenceServer', value: { name: 'inference-server-example' } },
+        strategy: { rolloutStrategy: { case: 'rolling', value: { incrementPercentage: 10 } } },
+        definition: { type: 1 },
+      },
+      status: { currentRevision: { name: 'bert-cola-37', namespace: NAMESPACE } },
+    };
+  }
+
+  function buildRequestCapture() {
+    const submitted: Record<string, unknown>[] = [];
+    const request = (name: string, payload: unknown) => {
+      switch (name) {
+        case 'UpdateDeployment':
+          submitted.push(payload as Record<string, unknown>);
+          return Promise.resolve({
+            deployment: { metadata: { name: DEPLOYMENT_NAME, namespace: NAMESPACE } },
+          });
+        case 'GetModel':
+          return Promise.resolve({
+            model: { spec: { modelFamily: { name: 'bert-cola' } } },
+          });
+        case 'ListInferenceServer':
+          return Promise.resolve({
+            inferenceServerList: { items: [{ metadata: { name: 'inference-server-example' } }] },
+          });
+        case 'ListModelFamily':
+          return Promise.resolve({
+            modelFamilyList: {
+              items: [{ metadata: { name: 'bert-cola' }, spec: { name: 'bert-cola' } }],
+            },
+          });
+        case 'ListModel':
+          return Promise.resolve({
+            modelList: {
+              items: [
+                { metadata: { name: 'bert-cola-37' } },
+                { metadata: { name: 'bert-cola-38' } },
+              ],
+            },
+          });
+        default:
+          return Promise.resolve({});
+      }
+    };
+    return { submitted, request };
+  }
+
+  async function openUpdateDialog(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(screen.getByRole('button', { name: 'Actions' }));
+    await user.click(await screen.findByRole('option', { name: 'Update deployment' }));
+    return screen.findByRole('dialog', { name: 'Update deployment' });
+  }
+
+  it('lists Update deployment as the first action in the menu', async () => {
+    const user = userEvent.setup();
+    const { request } = buildRequestCapture();
+
+    render(
+      <InterpolatableActionsPopover actions={DEPLOYMENT_ACTIONS} record={buildRecord()} />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getErrorProviderWrapper(),
+        getIconProviderWrapper(),
+        getInterpolationProviderWrapper(),
+        getRouterWrapper({ location: `/${NAMESPACE}/deploy/deployments/${DEPLOYMENT_NAME}` }),
+        getServiceProviderWrapper({ request }),
+        getSnackbarProviderWrapper(),
+      ])
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Actions' }));
+    const options = await screen.findAllByRole('option');
+    expect(options[0]).toHaveTextContent('Update deployment');
+  });
+
+  it('opens prefilled with name and inference server read-only', async () => {
+    const user = userEvent.setup();
+    const { request } = buildRequestCapture();
+
+    render(
+      <InterpolatableActionsPopover actions={DEPLOYMENT_ACTIONS} record={buildRecord()} />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getErrorProviderWrapper(),
+        getIconProviderWrapper(),
+        getInterpolationProviderWrapper(),
+        getRouterWrapper({ location: `/${NAMESPACE}/deploy/deployments/${DEPLOYMENT_NAME}` }),
+        getServiceProviderWrapper({ request }),
+        getSnackbarProviderWrapper(),
+      ])
+    );
+
+    const dialog = await openUpdateDialog(user);
+
+    const nameInput = within(dialog).getByRole('textbox', { name: 'Name *' });
+    expect(nameInput).toHaveValue(DEPLOYMENT_NAME);
+    expect(nameInput).toHaveAttribute('readonly');
+
+    // Prefilled selects render their values as text within the dialog.
+    expect(await within(dialog).findByText('inference-server-example')).toBeInTheDocument();
+    expect(await within(dialog).findByText('bert-cola')).toBeInTheDocument();
+    expect(await within(dialog).findByText('bert-cola-37')).toBeInTheDocument();
+  });
+
+  it('locks the model family so only the model can be changed', async () => {
+    const user = userEvent.setup();
+    const { request } = buildRequestCapture();
+
+    render(
+      <InterpolatableActionsPopover actions={DEPLOYMENT_ACTIONS} record={buildRecord()} />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getErrorProviderWrapper(),
+        getIconProviderWrapper(),
+        getInterpolationProviderWrapper(),
+        getRouterWrapper({ location: `/${NAMESPACE}/deploy/deployments/${DEPLOYMENT_NAME}` }),
+        getServiceProviderWrapper({ request }),
+        getSnackbarProviderWrapper(),
+      ])
+    );
+
+    const dialog = await openUpdateDialog(user);
+
+    // The prefilled selects' accessible names are their selected values.
+    const familySelect = await within(dialog).findByRole('combobox', {
+      name: /Selected bert-cola\./,
+    });
+    expect(familySelect).toHaveAttribute('readonly');
+    // Clicking a read-only select must not open its dropdown.
+    await user.click(familySelect);
+    expect(screen.queryByRole('option')).not.toBeInTheDocument();
+
+    // The model select stays editable.
+    const modelSelect = within(dialog).getByRole('combobox', { name: /Selected bert-cola-37/ });
+    expect(modelSelect).not.toHaveAttribute('readonly');
+    await user.click(modelSelect);
+    expect(await screen.findByRole('option', { name: 'bert-cola-38' })).toBeInTheDocument();
+  });
+
+  it('submits the full record with the newly selected model as desiredRevision', async () => {
+    const user = userEvent.setup();
+    const { submitted, request } = buildRequestCapture();
+
+    render(
+      <InterpolatableActionsPopover actions={DEPLOYMENT_ACTIONS} record={buildRecord()} />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getErrorProviderWrapper(),
+        getIconProviderWrapper(),
+        getInterpolationProviderWrapper(),
+        getRouterWrapper({ location: `/${NAMESPACE}/deploy/deployments/${DEPLOYMENT_NAME}` }),
+        getServiceProviderWrapper({ request }),
+        getSnackbarProviderWrapper(),
+      ])
+    );
+
+    const dialog = await openUpdateDialog(user);
+
+    // The prefilled Model select's accessible name is its selected value.
+    await user.click(within(dialog).getByRole('combobox', { name: /Selected bert-cola-37/ }));
+    await user.click(await screen.findByRole('option', { name: 'bert-cola-38' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Update' }));
+
+    await waitFor(() => expect(submitted).toHaveLength(1));
+
+    const payload = submitted[0] as {
+      metadata: { name: string };
+      spec: {
+        desiredRevision?: { name?: string };
+        strategy?: { rolloutStrategy?: { case?: string } };
+        target?: { value?: { name?: string } };
+      };
+      status?: unknown;
+    };
+    expect(payload.spec.desiredRevision?.name).toBe('bert-cola-38');
+    // Everything else on the record rides along unchanged.
+    expect(payload.metadata.name).toBe(DEPLOYMENT_NAME);
+    expect(payload.spec.target?.value?.name).toBe('inference-server-example');
+    expect(payload.spec.strategy?.rolloutStrategy?.case).toBe('rolling');
+    expect(payload.status).toBeDefined();
+  });
+});
