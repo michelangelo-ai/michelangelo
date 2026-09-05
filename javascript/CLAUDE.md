@@ -42,7 +42,7 @@ yarn test
 ### Testing
 
 - Query priority: `getByRole` → `getByLabelText` → `getByText`
-- Mock external APIs and RPC calls; never mock internal hooks, React context, or well-tested utilities
+- Mock RPC calls via `createQueryMockRouter` from `get-service-provider-wrapper`; use `.mock.calls` for payload assertions — never write custom capture helpers. Never mock internal hooks, React context, or well-tested utilities
 - Prefer integration-style tests over isolated component unit tests — e.g. table behavior is tested through `table.test.tsx` rather than scattered per-sub-component tests; reserve isolated unit tests for pure utils/hooks with standalone logic
 
 ### Documentation
