@@ -65,8 +65,9 @@ export enum Phase {
 export interface PhaseEntityConfig<T extends object = object> {
   /**
    * Name of the entity as it appears within MA Studio. Plural, lower case, and
-   * not pre-cased — a display context applies casing at render time. Acronyms
-   * (e.g. "AI") should still be capitalized in the name itself.
+   * not pre-cased — nav call sites apply Title Case via `formatEntityName` at
+   * render time. Acronyms (e.g. "AI") should still be capitalized in the name
+   * itself.
    *
    * @example
    * trained models
