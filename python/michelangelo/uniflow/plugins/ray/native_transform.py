@@ -186,11 +186,11 @@ def compute_numerical_statistics(
     if not aggregate_fns:
         return numerical_stats
 
-    # Ceiling division: `// + 1` would add a guaranteed-empty trailing batch
-    # whenever len(aggregate_fns) is an exact multiple of the batch size, and
-    # ray_data_df.aggregate() with zero aggregators crashes inside Ray
-    # (assert self._columns in table_block.py, surfaced as
-    # RayTaskError(AssertionError)).
+    # `// + 1` adds a guaranteed-empty trailing batch whenever len(aggregate_fns)
+    # is an exact multiple of the batch size, and ray_data_df.aggregate() with
+    # zero aggregators crashes inside Ray (assert self._columns in
+    # table_block.py, surfaced as RayTaskError(AssertionError)) -- must be
+    # exact ceiling division, not // + 1.
     batch_count = (
         len(aggregate_fns) + numerical_statistics_batch_fn_size - 1
     ) // numerical_statistics_batch_fn_size
