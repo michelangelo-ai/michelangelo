@@ -17,13 +17,6 @@ _ENV_PIPELINE_RUN_NAME = "MA_PIPELINE_RUN_NAME"
 _ENV_NAMESPACE = "MA_NAMESPACE"
 
 
-class _Unset:
-    """Sentinel distinguishing "not yet read" from "read, and it was None"."""
-
-
-_cache: SourcePipelineRun | _Unset | None = _Unset()
-
-
 @dataclass(frozen=True)
 class SourcePipelineRun:
     """Identifies the pipeline run that produced a model.
@@ -49,9 +42,7 @@ def get_source_pipeline_run() -> SourcePipelineRun | None:
 
     Reads the ``MA_PIPELINE_RUN_NAME`` and ``MA_NAMESPACE`` environment
     variables, which are pod-injected identity values set by the pipeline
-    worker for every task it launches. The result is cached process-globally
-    after the first call — these values are fixed for the lifetime of the
-    pod, so there's no need to re-read the environment on every call.
+    worker for every task it launches.
 
     Both environment variables are optional: this accessor is also called by
     code that runs outside a pipeline (local development, unit tests), where
@@ -63,23 +54,8 @@ def get_source_pipeline_run() -> SourcePipelineRun | None:
         reference with no name does not identify anything, regardless of
         whether a namespace is present.
     """
-    global _cache
-    if isinstance(_cache, _Unset):
-        run_name = os.environ.get(_ENV_PIPELINE_RUN_NAME)
-        if run_name:
-            namespace = os.environ.get(_ENV_NAMESPACE) or None
-            _cache = SourcePipelineRun(name=run_name, namespace=namespace)
-        else:
-            _cache = None
-    return _cache
-
-
-def _reset_source_pipeline_run_cache() -> None:
-    """Clear the cached result of :func:`get_source_pipeline_run`.
-
-    Test-only helper: forces the next call to :func:`get_source_pipeline_run`
-    to re-read the environment instead of returning a cached value from an
-    earlier test.
-    """
-    global _cache
-    _cache = _Unset()
+    run_name = os.environ.get(_ENV_PIPELINE_RUN_NAME)
+    if not run_name:
+        return None
+    namespace = os.environ.get(_ENV_NAMESPACE) or None
+    return SourcePipelineRun(name=run_name, namespace=namespace)

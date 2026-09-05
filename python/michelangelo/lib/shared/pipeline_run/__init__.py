@@ -3,7 +3,6 @@
 # flake8: noqa:F401
 from .pipeline_run import (
     SourcePipelineRun,
-    _reset_source_pipeline_run_cache,
     get_source_pipeline_run,
 )
 

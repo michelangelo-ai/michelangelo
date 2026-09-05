@@ -10,10 +10,7 @@ from unittest import TestCase
 from unittest.mock import MagicMock, patch
 
 from michelangelo.lib.model_manager.registry.client import RegisteredModel
-from michelangelo.lib.shared.pipeline_run import (
-    SourcePipelineRun,
-    _reset_source_pipeline_run_cache,
-)
+from michelangelo.lib.shared.pipeline_run import SourcePipelineRun
 from michelangelo.workflow.schema.exceptions import ConfigurationError
 from michelangelo.workflow.schema.pusher import ModelPluginConfig
 from michelangelo.workflow.tasks.pusher.plugins.model_plugin import (
@@ -669,9 +666,7 @@ class TestModelPusherPluginSourcePipelineRun(TestCase):
     """Tests for ModelPusherPlugin.execute() threading source_pipeline_run."""
 
     def setUp(self) -> None:
-        """Isolate the module-level pipeline-run cache and env vars per test."""
-        _reset_source_pipeline_run_cache()
-        self.addCleanup(_reset_source_pipeline_run_cache)
+        """Isolate the pipeline-run env vars per test."""
         self._env_patcher = patch.dict(os.environ, {}, clear=False)
         self._env_patcher.start()
         os.environ.pop("MA_PIPELINE_RUN_NAME", None)
