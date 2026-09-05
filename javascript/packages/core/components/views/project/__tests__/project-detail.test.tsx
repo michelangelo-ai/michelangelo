@@ -201,7 +201,7 @@ describe('ProjectDetail', () => {
     expect(screen.getByText('Train & Evaluate')).toBeInTheDocument();
     expect(screen.getByText('Deploy & Predict')).toBeInTheDocument();
 
-    expect(screen.getByRole('link', { name: 'pipelines' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Pipelines' })).toHaveAttribute(
       'href',
       '/fraud-detection/train/pipelines'
     );
@@ -244,13 +244,13 @@ describe('ProjectDetail', () => {
 
     await screen.findByText('Prepare & Analyze Data');
 
-    expect(screen.getByText('pipelines')).toBeInTheDocument();
-    expect(screen.getByText('pipeline runs')).toBeInTheDocument();
-    expect(screen.getByText('data sources')).toBeInTheDocument();
+    expect(screen.getByText('Pipelines')).toBeInTheDocument();
+    expect(screen.getByText('Pipeline Runs')).toBeInTheDocument();
+    expect(screen.getByText('Data Sources')).toBeInTheDocument();
 
-    expect(screen.queryByRole('link', { name: 'pipelines' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'pipeline runs' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'data sources' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Pipelines' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Pipeline Runs' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Data Sources' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
@@ -287,8 +287,8 @@ describe('ProjectDetail', () => {
     await screen.findByText('Deploy & Predict');
 
     expect(screen.getByText('Coming soon')).toBeInTheDocument();
-    expect(screen.getByText('endpoints')).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'endpoints' })).not.toBeInTheDocument();
+    expect(screen.getByText('Endpoints')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Endpoints' })).not.toBeInTheDocument();
   });
 
   test('phase description and learn more button render when docUrl is set', async () => {
@@ -364,10 +364,10 @@ describe('ProjectDetail', () => {
       );
 
       const links: [string, string][] = [
-        ['pipelines', '/fraud-detection/train/pipelines'],
-        ['pipeline runs', '/fraud-detection/train/runs'],
-        ['triggers', '/fraud-detection/train/triggers'],
-        ['trained models', '/fraud-detection/train/models'],
+        ['Pipelines', '/fraud-detection/train/pipelines'],
+        ['Pipeline Runs', '/fraud-detection/train/runs'],
+        ['Triggers', '/fraud-detection/train/triggers'],
+        ['Trained Models', '/fraud-detection/train/models'],
       ];
 
       for (const [name, href] of links) {
@@ -375,10 +375,10 @@ describe('ProjectDetail', () => {
         expect(link).toHaveAttribute('href', href);
       }
 
-      expect(screen.getByText('evaluations')).toBeInTheDocument();
-      expect(screen.getByText('notebooks')).toBeInTheDocument();
-      expect(screen.queryByRole('link', { name: 'evaluations' })).not.toBeInTheDocument();
-      expect(screen.queryByRole('link', { name: 'notebooks' })).not.toBeInTheDocument();
+      expect(screen.getByText('Evaluations')).toBeInTheDocument();
+      expect(screen.getByText('Notebooks')).toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'Evaluations' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'Notebooks' })).not.toBeInTheDocument();
     });
 
     test('navigate button goes to first active entity', async () => {
