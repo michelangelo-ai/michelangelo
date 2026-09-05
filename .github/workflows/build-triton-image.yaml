@@ -46,7 +46,7 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=raw,value=26.08-py3-torch
+            type=raw,value=25.01-py3-torch
             type=sha,prefix=sha-
 
       - name: Build and push

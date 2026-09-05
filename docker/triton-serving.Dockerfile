@@ -8,12 +8,17 @@
 # see go/components/inferenceserver/backends/triton.go's tritonImage().
 #
 # torch==2.4.1/transformers==4.44.2 were originally pinned because the prior
-# 23.04 base shipped Python 3.8, which capped what was installable. 26.08
-# ships a much newer Python, so that cap no longer applies -- these pins are
-# no longer forced, just not yet revisited.
+# 23.04 base shipped Python 3.8, which capped what was installable. 25.01
+# ships Python 3.12, so that cap no longer applies -- these pins are no
+# longer forced, just not yet revisited.
+#
+# Pinned to 25.01 specifically (not a newer release) because that's the
+# version already running in production internally, via Uber's own
+# ml_gpu_base vendoring -- not the latest available, but the one with actual
+# production track record behind it.
 #
 # A model needing deps/versions outside this image can still override it via
 # InferenceServer.spec.initSpec.servingSpec.containerBuildTemplate.
-FROM nvcr.io/nvidia/tritonserver:26.08-py3
+FROM nvcr.io/nvidia/tritonserver:25.01-py3
 
 RUN pip install --no-cache-dir torch==2.4.1 transformers==4.44.2
