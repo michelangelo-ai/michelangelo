@@ -10,6 +10,7 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import CloseIcon from '@mui/icons-material/Close';
 import CropSquareIcon from '@mui/icons-material/CropSquare';
 import Delete from '@mui/icons-material/Delete';
+import EditIcon from '@mui/icons-material/Edit';
 import ErrorIcon from '@mui/icons-material/Error';
 import EventRepeatIcon from '@mui/icons-material/EventRepeat';
 import Info from '@mui/icons-material/Info';
@@ -53,6 +54,7 @@ export const ICONS = {
   menu: createMuiIconAdapter(MenuIcon),
   monitor: createMuiIconAdapter(VisibilityIcon),
   overflowMenu: createMuiIconAdapter(MoreVertIcon),
+  pencil: createMuiIconAdapter(EditIcon),
   playerNext: createMuiIconAdapter(SkipNextIcon),
   playerPlay: createMuiIconAdapter(PlayArrowIcon),
   plus: createMuiIconAdapter(AddIcon),
