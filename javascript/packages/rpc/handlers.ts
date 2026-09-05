@@ -52,6 +52,7 @@ async function createHandlers() {
       }
       return services.DeploymentService.updateDeployment({ deployment: record }, headers);
     },
+    DeleteDeployment: deleteCrd(services.DeploymentService.deleteDeployment),
     ListInferenceServer: unary(services.InferenceServerService.listInferenceServer),
     GetInferenceServer: unary(services.InferenceServerService.getInferenceServer),
     CreateInferenceServer: (record: InferenceServer, headers?: Record<string, string>) =>
