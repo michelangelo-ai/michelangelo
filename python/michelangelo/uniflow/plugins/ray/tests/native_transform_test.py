@@ -245,7 +245,15 @@ class ComputeNumericalStatisticsTests(unittest.TestCase):
         self.assertEqual(result, {})
 
     def test_batches_aggregate_calls(self):
-        """Batches aggregate calls."""
+        """Batches aggregate calls.
+
+        2 aggregate fns (max, min) with a batch size of 1 must produce
+        exactly 2 non-empty batches/calls — not 3. (A prior version of this
+        test used a single aggregate fn with batch size 1, which happened to
+        pass under the old buggy `// batch_fn_size + 1` bound because that
+        formula's extra empty trailing batch was harmless with a mock
+        `return_value`; it would have crashed against real Ray, per GAP-006.)
+        """
         mock_dataset = MagicMock()
         mock_dataset.select_columns.return_value = mock_dataset
         mock_dataset.aggregate.return_value = {}
@@ -253,7 +261,7 @@ class ComputeNumericalStatisticsTests(unittest.TestCase):
             "col1": {
                 "percentiles": [],
                 "max": True,
-                "min": False,
+                "min": True,
                 "mean": False,
                 "std": False,
             }
@@ -318,6 +326,66 @@ class ComputeNumericalStatisticsTests(unittest.TestCase):
                 numerical_statistics_batch_fn_size=2,
             )
 
+        expected_keys = {
+            f"{col}_{stat}"
+            for col in ("col1", "col2")
+            for stat in ("max", "min", "mean", "std")
+        }
+        self.assertEqual(set(result.keys()), expected_keys)
+
+    def test_batch_count_does_not_add_empty_trailing_batch_on_exact_multiple(self):
+        """No empty batch when aggregate_fns is an exact multiple of the batch size.
+
+        Two columns x 4 aggregate fns each = 8 total, with a batch size of 4:
+        len(aggregate_fns) % batch_fn_size == 0. `// batch_fn_size + 1` would
+        add a third, empty batch, and calling ray_data_df.aggregate() with no
+        aggregators crashes inside Ray (assert self._columns in
+        table_block.py). aggregate() must be called exactly twice, never with
+        an empty argument list.
+        """
+
+        class _FakeAggFn:
+            def __init__(self, input_col, alias_name=None, **_kwargs):
+                self.input_col = input_col
+                self.alias_name = alias_name
+
+        def _aggregate(*fns):
+            assert fns, "aggregate() must never be called with zero aggregators"
+            return {fn.alias_name: 1.0 for fn in fns}
+
+        mock_dataset = MagicMock()
+        mock_dataset.select_columns.return_value = mock_dataset
+        mock_dataset.aggregate.side_effect = _aggregate
+        specs = {
+            "col1": {
+                "percentiles": [],
+                "max": True,
+                "min": True,
+                "mean": True,
+                "std": True,
+            },
+            "col2": {
+                "percentiles": [],
+                "max": True,
+                "min": True,
+                "mean": True,
+                "std": True,
+            },
+        }
+
+        mock_aggregate = MagicMock()
+        mock_aggregate.Max = mock_aggregate.Min = mock_aggregate.Mean = (
+            mock_aggregate.Std
+        ) = _FakeAggFn
+        with patch.dict("sys.modules", {"ray.data.aggregate": mock_aggregate}):
+            result = compute_numerical_statistics(
+                mock_dataset,
+                existing_numerical_stats={},
+                numerical_statistics_computation_specs=specs,
+                numerical_statistics_batch_fn_size=4,
+            )
+
+        self.assertEqual(mock_dataset.aggregate.call_count, 2)
         expected_keys = {
             f"{col}_{stat}"
             for col in ("col1", "col2")
