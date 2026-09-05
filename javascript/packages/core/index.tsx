@@ -49,10 +49,11 @@ export function CoreApp({ dependencies }: Props) {
                   {/*
                     Routed page content is `content` by default (prose read as a
                     sentence, rendered as written) — see `DisplayContextType`.
-                    Structural nav chrome nested anywhere below (BreadcrumbBar,
-                    tab-title strips) declares its own narrower `nav` override
-                    rather than requiring every future page to remember to wrap
-                    itself; `useEntityName` just reads whichever region a
+                    Elements that are wayfinding chrome despite living inside
+                    page content (BreadcrumbBar, phase-entity-view's tab titles,
+                    phase-card's entity links) declare their own narrower `nav`
+                    override rather than requiring every future page to remember
+                    to wrap itself; `useEntityName` just reads whichever region a
                     component happens to render inside.
                   */}
                   <DisplayProvider type="content">
