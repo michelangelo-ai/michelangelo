@@ -1,36 +1,17 @@
-import { useDisplayContext } from '#core/providers/display-provider/use-display-context';
-
-import type { DisplayContextType } from '#core/providers/display-provider/types';
-
 /**
- * Returns `name` cased for the surrounding `DisplayProvider`. Pass `casing`
- * to override the ambient context for a one-off exception; with no ambient
- * context and no override, `name` is returned unchanged.
+ * Applies nav casing (Title Case) to an entity name, or returns it unchanged.
+ * Nav regions are wayfinding chrome that's scanned, not read as a sentence —
+ * breadcrumbs, left-nav, tabs, page H1s — per Uber's style guide. Everywhere
+ * else, the lowercase canonical config value IS the correct display form, so
+ * there's nothing to pass for `casing`.
  *
  * @example
  * ```tsx
- * // Inside <DisplayProvider type="nav">:
- * useEntityName('trained models'); // 'Trained Models'
- *
- * // Inside <DisplayProvider type="content">:
- * useEntityName('trained models'); // 'trained models'
- *
- * // Explicit override, regardless of ambient context:
- * useEntityName('trained models', 'content'); // 'trained models'
+ * formatEntityName('trained models', 'nav'); // 'Trained Models'
+ * formatEntityName('trained models'); // 'trained models'
  * ```
  */
-export function useEntityName(name: string, casing?: DisplayContextType): string {
-  const context = useDisplayContext();
-  return formatEntityName(name, casing ?? context);
-}
-
-/**
- * Applies display casing for a given context value directly, without reading
- * `DisplayProvider` from the component tree. Use this over `useEntityName`
- * when casing several names against a context read once — e.g. mapping a
- * list — since a hook can't be called once per loop iteration.
- */
-export function formatEntityName(name: string, casing: DisplayContextType | undefined): string {
+export function formatEntityName(name: string, casing?: 'nav'): string {
   return casing === 'nav' ? toNavCase(name) : name;
 }
 

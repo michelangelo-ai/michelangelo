@@ -6,8 +6,7 @@ import { Breadcrumbs } from 'baseui/breadcrumbs';
 import { Cell, Grid } from 'baseui/layout-grid';
 
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
-import { useEntityName } from '#core/hooks/use-entity-name/use-entity-name';
-import { DisplayProvider } from '#core/providers/display-provider/display-provider';
+import { formatEntityName } from '#core/hooks/use-entity-name/use-entity-name';
 import { Phase } from '#core/types/common/studio-types';
 import { MenuDrawer } from './menu-drawer';
 import { BreadcrumbContainer, PlainLink } from './styled-components';
@@ -51,36 +50,34 @@ export function BreadcrumbBar({
   const { isScrolled } = useScrollingNavbarShadow();
 
   return (
-    <DisplayProvider type="nav">
-      <BreadcrumbContainer $scrolled={isScrolled}>
-        <Grid gridColumns={1} gridGutters={0} gridGaps={0}>
-          <Cell>
-            <div
-              className={css({ display: 'flex', alignItems: 'center', gap: theme.sizing.scale600 })}
+    <BreadcrumbContainer $scrolled={isScrolled}>
+      <Grid gridColumns={1} gridGutters={0} gridGaps={0}>
+        <Cell>
+          <div
+            className={css({ display: 'flex', alignItems: 'center', gap: theme.sizing.scale600 })}
+          >
+            <MenuDrawer phases={allPhases} projectId={projectId} topLevelLinks={topLevelLinks} />
+            <Breadcrumbs
+              overrides={{
+                Root: {
+                  style: { color: theme.colors.contentPrimary },
+                  props: { 'data-tracking-name': 'breadcrumb-bar' },
+                },
+              }}
             >
-              <MenuDrawer phases={allPhases} projectId={projectId} topLevelLinks={topLevelLinks} />
-              <Breadcrumbs
-                overrides={{
-                  Root: {
-                    style: { color: theme.colors.contentPrimary },
-                    props: { 'data-tracking-name': 'breadcrumb-bar' },
-                  },
-                }}
-              >
-                <PlainLink to="/" data-tracking-name="home">
-                  Home
-                </PlainLink>
-                <ProjectBreadcrumb />
-                {!isProjectPage && <CategoryBreadcrumb categories={categories} />}
-                {!isProjectPage && <PhaseBreadcrumb categories={categories} />}
-                {!isProjectPage && <EntityBreadcrumb categories={categories} />}
-                {!isProjectPage && entityId && <EntityIdBreadcrumb />}
-              </Breadcrumbs>
-            </div>
-          </Cell>
-        </Grid>
-      </BreadcrumbContainer>
-    </DisplayProvider>
+              <PlainLink to="/" data-tracking-name="home">
+                Home
+              </PlainLink>
+              <ProjectBreadcrumb />
+              {!isProjectPage && <CategoryBreadcrumb categories={categories} />}
+              {!isProjectPage && <PhaseBreadcrumb categories={categories} />}
+              {!isProjectPage && <EntityBreadcrumb categories={categories} />}
+              {!isProjectPage && entityId && <EntityIdBreadcrumb />}
+            </Breadcrumbs>
+          </div>
+        </Cell>
+      </Grid>
+    </BreadcrumbContainer>
   );
 }
 
@@ -129,8 +126,7 @@ function EntityBreadcrumb({ categories }: { categories: CategoryConfig[] }) {
   // eslint-disable-next-line @typescript-eslint/no-unsafe-enum-comparison
   const currentPhase = categories.flatMap((c) => c.phases).find((p) => p.id === phase);
   const configuredEntityName = currentPhase?.entities.find((e) => e.id === entity)?.name;
-  const casedEntityName = useEntityName(configuredEntityName ?? '');
-  const entityName = configuredEntityName ? casedEntityName : entity;
+  const entityName = configuredEntityName ? formatEntityName(configuredEntityName, 'nav') : entity;
 
   return entityId ? (
     <PlainLink to={`/${projectId}/${phase}/${entity}`} data-tracking-name="entity">
