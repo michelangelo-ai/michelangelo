@@ -15,11 +15,11 @@
     "@michelangelo-ai/rpc": "0.9.0",
     "@mui/icons-material": "^7.1.0",
     "@mui/material": "^7.1.0",
-    "@tanstack/react-query": "5.39.0",
+    "@tanstack/react-query": "5.102.8",
     "@michelangelo-ai/core": "0.9.0",
     "baseui": "15.0.0",
     "react-router-dom": "5.3.4",
-    "react-router-dom-v5-compat": "6.29.0",
+    "react-router-dom-v5-compat": "6.30.6",
     "styletron-engine-atomic": "^1.6.2",
     "styletron-react": "^6.1.1"
   },
