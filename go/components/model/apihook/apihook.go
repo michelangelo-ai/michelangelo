@@ -3,11 +3,9 @@
 // go/components/pipelinerun/apihook and go/components/triggerrun/apihook for
 // the sibling packages this one follows the shape of.
 //
-// This hook implements ONLY api.EnvironmentLabel defaulting/inheritance. It
-// deliberately does not implement
-// description-length validation, pipeline-type label copy, owner/LDAP
-// validation, or revision/pipeline-name label copy — those have no obvious
-// OSS-generic equivalent and are out of scope here.
+// This hook implements api.EnvironmentLabel defaulting/inheritance and
+// description-length validation. It does not implement pipeline-type label
+// copy, owner/LDAP validation, or revision/pipeline-name label copy.
 //
 // BeforeUpdate re-derives the label from Spec.SourcePipelineRun on every
 // update, the same as BeforeCreate: the source PipelineRun's label is the
@@ -18,8 +16,11 @@ package apihook
 
 import (
 	"context"
+	"unicode/utf8"
 
 	"go.uber.org/zap"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
@@ -46,12 +47,29 @@ type apiHook struct {
 	defaultEnv string
 }
 
+const maxDescriptionLength = 768
+
 func (a apiHook) BeforeCreate(ctx context.Context, request *v2.CreateModelRequest) error {
+	if err := validateDescription(request.Model); err != nil {
+		return err
+	}
 	return a.applyEnvironmentLabel(ctx, request.Model)
 }
 
 func (a apiHook) BeforeUpdate(ctx context.Context, request *v2.UpdateModelRequest) error {
+	if err := validateDescription(request.Model); err != nil {
+		return err
+	}
 	return a.applyEnvironmentLabel(ctx, request.Model)
+}
+
+func validateDescription(model *v2.Model) error {
+	if n := utf8.RuneCountInString(model.Spec.GetDescription()); n > maxDescriptionLength {
+		return status.Errorf(codes.InvalidArgument,
+			"model description exceeds maximum length of %d characters (got %d)",
+			maxDescriptionLength, n)
+	}
+	return nil
 }
 
 // applyEnvironmentLabel sets api.EnvironmentLabel to the configured default
