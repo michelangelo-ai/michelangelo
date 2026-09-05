@@ -1,10 +1,3 @@
-// Entity labels need their own small component so `useEntityName` can read
-// the `nav` `DisplayProvider` declared below as a proper descendant, rather
-// than a hook call sharing PhaseCard's own render (which sits above that
-// provider in the tree, and can't loop once per entity anyway). These are
-// clickable links that navigate to an entity — wayfinding chrome, not prose
-// — so they override the app's ambient `content` default back to `nav`.
-/* eslint-disable react/no-multi-comp */
 import { useNavigate } from 'react-router-dom-v5-compat';
 import { useStyletron } from 'baseui';
 import { Button, KIND, SHAPE, SIZE } from 'baseui/button';
@@ -14,14 +7,9 @@ import { Icon } from '#core/components/icon/icon';
 import { Link } from '#core/components/link/link';
 import { TAG_COLOR, TAG_SIZE } from '#core/components/tag/constants';
 import { Tag } from '#core/components/tag/tag';
-import { useEntityName } from '#core/hooks/use-entity-name/use-entity-name';
-import { DisplayProvider } from '#core/providers/display-provider/display-provider';
+import { formatEntityName } from '#core/hooks/use-entity-name/use-entity-name';
 
 import type { PhaseConfig } from '#core/types/common/studio-types';
-
-function EntityLabel({ name }: { name: string }) {
-  return <>{useEntityName(name)}</>;
-}
 
 export function PhaseCard(props: PhaseConfig & { projectId: string }) {
   const { id, icon, name, description, docUrl, state, entities, projectId } = props;
@@ -68,38 +56,38 @@ export function PhaseCard(props: PhaseConfig & { projectId: string }) {
         )
       }
     >
-      <DisplayProvider type="nav">
-        <div className={css({ display: 'flex', flexDirection: 'column' })}>
-          {entities.map((entity) => {
-            const isEntityDisabled = isPhaseDisabled || entity.state === 'disabled';
+      {/* Entity names here are clickable links that navigate to an entity —
+          wayfinding chrome, not prose — so they get `nav` (Title Case). */}
+      <div className={css({ display: 'flex', flexDirection: 'column' })}>
+        {entities.map((entity) => {
+          const isEntityDisabled = isPhaseDisabled || entity.state === 'disabled';
 
-            if (isEntityDisabled) {
-              return (
-                <span
-                  key={entity.id}
-                  className={css({
-                    ...theme.typography.ParagraphSmall,
-                    cursor: 'default',
-                    color: theme.colors.contentTertiary,
-                  })}
-                >
-                  <EntityLabel name={entity.name} />
-                </span>
-              );
-            }
-
+          if (isEntityDisabled) {
             return (
-              <Link
+              <span
                 key={entity.id}
-                href={`/${projectId}/${id}/${entity.id}`}
-                overrides={{ Link: { style: theme.typography.ParagraphSmall } }}
+                className={css({
+                  ...theme.typography.ParagraphSmall,
+                  cursor: 'default',
+                  color: theme.colors.contentTertiary,
+                })}
               >
-                <EntityLabel name={entity.name} />
-              </Link>
+                {formatEntityName(entity.name, 'nav')}
+              </span>
             );
-          })}
-        </div>
-      </DisplayProvider>
+          }
+
+          return (
+            <Link
+              key={entity.id}
+              href={`/${projectId}/${id}/${entity.id}`}
+              overrides={{ Link: { style: theme.typography.ParagraphSmall } }}
+            >
+              {formatEntityName(entity.name, 'nav')}
+            </Link>
+          );
+        })}
+      </div>
 
       {entities.some((entity) => entity.state === 'active') && !isPhaseDisabled && (
         <Button
