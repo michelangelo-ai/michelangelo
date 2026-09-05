@@ -23,6 +23,9 @@ const rule = {
       noModuleScopeWrapperHelper:
         "'{{ name }}' wraps buildWrapper() at module scope. Move the buildWrapper() call inline into each test so every test is self-contained.",
 
+      noRenderWithinRenderHelper:
+        "'{{ name }}' wraps render() in a local helper — call render() and buildWrapper() directly in each test instead.",
+
       noModuleScopeSetupConst:
         "'{{ name }}' is declared at module scope but looks like test setup (props, options, config). Inline it inside each test, or group shared setup in a nested describe with a factory function.",
     },
@@ -96,35 +99,118 @@ const rule = {
     }
 
     /**
-     * Returns true when the initializer (or any nested call) invokes buildWrapper.
+     * Like isModuleScope, but a nested describe never exempts a function here: wrapping
+     * render() in another helper is unnecessary indirection at any nesting depth, unlike
+     * shared literal setup, where a nested describe is an intentional semantic group.
      */
-    function callsBuildWrapper(node) {
-      if (!node) return false;
-      if (node.type === 'CallExpression') {
-        const { callee } = node;
-        if (callee.type === 'Identifier' && callee.name === 'buildWrapper') return true;
-        // Check arguments recursively in case it's wrapped
-        return node.arguments.some(callsBuildWrapper);
+    function isDescribeOrModuleScope(node) {
+      let current = node.parent;
+      while (current) {
+        if (current.type === 'Program') return true;
+        if (
+          (current.type === 'FunctionDeclaration' ||
+            current.type === 'FunctionExpression' ||
+            current.type === 'ArrowFunctionExpression') &&
+          isStandaloneFunction(current)
+        ) {
+          return false;
+        }
+        if (current.type === 'CallExpression') {
+          const name = getCalleeName(current);
+          if (name && TEST_HOOKS.has(name)) return false;
+          if (name === 'describe') return true;
+        }
+        current = current.parent;
       }
-      if (node.type === 'ArrayExpression') {
-        return node.elements.some(callsBuildWrapper);
-      }
-      return false;
+      return true;
     }
 
-    function bodyCallsBuildWrapper(node) {
+    function isFunctionBoundary(node) {
+      return (
+        node.type === 'FunctionDeclaration' ||
+        node.type === 'FunctionExpression' ||
+        node.type === 'ArrowFunctionExpression'
+      );
+    }
+
+    /**
+     * Walks a statement/expression tree looking for a direct call to `targetName`
+     * (e.g. `render`, `buildWrapper`), stopping at any nested function boundary — a call
+     * buried inside an inner closure isn't necessarily executed when the outer helper
+     * runs, so it doesn't count as the helper itself performing that call.
+     *
+     * Covers the shapes a call can hide behind: control flow (if/try/switch/loops),
+     * boolean/ternary short-circuiting, intermediate variables, and nested call
+     * arguments/array/object literals — not just a bare top-level statement.
+     */
+    function bodyCallsFunction(node, targetName) {
       if (!node) return false;
-      if (callsBuildWrapper(node)) return true;
-      if (node.type === 'BlockStatement') {
-        return node.body.some(bodyCallsBuildWrapper);
+
+      if (node.type === 'CallExpression') {
+        const { callee } = node;
+        if (callee.type === 'Identifier' && callee.name === targetName) return true;
+        return node.arguments.some((arg) => bodyCallsFunction(arg, targetName));
       }
-      if (node.type === 'ReturnStatement') {
-        return bodyCallsBuildWrapper(node.argument);
+
+      if (isFunctionBoundary(node)) return false;
+
+      switch (node.type) {
+        case 'Program':
+        case 'BlockStatement':
+          return node.body.some((n) => bodyCallsFunction(n, targetName));
+        case 'ExpressionStatement':
+          return bodyCallsFunction(node.expression, targetName);
+        case 'ReturnStatement':
+        case 'AwaitExpression':
+        case 'UnaryExpression':
+        case 'SpreadElement':
+        case 'YieldExpression':
+          return bodyCallsFunction(node.argument, targetName);
+        case 'IfStatement':
+          return (
+            bodyCallsFunction(node.consequent, targetName) ||
+            bodyCallsFunction(node.alternate, targetName)
+          );
+        case 'ConditionalExpression':
+          return (
+            bodyCallsFunction(node.test, targetName) ||
+            bodyCallsFunction(node.consequent, targetName) ||
+            bodyCallsFunction(node.alternate, targetName)
+          );
+        case 'LogicalExpression':
+        case 'BinaryExpression':
+        case 'AssignmentExpression':
+          return (
+            bodyCallsFunction(node.left, targetName) || bodyCallsFunction(node.right, targetName)
+          );
+        case 'SequenceExpression':
+          return node.expressions.some((n) => bodyCallsFunction(n, targetName));
+        case 'TryStatement':
+          return (
+            bodyCallsFunction(node.block, targetName) ||
+            (node.handler ? bodyCallsFunction(node.handler.body, targetName) : false) ||
+            bodyCallsFunction(node.finalizer, targetName)
+          );
+        case 'SwitchStatement':
+          return node.cases.some((c) => c.consequent.some((n) => bodyCallsFunction(n, targetName)));
+        case 'ForStatement':
+        case 'ForInStatement':
+        case 'ForOfStatement':
+        case 'WhileStatement':
+        case 'DoWhileStatement':
+        case 'LabeledStatement':
+          return bodyCallsFunction(node.body, targetName);
+        case 'VariableDeclaration':
+          return node.declarations.some((d) => bodyCallsFunction(d.init, targetName));
+        case 'ArrayExpression':
+          return node.elements.some((el) => bodyCallsFunction(el, targetName));
+        case 'ObjectExpression':
+          return node.properties.some((p) => bodyCallsFunction(p.value ?? p.argument, targetName));
+        case 'TemplateLiteral':
+          return node.expressions.some((n) => bodyCallsFunction(n, targetName));
+        default:
+          return false;
       }
-      if (node.type === 'ExpressionStatement') {
-        return bodyCallsBuildWrapper(node.expression);
-      }
-      return false;
     }
 
     /**
@@ -144,25 +230,38 @@ const rule = {
 
     return {
       FunctionDeclaration(node) {
-        if (!isModuleScope(node)) return;
         const name = node.id?.name ?? '<anonymous>';
-        if (bodyCallsBuildWrapper(node.body)) {
+
+        if (isModuleScope(node) && bodyCallsFunction(node.body, 'buildWrapper')) {
           context.report({
             node,
             messageId: 'noModuleScopeWrapperHelper',
+            data: { name },
+          });
+          return;
+        }
+
+        if (isDescribeOrModuleScope(node) && bodyCallsFunction(node.body, 'render')) {
+          context.report({
+            node,
+            messageId: 'noRenderWithinRenderHelper',
             data: { name },
           });
         }
       },
 
       VariableDeclaration(node) {
-        if (!isModuleScope(node)) return;
+        const declareScope = isModuleScope(node);
+        const renderScope = declareScope || isDescribeOrModuleScope(node);
+        if (!renderScope) return;
 
         for (const declarator of node.declarations) {
           const { init, id } = declarator;
           const name = id.type === 'Identifier' ? id.name : '<destructured>';
+          const isHelperFunction =
+            init && (init.type === 'ArrowFunctionExpression' || init.type === 'FunctionExpression');
 
-          if (callsBuildWrapper(init)) {
+          if (declareScope && bodyCallsFunction(init, 'buildWrapper')) {
             context.report({
               node: declarator,
               messageId: 'noModuleScopeWrapper',
@@ -170,11 +269,7 @@ const rule = {
             continue;
           }
 
-          if (
-            init &&
-            (init.type === 'ArrowFunctionExpression' || init.type === 'FunctionExpression') &&
-            bodyCallsBuildWrapper(init.body)
-          ) {
+          if (declareScope && isHelperFunction && bodyCallsFunction(init.body, 'buildWrapper')) {
             context.report({
               node: declarator,
               messageId: 'noModuleScopeWrapperHelper',
@@ -183,7 +278,16 @@ const rule = {
             continue;
           }
 
-          if (looksLikeSetupData(init)) {
+          if (isHelperFunction && bodyCallsFunction(init.body, 'render')) {
+            context.report({
+              node: declarator,
+              messageId: 'noRenderWithinRenderHelper',
+              data: { name },
+            });
+            continue;
+          }
+
+          if (declareScope && looksLikeSetupData(init)) {
             context.report({
               node: declarator,
               messageId: 'noModuleScopeSetupConst',

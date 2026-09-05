@@ -54,7 +54,13 @@ function getSubmitButton(dialog: HTMLElement) {
 
 describe('PIPELINE_ENTITY_CONFIG: delete action', () => {
   describe('list view', () => {
-    function renderList(mockRequest: ReturnType<typeof createQueryMockRouter>) {
+    it('opens dialog to confirm deletion of pipeline and deletes pipeline', async () => {
+      const user = userEvent.setup();
+      const mockRequest = createQueryMockRouter({
+        ListPipeline: { pipelineList: { items: [buildPipeline()] } },
+        DeletePipeline: {},
+      });
+
       render(
         <PhaseListRoute phases={buildTestPhases()} />,
         buildWrapper([
@@ -67,16 +73,6 @@ describe('PIPELINE_ENTITY_CONFIG: delete action', () => {
           getSnackbarProviderWrapper(),
         ])
       );
-    }
-
-    it('opens dialog to confirm deletion of pipeline and deletes pipeline', async () => {
-      const user = userEvent.setup();
-      const mockRequest = createQueryMockRouter({
-        ListPipeline: { pipelineList: { items: [buildPipeline()] } },
-        DeletePipeline: {},
-      });
-
-      renderList(mockRequest);
 
       await user.click(await screen.findByRole('button', { name: 'Actions' }));
       await user.click(await screen.findByRole('option', { name: 'Delete' }));
@@ -110,7 +106,18 @@ describe('PIPELINE_ENTITY_CONFIG: delete action', () => {
         DeletePipeline: new Error('Delete failed'),
       });
 
-      renderList(mockRequest);
+      render(
+        <PhaseListRoute phases={buildTestPhases()} />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getErrorProviderWrapper(),
+          getIconProviderWrapper(),
+          getInterpolationProviderWrapper(),
+          getRouterWrapper({ location: '/ma-dev-test/train/pipelines' }),
+          getServiceProviderWrapper({ request: mockRequest }),
+          getSnackbarProviderWrapper(),
+        ])
+      );
 
       await user.click(await screen.findByRole('button', { name: 'Actions' }));
       await user.click(await screen.findByRole('option', { name: 'Delete' }));
@@ -123,7 +130,14 @@ describe('PIPELINE_ENTITY_CONFIG: delete action', () => {
   });
 
   describe('pipeline detail page', () => {
-    function renderDetail(mockRequest: ReturnType<typeof createQueryMockRouter>) {
+    it('opens dialog to confirm deletion of pipeline, deletes pipeline and navigates to list view', async () => {
+      const user = userEvent.setup();
+      const mockRequest = createQueryMockRouter({
+        GetPipeline: { pipeline: buildPipeline() },
+        ListPipelineRun: { pipelineRunList: { items: [] } },
+        DeletePipeline: {},
+      });
+
       render(
         <EntityDetailRoute phases={buildTestPhases()} />,
         buildWrapper([
@@ -136,17 +150,6 @@ describe('PIPELINE_ENTITY_CONFIG: delete action', () => {
           getSnackbarProviderWrapper(),
         ])
       );
-    }
-
-    it('opens dialog to confirm deletion of pipeline, deletes pipeline and navigates to list view', async () => {
-      const user = userEvent.setup();
-      const mockRequest = createQueryMockRouter({
-        GetPipeline: { pipeline: buildPipeline() },
-        ListPipelineRun: { pipelineRunList: { items: [] } },
-        DeletePipeline: {},
-      });
-
-      renderDetail(mockRequest);
 
       await user.click(await screen.findByRole('button', { name: 'Actions' }));
       await user.click(await screen.findByRole('option', { name: 'Delete' }));
@@ -178,7 +181,18 @@ describe('PIPELINE_ENTITY_CONFIG: delete action', () => {
         DeletePipeline: new Error('Delete failed'),
       });
 
-      renderDetail(mockRequest);
+      render(
+        <EntityDetailRoute phases={buildTestPhases()} />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getErrorProviderWrapper(),
+          getIconProviderWrapper(),
+          getInterpolationProviderWrapper(),
+          getRouterWrapper({ location: '/ma-dev-test/train/pipelines/eval-pipeline/runs' }),
+          getServiceProviderWrapper({ request: mockRequest }),
+          getSnackbarProviderWrapper(),
+        ])
+      );
 
       await user.click(await screen.findByRole('button', { name: 'Actions' }));
       await user.click(await screen.findByRole('option', { name: 'Delete' }));
@@ -193,7 +207,15 @@ describe('PIPELINE_ENTITY_CONFIG: delete action', () => {
 
 describe('PIPELINE_ENTITY_CONFIG: Run trigger action', () => {
   describe('pipeline detail page', () => {
-    function renderDetail(mockRequest: ReturnType<typeof createQueryMockRouter>) {
+    it('is greyed out with an explanatory tooltip when the pipeline declares no triggers', async () => {
+      const user = userEvent.setup();
+      const mockRequest = createQueryMockRouter({
+        GetPipeline: {
+          pipeline: { ...buildPipeline(), spec: { ...buildPipeline().spec, manifest: {} } },
+        },
+        ListPipelineRun: { pipelineRunList: { items: [] } },
+      });
+
       render(
         <EntityDetailRoute phases={buildTestPhases()} />,
         buildWrapper([
@@ -206,18 +228,6 @@ describe('PIPELINE_ENTITY_CONFIG: Run trigger action', () => {
           getSnackbarProviderWrapper(),
         ])
       );
-    }
-
-    it('is greyed out with an explanatory tooltip when the pipeline declares no triggers', async () => {
-      const user = userEvent.setup();
-      const mockRequest = createQueryMockRouter({
-        GetPipeline: {
-          pipeline: { ...buildPipeline(), spec: { ...buildPipeline().spec, manifest: {} } },
-        },
-        ListPipelineRun: { pipelineRunList: { items: [] } },
-      });
-
-      renderDetail(mockRequest);
 
       const runTriggerButton = await screen.findByRole('button', { name: 'Run trigger' });
       expect(runTriggerButton).toBeDisabled();
@@ -245,7 +255,18 @@ describe('PIPELINE_ENTITY_CONFIG: Run trigger action', () => {
         ListPipelineRun: { pipelineRunList: { items: [] } },
       });
 
-      renderDetail(mockRequest);
+      render(
+        <EntityDetailRoute phases={buildTestPhases()} />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getErrorProviderWrapper(),
+          getIconProviderWrapper(),
+          getInterpolationProviderWrapper(),
+          getRouterWrapper({ location: '/ma-dev-test/train/pipelines/eval-pipeline/runs' }),
+          getServiceProviderWrapper({ request: mockRequest }),
+          getSnackbarProviderWrapper(),
+        ])
+      );
 
       const runTriggerButton = await screen.findByRole('button', { name: 'Run trigger' });
       expect(runTriggerButton).toBeEnabled();
@@ -256,7 +277,9 @@ describe('PIPELINE_ENTITY_CONFIG: Run trigger action', () => {
   });
 
   describe('list view', () => {
-    function renderList(items: object[], extraResponses: Record<string, object> = {}) {
+    it('is disabled with an explanatory tooltip when the row declares a manifest with no triggers', async () => {
+      const user = userEvent.setup();
+
       render(
         <PhaseListRoute phases={buildTestPhases()} />,
         buildWrapper([
@@ -267,20 +290,21 @@ describe('PIPELINE_ENTITY_CONFIG: Run trigger action', () => {
           getRouterWrapper({ location: '/ma-dev-test/train/pipelines' }),
           getServiceProviderWrapper({
             request: createQueryMockRouter({
-              ListPipeline: { pipelineList: { items } },
-              ...extraResponses,
+              ListPipeline: {
+                pipelineList: {
+                  items: [
+                    {
+                      ...buildPipeline(),
+                      spec: { ...buildPipeline().spec, manifest: { triggerMap: {} } },
+                    },
+                  ],
+                },
+              },
             }),
           }),
           getSnackbarProviderWrapper(),
         ])
       );
-    }
-
-    it('is disabled with an explanatory tooltip when the row declares a manifest with no triggers', async () => {
-      const user = userEvent.setup();
-      renderList([
-        { ...buildPipeline(), spec: { ...buildPipeline().spec, manifest: { triggerMap: {} } } },
-      ]);
 
       await user.click(await screen.findByRole('button', { name: 'Actions' }));
       await user.hover(await screen.findByRole('option', { name: 'Run trigger' }));
@@ -291,7 +315,24 @@ describe('PIPELINE_ENTITY_CONFIG: Run trigger action', () => {
     // not "no triggers" — fail open and let the dialog explain an empty trigger list.
     it('stays enabled when the row carries no manifest', async () => {
       const user = userEvent.setup();
-      renderList([buildPipeline()], { GetPipeline: { pipeline: buildPipeline() } });
+
+      render(
+        <PhaseListRoute phases={buildTestPhases()} />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getErrorProviderWrapper(),
+          getIconProviderWrapper(),
+          getInterpolationProviderWrapper(),
+          getRouterWrapper({ location: '/ma-dev-test/train/pipelines' }),
+          getServiceProviderWrapper({
+            request: createQueryMockRouter({
+              ListPipeline: { pipelineList: { items: [buildPipeline()] } },
+              GetPipeline: { pipeline: buildPipeline() },
+            }),
+          }),
+          getSnackbarProviderWrapper(),
+        ])
+      );
 
       await user.click(await screen.findByRole('button', { name: 'Actions' }));
       await user.click(await screen.findByRole('option', { name: 'Run trigger' }));
