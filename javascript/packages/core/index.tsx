@@ -2,7 +2,6 @@ import { LayersManager } from 'baseui/layer';
 import { SnackbarProvider } from 'baseui/snackbar';
 
 import { NavigationBar } from '#core/components/navigation-bar/navigation-bar';
-import { DisplayProvider } from '#core/providers/display-provider/display-provider';
 import { ErrorProvider } from '#core/providers/error-provider/error-provider';
 import { IconProvider } from '#core/providers/icon-provider/icon-provider';
 import { ServiceProvider } from '#core/providers/service-provider/service-provider';
@@ -46,19 +45,7 @@ export function CoreApp({ dependencies }: Props) {
                     links={dependencies.navigationBar?.links}
                     onSignOut={dependencies.navigationBar?.onSignOut}
                   />
-                  {/*
-                    Routed page content is `content` by default (prose read as a
-                    sentence, rendered as written) — see `DisplayContextType`.
-                    Elements that are wayfinding chrome despite living inside
-                    page content (BreadcrumbBar, phase-entity-view's tab titles,
-                    phase-card's entity links) declare their own narrower `nav`
-                    override rather than requiring every future page to remember
-                    to wrap itself; `useEntityName` just reads whichever region a
-                    component happens to render inside.
-                  */}
-                  <DisplayProvider type="content">
-                    <Router />
-                  </DisplayProvider>
+                  <Router />
                 </UserProvider>
               </IconProvider>
             </ErrorProvider>
