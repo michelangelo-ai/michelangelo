@@ -20,12 +20,6 @@ export { UserProvider } from '#core/providers/user-provider/user-provider';
 export { CellProvider } from '#core/providers/cell-provider/cell-provider';
 export { useCellProvider } from '#core/providers/cell-provider/use-cell-provider';
 export type { CellContextType } from '#core/providers/cell-provider/types';
-export { DisplayProvider } from '#core/providers/display-provider/display-provider';
-export { useDisplayContext } from '#core/providers/display-provider/use-display-context';
-export type { DisplayContextType } from '#core/providers/display-provider/types';
-
-// Hooks
-export { formatEntityName, useEntityName } from '#core/hooks/use-entity-name/use-entity-name';
 
 // Components
 export { Box } from '#core/components/box/box';
