@@ -1,3 +1,12 @@
+// Tab titles need their own small component so `useEntityName` can read the
+// per-title `nav` `DisplayProvider` below as a proper descendant, rather than
+// a hook call sharing PhaseEntityView's own render (which can't loop once per
+// entity anyway). The `nav` override is scoped to just the title node — not
+// the whole tab, and not the whole `Tabs` block — because `EntityTable`
+// renders as a tab's *content*, which sits under the app's ambient `content`
+// region (see `index.tsx`) and must not inherit `nav` casing from a sibling
+// concern.
+/* eslint-disable react/no-multi-comp */
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom-v5-compat';
 import { useStyletron } from 'baseui';
@@ -10,11 +19,16 @@ import { CircleExclamationMarkKind } from '#core/components/illustrations/circle
 import { PageHeader } from '#core/components/page-header/page-header';
 import { Signpost } from '#core/components/signpost/signpost';
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
-import { formatEntityName } from '#core/hooks/use-entity-name/use-entity-name';
+import { useEntityName } from '#core/hooks/use-entity-name/use-entity-name';
+import { DisplayProvider } from '#core/providers/display-provider/display-provider';
 import { EntityTable } from './entity-table';
 
 import type { Theme } from 'baseui/theme';
 import type { PhaseEntityViewProps } from './types';
+
+function EntityTabTitle({ name }: { name: string }) {
+  return <>{useEntityName(name)}</>;
+}
 
 /**
  * Renders tabbed interface for phase entities with URL-synchronized navigation.
@@ -114,7 +128,14 @@ export function PhaseEntityView<T extends object = object>({
         }}
       >
         {entities.map((entity, index) => (
-          <Tab key={String(index)} title={formatEntityName(entity.name, 'nav')}>
+          <Tab
+            key={String(index)}
+            title={
+              <DisplayProvider type="nav">
+                <EntityTabTitle name={entity.name} />
+              </DisplayProvider>
+            }
+          >
             {String(index) === activeKey && (
               <EntityTable<T>
                 service={entity.service}

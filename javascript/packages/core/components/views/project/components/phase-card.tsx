@@ -1,3 +1,9 @@
+// Entity labels need their own small component so `useEntityName` can be
+// called once per entity — PhaseCard's own render can't loop a hook call
+// once per `.map()` iteration. No local `DisplayProvider` is needed here:
+// this card renders in the app's ambient `content` region (see `index.tsx`),
+// which is exactly the casing these labels want.
+/* eslint-disable react/no-multi-comp */
 import { useNavigate } from 'react-router-dom-v5-compat';
 import { useStyletron } from 'baseui';
 import { Button, KIND, SHAPE, SIZE } from 'baseui/button';
@@ -7,9 +13,13 @@ import { Icon } from '#core/components/icon/icon';
 import { Link } from '#core/components/link/link';
 import { TAG_COLOR, TAG_SIZE } from '#core/components/tag/constants';
 import { Tag } from '#core/components/tag/tag';
-import { formatEntityName } from '#core/hooks/use-entity-name/use-entity-name';
+import { useEntityName } from '#core/hooks/use-entity-name/use-entity-name';
 
 import type { PhaseConfig } from '#core/types/common/studio-types';
+
+function EntityLabel({ name }: { name: string }) {
+  return <>{useEntityName(name)}</>;
+}
 
 export function PhaseCard(props: PhaseConfig & { projectId: string }) {
   const { id, icon, name, description, docUrl, state, entities, projectId } = props;
@@ -70,7 +80,7 @@ export function PhaseCard(props: PhaseConfig & { projectId: string }) {
                   color: theme.colors.contentTertiary,
                 })}
               >
-                {formatEntityName(entity.name, 'content')}
+                <EntityLabel name={entity.name} />
               </span>
             );
           }
@@ -81,7 +91,7 @@ export function PhaseCard(props: PhaseConfig & { projectId: string }) {
               href={`/${projectId}/${id}/${entity.id}`}
               overrides={{ Link: { style: theme.typography.ParagraphSmall } }}
             >
-              {formatEntityName(entity.name, 'content')}
+              <EntityLabel name={entity.name} />
             </Link>
           );
         })}
