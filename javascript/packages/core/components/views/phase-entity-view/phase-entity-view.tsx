@@ -10,6 +10,7 @@ import { CircleExclamationMarkKind } from '#core/components/illustrations/circle
 import { PageHeader } from '#core/components/page-header/page-header';
 import { Signpost } from '#core/components/signpost/signpost';
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
+import { formatEntityName } from '#core/hooks/use-entity-name/use-entity-name';
 import { EntityTable } from './entity-table';
 
 import type { Theme } from 'baseui/theme';
@@ -113,7 +114,7 @@ export function PhaseEntityView<T extends object = object>({
         }}
       >
         {entities.map((entity, index) => (
-          <Tab key={String(index)} title={entity.name}>
+          <Tab key={String(index)} title={formatEntityName(entity.name, 'nav')}>
             {String(index) === activeKey && (
               <EntityTable<T>
                 service={entity.service}
