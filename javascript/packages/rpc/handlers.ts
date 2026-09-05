@@ -45,10 +45,19 @@ async function createHandlers() {
       }
       return services.DeploymentService.createDeployment({ deployment: record }, headers);
     },
-    UpdateDeployment: (record: Deployment, headers?: Record<string, string>) => {
+    UpdateDeployment: async (record: Deployment, headers?: Record<string, string>) => {
       const actorName = headers?.['x-user-name'];
       if (actorName && record.spec) {
         record.spec.owner = create(UserInfoSchema, { name: actorName });
+      }
+      if (record.metadata) {
+        const { deployment: latest } = await services.DeploymentService.getDeployment(
+          { name: record.metadata.name, namespace: record.metadata.namespace },
+          headers
+        );
+        if (latest?.metadata) {
+          record.metadata.resourceVersion = latest.metadata.resourceVersion;
+        }
       }
       return services.DeploymentService.updateDeployment({ deployment: record }, headers);
     },
