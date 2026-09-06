@@ -17,6 +17,17 @@ const config: Config = {
   organizationName: 'michelangelo-ai',
   projectName: 'michelangelo',
 
+  headTags: [
+    {
+      tagName: 'link',
+      attributes: {
+        rel: 'preconnect',
+        href: 'https://tb-static.uber.com',
+        crossorigin: 'anonymous',
+      },
+    },
+  ],
+
   // In CI lint mode, use 'warn' so all broken links are reported at once
   // rather than failing on the first one. The workflow fails the build after
   // annotating every broken link.
