@@ -13,6 +13,7 @@ import (
 	projectapihook "github.com/michelangelo-ai/michelangelo/go/components/project/apihook"
 	triggerrunapihook "github.com/michelangelo-ai/michelangelo/go/components/triggerrun/apihook"
 	"github.com/michelangelo-ai/michelangelo/go/logging"
+	"github.com/michelangelo-ai/michelangelo/go/storage"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"github.com/uber-go/tally"
 	uberconfig "go.uber.org/config"
@@ -23,6 +24,12 @@ import (
 )
 
 const serverName = "ma-apiserver"
+
+// mySQLPrimaryKinds is the set of CRD kinds that are created/updated directly in
+// MetadataStorage (MySQL) and never written to etcd (see storage.MySQLPrimaryPolicy). Must
+// match the set wired in cmd/controllermgr/main.go so both binaries agree on which kinds skip
+// etcd entirely.
+var mySQLPrimaryKinds = []string{"Metric"}
 
 func main() {
 	fx.New(
@@ -48,6 +55,9 @@ func opts() fx.Option {
 		fx.Provide(provideDispatcher),
 		fx.Provide(getScheme),
 		fx.Provide(apihandler.NewConfig),
+		fx.Provide(func() storage.MySQLPrimaryPolicy {
+			return storage.NewStaticMySQLPrimaryPolicy(mySQLPrimaryKinds...)
+		}),
 		fx.Invoke(projectapihook.RegisterProjectAPIHook),
 		// Cascade-delete: stamp the owning Pipeline ownerReference on runs at
 		// creation. Also defaults api.EnvironmentLabel from the
@@ -63,6 +73,7 @@ func opts() fx.Option {
 		v2pb.ClusterSvcModule,
 		v2pb.DeploymentSvcModule,
 		v2pb.InferenceServerSvcModule,
+		v2pb.MetricSvcModule,
 		v2pb.ModelFamilySvcModule,
 		v2pb.ModelSvcModule,
 		v2pb.PipelineRunSvcModule,

@@ -21,6 +21,7 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -1040,4 +1041,118 @@ func TestUpdateEchoesCallerSpecForMetadataOnlyObjects(t *testing.T) {
 		"the object returned to the client keeps the URI it sent, though it was not persisted")
 	assert.Equal(t, "8", incoming.GetResourceVersion(),
 		"the new resource version must still reach the caller")
+}
+
+// TestMySQLPrimaryKind exercises the MySQLPrimaryPolicy opt-in mode end to end: Create, Update,
+// UpdateStatus, Delete and Get for a kind that never has an etcd copy, unlike the ordinary path
+// (etcd-first) and the immutable-eviction path (metadata-only updates that discard spec/status).
+func TestMySQLPrimaryKind(t *testing.T) {
+	k8sClient, err := setupK8s()
+	assert.NoError(t, err)
+
+	mockMetadataStorage, mockBlobStorage := setupMocks(t)
+
+	config := storage.MetadataStorageConfig{EnableMetadataStorage: true}
+	builder := NewAPIHandlerBuilder().
+		WithK8sClient(k8sClient).
+		WithMetadataStorage(mockMetadataStorage, config).
+		WithBlobStorage(mockBlobStorage).
+		WithMySQLPrimaryPolicy(storage.NewStaticMySQLPrimaryPolicy("RayJob")).
+		WithZapLogger(zap.Must(zap.NewDevelopment())).
+		WithMetrics(tally.NoopScope)
+	handler, err := builder.Build()
+	assert.NoError(t, err)
+
+	newJob := &v2pb.RayJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "mysql-primary-job",
+		},
+		Spec: v2pb.RayJobSpec{
+			JobId: "mysql-primary-job",
+		},
+	}
+
+	// Create rejects a name collision the same way the etcd path does.
+	mockMetadataStorage.EXPECT().
+		GetByName(gomock.Any(), newJob.Namespace, newJob.Name, gomock.Any()).
+		Return(nil).Times(1)
+	err = handler.Create(context.Background(), newJob, &metav1.CreateOptions{})
+	checkGrpcStatusCode(t, codes.AlreadyExists, err)
+
+	// Create writes straight to MetadataStorage via a full (non-direct) upsert; k8s/ETCD is never
+	// touched, and no IngesterFinalizer is added since there is nothing for the ingester to do.
+	mockMetadataStorage.EXPECT().
+		GetByName(gomock.Any(), newJob.Namespace, newJob.Name, gomock.Any()).
+		Return(errors.New("object does not exist")).Times(1)
+	mockMetadataStorage.EXPECT().
+		Upsert(gomock.Any(), gomock.Any(), false, gomock.Any()).
+		DoAndReturn(func(ctx context.Context, object runtime.Object, direct bool, indexedFields []storage.IndexedField) error {
+			job, ok := object.(*v2pb.RayJob)
+			assert.True(t, ok)
+			assert.NotEmpty(t, job.GetUID())
+			creationTimestamp := job.GetCreationTimestamp()
+			assert.False(t, creationTimestamp.IsZero())
+			job.SetResourceVersion("1")
+			return nil
+		}).Times(1)
+	err = handler.Create(context.Background(), newJob, &metav1.CreateOptions{})
+	assert.NoError(t, err)
+	assert.Empty(t, newJob.Finalizers, "MySQL-primary kinds have no etcd copy for the ingester to reconcile")
+
+	// The object never lands in k8s/ETCD.
+	etcdCopy := &v2pb.RayJob{}
+	err = k8sClient.Get(context.Background(), ctrlRTClient.ObjectKey{Namespace: "default", Name: "mysql-primary-job"}, etcdCopy)
+	assert.True(t, apiErrors.IsNotFound(err))
+
+	// Update persists the full incoming spec, unlike the immutable-eviction path.
+	updatedJob := newJob.DeepCopy()
+	updatedJob.Spec.JobId = "mysql-primary-job-v2"
+	mockMetadataStorage.EXPECT().
+		UpsertDirectFull(gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(ctx context.Context, object runtime.Object, indexedFields []storage.IndexedField) error {
+			job, ok := object.(*v2pb.RayJob)
+			assert.True(t, ok)
+			assert.Equal(t, "mysql-primary-job-v2", job.Spec.JobId,
+				"the new spec must actually be written, unlike the immutable-eviction path")
+			job.SetResourceVersion("2")
+			return nil
+		}).Times(1)
+	err = handler.Update(context.Background(), updatedJob, &metav1.UpdateOptions{})
+	assert.NoError(t, err)
+	assert.Equal(t, "2", updatedJob.GetResourceVersion())
+
+	// UpdateStatus also routes through MetadataStorage - there is no etcd status subresource.
+	mockMetadataStorage.EXPECT().
+		UpsertDirectFull(gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(nil).Times(1)
+	err = handler.UpdateStatus(context.Background(), updatedJob, &metav1.UpdateOptions{})
+	assert.NoError(t, err)
+
+	// Get falls back to MetadataStorage since the object was never created in k8s/ETCD.
+	// setupMocks configures mockBlobStorage.IsObjectInteresting to always return true.
+	mockMetadataStorage.EXPECT().
+		GetByName(gomock.Any(), "default", "mysql-primary-job", gomock.Any()).
+		DoAndReturn(func(ctx context.Context, namespace, name string, object runtime.Object) error {
+			job, ok := object.(*v2pb.RayJob)
+			assert.True(t, ok)
+			*job = *updatedJob
+			return nil
+		}).Times(1)
+	mockBlobStorage.EXPECT().MergeWithExternalBlob(gomock.Any(), gomock.Any()).Return(nil).Times(1)
+	fetched := &v2pb.RayJob{}
+	err = handler.Get(context.Background(), "default", "mysql-primary-job", nil, fetched)
+	assert.NoError(t, err)
+	assert.Equal(t, "mysql-primary-job-v2", fetched.Spec.JobId)
+
+	// Delete goes straight to MetadataStorage rather than annotating the (nonexistent) etcd copy.
+	mockMetadataStorage.EXPECT().
+		GetByID(gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(nil).Times(1)
+	mockMetadataStorage.EXPECT().
+		Delete(gomock.Any(), gomock.Any(), "default", "mysql-primary-job").
+		Return(nil).Times(1)
+	mockBlobStorage.EXPECT().DeleteFromBlobStorage(gomock.Any(), gomock.Any()).Return(nil).Times(1)
+	err = handler.Delete(context.Background(), updatedJob, &metav1.DeleteOptions{})
+	assert.NoError(t, err)
 }
