@@ -11,11 +11,15 @@ import (
 	"github.com/stretchr/testify/require"
 	uberconfig "go.uber.org/config"
 	"go.uber.org/zap/zaptest"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/michelangelo-ai/michelangelo/go/api"
+	"github.com/michelangelo-ai/michelangelo/go/api/apimocks"
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
 	blobstoreMock "github.com/michelangelo-ai/michelangelo/go/base/blobstore/blobstore_mocks"
@@ -1666,8 +1670,13 @@ func TestResumeFromPipelineRun(t *testing.T) {
 					_ = kwargs
 					capturedEnvs := envs
 
-					// Verify cache is disabled
-					require.Equal(t, "false", capturedEnvs["CACHE_ENABLED"])
+					// Verify cache defaults to enabled even with no resume spec, scoped
+					// safely per-run via CACHE_VERSION (defaults to pipelineRun.Name)
+					// and per-task input hash. This must default "true" here because
+					// StartWorkflow only runs once, before RetryInfo could ever be
+					// set - see the long comment on addTaskCacheEnv for why "true
+					// only for retry" cannot work at this call site.
+					require.Equal(t, "true", capturedEnvs["CACHE_ENABLED"])
 					require.Equal(t, "test-pipeline-run-no-resume", capturedEnvs["CACHE_VERSION"])
 
 					return &clientInterfaces.WorkflowExecution{
@@ -1676,7 +1685,7 @@ func TestResumeFromPipelineRun(t *testing.T) {
 					}, nil
 				})
 			},
-			expectedCacheEnabled:       false,
+			expectedCacheEnabled:       true,
 			expectedCacheVersionVars:   map[string]string{},
 			expectedResumeFromDisabled: []string{},
 		},
@@ -2903,6 +2912,165 @@ func TestFindTaskResetEventIDByActivityID(t *testing.T) {
 			expectedEventID: 0,
 			expectedError:   "could not find safe reset boundary before first activity test-activity-1",
 		},
+		{
+			name:            "Walks back past a preceding cache-check wave",
+			workflowID:      "test-workflow-id",
+			runID:           "test-run-id",
+			firstActivityID: "test-activity-1",
+			mockFunc: func(workflowClient *workflowclientMock.MockWorkflowClient) {
+				workflowClient.EXPECT().GetActivityTaskScheduledEventType().Return("ActivityTaskScheduled").AnyTimes()
+				workflowClient.EXPECT().GetActivityTaskCompletedEventType().Return("ActivityTaskCompleted").AnyTimes()
+				workflowClient.EXPECT().GetDecisionTaskCompletedEventType().Return("DecisionTaskCompleted").AnyTimes()
+
+				mockHistory := &clientInterfaces.WorkflowHistory{
+					Events: []clientInterfaces.HistoryEvent{
+						{EventID: 1, EventType: "WorkflowExecutionStarted"},
+						{EventID: 2, EventType: "DecisionTaskStarted"},
+						{EventID: 3, EventType: "DecisionTaskCompleted"},
+						{
+							EventID:   4,
+							EventType: "ActivityTaskScheduled",
+							Details: map[string]interface{}{
+								"activity_id":   "cache-a",
+								"activity_type": "github.com/michelangelo-ai/michelangelo/go/worker/activities/cachedoutput.(*activities).ListCachedOutput",
+							},
+						},
+						{
+							EventID:   5,
+							EventType: "ActivityTaskScheduled",
+							Details: map[string]interface{}{
+								"activity_id":   "cache-b",
+								"activity_type": "github.com/michelangelo-ai/michelangelo/go/worker/activities/cachedoutput.(*activities).ListCachedOutput",
+							},
+						},
+						{
+							EventID:   6,
+							EventType: "ActivityTaskCompleted",
+							Details:   map[string]interface{}{"scheduled_event_id": int64(4)},
+						},
+						{
+							EventID:   7,
+							EventType: "ActivityTaskCompleted",
+							Details:   map[string]interface{}{"scheduled_event_id": int64(5)},
+						},
+						{EventID: 8, EventType: "DecisionTaskStarted"},
+						{EventID: 9, EventType: "DecisionTaskCompleted"},
+						{
+							EventID:   10,
+							EventType: "ActivityTaskScheduled",
+							Details: map[string]interface{}{
+								"activity_id":   "test-activity-1",
+								"activity_type": "github.com/michelangelo-ai/michelangelo/go/worker/activities/spark.(*activities).CreateSparkJob",
+							},
+						},
+					},
+				}
+				workflowClient.EXPECT().GetWorkflowExecutionHistory(
+					gomock.Any(),
+					"test-workflow-id",
+					"test-run-id",
+					gomock.Any(),
+					int32(5000),
+				).Return(mockHistory, nil)
+			},
+			expectedEventID: 3,
+			expectedError:   "",
+		},
+		{
+			name:            "Stops at an unrelated real activity, does not over-reach",
+			workflowID:      "test-workflow-id",
+			runID:           "test-run-id",
+			firstActivityID: "test-activity-1",
+			mockFunc: func(workflowClient *workflowclientMock.MockWorkflowClient) {
+				workflowClient.EXPECT().GetActivityTaskScheduledEventType().Return("ActivityTaskScheduled").AnyTimes()
+				workflowClient.EXPECT().GetActivityTaskCompletedEventType().Return("ActivityTaskCompleted").AnyTimes()
+				workflowClient.EXPECT().GetDecisionTaskCompletedEventType().Return("DecisionTaskCompleted").AnyTimes()
+
+				mockHistory := &clientInterfaces.WorkflowHistory{
+					Events: []clientInterfaces.HistoryEvent{
+						{EventID: 1, EventType: "WorkflowExecutionStarted"},
+						{EventID: 2, EventType: "DecisionTaskCompleted"},
+						{
+							EventID:   3,
+							EventType: "ActivityTaskScheduled",
+							Details: map[string]interface{}{
+								"activity_id":   "seq-task",
+								"activity_type": "github.com/michelangelo-ai/michelangelo/go/worker/activities/spark.(*activities).CreateSparkJob",
+							},
+						},
+						{
+							EventID:   4,
+							EventType: "ActivityTaskCompleted",
+							Details:   map[string]interface{}{"scheduled_event_id": int64(3)},
+						},
+						{EventID: 5, EventType: "DecisionTaskCompleted"},
+						{
+							EventID:   6,
+							EventType: "ActivityTaskScheduled",
+							Details: map[string]interface{}{
+								"activity_id":   "test-activity-1",
+								"activity_type": "github.com/michelangelo-ai/michelangelo/go/worker/activities/spark.(*activities).CreateSparkJob",
+							},
+						},
+					},
+				}
+				workflowClient.EXPECT().GetWorkflowExecutionHistory(
+					gomock.Any(),
+					"test-workflow-id",
+					"test-run-id",
+					gomock.Any(),
+					int32(5000),
+				).Return(mockHistory, nil)
+			},
+			expectedEventID: 5,
+			expectedError:   "",
+		},
+		{
+			name:            "Stops walking back when the cache-check wave has no earlier boundary",
+			workflowID:      "test-workflow-id",
+			runID:           "test-run-id",
+			firstActivityID: "test-activity-1",
+			mockFunc: func(workflowClient *workflowclientMock.MockWorkflowClient) {
+				workflowClient.EXPECT().GetActivityTaskScheduledEventType().Return("ActivityTaskScheduled").AnyTimes()
+				workflowClient.EXPECT().GetActivityTaskCompletedEventType().Return("ActivityTaskCompleted").AnyTimes()
+				workflowClient.EXPECT().GetDecisionTaskCompletedEventType().Return("DecisionTaskCompleted").AnyTimes()
+
+				mockHistory := &clientInterfaces.WorkflowHistory{
+					Events: []clientInterfaces.HistoryEvent{
+						{
+							EventID:   1,
+							EventType: "ActivityTaskScheduled",
+							Details: map[string]interface{}{
+								"activity_id":   "cache-a",
+								"activity_type": "github.com/michelangelo-ai/michelangelo/go/worker/activities/cachedoutput.(*activities).ListCachedOutput",
+							},
+						},
+						{
+							EventID:   2,
+							EventType: "ActivityTaskCompleted",
+							Details:   map[string]interface{}{"scheduled_event_id": int64(1)},
+						},
+						{
+							EventID:   3,
+							EventType: "ActivityTaskScheduled",
+							Details: map[string]interface{}{
+								"activity_id":   "test-activity-1",
+								"activity_type": "github.com/michelangelo-ai/michelangelo/go/worker/activities/spark.(*activities).CreateSparkJob",
+							},
+						},
+					},
+				}
+				workflowClient.EXPECT().GetWorkflowExecutionHistory(
+					gomock.Any(),
+					"test-workflow-id",
+					"test-run-id",
+					gomock.Any(),
+					int32(5000),
+				).Return(mockHistory, nil)
+			},
+			expectedEventID: 2,
+			expectedError:   "",
+		},
 	}
 
 	for _, testCase := range testCases {
@@ -3408,4 +3576,294 @@ func TestExecuteWorkflowStepRetryHistory(t *testing.T) {
 		// The live step should be RUNNING
 		require.Equal(t, v2.PIPELINE_RUN_STEP_STATE_RUNNING, executeStep.State)
 	})
+}
+
+// TestProcessManualRetrySpecInvalidatesCachedOutput verifies that manual retry deletes only
+// the CachedOutput belonging to the exact task being retried, leaving every other task -
+// whether it ran before or after the retried one - untouched. A genuine downstream consumer
+// of the retried task's output is expected to miss cache on its own via a changed input_hash;
+// an independent task (whether earlier or later) keeps its cache hit.
+func TestProcessManualRetrySpecInvalidatesCachedOutput(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockWorkflowClient := workflowclientMock.NewMockWorkflowClient(ctrl)
+	mockBlobStore := blobstoreMock.NewMockBlobStoreClient(ctrl)
+	mockWorkflowClient.EXPECT().GetActivityTaskScheduledEventType().Return("ActivityTaskScheduled").AnyTimes()
+	mockWorkflowClient.EXPECT().GetActivityTaskCompletedEventType().Return("ActivityTaskCompleted").AnyTimes()
+	mockWorkflowClient.EXPECT().GetDecisionTaskCompletedEventType().Return("DecisionTaskCompleted").AnyTimes()
+	mockWorkflowClient.EXPECT().GetWorkflowExecutionHistory(
+		gomock.Any(), "test-workflow-id", "current-run-id", gomock.Any(), int32(5000),
+	).Return(&clientInterfaces.WorkflowHistory{
+		Events: []clientInterfaces.HistoryEvent{
+			{EventID: 1, EventType: "ActivityTaskCompleted"},
+			{EventID: 2, EventType: "ActivityTaskScheduled", Details: map[string]interface{}{"activity_id": "failed-activity"}},
+		},
+	}, nil)
+	mockWorkflowClient.EXPECT().ResetWorkflow(gomock.Any(), gomock.Any()).Return(
+		&clientInterfaces.WorkflowExecution{ID: "test-workflow-id", RunID: "new-run-id"}, nil,
+	)
+
+	scheme := runtime.NewScheme()
+	require.NoError(t, v2.AddToScheme(scheme))
+	k8sClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+
+	earlierTaskOutput := &v2.CachedOutput{ObjectMeta: v1.ObjectMeta{Namespace: "default", Name: "uf-vars-earlier"}}
+	retriedTaskOutput := &v2.CachedOutput{ObjectMeta: v1.ObjectMeta{Namespace: "default", Name: "uf-vars-retried"}}
+	laterTaskOutput := &v2.CachedOutput{ObjectMeta: v1.ObjectMeta{Namespace: "default", Name: "uf-vars-later"}}
+	require.NoError(t, k8sClient.Create(context.Background(), earlierTaskOutput))
+	require.NoError(t, k8sClient.Create(context.Background(), retriedTaskOutput))
+	require.NoError(t, k8sClient.Create(context.Background(), laterTaskOutput))
+
+	actor := setUpExecuteWorkflowActor(t, mockWorkflowClient, mockBlobStore, apiHandler.NewFakeAPIHandler(k8sClient))
+
+	pipelineRun := &v2.PipelineRun{
+		ObjectMeta: v1.ObjectMeta{Name: "test-pipeline-run", Namespace: "default"},
+		Spec: v2.PipelineRunSpec{
+			RetryInfo: &v2.RetryInfo{
+				ActivityId:    "failed-activity",
+				WorkflowId:    "test-workflow-id",
+				WorkflowRunId: "current-run-id",
+				Reason:        "Test retry",
+			},
+		},
+		Status: v2.PipelineRunStatus{
+			WorkflowId:    "test-workflow-id",
+			WorkflowRunId: "current-run-id",
+			Steps: []*v2.PipelineRunStepInfo{
+				{
+					Name:  pipelinerunutils.ExecuteWorkflowStepName,
+					State: v2.PIPELINE_RUN_STEP_STATE_FAILED,
+					SubSteps: []*v2.PipelineRunStepInfo{
+						{
+							Name:       "earlier-task",
+							State:      v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED,
+							ActivityId: "earlier-activity",
+							StepCachedOutputs: &v2.PipelineRunStepCachedOutputs{
+								IntermediateVars: []*apipb.ResourceIdentifier{
+									{Namespace: "default", Name: "uf-vars-earlier"},
+								},
+							},
+						},
+						{
+							Name:       "retried-task",
+							State:      v2.PIPELINE_RUN_STEP_STATE_FAILED,
+							ActivityId: "failed-activity",
+							StepCachedOutputs: &v2.PipelineRunStepCachedOutputs{
+								IntermediateVars: []*apipb.ResourceIdentifier{
+									{Namespace: "default", Name: "uf-vars-retried"},
+								},
+							},
+						},
+						{
+							Name:       "later-task",
+							State:      v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED,
+							ActivityId: "later-activity",
+							StepCachedOutputs: &v2.PipelineRunStepCachedOutputs{
+								IntermediateVars: []*apipb.ResourceIdentifier{
+									{Namespace: "default", Name: "uf-vars-later"},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	require.NoError(t, actor.processManualRetrySpec(context.Background(), pipelineRun))
+
+	err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: "default", Name: "uf-vars-retried"}, &v2.CachedOutput{})
+	require.Error(t, err)
+	require.True(t, k8serrors.IsNotFound(err), "expected retried task's CachedOutput to be deleted, got: %v", err)
+
+	require.NoError(t, k8sClient.Get(context.Background(), client.ObjectKey{Namespace: "default", Name: "uf-vars-earlier"}, &v2.CachedOutput{}),
+		"task that ran before the retried one should be left untouched")
+
+	require.NoError(t, k8sClient.Get(context.Background(), client.ObjectKey{Namespace: "default", Name: "uf-vars-later"}, &v2.CachedOutput{}),
+		"task that ran after the retried one, but is not itself the retried task, should be left untouched - "+
+			"a genuine downstream consumer of the retried task's output naturally misses cache on its own "+
+			"changed input_hash; an independent sibling correctly keeps its cache hit")
+}
+
+func TestInvalidateCachedOutputForActivityLogsDeleteFailure(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockWorkflowClient := workflowclientMock.NewMockWorkflowClient(ctrl)
+	mockBlobStore := blobstoreMock.NewMockBlobStoreClient(ctrl)
+
+	scheme := runtime.NewScheme()
+	require.NoError(t, v2.AddToScheme(scheme))
+	// No CachedOutput objects are created, so the Delete call below fails with NotFound -
+	// this exercises the "deletion failure is logged and ignored" branch.
+	k8sClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+	actor := setUpExecuteWorkflowActor(t, mockWorkflowClient, mockBlobStore, apiHandler.NewFakeAPIHandler(k8sClient))
+
+	pipelineRun := &v2.PipelineRun{
+		ObjectMeta: v1.ObjectMeta{Name: "test-pipeline-run", Namespace: "default"},
+		Status: v2.PipelineRunStatus{
+			Steps: []*v2.PipelineRunStepInfo{
+				{
+					Name: pipelinerunutils.ExecuteWorkflowStepName,
+					SubSteps: []*v2.PipelineRunStepInfo{
+						{
+							Name:       "retried-task",
+							ActivityId: "failed-activity",
+							StepCachedOutputs: &v2.PipelineRunStepCachedOutputs{
+								IntermediateVars: []*apipb.ResourceIdentifier{
+									{Namespace: "default", Name: "does-not-exist"},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	// Must not panic or propagate the deletion error - it's logged and ignored.
+	actor.invalidateCachedOutputForActivity(context.Background(), pipelineRun, "failed-activity", zaptest.NewLogger(t))
+}
+
+// TestInvalidateCachedOutputForActivityWaitsForDeleteToBecomeVisible verifies that
+// invalidateCachedOutputForActivity does not race ahead of an async deletion (the
+// mark-and-sweep-via-ingester path apiHandler.Delete takes when metadata storage is
+// enabled): it must keep polling Get until the object is confirmed gone before returning.
+func TestInvalidateCachedOutputForActivityWaitsForDeleteToBecomeVisible(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockWorkflowClient := workflowclientMock.NewMockWorkflowClient(ctrl)
+	mockBlobStore := blobstoreMock.NewMockBlobStoreClient(ctrl)
+	mockAPIHandler := apimocks.NewMockHandler(ctrl)
+
+	mockAPIHandler.EXPECT().Delete(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+
+	// Simulate the object still being visible for the first two polls (as it would be
+	// while the async ingester hasn't yet processed the deletion), then confirmed gone.
+	gomock.InOrder(
+		mockAPIHandler.EXPECT().Get(gomock.Any(), "default", "uf-vars-retried", gomock.Any(), gomock.Any()).Return(nil),
+		mockAPIHandler.EXPECT().Get(gomock.Any(), "default", "uf-vars-retried", gomock.Any(), gomock.Any()).Return(nil),
+		mockAPIHandler.EXPECT().Get(gomock.Any(), "default", "uf-vars-retried", gomock.Any(), gomock.Any()).
+			Return(k8serrors.NewNotFound(schema.GroupResource{}, "uf-vars-retried")),
+	)
+
+	actor := setUpExecuteWorkflowActor(t, mockWorkflowClient, mockBlobStore, mockAPIHandler)
+
+	pipelineRun := &v2.PipelineRun{
+		ObjectMeta: v1.ObjectMeta{Name: "test-pipeline-run", Namespace: "default"},
+		Status: v2.PipelineRunStatus{
+			Steps: []*v2.PipelineRunStepInfo{
+				{
+					Name: pipelinerunutils.ExecuteWorkflowStepName,
+					SubSteps: []*v2.PipelineRunStepInfo{
+						{
+							Name:       "retried-task",
+							ActivityId: "failed-activity",
+							StepCachedOutputs: &v2.PipelineRunStepCachedOutputs{
+								IntermediateVars: []*apipb.ResourceIdentifier{
+									{Namespace: "default", Name: "uf-vars-retried"},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	// If invalidateCachedOutputForActivity returned before all 3 Get calls above were
+	// consumed, ctrl.Finish() (deferred above) would fail with unmet expectations.
+	actor.invalidateCachedOutputForActivity(context.Background(), pipelineRun, "failed-activity", zaptest.NewLogger(t))
+}
+
+func TestResolveCompletedActivitySchedule(t *testing.T) {
+	testCases := []struct {
+		name              string
+		history           *clientInterfaces.WorkflowHistory
+		eventID           int64
+		expectedScheduled int64
+		expectedActivity  string
+		expectedOK        bool
+	}{
+		{
+			name: "event ID not found in history",
+			history: &clientInterfaces.WorkflowHistory{
+				Events: []clientInterfaces.HistoryEvent{
+					{EventID: 1, EventType: "ActivityTaskCompleted", Details: map[string]interface{}{"scheduled_event_id": int64(1)}},
+				},
+			},
+			eventID:    99,
+			expectedOK: false,
+		},
+		{
+			name: "event found but is not an ActivityTaskCompleted event",
+			history: &clientInterfaces.WorkflowHistory{
+				Events: []clientInterfaces.HistoryEvent{
+					{EventID: 1, EventType: "DecisionTaskCompleted"},
+				},
+			},
+			eventID:    1,
+			expectedOK: false,
+		},
+		{
+			name: "scheduled_event_id has an unrecognized type",
+			history: &clientInterfaces.WorkflowHistory{
+				Events: []clientInterfaces.HistoryEvent{
+					{EventID: 1, EventType: "ActivityTaskCompleted", Details: map[string]interface{}{"scheduled_event_id": "not-a-number"}},
+				},
+			},
+			eventID:    1,
+			expectedOK: false,
+		},
+		{
+			name: "scheduled_event_id as int32 but scheduled event missing from history",
+			history: &clientInterfaces.WorkflowHistory{
+				Events: []clientInterfaces.HistoryEvent{
+					{EventID: 1, EventType: "ActivityTaskCompleted", Details: map[string]interface{}{"scheduled_event_id": int32(5)}},
+				},
+			},
+			eventID:    1,
+			expectedOK: false,
+		},
+		{
+			name: "scheduled_event_id as int, resolves successfully",
+			history: &clientInterfaces.WorkflowHistory{
+				Events: []clientInterfaces.HistoryEvent{
+					{EventID: 1, EventType: "ActivityTaskCompleted", Details: map[string]interface{}{"scheduled_event_id": int(2)}},
+					{EventID: 2, EventType: "ActivityTaskScheduled", Details: map[string]interface{}{"activity_type": "cachedoutput.ListCachedOutput"}},
+				},
+			},
+			eventID:           1,
+			expectedScheduled: 2,
+			expectedActivity:  "cachedoutput.ListCachedOutput",
+			expectedOK:        true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			mockWorkflowClient := workflowclientMock.NewMockWorkflowClient(ctrl)
+			mockWorkflowClient.EXPECT().GetActivityTaskScheduledEventType().Return("ActivityTaskScheduled").AnyTimes()
+			mockWorkflowClient.EXPECT().GetActivityTaskCompletedEventType().Return("ActivityTaskCompleted").AnyTimes()
+			mockBlobStore := blobstoreMock.NewMockBlobStoreClient(ctrl)
+
+			scheme := runtime.NewScheme()
+			require.NoError(t, v2.AddToScheme(scheme))
+			k8sClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+			actor := setUpExecuteWorkflowActor(t, mockWorkflowClient, mockBlobStore, apiHandler.NewFakeAPIHandler(k8sClient))
+
+			scheduledEventID, activityType, ok := actor.resolveCompletedActivitySchedule(tc.history, tc.eventID)
+
+			require.Equal(t, tc.expectedOK, ok)
+			if tc.expectedOK {
+				require.Equal(t, tc.expectedScheduled, scheduledEventID)
+				require.Equal(t, tc.expectedActivity, activityType)
+			}
+		})
+	}
 }

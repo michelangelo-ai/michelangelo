@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"text/template"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/michelangelo-ai/michelangelo/go/api"
+	apiutils "github.com/michelangelo-ai/michelangelo/go/api/utils"
 	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
 	defaultengine "github.com/michelangelo-ai/michelangelo/go/base/conditions/engine"
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
@@ -646,8 +648,52 @@ func decodePipelineManifestContent(pipelineSpec v2.PipelineSpec) (map[string]int
 
 func (a *ExecuteWorkflowActor) addTaskCacheEnv(ctx context.Context, pipelineRun *v2.PipelineRun, envs map[string]interface{}) error {
 	logger := a.logger.With(zap.String("pipelineRun", fmt.Sprintf("%s/%s", pipelineRun.Namespace, pipelineRun.Name)))
-	envs[cacheEnabledVarName] = "false"
+	// CACHE_ENABLED must default to "true" here, unconditionally - this is NOT a
+	// blanket "always cache" choice, it's a hard consequence of when this function
+	// runs and what Cadence's Reset API can and cannot do. Read all of this before
+	// changing the default again.
+	//
+	// This function (via StartWorkflow) only ever runs ONCE per pipeline run: the
+	// very first time it starts, while pipelineRun.Status.WorkflowRunId is still
+	// empty. A manual retry does NOT call StartWorkflow again - processManualRetrySpec
+	// (below) triggers it via a.workflowClient.ResetWorkflow, which maps directly to
+	// Cadence's ResetWorkflowExecution API. That API's request only carries a
+	// WorkflowExecution identity, a DecisionFinishEventId to replay from, a Reason,
+	// and a RequestId (see cadenceclient.go's ResetWorkflow) - there is no field to
+	// supply new input/environ. Reset works by truncating history at that event and
+	// replaying forward with the SAME workflow input that was set at the one and
+	// only StartWorkflowExecution call, including this environ map. So by the time
+	// pipelineRun.Spec.RetryInfo is ever non-nil, the environ has already been fixed
+	// and can never be changed for that run again, at any code point, by any means -
+	// this was tried directly in the sandbox (checking RetryInfo here, defaulting to
+	// "false" otherwise) and confirmed dead code: the retried run's SparkJobs still
+	// showed CACHE_ENABLED=false, because Reset simply doesn't call this function.
+	//
+	// Given that constraint, defaulting to "true" here is actually safe, not just
+	// convenient: CACHE_VERSION below defaults to pipelineRun.Name, which is unique
+	// per run, so a fresh run's cache reads can only ever hit a CachedOutput written
+	// under that SAME run's own name - i.e. only from an earlier attempt of that
+	// exact run (a retry or resume of it). A genuinely new pipeline run has zero
+	// CachedOutput entries under its own name regardless of this flag, so the
+	// default has no observable effect until a retry or resume actually happens.
+	// (Writing to CachedOutput, in create_cached_output/commons.star, is itself
+	// unconditional on task success - only the read/skip check is gated by this
+	// flag - so a task always leaves a cache entry behind for a later retry to find,
+	// no matter what this default is.) The task actually named in RetryInfo has its
+	// CachedOutput explicitly invalidated in processManualRetrySpec before the Reset, so
+	// a retry always means a real re-execution of that task regardless of this default.
+	// Every other task - upstream or downstream - keeps this "true" default: a genuine
+	// downstream consumer of the retried task's new output naturally misses cache on its
+	// own via a changed input_hash (see get_cache_keys/get_input_hash in commons.star),
+	// while an independent task correctly benefits from the cache hit this default
+	// enables.
+	//
+	// Do not attempt to scope this to "true only when RetryInfo is set" again
+	// without a fundamentally different mechanism than checking pipelineRun.Spec at
+	// this call site - see above for why that specific approach cannot work.
+	envs[cacheEnabledVarName] = "true"
 	envs[cacheVersionVarName] = pipelineRun.Name
+
 	if pipelineRun.Spec.Resume == nil || pipelineRun.Spec.Resume.PipelineRun == nil {
 		return nil
 	}
@@ -1067,24 +1113,37 @@ func (a *ExecuteWorkflowActor) findTaskResetEventIDByActivityID(ctx context.Cont
 	}
 
 	// Find the decision/workflow task completed event immediately before the first activity
-	var resetEventID int64
-	for i := len(history.Events) - 1; i >= 0; i-- {
-		event := history.Events[i]
-
-		// Stop when we reach the first activity scheduled event
-		if event.EventID >= firstActivityScheduledEventID {
-			continue
-		}
-
-		// Look for the decision/activity task completed event just before
-		if event.EventType == a.workflowClient.GetActivityTaskCompletedEventType() || event.EventType == a.workflowClient.GetDecisionTaskCompletedEventType() {
-			resetEventID = event.EventID
-			break
-		}
-	}
-
+	resetEventID := a.nearestSafeBoundaryBefore(history, firstActivityScheduledEventID)
 	if resetEventID == 0 {
 		return 0, fmt.Errorf("could not find safe reset boundary before first activity %s", firstActivityID)
+	}
+
+	// Uniflow's concurrent-task cache check (cachedoutput.ListCachedOutput) runs once, up
+	// front, for every sibling in the same concurrent_run/batch_run batch, before any of them
+	// schedule their real work. If the boundary above lands right after that cache-check wave
+	// (as it does whenever caching is enabled), a Reset would freeze the pre-existing miss
+	// decision forever and no sibling could ever hit its cache on replay. Walk the boundary
+	// further back, past the entire contiguous run of ListCachedOutput activities that
+	// directly precedes the target, so a retry re-triggers those checks too.
+	for {
+		// The boundary above is often a DecisionTaskCompleted event sealing in whatever
+		// activities completed just before it - inspect the nearest activity completion at or
+		// before that point to see whether it was a cache check.
+		completedEventID := a.nearestActivityCompletedAtOrBefore(history, resetEventID)
+		if completedEventID == 0 {
+			break
+		}
+
+		scheduledEventID, activityType, ok := a.resolveCompletedActivitySchedule(history, completedEventID)
+		if !ok || !strings.Contains(activityType, "ListCachedOutput") {
+			break
+		}
+
+		earlier := a.nearestSafeBoundaryBefore(history, scheduledEventID)
+		if earlier == 0 || earlier >= resetEventID {
+			break
+		}
+		resetEventID = earlier
 	}
 
 	logger.Info("found precise reset boundary using activity ID",
@@ -1092,6 +1151,72 @@ func (a *ExecuteWorkflowActor) findTaskResetEventIDByActivityID(ctx context.Cont
 		zap.Int64("resetEventID", resetEventID))
 
 	return resetEventID, nil
+}
+
+// nearestSafeBoundaryBefore returns the EventID of the nearest ActivityTaskCompleted or
+// DecisionTaskCompleted event strictly before beforeEventID, or 0 if none exists.
+func (a *ExecuteWorkflowActor) nearestSafeBoundaryBefore(history *clientInterfaces.WorkflowHistory, beforeEventID int64) int64 {
+	for i := len(history.Events) - 1; i >= 0; i-- {
+		event := history.Events[i]
+		if event.EventID >= beforeEventID {
+			continue
+		}
+		if event.EventType == a.workflowClient.GetActivityTaskCompletedEventType() || event.EventType == a.workflowClient.GetDecisionTaskCompletedEventType() {
+			return event.EventID
+		}
+	}
+	return 0
+}
+
+// nearestActivityCompletedAtOrBefore returns the EventID of the nearest ActivityTaskCompleted
+// event with EventID <= atOrBeforeEventID, or 0 if none exists.
+func (a *ExecuteWorkflowActor) nearestActivityCompletedAtOrBefore(history *clientInterfaces.WorkflowHistory, atOrBeforeEventID int64) int64 {
+	for i := len(history.Events) - 1; i >= 0; i-- {
+		event := history.Events[i]
+		if event.EventID > atOrBeforeEventID {
+			continue
+		}
+		if event.EventType == a.workflowClient.GetActivityTaskCompletedEventType() {
+			return event.EventID
+		}
+	}
+	return 0
+}
+
+// resolveCompletedActivitySchedule checks whether eventID identifies an ActivityTaskCompleted
+// event, and if so returns the EventID and activity_type of the ActivityTaskScheduled event it
+// completed. ok is false if eventID isn't an ActivityTaskCompleted event, or its originating
+// scheduled event can't be found.
+func (a *ExecuteWorkflowActor) resolveCompletedActivitySchedule(history *clientInterfaces.WorkflowHistory, eventID int64) (scheduledEventID int64, activityType string, ok bool) {
+	var completed *clientInterfaces.HistoryEvent
+	for i := range history.Events {
+		if history.Events[i].EventID == eventID {
+			completed = &history.Events[i]
+			break
+		}
+	}
+	if completed == nil || completed.EventType != a.workflowClient.GetActivityTaskCompletedEventType() {
+		return 0, "", false
+	}
+
+	switch v := completed.Details["scheduled_event_id"].(type) {
+	case int64:
+		scheduledEventID = v
+	case int32:
+		scheduledEventID = int64(v)
+	case int:
+		scheduledEventID = int64(v)
+	default:
+		return 0, "", false
+	}
+
+	for _, event := range history.Events {
+		if event.EventID == scheduledEventID && event.EventType == a.workflowClient.GetActivityTaskScheduledEventType() {
+			activityType, _ = event.Details["activity_type"].(string)
+			return scheduledEventID, activityType, true
+		}
+	}
+	return 0, "", false
 }
 
 // processManualRetrySpec checks for manual retry spec field and triggers retry if present
@@ -1141,6 +1266,13 @@ func (a *ExecuteWorkflowActor) processManualRetrySpec(ctx context.Context, pipel
 		)
 		return fmt.Errorf("failed to find reset event ID for activity %s: %w", retryInfo.ActivityId, err)
 	}
+
+	// Force a cache-miss for the task being retried, so "retry" always means a real
+	// re-execution of that specific task - never a silent cache hit on stale output for
+	// it. Every other task, earlier or later, is left untouched: a genuine downstream
+	// consumer of the retried task's output naturally misses cache on its own via a
+	// changed input_hash, while an independent task correctly keeps its cache hit.
+	a.invalidateCachedOutputForActivity(ctx, pipelineRun, activityID, logger)
 
 	// Perform workflow reset
 	resetOptions := clientInterfaces.ResetWorkflowOptions{
@@ -1208,6 +1340,90 @@ func (a *ExecuteWorkflowActor) processManualRetrySpec(ctx context.Context, pipel
 	}
 
 	return nil
+}
+
+// cachedOutputDeleteConfirmInterval/Timeout bound how long invalidateCachedOutputForActivity
+// waits for a CachedOutput deletion to become durably visible (see comment below) before
+// giving up on that one object and moving on.
+const (
+	cachedOutputDeleteConfirmInterval = 150 * time.Millisecond
+	cachedOutputDeleteConfirmTimeout  = 5 * time.Second
+)
+
+// invalidateCachedOutputForActivity deletes any CachedOutput CRs recorded for the sub-step
+// matching activityID, so a manual retry always forces a real re-execution of the retried
+// task itself - never a silent cache hit on stale output for that task. Sub-steps other than
+// the retried one are left untouched: a genuinely downstream task that actually consumes the
+// retried task's output as an argument will naturally miss cache on its own (its resolved
+// input_hash changes - see get_cache_keys/get_input_hash in commons.star), while an
+// independent sibling task correctly keeps its cache hit. Deletion failures are logged and
+// otherwise ignored - they must not block the retry itself.
+func (a *ExecuteWorkflowActor) invalidateCachedOutputForActivity(ctx context.Context, pipelineRun *v2.PipelineRun, activityID string, logger *zap.Logger) {
+	executeWorkflowStep := pipelinerunutils.GetStep(pipelineRun, pipelinerunutils.ExecuteWorkflowStepName)
+	if executeWorkflowStep == nil {
+		return
+	}
+
+	var retriedSubStep *v2.PipelineRunStepInfo
+	for _, subStep := range executeWorkflowStep.SubSteps {
+		if subStep.ActivityId == activityID {
+			retriedSubStep = subStep
+			break
+		}
+	}
+	if retriedSubStep == nil {
+		return
+	}
+
+	{
+		subStep := retriedSubStep
+		if subStep.StepCachedOutputs == nil {
+			return
+		}
+
+		refs := append(append(append([]*apipb.ResourceIdentifier{},
+			subStep.StepCachedOutputs.IntermediateVars...),
+			subStep.StepCachedOutputs.Checkpoints...),
+			subStep.StepCachedOutputs.RawModels...)
+
+		for _, ref := range refs {
+			co := &v2.CachedOutput{ObjectMeta: metav1.ObjectMeta{Namespace: ref.Namespace, Name: ref.Name}}
+			if err := a.apiHandler.Delete(ctx, co, &metav1.DeleteOptions{}); err != nil {
+				logger.Warn("failed to invalidate cached output for retried task",
+					zap.String("activityId", activityID),
+					zap.String("cachedOutputName", ref.Name),
+					zap.Error(err))
+				continue
+			}
+
+			a.waitForCachedOutputDeleted(ctx, ref, activityID, logger)
+		}
+	}
+}
+
+// waitForCachedOutputDeleted blocks (up to cachedOutputDeleteConfirmTimeout) until the given
+// CachedOutput is confirmed gone from apiHandler's view. This exists because apiHandler.Delete
+// is not synchronous when metadata storage is enabled: it only marks the object for deletion
+// in K8s/ETCD and an async ingester reconciler performs the actual removal from metadata
+// storage. ListCachedOutput reads exclusively from metadata storage in that mode, so without
+// this wait, a task's cache-check can still see the "deleted" object and produce a stale hit -
+// exactly the outcome invalidateCachedOutputForActivity exists to prevent. On timeout, log a
+// warning and move on rather than blocking the retry indefinitely.
+func (a *ExecuteWorkflowActor) waitForCachedOutputDeleted(ctx context.Context, ref *apipb.ResourceIdentifier, activityID string, logger *zap.Logger) {
+	deadline := time.Now().Add(cachedOutputDeleteConfirmTimeout)
+	for {
+		err := a.apiHandler.Get(ctx, ref.Namespace, ref.Name, &metav1.GetOptions{}, &v2.CachedOutput{})
+		if apiutils.IsNotFoundError(err) {
+			return
+		}
+		if time.Now().After(deadline) {
+			logger.Warn("timed out waiting for cached output deletion to become visible",
+				zap.String("activityId", activityID),
+				zap.String("cachedOutputName", ref.Name))
+			return
+		}
+		time.Sleep(cachedOutputDeleteConfirmInterval)
+	}
 }
 
 // structFromMap converts a map[string]interface{} to a *pbtypes.Struct.
