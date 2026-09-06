@@ -431,6 +431,34 @@ func TestK8sAndMetadataStorage(t *testing.T) {
 	assert.True(t, utils.IsDeleting(&j3))
 }
 
+func TestDeleteMetadataOnlyObjectWithoutBlobStorage(t *testing.T) {
+	k8sClient, err := setupK8s()
+	assert.NoError(t, err)
+
+	ctrl := gomock.NewController(t)
+	mockMetadataStorage := storagemocks.NewMockMetadataStorage(ctrl)
+	mockMetadataStorage.EXPECT().
+		Delete(gomock.Any(), gomock.Any(), "project01", "recycled-trigger-run").
+		Return(nil).
+		Times(1)
+
+	handler, err := NewAPIHandlerBuilder().
+		WithK8sClient(k8sClient).
+		WithMetadataStorage(mockMetadataStorage, storage.MetadataStorageConfig{EnableMetadataStorage: true}).
+		WithZapLogger(zap.NewNop()).
+		WithMetrics(tally.NoopScope).
+		Build()
+	assert.NoError(t, err)
+
+	err = handler.Delete(context.Background(), &v2pb.TriggerRun{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "project01",
+			Name:      "recycled-trigger-run",
+		},
+	}, &metav1.DeleteOptions{})
+	assert.NoError(t, err)
+}
+
 func TestNewAPIServerHandler(t *testing.T) {
 	err := v2pb.AddToScheme(scheme.Scheme)
 	assert.NoError(t, err)
