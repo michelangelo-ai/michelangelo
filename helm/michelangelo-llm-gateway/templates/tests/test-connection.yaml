@@ -1,0 +1,50 @@
+{{- if .Values.tests.enabled }}
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "michelangelo-llm-gateway.fullname" . }}-test-connection
+  labels:
+    {{- include "michelangelo-llm-gateway.labels" . | nindent 4 }}
+    app.kubernetes.io/component: test
+  annotations:
+    helm.sh/hook: test
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  automountServiceAccountToken: false
+  restartPolicy: Never
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 100
+    runAsGroup: 101
+    seccompProfile:
+      type: RuntimeDefault
+  {{- with .Values.litellm.imagePullSecrets }}
+  imagePullSecrets:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  containers:
+    - name: curl
+      image: {{ include "michelangelo-llm-gateway.testImage" . | quote }}
+      imagePullPolicy: {{ .Values.tests.image.pullPolicy }}
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop:
+            - ALL
+      env:
+        - name: PROXY_MASTER_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.litellm.masterkeySecretName | quote }}
+              key: {{ .Values.litellm.masterkeySecretKey | quote }}
+      command:
+        - /bin/sh
+        - -ec
+      args:
+        - >-
+          curl --fail --show-error --silent
+          --max-time {{ .Values.tests.timeoutSeconds }}
+          --header "Authorization: Bearer ${PROXY_MASTER_KEY}"
+          http://litellm:{{ .Values.litellm.service.port }}/v1/models
+{{- end }}

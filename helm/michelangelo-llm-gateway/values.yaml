@@ -1,0 +1,227 @@
+# Values under litellm are passed directly to the pinned upstream chart.
+litellm:
+  replicaCount: 2
+
+  image:
+    repository: ghcr.io/berriai/litellm-non_root
+    tag: "v1.85.1@sha256:97ce25938fc7f38f14a4036df78ba3d57725706b6183488af9931750e395c673"
+    pullPolicy: IfNotPresent
+
+  imagePullSecrets: []
+  nameOverride: litellm
+  fullnameOverride: litellm
+
+  serviceAccount:
+    create: true
+    automount: false
+    annotations: {}
+    name: litellm
+
+  deploymentMinReadySeconds: 10
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+
+  podAnnotations: {}
+  podLabels: {}
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    runAsGroup: 65534
+    fsGroup: 65534
+    fsGroupChangePolicy: OnRootMismatch
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    runAsGroup: 65534
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: false
+    capabilities:
+      drop:
+        - ALL
+
+  service:
+    type: ClusterIP
+    port: 4000
+    annotations: {}
+  ingress:
+    enabled: false
+    className: ""
+    labels: {}
+    annotations: {}
+    hosts: []
+    tls: []
+
+  masterkeySecretName: litellm-secrets
+  masterkeySecretKey: masterkey
+
+  proxyConfigMap:
+    create: true
+    name: ""
+    key: config.yaml
+  proxy_config:
+    model_list: []
+    general_settings:
+      master_key: os.environ/PROXY_MASTER_KEY
+      disable_prisma_schema_update: true
+    litellm_settings:
+      cache: false
+      success_callback:
+        - prometheus
+
+  environmentSecrets: []
+  environmentConfigMaps: []
+  extraEnvVars:
+    - name: LITELLM_SALT_KEY
+      valueFrom:
+        secretKeyRef:
+          name: litellm-secrets
+          key: saltkey
+    - name: DATABASE_URL
+      valueFrom:
+        secretKeyRef:
+          name: litellm-secrets
+          key: database-url
+    - name: DISABLE_SCHEMA_UPDATE
+      value: "true"
+
+  db:
+    useExisting: false
+    deployStandalone: false
+  redis:
+    enabled: false
+
+  logLevel: INFO
+  envVars: {}
+  command: []
+  args:
+    - --config
+    - /etc/litellm/config.yaml
+
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: "2"
+      memory: 2Gi
+
+  startupProbe:
+    path: /health/readiness
+    initialDelaySeconds: 0
+    periodSeconds: 10
+    timeoutSeconds: 5
+    successThreshold: 1
+    failureThreshold: 30
+  livenessProbe:
+    path: /health/liveliness
+    initialDelaySeconds: 0
+    periodSeconds: 15
+    timeoutSeconds: 5
+    successThreshold: 1
+    failureThreshold: 5
+  readinessProbe:
+    path: /health/readiness
+    initialDelaySeconds: 0
+    periodSeconds: 10
+    timeoutSeconds: 5
+    successThreshold: 1
+    failureThreshold: 3
+
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+  keda:
+    enabled: false
+  pdb:
+    enabled: true
+    minAvailable: null
+    maxUnavailable: 1
+    annotations: {}
+    labels: {}
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: topology.kubernetes.io/zone
+      whenUnsatisfiable: ScheduleAnyway
+      labelSelector:
+        matchLabels:
+          app.kubernetes.io/name: litellm
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: ScheduleAnyway
+      labelSelector:
+        matchLabels:
+          app.kubernetes.io/name: litellm
+
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  terminationGracePeriodSeconds: 90
+
+  # These resources are owned by this wrapper because the upstream behavior
+  # does not meet the Michelangelo runtime contract.
+  migrationJob:
+    enabled: false
+  serviceMonitor:
+    enabled: false
+
+migrationJob:
+  enabled: true
+  managedExternally: false
+  serviceAccountName: default
+  activeDeadlineSeconds: 900
+  backoffLimit: 4
+  ttlSecondsAfterFinished: 86400
+  annotations: {}
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  hooks:
+    helm:
+      enabled: true
+      weight: 0
+    argocd:
+      enabled: false
+
+networkPolicy:
+  enabled: false
+  migration:
+    managedExternally: false
+  allowDNS: true
+  dns:
+    namespaceSelector:
+      kubernetes.io/metadata.name: kube-system
+    podSelector:
+      k8s-app: kube-dns
+  ingress: []
+  egress: []
+
+serviceMonitor:
+  enabled: false
+  labels: {}
+  annotations: {}
+  interval: 15s
+  scrapeTimeout: 10s
+  path: /metrics
+  namespaceSelector: {}
+  authorization:
+    secretName: ""
+    secretKey: token
+
+tests:
+  enabled: true
+  image:
+    repository: curlimages/curl
+    tag: "8.12.1@sha256:94e9e444bcba979c2ea12e27ae39bee4cd10bc7041a472c4727a558e213744e6"
+    pullPolicy: IfNotPresent
+  timeoutSeconds: 10
