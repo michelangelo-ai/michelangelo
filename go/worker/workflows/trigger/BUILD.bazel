@@ -31,7 +31,6 @@ go_test(
     name = "go_default_test",
     srcs = [
         "cron_trigger_workflows_test.go",
-        "logical_timestamp_test.go",
     ],
     embed = [":go_default_library"],
     deps = [
