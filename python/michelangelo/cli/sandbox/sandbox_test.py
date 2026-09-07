@@ -193,3 +193,71 @@ class SnapshotRestoreTest(TestCase):
         ):
             sandbox._snapshot_restore(argparse.Namespace(timestamp="does-not-exist"))
         mock_err.assert_called_once()
+
+
+class DemoActionRegistryTest(TestCase):
+    """Parser registration and dispatch share a single `_demo_actions` table."""
+
+    def test_parser_accepts_every_registered_demo_action(self):
+        """Every key in `_demo_actions` is a valid `ma sandbox demo` subcommand."""
+        parser = argparse.ArgumentParser()
+        sandbox.init_arguments(parser)
+        for action in sandbox._demo_actions():
+            ns = parser.parse_args(["demo", action])
+            self.assertEqual(ns.demo_action, action)
+
+    def test_parser_rejects_unknown_demo_action(self):
+        """Argparse rejects a demo action that is not in the registry."""
+        parser = argparse.ArgumentParser()
+        sandbox.init_arguments(parser)
+        with self.assertRaises(SystemExit):
+            parser.parse_args(["demo", "not-a-real-demo"])
+
+    def test_create_demo_crs_dispatches_registered_actions(self):
+        """Each registered action reaches its handler after the shared project CR."""
+        called = []
+        handlers = {
+            action: (lambda a=action: called.append(a))
+            for action in sandbox._demo_actions()
+        }
+        project = {
+            "apiVersion": "michelangelo.api/v2",
+            "kind": "Project",
+            "metadata": {"name": "demo", "namespace": "ma-dev-test"},
+        }
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            demo_dir = Path(tmp_dir) / "demo"
+            demo_dir.mkdir()
+            with open(demo_dir / "project.yaml", "w") as f:
+                yaml.safe_dump(project, f)
+
+            with (
+                patch.object(sandbox, "_dir", Path(tmp_dir)),
+                patch.object(sandbox, "_assert_sandbox_cluster_running"),
+                patch.object(sandbox, "_ensure_namespace_exists"),
+                patch.object(sandbox, "_kube_apply"),
+                patch.object(
+                    sandbox,
+                    "_demo_actions",
+                    return_value={
+                        action: sandbox._DemoAction(help=action, handler=handler)
+                        for action, handler in handlers.items()
+                    },
+                ),
+            ):
+                for action in handlers:
+                    sandbox._create_demo_crs(argparse.Namespace(demo_action=action))
+
+        self.assertEqual(called, list(handlers))
+
+    def test_unknown_action_rejected_before_cluster_work(self):
+        """An unknown action fails before any cluster or apply work."""
+        with (
+            patch.object(sandbox, "_assert_sandbox_cluster_running") as mock_running,
+            patch.object(sandbox, "_kube_apply") as mock_apply,
+            self.assertRaises(ValueError) as ctx,
+        ):
+            sandbox._create_demo_crs(argparse.Namespace(demo_action="bogus"))
+        self.assertIn("bogus", str(ctx.exception))
+        mock_running.assert_not_called()
+        mock_apply.assert_not_called()
