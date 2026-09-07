@@ -2,6 +2,7 @@ package triggerrun
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -132,6 +133,25 @@ func (r *cronTrigger) Run(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2p
 		"taskList", opt.TaskList)
 	exec, err := r.WorkflowClient.StartWorkflow(
 		ctx, opt, "trigger.CronTrigger", CreateTriggerRequest{TriggerRun: scheduleWorkflowInput(triggerRun)})
+
+	// A failed catch-up is not a failed start. The schedule is live and firing forward, so
+	// failing here would mark the TriggerRun terminal (see isTerminateState) and leave a
+	// running schedule that nothing reconciles. Keep the trigger running and record the
+	// missed window instead; it is not replayed automatically, because re-issuing a
+	// backfill whose outcome is unknown risks duplicate runs for the same period.
+	var catchUpWarning string
+	var catchUpErr *clientInterface.CatchUpError
+	if errors.As(err, &catchUpErr) {
+		log.Error(err, "cron trigger is running but its catch-up did not replay",
+			"operation", "start_workflow",
+			"namespace", triggerRun.Namespace,
+			"name", triggerRun.Name,
+			"workflowId", opt.ID,
+			"catchUpFrom", catchUpErr.CatchUpFrom.UTC().Format(time.RFC3339))
+		catchUpWarning = err.Error()
+		err = nil
+	}
+
 	if err != nil {
 		log.Error(err, "failed to start scheduled workflow",
 			"operation", "start_workflow",
@@ -155,6 +175,9 @@ func (r *cronTrigger) Run(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2p
 	if opt.StartPaused {
 		status.State = v2pb.TRIGGER_RUN_STATE_PAUSED
 	}
+	// Carried on a running trigger so the missed window stays visible to an operator
+	// rather than only appearing once in the controller log.
+	status.ErrorMessage = catchUpWarning
 	return status, nil
 }
 
@@ -175,6 +198,17 @@ func cronCatchUpFrom(cronSchedule *v2pb.CronSchedule) (time.Time, error) {
 	startTime, err := pbtypes.TimestampFromProto(cronSchedule.GetStartTime())
 	if err != nil {
 		return time.Time{}, fmt.Errorf("invalid cron schedule startTime: %w", err)
+	}
+	// A future start is rejected rather than ignored. It would otherwise pass the lookback
+	// check below (a negative lookback is never over the limit) and reach Backfill as an
+	// inverted range. It also usually means the author expected the schedule to stay idle
+	// until then, which this field does not do - the cron fires immediately either way, so
+	// silently accepting it would deliver the opposite of what was intended.
+	if startTime.After(time.Now()) {
+		return time.Time{}, fmt.Errorf(
+			"cron schedule startTime %s is in the future; it only replays missed occurrences "+
+				"and cannot delay when a schedule starts firing",
+			startTime.UTC().Format(time.RFC3339))
 	}
 	if lookback := time.Since(startTime); lookback > maxCatchUpLookback {
 		return time.Time{}, fmt.Errorf(

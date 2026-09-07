@@ -2,6 +2,7 @@ package triggerrun
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -244,6 +245,57 @@ func TestRunRejectsStartTimeBeyondCatchUpLimit(t *testing.T) {
 	require.Error(t, err)
 	assert.Equal(t, v2pb.TRIGGER_RUN_STATE_FAILED, status.State)
 	assert.Contains(t, status.ErrorMessage, "catch-up limit")
+}
+
+// A future startTime must be rejected, not ignored. A negative lookback trivially passes
+// the age limit, so without this check it would reach Backfill as an inverted range.
+func TestRunRejectsFutureStartTime(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
+	mockClient.EXPECT().StartWorkflow(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+
+	future := time.Now().Add(2 * time.Hour)
+	triggerRun := _triggerRun.DeepCopy()
+	triggerRun.Spec.Trigger.GetCronSchedule().StartTime = &pbtypes.Timestamp{Seconds: future.Unix()}
+
+	status, err := setupCronTrigger(t, mockClient).Run(context.Background(), triggerRun)
+
+	require.Error(t, err)
+	assert.Equal(t, v2pb.TRIGGER_RUN_STATE_FAILED, status.State)
+	assert.Contains(t, status.ErrorMessage, "in the future")
+}
+
+// A catch-up that fails after the schedule exists must leave the trigger RUNNING. Marking
+// it FAILED would be terminal (isTerminateState), stranding a live schedule that keeps
+// creating pipeline runs with nothing left to reconcile it.
+func TestRunStaysRunningWhenCatchUpFails(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
+	mockClient.EXPECT().GetDomain().Return("test-domain")
+	mockClient.EXPECT().GetProvider().Return("test-provider").AnyTimes()
+	mockClient.EXPECT().ListOpenWorkflow(gomock.Any(), gomock.Any()).Return(
+		&clientInterface.ListOpenWorkflowExecutionsResponse{}, nil)
+
+	catchUpFrom := time.Now().Add(-3 * time.Hour)
+	// The client reports the live schedule alongside the catch-up failure.
+	mockClient.EXPECT().StartWorkflow(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(
+		&clientInterface.WorkflowExecution{ID: "ma-dev-test.trigger-schedule"},
+		&clientInterface.CatchUpError{
+			ScheduleID:  "ma-dev-test.trigger-schedule",
+			CatchUpFrom: catchUpFrom,
+			Err:         errors.New("backfill rpc failed"),
+		})
+
+	triggerRun := _triggerRun.DeepCopy()
+	triggerRun.Spec.Trigger.GetCronSchedule().StartTime = &pbtypes.Timestamp{Seconds: catchUpFrom.Unix()}
+
+	status, err := setupCronTrigger(t, mockClient).Run(context.Background(), triggerRun)
+
+	require.NoError(t, err, "a failed catch-up must not fail the trigger")
+	assert.Equal(t, v2pb.TRIGGER_RUN_STATE_RUNNING, status.State)
+	assert.Contains(t, status.ErrorMessage, "catch-up", "missed window must stay visible in status")
+	assert.Contains(t, status.ErrorMessage, "backfill rpc failed")
+	assert.NotNil(t, status.ActualTrigger, "schedule is live, so drift tracking must still be populated")
 }
 
 func TestRunPausesExistingScheduleImmediately(t *testing.T) {

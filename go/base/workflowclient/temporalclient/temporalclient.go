@@ -152,18 +152,25 @@ func (c *TemporalClient) createScheduleForCron(ctx context.Context, options clie
 		return nil, fmt.Errorf("failed to create Temporal schedule: %w", err)
 	}
 
+	execution := &clientInterface.WorkflowExecution{
+		ID:    scheduleID,
+		RunID: "", // Schedules don't have runIDs
+	}
+
 	if !options.CatchUpFrom.IsZero() && !options.StartPaused {
 		if err := backfillSchedule(ctx, handle, options.CatchUpFrom); err != nil {
-			// The schedule itself is live and firing forward; only catch-up failed, so
-			// surface the error without tearing down an otherwise healthy trigger.
-			return nil, fmt.Errorf("schedule %s created but catch-up backfill failed: %w", scheduleID, err)
+			// Return the execution alongside the error: the schedule was created and is
+			// firing forward, so the caller must keep the trigger alive. Reporting a bare
+			// failure here would strand a live schedule behind a terminated TriggerRun.
+			return execution, &clientInterface.CatchUpError{
+				ScheduleID:  scheduleID,
+				CatchUpFrom: options.CatchUpFrom,
+				Err:         err,
+			}
 		}
 	}
 
-	return &clientInterface.WorkflowExecution{
-		ID:    scheduleID,
-		RunID: "", // Schedules don't have runIDs
-	}, nil
+	return execution, nil
 }
 
 // backfillSchedule replays the occurrences the schedule would have taken between
