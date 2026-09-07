@@ -23,6 +23,12 @@ export const DEPLOYMENT_STAGE = {
   CLEAN_UP_FAILED: 11,
 } as const;
 
+/** Stages in which a FALSE condition marks a real failure rather than "not reached yet". */
+export const FAILED_ROLLOUT_STAGES: number[] = [
+  DEPLOYMENT_STAGE.ROLLOUT_FAILED,
+  DEPLOYMENT_STAGE.ROLLBACK_FAILED,
+];
+
 export const DEPLOYMENT_STATE = {
   INVALID: 0,
   INITIALIZING: 1,
