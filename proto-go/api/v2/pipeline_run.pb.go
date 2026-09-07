@@ -6523,6 +6523,9 @@ spec:
                               properties:
                                 cron:
                                   type: string
+                                startTime:
+                                  format: date-time
+                                  type: string
                               type: object
                             intervalSchedule:
                               properties:
@@ -6965,6 +6968,9 @@ spec:
                                       properties:
                                         cron:
                                           type: string
+                                        startTime:
+                                          format: date-time
+                                          type: string
                                       type: object
                                     intervalSchedule:
                                       properties:
@@ -7339,6 +7345,9 @@ spec:
                                     cronSchedule:
                                       properties:
                                         cron:
+                                          type: string
+                                        startTime:
+                                          format: date-time
                                           type: string
                                       type: object
                                     intervalSchedule:

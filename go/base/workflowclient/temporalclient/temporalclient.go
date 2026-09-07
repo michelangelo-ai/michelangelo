@@ -133,7 +133,7 @@ func (c *TemporalClient) createScheduleForCron(ctx context.Context, options clie
 			TaskQueue: options.TaskList,
 			Args:      args,
 		},
-		Overlap:        overlapPolicy, // Use extracted policy based on maxConcurrency
+		Overlap:        overlapPolicy,
 		PauseOnFailure: false,
 		Paused:         options.StartPaused,
 	}
@@ -147,15 +147,56 @@ func (c *TemporalClient) createScheduleForCron(ctx context.Context, options clie
 	}
 
 	// Create the schedule
-	_, err := c.Client.ScheduleClient().Create(ctx, scheduleOptions)
+	handle, err := c.Client.ScheduleClient().Create(ctx, scheduleOptions)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Temporal schedule: %w", err)
+	}
+
+	if !options.CatchUpFrom.IsZero() && !options.StartPaused {
+		if err := backfillSchedule(ctx, handle, options.CatchUpFrom); err != nil {
+			// The schedule itself is live and firing forward; only catch-up failed, so
+			// surface the error without tearing down an otherwise healthy trigger.
+			return nil, fmt.Errorf("schedule %s created but catch-up backfill failed: %w", scheduleID, err)
+		}
 	}
 
 	return &clientInterface.WorkflowExecution{
 		ID:    scheduleID,
 		RunID: "", // Schedules don't have runIDs
 	}, nil
+}
+
+// backfillSchedule replays the occurrences the schedule would have taken between
+// catchUpFrom and now, one action each.
+//
+// ScheduleSpec.StartAt cannot do this - it only filters out times before it, and
+// CatchupWindow covers server downtime rather than a backdated start - so the
+// backfill API is the mechanism that actually replays a historical range.
+//
+// Overlap is overridden to BUFFER_ALL for this request only: the schedule's
+// steady-state SKIP policy would drop nearly every occurrence in the burst, since
+// backfilled actions are taken as if their time passed all at once.
+//
+// BUFFER_ALL is also what keeps the replay inside the trigger's maxConcurrency budget.
+// That setting bounds parallel pipeline runs *within* one CronTrigger execution, so the
+// peak during a backfill is (concurrent occurrences) x maxConcurrency. BUFFER_ALL pins
+// the first term to 1, landing peak concurrency exactly on maxConcurrency.
+//
+// Do not "use the spare capacity" by switching to ALLOW_ALL when maxConcurrency > 1:
+// that runs every occurrence at once, making peak N x maxConcurrency - a 24-tick catch-up
+// at maxConcurrency 3 would put 72 pipeline runs in flight. Temporal's overlap policies
+// are not numeric, so there is no setting for "at most N occurrences"; serializing them
+// is the only way to hold the bound.
+func backfillSchedule(ctx context.Context, handle temporalClient.ScheduleHandle, catchUpFrom time.Time) error {
+	return handle.Backfill(ctx, temporalClient.ScheduleBackfillOptions{
+		Backfill: []temporalClient.ScheduleBackfill{
+			{
+				Start:   catchUpFrom,
+				End:     time.Now(),
+				Overlap: temporalEnumsV1.SCHEDULE_OVERLAP_POLICY_BUFFER_ALL,
+			},
+		},
+	})
 }
 
 // GetWorkflowExecutionInfo gets the execution info of a workflow

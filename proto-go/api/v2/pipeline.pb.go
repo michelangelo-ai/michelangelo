@@ -3333,6 +3333,9 @@ spec:
                           properties:
                             cron:
                               type: string
+                            startTime:
+                              format: date-time
+                              type: string
                           type: object
                         intervalSchedule:
                           properties:

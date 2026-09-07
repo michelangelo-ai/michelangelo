@@ -13,6 +13,9 @@ type StartWorkflowOptions struct {
 	CronSchedule                    string
 	// StartPaused creates a recurring schedule without allowing its first action to fire.
 	StartPaused bool
+	// CatchUpFrom backfills the schedule's missed occurrences from this time up to
+	// schedule creation, one action per occurrence. Zero means no catch-up.
+	CatchUpFrom time.Time
 }
 
 type WorkflowExecutionStatus int32

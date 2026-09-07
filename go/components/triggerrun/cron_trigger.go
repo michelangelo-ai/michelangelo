@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-logr/logr"
 	gogoproto "github.com/gogo/protobuf/proto"
+	pbtypes "github.com/gogo/protobuf/types"
 	clientInterface "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	k8stypes "k8s.io/apimachinery/pkg/types"
@@ -61,6 +62,14 @@ func (r *cronTrigger) Run(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2p
 		Name:      triggerRun.Name,
 	})
 	wid := generateWorkflowID(triggerRun)
+	catchUpFrom, err := cronCatchUpFrom(triggerRun.Spec.Trigger.GetCronSchedule())
+	if err != nil {
+		return v2pb.TriggerRunStatus{
+				ErrorMessage: err.Error(),
+				State:        v2pb.TRIGGER_RUN_STATE_FAILED,
+			}, fmt.Errorf("resolve catch-up start for trigger %s/%s: %w",
+				triggerRun.Namespace, triggerRun.Name, err)
+	}
 	opt := clientInterface.StartWorkflowOptions{
 		ID:                              wid,
 		TaskList:                        "trigger_run",
@@ -68,6 +77,7 @@ func (r *cronTrigger) Run(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2p
 		DecisionTaskStartToCloseTimeout: 30 * time.Second,
 		CronSchedule:                    triggerRun.Spec.Trigger.GetCronSchedule().GetCron(),
 		StartPaused:                     triggerRun.Spec.Action == v2pb.TRIGGER_RUN_ACTION_PAUSE,
+		CatchUpFrom:                     catchUpFrom,
 	}
 	domain := r.WorkflowClient.GetDomain()
 	rid, err := getWorkflowOpenRunID(ctx, wid, r.WorkflowClient, domain)
@@ -146,6 +156,32 @@ func (r *cronTrigger) Run(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2p
 		status.State = v2pb.TRIGGER_RUN_STATE_PAUSED
 	}
 	return status, nil
+}
+
+// maxCatchUpLookback bounds how far back a cron trigger may catch up. A mistyped
+// year on a frequent cron would otherwise enqueue thousands of pipeline runs, so an
+// over-long window is rejected rather than silently clamped.
+const maxCatchUpLookback = 30 * 24 * time.Hour
+
+// cronCatchUpFrom resolves the schedule's catch-up start time, returning the zero
+// time when no catch-up is requested.
+//
+// The explicit nil check is required: types.TimestampFromProto maps a nil timestamp
+// to the Unix epoch, which would read as a request to catch up from 1970.
+func cronCatchUpFrom(cronSchedule *v2pb.CronSchedule) (time.Time, error) {
+	if cronSchedule.GetStartTime() == nil {
+		return time.Time{}, nil
+	}
+	startTime, err := pbtypes.TimestampFromProto(cronSchedule.GetStartTime())
+	if err != nil {
+		return time.Time{}, fmt.Errorf("invalid cron schedule startTime: %w", err)
+	}
+	if lookback := time.Since(startTime); lookback > maxCatchUpLookback {
+		return time.Time{}, fmt.Errorf(
+			"cron schedule startTime %s is %s in the past, exceeding the %s catch-up limit",
+			startTime.UTC().Format(time.RFC3339), lookback.Truncate(time.Hour), maxCatchUpLookback)
+	}
+	return startTime, nil
 }
 
 func recurringTriggerStatus(

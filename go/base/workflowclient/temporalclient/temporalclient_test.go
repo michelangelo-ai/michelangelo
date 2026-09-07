@@ -20,6 +20,9 @@ import (
 	temporalMocks "go.temporal.io/sdk/mocks"
 )
 
+// _catchUpFrom is a fixed point in the past used by the schedule catch-up tests.
+var _catchUpFrom = time.Now().Add(-3 * time.Hour).UTC().Truncate(time.Second)
+
 func TestStartWorkflow(t *testing.T) {
 	testCases := []struct {
 		name     string
@@ -583,6 +586,81 @@ func TestCreateScheduleForCron(t *testing.T) {
 			expectedID:    "test-workflow-schedule",
 			expectedRunID: "",
 			errMsg:        "",
+		},
+		{
+			name: "success - past catch-up start backfills missed occurrences",
+			options: clientInterface.StartWorkflowOptions{
+				ID:           "catchup-workflow",
+				TaskList:     "test-task-list",
+				CronSchedule: "0 * * * *",
+				CatchUpFrom:  _catchUpFrom,
+			},
+			workflowName: "test-workflow-name",
+			args:         []interface{}{"arg1"},
+			mockFunc: func(mockClient *temporalMocks.Client, mockScheduleClient *temporalMocks.ScheduleClient, mockScheduleHandle *temporalMocks.ScheduleHandle) {
+				mockClient.On("ScheduleClient").Return(mockScheduleClient)
+				mockScheduleClient.On("GetHandle", mock.Anything, "catchup-workflow-schedule").Return(mockScheduleHandle)
+				mockScheduleHandle.On("Describe", mock.Anything).Return(nil, fmt.Errorf("schedule not found"))
+				// The schedule keeps its steady-state SKIP policy; only the backfill
+				// request overrides overlap to BUFFER_ALL.
+				mockScheduleClient.On("Create", mock.Anything, mock.MatchedBy(func(options temporalClient.ScheduleOptions) bool {
+					return options.Overlap == temporalEnumsV1.SCHEDULE_OVERLAP_POLICY_SKIP &&
+						options.Spec.StartAt.IsZero()
+				})).Return(mockScheduleHandle, nil)
+				mockScheduleHandle.On("Backfill", mock.Anything, mock.MatchedBy(func(options temporalClient.ScheduleBackfillOptions) bool {
+					if len(options.Backfill) != 1 {
+						return false
+					}
+					backfill := options.Backfill[0]
+					return backfill.Start.Equal(_catchUpFrom) &&
+						backfill.End.After(_catchUpFrom) &&
+						backfill.Overlap == temporalEnumsV1.SCHEDULE_OVERLAP_POLICY_BUFFER_ALL
+				})).Return(nil)
+			},
+			expectedID:    "catchup-workflow-schedule",
+			expectedRunID: "",
+			errMsg:        "",
+		},
+		{
+			name: "catch-up skipped when schedule starts paused",
+			options: clientInterface.StartWorkflowOptions{
+				ID:           "paused-catchup-workflow",
+				TaskList:     "test-task-list",
+				CronSchedule: "0 * * * *",
+				CatchUpFrom:  _catchUpFrom,
+				StartPaused:  true,
+			},
+			workflowName: "test-workflow-name",
+			args:         []interface{}{"arg1"},
+			mockFunc: func(mockClient *temporalMocks.Client, mockScheduleClient *temporalMocks.ScheduleClient, mockScheduleHandle *temporalMocks.ScheduleHandle) {
+				mockClient.On("ScheduleClient").Return(mockScheduleClient)
+				mockScheduleClient.On("GetHandle", mock.Anything, "paused-catchup-workflow-schedule").Return(mockScheduleHandle)
+				mockScheduleHandle.On("Describe", mock.Anything).Return(nil, fmt.Errorf("schedule not found"))
+				mockScheduleClient.On("Create", mock.Anything, mock.Anything).Return(mockScheduleHandle, nil)
+				// No Backfill expectation: the strict mock fails the test if it is called.
+			},
+			expectedID:    "paused-catchup-workflow-schedule",
+			expectedRunID: "",
+			errMsg:        "",
+		},
+		{
+			name: "error - backfill failure is surfaced",
+			options: clientInterface.StartWorkflowOptions{
+				ID:           "failing-catchup-workflow",
+				TaskList:     "test-task-list",
+				CronSchedule: "0 * * * *",
+				CatchUpFrom:  _catchUpFrom,
+			},
+			workflowName: "test-workflow-name",
+			args:         []interface{}{"arg1"},
+			mockFunc: func(mockClient *temporalMocks.Client, mockScheduleClient *temporalMocks.ScheduleClient, mockScheduleHandle *temporalMocks.ScheduleHandle) {
+				mockClient.On("ScheduleClient").Return(mockScheduleClient)
+				mockScheduleClient.On("GetHandle", mock.Anything, "failing-catchup-workflow-schedule").Return(mockScheduleHandle)
+				mockScheduleHandle.On("Describe", mock.Anything).Return(nil, fmt.Errorf("schedule not found"))
+				mockScheduleClient.On("Create", mock.Anything, mock.Anything).Return(mockScheduleHandle, nil)
+				mockScheduleHandle.On("Backfill", mock.Anything, mock.Anything).Return(fmt.Errorf("backfill rejected"))
+			},
+			errMsg: "catch-up backfill failed",
 		},
 	}
 
