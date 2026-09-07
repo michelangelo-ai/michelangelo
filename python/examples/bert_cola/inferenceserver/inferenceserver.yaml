@@ -1,0 +1,37 @@
+apiVersion: michelangelo.api/v2
+kind: InferenceServer
+metadata:
+  name: bert-cola-is
+  namespace: ma-dev-test
+  labels:
+    app: bert-cola
+spec:
+  tenancyType: TENANCY_TYPE_DEDICATED
+  backendType: BACKEND_TYPE_TRITON
+  ownerSpec:
+    tier: 4
+  initSpec:
+    resourceSpec:
+      cpu: 1
+      memory: "2Gi"
+    servingSpec:
+      version: "latest"
+      # Installed into the Triton pod via an init container -- see
+      # ServingSpec.python_dependencies. Needed by the custom python-backend
+      # package assembler.py produces (imports torch/transformers at load
+      # time, which the stock Triton image doesn't have).
+      pythonDependencies:
+        - "torch==2.4.1"
+        - "transformers==4.44.2"
+    numInstances: 1
+  decomSpec:
+    decommission: false
+  owner:
+    name: "example-owner"
+  clusterTargets:
+  - clusterId: michelangelo-sandbox
+    kubernetes:
+      host: https://kubernetes.default.svc
+      port: "443"
+      tokenTag: cluster-michelangelo-sandbox-is-token
+      caDataTag: cluster-michelangelo-sandbox-ca-data

@@ -41,3 +41,16 @@ assembler path -- BERT's multi-input `forward()` isn't TorchScript-friendly),
 and `push_step` registers it in a model registry (`InMemoryRegistryClient` by
 default; set `REGISTRY_ENDPOINT` for a real registry). Set `AWS_ENDPOINT_URL`
 to push to MinIO/S3-compatible storage instead of a local temp directory.
+
+## Deploying to Triton
+
+`inferenceserver/` holds this example's deploy manifests. Rather than a
+custom serving image, `inferenceserver.yaml` declares the packages the
+custom python-backend `assembler.py` produces needs
+(`servingSpec.pythonDependencies`) -- the Triton pod installs them into a
+shared volume via an init container at startup, so no Dockerfile, registry,
+or CI build is required.
+
+To deploy: apply `inferenceserver/inferenceserver.yaml`, then
+`inferenceserver/deployment.yaml` with `desiredRevision.name` set to the
+model name printed by a real `push_step` run.
