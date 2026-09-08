@@ -17,7 +17,7 @@ YAML is used throughout the repo for build configuration, CI/CD pipelines, linti
 | `go/.golangci.yml` | Go linting rules for golangci-lint: enabled linters, per-linter settings, excluded paths |
 | `.github/codecov.yml` | Codecov settings for test coverage reporting |
 | `.github/workflows/` | GitHub Actions CI/CD pipelines — build, test, lint, docs |
-| `.bazelversion` | Pins the Bazel version for the repo (currently 7.4.1) |
+| `.bazelversion` | Pins the Bazel version for the repo (currently 8.8.0) |
 
 ## Go Linting (golangci-lint)
 
