@@ -8,6 +8,7 @@ import (
 	baseconfig "github.com/michelangelo-ai/michelangelo/go/base/config"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	"github.com/michelangelo-ai/michelangelo/go/base/zapfx"
+	deploymentapihook "github.com/michelangelo-ai/michelangelo/go/components/deployment/apihook"
 	modelapihook "github.com/michelangelo-ai/michelangelo/go/components/model/apihook"
 	pipelinerunapihook "github.com/michelangelo-ai/michelangelo/go/components/pipelinerun/apihook"
 	projectapihook "github.com/michelangelo-ai/michelangelo/go/components/project/apihook"
@@ -59,6 +60,9 @@ func opts() fx.Option {
 		fx.Invoke(func(logger *zap.Logger, apiHandler api.Handler, conf apihandler.Config) {
 			modelapihook.RegisterModelAPIHook(logger, apiHandler, conf.PipelineRunDefaultEnvironment)
 		}),
+		// Populate Deployment.Spec.ModelFamily from the desired Model at
+		// create/update time, and reject rollouts that would change it.
+		fx.Invoke(deploymentapihook.RegisterDeploymentAPIHook),
 		v2pb.CachedOutputSvcModule,
 		v2pb.ClusterSvcModule,
 		v2pb.DeploymentSvcModule,
