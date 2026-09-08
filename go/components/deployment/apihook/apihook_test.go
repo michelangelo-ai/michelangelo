@@ -19,15 +19,20 @@ import (
 	v2 "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
+// Shared fixtures for the hook's tests. Each concern's own behaviour is tested
+// alongside its source file (e.g. model_family_test.go); this file covers the
+// request plumbing in apihook.go.
+
 const (
-	testNamespace = "test-namespace"
-	testModel     = "bert-cola-38"
-	testFamily    = "bert-cola"
+	testNamespace  = "test-namespace"
+	testDeployment = "my-deployment"
+	testModel      = "bert-cola-38"
+	testFamily     = "bert-cola"
 )
 
 func newDeployment(modelFamily *apipb.ResourceIdentifier) *v2.Deployment {
 	return &v2.Deployment{
-		ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "my-deployment"},
+		ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testDeployment},
 		Spec: v2.DeploymentSpec{
 			DesiredRevision: &apipb.ResourceIdentifier{Namespace: testNamespace, Name: testModel},
 			ModelFamily:     modelFamily,
@@ -53,7 +58,7 @@ func expectGetModel(mockHandler *apimocks.MockHandler, familyName string) {
 // expectGetDeployment stubs the existing-Deployment lookup done by BeforeUpdate.
 func expectGetDeployment(mockHandler *apimocks.MockHandler, familyName string) {
 	mockHandler.EXPECT().
-		Get(gomock.Any(), testNamespace, "my-deployment", gomock.Any(), gomock.AssignableToTypeOf(&v2.Deployment{})).
+		Get(gomock.Any(), testNamespace, testDeployment, gomock.Any(), gomock.AssignableToTypeOf(&v2.Deployment{})).
 		DoAndReturn(func(_ context.Context, _, _ string, _ *metav1.GetOptions, obj interface{}) error {
 			existing := obj.(*v2.Deployment)
 			if familyName != "" {
@@ -61,71 +66,6 @@ func expectGetDeployment(mockHandler *apimocks.MockHandler, familyName string) {
 			}
 			return nil
 		})
-}
-
-func TestBeforeCreate_PopulatesModelFamilyFromModel(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	mockHandler := apimocks.NewMockHandler(ctrl)
-	expectGetModel(mockHandler, testFamily)
-
-	hook := apiHook{logger: zap.NewNop(), apiHandler: mockHandler}
-	request := &v2.CreateDeploymentRequest{Deployment: newDeployment(nil)}
-
-	err := hook.BeforeCreate(context.Background(), request)
-
-	require.NoError(t, err)
-	assert.Equal(t, &apipb.ResourceIdentifier{Namespace: testNamespace, Name: testFamily},
-		request.Deployment.Spec.ModelFamily)
-}
-
-func TestBeforeCreate_KeepsMatchingRequestedFamily(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	mockHandler := apimocks.NewMockHandler(ctrl)
-	expectGetModel(mockHandler, testFamily)
-
-	hook := apiHook{logger: zap.NewNop(), apiHandler: mockHandler}
-	request := &v2.CreateDeploymentRequest{
-		Deployment: newDeployment(&apipb.ResourceIdentifier{Name: testFamily}),
-	}
-
-	err := hook.BeforeCreate(context.Background(), request)
-
-	require.NoError(t, err)
-	assert.Equal(t, testFamily, request.Deployment.Spec.ModelFamily.GetName())
-	// The namespace is filled in from the Model's family reference.
-	assert.Equal(t, testNamespace, request.Deployment.Spec.ModelFamily.GetNamespace())
-}
-
-func TestBeforeCreate_RejectsMismatchedRequestedFamily(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	mockHandler := apimocks.NewMockHandler(ctrl)
-	expectGetModel(mockHandler, testFamily)
-
-	hook := apiHook{logger: zap.NewNop(), apiHandler: mockHandler}
-	request := &v2.CreateDeploymentRequest{
-		Deployment: newDeployment(&apipb.ResourceIdentifier{Name: "other-family"}),
-	}
-
-	err := hook.BeforeCreate(context.Background(), request)
-
-	require.Error(t, err)
-	assert.Equal(t, codes.InvalidArgument, status.Code(err))
-	assert.Contains(t, err.Error(), "does not match the model family")
-}
-
-func TestBeforeCreate_NoDesiredRevisionIsNoop(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	mockHandler := apimocks.NewMockHandler(ctrl) // no Get expected
-
-	hook := apiHook{logger: zap.NewNop(), apiHandler: mockHandler}
-	deployment := newDeployment(nil)
-	deployment.Spec.DesiredRevision = nil
-	request := &v2.CreateDeploymentRequest{Deployment: deployment}
-
-	err := hook.BeforeCreate(context.Background(), request)
-
-	require.NoError(t, err)
-	assert.Nil(t, request.Deployment.Spec.ModelFamily)
 }
 
 func TestBeforeCreate_NilDeploymentIsNoop(t *testing.T) {
@@ -136,143 +76,36 @@ func TestBeforeCreate_NilDeploymentIsNoop(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestBeforeCreate_ModelWithoutFamilyLeavesFamilyUnset(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	mockHandler := apimocks.NewMockHandler(ctrl)
-	expectGetModel(mockHandler, "")
+func TestBeforeUpdate_NilDeploymentIsNoop(t *testing.T) {
+	hook := apiHook{logger: zap.NewNop()}
 
-	hook := apiHook{logger: zap.NewNop(), apiHandler: mockHandler}
-	request := &v2.CreateDeploymentRequest{Deployment: newDeployment(nil)}
+	err := hook.BeforeUpdate(context.Background(), &v2.UpdateDeploymentRequest{})
 
-	err := hook.BeforeCreate(context.Background(), request)
-
-	require.NoError(t, err)
-	assert.Nil(t, request.Deployment.Spec.ModelFamily)
+	assert.NoError(t, err)
 }
 
-func TestBeforeCreate_ModelNotFoundIsNotAnError(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	mockHandler := apimocks.NewMockHandler(ctrl)
-	mockHandler.EXPECT().
-		Get(gomock.Any(), testNamespace, testModel, gomock.Any(), gomock.Any()).
-		Return(status.Error(codes.NotFound, "model not found"))
-
-	hook := apiHook{logger: zap.NewNop(), apiHandler: mockHandler}
-	request := &v2.CreateDeploymentRequest{Deployment: newDeployment(nil)}
-
-	err := hook.BeforeCreate(context.Background(), request)
-
-	// The controller reports a missing model on the AssetsPrepared condition;
-	// blocking the write here would hide that signal.
-	require.NoError(t, err)
-	assert.Nil(t, request.Deployment.Spec.ModelFamily)
-}
-
-func TestBeforeCreate_ModelGetErrorIsReturned(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	mockHandler := apimocks.NewMockHandler(ctrl)
-	mockHandler.EXPECT().
-		Get(gomock.Any(), testNamespace, testModel, gomock.Any(), gomock.Any()).
-		Return(assert.AnError)
-
-	hook := apiHook{logger: zap.NewNop(), apiHandler: mockHandler}
-	request := &v2.CreateDeploymentRequest{Deployment: newDeployment(nil)}
-
-	err := hook.BeforeCreate(context.Background(), request)
-
-	require.Error(t, err)
-	assert.Equal(t, codes.Internal, status.Code(err))
-}
-
-func TestBeforeCreate_DefaultsModelNamespaceFromDeployment(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	mockHandler := apimocks.NewMockHandler(ctrl)
-	expectGetModel(mockHandler, testFamily)
-
-	hook := apiHook{logger: zap.NewNop(), apiHandler: mockHandler}
-	deployment := newDeployment(nil)
-	deployment.Spec.DesiredRevision = &apipb.ResourceIdentifier{Name: testModel}
-	request := &v2.CreateDeploymentRequest{Deployment: deployment}
-
-	err := hook.BeforeCreate(context.Background(), request)
-
-	require.NoError(t, err)
-	assert.Equal(t, testFamily, request.Deployment.Spec.ModelFamily.GetName())
-}
-
-func TestBeforeUpdate_BackfillsFamilyOnLegacyDeployment(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	mockHandler := apimocks.NewMockHandler(ctrl)
-	expectGetDeployment(mockHandler, "")
-	expectGetModel(mockHandler, testFamily)
-
-	hook := apiHook{logger: zap.NewNop(), apiHandler: mockHandler}
-	request := &v2.UpdateDeploymentRequest{Deployment: newDeployment(nil)}
-
-	err := hook.BeforeUpdate(context.Background(), request)
-
-	require.NoError(t, err)
-	assert.Equal(t, testFamily, request.Deployment.Spec.ModelFamily.GetName())
-}
-
-func TestBeforeUpdate_AllowsNewModelInSameFamily(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	mockHandler := apimocks.NewMockHandler(ctrl)
-	expectGetDeployment(mockHandler, testFamily)
-	expectGetModel(mockHandler, testFamily)
-
-	hook := apiHook{logger: zap.NewNop(), apiHandler: mockHandler}
-	request := &v2.UpdateDeploymentRequest{
-		Deployment: newDeployment(&apipb.ResourceIdentifier{Namespace: testNamespace, Name: testFamily}),
-	}
-
-	err := hook.BeforeUpdate(context.Background(), request)
-
-	require.NoError(t, err)
-	assert.Equal(t, testFamily, request.Deployment.Spec.ModelFamily.GetName())
-}
-
-func TestBeforeUpdate_RejectsModelFromDifferentFamily(t *testing.T) {
+func TestBeforeUpdate_PassesExistingDeploymentToSteps(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockHandler := apimocks.NewMockHandler(ctrl)
 	expectGetDeployment(mockHandler, testFamily)
 	expectGetModel(mockHandler, "other-family")
 
 	hook := apiHook{logger: zap.NewNop(), apiHandler: mockHandler}
-	// The client echoes back the stored family, as the Studio update form does.
-	request := &v2.UpdateDeploymentRequest{
-		Deployment: newDeployment(&apipb.ResourceIdentifier{Namespace: testNamespace, Name: testFamily}),
-	}
+	request := &v2.UpdateDeploymentRequest{Deployment: newDeployment(nil)}
 
 	err := hook.BeforeUpdate(context.Background(), request)
 
+	// Only a step that saw the stored Deployment can detect the family change.
 	require.Error(t, err)
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
-	assert.Contains(t, err.Error(), "cannot be changed")
-}
-
-func TestBeforeUpdate_RetirementSkipsModelLookup(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	mockHandler := apimocks.NewMockHandler(ctrl)
-	expectGetDeployment(mockHandler, testFamily)
-
-	hook := apiHook{logger: zap.NewNop(), apiHandler: mockHandler}
-	deployment := newDeployment(&apipb.ResourceIdentifier{Namespace: testNamespace, Name: testFamily})
-	deployment.Spec.DesiredRevision = nil
-	request := &v2.UpdateDeploymentRequest{Deployment: deployment}
-
-	err := hook.BeforeUpdate(context.Background(), request)
-
-	require.NoError(t, err)
-	assert.Equal(t, testFamily, request.Deployment.Spec.ModelFamily.GetName())
 }
 
 func TestBeforeUpdate_ExistingDeploymentNotFoundFallsBackToCreateBehaviour(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockHandler := apimocks.NewMockHandler(ctrl)
 	mockHandler.EXPECT().
-		Get(gomock.Any(), testNamespace, "my-deployment", gomock.Any(), gomock.AssignableToTypeOf(&v2.Deployment{})).
-		Return(apiErrors.NewNotFound(schema.GroupResource{Resource: "deployments"}, "my-deployment"))
+		Get(gomock.Any(), testNamespace, testDeployment, gomock.Any(), gomock.AssignableToTypeOf(&v2.Deployment{})).
+		Return(apiErrors.NewNotFound(schema.GroupResource{Resource: "deployments"}, testDeployment))
 	expectGetModel(mockHandler, testFamily)
 
 	hook := apiHook{logger: zap.NewNop(), apiHandler: mockHandler}
@@ -288,7 +121,7 @@ func TestBeforeUpdate_ExistingDeploymentGetErrorIsReturned(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockHandler := apimocks.NewMockHandler(ctrl)
 	mockHandler.EXPECT().
-		Get(gomock.Any(), testNamespace, "my-deployment", gomock.Any(), gomock.AssignableToTypeOf(&v2.Deployment{})).
+		Get(gomock.Any(), testNamespace, testDeployment, gomock.Any(), gomock.AssignableToTypeOf(&v2.Deployment{})).
 		Return(assert.AnError)
 
 	hook := apiHook{logger: zap.NewNop(), apiHandler: mockHandler}
@@ -298,14 +131,6 @@ func TestBeforeUpdate_ExistingDeploymentGetErrorIsReturned(t *testing.T) {
 
 	require.Error(t, err)
 	assert.Equal(t, codes.Internal, status.Code(err))
-}
-
-func TestBeforeUpdate_NilDeploymentIsNoop(t *testing.T) {
-	hook := apiHook{logger: zap.NewNop()}
-
-	err := hook.BeforeUpdate(context.Background(), &v2.UpdateDeploymentRequest{})
-
-	assert.NoError(t, err)
 }
 
 func TestRegisterDeploymentAPIHook(t *testing.T) {

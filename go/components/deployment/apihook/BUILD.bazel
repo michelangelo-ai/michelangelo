@@ -23,7 +23,10 @@ go_library(
 
 go_test(
     name = "go_default_test",
-    srcs = ["apihook_test.go"],
+    srcs = [
+        "apihook_test.go",
+        "model_family_test.go",
+    ],
     embed = [":go_default_library"],
     deps = [
         "//go/api/apimocks:go_default_library",

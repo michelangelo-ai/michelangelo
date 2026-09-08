@@ -4,8 +4,8 @@
 // (Studio, CLI, direct API callers) should get for free. It follows the shape
 // of go/components/model/apihook and go/components/pipelinerun/apihook.
 //
-// Each concern lives in its own file and is registered as a mutator in
-// mutators() below; apihook.go only owns the request plumbing.
+// Each concern lives in its own file and is called from mutate() below;
+// apihook.go only owns the request plumbing.
 package apihook
 
 import (
@@ -36,19 +36,6 @@ type apiHook struct {
 	apiHandler api.Handler
 }
 
-// mutator defaults or validates one aspect of an incoming Deployment. existing
-// is the Deployment currently stored on the server, or nil on create (and on
-// update when it cannot be found). A mutator may edit deployment in place; an
-// error rejects the whole request.
-type mutator func(ctx context.Context, deployment *v2.Deployment, existing *v2.Deployment) error
-
-// mutators lists the steps applied to every create and update, in order.
-func (a apiHook) mutators() []mutator {
-	return []mutator{
-		a.fulfillModelFamily,
-	}
-}
-
 func (a apiHook) BeforeCreate(ctx context.Context, request *v2.CreateDeploymentRequest) error {
 	return a.mutate(ctx, request.Deployment, nil)
 }
@@ -72,14 +59,16 @@ func (a apiHook) BeforeUpdate(ctx context.Context, request *v2.UpdateDeploymentR
 	return a.mutate(ctx, deployment, existing)
 }
 
+// mutate applies every defaulting and validation step to an incoming
+// Deployment, in order. existing is the Deployment currently stored on the
+// server, or nil on create (and on update when it cannot be found). Steps edit
+// deployment in place; the first error rejects the whole request.
 func (a apiHook) mutate(ctx context.Context, deployment *v2.Deployment, existing *v2.Deployment) error {
 	if deployment == nil {
 		return nil
 	}
-	for _, m := range a.mutators() {
-		if err := m(ctx, deployment, existing); err != nil {
-			return err
-		}
+	if err := a.fulfillModelFamily(ctx, deployment, existing); err != nil {
+		return err
 	}
 	return nil
 }
