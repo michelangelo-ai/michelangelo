@@ -99,7 +99,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		}
 		// Requeue for errors other than not found
 		logger.Error(err, "failed to get ray cluster")
-		return ctrl.Result{RequeueAfter: requeueAfter}, err
+		return ctrl.Result{}, err
 	}
 
 	// Create a copy of the original RayCluster for comparison
@@ -111,7 +111,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		err := r.processClusterTermination(ctx, &rayCluster, logger)
 		if err != nil {
 			logger.Error(err, "cluster termination could not be processed")
-			return ctrl.Result{RequeueAfter: requeueAfter}, err
+			return ctrl.Result{}, err
 		}
 		logger.Info("processed cluster termination")
 		return ctrl.Result{}, nil
@@ -121,7 +121,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	err := r.enqueueIfRequired(ctx, &rayCluster, logger)
 	if err != nil {
 		logger.Error(err, "failed to enqueue cluster")
-		return ctrl.Result{RequeueAfter: requeueAfter}, err
+		return ctrl.Result{}, err
 	}
 
 	// Wait for scheduling
@@ -162,9 +162,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 					&metav1.UpdateOptions{},
 				); err != nil {
 					logger.Error(err, "failed to update status after creation failure")
+					return ctrl.Result{}, err
 				}
 
-				return ctrl.Result{RequeueAfter: requeueAfter}, err
+				return ctrl.Result{RequeueAfter: requeueAfter}, nil
 			}
 		}
 
@@ -185,7 +186,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			&metav1.UpdateOptions{},
 		); err != nil {
 			logger.Error(err, "failed to update launched condition")
-			return ctrl.Result{RequeueAfter: requeueAfter}, err
+			return ctrl.Result{}, err
 		}
 		logger.Info("cluster creation initiated")
 		return ctrl.Result{RequeueAfter: requeueAfter}, nil
@@ -200,12 +201,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			return ctrl.Result{RequeueAfter: requeueAfter}, nil
 		}
 		logger.Error(err, "failed to get cluster status")
-		return ctrl.Result{RequeueAfter: requeueAfter}, err
+		return ctrl.Result{}, err
 	}
 
 	if err := r.applyRayClusterStatus(&rayCluster, clusterStatus, logger, &res); err != nil {
 		logger.Error(err, "failed to apply cluster status")
-		return ctrl.Result{RequeueAfter: requeueAfter}, err
+		return ctrl.Result{}, err
 	}
 
 	// Update the RayCluster status if any changes occurred
@@ -219,7 +220,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			&metav1.UpdateOptions{},
 		); err != nil {
 			logger.Error(err, "failed to update ray cluster status")
-			return res, fmt.Errorf("update ray cluster status for %q: %w", req.NamespacedName, err)
+			return ctrl.Result{}, fmt.Errorf("update ray cluster status for %q: %w", req.NamespacedName, err)
 		}
 	}
 
