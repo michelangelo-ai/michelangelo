@@ -778,74 +778,39 @@ describe('Deployment update action', () => {
   const DEPLOYMENT_NAME = 'test-update-action';
   const NAMESPACE = 'ma-dev-test';
 
-  function buildRecord() {
-    return {
-      metadata: {
-        name: DEPLOYMENT_NAME,
-        namespace: NAMESPACE,
-        creationTimestamp: { seconds: 1757019547 },
-      },
-      spec: {
-        desiredRevision: { name: 'bert-cola-37', namespace: NAMESPACE },
-        target: { case: 'inferenceServer', value: { name: 'inference-server-example' } },
-        strategy: { rolloutStrategy: { case: 'rolling', value: { incrementPercentage: 10 } } },
-        definition: { type: 1 },
-      },
-      status: { currentRevision: { name: 'bert-cola-37', namespace: NAMESPACE } },
-    };
-  }
-
-  function buildRequestCapture() {
-    const submitted: Record<string, unknown>[] = [];
-    const request = (name: string, payload: unknown) => {
-      switch (name) {
-        case 'UpdateDeployment':
-          submitted.push(payload as Record<string, unknown>);
-          return Promise.resolve({
-            deployment: { metadata: { name: DEPLOYMENT_NAME, namespace: NAMESPACE } },
-          });
-        case 'GetModel':
-          return Promise.resolve({
-            model: { spec: { modelFamily: { name: 'bert-cola' } } },
-          });
-        case 'ListInferenceServer':
-          return Promise.resolve({
-            inferenceServerList: { items: [{ metadata: { name: 'inference-server-example' } }] },
-          });
-        case 'ListModelFamily':
-          return Promise.resolve({
-            modelFamilyList: {
-              items: [{ metadata: { name: 'bert-cola' }, spec: { name: 'bert-cola' } }],
-            },
-          });
-        case 'ListModel':
-          return Promise.resolve({
-            modelList: {
-              items: [
-                { metadata: { name: 'bert-cola-37' } },
-                { metadata: { name: 'bert-cola-38' } },
-              ],
-            },
-          });
-        default:
-          return Promise.resolve({});
-      }
-    };
-    return { submitted, request };
-  }
-
   async function openUpdateDialog(user: ReturnType<typeof userEvent.setup>) {
     await user.click(screen.getByRole('button', { name: 'Actions' }));
     await user.click(await screen.findByRole('option', { name: 'Update deployment' }));
     return screen.findByRole('dialog', { name: 'Update deployment' });
   }
 
+  /** Finds the payload sent in the (single) UpdateDeployment call. */
+  function getUpdateDeploymentPayload(request: ReturnType<typeof createQueryMockRouter>) {
+    const updateCall = vi.mocked(request).mock.calls.find(([name]) => name === 'UpdateDeployment');
+    expect(updateCall).toBeDefined();
+    return updateCall![1] as {
+      metadata: { name: string };
+      spec: {
+        desiredRevision?: { name?: string };
+        strategy?: { rolloutStrategy?: { case?: string } };
+        target?: { value?: { name?: string } };
+      };
+      status?: unknown;
+    };
+  }
+
   it('lists Update deployment as the first action in the menu', async () => {
     const user = userEvent.setup();
-    const { request } = buildRequestCapture();
+    const request = createQueryMockRouter({});
 
     render(
-      <InterpolatableActionsPopover actions={DEPLOYMENT_ACTIONS} record={buildRecord()} />,
+      <InterpolatableActionsPopover
+        actions={DEPLOYMENT_ACTIONS}
+        record={{
+          metadata: { name: DEPLOYMENT_NAME, namespace: NAMESPACE },
+          spec: { desiredRevision: { name: 'bert-cola-37', namespace: NAMESPACE } },
+        }}
+      />,
       buildWrapper([
         getBaseProviderWrapper(),
         getErrorProviderWrapper(),
@@ -864,10 +829,34 @@ describe('Deployment update action', () => {
 
   it('opens prefilled with name and inference server read-only', async () => {
     const user = userEvent.setup();
-    const { request } = buildRequestCapture();
+    const request = createQueryMockRouter({
+      GetModel: { model: { spec: { modelFamily: { name: 'bert-cola' } } } },
+      ListInferenceServer: {
+        inferenceServerList: { items: [{ metadata: { name: 'inference-server-example' } }] },
+      },
+      ListModelFamily: {
+        modelFamilyList: {
+          items: [{ metadata: { name: 'bert-cola' }, spec: { name: 'bert-cola' } }],
+        },
+      },
+      ListModel: {
+        modelList: {
+          items: [{ metadata: { name: 'bert-cola-37' } }, { metadata: { name: 'bert-cola-38' } }],
+        },
+      },
+    });
 
     render(
-      <InterpolatableActionsPopover actions={DEPLOYMENT_ACTIONS} record={buildRecord()} />,
+      <InterpolatableActionsPopover
+        actions={DEPLOYMENT_ACTIONS}
+        record={{
+          metadata: { name: DEPLOYMENT_NAME, namespace: NAMESPACE },
+          spec: {
+            desiredRevision: { name: 'bert-cola-37', namespace: NAMESPACE },
+            target: { case: 'inferenceServer', value: { name: 'inference-server-example' } },
+          },
+        }}
+      />,
       buildWrapper([
         getBaseProviderWrapper(),
         getErrorProviderWrapper(),
@@ -893,10 +882,34 @@ describe('Deployment update action', () => {
 
   it('locks the model family so only the model can be changed', async () => {
     const user = userEvent.setup();
-    const { request } = buildRequestCapture();
+    const request = createQueryMockRouter({
+      GetModel: { model: { spec: { modelFamily: { name: 'bert-cola' } } } },
+      ListInferenceServer: {
+        inferenceServerList: { items: [{ metadata: { name: 'inference-server-example' } }] },
+      },
+      ListModelFamily: {
+        modelFamilyList: {
+          items: [{ metadata: { name: 'bert-cola' }, spec: { name: 'bert-cola' } }],
+        },
+      },
+      ListModel: {
+        modelList: {
+          items: [{ metadata: { name: 'bert-cola-37' } }, { metadata: { name: 'bert-cola-38' } }],
+        },
+      },
+    });
 
     render(
-      <InterpolatableActionsPopover actions={DEPLOYMENT_ACTIONS} record={buildRecord()} />,
+      <InterpolatableActionsPopover
+        actions={DEPLOYMENT_ACTIONS}
+        record={{
+          metadata: { name: DEPLOYMENT_NAME, namespace: NAMESPACE },
+          spec: {
+            desiredRevision: { name: 'bert-cola-37', namespace: NAMESPACE },
+            target: { case: 'inferenceServer', value: { name: 'inference-server-example' } },
+          },
+        }}
+      />,
       buildWrapper([
         getBaseProviderWrapper(),
         getErrorProviderWrapper(),
@@ -928,10 +941,40 @@ describe('Deployment update action', () => {
 
   it('submits the full record with the newly selected model as desiredRevision', async () => {
     const user = userEvent.setup();
-    const { submitted, request } = buildRequestCapture();
+    const request = createQueryMockRouter({
+      UpdateDeployment: {
+        deployment: { metadata: { name: DEPLOYMENT_NAME, namespace: NAMESPACE } },
+      },
+      GetModel: { model: { spec: { modelFamily: { name: 'bert-cola' } } } },
+      ListInferenceServer: {
+        inferenceServerList: { items: [{ metadata: { name: 'inference-server-example' } }] },
+      },
+      ListModelFamily: {
+        modelFamilyList: {
+          items: [{ metadata: { name: 'bert-cola' }, spec: { name: 'bert-cola' } }],
+        },
+      },
+      ListModel: {
+        modelList: {
+          items: [{ metadata: { name: 'bert-cola-37' } }, { metadata: { name: 'bert-cola-38' } }],
+        },
+      },
+    });
 
     render(
-      <InterpolatableActionsPopover actions={DEPLOYMENT_ACTIONS} record={buildRecord()} />,
+      <InterpolatableActionsPopover
+        actions={DEPLOYMENT_ACTIONS}
+        record={{
+          metadata: { name: DEPLOYMENT_NAME, namespace: NAMESPACE },
+          spec: {
+            desiredRevision: { name: 'bert-cola-37', namespace: NAMESPACE },
+            target: { case: 'inferenceServer', value: { name: 'inference-server-example' } },
+            strategy: { rolloutStrategy: { case: 'rolling', value: { incrementPercentage: 10 } } },
+            definition: { type: 1 },
+          },
+          status: { currentRevision: { name: 'bert-cola-37', namespace: NAMESPACE } },
+        }}
+      />,
       buildWrapper([
         getBaseProviderWrapper(),
         getErrorProviderWrapper(),
@@ -950,17 +993,8 @@ describe('Deployment update action', () => {
     await user.click(await screen.findByRole('option', { name: 'bert-cola-38' }));
     await user.click(within(dialog).getByRole('button', { name: 'Update' }));
 
-    await waitFor(() => expect(submitted).toHaveLength(1));
+    const payload = await waitFor(() => getUpdateDeploymentPayload(request));
 
-    const payload = submitted[0] as {
-      metadata: { name: string };
-      spec: {
-        desiredRevision?: { name?: string };
-        strategy?: { rolloutStrategy?: { case?: string } };
-        target?: { value?: { name?: string } };
-      };
-      status?: unknown;
-    };
     expect(payload.spec.desiredRevision?.name).toBe('bert-cola-38');
     // Everything else on the record rides along unchanged.
     expect(payload.metadata.name).toBe(DEPLOYMENT_NAME);
