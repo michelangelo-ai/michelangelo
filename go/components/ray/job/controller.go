@@ -71,8 +71,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		if utils.IsNotFoundError(err) {
 			return ctrl.Result{}, nil
 		}
-		res.RequeueAfter = requeueAfter
-		return res, err
+		return ctrl.Result{}, err
 	}
 	// original copy of ray job to determine if we need to update the status
 	originalRayJob := rayJob.DeepCopy()
@@ -97,8 +96,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		err := r.Status().Update(ctx, &rayJob)
 		if err != nil {
 			logger.Error(err, "failed to update status")
-			res.RequeueAfter = requeueAfter
-			return res, err
+			return ctrl.Result{}, err
 		}
 	}
 
