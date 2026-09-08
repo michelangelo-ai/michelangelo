@@ -86,10 +86,12 @@ def set_ray_data_context(
         retried_io_errors if retried_io_errors is not None else RETRIED_IO_ERRORS
     )
     if extra_errors:
-        ctx.retried_io_errors = [
-            *ctx.retried_io_errors,
-            *extra_errors,
-        ]
+        # Ray's DataContext is a process-global singleton, so repeated calls in
+        # one driver process (retries, multiple pipeline steps) must not keep
+        # appending duplicate patterns onto it -- dedupe while preserving order.
+        ctx.retried_io_errors = list(
+            dict.fromkeys([*ctx.retried_io_errors, *extra_errors])
+        )
 
     # Cap the executor's buffered-block budget so readers backpressure instead of
     # racing an actor pool's warmup and OOM-killing the node. See the arg

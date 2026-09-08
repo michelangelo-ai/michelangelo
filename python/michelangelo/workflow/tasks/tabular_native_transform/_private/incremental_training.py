@@ -162,7 +162,17 @@ def load_incremental_artifacts(
 
 
 def _stats_keys_for_refit(transform_spec: TransformSpec) -> set[str]:
-    """Compute the feature-stats keys that must be removed for REFIT columns."""
+    """Compute the feature-stats keys to remove ahead of a selective refit.
+
+    Invalidates stats per transform *level*, not per individual REFIT layer:
+    every level that contains at least one REFIT layer has its numerical
+    stats removed in full, even for REUSE layers sharing that level. This
+    matches the internal SDK's existing behavior — a conservative-recompute
+    tradeoff, not a bug. A REUSE layer whose stats happen to live on the same
+    level as a REFIT layer will be recomputed unnecessarily rather than
+    reused; this keeps the merge logic simple (no per-layer stats
+    provenance) at the cost of some avoidable recomputation.
+    """
     keys: set[str] = set()
     for level in set(transform_spec.transform_levels.values()):
         specs = transform_spec.get_numerical_statistics_computation_specs(level)
@@ -238,9 +248,10 @@ def merge_specs_for_selective_refit(
             raise ConfigurationError(
                 f"Layer {layer_spec.name!r} (type={type(layer_spec).__name__}, "
                 f"input_cols={layer_spec.input_cols}, "
-                f"output_cols={layer_spec.output_cols}) has mode=REUSE but does "
-                "not exist in the base run. REUSE layers must match the base "
-                "run's transform spec by type, input_cols, and output_cols."
+                f"output_cols={layer_spec.output_cols}) has mode="
+                f"{layer_spec.mode.value} but does not exist in the base run. "
+                "Non-REFIT layers must match the base run's transform spec by "
+                "type, input_cols, and output_cols."
             )
 
     merged_layers: dict[str, TorchTransformLayerSpec] = {}
@@ -283,6 +294,8 @@ def merge_specs_for_selective_refit(
                     overlap,
                 )
 
+    # Per-level invalidation: a REUSE layer sharing a level with a REFIT layer
+    # also has its stats removed here (see _stats_keys_for_refit docstring).
     refit_stats_keys = _stats_keys_for_refit(base_spec)
     filtered_stats = {
         k: v for k, v in base_feature_stats.items() if k not in refit_stats_keys

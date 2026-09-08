@@ -205,7 +205,13 @@ class MergeSpecsForSelectiveRefitTest(TestCase):
         self.assertEqual(filtered_stats, {})
 
     def test_non_refit_layer_not_matching_base_raises(self):
-        """A non-REFIT config layer with no matching base layer raises."""
+        """A non-REFIT config layer with no matching base layer raises.
+
+        The unmatched layer's mode here defaults to INVALID (not set
+        explicitly) -- the error message must report the layer's actual
+        mode, not a hardcoded one, so this also guards against the message
+        claiming "mode=REUSE" for a layer that is not REUSE.
+        """
         base_spec = self._base_spec()
         config_spec = TransformSpec(
             raw_transform_specs={
@@ -218,10 +224,15 @@ class MergeSpecsForSelectiveRefitTest(TestCase):
                 ]
             }
         )
-        with self.assertRaises(ConfigurationError):
+        (unmatched_layer,) = config_spec.transform_specs.values()
+        self.assertEqual(unmatched_layer.mode, TransformerMode.INVALID)
+
+        with self.assertRaises(ConfigurationError) as ctx:
             incremental_training.merge_specs_for_selective_refit(
                 base_spec, config_spec, {}
             )
+        self.assertIn("mode=INVALID", str(ctx.exception))
+        self.assertNotIn("mode=REUSE", str(ctx.exception))
 
     def test_reuse_layer_consuming_refit_output_logs_warning(self):
         """A REUSE layer downstream of a REFIT layer merges without raising."""

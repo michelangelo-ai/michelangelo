@@ -78,3 +78,19 @@ class SetRayDataContextTest(TestCase):
         set_ray_data_context(wait_for_min_actors_s=30)
         ctx = ray.data.DataContext.get_current()
         self.assertEqual(ctx.wait_for_min_actors_s, 30)
+
+    def test_repeated_calls_do_not_duplicate_retried_io_errors(self):
+        """Calling twice with overlapping patterns does not grow the list unboundedly.
+
+        DataContext is a process-global singleton, so a driver process that
+        calls this more than once (retries, multiple pipeline steps) must not
+        accumulate duplicate patterns indefinitely.
+        """
+        ctx = ray.data.DataContext.get_current()
+        before = list(ctx.retried_io_errors)
+        set_ray_data_context(retried_io_errors=["shared error", "first-only error"])
+        set_ray_data_context(retried_io_errors=["shared error", "second-only error"])
+        self.assertEqual(
+            ctx.retried_io_errors,
+            [*before, "shared error", "first-only error", "second-only error"],
+        )

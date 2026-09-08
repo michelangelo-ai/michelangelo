@@ -134,8 +134,9 @@ class TabularNativeTransformConfig:
         incremental_training: Incremental training configuration.
 
     Example:
-        >>> TabularNativeTransformConfig(transform_spec={"transform_specs": []})
-        TabularNativeTransformConfig(transform_spec={'transform_specs': []}, ...)
+        ``TabularNativeTransformConfig(transform_spec={"transform_specs": []})``
+        runs with an empty inlined transform spec and every other setting at
+        its default.
     """
 
     transform_spec: str | dict | None = None

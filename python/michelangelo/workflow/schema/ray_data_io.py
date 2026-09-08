@@ -45,8 +45,8 @@ class ParquetReadConfig:
         arrow_parquet_args: Additional kwargs forwarded to PyArrow's reader.
 
     Example:
-        >>> ParquetReadConfig(num_cpus=2, shuffle="files")
-        ParquetReadConfig(num_cpus=2, ...)
+        ``ParquetReadConfig(num_cpus=2, shuffle="files")`` reserves 2 CPUs
+        per read worker and shuffles input file order.
     """
 
     num_cpus: float | None = None
@@ -124,8 +124,9 @@ class RayDataContextConfig:
             wait).
 
     Example:
-        >>> RayDataContextConfig(min_block_size=32 * 1024 * 1024)
-        RayDataContextConfig(min_block_size=33554432, ...)
+        ``RayDataContextConfig(min_block_size=32 * 1024 * 1024)`` sets a
+        32 MiB target minimum block size, leaving every other setting at
+        Ray's default.
     """
 
     min_block_size: int | None = None
