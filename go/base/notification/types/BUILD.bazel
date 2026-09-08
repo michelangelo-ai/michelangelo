@@ -6,6 +6,7 @@ go_library(
     importpath = "github.com/michelangelo-ai/michelangelo/go/base/notification/types",
     visibility = ["//visibility:public"],
     deps = [
+        "//go/api:go_default_library",
         "//proto/api/v2:go_default_library",
         "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
     ],
@@ -16,6 +17,7 @@ go_test(
     srcs = ["types_test.go"],
     embed = [":go_default_library"],
     deps = [
+        "//go/api:go_default_library",
         "//proto/api:go_default_library",
         "//proto/api/v2:go_default_library",
         "@com_github_stretchr_testify//assert:go_default_library",

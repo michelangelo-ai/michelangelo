@@ -24,15 +24,19 @@ import (
 const pipelineKind = "Pipeline"
 
 // RegisterPipelineRunAPIHook registers the API hook that stamps the owning
-// Pipeline as the controller ownerReference on PipelineRuns at creation, so a run
-// is never GC-eligible-but-unprotected. Resolving the owning Pipeline is
-// kind-specific and happens here; the shared stamping body lives in
-// cascadedelete.StampOwnerRefOnCreate.
-func RegisterPipelineRunAPIHook(logger *zap.Logger, apiHandler api.Handler, scheme *runtime.Scheme) {
+// Pipeline as the controller ownerReference on PipelineRuns at creation, and
+// stamps the owning Pipeline's type as the michelangelo/SourcePipelineType
+// label. Both are best-effort: if the owning Pipeline can't be resolved,
+// creation proceeds without them. It also defaults api.EnvironmentLabel when
+// the caller did not supply one. defaultEnv is the operator-configured
+// default environment label value (empty when unconfigured, in which case
+// api.UnspecifiedEnvironment is used instead).
+func RegisterPipelineRunAPIHook(logger *zap.Logger, apiHandler api.Handler, scheme *runtime.Scheme, defaultEnv string) {
 	v2.RegisterPipelineRunAPIHook(apiHook{
 		logger:     logger,
 		apiHandler: apiHandler,
 		scheme:     scheme,
+		defaultEnv: defaultEnv,
 	})
 }
 
@@ -41,9 +45,12 @@ type apiHook struct {
 	logger     *zap.Logger
 	apiHandler api.Handler
 	scheme     *runtime.Scheme
+	defaultEnv string
 }
 
 func (a apiHook) BeforeCreate(ctx context.Context, request *v2.CreatePipelineRunRequest) error {
+	setIfAbsent(request.PipelineRun, api.EnvironmentLabel, a.defaultEnvironment())
+
 	// Fetch the live Pipeline once when a pipeline ref is present. Used both to
 	// optionally pin status.latestRevision and to stamp ownerRef / notifications.
 	pipeline := a.getReferencedPipeline(ctx, request)
@@ -86,7 +93,27 @@ func (a apiHook) BeforeCreate(ctx context.Context, request *v2.CreatePipelineRun
 			zap.Int("count", len(pipeline.Spec.Notifications)))
 	}
 
+	api.StampSourcePipelineTypeLabelOnCreate(request.PipelineRun, pipeline.Spec.GetType().String())
+
 	return cascadedelete.StampOwnerRefOnCreate(ctx, a.logger, a.scheme, request.PipelineRun, pipeline)
+}
+
+// BeforeUpdate defaults api.EnvironmentLabel when the caller did not supply
+// one, the same as BeforeCreate. It is intentionally narrow: unlike Model's
+// BeforeUpdate, PipelineRun has no source resource to inherit the label
+// from, so this only ever fills in the configured default when the label is
+// absent and never overwrites a value the caller (or a prior update) set. It
+// also guards against a nil Annotations map, since callers/serialization can
+// leave it unset and later merges into the map would otherwise panic.
+func (a apiHook) BeforeUpdate(_ context.Context, request *v2.UpdatePipelineRunRequest) error {
+	if request.PipelineRun.Annotations == nil {
+		request.PipelineRun.Annotations = map[string]string{}
+		a.logger.Warn("BeforeUpdate: pipeline run annotations are nil, creating a new map",
+			zap.String("pipelinerun", request.PipelineRun.GetName()))
+	}
+
+	setIfAbsent(request.PipelineRun, api.EnvironmentLabel, a.defaultEnvironment())
+	return nil
 }
 
 // getReferencedPipeline loads Spec.Pipeline when set. Any Get failure (including
@@ -269,4 +296,22 @@ func (a apiHook) resolveRevision(ctx context.Context, request *v2.CreatePipeline
 		zap.String("pipelinerun", request.PipelineRun.GetName()))
 
 	return nil
+}
+
+// defaultEnvironment returns the configured default, or
+// api.UnspecifiedEnvironment when the operator has configured none.
+func (a apiHook) defaultEnvironment() string {
+	if a.defaultEnv == "" {
+		return api.UnspecifiedEnvironment
+	}
+	return a.defaultEnv
+}
+
+func setIfAbsent(run *v2.PipelineRun, key, value string) {
+	if run.ObjectMeta.Labels == nil {
+		run.ObjectMeta.Labels = map[string]string{}
+	}
+	if _, ok := run.ObjectMeta.Labels[key]; !ok {
+		run.ObjectMeta.Labels[key] = value
+	}
 }

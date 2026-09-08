@@ -15,7 +15,9 @@ from michelangelo.lib.model_manager._private.packager.torch_triton import (
     validate_model_class,
     validate_raw_model_package,
 )
-from michelangelo.lib.model_manager._private.schema.triton import validate_model_schema
+from michelangelo.lib.model_manager._private.schema.triton import (
+    validate_model_schema,
+)
 from michelangelo.lib.model_manager._private.utils.data_utils import (
     validate_sample_data,
     validate_sample_data_with_model_schema,

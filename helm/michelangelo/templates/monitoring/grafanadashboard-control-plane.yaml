@@ -1,0 +1,15 @@
+{{- if and .Values.monitoring.enabled .Values.monitoring.grafanaDashboards.enabled (.Capabilities.APIVersions.Has "grafana.integreatly.org/v1beta1") }}
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaDashboard
+metadata:
+  name: {{ include "michelangelo.fullname" . }}-control-plane
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "michelangelo.labels" . | nindent 4 }}
+spec:
+  resyncPeriod: {{ .Values.monitoring.grafanaDashboards.resyncPeriod }}
+  instanceSelector:
+    {{- toYaml .Values.monitoring.grafanaDashboards.instanceSelector | nindent 4 }}
+  json: |-
+    {{- .Files.Get "files/dashboards/control-plane.json" | nindent 4 }}
+{{- end }}

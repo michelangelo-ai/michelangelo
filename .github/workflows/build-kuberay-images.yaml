@@ -42,7 +42,7 @@ jobs:
 
     steps:
       - name: Check out kuberay (upstream)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: ray-project/kuberay
           ref: ${{ github.event.inputs.kuberay_ref || env.KUBERAY_REF_DEFAULT }}
@@ -86,7 +86,7 @@ jobs:
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
 
       - name: Build and push
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: kuberay/historyserver
           file: kuberay/historyserver/${{ matrix.component.dockerfile }}

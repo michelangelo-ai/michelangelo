@@ -5,7 +5,6 @@ from __future__ import annotations
 import os
 import shutil
 import sys
-import tarfile
 import tempfile
 from unittest import TestCase
 from unittest.mock import MagicMock, patch
@@ -19,6 +18,13 @@ class _FakeS3Error(Exception):
     def __init__(self, msg: str = "", code: str = "") -> None:
         super().__init__(msg)
         self.code = code
+
+
+class _FakeObject:
+    """Stand-in for minio.datatypes.Object — only .object_name is used."""
+
+    def __init__(self, object_name: str) -> None:
+        self.object_name = object_name
 
 
 def _make_mock_minio(bucket_exists: bool = True) -> tuple[MagicMock, MagicMock]:
@@ -193,6 +199,16 @@ class TestMinioStorageBackendUpload(TestCase):
             f.write("weights")
         return d
 
+    def _make_tmp_dir_nested(self) -> str:
+        d = tempfile.mkdtemp()
+        self._tmp_dirs.append(d)
+        with open(os.path.join(d, "weights.bin"), "w") as f:
+            f.write("weights")
+        os.makedirs(os.path.join(d, "sub"))
+        with open(os.path.join(d, "sub", "config.json"), "w") as f:
+            f.write("{}")
+        return d
+
     def _backend(self, mock_client):
         from michelangelo.lib.artifact_manager.minio_backend import MinioStorageBackend
 
@@ -219,22 +235,36 @@ class TestMinioStorageBackendUpload(TestCase):
             "test-bucket", "models/clf/abc/raw", local
         )
 
-    def test_upload_directory_returns_dir_tar_uri(self):
-        """It returns a URI with /__dir__.tar suffix for directory uploads."""
+    def test_upload_directory_returns_prefix_uri(self):
+        """It returns a URI equal to the destination_key prefix (no suffix)."""
         mock_client = MagicMock()
         backend = self._backend(mock_client)
         local_dir = self._make_tmp_dir()
         uri = backend.upload(local_dir, "models/clf/abc/raw")
-        self.assertEqual(uri, "s3://test-bucket/models/clf/abc/raw/__dir__.tar")
+        self.assertEqual(uri, "s3://test-bucket/models/clf/abc/raw")
 
-    def test_upload_directory_stores_at_dir_tar_key(self):
-        """fput_object is called with the /__dir__.tar key for directories."""
+    def test_upload_directory_uploads_each_file_under_prefix(self):
+        """fput_object is called once per file, each under the key prefix."""
         mock_client = MagicMock()
         backend = self._backend(mock_client)
         backend.upload(self._make_tmp_dir(), "models/clf/abc/raw")
         call_args = mock_client.fput_object.call_args[0]
         self.assertEqual(call_args[0], "test-bucket")
-        self.assertEqual(call_args[1], "models/clf/abc/raw/__dir__.tar")
+        self.assertEqual(call_args[1], "models/clf/abc/raw/weights.bin")
+
+    def test_upload_directory_preserves_nested_structure(self):
+        """Nested subdirectories are preserved as key segments."""
+        mock_client = MagicMock()
+        backend = self._backend(mock_client)
+        backend.upload(self._make_tmp_dir_nested(), "models/clf/abc/raw")
+        uploaded_keys = {c[0][1] for c in mock_client.fput_object.call_args_list}
+        self.assertEqual(
+            uploaded_keys,
+            {
+                "models/clf/abc/raw/weights.bin",
+                "models/clf/abc/raw/sub/config.json",
+            },
+        )
 
     def test_upload_raises_on_empty_key(self):
         """It raises ValueError when destination_key is empty."""
@@ -250,6 +280,14 @@ class TestMinioStorageBackendUpload(TestCase):
         backend = self._backend(mock_client)
         with self.assertRaises(OSError):
             backend.upload(self._make_tmp_file(), "models/clf/raw")
+
+    def test_upload_directory_wraps_s3error_as_oserror(self):
+        """It converts S3Error from fput_object into OSError for directories."""
+        mock_client = MagicMock()
+        mock_client.fput_object.side_effect = _FakeS3Error("access denied")
+        backend = self._backend(mock_client)
+        with self.assertRaises(OSError):
+            backend.upload(self._make_tmp_dir(), "models/clf/raw")
 
 
 class TestMinioStorageBackendDownload(TestCase):
@@ -300,41 +338,15 @@ class TestMinioStorageBackendDownload(TestCase):
         with open(dest, "rb") as f:
             self.assertEqual(f.read(), b"model-weights")
 
-    def test_download_directory_extracts_tar_on_dir_tar_uri(self):
-        """It extracts a tar archive when the URI ends with /__dir__.tar."""
-        src_dir = tempfile.mkdtemp()
-        self._tmp_dirs.append(src_dir)
-        with open(os.path.join(src_dir, "weights.bin"), "w") as f:
-            f.write("weights")
+    def test_download_file_uses_stat_to_detect_single_object(self):
+        """A key that exists as a plain object is downloaded as a file.
 
-        tar_dir = tempfile.mkdtemp()
-        self._tmp_dirs.append(tar_dir)
-        tar_path = os.path.join(tar_dir, "archive.tar")
-        with tarfile.open(tar_path, "w") as tar:
-            tar.add(src_dir, arcname="")
+        list_objects is never consulted in that case.
+        """
+        src = self._write_tmp_file(b"data")
 
         def fake_fget(bucket, key, local):
-            shutil.copy2(tar_path, local)
-
-        mock_client = MagicMock()
-        mock_client.fget_object.side_effect = fake_fget
-        backend = self._backend(mock_client)
-
-        dest = tempfile.mkdtemp()
-        self._tmp_dirs.append(dest)
-        backend.download("s3://test-bucket/models/clf/raw/__dir__.tar", dest)
-        self.assertTrue(os.path.exists(os.path.join(dest, "weights.bin")))
-
-    def test_download_plain_tar_not_extracted(self):
-        """A plain .tar file is NOT extracted when URI lacks /__dir__.tar suffix."""
-        src_dir = tempfile.mkdtemp()
-        self._tmp_dirs.append(src_dir)
-        tar_path = os.path.join(src_dir, "data.tar")
-        with tarfile.open(tar_path, "w"):
-            pass
-
-        def fake_fget(bucket, key, local):
-            shutil.copy2(tar_path, local)
+            shutil.copy2(src, local)
 
         mock_client = MagicMock()
         mock_client.fget_object.side_effect = fake_fget
@@ -342,9 +354,64 @@ class TestMinioStorageBackendDownload(TestCase):
 
         dest_dir = tempfile.mkdtemp()
         self._tmp_dirs.append(dest_dir)
-        dest = os.path.join(dest_dir, "out.tar")
+        dest = os.path.join(dest_dir, "out")
         backend.download("s3://test-bucket/models/clf/raw", dest)
         self.assertTrue(os.path.isfile(dest))
+        mock_client.list_objects.assert_not_called()
+
+    def test_download_directory_downloads_each_object_under_prefix(self):
+        """No object at the exact key means every object under it is fetched.
+
+        This reconstructs nested structure.
+        """
+        mock_client = MagicMock()
+        mock_client.stat_object.side_effect = _FakeS3Error(
+            "not found", code="NoSuchKey"
+        )
+        mock_client.list_objects.return_value = [
+            _FakeObject("models/clf/raw/weights.bin"),
+            _FakeObject("models/clf/raw/sub/config.json"),
+        ]
+
+        def fake_fget(bucket, key, local):
+            with open(local, "w") as f:
+                f.write(key)
+
+        mock_client.fget_object.side_effect = fake_fget
+        backend = self._backend(mock_client)
+
+        dest = tempfile.mkdtemp()
+        self._tmp_dirs.append(dest)
+        backend.download("s3://test-bucket/models/clf/raw", dest)
+        self.assertTrue(os.path.exists(os.path.join(dest, "weights.bin")))
+        self.assertTrue(os.path.exists(os.path.join(dest, "sub", "config.json")))
+
+    def test_download_raises_when_neither_object_nor_directory_exists(self):
+        """It raises OSError when the key is neither a file nor a non-empty prefix."""
+        mock_client = MagicMock()
+        mock_client.stat_object.side_effect = _FakeS3Error(
+            "not found", code="NoSuchKey"
+        )
+        mock_client.list_objects.return_value = []
+        backend = self._backend(mock_client)
+
+        with self.assertRaises(OSError):
+            backend.download("s3://test-bucket/models/clf/raw", "/tmp/out")
+
+    def test_download_reraises_non_notfound_stat_error(self):
+        """A stat_object error other than NoSuchKey propagates as OSError.
+
+        No fallback to directory listing occurs.
+        """
+        mock_client = MagicMock()
+        mock_client.stat_object.side_effect = _FakeS3Error(
+            "access denied", code="AccessDenied"
+        )
+        backend = self._backend(mock_client)
+
+        with self.assertRaises(OSError):
+            backend.download("s3://test-bucket/models/clf/raw", "/tmp/out")
+        mock_client.list_objects.assert_not_called()
 
     def test_download_raises_on_non_s3_uri(self):
         """It raises ValueError for a URI that is not s3://."""
@@ -367,3 +434,18 @@ class TestMinioStorageBackendDownload(TestCase):
         backend = self._backend(mock_client)
         with self.assertRaises(OSError):
             backend.download("s3://test-bucket/models/clf/raw", "/tmp/out")
+
+    def test_download_directory_wraps_s3error_as_oserror(self):
+        """It converts S3Error from fget_object into OSError for directories."""
+        mock_client = MagicMock()
+        mock_client.stat_object.side_effect = _FakeS3Error(
+            "not found", code="NoSuchKey"
+        )
+        mock_client.list_objects.return_value = [_FakeObject("models/clf/raw/w.bin")]
+        mock_client.fget_object.side_effect = _FakeS3Error("access denied")
+        backend = self._backend(mock_client)
+
+        dest = tempfile.mkdtemp()
+        self._tmp_dirs.append(dest)
+        with self.assertRaises(OSError):
+            backend.download("s3://test-bucket/models/clf/raw", dest)

@@ -13,16 +13,13 @@ vi.mock('@michelangelo-ai/rpc', () => ({
   normalizeTranscoderError: vi.fn(() => null),
 }));
 
-// AppNavBar renders both its desktop and mobile menu variants at once and switches between them
-// with a `matchMedia` query, which jsdom doesn't implement — the inactive variant reports as
-// hidden to the accessibility tree, so role queries need `hidden: true`.
+// AppNavBar renders both its desktop and mobile menu variants at once. The inactive variant
+// reports as hidden to the accessibility tree, so role queries need `hidden: true`.
 const HIDDEN = { hidden: true };
-const originalLocation = window.location;
 
 afterEach(() => {
   window.localStorage.clear();
   vi.unstubAllGlobals();
-  Object.defineProperty(window, 'location', { configurable: true, value: originalLocation });
   window.history.replaceState(null, '', '/');
 });
 
@@ -59,13 +56,6 @@ it('signs out to clear the cached dev profile', async () => {
       avatarUrl: 'https://example.com/a.png',
     })
   );
-  // jsdom's window.location.reload is non-configurable, so it can't be spied on directly;
-  // swap in a plain copy with reload replaced instead.
-  Object.defineProperty(window, 'location', {
-    configurable: true,
-    value: { ...window.location, reload: vi.fn() },
-  });
-
   render(<App />);
   await userEvent.click(
     (await screen.findAllByRole('button', { name: /Ada Lovelace/, ...HIDDEN }))[0]

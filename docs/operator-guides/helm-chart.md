@@ -127,6 +127,17 @@ objectStorage:
   existingSecret: my-s3-secret       # must contain keys: accessKeyId, secretAccessKey
 ```
 
+### Enable monitoring resources
+
+If your cluster runs the [Prometheus Operator](https://github.com/prometheus-operator/prometheus-operator) and/or the [Grafana Operator](https://github.com/grafana/grafana-operator), one toggle installs a `ServiceMonitor` for the controller manager, a `PrometheusRule` with starter alerts, and two `GrafanaDashboard`s:
+
+```yaml
+monitoring:
+  enabled: true
+```
+
+Every resource is CRD-gated — anything whose operator CRDs are absent is skipped, so the toggle is safe on any cluster. See [Monitoring & Observability](operations/monitoring.md) for the sub-toggles and the metrics behind each artifact.
+
 ### Expose the UI and API
 
 The chart includes per-service Ingress templates (`apiserver.ingress`, `envoy.ingress`, `ui.ingress`). Enable and configure them to expose the UI and API outside the cluster:
@@ -283,6 +294,7 @@ Most commonly set values. See `helm/michelangelo/values.yaml` for the complete l
 | `ui.enabled` / `envoy.enabled` / etc. | no | `true` | Per-service install toggle |
 | `<service>.ingress.enabled` | no | `false` | Per-service Ingress toggle |
 | `controllermgr.watchNamespace` | no | `[]` (all) | Namespaces the controller manager watches |
+| `monitoring.enabled` | no | `false` | Install CRD-gated ServiceMonitor, alert rules, and Grafana dashboards |
 | `cadence.enabled` | no | `false` | Install bundled Cadence subchart |
 | `temporal.enabled` | no | `false` | Install bundled Temporal subchart |
 
@@ -299,7 +311,7 @@ The `michelangelo` chart owns the **control plane only**. Three tiers, with clea
   - `michelangelo-ui` — React frontend (port 80)
   - `michelangelo-worker` — Cadence/Temporal workflow client
   - `michelangelo-controllermgr` — Kubernetes controller manager
-- **Observability tier** — optional. Bring your own Prometheus and Grafana, or see [Monitoring & Observability](operations/monitoring.md).
+- **Observability tier** — optional. Bring your own Prometheus and Grafana; if you run the Prometheus Operator and/or Grafana Operator, `monitoring.enabled=true` installs a ServiceMonitor, starter alert rules, and two dashboards (see [Monitoring & Observability](operations/monitoring.md)).
 
 ### Chart layout
 

@@ -45,6 +45,68 @@ describe('ProjectDetail', () => {
     expect(screen.getAllByText('fraud-detection')).not.toHaveLength(0);
   });
 
+  test('resolves the Owner field to a linked display name via a registered team resolver', async () => {
+    const resolveTeams = vi.fn().mockResolvedValue({
+      'uuid-1': { id: 'uuid-1', displayName: 'Michelangelo', url: 'https://example.com/team' },
+    });
+
+    render(
+      <ProjectDetail phases={[]} />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getErrorProviderWrapper(),
+        getIconProviderWrapper(),
+        getRouterWrapper({ location: '/fraud-detection' }),
+        getServiceProviderWrapper({
+          request: createQueryMockRouter({
+            GetProject: {
+              project: {
+                metadata: { name: 'fraud-detection' },
+                spec: {
+                  description: 'Detects fraudulent transactions',
+                  owner: { owningTeam: 'uuid-1' },
+                },
+              },
+            },
+          }),
+          resolvers: { team: resolveTeams },
+        }),
+      ])
+    );
+
+    const link = await screen.findByRole('link', { name: 'Michelangelo' });
+    expect(link).toHaveAttribute('href', 'https://example.com/team');
+    expect(resolveTeams).toHaveBeenCalledWith(['uuid-1']);
+  });
+
+  test('falls back to the raw owningTeam UUID as plain text when unenriched', async () => {
+    render(
+      <ProjectDetail phases={[]} />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getErrorProviderWrapper(),
+        getIconProviderWrapper(),
+        getRouterWrapper({ location: '/fraud-detection' }),
+        getServiceProviderWrapper({
+          request: createQueryMockRouter({
+            GetProject: {
+              project: {
+                metadata: { name: 'fraud-detection' },
+                spec: {
+                  description: 'Detects fraudulent transactions',
+                  owner: { owningTeam: 'uuid-1' },
+                },
+              },
+            },
+          }),
+        }),
+      ])
+    );
+
+    expect(await screen.findByText('uuid-1')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'uuid-1' })).not.toBeInTheDocument();
+  });
+
   test('renders a source code link when gitRepo is set', async () => {
     render(
       <ProjectDetail phases={[]} />,

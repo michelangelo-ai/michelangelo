@@ -5,3 +5,6 @@ This file renders to empty YAML when all checks pass.
 {{- if and .Values.cadence.enabled .Values.temporal.enabled -}}
 {{- fail "cadence.enabled and temporal.enabled cannot both be true — pick one workflow engine per release. Set workflow.engine=cadence + cadence.enabled=true, OR workflow.engine=temporal + temporal.enabled=true. See helm/michelangelo/README.md." -}}
 {{- end -}}
+{{- if and .Values.monitoring.enabled (not .Values.controllermgr.enabled) -}}
+{{- fail "monitoring.enabled requires controllermgr.enabled=true — the controller manager is the only component exposing a /metrics endpoint. See helm/michelangelo/README.md." -}}
+{{- end -}}

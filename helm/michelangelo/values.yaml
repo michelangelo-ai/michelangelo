@@ -150,11 +150,18 @@ apiserver:
     qps: 300
     burst: 600
 
-  # Apiserver-specific config knobs. 
+  # Apiserver-specific config knobs.
   metadataStorage:
     enable: false
   crdSync:
     enableUpdate: true
+
+  # Default values applied when creating PipelineRun/Model objects that don't
+  # set them explicitly. Empty (the default) means the apiserver falls back to
+  # its own write-time sentinel ("unspecified") rather than a guessed real
+  # environment — see helm/michelangelo/README.md#values-reference.
+  pipelineRunDefaults:
+    environment: ""
 
   # Resource requests and limits. Override per-service if you need different
   # allocations than the global `resources` block below.
@@ -353,6 +360,24 @@ notification:
   senderEmail: ""
 
 # -----------------------------------------------------------------------------
+# inferenceServer — settings the InferenceServer controller needs to publish
+# and route traffic to inference servers.
+# -----------------------------------------------------------------------------
+inferenceServer:
+  gateway:
+    # name is the Gateway resource that HTTPRoutes attach to via parentRefs.
+    name: ma-gateway
+
+    # Istio's Gateway controller materializes a Service named '<gateway>-istio'
+    # for each Gateway resource. The endpoint provider reads this Service's
+    # NodePort and a node InternalIP to publish per-cluster EndpointSlices.
+    # Leaving serviceName empty makes endpoint publishing fail with
+    # "resource name may not be empty".
+    serviceName: ma-gateway-istio
+    serviceNamespace: default
+    portName: http
+
+# -----------------------------------------------------------------------------
 # controllermgr — Kubernetes controller manager for Michelangelo CRDs.
 # -----------------------------------------------------------------------------
 controllermgr:
@@ -446,6 +471,66 @@ controllermgr:
           logURLFormat: ""
 
   resources: {}
+
+# -----------------------------------------------------------------------------
+# Optional monitoring resources. Everything here is CRD-gated: resources are
+# only rendered when the owning operator's CRDs are installed in the cluster,
+# so enabling the toggle on a cluster without the Prometheus Operator is a
+# safe no-op.
+# -----------------------------------------------------------------------------
+monitoring:
+  # Master toggle for chart-managed monitoring resources.
+  enabled: false
+
+  serviceMonitor:
+    # Scrape the controller manager's /metrics endpoint (port
+    # controllermgr.metricsPort). Requires the Prometheus Operator CRDs
+    # (monitoring.coreos.com/v1); skipped when they are absent.
+    enabled: true
+
+    # Scrape interval.
+    interval: 30s
+
+    # Extra labels for the ServiceMonitor, e.g. to match a Prometheus
+    # instance's serviceMonitorSelector.
+    additionalLabels: {}
+
+  prometheusRule:
+    # Create a PrometheusRule with starter alerts for pipeline-run failures,
+    # long-running pipeline runs, controller reconcile errors, and cascade
+    # delete drain timeouts. All default alerts fire on metrics the
+    # controller manager exposes out of the box. Requires the Prometheus
+    # Operator CRDs (monitoring.coreos.com/v1); skipped when they are absent.
+    enabled: true
+
+    # Extra labels for the PrometheusRule, e.g. to match a Prometheus
+    # instance's ruleSelector.
+    additionalLabels: {}
+
+    envoyAlerts:
+      # Add inference latency/error-rate alerts on Envoy upstream metrics.
+      # Off by default because the Envoy admin interface (which exposes
+      # those metrics) is not enabled by the chart — enable it and add a
+      # scrape job first, or these alerts can never fire. See
+      # docs/operator-guides/operations/monitoring.md.
+      enabled: false
+
+  grafanaDashboards:
+    # Create GrafanaDashboard CRs (control-plane and pipeline-run views)
+    # for the Grafana Operator (https://github.com/grafana/grafana-operator).
+    # Every panel queries metrics the controller manager exposes out of the
+    # box. Requires the Grafana Operator CRDs (grafana.integreatly.org/v1beta1);
+    # skipped when they are absent.
+    enabled: true
+
+    # How often the operator re-applies the dashboards to Grafana.
+    resyncPeriod: 10m
+
+    # Label selector matching the Grafana CR(s) the dashboards should be
+    # installed into. Must match labels you set on your Grafana instance.
+    instanceSelector:
+      matchLabels:
+        dashboards: grafana
 
 # -----------------------------------------------------------------------------
 # ServiceAccount used by every chart-managed Pod.

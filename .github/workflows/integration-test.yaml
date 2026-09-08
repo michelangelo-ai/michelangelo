@@ -48,7 +48,7 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # k3d, kubectl, helm, and AWS CLI v2 are pre-installed on the GCP self-hosted runner.
       # The examples task image is pre-loaded into k3s containerd on the runner VM.
@@ -73,7 +73,7 @@ jobs:
             --set objectStorage.existingSecret=minio-credentials
 
       - name: Check out integration-test repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: michelangelo-ai/integration-test
           ref: ${{ inputs.integration_test_ref || 'main' }}
@@ -81,7 +81,7 @@ jobs:
           path: integration-test
 
       - name: Check out michelangelo-examples repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: michelangelo-ai/michelangelo-examples
           ref: main

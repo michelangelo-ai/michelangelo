@@ -229,5 +229,5 @@ func (b *backfillTrigger) Resume(ctx context.Context, triggerRun *v2pb.TriggerRu
 //
 // Returns current TriggerRunStatus (state unchanged).
 func (b *backfillTrigger) Update(ctx context.Context, triggerRun *v2pb.TriggerRun, action v2pb.TriggerRunAction) (v2pb.TriggerRunStatus, bool, error) {
-	return v2pb.TriggerRunStatus{State: triggerRun.Status.State}, false, nil
+	return triggerRun.Status, false, nil
 }

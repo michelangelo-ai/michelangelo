@@ -9,6 +9,7 @@ import (
 	"k8s.io/client-go/dynamic"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	goapi "github.com/michelangelo-ai/michelangelo/go/api"
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	"github.com/michelangelo-ai/michelangelo/go/components/common/routing"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/rollout/strategies"
@@ -29,6 +30,7 @@ type conditionPlugin struct {
 // Params contains dependencies injected for rollout plugin initialization.
 type Params struct {
 	Client              client.Client
+	APIHandler          goapi.Handler
 	HTTPClient          *http.Client
 	DynamicClient       dynamic.Interface
 	ClientFactory       clientfactory.ClientFactory
@@ -48,7 +50,8 @@ func NewRolloutPlugin(ctx context.Context, p Params, deployment *v2pb.Deployment
 			logger: logger,
 		},
 		&AssetPreparationActor{
-			logger: logger,
+			apiHandler: p.APIHandler,
+			logger:     logger,
 		},
 		&PlacementPrepActor{
 			kubeClient: p.Client,
@@ -60,6 +63,7 @@ func NewRolloutPlugin(ctx context.Context, p Params, deployment *v2pb.Deployment
 	placementActors, err := strategies.GetActorsForStrategy(ctx, strategies.Params{
 		ClientFactory:       p.ClientFactory,
 		Client:              p.Client,
+		APIHandler:          p.APIHandler,
 		HTTPClient:          p.HTTPClient,
 		DynamicClient:       p.DynamicClient,
 		RouteManager:        p.RouteManager,

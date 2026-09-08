@@ -1,4 +1,9 @@
-import { getDateFromEpochSeconds, getEpochSecondsFromDate, parseIsoString } from '../time-utils';
+import {
+  formatElapsedSeconds,
+  getDateFromEpochSeconds,
+  getEpochSecondsFromDate,
+  parseIsoString,
+} from '../time-utils';
 
 describe('time-utils', () => {
   describe('getDateFromEpochSeconds', () => {
@@ -100,6 +105,32 @@ describe('time-utils', () => {
     test.each(invalidCases)('should return null for $description', ({ input }) => {
       const result = parseIsoString(input);
       expect(result).toBe(null);
+    });
+  });
+
+  describe('formatElapsedSeconds', () => {
+    test('formats the gap between two timestamps', () => {
+      expect(formatElapsedSeconds(1704067200, 1704067752)).toBe('552s');
+    });
+
+    test('accepts string timestamps as returned by the API', () => {
+      expect(formatElapsedSeconds('1704067200', '1704067752')).toBe('552s');
+    });
+
+    test('returns 0s when a step started and ended within the same second', () => {
+      expect(formatElapsedSeconds(1704067200, 1704067200)).toBe('0s');
+    });
+
+    test.each([
+      ['no end time — step is still running', 1704067200, undefined],
+      ['no start time — step never began', undefined, 1704067752],
+      ['neither bound', undefined, undefined],
+    ])('returns null when there is %s', (_label, start, end) => {
+      expect(formatElapsedSeconds(start, end)).toBeNull();
+    });
+
+    test('returns null for unparseable timestamps', () => {
+      expect(formatElapsedSeconds('not-a-number', 1704067752)).toBeNull();
     });
   });
 });

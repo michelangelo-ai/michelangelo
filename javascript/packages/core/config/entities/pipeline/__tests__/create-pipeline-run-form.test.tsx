@@ -3,6 +3,11 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { CreatePipelineRunForm } from '#core/config/entities/pipeline/create-pipeline-run-form';
+import {
+  NotificationEventType,
+  NotificationResourceType,
+  NotificationType,
+} from '#core/config/entities/run/types';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getBaseProviderWrapper } from '#core/test/wrappers/get-base-provider-wrapper';
 import { getErrorProviderWrapper } from '#core/test/wrappers/get-error-provider-wrapper';
@@ -13,6 +18,8 @@ import {
   createQueryMockRouter,
   getServiceProviderWrapper,
 } from '#core/test/wrappers/get-service-provider-wrapper';
+
+import type { PipelineRun } from '#core/config/entities/run/types';
 
 describe('CreatePipelineRunForm', () => {
   // Mount-when-visible pattern: the dispatcher mounts the component while open and
@@ -25,6 +32,15 @@ describe('CreatePipelineRunForm', () => {
     };
     if (!mounted) return null;
     return <CreatePipelineRunForm record={data} onClose={() => setMounted(false)} />;
+  }
+
+  /** Environment is required, so every submit-path test must pick one first. */
+  async function selectEnvironment(
+    user: ReturnType<typeof userEvent.setup>,
+    dialog: HTMLElement,
+    label: 'Development' | 'Production'
+  ) {
+    await user.click(within(dialog).getByRole('radio', { name: label }));
   }
 
   it('submits pipeline run with correct data structure and closes dialog', async () => {
@@ -47,6 +63,7 @@ describe('CreatePipelineRunForm', () => {
     );
 
     const dialog = await screen.findByRole('dialog', { name: 'Start new pipeline run' });
+    await selectEnvironment(user, dialog, 'Development');
     const submitButton = within(dialog).getByRole('button', { name: 'Run' });
     await user.click(submitButton);
 
@@ -57,6 +74,7 @@ describe('CreatePipelineRunForm', () => {
           metadata: expect.objectContaining({
             name: expect.stringMatching(/^run-\d{8}-\d{6}-.+$/) as string,
             namespace: 'ma-dev-test',
+            labels: { 'michelangelo/environment': 'development' },
           }) as Record<string, unknown>,
           spec: expect.objectContaining({
             pipeline: {
@@ -71,6 +89,184 @@ describe('CreatePipelineRunForm', () => {
 
     await waitFor(() => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+  });
+
+  it('leaves notifications empty when the toggle is left off', async () => {
+    const user = userEvent.setup();
+    const mockRequest = createQueryMockRouter({ CreatePipelineRun: {} });
+
+    render(
+      <FormWrapper />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getIconProviderWrapper(),
+        getErrorProviderWrapper(),
+        getInterpolationProviderWrapper(),
+        getRouterWrapper({ location: '/ma-dev-test/train/pipelines' }),
+        getServiceProviderWrapper({ request: mockRequest }),
+      ])
+    );
+
+    const dialog = await screen.findByRole('dialog', { name: 'Start new pipeline run' });
+    await selectEnvironment(user, dialog, 'Development');
+    await user.click(within(dialog).getByRole('button', { name: 'Run' }));
+
+    await waitFor(() => {
+      expect(mockRequest).toHaveBeenCalledWith(
+        'CreatePipelineRun',
+        expect.objectContaining({
+          spec: expect.objectContaining({ notifications: [] }) as Record<string, unknown>,
+        }),
+        {}
+      );
+    });
+  });
+
+  it('submits an email notification covering every event type once opted in', async () => {
+    const user = userEvent.setup();
+    const mockRequest = createQueryMockRouter({ CreatePipelineRun: {} });
+
+    render(
+      <FormWrapper />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getIconProviderWrapper(),
+        getErrorProviderWrapper(),
+        getInterpolationProviderWrapper(),
+        getRouterWrapper({ location: '/ma-dev-test/train/pipelines' }),
+        getServiceProviderWrapper({ request: mockRequest }),
+      ])
+    );
+
+    const dialog = await screen.findByRole('dialog', { name: 'Start new pipeline run' });
+
+    await user.click(
+      within(dialog).getByRole('checkbox', {
+        name: 'Do you want to receive notifications when pipeline run completed?',
+      })
+    );
+    await user.type(
+      within(dialog).getByPlaceholderText('e.g. name@example.com'),
+      'oncall@example.com'
+    );
+    await selectEnvironment(user, dialog, 'Development');
+    await user.click(within(dialog).getByRole('button', { name: 'Run' }));
+
+    await waitFor(() => {
+      expect(mockRequest).toHaveBeenCalledWith(
+        'CreatePipelineRun',
+        expect.objectContaining({
+          spec: expect.objectContaining({
+            notifications: [
+              {
+                notificationType: NotificationType.EMAIL,
+                eventTypes: [
+                  NotificationEventType.PIPELINE_RUN_STATE_STARTED,
+                  NotificationEventType.PIPELINE_RUN_STATE_SUCCEEDED,
+                  NotificationEventType.PIPELINE_RUN_STATE_FAILED,
+                  NotificationEventType.PIPELINE_RUN_STATE_KILLED,
+                  NotificationEventType.PIPELINE_RUN_STATE_SKIPPED,
+                ],
+                resourceType: NotificationResourceType.PIPELINE_RUN,
+                emails: ['oncall@example.com'],
+                slackDestinations: [],
+              },
+            ],
+          }) as Record<string, unknown>,
+        }),
+        {}
+      );
+    });
+  });
+
+  it('submits both an email and a Slack notification when both are filled in', async () => {
+    const user = userEvent.setup();
+    const mockRequest = createQueryMockRouter({ CreatePipelineRun: {} });
+
+    render(
+      <FormWrapper />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getIconProviderWrapper(),
+        getErrorProviderWrapper(),
+        getInterpolationProviderWrapper(),
+        getRouterWrapper({ location: '/ma-dev-test/train/pipelines' }),
+        getServiceProviderWrapper({ request: mockRequest }),
+      ])
+    );
+
+    const dialog = await screen.findByRole('dialog', { name: 'Start new pipeline run' });
+
+    await user.click(
+      within(dialog).getByRole('checkbox', {
+        name: 'Do you want to receive notifications when pipeline run completed?',
+      })
+    );
+    await user.type(
+      within(dialog).getByPlaceholderText('e.g. name@example.com'),
+      'oncall@example.com'
+    );
+    await user.type(within(dialog).getByPlaceholderText('e.g. #channel or @user'), '#ml-oncall');
+    await selectEnvironment(user, dialog, 'Development');
+    await user.click(within(dialog).getByRole('button', { name: 'Run' }));
+
+    await waitFor(() => {
+      expect(mockRequest).toHaveBeenCalledWith(
+        'CreatePipelineRun',
+        expect.objectContaining({
+          spec: expect.objectContaining({
+            notifications: [
+              expect.objectContaining({
+                notificationType: NotificationType.EMAIL,
+                emails: ['oncall@example.com'],
+              }) as Record<string, unknown>,
+              expect.objectContaining({
+                notificationType: NotificationType.SLACK,
+                slackDestinations: ['#ml-oncall'],
+              }) as Record<string, unknown>,
+            ],
+          }) as Record<string, unknown>,
+        }),
+        {}
+      );
+    });
+  });
+
+  it('omits a destination type left blank even when the toggle is on', async () => {
+    const user = userEvent.setup();
+    const mockRequest = createQueryMockRouter({ CreatePipelineRun: {} });
+
+    render(
+      <FormWrapper />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getIconProviderWrapper(),
+        getErrorProviderWrapper(),
+        getInterpolationProviderWrapper(),
+        getRouterWrapper({ location: '/ma-dev-test/train/pipelines' }),
+        getServiceProviderWrapper({ request: mockRequest }),
+      ])
+    );
+
+    const dialog = await screen.findByRole('dialog', { name: 'Start new pipeline run' });
+
+    await user.click(
+      within(dialog).getByRole('checkbox', {
+        name: 'Do you want to receive notifications when pipeline run completed?',
+      })
+    );
+    await selectEnvironment(user, dialog, 'Development');
+    await user.click(within(dialog).getByRole('button', { name: 'Run' }));
+
+    await waitFor(() => {
+      expect(mockRequest).toHaveBeenCalledWith(
+        'CreatePipelineRun',
+        expect.objectContaining({
+          spec: expect.objectContaining({ notifications: [] }) as Record<string, unknown>,
+        }),
+        {}
+      );
     });
   });
 
@@ -94,6 +290,7 @@ describe('CreatePipelineRunForm', () => {
     );
 
     const dialog = await screen.findByRole('dialog');
+    await selectEnvironment(user, dialog, 'Development');
     const submitButton = within(dialog).getByRole('button', { name: 'Run' });
     await user.click(submitButton);
 
@@ -122,6 +319,7 @@ describe('CreatePipelineRunForm', () => {
       screen.getByRole('textbox', { name: /description/i }),
       'nightly evaluation run'
     );
+    await selectEnvironment(user, dialog, 'Development');
     await user.click(within(dialog).getByRole('button', { name: 'Run' }));
 
     await waitFor(() => {
@@ -134,6 +332,300 @@ describe('CreatePipelineRunForm', () => {
         }),
         {}
       );
+    });
+  });
+
+  it('renders both Development and Production environment options', async () => {
+    render(
+      <FormWrapper />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getIconProviderWrapper(),
+        getErrorProviderWrapper(),
+        getInterpolationProviderWrapper(),
+        getRouterWrapper({ location: '/ma-dev-test/train/pipelines' }),
+        getServiceProviderWrapper({ request: createQueryMockRouter({ CreatePipelineRun: {} }) }),
+      ])
+    );
+
+    const dialog = await screen.findByRole('dialog', { name: 'Start new pipeline run' });
+
+    expect(within(dialog).getByRole('radio', { name: 'Development' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('radio', { name: 'Production' })).toBeInTheDocument();
+  });
+
+  it('blocks submission until an environment is selected', async () => {
+    const user = userEvent.setup();
+    const mockRequest = createQueryMockRouter({ CreatePipelineRun: {} });
+
+    render(
+      <FormWrapper />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getIconProviderWrapper(),
+        getErrorProviderWrapper(),
+        getInterpolationProviderWrapper(),
+        getRouterWrapper({ location: '/ma-dev-test/train/pipelines' }),
+        getServiceProviderWrapper({ request: mockRequest }),
+      ])
+    );
+
+    const dialog = await screen.findByRole('dialog', { name: 'Start new pipeline run' });
+    await user.click(within(dialog).getByRole('button', { name: 'Run' }));
+
+    expect(mockRequest).not.toHaveBeenCalledWith(
+      'CreatePipelineRun',
+      expect.anything(),
+      expect.anything()
+    );
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('submits the selected environment as a metadata label', async () => {
+    const user = userEvent.setup();
+    const mockRequest = createQueryMockRouter({ CreatePipelineRun: {} });
+
+    render(
+      <FormWrapper />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getIconProviderWrapper(),
+        getErrorProviderWrapper(),
+        getInterpolationProviderWrapper(),
+        getRouterWrapper({ location: '/ma-dev-test/train/pipelines' }),
+        getServiceProviderWrapper({ request: mockRequest }),
+      ])
+    );
+
+    const dialog = await screen.findByRole('dialog', { name: 'Start new pipeline run' });
+    await selectEnvironment(user, dialog, 'Production');
+    await user.click(within(dialog).getByRole('button', { name: 'Run' }));
+
+    await waitFor(() => {
+      expect(mockRequest).toHaveBeenCalledWith(
+        'CreatePipelineRun',
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            labels: { 'michelangelo/environment': 'production' },
+          }) as Record<string, unknown>,
+        }),
+        {}
+      );
+    });
+  });
+
+  describe('resuming a previous run', () => {
+    const SOURCE_RUN = 'run-20260817-a3f9';
+
+    /**
+     * A finished run of `test-pipeline`, plus two runs the picker must exclude: one
+     * belonging to a different pipeline, one still running.
+     */
+    const runListResponse = {
+      pipelineRunList: {
+        items: [
+          {
+            metadata: { name: SOURCE_RUN, creationTimestamp: { seconds: '1755440000' } },
+            spec: { pipeline: { name: 'test-pipeline' } },
+            status: { state: 5 },
+          },
+          {
+            metadata: { name: 'run-other-pipeline', creationTimestamp: { seconds: '1755450000' } },
+            spec: { pipeline: { name: 'some-other-pipeline' } },
+            status: { state: 3 },
+          },
+          {
+            metadata: { name: 'run-still-running', creationTimestamp: { seconds: '1755460000' } },
+            spec: { pipeline: { name: 'test-pipeline' } },
+            status: { state: 2 },
+          },
+        ],
+      },
+    };
+
+    /**
+     * Sub-steps of "Execute Workflow" are the DAG tasks. `name` holds the task path and
+     * `displayName` the task name — only the latter is a valid `resumeFrom` value.
+     */
+    const sourceRunResponse = {
+      pipelineRun: {
+        metadata: { name: SOURCE_RUN },
+        status: {
+          steps: [
+            { name: 'Image Build', displayName: 'Image Build', state: 3 },
+            {
+              name: 'Execute Workflow',
+              displayName: 'Execute Workflow',
+              state: 5,
+              subSteps: [
+                {
+                  name: 'tasks/feature_gen',
+                  displayName: 'feature_gen',
+                  state: 5,
+                  startTime: { seconds: '1755440100' },
+                  endTime: { seconds: '1755440652' },
+                },
+                {
+                  name: 'tasks/train_model',
+                  displayName: 'train_model',
+                  state: 6,
+                },
+              ],
+            },
+          ],
+        },
+      },
+    };
+
+    function renderForm(request: ReturnType<typeof createQueryMockRouter>) {
+      return render(
+        <FormWrapper />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getIconProviderWrapper(),
+          getErrorProviderWrapper(),
+          getInterpolationProviderWrapper(),
+          getRouterWrapper({ location: '/ma-dev-test/train/pipelines' }),
+          getServiceProviderWrapper({ request }),
+        ])
+      );
+    }
+
+    function buildRequest() {
+      return createQueryMockRouter({
+        CreatePipelineRun: {},
+        ListPipelineRun: runListResponse,
+        GetPipelineRun: sourceRunResponse,
+      });
+    }
+
+    async function openResumeGroup(user: ReturnType<typeof userEvent.setup>) {
+      await user.click(screen.getByText('Select run to resume from'));
+    }
+
+    async function selectSourceRun(user: ReturnType<typeof userEvent.setup>) {
+      await user.click(await screen.findByRole('combobox', { name: /pipeline run/i }));
+      await user.click(await screen.findByText(new RegExp(SOURCE_RUN)));
+    }
+
+    it('offers only finished runs of this pipeline', async () => {
+      const user = userEvent.setup();
+      renderForm(buildRequest());
+
+      await screen.findByRole('dialog', { name: 'Start new pipeline run' });
+      await openResumeGroup(user);
+      await user.click(await screen.findByRole('combobox', { name: /pipeline run/i }));
+
+      expect(await screen.findByText(new RegExp(SOURCE_RUN))).toBeInTheDocument();
+      // Excluded: belongs to another pipeline, and is still running
+      expect(screen.queryByText(/run-other-pipeline/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/run-still-running/)).not.toBeInTheDocument();
+    });
+
+    it('populates the step picker from Execute Workflow sub-steps once a run is chosen', async () => {
+      const user = userEvent.setup();
+      renderForm(buildRequest());
+
+      await screen.findByRole('dialog', { name: 'Start new pipeline run' });
+      await openResumeGroup(user);
+
+      // Disabled until a source run supplies the option list
+      expect(screen.getByRole('combobox', { name: /steps/i })).toBeDisabled();
+
+      await selectSourceRun(user);
+
+      const stepPicker = await screen.findByRole('combobox', { name: /steps/i });
+      await waitFor(() => expect(stepPicker).not.toBeDisabled());
+      await user.click(stepPicker);
+
+      expect(await screen.findByText('feature_gen')).toBeInTheDocument();
+      expect(screen.getByText('train_model')).toBeInTheDocument();
+      // Platform stages are not resumable DAG tasks
+      expect(screen.queryByText('Image Build')).not.toBeInTheDocument();
+    });
+
+    it('submits resumeFrom using step displayName, not the task path', async () => {
+      const user = userEvent.setup();
+      const mockRequest = buildRequest();
+      renderForm(mockRequest);
+
+      const dialog = await screen.findByRole('dialog', { name: 'Start new pipeline run' });
+      await openResumeGroup(user);
+      await selectSourceRun(user);
+
+      const stepPicker = await screen.findByRole('combobox', { name: /steps/i });
+      await waitFor(() => expect(stepPicker).not.toBeDisabled());
+      await user.click(stepPicker);
+      await user.click(await screen.findByText('feature_gen'));
+
+      await selectEnvironment(user, dialog, 'Development');
+      await user.click(within(dialog).getByRole('button', { name: 'Run' }));
+
+      await waitFor(() => {
+        expect(mockRequest).toHaveBeenCalledWith(
+          'CreatePipelineRun',
+          expect.objectContaining({
+            spec: expect.objectContaining({
+              resume: {
+                pipelineRun: { name: SOURCE_RUN, namespace: 'ma-dev-test' },
+                resumeFrom: ['feature_gen'],
+              },
+            }) as Record<string, unknown>,
+          }),
+          {}
+        );
+      });
+    });
+
+    it('submits resume without resumeFrom when no step is picked', async () => {
+      const user = userEvent.setup();
+      const mockRequest = buildRequest();
+      renderForm(mockRequest);
+
+      const dialog = await screen.findByRole('dialog', { name: 'Start new pipeline run' });
+      await openResumeGroup(user);
+      await selectSourceRun(user);
+      await selectEnvironment(user, dialog, 'Development');
+      await user.click(within(dialog).getByRole('button', { name: 'Run' }));
+
+      await waitFor(() => {
+        expect(mockRequest).toHaveBeenCalledWith(
+          'CreatePipelineRun',
+          expect.objectContaining({
+            spec: expect.objectContaining({
+              resume: { pipelineRun: { name: SOURCE_RUN, namespace: 'ma-dev-test' } },
+            }) as Record<string, unknown>,
+          }),
+          {}
+        );
+      });
+    });
+
+    it('omits the resume spec entirely when the group is opened but nothing is chosen', async () => {
+      const user = userEvent.setup();
+      const router = buildRequest();
+
+      // Captures the payload so the assertion can check for the *absence* of a key,
+      // which call matchers express poorly.
+      const submitted: PipelineRun[] = [];
+      const request: typeof router = (queryName, args, headers) => {
+        if (queryName === 'CreatePipelineRun') {
+          submitted.push(args as PipelineRun);
+        }
+        return router(queryName, args, headers);
+      };
+
+      renderForm(request);
+
+      const dialog = await screen.findByRole('dialog', { name: 'Start new pipeline run' });
+      await openResumeGroup(user);
+      await selectEnvironment(user, dialog, 'Development');
+      await user.click(within(dialog).getByRole('button', { name: 'Run' }));
+
+      await waitFor(() => {
+        expect(submitted).toHaveLength(1);
+      });
+      expect(submitted[0].spec.resume).toBeUndefined();
     });
   });
 });

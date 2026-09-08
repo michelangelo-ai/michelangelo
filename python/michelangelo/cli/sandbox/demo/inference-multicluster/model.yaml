@@ -1,0 +1,16 @@
+apiVersion: michelangelo.api/v2
+kind: Model
+metadata:
+  name: bert-cola-37
+  namespace: default
+  labels:
+    app: inference-server
+spec:
+  owner:
+    name: "user-example"
+  description: "BERT fine-tuned on CoLA, packaged for Triton."
+  packageType: DEPLOYABLE_MODEL_PACKAGE_TYPE_TRITON
+  # The deployment controller reads this URI and hands it to the model-sync sidecar in
+  # every target cluster, each of which syncs the whole prefix from the shared MinIO.
+  deployableArtifactUri:
+    - s3://deploy-models/bert-cola-37/

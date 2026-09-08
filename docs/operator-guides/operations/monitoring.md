@@ -14,7 +14,16 @@ Michelangelo AI components expose Prometheus metrics that integrate with a stand
 
 ### Controller Manager
 
-The controller manager exposes metrics on port `8091` (configured via `metricsBindAddress`). If you are using the [Prometheus Operator](https://github.com/prometheus-operator/prometheus-operator), create a `ServiceMonitor`:
+The controller manager exposes metrics on port `8091` (configured via `metricsBindAddress`). If you are using the [Prometheus Operator](https://github.com/prometheus-operator/prometheus-operator), the Helm chart can create the `ServiceMonitor` for you:
+
+```bash
+helm upgrade michelangelo ./helm/michelangelo --reuse-values \
+  --set monitoring.enabled=true
+```
+
+The resource is only rendered when the Prometheus Operator CRDs (`monitoring.coreos.com/v1`) are installed, so the toggle is a safe no-op on clusters without the operator. Scrape interval and extra labels (e.g. to match your Prometheus instance's `serviceMonitorSelector`) are configurable under `monitoring.serviceMonitor.*`.
+
+To create the `ServiceMonitor` yourself instead, select the controller manager Service by its chart labels:
 
 ```yaml
 apiVersion: monitoring.coreos.com/v1
@@ -22,12 +31,12 @@ kind: ServiceMonitor
 metadata:
   name: michelangelo-controllermgr
   namespace: ma-system
-  labels:
-    app: michelangelo-controllermgr
 spec:
   selector:
     matchLabels:
-      app: michelangelo-controllermgr
+      app.kubernetes.io/name: michelangelo
+      app.kubernetes.io/instance: michelangelo   # your Helm release name
+      app.kubernetes.io/component: controllermgr
   endpoints:
   - port: metrics          # Must match the Service port name for port 8091
     path: /metrics
@@ -36,12 +45,12 @@ spec:
 
 ### Health Probes
 
-The controller manager exposes health endpoints on port `8083` (configured via `healthProbeBindAddress`):
+The controller manager exposes health endpoints on port `8081` (configured via `healthProbeBindAddress`; the chart default is `controllermgr.healthPort: 8081`):
 
 | Endpoint | Purpose |
 |----------|---------|
-| `GET :8083/healthz` | Liveness — is the process alive? |
-| `GET :8083/readyz` | Readiness — is the controller ready to reconcile? |
+| `GET :8081/healthz` | Liveness — is the process alive? |
+| `GET :8081/readyz` | Readiness — is the controller ready to reconcile? |
 
 These are used by Kubernetes liveness and readiness probes, but you can also poll them from your monitoring stack for coarser-grained health checks.
 
@@ -110,7 +119,9 @@ The `kind` label is a stable dashboard/alerting **contract**: its value is alway
 
 ## Alerting Rules
 
-Add these rules to your Prometheus configuration:
+If you use the Prometheus Operator, the Helm chart installs these rules as a `PrometheusRule` resource when `monitoring.enabled=true` (on by default under the toggle; disable with `monitoring.prometheusRule.enabled=false`). The four alerts based on controller-manager metrics are always included; the two Envoy-based inference alerts are behind `monitoring.prometheusRule.envoyAlerts.enabled` because they require the Envoy admin interface and a scrape job for it (see [Envoy Proxy](#envoy-proxy) above).
+
+If you manage Prometheus configuration directly, add the rules yourself:
 
 ```yaml
 groups:
@@ -202,7 +213,9 @@ groups:
 
 ## Grafana Dashboard
 
-Create a Grafana dashboard with these panels to get operational visibility at a glance.
+If you run the [Grafana Operator](https://github.com/grafana/grafana-operator), the Helm chart ships two ready-made dashboards as `GrafanaDashboard` resources when `monitoring.enabled=true`: a control-plane view (pipeline results, reconcile health, work queues, cascade delete) and a pipeline-runs view (durations, failure reasons, step completions). Point `monitoring.grafanaDashboards.instanceSelector` at the labels on your `Grafana` CR — the default matches `dashboards: grafana`. Every panel queries metrics the controller manager exposes out of the box.
+
+To build a dashboard by hand instead, use these panels to get operational visibility at a glance.
 
 ### Overview row
 

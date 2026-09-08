@@ -331,17 +331,23 @@ current-context: test-context
 
         sandbox._delete(ns)
 
-        # Verify check was called
-        mock_check_output.assert_called_once()
+        # Each demo inference cluster is probed before the compute cluster, so the
+        # compute-cluster probe is the last one.
+        inference_clusters = sandbox._inference_compute_cluster_names
+        self.assertEqual(mock_check_output.call_count, len(inference_clusters) + 1)
         call_args = mock_check_output.call_args[0][0]
         self.assertIn("k3d", call_args)
         self.assertIn("cluster", call_args)
         self.assertIn("get", call_args)
         self.assertIn("test-compute", call_args)
 
-        # Verify both clusters were deleted
+        # Every probe succeeds here, so the inference clusters, the compute cluster,
+        # and the sandbox cluster are all deleted.
         delete_calls = [c for c in mock_exec.call_args_list if "delete" in c[0]]
-        self.assertEqual(len(delete_calls), 2)
+        self.assertEqual(len(delete_calls), len(inference_clusters) + 2)
+        deleted = {c[0][-1] for c in delete_calls}
+        for inf_cluster in inference_clusters:
+            self.assertIn(inf_cluster, deleted)
 
     @patch("michelangelo.cli.sandbox.sandbox._exec")
     @patch("michelangelo.cli.sandbox.sandbox.subprocess.check_output")
@@ -357,10 +363,12 @@ current-context: test-context
 
         sandbox._delete(ns)
 
-        # Verify check was called
-        mock_check_output.assert_called_once()
+        # Each demo inference cluster is probed before the compute cluster.
+        inference_clusters = sandbox._inference_compute_cluster_names
+        self.assertEqual(mock_check_output.call_count, len(inference_clusters) + 1)
 
-        # Verify only main cluster was deleted (not the compute cluster)
+        # Every probe fails, so neither the inference clusters nor the compute cluster
+        # are deleted; only the main sandbox cluster is.
         delete_calls = [c for c in mock_exec.call_args_list if "delete" in c[0]]
         self.assertEqual(len(delete_calls), 1)
 

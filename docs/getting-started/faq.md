@@ -78,7 +78,7 @@ A: Deployment time varies:
 
 **Q: Can I do A/B testing?**
 
-A: Yes. Deploy multiple model versions to the same endpoint with traffic splitting. Monitor metrics per variant and gradually shift traffic to the winner.
+A: Not yet for automatic traffic splitting (on the [roadmap](./roadmap.md)). Today you can deploy multiple model versions and route to a specific one by deployment name; compare metrics per deployment manually.
 
 **Q: What happens if my model training fails?**
 

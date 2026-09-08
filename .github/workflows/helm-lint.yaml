@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Helm
         uses: azure/setup-helm@v5
@@ -109,6 +109,31 @@ jobs:
             --set temporal.server.config.persistence.visibility.sql.host=mysql \
             --set temporal.server.config.persistence.visibility.sql.user=root \
             --set temporal.server.config.persistence.visibility.sql.password=root \
+            2>/dev/null
+
+      - name: Template — monitoring enabled (ServiceMonitor renders with CRDs present)
+        run: |
+          helm template michelangelo helm/michelangelo \
+            -f helm/michelangelo/values-k3d.yaml \
+            --set monitoring.enabled=true \
+            --api-versions monitoring.coreos.com/v1 \
+            --api-versions grafana.integreatly.org/v1beta1 \
+            --debug \
+            | grep -e 'kind: ServiceMonitor' -e 'kind: PrometheusRule' -e 'kind: GrafanaDashboard'
+
+      - name: Template — monitoring enabled without CRDs (must skip gracefully)
+        run: |
+          ! helm template michelangelo helm/michelangelo \
+            -f helm/michelangelo/values-k3d.yaml \
+            --set monitoring.enabled=true \
+            | grep -e 'kind: ServiceMonitor' -e 'kind: PrometheusRule' -e 'kind: GrafanaDashboard'
+
+      - name: Validate fail-fast guard (monitoring without controllermgr must fail)
+        run: |
+          ! helm template michelangelo helm/michelangelo \
+            -f helm/michelangelo/values-k3d.yaml \
+            --set monitoring.enabled=true \
+            --set controllermgr.enabled=false \
             2>/dev/null
 
       - name: Template — Ingress enabled (UI + Envoy, hosts[] syntax)

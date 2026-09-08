@@ -1,0 +1,20 @@
+{{- if and .Values.monitoring.enabled .Values.monitoring.serviceMonitor.enabled .Values.controllermgr.enabled (.Capabilities.APIVersions.Has "monitoring.coreos.com/v1") }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "michelangelo.componentFullname" (dict "context" . "component" "controllermgr") }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "michelangelo.componentLabels" (dict "context" . "component" "controllermgr") | nindent 4 }}
+    {{- with .Values.monitoring.serviceMonitor.additionalLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "michelangelo.componentSelectorLabels" (dict "context" . "component" "controllermgr") | nindent 6 }}
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: {{ .Values.monitoring.serviceMonitor.interval }}
+{{- end }}

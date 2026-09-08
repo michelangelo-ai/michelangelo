@@ -3,6 +3,7 @@ import { ArrowUp, Check, Delete } from 'baseui/icon';
 
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getIconProviderWrapper } from '#core/test/wrappers/get-icon-provider-wrapper';
+import { getRouterWrapper } from '#core/test/wrappers/get-router-wrapper';
 import { TASK_STATE } from '../../../constants';
 import { createTask } from '../__fixtures__/task-details-fixtures';
 import { TaskHeader } from '../task-header';
@@ -45,7 +46,8 @@ describe('TaskHeader', () => {
           { id: 'duration', label: 'Duration' },
           { id: 'startTime', label: 'Started' },
         ]}
-      />
+      />,
+      buildWrapper([getRouterWrapper()])
     );
 
     expect(screen.getByText('Task with Metadata')).toBeInTheDocument();
@@ -113,7 +115,8 @@ describe('TaskHeader', () => {
           { id: 'duration', label: 'Duration' },
           { id: 'startTime', label: 'Started' },
         ]}
-      />
+      />,
+      buildWrapper([getRouterWrapper()])
     );
 
     expect(screen.getByText('Incomplete Task')).toBeInTheDocument();

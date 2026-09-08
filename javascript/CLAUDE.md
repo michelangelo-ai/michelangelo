@@ -38,6 +38,7 @@ yarn test
 
 - Start with `useStyletron`; extract to `styled()` at 4+ CSS properties or when used in 2+ places
 - Styled component names are semantic — never `Container`, `Card`, `Wrapper`
+- Placeholder text shows examples, never instructions: prefix with "e.g." and never use action verbs ("Enter…", "Type…", "Select…"); never echo the field's label; default to no placeholder at all unless a concrete example genuinely helps
 
 ### Testing
 

@@ -29,8 +29,8 @@ repos:
         language: system
         files: ^go/.*\.go$
       - id: go-vet
-        name: go vet
-        entry: bash -c 'cd go && go vet ./...'
+        name: go vet (via bazel nogo)
+        entry: bash -c './tools/bazel build //go/...'
         language: system
         files: ^go/.*\.go$
         pass_filenames: false

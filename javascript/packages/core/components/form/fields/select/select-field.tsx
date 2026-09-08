@@ -32,6 +32,7 @@ export function SelectField<V = string | number>({
   searchable = true,
   multi = false,
   creatable = false,
+  getOptionContent,
 }: SelectFieldProps<V>) {
   const { input, meta } = useField<V | V[]>(name, {
     required,
@@ -145,7 +146,16 @@ export function SelectField<V = string | number>({
         isLoading={isLoading}
         // Modified getOptionLabel in BaseWeb Select to avoid adding "Create" prefix on user input for
         // creatable dropdowns, as creation typically occurs during form submission. The prefix is misleading.
-        getOptionLabel={({ option }) => option.label}
+        // When getOptionContent is supplied, dropdown rows render it instead of the plain label; the
+        // original option is recovered from the serialized key, since BaseUI only sees the adaptation.
+        getOptionLabel={({ option }) => {
+          if (!getOptionContent) return option.label;
+          const original = findByKey(String(option.id));
+          return original ? getOptionContent(original) : option.label;
+        }}
+        // Selected values keep the plain label so multi-select tags stay compact even when
+        // dropdown rows are rich.
+        getValueLabel={({ option }) => option.label}
       />
     </FormControl>
   );

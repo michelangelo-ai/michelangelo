@@ -26,6 +26,7 @@ export function EntityTable<T extends object = object>({
   tableConfig,
   tableSettingsId,
   pipelineTypes,
+  trailingActions,
 }: EntityTableProps<T>) {
   const { projectId } = useStudioParams('base');
   const listOptions = injectListOptions(service, pipelineTypes);
@@ -49,5 +50,11 @@ export function EntityTable<T extends object = object>({
     error: error ?? undefined,
   });
 
-  return <Table {...tableProps} state={entityTableState} />;
+  return (
+    <Table
+      {...tableProps}
+      actionBarConfig={{ ...tableProps.actionBarConfig, trailing: trailingActions }}
+      state={entityTableState}
+    />
+  );
 }

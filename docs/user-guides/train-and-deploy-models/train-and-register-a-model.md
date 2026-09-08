@@ -19,7 +19,7 @@ The focus is simplicity: **you control your training logic**, Michelangelo AI pr
 
 - **A running sandbox** — Remote training runs require a local Kubernetes cluster. Follow the [Sandbox Setup](../../getting-started/sandbox-setup.md) guide if you haven't done this yet.
 - **A prepared dataset** — Training tasks expect datasets passed as `DatasetVariable`. See [Data Preparation](../getting-started/prepare-your-data.md) for how to produce them.
-- **Python 3.11+, Poetry, and the Michelangelo AI SDK installed** — Run `cd python && poetry install` from the repo root.
+- **Python 3.11+, Poetry, and the Michelangelo AI SDK installed** — Run `cd python && poetry install -E example` from the repo root (the `example` extra pulls the ML dependencies the bundled examples import).
 - **For distributed training:** A Docker image with your workflow code. See [Running Uniflow Pipelines](../ml-pipelines/running-uniflow.md) for image build steps.
 
 ## Understanding Training Inputs
@@ -183,6 +183,10 @@ You **do not** need to implement:
 
 The SDK automates all distributed concerns.
 
+:::tip
+This example covers the common case. For the full configuration surface — every `LightningTrainerParam` field, choosing between DDP/FSDP/FSDP2/DeepSpeed, warm starts, auto-resume, and loading trained weights back into a `torch.nn.Module` — see [Distributed Training with LightningTrainer](./distributed-training.md).
+:::
+
 ## Best Practices
 
 ### Recommended
@@ -204,6 +208,7 @@ Your models are now ready to move forward:
 
 * Continue to [**Model Registry**](./model-registry-guide.md) to save and version
 * Continue to [**Deploy a Model**](./deploy-a-model.md) for inference
+* Optional: go deeper on [**Distributed Training**](./distributed-training.md) for strategies, warm starts, and auto-resume
 
 ## Troubleshooting
 

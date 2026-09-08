@@ -16,6 +16,62 @@ export type Trigger = {
   };
 };
 
+/**
+ * A trigger declared in a pipeline's manifest (`PipelineManifest.trigger_map`), as
+ * protobuf-es decodes the proto `Trigger` message: the `oneof trigger_type` becomes a
+ * tagged `{ case, value }` union.
+ *
+ * The whole object is copied (and, for a backfill run, partially overridden) into
+ * {@link RunTriggerPayload.spec.trigger} on submit, so fields not read directly by the UI
+ * still survive the round trip via object spread — they just aren't typed here individually
+ * unless a form field needs to read or override them (see `parametersMap`, `maxConcurrency`).
+ */
+export type ManifestTrigger = {
+  triggerType?:
+    | { case: 'cronSchedule'; value: { cron?: string } }
+    | { case: 'intervalSchedule'; value: { interval?: { seconds?: bigint | number | string } } }
+    | { case: 'batchRerun'; value: BatchRerun };
+  /** Dynamic pipeline parameters this trigger can run with, keyed by parameter ID. */
+  parametersMap?: Record<string, unknown>;
+  /** Default cap on concurrent runs for this trigger; overridable for a backfill run. */
+  maxConcurrency?: number;
+};
+
+/** Reruns a set of existing pipeline runs, optionally from/up to specific DAG nodes (proto `BatchRerun`). */
+export type BatchRerun = {
+  /** The pipeline runs to rerun. */
+  pipelineRuns?: { name?: string; namespace?: string }[];
+  /** DAG nodes execution resumes from. */
+  resumeFrom?: string[];
+  /** DAG nodes execution runs up to (inclusive). */
+  resumeUpTo?: string[];
+};
+
+/**
+ * Payload for `CreateTriggerRun` when running a pipeline from a manifest trigger — either on
+ * its declared schedule, or as a one-off backfill over a time window.
+ *
+ * `spec.trigger` carries the schedule and is what actually drives execution — the
+ * reconciler reads it directly (`GetTriggerType` in go/components/triggerrun/util.go) and
+ * falls through to `TriggerTypeUnknown` if it is absent, leaving the TriggerRun inert.
+ * `spec.sourceTriggerName` is provenance only; nothing on the backend resolves it.
+ */
+export type RunTriggerPayload = {
+  metadata: {
+    name: string;
+    namespace: string;
+  };
+  spec: {
+    pipeline: { name: string; namespace: string };
+    trigger: ManifestTrigger;
+    sourceTriggerName: string;
+    autoFlip: boolean;
+    /** Epoch-seconds window bounds; present only for a backfill run. */
+    startTimestamp?: { seconds: string };
+    endTimestamp?: { seconds: string };
+  };
+};
+
 export type TriggerRun = {
   metadata: {
     name: string;
@@ -25,6 +81,8 @@ export type TriggerRun = {
     pipeline: { name: string; namespace: string };
     revision: { name: string; namespace: string };
     actor: { name: string };
+    /** The trigger definition this run executes; its `triggerType` decides the schedule. */
+    trigger?: ManifestTrigger;
     sourceTriggerName: string;
     autoFlip: boolean;
     notifications: unknown[];

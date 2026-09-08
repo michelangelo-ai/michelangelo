@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import itertools
+import os
 import re
+import tempfile
 from unittest import TestCase
 from unittest.mock import MagicMock, patch
 
 from michelangelo.lib.model_manager.registry.client import RegisteredModel
+from michelangelo.lib.shared.pipeline_run import SourcePipelineRun
 from michelangelo.workflow.schema.exceptions import ConfigurationError
 from michelangelo.workflow.schema.pusher import ModelPluginConfig
 from michelangelo.workflow.tasks.pusher.plugins.model_plugin import (
@@ -150,6 +153,63 @@ class TestModelPusherPluginExecute(TestCase):
         self.assertIn("push_id", result)
         self.assertIn("registrations", result)
 
+    def test_remote_artifact_uri_downloaded_before_upload(self):
+        """A URI artifact.path is downloaded to a local path before upload().
+
+        The temp download is cleaned up after execute() returns, so
+        existence is checked from within the upload() call itself.
+        """
+        backend = _mock_backend()
+        artifact = AssembledModel(
+            raw_model=ModelArtifact(path="s3://bucket/tabular_assembler/x/raw"),
+            deployable_model=ModelArtifact(
+                path="s3://bucket/tabular_assembler/x/deployable"
+            ),
+        )
+
+        def _fake_download(uri, local_path):
+            with open(local_path, "w") as f:
+                f.write("fake artifact content")
+
+        backend.download.side_effect = _fake_download
+
+        upload_time_existence = []
+
+        def _fake_upload(local_path, destination_key):
+            upload_time_existence.append(os.path.isfile(local_path))
+            return f"s3://uploaded/{destination_key}"
+
+        backend.upload.side_effect = _fake_upload
+
+        result = _plugin(artifact=artifact, backend=backend).execute()
+
+        self.assertEqual(backend.download.call_count, 2)
+        raw_local_path = backend.upload.call_args_list[0][0][0]
+        dep_local_path = backend.upload.call_args_list[1][0][0]
+        self.assertNotEqual(raw_local_path, "s3://bucket/tabular_assembler/x/raw")
+        self.assertNotEqual(
+            dep_local_path, "s3://bucket/tabular_assembler/x/deployable"
+        )
+        self.assertEqual(upload_time_existence, [True, True])
+
+        # The local download directory name (an implementation detail) must
+        # not leak into the destination storage key.
+        raw_key = backend.upload.call_args_list[0][0][1]
+        dep_key = backend.upload.call_args_list[1][0][1]
+        self.assertEqual(raw_key, f"models/{result['model_name']}/raw")
+        self.assertEqual(dep_key, f"models/{result['model_name']}/deployable/model.tar")
+
+    def test_local_artifact_path_uploaded_directly_without_download(self):
+        """A plain local path is passed straight to upload() without download."""
+        backend = _mock_backend()
+        artifact = _assembled()
+
+        _plugin(artifact=artifact, backend=backend).execute()
+
+        self.assertEqual(backend.download.call_count, 0)
+        raw_local_path = backend.upload.call_args_list[0][0][0]
+        self.assertEqual(raw_local_path, artifact.raw_model.path)
+
     def test_uses_config_model_name(self):
         """It registers the model under the name set in ModelPluginConfig."""
         registry = _mock_registry(name="my-clf")
@@ -191,8 +251,13 @@ class TestModelPusherPluginExecute(TestCase):
         gen.assert_called_once_with("model")
         self.assertEqual(result["model_name"], "model-20260721-114130-2d9c959d")
 
-    def test_storage_key_includes_push_id_for_uniqueness(self):
-        """Each execute() call uses a unique push_id in the storage key."""
+    def test_storage_key_is_stable_across_calls_with_same_model_name(self):
+        """Two execute() calls with the same model_name reuse the same key.
+
+        This is a deliberate tradeoff: storage keys have no per-push
+        differentiator, so re-pushing the same model_name overwrites the
+        previous push's storage objects.
+        """
         backend1 = _mock_backend(raw_uri="s3://b/raw1", dep_uri="s3://b/dep1")
         backend2 = _mock_backend(raw_uri="s3://b/raw2", dep_uri="s3://b/dep2")
         _plugin(model_name="m", backend=backend1).execute()
@@ -200,9 +265,8 @@ class TestModelPusherPluginExecute(TestCase):
 
         key1_raw = backend1.upload.call_args_list[0][0][1]
         key2_raw = backend2.upload.call_args_list[0][0][1]
-        self.assertTrue(key1_raw.startswith("models/m/"))
-        self.assertTrue(key2_raw.startswith("models/m/"))
-        self.assertNotEqual(key1_raw, key2_raw)
+        self.assertEqual(key1_raw, "models/m/raw")
+        self.assertEqual(key2_raw, "models/m/raw")
 
     def test_description_forwarded_to_register_model(self):
         """It passes config.description to register_model(description=...)."""
@@ -594,12 +658,76 @@ class TestModelPusherPluginMultiRegistry(TestCase):
 
 
 # ---------------------------------------------------------------------------
+# Pipeline-run provenance
+# ---------------------------------------------------------------------------
+
+
+class TestModelPusherPluginSourcePipelineRun(TestCase):
+    """Tests for ModelPusherPlugin.execute() threading source_pipeline_run."""
+
+    def setUp(self) -> None:
+        """Isolate the pipeline-run env vars per test."""
+        self._env_patcher = patch.dict(os.environ, {}, clear=False)
+        self._env_patcher.start()
+        os.environ.pop("MA_PIPELINE_RUN_NAME", None)
+        os.environ.pop("MA_NAMESPACE", None)
+        self.addCleanup(self._env_patcher.stop)
+
+    def test_source_pipeline_run_passed_when_env_vars_set(self):
+        """execute() calls register_model() with source_pipeline_run from the env."""
+        os.environ["MA_PIPELINE_RUN_NAME"] = "run-1"
+        os.environ["MA_NAMESPACE"] = "ns-1"
+        registry = _mock_registry(name="clf")
+        _plugin(model_name="clf", registry=registry).execute()
+
+        call_kwargs = registry.register_model.call_args.kwargs
+        self.assertEqual(
+            call_kwargs["source_pipeline_run"],
+            SourcePipelineRun(name="run-1", namespace="ns-1"),
+        )
+
+    def test_source_pipeline_run_none_when_env_vars_unset(self):
+        """execute() passes source_pipeline_run=None outside a pipeline (local dev).
+
+        Regression guard: every other test in this file runs with neither env
+        var set and must keep working exactly as before this change.
+        """
+        registry = _mock_registry(name="clf")
+        _plugin(model_name="clf", registry=registry).execute()
+
+        call_kwargs = registry.register_model.call_args.kwargs
+        self.assertIsNone(call_kwargs["source_pipeline_run"])
+
+    def test_source_pipeline_run_sent_to_every_registry_in_fanout(self):
+        """Multi-registry fan-out: every registry receives the same value."""
+        os.environ["MA_PIPELINE_RUN_NAME"] = "run-2"
+        r1 = MagicMock()
+        r1.register_model.return_value = RegisteredModel(
+            name="m", version="1", registry_uri="a://m/1"
+        )
+        r2 = MagicMock()
+        r2.register_model.return_value = RegisteredModel(
+            name="m", version="1", registry_uri="b://m/1"
+        )
+        ModelPusherPlugin(
+            config=ModelPluginConfig(model_name="m", registry_clients=[r1, r2]),
+            artifact=_assembled(),
+            storage_backend=_mock_backend(),
+        ).execute()
+
+        expected = SourcePipelineRun(name="run-2", namespace=None)
+        for client in (r1, r2):
+            kw = client.register_model.call_args.kwargs
+            self.assertEqual(kw["source_pipeline_run"], expected)
+
+
+# ---------------------------------------------------------------------------
 # Push ID and result contract
 # ---------------------------------------------------------------------------
 
 
 class TestModelPusherPluginPushId(TestCase):
-    """Tests for push_id uniqueness, presence in result, and storage-only scope."""
+    """Tests for push_id presence/uniqueness in the result and its scope."""
 
     def test_push_id_present_in_result(self):
         """execute() result contains a 'push_id' key."""
@@ -607,15 +735,15 @@ class TestModelPusherPluginPushId(TestCase):
         self.assertIn("push_id", result)
         self.assertEqual(len(result["push_id"]), 16)
 
-    def test_push_id_in_storage_key(self):
-        """The push_id returned in result matches the storage key segment."""
+    def test_push_id_not_in_storage_key(self):
+        """push_id is a per-call correlation token only, absent from storage keys."""
         backend = _mock_backend()
         result = _plugin(model_name="m", backend=backend).execute()
         raw_key = backend.upload.call_args_list[0][0][1]
-        self.assertIn(result["push_id"], raw_key)
+        self.assertNotIn(result["push_id"], raw_key)
 
     def test_push_id_not_in_registry_labels_or_metadata(self):
-        """push_id is a storage-layer token — absent from both labels and metadata."""
+        """push_id is a correlation token — absent from labels and metadata."""
         registry = _mock_registry(name="m")
         _plugin(model_name="m", registry=registry).execute()
         labels = registry.register_model.call_args.kwargs["labels"]
@@ -632,10 +760,10 @@ class TestModelPusherPluginPushId(TestCase):
 
 
 class TestModelPusherPluginStorageKey(TestCase):
-    """Tests for artifact filename inclusion in S3 storage keys."""
+    """Tests for the fixed destination-key format used for raw/deployable uploads."""
 
-    def test_raw_key_includes_artifact_filename(self):
-        """Raw upload key ends with the artifact's filename."""
+    def test_raw_key_is_fixed_regardless_of_artifact_filename(self):
+        """Raw upload key is fixed and does not echo the artifact's filename."""
         backend = _mock_backend()
         ModelPusherPlugin(
             config=ModelPluginConfig(model_name="m"),
@@ -644,43 +772,150 @@ class TestModelPusherPluginStorageKey(TestCase):
             registry_client=_mock_registry(),
         ).execute()
         raw_key = backend.upload.call_args_list[0][0][1]
-        self.assertTrue(raw_key.endswith("/model.ubj"), raw_key)
+        self.assertEqual(raw_key, "models/m/raw")
 
-    def test_deployable_key_includes_artifact_filename(self):
-        """Deployable upload key ends with the artifact's filename."""
+    def test_deployable_key_is_fixed_regardless_of_artifact_filename(self):
+        """Deployable upload key is fixed and does not echo the artifact's filename.
+
+        A real file is used for the deployable path (rather than the
+        fake nonexistent paths used elsewhere in this module) because the
+        raw-vs-deployable key format now depends on whether the artifact is
+        actually a file or a directory on disk.
+        """
         backend = _mock_backend()
-        ModelPusherPlugin(
-            config=ModelPluginConfig(model_name="m"),
-            artifact=AssembledModel(
-                raw_model=ModelArtifact(path="/tmp/model.ubj"),
-                deployable_model=ModelArtifact(path="/tmp/serving_model.zip"),
-            ),
-            storage_backend=backend,
-            registry_client=_mock_registry(),
-        ).execute()
+        with tempfile.NamedTemporaryFile(suffix="serving_model.zip") as f:
+            ModelPusherPlugin(
+                config=ModelPluginConfig(model_name="m"),
+                artifact=AssembledModel(
+                    raw_model=ModelArtifact(path="/tmp/model.ubj"),
+                    deployable_model=ModelArtifact(path=f.name),
+                ),
+                storage_backend=backend,
+                registry_client=_mock_registry(),
+            ).execute()
         dep_key = backend.upload.call_args_list[1][0][1]
-        self.assertTrue(dep_key.endswith("/serving_model.zip"), dep_key)
+        self.assertEqual(dep_key, "models/m/deployable/model.tar")
 
-    def test_raw_key_with_trailing_slash_path_uses_name(self):
-        """Trailing-slash path produces a non-empty filename segment in the key."""
+    def test_deployable_key_has_no_model_tar_suffix_for_directory_artifact(self):
+        """A deployable artifact that's a directory gets no /model.tar suffix.
+
+        The assembler always hands off the deployable package as loose
+        files (tarring, when requested via
+        ModelPluginConfig.tar_deployable_package, is the pusher's job) --
+        with tar_deployable_package left at its default (False) here, a
+        directory artifact must be keyed like the raw model, not assumed
+        to always be a tar.
+        """
+        backend = _mock_backend()
+        with tempfile.TemporaryDirectory() as d:
+            ModelPusherPlugin(
+                config=ModelPluginConfig(model_name="m"),
+                artifact=AssembledModel(
+                    raw_model=ModelArtifact(path="/tmp/model.ubj"),
+                    deployable_model=ModelArtifact(path=d),
+                ),
+                storage_backend=backend,
+                registry_client=_mock_registry(),
+            ).execute()
+        dep_key = backend.upload.call_args_list[1][0][1]
+        self.assertEqual(dep_key, "models/m/deployable")
+
+    def test_tar_deployable_package_archives_directory_before_upload(self):
+        """tar_deployable_package=True archives a directory deployable artifact.
+
+        Tarring a directory deployable artifact (rather than uploading it
+        as loose files) is the pusher's decision, driven by
+        ModelPluginConfig.tar_deployable_package -- the assembler always
+        hands off loose files regardless.
+        """
+        backend = _mock_backend()
+        upload_time_is_file: list[bool] = []
+
+        def _fake_upload(local_path, destination_key):
+            upload_time_is_file.append(os.path.isfile(local_path))
+            return f"s3://uploaded/{destination_key}"
+
+        backend.upload.side_effect = _fake_upload
+
+        with tempfile.TemporaryDirectory() as d:
+            with open(os.path.join(d, "config.pbtxt"), "w") as f:
+                f.write('name: "m"')
+            ModelPusherPlugin(
+                config=ModelPluginConfig(model_name="m", tar_deployable_package=True),
+                artifact=AssembledModel(
+                    raw_model=ModelArtifact(path="/tmp/model.ubj"),
+                    deployable_model=ModelArtifact(path=d),
+                ),
+                storage_backend=backend,
+                registry_client=_mock_registry(),
+            ).execute()
+        dep_key = backend.upload.call_args_list[1][0][1]
+        self.assertEqual(upload_time_is_file, [False, True])
+        self.assertEqual(dep_key, "models/m/deployable/model.tar")
+
+    def test_tar_deployable_package_has_no_effect_on_file_artifact(self):
+        """tar_deployable_package=True is a no-op when already a single file."""
+        backend = _mock_backend()
+        with tempfile.NamedTemporaryFile() as f:
+            ModelPusherPlugin(
+                config=ModelPluginConfig(model_name="m", tar_deployable_package=True),
+                artifact=AssembledModel(
+                    raw_model=ModelArtifact(path="/tmp/model.ubj"),
+                    deployable_model=ModelArtifact(path=f.name),
+                ),
+                storage_backend=backend,
+                registry_client=_mock_registry(),
+            ).execute()
+        dep_key = backend.upload.call_args_list[1][0][1]
+        self.assertEqual(dep_key, "models/m/deployable/model.tar")
+
+    def test_raw_key_unaffected_by_source_path_shape(self):
+        """A source path ending in a category-like segment doesn't alter the key.
+
+        Regression: previously, a local download directory name could leak
+        into the destination key, producing a doubled segment (e.g.
+        ``.../raw/raw``) when the source artifact's own path also ended in
+        ``raw``/``deployable``. The destination key must stay fixed no
+        matter what the source path looks like.
+        """
         backend = _mock_backend()
         ModelPusherPlugin(
             config=ModelPluginConfig(model_name="m"),
             artifact=AssembledModel(
-                raw_model=ModelArtifact(path="/tmp/checkpoints/run1/")
+                raw_model=ModelArtifact(path="/tmp/checkpoints/run1/raw")
             ),
             storage_backend=backend,
             registry_client=_mock_registry(),
         ).execute()
         raw_key = backend.upload.call_args_list[0][0][1]
-        # Path("/tmp/checkpoints/run1/").name == "run1" — not empty
-        self.assertTrue(raw_key.endswith("/run1"), raw_key)
+        self.assertEqual(raw_key, "models/m/raw")
 
     def test_push_id_unique_across_calls(self):
         """Consecutive execute() calls produce different push_ids."""
         r1 = _plugin(model_name="m", backend=_mock_backend()).execute()
         r2 = _plugin(model_name="m", backend=_mock_backend()).execute()
         self.assertNotEqual(r1["push_id"], r2["push_id"])
+
+    def test_downloaded_artifact_key_is_fixed(self):
+        """A downloaded URI artifact's key is fixed, matching the local-path case."""
+        backend = _mock_backend()
+
+        def _fake_download(uri, local_path):
+            with open(local_path, "w") as f:
+                f.write("fake artifact content")
+
+        backend.download.side_effect = _fake_download
+
+        ModelPusherPlugin(
+            config=ModelPluginConfig(model_name="m"),
+            artifact=AssembledModel(
+                raw_model=ModelArtifact(path="s3://bucket/tabular_assembler/x/raw")
+            ),
+            storage_backend=backend,
+            registry_client=_mock_registry(),
+        ).execute()
+        raw_key = backend.upload.call_args_list[0][0][1]
+        self.assertEqual(raw_key, "models/m/raw")
 
 
 # ---------------------------------------------------------------------------

@@ -17,6 +17,8 @@ data:
         burst: {{ .Values.apiserver.k8s.burst }}
       crdSync:
         enableCRDUpdate: {{ .Values.apiserver.crdSync.enableUpdate }}
+      pipelineRunDefaults:
+        environment: {{ .Values.apiserver.pipelineRunDefaults.environment | default "" | quote }}
     metadataStorage:
       enableMetadataStorage: {{ .Values.apiserver.metadataStorage.enable }}
     mysql:

@@ -49,8 +49,14 @@ class ValidateSchemaTest(TestCase):
             ),
         )
 
-    def test_validate_model_schema_item_invalid_shape(self):
-        """It rejects schema items without shapes."""
+    def test_validate_model_schema_item_empty_shape_is_valid(self):
+        """An empty shape is a valid true scalar (no non-batch dimensions).
+
+        item.shape excludes the batch dimension, which Triton applies
+        separately and flexibly (config.pbtxt `dims` never includes it), so
+        there is nothing to reject here -- a feature with no non-batch
+        dimensions at all is a legitimate schema item, not an error state.
+        """
         schema_item = ModelSchemaItem(
             name="ft1",
             data_type=DataType.INT,
@@ -58,26 +64,16 @@ class ValidateSchemaTest(TestCase):
         )
 
         is_valid, error = validate_model_schema_item(schema_item)
-        self.assertFalse(is_valid)
-        self.assertIsInstance(error, ValueError)
-        self.assertEqual(
-            str(error),
-            "Shape must be provided for item: ModelSchemaItem(name='ft1', "
-            "data_type=<DataType.INT: 18>, shape=[], optional=None)",
-        )
+        self.assertTrue(is_valid)
+        self.assertIsNone(error)
 
         schema_item = ModelSchemaItem(
             name="ft1",
             data_type=DataType.INT,
         )
         is_valid, error = validate_model_schema_item(schema_item)
-        self.assertFalse(is_valid)
-        self.assertIsInstance(error, ValueError)
-        self.assertEqual(
-            str(error),
-            "Shape must be provided for item: ModelSchemaItem(name='ft1', "
-            "data_type=<DataType.INT: 18>, shape=None, optional=None)",
-        )
+        self.assertTrue(is_valid)
+        self.assertIsNone(error)
 
     def test_validate_model_schema_success(self):
         """It accepts schemas with valid items."""
@@ -140,7 +136,22 @@ class ValidateSchemaTest(TestCase):
         self.assertIsInstance(error, ValueError)
 
     def test_validate_model_schema_output_schema_error(self):
-        """It rejects output schema items missing a shape."""
+        """It rejects output schema items with an unsupported data type."""
+        model_schema = ModelSchema(
+            output_schema=[
+                ModelSchemaItem(
+                    name="ft1",
+                    data_type=DataType.UNKNOWN,
+                    shape=[],
+                ),
+            ],
+        )
+        is_valid, error = validate_model_schema(model_schema)
+        self.assertFalse(is_valid)
+        self.assertIsInstance(error, ValueError)
+
+    def test_validate_model_schema_output_schema_empty_shape_is_valid(self):
+        """An empty shape (true scalar) is valid for output schema items too."""
         model_schema = ModelSchema(
             output_schema=[
                 ModelSchemaItem(
@@ -151,8 +162,8 @@ class ValidateSchemaTest(TestCase):
             ],
         )
         is_valid, error = validate_model_schema(model_schema)
-        self.assertFalse(is_valid)
-        self.assertIsInstance(error, ValueError)
+        self.assertTrue(is_valid)
+        self.assertIsNone(error)
 
     def test_validate_model_schema_output_schema_with_optional(self):
         """It rejects optional output schema items."""

@@ -20,6 +20,7 @@ export function SingleStringField({
   labelEndEnhancer,
   format,
   parse,
+  maxLength,
 }: SingleStringFieldProps) {
   const { input, meta } = useField<string>(name, {
     required,
@@ -30,6 +31,7 @@ export function SingleStringField({
     format,
     parse,
   });
+  const currentLength = input.value?.length ?? 0;
 
   return (
     <FormControl
@@ -39,6 +41,7 @@ export function SingleStringField({
       labelEndEnhancer={labelEndEnhancer}
       caption={caption}
       error={meta.touched && meta.error ? meta.error : undefined}
+      counter={maxLength ? { length: currentLength, maxLength } : undefined}
     >
       <Input
         id={input.name}
@@ -50,6 +53,7 @@ export function SingleStringField({
         placeholder={placeholder}
         readOnly={readOnly}
         disabled={disabled}
+        maxLength={maxLength}
       />
     </FormControl>
   );

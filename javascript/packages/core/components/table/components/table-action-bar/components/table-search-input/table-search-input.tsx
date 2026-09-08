@@ -37,7 +37,7 @@ export function TableSearchInput({ value, onChange }: TableSearchInputProps) {
       overrides={{
         Root: { style: { width: '250px' } },
       }}
-      placeholder="Search..."
+      aria-label="Search"
       startEnhancer={<Icon name="search" />}
     />
   );

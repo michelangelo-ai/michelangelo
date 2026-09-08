@@ -9,7 +9,7 @@ By the end of this guide you'll have a working pipeline that looks like this:
 ```
 dataset_cols
     └─▶ feature_prep()    # Ray task: downloads data, splits into train/validation
-            └─▶ train()   # Ray task: trains XGBoost model on the splits
+            └─▶ train()   # Ray task: trains a PyTorch Lightning model on the splits
 ```
 
 Each step runs as an isolated, containerized task. Michelangelo AI handles data passing between them, caches intermediate results, and retries on transient failures — your code stays plain Python.
@@ -28,7 +28,6 @@ Each step runs as an isolated, containerized task. Michelangelo AI handles data 
 * Java 17 with `JAVA_HOME` set — required for the Spark preprocessing step. Java 21 is not compatible with PySpark 3.5 + Hadoop 3.3 (`getSubject is not supported` error). On macOS: `brew install openjdk@17` then `export JAVA_HOME=$(brew --prefix openjdk@17)/libexec/openjdk.jdk/Contents/Home`
 * For remote runs: Docker and access to a Kubernetes cluster (or use the [local sandbox](../../getting-started/sandbox-setup.md))
 * [Create a project](./project-management-for-ml-pipelines.md)
-* **macOS only**: XGBoost requires OpenMP (`libomp.dylib`), which is not installed by default. Run `brew install libomp` before installing dependencies.
 
 ## Environment setup
 
@@ -141,12 +140,9 @@ def train_workflow(dataset_cols: str):
         train_dv=train_dv,
         validation_dv=validation_dv,
         params={
-            "objective": "reg:squarederror",
-            "colsample_bytree": 0.3,
-            "learning_rate": 0.1,
-            "max_depth": 5,
-            "alpha": 10,
-            "n_estimators": 10,
+            "max_epochs": 5,
+            "batch_size": 64,
+            "precision": "32",
         },
     )
     return result
@@ -184,12 +180,33 @@ The context provides three methods:
 
 Then run it:
 
+The `feature_prep`/`train` workflow above is exactly what the `pytorch_train` pipeline in [`michelangelo-examples`](https://github.com/michelangelo-ai/michelangelo-examples) implements — this tutorial's example now lives there, in its own pip-installable package, rather than in this repo. Install and run it:
+
 ```bash
-cd michelangelo/python
-PYTHONPATH=. poetry run python examples/pipelines/california_housing_xgb/california_housing_xgb.py
+pip install "michelangelo-examples[california-housing]"
+python -m michelangelo_examples.california_housing.pipelines.pytorch_train.pipeline
 ```
 
-Local runs execute everything in your Python interpreter with zero infrastructure setup. This is the fastest way to iterate on your workflow logic.
+Local runs execute everything in your Python interpreter with zero additional infrastructure setup (beyond the one-time `pip install` above) — the fastest way to iterate on your workflow logic.
+
+> **Why a separate repo?** Heavier example pipelines with their own dependency
+> footprint (here, Spark + PyTorch Lightning) live in
+> [`michelangelo-examples`](https://github.com/michelangelo-ai/michelangelo-examples)
+> to keep this core repo's own dependencies lean. Lighter in-repo examples
+> like `bert_cola` (`python/examples/bert_cola/`) are unrelated to this
+> tutorial's pipeline but still run directly from this checkout:
+> ```bash
+> cd michelangelo/python
+> PYTHONPATH=. poetry run python examples/bert_cola/bert_cola.py
+> ```
+>
+> `pytorch_train` also ships a separate, lighter-weight local-only trainer
+> (`python -m michelangelo_examples.california_housing.pipelines.pytorch_train`,
+> no `.pipeline` suffix) that trains directly with plain PyTorch
+> Lightning — no Ray, Spark, or Uniflow context at all. That script is a
+> standalone quick-start, not the `ctx.run(train_workflow)` pattern this
+> tutorial teaches; use the `.pipeline`-suffixed command above to run the
+> actual workflow you just wrote.
 
 ## Step 4: Run remotely
 
@@ -198,19 +215,29 @@ When you need more compute power or want to validate against production infrastr
 ### Build and push a Docker image
 
 ```bash
-docker build -t my-workflow:latest -f ./examples/Dockerfile .
-k3d image import my-workflow:latest -c michelangelo-sandbox
+# From the michelangelo-examples repo checkout:
+docker build -t michelangelo-examples:local .
+k3d image import michelangelo-examples:local -c michelangelo-sandbox
 ```
 
 ### Run with remote execution
 
 ```bash
-PYTHONPATH=. poetry run python examples/pipelines/california_housing_xgb/california_housing_xgb.py remote-run \
-  --image docker.io/library/my-workflow:latest \
-  --storage-url s3://my-bucket/workflows \
+python -m michelangelo_examples.california_housing.pipelines.pytorch_train.pipeline \
+  remote-run \
+  --image docker.io/library/michelangelo-examples:local \
+  --storage-url s3://michelangelo/workflows \
+  --environ AWS_ENDPOINT_URL=http://minio:9091 \
+  --environ AWS_ACCESS_KEY_ID=minioadmin \
+  --environ AWS_SECRET_ACCESS_KEY=minioadmin \
+  --environ REGISTRY_ENDPOINT=michelangelo-apiserver:15566 \
   --yes
 ```
-**Sandbox storage URL**: the `michelangelo` bucket is created automatically by `ma sandbox create`. For other environments replace with your own S3-compatible bucket URL.
+> **Sandbox storage URL**: the `michelangelo` bucket is created automatically
+> by `ma sandbox create`. The `--environ` flags inject credentials into the
+> Cadence/Temporal workflow so they reach remote Ray/Spark workers. See the
+> [`pytorch_train` README](https://github.com/michelangelo-ai/michelangelo-examples/tree/main/src/michelangelo_examples/california_housing/pipelines/pytorch_train)
+> for the full environment variable reference.
 
 Remote runs execute workflow code in a Cadence/Temporal worker and task code in Kubernetes containers with full resource isolation. For detailed remote setup instructions including sandbox configuration, see [Running Uniflow pipelines](../ml-pipelines/running-uniflow.md).
 
@@ -223,11 +250,15 @@ To manage your workflow through MA Studio and the `ma` CLI, register it as a pip
 Pipelines belong to a project. Create one first using the example project config:
 
 ```bash
-ma project apply -f examples/config/project.yaml
+# From the michelangelo-examples repo:
+ma project apply -f src/michelangelo_examples/california_housing/config/project.yaml
 ```
 
-This creates the `ma-examples` project with its namespace. The project config at
-`examples/config/project.yaml` defines ownership, tier, and repository metadata.
+This creates the `california-housing` project with its namespace. The project
+config is specific to `michelangelo-examples`' California Housing pipelines
+and is separate from the core repo's `python/examples/config/project.yaml`
+(which registers the `ma-examples` project for examples that remain in this
+monorepo, such as `workflow_patterns`).
 For details on project configuration, see
 [Project Management for ML Pipelines](./project-management-for-ml-pipelines.md).
 
@@ -240,35 +271,30 @@ annotation specifies the Docker image that runs your task code in Kubernetes:
 apiVersion: michelangelo.api/v2
 kind: Pipeline
 metadata:
-  namespace: "ma-examples"
-  name: "california-housing-xgb"
+  namespace: "california-housing"
+  name: "pytorch-train"
   annotations:
-    michelangelo/uniflow-image: docker.io/library/my-workflow:latest # Example: ghcr.io/michelangelo-ai/examples:main
+    michelangelo/uniflow-image: ghcr.io/michelangelo-ai/michelangelo-examples:california-housing
 spec:
   type: "PIPELINE_TYPE_TRAIN"
   manifest:
-    filePath: examples.pipelines.california_housing_xgb.california_housing_xgb
+    filePath: michelangelo_examples.california_housing.pipelines.pytorch_train.pipeline
 ```
 
-The California Housing XGBoost example includes this manifest at
-`examples/pipelines/california_housing_xgb/pipeline.yaml`.
-
-> **Sandbox tip:** the `michelangelo/uniflow-image` annotation controls which
-> Docker image runs your tasks. For a k3d sandbox, build the image from Step 4
-> (`docker build -t my-workflow:latest -f ./examples/Dockerfile .`) and import
-> it with `k3d image import`. The `ghcr.io/michelangelo-ai/examples:main`
-> image is published by CI for production deployments.
+The California Housing PyTorch Lightning example includes this manifest at
+`src/michelangelo_examples/california_housing/pipelines/pytorch_train/pipeline.yaml`
+in the [`michelangelo-examples`](https://github.com/michelangelo-ai/michelangelo-examples) repo.
 
 ### Register the pipeline
 
 ```bash
-ma pipeline apply -f examples/pipelines/california_housing_xgb/pipeline.yaml
+ma pipeline apply -f src/michelangelo_examples/california_housing/pipelines/pytorch_train/pipeline.yaml
 ```
 
 ### Run the registered pipeline
 
 ```bash
-ma pipeline run --namespace ma-examples --name california-housing-xgb
+ma pipeline run -n california-housing --name pytorch-train
 ```
 
 ## Workflow constraints
@@ -341,7 +367,7 @@ def train_workflow(dataset_cols: str):
 
 ## Complete example
 
-See the full California Housing XGBoost example at [`python/examples/pipelines/california_housing_xgb/`](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/pipelines/california_housing_xgb). This example demonstrates:
+See the full California Housing PyTorch Lightning example at [`pytorch_train/`](https://github.com/michelangelo-ai/michelangelo-examples/tree/main/src/michelangelo_examples/california_housing/pipelines/pytorch_train) in the [michelangelo-examples](https://github.com/michelangelo-ai/michelangelo-examples) repo. This example demonstrates:
 
 * **Heterogeneous workflow**: Ray tasks for data prep and training, Spark task for preprocessing
 * **Task caching**: Reuse feature preparation results across runs

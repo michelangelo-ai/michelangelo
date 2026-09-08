@@ -1,0 +1,91 @@
+{{- if and .Values.monitoring.enabled .Values.monitoring.prometheusRule.enabled (.Capabilities.APIVersions.Has "monitoring.coreos.com/v1") }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "michelangelo.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "michelangelo.labels" . | nindent 4 }}
+    {{- with .Values.monitoring.prometheusRule.additionalLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  groups:
+    - name: michelangelo
+      rules:
+        # Pipeline run failure rate
+        - alert: PipelineRunFailureRateHigh
+          expr: rate(pipelinerun_result_failure_total[5m]) > 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Pipeline run failures detected"
+            description: >-
+              Pipeline runs are failing at {{`{{ $value | humanize }}`}} failures/sec.
+              Check failure reasons: kubectl get pipelineruns -A --field-selector status.phase=Failed
+
+        # Pipeline run duration: P99 above 1 hour
+        - alert: PipelineRunDurationHigh
+          expr: histogram_quantile(0.99, rate(pipelinerun_duration_seconds_bucket[5m])) > 3600
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Pipeline run P99 duration above 1 hour"
+            description: >-
+              The 99th percentile pipeline run duration is {{`{{ $value | humanize }}`}}s.
+
+        # Controller reconcile errors — sustained error rate from any controller
+        - alert: ControllerReconcileErrorRate
+          expr: rate(controller_runtime_reconcile_errors_total[5m]) > 0.1
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Controller {{`{{ $labels.controller }}`}} has high reconcile error rate"
+            description: >-
+              The {{`{{ $labels.controller }}`}} controller is failing reconciles at
+              {{`{{ $value | humanize }}`}} errors/sec. Check logs:
+              kubectl -n {{ .Release.Namespace }} logs deployment/{{ include "michelangelo.componentFullname" (dict "context" . "component" "controllermgr") }}
+
+        # Cascade delete: safety timeout force-completed a child's drain
+        - alert: CascadeChildDrainTimeout
+          expr: increase(cascade_child_drain_timeout_total[1h]) > 0
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Cascade delete safety timeout fired"
+            description: >-
+              {{`{{ $value }}`}} child resource(s) were force-killed because their drain
+              did not complete within 24 hours. Investigate why the drain was wedged:
+              kubectl -n {{ .Release.Namespace }} logs deployment/{{ include "michelangelo.componentFullname" (dict "context" . "component" "controllermgr") }} | grep -i "cascade\|force"
+    {{- if .Values.monitoring.prometheusRule.envoyAlerts.enabled }}
+
+    - name: michelangelo-envoy
+      rules:
+        # Inference latency: P99 above 500ms for 5 minutes
+        - alert: InferenceLatencyHigh
+          expr: histogram_quantile(0.99, rate(envoy_cluster_upstream_rq_time_bucket[5m])) > 500
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Inference P99 latency is above 500ms"
+            description: >-
+              The 99th percentile inference request latency is {{`{{ $value }}`}}ms.
+              Check InferenceServer and model-sync sidecar logs.
+
+        # Inference error rate: more than 1% of requests returning 5xx
+        - alert: InferenceErrorRateHigh
+          expr: rate(envoy_cluster_upstream_rq_5xx[5m]) / rate(envoy_cluster_upstream_rq_total[5m]) > 0.01
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Inference 5xx error rate above 1%"
+            description: >-
+              {{`{{ $value | humanizePercentage }}`}} of inference requests are returning 5xx errors.
+    {{- end }}
+{{- end }}

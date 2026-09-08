@@ -1,3 +1,4 @@
+import { CreateDeploymentForm } from './create-deployment-form';
 import { DEPLOYMENT_DETAIL_CONFIG } from './detail';
 import { DEPLOYMENT_LIST_CONFIG } from './list';
 
@@ -9,4 +10,8 @@ export const DEPLOYMENT_ENTITY_CONFIG: PhaseEntityConfig = {
   service: 'deployment',
   state: 'active',
   views: [DEPLOYMENT_LIST_CONFIG, DEPLOYMENT_DETAIL_CONFIG],
+  createAction: {
+    display: { label: 'Create deployment', icon: 'plus' },
+    component: CreateDeploymentForm,
+  },
 };

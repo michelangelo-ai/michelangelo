@@ -20,6 +20,26 @@ export const CONDITION_STATUS = {
   FALSE: 2,
 } as const;
 
+export const TENANCY_TYPE = {
+  INVALID: 0,
+  DEDICATED: 1,
+  MULTI_TENANT: 2,
+} as const;
+
+export const BACKEND_TYPE = {
+  INVALID: 0,
+  TRITON: 1,
+  LLM_D: 2,
+  DYNAMO: 3,
+  TORCHSERVE: 4,
+} as const;
+
+export const CONTAINER_BUILD_TEMPLATE = {
+  DEFAULT_TRITON: 'default_triton',
+  DEFAULT_TRITON_GPU: 'default_triton_gpu',
+  DEFAULT_TRITON_PYTHON: 'default_triton_python',
+} as const;
+
 export const INFERENCE_SERVER_STATE_CELL: Cell = {
   id: 'status.state',
   label: 'State',

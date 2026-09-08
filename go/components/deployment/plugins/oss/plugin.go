@@ -10,6 +10,7 @@ import (
 	"k8s.io/client-go/dynamic"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	goapi "github.com/michelangelo-ai/michelangelo/go/api"
 	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	"github.com/michelangelo-ai/michelangelo/go/base/pluginmanager"
@@ -38,6 +39,7 @@ var _ plugins.Plugin = &Plugin{}
 // Plugin implements deployment lifecycle management for open-source deployments.
 type Plugin struct {
 	client              client.Client
+	apiHandler          goapi.Handler
 	httpClient          *http.Client
 	dynamicClient       dynamic.Interface
 	clientFactory       clientfactory.ClientFactory
@@ -59,6 +61,7 @@ type Params struct {
 
 	Registrar           pluginmanager.Registrar[plugins.Plugin]
 	Client              client.Client
+	APIHandler          goapi.Handler
 	HTTPClient          *http.Client
 	DynamicClient       dynamic.Interface
 	ClientFactory       clientfactory.ClientFactory
@@ -73,6 +76,7 @@ type Params struct {
 func NewPlugin(params Params) *Plugin {
 	return &Plugin{
 		client:              params.Client,
+		apiHandler:          params.APIHandler,
 		httpClient:          params.HTTPClient,
 		dynamicClient:       params.DynamicClient,
 		clientFactory:       params.ClientFactory,
@@ -104,6 +108,7 @@ func NewPlugin(params Params) *Plugin {
 func (p *Plugin) GetRolloutPlugin(ctx context.Context, deployment *v2pb.Deployment) (conditionInterfaces.Plugin[*v2pb.Deployment], error) {
 	rolloutPlugin, err := rollout.NewRolloutPlugin(ctx, rollout.Params{
 		Client:              p.client,
+		APIHandler:          p.apiHandler,
 		HTTPClient:          p.httpClient,
 		DynamicClient:       p.dynamicClient,
 		ClientFactory:       p.clientFactory,

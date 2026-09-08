@@ -329,6 +329,42 @@ class CustomTritonPackagerTest(TestCase):
             )
             self.assertTrue(os.path.exists(expected_file))
 
+    def test_create_model_package_with_scalar_shape_items(self):
+        """A schema with shape-less (scalar) items packages successfully.
+
+        ``ColumnConfig("torch.float32")`` -- the documented way to declare a
+        scalar feature in ``tabular_trainer`` -- produces a
+        ``ModelSchemaItem`` with ``shape=[]``. That's a legitimate true
+        scalar (no non-batch dimensions) rather than an error state: the
+        batch dimension is applied separately and flexibly by Triton, so an
+        empty item shape must not be rejected or padded to ``[1]``.
+        """
+        scalar_schema = ModelSchema(
+            input_schema=[
+                ModelSchemaItem(name="input", data_type=DataType.INT, shape=[]),
+            ],
+            output_schema=[
+                ModelSchemaItem(name="response", data_type=DataType.INT, shape=[]),
+            ],
+        )
+        packager = CustomTritonPackager()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            model_path = os.path.join(temp_dir, "model")
+            dest_model_path = os.path.join(temp_dir, "deployable_model")
+            os.makedirs(model_path)
+            with open(os.path.join(model_path, "file.txt"), "w") as f:
+                f.write("file_content")
+            dest_model_path = packager.create_model_package(
+                model_path=model_path,
+                dest_model_path=dest_model_path,
+                model_class=model_class,
+                model_schema=scalar_schema,
+                model_name="test_model_name",
+                include_import_prefixes=["michelangelo"],
+            )
+
+            self.assert_model_package(dest_model_path)
+
     def test_create_model_package_with_empty_model_schema(self):
         """It raises ValueError when model schema is empty."""
         packager = CustomTritonPackager()

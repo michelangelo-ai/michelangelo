@@ -96,7 +96,8 @@ describe('ConfigDrivenForm', () => {
       const user = userEvent.setup();
       await user.click(screen.getByRole('button', { name: 'Add more' }));
 
-      expect(screen.getAllByRole('textbox', { name: '' }).length).toBeGreaterThanOrEqual(2);
+      expect(screen.getAllByRole('textbox', { name: 'Key' }).length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByRole('textbox', { name: 'Value' }).length).toBeGreaterThanOrEqual(1);
     });
 
     it('renders a markdown field', () => {

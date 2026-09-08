@@ -1,0 +1,36 @@
+loaders:
+  - type: python
+    search_path: [python/michelangelo]
+    modules:
+      - uniflow.core.decorator
+      - uniflow.core.task_config
+      - uniflow.core.context
+      - uniflow.core.image_spec
+      - uniflow.core.io_registry
+      - uniflow.plugins.ray.task
+      - uniflow.plugins.ray.run_config
+      - uniflow.plugins.ray.io
+      - uniflow.plugins.spark.task
+      - uniflow.plugins.spark.io
+      - uniflow.plugins.pandas.io
+      - workflow.tasks.pusher.task
+      - workflow.tasks.pusher.registry
+      - workflow.tasks.pusher.exceptions
+      - lib.trainer.torch.data_collate_functions
+      - lib.trainer.torch.utils
+      - lib.native_transform.torch.base_layers
+      - lib.native_transform.torch.id_hash_tokenizer
+      - lib.native_transform.torch.utils
+      - workflow.variables.types
+      - workflow.variables.metadata
+processors:
+  - type: filter
+    skip_empty_modules: true
+  - type: smart
+  - type: crossref
+renderer:
+  type: docusaurus
+  docs_base_path: docs/api-reference/python-sdk
+  relative_output_path: reference
+  relative_sidebar_path: sidebar.json
+  sidebar_top_level_label: null

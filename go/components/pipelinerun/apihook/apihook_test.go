@@ -505,6 +505,96 @@ func TestBeforeCreate_RevisionNamespaceFallsBackToPipelineRun(t *testing.T) {
 	assert.Equal(t, "revision X", request.PipelineRun.Spec.PipelineSpec.Description)
 }
 
+func TestBeforeCreate_DefaultsEnvironmentLabelWhenAbsent(t *testing.T) {
+	hook := setUpHook(t)
+	hook.defaultEnv = "staging"
+
+	request := &v2.CreatePipelineRunRequest{
+		PipelineRun: &v2.PipelineRun{
+			ObjectMeta: metav1.ObjectMeta{Name: "test-run", Namespace: testNamespace},
+		},
+	}
+	require.NoError(t, hook.BeforeCreate(context.Background(), request))
+	assert.Equal(t, "staging", request.PipelineRun.Labels[api.EnvironmentLabel])
+}
+
+func TestBeforeCreate_DefaultsToUnspecifiedWhenUnconfigured(t *testing.T) {
+	hook := setUpHook(t)
+
+	request := &v2.CreatePipelineRunRequest{
+		PipelineRun: &v2.PipelineRun{
+			ObjectMeta: metav1.ObjectMeta{Name: "test-run", Namespace: testNamespace},
+		},
+	}
+	require.NoError(t, hook.BeforeCreate(context.Background(), request))
+	assert.Equal(t, api.UnspecifiedEnvironment, request.PipelineRun.Labels[api.EnvironmentLabel])
+}
+
+func TestBeforeCreate_PreservesExplicitEnvironmentLabel(t *testing.T) {
+	hook := setUpHook(t)
+	hook.defaultEnv = "production"
+
+	request := &v2.CreatePipelineRunRequest{
+		PipelineRun: &v2.PipelineRun{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-run",
+				Namespace: testNamespace,
+				Labels:    map[string]string{api.EnvironmentLabel: "staging"},
+			},
+		},
+	}
+	require.NoError(t, hook.BeforeCreate(context.Background(), request))
+	assert.Equal(t, "staging", request.PipelineRun.Labels[api.EnvironmentLabel])
+}
+
+func TestBeforeUpdate_DefaultsEnvironmentLabelWhenAbsent(t *testing.T) {
+	hook := setUpHook(t)
+	hook.defaultEnv = "staging"
+
+	request := &v2.UpdatePipelineRunRequest{
+		PipelineRun: &v2.PipelineRun{
+			ObjectMeta: metav1.ObjectMeta{Name: "test-run", Namespace: testNamespace},
+		},
+	}
+	require.NoError(t, hook.BeforeUpdate(context.Background(), request))
+	assert.Equal(t, "staging", request.PipelineRun.Labels[api.EnvironmentLabel])
+}
+
+func TestBeforeUpdate_PreservesExplicitEnvironmentLabel(t *testing.T) {
+	hook := setUpHook(t)
+	hook.defaultEnv = "production"
+
+	request := &v2.UpdatePipelineRunRequest{
+		PipelineRun: &v2.PipelineRun{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-run",
+				Namespace: testNamespace,
+				Labels:    map[string]string{api.EnvironmentLabel: "staging"},
+			},
+		},
+	}
+	require.NoError(t, hook.BeforeUpdate(context.Background(), request))
+	assert.Equal(t, "staging", request.PipelineRun.Labels[api.EnvironmentLabel])
+}
+
+func TestBeforeUpdate_NilAnnotationsReplacedWithEmptyMap(t *testing.T) {
+	hook := setUpHook(t)
+
+	request := &v2.UpdatePipelineRunRequest{
+		PipelineRun: &v2.PipelineRun{
+			ObjectMeta: metav1.ObjectMeta{Name: "test-run", Namespace: testNamespace},
+		},
+	}
+	require.Nil(t, request.PipelineRun.Annotations)
+	require.NoError(t, hook.BeforeUpdate(context.Background(), request))
+	assert.NotNil(t, request.PipelineRun.Annotations)
+	assert.Empty(t, request.PipelineRun.Annotations)
+}
+
+func TestRegisterPipelineRunAPIHook(t *testing.T) {
+	RegisterPipelineRunAPIHook(zaptest.NewLogger(t), nil, runtime.NewScheme(), "production")
+}
+
 func TestBeforeCreate_PipelineGetTransientErrorIsSoft(t *testing.T) {
 	live := &v2.Pipeline{
 		ObjectMeta: metav1.ObjectMeta{Name: "test-pipeline", Namespace: testNamespace},
@@ -525,4 +615,35 @@ func TestBeforeCreate_PipelineGetTransientErrorIsSoft(t *testing.T) {
 	require.NoError(t, hook.BeforeCreate(context.Background(), request))
 	assert.Nil(t, request.PipelineRun.Spec.Revision)
 	assert.Nil(t, request.PipelineRun.Spec.PipelineSpec)
+}
+
+func TestBeforeCreate_StampsSourcePipelineTypeLabel(t *testing.T) {
+	live := &v2.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-pipeline", Namespace: testNamespace},
+		Spec:       v2.PipelineSpec{Type: v2.PIPELINE_TYPE_TRAIN},
+	}
+	hook := setUpHook(t, live)
+
+	request := newPipelineRefRequest("test-pipeline")
+	require.NoError(t, hook.BeforeCreate(context.Background(), request))
+	assert.Equal(t, "PIPELINE_TYPE_TRAIN",
+		request.PipelineRun.GetLabels()[api.SourcePipelineTypeLabelName])
+}
+
+// When the owning Pipeline has no type set (proto3 zero value
+// PIPELINE_TYPE_INVALID), the label must still be stamped with the
+// explicit string "PIPELINE_TYPE_INVALID" rather than silently omitted.
+// This provides a greppable diagnostic value on every PipelineRun.
+func TestBeforeCreate_StampsSourcePipelineTypeLabelWhenTypeUnset(t *testing.T) {
+	live := &v2.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-pipeline", Namespace: testNamespace},
+		// Spec.Type deliberately omitted — defaults to PIPELINE_TYPE_INVALID (0).
+	}
+	hook := setUpHook(t, live)
+
+	request := newPipelineRefRequest("test-pipeline")
+	require.NoError(t, hook.BeforeCreate(context.Background(), request))
+	assert.Equal(t, "PIPELINE_TYPE_INVALID",
+		request.PipelineRun.GetLabels()[api.SourcePipelineTypeLabelName],
+		"label must be present even when the Pipeline has no type set")
 }

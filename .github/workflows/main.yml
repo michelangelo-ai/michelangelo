@@ -25,7 +25,7 @@ jobs:
     steps:
       # Checkout the repository
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # Cache Bazel outputs
       - name: Cache Bazel Outputs
@@ -52,7 +52,7 @@ jobs:
       #  Checkout repository first (required for local actions)
       #----------------------------------------------
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0  # Fetch full history for git operations
 
@@ -92,7 +92,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # Restore-only: reuse the cache saved by bazel-build (no redundant save)
       - name: Restore Bazel Cache

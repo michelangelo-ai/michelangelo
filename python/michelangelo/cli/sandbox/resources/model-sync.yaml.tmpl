@@ -1,0 +1,113 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: model-sync
+  namespace: default
+  labels:
+    app: model-sync
+spec:
+  selector:
+    matchLabels:
+      app: model-sync
+  template:
+    metadata:
+      labels:
+        app: model-sync
+    spec:
+      # The model repository is a hostPath, so a Triton pod can only read what was
+      # downloaded onto its own node. Running one daemon per node keeps every node that
+      # schedules a Triton replica supplied, rather than only the node the daemon
+      # happened to land on. Each daemon reconciles just the Triton pods on its node.
+      serviceAccountName: model-sync
+      containers:
+      - name: model-sync
+        image: python:3.11-slim
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          pip install --no-cache-dir awscli >/dev/null
+          exec python3 -u /scripts/sync-models.py
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        envFrom:
+        - configMapRef:
+            name: michelangelo-config
+        volumeMounts:
+        - name: models
+          mountPath: /mnt/models
+        - name: inference-servers-config
+          mountPath: /config/inference-servers
+          readOnly: true
+        - name: inference-server-config
+          mountPath: /config/${IS_NAME}
+          readOnly: true
+        - name: sync-script
+          mountPath: /scripts
+          readOnly: true
+        resources:
+          requests:
+            cpu: 100m
+            memory: 512Mi
+          limits:
+            cpu: 500m
+            memory: 2Gi
+      volumes:
+      - name: models
+        hostPath:
+          path: /var/lib/michelangelo/models
+          type: DirectoryOrCreate
+      - name: inference-servers-config
+        configMap:
+          name: inference-servers-list
+      - name: inference-server-config
+        configMap:
+          name: ${IS_NAME}-model-config
+          optional: true
+      - name: sync-script
+        configMap:
+          name: model-sync-script
+          defaultMode: 0755
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: model-sync
+  namespace: default
+---
+# Lets the daemon look up Endpoints for the inference Service so it can talk
+# to each Triton pod directly instead of going through the Service VIP.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: model-sync
+  namespace: default
+rules:
+- apiGroups: [""]
+  resources: ["endpoints"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: model-sync
+  namespace: default
+subjects:
+- kind: ServiceAccount
+  name: model-sync
+  namespace: default
+roleRef:
+  kind: Role
+  name: model-sync
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: inference-servers-list
+  namespace: default
+data:
+  servers.txt: |
+    ${IS_NAME}

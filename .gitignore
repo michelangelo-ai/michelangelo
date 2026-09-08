@@ -342,3 +342,9 @@ bin/
 python/check_artifacts.py
 python/check_test_run.py
 python/test_mlflow_model_loading.py
+
+# Playwright MCP session artifacts
+.playwright-mcp/
+
+# Captured `ma sandbox snapshot create` output — local dev artifacts
+python/michelangelo/cli/sandbox/snapshots/

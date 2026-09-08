@@ -279,6 +279,16 @@ Top-level keys. See [`values.yaml`](./values.yaml) for the full annotated schema
 | `worker.replicas` | int | `1` | no | Scale horizontally for higher pipeline-run throughput. |
 | `controllermgr.enabled` | bool | `true` | no | |
 | `controllermgr.watchNamespace` | list | `[]` | no | Namespaces the controller watches. Empty = all namespaces (ClusterRole). Set to a list to scope down to namespaced Roles. |
+| `monitoring.enabled` | bool | `false` | no | Master toggle for chart-managed monitoring resources. All resources are CRD-gated: skipped when the owning operator's CRDs are absent, so enabling this is safe on any cluster. |
+| `monitoring.serviceMonitor.enabled` | bool | `true` | no | Create a `ServiceMonitor` for the controller manager's `/metrics` endpoint (requires the Prometheus Operator CRDs, `monitoring.coreos.com/v1`). |
+| `monitoring.serviceMonitor.interval` | string | `30s` | no | Scrape interval. |
+| `monitoring.serviceMonitor.additionalLabels` | object | `{}` | no | Extra labels on the `ServiceMonitor`, e.g. to match a Prometheus instance's `serviceMonitorSelector`. |
+| `monitoring.prometheusRule.enabled` | bool | `true` | no | Create a `PrometheusRule` with starter alerts (pipeline-run failures/duration, reconcile errors, cascade drain timeouts). All default alerts use metrics exposed out of the box. |
+| `monitoring.prometheusRule.additionalLabels` | object | `{}` | no | Extra labels on the `PrometheusRule`, e.g. to match a Prometheus instance's `ruleSelector`. |
+| `monitoring.prometheusRule.envoyAlerts.enabled` | bool | `false` | no | Add inference latency/error alerts on Envoy upstream metrics. Requires the Envoy admin interface + a scrape job (not chart-managed). |
+| `monitoring.grafanaDashboards.enabled` | bool | `true` | no | Create `GrafanaDashboard` CRs for the [Grafana Operator](https://github.com/grafana/grafana-operator) (requires its CRDs, `grafana.integreatly.org/v1beta1`). |
+| `monitoring.grafanaDashboards.instanceSelector` | object | `matchLabels: {dashboards: grafana}` | no | Label selector matching your Grafana CR(s). |
+| `monitoring.grafanaDashboards.resyncPeriod` | string | `10m` | no | How often the operator re-applies the dashboards. |
 | `serviceAccount.create` | bool | `true` | no | Create a ServiceAccount for the chart. |
 | `serviceAccount.name` | string | `""` | no | Override the generated ServiceAccount name. |
 | `podSecurityContext` | object | see values.yaml | no | Applied to every Pod. |

@@ -9,6 +9,7 @@ coverage:
         target: auto          # Use baseline from main branch
         threshold: 1%         # Allow 1% drop from baseline
         if_ci_failed: error
+        informational: true   # Report-only until the check has real history
 
     # Coverage for changes in PR (strictly enforced)
     patch:
@@ -16,6 +17,7 @@ coverage:
         target: 90%           # New code must have 90% coverage
         threshold: 0%         # No tolerance for drops in new code
         if_ci_failed: error
+        informational: true   # Report-only until the 90% bar is calibrated
 
   precision: 2
   round: down

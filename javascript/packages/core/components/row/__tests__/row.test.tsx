@@ -1,5 +1,7 @@
 import { render, screen } from '@testing-library/react';
 
+import { buildWrapper } from '#core/test/wrappers/build-wrapper';
+import { getRouterWrapper } from '#core/test/wrappers/get-router-wrapper';
 import { Row } from '../row';
 
 describe('Row', () => {
@@ -28,7 +30,8 @@ describe('Row', () => {
           { id: 'email', label: 'Email', hideEmpty: true },
         ]}
         record={{ name: 'John Doe', age: 30, email: undefined }}
-      />
+      />,
+      buildWrapper([getRouterWrapper()])
     );
     expect(screen.getByText('John Doe')).toBeInTheDocument();
     expect(screen.getByText('30')).toBeInTheDocument();
@@ -44,7 +47,8 @@ describe('Row', () => {
           { id: 'email', label: 'Email', hideEmpty: false },
         ]}
         record={{ name: 'John Doe', age: 30, email: undefined }}
-      />
+      />,
+      buildWrapper([getRouterWrapper()])
     );
     expect(screen.getByText('John Doe')).toBeInTheDocument();
     expect(screen.getByText('30')).toBeInTheDocument();
@@ -64,7 +68,10 @@ describe('Row', () => {
       },
     };
 
-    render(<Row items={[{ id: 'name', label: 'Name' }]} overrides={overrides} />);
+    render(
+      <Row items={[{ id: 'name', label: 'Name' }]} overrides={overrides} />,
+      buildWrapper([getRouterWrapper()])
+    );
     // eslint-disable-next-line testing-library/no-test-id-queries -- generic div, no accessible identity
     expect(screen.getByTestId('custom-container')).toBeInTheDocument();
   });
@@ -77,7 +84,10 @@ describe('Row', () => {
       },
     };
 
-    render(<Row items={itemsWithAccessor} record={nestedRecord} />);
+    render(
+      <Row items={itemsWithAccessor} record={nestedRecord} />,
+      buildWrapper([getRouterWrapper()])
+    );
     expect(screen.getByText('John Doe')).toBeInTheDocument();
   });
 });

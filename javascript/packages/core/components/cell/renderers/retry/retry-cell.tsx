@@ -143,7 +143,7 @@ export const RetryCell = (props: CellRendererProps<string>) => {
         <Textarea
           value={retryReason}
           onChange={(e) => setRetryReason(e.target.value)}
-          placeholder="Enter reason for retry..."
+          placeholder="e.g. Fixed the input schema mismatch"
           overrides={{
             Input: {
               style: {
