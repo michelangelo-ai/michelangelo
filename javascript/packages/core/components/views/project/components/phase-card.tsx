@@ -7,7 +7,7 @@ import { Icon } from '#core/components/icon/icon';
 import { Link } from '#core/components/link/link';
 import { TAG_COLOR, TAG_SIZE } from '#core/components/tag/constants';
 import { Tag } from '#core/components/tag/tag';
-import { formatEntityName } from '#core/hooks/use-entity-name/use-entity-name';
+import { formatEntityName } from '#core/utils/string-utils';
 
 import type { PhaseConfig } from '#core/types/common/studio-types';
 
