@@ -1,7 +1,7 @@
 import { useLocation, useNavigate } from 'react-router-dom-v5-compat';
 import { useStyletron } from 'baseui';
 
-import { formatEntityName } from '#core/hooks/use-entity-name/use-entity-name';
+import { formatEntityName } from '#core/utils/string-utils';
 import { EntityItem } from './styled-components';
 
 import type { PhaseConfig } from '#core/types/common/studio-types';

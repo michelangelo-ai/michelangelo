@@ -6,8 +6,8 @@ import { Breadcrumbs } from 'baseui/breadcrumbs';
 import { Cell, Grid } from 'baseui/layout-grid';
 
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
-import { formatEntityName } from '#core/hooks/use-entity-name/use-entity-name';
 import { Phase } from '#core/types/common/studio-types';
+import { formatEntityName } from '#core/utils/string-utils';
 import { MenuDrawer } from './menu-drawer';
 import { BreadcrumbContainer, PlainLink } from './styled-components';
 import { useScrollingNavbarShadow } from './use-scrolling-navbar-shadow';
