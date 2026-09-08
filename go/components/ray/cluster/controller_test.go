@@ -24,6 +24,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/client/clientmocks"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/cluster"
 	matypes "github.com/michelangelo-ai/michelangelo/go/components/jobs/common/types"
@@ -991,6 +992,74 @@ func TestReconcilerReconcile(t *testing.T) {
 				}
 				assert.NotNil(t, killedCond, "KilledCondition should exist")
 				assert.Equal(t, apipb.CONDITION_STATUS_TRUE, killedCond.Status)
+			},
+		},
+		{
+			name: "Cluster already terminated - marks immutable and skips reconciliation",
+			setup: func() []client.Object {
+				cluster := &v2pb.RayCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       rayClusterName,
+						Namespace:  testNamespace,
+						Generation: 1,
+					},
+					Spec: v2pb.RayClusterSpec{
+						RayVersion: "2.3.1",
+						Head:       &v2pb.RayHeadSpec{},
+					},
+					Status: v2pb.RayClusterStatus{
+						State: v2pb.RAY_CLUSTER_STATE_TERMINATED,
+					},
+				}
+				return []client.Object{cluster}
+			},
+			// No expectations are set on the federated client mock: any call (e.g.
+			// DeleteJobCluster) fails the test, proving the termination flow is not
+			// re-entered for a cluster that is already terminated.
+			setupMocks:      func(mfc *clientmocks.MockFederatedClient, mcc *mockClusterCache, msq *mockSchedulerQueue) {},
+			expectedState:   v2pb.RAY_CLUSTER_STATE_TERMINATED,
+			expectedMessage: "",
+			errorAssertion:  require.NoError,
+			postCheck: func(res ctrl.Result) {
+				assert.Equal(t, time.Duration(0), res.RequeueAfter)
+			},
+			verifyConditions: func(t *testing.T, cluster *v2pb.RayCluster) {
+				assert.True(t, utils.IsImmutable(cluster), "terminated cluster should be marked immutable")
+			},
+		},
+		{
+			name: "Cluster already terminated and immutable - no-op",
+			setup: func() []client.Object {
+				cluster := &v2pb.RayCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       rayClusterName,
+						Namespace:  testNamespace,
+						Generation: 1,
+					},
+					Spec: v2pb.RayClusterSpec{
+						RayVersion: "2.3.1",
+						Head:       &v2pb.RayHeadSpec{},
+					},
+					Status: v2pb.RayClusterStatus{
+						State: v2pb.RAY_CLUSTER_STATE_TERMINATED,
+					},
+				}
+				utils.MarkImmutable(cluster)
+				return []client.Object{cluster}
+			},
+			setupMocks:      func(mfc *clientmocks.MockFederatedClient, mcc *mockClusterCache, msq *mockSchedulerQueue) {},
+			expectedState:   v2pb.RAY_CLUSTER_STATE_TERMINATED,
+			expectedMessage: "",
+			errorAssertion:  require.NoError,
+			postCheck: func(res ctrl.Result) {
+				assert.Equal(t, time.Duration(0), res.RequeueAfter)
+			},
+			verifyConditions: func(t *testing.T, cluster *v2pb.RayCluster) {
+				assert.True(t, utils.IsImmutable(cluster), "immutable annotation should remain set")
+				// The fake client's object tracker seeds ResourceVersion as "999" and
+				// bumps it on every Update; an unchanged value proves no Update was
+				// issued for a cluster that is already terminated and immutable.
+				assert.Equal(t, "999", cluster.ResourceVersion, "no Update should be issued for an already-immutable terminated cluster")
 			},
 		},
 		{

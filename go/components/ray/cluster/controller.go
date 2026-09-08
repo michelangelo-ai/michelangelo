@@ -102,6 +102,24 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{RequeueAfter: requeueAfter}, err
 	}
 
+	// A cluster in the terminal TERMINATED state has nothing left to reconcile: the remote
+	// RayCluster is gone and every termination step below is a no-op. Marking it immutable
+	// hands it to the ingester, which moves it to metadata storage and deletes it from ETCD,
+	// permanently ending reconciliation instead of re-entering the termination flow on every
+	// watch event.
+	if rayCluster.Status.State == v2pb.RAY_CLUSTER_STATE_TERMINATED {
+		if !utils.IsImmutable(&rayCluster) {
+			utils.MarkImmutable(&rayCluster)
+			if err := r.Update(ctx, &rayCluster, &metav1.UpdateOptions{}); err != nil {
+				logger.Error(err, "failed to mark terminated cluster immutable")
+				return ctrl.Result{}, err
+			}
+			logger.Info("marked terminated cluster immutable")
+		}
+		logger.V(1).Info("cluster is terminated, skipping reconciliation")
+		return ctrl.Result{}, nil
+	}
+
 	// Create a copy of the original RayCluster for comparison
 	originalRayCluster := rayCluster.DeepCopy()
 
