@@ -26,8 +26,8 @@ type DeploymentFormProps = { onClose: () => void } & (
  * The single source of truth for the deployment form fields, shared by the create and
  * update flows so the two can never drift apart.
  *
- * Update mode prefills every field from the record, locks the identifying fields as 
- * read-only, and submits the full record with the newly selected model as 
+ * Update mode prefills every field from the record, locks the identifying fields as
+ * read-only, and submits the full record with the newly selected model as
  * desiredRevision so the controller rolls it out.
  */
 export const DeploymentForm = ({ mode, record, onClose }: DeploymentFormProps) => {
