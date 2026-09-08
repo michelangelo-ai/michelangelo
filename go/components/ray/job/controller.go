@@ -89,16 +89,27 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		r.reconcileRayJobWithCluster(ctx, logger, &rayJob, &res)
 	}
 
-	if !reflect.DeepEqual(originalRayJob, rayJob) {
+	if !reflect.DeepEqual(originalRayJob.Status, rayJob.Status) {
 		// update the resource in ETCD
-		if isTerminalRayJobState(rayJob.Status.State) {
-			utils.MarkImmutable(&rayJob)
-		}
 		err := r.Status().Update(ctx, &rayJob)
 		if err != nil {
 			logger.Error(err, "failed to update status")
 			res.RequeueAfter = requeueAfter
 			return res, err
+		}
+
+		if isTerminalRayJobState(rayJob.Status.State) && !utils.IsImmutable(&rayJob) {
+			// Annotations are metadata, so Status().Update above never persists
+			// them. Persist with a plain Update, and do it after the status
+			// write using the resourceVersion that refreshed: doing it first
+			// would bump resourceVersion and hand back the pre-update status in
+			// the response, clobbering the status we just persisted.
+			utils.MarkImmutable(&rayJob)
+			if err := r.Update(ctx, &rayJob); err != nil {
+				// Log only: don't turn an already-successful status write into
+				// a failed reconcile over a best-effort annotation.
+				logger.Error(err, "failed to persist immutable annotation")
+			}
 		}
 	}
 
