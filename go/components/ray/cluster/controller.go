@@ -115,16 +115,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			return ctrl.Result{RequeueAfter: requeueAfter}, err
 		}
 		logger.Info("processed cluster termination")
-
-		// Once termination has fully converged (kill/cleanup finished, or there was
-		// nothing to clean up), freeze the object so the ingester archives it and
-		// reconciliation stops for good. No-op if cleanup is still in progress; a later
-		// reconcile will pick this back up once it does.
-		if err := r.markImmutableIfTerminal(ctx, &rayCluster); err != nil {
-			logger.Error(err, "failed to mark cluster immutable after termination")
-			return ctrl.Result{RequeueAfter: requeueAfter}, err
-		}
-		return ctrl.Result{}, nil
+		return r.finalizeIfTerminal(ctx, &rayCluster, logger)
 	}
 
 	// Enqueue if not scheduled
@@ -208,17 +199,16 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		if utils.IsNotFoundError(err) {
 			// The RayCluster no longer exists on the remote compute cluster. This is a
 			// terminal, non-recoverable condition: there is nothing left to monitor or
-			// clean up. Mark it failed + immutable so the ingester freezes the object and
-			// we stop reconciling, instead of requeuing forever.
-			logger.Info("cluster not found on remote compute cluster, marking as failed and immutable")
-			if err := r.markClusterFailedImmutable(ctx, &rayCluster,
+			// clean up. Mark it failed so we stop reconciling instead of requeuing forever.
+			logger.Info("cluster not found on remote compute cluster, marking as failed")
+			if err := r.markClusterFailed(ctx, &rayCluster,
 				"ClusterNotFoundOnRemote",
 				"RayCluster no longer exists on the remote compute cluster",
 			); err != nil {
-				logger.Error(err, "failed to mark cluster as failed and immutable")
+				logger.Error(err, "failed to mark cluster as failed")
 				return ctrl.Result{RequeueAfter: requeueAfter}, err
 			}
-			return ctrl.Result{}, nil
+			return r.finalizeIfTerminal(ctx, &rayCluster, logger)
 		}
 		logger.Error(err, "failed to get cluster status")
 		return ctrl.Result{RequeueAfter: requeueAfter}, err
@@ -581,12 +571,12 @@ func (r *Reconciler) getClusterStatus(ctx context.Context, log logr.Logger, assi
 // outcome: Succeeded is decided (TRUE or FALSE) and any kill/cleanup processing it
 // triggers has completed (Killing back to FALSE with Killed TRUE).
 //
-// cleanupCluster and markClusterFailedImmutable are the only two places that produce
-// this combination, and both set Killing=FALSE/Killed=TRUE atomically alongside their
-// last piece of cleanup work (or, for markClusterFailedImmutable, with no cleanup needed
-// at all since the remote resource is already confirmed gone). So checking it on a
-// freshly-fetched object is race-free: there is no window where it reads true before
-// cleanup has actually finished.
+// cleanupCluster and markClusterFailed are the only two places that produce this
+// combination, and both set Killing=FALSE/Killed=TRUE atomically alongside their last
+// piece of cleanup work (or, for markClusterFailed, with no cleanup needed at all since
+// the remote resource is already confirmed gone). So checking it on a freshly-fetched
+// object is race-free: there is no window where it reads true before cleanup has
+// actually finished.
 func isClusterFullyTerminal(cluster *v2pb.RayCluster) bool {
 	succeeded := jobsutils.GetCondition(&cluster.Status.StatusConditions, SucceededCondition, cluster.Generation)
 	if succeeded.Status == apipb.CONDITION_STATUS_UNKNOWN {
@@ -595,6 +585,19 @@ func isClusterFullyTerminal(cluster *v2pb.RayCluster) bool {
 	killing := jobsutils.GetCondition(&cluster.Status.StatusConditions, KillingCondition, cluster.Generation)
 	killed := jobsutils.GetCondition(&cluster.Status.StatusConditions, KilledCondition, cluster.Generation)
 	return killing.Status == apipb.CONDITION_STATUS_FALSE && killed.Status == apipb.CONDITION_STATUS_TRUE
+}
+
+// finalizeIfTerminal is the single call site for freezing a RayCluster. Every path that
+// can drive a cluster to a fully terminal outcome — the normal kill/cleanup convergence
+// in Reconcile's termination branch, and markClusterFailed's NotFound-on-remote write —
+// calls this right after its own status write completes, instead of each calling
+// markImmutableIfTerminal separately.
+func (r *Reconciler) finalizeIfTerminal(ctx context.Context, cluster *v2pb.RayCluster, log logr.Logger) (ctrl.Result, error) {
+	if err := r.markImmutableIfTerminal(ctx, cluster); err != nil {
+		log.Error(err, "failed to mark cluster immutable after termination")
+		return ctrl.Result{RequeueAfter: requeueAfter}, err
+	}
+	return ctrl.Result{}, nil
 }
 
 // markImmutableIfTerminal freezes cluster once it has fully converged to a terminal
@@ -625,17 +628,18 @@ func (r *Reconciler) markImmutableIfTerminal(ctx context.Context, cluster *v2pb.
 	return nil
 }
 
-// markClusterFailedImmutable records a terminal failure for a RayCluster whose backing
-// resource has disappeared from the remote compute cluster, so it stops being monitored.
+// markClusterFailed records a terminal failure for a RayCluster whose backing resource
+// has disappeared from the remote compute cluster, so it stops being monitored.
 //
 // It persists the complete terminal condition set in one write (State=FAILED,
 // Succeeded=FALSE, Killing=FALSE, Killed=TRUE) rather than just setting Succeeded=FALSE
 // and letting processClusterTermination converge over further reconciles: the remote
 // resource is already confirmed gone, so there is nothing to clean up, and setting
 // Killing=FALSE directly means cleanupCluster will never issue a pointless
-// DeleteJobCluster against it. That same condition set is what markImmutableIfTerminal
-// looks for, so it freezes the object immediately after.
-func (r *Reconciler) markClusterFailedImmutable(
+// DeleteJobCluster against it. That same condition set is what isClusterFullyTerminal
+// looks for; the caller is responsible for calling finalizeIfTerminal afterwards to act
+// on it.
+func (r *Reconciler) markClusterFailed(
 	ctx context.Context,
 	cluster *v2pb.RayCluster,
 	reason string,
@@ -667,12 +671,12 @@ func (r *Reconciler) markClusterFailedImmutable(
 				Reason:     reason,
 			})
 		},
-		&metav1.UpdateOptions{FieldManager: "markClusterFailedImmutable"},
+		&metav1.UpdateOptions{FieldManager: "markClusterFailed"},
 	); err != nil {
 		return fmt.Errorf("failed to persist terminal status: %w", err)
 	}
 
-	return r.markImmutableIfTerminal(ctx, cluster)
+	return nil
 }
 
 // applyRayClusterStatus updates the RayCluster status and conditions based on the cluster state from KubeRay.
