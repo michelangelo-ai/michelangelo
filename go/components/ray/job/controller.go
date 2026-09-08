@@ -75,6 +75,15 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		res.RequeueAfter = requeueAfter
 		return res, err
 	}
+
+	// An immutable RayJob has reached a terminal state and is being moved to metadata
+	// storage by the ingester (which will delete it from ETCD). Skip reconciliation so we
+	// neither waste queue capacity nor re-trigger ourselves by rewriting a terminal object.
+	if utils.IsImmutable(&rayJob) {
+		logger.Info("RayJob is immutable, skipping reconciliation")
+		return ctrl.Result{}, nil
+	}
+
 	// original copy of ray job to determine if we need to update the status
 	originalRayJob := rayJob.DeepCopy()
 	// Initialize status conditions, as they will be nil for new jobs

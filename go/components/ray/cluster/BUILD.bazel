@@ -40,6 +40,7 @@ go_test(
     srcs = ["controller_test.go"],
     embed = [":go_default_library"],
     deps = [
+        "//go/api:go_default_library",
         "//go/api/utils:go_default_library",
         "//go/components/jobs/client/clientmocks:go_default_library",
         "//go/components/jobs/cluster:go_default_library",

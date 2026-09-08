@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/michelangelo-ai/michelangelo/go/api"
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/client/clientmocks"
 	jobscluster "github.com/michelangelo-ai/michelangelo/go/components/jobs/cluster"
@@ -122,6 +123,39 @@ func TestReconciler_Reconcile(t *testing.T) {
 				assert.Equal(t, time.Duration(0), res.RequeueAfter)
 			},
 			verifyConditions: func(t *testing.T, job *v2pb.RayJob) {},
+		},
+		{
+			// An immutable RayJob must be skipped entirely. A non-immutable job with
+			// no cluster set would be marked FAILED ("cluster is not set"); a job left
+			// in its seeded INVALID state with no status conditions and no requeue
+			// proves reconciliation was short-circuited by the immutable check.
+			name: "immutable job is skipped",
+			setup: func() []client.Object {
+				objects := make([]client.Object, 0)
+				rayJob := &v2pb.RayJob{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:        rayJobName,
+						Namespace:   testNamespace,
+						Generation:  1,
+						Annotations: map[string]string{api.ImmutableAnnotation: "true"},
+					},
+					Spec: v2pb.RayJobSpec{
+						Cluster: nil,
+					},
+				}
+				objects = append(objects, rayJob)
+				return objects
+			},
+			setupMocks:      func(ctrl *gomock.Controller, mfc *clientmocks.MockFederatedClient, mcc *mockClusterCache) {},
+			expectedState:   v2pb.RAY_JOB_STATE_INVALID,
+			expectedMessage: "",
+			errorAssertion:  require.NoError,
+			postCheck: func(res ctrl.Result) {
+				assert.Equal(t, time.Duration(0), res.RequeueAfter)
+			},
+			verifyConditions: func(t *testing.T, job *v2pb.RayJob) {
+				assert.Empty(t, job.Status.StatusConditions, "immutable job must not be reconciled")
+			},
 		},
 		{
 			name: "Cluster not found",

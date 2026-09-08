@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/michelangelo-ai/michelangelo/go/api"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	corev1 "k8s.io/api/core/v1"
@@ -192,6 +193,38 @@ func TestReconcilerReconcile(t *testing.T) {
 				assert.Equal(t, time.Duration(0), res.RequeueAfter)
 			},
 			verifyConditions: func(t *testing.T, cluster *v2pb.RayCluster) {},
+		},
+		{
+			// An immutable RayCluster must be skipped entirely. A non-immutable
+			// cluster with this spec would be enqueued (EnqueuedCondition set and a
+			// requeue); a cluster left in its seeded INVALID state with no status
+			// conditions and no requeue proves reconciliation was short-circuited by
+			// the immutable check.
+			name: "immutable cluster is skipped",
+			setup: func() []client.Object {
+				objects := make([]client.Object, 0)
+				cluster := &v2pb.RayCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:        rayClusterName,
+						Namespace:   testNamespace,
+						Generation:  1,
+						Annotations: map[string]string{api.ImmutableAnnotation: "true"},
+					},
+					Spec: createRayClusterSpec(),
+				}
+				objects = append(objects, cluster)
+				return objects
+			},
+			setupMocks:      func(mfc *clientmocks.MockFederatedClient, mcc *mockClusterCache, msq *mockSchedulerQueue) {},
+			expectedState:   v2pb.RAY_CLUSTER_STATE_INVALID,
+			expectedMessage: "",
+			errorAssertion:  require.NoError,
+			postCheck: func(res ctrl.Result) {
+				assert.Equal(t, time.Duration(0), res.RequeueAfter)
+			},
+			verifyConditions: func(t *testing.T, cluster *v2pb.RayCluster) {
+				assert.Empty(t, cluster.Status.StatusConditions, "immutable cluster must not be reconciled")
+			},
 		},
 		{
 			name: "Cluster should be enqueued",

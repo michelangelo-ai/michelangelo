@@ -103,6 +103,14 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{RequeueAfter: requeueAfter}, err
 	}
 
+	// An immutable RayCluster has reached a terminal state and is being moved to metadata
+	// storage by the ingester (which will delete it from ETCD). Skip reconciliation so we
+	// neither waste queue capacity nor re-trigger ourselves by rewriting a terminal object.
+	if utils.IsImmutable(&rayCluster) {
+		logger.Info("RayCluster is immutable, skipping reconciliation")
+		return ctrl.Result{}, nil
+	}
+
 	// Create a copy of the original RayCluster for comparison
 	originalRayCluster := rayCluster.DeepCopy()
 
