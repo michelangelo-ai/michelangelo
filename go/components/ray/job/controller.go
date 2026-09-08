@@ -97,19 +97,26 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			res.RequeueAfter = requeueAfter
 			return res, err
 		}
+	}
 
-		if isTerminalRayJobState(rayJob.Status.State) && !utils.IsImmutable(&rayJob) {
-			// Annotations are metadata, so Status().Update above never persists
-			// them. Persist with a plain Update, and do it after the status
-			// write using the resourceVersion that refreshed: doing it first
-			// would bump resourceVersion and hand back the pre-update status in
-			// the response, clobbering the status we just persisted.
-			utils.MarkImmutable(&rayJob)
-			if err := r.Update(ctx, &rayJob); err != nil {
-				// Log only: don't turn an already-successful status write into
-				// a failed reconcile over a best-effort annotation.
-				logger.Error(err, "failed to persist immutable annotation")
-			}
+	// Checked independently of the dirty-check above -- and on every
+	// reconcile, not just the pass that first reached a terminal state --
+	// so a job stuck terminal-but-mutable (e.g. a prior annotation write
+	// failed, or it lands on the same terminal status every pass, as with a
+	// permanently missing cluster spec) keeps getting retried instead of
+	// being skipped forever once its status stops changing.
+	if isTerminalRayJobState(rayJob.Status.State) && !utils.IsImmutable(&rayJob) {
+		// Annotations are metadata, so Status().Update above never persists
+		// them; persist with a plain Update. This is safe whether or not the
+		// status write above ran: a plain Update never touches .status, so
+		// there's nothing for it to clobber, and rayJob's resourceVersion is
+		// current either way -- refreshed by Status().Update if it ran, or
+		// still the one from the Get at the top of Reconcile if it didn't.
+		utils.MarkImmutable(&rayJob)
+		if err := r.Update(ctx, &rayJob); err != nil {
+			// Log only: don't turn an already-successful status write into a
+			// failed reconcile over a best-effort annotation.
+			logger.Error(err, "failed to persist immutable annotation")
 		}
 	}
 
