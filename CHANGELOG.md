@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.10.0] - 2026-09-08
 
 
 ### Bug Fixes
@@ -56,6 +56,10 @@ All notable changes to this project will be documented in this file.
 - **trainer:** Default to SingleDeviceStrategy when world size is 1 (#2005)
 
 
+- **changelog:** Correct v0.10.0-rc.1 range to v0.9.0..v0.10.0-rc.1 (#2045)
+
+
+
 ### CI/CD
 
 
@@ -84,6 +88,7 @@ All notable changes to this project will be documented in this file.
 
 
 - Bump docker/setup-qemu-action from 3 to 4 (#1969)
+
 
 
 ### Documentation
@@ -120,6 +125,10 @@ All notable changes to this project will be documented in this file.
 
 
 - Revert getting-started.md tutorial to pytorch_train (MPS fix merged) (#2026)
+
+
+- Update CHANGELOG.md for v0.10.0-rc.1 (#2030)
+
 
 
 ### Features
@@ -200,6 +209,7 @@ All notable changes to this project will be documented in this file.
 - Reflect name to unmarshalled table (#1914)
 
 
+
 ### Miscellaneous
 
 
@@ -230,10 +240,15 @@ All notable changes to this project will be documented in this file.
 - Bump version to 0.10.0-rc.1
 
 
+- Release 0.10.0 (#2048)
+
+
+
 ### Performance
 
 
 - **javascript:** Switch test environment from jsdom to happy-dom (#847)
+
 
 
 ### Refactoring
