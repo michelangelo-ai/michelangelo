@@ -47,8 +47,9 @@ export const DeploymentForm = ({ mode, record, onClose }: DeploymentFormProps) =
     label: item.metadata.name,
   }));
 
-  // The record doesn't carry the model family (spec.modelFamily is never written on
-  // create), so update mode resolves it from the currently deployed model for prefill.
+  // spec.modelFamily exists on the Deployment proto but the controller never populates
+  // it, so it can't be relied on for prefill. Update mode instead resolves the family
+  // via GetModel on the currently deployed model, purely to prefill/filter the dropdown.
   const { data: modelData, isLoading: isModelLoading } = useStudioQuery<{ model?: ModelRecord }>({
     queryName: 'GetModel',
     serviceOptions: { name: currentModelName },
