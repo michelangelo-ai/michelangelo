@@ -113,15 +113,11 @@ export function safeStringify(value: unknown): string {
  * ```
  */
 export function formatEntityName(name: string, casing?: 'nav'): string {
-  return casing === 'nav' ? toNavCase(name) : name;
-}
+  if (casing !== 'nav') return name;
 
-/**
- * Capitalizes the first letter of each space-separated word. Splitting on
- * spaces (not hyphens) keeps hyphenated names like "one-off" intact, and
- * already-uppercase letters are untouched, so acronyms survive.
- */
-function toNavCase(name: string): string {
+  // Capitalize the first letter of each space-separated word. Splitting on
+  // spaces (not hyphens) keeps hyphenated names like "one-off" intact, and
+  // already-uppercase letters are untouched, so acronyms survive.
   return name
     .split(' ')
     .map((word) => (word ? word[0].toUpperCase() + word.slice(1) : word))
