@@ -125,6 +125,16 @@ assert_contains "$default_output" 'fsGroup: 65534'
 assert_contains "$default_output" 'helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded'
 assert_not_contains "$default_output" 'hook-failed'
 
+default_deployment_output="$(helm template litellm "$CHART_DIR" \
+  --namespace litellm \
+  --show-only charts/litellm/templates/deployment.yaml)"
+assert_contains "$default_deployment_output" $'limits:\n              cpu: "2"\n              memory: 2Gi\n            requests:\n              cpu: 500m\n              memory: 1Gi'
+
+default_migration_output="$(helm template litellm "$CHART_DIR" \
+  --namespace litellm \
+  --show-only templates/migrations-job.yaml)"
+assert_contains "$default_migration_output" $'limits:\n              cpu: 500m\n              memory: 2Gi\n            requests:\n              cpu: 100m\n              memory: 1Gi'
+
 argocd_output="$(helm template litellm "$CHART_DIR" \
   --namespace litellm \
   --set migrationJob.hooks.helm.enabled=false \
