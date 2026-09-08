@@ -285,63 +285,13 @@ class ComputeNumericalStatisticsTests(unittest.TestCase):
         total, while there are only 2 specs. With a batch size of 2, a
         batch_count derived from spec count would only cover the first 4
         aggregate fns, silently dropping the rest.
-        """
 
-        class _FakeAggFn:
-            def __init__(self, input_col, alias_name=None, **_kwargs):
-                self.input_col = input_col
-                self.alias_name = alias_name
-
-        mock_dataset = MagicMock()
-        mock_dataset.select_columns.return_value = mock_dataset
-        mock_dataset.aggregate.side_effect = lambda *fns: {
-            fn.alias_name: 1.0 for fn in fns
-        }
-        specs = {
-            "col1": {
-                "percentiles": [],
-                "max": True,
-                "min": True,
-                "mean": True,
-                "std": True,
-            },
-            "col2": {
-                "percentiles": [],
-                "max": True,
-                "min": True,
-                "mean": True,
-                "std": True,
-            },
-        }
-
-        mock_aggregate = MagicMock()
-        mock_aggregate.Max = mock_aggregate.Min = mock_aggregate.Mean = (
-            mock_aggregate.Std
-        ) = _FakeAggFn
-        with patch.dict("sys.modules", {"ray.data.aggregate": mock_aggregate}):
-            result = compute_numerical_statistics(
-                mock_dataset,
-                existing_numerical_stats={},
-                numerical_statistics_computation_specs=specs,
-                numerical_statistics_batch_fn_size=2,
-            )
-
-        expected_keys = {
-            f"{col}_{stat}"
-            for col in ("col1", "col2")
-            for stat in ("max", "min", "mean", "std")
-        }
-        self.assertEqual(set(result.keys()), expected_keys)
-
-    def test_batch_count_does_not_add_empty_trailing_batch_on_exact_multiple(self):
-        """No empty batch when aggregate_fns is an exact multiple of the batch size.
-
-        Two columns x 4 aggregate fns each = 8 total, with a batch size of 4:
-        len(aggregate_fns) % batch_fn_size == 0. `// batch_fn_size + 1` would
-        add a third, empty batch, and calling ray_data_df.aggregate() with no
-        aggregators crashes inside Ray (assert self._columns in
-        table_block.py). aggregate() must be called exactly twice, never with
-        an empty argument list.
+        8 fns at a batch size of 2 is also an exact multiple (4 batches, no
+        remainder), so this doubles as the regression case for `// + 1`
+        adding a guaranteed-empty trailing batch: aggregate() must never be
+        called with zero aggregators (that crashes inside Ray, see
+        table_block.py's `assert self._columns`), and must be called exactly
+        4 times.
         """
 
         class _FakeAggFn:
@@ -382,10 +332,10 @@ class ComputeNumericalStatisticsTests(unittest.TestCase):
                 mock_dataset,
                 existing_numerical_stats={},
                 numerical_statistics_computation_specs=specs,
-                numerical_statistics_batch_fn_size=4,
+                numerical_statistics_batch_fn_size=2,
             )
 
-        self.assertEqual(mock_dataset.aggregate.call_count, 2)
+        self.assertEqual(mock_dataset.aggregate.call_count, 4)
         expected_keys = {
             f"{col}_{stat}"
             for col in ("col1", "col2")
