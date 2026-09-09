@@ -10,8 +10,6 @@ import { DEPLOYMENT_LIST_CONFIG } from './list';
 import type { PhaseEntityConfig } from '#core/types/common/studio-types';
 import type { DeploymentRecord } from './types';
 
-const LAST_PREDICTION_ANNOTATION = 'deployment.michelangelo/last-prediction-timestamp';
-
 const isRetirable = (record: unknown) => {
   // cast: record is unknown from the action predicate context; always a Deployment in this
   // entity config; see #1425
@@ -24,11 +22,7 @@ const retireModalBody = (record: unknown) => {
   // config; see #1425
   const deployment = record as DeploymentRecord;
   const deployed = timestampToString(getCrdUpdatedSeconds(deployment), TimeZone.Local);
-  const lastUsed = timestampToString(
-    deployment.metadata?.annotations?.[LAST_PREDICTION_ANNOTATION],
-    TimeZone.Local
-  );
-  return `Deployed at: **${deployed ?? 'N/A'}**\n\nLast used at: **${lastUsed ?? 'N/A'}**\n\nThis process might take a few minutes.`;
+  return `Deployed at: **${deployed ?? 'N/A'}**\n\nThis process might take a few minutes.`;
 };
 
 export const DEPLOYMENT_ENTITY_CONFIG: PhaseEntityConfig = {

@@ -492,10 +492,7 @@ describe('Deployment retire action', () => {
     );
 
     const dialog = await openRetireDialog(user);
-    // No last-prediction annotation on the record → N/A.
     expect(within(dialog).getByText(/Deployed at:/)).toBeInTheDocument();
-    expect(within(dialog).getByText(/Last used at:/)).toBeInTheDocument();
-    expect(within(dialog).getByText('N/A')).toBeInTheDocument();
     expect(within(dialog).getByText('This process might take a few minutes.')).toBeInTheDocument();
 
     await user.click(within(dialog).getByRole('button', { name: 'Yes, retire' }));
