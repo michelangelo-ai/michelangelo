@@ -11,7 +11,6 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//go/api:go_default_library",
-        "//go/api/utils:go_default_library",
         "//go/base/blobstore:go_default_library",
         "//go/base/conditions/engine:go_default_library",
         "//go/base/conditions/interfaces:go_default_library",
@@ -40,7 +39,6 @@ go_test(
     embed = [":go_default_library"],
     deps = [
         "//go/api:go_default_library",
-        "//go/api/apimocks:go_default_library",
         "//go/api/handler:go_default_library",
         "//go/base/blobstore:go_default_library",
         "//go/base/blobstore/blobstore_mocks:go_default_library",
@@ -56,11 +54,8 @@ go_test(
         "@com_github_gogo_protobuf//types:go_default_library",
         "@com_github_golang_mock//gomock:go_default_library",
         "@com_github_stretchr_testify//require:go_default_library",
-        "@io_k8s_apimachinery//pkg/api/errors:go_default_library",
         "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
         "@io_k8s_apimachinery//pkg/runtime:go_default_library",
-        "@io_k8s_apimachinery//pkg/runtime/schema:go_default_library",
-        "@io_k8s_sigs_controller_runtime//pkg/client:go_default_library",
         "@io_k8s_sigs_controller_runtime//pkg/client/fake:go_default_library",
         "@org_uber_go_config//:go_default_library",
         "@org_uber_go_zap//zaptest:go_default_library",
