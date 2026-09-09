@@ -297,6 +297,38 @@ func validateIndex(key, fullPath string, curMsg *protogen.Message) ([]string, *p
 	return parsedGoPaths, lastField, lastField.Message
 }
 
+// ValidateWrapperContentField walks a dotted path (e.g. "spec.content") against
+// wrapperMsg's fields and panics unless every segment resolves to a real field
+// and the leaf field is a google.protobuf.Any. This is the check that ties a
+// revisioned_in wrapper kind's hardcoded content path back to the wrapper's
+// actual proto schema, so a renamed/missing content field fails at codegen
+// time instead of surfacing as a runtime failure when the storage layer
+// reflects into the Any at that path.
+func ValidateWrapperContentField(baseCrdName, wrapperKind, wrapperName, path string, wrapperMsg *protogen.Message) {
+	curMsg := wrapperMsg
+	var lastField *protogen.Field
+	segments := strings.Split(path, ".")
+	for _, segment := range segments {
+		field := validateField(curMsg, segment)
+		if field == nil {
+			logger.Panicf("Invalid revisioned_in annotation on %v: kind %q resolves to message %v, "+
+				"which has no field %q at path %q", baseCrdName, wrapperKind, wrapperName, segment, path)
+		}
+		if field.Desc.IsList() {
+			logger.Panicf("Invalid revisioned_in annotation on %v: kind %q resolves to message %v, "+
+				"whose field %q at path %q is repeated but a singular field is required",
+				baseCrdName, wrapperKind, wrapperName, segment, path)
+		}
+		lastField = field
+		curMsg = field.Message
+	}
+
+	if lastField.Desc.Kind() != protoreflect.MessageKind || lastField.Message.Desc.FullName() != "google.protobuf.Any" {
+		logger.Panicf("Invalid revisioned_in annotation on %v: kind %q resolves to message %v, "+
+			"whose field at path %q is not a google.protobuf.Any", baseCrdName, wrapperKind, wrapperName, path)
+	}
+}
+
 // validateField validates that a field with the given name exists on the given message
 // Returns the field if such field exists, otherwise returns nil
 func validateField(curMsg *protogen.Message, fieldName string) *protogen.Field {

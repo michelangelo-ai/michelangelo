@@ -541,8 +541,10 @@ func genCRDRevisionedIndex(crdName string, crdRootMsg *protogen.Message, crdBuf 
 
 // resolveWrapperKind converts a revisioned_in kind string (e.g. "revision")
 // to the wrapper CRD's Kind ("Revision") and validates, at codegen time,
-// that a message by that name actually exists in this compile unit and
-// is itself a CRD resource (has_resource).
+// that a message by that name actually exists in this compile unit, is
+// itself a CRD resource (has_resource) and has a google.protobuf.Any field
+// at wrapperContentPath — the path RevisionedIndexSpec.ContentPath hardcodes
+// for every wrapper kind.
 func resolveWrapperKind(baseCrdName, kind string, allProtoMsgs map[string]*protogen.Message,
 	extTypes *protoregistry.Types) string {
 	if kind == "" {
@@ -564,6 +566,7 @@ func resolveWrapperKind(baseCrdName, kind string, allProtoMsgs map[string]*proto
 		logger.Panicf("Invalid revisioned_in annotation on %v: kind %q resolves to message %v, which is not "+
 			"a CRD resource (missing michelangelo.api.resource)", baseCrdName, kind, wrapperKind)
 	}
+	util.ValidateWrapperContentField(baseCrdName, kind, wrapperKind, wrapperContentPath, wrapperMsg)
 	return wrapperKind
 }
 
