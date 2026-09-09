@@ -602,17 +602,6 @@ describe('Deployment delete action', () => {
     };
   }
 
-  function buildRequestCapture() {
-    const submitted: Record<string, unknown>[] = [];
-    const request = (name: string, payload: unknown) => {
-      if (name === 'DeleteDeployment') {
-        submitted.push(payload as Record<string, unknown>);
-      }
-      return Promise.resolve({});
-    };
-    return { submitted, request };
-  }
-
   async function openDeleteDialog(user: ReturnType<typeof userEvent.setup>) {
     await user.click(screen.getByRole('button', { name: 'Actions' }));
     await user.click(await screen.findByRole('option', { name: 'Delete' }));
@@ -621,9 +610,13 @@ describe('Deployment delete action', () => {
     });
   }
 
-  it('sends the record to DeleteDeployment and confirms with a toast', async () => {
+  function findDeleteDeploymentCall(request: ReturnType<typeof createQueryMockRouter>) {
+    return vi.mocked(request).mock.calls.find(([name]) => name === 'DeleteDeployment');
+  }
+
+  it('warns in the dialog, sends nothing on cancel, then deletes the record and toasts on confirm', async () => {
     const user = userEvent.setup();
-    const { submitted, request } = buildRequestCapture();
+    const request = createQueryMockRouter({ DeleteDeployment: {} });
 
     render(
       <InterpolatableActionsPopover actions={DEPLOYMENT_ACTIONS} record={buildRecord()} />,
@@ -638,40 +631,7 @@ describe('Deployment delete action', () => {
       ])
     );
 
-    const dialog = await openDeleteDialog(user);
-    await user.click(within(dialog).getByRole('button', { name: 'Yes, delete' }));
-
-    await waitFor(() => expect(submitted).toHaveLength(1));
-
-    // The handler reshapes the record into { name, namespace }; the action itself
-    // submits the record unchanged.
-    const payload = submitted[0] as { metadata: { name: string; namespace: string } };
-    expect(payload.metadata.name).toBe(DEPLOYMENT_NAME);
-    expect(payload.metadata.namespace).toBe(NAMESPACE);
-
-    expect(
-      await screen.findByText('Deployment has been deleted. This process may take a few seconds.')
-    ).toBeInTheDocument();
-  });
-
-  it('warns that retirement runs first and in-flight traffic fails the call', async () => {
-    const user = userEvent.setup();
-    const { submitted, request } = buildRequestCapture();
-
-    render(
-      <InterpolatableActionsPopover actions={DEPLOYMENT_ACTIONS} record={buildRecord()} />,
-      buildWrapper([
-        getBaseProviderWrapper(),
-        getErrorProviderWrapper(),
-        getIconProviderWrapper(),
-        getInterpolationProviderWrapper(),
-        getRouterWrapper({ location: `/${NAMESPACE}/deploy/deployments/${DEPLOYMENT_NAME}` }),
-        getServiceProviderWrapper({ request }),
-        getSnackbarProviderWrapper(),
-      ])
-    );
-
-    const dialog = await openDeleteDialog(user);
+    let dialog = await openDeleteDialog(user);
     expect(
       within(dialog).getByText(
         'We will perform retirement process first and then the deployment will be deleted. This process will take few minutes to complete.'
@@ -684,6 +644,23 @@ describe('Deployment delete action', () => {
     ).toBeInTheDocument();
 
     await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
-    expect(submitted).toHaveLength(0);
+    expect(findDeleteDeploymentCall(request)).toBeUndefined();
+
+    dialog = await openDeleteDialog(user);
+    await user.click(within(dialog).getByRole('button', { name: 'Yes, delete' }));
+
+    await waitFor(() => expect(findDeleteDeploymentCall(request)).toBeDefined());
+
+    // The handler reshapes the record into { name, namespace }; the action itself
+    // submits the record unchanged.
+    const payload = findDeleteDeploymentCall(request)?.[1] as {
+      metadata: { name: string; namespace: string };
+    };
+    expect(payload.metadata.name).toBe(DEPLOYMENT_NAME);
+    expect(payload.metadata.namespace).toBe(NAMESPACE);
+
+    expect(
+      await screen.findByText('Deployment has been deleted. This process may take a few seconds.')
+    ).toBeInTheDocument();
   });
 });
