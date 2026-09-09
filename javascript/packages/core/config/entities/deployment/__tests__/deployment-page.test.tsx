@@ -454,18 +454,12 @@ describe('Deployment retire action', () => {
     };
   }
 
-  function buildRequestCapture() {
-    const submitted: Record<string, unknown>[] = [];
-    const request = (name: string, payload: unknown) => {
-      if (name === 'UpdateDeployment') {
-        submitted.push(payload as Record<string, unknown>);
-        return Promise.resolve({
-          deployment: { metadata: { name: DEPLOYMENT_NAME, namespace: NAMESPACE } },
-        });
-      }
-      return Promise.resolve({});
-    };
-    return { submitted, request };
+  function buildRetireMockRequest() {
+    return createQueryMockRouter({
+      UpdateDeployment: {
+        deployment: { metadata: { name: DEPLOYMENT_NAME, namespace: NAMESPACE } },
+      },
+    });
   }
 
   async function openRetireDialog(user: ReturnType<typeof userEvent.setup>) {
@@ -476,44 +470,13 @@ describe('Deployment retire action', () => {
     });
   }
 
-  it('updates the deployment with desiredRevision removed, leaving the rest of the spec intact', async () => {
+  function findUpdateDeploymentCall(request: ReturnType<typeof createQueryMockRouter>) {
+    return vi.mocked(request).mock.calls.find(([name]) => name === 'UpdateDeployment');
+  }
+
+  it('confirms the retire in a dialog, submits the spec with desiredRevision removed, and toasts', async () => {
     const user = userEvent.setup();
-    const { submitted, request } = buildRequestCapture();
-
-    render(
-      <InterpolatableActionsPopover actions={RETIRE_ACTIONS} record={buildDeployedRecord()} />,
-      buildWrapper([
-        getBaseProviderWrapper(),
-        getErrorProviderWrapper(),
-        getIconProviderWrapper(),
-        getInterpolationProviderWrapper(),
-        getRouterWrapper({ location: `/${NAMESPACE}/deploy/deployments/${DEPLOYMENT_NAME}` }),
-        getServiceProviderWrapper({ request }),
-        getSnackbarProviderWrapper(),
-      ])
-    );
-
-    const dialog = await openRetireDialog(user);
-    await user.click(within(dialog).getByRole('button', { name: 'Yes, retire' }));
-
-    await waitFor(() => expect(submitted).toHaveLength(1));
-
-    const payload = submitted[0] as {
-      metadata: { name: string };
-      spec: { desiredRevision?: unknown; target?: unknown };
-    };
-    // The absent desiredRevision is what tells the backend to run cleanup.
-    expect(payload.spec.desiredRevision).toBeUndefined();
-    expect(payload.spec.target).toEqual({
-      case: 'inferenceServer',
-      value: { name: 'inference-server-example' },
-    });
-    expect(payload.metadata.name).toBe(DEPLOYMENT_NAME);
-  });
-
-  it('shows the deployed/last-used timestamps in the confirm dialog', async () => {
-    const user = userEvent.setup();
-    const { request } = buildRequestCapture();
+    const request = buildRetireMockRequest();
 
     render(
       <InterpolatableActionsPopover actions={RETIRE_ACTIONS} record={buildDeployedRecord()} />,
@@ -534,27 +497,23 @@ describe('Deployment retire action', () => {
     expect(within(dialog).getByText(/Last used at:/)).toBeInTheDocument();
     expect(within(dialog).getByText('N/A')).toBeInTheDocument();
     expect(within(dialog).getByText('This process might take a few minutes.')).toBeInTheDocument();
-  });
 
-  it('confirms with a toast naming the deployment being retired', async () => {
-    const user = userEvent.setup();
-    const { request } = buildRequestCapture();
-
-    render(
-      <InterpolatableActionsPopover actions={RETIRE_ACTIONS} record={buildDeployedRecord()} />,
-      buildWrapper([
-        getBaseProviderWrapper(),
-        getErrorProviderWrapper(),
-        getIconProviderWrapper(),
-        getInterpolationProviderWrapper(),
-        getRouterWrapper({ location: `/${NAMESPACE}/deploy/deployments/${DEPLOYMENT_NAME}` }),
-        getServiceProviderWrapper({ request }),
-        getSnackbarProviderWrapper(),
-      ])
-    );
-
-    const dialog = await openRetireDialog(user);
     await user.click(within(dialog).getByRole('button', { name: 'Yes, retire' }));
+
+    await waitFor(() => expect(findUpdateDeploymentCall(request)).toBeDefined());
+
+    const payload = findUpdateDeploymentCall(request)?.[1] as {
+      metadata: { name: string };
+      spec: { desiredRevision?: unknown; target?: unknown };
+    };
+    // The absent desiredRevision is what tells the backend to run cleanup; the rest of
+    // the spec must be sent through intact.
+    expect(payload.spec.desiredRevision).toBeUndefined();
+    expect(payload.spec.target).toEqual({
+      case: 'inferenceServer',
+      value: { name: 'inference-server-example' },
+    });
+    expect(payload.metadata.name).toBe(DEPLOYMENT_NAME);
 
     expect(
       await screen.findByText(`Retirement for deployment ${DEPLOYMENT_NAME} has begun`)
@@ -563,7 +522,7 @@ describe('Deployment retire action', () => {
 
   it('disables retire with a tooltip when the deployment has no revision to retire', async () => {
     const user = userEvent.setup();
-    const request = vi.fn();
+    const request = buildRetireMockRequest();
 
     const record = buildDeployedRecord({
       spec: { target: { case: 'inferenceServer', value: { name: 'inference-server-example' } } },
@@ -596,7 +555,7 @@ describe('Deployment retire action', () => {
 
   it('stays enabled while a candidate revision is still rolling out', async () => {
     const user = userEvent.setup();
-    const { submitted, request } = buildRequestCapture();
+    const request = buildRetireMockRequest();
 
     // desiredRevision already cleared but a candidate is mid-rollout — retiring must
     // still be possible to abort the rollout, matching the backend's cleanup trigger.
@@ -621,6 +580,6 @@ describe('Deployment retire action', () => {
     const dialog = await openRetireDialog(user);
     await user.click(within(dialog).getByRole('button', { name: 'Yes, retire' }));
 
-    await waitFor(() => expect(submitted).toHaveLength(1));
+    await waitFor(() => expect(findUpdateDeploymentCall(request)).toBeDefined());
   });
 });
