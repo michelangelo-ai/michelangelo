@@ -28,7 +28,7 @@ describe('Model detail page', () => {
       ...overrides,
     });
 
-    function renderDetail(model: object) {
+    it('renders header metadata for the model', async () => {
       render(
         <EntityDetailRoute phases={{ train: TRAIN_PHASE }} />,
         buildWrapper([
@@ -37,14 +37,10 @@ describe('Model detail page', () => {
             location: '/myproject/train/models/fraud-classifier/information',
           }),
           getServiceProviderWrapper({
-            request: createQueryMockRouter({ GetModel: { model } }),
+            request: createQueryMockRouter({ GetModel: { model: buildModel() } }),
           }),
         ])
       );
-    }
-
-    it('renders header metadata for the model', async () => {
-      renderDetail(buildModel());
 
       expect(screen.getByText('fraud-classifier')).toBeInTheDocument();
       expect(await screen.findByText('Source pipeline run')).toBeInTheDocument();
@@ -76,7 +72,7 @@ describe('Model detail page', () => {
       },
     });
 
-    function renderInformationTab() {
+    beforeEach(() => {
       render(
         <EntityDetailRoute phases={{ train: TRAIN_PHASE }} />,
         buildWrapper([
@@ -89,27 +85,21 @@ describe('Model detail page', () => {
           }),
         ])
       );
-    }
+    });
 
     it('renders the source pipeline run link in Useful links', async () => {
-      renderInformationTab();
-
       for (const link of await screen.findAllByRole('link', { name: 'fraud-classifier-run-1' })) {
         expect(link).toHaveAttribute('href', '/myproject/train/runs/fraud-classifier-run-1');
       }
     });
 
     it('renders the description', async () => {
-      renderInformationTab();
-
       expect(
         await screen.findByDisplayValue('Fraud detection model trained on transaction history.')
       ).toBeInTheDocument();
     });
 
     it('renders the model context configuration fields', async () => {
-      renderInformationTab();
-
       expect(await screen.findByText('Model context')).toBeInTheDocument();
       expect(await screen.findByRole('textbox', { name: 'Model family' })).toHaveValue(
         'fraud-classifier-family'
@@ -119,8 +109,6 @@ describe('Model detail page', () => {
     });
 
     it('renders the training setup configuration fields', async () => {
-      renderInformationTab();
-
       expect(await screen.findByText('Training setup')).toBeInTheDocument();
       expect(
         await screen.findByRole('textbox', { name: 'Train evaluation Hive table' })

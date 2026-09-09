@@ -477,20 +477,6 @@ describe('CreatePipelineRunForm', () => {
       },
     };
 
-    function renderForm(request: ReturnType<typeof createQueryMockRouter>) {
-      return render(
-        <FormWrapper />,
-        buildWrapper([
-          getBaseProviderWrapper(),
-          getIconProviderWrapper(),
-          getErrorProviderWrapper(),
-          getInterpolationProviderWrapper(),
-          getRouterWrapper({ location: '/ma-dev-test/train/pipelines' }),
-          getServiceProviderWrapper({ request }),
-        ])
-      );
-    }
-
     function buildRequest() {
       return createQueryMockRouter({
         CreatePipelineRun: {},
@@ -508,96 +494,109 @@ describe('CreatePipelineRunForm', () => {
       await user.click(await screen.findByText(new RegExp(SOURCE_RUN)));
     }
 
-    it('offers only finished runs of this pipeline', async () => {
-      const user = userEvent.setup();
-      renderForm(buildRequest());
+    describe('with the default mock request', () => {
+      let mockRequest: ReturnType<typeof buildRequest>;
 
-      await screen.findByRole('dialog', { name: 'Start new pipeline run' });
-      await openResumeGroup(user);
-      await user.click(await screen.findByRole('combobox', { name: /pipeline run/i }));
-
-      expect(await screen.findByText(new RegExp(SOURCE_RUN))).toBeInTheDocument();
-      // Excluded: belongs to another pipeline, and is still running
-      expect(screen.queryByText(/run-other-pipeline/)).not.toBeInTheDocument();
-      expect(screen.queryByText(/run-still-running/)).not.toBeInTheDocument();
-    });
-
-    it('populates the step picker from Execute Workflow sub-steps once a run is chosen', async () => {
-      const user = userEvent.setup();
-      renderForm(buildRequest());
-
-      await screen.findByRole('dialog', { name: 'Start new pipeline run' });
-      await openResumeGroup(user);
-
-      // Disabled until a source run supplies the option list
-      expect(screen.getByRole('combobox', { name: /steps/i })).toBeDisabled();
-
-      await selectSourceRun(user);
-
-      const stepPicker = await screen.findByRole('combobox', { name: /steps/i });
-      await waitFor(() => expect(stepPicker).not.toBeDisabled());
-      await user.click(stepPicker);
-
-      expect(await screen.findByText('feature_gen')).toBeInTheDocument();
-      expect(screen.getByText('train_model')).toBeInTheDocument();
-      // Platform stages are not resumable DAG tasks
-      expect(screen.queryByText('Image Build')).not.toBeInTheDocument();
-    });
-
-    it('submits resumeFrom using step displayName, not the task path', async () => {
-      const user = userEvent.setup();
-      const mockRequest = buildRequest();
-      renderForm(mockRequest);
-
-      const dialog = await screen.findByRole('dialog', { name: 'Start new pipeline run' });
-      await openResumeGroup(user);
-      await selectSourceRun(user);
-
-      const stepPicker = await screen.findByRole('combobox', { name: /steps/i });
-      await waitFor(() => expect(stepPicker).not.toBeDisabled());
-      await user.click(stepPicker);
-      await user.click(await screen.findByText('feature_gen'));
-
-      await selectEnvironment(user, dialog, 'Development');
-      await user.click(within(dialog).getByRole('button', { name: 'Run' }));
-
-      await waitFor(() => {
-        expect(mockRequest).toHaveBeenCalledWith(
-          'CreatePipelineRun',
-          expect.objectContaining({
-            spec: expect.objectContaining({
-              resume: {
-                pipelineRun: { name: SOURCE_RUN, namespace: 'ma-dev-test' },
-                resumeFrom: ['feature_gen'],
-              },
-            }) as Record<string, unknown>,
-          }),
-          {}
+      beforeEach(() => {
+        mockRequest = buildRequest();
+        render(
+          <FormWrapper />,
+          buildWrapper([
+            getBaseProviderWrapper(),
+            getIconProviderWrapper(),
+            getErrorProviderWrapper(),
+            getInterpolationProviderWrapper(),
+            getRouterWrapper({ location: '/ma-dev-test/train/pipelines' }),
+            getServiceProviderWrapper({ request: mockRequest }),
+          ])
         );
       });
-    });
 
-    it('submits resume without resumeFrom when no step is picked', async () => {
-      const user = userEvent.setup();
-      const mockRequest = buildRequest();
-      renderForm(mockRequest);
+      it('offers only finished runs of this pipeline', async () => {
+        const user = userEvent.setup();
 
-      const dialog = await screen.findByRole('dialog', { name: 'Start new pipeline run' });
-      await openResumeGroup(user);
-      await selectSourceRun(user);
-      await selectEnvironment(user, dialog, 'Development');
-      await user.click(within(dialog).getByRole('button', { name: 'Run' }));
+        await screen.findByRole('dialog', { name: 'Start new pipeline run' });
+        await openResumeGroup(user);
+        await user.click(await screen.findByRole('combobox', { name: /pipeline run/i }));
 
-      await waitFor(() => {
-        expect(mockRequest).toHaveBeenCalledWith(
-          'CreatePipelineRun',
-          expect.objectContaining({
-            spec: expect.objectContaining({
-              resume: { pipelineRun: { name: SOURCE_RUN, namespace: 'ma-dev-test' } },
-            }) as Record<string, unknown>,
-          }),
-          {}
-        );
+        expect(await screen.findByText(new RegExp(SOURCE_RUN))).toBeInTheDocument();
+        // Excluded: belongs to another pipeline, and is still running
+        expect(screen.queryByText(/run-other-pipeline/)).not.toBeInTheDocument();
+        expect(screen.queryByText(/run-still-running/)).not.toBeInTheDocument();
+      });
+
+      it('populates the step picker from Execute Workflow sub-steps once a run is chosen', async () => {
+        const user = userEvent.setup();
+
+        await screen.findByRole('dialog', { name: 'Start new pipeline run' });
+        await openResumeGroup(user);
+
+        // Disabled until a source run supplies the option list
+        expect(screen.getByRole('combobox', { name: /steps/i })).toBeDisabled();
+
+        await selectSourceRun(user);
+
+        const stepPicker = await screen.findByRole('combobox', { name: /steps/i });
+        await waitFor(() => expect(stepPicker).not.toBeDisabled());
+        await user.click(stepPicker);
+
+        expect(await screen.findByText('feature_gen')).toBeInTheDocument();
+        expect(screen.getByText('train_model')).toBeInTheDocument();
+        // Platform stages are not resumable DAG tasks
+        expect(screen.queryByText('Image Build')).not.toBeInTheDocument();
+      });
+
+      it('submits resumeFrom using step displayName, not the task path', async () => {
+        const user = userEvent.setup();
+
+        const dialog = await screen.findByRole('dialog', { name: 'Start new pipeline run' });
+        await openResumeGroup(user);
+        await selectSourceRun(user);
+
+        const stepPicker = await screen.findByRole('combobox', { name: /steps/i });
+        await waitFor(() => expect(stepPicker).not.toBeDisabled());
+        await user.click(stepPicker);
+        await user.click(await screen.findByText('feature_gen'));
+
+        await selectEnvironment(user, dialog, 'Development');
+        await user.click(within(dialog).getByRole('button', { name: 'Run' }));
+
+        await waitFor(() => {
+          expect(mockRequest).toHaveBeenCalledWith(
+            'CreatePipelineRun',
+            expect.objectContaining({
+              spec: expect.objectContaining({
+                resume: {
+                  pipelineRun: { name: SOURCE_RUN, namespace: 'ma-dev-test' },
+                  resumeFrom: ['feature_gen'],
+                },
+              }) as Record<string, unknown>,
+            }),
+            {}
+          );
+        });
+      });
+
+      it('submits resume without resumeFrom when no step is picked', async () => {
+        const user = userEvent.setup();
+
+        const dialog = await screen.findByRole('dialog', { name: 'Start new pipeline run' });
+        await openResumeGroup(user);
+        await selectSourceRun(user);
+        await selectEnvironment(user, dialog, 'Development');
+        await user.click(within(dialog).getByRole('button', { name: 'Run' }));
+
+        await waitFor(() => {
+          expect(mockRequest).toHaveBeenCalledWith(
+            'CreatePipelineRun',
+            expect.objectContaining({
+              spec: expect.objectContaining({
+                resume: { pipelineRun: { name: SOURCE_RUN, namespace: 'ma-dev-test' } },
+              }) as Record<string, unknown>,
+            }),
+            {}
+          );
+        });
       });
     });
 
@@ -615,7 +614,17 @@ describe('CreatePipelineRunForm', () => {
         return router(queryName, args, headers);
       };
 
-      renderForm(request);
+      render(
+        <FormWrapper />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getIconProviderWrapper(),
+          getErrorProviderWrapper(),
+          getInterpolationProviderWrapper(),
+          getRouterWrapper({ location: '/ma-dev-test/train/pipelines' }),
+          getServiceProviderWrapper({ request }),
+        ])
+      );
 
       const dialog = await screen.findByRole('dialog', { name: 'Start new pipeline run' });
       await openResumeGroup(user);
