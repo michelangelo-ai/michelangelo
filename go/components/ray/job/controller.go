@@ -99,23 +99,21 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		}
 	}
 
-	// Checked independently of the dirty-check above -- and on every
-	// reconcile, not just the pass that first reached a terminal state --
-	// so a job stuck terminal-but-mutable (e.g. a prior annotation write
-	// failed, or it lands on the same terminal status every pass, as with a
-	// permanently missing cluster spec) keeps getting retried instead of
-	// being skipped forever once its status stops changing.
+	// Mark terminal jobs immutable. Intentionally separate from the status
+	// dirty-check above and run on every reconcile -- not just the pass that
+	// first turned the job terminal. A terminal job's status usually stops
+	// changing, so a check nested in the dirty-check would fire at most once;
+	// if that single write didn't land, the job would stay terminal-but-mutable
+	// forever and the ingester would never collect it.
 	if isTerminalRayJobState(rayJob.Status.State) && !utils.IsImmutable(&rayJob) {
-		// Annotations are metadata, so Status().Update above never persists
-		// them; persist with a plain Update. This is safe whether or not the
-		// status write above ran: a plain Update never touches .status, so
-		// there's nothing for it to clobber, and rayJob's resourceVersion is
-		// current either way -- refreshed by Status().Update if it ran, or
-		// still the one from the Get at the top of Reconcile if it didn't.
+		// The immutable marker is an annotation (metadata). Status().Update
+		// above writes only the /status subresource and cannot persist it, so
+		// use a plain Update. Ordering is safe: a plain Update leaves /status
+		// untouched, and rayJob's resourceVersion is current either way.
 		utils.MarkImmutable(&rayJob)
 		if err := r.Update(ctx, &rayJob); err != nil {
-			// Log only: don't turn an already-successful status write into a
-			// failed reconcile over a best-effort annotation.
+			// Best-effort: don't fail the reconcile (losing the status write)
+			// over the annotation; the guard above retries on a later reconcile.
 			logger.Error(err, "failed to persist immutable annotation")
 		}
 	}
