@@ -347,6 +347,9 @@ def _train_lightning(
         _logger.info("Using initial weights from: %s", initial_weights_path)
 
     # Build and run trainer
+    from dataclasses import asdict
+
+    torch_compile = asdict(config.torch_compile) if config.torch_compile else None
     trainer_param = LightningTrainerParam(
         create_model_fn=create_model_fn,
         create_model_fn_kwargs=create_model_fn_kwargs,
@@ -358,6 +361,7 @@ def _train_lightning(
         lightning_trainer_kwargs=lightning_trainer_kwargs,
         transfer_learning_spec=None,
         initial_weights_path=initial_weights_path,
+        torch_compile=torch_compile,
     )
     trainer = LightningTrainerWithStateDict(
         trainer_param, run_config=run_config, scaling_config=scaling_config
