@@ -13,7 +13,7 @@ Entities define data models and their properties within a phase. Each entity rep
 | Property | Type | Description | Required |
 |----------|------|-------------|----------|
 | `id` | `string` | Unique identifier within the phase, used in URL routing | ✅ Yes |
-| `name` | `string` | Display name for the entity (plural, lowercase recommended) | ✅ Yes |
+| `name` | `string` | Lowercase canonical display name (plural); title-cased at render time in nav | ✅ Yes |
 | `service` | `string` | Name of the protobuf service this entity maps to | ✅ Yes |
 | `state` | `PhaseEntityState` | Controls entity availability | ✅ Yes |
 | `views` | `ViewConfig[]` | Array of view configurations (list, detail, form) | ✅ Yes |
@@ -33,7 +33,7 @@ The `state` property controls individual entity behavior within a phase:
 // From: config/entities/run/run.ts
 export const RUN_ENTITY_CONFIG: PhaseEntityConfig = {
   id: 'runs',
-  name: 'Runs',
+  name: 'runs',
   service: 'pipelineRun',
   state: 'active',
   views: [RUN_LIST_CONFIG, RUN_DETAIL_CONFIG],
@@ -50,10 +50,25 @@ export const RUN_ENTITY_CONFIG: PhaseEntityConfig = {
 - Convention: plural, lowercase, hyphenated (e.g., `runs`, `pipelines`, `feature-groups`)
 
 ### `name`
-- Display name shown in navigation and headers
+- The **lowercase canonical** display name for the entity. Store it lowercase; casing is applied at render time, not in config
 - Recommended: plural, descriptive
-- Examples: `"Runs"`, `"Pipelines"`, `"Trained Models"`
-- Can be intentionally not pluralized for special cases (e.g., `"Feature Consistency"`)
+- Examples: `"runs"`, `"pipelines"`, `"trained models"`
+- Can be intentionally not pluralized for special cases (e.g., `"feature consistency"`)
+
+Nav chrome — breadcrumbs, left-nav, phase tabs, page H1s — renders the name through
+`formatEntityName(name, 'nav')`, which title-cases each space-separated word, so
+`'trained models'` displays as **Trained Models**. Everywhere else the lowercase value
+is itself the correct display form, which is why it reads naturally mid-sentence
+("no runs found"). Pre-casing the config value is invisible in nav — `formatEntityName`
+leaves existing capitals alone, so it's idempotent there — which is exactly why the
+mistake is easy to miss: it looks right in the tabs and breaks the sentence case
+everywhere else.
+
+:::note
+This applies to entity `name` only. Phase `name` in `config/phases/` stays Title Case
+(`'Train & Evaluate'`, `'Prepare & Analyze Data'`) — phases are not passed through
+`formatEntityName`.
+:::
 
 ### `service`
 - Maps to the root protobuf field name of the backend service
@@ -109,7 +124,7 @@ service PipelineRunService {
 // Entity config
 {
   id: 'runs',
-  name: 'Runs',
+  name: 'runs',
   service: 'pipelineRun', // ← Must match root field name
   // ...
 }

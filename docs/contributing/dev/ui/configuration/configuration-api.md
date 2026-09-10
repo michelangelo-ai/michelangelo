@@ -46,7 +46,7 @@ See [`javascript/packages/core/config/phases`](https://github.com/michelangelo-a
 // Example: config/entities/run/run.ts
 export const RUN_ENTITY_CONFIG: PhaseEntityConfig = {
   id: 'runs',
-  name: 'Runs',
+  name: 'runs',
   service: 'pipelineRun',
   state: 'active',
   views: [RUN_LIST_CONFIG, RUN_DETAIL_CONFIG],
@@ -54,6 +54,9 @@ export const RUN_ENTITY_CONFIG: PhaseEntityConfig = {
 ```
 
 - **id**: URL routing (`/<phase>/runs`)
+- **name**: lowercase canonical form — nav title-cases it at render time via
+  `formatEntityName`. Note this differs from phase `name` above, which is stored
+  Title Case. See [Entity Configuration Reference](./entity-configuration-reference.md#name)
 - **service**: Maps to protobuf service name
 - **views**: Supported views (list, detail)
 
