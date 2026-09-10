@@ -534,23 +534,21 @@ def _render_single_item(
 ) -> None:
     """Render a single CRD message in the requested output format.
 
-    Table output prints a one-row table using the same columns as `list`,
-    matching kubectl's `get <resource> <name>` behavior. Prior versions
-    printed the raw proto text_format, which rendered `google.protobuf.Any`
-    payloads (e.g. `spec.manifest.content`) as escaped byte strings.
+    All formats unwrap ``GetXxxResponse`` via
+    ``_unwrap_single_field_response`` so the RPC envelope stays out of
+    user-visible output. YAML and JSON both use proto3-JSON defaults
+    (lowerCamelCase) — matching Go ``mactl``, ``kubectl``, and every
+    k8s tool that reads CRD output; the two formats differ only in
+    serialization, not casing. Table prints one row using the same
+    columns as ``list``.
     """
+    inner = _unwrap_single_field_response(msg)
     if output_format == "yaml":
-        print(
-            yaml_safe_dump(
-                MessageToDict(msg, preserving_proto_field_name=True), sort_keys=False
-            )
-        )
+        print(yaml_safe_dump(MessageToDict(inner), sort_keys=False))
     elif output_format == "json":
-        print(MessageToJson(msg, preserving_proto_field_name=True))
+        print(MessageToJson(inner))
     else:
-        print_list_formatted(
-            [_unwrap_single_field_response(msg)], extra_columns=extra_columns
-        )
+        print_list_formatted([inner], extra_columns=extra_columns)
 
 
 def _resolve_criteria(spec, bound_args: dict, arg_dest: str) -> list[Criterion]:
