@@ -154,7 +154,7 @@ func TestGogoOutput(t *testing.T) {
 //go:embed test/expected_go_code.txt
 var expectedGoCode string
 
-const ObjectJSON = `{"kind":"Object","metadata":{"name":"object01","namespace":"default","creationTimestamp":null},"spec":{"description":"test"},"status":{}}`
+const ObjectJSON = `{"kind":"Object","metadata":{"name":"object01","namespace":"default"},"spec":{"description":"test"},"status":{}}`
 const EnumJSON = `{"inputSchema":{"schemaItems":[{"boolValue":true,"dataType":"DATA_TYPE_BOOLEAN"},{"int32Value":1234,"dataType":"DATA_TYPE_NUMERIC"}]},"nestedEnum":"CLUSTER_TYPE_PELOTON"}`
 const AnyJSON = `{"any":{"@type":"type.googleapis.com/michelangelo.test.kubeproto.TestMsg","value":"CAUSDnRlc3RBbnlNZXNzYWdl"}}`
 const TimeJSON = `{"time":"2021-06-07T09:01:02.000000003Z"}`
