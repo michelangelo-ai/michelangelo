@@ -127,14 +127,19 @@ message PipelineRunSpec {
   // Retry configuration for manual retry operations.
   // When specified with both task_name and workflow_id, the pipeline run controller will
   // trigger a workflow reset to retry that specific task from the specified workflow run.
-  // This field is automatically cleared after successful processing to prevent repeated retries.
+  // This field is NOT cleared after processing - it persists on the PipelineRun and is
+  // superseded only by a subsequent retry request. See workflow_run_id below for how
+  // duplicate processing of the same request is avoided.
   // The retry will bypass normal retry limits and restart from the beginning of the specified task.
   RetryInfo retry_info = 13;
 }
 
 // RetryInfo specifies retry configuration for manual retry operations.
 // It defines which task to retry from which specific workflow execution.
-// The retry is triggered when workflow_run_id differs from the current pipeline run's status.workflow_run_id.
+// The retry is triggered when workflow_run_id equals the current pipeline run's
+// status.workflow_run_id (i.e. it names the run about to be reset); once processed,
+// status.workflow_run_id moves to the new run's ID, so the same RetryInfo won't
+// match again until a subsequent retry request updates it.
 message RetryInfo {
   // Activity ID to retry from for precise targeting.
   // Replaces task_name for exact workflow reset boundary identification.
@@ -152,9 +157,10 @@ message RetryInfo {
   string reason = 3;
 
   // Workflow Run ID used as trigger condition for retry processing.
-  // The retry is only processed when this field is set and differs from
-  // pipelineRun.status.workflow_run_id, ensuring retries are triggered precisely
-  // and preventing duplicate processing of the same retry request.
+  // The retry is only processed when this field is set and equals
+  // pipelineRun.status.workflow_run_id (the run about to be reset). Once processed,
+  // status.workflow_run_id is updated to the new run's ID, so this same value will
+  // no longer match, preventing duplicate processing of the same retry request.
   string workflow_run_id = 4;
 }
 

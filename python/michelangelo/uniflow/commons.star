@@ -109,9 +109,39 @@ def get_input_hash(args, kwargs):
     input_hash = hashlib.blake2b_hex(args + kwargs, digest_size = 16)
     return input_hash
 
-def get_cache_enabled(cache_enabled, task_name):
+def get_cache_enabled(cache_enabled, task_name, namespace, task_path):
+    """
+    Get the effective cache_enabled value for the task.
+
+    An explicit True is always honored as-is. A declared/defaulted False is
+    checked against a live backend decision first: Temporal Reset (used for
+    manual retry) replays a workflow forward with the SAME env it was
+    started with, so a retry can't flip CACHE_ENABLED for the run it resets.
+    The backend decision runs at the activity boundary, which - unlike the
+    frozen env - re-executes with live state after a Reset, letting it tell
+    the exact retried task to keep caching off (real re-execution) while
+    every other task swept up by the reset boundary gets it turned on
+    (replay from its own prior CachedOutput). When there's no active retry,
+    the backend reports no override and this falls back to the existing
+    env-based default, unchanged.
+
+    Args:
+        cache_enabled: the declared cache_enabled value for the task
+        task_name: the name of the task
+        namespace: the namespace of the task's pipeline run
+        task_path: the path of the task
+    Returns:
+        final_cache_enabled: whether caching is enabled for this task
+    """
     if cache_enabled:
         return cache_enabled
+    retry_decision = cachedoutput.should_override_cache_for_retry(
+        namespace = namespace,
+        task_path = task_path,
+        task_name = task_name,
+    )
+    if retry_decision.get("has_override", False):
+        return retry_decision.get("use_cache", False)
     cache_enabled = os.environ.get("{}_{}".format(CACHE_ENABLED_ENV, task_name), os.environ.get(CACHE_ENABLED_ENV, CACHE_ENABLED_FALSE))
     return cache_enabled == CACHE_ENABLED_TRUE
 

@@ -1106,15 +1106,17 @@ func (a *ExecuteWorkflowActor) processManualRetrySpec(ctx context.Context, pipel
 		return nil
 	}
 
-	// New trigger condition: only process if workflowRunId differs from current status
-	// This prevents duplicate processing and ensures precise retry control
+	// Trigger condition: only process when workflowRunId names the run currently
+	// about to be reset (i.e. equals current status). Once processed, status
+	// moves to the new run's ID, so this same RetryInfo won't match again -
+	// this is what prevents duplicate processing of the same retry request.
 	if retryInfo.WorkflowRunId != "" && retryInfo.WorkflowRunId == pipelineRun.Status.WorkflowRunId {
-		logger.Info("processing retry - workflowRunId differs from current status",
+		logger.Info("processing retry - workflowRunId matches current status",
 			zap.String("retryWorkflowRunId", retryInfo.WorkflowRunId),
 			zap.String("currentWorkflowRunId", pipelineRun.Status.WorkflowRunId),
 		)
 	} else {
-		logger.Debug("skipping retry processing - workflowRunId matches current status or is empty",
+		logger.Debug("skipping retry processing - workflowRunId differs from current status or is empty",
 			zap.String("retryWorkflowRunId", retryInfo.WorkflowRunId),
 			zap.String("currentWorkflowRunId", pipelineRun.Status.WorkflowRunId),
 		)

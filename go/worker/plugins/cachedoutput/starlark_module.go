@@ -27,9 +27,10 @@ type module struct {
 func newModule() starlark.Value {
 	m := &module{}
 	m.attributes = map[string]starlark.Value{
-		"get":   starlark.NewBuiltin("get", m.get).BindReceiver(m),
-		"put":   starlark.NewBuiltin("put", m.put).BindReceiver(m),
-		"query": starlark.NewBuiltin("query", m.query).BindReceiver(m),
+		"get":                             starlark.NewBuiltin("get", m.get).BindReceiver(m),
+		"put":                             starlark.NewBuiltin("put", m.put).BindReceiver(m),
+		"query":                           starlark.NewBuiltin("query", m.query).BindReceiver(m),
+		"should_override_cache_for_retry": starlark.NewBuiltin("should_override_cache_for_retry", m.shouldOverrideCacheForRetry).BindReceiver(m),
 	}
 	return m
 }
@@ -221,6 +222,54 @@ func (r *module) query(t *starlark.Thread, _ *starlark.Builtin, args starlark.Tu
 	})
 	if len(response.CachedOutputList.Items) > int(limit) {
 		response.CachedOutputList.Items = response.CachedOutputList.Items[:limit]
+	}
+
+	var responseValue starlark.Value
+	if err := utils.AsStar(response, &responseValue); err != nil {
+		logger.Error(errorReasonConvertStarlarkValue, ext.ZapError(err)...)
+		return nil, err
+	}
+	return responseValue, nil
+}
+
+// should_override_cache_for_retry asks the backend, unconditionally, whether
+// this task's cache_enabled default should be overridden for an in-flight
+// manual retry.
+//
+//	should_override_cache_for_retry(namespace=namespace, task_path=task_path, task_name=task_name) -> dict
+//
+//	  namespace: the namespace of the task's pipeline run
+//	  task_path: the path of the task
+//	  task_name: the (alias-resolved) name of the task
+//
+//	  return: dict with has_override (bool) and use_cache (bool, only meaningful when has_override is true)
+func (r *module) shouldOverrideCacheForRetry(t *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	ctx := service.GetContext(t)
+	logger := workflow.GetLogger(ctx)
+	var namespace string
+	var taskPath string
+	var taskName string
+
+	if err := starlark.UnpackArgs("should_override_cache_for_retry", args, kwargs,
+		"namespace", &namespace,
+		"task_path", &taskPath,
+		"task_name", &taskName,
+	); err != nil {
+		logger.Error(errorReasonUnpackArgs, ext.ZapError(err)...)
+		return nil, err
+	}
+
+	request := cachedoutput.ShouldOverrideCacheForRetryRequest{
+		Namespace: namespace,
+		TaskPath:  taskPath,
+		TaskName:  taskName,
+	}
+	response := cachedoutput.ShouldOverrideCacheForRetryResponse{}
+	retryPolicy := utils.DefaultRetryPolicy
+	decisionCtx := workflow.WithRetryPolicy(ctx, retryPolicy)
+	if err := workflow.ExecuteActivity(decisionCtx, cachedoutput.Activities.ShouldOverrideCacheForRetry, request).Get(ctx, &response); err != nil {
+		logger.Error("Failed to check retry cache override", ext.ZapError(err)...)
+		return nil, err
 	}
 
 	var responseValue starlark.Value

@@ -107,7 +107,7 @@ def task(
         namespace = os.environ.get("MA_NAMESPACE", "default")
         start_time_seconds = time.time()
         start_time_formated_str = time.utc_format_seconds(TIME_FOMART, start_time_seconds)
-        final_cache_enabled = get_cache_enabled(cache_enabled, task_name)
+        final_cache_enabled = get_cache_enabled(cache_enabled, task_name, namespace, task_path)
         if final_cache_enabled:  # Check if the result is cached
             cache_keys = get_cache_keys(task_path, task_name, args, kwargs, cache_version, CACHE_OPERATION_GET)
             print("ray | cache enabled with key", "key:", cache_keys)
