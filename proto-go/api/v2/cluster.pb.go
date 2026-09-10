@@ -1530,7 +1530,6 @@ func init() {
 	YamlSchemas["Cluster"] = `apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
-  creationTimestamp: null
   name: clusters.michelangelo.api
 spec:
   group: michelangelo.api
