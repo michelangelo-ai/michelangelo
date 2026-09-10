@@ -15,6 +15,10 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
+// testRunID is the RunID both the Cadence and Temporal test suites stamp on
+// activity.GetInfo(ctx).WorkflowExecution.
+const testRunID = "default-test-run-id"
+
 type Suite struct {
 	suite.Suite
 	act                    *activities
@@ -96,9 +100,10 @@ func (r *Suite) Test_ShouldOverrideCacheForRetry_NoRetryInfo() {
 func (r *Suite) Test_ShouldOverrideCacheForRetry_RetryTarget_KeepsCacheOff() {
 	pipelineRun := &v2pb.PipelineRun{
 		Spec: v2pb.PipelineRunSpec{
-			RetryInfo: &v2pb.RetryInfo{ActivityId: "act-1"},
+			RetryInfo: &v2pb.RetryInfo{ActivityId: "act-1", WorkflowRunId: "old-run-id"},
 		},
 		Status: v2pb.PipelineRunStatus{
+			WorkflowRunId: testRunID,
 			Steps: []*v2pb.PipelineRunStepInfo{
 				{
 					Name: "Execute Workflow",
@@ -126,9 +131,10 @@ func (r *Suite) Test_ShouldOverrideCacheForRetry_RetryTarget_KeepsCacheOff() {
 func (r *Suite) Test_ShouldOverrideCacheForRetry_Sibling_TurnsCacheOn() {
 	pipelineRun := &v2pb.PipelineRun{
 		Spec: v2pb.PipelineRunSpec{
-			RetryInfo: &v2pb.RetryInfo{ActivityId: "act-1"},
+			RetryInfo: &v2pb.RetryInfo{ActivityId: "act-1", WorkflowRunId: "old-run-id"},
 		},
 		Status: v2pb.PipelineRunStatus{
+			WorkflowRunId: testRunID,
 			Steps: []*v2pb.PipelineRunStepInfo{
 				{
 					Name: "Execute Workflow",
@@ -151,4 +157,56 @@ func (r *Suite) Test_ShouldOverrideCacheForRetry_Sibling_TurnsCacheOn() {
 	r.Require().NoError(val.Get(&res))
 	r.Require().True(res.HasOverride)
 	r.Require().True(res.UseCache)
+}
+
+func (r *Suite) Test_ShouldOverrideCacheForRetry_PendingRetry_NoOverride() {
+	// Retry requested but not yet processed: retryInfo.workflowRunId still equals
+	// status.workflowRunId, so the reset hasn't happened.
+	pipelineRun := &v2pb.PipelineRun{
+		Spec: v2pb.PipelineRunSpec{
+			RetryInfo: &v2pb.RetryInfo{ActivityId: "act-1", WorkflowRunId: testRunID},
+		},
+		Status: v2pb.PipelineRunStatus{
+			WorkflowRunId: testRunID,
+			Steps: []*v2pb.PipelineRunStepInfo{
+				{Name: "a.b.task_b", DisplayName: "task_b", ActivityId: "act-2"},
+			},
+		},
+	}
+	r.mockPipelineRunService.EXPECT().GetPipelineRun(gomock.Any(), gomock.Any()).Return(
+		&v2pb.GetPipelineRunResponse{PipelineRun: pipelineRun}, nil)
+
+	request := ShouldOverrideCacheForRetryRequest{Namespace: "default", TaskPath: "a.b.task_b", TaskName: "task_b"}
+	val, err := r.activitySuite.ExecuteActivity(Activities.ShouldOverrideCacheForRetry, request)
+	r.Require().NoError(err)
+
+	var res ShouldOverrideCacheForRetryResponse
+	r.Require().NoError(val.Get(&res))
+	r.Require().False(res.HasOverride)
+}
+
+func (r *Suite) Test_ShouldOverrideCacheForRetry_OtherRun_NoOverride() {
+	// Retry processed, but this activity belongs to a run other than the one the
+	// reset produced (status.workflowRunId != the activity's RunID).
+	pipelineRun := &v2pb.PipelineRun{
+		Spec: v2pb.PipelineRunSpec{
+			RetryInfo: &v2pb.RetryInfo{ActivityId: "act-1", WorkflowRunId: "old-run-id"},
+		},
+		Status: v2pb.PipelineRunStatus{
+			WorkflowRunId: "some-newer-run-id",
+			Steps: []*v2pb.PipelineRunStepInfo{
+				{Name: "a.b.task_b", DisplayName: "task_b", ActivityId: "act-2"},
+			},
+		},
+	}
+	r.mockPipelineRunService.EXPECT().GetPipelineRun(gomock.Any(), gomock.Any()).Return(
+		&v2pb.GetPipelineRunResponse{PipelineRun: pipelineRun}, nil)
+
+	request := ShouldOverrideCacheForRetryRequest{Namespace: "default", TaskPath: "a.b.task_b", TaskName: "task_b"}
+	val, err := r.activitySuite.ExecuteActivity(Activities.ShouldOverrideCacheForRetry, request)
+	r.Require().NoError(err)
+
+	var res ShouldOverrideCacheForRetryResponse
+	r.Require().NoError(val.Get(&res))
+	r.Require().False(res.HasOverride)
 }

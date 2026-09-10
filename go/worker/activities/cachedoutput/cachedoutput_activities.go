@@ -86,8 +86,17 @@ func (r *activities) ShouldOverrideCacheForRetry(ctx context.Context, request Sh
 		return &ShouldOverrideCacheForRetryResponse{}, nil
 	}
 
+	// RetryInfo is never cleared, so its presence alone doesn't mean a retry is in
+	// effect. Mirror the controller (processManualRetrySpec): a request is pending
+	// while retryInfo.workflowRunId == status.workflowRunId, and once the Reset is
+	// processed status.workflowRunId moves to the new run. Only that new run - the
+	// one this activity must belong to - is the product of the retry.
 	retryInfo := response.PipelineRun.Spec.RetryInfo
-	if retryInfo == nil || retryInfo.ActivityId == "" {
+	currentRunID := response.PipelineRun.Status.WorkflowRunId
+	if retryInfo == nil || retryInfo.ActivityId == "" || retryInfo.WorkflowRunId == "" {
+		return &ShouldOverrideCacheForRetryResponse{}, nil
+	}
+	if retryInfo.WorkflowRunId == currentRunID || currentRunID != info.WorkflowExecution.RunID {
 		return &ShouldOverrideCacheForRetryResponse{}, nil
 	}
 
