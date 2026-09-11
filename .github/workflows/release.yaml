@@ -5,7 +5,40 @@ on:
     tags: ["v*"]
   workflow_dispatch: {}
 jobs:
+  release-preflight:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate release tag and versions
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "$GITHUB_REF_TYPE" != 'tag' ]]; then
+            echo "Release builds require a tag ref, got $GITHUB_REF_TYPE $GITHUB_REF_NAME" >&2
+            exit 1
+          fi
+
+          version="${GITHUB_REF_NAME#v}"
+          if [[ "$GITHUB_REF_NAME" != v* || ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid Michelangelo release tag: $GITHUB_REF_NAME" >&2
+            exit 1
+          fi
+
+          source_version="$(awk '$1 == "version:" {gsub(/"/, "", $2); print $2; exit}' helm/michelangelo/Chart.yaml)"
+          if [[ "$version" != "$source_version" ]]; then
+            echo "Release tag $version does not match source version $source_version" >&2
+            exit 1
+          fi
+
+          bash scripts/version-bump.sh --check
+
   build-upload:
+    needs: release-preflight
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -71,6 +104,7 @@ jobs:
           files: python/dist/*.whl
 
   build-go-binaries:
+    needs: release-preflight
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -130,6 +164,7 @@ jobs:
           files: binaries/*
 
   helm-publish:
+    needs: release-preflight
     runs-on: ubuntu-latest
     permissions:
       packages: write
@@ -171,8 +206,15 @@ jobs:
             michelangelo-${{ steps.version.outputs.VERSION }}.tgz \
             oci://ghcr.io/michelangelo-ai/michelangelo/charts
 
+  llm-gateway-helm-publish:
+    needs: release-preflight
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/llm-gateway-chart-release.yml
+
   notify-on-failure:
-    needs: [build-upload, build-go-binaries, upload-binaries, helm-publish]
+    needs: [release-preflight, build-upload, build-go-binaries, upload-binaries, helm-publish, llm-gateway-helm-publish]
     if: failure()
     runs-on: ubuntu-latest
     steps:
