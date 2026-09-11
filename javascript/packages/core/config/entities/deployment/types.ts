@@ -23,6 +23,11 @@ export type DeploymentCreateInput = {
   };
 };
 
+export type DeploymentUpdateInput = {
+  metadata: { name: string };
+  spec: { desiredRevision?: ResourceRef; target?: { case?: string; value?: ResourceRef } };
+};
+
 export type InferenceServerListResult = {
   inferenceServerList: {
     items: Array<{ metadata: { name: string } }>;

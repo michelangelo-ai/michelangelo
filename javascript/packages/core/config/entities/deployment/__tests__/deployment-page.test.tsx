@@ -25,6 +25,7 @@ import {
 import { getSnackbarProviderWrapper } from '#core/test/wrappers/get-snackbar-provider-wrapper';
 
 import type { ActionConfigSchema, Data } from '#core/components/actions/types';
+import type { DeploymentUpdateInput } from '#core/config/entities/deployment/types';
 
 describe('Deployment list page', () => {
   it('renders the Deployments tab', () => {
@@ -448,10 +449,6 @@ describe('Deployment retire action', () => {
     });
   }
 
-  function findUpdateDeploymentCall(request: ReturnType<typeof createQueryMockRouter>) {
-    return vi.mocked(request).mock.calls.find(([name]) => name === 'UpdateDeployment');
-  }
-
   it('confirms the retire in a dialog, submits the spec with desiredRevision removed, and toasts', async () => {
     const user = userEvent.setup();
     const request = createQueryMockRouter({
@@ -479,12 +476,10 @@ describe('Deployment retire action', () => {
 
     await user.click(within(dialog).getByRole('button', { name: 'Yes, retire' }));
 
-    await waitFor(() => expect(findUpdateDeploymentCall(request)).toBeDefined());
+    await waitFor(() => expect(request.getCall('UpdateDeployment')).toBeDefined());
 
-    const payload = findUpdateDeploymentCall(request)?.[1] as {
-      metadata: { name: string };
-      spec: { desiredRevision?: unknown; target?: unknown };
-    };
+    // cast: recorded call args are `unknown`; DeploymentUpdateInput is what this test's request actually sends
+    const payload = request.getCall('UpdateDeployment')!.args as DeploymentUpdateInput;
     // The absent desiredRevision is what tells the backend to run cleanup; the rest of
     // the spec must be sent through intact.
     expect(payload.spec.desiredRevision).toBeUndefined();
@@ -567,6 +562,6 @@ describe('Deployment retire action', () => {
     const dialog = await openRetireDialog(user);
     await user.click(within(dialog).getByRole('button', { name: 'Yes, retire' }));
 
-    await waitFor(() => expect(findUpdateDeploymentCall(request)).toBeDefined());
+    await waitFor(() => expect(request.getCall('UpdateDeployment')).toBeDefined());
   });
 });

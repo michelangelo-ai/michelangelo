@@ -624,12 +624,15 @@ describe('CreatePipelineRunForm', () => {
       // Captures the payload so the assertion can check for the *absence* of a key,
       // which call matchers express poorly.
       const submitted: PipelineRun[] = [];
-      const request: typeof router = (queryName, args, headers) => {
-        if (queryName === 'CreatePipelineRun') {
-          submitted.push(args as PipelineRun);
-        }
-        return router(queryName, args, headers);
-      };
+      const request: typeof router = Object.assign(
+        (queryName: string, args: object, headers?: Record<string, string>) => {
+          if (queryName === 'CreatePipelineRun') {
+            submitted.push(args as PipelineRun);
+          }
+          return router(queryName, args, headers);
+        },
+        { getCall: router.getCall }
+      );
 
       renderForm(request);
 
