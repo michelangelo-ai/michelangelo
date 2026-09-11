@@ -189,16 +189,18 @@ func (r *Suite) Test_ShouldOverrideCacheForRetry_PendingRetry_NoOverride() {
 	r.Require().NotEmpty(res.ActivityID)
 }
 
-func (r *Suite) Test_ShouldOverrideCacheForRetry_OtherRun_NoOverride() {
-	// Retry processed, but this activity belongs to a run other than the one the
-	// reset produced (status.workflowRunId != the activity's RunID).
+func (r *Suite) Test_ShouldOverrideCacheForRetry_StatusLagsBehindReset_StillOverrides() {
+	// The reset run makes its cache decisions before the controller writes the
+	// new run ID back to status, so status.workflowRunId may still equal the
+	// (old) run named by retryInfo. The decision must key off the live RunID.
 	pipelineRun := &v2pb.PipelineRun{
 		Spec: v2pb.PipelineRunSpec{
 			RetryInfo: &v2pb.RetryInfo{ActivityId: "act-1", WorkflowRunId: "old-run-id"},
 		},
 		Status: v2pb.PipelineRunStatus{
-			WorkflowRunId: "some-newer-run-id",
+			WorkflowRunId: "old-run-id",
 			Steps: []*v2pb.PipelineRunStepInfo{
+				{Name: "a.b.task_a", DisplayName: "task_a", ActivityId: "act-1"},
 				{Name: "a.b.task_b", DisplayName: "task_b", ActivityId: "act-2"},
 			},
 		},
@@ -212,6 +214,7 @@ func (r *Suite) Test_ShouldOverrideCacheForRetry_OtherRun_NoOverride() {
 
 	var res ShouldOverrideCacheForRetryResponse
 	r.Require().NoError(val.Get(&res))
-	r.Require().False(res.HasOverride)
+	r.Require().True(res.HasOverride)
+	r.Require().True(res.UseCache)
 	r.Require().NotEmpty(res.ActivityID)
 }
