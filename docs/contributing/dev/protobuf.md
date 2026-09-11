@@ -24,7 +24,7 @@ After editing any `.proto` file, regenerate the Go bindings:
 1. If creating a new service: scaffold the proto file with `tools/grpc-svc-gen.sh [Entity]`, then edit the generated file. Otherwise, edit the existing `.proto` file in `proto/api/v2/` directly.
 2. Run `tools/gazelle` to update BUILD targets
 3. Run `bazel build //proto/...` to compile
-4. Run `tools/gen-proto-go.sh` to regenerate alias `BUILD.bazel` files under `proto-go/`, sync dependency versions from `go/go.mod` into `proto-go/go.mod`, and run `go mod tidy` in `proto-go/`
+4. Run `tools/gen-proto-go.sh` to regenerate alias `BUILD.bazel` files under `proto-go/`, sync dependency versions from `go/go.mod` into `proto-go/go.mod`, set `proto-go/go.mod`'s `go` toolchain directive from `MODULE.bazel`'s `go_sdk.download(version = ...)` pin (failing loudly if that pin can't be found), and run `go mod tidy` in `proto-go/`
 5. Check in both the `.proto` changes and the generated `proto-go/` changes
 
 ## Service Pattern

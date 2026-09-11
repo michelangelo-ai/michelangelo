@@ -27,7 +27,7 @@ Shell scripts in `tools/` automate code generation and development workflows. Th
 tools/gen-proto-go.sh
 ```
 
-Builds `//proto/...` with Bazel, copies the generated `.pb.go` files into `proto-go/`, generates alias `BUILD.bazel` files under `proto-go/`, syncs dependency versions from `go/go.mod` into `proto-go/go.mod`, and runs `go mod tidy` in `proto-go/`.
+Builds `//proto/...` with Bazel, copies the generated `.pb.go` files into `proto-go/`, generates alias `BUILD.bazel` files under `proto-go/`, syncs dependency versions from `go/go.mod` into `proto-go/go.mod`, sets `proto-go/go.mod`'s `go` toolchain directive from `MODULE.bazel`'s `go_sdk.download(version = ...)` pin (failing loudly if that pin can't be found), and runs `go mod tidy` in `proto-go/`.
 
 Check in both the proto change and the generated output together.
 
