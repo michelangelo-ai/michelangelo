@@ -25,6 +25,13 @@ data:
       awsSecretAccessKey: ${AWS_SECRET_ACCESS_KEY}
       awsEndpointUrl: {{ required "objectStorage.endpoint is required — see helm/michelangelo/README.md#values-reference" .Values.objectStorage.endpoint | quote }}
       secure: {{ .Values.objectStorage.secure }}
+    {{- if ne .Values.secretsProvider.type "sample" }}
+
+    secrets:
+      provider: {{ .Values.secretsProvider.type | quote }}
+      eso:
+        namespace: {{ .Values.secretsProvider.esoNamespace | default "default" | quote }}
+    {{- end }}
 
     metadataStorage:
       enableMetadataStorage: {{ .Values.controllermgr.metadataStorage.enable }}

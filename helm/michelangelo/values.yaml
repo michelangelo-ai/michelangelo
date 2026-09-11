@@ -75,6 +75,24 @@ objectStorage:
   existingSecret: ""
 
 # -----------------------------------------------------------------------------
+# Secret provider for remote-cluster credentials (jobs engine and
+# inference-server client factory). Unrelated to `metadataStorage` /
+# `objectStorage` credentials above.
+# -----------------------------------------------------------------------------
+secretsProvider:
+  # "sample" (default) reads credential Secrets from the control-plane
+  # cluster and is intended for sandbox and testing.
+  # "eso" reads Secrets materialized by the External Secrets Operator
+  # (installed separately) from ExternalSecret resources you manage, synced
+  # from an external store such as Vault, AWS Secrets Manager, or GCP
+  # Secret Manager.
+  type: sample
+
+  # Namespace where operator-synced credential Secrets live. Only used with
+  # type=eso. Defaults to "default", matching the sample provider.
+  esoNamespace: ""
+
+# -----------------------------------------------------------------------------
 # Workflow engine — Cadence or Temporal. Required by worker and apiserver.
 # -----------------------------------------------------------------------------
 workflow:
