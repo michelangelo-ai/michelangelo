@@ -68,8 +68,8 @@ func GetPipelineRun(ctx context.Context, pipelineRunID *apipb.ResourceIdentifier
 
 	err := apiHandler.Get(ctx, pipelineRunID.Namespace, pipelineRunID.Name, &metav1.GetOptions{}, pipelineRun)
 	if err != nil {
-		return fmt.Errorf("Failed to get PipelineRun namespace: %s, name: %s",
-			pipelineRunID.Namespace, pipelineRunID.Name)
+		return fmt.Errorf("failed to get PipelineRun namespace: %s, name: %s: %w",
+			pipelineRunID.Namespace, pipelineRunID.Name, err)
 	}
 	return nil
 }
