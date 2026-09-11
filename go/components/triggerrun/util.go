@@ -11,6 +11,7 @@ import (
 	"github.com/go-logr/logr"
 	clientInterface "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // TriggerType constants define the supported trigger types.
@@ -24,6 +25,22 @@ const (
 	TriggerTypeInterval   = "interval"    // Workflows triggered at fixed intervals
 	TriggerTypeUnknown    = "unknown"     // Unknown or unsupported trigger type
 )
+
+// AnnotationSuccessorTrigger, when present on a backfill TriggerRun, tells the
+// reconciler to create a recurring cron TriggerRun once the backfill reaches a
+// terminal state (SUCCEEDED or FAILED).
+//
+// This exists because workflow engine cron primitives (Cadence/Temporal) have
+// no backfill/catch-up concept of their own: a cron schedule only ever looks
+// forward from "now" or from the previous run's completion. To reproduce
+// Airflow/Flyte-style "run the historical gap, then start the live schedule"
+// behavior, the gap is instead run explicitly as a one-time backfill
+// TriggerRun, and this annotation tells the reconciler to chain a live cron
+// TriggerRun onto it once it finishes.
+//
+// A failed backfill still gets a successor: a failed historical backfill
+// must not block today's live schedule.
+const AnnotationSuccessorTrigger = "triggerrun.michelangelo/successor-trigger"
 
 // CreateTriggerRequest is a data transfer object for trigger workflow execution.
 //
@@ -453,4 +470,67 @@ func resumeWorkflow(ctx context.Context, triggerRun *v2pb.TriggerRun, log logr.L
 	triggerRun.Status.State = v2pb.TRIGGER_RUN_STATE_RUNNING
 	triggerRun.Status.ErrorMessage = ""
 	return triggerRun.Status, nil
+}
+
+// backfillSuccessorPending reports whether tr is a backfill TriggerRun
+// annotated with AnnotationSuccessorTrigger that has just reached a terminal
+// state (newState), and therefore needs its successor cron TriggerRun created
+// before the reconciler is allowed to persist newState.
+//
+// The check must run against the freshly computed newState rather than
+// tr.Status.State: reconcile() short-circuits on an already-terminal
+// tr.Status.State before the state machine runs, so the successor must be
+// created in the same pass that first observes the terminal status, before
+// it is written back.
+func backfillSuccessorPending(tr *v2pb.TriggerRun, newState v2pb.TriggerRunState) bool {
+	if tr.Annotations[AnnotationSuccessorTrigger] == "" {
+		return false
+	}
+	if GetTriggerType(tr) != TriggerTypeBackfill {
+		return false
+	}
+	return newState == v2pb.TRIGGER_RUN_STATE_SUCCEEDED || newState == v2pb.TRIGGER_RUN_STATE_FAILED
+}
+
+// generateSuccessorTriggerRunName derives a deterministic name for the
+// recurring TriggerRun spawned once a backfill completes. Determinism makes
+// creating the successor idempotent: if the reconciler crashes after Create
+// succeeds but before the terminal status is persisted, the next reconcile
+// retries Create against the same name instead of producing a duplicate
+// successor.
+func generateSuccessorTriggerRunName(backfillName string) string {
+	return backfillName + "-successor"
+}
+
+// generateSuccessorTriggerRunSpec builds the recurring cron TriggerRun that
+// should start once a backfill TriggerRun (marked with
+// AnnotationSuccessorTrigger) reaches a terminal state. It reuses the
+// backfill's own Spec (pipeline, revision, trigger, actor, notifications),
+// but strips StartTimestamp/EndTimestamp so GetTriggerType classifies the
+// result as a live cron trigger rather than another backfill, and drops
+// AnnotationSuccessorTrigger itself so the live cron trigger never spawns a
+// successor of its own.
+func generateSuccessorTriggerRunSpec(backfillTriggerRun *v2pb.TriggerRun) (*v2pb.TriggerRun, error) {
+	if backfillTriggerRun.Spec.Trigger.GetCronSchedule() == nil {
+		return nil, fmt.Errorf("backfill trigger run %s/%s has no cron schedule to resume from",
+			backfillTriggerRun.Namespace, backfillTriggerRun.Name)
+	}
+	// Carry over the spec onto a brand new run rather than copying the backfill
+	// and stripping it: nothing outside the spec can then leak into the successor
+	// by omission (status, ownerRefs, finalizers, the successor annotation itself).
+	copied := backfillTriggerRun.DeepCopy()
+	// A successor is a live recurring schedule, not another backfill, and the
+	// timestamp pair is exactly what GetTriggerType keys on.
+	copied.Spec.StartTimestamp = nil
+	copied.Spec.EndTimestamp = nil
+	return &v2pb.TriggerRun{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      generateSuccessorTriggerRunName(backfillTriggerRun.Name),
+			Namespace: backfillTriggerRun.Namespace,
+			// Labels carry the environment and pipeline-manifest-type that feed
+			// the recurring schedule's input hash (see scheduleInputLabels).
+			Labels: copied.Labels,
+		},
+		Spec: copied.Spec,
+	}, nil
 }

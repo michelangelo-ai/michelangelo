@@ -47,6 +47,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/cascadedelete"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"go.uber.org/fx"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -318,6 +319,18 @@ StateMachine:
 			triggerRun.Status.State = status2.State
 			break StateMachine
 		}
+		if backfillSuccessorPending(triggerRun, status2.State) {
+			// Must create the successor before persisting a terminal state: reconcile()
+			// short-circuits on an already-terminal triggerRun.Status.State before the
+			// state machine runs, so this is the only pass in which it can happen. On
+			// failure, leave triggerRun.Status.State at its prior (RUNNING) value so
+			// this reconcile pass is retried instead of being short-circuited forever.
+			if err := r.createSuccessorTriggerRun(ctx, log, triggerRun); err != nil {
+				log.Error(err, "failed to create successor trigger run after backfill completed, will retry")
+				triggerRun.Status.ErrorMessage = "failed to create successor trigger run: " + err.Error()
+				break StateMachine
+			}
+		}
 		triggerRun.Status.State = status2.State
 
 	case v2pb.TRIGGER_RUN_STATE_PAUSED:
@@ -587,6 +600,25 @@ func (r *Reconciler) Register(mgr ctrl.Manager) error {
 		For(&v2pb.TriggerRun{}).
 		WithOptions(controller.Options{MaxConcurrentReconciles: maximumConcurrentReconciles}).
 		Complete(r)
+}
+
+// createSuccessorTriggerRun creates the recurring cron TriggerRun for a
+// backfill TriggerRun annotated with AnnotationSuccessorTrigger, once the
+// backfill has reached a terminal state. Create is idempotent via the
+// deterministic successor name (generateSuccessorTriggerRunName): if a prior
+// attempt already created it, an AlreadyExists error is treated as success so
+// retries after a transient failure or a crash mid-reconcile are safe.
+func (r *Reconciler) createSuccessorTriggerRun(ctx context.Context, log logr.Logger, backfillTriggerRun *v2pb.TriggerRun) error {
+	successor, err := generateSuccessorTriggerRunSpec(backfillTriggerRun)
+	if err != nil {
+		return err
+	}
+	if err := r.Create(ctx, successor, &metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
+		return err
+	}
+	log.Info("created successor cron trigger run after backfill completed",
+		"successorName", successor.Name, "backfillName", backfillTriggerRun.Name)
+	return nil
 }
 
 // getRunner selects the appropriate Runner implementation based on the TriggerRun's trigger type.
