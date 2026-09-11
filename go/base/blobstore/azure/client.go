@@ -41,6 +41,13 @@ func newAzureBlobClient(storageAccount, sasToken, endpoint string) *azureBlobCli
 // Get retrieves an object from Azure Blob Storage using SAS token authentication.
 // The blobURI is expected to be in the format "abfss://container@storageaccount.blob.core.windows.net/path".
 func (c *azureBlobClient) Get(ctx context.Context, blobURI string) ([]byte, error) {
+	// Configuration is validated here rather than at construction so that the
+	// module can be provided unconditionally without failing startup for
+	// deployments that do not use Azure Blob Storage.
+	if c.storageAccount == "" || c.sasToken == "" {
+		return nil, fmt.Errorf("azure blob storage is not configured: storageAccount and sasToken are required to fetch %s", blobURI)
+	}
+
 	parsedURL, err := url.Parse(blobURI)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse url: %w", err)
