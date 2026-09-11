@@ -5,7 +5,10 @@ import (
 	"fmt"
 	"text/template"
 
+	maconfig "github.com/michelangelo-ai/michelangelo/go/base/config"
+	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/constants"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/types"
+	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/utils"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"go.uber.org/config"
@@ -16,6 +19,7 @@ import (
 // Mapper helps to map global to local crds and vice versa
 type Mapper struct {
 	LogPersistence LogPersistenceConfig
+	Scheduler      maconfig.SchedulerConfig
 	logURLTemplate *template.Template
 }
 
@@ -43,7 +47,7 @@ func NewLogPersistenceConfig(provider config.Provider) (LogPersistenceConfig, er
 
 // NewMapper constructs the Mapper. Panics if LogURLFormat is set but does not
 // parse as a valid Go text/template — config errors should fail at startup.
-func NewMapper(logPersistence LogPersistenceConfig) MapperResult {
+func NewMapper(logPersistence LogPersistenceConfig, scheduler maconfig.SchedulerConfig) MapperResult {
 	var tmpl *template.Template
 	if logPersistence.Enabled && logPersistence.LogURLFormat != "" {
 		tmpl = template.Must(template.New("logURL").Parse(logPersistence.LogURLFormat))
@@ -51,9 +55,42 @@ func NewMapper(logPersistence LogPersistenceConfig) MapperResult {
 	return MapperResult{
 		Mapper: Mapper{
 			LogPersistence: logPersistence,
+			Scheduler:      scheduler,
 			logURLTemplate: tmpl,
 		},
 	}
+}
+
+// mapLabels builds the label set for objects created on compute clusters.
+// Control-plane labels (michelangelo/*, ma/*) deliberately do not cross the
+// cluster boundary: the compute-cluster operators do not understand them, and
+// wholesale copying would let user-controlled labels (in particular
+// kueue.x-k8s.io/queue-name) steer admission. Labels the compute cluster
+// genuinely needs are added explicitly — today that is only the Kueue queue
+// label, resolved by the control plane and passed in as queueName.
+func mapLabels(_ map[string]string, queueName string) map[string]string {
+	if queueName == "" {
+		return nil
+	}
+	return map[string]string{constants.KueueQueueNameLabelKey: queueName}
+}
+
+// kueueQueueName resolves the LocalQueue for a job dispatched to cluster, or
+// "" when the cluster is not Kueue-managed. The inputs are trusted: the
+// cluster's scheduler_type is operator-set, the project identity is the
+// control-plane-stamped label or the job's authorization-bound namespace,
+// and the mapping comes from jobs.scheduler.kueue config.
+func (m Mapper) kueueQueueName(labels map[string]string, namespace string, cluster *v2pb.Cluster) (string, error) {
+	spec := cluster.GetSpec()
+	if spec.GetSchedulerType() != v2pb.SCHEDULER_TYPE_KUEUE {
+		return "", nil
+	}
+	project := utils.ProjectNameForJob(labels, namespace)
+	if project == "" {
+		return "", fmt.Errorf("kueue-managed cluster %q: job has neither a %s label nor a namespace to resolve a LocalQueue from",
+			cluster.GetName(), constants.ProjectNameLabelKey)
+	}
+	return utils.ResolveLocalQueueName(m.Scheduler.Kueue, project), nil
 }
 
 // MapGlobalJobToLocal maps the global job object to local job object
@@ -84,7 +121,7 @@ func (m Mapper) MapGlobalJobClusterToLocal(jobClusterObject runtime.Object, clus
 
 	switch obj := jobClusterObject.(type) {
 	case *v2pb.RayCluster:
-		localCluster, err := m.mapRayCluster(obj)
+		localCluster, err := m.mapRayCluster(obj, cluster)
 		if err != nil {
 			return nil, fmt.Errorf("map ray cluster: %w", err)
 		}
