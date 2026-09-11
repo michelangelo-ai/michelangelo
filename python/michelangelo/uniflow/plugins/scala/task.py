@@ -107,30 +107,34 @@ class ScalaSparkTask(TaskConfig):
 
         import fsspec
 
-        local_dir = tempfile.mkdtemp(prefix="michelangelo_scala_")
-        local_jar = os.path.join(local_dir, os.path.basename(self.main_file))
-        log.info("scala task: downloading %s to %s", self.main_file, local_jar)
-        with (
-            fsspec.open(self.main_file, mode="rb") as src,
-            open(local_jar, "wb") as dst,
-        ):
-            dst.write(src.read())
+        # The downloaded JAR lives only for the duration of the local run; the
+        # temp directory is removed on exit, whether spark-submit succeeded,
+        # failed, or the download itself raised.
+        with tempfile.TemporaryDirectory(prefix="michelangelo_scala_") as local_dir:
+            local_jar = os.path.join(local_dir, os.path.basename(self.main_file))
+            log.info("scala task: downloading %s to %s", self.main_file, local_jar)
+            with (
+                fsspec.open(self.main_file, mode="rb") as src,
+                open(local_jar, "wb") as dst,
+            ):
+                dst.write(src.read())
 
-        cmd = [
-            "spark-submit",
-            "--master",
-            "local[*]",
-            "--class",
-            self.main_class,
-            local_jar,
-        ]
-        log.info("scala task: running locally: %s", " ".join(cmd))
-        result = subprocess.run(cmd, check=False)
-        if result.returncode != 0:
-            raise RuntimeError(
-                f"scala task: spark-submit failed with exit code {result.returncode} "
-                f"(main_class={self.main_class!r}, main_file={self.main_file!r})"
-            )
+            cmd = [
+                "spark-submit",
+                "--master",
+                "local[*]",
+                "--class",
+                self.main_class,
+                local_jar,
+            ]
+            log.info("scala task: running locally: %s", " ".join(cmd))
+            result = subprocess.run(cmd, check=False)
+            if result.returncode != 0:
+                raise RuntimeError(
+                    "scala task: spark-submit failed with exit code "
+                    f"{result.returncode} (main_class={self.main_class!r}, "
+                    f"main_file={self.main_file!r})"
+                )
 
     def post_run(self):
         """No-op — the local run in pre_run() already completed synchronously."""
