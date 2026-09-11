@@ -16,6 +16,9 @@ import logging
 import time
 from typing import TYPE_CHECKING
 
+import ray
+from packaging import version
+
 from michelangelo.lib.native_transform.torch import (
     TorchTransformModule,
     TransformSpec,
@@ -46,6 +49,7 @@ from michelangelo.workflow.variables.types import NativeTransformResult
 
 if TYPE_CHECKING:
     from michelangelo.lib.artifact_manager.storage_backend import StorageBackend
+    from michelangelo.workflow.schema.ray_data_io import WriteConfig
     from michelangelo.workflow.schema.tabular_native_transform import (
         TabularNativeTransformConfig,
     )
@@ -53,6 +57,13 @@ if TYPE_CHECKING:
 _logger = logging.getLogger(__name__)
 
 __all__ = ["tabular_native_transform"]
+
+# Ray version floors below which `Dataset.write_parquet` silently swallows the
+# kwarg into `**arrow_parquet_args` instead of applying it, later raising a
+# confusing `TypeError` from inside a write task rather than failing at
+# config time. See `parquet_io.py`'s analogous 2.50 read-API gate.
+_MIN_RAY_VERSION_FOR_MAX_ROWS_PER_FILE = version.parse("2.48")
+_MIN_RAY_VERSION_FOR_MIN_ROWS_PER_FILE = version.parse("2.43")
 
 
 def tabular_native_transform(
@@ -100,6 +111,8 @@ def tabular_native_transform(
         min_block_size=rc.min_block_size if rc else None,
         max_block_size=rc.max_block_size if rc else None,
         retried_io_errors=rc.retried_io_errors if rc else None,
+        object_store_memory_limit=rc.object_store_memory_limit if rc else None,
+        wait_for_min_actors_s=rc.wait_for_min_actors_s if rc else None,
     )
 
     inc = config.incremental_training
@@ -164,12 +177,7 @@ def tabular_native_transform(
     _logger.info("Creating transform module (model) from transform spec")
     model_variable = _create_transform_model(transform_spec, feature_stats, sample_data)
 
-    write_kwargs = {}
-    if config.write_config:
-        if config.write_config.max_rows_per_file is not None:
-            write_kwargs["max_rows_per_file"] = config.write_config.max_rows_per_file
-        if config.write_config.min_rows_per_file is not None:
-            write_kwargs["min_rows_per_file"] = config.write_config.min_rows_per_file
+    write_kwargs = _write_config_to_kwargs(config.write_config)
     _save_datasets(transformed_datasets, **write_kwargs)
 
     if incremental_training.is_incremental(inc) and model_variable is None:
@@ -370,6 +378,46 @@ def _create_transform_model(
     model_variable.save()
 
     return model_variable
+
+
+def _write_config_to_kwargs(write_config: WriteConfig | None) -> dict:
+    """Convert a ``WriteConfig`` into ``write_parquet`` kwargs, gated by Ray version.
+
+    ``max_rows_per_file``/``min_rows_per_file`` are only understood by
+    ``Dataset.write_parquet`` from Ray 2.48/2.43 onward respectively. On an
+    older Ray, the kwarg isn't rejected up front — it flows through to
+    PyArrow's writer as an unexpected option and fails deep inside a write
+    task, after the whole transform has already run. Fail fast here instead.
+
+    Raises:
+        ConfigurationError: If ``write_config`` requests a kwarg the
+            installed Ray version doesn't support.
+    """
+    if not write_config:
+        return {}
+
+    ray_version = version.parse(ray.__version__)
+    write_kwargs = {}
+
+    if write_config.max_rows_per_file is not None:
+        if ray_version < _MIN_RAY_VERSION_FOR_MAX_ROWS_PER_FILE:
+            raise ConfigurationError(
+                f"write_config.max_rows_per_file requires Ray >= "
+                f"{_MIN_RAY_VERSION_FOR_MAX_ROWS_PER_FILE}, but installed Ray is "
+                f"{ray.__version__}."
+            )
+        write_kwargs["max_rows_per_file"] = write_config.max_rows_per_file
+
+    if write_config.min_rows_per_file is not None:
+        if ray_version < _MIN_RAY_VERSION_FOR_MIN_ROWS_PER_FILE:
+            raise ConfigurationError(
+                f"write_config.min_rows_per_file requires Ray >= "
+                f"{_MIN_RAY_VERSION_FOR_MIN_ROWS_PER_FILE}, but installed Ray is "
+                f"{ray.__version__}."
+            )
+        write_kwargs["min_rows_per_file"] = write_config.min_rows_per_file
+
+    return write_kwargs
 
 
 def _save_datasets(

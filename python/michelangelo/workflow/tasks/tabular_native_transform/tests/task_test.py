@@ -93,7 +93,11 @@ class TabularNativeTransformTaskTest(TestCase):
         config = TabularNativeTransformConfig(transform_spec=None)
         tabular_native_transform(config, {"train": train})
         mock_set_context.assert_called_once_with(
-            min_block_size=None, max_block_size=None, retried_io_errors=None
+            min_block_size=None,
+            max_block_size=None,
+            retried_io_errors=None,
+            object_store_memory_limit=None,
+            wait_for_min_actors_s=None,
         )
 
     @patch(f"{_TASK}.set_ray_data_context")
@@ -103,12 +107,20 @@ class TabularNativeTransformTaskTest(TestCase):
         config = TabularNativeTransformConfig(
             transform_spec=None,
             ray_data_context=RayDataContextConfig(
-                min_block_size=1024, max_block_size=2048, retried_io_errors=["oops"]
+                min_block_size=1024,
+                max_block_size=2048,
+                retried_io_errors=["oops"],
+                object_store_memory_limit=4096,
+                wait_for_min_actors_s=30,
             ),
         )
         tabular_native_transform(config, {"train": train})
         mock_set_context.assert_called_once_with(
-            min_block_size=1024, max_block_size=2048, retried_io_errors=["oops"]
+            min_block_size=1024,
+            max_block_size=2048,
+            retried_io_errors=["oops"],
+            object_store_memory_limit=4096,
+            wait_for_min_actors_s=30,
         )
 
     # -- early return ----------------------------------------------------
@@ -308,6 +320,44 @@ class TabularNativeTransformTaskTest(TestCase):
 
     @patch.object(DatasetVariable, "save_ray_dataset")
     @patch(f"{_TASK}.native_transform")
+    def test_train_processed_before_validation_regardless_of_dict_order(
+        self, mock_transform, _mock_save
+    ):
+        """Train is transformed first even when validation comes first in the dict.
+
+        Feature stats are computed from whichever split runs first through
+        ``native_transform`` (stats are threaded through the loop and only
+        computed once, when empty). Passing ``validation`` before ``train``
+        in the input dict must not change that: the *first* call into
+        ``native_transform`` must carry train's underlying Ray Dataset, not
+        validation's — collapsing dataset ordering to plain dict-insertion
+        order would silently fit stats on validation instead.
+        """
+        train_ray_dataset = _ray_dataset(self.rows)
+        validation_ray_dataset = _ray_dataset(self.rows)
+        train = DatasetVariable.create(train_ray_dataset)
+        validation = DatasetVariable.create(validation_ray_dataset)
+
+        def _fake_transform(*, df, transform_spec, feature_stats, **_kwargs):
+            return df, transform_spec, {"seen": True}
+
+        mock_transform.side_effect = _fake_transform
+        config = TabularNativeTransformConfig(
+            transform_spec=dict(_SIMPLE_SPEC),
+            batch_options=BatchOptions(batch_size=10),
+        )
+        # validation listed first in the dict; PREFERRED_DATASET_ORDER must
+        # still process train first.
+        tabular_native_transform(config, {"validation": validation, "train": train})
+
+        self.assertEqual(mock_transform.call_count, 2)
+        first_call_df = mock_transform.call_args_list[0].kwargs["df"]
+        self.assertIs(first_call_df, train_ray_dataset)
+        second_call_df = mock_transform.call_args_list[1].kwargs["df"]
+        self.assertIs(second_call_df, validation_ray_dataset)
+
+    @patch.object(DatasetVariable, "save_ray_dataset")
+    @patch(f"{_TASK}.native_transform")
     def test_columns_to_keep_used_for_derived_features(
         self, mock_transform, _mock_save
     ):
@@ -392,6 +442,56 @@ class TabularNativeTransformTaskTest(TestCase):
         )
         tabular_native_transform(config, {"train": train})
         mock_save.assert_called_once_with(max_rows_per_file=100, min_rows_per_file=10)
+
+    @patch(f"{_TASK}.ray")
+    @patch.object(DatasetVariable, "save_ray_dataset")
+    @patch(f"{_TASK}.native_transform")
+    def test_max_rows_per_file_below_ray_floor_raises(
+        self, mock_transform, _mock_save, mock_ray
+    ):
+        """max_rows_per_file on a too-old Ray raises before any write happens."""
+        mock_ray.__version__ = "2.47.0"
+        train = DatasetVariable.create(_ray_dataset(self.rows))
+        mock_transform.return_value = (
+            _ray_dataset(self.rows),
+            _load_transform_spec(
+                TabularNativeTransformConfig(transform_spec=dict(_SIMPLE_SPEC))
+            ),
+            {},
+        )
+        from michelangelo.workflow.schema.ray_data_io import WriteConfig
+
+        config = TabularNativeTransformConfig(
+            transform_spec=dict(_SIMPLE_SPEC),
+            write_config=WriteConfig(max_rows_per_file=100),
+        )
+        with self.assertRaises(ConfigurationError):
+            tabular_native_transform(config, {"train": train})
+
+    @patch(f"{_TASK}.ray")
+    @patch.object(DatasetVariable, "save_ray_dataset")
+    @patch(f"{_TASK}.native_transform")
+    def test_min_rows_per_file_below_ray_floor_raises(
+        self, mock_transform, _mock_save, mock_ray
+    ):
+        """min_rows_per_file on a too-old Ray raises before any write happens."""
+        mock_ray.__version__ = "2.42.0"
+        train = DatasetVariable.create(_ray_dataset(self.rows))
+        mock_transform.return_value = (
+            _ray_dataset(self.rows),
+            _load_transform_spec(
+                TabularNativeTransformConfig(transform_spec=dict(_SIMPLE_SPEC))
+            ),
+            {},
+        )
+        from michelangelo.workflow.schema.ray_data_io import WriteConfig
+
+        config = TabularNativeTransformConfig(
+            transform_spec=dict(_SIMPLE_SPEC),
+            write_config=WriteConfig(min_rows_per_file=10),
+        )
+        with self.assertRaises(ConfigurationError):
+            tabular_native_transform(config, {"train": train})
 
     @patch.object(DatasetVariable, "save_ray_dataset")
     @patch(f"{_TASK}.get_transform_module")

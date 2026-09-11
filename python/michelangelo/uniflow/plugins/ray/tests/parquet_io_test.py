@@ -21,6 +21,7 @@ class _FakeParquetReadConfig:
     num_gpus: int | None = None
     memory: int | None = None
     arrow_parquet_args: dict | None = None
+    override_num_blocks: int | None = None
     override_num_blocks_per_dataset: dict | None = None
 
 
@@ -86,14 +87,23 @@ class ParquetReadConfigToKwargsTest(TestCase):
         self.assertEqual(result, {"override_num_blocks": 8})
 
     def test_override_num_blocks_per_dataset_no_match_drops_key(self):
-        """No matching entry for dataset_name means override_num_blocks is absent."""
-        config = _FakeParquetReadConfig(override_num_blocks_per_dataset={"train": 8})
+        """No matching entry for dataset_name means override_num_blocks is absent.
+
+        ``override_num_blocks`` is also set directly here (as if it were a
+        base default), to prove it actually gets dropped for the
+        non-matching dataset rather than merely being absent to begin with.
+        """
+        config = _FakeParquetReadConfig(
+            override_num_blocks=4, override_num_blocks_per_dataset={"train": 8}
+        )
         result = parquet_read_config_to_kwargs(config, dataset_name="validation")
         self.assertEqual(result, {})
 
     def test_override_num_blocks_per_dataset_no_dataset_name_drops_key(self):
         """No dataset_name given means override_num_blocks is absent."""
-        config = _FakeParquetReadConfig(override_num_blocks_per_dataset={"train": 8})
+        config = _FakeParquetReadConfig(
+            override_num_blocks=4, override_num_blocks_per_dataset={"train": 8}
+        )
         result = parquet_read_config_to_kwargs(config)
         self.assertEqual(result, {})
 
