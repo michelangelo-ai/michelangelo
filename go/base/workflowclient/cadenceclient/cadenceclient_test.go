@@ -80,6 +80,17 @@ func TestStartWorkflowRejectsStartPaused(t *testing.T) {
 	assert.EqualError(t, err, "starting a paused workflow is not supported by Cadence")
 }
 
+func TestStartWorkflowRejectsCatchUpFrom(t *testing.T) {
+	client := &CadenceClient{Client: &cadencemocks.Client{}}
+	_, err := client.StartWorkflow(
+		context.Background(),
+		clientInterface.StartWorkflowOptions{CatchUpFrom: time.Now().Add(-time.Hour)},
+		"testWorkflow",
+	)
+
+	assert.EqualError(t, err, "cron schedule startTime catch-up is not supported by Cadence")
+}
+
 func TestGetWorkflowExecutionInfo(t *testing.T) {
 	workflowID := "testWorkflowID"
 	runID := "testRunID"
