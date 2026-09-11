@@ -26,9 +26,10 @@ type SecretProvider interface {
 // Provider implements the SecretProvider interface.
 //
 // NOTE: This is a SAMPLE IMPLEMENTATION that stores secrets in the MA control plane K8s Cluster.
-// This is NOT recommended for production use. For real deployments, use external secret
-// management systems (e.g., HashiCorp Vault, AWS Secrets Manager) or explore utilities
-// designed for sandbox/testing purposes.
+// This is NOT recommended for production use. For real deployments, set
+// `secrets.provider: eso` to use the External Secrets Operator backed
+// ESOProvider, which sources credentials from an external secret manager
+// (e.g., HashiCorp Vault, AWS Secrets Manager, GCP Secret Manager).
 type Provider struct {
 	k8sClusterClient kubernetes.Interface
 	logger           *zap.Logger
@@ -52,6 +53,7 @@ type Params struct {
 
 	ClientSet kubernetes.Interface `name:"inClusterClientSet"`
 	Logger    *zap.Logger
+	Cfg       Config `optional:"true"`
 }
 
 type InClusterClientSet struct {
@@ -86,13 +88,26 @@ type Result struct {
 	SecretProvider SecretProvider
 }
 
-// New provides new Secrets generator
-func New(p Params) Result {
-	return Result{
-		SecretProvider: Provider{
-			k8sClusterClient: p.ClientSet,
-			logger:           p.Logger,
-		},
+// New provides the SecretProvider selected by `secrets.provider`: the
+// sample control-plane provider by default, or the External Secrets
+// Operator backed provider when configured as "eso".
+func New(p Params) (Result, error) {
+	switch p.Cfg.Provider {
+	case "", ProviderSample:
+		return Result{
+			SecretProvider: Provider{
+				k8sClusterClient: p.ClientSet,
+				logger:           p.Logger,
+			},
+		}, nil
+	case ProviderESO:
+		return Result{
+			SecretProvider: NewESOProvider(p.ClientSet, p.Cfg.ESO, p.Logger),
+		}, nil
+	default:
+		return Result{}, fmt.Errorf(
+			"unknown secrets.provider %q: must be %q or %q",
+			p.Cfg.Provider, ProviderSample, ProviderESO)
 	}
 }
 
