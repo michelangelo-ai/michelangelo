@@ -60,6 +60,7 @@ WORKSPACE_ROOT="${WORKSPACE_ROOT}" python3 - <<'PY'
 import os
 import pathlib
 import re
+import sys
 
 root = pathlib.Path(os.environ["WORKSPACE_ROOT"])
 go_mod = root / "go" / "go.mod"
@@ -77,8 +78,46 @@ for line in go_text.splitlines():
     if m:
         versions[m.group(1)] = m.group(2)
 
-# Align Go version too.
-proto_text = re.sub(r"^go\\s+\\S+", "go 1.23.2", proto_text, flags=re.M)
+
+def read_go_sdk_version(module_bazel: pathlib.Path) -> str:
+    """Extract the pinned Go SDK version from MODULE.bazel's go_sdk.download()
+    call. Raises SystemExit(1) with a clear message if the block or version
+    argument cannot be found -- never falls back to a stale/guessed default.
+    """
+    text = module_bazel.read_text()
+    # Matches:
+    #   go_sdk.download(
+    #       version = "1.26.5",
+    #   )
+    # Anchored on the `go_sdk.download(` call specifically (not `go_sdk.nogo(`
+    # or any other go_sdk.* call sharing the extension), tolerant of arg order
+    # and additional kwargs (e.g. a future `strip_prefix` or `patches` arg)
+    # since it only greps for `version = "..."` within that call's parens.
+    m = re.search(
+        r"go_sdk\.download\s*\((?P<args>[^)]*)\)",
+        text,
+        flags=re.S,
+    )
+    if not m:
+        sys.exit(
+            "ERROR: could not find a go_sdk.download(...) call in "
+            f"{module_bazel} -- refusing to guess a Go version for proto-go/go.mod."
+        )
+    version_match = re.search(r'version\s*=\s*"([^"]+)"', m.group("args"))
+    if not version_match:
+        sys.exit(
+            "ERROR: found go_sdk.download(...) in "
+            f"{module_bazel} but no version = \"...\" argument inside it."
+        )
+    return version_match.group(1)
+
+
+# MODULE.bazel's go_sdk.download(version=...) is the single source of truth
+# for the Go toolchain version (feature 016, Go SDK CVE bump) -- do not
+# reintroduce a hardcoded literal here.
+module_bazel = root / "MODULE.bazel"
+go_sdk_version = read_go_sdk_version(module_bazel)
+proto_text = re.sub(r"^go\s+\S+", f"go {go_sdk_version}", proto_text, flags=re.M)
 
 out_lines = []
 for line in proto_text.splitlines():
