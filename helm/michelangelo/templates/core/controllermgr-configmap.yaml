@@ -100,6 +100,14 @@ data:
             {{- end }}
     {{- end }}
 
+    {{- $gateway := dig "inferenceServer" "gateway" dict .Values.controllermgr }}
+    inferenceServer:
+      gateway:
+        name: {{ $gateway.name | default "ma-gateway" | quote }}
+        serviceName: {{ $gateway.serviceName | default "ma-gateway-istio" | quote }}
+        serviceNamespace: {{ $gateway.serviceNamespace | default "default" | quote }}
+        portName: {{ $gateway.portName | default "http" | quote }}
+
     notification:
       {{- $notif := default dict .Values.notification }}
       taskList: {{ index $notif "taskList" | default "" | quote }}
