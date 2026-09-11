@@ -74,11 +74,12 @@ for line in go_text.splitlines():
     line = line.strip()
     if not line or line.startswith("//"):
         continue
-    # TODO: this doubled-backslash pattern never matches. Because this heredoc
-    # is single-quoted (<<'PY'), bash passes it through to Python literally --
-    # "\\w" here is a two-character escaped backslash followed by "w", not a
-    # \w character class. As a result `versions` is always empty and the
-    # per-dependency sync loop below (using this same dict) never fires.
+    # TODO(#2066): this doubled-backslash pattern never matches. Because this
+    # heredoc is single-quoted (<<'PY'), bash passes it through to Python
+    # literally -- "\\w" here is a two-character escaped backslash followed
+    # by "w", not a \w character class. As a result `versions` is always
+    # empty and the per-dependency sync loop below (using this same dict)
+    # never fires.
     m = re.match(r"^([\\w./-]+)\\s+(v\\S+)$", line)
     if m:
         versions[m.group(1)] = m.group(2)
@@ -133,8 +134,9 @@ proto_text = re.sub(r"^go\s+\S+", f"go {go_sdk_version}", proto_text, flags=re.M
 
 out_lines = []
 for line in proto_text.splitlines():
-    # TODO: same doubled-backslash issue as above -- this never matches inside
-    # this quoted heredoc, so `m` is always None and this branch never fires.
+    # TODO(#2066): same doubled-backslash issue as above -- this never matches
+    # inside this quoted heredoc, so `m` is always None and this branch never
+    # fires.
     m = re.match(r"^(\\s*)([\\w./-]+)\\s+(v\\S+)(\\s*//.*)?$", line)
     if m and m.group(2) in versions:
         indent, mod, _ver, trailing = m.group(1), m.group(2), m.group(3), m.group(4) or ""
