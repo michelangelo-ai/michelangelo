@@ -34,6 +34,7 @@ For a fresh deployment, follow this recommended reading order:
 |-------|-------------|
 | [Jobs Overview](jobs/index.md) | Ray and Spark job lifecycle, compute selection, and observability |
 | [Run a Pipeline on a Compute Cluster](jobs/run-uniflow-pipeline-on-compute-cluster.md) | Submit and monitor a Uniflow pipeline on a registered cluster |
+| [Kueue Scheduler Backend](jobs/kueue-scheduler-backend.md) | Quota-aware queueing and gang admission for batch jobs via Kueue |
 | [Extend the Job Scheduler](jobs/extend-michelangelo-batch-job-scheduler-system.md) | Custom scheduling backends (Kueue, Volcano) and assignment strategies |
 
 ## Model Serving
