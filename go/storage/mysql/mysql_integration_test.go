@@ -927,3 +927,84 @@ func TestIntegration_DirectUpdate_ReregisterModelKeepsStoredArtifactURI(t *testi
 		"the caller's object keeps the URI it sent, so caller and storage disagree")
 	assert.Equal(t, "2", second.GetResourceVersion())
 }
+
+// TestIntegration_UpsertDirectFull_HappyPath is UpsertDirectFull's counterpart to
+// TestIntegration_DirectUpdate_HappyPath: it must bump the resource version and commit, but
+// unlike directUpdate it must actually persist the incoming spec, since UpsertDirectFull backs
+// a MySQL-primary kind (see storage.MySQLPrimaryPolicy) whose spec is expected to keep changing.
+func TestIntegration_UpsertDirectFull_HappyPath(t *testing.T) {
+	db := openIntegrationDB(t)
+	store := newIntegrationStorage(t, db)
+	ctx := context.Background()
+
+	const (
+		namespace = "integration-test-ns"
+		name      = "upsert-direct-full-happy"
+		uid       = "upsert-direct-full-happy-uid"
+	)
+	t.Cleanup(func() { cleanupDeploymentRow(t, db, namespace, name, uid) })
+
+	initial := newDirectUpdateDeployment(namespace, name, uid, "1", map[string]string{"app": "before"}, nil)
+	initial.Spec = v2pb.DeploymentSpec{ModelFamily: &apipb.ResourceIdentifier{Name: "before-family"}}
+	require.NoError(t, store.Upsert(ctx, initial, false, nil), "seed Upsert must succeed")
+
+	update := newDirectUpdateDeployment(namespace, name, "", "1", map[string]string{"app": "after"}, nil)
+	update.Spec = v2pb.DeploymentSpec{ModelFamily: &apipb.ResourceIdentifier{Name: "after-family"}}
+	require.NoError(t, store.UpsertDirectFull(ctx, update, nil), "direct full update must succeed")
+
+	assert.Equal(t, uint64(2), storedResVersion(t, db, namespace, name),
+		"res_version must be bumped and the transaction committed")
+	assert.Equal(t, "2", update.GetResourceVersion(),
+		"the new resource version must be written back onto the caller's object")
+
+	readBack := &v2pb.Deployment{}
+	require.NoError(t, store.GetByName(ctx, namespace, name, readBack))
+	assert.Equal(t, "after-family", readBack.Spec.GetModelFamily().GetName(),
+		"unlike directUpdate, UpsertDirectFull must actually persist the incoming spec")
+	assert.Equal(t, "after", readBack.GetLabels()["app"])
+}
+
+// TestIntegration_UpsertDirectFull_ResourceVersionMismatchConflicts checks that UpsertDirectFull
+// enforces the same optimistic-concurrency precondition as directUpdate, and leaves no partial
+// write behind on conflict.
+func TestIntegration_UpsertDirectFull_ResourceVersionMismatchConflicts(t *testing.T) {
+	db := openIntegrationDB(t)
+	store := newIntegrationStorage(t, db)
+	ctx := context.Background()
+
+	const (
+		namespace = "integration-test-ns"
+		name      = "upsert-direct-full-conflict"
+		uid       = "upsert-direct-full-conflict-uid"
+	)
+	t.Cleanup(func() { cleanupDeploymentRow(t, db, namespace, name, uid) })
+
+	initial := newDirectUpdateDeployment(namespace, name, uid, "5", nil, nil)
+	initial.Spec = v2pb.DeploymentSpec{ModelFamily: &apipb.ResourceIdentifier{Name: "before-family"}}
+	require.NoError(t, store.Upsert(ctx, initial, false, nil))
+
+	update := newDirectUpdateDeployment(namespace, name, "", "4", nil, nil)
+	update.Spec = v2pb.DeploymentSpec{ModelFamily: &apipb.ResourceIdentifier{Name: "after-family"}}
+	err := store.UpsertDirectFull(ctx, update, nil)
+	require.Error(t, err)
+	assert.Equal(t, codes.FailedPrecondition, status.Code(err))
+
+	assert.Equal(t, uint64(5), storedResVersion(t, db, namespace, name), "row must be unchanged")
+	unchanged := &v2pb.Deployment{}
+	require.NoError(t, store.GetByName(ctx, namespace, name, unchanged))
+	assert.Equal(t, "before-family", unchanged.Spec.GetModelFamily().GetName(), "spec must be unchanged")
+}
+
+// TestIntegration_UpsertDirectFull_RowNotFound covers a namespace/name that was never stored:
+// UpsertDirectFull is only for updating a MySQL-primary object that already exists, so the
+// initial Create of such an object goes through the ordinary Upsert(direct=false) path instead.
+func TestIntegration_UpsertDirectFull_RowNotFound(t *testing.T) {
+	db := openIntegrationDB(t)
+	store := newIntegrationStorage(t, db)
+	ctx := context.Background()
+
+	update := newDirectUpdateDeployment("integration-test-ns", "upsert-direct-full-never-existed", "", "1", nil, nil)
+	err := store.UpsertDirectFull(ctx, update, nil)
+	require.Error(t, err)
+	assert.Equal(t, codes.NotFound, status.Code(err))
+}

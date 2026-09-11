@@ -33,6 +33,11 @@ func (m *MockMetadataStorage) Upsert(ctx context.Context, object runtime.Object,
 	return args.Error(0)
 }
 
+func (m *MockMetadataStorage) UpsertDirectFull(ctx context.Context, object runtime.Object, indexedFields []storage.IndexedField) error {
+	args := m.Called(ctx, object, indexedFields)
+	return args.Error(0)
+}
+
 func (m *MockMetadataStorage) GetByName(ctx context.Context, namespace string, name string, object runtime.Object) error {
 	args := m.Called(ctx, namespace, name, object)
 	return args.Error(0)

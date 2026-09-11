@@ -27,6 +27,8 @@ proto_library(
         "inference_server_svc.proto",
         "job.proto",
         "kubernetes.proto",
+        "metric.proto",
+        "metric_svc.proto",
         "model.proto",
         "model_family.proto",
         "model_family_svc.proto",
