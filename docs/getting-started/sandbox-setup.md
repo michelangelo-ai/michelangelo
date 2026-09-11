@@ -97,6 +97,8 @@ Docker containers need to communicate with services on your host machine. Verify
    ```
 3. If missing, add it to the end of the file and save.
 
+> **Note:** this only fixes host-side resolution. It does not make `host.docker.internal` (or any other host address) reachable from inside pods — pod-to-host and pod-to-pod traffic requires the sandbox's k3d/docker-network addressing (see `_cluster_endpoint_for_crd` in `sandbox.py`), not `/etc/hosts` edits.
+
 ### Install Python dependencies
 
 From the repository you cloned, install the Michelangelo AI Python packages:

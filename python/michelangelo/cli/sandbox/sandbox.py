@@ -30,6 +30,17 @@ _michelangelo_sandbox_kube_cluster_name = "michelangelo-sandbox"
 _cadence_domain = "default"
 _default_compute_kube_cluster_name = "michelangelo-compute-0"
 
+# Hosts that `k3d kubeconfig get` may return but that are not reachable from
+# inside pods (host-side loopback/docker-gateway addresses).
+_unroutable_cluster_hosts = {
+    "0.0.0.0",
+    "127.0.0.1",
+    "localhost",
+    "host.docker.internal",
+}
+# Port the k3d server container listens on within the shared docker network.
+_k3d_server_port = "6443"
+
 # Path to the Michelangelo Helm chart (relative to this file)
 _chart_dir = Path(__file__).parent.parent.parent.parent.parent / "helm" / "michelangelo"
 
@@ -1937,6 +1948,33 @@ def _ensure_namespace_exists(namespace: str):
         print(f"Created namespace '{namespace}' in the sandbox cluster.")
 
 
+def _cluster_endpoint_for_crd(cluster_name: str, server_url: str) -> tuple[str, str]:
+    """Pick an API endpoint for the Cluster CRD that is reachable from inside pods.
+
+    `k3d kubeconfig get` returns the host-side endpoint (for example
+    `https://0.0.0.0:59896`), which the controllermgr cannot reach from inside
+    the cluster. Returns a `(host, port)` pair that pods can actually dial.
+    """
+    if cluster_name == _michelangelo_sandbox_kube_cluster_name:
+        # The sandbox cluster itself: use the in-cluster service endpoint.
+        return "https://kubernetes.default.svc", "443"
+
+    import re
+
+    match = re.search(r"(https://[^:]+):(\d+)", server_url)
+    if not match:
+        raise ValueError(
+            f"Could not extract cluster host and port from server URL: {server_url}"
+        )
+    host, port = match.groups()
+
+    if host.removeprefix("https://") in _unroutable_cluster_hosts:
+        # Another k3d cluster on the shared docker network: its server
+        # container name resolves from pods and its port is stable.
+        return f"https://k3d-{cluster_name}-server-0", _k3d_server_port
+    return host, port
+
+
 # Given a cluster name, create a Cluster CRD in the sandbox cluster
 def _create_compute_cluster_crd(cluster_name: str):
     """Create a Cluster CRD for the Ray jobs cluster in the sandbox cluster."""
@@ -1954,16 +1992,7 @@ def _create_compute_cluster_crd(cluster_name: str):
     # Extract server URL from clusters[0].cluster.server
     server_url = kubeconfig_data["clusters"][0]["cluster"]["server"]
 
-    # Extract host and port from server URL
-    # Example: "https://host.docker.internal:52910"
-    import re
-
-    match = re.search(r"(https://[^:]+):(\d+)", server_url)
-    if not match:
-        raise ValueError(
-            f"Could not extract cluster host and port from server URL: {server_url}"
-        )
-    host, port = match.groups()
+    host, port = _cluster_endpoint_for_crd(cluster_name, server_url)
 
     # Create Cluster CRD manifest
     cluster_crd = {
