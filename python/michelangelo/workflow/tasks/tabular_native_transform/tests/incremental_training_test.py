@@ -24,7 +24,7 @@ from michelangelo.lib.native_transform.torch.transform_spec import (  # noqa: E4
 from michelangelo.workflow.schema.exceptions import ConfigurationError  # noqa: E402
 from michelangelo.workflow.schema.tabular_native_transform import (  # noqa: E402
     IncrementalTrainingConfig,
-    TrainingType,
+    TrainingTypeConfig,
 )
 from michelangelo.workflow.tasks.tabular_native_transform._private import (  # noqa: E402
     incremental_training,
@@ -67,18 +67,18 @@ class IsIncrementalIsBaselineTest(TestCase):
         self.assertFalse(incremental_training.is_incremental(None))
 
     def test_is_incremental_true(self):
-        """TrainingType.INCREMENTAL is reported as incremental."""
-        cfg = IncrementalTrainingConfig(training_type=TrainingType.INCREMENTAL)
+        """TrainingTypeConfig.INCREMENTAL is reported as incremental."""
+        cfg = IncrementalTrainingConfig(training_type=TrainingTypeConfig.INCREMENTAL)
         self.assertTrue(incremental_training.is_incremental(cfg))
 
     def test_is_incremental_false_for_base(self):
-        """TrainingType.BASE is not reported as incremental."""
-        cfg = IncrementalTrainingConfig(training_type=TrainingType.BASE)
+        """TrainingTypeConfig.BASE is not reported as incremental."""
+        cfg = IncrementalTrainingConfig(training_type=TrainingTypeConfig.BASE)
         self.assertFalse(incremental_training.is_incremental(cfg))
 
     def test_is_baseline_true(self):
-        """TrainingType.BASE is reported as a baseline run."""
-        cfg = IncrementalTrainingConfig(training_type=TrainingType.BASE)
+        """TrainingTypeConfig.BASE is reported as a baseline run."""
+        cfg = IncrementalTrainingConfig(training_type=TrainingTypeConfig.BASE)
         self.assertTrue(incremental_training.is_baseline(cfg))
 
     def test_is_baseline_none_config(self):
@@ -106,7 +106,7 @@ class LoadIncrementalArtifactsTest(TestCase):
 
     def test_requires_baseline_model_uri(self):
         """A missing baseline_model_uri raises ConfigurationError."""
-        cfg = IncrementalTrainingConfig(training_type=TrainingType.INCREMENTAL)
+        cfg = IncrementalTrainingConfig(training_type=TrainingTypeConfig.INCREMENTAL)
         with self.assertRaises(ConfigurationError):
             incremental_training.load_incremental_artifacts(cfg, self.backend)
 
@@ -116,7 +116,7 @@ class LoadIncrementalArtifactsTest(TestCase):
             _fitted_base_spec_dict(), feature_stats={"col3_mean": 1.0, "col3_std": 2.0}
         )
         cfg = IncrementalTrainingConfig(
-            training_type=TrainingType.INCREMENTAL, baseline_model_uri=uri
+            training_type=TrainingTypeConfig.INCREMENTAL, baseline_model_uri=uri
         )
         spec, stats = incremental_training.load_incremental_artifacts(cfg, self.backend)
         self.assertIsInstance(spec, TransformSpec)
@@ -126,7 +126,7 @@ class LoadIncrementalArtifactsTest(TestCase):
         """A base run with no feature stats file yields an empty stats dict."""
         uri = self._upload_base_run(_fitted_base_spec_dict())
         cfg = IncrementalTrainingConfig(
-            training_type=TrainingType.INCREMENTAL, baseline_model_uri=uri
+            training_type=TrainingTypeConfig.INCREMENTAL, baseline_model_uri=uri
         )
         _, stats = incremental_training.load_incremental_artifacts(cfg, self.backend)
         self.assertEqual(stats, {})
@@ -138,7 +138,7 @@ class LoadIncrementalArtifactsTest(TestCase):
             f.write("x")
         uri = self.backend.upload(src, "empty-base-run")
         cfg = IncrementalTrainingConfig(
-            training_type=TrainingType.INCREMENTAL, baseline_model_uri=uri
+            training_type=TrainingTypeConfig.INCREMENTAL, baseline_model_uri=uri
         )
         with self.assertRaises(ConfigurationError):
             incremental_training.load_incremental_artifacts(cfg, self.backend)
@@ -151,7 +151,7 @@ class LoadIncrementalArtifactsTest(TestCase):
             layer_spec.mode = TransformerMode.REFIT
         uri = self._upload_base_run(spec.to_dict())
         cfg = IncrementalTrainingConfig(
-            training_type=TrainingType.INCREMENTAL,
+            training_type=TrainingTypeConfig.INCREMENTAL,
             baseline_model_uri=uri,
             enforce_full_reuse=True,
         )
@@ -166,7 +166,7 @@ class LoadIncrementalArtifactsTest(TestCase):
             layer_spec.mode = TransformerMode.REFIT
         uri = self._upload_base_run(spec.to_dict())
         cfg = IncrementalTrainingConfig(
-            training_type=TrainingType.INCREMENTAL,
+            training_type=TrainingTypeConfig.INCREMENTAL,
             baseline_model_uri=uri,
             enforce_full_reuse=False,
         )

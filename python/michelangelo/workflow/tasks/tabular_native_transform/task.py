@@ -91,7 +91,7 @@ def tabular_native_transform(
             optionally test datasets.
         storage_backend: Backend used to download a base run's artifacts.
             Required only when ``config.incremental_training`` specifies
-            ``TrainingType.INCREMENTAL`` mode; ignored otherwise.
+            ``TrainingTypeConfig.INCREMENTAL`` mode; ignored otherwise.
 
     Returns:
         A ``NativeTransformResult`` containing the transformed datasets and
@@ -143,7 +143,7 @@ def tabular_native_transform(
         if storage_backend is None:
             raise ConfigurationError(
                 "storage_backend is required when incremental_training.training_type "
-                "is TrainingType.INCREMENTAL."
+                "is TrainingTypeConfig.INCREMENTAL."
             )
         base_spec, base_stats = incremental_training.load_incremental_artifacts(
             inc, storage_backend
@@ -256,7 +256,7 @@ def _transform_all_datasets(
         transform_spec: Transform specification.
         config: Tabular native transform configuration.
         initial_feature_stats: Pre-loaded feature stats (e.g. from a base
-            run in ``TrainingType.INCREMENTAL`` mode). When provided, the
+            run in ``TrainingTypeConfig.INCREMENTAL`` mode). When provided, the
             stats are used as-is and fitting is skipped for levels whose
             stats are already present.
 

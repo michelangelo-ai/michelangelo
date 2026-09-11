@@ -26,7 +26,7 @@ from michelangelo.uniflow.plugins.ray.native_transform import get_numerical_stat
 from michelangelo.workflow.schema.exceptions import ConfigurationError
 from michelangelo.workflow.schema.tabular_native_transform import (
     IncrementalTrainingConfig,
-    TrainingType,
+    TrainingTypeConfig,
 )
 
 if TYPE_CHECKING:
@@ -52,7 +52,7 @@ _PLACEHOLDER_TO_RESOLVED = {
 
 
 def is_incremental(config: IncrementalTrainingConfig | None) -> bool:
-    """Check whether *config* specifies ``TrainingType.INCREMENTAL`` mode.
+    """Check whether *config* specifies ``TrainingTypeConfig.INCREMENTAL`` mode.
 
     Args:
         config: The incremental training configuration, or ``None``.
@@ -60,11 +60,11 @@ def is_incremental(config: IncrementalTrainingConfig | None) -> bool:
     Returns:
         ``True`` if incremental (refit-from-baseline) mode is active.
     """
-    return config is not None and config.training_type == TrainingType.INCREMENTAL
+    return config is not None and config.training_type == TrainingTypeConfig.INCREMENTAL
 
 
 def is_baseline(config: IncrementalTrainingConfig | None) -> bool:
-    """Check whether *config* specifies ``TrainingType.BASE`` mode.
+    """Check whether *config* specifies ``TrainingTypeConfig.BASE`` mode.
 
     Args:
         config: The incremental training configuration, or ``None``.
@@ -72,7 +72,7 @@ def is_baseline(config: IncrementalTrainingConfig | None) -> bool:
     Returns:
         ``True`` if this run is a base run for a future incremental run.
     """
-    return config is not None and config.training_type == TrainingType.BASE
+    return config is not None and config.training_type == TrainingTypeConfig.BASE
 
 
 def load_incremental_artifacts(
@@ -94,7 +94,7 @@ def load_incremental_artifacts(
 
     Args:
         config: The incremental training configuration. Must specify
-            ``training_type == TrainingType.INCREMENTAL`` and a non-``None``
+            ``training_type == TrainingTypeConfig.INCREMENTAL`` and a non-``None``
             ``baseline_model_uri``.
         storage_backend: Backend used to download the base run's artifacts.
 
@@ -126,7 +126,8 @@ def load_incremental_artifacts(
         if not transform_spec_path.exists():
             raise ConfigurationError(
                 f"Base run artifacts at {config.baseline_model_uri!r} do not contain "
-                f"{_TRANSFORM_SPEC_FILE}. Was it produced by a TrainingType.BASE run?"
+                f"{_TRANSFORM_SPEC_FILE}. Was it produced by a "
+                "TrainingTypeConfig.BASE run?"
             )
         with open(transform_spec_path) as f:
             base_spec_dict = yaml.safe_load(f)

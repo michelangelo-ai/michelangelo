@@ -7,7 +7,7 @@ from michelangelo.workflow.schema.tabular_native_transform import (
     ParquetReadConfig,
     RayDataContextConfig,
     TabularNativeTransformConfig,
-    TrainingType,
+    TrainingTypeConfig,
     WriteConfig,
 )
 from michelangelo.workflow.tasks.tabular_native_transform._private import (
@@ -34,7 +34,7 @@ __all__ = [
     "ParquetReadConfig",
     "RayDataContextConfig",
     "TabularNativeTransformConfig",
-    "TrainingType",
+    "TrainingTypeConfig",
     "WriteConfig",
     "convert_to_numpy_sample",
     "get_sample_data_from_datasets",

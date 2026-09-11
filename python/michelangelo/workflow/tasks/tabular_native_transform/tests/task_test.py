@@ -20,7 +20,7 @@ from michelangelo.workflow.schema.tabular_native_transform import (  # noqa: E40
     BatchOptions,
     IncrementalTrainingConfig,
     TabularNativeTransformConfig,
-    TrainingType,
+    TrainingTypeConfig,
 )
 from michelangelo.workflow.tasks.tabular_native_transform._private import (  # noqa: E402
     incremental_training,
@@ -190,7 +190,7 @@ class TabularNativeTransformTaskTest(TestCase):
         config = TabularNativeTransformConfig(
             transform_spec=None,
             incremental_training=IncrementalTrainingConfig(
-                training_type=TrainingType.INCREMENTAL,
+                training_type=TrainingTypeConfig.INCREMENTAL,
                 baseline_model_uri="file:///does/not/matter",
             ),
         )
@@ -216,7 +216,7 @@ class TabularNativeTransformTaskTest(TestCase):
         config = TabularNativeTransformConfig(
             transform_spec=None,
             incremental_training=IncrementalTrainingConfig(
-                training_type=TrainingType.INCREMENTAL,
+                training_type=TrainingTypeConfig.INCREMENTAL,
                 baseline_model_uri="file:///does/not/matter",
             ),
         )
@@ -247,7 +247,7 @@ class TabularNativeTransformTaskTest(TestCase):
         config = TabularNativeTransformConfig(
             transform_spec=dict(_SIMPLE_SPEC),
             incremental_training=IncrementalTrainingConfig(
-                training_type=TrainingType.INCREMENTAL,
+                training_type=TrainingTypeConfig.INCREMENTAL,
                 baseline_model_uri="file:///does/not/matter",
                 enforce_full_reuse=False,
             ),
@@ -279,7 +279,7 @@ class TabularNativeTransformTaskTest(TestCase):
         config = TabularNativeTransformConfig(
             transform_spec=None,
             incremental_training=IncrementalTrainingConfig(
-                training_type=TrainingType.INCREMENTAL,
+                training_type=TrainingTypeConfig.INCREMENTAL,
                 baseline_model_uri="file:///does/not/matter",
             ),
         )

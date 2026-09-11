@@ -22,13 +22,19 @@ __all__ = [
     "ParquetReadConfig",
     "RayDataContextConfig",
     "TabularNativeTransformConfig",
-    "TrainingType",
+    "TrainingTypeConfig",
     "WriteConfig",
 ]
 
 
-class TrainingType(str, Enum):
+class TrainingTypeConfig(str, Enum):
     """Incremental-training mode for ``tabular_native_transform``.
+
+    A config-layer value, parsed directly from pipeline configuration —
+    distinct from (and not interchangeable with) any runtime-layer
+    incremental-training enum a trainer task might construct from it. Trainer
+    tasks that build their own runtime training state are expected to derive
+    it from their own config, not from this type.
 
     Attributes:
         INVALID: Not set; treated the same as a fresh (non-incremental) run.
@@ -38,7 +44,7 @@ class TrainingType(str, Enum):
             fitted transform spec and feature statistics.
 
     Example:
-        >>> TrainingType.INCREMENTAL.value
+        >>> TrainingTypeConfig.INCREMENTAL.value
         'INCREMENTAL'
     """
 
@@ -51,11 +57,16 @@ class TrainingType(str, Enum):
 class IncrementalTrainingConfig:
     """Incremental-training configuration for ``tabular_native_transform``.
 
-    Scoped to only the fields this task uses. Internal's equivalent
-    configuration is shared with a model-initializer task and carries extra
-    fields (``load_optimizer_weights``, ``fused_model_submodule``) that are
-    meaningless here — this config intentionally omits them rather than
-    porting unused surface area.
+    A config-layer type read directly from pipeline configuration for this
+    task specifically. It is intentionally distinct from any runtime-layer
+    incremental-training spec a trainer task might build for its own model
+    training — the two live at different layers (parsed configuration vs.
+    constructed runtime state) and are not meant to be unified. Scoped to
+    only the fields this task uses: a shared, more general equivalent
+    configuration (as consumed by a model-initializer-style task elsewhere)
+    would also carry fields like ``load_optimizer_weights`` and
+    ``fused_model_submodule`` that are meaningless here — this config
+    intentionally omits them rather than porting unused surface area.
 
     Attributes:
         training_type: Whether this run is a base run, an incremental run,
@@ -65,9 +76,9 @@ class IncrementalTrainingConfig:
             ``StorageBackend.download()`` to retrieve
             ``transform_spec.yaml``/``transform_feature_stats.yaml`` from its
             metadata directory. Required when ``training_type ==
-            TrainingType.INCREMENTAL``.
+            TrainingTypeConfig.INCREMENTAL``.
         enforce_full_reuse: When ``True`` and ``training_type ==
-            TrainingType.INCREMENTAL``, every layer in the (optional)
+            TrainingTypeConfig.INCREMENTAL``, every layer in the (optional)
             inlined ``transform_spec`` must use
             :attr:`~michelangelo.lib.native_transform.torch.transform_layer_spec.TransformerMode.REUSE`
             (or the default ``INVALID``, which behaves as ``REUSE``) — no
@@ -75,13 +86,13 @@ class IncrementalTrainingConfig:
 
     Example:
         >>> IncrementalTrainingConfig(
-        ...     training_type=TrainingType.INCREMENTAL,
+        ...     training_type=TrainingTypeConfig.INCREMENTAL,
         ...     baseline_model_uri="s3://bucket/models/base-run/",
         ... ).enforce_full_reuse
         True
     """
 
-    training_type: TrainingType = TrainingType.INVALID
+    training_type: TrainingTypeConfig = TrainingTypeConfig.INVALID
     baseline_model_uri: str | None = None
     enforce_full_reuse: bool = True
 
@@ -121,7 +132,7 @@ class TabularNativeTransformConfig:
             file path to a YAML spec file resolved via
             :func:`~michelangelo.workflow.tasks.tabular_native_transform.utils.resolve_data_file_path`.
             May be ``None`` when ``incremental_training`` supplies a
-            baseline spec to reuse (``TrainingType.INCREMENTAL``).
+            baseline spec to reuse (``TrainingTypeConfig.INCREMENTAL``).
         batch_options: Batch processing options for Ray operations.
         parquet_read_config: kwargs forwarded to ``ray.data.read_parquet``
             when loading the input datasets. Use this to tune read
