@@ -2,6 +2,28 @@
 
 Michelangelo AI welcomes contributions from the community. This guide is your entry point — it explains what you can contribute, where each part of the codebase lives, and how to get started.
 
+## Where to Start
+
+Not sure where to jump in? Contributions fall into three tiers of increasing setup cost. Start at the tier that matches the time you have — every tier is a real contribution, not a warm-up exercise.
+
+### Tier 1: Docs and examples — no build required
+
+Fix a guide, clarify a confusing section, or improve an example. You only need a fork and a text editor: the Docs Check CI workflow validates links and builds the site on every PR that touches `docs/`, so there is nothing to run locally.
+
+- Read the [Documentation Guide](documentation-guide.md) for structure and style conventions
+- Browse issues labeled [`good first issue`](https://github.com/michelangelo-ai/michelangelo/issues?q=is%3Aissue%20state%3Aopen%20label%3A%22good%20first%20issue%22) or [`help wanted`](https://github.com/michelangelo-ai/michelangelo/issues?q=is%3Aissue%20state%3Aopen%20label%3A%22help%20wanted%22)
+
+### Tier 2: Uniflow plugins and integrations — extend the edges
+
+Add a task type, compute backend, or serving integration without touching the core control plane. You'll need a working build ([Building from Source](building-michelangelo-ai-from-source.md)), but your changes stay inside well-documented extension points.
+
+- [Uniflow Plugin Guide](uniflow-plugin-guide.md) — end-to-end walkthrough of the most common contribution type
+- [Integrate a Custom Serving Backend](../operator-guides/serving/integrate-custom-backend.md) — add a new model serving backend
+
+### Tier 3: Core platform — controllers, APIs, and the SDK
+
+Changes to the API server, controllers, proto definitions, or the Python SDK. Use the [Component Map](#component-map) below to find the owning directory. Major architectural changes go through the RFC process first — see the Dual-Track model in [CONTRIBUTING.md](https://github.com/michelangelo-ai/michelangelo/blob/main/CONTRIBUTING.md).
+
 ## Types of Contributions
 
 | Type | Examples |
