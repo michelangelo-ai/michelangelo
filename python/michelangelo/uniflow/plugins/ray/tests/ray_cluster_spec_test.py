@@ -180,7 +180,7 @@ class TestTaskResourcePlumbing(TestCase):
                 utc_format_seconds=lambda fmt, seconds: "2026-01-01T00:00:00",
             ),
             "get_task_name": lambda task_path, alias: "test-task",
-            "get_cache_enabled": lambda cache_enabled, task_name, namespace, task_path: False,
+            "get_cache_enabled": lambda cache_enabled, task_name, namespace, task_path: (False, ""),
             "get_result_url": lambda: "s3://bucket/result.json",
             "get_task_image": lambda task_name: "test-image",
             "execute_ray_task": execute_ray_task,

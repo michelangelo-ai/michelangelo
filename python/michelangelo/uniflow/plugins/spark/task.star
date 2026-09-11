@@ -54,7 +54,7 @@ def spark_task(
         namespace = os.environ.get("MA_NAMESPACE", "default")
         start_time_seconds = time.time()
         start_time_formatted_str = time.utc_format_seconds(TIME_FOMART, start_time_seconds)
-        final_cache_enabled = get_cache_enabled(cache_enabled, task_name, namespace, task_path)
+        final_cache_enabled, first_activity_id = get_cache_enabled(cache_enabled, task_name, namespace, task_path)
         if final_cache_enabled:  # Check if the result is cached
             cache_keys = get_cache_keys(task_path, task_name, args, kwargs, cache_version, CACHE_OPERATION_GET)
             cached_output = get_cached_output(namespace, cache_keys)
@@ -73,6 +73,7 @@ def spark_task(
                         end_time = end_time_formated_str,
                         output = cached_output.get("metadata", {}).get("name", ""),
                         retry_attempt_id = "",
+                        first_activity_id = first_activity_id,
                     )
                     result = io_read_json(cached_result_json_url)
                     print("spark | cached", "result:", result)
@@ -135,6 +136,7 @@ def spark_task(
                 start_time_formatted_str = start_time_formatted_str,
                 retry_attempt_id = retry_attempt_id,
                 total_retry_attempt = total_retry_attempt,
+                first_activity_id = first_activity_id,
             )
 
             # Extract log URL from terminated job
@@ -192,7 +194,7 @@ def spark_task(
     callable.with_overrides = with_overrides
     return callable
 
-def execute_spark_task(namespace, task_name, task_path, spark_job, start_time_formatted_str, retry_attempt_id, total_retry_attempt):
+def execute_spark_task(namespace, task_name, task_path, spark_job, start_time_formatted_str, retry_attempt_id, total_retry_attempt, first_activity_id = ""):
     print("Spark job running, attempt (" + str(retry_attempt_id) + " / " + str(total_retry_attempt) + ")")
 
     driver_log_url = ""
@@ -203,7 +205,10 @@ def execute_spark_task(namespace, task_name, task_path, spark_job, start_time_fo
     spark_job_response = spark.create_job(spark_job)
 
     created_spark_job = spark_job_response["sparkJob"]
-    first_activity_id = spark_job_response["activityId"]
+
+    # The retry reset anchor: the cache decision activity when one ran, else the
+    # job creation (explicit cache_enabled=True never consults the backend).
+    first_activity_id = first_activity_id or spark_job_response["activityId"]
 
     print("spark | first activity ID:", first_activity_id)
 

@@ -242,7 +242,8 @@ func (r *module) query(t *starlark.Thread, _ *starlark.Builtin, args starlark.Tu
 //	  task_path: the path of the task
 //	  task_name: the (alias-resolved) name of the task
 //
-//	  return: dict with has_override (bool) and use_cache (bool, only meaningful when has_override is true)
+//	  return: dict with has_override (bool), use_cache (bool, only meaningful when has_override is true)
+//	          and activity_id (str, this decision activity's ID - report it as the task's first activity)
 func (r *module) shouldOverrideCacheForRetry(t *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	ctx := service.GetContext(t)
 	logger := workflow.GetLogger(ctx)

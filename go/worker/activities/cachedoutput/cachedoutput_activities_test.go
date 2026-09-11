@@ -95,6 +95,7 @@ func (r *Suite) Test_ShouldOverrideCacheForRetry_NoRetryInfo() {
 	var res ShouldOverrideCacheForRetryResponse
 	r.Require().NoError(val.Get(&res))
 	r.Require().False(res.HasOverride)
+	r.Require().NotEmpty(res.ActivityID)
 }
 
 func (r *Suite) Test_ShouldOverrideCacheForRetry_RetryTarget_KeepsCacheOff() {
@@ -125,6 +126,7 @@ func (r *Suite) Test_ShouldOverrideCacheForRetry_RetryTarget_KeepsCacheOff() {
 	var res ShouldOverrideCacheForRetryResponse
 	r.Require().NoError(val.Get(&res))
 	r.Require().True(res.HasOverride)
+	r.Require().NotEmpty(res.ActivityID)
 	r.Require().False(res.UseCache)
 }
 
@@ -156,6 +158,7 @@ func (r *Suite) Test_ShouldOverrideCacheForRetry_Sibling_TurnsCacheOn() {
 	var res ShouldOverrideCacheForRetryResponse
 	r.Require().NoError(val.Get(&res))
 	r.Require().True(res.HasOverride)
+	r.Require().NotEmpty(res.ActivityID)
 	r.Require().True(res.UseCache)
 }
 
@@ -183,6 +186,7 @@ func (r *Suite) Test_ShouldOverrideCacheForRetry_PendingRetry_NoOverride() {
 	var res ShouldOverrideCacheForRetryResponse
 	r.Require().NoError(val.Get(&res))
 	r.Require().False(res.HasOverride)
+	r.Require().NotEmpty(res.ActivityID)
 }
 
 func (r *Suite) Test_ShouldOverrideCacheForRetry_OtherRun_NoOverride() {
@@ -209,4 +213,5 @@ func (r *Suite) Test_ShouldOverrideCacheForRetry_OtherRun_NoOverride() {
 	var res ShouldOverrideCacheForRetryResponse
 	r.Require().NoError(val.Get(&res))
 	r.Require().False(res.HasOverride)
+	r.Require().NotEmpty(res.ActivityID)
 }

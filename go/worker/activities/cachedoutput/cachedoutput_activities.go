@@ -21,9 +21,15 @@ type ShouldOverrideCacheForRetryRequest struct {
 //
 // HasOverride is false when there's no active manual retry on this pipeline
 // run, in which case the caller should fall back to its own env-based default.
+//
+// ActivityID is this decision activity's own ID. Tasks report it as their
+// first activity so a manual retry resets the workflow to before the cache
+// decision, making the retried task re-decide live (cache off) instead of
+// replaying whatever it decided last time.
 type ShouldOverrideCacheForRetryResponse struct {
-	HasOverride bool `json:"has_override"`
-	UseCache    bool `json:"use_cache"`
+	HasOverride bool   `json:"has_override"`
+	UseCache    bool   `json:"use_cache"`
+	ActivityID  string `json:"activity_id"`
 }
 
 // TerminateClusterRequest defines the request parameters for terminating a Spark cluster.
@@ -77,13 +83,14 @@ func (r *activities) CreateCachedOutput(ctx context.Context, request v2pb.Create
 // block the retried task from running.
 func (r *activities) ShouldOverrideCacheForRetry(ctx context.Context, request ShouldOverrideCacheForRetryRequest) (*ShouldOverrideCacheForRetryResponse, error) {
 	info := activity.GetInfo(ctx)
+	noOverride := &ShouldOverrideCacheForRetryResponse{ActivityID: info.ActivityID}
 
 	response, err := r.pipelineRunService.GetPipelineRun(ctx, &v2pb.GetPipelineRunRequest{
 		Namespace: request.Namespace,
 		Name:      info.WorkflowExecution.ID,
 	})
 	if err != nil || response == nil || response.PipelineRun == nil {
-		return &ShouldOverrideCacheForRetryResponse{}, nil
+		return noOverride, nil
 	}
 
 	// RetryInfo is never cleared, so its presence alone doesn't mean a retry is in
@@ -94,10 +101,10 @@ func (r *activities) ShouldOverrideCacheForRetry(ctx context.Context, request Sh
 	retryInfo := response.PipelineRun.Spec.RetryInfo
 	currentRunID := response.PipelineRun.Status.WorkflowRunId
 	if retryInfo == nil || retryInfo.ActivityId == "" || retryInfo.WorkflowRunId == "" {
-		return &ShouldOverrideCacheForRetryResponse{}, nil
+		return noOverride, nil
 	}
 	if retryInfo.WorkflowRunId == currentRunID || currentRunID != info.WorkflowExecution.RunID {
-		return &ShouldOverrideCacheForRetryResponse{}, nil
+		return noOverride, nil
 	}
 
 	target := findStepByActivityID(response.PipelineRun.Status.Steps, retryInfo.ActivityId)
@@ -106,6 +113,7 @@ func (r *activities) ShouldOverrideCacheForRetry(ctx context.Context, request Sh
 	return &ShouldOverrideCacheForRetryResponse{
 		HasOverride: true,
 		UseCache:    !isRetryTarget,
+		ActivityID:  info.ActivityID,
 	}, nil
 }
 
