@@ -25,7 +25,17 @@ message ServingSpec {
   // a default template will be used.
   string container_build_template = 2;
 
-  // TODO(#933): Add serving time dependencies.
+  // Addresses the Python-dependency case from #933 (sidecar containers and
+  // external-service dependencies from that issue are still open). Python
+  // package requirement strings (e.g. "torch==2.4.1") -- no custom container
+  // image or project-level Dockerfile required. Resolves to a shared,
+  // content-addressed image built on demand by CI: any InferenceServer, from
+  // any project, declaring the same dependency set reuses the same image
+  // (see go/components/inferenceserver/depsimage). Applies once per
+  // InferenceServer (shared by every model it serves), not per model. The
+  // first InferenceServer to request a new dependency set will see it in
+  // CREATE_PENDING state until that set's image finishes building.
+  repeated string python_dependencies = 3;
 }
 
 // Ownership spec for the InferenceServer. Used for capacity attribution and
