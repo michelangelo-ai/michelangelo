@@ -157,6 +157,8 @@ def hyperparameter_sweep(data_url: str, learning_rates: list[float]):
 
 Note that the for-loop pattern runs each task call sequentially. To run all of them in parallel, see [Parallel batch run](#parallel-batch-run) below.
 
+Also note that each task call in the loop provisions its own Ray cluster. For a genuine hyperparameter search (many configurations, early stopping), prefer the Ray Tune helper in `michelangelo.lib.tuner.ray_tune`: a single `RayTask`-decorated step runs all trials on one provisioned cluster via `ray.tune`, and returns the best trial's parameters and checkpoint for downstream tasks.
+
 ---
 
 ## Concurrent run
