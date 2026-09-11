@@ -424,26 +424,64 @@ def _sync(ns: argparse.Namespace):
         status_result.returncode == 0 and '"status":"deployed"' in status_result.stdout
     )
 
+    # When Cadence gRPC is unresponsive (both ports refused), the schema is
+    # corrupt or version-mismatched.  A surgical schema repair via helm upgrade
+    # is unreliable because the schema Job's update-schema silently ignores
+    # failures.  Force a full uninstall+reinstall so the schema Job runs
+    # against completely fresh databases.
+    if release_healthy and ns.workflow == "cadence" and not _cadence_rpc_available():
+        print(
+            "Cadence gRPC unresponsive — dropping databases"
+            " and forcing full reinstall..."
+        )
+        subprocess.run(
+            [
+                "kubectl",
+                "exec",
+                "mysql",
+                "--",
+                "mysql",
+                "-uroot",
+                "-proot",
+                "-e",
+                "DROP DATABASE IF EXISTS cadence;"
+                " DROP DATABASE IF EXISTS cadence_visibility;",
+            ],
+            check=False,
+        )
+        release_healthy = False
+
     if release_healthy:
         # Healthy release: upgrade in-place, keeping infra running.
-        _exec(
-            "helm",
-            "upgrade",
-            "michelangelo",
-            str(_chart_dir),
-            "-f",
-            str(_chart_dir / "values-k3d.yaml"),
-            "--dependency-update",
-            "--reuse-values",
-            *helm_args,
+        _helm_upgrade_with_adoption(
+            [
+                "helm",
+                "upgrade",
+                "michelangelo",
+                str(_chart_dir),
+                "-f",
+                str(_chart_dir / "values-k3d.yaml"),
+                "--dependency-update",
+                "--reuse-values",
+                *helm_args,
+            ]
         )
+
+        if ns.workflow == "cadence":
+            # Ensure the Cadence domain exists. This is idempotent — if the
+            # domain is already registered, _create_cadence_domain returns
+            # immediately.
+            _create_cadence_domain(None)
         # Force-restart app deployments so they always pick up the latest
         # configmap values (helm upgrade only restarts pods when the pod
         # template spec changes, but values-only changes may not alter it).
+        # Also restart cadence-web in case it is stuck in Init (e.g. after a
+        # previous run inadvertently caused the cadence-schema Job to re-run).
         for deploy in (
             "michelangelo-apiserver",
             "michelangelo-controllermgr",
             "michelangelo-worker",
+            "michelangelo-cadence-web",
         ):
             subprocess.run(
                 [
@@ -494,6 +532,10 @@ def _sync(ns: argparse.Namespace):
             "--dependency-update",
             *helm_args,
         )
+        if ns.workflow == "cadence":
+            # Fresh install: wait for schema Job + Cadence to come up,
+            # then register the domain.
+            _create_cadence_domain(None)
 
     _helm_wait(ns)
 
@@ -542,6 +584,70 @@ def _refresh_mysql_schema():
         ],
         check=True,
     )
+
+
+def _refresh_cadence_schema():
+    """Drop the Cadence databases and schema job so Helm reinitializes them.
+
+    This drops cadence and cadence_visibility databases and deletes the
+    schema Job so the next helm upgrade recreates and applies the schema
+    to fresh databases. Cadence pod restarts are handled AFTER the schema
+    job completes (see the _sync flow) so the pods don't get stuck in Init.
+    """
+    print("Refreshing Cadence schema (drop + recreate cadence databases)...")
+    subprocess.run(
+        [
+            "kubectl",
+            "exec",
+            "mysql",
+            "--",
+            "mysql",
+            "-uroot",
+            "-proot",
+            "-e",
+            "DROP DATABASE IF EXISTS cadence;"
+            " DROP DATABASE IF EXISTS cadence_visibility;",
+        ],
+        check=True,
+    )
+    # Delete the completed/failed cadence schema Job so Helm recreates it
+    # during the upgrade and properly reinitializes the databases.
+    subprocess.run(
+        [
+            "kubectl",
+            "delete",
+            "job",
+            "-l",
+            "app.kubernetes.io/name=cadence,app.kubernetes.io/component=schema",
+            "--ignore-not-found=true",
+        ],
+        check=False,
+    )
+
+
+def _cadence_rpc_available():
+    """Return True if the Cadence gRPC port (7833) is accepting connections.
+
+    Runs a TCP connect from the mysql pod using bash /dev/tcp so no extra
+    tooling is required.  A refused connection means Cadence failed to start
+    its gRPC server (likely due to a corrupt or version-mismatched schema).
+    """
+    result = subprocess.run(
+        [
+            "kubectl",
+            "exec",
+            "mysql",
+            "--",
+            "bash",
+            "-c",
+            "timeout 3 bash -c"
+            " 'echo >/dev/tcp/michelangelo-cadence-frontend/7833'"
+            " 2>/dev/null && echo ok || echo fail",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    return "ok" in result.stdout
 
 
 def _helm_ensure_repos():
@@ -643,67 +749,95 @@ def _helm_delete_services(helm_args: list[str]):
 
 
 def _helm_adopt_orphaned_resources(helm_args: list[str]):
-    """Clean up resources that would block helm upgrade --install.
+    """Adopt resources that exist in the cluster without Helm ownership metadata.
 
-    Helm 3 refuses to manage resources missing its ownership annotations.
-    We render the chart manifests and for each resource that exists in the
-    cluster WITHOUT Helm ownership labels, we delete it so the install can
-    recreate it cleanly. Resources already managed by Helm (correct labels)
-    are left untouched.
+    Helm 3 refuses to manage resources that it did not create (missing
+    meta.helm.sh/* annotations). Rather than pre-scanning the entire chart,
+    we let helm upgrade fail, parse the error to find the specific blocking
+    resource, annotate only that resource, and retry — up to a small limit.
+
+    This surgical approach avoids side-effects from broad adoption (e.g.
+    causing Helm to delete-and-recreate immutable Jobs like cadence-schema).
     """
-    result = subprocess.run(
-        [
-            "helm",
-            "template",
-            "michelangelo",
-            str(_chart_dir),
-            "-f",
-            str(_chart_dir / "values-k3d.yaml"),
-            *helm_args,
-        ],
-        capture_output=True,
-        text=True,
+    pass  # logic moved into _helm_upgrade_with_adoption
+
+
+def _helm_upgrade_with_adoption(upgrade_cmd: list[str], max_adoption_retries: int = 10):
+    """Run a helm upgrade command, adopting blocking orphaned resources on failure.
+
+    If helm exits with an "exists and cannot be imported" ownership error,
+    parse the blocking resource, add the Helm ownership annotations/labels to
+    it, and retry the upgrade. Repeat until the upgrade succeeds or retries
+    are exhausted.
+
+    Jobs are intentionally skipped: they are immutable once complete and Helm
+    would delete-and-recreate them on adoption, causing schema jobs to re-run
+    against an already-initialised database.
+    """
+    import re
+
+    ownership_re = re.compile(
+        r'(\w+) "([^"]+)" in namespace "([^"]+)" exists and cannot be imported'
     )
-    if result.returncode != 0:
-        return
-    for doc in yaml.safe_load_all(result.stdout):
-        if not doc:
-            continue
-        kind = doc.get("kind", "")
-        name = (doc.get("metadata") or {}).get("name", "")
-        namespace = (doc.get("metadata") or {}).get("namespace", "default")
-        if not kind or not name:
-            continue
-        # Check if this resource exists and lacks Helm ownership annotations.
-        get_result = subprocess.run(
-            [
-                "kubectl",
-                "get",
-                f"{kind.lower()}/{name}",
-                "-n",
-                namespace,
-                "-o",
-                "jsonpath={.metadata.annotations.meta\\.helm\\.sh/release-name}",
-            ],
-            capture_output=True,
-            text=True,
-        )
-        if get_result.returncode != 0:
-            continue  # resource doesn't exist — no action needed
-        if get_result.stdout.strip() == "michelangelo":
-            continue  # already owned by this release — leave it
-        # Resource exists but is not owned by Helm — delete it so Helm can recreate.
+
+    for attempt in range(max_adoption_retries + 1):
+        print("[+]", " ".join(upgrade_cmd))
+        result = subprocess.run(upgrade_cmd, capture_output=True, text=True)
+        if result.returncode == 0:
+            print(result.stdout, end="")
+            return
+        # Print what helm said so it's visible in CI logs.
+        if result.stdout:
+            print(result.stdout, end="")
+        if result.stderr:
+            print(result.stderr, end="", file=sys.stderr)
+
+        if attempt == max_adoption_retries:
+            break
+
+        match = ownership_re.search(result.stderr)
+        if not match:
+            break  # not an ownership error — don't retry
+
+        kind, name, namespace = match.group(1), match.group(2), match.group(3)
+        if kind.lower() == "job":
+            # Jobs are immutable; adoption would cause Helm to recreate them.
+            # Skip and let the upgrade fail — manual cleanup is needed.
+            print(
+                f"WARNING: Job {namespace}/{name} blocks helm upgrade but "
+                "cannot be safely adopted (immutable). Skipping.",
+                file=sys.stderr,
+            )
+            break
+
+        print(f"Adopting orphaned {kind} {namespace}/{name} into Helm release...")
         subprocess.run(
             [
                 "kubectl",
-                "delete",
+                "annotate",
                 f"{kind.lower()}/{name}",
                 "-n",
                 namespace,
-                "--ignore-not-found=true",
+                "meta.helm.sh/release-name=michelangelo",
+                "meta.helm.sh/release-namespace=default",
+                "--overwrite",
             ],
             capture_output=True,
         )
+        subprocess.run(
+            [
+                "kubectl",
+                "label",
+                f"{kind.lower()}/{name}",
+                "-n",
+                namespace,
+                "app.kubernetes.io/managed-by=Helm",
+                "--overwrite",
+            ],
+            capture_output=True,
+        )
+
+    _err_exit("helm upgrade failed after adoption retries")
 
 
 def _deploy_app_services(ns: argparse.Namespace):
@@ -711,17 +845,18 @@ def _deploy_app_services(ns: argparse.Namespace):
     _ensure_credentials_secret()
     _helm_ensure_repos()
     helm_args = _build_helm_set_args(ns)
-    _helm_adopt_orphaned_resources(helm_args)
-    _exec(
-        "helm",
-        "upgrade",
-        "--install",
-        "michelangelo",
-        str(_chart_dir),
-        "-f",
-        str(_chart_dir / "values-k3d.yaml"),
-        "--dependency-update",
-        *helm_args,
+    _helm_upgrade_with_adoption(
+        [
+            "helm",
+            "upgrade",
+            "--install",
+            "michelangelo",
+            str(_chart_dir),
+            "-f",
+            str(_chart_dir / "values-k3d.yaml"),
+            "--dependency-update",
+            *helm_args,
+        ]
     )
     _helm_wait(ns)
 
@@ -734,10 +869,18 @@ def _helm_wait(ns: argparse.Namespace):
        Deployment object (created immediately by Helm) so there is no
        'no matching resources found' race. The apiserver runs a schema-init
        container so it takes 30-60s longer than the other services.
-    2. Wait for all remaining Helm-managed Deployments to become Available.
+    2. Wait for Michelangelo app Deployments to become Available. Cadence
+       sub-chart components (cadence-web, cadence-worker) are intentionally
+       excluded: cadence-web is a UI-only component not required for
+       integration tests, and a single stuck pod would cause kubectl wait
+       to exit early and incorrectly report all other pods as timed-out.
     """
     timeout = getattr(ns, "wait_timeout", 600)
     instance_selector = "app.kubernetes.io/instance=michelangelo"
+    # Exclude Cadence sub-chart pods (app.kubernetes.io/name=cadence).
+    # They are infrastructure; cadence-web in particular can be stuck in
+    # Init:0/1 without affecting workflow functionality.
+    app_selector = f"{instance_selector},app.kubernetes.io/name!=cadence"
 
     # Stage 1: apiserver Deployment (schema-init can take 30-60s)
     print("Waiting for apiserver to become available (schema-init runs first)...")
@@ -753,15 +896,40 @@ def _helm_wait(ns: argparse.Namespace):
 
     # Stage 2: remaining Helm-managed Deployments
     print("Waiting for remaining control plane services...")
-    _exec(
-        "kubectl",
-        "wait",
-        "deployment",
-        "-l",
-        instance_selector,
-        "--for=condition=available",
-        f"--timeout={timeout}s",
+    wait_result = subprocess.run(
+        [
+            "kubectl",
+            "wait",
+            "deployment",
+            "-l",
+            app_selector,
+            "--for=condition=available",
+            f"--timeout={timeout}s",
+        ]
     )
+    if wait_result.returncode != 0:
+        # Print pod state so CI logs show why pods are not ready.
+        print("--- pod status at timeout ---")
+        subprocess.run(
+            ["kubectl", "get", "pods", "-n", "default", "-o", "wide"],
+            check=False,
+        )
+        print("--- non-ready deployments ---")
+        subprocess.run(
+            [
+                "kubectl",
+                "get",
+                "deployments",
+                "-n",
+                "default",
+                "-l",
+                app_selector,
+                "-o",
+                "custom-columns=NAME:.metadata.name,READY:.status.readyReplicas,DESIRED:.spec.replicas,AVAILABLE:.status.availableReplicas",
+            ],
+            check=False,
+        )
+        _err_exit("timed out waiting for control plane services to become available")
 
 
 def _build_helm_set_args(ns: argparse.Namespace) -> list[str]:
@@ -1174,7 +1342,11 @@ def _create_cadence_domain(links):
         "--stdin",
         "--image",
         "ubercadence/cli:v1.2.6",
-        "--env=CADENCE_CLI_ADDRESS=michelangelo-cadence-frontend:7933",
+        # The Cadence helm chart defaults to rpcTransport=grpc so the server
+        # only binds gRPC (port 7833). TChannel (port 7933) is not started.
+        # Use grpc transport so the CLI can reach the frontend.
+        "--env=CADENCE_CLI_ADDRESS=michelangelo-cadence-frontend:7833",
+        "--env=CADENCE_CLI_TRANSPORT_PROTOCOL=grpc",
         "--command",
         "--",
         "cadence",
