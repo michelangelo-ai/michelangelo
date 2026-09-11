@@ -27,7 +27,7 @@ require (
 	github.com/stretchr/testify v1.11.1
 	github.com/tidwall/gjson v1.18.0
 	github.com/tidwall/sjson v1.2.5
-	github.com/uber-go/tally v3.5.10+incompatible
+	github.com/uber-go/tally v5.0.0+incompatible
 	github.com/uber-go/tally/v4 v4.1.1
 	go.starlark.net v0.0.0-20250128212104-d908c3ead437
 	go.temporal.io/api v1.49.1
