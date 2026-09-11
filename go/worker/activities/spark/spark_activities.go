@@ -15,6 +15,7 @@ import (
 
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	pluginutils "github.com/michelangelo-ai/michelangelo/go/worker/plugins/utils"
+	"github.com/michelangelo-ai/michelangelo/go/worker/runnertoken"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
@@ -70,6 +71,9 @@ func (r *activities) CreateSparkJob(ctx context.Context, request v2pb.CreateSpar
 	logger.Info("activity-id-extracted", zap.String("activityID", activityID))
 
 	// Execute the original job creation logic
+	if request.SparkJob != nil {
+		ctx = runnertoken.WithNamespace(ctx, request.SparkJob.Namespace)
+	}
 	createSparkJobResponse, err := r.sparkJobService.CreateSparkJob(ctx, &request)
 	if err != nil {
 		logger.Error("activity-error: failed to create spark job", zap.Error(err))
@@ -101,6 +105,7 @@ func (r *activities) CreateSparkJob(ctx context.Context, request v2pb.CreateSpar
 func (r *activities) GetSparkJob(ctx context.Context, request v2pb.GetSparkJobRequest) (*v2pb.GetSparkJobResponse, error) {
 	logger := log.FromContext(ctx)
 	logger.Info("activity-start", zap.Any("request", request))
+	ctx = runnertoken.WithNamespace(ctx, request.Namespace)
 	getSparkJobResponse, err := r.sparkJobService.GetSparkJob(ctx, &request)
 	if err != nil {
 		logger.Error(err, "activity-error")
@@ -133,6 +138,7 @@ func (r *activities) SensorSparkJob(ctx context.Context, request v2pb.GetSparkJo
 	logger := log.FromContext(ctx)
 	logger.Info("activity-start", zap.Any("request", request))
 
+	ctx = runnertoken.WithNamespace(ctx, request.Namespace)
 	getSparkJobResponse, err := r.sparkJobService.GetSparkJob(ctx, &request)
 	if err != nil {
 		logger.Error(err, "activity-error")
@@ -177,6 +183,7 @@ func (r *activities) TerminateSparkJob(ctx context.Context, request TerminateSpa
 		Namespace: request.Namespace,
 		Name:      request.Name,
 	}
+	ctx = runnertoken.WithNamespace(ctx, request.Namespace)
 	response, err := r.sparkJobService.GetSparkJob(ctx, &getRequest)
 	if err != nil {
 		logger.Error("activity-error", ext.ZapError(err)...)

@@ -1,0 +1,61 @@
+{{- /*
+User-facing roles for k8s-rbac auth mode. Operators grant API access by
+binding these in project namespaces (RoleBinding) or cluster-wide
+(ClusterRoleBinding); the apiserver's SubjectAccessReviews are evaluated
+against them. The resource names are the CRD plurals -- including
+"modelfamilys", which is what the ModelFamily CRD actually declares.
+Verbs are exactly the six actions the generated API handlers enforce.
+*/ -}}
+{{- if eq .Values.apiserver.auth.mode "k8s-rbac" }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: michelangelo-viewer
+  labels:
+    {{- include "michelangelo.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["michelangelo.api"]
+    resources:
+      - cachedoutputs
+      - clusters
+      - deployments
+      - evaluationreports
+      - inferenceservers
+      - modelfamilys
+      - models
+      - pipelineruns
+      - pipelines
+      - projects
+      - rayclusters
+      - rayjobs
+      - revisions
+      - sparkjobs
+      - triggerruns
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: michelangelo-editor
+  labels:
+    {{- include "michelangelo.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["michelangelo.api"]
+    resources:
+      - cachedoutputs
+      - clusters
+      - deployments
+      - evaluationreports
+      - inferenceservers
+      - modelfamilys
+      - models
+      - pipelineruns
+      - pipelines
+      - projects
+      - rayclusters
+      - rayjobs
+      - revisions
+      - sparkjobs
+      - triggerruns
+    verbs: ["get", "list", "create", "update", "delete", "deletecollection"]
+{{- end }}
