@@ -495,7 +495,12 @@ def _sync(ns: argparse.Namespace):
             *helm_args,
         )
 
-    _helm_wait(ns)
+    try:
+        _helm_wait(ns)
+    finally:
+        # Register the Cadence domain here too, even if _helm_wait() times out.
+        if ns.workflow == "cadence":
+            _create_cadence_domain([])
 
 
 def _refresh_mysql_schema():
