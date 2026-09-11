@@ -1,7 +1,7 @@
 """Tabular native transform workflow task."""
 
 from michelangelo.workflow.schema.exceptions import ConfigurationError
-from michelangelo.workflow.schema.tabular_native_transform import (
+from michelangelo.workflow.schema.native_transform import (
     BatchOptions,
     IncrementalTrainingConfig,
     ParquetReadConfig,

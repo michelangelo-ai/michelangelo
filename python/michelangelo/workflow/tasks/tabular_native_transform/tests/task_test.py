@@ -14,14 +14,16 @@ pytest.importorskip("pydantic")
 from michelangelo.lib.artifact_manager.storage_backend import (  # noqa: E402
     LocalStorageBackend,
 )
-from michelangelo.workflow.schema.exceptions import ConfigurationError  # noqa: E402
-from michelangelo.workflow.schema.ray_data_io import RayDataContextConfig  # noqa: E402
-from michelangelo.workflow.schema.tabular_native_transform import (  # noqa: E402
-    BatchOptions,
+from michelangelo.workflow.schema.common import (  # noqa: E402
     IncrementalTrainingConfig,
-    TabularNativeTransformConfig,
     TrainingTypeConfig,
 )
+from michelangelo.workflow.schema.exceptions import ConfigurationError  # noqa: E402
+from michelangelo.workflow.schema.native_transform import (  # noqa: E402
+    BatchOptions,
+    TabularNativeTransformConfig,
+)
+from michelangelo.workflow.schema.ray_data_io import RayDataContextConfig  # noqa: E402
 from michelangelo.workflow.tasks.tabular_native_transform._private import (  # noqa: E402
     incremental_training,
 )

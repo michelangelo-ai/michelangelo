@@ -8,8 +8,11 @@ Plain ``@dataclass`` with no Pydantic dependency, matching
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import Enum
 
+from michelangelo.workflow.schema.common import (
+    IncrementalTrainingConfig,
+    TrainingTypeConfig,
+)
 from michelangelo.workflow.schema.ray_data_io import (
     ParquetReadConfig,
     RayDataContextConfig,
@@ -25,76 +28,6 @@ __all__ = [
     "TrainingTypeConfig",
     "WriteConfig",
 ]
-
-
-class TrainingTypeConfig(str, Enum):
-    """Incremental-training mode for ``tabular_native_transform``.
-
-    A config-layer value, parsed directly from pipeline configuration —
-    distinct from (and not interchangeable with) any runtime-layer
-    incremental-training enum a trainer task might construct from it. Trainer
-    tasks that build their own runtime training state are expected to derive
-    it from their own config, not from this type.
-
-    Attributes:
-        INVALID: Not set; treated the same as a fresh (non-incremental) run.
-        BASE: A base run whose fitted transform can later be reused/refit by
-            an ``INCREMENTAL`` run.
-        INCREMENTAL: Reuse (and optionally selectively refit) a base run's
-            fitted transform spec and feature statistics.
-
-    Example:
-        >>> TrainingTypeConfig.INCREMENTAL.value
-        'INCREMENTAL'
-    """
-
-    INVALID = "INVALID"
-    BASE = "BASE"
-    INCREMENTAL = "INCREMENTAL"
-
-
-@dataclass
-class IncrementalTrainingConfig:
-    """Incremental-training configuration for ``tabular_native_transform``.
-
-    A config-layer type read directly from pipeline configuration for this
-    task specifically. It is intentionally distinct from any runtime-layer
-    incremental-training spec a trainer task might build for its own model
-    training — the two live at different layers (parsed configuration vs.
-    constructed runtime state) and are not meant to be unified. Scoped to
-    only the fields this task uses: a shared, more general equivalent
-    configuration (as consumed by a model-initializer-style task elsewhere)
-    would also carry fields like ``load_optimizer_weights`` and
-    ``fused_model_submodule`` that are meaningless here — this config
-    intentionally omits them rather than porting unused surface area.
-
-    Attributes:
-        training_type: Whether this run is a base run, an incremental run,
-            or neither (``INVALID``).
-        baseline_model_uri: URI of the base run's raw model package, as
-            returned by ``StorageBackend.upload()`` — passed directly to
-            ``StorageBackend.download()`` to retrieve
-            ``transform_spec.yaml``/``transform_feature_stats.yaml`` from its
-            metadata directory. Required when ``training_type ==
-            TrainingTypeConfig.INCREMENTAL``.
-        enforce_full_reuse: When ``True`` and ``training_type ==
-            TrainingTypeConfig.INCREMENTAL``, every layer in the (optional)
-            inlined ``transform_spec`` must use
-            :attr:`~michelangelo.lib.native_transform.torch.transform_layer_spec.TransformerMode.REUSE`
-            (or the default ``INVALID``, which behaves as ``REUSE``) — no
-            refitting allowed. This is the only supported setting for now.
-
-    Example:
-        >>> IncrementalTrainingConfig(
-        ...     training_type=TrainingTypeConfig.INCREMENTAL,
-        ...     baseline_model_uri="s3://bucket/models/base-run/",
-        ... ).enforce_full_reuse
-        True
-    """
-
-    training_type: TrainingTypeConfig = TrainingTypeConfig.INVALID
-    baseline_model_uri: str | None = None
-    enforce_full_reuse: bool = True
 
 
 @dataclass

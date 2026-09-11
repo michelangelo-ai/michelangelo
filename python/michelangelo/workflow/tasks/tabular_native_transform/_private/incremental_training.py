@@ -23,11 +23,11 @@ from michelangelo.lib.native_transform.torch.transform_layer_spec import (
 )
 from michelangelo.lib.native_transform.torch.transform_spec import TransformSpec
 from michelangelo.uniflow.plugins.ray.native_transform import get_numerical_stats_names
-from michelangelo.workflow.schema.exceptions import ConfigurationError
-from michelangelo.workflow.schema.tabular_native_transform import (
+from michelangelo.workflow.schema.common import (
     IncrementalTrainingConfig,
     TrainingTypeConfig,
 )
+from michelangelo.workflow.schema.exceptions import ConfigurationError
 
 if TYPE_CHECKING:
     from michelangelo.lib.artifact_manager.storage_backend import StorageBackend

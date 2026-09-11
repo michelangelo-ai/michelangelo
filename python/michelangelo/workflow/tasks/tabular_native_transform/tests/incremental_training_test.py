@@ -21,11 +21,11 @@ from michelangelo.lib.native_transform.torch.transform_layer_spec import (  # no
 from michelangelo.lib.native_transform.torch.transform_spec import (  # noqa: E402
     TransformSpec,
 )
-from michelangelo.workflow.schema.exceptions import ConfigurationError  # noqa: E402
-from michelangelo.workflow.schema.tabular_native_transform import (  # noqa: E402
+from michelangelo.workflow.schema.common import (  # noqa: E402
     IncrementalTrainingConfig,
     TrainingTypeConfig,
 )
+from michelangelo.workflow.schema.exceptions import ConfigurationError  # noqa: E402
 from michelangelo.workflow.tasks.tabular_native_transform._private import (  # noqa: E402
     incremental_training,
 )
@@ -84,6 +84,17 @@ class IsIncrementalIsBaselineTest(TestCase):
     def test_is_baseline_none_config(self):
         """A None config is not a baseline run."""
         self.assertFalse(incremental_training.is_baseline(None))
+
+    def test_default_training_type_is_neither(self):
+        """Default (unset) training_type is neither incremental nor baseline.
+
+        Preserves the behavior the removed ``INVALID`` sentinel used to
+        provide, now represented as ``None``.
+        """
+        cfg = IncrementalTrainingConfig()
+        self.assertIsNone(cfg.training_type)
+        self.assertFalse(incremental_training.is_incremental(cfg))
+        self.assertFalse(incremental_training.is_baseline(cfg))
 
 
 class LoadIncrementalArtifactsTest(TestCase):

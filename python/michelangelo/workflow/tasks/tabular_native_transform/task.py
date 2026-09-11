@@ -49,10 +49,10 @@ from michelangelo.workflow.variables.types import NativeTransformResult
 
 if TYPE_CHECKING:
     from michelangelo.lib.artifact_manager.storage_backend import StorageBackend
-    from michelangelo.workflow.schema.ray_data_io import WriteConfig
-    from michelangelo.workflow.schema.tabular_native_transform import (
+    from michelangelo.workflow.schema.native_transform import (
         TabularNativeTransformConfig,
     )
+    from michelangelo.workflow.schema.ray_data_io import WriteConfig
 
 _logger = logging.getLogger(__name__)
 
