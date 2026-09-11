@@ -87,12 +87,12 @@ RUN mkdir -p ${SPARK_HOME}/conf && \
 ### Install Java
 ###
 
-# Detect JAVA_HOME at build time so the image works on both arm64 and amd64.
-RUN JAVA_HOME=$(dirname $(dirname $(readlink -f $(which java)))) && \
-    echo "JAVA_HOME=${JAVA_HOME}" >> /etc/environment && \
-    echo "export JAVA_HOME=${JAVA_HOME}" >> /etc/profile.d/java.sh
-ARG TARGETARCH=amd64
-ENV JAVA_HOME=/usr/lib/jvm/java-11-openjdk-${TARGETARCH}
+# Detect the actual installed JDK path at build time and pin a stable,
+# arch-independent symlink to it (works regardless of how/whether TARGETARCH
+# is populated by the builder).
+RUN ln -sfn "$(dirname "$(dirname "$(readlink -f "$(which java)")")")" /usr/lib/jvm/default-java
+
+ENV JAVA_HOME=/usr/lib/jvm/default-java
 ENV PATH="${JAVA_HOME}/bin:${PATH}"
 
 # Set working directory

@@ -18,14 +18,18 @@ var Module = fx.Options(
 // register registers the activities for Spark cluster and job operations to the provided workers.
 //
 // Params:
-// - workers ([]worker.Worker): A list of Cadence workers where activities will be registered.
-// - sparkJob (v2pb.SparkJobServiceYARPCClient): YARPC client for Spark job operations.
+//   - workers ([]worker.Worker): A list of Cadence workers where activities will be registered.
+//   - sparkJob (v2pb.SparkJobServiceYARPCClient): YARPC client for Spark job operations.
+//   - pipelineRunService (v2pb.PipelineRunServiceYARPCClient): YARPC client used to read a
+//     pipeline run's live RetryInfo for retry-aware cache decisions.
 func register(workers []worker.Worker,
-	co v2pb.CachedOutputServiceYARPCClient) {
+	co v2pb.CachedOutputServiceYARPCClient,
+	pipelineRunService v2pb.PipelineRunServiceYARPCClient) {
 
 	// Initialize the activities struct with the YARPC clients for Spark services.
 	a := &activities{
-		cachedOutput: co,
+		cachedOutput:       co,
+		pipelineRunService: pipelineRunService,
 	}
 
 	// Register the activities with each worker.

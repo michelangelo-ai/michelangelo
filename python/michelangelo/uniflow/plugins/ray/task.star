@@ -107,7 +107,7 @@ def task(
         namespace = os.environ.get("MA_NAMESPACE", "default")
         start_time_seconds = time.time()
         start_time_formated_str = time.utc_format_seconds(TIME_FOMART, start_time_seconds)
-        final_cache_enabled = get_cache_enabled(cache_enabled, task_name)
+        final_cache_enabled, first_activity_id = get_cache_enabled(cache_enabled, task_name, namespace, task_path)
         if final_cache_enabled:  # Check if the result is cached
             cache_keys = get_cache_keys(task_path, task_name, args, kwargs, cache_version, CACHE_OPERATION_GET)
             print("ray | cache enabled with key", "key:", cache_keys)
@@ -128,6 +128,7 @@ def task(
                         end_time = end_time_formated_str,
                         output = cached_output.get("metadata", {}).get("name", ""),
                         retry_attempt_id = "",
+                        first_activity_id = first_activity_id,
                     )
                     result = io_read_json(cached_result_json_url)
                     print("ray | cached", "result:", result)
@@ -198,6 +199,7 @@ def task(
             job_state, job, cluster_url, ray_job_name = execute_ray_task(
                 task_path = task_path,
                 task_name = task_name,
+                first_activity_id = first_activity_id,
                 cluster = cluster,
                 cluster_namespace = cluster_namespace,
                 runtime_env = runtime_env,
@@ -267,7 +269,7 @@ def task(
     callable.with_overrides = with_overrides
     return callable
 
-def execute_ray_task(task_path, task_name, cluster, cluster_namespace, runtime_env, start_time_formated_str, result_url, args, kwargs, retry_attempt_id, total_retry_attempt, cache_version, namespace, breakpoint = False):
+def execute_ray_task(task_path, task_name, cluster, cluster_namespace, runtime_env, start_time_formated_str, result_url, args, kwargs, retry_attempt_id, total_retry_attempt, cache_version, namespace, breakpoint = False, first_activity_id = ""):
     print("Ray job running, attempt (" + str(retry_attempt_id) + " / " + str(total_retry_attempt) + ")")
     report_progress(
         task_path = task_path,
@@ -278,12 +280,16 @@ def execute_ray_task(task_path, task_name, cluster, cluster_namespace, runtime_e
         start_time = start_time_formated_str,
         end_time = "",
         retry_attempt_id = retry_attempt_id,
+        first_activity_id = first_activity_id,
     )
 
     cluster_response = ray.create_cluster(cluster, timeout_seconds = DEFAULT_CREATE_CLUSTER_TIMEOUT_SECONDS)
 
     cluster = cluster_response["rayCluster"]
-    first_activity_id = cluster_response["activityId"]
+
+    # The retry reset anchor: the cache decision activity when one ran, else the
+    # cluster creation (explicit cache_enabled=True never consults the backend).
+    first_activity_id = first_activity_id or cluster_response["activityId"]
 
     print("ray | first activity ID:", first_activity_id)
 
@@ -343,7 +349,7 @@ def execute_ray_task(task_path, task_name, cluster, cluster_namespace, runtime_e
                     job.get("metadata", {}).get("name", cluster_name))
     generated_log_url = get_ray_log_url(ray_job_name)
     log_url = generated_log_url if generated_log_url else cluster_url
-    atexit.register(report_ray_task_result, job, task_path, task_name, cluster_url, start_time_formated_str, args, kwargs, retry_attempt_id, cache_version, namespace, result_url)
+    atexit.register(report_ray_task_result, job, task_path, task_name, cluster_url, start_time_formated_str, args, kwargs, retry_attempt_id, cache_version, namespace, result_url, first_activity_id)
 
     if breakpoint:
         print("ray | breakpoint:", "ns=" + cluster_namespace, "n=" + cluster_name)
@@ -354,7 +360,7 @@ def execute_ray_task(task_path, task_name, cluster, cluster_namespace, runtime_e
         fail(err_message)
 
     # Terminate cluster
-    job_state = report_ray_task_result(job, task_path, task_name, cluster_url, start_time_formated_str, args, kwargs, retry_attempt_id, cache_version, namespace, result_url)
+    job_state = report_ray_task_result(job, task_path, task_name, cluster_url, start_time_formated_str, args, kwargs, retry_attempt_id, cache_version, namespace, result_url, first_activity_id)
     if job_state == TASK_STATE_SUCCEEDED:
         ray.terminate_cluster(cluster_name, cluster_namespace, "job succeeded", "TERMINATION_TYPE_SUCCEEDED")
     else:
@@ -369,7 +375,7 @@ def terminate_cluster(cluster_namespace, cluster_name):
     ray.terminate_cluster(cluster_name, cluster_namespace, "job failed", "TERMINATION_TYPE_FAILED")
     print("ray | cluster terminated:", "ns=" + cluster_namespace, "n=" + cluster_name)
 
-def report_ray_task_result(job, task_path, task_name, cluster_url, start_time_formated_str, args, kwargs, retry_attempt_id, cache_version, namespace, result_url):
+def report_ray_task_result(job, task_path, task_name, cluster_url, start_time_formated_str, args, kwargs, retry_attempt_id, cache_version, namespace, result_url, first_activity_id = ""):
     end_time_seconds = time.time()
     end_time_formated_str = time.utc_format_seconds(TIME_FOMART, end_time_seconds)
 
@@ -396,6 +402,7 @@ def report_ray_task_result(job, task_path, task_name, cluster_url, start_time_fo
             end_time = end_time_formated_str,
             output = cached_output_name,
             retry_attempt_id = retry_attempt_id,
+            first_activity_id = first_activity_id,
             input = input_str,
         )
         return TASK_STATE_SUCCEEDED
@@ -412,6 +419,7 @@ def report_ray_task_result(job, task_path, task_name, cluster_url, start_time_fo
             end_time = end_time_formated_str,
             output = cached_output_name,
             retry_attempt_id = retry_attempt_id,
+            first_activity_id = first_activity_id,
             input = input_str,
         )
         return TASK_STATE_KILLED
@@ -430,6 +438,7 @@ def report_ray_task_result(job, task_path, task_name, cluster_url, start_time_fo
             end_time = end_time_formated_str,
             output = cached_output_name,
             retry_attempt_id = retry_attempt_id,
+            first_activity_id = first_activity_id,
             input = input_str,
         )
         return TASK_STATE_FAILED
