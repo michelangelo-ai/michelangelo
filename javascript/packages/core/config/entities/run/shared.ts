@@ -3,6 +3,7 @@ import { interpolate } from '#core/interpolation/interpolate';
 
 import type { Cell } from '#core/components/cell/types';
 import type { TagColor } from '#core/components/tag/types';
+import type { RunWithManifest } from './types';
 
 /**
  * Labels for `PipelineRunStepState`, keyed by the proto enum value.
@@ -139,3 +140,20 @@ export const SHARED_RUN_CELL_CONFIG: Cell[] = [
   RUN_TRIGGERED_BY_COLUMN,
   RUN_STATE_COLUMN,
 ];
+
+/**
+ * Resolves the pipeline configuration a run executes, unpacked from the manifest's
+ * `content` envelope by the rpc layer. Prefers the snapshot captured when the run started
+ * (`status.sourcePipeline`) and falls back to the inline dev-run spec before that snapshot
+ * has been resolved. Shared by the Information and Pipeline Configuration tabs.
+ */
+export function getRunManifestContent(
+  run: RunWithManifest | undefined
+): Record<string, unknown> | undefined {
+  const sourcePipeline = run?.status?.sourcePipeline;
+  const manifest =
+    sourcePipeline?.pipeline?.spec?.manifest ??
+    sourcePipeline?.draftPipeline?.spec?.manifest ??
+    run?.spec?.pipelineSpec?.manifest;
+  return manifest?.content?.value;
+}
