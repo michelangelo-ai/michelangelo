@@ -107,7 +107,7 @@ jobs:
 
       - name: Post Go API diff comment
         if: steps.apidiff.outputs.breaking == 'true'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -184,7 +184,7 @@ jobs:
 
       - name: Post proto breaking change comment
         if: steps.buf-breaking.outputs.HAS_OUTPUT == 'true'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -269,7 +269,7 @@ jobs:
 
       - name: Post Helm values diff comment
         if: steps.helm-diff.outputs.HAS_REMOVED == 'true'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
