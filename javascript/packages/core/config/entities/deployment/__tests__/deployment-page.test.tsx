@@ -565,3 +565,87 @@ describe('Deployment retire action', () => {
     await waitFor(() => expect(request.getCall('UpdateDeployment')).toBeDefined());
   });
 });
+
+describe('Deployment delete action', () => {
+  const DEPLOYMENT_ACTIONS = DEPLOYMENT_ENTITY_CONFIG.actions as ActionConfigSchema<Data>[];
+
+  const DEPLOYMENT_NAME = 'test-delete-action';
+  const NAMESPACE = 'ma-dev-test';
+
+  function buildRecord() {
+    return {
+      metadata: {
+        name: DEPLOYMENT_NAME,
+        namespace: NAMESPACE,
+        creationTimestamp: { seconds: 1757019547 },
+      },
+      spec: {
+        desiredRevision: { name: 'bert-cola-37', namespace: NAMESPACE },
+        target: { case: 'inferenceServer', value: { name: 'inference-server-example' } },
+      },
+      status: {},
+    };
+  }
+
+  async function openDeleteDialog(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(screen.getByRole('button', { name: 'Actions' }));
+    await user.click(await screen.findByRole('option', { name: 'Delete' }));
+    return screen.findByRole('dialog', {
+      name: `Are you sure you want to delete “${DEPLOYMENT_NAME}” ?`,
+    });
+  }
+
+  function findDeleteDeploymentCall(request: ReturnType<typeof createQueryMockRouter>) {
+    return vi.mocked(request).mock.calls.find(([name]) => name === 'DeleteDeployment');
+  }
+
+  it('warns in the dialog, sends nothing on cancel, then deletes the record and toasts on confirm', async () => {
+    const user = userEvent.setup();
+    const request = createQueryMockRouter({ DeleteDeployment: {} });
+
+    render(
+      <InterpolatableActionsPopover actions={DEPLOYMENT_ACTIONS} record={buildRecord()} />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getErrorProviderWrapper(),
+        getIconProviderWrapper(),
+        getInterpolationProviderWrapper(),
+        getRouterWrapper({ location: `/${NAMESPACE}/deploy/deployments/${DEPLOYMENT_NAME}` }),
+        getServiceProviderWrapper({ request }),
+        getSnackbarProviderWrapper(),
+      ])
+    );
+
+    let dialog = await openDeleteDialog(user);
+    expect(
+      within(dialog).getByText(
+        'We will perform retirement process first and then the deployment will be deleted. This process will take few minutes to complete.'
+      )
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByText(
+        'If there are any online existing prediction requests or offline pipeline runs in this deployment this call will fail.'
+      )
+    ).toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(findDeleteDeploymentCall(request)).toBeUndefined();
+
+    dialog = await openDeleteDialog(user);
+    await user.click(within(dialog).getByRole('button', { name: 'Yes, delete' }));
+
+    await waitFor(() => expect(findDeleteDeploymentCall(request)).toBeDefined());
+
+    // The handler reshapes the record into { name, namespace }; the action itself
+    // submits the record unchanged.
+    const payload = findDeleteDeploymentCall(request)?.[1] as {
+      metadata: { name: string; namespace: string };
+    };
+    expect(payload.metadata.name).toBe(DEPLOYMENT_NAME);
+    expect(payload.metadata.namespace).toBe(NAMESPACE);
+
+    expect(
+      await screen.findByText('Deployment has been deleted. This process may take a few seconds.')
+    ).toBeInTheDocument();
+  });
+});
