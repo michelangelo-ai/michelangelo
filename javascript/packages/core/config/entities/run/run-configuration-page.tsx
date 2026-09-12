@@ -7,6 +7,7 @@ import { CircleExclamationMark } from '#core/components/illustrations/circle-exc
 import { CircleExclamationMarkKind } from '#core/components/illustrations/circle-exclamation-mark/types';
 import { Signpost } from '#core/components/signpost/signpost';
 import { TextEditor } from '#core/components/text-editor/text-editor';
+import { getRunManifestContent } from './shared';
 
 import type { PipelineRun } from './types';
 
@@ -16,12 +17,7 @@ export function RunConfigurationPage({ data, isLoading }: { data?: object; isLoa
   // cast: custom detail pages receive the entity as a plain object; narrowing to the
   // expected proto shape for property access; see #1425
   const run = data as PipelineRun | undefined;
-  const sourcePipeline = run?.status?.sourcePipeline;
-  const manifest =
-    sourcePipeline?.pipeline?.spec?.manifest ??
-    sourcePipeline?.draftPipeline?.spec?.manifest ??
-    run?.spec?.pipelineSpec?.manifest;
-  const config = manifest?.content?.value;
+  const config = getRunManifestContent(run);
 
   if (isLoading) {
     return <Skeleton animation height="400px" width="100%" />;
