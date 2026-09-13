@@ -209,6 +209,16 @@ interface TableOptionalProps<T extends TableData = TableData> {
    * @default undefined
    */
   actions?: React.ComponentType<{ row: TableRow<T> }>;
+
+  /**
+   * @description
+   * Caps the height of the scrollable table area (any CSS length). Rows beyond the cap scroll
+   * vertically while the header stays pinned. Useful for embedded tables whose row count is
+   * unbounded but which must not push the rest of the page down.
+   *
+   * @default undefined
+   */
+  maxHeight?: string;
 }
 
 /**

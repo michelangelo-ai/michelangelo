@@ -1,5 +1,10 @@
 import { CellType } from '#core/components/cell/constants';
-import { DEPLOYMENT_STAGE_CELL, DEPLOYMENT_STATE_CELL } from './shared';
+import {
+  DEPLOYMENT_STAGE_CELL,
+  DEPLOYMENT_STATE_CELL,
+  DEPLOYMENT_TARGET_CELL,
+  DEPLOYMENT_TYPE_CELL,
+} from './shared';
 
 import type { ColumnConfig } from '#core/components/table/types/column-types';
 import type { ListViewConfig } from '#core/components/views/types';
@@ -16,34 +21,9 @@ const DEPLOYMENT_COLUMNS: ColumnConfig<object>[] = [
     label: 'Model',
     type: CellType.TEXT,
   },
-  {
-    id: 'spec.definition.type',
-    label: 'Type',
-    type: CellType.TAG,
-    accessor: (data: unknown) => {
-      // cast: accessor receives unknown data; narrowing to expected proto shape for property
-      // access; see #1425
-      const type = (data as { spec?: { definition?: { type?: string } } })?.spec?.definition?.type;
-      if (!type) return null;
-      if (type === 'TARGET_TYPE_OFFLINE') return 'Offline';
-      if (type === 'TARGET_TYPE_MOBILE') return 'Mobile';
-      return 'Online';
-    },
-  },
+  DEPLOYMENT_TYPE_CELL,
   DEPLOYMENT_STAGE_CELL,
-  {
-    id: 'spec.inferenceServer.name',
-    label: 'Target',
-    type: CellType.TEXT,
-    accessor: (data: unknown) => {
-      // cast: accessor receives unknown data; narrowing to expected proto shape for property
-      // access; see #1425
-      const target = (data as { spec?: { target?: { case?: string; value?: { name?: string } } } })
-        ?.spec?.target;
-      if (target?.case === 'inferenceServer') return target.value?.name ?? null;
-      return null;
-    },
-  },
+  DEPLOYMENT_TARGET_CELL,
   {
     id: 'spec.owner.name',
     label: 'Owner',

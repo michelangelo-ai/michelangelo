@@ -52,6 +52,9 @@ export interface TableConfig<T extends TableData = TableData> {
   /** Whether to enable sticky sides in the table */
   enableStickySides?: boolean;
 
+  /** Caps the scrollable table area's height (CSS length); rows beyond it scroll under a pinned header */
+  maxHeight?: string;
+
   /** Optional actions to render in each table row */
   actions?: ActionConfigSchema<T>[];
 }

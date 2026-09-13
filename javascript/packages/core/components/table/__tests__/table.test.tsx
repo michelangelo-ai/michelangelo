@@ -2448,6 +2448,38 @@ describe('Table', () => {
     });
   });
 
+  describe('maxHeight', () => {
+    it('caps the scroll container and pins the header when set', () => {
+      render(
+        <Table data={buildTableData(3, 2)} columns={buildTableColumns(2)} maxHeight="200px" />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getInterpolationProviderWrapper(),
+          getRouterWrapper(),
+        ])
+      );
+
+      const table = screen.getByRole('table');
+      expect(table.parentElement).toHaveStyle({ maxHeight: '200px', overflow: 'auto' });
+      expect(table.querySelector('thead')).toHaveStyle({ position: 'sticky', top: '0px' });
+    });
+
+    it('leaves the container unbounded and the header static by default', () => {
+      render(
+        <Table data={buildTableData(3, 2)} columns={buildTableColumns(2)} />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getInterpolationProviderWrapper(),
+          getRouterWrapper(),
+        ])
+      );
+
+      const table = screen.getByRole('table');
+      expect(table.parentElement).not.toHaveStyle({ maxHeight: '200px' });
+      expect(table.querySelector('thead')).not.toHaveStyle({ position: 'sticky' });
+    });
+  });
+
   describe('row expansion integration', () => {
     const testData = [
       { id: '1', name: 'Alice Johnson', department: 'Engineering' },

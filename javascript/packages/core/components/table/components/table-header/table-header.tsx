@@ -27,11 +27,24 @@ export const TableHeader = <T extends TableData = TableData>({
   onToggleSelection,
   enableStickySides,
   scrollRatio,
+  stickyHeader = false,
 }: TableHeaderProps<T>) => {
   const [css, theme] = useStyletron();
 
   return (
-    <StyledTableHead>
+    <StyledTableHead
+      className={
+        stickyHeader
+          ? css({
+              position: 'sticky',
+              top: 0,
+              // Above the sticky-side body cells, which otherwise paint over the header.
+              zIndex: 2,
+              backgroundColor: theme.colors.tableHeadBackgroundColor,
+            })
+          : undefined
+      }
+    >
       <StickySidesTableHeadRow
         enableStickySides={enableStickySides}
         enableRowSelection={enableRowSelection}
