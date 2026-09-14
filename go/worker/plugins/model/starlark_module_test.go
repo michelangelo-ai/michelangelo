@@ -12,12 +12,81 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/utils"
 
 	modelactivities "github.com/michelangelo-ai/michelangelo/go/worker/activities/model"
+	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type Test struct {
 	suite.Suite
 	service.TestSuite
 	env *service.TestEnvironment
+}
+
+func (r *Test) TestDeployModel() {
+	env := r.env.Cadence.GetTestWorkflowEnvironment()
+	env.RegisterActivity(modelactivities.Activities.DeployModel)
+	env.RegisterActivity(modelactivities.Activities.DeploymentSensor)
+	created := &v2pb.Deployment{
+		ObjectMeta: metav1.ObjectMeta{Name: "retrain-deployment", Namespace: "default"},
+		Spec: v2pb.DeploymentSpec{DesiredRevision: &apipb.ResourceIdentifier{
+			Name: "trained-model", Namespace: "default",
+		}},
+	}
+	complete := created.DeepCopy()
+	complete.Status = v2pb.DeploymentStatus{
+		State: v2pb.DEPLOYMENT_STATE_HEALTHY,
+		Stage: v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE,
+		CurrentRevision: &apipb.ResourceIdentifier{
+			Name: "trained-model", Namespace: "default",
+		},
+	}
+	env.OnActivity(modelactivities.Activities.DeployModel, mock.Anything, &modelactivities.DeployModelRequest{
+		Namespace:           "default",
+		DeploymentName:      "retrain-deployment",
+		PipelineRunName:     "child-run",
+		InferenceServerName: "inference-server",
+		Actor:               "integration-test",
+	}).Once().Return(&modelactivities.DeployModelResponse{Deployment: created, ModelName: "trained-model"}, nil)
+	env.OnActivity(modelactivities.Activities.DeploymentSensor, mock.Anything, &modelactivities.DeploymentSensorRequest{
+		Namespace: "default", DeploymentName: "retrain-deployment", ModelName: "trained-model",
+	}).Once().Return(complete, nil)
+
+	r.env.Cadence.ExecuteFunction("/test.star", "test_deploy_model", nil, nil, nil)
+	require := r.Require()
+	var response *starlark.Dict
+	require.NoError(r.env.Cadence.GetResult(&response))
+
+	expected := map[string]interface{}{
+		"metadata": map[string]interface{}{"name": "retrain-deployment", "namespace": "default"},
+		"model":    map[string]interface{}{"name": "trained-model", "namespace": "default"},
+		"status": map[string]interface{}{
+			"state": "DEPLOYMENT_STATE_HEALTHY", "stage": "DEPLOYMENT_STAGE_ROLLOUT_COMPLETE",
+		},
+	}
+	var actual map[string]interface{}
+	require.NoError(utils.AsGo(response, &actual))
+	require.Equal(expected, actual)
+}
+
+func (r *Test) TestDeployModelRollbackFails() {
+	env := r.env.Cadence.GetTestWorkflowEnvironment()
+	env.RegisterActivity(modelactivities.Activities.DeployModel)
+	env.RegisterActivity(modelactivities.Activities.DeploymentSensor)
+	deployment := &v2pb.Deployment{
+		ObjectMeta: metav1.ObjectMeta{Name: "retrain-deployment", Namespace: "default"},
+		Status: v2pb.DeploymentStatus{
+			Stage:   v2pb.DEPLOYMENT_STAGE_ROLLBACK_COMPLETE,
+			Message: "health check failed",
+		},
+	}
+	env.OnActivity(modelactivities.Activities.DeployModel, mock.Anything, mock.Anything).Once().Return(
+		&modelactivities.DeployModelResponse{Deployment: deployment, ModelName: "trained-model"}, nil)
+	env.OnActivity(modelactivities.Activities.DeploymentSensor, mock.Anything, mock.Anything).Once().Return(deployment, nil)
+	r.env.Cadence.ExecuteFunction("/test.star", "test_deploy_model", nil, nil, nil)
+	var response *starlark.Dict
+	err := r.env.Cadence.GetResult(&response)
+	r.Require().Error(err)
 }
 
 func TestSuite(t *testing.T) { suite.Run(t, new(Test)) }
@@ -86,7 +155,7 @@ func (r *Test) TestModelSearch() {
 func (r *Test) TestModelSearchWithActivityError() {
 	env := r.env.Cadence.GetTestWorkflowEnvironment()
 	env.RegisterActivity(modelactivities.Activities.ModelSearch)
-	env.OnActivity(modelactivities.Activities.ModelSearch, mock.Anything, mock.Anything).Once().Return(nil, cadence.NewCustomError("activity error"))
+	env.OnActivity(modelactivities.Activities.ModelSearch, mock.Anything, mock.Anything).Once().Return(nil, cadence.NewCustomError("400", "activity error"))
 	r.env.Cadence.ExecuteFunction("/test.star", "test_model_search", nil, nil, nil)
 	require := r.Require()
 	var res any

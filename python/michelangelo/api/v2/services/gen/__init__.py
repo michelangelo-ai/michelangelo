@@ -28,6 +28,7 @@ def _wire(target, context):
 
 class ServicesGen(object):
     CachedOutputService = None
+    DeploymentService = None
     EvaluationReportService = None
     ModelService = None
     ModelFamilyService = None
