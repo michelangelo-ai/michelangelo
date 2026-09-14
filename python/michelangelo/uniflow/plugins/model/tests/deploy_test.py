@@ -193,6 +193,208 @@ class TestDeployModel(TestCase):
                 timeout_seconds=60,
             )
 
+    def test_existing_deployment_updates_model_and_actor(self):
+        """An existing deployment advances to the new model and actor."""
+        existing = _complete_deployment("old-model")
+        existing.spec.owner.name = "old-actor"
+        complete = _complete_deployment()
+        self.deployment_service.get_deployment.side_effect = [existing, complete]
+        self.deployment_service.update_deployment.side_effect = (
+            lambda deployment, update_options: deployment
+        )
+
+        with self._api_patch(), patch(f"{_MODULE}.time.sleep"):
+            result = deploy_model(
+                namespace="default",
+                deployment_name="retrain-deployment",
+                pipeline_run_name="child-run",
+                inference_server_name="inference-server",
+                actor="new-actor",
+                timeout_seconds=60,
+                poll_seconds=1,
+            )
+
+        updated = self.deployment_service.update_deployment.call_args.kwargs[
+            "deployment"
+        ]
+        self.assertEqual(updated.spec.desired_revision.name, "trained-model")
+        self.assertEqual(updated.spec.owner.name, "new-actor")
+        self.assertEqual(result["model"]["name"], "trained-model")
+
+    def test_get_deployment_unexpected_error_is_propagated(self):
+        """Only a not-found read enters the create path."""
+        self.deployment_service.get_deployment.side_effect = _RpcError(
+            grpc.StatusCode.PERMISSION_DENIED
+        )
+
+        with self._api_patch(), self.assertRaises(grpc.RpcError):
+            deploy_model(
+                namespace="default",
+                deployment_name="retrain-deployment",
+                pipeline_run_name="child-run",
+                inference_server_name="inference-server",
+                timeout_seconds=60,
+            )
+
+    def test_create_conflict_retries_as_update(self):
+        """A concurrent creator is resolved by reading and updating its object."""
+        existing = _complete_deployment("old-model")
+        complete = _complete_deployment()
+        self.deployment_service.get_deployment.side_effect = [
+            _RpcError(grpc.StatusCode.NOT_FOUND),
+            existing,
+            complete,
+        ]
+        self.deployment_service.create_deployment.side_effect = _RpcError(
+            grpc.StatusCode.ALREADY_EXISTS
+        )
+        self.deployment_service.update_deployment.side_effect = (
+            lambda deployment, update_options: deployment
+        )
+
+        with self._api_patch(), patch(f"{_MODULE}.time.sleep"):
+            result = deploy_model(
+                namespace="default",
+                deployment_name="retrain-deployment",
+                pipeline_run_name="child-run",
+                inference_server_name="inference-server",
+                timeout_seconds=60,
+                poll_seconds=1,
+            )
+
+        self.assertEqual(self.deployment_service.get_deployment.call_count, 3)
+        self.assertEqual(self.deployment_service.update_deployment.call_count, 1)
+        self.assertEqual(result["status"]["state"], "DEPLOYMENT_STATE_HEALTHY")
+
+    def test_create_unexpected_error_is_propagated(self):
+        """Create failures other than a concurrent create are not hidden."""
+        self.deployment_service.get_deployment.side_effect = _RpcError(
+            grpc.StatusCode.NOT_FOUND
+        )
+        self.deployment_service.create_deployment.side_effect = _RpcError(
+            grpc.StatusCode.INTERNAL
+        )
+
+        with self._api_patch(), self.assertRaises(grpc.RpcError):
+            deploy_model(
+                namespace="default",
+                deployment_name="retrain-deployment",
+                pipeline_run_name="child-run",
+                inference_server_name="inference-server",
+                timeout_seconds=60,
+            )
+
+    def test_update_conflict_retries(self):
+        """A resource-version conflict is retried from a fresh deployment read."""
+        first = _complete_deployment("old-model")
+        second = _complete_deployment("old-model")
+        complete = _complete_deployment()
+        self.deployment_service.get_deployment.side_effect = [first, second, complete]
+        self.deployment_service.update_deployment.side_effect = [
+            _RpcError(grpc.StatusCode.FAILED_PRECONDITION),
+            second,
+        ]
+
+        with self._api_patch(), patch(f"{_MODULE}.time.sleep"):
+            result = deploy_model(
+                namespace="default",
+                deployment_name="retrain-deployment",
+                pipeline_run_name="child-run",
+                inference_server_name="inference-server",
+                timeout_seconds=60,
+                poll_seconds=1,
+            )
+
+        self.assertEqual(self.deployment_service.update_deployment.call_count, 2)
+        self.assertEqual(result["model"]["name"], "trained-model")
+
+    def test_update_unexpected_error_is_propagated(self):
+        """Non-conflict update failures are not retried or hidden."""
+        self.deployment_service.get_deployment.return_value = _complete_deployment(
+            "old-model"
+        )
+        self.deployment_service.update_deployment.side_effect = _RpcError(
+            grpc.StatusCode.INTERNAL
+        )
+
+        with self._api_patch(), self.assertRaises(grpc.RpcError):
+            deploy_model(
+                namespace="default",
+                deployment_name="retrain-deployment",
+                pipeline_run_name="child-run",
+                inference_server_name="inference-server",
+                timeout_seconds=60,
+            )
+
+    def test_poll_retries_transient_error_and_pending_state(self):
+        """Transient reads and an incomplete rollout are polled again."""
+        existing = _complete_deployment()
+        pending = _complete_deployment()
+        pending.status.stage = 0
+        complete = _complete_deployment()
+        self.deployment_service.get_deployment.side_effect = [
+            existing,
+            _RpcError(grpc.StatusCode.UNAVAILABLE),
+            pending,
+            complete,
+        ]
+
+        with self._api_patch(), patch(f"{_MODULE}.time.sleep") as sleep:
+            result = deploy_model(
+                namespace="default",
+                deployment_name="retrain-deployment",
+                pipeline_run_name="child-run",
+                inference_server_name="inference-server",
+                timeout_seconds=60,
+                poll_seconds=1,
+            )
+
+        self.assertEqual(sleep.call_count, 2)
+        self.assertEqual(result["status"]["stage"], "DEPLOYMENT_STAGE_ROLLOUT_COMPLETE")
+
+    def test_poll_unexpected_error_reports_details(self):
+        """A non-transient poll failure includes the server details."""
+        self.deployment_service.get_deployment.side_effect = [
+            _complete_deployment(),
+            _RpcError(grpc.StatusCode.PERMISSION_DENIED, "access denied"),
+        ]
+
+        with (
+            self._api_patch(),
+            self.assertRaisesRegex(RuntimeError, "access denied"),
+        ):
+            deploy_model(
+                namespace="default",
+                deployment_name="retrain-deployment",
+                pipeline_run_name="child-run",
+                inference_server_name="inference-server",
+                timeout_seconds=60,
+            )
+
+    def test_poll_timeout(self):
+        """An incomplete rollout fails after the caller's deadline."""
+        pending = _complete_deployment()
+        pending.status.stage = 0
+        self.deployment_service.get_deployment.side_effect = [
+            _complete_deployment(),
+            pending,
+        ]
+
+        with (
+            self._api_patch(),
+            patch(f"{_MODULE}.time.monotonic", side_effect=[0, 0, 1]),
+            patch(f"{_MODULE}.time.sleep"),
+            self.assertRaises(TimeoutError),
+        ):
+            deploy_model(
+                namespace="default",
+                deployment_name="retrain-deployment",
+                pipeline_run_name="child-run",
+                inference_server_name="inference-server",
+                timeout_seconds=1,
+                poll_seconds=1,
+            )
+
     def test_rollback_complete_is_a_failed_deploy(self):
         """A completed rollback means this requested rollout failed."""
         failed = _complete_deployment()
@@ -211,6 +413,44 @@ class TestDeployModel(TestCase):
                 timeout_seconds=60,
                 poll_seconds=1,
             )
+
+    def test_rejects_invalid_arguments(self):
+        """Required names and optional controls are validated before API calls."""
+        cases = [
+            ({"namespace": ""}, "namespace must be a non-empty string"),
+            ({"model_name": ""}, "model_name must be non-empty"),
+            ({"timeout_seconds": -1}, "timeout_seconds must be non-negative"),
+        ]
+        defaults = {
+            "namespace": "default",
+            "deployment_name": "retrain-deployment",
+            "pipeline_run_name": "child-run",
+            "inference_server_name": "inference-server",
+            "timeout_seconds": 60,
+        }
+
+        for overrides, message in cases:
+            with (
+                self.subTest(overrides=overrides),
+                self.assertRaisesRegex(ValueError, message),
+            ):
+                deploy_model(**(defaults | overrides))
+
+    def test_zero_timeout_uses_default(self):
+        """The public zero timeout preserves the effectively-unbounded default."""
+        with (
+            patch(f"{_MODULE}._resolve_model", return_value=_model()),
+            patch(f"{_MODULE}._create_or_update_deployment"),
+            patch(f"{_MODULE}._poll_deployment", return_value={}) as poll,
+        ):
+            deploy_model(
+                namespace="default",
+                deployment_name="retrain-deployment",
+                pipeline_run_name="child-run",
+                inference_server_name="inference-server",
+            )
+
+        self.assertGreater(poll.call_args.args[3], 365 * 24 * 60 * 60)
 
     def test_rejects_invalid_poll_interval(self):
         """Polling must make forward progress."""
