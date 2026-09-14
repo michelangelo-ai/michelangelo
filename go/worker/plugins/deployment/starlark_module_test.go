@@ -156,3 +156,28 @@ func (r *Test) TestWaitForDeployment_Success() {
 	require.Equal("test-model-revision-2", resMap["current_revision"])
 	require.Equal("test-model-revision-2", resMap["desired_revision"])
 }
+
+func (r *Test) TestWaitForDeployment_FailedStageIsError() {
+	env := r.env.Cadence.GetTestWorkflowEnvironment()
+	env.RegisterActivity(deployment.Activities.SensorDeployment)
+
+	// SensorDeployment reports any terminal stage (success or failure) without
+	// erroring; waitForDeployment must translate a failed terminal stage into
+	// an error rather than reporting it as a successful result.
+	finalDeployment := &v2pb.Deployment{
+		Spec: v2pb.DeploymentSpec{
+			DesiredRevision: &apipb.ResourceIdentifier{Name: "test-model-revision-2"},
+		},
+		Status: v2pb.DeploymentStatus{
+			Stage: v2pb.DEPLOYMENT_STAGE_ROLLOUT_FAILED,
+		},
+	}
+	env.OnActivity(deployment.Activities.SensorDeployment, mock.Anything, mock.Anything).Once().Return(finalDeployment, nil)
+
+	r.env.Cadence.ExecuteFunction("/test.star", "test_wait_for_deployment",
+		starlark.Tuple{starlark.String("test-model-revision-2")}, nil, nil)
+	require := r.Require()
+	var res any
+	err := r.env.Cadence.GetResult(&res)
+	require.Error(err)
+}

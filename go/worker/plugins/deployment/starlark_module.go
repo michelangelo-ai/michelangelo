@@ -20,6 +20,16 @@ var (
 	_ starlark.HasAttrs = (*module)(nil)
 )
 
+// deploymentFailedStages mirrors the Python mirror's _DEPLOYMENT_FAILED_STAGES:
+// terminal stages that indicate the deployment did not succeed.
+var deploymentFailedStages = map[v2pb.DeploymentStage]bool{
+	v2pb.DEPLOYMENT_STAGE_ROLLOUT_FAILED:    true,
+	v2pb.DEPLOYMENT_STAGE_ROLLBACK_FAILED:   true,
+	v2pb.DEPLOYMENT_STAGE_CLEAN_UP_FAILED:   true,
+	v2pb.DEPLOYMENT_STAGE_ROLLBACK_COMPLETE: true,
+	v2pb.DEPLOYMENT_STAGE_CLEAN_UP_COMPLETE: true,
+}
+
 type module struct {
 	attributes map[string]starlark.Value
 }
@@ -183,6 +193,13 @@ func (r *module) waitForDeployment(t *starlark.Thread, _ *starlark.Builtin, args
 	desiredRev := ""
 	if finalDeployment.Spec.GetDesiredRevision() != nil {
 		desiredRev = finalDeployment.Spec.GetDesiredRevision().GetName()
+	}
+
+	// SensorDeployment reports any terminal stage as success and defers the
+	// success/failure distinction to the caller; make that check here so a
+	// failed rollout is reported as an error, matching the Python mirror.
+	if deploymentFailedStages[finalDeployment.Status.Stage] {
+		return nil, fmt.Errorf("deployment failed with stage: %s", finalDeployment.Status.Stage.String())
 	}
 
 	result := starlark.NewDict(3)
