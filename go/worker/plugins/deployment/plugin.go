@@ -23,4 +23,3 @@ func (r *plugin) Create(_ service.RunInfo) starlark.Value {
 	return newModule()
 }
 func (r *plugin) Register(_ worker.Registry) {}
-

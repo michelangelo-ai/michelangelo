@@ -9,9 +9,10 @@ import (
 	"github.com/cadence-workflow/starlark-worker/workflow"
 	"go.starlark.net/starlark"
 
+	deployment "github.com/michelangelo-ai/michelangelo/go/worker/activities/deployment"
+	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/utils"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
-	deployment "github.com/michelangelo-ai/michelangelo/go/worker/activities/deployment"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -56,22 +57,29 @@ func (r *module) createOrUpdateDeployment(t *starlark.Thread, _ *starlark.Builti
 	}
 
 	// Check if the deployment already exists to determine if we should update or create.
+	// GetDeployment reports a not-found deployment as (nil, nil), so any non-nil
+	// error here is a genuine failure (transient, auth, etc.) and must not be
+	// treated as "deployment doesn't exist".
 	var existingDeployment *v2pb.Deployment
-	err := workflow.ExecuteActivity(ctx, deployment.Activities.GetDeployment, &v2pb.GetDeploymentRequest{
+	if err := workflow.ExecuteActivity(ctx, deployment.Activities.GetDeployment, &v2pb.GetDeploymentRequest{
 		Namespace: namespace,
 		Name:      deploymentName,
-	}).Get(ctx, &existingDeployment)
+	}).Get(ctx, &existingDeployment); err != nil {
+		return nil, err
+	}
 
-	if err == nil {
+	if existingDeployment != nil {
 		// Case 1: Deployment exists - Update path.
 		// Update the existing deployment with the new desired revision.
 		updateReq := &v2pb.UpdateDeploymentRequest{
 			Deployment: &v2pb.Deployment{
 				ObjectMeta: existingDeployment.ObjectMeta,
 				Spec:       existingDeployment.Spec,
-				Status:     existingDeployment.Status,
 			},
 		}
+		// Reset status: it's server-managed and must not be pushed back from a
+		// stale read, mirroring the Python implementation's behavior.
+		updateReq.Deployment.Status = v2pb.DeploymentStatus{}
 		// Override only the desired revision with the new value.
 		updateReq.Deployment.Spec.DesiredRevision = &apipb.ResourceIdentifier{
 			Name:      modelRevisionName,
@@ -95,6 +103,9 @@ func (r *module) createOrUpdateDeployment(t *starlark.Thread, _ *starlark.Builti
 			Name:      deploymentTemplate,
 		}).Get(ctx, &template); err != nil {
 			return nil, err
+		}
+		if template == nil {
+			return nil, fmt.Errorf("deployment_template %q not found in namespace %q", deploymentTemplate, namespace)
 		}
 
 		// Create a new deployment object by copying the template and applying modifications.
@@ -132,7 +143,7 @@ func (r *module) waitForDeployment(t *starlark.Thread, _ *starlark.Builtin, args
 	logger := workflow.GetLogger(ctx)
 
 	var namespace, deploymentName, expectedModelRevision string
-	var timeout, poll int64 = 31536000, 600 // Defaults: 1 year, 10 mins
+	var timeout, poll int64 = 0, 600 // Defaults: LongTimeout (below), 10 mins
 
 	if err := starlark.UnpackArgs("wait_for_deployment", args, kwargs,
 		"namespace", &namespace,
@@ -144,17 +155,16 @@ func (r *module) waitForDeployment(t *starlark.Thread, _ *starlark.Builtin, args
 		logger.Error("builtin-error", ext.ZapError(err)...)
 		return nil, err
 	}
-
-	// Set up retry policy for polling the deployment status.
-	retryPolicy := workflow.RetryPolicy{
-		InitialInterval:          time.Second * time.Duration(poll),
-		BackoffCoefficient:       1.0,
-		MaximumInterval:          time.Second * time.Duration(poll),
-		ExpirationInterval:       time.Second * time.Duration(timeout),
-		MaximumAttempts:          0, // Unlimited retries within timeout
-		NonRetriableErrorReasons: []string{"cadenceInternal:Generic", "not-found", "internal", "invalid-argument"},
+	if timeout == 0 {
+		timeout = int64(utils.LongTimeout.Seconds())
 	}
-	ctx = workflow.WithRetryPolicy(ctx, retryPolicy)
+
+	// Set up retry policy for polling the deployment status, following the
+	// same shared sensor-retry convention as the other worker plugins.
+	srp := utils.DefaultSensorRetryPolicy
+	srp.ExpirationInterval = time.Second * time.Duration(timeout)
+	srp.InitialInterval = time.Second * time.Duration(poll)
+	ctx = workflow.WithRetryPolicy(ctx, srp)
 
 	var finalDeployment *v2pb.Deployment
 	if err := workflow.ExecuteActivity(ctx, deployment.Activities.SensorDeployment, deployment.SensorDeploymentRequest{
@@ -181,4 +191,3 @@ func (r *module) waitForDeployment(t *starlark.Thread, _ *starlark.Builtin, args
 	result.SetKey(starlark.String("desired_revision"), starlark.String(desiredRev))
 	return result, nil
 }
-

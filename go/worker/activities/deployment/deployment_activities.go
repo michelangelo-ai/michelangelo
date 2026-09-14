@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"go.uber.org/cadence"
+	"github.com/cadence-workflow/starlark-worker/workflow"
 	"go.uber.org/yarpc/yarpcerrors"
 
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
@@ -20,17 +20,23 @@ type (
 
 	// SensorDeploymentRequest contains parameters for the SensorDeployment activity.
 	SensorDeploymentRequest struct {
-		Namespace              string `json:"namespace,omitempty"`
-		DeploymentName         string `json:"deploymentName,omitempty"`
-		ExpectedModelRevision  string `json:"expectedModelRevision,omitempty"`
+		Namespace             string `json:"namespace,omitempty"`
+		DeploymentName        string `json:"deploymentName,omitempty"`
+		ExpectedModelRevision string `json:"expectedModelRevision,omitempty"`
 	}
 )
 
-// GetDeployment retrieves a deployment.
+// GetDeployment retrieves a deployment. A not-found deployment is reported as
+// (nil, nil) rather than an error, so callers can use existence checks (e.g.
+// deciding between create and update) without having to parse error codes.
+// Any other failure (transient, auth, etc.) is returned as an error.
 func (r *activities) GetDeployment(ctx context.Context, req *v2pb.GetDeploymentRequest) (*v2pb.Deployment, error) {
 	resp, err := r.deploymentService.GetDeployment(ctx, req)
 	if err != nil {
-		return nil, err
+		if yarpcerrors.FromError(err).Code() == yarpcerrors.CodeNotFound {
+			return nil, nil
+		}
+		return nil, workflow.NewCustomError(ctx, fmt.Sprintf("%s: %s", yarpcerrors.FromError(err).Code().String(), err.Error()))
 	}
 	return resp.Deployment, nil
 }
@@ -39,7 +45,7 @@ func (r *activities) GetDeployment(ctx context.Context, req *v2pb.GetDeploymentR
 func (r *activities) CreateDeployment(ctx context.Context, req *v2pb.CreateDeploymentRequest) (*v2pb.Deployment, error) {
 	resp, err := r.deploymentService.CreateDeployment(ctx, req)
 	if err != nil {
-		return nil, err
+		return nil, workflow.NewCustomError(ctx, fmt.Sprintf("%s: %s", yarpcerrors.FromError(err).Code().String(), err.Error()))
 	}
 	return resp.Deployment, nil
 }
@@ -48,7 +54,7 @@ func (r *activities) CreateDeployment(ctx context.Context, req *v2pb.CreateDeplo
 func (r *activities) UpdateDeployment(ctx context.Context, req *v2pb.UpdateDeploymentRequest) (*v2pb.Deployment, error) {
 	resp, err := r.deploymentService.UpdateDeployment(ctx, req)
 	if err != nil {
-		return nil, err
+		return nil, workflow.NewCustomError(ctx, fmt.Sprintf("%s: %s", yarpcerrors.FromError(err).Code().String(), err.Error()))
 	}
 	return resp.Deployment, nil
 }
@@ -63,7 +69,16 @@ func (r *activities) SensorDeployment(ctx context.Context, req SensorDeploymentR
 		Name:      req.DeploymentName,
 	})
 	if err != nil {
+		// GetDeployment already wraps this with a distinguishable reason so
+		// transient failures are retried by the sensor's retry policy instead
+		// of being bucketed under Cadence's non-retriable generic reason.
 		return nil, err
+	}
+	if deployment == nil {
+		// The deployment disappeared entirely - retrying won't help, so this
+		// is deliberately reported as non-retriable via the shared reason.
+		return nil, workflow.NewCustomError(ctx, yarpcerrors.CodeNotFound.String(),
+			fmt.Sprintf("deployment %s/%s not found", req.Namespace, req.DeploymentName))
 	}
 
 	stage := deployment.Status.GetStage()
@@ -79,8 +94,7 @@ func (r *activities) SensorDeployment(ctx context.Context, req SensorDeploymentR
 	// Check if deployment was updated by another workflow - fail immediately if expected revision doesn't match
 	// This error is non-retriable since retrying won't change the fact that another workflow updated the deployment
 	if req.ExpectedModelRevision != "" && desiredRev != req.ExpectedModelRevision {
-		return nil, cadence.NewCustomError(
-			"cadenceInternal:Generic",
+		return nil, workflow.NewCustomError(ctx, "cadenceInternal:Generic",
 			fmt.Sprintf("deployment was updated by another workflow: expected model revision %s, but deployment now targets %s", req.ExpectedModelRevision, desiredRev))
 	}
 
@@ -96,7 +110,6 @@ func (r *activities) SensorDeployment(ctx context.Context, req SensorDeploymentR
 	}
 
 	// Non-terminal state - return error to trigger retry
-	return nil, cadence.NewCustomError(
-		yarpcerrors.CodeFailedPrecondition.String(),
+	return nil, workflow.NewCustomError(ctx, yarpcerrors.CodeFailedPrecondition.String(),
 		fmt.Sprintf("deployment stage %v not terminal (current revision: %s, desired revision: %s)", stage, currentRev, desiredRev))
 }
