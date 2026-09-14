@@ -34,6 +34,29 @@ import "michelangelo/api/v2/notification.proto";
 message CronSchedule {
   // the cron expression in string
   string cron = 1;
+
+  // If set to a time in the past, the occurrences that would have fired between
+  // start_time and schedule creation are each fired once, via the workflow
+  // engine's native schedule backfill. Leave unset for no catch-up.
+  //
+  // Replays run one at a time, in chronological order, so a long catch-up window
+  // drains gradually rather than all at once. Each replayed run is stamped with the
+  // occurrence it stands for, not the time it actually executes.
+  //
+  // Constraints:
+  // - Applied at trigger creation only; changing it on an existing trigger has no effect.
+  // - Must be in the past, and at most 30 days back. This field cannot delay when a
+  //   schedule starts firing, so a future value is rejected rather than ignored.
+  // - Ignored when the trigger is created paused, since a paused schedule takes no
+  //   actions. Resuming it later does not replay the window.
+  // - Requires the Temporal workflow provider; rejected under Cadence, which has no
+  //   schedule-backfill equivalent.
+  //
+  // If the schedule is created but the replay fails, the trigger stays running and the
+  // missed window is reported in TriggerRunStatus.error_message. It is not retried
+  // automatically, because a backfill whose outcome is unknown cannot be re-issued
+  // without risking duplicate runs for the same period.
+  google.protobuf.Timestamp start_time = 2;
 }
 
 // IntervalSchedule defines a schedule for triggering pipeline runs at fixed time intervals.
@@ -97,7 +120,15 @@ message Trigger {
   // batch policy used by the trigger to kick off pipeline_runs
   BatchPolicy batch_policy = 3;
 
-  // defines an upper bound on how many pipelines may run in parallel
+  // Upper bound on how many pipeline runs a single execution of this trigger starts in
+  // parallel across parameters_map. Unset or 0 selects batch_policy batching instead,
+  // which starts runs sequentially.
+  //
+  // Scoped to one execution, not to the trigger as a whole: two overlapping executions
+  // could each start up to this many. They are not expected to overlap in practice -
+  // the schedule skips an occurrence whose predecessor is still running, and a catch-up
+  // backfill (see CronSchedule.start_time) replays missed occurrences one at a time,
+  // in chronological order, so peak parallelism stays at this bound.
   int32 max_concurrency = 5;
 
   // proxy_user is the service account identity for pipeline runs spawned by this
