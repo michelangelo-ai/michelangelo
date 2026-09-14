@@ -18,9 +18,22 @@ MINIO_SECRET_KEY="${MINIO_SECRET_KEY:-$(kubectl get secret minio-credentials -o 
 
 log() { echo "[$(date -u '+%H:%M:%S')] $*"; }
 
+diagnose_minio() {
+  log "MinIO diagnostics"
+  kubectl get pod/minio service/minio endpoints/minio \
+    -n "${NAMESPACE}" -o wide || true
+  kubectl get pod/minio -n "${NAMESPACE}" -o yaml || true
+  kubectl describe pod/minio -n "${NAMESPACE}" || true
+  kubectl logs pod/minio -n "${NAMESPACE}" --tail=200 || true
+  kubectl logs pod/minio -n "${NAMESPACE}" --previous --tail=200 || true
+  curl --include --max-time 5 \
+    "${MINIO_ENDPOINT}/minio/health/ready" || true
+}
+
 diagnose_retrain_failure() {
   trap - ERR
   log "Retrain diagnostics"
+  diagnose_minio
   kubectl get inferenceservers.michelangelo.api inference-server-example \
     -n "${NAMESPACE}" -o yaml || true
   kubectl get deployments.michelangelo.api retrain-example \
@@ -41,6 +54,69 @@ diagnose_retrain_failure() {
 }
 
 trap diagnose_retrain_failure ERR
+
+ensure_minio_ready() {
+  local phase pod_reason waiting_reason
+  local minio_manifest="${PYTHON_DIR}/michelangelo/cli/sandbox/resources/minio.yaml"
+
+  if ! kubectl get pod/minio -n "${NAMESPACE}" >/dev/null 2>&1; then
+    log "MinIO pod is missing; restoring the sandbox resource"
+    kubectl apply -f "${minio_manifest}"
+  else
+    phase=$(kubectl get pod/minio -n "${NAMESPACE}" \
+      -o jsonpath='{.status.phase}')
+    pod_reason=$(kubectl get pod/minio -n "${NAMESPACE}" \
+      -o jsonpath='{.status.reason}')
+    waiting_reason=$(kubectl get pod/minio -n "${NAMESPACE}" \
+      -o jsonpath='{.status.containerStatuses[0].state.waiting.reason}')
+
+    if [[ "${phase}" = Failed || "${pod_reason}" = Evicted \
+        || "${waiting_reason}" = CrashLoopBackOff \
+        || "${waiting_reason}" = ContainerCannotRun ]]; then
+      log "MinIO is failed (phase=${phase}, reason=${pod_reason}, waiting=${waiting_reason}); restoring it"
+      diagnose_minio
+      kubectl delete pod/minio -n "${NAMESPACE}" --wait=true
+      kubectl apply -f "${minio_manifest}"
+    fi
+  fi
+
+  if ! kubectl get service/minio -n "${NAMESPACE}" >/dev/null 2>&1; then
+    log "MinIO service is missing; restoring the sandbox resource"
+    kubectl apply -f "${minio_manifest}"
+  fi
+
+  kubectl wait --for=condition=Ready pod/minio \
+    -n "${NAMESPACE}" --timeout=180s
+
+  for attempt in $(seq 1 30); do
+    if curl --fail --silent --show-error --max-time 5 \
+        "${MINIO_ENDPOINT}/minio/health/ready" >/dev/null; then
+      log "MinIO HTTP endpoint is ready"
+      break
+    fi
+    if (( attempt = 30 )); then
+      log "MinIO HTTP endpoint did not become ready"
+      return 1
+    fi
+    sleep 5
+  done
+
+  for attempt in $(seq 1 6); do
+    if AWS_ACCESS_KEY_ID="${MINIO_ACCESS_KEY}" \
+        AWS_SECRET_ACCESS_KEY="${MINIO_SECRET_KEY}" \
+        timeout 15 aws --endpoint-url "${MINIO_ENDPOINT}" \
+          s3api list-buckets >/dev/null; then
+      log "MinIO S3 API is ready"
+      return 0
+    fi
+    if (( attempt < 6 )); then
+      sleep 5
+    fi
+  done
+
+  log "MinIO S3 API did not become ready"
+  return 1
+}
 
 wait_for_pipeline_run() {
   local run_name="$1"
@@ -109,6 +185,7 @@ if [[ "${inference_state}" != INFERENCE_SERVER_STATE_SERVING ]]; then
 fi
 
 log "Registering the namespace-compatible BERT/CoLA and retrain pipelines"
+ensure_minio_ready
 AWS_ACCESS_KEY_ID="${MINIO_ACCESS_KEY}" \
 AWS_SECRET_ACCESS_KEY="${MINIO_SECRET_KEY}" \
 AWS_ENDPOINT_URL="${MINIO_ENDPOINT}" \
@@ -128,6 +205,7 @@ log "Local execution deployed ${local_revision}"
 
 log "Submitting retrain-example through the remote Starlark worker"
 previous_remote_run=$(latest_retrain_run)
+ensure_minio_ready
 AWS_ACCESS_KEY_ID="${MINIO_ACCESS_KEY}" \
 AWS_SECRET_ACCESS_KEY="${MINIO_SECRET_KEY}" \
 AWS_ENDPOINT_URL="${MINIO_ENDPOINT}" \
