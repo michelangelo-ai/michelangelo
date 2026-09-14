@@ -7,7 +7,7 @@ from michelangelo.uniflow.plugins.pipeline import run_pipeline
 
 
 @uniflow.workflow()
-def retrain(
+def retrain_workflow(
     namespace="default",
     retrainer_pipeline="bert-cola-test",
     deployment_name="retrain-example",
@@ -48,4 +48,4 @@ if __name__ == "__main__":
     APIClient.set_caller("retrain-example")
     ctx = uniflow.create_context()
     ctx.environ["MA_NAMESPACE"] = "default"
-    ctx.run(retrain)
+    ctx.run(retrain_workflow)

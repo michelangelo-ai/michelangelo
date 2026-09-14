@@ -5,8 +5,9 @@ from unittest.mock import patch
 
 import yaml
 
-from examples.retrain_example.retrain import retrain
+from examples.retrain_example.retrain import retrain_workflow
 from michelangelo.uniflow.core.build import build
+from michelangelo.uniflow.registration.config_builder import ConfigBuilder
 from michelangelo.uniflow.registration.subprocess import (
     discover_workflow_from_config,
 )
@@ -17,7 +18,7 @@ _EXAMPLE_DIR = Path(__file__).parents[2] / "examples" / "retrain_example"
 
 def test_retrain_compiles_to_remote_plugins():
     """The remote package binds both plugin calls instead of Python bodies."""
-    package = build(retrain)
+    package = build(retrain_workflow)
     source = package.files[package.main_file].decode("utf-8")
 
     assert "load('@plugin', __pipeline__='pipeline', __model__='model')" in source
@@ -27,9 +28,14 @@ def test_retrain_compiles_to_remote_plugins():
 
 def test_retrain_registration_discovers_workflow():
     """Registration selects retrain rather than an imported plugin function."""
-    workflow = discover_workflow_from_config(str(_EXAMPLE_DIR / "pipeline.yaml"))
+    config_path = str(_EXAMPLE_DIR / "pipeline.yaml")
+    workflow = discover_workflow_from_config(config_path)
 
-    assert workflow is retrain
+    with ConfigBuilder.from_config_file(config_path) as config_builder:
+        configured_workflow = config_builder.workflow_function_obj
+
+    assert workflow is retrain_workflow
+    assert configured_workflow is retrain_workflow
 
 
 @patch(
@@ -54,7 +60,7 @@ def test_retrain_runs_child_then_deploys_its_model(
     mock_run_pipeline, mock_deploy_model
 ):
     """The local workflow bridges the exact child run name to deployment."""
-    result = retrain(
+    result = retrain_workflow(
         namespace="default",
         retrainer_pipeline="bert-cola-test",
         deployment_name="retrain-example",
