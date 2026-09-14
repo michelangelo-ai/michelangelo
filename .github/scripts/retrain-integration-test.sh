@@ -121,6 +121,8 @@ ensure_minio_ready() {
     if [[ "${phase}" = Failed || "${phase}" = Succeeded \
         || "${pod_reason}" = Evicted \
         || "${waiting_reason}" = CrashLoopBackOff \
+        || "${waiting_reason}" = ErrImagePull \
+        || "${waiting_reason}" = ImagePullBackOff \
         || "${waiting_reason}" = ContainerCannotRun \
         || "${terminated_reason}" = OOMKilled ]]; then
       log "MinIO is not runnable (phase=${phase}, reason=${pod_reason}, waiting=${waiting_reason}, terminated=${terminated_reason}); restoring it"
