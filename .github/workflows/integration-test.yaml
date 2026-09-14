@@ -19,6 +19,12 @@ on:
           Defaults to "main". Use a feature branch to test unreleased fixture changes.
         required: false
         default: "main"
+      worker_tag:
+        description: >
+          GHCR worker image tag. Use a dev-release sha tag to test worker changes.
+          Defaults to "main".
+        required: false
+        default: "main"
   workflow_call:
     inputs:
       image_tag:
@@ -28,6 +34,11 @@ on:
         default: "latest"
       integration_test_ref:
         description: "Branch or ref of michelangelo-ai/integration-test to check out"
+        required: false
+        type: string
+        default: "main"
+      worker_tag:
+        description: "GHCR worker image tag"
         required: false
         type: string
         default: "main"
@@ -79,6 +90,7 @@ jobs:
             --set controllermgr.metadataStorage.enable=true \
             --set controllermgr.jobs.k8sengine.mapper.logPersistence.enabled=false \
             --set monitoring.enabled=false \
+            --set images.worker.tag=${{ inputs.worker_tag || 'main' }} \
             --set objectStorage.existingSecret=minio-credentials
 
       - name: Check out integration-test repo
