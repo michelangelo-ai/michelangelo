@@ -379,6 +379,20 @@ class RenderHelpersTest(TestCase):
 
         mock_print.assert_called_once_with(items, extra_columns=())
 
+    @staticmethod
+    def _non_wrapper_msg():
+        """Build a Mock message that _unwrap_single_field_response leaves untouched.
+
+        ``_unwrap_single_field_response`` checks ``msg.DESCRIPTOR.fields`` and
+        only unwraps when there is exactly one message-typed field. An empty
+        fields list makes it return ``msg`` unchanged, so tests that only care
+        about the render step can ignore the unwrap detail.
+        """
+        msg = Mock()
+        msg.DESCRIPTOR = Mock()
+        msg.DESCRIPTOR.fields = []
+        return msg
+
     @patch("michelangelo.cli.mactl.crd.MessageToJson")
     def test_render_single_item_json(self, mock_to_json):
         """Json output for a single item uses MessageToJson."""
@@ -391,10 +405,54 @@ class RenderHelpersTest(TestCase):
 
         buf = io.StringIO()
         with redirect_stdout(buf):
-            _render_single_item(Mock(), "json")
+            _render_single_item(self._non_wrapper_msg(), "json")
 
         self.assertIn('"name": "x"', buf.getvalue())
         mock_to_json.assert_called_once()
+
+    @patch("michelangelo.cli.mactl.crd.MessageToJson")
+    def test_render_single_item_json_uses_proto3_camel_case(self, mock_to_json):
+        """JSON path does not pass preserving_proto_field_name.
+
+        Proto3-JSON default is lowerCamelCase (`apiVersion`, `metadata`,
+        `revisionId`), which matches kubectl / k8s-native CRD conventions.
+        The prior `preserving_proto_field_name=True` argument leaked proto
+        snake_case (`type_meta`, `revision_id`) into user-visible output
+        and blocked jq recipes shared with k8s tooling.
+        """
+        from michelangelo.cli.mactl.crd import _render_single_item
+
+        mock_to_json.return_value = "{}"
+        _render_single_item(self._non_wrapper_msg(), "json")
+
+        _, kwargs = mock_to_json.call_args
+        self.assertNotIn("preserving_proto_field_name", kwargs)
+
+    @patch("michelangelo.cli.mactl.crd.MessageToJson")
+    def test_render_single_item_json_unwraps_wrapper_response(self, mock_to_json):
+        """GetXxxResponse (one message-typed field) is unwrapped for JSON.
+
+        `_get` returns e.g. `GetRevisionResponse` with a single `revision`
+        field. Rendering the wrapper directly leaks the RPC envelope as the
+        top-level JSON key (`{"revision": {...}}`); users want the resource
+        itself.
+        """
+        from michelangelo.cli.mactl.crd import _render_single_item
+
+        mock_to_json.return_value = "{}"
+        inner = self._non_wrapper_msg()
+        wrapper = Mock()
+        wrapper.DESCRIPTOR = Mock()
+        field = Mock()
+        field.name = "revision"
+        field.message_type = Mock()
+        wrapper.DESCRIPTOR.fields = [field]
+        wrapper.revision = inner
+
+        _render_single_item(wrapper, "json")
+
+        args, _ = mock_to_json.call_args
+        self.assertIs(args[0], inner)
 
     @patch("michelangelo.cli.mactl.crd.MessageToDict")
     def test_render_single_item_yaml(self, mock_to_dict):
@@ -408,9 +466,51 @@ class RenderHelpersTest(TestCase):
 
         buf = io.StringIO()
         with redirect_stdout(buf):
-            _render_single_item(Mock(), "yaml")
+            _render_single_item(self._non_wrapper_msg(), "yaml")
 
         self.assertIn("name: x", buf.getvalue())
+
+    @patch("michelangelo.cli.mactl.crd.MessageToDict")
+    def test_render_single_item_yaml_unwraps_wrapper_response(self, mock_to_dict):
+        """GetXxxResponse (one message-typed field) is unwrapped for YAML.
+
+        Same rationale as the JSON path: rendering the raw response leaks
+        the RPC envelope name as the top-level YAML key (`revision:`).
+        """
+        from michelangelo.cli.mactl.crd import _render_single_item
+
+        mock_to_dict.return_value = {}
+        inner = self._non_wrapper_msg()
+        wrapper = Mock()
+        wrapper.DESCRIPTOR = Mock()
+        field = Mock()
+        field.name = "revision"
+        field.message_type = Mock()
+        wrapper.DESCRIPTOR.fields = [field]
+        wrapper.revision = inner
+
+        _render_single_item(wrapper, "yaml")
+
+        args, _ = mock_to_dict.call_args
+        self.assertIs(args[0], inner)
+
+    @patch("michelangelo.cli.mactl.crd.MessageToDict")
+    def test_render_single_item_yaml_uses_proto3_camel_case(self, mock_to_dict):
+        """YAML path does not pass preserving_proto_field_name.
+
+        Proto3-JSON default is lowerCamelCase (`apiVersion`, `metadata`,
+        `revisionId`). Go ``mactl`` and ``kubectl`` both emit camelCase in
+        their YAML output (`sigs.k8s.io/yaml` marshals via JSON), so the
+        Python CLI aligns on camelCase to keep JSON and YAML internally
+        consistent and to match every other tool in the k8s ecosystem.
+        """
+        from michelangelo.cli.mactl.crd import _render_single_item
+
+        mock_to_dict.return_value = {}
+        _render_single_item(self._non_wrapper_msg(), "yaml")
+
+        _, kwargs = mock_to_dict.call_args
+        self.assertNotIn("preserving_proto_field_name", kwargs)
 
     @patch("michelangelo.cli.mactl.crd.MessageToDict")
     def test_render_single_item_yaml_handles_ordereddict(self, mock_to_dict):
@@ -442,7 +542,7 @@ class RenderHelpersTest(TestCase):
 
         buf = io.StringIO()
         with redirect_stdout(buf):
-            _render_single_item(Mock(), "yaml")
+            _render_single_item(self._non_wrapper_msg(), "yaml")
 
         out = buf.getvalue()
         self.assertIn("'@type': type.googleapis.com/foo.Bar", out)
