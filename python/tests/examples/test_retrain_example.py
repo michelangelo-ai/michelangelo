@@ -7,6 +7,9 @@ import yaml
 
 from examples.retrain_example.retrain import retrain
 from michelangelo.uniflow.core.build import build
+from michelangelo.uniflow.registration.subprocess import (
+    discover_workflow_from_config,
+)
 
 _MODULE = "examples.retrain_example.retrain"
 _EXAMPLE_DIR = Path(__file__).parents[2] / "examples" / "retrain_example"
@@ -20,6 +23,13 @@ def test_retrain_compiles_to_remote_plugins():
     assert "load('@plugin', __pipeline__='pipeline', __model__='model')" in source
     assert "__pipeline__.run_pipeline(" in source
     assert "__model__.deploy_model(" in source
+
+
+def test_retrain_registration_discovers_workflow():
+    """Registration selects retrain rather than an imported plugin function."""
+    workflow = discover_workflow_from_config(str(_EXAMPLE_DIR / "pipeline.yaml"))
+
+    assert workflow is retrain
 
 
 @patch(

@@ -46,6 +46,6 @@ def retrain(
 
 if __name__ == "__main__":
     APIClient.set_caller("retrain-example")
-    context = uniflow.create_context()
-    context.environ["MA_NAMESPACE"] = "default"
-    context.run(retrain)
+    ctx = uniflow.create_context()
+    ctx.environ["MA_NAMESPACE"] = "default"
+    ctx.run(retrain)
