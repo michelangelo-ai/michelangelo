@@ -19,6 +19,29 @@ export interface Pipeline {
 }
 
 /**
+ * A Revision CR snapshotting a Pipeline (spec.baseType.kind === 'Pipeline'). `spec.content`
+ * is the wrapped Pipeline, unpacked from its `google.protobuf.Any` by the RPC layer, so
+ * pipeline-derived columns (type, state) read from `spec.content.*`.
+ */
+export interface PipelineRevision {
+  metadata: {
+    name: string;
+    namespace: string;
+  };
+  spec: {
+    baseResource: { name: string; namespace?: string };
+    revisionId: string;
+    owner?: { name: string };
+    gitCommit?: { branch?: string; gitRef?: string };
+    content?: {
+      spec?: { type?: number };
+      status?: { state?: number };
+    };
+  };
+  status?: { state?: number };
+}
+
+/**
  * Form-only shape submitted by {@link CreatePipelineRunForm}.
  *
  * The notification fields here have no proto counterpart — `notifyOnCompletion` is a UI-only

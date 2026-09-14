@@ -5,6 +5,9 @@ import type { Cell } from '#core/components/cell/types';
 /** `CRITERION_OPERATOR_EQUAL` from `proto/api/list.proto`. */
 export const CRITERION_OPERATOR_EQUAL = 1;
 
+/** `SORT_ORDER_DESC` from `proto/api/list.proto` — protobuf-es encodes enums by number. */
+export const SORT_ORDER_DESC = 2;
+
 /** Criterion field name for the pipeline a PipelineRun belongs to. */
 export const PIPELINE_RUN_PIPELINE_NAME_FIELD = 'pipeline_run.pipeline_name';
 
