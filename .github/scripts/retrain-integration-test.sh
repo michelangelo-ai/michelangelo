@@ -55,51 +55,31 @@ diagnose_retrain_failure() {
 
 trap diagnose_retrain_failure ERR
 
-ensure_minio_ready() {
-  local phase pod_reason waiting_reason
-  local minio_manifest="${PYTHON_DIR}/michelangelo/cli/sandbox/resources/minio.yaml"
+restore_minio() {
+  local minio_manifest="$1"
+  kubectl delete pod/minio -n "${NAMESPACE}" --ignore-not-found --wait=true
+  kubectl apply -f "${minio_manifest}"
+}
 
-  if ! kubectl get pod/minio -n "${NAMESPACE}" >/dev/null 2>&1; then
-    log "MinIO pod is missing; restoring the sandbox resource"
-    kubectl apply -f "${minio_manifest}"
-  else
-    phase=$(kubectl get pod/minio -n "${NAMESPACE}" \
-      -o jsonpath='{.status.phase}')
-    pod_reason=$(kubectl get pod/minio -n "${NAMESPACE}" \
-      -o jsonpath='{.status.reason}')
-    waiting_reason=$(kubectl get pod/minio -n "${NAMESPACE}" \
-      -o jsonpath='{.status.containerStatuses[0].state.waiting.reason}')
-
-    if [[ "${phase}" = Failed || "${pod_reason}" = Evicted \
-        || "${waiting_reason}" = CrashLoopBackOff \
-        || "${waiting_reason}" = ContainerCannotRun ]]; then
-      log "MinIO is failed (phase=${phase}, reason=${pod_reason}, waiting=${waiting_reason}); restoring it"
-      diagnose_minio
-      kubectl delete pod/minio -n "${NAMESPACE}" --wait=true
-      kubectl apply -f "${minio_manifest}"
-    fi
-  fi
-
-  if ! kubectl get service/minio -n "${NAMESPACE}" >/dev/null 2>&1; then
-    log "MinIO service is missing; restoring the sandbox resource"
-    kubectl apply -f "${minio_manifest}"
-  fi
-
-  kubectl wait --for=condition=Ready pod/minio \
-    -n "${NAMESPACE}" --timeout=180s
+probe_minio() {
+  local attempt
+  local http_ready=false
 
   for attempt in $(seq 1 30); do
     if curl --fail --silent --show-error --max-time 5 \
         "${MINIO_ENDPOINT}/minio/health/ready" >/dev/null; then
       log "MinIO HTTP endpoint is ready"
+      http_ready=true
       break
     fi
-    if (( attempt = 30 )); then
-      log "MinIO HTTP endpoint did not become ready"
-      return 1
+    if (( attempt < 30 )); then
+      sleep 5
     fi
-    sleep 5
   done
+  if [[ "${http_ready}" = false ]]; then
+    log "MinIO HTTP endpoint did not become ready"
+    return 1
+  fi
 
   for attempt in $(seq 1 6); do
     if AWS_ACCESS_KEY_ID="${MINIO_ACCESS_KEY}" \
@@ -115,6 +95,58 @@ ensure_minio_ready() {
   done
 
   log "MinIO S3 API did not become ready"
+  return 1
+}
+
+ensure_minio_ready() {
+  local phase pod_reason waiting_reason
+  local minio_manifest="${PYTHON_DIR}/michelangelo/cli/sandbox/resources/minio.yaml"
+  local restored=false
+
+  if ! kubectl get pod/minio -n "${NAMESPACE}" >/dev/null 2>&1; then
+    log "MinIO pod is missing; restoring the sandbox resource"
+    kubectl apply -f "${minio_manifest}"
+    restored=true
+  else
+    phase=$(kubectl get pod/minio -n "${NAMESPACE}" \
+      -o jsonpath='{.status.phase}')
+    pod_reason=$(kubectl get pod/minio -n "${NAMESPACE}" \
+      -o jsonpath='{.status.reason}')
+    waiting_reason=$(kubectl get pod/minio -n "${NAMESPACE}" \
+      -o jsonpath='{.status.containerStatuses[0].state.waiting.reason}')
+
+    if [[ "${phase}" = Failed || "${pod_reason}" = Evicted \
+        || "${waiting_reason}" = CrashLoopBackOff \
+        || "${waiting_reason}" = ContainerCannotRun ]]; then
+      log "MinIO is failed (phase=${phase}, reason=${pod_reason}, waiting=${waiting_reason}); restoring it"
+      diagnose_minio
+      restore_minio "${minio_manifest}"
+      restored=true
+    fi
+  fi
+
+  if ! kubectl get service/minio -n "${NAMESPACE}" >/dev/null 2>&1; then
+    log "MinIO service is missing; restoring the sandbox resource"
+    kubectl apply -f "${minio_manifest}"
+  fi
+
+  kubectl wait --for=condition=Ready pod/minio \
+    -n "${NAMESPACE}" --timeout=180s
+
+  if probe_minio; then
+    return 0
+  fi
+
+  if [[ "${restored}" = false ]]; then
+    log "MinIO pod is ready but its HTTP/S3 endpoint is unhealthy; restoring it once"
+    diagnose_minio
+    restore_minio "${minio_manifest}"
+    kubectl wait --for=condition=Ready pod/minio \
+      -n "${NAMESPACE}" --timeout=180s
+    probe_minio
+    return
+  fi
+
   return 1
 }
 
