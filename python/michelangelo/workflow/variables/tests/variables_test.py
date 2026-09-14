@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 import types as _types
 import unittest
@@ -1193,6 +1194,156 @@ class TestModelVariableImports(TestCase):
         from michelangelo.workflow import variables as _wv
 
         self.assertIs(_wv.ModelVariable, ModelVariable)
+
+
+class TestModelVariableToArtifact(TestCase):
+    """Tests for ModelVariable.to_artifact()."""
+
+    def test_raises_when_unsaved(self):
+        """to_artifact() raises ValueError when the path does not exist."""
+        var = ModelVariable(
+            path="memory://missing",
+            metadata=ModelMetadata(training_framework=TRAINING_FRAMEWORK_PYTORCH),
+        )
+        mock_fs = MagicMock()
+        mock_fs.exists.return_value = False
+        with patch(f"{_MODEL_PATH}.fsspec") as mock_fsspec:
+            mock_fsspec.core.url_to_fs.return_value = (mock_fs, "missing")
+            with self.assertRaises(ValueError) as ctx:
+                var.to_artifact(MagicMock())
+        self.assertIn("Call save() first", str(ctx.exception))
+
+    def test_pytorch_downloads_single_file_non_recursive(self):
+        """A pytorch-framework variable is downloaded with fs.get (no recursive)."""
+        mock_fs = MagicMock()
+        mock_fs.exists.return_value = True
+        mock_backend = MagicMock()
+        mock_backend.upload.return_value = "backend://uploaded/model.pt"
+        var = ModelVariable(
+            path="memory://target",
+            metadata=ModelMetadata(training_framework=TRAINING_FRAMEWORK_PYTORCH),
+        )
+        with patch(f"{_MODEL_PATH}.fsspec") as mock_fsspec:
+            mock_fsspec.core.url_to_fs.return_value = (mock_fs, "target")
+            artifact = var.to_artifact(mock_backend)
+        get_args, get_kwargs = mock_fs.get.call_args
+        self.assertEqual(get_args[0], "target")
+        self.assertNotIn("recursive", get_kwargs)
+        self.assertEqual(artifact.path, "backend://uploaded/model.pt")
+        self.assertIs(artifact.metadata, var.metadata)
+
+    def test_custom_downloads_directory_recursive(self):
+        """A custom-framework variable is downloaded with fs.get(recursive=True)."""
+        mock_fs = MagicMock()
+        mock_fs.exists.return_value = True
+        mock_backend = MagicMock()
+        mock_backend.upload.return_value = "backend://uploaded/model"
+        var = ModelVariable(
+            path="memory://target",
+            metadata=ModelMetadata(training_framework=TRAINING_FRAMEWORK_CUSTOM),
+        )
+        with patch(f"{_MODEL_PATH}.fsspec") as mock_fsspec:
+            mock_fsspec.core.url_to_fs.return_value = (mock_fs, "target")
+            var.to_artifact(mock_backend)
+        _, get_kwargs = mock_fs.get.call_args
+        self.assertTrue(get_kwargs.get("recursive"))
+
+    def test_default_destination_key_uses_uuid(self):
+        """Without destination_key, a 'model_variable/<uuid>' key is used."""
+        mock_fs = MagicMock()
+        mock_fs.exists.return_value = True
+        mock_backend = MagicMock()
+        mock_backend.upload.return_value = "backend://uploaded"
+        var = ModelVariable(
+            path="memory://target",
+            metadata=ModelMetadata(training_framework=TRAINING_FRAMEWORK_PYTORCH),
+        )
+        with (
+            patch(f"{_MODEL_PATH}.fsspec") as mock_fsspec,
+            patch(f"{_MODEL_PATH}.uuid") as mock_uuid,
+        ):
+            mock_fsspec.core.url_to_fs.return_value = (mock_fs, "target")
+            mock_uuid.uuid4.return_value.hex = "deadbeef"
+            var.to_artifact(mock_backend)
+        upload_args, _ = mock_backend.upload.call_args
+        self.assertEqual(upload_args[1], "model_variable/deadbeef")
+
+    def test_explicit_destination_key_forwarded(self):
+        """An explicit destination_key is forwarded to storage_backend.upload()."""
+        mock_fs = MagicMock()
+        mock_fs.exists.return_value = True
+        mock_backend = MagicMock()
+        mock_backend.upload.return_value = "backend://uploaded"
+        var = ModelVariable(
+            path="memory://target",
+            metadata=ModelMetadata(training_framework=TRAINING_FRAMEWORK_PYTORCH),
+        )
+        with patch(f"{_MODEL_PATH}.fsspec") as mock_fsspec:
+            mock_fsspec.core.url_to_fs.return_value = (mock_fs, "target")
+            var.to_artifact(mock_backend, destination_key="raw_model/model.pt")
+        upload_args, _ = mock_backend.upload.call_args
+        self.assertEqual(upload_args[1], "raw_model/model.pt")
+
+
+class TestModelVariableToArtifactStorageBackendRoundTrip(TestCase):
+    """End-to-end round trip of to_artifact() against a real LocalStorageBackend."""
+
+    def test_single_file_artifact_is_downloadable(self):
+        """A pytorch-framework variable's artifact downloads via the same backend."""
+        import tempfile
+
+        from michelangelo.lib.artifact_manager.storage_backend import (
+            LocalStorageBackend,
+        )
+
+        with (
+            tempfile.TemporaryDirectory() as source_dir,
+            tempfile.TemporaryDirectory() as backend_dir,
+            tempfile.TemporaryDirectory() as dest_dir,
+        ):
+            source_path = os.path.join(source_dir, "model.pt")
+            with open(source_path, "wb") as f:
+                f.write(b"fake-weights")
+
+            metadata = ModelMetadata(training_framework=TRAINING_FRAMEWORK_PYTORCH)
+            var = ModelVariable(path=source_path, metadata=metadata)
+            var._saved = True
+
+            backend = LocalStorageBackend(base_dir=backend_dir)
+            artifact = var.to_artifact(backend, destination_key="raw_model/model.pt")
+
+            self.assertIs(artifact.metadata, metadata)
+            dest_path = os.path.join(dest_dir, "model.pt")
+            backend.download(artifact.path, dest_path)
+            with open(dest_path, "rb") as f:
+                self.assertEqual(f.read(), b"fake-weights")
+
+    def test_directory_artifact_is_downloadable(self):
+        """A custom-framework variable's directory artifact round-trips."""
+        import tempfile
+
+        from michelangelo.lib.artifact_manager.storage_backend import (
+            LocalStorageBackend,
+        )
+
+        with (
+            tempfile.TemporaryDirectory() as source_dir,
+            tempfile.TemporaryDirectory() as backend_dir,
+            tempfile.TemporaryDirectory() as dest_dir,
+        ):
+            with open(os.path.join(source_dir, "weights.bin"), "wb") as f:
+                f.write(b"custom-model-bytes")
+
+            metadata = ModelMetadata(training_framework=TRAINING_FRAMEWORK_CUSTOM)
+            var = ModelVariable(path=source_dir, metadata=metadata)
+            var._saved = True
+
+            backend = LocalStorageBackend(base_dir=backend_dir)
+            artifact = var.to_artifact(backend, destination_key="raw_model/dir")
+
+            backend.download(artifact.path, dest_dir)
+            with open(os.path.join(dest_dir, "weights.bin"), "rb") as f:
+                self.assertEqual(f.read(), b"custom-model-bytes")
 
 
 # ---------------------------------------------------------------------------
