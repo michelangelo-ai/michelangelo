@@ -103,6 +103,31 @@ jobs:
         # only michelangelo_examples' own thin package needs installing here.
         run: .venv/bin/pip install -q --no-deps "$GITHUB_WORKSPACE/michelangelo-examples"
 
+      - name: Wait for apiserver gRPC readiness
+        run: |
+          if kubectl rollout status deployment/michelangelo-apiserver \
+              --namespace default --timeout=300s \
+            && .venv/bin/python - <<'PY'
+          import grpc
+
+          channel = grpc.insecure_channel("localhost:15566")
+          try:
+              grpc.channel_ready_future(channel).result(timeout=300)
+              print("Michelangelo apiserver gRPC endpoint is ready.")
+          finally:
+              channel.close()
+          PY
+          then
+            exit 0
+          fi
+
+          kubectl get pods --namespace default -o wide || true
+          kubectl describe deployment/michelangelo-apiserver \
+            --namespace default || true
+          kubectl logs deployment/michelangelo-apiserver --namespace default \
+            --all-containers --tail=200 || true
+          exit 1
+
       - name: Run API CRUD tests
         run: |
           $GITHUB_WORKSPACE/python/.venv/bin/pytest \
