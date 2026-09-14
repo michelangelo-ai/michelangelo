@@ -80,13 +80,45 @@ jobs:
             kubectl wait --for=condition=Ready pod/mysql --timeout=180s
           fi
 
+      - name: Ensure Cadence domain exists
+        run: |
+          if ! k3d cluster get michelangelo-sandbox >/dev/null 2>&1; then
+            echo "Sandbox does not exist yet; sandbox create will register the domain."
+            exit 0
+          fi
+
+          kubectl wait --for=condition=available deployment \
+            --selector app.kubernetes.io/name=cadence,app.kubernetes.io/component=frontend \
+            --timeout=300s
+
+          for attempt in $(seq 1 21); do
+            pod_name="cadence-domain-${GITHUB_RUN_ID}-${attempt}"
+            if registration_output=$(kubectl run "${pod_name}" \
+                --restart=Never --rm --stdin \
+                --image=ubercadence/cli:v1.2.6 \
+                --env=CADENCE_CLI_ADDRESS=michelangelo-cadence-frontend:7933 \
+                --command -- cadence --domain default domain register --rd 1 2>&1); then
+              echo "${registration_output}"
+              exit 0
+            fi
+            echo "${registration_output}"
+            if grep -Eq 'Domain already exists|already registered' \
+                <<< "${registration_output}"; then
+              echo "Cadence domain 'default' is already registered."
+              exit 0
+            fi
+            if (( attempt < 21 )); then
+              sleep 5
+            fi
+          done
+          exit 1
+
       # Sync restarts only Michelangelo app services (apiserver, envoy, ui, worker,
       # controllermgr). Infrastructure (MySQL, Cadence, MinIO, Grafana, Prometheus)
       # is kept running between runs — no re-init overhead.
       - name: Sync sandbox
         run: |
-          timeout 180s $HOME/.local/bin/poetry run ma sandbox sync --workflow cadence \
-            --wait-timeout 120 \
+          $HOME/.local/bin/poetry run ma sandbox sync --workflow cadence \
             --set apiserver.metadataStorage.enable=true \
             --set controllermgr.metadataStorage.enable=true \
             --set controllermgr.jobs.k8sengine.mapper.logPersistence.enabled=false \
