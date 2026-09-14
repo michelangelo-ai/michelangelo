@@ -78,6 +78,7 @@ jobs:
             --set apiserver.metadataStorage.enable=true \
             --set controllermgr.metadataStorage.enable=true \
             --set controllermgr.jobs.k8sengine.mapper.logPersistence.enabled=false \
+            --set monitoring.enabled=false \
             --set objectStorage.existingSecret=minio-credentials
 
       - name: Check out integration-test repo
