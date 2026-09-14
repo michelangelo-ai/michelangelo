@@ -41,7 +41,8 @@ diagnose_retrain_failure() {
   kubectl get pipelineruns -n "${NAMESPACE}" -o wide || true
   kubectl get deployment/triton-inference-server-example \
     service/inference-server-example-inference-service \
-    pods -n "${NAMESPACE}" -o wide || true
+    -n "${NAMESPACE}" -o wide || true
+  kubectl get pods -n "${NAMESPACE}" -o wide || true
   kubectl describe deployment/triton-inference-server-example \
     -n "${NAMESPACE}" || true
   kubectl get events -n "${NAMESPACE}" --sort-by=.lastTimestamp | tail -100 || true
@@ -99,7 +100,7 @@ probe_minio() {
 }
 
 ensure_minio_ready() {
-  local phase pod_reason waiting_reason
+  local phase pod_reason terminated_reason waiting_reason
   local minio_manifest="${PYTHON_DIR}/michelangelo/cli/sandbox/resources/minio.yaml"
   local restored=false
 
@@ -114,11 +115,15 @@ ensure_minio_ready() {
       -o jsonpath='{.status.reason}')
     waiting_reason=$(kubectl get pod/minio -n "${NAMESPACE}" \
       -o jsonpath='{.status.containerStatuses[0].state.waiting.reason}')
+    terminated_reason=$(kubectl get pod/minio -n "${NAMESPACE}" \
+      -o jsonpath='{.status.containerStatuses[0].state.terminated.reason}')
 
-    if [[ "${phase}" = Failed || "${pod_reason}" = Evicted \
+    if [[ "${phase}" = Failed || "${phase}" = Succeeded \
+        || "${pod_reason}" = Evicted \
         || "${waiting_reason}" = CrashLoopBackOff \
-        || "${waiting_reason}" = ContainerCannotRun ]]; then
-      log "MinIO is failed (phase=${phase}, reason=${pod_reason}, waiting=${waiting_reason}); restoring it"
+        || "${waiting_reason}" = ContainerCannotRun \
+        || "${terminated_reason}" = OOMKilled ]]; then
+      log "MinIO is not runnable (phase=${phase}, reason=${pod_reason}, waiting=${waiting_reason}, terminated=${terminated_reason}); restoring it"
       diagnose_minio
       restore_minio "${minio_manifest}"
       restored=true
