@@ -61,6 +61,14 @@ jobs:
           poetry env use python3
           poetry install --no-interaction -E dev -E example
 
+      - name: Recover failed MySQL pod
+        run: |
+          if [ "$(kubectl get pod mysql -o jsonpath='{.status.phase}' 2>/dev/null || true)" = "Failed" ]; then
+            kubectl delete pod mysql --ignore-not-found
+            kubectl apply -f michelangelo/cli/sandbox/resources/mysql.yaml
+            kubectl wait --for=condition=Ready pod/mysql --timeout=180s
+          fi
+
       # Sync restarts only Michelangelo app services (apiserver, envoy, ui, worker,
       # controllermgr). Infrastructure (MySQL, Cadence, MinIO, Grafana, Prometheus)
       # is kept running between runs — no re-init overhead.
@@ -129,6 +137,12 @@ jobs:
             sleep 10
           done
           echo "WARNING: worker did not confirm Cadence connection after 300s, proceeding anyway"
+
+      - name: Run retrain local and remote e2e
+        run: ../.github/scripts/retrain-integration-test.sh
+        env:
+          MA_API_SERVER: localhost:15566
+          MA_NAMESPACE: default
 
       - name: Run CLI e2e tests
         run: |
