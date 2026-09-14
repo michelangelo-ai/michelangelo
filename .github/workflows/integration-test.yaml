@@ -124,6 +124,10 @@ jobs:
             --set controllermgr.jobs.k8sengine.mapper.logPersistence.enabled=false \
             --set monitoring.enabled=false \
             --set images.worker.tag=${{ inputs.worker_tag || 'main' }} \
+            --set inferenceServer.gateway.name=ma-gateway \
+            --set inferenceServer.gateway.serviceName=ma-gateway-istio \
+            --set inferenceServer.gateway.serviceNamespace=default \
+            --set inferenceServer.gateway.portName=http \
             --set objectStorage.existingSecret=minio-credentials
 
       - name: Diagnose sandbox sync failure
