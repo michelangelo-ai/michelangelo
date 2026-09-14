@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Exercises retrain-example through both direct Python and remote Starlark execution.
 
-set -euo pipefail
+set -Eeuo pipefail
 
 NAMESPACE="${MA_NAMESPACE:-default}"
 POLL_INTERVAL="${POLL_INTERVAL:-15}"
@@ -17,6 +17,30 @@ MINIO_ACCESS_KEY="${MINIO_ACCESS_KEY:-$(kubectl get secret minio-credentials -o 
 MINIO_SECRET_KEY="${MINIO_SECRET_KEY:-$(kubectl get secret minio-credentials -o jsonpath='{.data.AWS_SECRET_ACCESS_KEY}' 2>/dev/null | base64 -d || echo minioadmin)}"
 
 log() { echo "[$(date -u '+%H:%M:%S')] $*"; }
+
+diagnose_retrain_failure() {
+  trap - ERR
+  log "Retrain diagnostics"
+  kubectl get inferenceservers.michelangelo.api inference-server-example \
+    -n "${NAMESPACE}" -o yaml || true
+  kubectl get deployments.michelangelo.api retrain-example \
+    -n "${NAMESPACE}" -o yaml || true
+  kubectl get pipelineruns -n "${NAMESPACE}" -o wide || true
+  kubectl get deployment/triton-inference-server-example \
+    service/inference-server-example-inference-service \
+    pods -n "${NAMESPACE}" -o wide || true
+  kubectl describe deployment/triton-inference-server-example \
+    -n "${NAMESPACE}" || true
+  kubectl get events -n "${NAMESPACE}" --sort-by=.lastTimestamp | tail -100 || true
+  kubectl logs deployment/triton-inference-server-example \
+    -n "${NAMESPACE}" --all-containers --tail=200 || true
+  kubectl logs deployment/michelangelo-controllermgr \
+    -n "${NAMESPACE}" --all-containers --tail=300 || true
+  kubectl logs daemonset/model-sync \
+    -n "${NAMESPACE}" --all-containers --tail=200 || true
+}
+
+trap diagnose_retrain_failure ERR
 
 wait_for_pipeline_run() {
   local run_name="$1"
@@ -70,6 +94,11 @@ assert_healthy_deployment() {
 }
 
 cd "${PYTHON_DIR}"
+
+log "Starting the lightweight retrain inference backend"
+kubectl apply -f "${REPO_ROOT}/.github/scripts/retrain-inference-server.yaml"
+kubectl rollout status deployment/triton-inference-server-example \
+  -n "${NAMESPACE}" --timeout=180s
 
 inference_state=$(kubectl get inferenceservers.michelangelo.api \
   inference-server-example -n "${NAMESPACE}" -o jsonpath='{.status.state}' \
@@ -126,3 +155,4 @@ if [[ "${remote_revision}" = "${local_revision}" ]]; then
 fi
 log "Remote execution deployed ${remote_revision}"
 log "Retrain local and remote integration test passed"
+trap - ERR
