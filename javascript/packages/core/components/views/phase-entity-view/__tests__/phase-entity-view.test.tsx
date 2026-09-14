@@ -85,6 +85,90 @@ describe('PhaseEntityView', () => {
     expect(await screen.findByRole('cell', { name: 'my-pipeline' })).toBeInTheDocument();
   });
 
+  describe('list variants', () => {
+    const buildVariantEntity = () =>
+      buildPipelineEntityConfig({
+        views: [
+          {
+            type: 'list',
+            tableConfig: { columns: [{ id: 'metadata.name', label: 'Name' }] },
+            variants: [
+              { id: 'pipelines', label: 'Pipelines' },
+              {
+                id: 'revisions',
+                label: 'Revisions',
+                service: 'revision',
+                tableConfig: {
+                  columns: [{ id: 'spec.baseResource.name', label: 'Pipeline' }],
+                },
+                serviceOptions: { listOptions: { limit: '250' } },
+              },
+            ],
+          },
+        ],
+      }) as ListableEntity;
+
+    const renderView = (location: string) => {
+      const request = createQueryMockRouter({
+        ListPipeline: { pipelineList: { items: [{ metadata: { name: 'my-pipeline' } }] } },
+        ListRevision: {
+          revisionList: { items: [{ spec: { baseResource: { name: 'my-pipeline' } } }] },
+        },
+      });
+      render(
+        <PhaseEntityView
+          phaseConfig={buildPhaseConfig({ pipelineTypes: ['PIPELINE_TYPE_TRAIN'] })}
+          entities={[buildVariantEntity()]}
+        />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getErrorProviderWrapper(),
+          getServiceProviderWrapper({ request }),
+          getRouterWrapper({ location }),
+          getIconProviderWrapper(),
+        ])
+      );
+      return request;
+    };
+
+    it('renders the first variant by default with a segmented control', async () => {
+      const request = renderView('/project-1/training/pipelines');
+
+      expect(await screen.findByRole('cell', { name: 'my-pipeline' })).toBeInTheDocument();
+      expect(screen.getByRole('columnheader', { name: /Name/ })).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: 'Pipelines' })).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: 'Revisions' })).toBeInTheDocument();
+      expect(request).toHaveBeenCalledWith(
+        'ListPipeline',
+        expect.objectContaining({
+          listOptions: { fieldSelector: 'pipeline_type in (PIPELINE_TYPE_TRAIN)' },
+        }),
+        expect.anything()
+      );
+    });
+
+    it('switches data source and scopes the query when a segment is clicked', async () => {
+      const user = userEvent.setup();
+      const request = renderView('/project-1/training/pipelines');
+      await screen.findByRole('cell', { name: 'my-pipeline' });
+
+      await user.click(screen.getByRole('option', { name: 'Revisions' }));
+
+      expect(await screen.findByRole('columnheader', { name: /Pipeline/ })).toBeInTheDocument();
+      expect(request).toHaveBeenCalledWith(
+        'ListRevision',
+        expect.objectContaining({
+          listOptions: {
+            limit: '250',
+            fieldSelector: 'base_type=Pipeline',
+            labelSelector: 'michelangelo/PipelineType in (PIPELINE_TYPE_TRAIN)',
+          },
+        }),
+        expect.anything()
+      );
+    });
+  });
+
   it('opens the action component when an action menu item is clicked', async () => {
     const user = userEvent.setup();
     const RunDialog = () => <div role="dialog">Run dialog</div>;
