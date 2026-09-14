@@ -225,6 +225,7 @@ fi
 
 log "Registering the namespace-compatible BERT/CoLA and retrain pipelines"
 ensure_minio_ready
+kubectl apply -f "${PYTHON_DIR}/examples/retrain_example/project.yaml"
 AWS_ACCESS_KEY_ID="${MINIO_ACCESS_KEY}" \
 AWS_SECRET_ACCESS_KEY="${MINIO_SECRET_KEY}" \
 AWS_ENDPOINT_URL="${MINIO_ENDPOINT}" \
