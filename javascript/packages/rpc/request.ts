@@ -2,6 +2,7 @@ import { fromBinary, toJson } from '@bufbuild/protobuf';
 
 import { TypedStructSchema } from './gen/michelangelo/api/typed_struct_pb';
 import { getRpcHandlers } from './handlers';
+import { typeRegistry } from './services';
 
 import type { Any } from '@bufbuild/protobuf/wkt';
 import type { OmitTypeName, RpcHandlerType } from './types';
@@ -47,8 +48,8 @@ function toPlainObject(value: unknown): unknown {
   if (value instanceof Uint8Array) return value; // preserve bytes fields (e.g. google.protobuf.Any.value)
   if (Array.isArray(value)) return value.map(toPlainObject);
 
-  const typedStruct = unpackTypedStructAny(value);
-  if (typedStruct) return typedStruct;
+  const unpacked = unpackAny(value);
+  if (unpacked !== undefined) return unpacked;
 
   const result: Record<string, unknown> = {};
   for (const [key, val] of Object.entries(value)) {
@@ -58,16 +59,28 @@ function toPlainObject(value: unknown): unknown {
   return result;
 }
 
-const TYPED_STRUCT_TYPE_URL = `type.googleapis.com/${TypedStructSchema.typeName}`;
+const TYPE_URL_PREFIX = 'type.googleapis.com/';
+const TYPED_STRUCT_TYPE_URL = `${TYPE_URL_PREFIX}${TypedStructSchema.typeName}`;
 
 // google.protobuf.Any fields survive fromJson as { typeUrl, value: Uint8Array } — the binary
-// payload is useless to consumers. When the payload is a michelangelo.api.TypedStruct
-// (e.g. PipelineManifest.content), expand it to { typeUrl, value } where typeUrl names the
-// inner config type and value is its plain JSON. Other Any payloads are left untouched.
-function unpackTypedStructAny(value: object): unknown {
+// payload is useless to consumers.
+//
+// - A michelangelo.api.TypedStruct payload (e.g. PipelineManifest.content) expands to
+//   { typeUrl, value } where typeUrl names the inner config type and value is its plain JSON.
+// - Any other payload whose type is in the RPC type registry (e.g. a Pipeline inside
+//   Revision.spec.content) is decoded and flattened into a plain object shaped exactly like
+//   that message would be if it arrived as a top-level response, so column paths such as
+//   `spec.content.spec.type` read the same values (numeric enums, Timestamp objects) as they
+//   would on the base resource.
+// - Unregistered payloads are left untouched.
+function unpackAny(value: object): unknown {
   if (!('$typeName' in value) || value.$typeName !== 'google.protobuf.Any') return undefined;
   // cast: the $typeName check above identifies this as a google.protobuf.Any message
   const any = value as Any;
-  if (any.typeUrl !== TYPED_STRUCT_TYPE_URL) return undefined;
-  return toJson(TypedStructSchema, fromBinary(TypedStructSchema, any.value));
+  if (any.typeUrl === TYPED_STRUCT_TYPE_URL) {
+    return toJson(TypedStructSchema, fromBinary(TypedStructSchema, any.value));
+  }
+  const schema = typeRegistry.getMessage(any.typeUrl.replace(TYPE_URL_PREFIX, ''));
+  if (!schema) return undefined;
+  return toPlainObject(fromBinary(schema, any.value));
 }
