@@ -7,9 +7,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/deployment"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/suite"
-	"go.starlark.net/starlark"
-	"go.uber.org/cadence"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -54,7 +52,13 @@ func (r *Test) TestCreateOrUpdateDeployment_Update() {
 	// Mock successful UpdateDeployment
 	env.OnActivity(deployment.Activities.UpdateDeployment, mock.Anything, mock.Anything).Return(&v2pb.Deployment{}, nil)
 
-	// Note: Full integration test would require executing test.star file
-	// This test verifies the basic activity mocking structure compiles correctly
+	r.env.Cadence.ExecuteFunction("/test.star", "test_update_deployment", nil, nil, nil)
+	require := r.Require()
+	var res any
+	err := r.env.Cadence.GetResult(&res)
+	require.NoError(err)
+	resMap := res.(map[string]interface{})
+	require.Equal("test-deployment-1", resMap["deployment_name"])
+	require.Equal("test-model-revision-2", resMap["model_revision_name"])
 }
 

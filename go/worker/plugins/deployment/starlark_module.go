@@ -9,8 +9,8 @@ import (
 	"github.com/cadence-workflow/starlark-worker/workflow"
 	"go.starlark.net/starlark"
 
-	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	deployment "github.com/michelangelo-ai/michelangelo/go/worker/activities/deployment"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
