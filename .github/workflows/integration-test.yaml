@@ -85,13 +85,36 @@ jobs:
       # is kept running between runs — no re-init overhead.
       - name: Sync sandbox
         run: |
-          $HOME/.local/bin/poetry run ma sandbox sync --workflow cadence \
+          timeout 180s $HOME/.local/bin/poetry run ma sandbox sync --workflow cadence \
+            --wait-timeout 120 \
             --set apiserver.metadataStorage.enable=true \
             --set controllermgr.metadataStorage.enable=true \
             --set controllermgr.jobs.k8sengine.mapper.logPersistence.enabled=false \
             --set monitoring.enabled=false \
             --set images.worker.tag=${{ inputs.worker_tag || 'main' }} \
             --set objectStorage.existingSecret=minio-credentials
+
+      - name: Diagnose sandbox sync failure
+        if: failure()
+        run: |
+          kubectl get deployments,pods --namespace default -o wide || true
+          kubectl describe deployment/michelangelo-worker \
+            --namespace default || true
+          kubectl describe pods --namespace default \
+            --selector app.kubernetes.io/component=worker || true
+          kubectl get pods --namespace default \
+            --selector app.kubernetes.io/component=worker \
+            -o custom-columns='NAME:.metadata.name,PHASE:.status.phase,IMAGE:.spec.containers[*].image,IMAGE_ID:.status.containerStatuses[*].imageID,RESTARTS:.status.containerStatuses[*].restartCount' \
+            || true
+          while read -r pod; do
+            echo "Current logs for ${pod}"
+            kubectl logs "${pod}" --namespace default \
+              --all-containers --tail=200 || true
+            echo "Previous logs for ${pod}"
+            kubectl logs "${pod}" --namespace default \
+              --all-containers --previous --tail=200 || true
+          done < <(kubectl get pods --namespace default \
+            --selector app.kubernetes.io/component=worker -o name)
 
       - name: Check out integration-test repo
         uses: actions/checkout@v7
