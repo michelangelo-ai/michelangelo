@@ -32,7 +32,8 @@ from __future__ import annotations
 import logging
 import os
 import tempfile
-from typing import Any
+import uuid
+from typing import TYPE_CHECKING, Any
 
 import fsspec
 
@@ -44,6 +45,10 @@ from michelangelo.workflow.variables.metadata import (
     TRAINING_FRAMEWORK_PYTORCH,
     ModelMetadata,
 )
+from michelangelo.workflow.variables.types import ModelArtifact
+
+if TYPE_CHECKING:
+    from michelangelo.lib.artifact_manager.storage_backend import StorageBackend
 
 _logger = logging.getLogger(__name__)
 
@@ -92,8 +97,6 @@ class ModelVariable(Variable):
                 save. Passed through by the UniFlow codec when reconstructing
                 a ``ModelVariable`` from a task result.
         """
-        import uuid
-
         if path is None:
             path = (
                 f"{os.environ.get('UF_STORAGE_URL', 'memory://storage')}/"
@@ -457,3 +460,66 @@ class ModelVariable(Variable):
         model.eval()
         self._value = model
         self._saved = True
+
+    # ------------------------------------------------------------------
+    # StorageBackend interop
+    # ------------------------------------------------------------------
+
+    def to_artifact(
+        self,
+        storage_backend: StorageBackend,
+        *,
+        destination_key: str | None = None,
+    ) -> ModelArtifact:
+        """Persist this variable's weights through storage_backend as a ModelArtifact.
+
+        ``ModelVariable.path`` is written under ``UF_STORAGE_URL`` via fsspec,
+        independent of any pipeline's ``StorageBackend`` instance -- a
+        ``LocalStorageBackend.download()`` only accepts URIs it produced
+        itself, so a variable's path cannot be handed directly to a task
+        (e.g. ``torch_assembler``) that requires a ``StorageBackend``-
+        addressable ``ModelArtifact``. This method downloads the variable's
+        persisted weights (a directory tree for ``"custom"`` framework
+        variables, a single file for ``"pytorch"``/``"lightning"``) and
+        re-uploads them through *storage_backend*, producing a URI that
+        backend can later ``download()``.
+
+        Args:
+            storage_backend: Backend to upload through. The returned
+                ``ModelArtifact.path`` is only valid for ``download()`` calls
+                on this same backend instance -- callers must pass the same
+                instance to any downstream task that needs to read it back.
+            destination_key: Optional destination key forwarded to
+                ``storage_backend.upload()``. Defaults to
+                ``f"model_variable/{uuid.uuid4().hex}"``.
+
+        Returns:
+            A ``ModelArtifact`` whose ``path`` is a URI produced by
+            *storage_backend*, and whose ``metadata`` is this variable's
+            ``metadata`` object, unchanged -- including any ``schema``/
+            ``sample_data``/``hyperparameters`` already set by the producing
+            task.
+
+        Raises:
+            ValueError: If this variable has not been saved (``self.path``
+                does not resolve to an existing file or directory).
+        """
+        fs, remote_path = fsspec.core.url_to_fs(self.path)
+        if not fs.exists(remote_path):
+            raise ValueError(
+                f"Cannot convert unsaved ModelVariable to ModelArtifact: "
+                f"{self.path!r} does not exist. Call save() first."
+            )
+
+        key = destination_key or f"model_variable/{uuid.uuid4().hex}"
+        is_dir = self.metadata.training_framework == TRAINING_FRAMEWORK_CUSTOM
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            local_path = os.path.join(temp_dir, "model")
+            if is_dir:
+                fs.get(remote_path, local_path, recursive=True)
+            else:
+                fs.get(remote_path, local_path)
+            uri = storage_backend.upload(local_path, key)
+
+        return ModelArtifact(path=uri, metadata=self.metadata)
