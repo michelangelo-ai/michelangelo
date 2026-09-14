@@ -131,8 +131,8 @@ def _build_input_struct(
         if environ is not None:
             env_struct = Struct()
             for k, v in environ.items():
-                env_struct[k] = Value(string_value=str(v))
-            pb_struct["environ"] = Value(struct_value=env_struct)
+                env_struct.fields[k].CopyFrom(Value(string_value=str(v)))
+            pb_struct.fields["environ"].CopyFrom(Value(struct_value=env_struct))
 
         # Process args (list of Struct)
         if args is not None:
@@ -143,9 +143,11 @@ def _build_input_struct(
                     arg_struct.update(arg)
                 else:
                     arg_struct = Struct()
-                    arg_struct["value"] = _python_to_value(arg)
+                    arg_struct.fields["value"].CopyFrom(_python_to_value(arg))
                 arg_list.append(Value(struct_value=arg_struct))
-            pb_struct["args"] = Value(list_value=struct_pb2.ListValue(values=arg_list))
+            pb_struct.fields["args"].CopyFrom(
+                Value(list_value=struct_pb2.ListValue(values=arg_list))
+            )
 
         # Process kwargs (dict -> sorted list of [key, value] pairs)
         if kwargs is not None:
@@ -164,8 +166,8 @@ def _build_input_struct(
                         )
                     )
                 )
-            pb_struct["kwargs"] = Value(
-                list_value=struct_pb2.ListValue(values=kwarg_list)
+            pb_struct.fields["kwargs"].CopyFrom(
+                Value(list_value=struct_pb2.ListValue(values=kwarg_list))
             )
 
         return pb_struct if pb_struct else None
