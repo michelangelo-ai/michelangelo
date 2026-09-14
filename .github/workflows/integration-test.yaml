@@ -87,9 +87,50 @@ jobs:
             exit 0
           fi
 
-          kubectl wait --for=condition=available deployment \
-            --selector app.kubernetes.io/name=cadence,app.kubernetes.io/component=frontend \
-            --timeout=300s
+          api_ready=false
+          for attempt in $(seq 1 12); do
+            k3d cluster start michelangelo-sandbox || true
+            if kubectl get --raw=/readyz >/dev/null 2>&1; then
+              api_ready=true
+              break
+            fi
+            echo "Kubernetes API is not ready (attempt ${attempt}/12)."
+            if (( attempt < 12 )); then
+              sleep 5
+            fi
+          done
+          if [[ "${api_ready}" = false ]]; then
+            k3d cluster list || true
+            docker ps --filter name=k3d-michelangelo-sandbox || true
+            kubectl cluster-info || true
+            exit 1
+          fi
+
+          frontend_ready=false
+          for attempt in $(seq 1 6); do
+            if kubectl wait --for=condition=available deployment \
+                --selector app.kubernetes.io/name=cadence,app.kubernetes.io/component=frontend \
+                --timeout=30s; then
+              frontend_ready=true
+              break
+            fi
+            echo "Cadence frontend is not ready (attempt ${attempt}/6)."
+            if (( attempt < 6 )); then
+              sleep 5
+            fi
+          done
+          if [[ "${frontend_ready}" = false ]]; then
+            k3d cluster list || true
+            docker ps --filter name=k3d-michelangelo-sandbox || true
+            kubectl cluster-info || true
+            kubectl get deployments,pods --namespace default -o wide || true
+            kubectl describe deployment \
+              --selector app.kubernetes.io/name=cadence,app.kubernetes.io/component=frontend \
+              --namespace default || true
+            kubectl logs deployment/michelangelo-cadence-frontend \
+              --namespace default --all-containers --tail=200 || true
+            exit 1
+          fi
 
           for attempt in $(seq 1 21); do
             pod_name="cadence-domain-${GITHUB_RUN_ID}-${attempt}"
