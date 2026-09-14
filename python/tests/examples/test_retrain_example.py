@@ -100,11 +100,17 @@ def test_retrain_runs_child_then_deploys_its_model(
 
 def test_pipeline_resources_use_existing_training_code_in_one_namespace():
     """Retrain, training, and inference demo resources can coexist in default."""
+    project = yaml.safe_load((_EXAMPLE_DIR / "project.yaml").read_text())
     retrain_pipeline = yaml.safe_load((_EXAMPLE_DIR / "pipeline.yaml").read_text())
     training_pipeline = yaml.safe_load(
         (_EXAMPLE_DIR / "training_pipeline.yaml").read_text()
     )
 
+    assert project["metadata"] == {
+        "namespace": "default",
+        "name": "default",
+        "annotations": {"michelangelo/worker_queue": "default"},
+    }
     assert retrain_pipeline["metadata"] == {
         "namespace": "default",
         "name": "retrain-example",
