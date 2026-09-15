@@ -12,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+	"github.com/michelangelo-ai/michelangelo/go/api"
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	"github.com/michelangelo-ai/michelangelo/go/base/revision"
@@ -109,6 +110,7 @@ func TestReconcile_RevisioningEnabled(t *testing.T) {
 			Namespace: "test-namespace",
 		},
 		Spec: v2pb.PipelineSpec{
+			Type: v2pb.PIPELINE_TYPE_DATA_PREP,
 			Commit: &v2pb.CommitInfo{
 				GitRef: "abc123456789",
 				Branch: "main",
@@ -133,6 +135,7 @@ func TestReconcile_RevisioningEnabled(t *testing.T) {
 	require.NoError(t, reconciler.Get(context.Background(), "test-namespace", "pipeline-test-pipeline-abc123456789", &metav1.GetOptions{}, rev))
 	assert.Equal(t, "abc123456789", rev.Spec.RevisionId)
 	assert.Equal(t, "Pipeline", rev.Spec.BaseType.Kind)
+	assert.Equal(t, "PIPELINE_TYPE_DATA_PREP", rev.Labels[api.PipelineTypeLabelName])
 }
 
 func TestReconcile_RevisioningEnabled_NoCommit(t *testing.T) {
