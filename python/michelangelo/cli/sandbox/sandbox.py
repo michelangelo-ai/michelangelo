@@ -405,6 +405,10 @@ def _sync(ns: argparse.Namespace):
         "--timeout=120s",
     )
 
+    # Refresh the self-cluster endpoint so older sandboxes stop advertising
+    # the host-only k3d API address to in-cluster controllers.
+    _create_compute_cluster_crd(_michelangelo_sandbox_kube_cluster_name)
+
     # Upgrade or install the control plane via Helm.
     # Infrastructure (mysql, cadence, minio, grafana, prometheus) is left running.
 
