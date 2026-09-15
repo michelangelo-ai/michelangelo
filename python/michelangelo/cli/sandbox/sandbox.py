@@ -405,6 +405,10 @@ def _sync(ns: argparse.Namespace):
         "--timeout=120s",
     )
 
+    # Refresh the self-cluster endpoint so older sandboxes stop advertising
+    # the host-only k3d API address to in-cluster controllers.
+    _create_compute_cluster_crd(_michelangelo_sandbox_kube_cluster_name)
+
     # Upgrade or install the control plane via Helm.
     # Infrastructure (mysql, cadence, minio, grafana, prometheus) is left running.
 
@@ -1954,16 +1958,7 @@ def _create_compute_cluster_crd(cluster_name: str):
     # Extract server URL from clusters[0].cluster.server
     server_url = kubeconfig_data["clusters"][0]["cluster"]["server"]
 
-    # Extract host and port from server URL
-    # Example: "https://host.docker.internal:52910"
-    import re
-
-    match = re.search(r"(https://[^:]+):(\d+)", server_url)
-    if not match:
-        raise ValueError(
-            f"Could not extract cluster host and port from server URL: {server_url}"
-        )
-    host, port = match.groups()
+    host, port = _compute_cluster_endpoint(cluster_name, server_url)
 
     # Create Cluster CRD manifest
     cluster_crd = {
@@ -2002,6 +1997,21 @@ def _create_compute_cluster_crd(cluster_name: str):
         print(f"Cluster host: {host}")
         print(f"Cluster port: {port}")
         print(f"Server URL: {server_url}")
+
+
+def _compute_cluster_endpoint(cluster_name: str, server_url: str) -> tuple[str, str]:
+    if cluster_name == _michelangelo_sandbox_kube_cluster_name:
+        return "https://kubernetes.default.svc", "443"
+
+    # Example: "https://host.docker.internal:52910"
+    import re
+
+    match = re.search(r"(https://[^:]+):(\d+)", server_url)
+    if not match:
+        raise ValueError(
+            f"Could not extract cluster host and port from server URL: {server_url}"
+        )
+    return match.groups()
 
 
 def _create_compute_cluster_secrets(cluster_name: str):

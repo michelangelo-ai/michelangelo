@@ -19,6 +19,12 @@ on:
           Defaults to "main". Use a feature branch to test unreleased fixture changes.
         required: false
         default: "main"
+      worker_tag:
+        description: >
+          GHCR worker image tag. Use a dev-release sha tag to test worker changes.
+          Defaults to "main".
+        required: false
+        default: "main"
   workflow_call:
     inputs:
       image_tag:
@@ -28,6 +34,11 @@ on:
         default: "latest"
       integration_test_ref:
         description: "Branch or ref of michelangelo-ai/integration-test to check out"
+        required: false
+        type: string
+        default: "main"
+      worker_tag:
+        description: "GHCR worker image tag"
         required: false
         type: string
         default: "main"
@@ -61,6 +72,91 @@ jobs:
           poetry env use python3
           poetry install --no-interaction -E dev -E example
 
+      - name: Recover storage-pressured sandbox
+        run: ../.github/scripts/recover-sandbox-storage.sh
+
+      - name: Recover failed MySQL pod
+        run: |
+          if [ "$(kubectl get pod mysql -o jsonpath='{.status.phase}' 2>/dev/null || true)" = "Failed" ]; then
+            kubectl delete pod mysql --ignore-not-found
+            kubectl apply -f michelangelo/cli/sandbox/resources/mysql.yaml
+            kubectl wait --for=condition=Ready pod/mysql --timeout=180s
+          fi
+
+      - name: Ensure Cadence domain exists
+        run: |
+          if ! k3d cluster get michelangelo-sandbox >/dev/null 2>&1; then
+            echo "Sandbox does not exist yet; sandbox create will register the domain."
+            exit 0
+          fi
+
+          api_ready=false
+          for attempt in $(seq 1 12); do
+            k3d cluster start michelangelo-sandbox || true
+            if kubectl get --raw=/readyz >/dev/null 2>&1; then
+              api_ready=true
+              break
+            fi
+            echo "Kubernetes API is not ready (attempt ${attempt}/12)."
+            if (( attempt < 12 )); then
+              sleep 5
+            fi
+          done
+          if [[ "${api_ready}" = false ]]; then
+            k3d cluster list || true
+            docker ps --filter name=k3d-michelangelo-sandbox || true
+            kubectl cluster-info || true
+            exit 1
+          fi
+
+          frontend_ready=false
+          for attempt in $(seq 1 6); do
+            if kubectl wait --for=condition=available deployment \
+                --selector app.kubernetes.io/name=cadence,app.kubernetes.io/component=frontend \
+                --timeout=30s; then
+              frontend_ready=true
+              break
+            fi
+            echo "Cadence frontend is not ready (attempt ${attempt}/6)."
+            if (( attempt < 6 )); then
+              sleep 5
+            fi
+          done
+          if [[ "${frontend_ready}" = false ]]; then
+            k3d cluster list || true
+            docker ps --filter name=k3d-michelangelo-sandbox || true
+            kubectl cluster-info || true
+            kubectl get deployments,pods --namespace default -o wide || true
+            kubectl describe deployment \
+              --selector app.kubernetes.io/name=cadence,app.kubernetes.io/component=frontend \
+              --namespace default || true
+            kubectl logs deployment/michelangelo-cadence-frontend \
+              --namespace default --all-containers --tail=200 || true
+            exit 1
+          fi
+
+          for attempt in $(seq 1 21); do
+            pod_name="cadence-domain-${GITHUB_RUN_ID}-${attempt}"
+            if registration_output=$(kubectl run "${pod_name}" \
+                --restart=Never --rm --stdin \
+                --image=ubercadence/cli:v1.2.6 \
+                --env=CADENCE_CLI_ADDRESS=michelangelo-cadence-frontend:7933 \
+                --command -- cadence --domain default domain register --rd 1 2>&1); then
+              echo "${registration_output}"
+              exit 0
+            fi
+            echo "${registration_output}"
+            if grep -Eq 'Domain already exists|already registered' \
+                <<< "${registration_output}"; then
+              echo "Cadence domain 'default' is already registered."
+              exit 0
+            fi
+            if (( attempt < 21 )); then
+              sleep 5
+            fi
+          done
+          exit 1
+
       # Sync restarts only Michelangelo app services (apiserver, envoy, ui, worker,
       # controllermgr). Infrastructure (MySQL, Cadence, MinIO, Grafana, Prometheus)
       # is kept running between runs — no re-init overhead.
@@ -70,7 +166,35 @@ jobs:
             --set apiserver.metadataStorage.enable=true \
             --set controllermgr.metadataStorage.enable=true \
             --set controllermgr.jobs.k8sengine.mapper.logPersistence.enabled=false \
+            --set monitoring.enabled=false \
+            --set images.worker.tag=${{ inputs.worker_tag || 'main' }} \
+            --set inferenceServer.gateway.name=ma-gateway \
+            --set inferenceServer.gateway.serviceName=ma-gateway-istio \
+            --set inferenceServer.gateway.serviceNamespace=default \
+            --set inferenceServer.gateway.portName=http \
             --set objectStorage.existingSecret=minio-credentials
+
+      - name: Diagnose sandbox sync failure
+        if: failure()
+        run: |
+          kubectl get deployments,pods --namespace default -o wide || true
+          kubectl describe deployment/michelangelo-worker \
+            --namespace default || true
+          kubectl describe pods --namespace default \
+            --selector app.kubernetes.io/component=worker || true
+          kubectl get pods --namespace default \
+            --selector app.kubernetes.io/component=worker \
+            -o custom-columns='NAME:.metadata.name,PHASE:.status.phase,IMAGE:.spec.containers[*].image,IMAGE_ID:.status.containerStatuses[*].imageID,RESTARTS:.status.containerStatuses[*].restartCount' \
+            || true
+          while read -r pod; do
+            echo "Current logs for ${pod}"
+            kubectl logs "${pod}" --namespace default \
+              --all-containers --tail=200 || true
+            echo "Previous logs for ${pod}"
+            kubectl logs "${pod}" --namespace default \
+              --all-containers --previous --tail=200 || true
+          done < <(kubectl get pods --namespace default \
+            --selector app.kubernetes.io/component=worker -o name)
 
       - name: Check out integration-test repo
         uses: actions/checkout@v7
@@ -93,6 +217,31 @@ jobs:
       - name: Install michelangelo-examples dependencies
         # only michelangelo_examples' own thin package needs installing here.
         run: .venv/bin/pip install -q --no-deps "$GITHUB_WORKSPACE/michelangelo-examples"
+
+      - name: Wait for apiserver gRPC readiness
+        run: |
+          if kubectl rollout status deployment/michelangelo-apiserver \
+              --namespace default --timeout=300s \
+            && .venv/bin/python - <<'PY'
+          import grpc
+
+          channel = grpc.insecure_channel("localhost:15566")
+          try:
+              grpc.channel_ready_future(channel).result(timeout=300)
+              print("Michelangelo apiserver gRPC endpoint is ready.")
+          finally:
+              channel.close()
+          PY
+          then
+            exit 0
+          fi
+
+          kubectl get pods --namespace default -o wide || true
+          kubectl describe deployment/michelangelo-apiserver \
+            --namespace default || true
+          kubectl logs deployment/michelangelo-apiserver --namespace default \
+            --all-containers --tail=200 || true
+          exit 1
 
       - name: Run API CRUD tests
         run: |
@@ -129,6 +278,12 @@ jobs:
             sleep 10
           done
           echo "WARNING: worker did not confirm Cadence connection after 300s, proceeding anyway"
+
+      - name: Run retrain local and remote e2e
+        run: ../.github/scripts/retrain-integration-test.sh
+        env:
+          MA_API_SERVER: localhost:15566
+          MA_NAMESPACE: default
 
       - name: Run CLI e2e tests
         run: |

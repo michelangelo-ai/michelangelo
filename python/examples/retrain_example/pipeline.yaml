@@ -1,0 +1,11 @@
+apiVersion: michelangelo.api/v2
+kind: Pipeline
+metadata:
+  namespace: default
+  name: retrain-example
+  annotations:
+    michelangelo/uniflow-image: ghcr.io/michelangelo-ai/examples:main
+spec:
+  type: PIPELINE_TYPE_RETRAIN
+  manifest:
+    filePath: examples.retrain_example.retrain
