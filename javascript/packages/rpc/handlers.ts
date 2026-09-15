@@ -36,6 +36,7 @@ async function createHandlers() {
   const services = await getServices();
 
   return {
+    ListCluster: unary(services.ClusterService.listCluster),
     ListDeployment: unary(services.DeploymentService.listDeployment),
     GetDeployment: unary(services.DeploymentService.getDeployment),
     CreateDeployment: (record: Deployment, headers?: Record<string, string>) => {

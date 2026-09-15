@@ -8,6 +8,7 @@ import {
 
 import { createFetchTransport } from './create-fetch-transport';
 import { TypedStructSchema } from './gen/michelangelo/api/typed_struct_pb';
+import { ClusterService } from './gen/michelangelo/api/v2/cluster_svc_pb';
 import { DeploymentService } from './gen/michelangelo/api/v2/deployment_svc_pb';
 import { InferenceServerService } from './gen/michelangelo/api/v2/inference_server_svc_pb';
 import { ModelFamilyService } from './gen/michelangelo/api/v2/model_family_svc_pb';
@@ -80,6 +81,7 @@ async function createServices(): Promise<Services> {
   const transport = createFetchTransport({ baseUrl: apiBaseUrl });
 
   return {
+    ClusterService: createServiceClient(ClusterService, transport),
     DeploymentService: createServiceClient(DeploymentService, transport),
     InferenceServerService: createServiceClient(InferenceServerService, transport),
     ProjectService: createServiceClient(ProjectService, transport),
