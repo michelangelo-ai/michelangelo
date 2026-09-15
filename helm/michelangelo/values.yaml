@@ -75,6 +75,29 @@ objectStorage:
   existingSecret: ""
 
 # -----------------------------------------------------------------------------
+# Google Cloud Storage — optional native gs:// support for the worker and
+# controller manager. Independent of `objectStorage`, which remains the
+# S3-compatible store for artifacts, models, and logs.
+# -----------------------------------------------------------------------------
+gcsStorage:
+  # Render GCS client configuration. With GKE workload identity,
+  # `enabled: true` alone is enough: credentials resolve via Application
+  # Default Credentials and no keys are stored in the cluster.
+  enabled: false
+
+  # Optional. Name of a pre-existing Secret with a `credentials.json` key
+  # holding a GCP service account JSON key, mounted read-only at
+  # /etc/gcs/credentials.json. Leave empty to use Application Default
+  # Credentials (recommended).
+  existingSecret: ""
+
+  # Optional. Custom storage endpoint (private Google access or an emulator).
+  endpoint: ""
+
+  # Optional. Disable authentication. Public buckets and emulators only.
+  anonymous: false
+
+# -----------------------------------------------------------------------------
 # Workflow engine — Cadence or Temporal. Required by worker and apiserver.
 # -----------------------------------------------------------------------------
 workflow:
