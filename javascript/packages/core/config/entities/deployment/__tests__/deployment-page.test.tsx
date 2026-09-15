@@ -572,21 +572,6 @@ describe('Deployment delete action', () => {
   const DEPLOYMENT_NAME = 'test-delete-action';
   const NAMESPACE = 'ma-dev-test';
 
-  function buildRecord() {
-    return {
-      metadata: {
-        name: DEPLOYMENT_NAME,
-        namespace: NAMESPACE,
-        creationTimestamp: { seconds: 1757019547 },
-      },
-      spec: {
-        desiredRevision: { name: 'bert-cola-37', namespace: NAMESPACE },
-        target: { case: 'inferenceServer', value: { name: 'inference-server-example' } },
-      },
-      status: {},
-    };
-  }
-
   async function openDeleteDialog(user: ReturnType<typeof userEvent.setup>) {
     await user.click(screen.getByRole('button', { name: 'Actions' }));
     await user.click(await screen.findByRole('option', { name: 'Delete' }));
@@ -602,9 +587,21 @@ describe('Deployment delete action', () => {
   it('warns in the dialog, sends nothing on cancel, then deletes the record and toasts on confirm', async () => {
     const user = userEvent.setup();
     const request = createQueryMockRouter({ DeleteDeployment: {} });
+    const record = {
+      metadata: {
+        name: DEPLOYMENT_NAME,
+        namespace: NAMESPACE,
+        creationTimestamp: { seconds: 1757019547 },
+      },
+      spec: {
+        desiredRevision: { name: 'bert-cola-37', namespace: NAMESPACE },
+        target: { case: 'inferenceServer', value: { name: 'inference-server-example' } },
+      },
+      status: {},
+    };
 
     render(
-      <InterpolatableActionsPopover actions={DEPLOYMENT_ACTIONS} record={buildRecord()} />,
+      <InterpolatableActionsPopover actions={DEPLOYMENT_ACTIONS} record={record} />,
       buildWrapper([
         getBaseProviderWrapper(),
         getErrorProviderWrapper(),
