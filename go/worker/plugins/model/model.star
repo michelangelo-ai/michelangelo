@@ -4,6 +4,15 @@ model.star allows you to implement plugins related to managing models in starlar
 Functions:
     model_search: searches for a model based on the specified criteria.
 
+    get_models_by_pipeline_run: returns models produced by a PipelineRun.
+
+        Arguments:
+            namespace: str: Namespace where the PipelineRun and models are located.
+            pipeline_run_name: str: Name of the source PipelineRun.
+
+        Returns:
+            models: list[dict]: Model identities with name, namespace, and revision_id.
+
         Arguments:
             namespace: str: Namespace, also known as Michelangelo Project ID, where the model is located.
             deployment_name: str: The deployment name of the model. Use this criterion to find a deployed model by the deployment name. For example, this way you can find the latest model currently in production.
@@ -19,6 +28,9 @@ load("@plugin", "model")
 
 def main():
     return test_model_search()
+
+def get_pipeline_run_models(namespace, pipeline_run_name):
+    return model.get_models_by_pipeline_run(namespace, pipeline_run_name)
 
 def test_model_search():
     """
