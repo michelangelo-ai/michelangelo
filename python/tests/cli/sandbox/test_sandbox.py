@@ -262,6 +262,24 @@ class ComputeClusterSetupTest(TestCase):
         self.assertEqual(exec_call_args[0], "kubectl")
         self.assertIn("apply", exec_call_args)
 
+    def test_control_plane_cluster_uses_in_cluster_api_endpoint(self):
+        """The controller reaches its own cluster through the service endpoint."""
+        self.assertEqual(
+            sandbox._compute_cluster_endpoint(
+                "michelangelo-sandbox", "https://0.0.0.0:12345"
+            ),
+            ("https://kubernetes.default.svc", "443"),
+        )
+
+    def test_dedicated_compute_cluster_uses_kubeconfig_endpoint(self):
+        """A separate compute cluster retains its kubeconfig endpoint."""
+        self.assertEqual(
+            sandbox._compute_cluster_endpoint(
+                "michelangelo-compute", "https://host.docker.internal:12345"
+            ),
+            ("https://host.docker.internal", "12345"),
+        )
+
     @patch("michelangelo.cli.sandbox.sandbox._exec")
     @patch("michelangelo.cli.sandbox.sandbox.subprocess.check_output")
     def test_create_secrets_success(self, mock_check_output, mock_exec):
