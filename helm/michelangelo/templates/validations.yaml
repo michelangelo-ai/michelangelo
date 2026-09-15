@@ -8,3 +8,6 @@ This file renders to empty YAML when all checks pass.
 {{- if and .Values.monitoring.enabled (not .Values.controllermgr.enabled) -}}
 {{- fail "monitoring.enabled requires controllermgr.enabled=true — the controller manager is the only component exposing a /metrics endpoint. See helm/michelangelo/README.md." -}}
 {{- end -}}
+{{- if not (has .Values.secretsProvider.type (list "sample" "eso")) -}}
+{{- fail (printf "secretsProvider.type must be 'sample' or 'eso', got: %s. See helm/michelangelo/README.md." .Values.secretsProvider.type) -}}
+{{- end -}}
