@@ -1,12 +1,17 @@
 """Tests for the Uniflow retrain example."""
 
+import importlib
+import sys
 from pathlib import Path
-from unittest.mock import patch
+from types import ModuleType
+from unittest.mock import Mock, patch
 
 import yaml
 
+import michelangelo.uniflow.core as uniflow
 from examples.retrain_example.retrain import retrain_workflow
 from michelangelo.uniflow.core.build import build
+from michelangelo.uniflow.plugins.ray import RayTask
 from michelangelo.uniflow.registration.config_builder import ConfigBuilder
 from michelangelo.uniflow.registration.subprocess import (
     discover_workflow_from_config,
@@ -28,6 +33,84 @@ def test_retrain_compiles_to_remote_plugins():
     assert "__model__.get_models_by_pipeline_run(" in source
     assert "__deployment__.create_or_update_deployment(" in source
     assert "__deployment__.wait_for_deployment(" in source
+
+
+@uniflow.task(config=RayTask())
+def _load_data(path, name, tokenizer_max_length):
+    return "train", "validation", "test"
+
+
+@uniflow.task(config=RayTask())
+def _train(train_data, validation_data, test_data):
+    return "result", "model"
+
+
+@uniflow.task(config=RayTask(worker_instances=0))
+def _assembler(model_variable, lr, eps, tokenizer_max_length):
+    return "assembled"
+
+
+@uniflow.task(config=RayTask(worker_instances=0))
+def _push_step(assembled):
+    return ["pushed"]
+
+
+def _module(name, attribute, value):
+    module = ModuleType(name)
+    setattr(module, attribute, value)
+    return module
+
+
+def test_training_adaptation_uses_head_only_ray_tasks():
+    """The e2e training image is pulled onto one sandbox node only."""
+    modules = {
+        "examples.bert_cola.assembler": _module(
+            "examples.bert_cola.assembler", "assembler", _assembler
+        ),
+        "examples.bert_cola.data": _module(
+            "examples.bert_cola.data", "load_data", _load_data
+        ),
+        "examples.bert_cola.push": _module(
+            "examples.bert_cola.push", "push_step", _push_step
+        ),
+        "examples.bert_cola.train": _module(
+            "examples.bert_cola.train", "train", _train
+        ),
+    }
+    with patch.dict(sys.modules, modules):
+        sys.modules.pop("examples.retrain_example.training", None)
+        training = importlib.import_module("examples.retrain_example.training")
+        package = build(training.train_workflow)
+    source = package.files[package.main_file].decode("utf-8")
+
+    assert "alias='retrain_load_data'" in source
+    assert "alias='retrain_train'" in source
+    assert source.count("worker_instances=0") == 4
+
+    load_data = Mock()
+    load_data.with_overrides.return_value.return_value = (
+        "train",
+        "validation",
+        "test",
+    )
+    train = Mock()
+    train.with_overrides.return_value.return_value = ("result", "model")
+    assembler = Mock(return_value="assembled")
+    push_step = Mock(return_value=["pushed"])
+    with (
+        patch.object(training, "_load_data", load_data),
+        patch.object(training, "_train", train),
+        patch.object(training, "assembler", assembler),
+        patch.object(training, "push_step", push_step),
+    ):
+        training.train_workflow()
+
+    assert load_data.with_overrides.call_args.kwargs["config"].worker_instances == 0
+    assert train.with_overrides.call_args.kwargs["config"].worker_instances == 0
+    assembler.assert_called_once_with(
+        "model", lr=2e-5, eps=1e-8, tokenizer_max_length=128
+    )
+    push_step.assert_called_once_with("assembled")
 
 
 def test_retrain_registration_discovers_workflow():
@@ -141,5 +224,5 @@ def test_pipeline_resources_use_existing_training_code_in_one_namespace():
     assert training_pipeline["metadata"]["namespace"] == "default"
     assert training_pipeline["metadata"]["name"] == "bert-cola-test"
     assert training_pipeline["spec"]["manifest"]["filePath"] == (
-        "examples.bert_cola.bert_cola"
+        "examples.retrain_example.training"
     )

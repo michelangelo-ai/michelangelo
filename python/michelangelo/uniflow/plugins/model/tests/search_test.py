@@ -61,7 +61,7 @@ def test_get_models_by_pipeline_run_rechecks_server_results(mock_list_model):
     """An ignored server-side filter cannot return unrelated models."""
     mock_list_model.return_value = ModelList(items=[_model("wrong", 1, "other-run")])
 
-    with pytest.raises(RuntimeError, match="no models found.*default/child-run"):
+    with pytest.raises(RuntimeError, match=r"no models found.*default/child-run"):
         get_models_by_pipeline_run("default", "child-run")
 
 
@@ -94,5 +94,5 @@ def test_get_models_by_pipeline_run_requires_both_identifiers(
     namespace, pipeline_run_name
 ):
     """Both parts of the source PipelineRun identity are required."""
-    with pytest.raises(ValueError, match="namespace.*pipeline_run_name"):
+    with pytest.raises(ValueError, match=r"namespace.*pipeline_run_name"):
         get_models_by_pipeline_run(namespace, pipeline_run_name)

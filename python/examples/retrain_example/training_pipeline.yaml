@@ -1,4 +1,4 @@
-# Namespace-compatible registration of the existing BERT/CoLA training example.
+# Namespace-compatible, single-node adaptation of the BERT/CoLA training example.
 apiVersion: michelangelo.api/v2
 kind: Pipeline
 metadata:
@@ -9,4 +9,4 @@ metadata:
 spec:
   type: PIPELINE_TYPE_TRAIN
   manifest:
-    filePath: examples.bert_cola.bert_cola
+    filePath: examples.retrain_example.training
