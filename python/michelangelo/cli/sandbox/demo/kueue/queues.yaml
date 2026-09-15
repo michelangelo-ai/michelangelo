@@ -1,0 +1,37 @@
+# Demo Kueue quota for a sandbox compute cluster.
+#
+# One ClusterQueue holds the cluster's quota; one LocalQueue per project
+# points at it. The LocalQueue lives in the namespace where the control plane
+# dispatches RayClusters ("default") and is named by the default naming
+# convention ma-{project} applied to the demo project's identity (its
+# namespace, ma-dev-test).
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: ResourceFlavor
+metadata:
+  name: default-flavor
+spec: {}
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: ClusterQueue
+metadata:
+  name: cluster-queue
+spec:
+  namespaceSelector: {}
+  queueingStrategy: BestEffortFIFO
+  resourceGroups:
+  - coveredResources: ["cpu", "memory"]
+    flavors:
+    - name: default-flavor
+      resources:
+      - name: cpu
+        nominalQuota: "8"
+      - name: memory
+        nominalQuota: 16Gi
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: LocalQueue
+metadata:
+  name: ma-ma-dev-test
+  namespace: default
+spec:
+  clusterQueue: cluster-queue
