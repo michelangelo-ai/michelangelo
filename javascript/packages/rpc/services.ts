@@ -12,9 +12,11 @@ import { DeploymentService } from './gen/michelangelo/api/v2/deployment_svc_pb';
 import { InferenceServerService } from './gen/michelangelo/api/v2/inference_server_svc_pb';
 import { ModelFamilyService } from './gen/michelangelo/api/v2/model_family_svc_pb';
 import { ModelService } from './gen/michelangelo/api/v2/model_svc_pb';
+import { PipelineSchema } from './gen/michelangelo/api/v2/pipeline_pb';
 import { PipelineRunService } from './gen/michelangelo/api/v2/pipeline_run_svc_pb';
 import { PipelineService } from './gen/michelangelo/api/v2/pipeline_svc_pb';
 import { ProjectService } from './gen/michelangelo/api/v2/project_svc_pb';
+import { RevisionService } from './gen/michelangelo/api/v2/revision_svc_pb';
 import { TriggerRunService } from './gen/michelangelo/api/v2/trigger_run_svc_pb';
 import { packAnyFields } from './pack-any-fields';
 import { getRuntimeConfig } from './runtime-config';
@@ -22,12 +24,14 @@ import { getRuntimeConfig } from './runtime-config';
 import type { DescService } from '@bufbuild/protobuf';
 import type { FetchTransport, ServiceClient, Services } from './types';
 
-// These wrapper schemas are registered so criteria that wrap a matchValue in a
-// google.protobuf.Any (e.g. ListOptionsExt filters, packed by packAnyFields) can be
-// JSON-encoded — protobuf-es resolves an Any's typeUrl against this registry to serialize
-// it as a well-known type.
-const typeRegistry = createRegistry(
+// Every message type that can appear inside a google.protobuf.Any on the wire must be
+// registered here — protobuf-es resolves an Any's typeUrl against this registry both when
+// JSON-encoding requests (ListOptionsExt criteria packed by packAnyFields) and when decoding
+// responses (fromJson throws on an unregistered typeUrl). PipelineSchema covers
+// Revision.spec.content for Pipeline revisions.
+export const typeRegistry = createRegistry(
   TypedStructSchema,
+  PipelineSchema,
   StringValueSchema,
   BoolValueSchema,
   Int64ValueSchema,
@@ -88,6 +92,7 @@ async function createServices(): Promise<Services> {
     TriggerRunService: createServiceClient(TriggerRunService, transport),
     ModelService: createServiceClient(ModelService, transport),
     ModelFamilyService: createServiceClient(ModelFamilyService, transport),
+    RevisionService: createServiceClient(RevisionService, transport),
   } as const;
 }
 
