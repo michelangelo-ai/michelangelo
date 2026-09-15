@@ -3,11 +3,14 @@ package model
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
+	"github.com/gogo/protobuf/types"
 	"go.uber.org/zap"
 
+	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
@@ -32,7 +35,94 @@ type (
 		ModelRevisionID int32  `json:"modelRevisionId"`
 		Namespace       string `json:"namespace,omitempty"`
 	}
+
+	// GetModelsByPipelineRunRequest identifies the pipeline run whose models
+	// should be returned.
+	GetModelsByPipelineRunRequest struct {
+		Namespace       string `json:"namespace,omitempty"`
+		PipelineRunName string `json:"pipelineRunName,omitempty"`
+	}
+
+	// PipelineRunModel contains the model identity needed by downstream
+	// deployment plugins.
+	PipelineRunModel struct {
+		Name       string `json:"name,omitempty"`
+		Namespace  string `json:"namespace,omitempty"`
+		RevisionID int32  `json:"revision_id"`
+	}
+
+	// GetModelsByPipelineRunResponse contains every model produced by a run.
+	GetModelsByPipelineRunResponse struct {
+		Models []PipelineRunModel `json:"models"`
+	}
 )
+
+func stringCriterion(fieldName, value string) (*apipb.Criterion, error) {
+	matchValue, err := types.MarshalAny(&types.StringValue{Value: value})
+	if err != nil {
+		return nil, err
+	}
+	return &apipb.Criterion{
+		FieldName:  fieldName,
+		MatchValue: matchValue,
+		Operator:   apipb.CRITERION_OPERATOR_EQUAL,
+	}, nil
+}
+
+// GetModelsByPipelineRun returns models whose indexed source provenance
+// points at the requested PipelineRun.
+func (r *activities) GetModelsByPipelineRun(ctx context.Context, request *GetModelsByPipelineRunRequest) (*GetModelsByPipelineRunResponse, error) {
+	if request.Namespace == "" || request.PipelineRunName == "" {
+		return nil, fmt.Errorf("both \"namespace\" and \"pipeline_run_name\" are required")
+	}
+
+	namespaceCriterion, err := stringCriterion("model.spec.source_pipeline_run.namespace", request.Namespace)
+	if err != nil {
+		return nil, err
+	}
+	runCriterion, err := stringCriterion("model.spec.source_pipeline_run.name", request.PipelineRunName)
+	if err != nil {
+		return nil, err
+	}
+
+	response, err := r.modelService.ListModel(ctx, &v2pb.ListModelRequest{
+		Namespace: request.Namespace,
+		ListOptionsExt: &apipb.ListOptionsExt{
+			Operation: &apipb.CriterionOperation{
+				Criterion: []*apipb.Criterion{namespaceCriterion, runCriterion},
+			},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	models := make([]PipelineRunModel, 0)
+	if response != nil && response.ModelList != nil {
+		for _, candidate := range response.ModelList.Items {
+			source := candidate.Spec.GetSourcePipelineRun()
+			if source.GetNamespace() != request.Namespace || source.GetName() != request.PipelineRunName {
+				continue
+			}
+			models = append(models, PipelineRunModel{
+				Name:       candidate.GetName(),
+				Namespace:  candidate.GetNamespace(),
+				RevisionID: candidate.Spec.GetRevisionId(),
+			})
+		}
+	}
+
+	sort.Slice(models, func(i, j int) bool {
+		if models[i].Name == models[j].Name {
+			return models[i].RevisionID < models[j].RevisionID
+		}
+		return models[i].Name < models[j].Name
+	})
+	if len(models) == 0 {
+		return nil, fmt.Errorf("no models found for pipeline run %s/%s", request.Namespace, request.PipelineRunName)
+	}
+	return &GetModelsByPipelineRunResponse{Models: models}, nil
+}
 
 func (r *activities) ListDeployments(ctx context.Context, namespace string) (*v2pb.ListDeploymentResponse, error) {
 	return r.deploymentService.ListDeployment(ctx, &v2pb.ListDeploymentRequest{

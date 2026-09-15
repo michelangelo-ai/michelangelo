@@ -72,6 +72,9 @@ jobs:
           poetry env use python3
           poetry install --no-interaction -E dev -E example
 
+      - name: Recover storage-pressured sandbox
+        run: ../.github/scripts/recover-sandbox-storage.sh
+
       - name: Recover failed MySQL pod
         run: |
           if [ "$(kubectl get pod mysql -o jsonpath='{.status.phase}' 2>/dev/null || true)" = "Failed" ]; then

@@ -1,10 +1,14 @@
 # Uniflow retrain example
 
-`retrain-example` composes two OSS Uniflow plugins:
+`retrain-example` composes three OSS Uniflow plugins:
 
 1. `pipeline.run_pipeline` runs the existing `bert-cola-test` training example.
-2. `model.deploy_model` finds the immutable Model registered by that child run
-   and rolls it out to `inference-server-example`.
+2. `model.get_models_by_pipeline_run` finds the Model registered by that child
+   run. OSS Deployments reference the exact `Model.metadata.name`; unlike the
+   internal API, they do not append the model revision ID.
+3. `deployment.create_or_update_deployment` clones `deployment-example` on the
+   first run (or updates the existing target), then
+   `deployment.wait_for_deployment` waits for the rollout.
 
 The project, both pipelines, and inference resources must share a namespace in
 the current OSS controllers. The checked-in `project.yaml` routes workflows to

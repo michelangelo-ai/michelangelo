@@ -30,15 +30,100 @@ diagnose_minio() {
     "${MINIO_ENDPOINT}/minio/health/ready" || true
 }
 
+diagnose_storage() {
+  local pod
+  diagnose_minio
+  log "MySQL diagnostics"
+  kubectl get pod/mysql service/mysql endpoints/mysql \
+    -n "${NAMESPACE}" -o wide || true
+  kubectl get pod/mysql -n "${NAMESPACE}" -o yaml || true
+  kubectl describe pod/mysql -n "${NAMESPACE}" || true
+  kubectl logs pod/mysql -n "${NAMESPACE}" --all-containers --tail=200 || true
+  kubectl logs pod/mysql -n "${NAMESPACE}" \
+    --all-containers --previous --tail=200 || true
+  log "Pipeline and Ray diagnostics"
+  kubectl get pipelineruns -n "${NAMESPACE}" -o wide || true
+  while IFS= read -r run; do
+    [[ -n "${run}" ]] || continue
+    kubectl get "${run}" -n "${NAMESPACE}" -o yaml || true
+  done < <(kubectl get pipelineruns -n "${NAMESPACE}" -o name 2>/dev/null || true)
+  kubectl get rayjobs.ray.io,rayclusters.ray.io \
+    -n "${NAMESPACE}" -o yaml || true
+  while IFS= read -r pod; do
+    case "${pod}" in
+      *ray* | *bert-cola*)
+        kubectl describe "${pod}" -n "${NAMESPACE}" || true
+        kubectl logs "${pod}" -n "${NAMESPACE}" \
+          --all-containers --tail=200 || true
+        ;;
+    esac
+  done < <(kubectl get pods -n "${NAMESPACE}" -o name 2>/dev/null || true)
+}
+
+check_storage_health() {
+  local pod phase ready reason
+
+  for pod in minio mysql; do
+    phase=$(kubectl get pod "${pod}" -n "${NAMESPACE}" \
+      -o jsonpath='{.status.phase}' 2>/dev/null || true)
+    ready=$(kubectl get pod "${pod}" -n "${NAMESPACE}" \
+      -o jsonpath='{range .status.conditions[?(@.type=="Ready")]}{.status}{end}' \
+      2>/dev/null || true)
+    reason=$(kubectl get pod "${pod}" -n "${NAMESPACE}" \
+      -o jsonpath='{.status.reason}' 2>/dev/null || true)
+    if [[ "${phase}" != Running || "${ready}" != True ]]; then
+      log "Storage dependency ${pod} is unhealthy (phase=${phase:-missing}, ready=${ready:-missing}, reason=${reason:-none})"
+      return 1
+    fi
+  done
+
+  if ! curl --fail --silent --show-error --max-time 5 \
+      "${MINIO_ENDPOINT}/minio/health/ready" >/dev/null; then
+    log "MinIO readiness endpoint is unhealthy"
+    return 1
+  fi
+}
+
+process_is_running() {
+  local state
+  state=$(ps -o stat= -p "$1" 2>/dev/null || true)
+  state="${state//[[:space:]]/}"
+  [[ -n "${state}" && "${state}" != Z* ]]
+}
+
+run_with_storage_monitor() {
+  local child_pid status
+
+  "$@" &
+  child_pid=$!
+  while process_is_running "${child_pid}"; do
+    if ! check_storage_health; then
+      log "Stopping command ${child_pid} after a storage dependency failed"
+      diagnose_storage
+      kill "${child_pid}" 2>/dev/null || true
+      wait "${child_pid}" 2>/dev/null || true
+      return 1
+    fi
+    sleep "${POLL_INTERVAL}"
+  done
+
+  if wait "${child_pid}"; then
+    return 0
+  else
+    status=$?
+    log "Monitored command exited with status ${status}"
+    return "${status}"
+  fi
+}
+
 diagnose_retrain_failure() {
   trap - ERR
   log "Retrain diagnostics"
-  diagnose_minio
+  diagnose_storage
   kubectl get inferenceservers.michelangelo.api inference-server-example \
     -n "${NAMESPACE}" -o yaml || true
   kubectl get deployments.michelangelo.api retrain-example \
     -n "${NAMESPACE}" -o yaml || true
-  kubectl get pipelineruns -n "${NAMESPACE}" -o wide || true
   kubectl get deployment/triton-inference-server-example \
     service/inference-server-example-inference-service \
     -n "${NAMESPACE}" -o wide || true
@@ -167,6 +252,12 @@ wait_for_pipeline_run() {
       -o jsonpath='{.status.state}' 2>/dev/null || echo UNKNOWN)
     log "PipelineRun ${run_name}: ${state}"
 
+    if ! check_storage_health; then
+      log "Storage failed while waiting for PipelineRun ${run_name}"
+      kubectl get pipelinerun "${run_name}" -n "${NAMESPACE}" -o yaml || true
+      return 1
+    fi
+
     case "${state}" in
       PIPELINE_RUN_STATE_SUCCEEDED)
         return 0
@@ -236,7 +327,8 @@ AWS_ENDPOINT_URL="${MINIO_ENDPOINT}" \
   "${MA_BIN}" pipeline apply --file=examples/retrain_example/pipeline.yaml
 
 log "Running retrain-example through the local Python plugin implementations"
-MA_API_SERVER="${MA_API_SERVER:-localhost:15566}" \
+run_with_storage_monitor env \
+  MA_API_SERVER="${MA_API_SERVER:-localhost:15566}" \
   "${PYTHON_BIN}" -m examples.retrain_example.retrain local-run
 assert_healthy_deployment
 local_revision=$(deployment_revision)
@@ -246,9 +338,10 @@ log "Local execution deployed ${local_revision}"
 log "Submitting retrain-example through the remote Starlark worker"
 previous_remote_run=$(latest_retrain_run)
 ensure_minio_ready
-AWS_ACCESS_KEY_ID="${MINIO_ACCESS_KEY}" \
-AWS_SECRET_ACCESS_KEY="${MINIO_SECRET_KEY}" \
-AWS_ENDPOINT_URL="${MINIO_ENDPOINT}" \
+run_with_storage_monitor env \
+  AWS_ACCESS_KEY_ID="${MINIO_ACCESS_KEY}" \
+  AWS_SECRET_ACCESS_KEY="${MINIO_SECRET_KEY}" \
+  AWS_ENDPOINT_URL="${MINIO_ENDPOINT}" \
   "${MA_BIN}" pipeline dev-run --file=examples/retrain_example/pipeline.yaml
 
 remote_run=""

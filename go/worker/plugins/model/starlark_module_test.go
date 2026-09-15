@@ -93,3 +93,38 @@ func (r *Test) TestModelSearchWithActivityError() {
 	err := r.env.Cadence.GetResult(res)
 	require.Error(err)
 }
+
+func (r *Test) TestGetModelsByPipelineRun() {
+	env := r.env.Cadence.GetTestWorkflowEnvironment()
+	env.RegisterActivity(modelactivities.Activities.GetModelsByPipelineRun)
+	env.OnActivity(modelactivities.Activities.GetModelsByPipelineRun, mock.Anything, mock.Anything).Once().Return(
+		&modelactivities.GetModelsByPipelineRunResponse{Models: []modelactivities.PipelineRunModel{
+			{Name: "trained-model", Namespace: "default", RevisionID: 4},
+		}}, nil,
+	)
+
+	r.env.Cadence.ExecuteFunction("/test.star", "test_get_models_by_pipeline_run", nil, nil, nil)
+	require := r.Require()
+	var response *starlark.List
+	require.NoError(r.env.Cadence.GetResult(&response))
+	require.Equal(1, response.Len())
+	model, ok := response.Index(0).(*starlark.Dict)
+	require.True(ok)
+	revisionID, found, err := model.Get(starlark.String("revision_id"))
+	require.NoError(err)
+	require.True(found)
+	require.Equal(starlark.MakeInt(4), revisionID)
+}
+
+func (r *Test) TestGetModelsByPipelineRunWithActivityError() {
+	env := r.env.Cadence.GetTestWorkflowEnvironment()
+	env.RegisterActivity(modelactivities.Activities.GetModelsByPipelineRun)
+	env.OnActivity(modelactivities.Activities.GetModelsByPipelineRun, mock.Anything, mock.Anything).Once().Return(
+		nil, cadence.NewCustomError("activity error"),
+	)
+
+	r.env.Cadence.ExecuteFunction("/test.star", "test_get_models_by_pipeline_run", nil, nil, nil)
+	var response *starlark.List
+	err := r.env.Cadence.GetResult(&response)
+	r.Require().Error(err)
+}
