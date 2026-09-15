@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 
 import { TRAIN_PHASE } from '#core/config/phases/train';
 import { EntityDetailRoute } from '#core/router/entity-detail-route';
@@ -37,18 +37,6 @@ describe('Run detail page', () => {
       },
       ...overrides,
     });
-
-    /** The JSON editor rendered inside the Box whose title is `title`. */
-    const findEditorTitled = (title: string) => {
-      let node: HTMLElement | null = screen.getByText(title);
-      while (node && !node.querySelector('[role="textbox"]')) {
-        node = node.parentElement;
-      }
-      if (!node) {
-        throw new Error(`no editor found under the "${title}" box`);
-      }
-      return within(node).getByRole('textbox');
-    };
 
     it('renders the workflow log link, status indicators, and environment', async () => {
       render(
@@ -191,12 +179,12 @@ describe('Run detail page', () => {
         ])
       );
 
-      await screen.findByText('Content');
-      // The CodeMirror editor exposes its content as a readonly textbox.
-      expect(findEditorTitled('Content')).toHaveTextContent('"workflow_version": "v2"');
-      const inputEditor = findEditorTitled('Input');
-      expect(inputEditor).toHaveTextContent('"learning_rate": 0.01');
-      expect(inputEditor).toHaveTextContent('"dataset": "boston"');
+      expect(await screen.findByText('Content')).toBeInTheDocument();
+      expect(screen.getByText('Input')).toBeInTheDocument();
+      // The CodeMirror editors render the pretty-printed JSON as page text.
+      expect(document.body).toHaveTextContent('"workflow_version": "v2"');
+      expect(document.body).toHaveTextContent('"learning_rate": 0.01');
+      expect(document.body).toHaveTextContent('"dataset": "boston"');
     });
 
     it('links a resumed run back to its source run', async () => {

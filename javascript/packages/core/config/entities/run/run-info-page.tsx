@@ -85,7 +85,7 @@ export function RunInfoPage({ data, isLoading }: { data?: object; isLoading: boo
     },
   ];
 
-  const column = css({
+  const fieldColumn = css({
     display: 'flex',
     flexDirection: 'column',
     gap: theme.sizing.scale600,
@@ -96,7 +96,7 @@ export function RunInfoPage({ data, isLoading }: { data?: object; isLoading: boo
       onSubmit={() => undefined}
       initialValues={Object.fromEntries(fields.map((field) => [field.id, field.value]))}
     >
-      <div className={column}>
+      <div className={fieldColumn}>
         {fields.map((field) =>
           isLoading ? (
             <Skeleton key={field.id} animation height="48px" width="100%" />
@@ -124,7 +124,7 @@ export function RunInfoPage({ data, isLoading }: { data?: object; isLoading: boo
     );
 
   return (
-    <div className={column}>
+    <div className={fieldColumn}>
       <LinksBox title="Useful links" links={links} isLoading={isLoading} />
 
       {errorMessage && !isLoading && (
@@ -144,18 +144,16 @@ export function RunInfoPage({ data, isLoading }: { data?: object; isLoading: boo
         <HeadingSmall marginTop="0" marginBottom={theme.sizing.scale600}>
           Key status indicators
         </HeadingSmall>
-        <div className={column}>
-          <Box>{renderReadOnlyFields(statusFields)}</Box>
-          {manifestContent !== undefined && renderJsonBox('Content', manifestContent)}
-        </div>
+        <Box>{renderReadOnlyFields(statusFields)}</Box>
       </section>
 
       <section>
         <HeadingSmall marginTop="0" marginBottom={theme.sizing.scale600}>
           Configuration
         </HeadingSmall>
-        <div className={column}>
+        <div className={fieldColumn}>
           <Box>{renderReadOnlyFields(configurationFields)}</Box>
+          {manifestContent !== undefined && renderJsonBox('Content', manifestContent)}
           {input !== undefined && renderJsonBox('Input', input)}
         </div>
       </section>
@@ -192,15 +190,8 @@ function decodeRunInput(input: unknown): unknown {
  */
 function getExecutionTimestampSeconds(run: PipelineRunSummary | undefined): string | undefined {
   const label = run?.metadata?.labels?.[EXECUTION_TIMESTAMP_LABEL];
-  if (label) {
-    if (!isNaN(Number(label))) {
-      return label;
-    }
-    // Older writers recorded the label as an RFC 3339 string.
-    const parsed = Date.parse(label);
-    if (!isNaN(parsed)) {
-      return String(Math.floor(parsed / 1000));
-    }
+  if (label && !isNaN(Number(label))) {
+    return label;
   }
   return run?.metadata?.creationTimestamp?.seconds;
 }
