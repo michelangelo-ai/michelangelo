@@ -14,6 +14,9 @@ export default function Hero(): React.ReactElement {
           className={styles.heroLogo}
           src={logoSrc}
           alt="Michelangelo logo"
+          width={204}
+          height={129}
+          fetchPriority="high"
         />
         <h1 className={styles.heroTitle}>
           The ML Platform Behind Uber&apos;s AI.
