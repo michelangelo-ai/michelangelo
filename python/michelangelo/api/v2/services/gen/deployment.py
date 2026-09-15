@@ -20,11 +20,12 @@ from ..base import BaseService, _TIMEOUT_SECONDS
 
 
 class DeploymentService(BaseService):
-
     def __init__(self, context):
         super(DeploymentService, self).__init__(context, DeploymentServiceStub)
 
-    def create_deployment(self, deployment, create_options=None, headers=None, timeout=_TIMEOUT_SECONDS):
+    def create_deployment(
+        self, deployment, create_options=None, headers=None, timeout=_TIMEOUT_SECONDS
+    ):
         """
         Create deployment
 
@@ -51,10 +52,14 @@ class DeploymentService(BaseService):
         req = CreateDeploymentRequest(deployment=deployment)
         create_options = self._process_message_or_dict(create_options, CreateOptions)
         req.create_options.CopyFrom(create_options)
-        resp = self._stub.CreateDeployment(req, metadata=self._get_metadata(headers), timeout=timeout)
+        resp = self._stub.CreateDeployment(
+            req, metadata=self._get_metadata(headers), timeout=timeout
+        )
         return resp.deployment
 
-    def get_deployment(self, namespace, name, get_options=None, headers=None, timeout=_TIMEOUT_SECONDS):
+    def get_deployment(
+        self, namespace, name, get_options=None, headers=None, timeout=_TIMEOUT_SECONDS
+    ):
         """
         Get deployment
 
@@ -79,10 +84,14 @@ class DeploymentService(BaseService):
         req = GetDeploymentRequest(name=name, namespace=namespace)
         get_options = self._process_message_or_dict(get_options, GetOptions)
         req.get_options.CopyFrom(get_options)
-        resp = self._stub.GetDeployment(req, metadata=self._get_metadata(headers), timeout=timeout)
+        resp = self._stub.GetDeployment(
+            req, metadata=self._get_metadata(headers), timeout=timeout
+        )
         return resp.deployment
 
-    def update_deployment(self, deployment, update_options=None, headers=None, timeout=_TIMEOUT_SECONDS):
+    def update_deployment(
+        self, deployment, update_options=None, headers=None, timeout=_TIMEOUT_SECONDS
+    ):
         """
         Update deployment
 
@@ -107,10 +116,19 @@ class DeploymentService(BaseService):
         req = UpdateDeploymentRequest(deployment=deployment)
         update_options = self._process_message_or_dict(update_options, UpdateOptions)
         req.update_options.CopyFrom(update_options)
-        resp = self._stub.UpdateDeployment(req, metadata=self._get_metadata(headers), timeout=timeout)
+        resp = self._stub.UpdateDeployment(
+            req, metadata=self._get_metadata(headers), timeout=timeout
+        )
         return resp.deployment
 
-    def delete_deployment(self, namespace, name, delete_options=None, headers=None, timeout=_TIMEOUT_SECONDS):
+    def delete_deployment(
+        self,
+        namespace,
+        name,
+        delete_options=None,
+        headers=None,
+        timeout=_TIMEOUT_SECONDS,
+    ):
         """
         Delete deployment
 
@@ -132,9 +150,18 @@ class DeploymentService(BaseService):
         req = DeleteDeploymentRequest(namespace=namespace, name=name)
         delete_options = self._process_message_or_dict(delete_options, DeleteOptions)
         req.delete_options.CopyFrom(delete_options)
-        self._stub.DeleteDeployment(req, metadata=self._get_metadata(headers), timeout=timeout)
+        self._stub.DeleteDeployment(
+            req, metadata=self._get_metadata(headers), timeout=timeout
+        )
 
-    def delete_deployment_collection(self, namespace, delete_options=None, list_options=None, headers=None, timeout=_TIMEOUT_SECONDS):
+    def delete_deployment_collection(
+        self,
+        namespace,
+        delete_options=None,
+        list_options=None,
+        headers=None,
+        timeout=_TIMEOUT_SECONDS,
+    ):
         """
         Delete deployment collection
 
@@ -158,9 +185,18 @@ class DeploymentService(BaseService):
         req.delete_options.CopyFrom(delete_options)
         list_options = self._process_message_or_dict(list_options, ListOptions)
         req.list_options.CopyFrom(list_options)
-        self._stub.DeleteDeploymentCollection(req, metadata=self._get_metadata(headers), timeout=timeout)
+        self._stub.DeleteDeploymentCollection(
+            req, metadata=self._get_metadata(headers), timeout=timeout
+        )
 
-    def list_deployment(self, namespace, list_options=None, list_options_ext=None, headers=None, timeout=_TIMEOUT_SECONDS):
+    def list_deployment(
+        self,
+        namespace,
+        list_options=None,
+        list_options_ext=None,
+        headers=None,
+        timeout=_TIMEOUT_SECONDS,
+    ):
         """
         List deployment
 
@@ -192,13 +228,18 @@ class DeploymentService(BaseService):
             # Criterion.match_value is a protobuf Any field, which is not handled
             # properly with _process_message_or_dict()
             operation = CriterionOperation()
-            if isinstance(list_options_ext, dict) and 'operation' in list_options_ext:
-                operation = self._process_criterion_operation(list_options_ext['operation'])
-                del list_options_ext['operation']
-            list_options_ext = self._process_message_or_dict(list_options_ext, ListOptionsExt)
+            if isinstance(list_options_ext, dict) and "operation" in list_options_ext:
+                operation = self._process_criterion_operation(
+                    list_options_ext["operation"]
+                )
+                del list_options_ext["operation"]
+            list_options_ext = self._process_message_or_dict(
+                list_options_ext, ListOptionsExt
+            )
             list_options_ext.operation.CopyFrom(operation)
             req.list_options_ext.CopyFrom(list_options_ext)
 
-        resp = self._stub.ListDeployment(req, metadata=self._get_metadata(headers), timeout=timeout)
+        resp = self._stub.ListDeployment(
+            req, metadata=self._get_metadata(headers), timeout=timeout
+        )
         return resp.deployment_list
-
