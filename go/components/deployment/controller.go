@@ -60,7 +60,7 @@ import (
 
 const (
 	_defaultRequeuePeriod  = 10 * time.Second
-	_reconciliationTimeout = 60 * time.Second
+	_reconciliationTimeout = 10 * time.Minute
 
 	_deploymentCleanedUpFinalizer = "deployments.michelangelo.uber.com/finalizer"
 
@@ -361,7 +361,15 @@ func (r *Reconciler) processPlugin(ctx context.Context, log logr.Logger, metrics
 
 		desiredModelChanged := ShouldRollback(*deployment)
 		rollbackAlertsEnabled := RollbackAlertsEnabled(*deployment)
-		if (!isHealthy || desiredModelChanged) && rollbackAlertsEnabled {
+		// A deployment with no prior successful revision has nothing to roll back to: the
+		// health check is expected to report unhealthy until the rollout actually provisions
+		// something, so an unhealthy gate alone must not trigger rollback here. Without this
+		// guard, a brand-new deployment's first health-check failure immediately routes into
+		// RollbackActor, which always fails (there is no model-config entry yet to remove) and
+		// permanently dead-ends the deployment at DEPLOYMENT_STAGE_ROLLBACK_FAILED before the
+		// rollout actor chain (asset prep / placement / rolling rollout) ever runs.
+		hasPriorRevision := deployment.Status.CurrentRevision != nil
+		if ((!isHealthy && hasPriorRevision) || desiredModelChanged) && rollbackAlertsEnabled {
 			if !IsRollbackStage(deployment.GetStatus().Stage) {
 				deployment.Status.Message = fmt.Sprintf("Detected that a rollback should occur due to alert firing=[%v], or due to the desired model changing=[%v]", isHealthy, desiredModelChanged)
 				log.Info("detected that a rollback should occur")

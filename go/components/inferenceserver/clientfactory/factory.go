@@ -189,6 +189,16 @@ func (f *remoteClientFactory) GetDynamicClient(ctx context.Context, cluster *v2p
 	return dynamicClient, nil
 }
 
+// GetRESTConfig returns a *rest.Config for the given ClusterTarget. Unlike the other
+// client types, this isn't cached: it's used rarely (e.g. building a clientset for pod
+// exec), and rebuilding it is cheap relative to a TLS handshake.
+func (f *remoteClientFactory) GetRESTConfig(ctx context.Context, cluster *v2pb.ClusterTarget) (*rest.Config, error) {
+	if cluster.GetKubernetes() == nil {
+		return nil, fmt.Errorf("cluster %q has no kubernetes connection spec", cluster.GetClusterId())
+	}
+	return f.buildRESTConfig(ctx, cluster)
+}
+
 // buildRESTConfig assembles a *rest.Config for a cluster from the connection spec
 // and credentials retrieved from the SecretProvider.
 func (f *remoteClientFactory) buildRESTConfig(ctx context.Context, cluster *v2pb.ClusterTarget) (*rest.Config, error) {

@@ -11,7 +11,11 @@ workflowClient:
   domain: default
   # taskList is a used as a fallback if project.Metatdata.Annotations["michelangelo/worker_queue"] is empty
   taskList: default # TODO(#934): MaCTL support for adding project.Metatdata.Annotations["michelangelo/worker_queue"] to project CRD
-  executionUrlFormat: http://localhost:8088/namespaces/{{.Domain}}/workflows/{{.ExecutionID}}
+  # cluster0 segment and trailing /{{.RunID}}/summary match cadence-web's
+  # actual route (/domains/<domain>/<cluster>/workflows/<id>/<runId>/summary);
+  # a format missing RunID resolves to a listing rather than a specific
+  # execution.
+  executionUrlFormat: "http://localhost:8088/domains/{{.Domain}}/cluster0/workflows/{{.ExecutionID}}/{{.RunID}}/summary"
 
 k8s:
   qps: 300
@@ -63,6 +67,20 @@ jobs:
         # {{.RayLocalNamespace}}. Sandbox default points at the in-cluster MinIO
         # console; production overlays point at OCI Object Storage / S3 console.
         logURLFormat: "http://localhost:9090/browser/{{.Bucket}}/{{.PathPrefix}}/{{.ClusterName}}_{{.RayLocalNamespace}}/"
+        # dashboardURLFormat is a Go text/template that builds the live
+        # KubeRay dashboard URL (job_url), independent of log persistence.
+        # Available vars: {{.ClusterName}}, {{.RayLocalNamespace}}.
+        dashboardURLFormat: "http://{{.ClusterName}}-head-svc.{{.RayLocalNamespace}}.svc.cluster.local:8265"
+      # rayObservability wires the Ray dashboard's built-in Metrics tab (and
+      # Prometheus service discovery) to the sandbox's in-cluster Grafana and
+      # Prometheus. grafanaIframeHost is the browser-reachable URL (matches
+      # the sandbox's default Grafana NodePort mapping — see grafana.yaml);
+      # override it if your local sandbox exposes Grafana on a different
+      # host/port (e.g. a custom port-forward).
+      rayObservability:
+        grafanaHost: "http://grafana:3000"
+        grafanaIframeHost: "http://localhost:3000"
+        prometheusHost: "http://prometheus:9090"
 
 minio:
   awsRegion: us-east-1

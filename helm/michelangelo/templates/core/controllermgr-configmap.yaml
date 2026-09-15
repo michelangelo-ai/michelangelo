@@ -98,6 +98,23 @@ data:
             {{- with .logURLFormat }}
             logURLFormat: {{ . | quote }}
             {{- end }}
+            {{- with .dashboardURLFormat }}
+            dashboardURLFormat: {{ . | quote }}
+            {{- end }}
+          {{- with $.Values.controllermgr.jobs.k8sengine.mapper.rayObservability }}
+          {{- if or .grafanaHost .prometheusHost }}
+          rayObservability:
+            {{- with .grafanaHost }}
+            grafanaHost: {{ . | quote }}
+            {{- end }}
+            {{- with .grafanaIframeHost }}
+            grafanaIframeHost: {{ . | quote }}
+            {{- end }}
+            {{- with .prometheusHost }}
+            prometheusHost: {{ . | quote }}
+            {{- end }}
+          {{- end }}
+          {{- end }}
     {{- end }}
 
     notification:

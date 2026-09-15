@@ -1,0 +1,30 @@
+apiVersion: michelangelo.api/v2
+kind: InferenceServer
+metadata:
+  name: bert-cola-is
+  namespace: ma-dev-test
+  labels:
+    app: bert-cola
+spec:
+  tenancyType: TENANCY_TYPE_DEDICATED
+  backendType: BACKEND_TYPE_TRITON
+  ownerSpec:
+    tier: 4
+  initSpec:
+    resourceSpec:
+      cpu: 1
+      memory: "2Gi"
+    servingSpec:
+      version: "latest"
+    numInstances: 1
+  decomSpec:
+    decommission: false
+  owner:
+    name: "weric"
+  clusterTargets:
+  - clusterId: scala-hello-test
+    kubernetes:
+      host: https://kubernetes.default.svc
+      port: "443"
+      tokenTag: scala-hello-test-cluster-auth
+      caDataTag: scala-hello-test-cluster-auth

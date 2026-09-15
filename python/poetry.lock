@@ -14171,7 +14171,7 @@ type = ["pytest-mypy (>=1.0.1) ; platform_python_implementation != \"PyPy\""]
 
 [extras]
 dev = ["coverage", "docker", "jinja2", "numpy", "pandas", "polars", "pre-commit", "pyarrow", "pytest", "pytest-cov", "pytorch_lightning", "ray", "ray", "ruff", "torch", "transformers", "xgboost"]
-example = ["accelerate", "boto3", "chronon-ai", "datasets", "einops", "kaggle", "minio", "mlflow", "numpy", "pandas", "peft", "pyarrow", "pyspark", "pytorch_lightning", "ray", "ray", "ray", "ray", "s3fs", "scikit-learn", "sqlglot", "thrift", "torch", "transformers"]
+example = ["accelerate", "boto3", "chronon-ai", "datasets", "einops", "importlib-resources", "kaggle", "minio", "mlflow", "numpy", "pandas", "peft", "pyarrow", "pyspark", "pytorch_lightning", "ray", "ray", "ray", "ray", "s3fs", "scikit-learn", "sqlglot", "thrift", "torch", "transformers"]
 mactl = []
 minio = ["minio"]
 plugin = ["pyspark", "ray", "ray"]
@@ -14186,4 +14186,4 @@ vllm = ["accelerate", "datasets", "einops", "numpy", "pandas", "pyarrow", "pytor
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.9.0"
-content-hash = "16c893d656f8c53aa3fa69a422edc3974ca0d7067bae640c02b974f225f2301b"
+content-hash = "70d2fac79aaba37f2a29488a697dd56a48bca4285d38d81c7700b77566f2ab07"
