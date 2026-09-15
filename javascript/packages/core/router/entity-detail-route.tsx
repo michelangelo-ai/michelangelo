@@ -1,5 +1,5 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom-v5-compat';
+import { useLocation, useNavigate } from 'react-router-dom-v5-compat';
 import { useStyletron } from 'baseui';
 
 import { CircleExclamationMark } from '#core/components/illustrations/circle-exclamation-mark/circle-exclamation-mark';
@@ -8,11 +8,13 @@ import { Row } from '#core/components/row/row';
 import { Signpost } from '#core/components/signpost/signpost';
 import { DetailViewPageRenderer } from '#core/components/views/detail-view/components/detail-view-page-renderer/detail-view-page-renderer';
 import { DetailViewPages } from '#core/components/views/detail-view/components/detail-view-pages/detail-view-pages';
+import { RevisionSelector } from '#core/components/views/detail-view/components/revision-selector/revision-selector';
 import { DetailView } from '#core/components/views/detail-view/detail-view';
 import { PHASES } from '#core/config/phases/phases';
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
 import { useStudioQuery } from '#core/hooks/use-studio-query';
 import { useInterpolationResolver } from '#core/interpolation/use-interpolation-resolver';
+import { buildRevisionName, formatRevisionId } from '#core/utils/revision-utils';
 import { capitalizeFirstLetter } from '#core/utils/string-utils';
 
 import type { PhaseConfig } from '#core/types/common/studio-types';
@@ -23,33 +25,45 @@ import type { PhaseConfig } from '#core/types/common/studio-types';
  * Maps URL parameters to specific entity detail pages and handles:
  * - Entity not found scenarios
  * - Navigation back to entity list
+ * - Revision snapshots: for a `revisioned` entity, `?revisionId=` swaps the live record for the
+ *   matching Revision's `spec.content`, rendered through the same detail view config
  *
  * @param phases - Phase configuration override for testing. Defaults to {@link PHASES}.
  */
 export function EntityDetailRoute({ phases = PHASES }: { phases?: Record<string, PhaseConfig> }) {
   const [, theme] = useStyletron();
-  const { phase, entity, entityId, projectId, entityTab } = useStudioParams('detail');
+  const { phase, entity, entityId, projectId, entityTab, revisionId } = useStudioParams('detail');
   const navigate = useNavigate();
+  const { pathname, search } = useLocation();
   const entityConfig = phases[phase].entities.find((e) => e.id === entity);
   const resolver = useInterpolationResolver();
 
+  const service = entityConfig?.service ?? '';
+  const isRevisionView = !!revisionId && !!entityConfig?.revisioned;
+
   const { data, isLoading, error } = useStudioQuery<Record<string, unknown>>({
-    queryName: `Get${capitalizeFirstLetter(entityConfig?.service ?? '')}`,
+    queryName: isRevisionView ? 'GetRevision' : `Get${capitalizeFirstLetter(service)}`,
     serviceOptions: {
       namespace: projectId,
-      name: entityId,
+      name: isRevisionView ? buildRevisionName(service, entityId, revisionId) : entityId,
     },
     clientOptions: {
-      enabled: !!entityConfig?.service && !!entityId,
+      enabled: !!service && !!entityId,
     },
   });
 
+  // Tabs live in the path; the query string (e.g. `?revisionId=`) must survive tab changes.
   const handleTabNavigation = React.useCallback(
     (tabId: string, options?: { replace?: boolean }) => {
-      navigate(`/${projectId}/${phase}/${entity}/${entityId}/${tabId}`, options);
+      navigate(`/${projectId}/${phase}/${entity}/${entityId}/${tabId}${search}`, options);
     },
-    [navigate, projectId, phase, entity, entityId]
+    [navigate, projectId, phase, entity, entityId, search]
   );
+
+  // Revision selection lives in the query string so the tab path is untouched.
+  const handleRevisionSelect = (nextRevisionId: string) => {
+    navigate({ pathname, search: `?revisionId=${encodeURIComponent(nextRevisionId)}` });
+  };
 
   const handleReturnToEntityList = () => {
     navigate(`/${projectId}/${phase}/${entity}`);
@@ -80,7 +94,9 @@ export function EntityDetailRoute({ phases = PHASES }: { phases?: Record<string,
     return (
       <Signpost
         title="Entity not found"
-        description={`Could not load ${entity} "${entityId}". ${error.message}`}
+        description={`Could not load ${entity} "${entityId}"${
+          isRevisionView ? ` at ${formatRevisionId(revisionId).toLowerCase()}` : ''
+        }. ${error.message}`}
         illustration={
           <CircleExclamationMark
             kind={CircleExclamationMarkKind.ERROR}
@@ -96,16 +112,33 @@ export function EntityDetailRoute({ phases = PHASES }: { phases?: Record<string,
     );
   }
 
+  // cast: the Revision response is untyped here; the route only reads the wrapped entity at
+  // spec.content, which the RPC layer unpacks into a plain object; see #1425
+  const revision = data?.revision as { spec?: { content?: Record<string, unknown> } } | undefined;
   // cast: PhaseEntityConfig carries no entity type generic, so the runtime-selected service key's
-  // value is assumed to be the entity object; related to #1425
-  const entityData = data?.[entityConfig!.service] as Record<string, unknown> | undefined;
+  // value is assumed to be the entity object; related to #1425. In a revision view the snapshot
+  // is the same entity shape, so the same detail config reads from it unchanged.
+  const entityData = (isRevisionView ? revision?.spec?.content : data?.[service]) as
+    | Record<string, unknown>
+    | undefined;
   const resolvedDetailViewConfig = resolver(detailViewConfig, { page: entityData });
   return (
     <DetailView
       subtitle={entityConfig!.name}
       title={entityId}
+      titleEnhancer={
+        entityConfig!.revisioned && (
+          <RevisionSelector
+            service={service}
+            entityId={entityId}
+            selectedRevisionId={revisionId}
+            onSelect={handleRevisionSelect}
+          />
+        )
+      }
       onGoBack={handleReturnToEntityList}
-      actions={entityConfig!.actions}
+      // Revisions are immutable snapshots — the entity's actions target the live record.
+      actions={isRevisionView ? undefined : entityConfig!.actions}
       record={entityData}
       loading={isLoading}
       headerContent={

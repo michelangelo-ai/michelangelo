@@ -1,13 +1,11 @@
 import { CellType } from '#core/components/cell/constants';
 import { DescriptionHierarchy } from '#core/components/cell/renderers/description/constants';
+import { formatRevisionId } from '#core/utils/revision-utils';
 import { PIPELINE_STATE_CELL, PIPELINE_TYPE_CELL, SORT_ORDER_DESC } from './shared';
 
 import type { ColumnConfig } from '#core/components/table/types/column-types';
 import type { TableConfig } from '#core/components/views/types';
 import type { PipelineRevision } from './types';
-
-/** Revision ids are full git refs; the leading 12 characters are enough to identify one. */
-export const REVISION_ID_DISPLAY_LENGTH = 12;
 
 /**
  * Columns for the Revisions variant of the pipeline list. Mirrors the pipeline columns
@@ -57,7 +55,3 @@ export const PIPELINE_REVISION_SERVICE_OPTIONS = {
     orderBy: [{ field: 'metadata.update_timestamp', dir: SORT_ORDER_DESC }],
   },
 };
-
-function formatRevisionId(revisionId?: string): string {
-  return revisionId ? `Revision ${revisionId.slice(0, REVISION_ID_DISPLAY_LENGTH)}` : '';
-}
