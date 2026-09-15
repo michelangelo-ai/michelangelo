@@ -245,6 +245,25 @@ class PipelineCreateTest(TestCase):
         self.assertIn("Pipeline registration failed", str(context.exception))
 
     @patch(
+        "michelangelo.cli.mactl.plugins.entity.pipeline.create.get_pipeline_config_and_tar"
+    )
+    def test_handle_workflow_inputs_retrieval_unexpected_error(self, mock_get_config):
+        """An unrelated Exception during registration surfaces as a ValueError."""
+        repo_root = Path("/fake/repo")
+        config_file_relative_path = "pipelines/pipeline.yaml"
+        project = "test-project"
+        pipeline = "test-pipeline"
+
+        mock_get_config.side_effect = KeyError("unexpected")
+
+        with self.assertRaises(ValueError) as context:
+            handle_workflow_inputs_retrieval(
+                repo_root, config_file_relative_path, project, pipeline
+            )
+
+        self.assertIn("Pipeline registration failed", str(context.exception))
+
+    @patch(
         "michelangelo.cli.mactl.plugins.entity.pipeline.create.run_subprocess_registration"
     )
     def test_get_pipeline_config_and_tar_subprocess_exception(
