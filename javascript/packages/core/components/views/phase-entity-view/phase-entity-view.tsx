@@ -125,6 +125,7 @@ export function PhaseEntityView<T extends object = object>({
                 tableSettingsId={`${phaseConfig.id}/${entity.id}`}
                 pipelineTypes={phaseConfig.pipelineTypes}
                 trailingActions={createActionButton}
+                variants={currentEntityConfig.views[0].variants}
               />
             )}
           </Tab>
