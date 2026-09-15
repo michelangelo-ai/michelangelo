@@ -8,6 +8,7 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/michelangelo-ai/michelangelo/go/worker/runnertoken"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
@@ -35,12 +36,14 @@ type (
 )
 
 func (r *activities) ListDeployments(ctx context.Context, namespace string) (*v2pb.ListDeploymentResponse, error) {
+	ctx = runnertoken.WithNamespace(ctx, namespace)
 	return r.deploymentService.ListDeployment(ctx, &v2pb.ListDeploymentRequest{
 		Namespace: namespace,
 	})
 }
 
 func (r *activities) GetModel(ctx context.Context, namespace string, modelName string) (*v2pb.GetModelResponse, error) {
+	ctx = runnertoken.WithNamespace(ctx, namespace)
 	return r.modelService.GetModel(ctx, &v2pb.GetModelRequest{
 		Name:      modelName,
 		Namespace: namespace,
@@ -54,6 +57,7 @@ func (r *activities) ModelSearch(ctx context.Context, request *ModelSearchReques
 		return nil, fmt.Errorf("\"namespace\" and \"deployment name\" are required to perform model search")
 	}
 	logger.Info("retrieving deployment", zap.String("namespace", request.Namespace), zap.String("name", request.DeploymentName))
+	ctx = runnertoken.WithNamespace(ctx, request.Namespace)
 	deploymentRes, err := r.deploymentService.GetDeployment(ctx, &v2pb.GetDeploymentRequest{
 		Name:      request.DeploymentName,
 		Namespace: request.Namespace,

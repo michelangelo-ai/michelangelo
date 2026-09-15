@@ -156,6 +156,56 @@ apiserver:
   crdSync:
     enableUpdate: true
 
+  # ---------------------------------------------------------------------------
+  # Authentication + authorization for the Michelangelo API.
+  # ---------------------------------------------------------------------------
+  auth:
+    # "dummy" (default) allows every request, exactly as before.
+    # "k8s-rbac" authenticates bearer tokens (OIDC and/or Kubernetes
+    # ServiceAccount TokenReview) and authorizes each request through
+    # Kubernetes RBAC via SubjectAccessReview, so access is granted with
+    # ordinary RoleBindings on the Michelangelo resources (see the
+    # michelangelo-viewer / michelangelo-editor ClusterRoles the chart
+    # ships in this mode, and docs/operator-guides/setup/authentication.md).
+    mode: dummy
+
+    # OIDC ID-token verification for human callers. Enabled by setting
+    # issuerUrl. Requires at least one audience.
+    oidc:
+      # OIDC issuer URL; discovery uses <issuerUrl>/.well-known/openid-configuration.
+      # The apiserver fails startup if the issuer is unreachable.
+      issuerUrl: ""
+      # Accepted values of the token's `aud` claim (any-of). List several
+      # when the UI and the CLI use different client IDs.
+      audiences: []
+      # Claim used as the username RBAC sees (SubjectAccessReview user).
+      usernameClaim: email
+      # Claim carrying group memberships (SubjectAccessReview groups).
+      groupsClaim: groups
+      # Accepted clock skew when validating token expiry / not-before.
+      clockSkewLeeway: 30s
+
+    # TokenReview-based authentication for in-cluster callers, including
+    # the worker's per-project michelangelo-runner tokens (see
+    # worker.runnerToken below).
+    serviceAccounts:
+      enabled: true
+      # Audiences TokenReview accepts. Empty accepts the cluster API
+      # server's default audiences.
+      audiences: []
+
+    # SubjectAccessReview decision cache. Bounds how long a revoked
+    # RoleBinding can still be honored; 0s disables that cache.
+    sarCache:
+      allowTTL: 10s
+      denyTTL: 10s
+
+    # Project namespaces that get a michelangelo-runner ServiceAccount and
+    # an editor RoleBinding, the identity the worker's pipeline activities
+    # run as when worker.runnerToken.enabled is on. The namespaces must
+    # already exist.
+    runnerProjects: []
+
   # Default values applied when creating PipelineRun/Model objects that don't
   # set them explicitly. Empty (the default) means the apiserver falls back to
   # its own write-time sentinel ("unspecified") rather than a guessed real
@@ -336,6 +386,20 @@ worker:
     level: info
     development: true
     encoding: console
+
+  # Per-project machine identity for the worker's API-server calls. When
+  # enabled, the worker mints a short-lived token for the target project's
+  # michelangelo-runner ServiceAccount (TokenRequest API) and attaches it
+  # as a bearer header, so each pipeline runs with that project's RBAC
+  # grants only. Requires apiserver.auth.mode=k8s-rbac with
+  # serviceAccounts.enabled, plus the runner ServiceAccounts
+  # (apiserver.auth.runnerProjects) and the token-mint grant the chart
+  # ships alongside this flag. Disabled, the worker sends no credential.
+  runnerToken:
+    enabled: false
+    # Audiences requested for the minted tokens; when
+    # apiserver.auth.serviceAccounts.audiences is set, list one of them.
+    audiences: []
 
   resources: {}
 

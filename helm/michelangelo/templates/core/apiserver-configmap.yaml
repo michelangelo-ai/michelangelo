@@ -19,6 +19,34 @@ data:
         enableCRDUpdate: {{ .Values.apiserver.crdSync.enableUpdate }}
       pipelineRunDefaults:
         environment: {{ .Values.apiserver.pipelineRunDefaults.environment | default "" | quote }}
+      {{- if ne .Values.apiserver.auth.mode "dummy" }}
+      auth:
+        mode: {{ .Values.apiserver.auth.mode | quote }}
+        {{- if .Values.apiserver.auth.oidc.issuerUrl }}
+        oidc:
+          issuerUrl: {{ .Values.apiserver.auth.oidc.issuerUrl | quote }}
+          audiences:
+            {{- range .Values.apiserver.auth.oidc.audiences }}
+            - {{ . | quote }}
+            {{- end }}
+          usernameClaim: {{ .Values.apiserver.auth.oidc.usernameClaim | quote }}
+          groupsClaim: {{ .Values.apiserver.auth.oidc.groupsClaim | quote }}
+          clockSkewLeeway: {{ .Values.apiserver.auth.oidc.clockSkewLeeway }}
+        {{- end }}
+        {{- if .Values.apiserver.auth.serviceAccounts.enabled }}
+        serviceAccounts:
+          enabled: true
+          {{- with .Values.apiserver.auth.serviceAccounts.audiences }}
+          audiences:
+            {{- range . }}
+            - {{ . | quote }}
+            {{- end }}
+          {{- end }}
+        {{- end }}
+        sarCache:
+          allowTTL: {{ .Values.apiserver.auth.sarCache.allowTTL }}
+          denyTTL: {{ .Values.apiserver.auth.sarCache.denyTTL }}
+      {{- end }}
     metadataStorage:
       enableMetadataStorage: {{ .Values.apiserver.metadataStorage.enable }}
     mysql:
