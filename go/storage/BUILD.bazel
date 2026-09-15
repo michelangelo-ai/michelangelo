@@ -5,6 +5,7 @@ go_library(
     srcs = [
         "blob_storage.go",
         "metadata_storage.go",
+        "mysql_primary_policy.go",
         "storage_config.go",
     ],
     importpath = "github.com/michelangelo-ai/michelangelo/go/storage",

@@ -35,6 +35,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/components/triggerrun"
 	"github.com/michelangelo-ai/michelangelo/go/controllermgr"
 	"github.com/michelangelo-ai/michelangelo/go/kubeproto/metrics"
+	"github.com/michelangelo-ai/michelangelo/go/storage"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
@@ -46,6 +47,12 @@ const serverName = "ma-controllermgr"
 // cascadedelete.RetainPolicy. Keep this in sync with the kinds that implement the cascade
 // DrainTarget adapter (see go/components/{pipelinerun,triggerrun}).
 var cascadeRetainKinds = []string{"PipelineRun", "TriggerRun"}
+
+// mySQLPrimaryKinds is the set of CRD kinds that are created/updated directly in
+// MetadataStorage (MySQL) and never written to etcd at all (see storage.MySQLPrimaryPolicy).
+// Unlike cascadeRetainKinds, these kinds have no etcd copy at any point in their lifecycle, so
+// the ingester never sets up a reconciler for them either (see components/ingester/module.go).
+var mySQLPrimaryKinds = []string{"Metric"}
 
 // scheme provides a Kubernetes runtime.Scheme object.
 //
@@ -118,6 +125,11 @@ func options() fx.Option {
 			return cascadedelete.NewStaticRetainPolicy(cascadeRetainKinds...)
 		}),
 		fx.Invoke(cascadedelete.RegisterMetrics),
+		// MySQL-primary wiring (CRD-aware binary): supply the per-kind opt-in for kinds that
+		// bypass etcd entirely (see storage.MySQLPrimaryPolicy).
+		fx.Provide(func() storage.MySQLPrimaryPolicy {
+			return storage.NewStaticMySQLPrimaryPolicy(mySQLPrimaryKinds...)
+		}),
 		revision.Module,
 		deploymentOSSPlugin.Module,
 		deployment.Module,
