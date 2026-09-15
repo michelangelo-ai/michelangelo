@@ -13,7 +13,9 @@
 The project, both pipelines, and inference resources must share a namespace in
 the current OSS controllers. The checked-in `project.yaml` routes workflows to
 the sandbox's default worker queue, and `training_pipeline.yaml` registers the
-existing `examples.bert_cola.bert_cola` workflow alongside the inference demo.
+existing BERT/CoLA tasks through a single-node workflow alongside the inference
+demo. The head-only task configuration avoids duplicating the large examples
+image across both nodes of the local k3d sandbox.
 
 Set up the sandbox resources and register both pipelines:
 

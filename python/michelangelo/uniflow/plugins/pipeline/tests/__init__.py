@@ -1,1 +1,1 @@
-
+"""Tests for pipeline plugins."""
