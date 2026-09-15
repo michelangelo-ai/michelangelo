@@ -1,6 +1,7 @@
 """Tests for the Uniflow retrain example."""
 
 import importlib
+import importlib.resources
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -111,6 +112,25 @@ def test_training_adaptation_uses_head_only_ray_tasks():
         "model", lr=2e-5, eps=1e-8, tokenizer_max_length=128
     )
     push_step.assert_called_once_with("assembled")
+
+
+def test_training_adaptation_uses_stdlib_resources_as_backport_fallback():
+    """Python 3.9 task images can import Matplotlib without the backport."""
+    from examples.retrain_example import training
+
+    existing = sys.modules.pop("importlib_resources", None)
+    try:
+        with patch.object(
+            training.importlib,
+            "import_module",
+            side_effect=ModuleNotFoundError("missing backport"),
+        ):
+            training._ensure_importlib_resources()
+        assert sys.modules["importlib_resources"] is importlib.resources
+    finally:
+        sys.modules.pop("importlib_resources", None)
+        if existing is not None:
+            sys.modules["importlib_resources"] = existing
 
 
 def test_retrain_registration_discovers_workflow():

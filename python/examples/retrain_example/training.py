@@ -1,11 +1,27 @@
 """Single-node adaptation of the BERT/CoLA training example."""
 
+import importlib
+import importlib.resources
+import sys
+
 import michelangelo.uniflow.core as uniflow
-from examples.bert_cola.assembler import assembler
-from examples.bert_cola.data import load_data as _load_data
-from examples.bert_cola.push import push_step
-from examples.bert_cola.train import train as _train
 from michelangelo.uniflow.plugins.ray import UF_PLUGIN_RAY_USE_FSSPEC, RayTask
+
+
+def _ensure_importlib_resources() -> None:
+    """Use the Python 3.9 stdlib API when its backport is not installed."""
+    try:
+        importlib.import_module("importlib_resources")
+    except ModuleNotFoundError:
+        sys.modules["importlib_resources"] = importlib.resources
+
+
+_ensure_importlib_resources()
+
+assembler = importlib.import_module("examples.bert_cola.assembler").assembler
+_load_data = importlib.import_module("examples.bert_cola.data").load_data
+push_step = importlib.import_module("examples.bert_cola.push").push_step
+_train = importlib.import_module("examples.bert_cola.train").train
 
 
 @uniflow.workflow()
