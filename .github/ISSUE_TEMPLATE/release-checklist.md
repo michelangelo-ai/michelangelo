@@ -15,6 +15,7 @@ assignees: ''
   - [ ] `javascript/packages/rpc/package.json`
   - [ ] `website/package.json`
   - [ ] `helm/michelangelo/Chart.yaml` (both `version` and `appVersion`)
+  - [ ] `helm/michelangelo-llm-gateway/Chart.yaml` (`version`; `appVersion` tracks LiteLLM)
 - [ ] `CHANGELOG.md` updated via `git cliff`
 - [ ] Release notes drafted (follows three-layer template: summary, categorized changes, compatibility matrix)
 - [ ] Breaking changes reviewed and documented:
@@ -33,7 +34,8 @@ assignees: ''
   - [ ] Go service containers on ghcr.io
   - [ ] UI container on ghcr.io
   - [ ] npm packages (`@michelangelo-ai/core`, `@michelangelo-ai/rpc`)
-  - [ ] Helm OCI chart on ghcr.io
+  - [ ] Michelangelo Helm OCI chart on ghcr.io
+  - [ ] LLM gateway Helm OCI chart on ghcr.io
 - [ ] RC announcement posted (GitHub Discussions or relevant channel)
 - [ ] Soak period complete (minimum 1 week for minor releases)
 - [ ] No P0/P1 issues reported against RC
@@ -46,7 +48,8 @@ assignees: ''
   - [ ] Go service containers on ghcr.io (tagged `v0.3.0` + `latest`)
   - [ ] UI container on ghcr.io
   - [ ] npm packages (latest dist-tag)
-  - [ ] Helm OCI chart on ghcr.io
+  - [ ] Michelangelo Helm OCI chart on ghcr.io
+  - [ ] LLM gateway Helm OCI chart on ghcr.io
 - [ ] GitHub Release created with generated release notes
 - [ ] Announcement posted
 - [ ] Release branch merged back to main (if diverged)

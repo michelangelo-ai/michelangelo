@@ -1,0 +1,86 @@
+name: LLM gateway chart
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/scripts/validate-llm-gateway-chart.sh'
+      - '.github/workflows/llm-gateway-chart-ci.yml'
+      - '.github/workflows/llm-gateway-chart-release.yml'
+      - '.github/workflows/release.yaml'
+      - 'helm/michelangelo-llm-gateway/**'
+      - 'scripts/version-bump.sh'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/scripts/validate-llm-gateway-chart.sh'
+      - '.github/workflows/llm-gateway-chart-ci.yml'
+      - '.github/workflows/llm-gateway-chart-release.yml'
+      - '.github/workflows/release.yaml'
+      - 'helm/michelangelo-llm-gateway/**'
+      - 'scripts/version-bump.sh'
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  validate:
+    name: Helm ${{ matrix.helm-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        helm-version:
+          - '3.17.0'
+          - '4.1.0'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Helm
+        uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+        with:
+          version: ${{ matrix.helm-version }}
+
+      - name: Log in to GHCR
+        run: |
+          echo "${{ github.token }}" | helm registry login ghcr.io \
+            --username "${{ github.actor }}" \
+            --password-stdin
+
+      - name: Build dependency
+        run: helm dependency build helm/michelangelo-llm-gateway
+
+      - name: Install kubeconform
+        run: |
+          archive=/tmp/kubeconform-linux-amd64.tar.gz
+          curl --fail --location --silent --show-error \
+            --output "$archive" \
+            https://github.com/yannh/kubeconform/releases/download/v0.8.0/kubeconform-linux-amd64.tar.gz
+          echo "9bc2bffbf71f261128533edaf912153948b7ff238f9a531ae6d34466ec287883  $archive" | sha256sum --check
+          tar --extract --gzip --file "$archive" --directory /tmp kubeconform
+          sudo install --mode 0755 /tmp/kubeconform /usr/local/bin/kubeconform
+          kubeconform -v
+
+      - name: Validate
+        run: bash .github/scripts/validate-llm-gateway-chart.sh
+
+      - name: Check shell
+        run: shellcheck .github/scripts/validate-llm-gateway-chart.sh
+
+      - name: Check release versions
+        if: matrix.helm-version == '3.17.0'
+        run: bash scripts/version-bump.sh --check
+
+      - name: Check workflows
+        if: matrix.helm-version == '3.17.0'
+        run: |
+          go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 \
+            .github/workflows/llm-gateway-chart-ci.yml \
+            .github/workflows/llm-gateway-chart-release.yml \
+            .github/workflows/release.yaml
