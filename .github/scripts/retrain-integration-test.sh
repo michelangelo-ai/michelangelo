@@ -325,6 +325,10 @@ else
     --file="${PYTHON_DIR}/michelangelo/cli/sandbox/demo/inference/deployment.yaml"
 fi
 
+log "Resetting the test-owned retrain deployment"
+kubectl delete deployments.michelangelo.api retrain-example \
+  -n "${NAMESPACE}" --ignore-not-found --wait=true --timeout=180s
+
 log "Registering the namespace-compatible BERT/CoLA and retrain pipelines"
 ensure_minio_ready
 kubectl apply -f "${PYTHON_DIR}/examples/retrain_example/project.yaml"
