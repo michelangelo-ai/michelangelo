@@ -70,11 +70,21 @@ class Variable(ABC):
         This method should be implemented by subclasses.
         """
 
-    def _load_value_using_io(self, io_class: type):
+    def _load_value_using_io(self, io_class: type, **read_kwargs):
         """A helper method to load the value from the variable's path using IO.
 
         IO can be given as either as a concrete instance, or as a string
         representing a dot-path to the IO's class.
+
+        Args:
+            io_class: The ``IO[T]`` implementation to instantiate and read
+                with.
+            **read_kwargs: Additional backend-specific kwargs forwarded to
+                ``io_class().read(self.path, self._io_metadata, **read_kwargs)``.
+                Most ``IO`` implementations accept only ``(url, metadata)``
+                and ignore extra kwargs unless they explicitly declare
+                support (e.g.
+                ``michelangelo.uniflow.plugins.ray.io.RayDatasetIO.read``).
         """
         _logger.info(f"loading value for {self.path}")
 
@@ -84,14 +94,24 @@ class Variable(ABC):
 
         io = _create_io(io_class)
 
-        self._value = io.read(self.path, self._io_metadata)
+        self._value = io.read(self.path, self._io_metadata, **read_kwargs)
         self._saved = True  # the value is already saved on disk
 
-    def _save_value_using_io(self, io_class: type):
+    def _save_value_using_io(self, io_class: type, **write_kwargs):
         """A helper method to save the value using the given IO class.
 
         IO can be given as either as a concrete instance, or as a string
         representing a dot-path to the IO's class.
+
+        Args:
+            io_class: The ``IO[T]`` implementation to instantiate and write
+                with.
+            **write_kwargs: Additional backend-specific kwargs forwarded to
+                ``io_class().write(self.path, self._value, **write_kwargs)``.
+                Most ``IO`` implementations accept only ``(url, value)`` and
+                ignore extra kwargs unless they explicitly declare support
+                (e.g.
+                ``michelangelo.uniflow.plugins.ray.io.RayDatasetIO.write``).
         """
         _logger.info(f"saving value for {self.path}")
 
@@ -100,7 +120,7 @@ class Variable(ABC):
             return
 
         io = _create_io(io_class)
-        self._io_metadata = io.write(self.path, self._value)
+        self._io_metadata = io.write(self.path, self._value, **write_kwargs)
         self._saved = True
 
 

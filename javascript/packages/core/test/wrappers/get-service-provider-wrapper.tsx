@@ -101,8 +101,14 @@ export function createServiceProviderTestContext(serviceProvider: Partial<Servic
  */
 export function createQueryMockRouter(
   responses: Record<string, object | Error>
-): ServiceContextType['request'] {
-  return vi.fn((queryName: string, args: object, _headers?: Record<string, string>) => {
+): ServiceContextType['request'] & {
+  getCall: (
+    queryName: string
+  ) =>
+    | { queryName: string; args: unknown; headers: Record<string, string> | undefined }
+    | undefined;
+} {
+  const mock = vi.fn((queryName: string, args: object, _headers?: Record<string, string>) => {
     if (args) {
       for (const [responseKey, response] of Object.entries(responses)) {
         if (isEqual(parseArgsFromKey(responseKey), { queryName, args })) {
@@ -118,6 +124,16 @@ export function createQueryMockRouter(
     }
 
     return response instanceof Error ? Promise.reject(response) : Promise.resolve(response);
+  });
+
+  return Object.assign(mock, {
+    getCall: (queryName: string) => {
+      const call = mock.mock.calls.find(([name]) => name === queryName);
+      if (!call) return undefined;
+
+      const [name, args, headers] = call;
+      return { queryName: name, args, headers };
+    },
   });
 }
 

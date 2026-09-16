@@ -20,7 +20,7 @@ import (
 // for metadata operations while supporting different storage implementations.
 type MetadataHandlerImpl struct {
 	storage     storage.MetadataStorage
-	blobStorage storage.BlobStorage
+	blobHandler BlobHandler
 	logger      logr.Logger
 }
 
@@ -31,7 +31,7 @@ func NewMetadataHandler(storage storage.MetadataStorage, blobStorage storage.Blo
 	if storage == nil {
 		return &NullMetadataHandler{}
 	}
-	return &MetadataHandlerImpl{storage: storage, blobStorage: blobStorage, logger: logger}
+	return &MetadataHandlerImpl{storage: storage, blobHandler: NewBlobHandler(blobStorage), logger: logger}
 }
 
 // Get implements MetadataHandler.Get by delegating to the storage backend.
@@ -41,7 +41,7 @@ func (m *MetadataHandlerImpl) Get(ctx context.Context, namespace, name string, o
 
 // Update implements MetadataHandler.Update by delegating to the handleUpdate function.
 func (m *MetadataHandlerImpl) Update(ctx context.Context, obj ctrlRTClient.Object) error {
-	return handleUpdate(ctx, obj, m.storage, true, nil, m.blobStorage)
+	return handleUpdate(ctx, obj, m.storage, true, nil, m.blobHandler)
 }
 
 // Delete implements MetadataHandler.Delete by delegating to the handleDelete function.
@@ -50,7 +50,7 @@ func (m *MetadataHandlerImpl) Delete(ctx context.Context, obj ctrlRTClient.Objec
 	if err != nil {
 		return err
 	}
-	return handleDelete(ctx, m.logger, typeMeta, obj, m.storage, m.blobStorage)
+	return handleDelete(ctx, m.logger, typeMeta, obj, m.storage, m.blobHandler)
 }
 
 // List implements MetadataHandler.List by delegating to the storage backend.
@@ -108,7 +108,7 @@ func (n *NullMetadataHandler) List(ctx context.Context, namespace string, opts *
 // handleUpdate is a helper function for updating objects in metadata storage.
 // This function handles the actual update operation by delegating to the storage layer.
 func handleUpdate(ctx context.Context, obj ctrlRTClient.Object, metadataStorage storage.MetadataStorage, direct bool,
-	indexedFields []storage.IndexedField, handler storage.BlobStorage) error {
+	indexedFields []storage.IndexedField, handler BlobHandler) error {
 	// TODO(#555): update the object in blob storage
 	return metadataStorage.Upsert(ctx, obj, direct, indexedFields)
 }
@@ -118,7 +118,7 @@ func handleUpdate(ctx context.Context, obj ctrlRTClient.Object, metadataStorage 
 // 2. Deletes the object in metadataStorage
 // 3. Deletes the object in blob storage
 func handleDelete(ctx context.Context, log logr.Logger, typeMeta *metav1.TypeMeta, object ctrlRTClient.Object,
-	metadataStorage storage.MetadataStorage, handler storage.BlobStorage) error {
+	metadataStorage storage.MetadataStorage, handler BlobHandler) error {
 	if handler.IsObjectInteresting(object) {
 		// TODO(#556): if blob annotations are already available, this Get is not needed
 		getErr := metadataStorage.GetByID(ctx, string(object.GetUID()), object)

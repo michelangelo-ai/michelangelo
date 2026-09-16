@@ -1,5 +1,6 @@
 export type ModelRecord = {
   metadata?: {
+    name?: string;
     labels?: Record<string, string>;
     creationTimestamp?: { seconds: number };
   };

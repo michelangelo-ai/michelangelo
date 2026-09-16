@@ -16,7 +16,7 @@ const isKillable = (record: unknown) => {
 
 export const TRIGGER_ENTITY_CONFIG: PhaseEntityConfig = {
   id: 'triggers',
-  name: 'Triggers',
+  name: 'triggers',
   service: 'triggerRun',
   state: 'active',
   views: [TRIGGER_LIST_CONFIG, TRIGGER_DETAIL_CONFIG],

@@ -52,5 +52,6 @@ export function adaptTableConfigToTableProps<T extends TableData = TableData>(
     disableSorting: config.disableSorting,
     pageSizes: config.pageSizes,
     enableStickySides: config.enableStickySides,
+    maxHeight: config.maxHeight,
   };
 }

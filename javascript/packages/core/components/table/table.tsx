@@ -141,7 +141,7 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
         />
 
         <div
-          className={css({ overflow: 'auto', position: 'relative' })}
+          className={css({ overflow: 'auto', position: 'relative', maxHeight: props.maxHeight })}
           ref={tableRef}
           onScroll={handleScrollRatioUpdate}
         >
@@ -173,6 +173,7 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
                 onToggleSelection={(selected: boolean) => table.toggleAllRowsSelected(selected)}
                 enableStickySides={props.enableStickySides}
                 scrollRatio={scrollRatio}
+                stickyHeader={Boolean(props.maxHeight)}
               />
             )}
 

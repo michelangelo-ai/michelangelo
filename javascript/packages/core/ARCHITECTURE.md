@@ -56,6 +56,10 @@ Configurations are not a flat catalog. They compose:
 
 An action's mutation payload is the record itself — the current row or page entity, optionally reshaped by `middleware`. Whether a request needs shaping is controlled by how an operator configures `ServiceProvider.request`.
 
+### Filtering option lists
+
+A dropdown or select field whose options come from a list query (a `pipeline` picker, a `revision` picker, and similar) **must** narrow that query server-side via `listOptions`/`listOptionsExt` — passed through the query's `serviceOptions`, as in `resume-run-fields.tsx`'s `buildPipelineRunFilter` or `model-family-revision-fields.tsx`'s `modelFamilyListOptionsExt`. Fetching the full list and filtering it in JS is not an accepted alternative, even for a component that only ever renders a handful of options: it pulls in rows the field will never show, moves filtering logic away from the data source and into the field, and stops scaling the moment the backing collection grows past what one page of results can hold. If the field's filter criterion isn't expressible as a `listOptions`/`listOptionsExt` filter, that's a query-layer gap to close, not a reason to filter client-side.
+
 ### Customization escape hatches
 
 The configuration runtime is the path of least resistance. Most customization happens by adjusting configuration — registering custom column renderers, choosing different field types, supplying disabled rules. Specific escape hatches let consumers ship React components when an interaction doesn't fit configuration:

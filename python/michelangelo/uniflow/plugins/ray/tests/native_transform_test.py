@@ -245,7 +245,15 @@ class ComputeNumericalStatisticsTests(unittest.TestCase):
         self.assertEqual(result, {})
 
     def test_batches_aggregate_calls(self):
-        """Batches aggregate calls."""
+        """Batches aggregate calls.
+
+        2 aggregate fns (max, min) with a batch size of 1 must produce
+        exactly 2 non-empty batches/calls — not 3. (A prior version of this
+        test used a single aggregate fn with batch size 1, which happened to
+        pass under the old buggy `// batch_fn_size + 1` bound because that
+        formula's extra empty trailing batch was harmless with a mock
+        `return_value`; it would have crashed against real Ray, per GAP-006.)
+        """
         mock_dataset = MagicMock()
         mock_dataset.select_columns.return_value = mock_dataset
         mock_dataset.aggregate.return_value = {}
@@ -253,7 +261,7 @@ class ComputeNumericalStatisticsTests(unittest.TestCase):
             "col1": {
                 "percentiles": [],
                 "max": True,
-                "min": False,
+                "min": True,
                 "mean": False,
                 "std": False,
             }
@@ -277,6 +285,13 @@ class ComputeNumericalStatisticsTests(unittest.TestCase):
         total, while there are only 2 specs. With a batch size of 2, a
         batch_count derived from spec count would only cover the first 4
         aggregate fns, silently dropping the rest.
+
+        8 fns at a batch size of 2 is also an exact multiple (4 batches, no
+        remainder), so this doubles as the regression case for `// + 1`
+        adding a guaranteed-empty trailing batch: aggregate() must never be
+        called with zero aggregators (that crashes inside Ray, see
+        table_block.py's `assert self._columns`), and must be called exactly
+        4 times.
         """
 
         class _FakeAggFn:
@@ -284,11 +299,13 @@ class ComputeNumericalStatisticsTests(unittest.TestCase):
                 self.input_col = input_col
                 self.alias_name = alias_name
 
+        def _aggregate(*fns):
+            assert fns, "aggregate() must never be called with zero aggregators"
+            return {fn.alias_name: 1.0 for fn in fns}
+
         mock_dataset = MagicMock()
         mock_dataset.select_columns.return_value = mock_dataset
-        mock_dataset.aggregate.side_effect = lambda *fns: {
-            fn.alias_name: 1.0 for fn in fns
-        }
+        mock_dataset.aggregate.side_effect = _aggregate
         specs = {
             "col1": {
                 "percentiles": [],
@@ -318,6 +335,7 @@ class ComputeNumericalStatisticsTests(unittest.TestCase):
                 numerical_statistics_batch_fn_size=2,
             )
 
+        self.assertEqual(mock_dataset.aggregate.call_count, 4)
         expected_keys = {
             f"{col}_{stat}"
             for col in ("col1", "col2")

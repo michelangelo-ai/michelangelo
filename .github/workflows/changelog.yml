@@ -101,28 +101,26 @@ jobs:
           # main, which is always a real ancestor since main only grows
           # forward, and correctly scopes to "what's new since that branch
           # point" without re-including anything already released.
-          CURRENT_BRANCH="${{ steps.branch.outputs.base }}"
-
-          if [ "$CURRENT_BRANCH" = "main" ]; then
-            echo "range=" >> "$GITHUB_OUTPUT"
-            echo "Tag is on main, not a release branch, and the preceding tag isn't an ancestor; falling back to --latest"
+          # CANDIDATE (found above) is not an ancestor of CURRENT_TAG -- expected
+          # whenever a release-branch boundary was crossed, since this repo is
+          # squash-merge-only and a release tag's commit is therefore never an
+          # ancestor of anything on main afterward (#1662). The correct range start
+          # is the fork point of CANDIDATE's own release cycle off main, which
+          # equals merge-base(main, CANDIDATE) as long as cycles are sequential
+          # (the next cycle's branch is cut only after the previous one's merge-back
+          # has landed on main -- the same assumption the old branch-based fallback
+          # already made). Using CANDIDATE's *tag* instead of hunting for its
+          # release *branch* survives that branch being deleted after its
+          # merge-back PR merges (delete_branch_on_merge: true) -- see #2046.
+          if [ -n "$CANDIDATE" ]; then
+            START=$(git merge-base origin/main "$CANDIDATE")
+            echo "range=${START}..${CURRENT_TAG}" >> "$GITHUB_OUTPUT"
+            echo "Changelog range: ${START} (${CANDIDATE}'s fork point from main) .. ${CURRENT_TAG}"
             exit 0
           fi
 
-          PREV_BRANCH=$(git branch -r --list 'origin/release/v*' \
-            | sed 's#^[* ]*origin/##' \
-            | sort -V \
-            | grep -B1 -x "$CURRENT_BRANCH" | head -1)
-
-          if [ -z "$PREV_BRANCH" ] || [ "$PREV_BRANCH" = "$CURRENT_BRANCH" ]; then
-            echo "range=" >> "$GITHUB_OUTPUT"
-            echo "No previous release branch found (first release); falling back to --latest"
-            exit 0
-          fi
-
-          START=$(git merge-base origin/main "origin/$PREV_BRANCH")
-          echo "range=${START}..${CURRENT_TAG}" >> "$GITHUB_OUTPUT"
-          echo "Changelog range: ${START} (${PREV_BRANCH}'s fork point from main) .. ${CURRENT_TAG}"
+          echo "range=" >> "$GITHUB_OUTPUT"
+          echo "No previous final tag found (first release); falling back to --latest"
 
 
 

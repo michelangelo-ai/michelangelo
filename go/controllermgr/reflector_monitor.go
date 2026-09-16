@@ -1,6 +1,7 @@
 package controllermgr
 
 import (
+	"context"
 	"io"
 	"regexp"
 	"strconv"
@@ -43,8 +44,8 @@ var crdTypeRe = regexp.MustCompile(`(?:failed to list|Failed to watch)\s+(\*?\w+
 // See: https://github.com/michelangelo-ai/michelangelo/issues/1318
 var durationErrRe = regexp.MustCompile(`(?i)\b(bad|invalid)\s+duration\b`)
 
-// NewWatchErrorHandler returns a client-go WatchErrorHandler that classifies
-// reflector errors and emits the cr_unmarshal_errors_total metric.
+// NewWatchErrorHandler returns a client-go WatchErrorHandlerWithContext that
+// classifies reflector errors and emits the cr_unmarshal_errors_total metric.
 //
 // It replaces the default handler but preserves its behavior for benign
 // cases: io.EOF (normal watch close) and expired/gone errors are passed
@@ -55,11 +56,8 @@ var durationErrRe = regexp.MustCompile(`(?i)\b(bad|invalid)\s+duration\b`)
 // The CRD type is extracted from the error string because
 // Reflector.typeDescription is unexported. The error format is
 // "failed to list *v2.Deployment: <cause>" per client-go reflector.go:562.
-//
-// NOTE: The WatchErrorHandler signature changes to WatchErrorHandlerWithContext
-// in controller-runtime v0.21+ / client-go v0.32+. Update on k8s dep bump.
-func NewWatchErrorHandler(logger logr.Logger) toolscache.WatchErrorHandler {
-	return func(r *toolscache.Reflector, err error) {
+func NewWatchErrorHandler(logger logr.Logger) toolscache.WatchErrorHandlerWithContext {
+	return func(ctx context.Context, r *toolscache.Reflector, err error) {
 		if err == nil {
 			return
 		}
@@ -68,7 +66,7 @@ func NewWatchErrorHandler(logger logr.Logger) toolscache.WatchErrorHandler {
 		// These are normal watch lifecycle events, not failures.
 		if err == io.EOF || err == io.ErrUnexpectedEOF || apierrors.IsResourceExpired(err) || apierrors.IsGone(err) {
 			if r != nil {
-				toolscache.DefaultWatchErrorHandler(r, err)
+				toolscache.DefaultWatchErrorHandler(ctx, r, err)
 			}
 			return
 		}

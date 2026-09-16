@@ -103,19 +103,6 @@ describe('Run list page', () => {
 
 describe('Run detail page', () => {
   describe('configuration tab', () => {
-    const buildManifestContent = () => ({
-      typeUrl: 'type.googleapis.com/michelangelo.PredictionPipelineConf',
-      value: {
-        meta: {
-          workflow_version: 'v2',
-          app: 'data.michelangelo.asl.app.prediction.PredictionPipeline',
-        },
-        triggers: {
-          'daily-01': { cron: '0 01 * * *' },
-        },
-      },
-    });
-
     const buildRun = (overrides: Record<string, unknown> = {}) => ({
       metadata: { name: 'run-1', creationTimestamp: { seconds: 1700000000 } },
       spec: {
@@ -132,7 +119,18 @@ describe('Run detail page', () => {
                 // discriminant (PIPELINE_MANIFEST_TYPE_YAML = 1), not the enum's string name.
                 type: 1,
                 filePath: 'python/examples/boston/pipeline.yaml',
-                content: buildManifestContent(),
+                content: {
+                  typeUrl: 'type.googleapis.com/michelangelo.PredictionPipelineConf',
+                  value: {
+                    meta: {
+                      workflow_version: 'v2',
+                      app: 'data.michelangelo.asl.app.prediction.PredictionPipeline',
+                    },
+                    triggers: {
+                      'daily-01': { cron: '0 01 * * *' },
+                    },
+                  },
+                },
               },
             },
           },
@@ -172,7 +170,21 @@ describe('Run detail page', () => {
         spec: {
           actor: { name: 'jsmith' },
           pipelineSpec: {
-            manifest: { type: 1, content: buildManifestContent() },
+            manifest: {
+              type: 1,
+              content: {
+                typeUrl: 'type.googleapis.com/michelangelo.PredictionPipelineConf',
+                value: {
+                  meta: {
+                    workflow_version: 'v2',
+                    app: 'data.michelangelo.asl.app.prediction.PredictionPipeline',
+                  },
+                  triggers: {
+                    'daily-01': { cron: '0 01 * * *' },
+                  },
+                },
+              },
+            },
           },
         },
         status: { state: 1 },

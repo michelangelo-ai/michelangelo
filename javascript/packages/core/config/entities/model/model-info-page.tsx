@@ -8,6 +8,7 @@ import { TextareaField } from '#core/components/form/fields/textarea/textarea-fi
 import { Form } from '#core/components/form/form';
 import { LinksBox } from '#core/components/links-box/links-box';
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
+import { ModelDeploymentsTable } from './model-deployments-table';
 
 import type { ModelRecord } from './types';
 
@@ -18,6 +19,7 @@ export function ModelInfoPage({ data, isLoading }: { data?: object; isLoading: b
   // cast: custom detail pages receive the entity as a plain object; narrowing to the
   // expected proto shape for property access; see #1425
   const model = data as ModelRecord | undefined;
+  const modelName = model?.metadata?.name;
 
   const pipelineRunName = model?.spec?.sourcePipelineRun?.name;
   const links = [
@@ -74,6 +76,15 @@ export function ModelInfoPage({ data, isLoading }: { data?: object; isLoading: b
           </Form>
         )}
       </Box>
+
+      <section>
+        <HeadingSmall marginTop="0" marginBottom={theme.sizing.scale600}>
+          Key status indicators
+        </HeadingSmall>
+        <Box title="Deployments this model is currently deployed to">
+          <ModelDeploymentsTable modelName={modelName} isModelLoading={isLoading} />
+        </Box>
+      </section>
 
       <section>
         <HeadingSmall marginTop="0" marginBottom={theme.sizing.scale600}>
