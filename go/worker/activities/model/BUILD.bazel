@@ -9,7 +9,6 @@ go_library(
     importpath = "github.com/michelangelo-ai/michelangelo/go/worker/activities/model",
     visibility = ["//visibility:public"],
     deps = [
-        "//proto/api:go_default_library",
         "//proto/api/v2:go_default_library",
         "@com_github_cadence_workflow_starlark_worker//worker:go_default_library",
         "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
