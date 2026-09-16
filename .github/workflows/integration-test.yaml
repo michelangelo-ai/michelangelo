@@ -284,6 +284,7 @@ jobs:
         env:
           MA_API_SERVER: localhost:15566
           MA_NAMESPACE: default
+          RETRAIN_IMAGE_TAG: ${{ inputs.image_tag }}
 
       - name: Run CLI e2e tests
         run: |

@@ -7,6 +7,8 @@ NAMESPACE="${MA_NAMESPACE:-default}"
 POLL_INTERVAL="${POLL_INTERVAL:-15}"
 TIMEOUT="${TIMEOUT:-3600}"
 MINIO_ENDPOINT="${MINIO_ENDPOINT:-http://localhost:9091}"
+RETRAIN_IMAGE_TAG="${RETRAIN_IMAGE_TAG:-main}"
+RETRAIN_IMAGE="ghcr.io/michelangelo-ai/examples:${RETRAIN_IMAGE_TAG}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 PYTHON_DIR="${REPO_ROOT}/python"
@@ -321,10 +323,16 @@ AWS_ACCESS_KEY_ID="${MINIO_ACCESS_KEY}" \
 AWS_SECRET_ACCESS_KEY="${MINIO_SECRET_KEY}" \
 AWS_ENDPOINT_URL="${MINIO_ENDPOINT}" \
   "${MA_BIN}" pipeline apply --file=examples/retrain_example/training_pipeline.yaml
+kubectl annotate pipelines.michelangelo.api bert-cola-test \
+  -n "${NAMESPACE}" \
+  michelangelo/uniflow-image="${RETRAIN_IMAGE}" --overwrite
 AWS_ACCESS_KEY_ID="${MINIO_ACCESS_KEY}" \
 AWS_SECRET_ACCESS_KEY="${MINIO_SECRET_KEY}" \
 AWS_ENDPOINT_URL="${MINIO_ENDPOINT}" \
   "${MA_BIN}" pipeline apply --file=examples/retrain_example/pipeline.yaml
+kubectl annotate pipelines.michelangelo.api retrain-example \
+  -n "${NAMESPACE}" \
+  michelangelo/uniflow-image="${RETRAIN_IMAGE}" --overwrite
 
 log "Running retrain-example through the local Python plugin implementations"
 run_with_storage_monitor env \
