@@ -58,15 +58,9 @@ describe('CreateInferenceServerForm', () => {
 
     await user.type(within(dialog).getByRole('textbox', { name: 'Name *' }), 'full-target');
 
-    await user.click(within(dialog).getByLabelText('Backend', { exact: false }));
-    await user.click(await screen.findByRole('option', { name: 'Dynamo' }));
-
     await within(dialog).findByRole('combobox', {
       name: 'Selected michelangelo-sandbox-inference.',
     });
-
-    await user.click(within(dialog).getByLabelText('Service type', { exact: false }));
-    await user.click(await screen.findByRole('option', { name: 'Triton GPU' }));
 
     await user.type(within(dialog).getByRole('textbox', { name: 'Server version' }), 'v1.2.3');
 
@@ -95,12 +89,12 @@ describe('CreateInferenceServerForm', () => {
           metadata: { name: 'full-target', namespace: 'ma-dev-test' },
           spec: {
             tenancyType: 1,
-            backendType: 3,
+            backendType: 1,
             initSpec: {
               resourceSpec: { cpu: 4, memory: '8Gi', diskSize: '', gpu: 1 },
               servingSpec: {
                 version: 'v1.2.3',
-                containerBuildTemplate: 'default_triton_gpu',
+                containerBuildTemplate: 'default_triton',
               },
               numInstances: 3,
             },

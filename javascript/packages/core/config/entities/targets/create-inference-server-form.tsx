@@ -1,3 +1,6 @@
+import { Input } from 'baseui/input';
+
+import { FormControl } from '#core/components/form/components/form-control';
 import { FormDialog } from '#core/components/form/components/form-dialog/form-dialog';
 import { NumberField } from '#core/components/form/fields/number/number-field';
 import { SelectField } from '#core/components/form/fields/select/select-field';
@@ -31,8 +34,6 @@ import type { InferenceServer, InferenceServerCreateInput } from './types';
 
 const CONTAINER_BUILD_TEMPLATE_OPTIONS = [
   { id: CONTAINER_BUILD_TEMPLATE.DEFAULT_TRITON, label: 'Triton' },
-  { id: CONTAINER_BUILD_TEMPLATE.DEFAULT_TRITON_GPU, label: 'Triton GPU' },
-  { id: CONTAINER_BUILD_TEMPLATE.DEFAULT_TRITON_PYTHON, label: 'Triton Python' },
 ];
 
 /** Kubernetes quantity, e.g. "4Gi", "512Mi", "100G". */
@@ -111,16 +112,13 @@ export const CreateInferenceServerForm = ({ onClose }: CreateActionComponentProp
         placeholder="e.g. my-inference-server"
       />
 
-      <StringField
-        name="targetTypeDisplay"
-        label="Target type"
-        defaultValue="Inference Server"
-        readOnly
-      />
+      <FormControl label="Target type">
+        <Input id="targetTypeDisplay" value="Inference Server" readOnly />
+      </FormControl>
 
       <SelectField
         name="spec.backendType"
-        label="Backend"
+        label="Backend type"
         required
         validate={required()}
         options={BACKEND_TYPE_OPTIONS}
