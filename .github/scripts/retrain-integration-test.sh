@@ -244,6 +244,20 @@ ensure_minio_ready() {
   return 1
 }
 
+refresh_model_sync() {
+  local script_path="${PYTHON_DIR}/michelangelo/cli/sandbox/resources/sync-models.py"
+
+  log "Refreshing the reused sandbox model-sync process"
+  kubectl create configmap model-sync-script \
+    -n "${NAMESPACE}" \
+    "--from-file=sync-models.py=${script_path}" \
+    --dry-run=client -o yaml \
+    | kubectl apply -f -
+  kubectl rollout restart daemonset/model-sync -n "${NAMESPACE}"
+  kubectl rollout status daemonset/model-sync \
+    -n "${NAMESPACE}" --timeout=180s
+}
+
 pipeline_run_state() {
   local run_name="$1"
 
@@ -337,6 +351,7 @@ if [[ "${inference_state}" != INFERENCE_SERVER_STATE_SERVING ]]; then
   log "Creating the inference-server-example sandbox demo"
   "${MA_BIN}" sandbox demo inference
 fi
+refresh_model_sync
 
 log "Ensuring the deployment-example template exists"
 if kubectl get deployments.michelangelo.api deployment-example \
