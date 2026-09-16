@@ -18,10 +18,23 @@ def _ensure_importlib_resources() -> None:
 
 _ensure_importlib_resources()
 
-assembler = importlib.import_module("examples.bert_cola.assembler").assembler
+_assembler = importlib.import_module("examples.bert_cola.assembler").assembler
 _load_data = importlib.import_module("examples.bert_cola.data").load_data
 push_step = importlib.import_module("examples.bert_cola.push").push_step
 _train = importlib.import_module("examples.bert_cola.train").train
+
+
+@uniflow.task(
+    config=RayTask(head_cpu=1, head_memory="2Gi", worker_instances=0),
+)
+def assembler(model_variable, lr, eps, tokenizer_max_length=128):
+    """Assemble through a task module that provides the Python 3.9 fallback."""
+    return _assembler(
+        model_variable,
+        lr=lr,
+        eps=eps,
+        tokenizer_max_length=tokenizer_max_length,
+    )
 
 
 @uniflow.workflow()

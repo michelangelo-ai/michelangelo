@@ -86,6 +86,7 @@ def test_training_adaptation_uses_head_only_ray_tasks():
 
     assert "alias='retrain_load_data'" in source
     assert "alias='retrain_train'" in source
+    assert "examples.retrain_example.training.assembler" in source
     assert source.count("worker_instances=0") == 4
 
     load_data = Mock()
