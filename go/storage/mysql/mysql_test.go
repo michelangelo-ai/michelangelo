@@ -284,6 +284,17 @@ func TestBuildFieldSelectorSQL(t *testing.T) {
 			wantParams: []interface{}{"child-run"},
 		},
 		{
+			name:     "generated_pipeline_map_accepts_legacy_column_alias",
+			selector: "name=alice",
+			indexPathToKeyMap: v2pb.IndexesPathToKeyMap[schema.GroupVersionKind{
+				Group:   "michelangelo.api",
+				Version: "v2",
+				Kind:    "Pipeline",
+			}],
+			want:       " AND `name`=?",
+			wantParams: []interface{}{"alice"},
+		},
+		{
 			name:              "populated_map_rejects_unmapped_field",
 			selector:          "other=alice",
 			indexPathToKeyMap: map[string]string{"metadata.name": "name"},
@@ -423,6 +434,26 @@ func TestBuildFieldCriterionSQL_IndexPathMapValidation(t *testing.T) {
 		queryStrs, _, err := buildFieldCriterionSQL(op, indexPathToKeyMap)
 		require.NoError(t, err)
 		require.Equal(t, []string{" `create_time` > ?"}, queryStrs)
+	})
+
+	t.Run("generated_map_accepts_legacy_column_alias", func(t *testing.T) {
+		op := &apipb.CriterionOperation{
+			Criterion: []*apipb.Criterion{
+				{
+					FieldName:  "pipeline.name",
+					Operator:   apipb.CRITERION_OPERATOR_EQUAL,
+					MatchValue: stringMatchValue(t, "alice"),
+				},
+			},
+		}
+		indexPathToKeyMap := v2pb.IndexesPathToKeyMap[schema.GroupVersionKind{
+			Group:   "michelangelo.api",
+			Version: "v2",
+			Kind:    "Pipeline",
+		}]
+		queryStrs, _, err := buildFieldCriterionSQL(op, indexPathToKeyMap)
+		require.NoError(t, err)
+		require.Equal(t, []string{" `name` = ?"}, queryStrs)
 	})
 }
 
@@ -591,6 +622,18 @@ func TestBuildOrderBySQL(t *testing.T) {
 			},
 			indexPathToKeyMap: map[string]string{"some_field": "some_column"},
 			want:              " ORDER BY `some_column` ASC",
+		},
+		{
+			name: "generated_map_accepts_legacy_column_alias",
+			in: []*apipb.OrderBy{
+				{Field: "pipeline.name", Dir: apipb.SORT_ORDER_ASC},
+			},
+			indexPathToKeyMap: v2pb.IndexesPathToKeyMap[schema.GroupVersionKind{
+				Group:   "michelangelo.api",
+				Version: "v2",
+				Kind:    "Pipeline",
+			}],
+			want: " ORDER BY `name` ASC",
 		},
 	}
 	for _, c := range cases {
