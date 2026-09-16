@@ -1,7 +1,13 @@
 import { create, toBinary } from '@bufbuild/protobuf';
+import { anyPack } from '@bufbuild/protobuf/wkt';
 import { expect, it, vi } from 'vitest';
 
-import { PipelineSchema, PipelineType } from '../gen/michelangelo/api/v2/pipeline_pb';
+import { TypedStructSchema } from '../gen/michelangelo/api/typed_struct_pb';
+import {
+  PipelineManifest_Type,
+  PipelineSchema,
+  PipelineType,
+} from '../gen/michelangelo/api/v2/pipeline_pb';
 import { request } from '../request';
 
 vi.mock('../handlers', () => ({
@@ -81,6 +87,55 @@ it('unpacks a registered Any payload (Pipeline) into a plain object', async () =
   expect(result.spec.content.spec.type).toBe(PipelineType.DATA_PREP);
   expect(result.spec.content.spec.commit.branch).toBe('main');
   expect(result.spec.content).not.toHaveProperty('$typeName');
+});
+
+it('unpacks a registered Any payload whose own fields contain a nested TypedStruct Any', async () => {
+  // The Pipeline packed into Revision.spec.content (a registry-typed Any) has its own
+  // manifest.content field, which is a TypedStruct. Both must unpack in one pass: toPlainObject 
+  // recurses into the decoded Pipeline and finds the inner Any too.
+  const manifestContent = anyPack(
+    TypedStructSchema,
+    create(TypedStructSchema, {
+      typeUrl: 'type.googleapis.com/michelangelo.pipeline.dataprep.Config',
+      value: { source: 'hive' },
+    })
+  );
+  const pipeline = create(PipelineSchema, {
+    metadata: { name: 'my-pipeline' },
+    spec: {
+      type: PipelineType.DATA_PREP,
+      commit: { branch: 'main' },
+      manifest: {
+        type: PipelineManifest_Type.PIPELINE_MANIFEST_TYPE_YAML,
+        content: manifestContent,
+      },
+    },
+  });
+  mockHandler({
+    $typeName: 'michelangelo.api.v2.Revision',
+    spec: {
+      $typeName: 'michelangelo.api.v2.RevisionSpec',
+      revisionId: 'abc',
+      content: {
+        $typeName: 'google.protobuf.Any',
+        typeUrl: 'type.googleapis.com/michelangelo.api.v2.Pipeline',
+        value: toBinary(PipelineSchema, pipeline),
+      },
+    },
+  });
+
+  const result = (await request('GetPipelineRun', {} as never)) as {
+    spec: {
+      content: {
+        spec: { manifest: { content: { typeUrl: string; value: { source: string } } } };
+      };
+    };
+  };
+
+  expect(result.spec.content.spec.manifest.content).toEqual({
+    typeUrl: 'type.googleapis.com/michelangelo.pipeline.dataprep.Config',
+    value: { source: 'hive' },
+  });
 });
 
 it('leaves an unregistered Any payload untouched', async () => {
