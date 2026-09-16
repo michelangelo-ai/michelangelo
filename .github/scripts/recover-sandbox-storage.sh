@@ -7,6 +7,7 @@ set -Eeuo pipefail
 CLUSTER_NAME="${K3D_CLUSTER_NAME:-michelangelo-sandbox}"
 NAMESPACE="${MA_NAMESPACE:-default}"
 MIN_AVAILABLE_KIB="${MIN_SANDBOX_AVAILABLE_KIB:-26214400}"
+FORCE_RECREATE_SANDBOX="${FORCE_RECREATE_SANDBOX:-false}"
 
 log() { echo "[$(date -u '+%H:%M:%S')] $*"; }
 
@@ -16,6 +17,17 @@ main() {
 
   if ! k3d cluster get "${CLUSTER_NAME}" >/dev/null 2>&1; then
     log "Sandbox ${CLUSTER_NAME} does not exist; sync will create it"
+    return 0
+  fi
+
+  if [[ "${FORCE_RECREATE_SANDBOX}" = true ]]; then
+    log "Recreating disposable sandbox ${CLUSTER_NAME} as explicitly requested"
+    k3d cluster delete "${CLUSTER_NAME}"
+    if k3d cluster get "${CLUSTER_NAME}" >/dev/null 2>&1; then
+      log "Sandbox ${CLUSTER_NAME} still exists after delete"
+      return 1
+    fi
+    log "Removed only ${CLUSTER_NAME}; sandbox sync will perform a clean create"
     return 0
   fi
 
