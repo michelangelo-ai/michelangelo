@@ -21,7 +21,7 @@ export const RowItem = (props: {
   const value = getObjectValue(record, item.accessor ?? item.id);
   return (
     <div>
-      <RowLabel label={item.label} />
+      <RowLabel label={item.label} description={item.description} />
       <div className={css(theme.typography.ParagraphSmall)}>
         <CellComponent value={value} column={item} record={record} />
       </div>

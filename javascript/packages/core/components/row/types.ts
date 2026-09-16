@@ -10,6 +10,11 @@ export type RowProps = {
 
 export type RowCell = Cell & {
   /**
+   * Supplemental help displayed next to the row label.
+   */
+  description?: string;
+
+  /**
    * @description
    * If possible, hide the column when its value is empty
    *
