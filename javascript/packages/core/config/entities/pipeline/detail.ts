@@ -2,6 +2,7 @@ import { CellType } from '#core/components/cell/constants';
 import { SHARED_RUN_CELL_CONFIG } from '#core/config/entities/run/shared';
 import { TRIGGER_STATE_CELL_CONFIG } from '#core/config/entities/trigger/shared';
 import { formatTriggerSchedule } from './format-trigger-schedule';
+import { PipelineInfoPage } from './pipeline-info-page';
 import {
   CRITERION_OPERATOR_EQUAL,
   PIPELINE_RUN_PIPELINE_NAME_FIELD,
@@ -22,6 +23,12 @@ export const PIPELINE_DETAIL_CONFIG: DetailViewConfig = {
     PIPELINE_STATE_CELL,
   ],
   pages: [
+    {
+      id: 'info',
+      label: 'Information',
+      type: 'custom',
+      component: PipelineInfoPage,
+    },
     {
       id: 'runs',
       label: 'Runs',
