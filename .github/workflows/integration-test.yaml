@@ -25,6 +25,18 @@ on:
           Defaults to "main".
         required: false
         default: "main"
+      apiserver_tag:
+        description: >
+          GHCR apiserver image tag. Use a dev-release sha tag to test apiserver changes.
+          Defaults to "main".
+        required: false
+        default: "main"
+      controllermgr_tag:
+        description: >
+          GHCR controllermgr image tag. Use a dev-release sha tag to test controllermgr changes.
+          Defaults to "main".
+        required: false
+        default: "main"
   workflow_call:
     inputs:
       image_tag:
@@ -39,6 +51,16 @@ on:
         default: "main"
       worker_tag:
         description: "GHCR worker image tag"
+        required: false
+        type: string
+        default: "main"
+      apiserver_tag:
+        description: "GHCR apiserver image tag"
+        required: false
+        type: string
+        default: "main"
+      controllermgr_tag:
+        description: "GHCR controllermgr image tag"
         required: false
         type: string
         default: "main"
@@ -167,7 +189,9 @@ jobs:
             --set controllermgr.metadataStorage.enable=true \
             --set controllermgr.jobs.k8sengine.mapper.logPersistence.enabled=false \
             --set monitoring.enabled=false \
+            --set images.apiserver.tag=${{ inputs.apiserver_tag || 'main' }} \
             --set images.worker.tag=${{ inputs.worker_tag || 'main' }} \
+            --set images.controllermgr.tag=${{ inputs.controllermgr_tag || 'main' }} \
             --set inferenceServer.gateway.name=ma-gateway \
             --set inferenceServer.gateway.serviceName=ma-gateway-istio \
             --set inferenceServer.gateway.serviceNamespace=default \
