@@ -244,14 +244,35 @@ ensure_minio_ready() {
   return 1
 }
 
+pipeline_run_state() {
+  local run_name="$1"
+
+  MA_API_SERVER="${MA_API_SERVER:-localhost:15566}" \
+    "${PYTHON_BIN}" - "${NAMESPACE}" "${run_name}" <<'PY'
+import sys
+
+from michelangelo.api.v2 import APIClient
+from michelangelo.gen.api.v2.pipeline_run_pb2 import PipelineRunState
+
+try:
+    APIClient.set_caller("retrain-integration-test")
+    pipeline_run = APIClient.PipelineRunService.get_pipeline_run(
+        namespace=sys.argv[1], name=sys.argv[2]
+    )
+    print(PipelineRunState.Name(pipeline_run.status.state))
+except Exception as error:
+    print(f"PipelineRun API lookup failed: {error}", file=sys.stderr)
+    print("UNKNOWN")
+PY
+}
+
 wait_for_pipeline_run() {
   local run_name="$1"
   local start state elapsed
   start=$(date +%s)
 
   while true; do
-    state=$(kubectl get pipelinerun "${run_name}" -n "${NAMESPACE}" \
-      -o jsonpath='{.status.state}' 2>/dev/null || echo UNKNOWN)
+    state=$(pipeline_run_state "${run_name}")
     log "PipelineRun ${run_name}: ${state}"
 
     if ! check_storage_health; then
@@ -265,7 +286,8 @@ wait_for_pipeline_run() {
         return 0
         ;;
       PIPELINE_RUN_STATE_FAILED | PIPELINE_RUN_STATE_KILLED)
-        kubectl get pipelinerun "${run_name}" -n "${NAMESPACE}" -o yaml || true
+        "${MA_BIN}" pipeline_run get \
+          --namespace="${NAMESPACE}" --name="${run_name}" || true
         return 1
         ;;
     esac

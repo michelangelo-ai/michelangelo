@@ -167,7 +167,7 @@ def safe_extractall(tar: tarfile.TarFile, dest: str) -> None:
         if not member.name:
             continue
         member_path = os.path.realpath(os.path.join(dest, member.name))
-        if not member_path.startswith(real_dest + os.sep):
+        if os.path.commonpath((real_dest, member_path)) != real_dest:
             raise ValueError(
                 f"refusing to extract '{member.name}': path escapes '{dest}'"
             )
