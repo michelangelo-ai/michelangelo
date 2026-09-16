@@ -21,6 +21,8 @@ Set up the sandbox resources and register both pipelines:
 
 ```bash
 ma sandbox demo inference
+ma deployment apply \
+  --file=michelangelo/cli/sandbox/demo/inference/deployment.yaml
 ma project apply --file=examples/retrain_example/project.yaml
 ma pipeline apply --file=examples/retrain_example/training_pipeline.yaml
 ma pipeline apply --file=examples/retrain_example/pipeline.yaml

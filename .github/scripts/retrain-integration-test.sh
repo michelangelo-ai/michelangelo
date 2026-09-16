@@ -316,6 +316,10 @@ if [[ "${inference_state}" != INFERENCE_SERVER_STATE_SERVING ]]; then
   "${MA_BIN}" sandbox demo inference
 fi
 
+log "Ensuring the deployment-example template exists"
+"${MA_BIN}" deployment apply \
+  --file="${PYTHON_DIR}/michelangelo/cli/sandbox/demo/inference/deployment.yaml"
+
 log "Registering the namespace-compatible BERT/CoLA and retrain pipelines"
 ensure_minio_ready
 kubectl apply -f "${PYTHON_DIR}/examples/retrain_example/project.yaml"
