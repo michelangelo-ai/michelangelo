@@ -317,8 +317,13 @@ if [[ "${inference_state}" != INFERENCE_SERVER_STATE_SERVING ]]; then
 fi
 
 log "Ensuring the deployment-example template exists"
-"${MA_BIN}" deployment apply \
-  --file="${PYTHON_DIR}/michelangelo/cli/sandbox/demo/inference/deployment.yaml"
+if kubectl get deployments.michelangelo.api deployment-example \
+    -n "${NAMESPACE}" >/dev/null 2>&1; then
+  log "Reusing the existing deployment-example template"
+else
+  "${MA_BIN}" deployment apply \
+    --file="${PYTHON_DIR}/michelangelo/cli/sandbox/demo/inference/deployment.yaml"
+fi
 
 log "Registering the namespace-compatible BERT/CoLA and retrain pipelines"
 ensure_minio_ready
