@@ -1,6 +1,25 @@
 import type { PipelineRun } from '#core/config/entities/run/types';
 import type { ManifestTrigger } from '#core/config/entities/trigger/types';
 
+export interface PipelineManifest {
+  /** PipelineManifest.Type enum, decoded to its numeric discriminant. */
+  type?: number;
+  /** Manifest path relative to the repository root. */
+  filePath?: string;
+  uniflowTar?: string;
+  uniflowFunction?: string;
+  /** Named triggers declared for this pipeline, keyed by trigger name. */
+  triggerMap?: Record<string, ManifestTrigger>;
+  /**
+   * Pipeline configuration, unpacked from its Any/TypedStruct envelope by the rpc layer.
+   * Only present for pipelines registered through mactl.
+   */
+  content?: {
+    typeUrl?: string;
+    value?: Record<string, unknown>;
+  };
+}
+
 export interface Pipeline {
   metadata: {
     name: string;
@@ -11,10 +30,7 @@ export interface Pipeline {
       name: string;
     };
     /** Optional because a pipeline can be registered without a manifest. */
-    manifest?: {
-      /** Named triggers declared for this pipeline, keyed by trigger name. */
-      triggerMap?: Record<string, ManifestTrigger>;
-    };
+    manifest?: PipelineManifest;
   };
 }
 
