@@ -1,5 +1,6 @@
 """Tests for the Uniflow task runner entrypoint."""
 
+import argparse
 import json
 import os
 import subprocess
@@ -154,6 +155,43 @@ class Test(unittest.TestCase):  # noqa: D101
                 self.assertRaisesRegex(SystemExit, "2"),
             ):
                 run_task_main()
+
+    def test_inline_decode_error_is_not_suppressed_by_argparse(self):  # noqa: D102
+        test_args = _task_args(
+            capture_kwargs_task,
+            _random_test_result_url(),
+            "--kwargs",
+            "not-json",
+        )
+
+        with (
+            mock.patch("sys.argv", test_args),
+            self.assertRaisesRegex(
+                argparse.ArgumentTypeError,
+                "Failed to decode argument: not-json",
+            ),
+        ):
+            run_task_main()
+
+    def test_kwargs_file_error_is_not_suppressed_by_argparse(self):  # noqa: D102
+        missing_path = "/a/kwargs/file/that/does/not/exist.json"
+        test_args = _task_args(
+            capture_kwargs_task,
+            _random_test_result_url(),
+            "--kwargs-file",
+            missing_path,
+        )
+
+        with (
+            mock.patch("sys.argv", test_args),
+            self.assertRaisesRegex(
+                argparse.ArgumentTypeError,
+                f"Failed to decode kwargs file: {missing_path}",
+            ) as cm,
+        ):
+            run_task_main()
+
+        self.assertIsInstance(cm.exception.__cause__, FileNotFoundError)
 
     def test_kwargs_file_must_decode_to_dict(self):  # noqa: D102
         result_url = _random_test_result_url()

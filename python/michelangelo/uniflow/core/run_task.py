@@ -20,19 +20,23 @@ def main():
 
     p = argparse.ArgumentParser()
     p.add_argument("--task", required=True, type=str)
-    p.add_argument("--args", required=True, type=_decode_arg)
+    p.add_argument("--args", required=True, type=str)
     kwargs_group = p.add_mutually_exclusive_group(required=True)
-    kwargs_group.add_argument("--kwargs", type=_decode_arg)
-    kwargs_group.add_argument("--kwargs-file", type=_decode_kwargs_file)
+    kwargs_group.add_argument("--kwargs", type=str)
+    kwargs_group.add_argument("--kwargs-file", type=str)
     p.add_argument("--result-url", required=True, type=str)
-    p.add_argument("--overrides", type=_decode_arg)
+    p.add_argument("--overrides", type=str)
     ns = p.parse_args()
 
-    kwargs = ns.kwargs if ns.kwargs is not None else ns.kwargs_file
-
-    assert isinstance(ns.args, list), (
-        f"Expected args to be a list, but got {type(ns.args)}"
+    args = _decode_arg(ns.args)
+    kwargs = (
+        _decode_arg(ns.kwargs)
+        if ns.kwargs is not None
+        else _decode_kwargs_file(ns.kwargs_file)
     )
+    overrides = _decode_arg(ns.overrides) if ns.overrides is not None else None
+
+    assert isinstance(args, list), f"Expected args to be a list, but got {type(args)}"
     assert isinstance(kwargs, dict), (
         f"Expected kwargs to be a dict, but got {type(kwargs)}"
     )
@@ -49,12 +53,12 @@ def main():
         f"Expected task to be a TaskFunction instance, but got instance of {type(task)}"
     )
 
-    if ns.overrides:
-        assert isinstance(ns.overrides, dict)
-        task = task.with_overrides(**ns.overrides)
+    if overrides:
+        assert isinstance(overrides, dict)
+        task = task.with_overrides(**overrides)
 
     task(
-        *ns.args,
+        *args,
         **kwargs,
         _uf_result_url=ns.result_url,
     )
