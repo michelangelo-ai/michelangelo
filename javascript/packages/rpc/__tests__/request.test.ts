@@ -91,7 +91,7 @@ it('unpacks a registered Any payload (Pipeline) into a plain object', async () =
 
 it('unpacks a registered Any payload whose own fields contain a nested TypedStruct Any', async () => {
   // The Pipeline packed into Revision.spec.content (a registry-typed Any) has its own
-  // manifest.content field, which is a TypedStruct. Both must unpack in one pass: toPlainObject 
+  // manifest.content field, which is a TypedStruct. Both must unpack in one pass: toPlainObject
   // recurses into the decoded Pipeline and finds the inner Any too.
   const manifestContent = anyPack(
     TypedStructSchema,
