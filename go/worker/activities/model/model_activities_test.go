@@ -7,8 +7,6 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	gogotypes "github.com/gogo/protobuf/types"
-
 	"github.com/cadence-workflow/starlark-worker/service"
 	"github.com/cadence-workflow/starlark-worker/test/types"
 	"github.com/golang/mock/gomock"
@@ -150,11 +148,7 @@ func (r *Suite) Test_GetModelsByPipelineRun_Succeeded() {
 	modelService.EXPECT().ListModel(gomock.Any(), gomock.Any()).DoAndReturn(
 		func(_ context.Context, request *v2pb.ListModelRequest, _ ...interface{}) (*v2pb.ListModelResponse, error) {
 			assert.Equal(r.t, "ma-test-sandbox", request.Namespace)
-			assert.Len(r.t, request.ListOptionsExt.Operation.Criterion, 2)
-			assert.Equal(r.t, "model.spec.source_pipeline_run.namespace", request.ListOptionsExt.Operation.Criterion[0].FieldName)
-			assert.Equal(r.t, "ma-test-sandbox", unpackString(r.t, request.ListOptionsExt.Operation.Criterion[0].MatchValue))
-			assert.Equal(r.t, "model.spec.source_pipeline_run.name", request.ListOptionsExt.Operation.Criterion[1].FieldName)
-			assert.Equal(r.t, "child-run", unpackString(r.t, request.ListOptionsExt.Operation.Criterion[1].MatchValue))
+			assert.Equal(r.t, "spec.source_pipeline_run.name=child-run", request.ListOptions.FieldSelector)
 			return &v2pb.ListModelResponse{
 				ModelList: &v2pb.ModelList{Items: []v2pb.Model{
 					{
@@ -204,6 +198,46 @@ func (r *Suite) Test_GetModelsByPipelineRun_Succeeded() {
 	}, response.Models)
 }
 
+func (r *Suite) Test_GetModelsByPipelineRun_AcceptsImplicitSourceNamespace() {
+	modelService := r.act.modelService.(*v2mock.MockModelServiceYARPCClient)
+	modelService.EXPECT().ListModel(gomock.Any(), gomock.Any()).Return(&v2pb.ListModelResponse{
+		ModelList: &v2pb.ModelList{Items: []v2pb.Model{{
+			ObjectMeta: v1.ObjectMeta{Name: "trained-model", Namespace: "ma-test-sandbox"},
+			Spec: v2pb.ModelSpec{
+				RevisionId:        4,
+				SourcePipelineRun: &api.ResourceIdentifier{Name: "child-run"},
+			},
+		}}},
+	}, nil)
+
+	response, err := r.act.GetModelsByPipelineRun(context.Background(), &GetModelsByPipelineRunRequest{
+		Namespace:       "ma-test-sandbox",
+		PipelineRunName: "child-run",
+	})
+	assert.NoError(r.t, err)
+	assert.Equal(r.t, []PipelineRunModel{{Name: "trained-model", Namespace: "ma-test-sandbox", RevisionID: 4}}, response.Models)
+}
+
+func (r *Suite) Test_GetModelsByPipelineRun_RejectsForeignSourceNamespace() {
+	modelService := r.act.modelService.(*v2mock.MockModelServiceYARPCClient)
+	modelService.EXPECT().ListModel(gomock.Any(), gomock.Any()).Return(&v2pb.ListModelResponse{
+		ModelList: &v2pb.ModelList{Items: []v2pb.Model{{
+			ObjectMeta: v1.ObjectMeta{Name: "wrong-model", Namespace: "ma-test-sandbox"},
+			Spec: v2pb.ModelSpec{SourcePipelineRun: &api.ResourceIdentifier{
+				Namespace: "other",
+				Name:      "child-run",
+			}},
+		}}},
+	}, nil)
+
+	response, err := r.act.GetModelsByPipelineRun(context.Background(), &GetModelsByPipelineRunRequest{
+		Namespace:       "ma-test-sandbox",
+		PipelineRunName: "child-run",
+	})
+	assert.Nil(r.t, response)
+	assert.EqualError(r.t, err, "no models found for pipeline run ma-test-sandbox/child-run")
+}
+
 func (r *Suite) Test_GetModelsByPipelineRun_RequiresIdentifiers() {
 	response, err := r.act.GetModelsByPipelineRun(context.Background(), &GetModelsByPipelineRunRequest{})
 	assert.Nil(r.t, response)
@@ -240,11 +274,4 @@ func (r *Suite) Test_GetModelsByPipelineRun_RejectsUnrelatedServerResults() {
 	})
 	assert.Nil(r.t, response)
 	assert.EqualError(r.t, err, "no models found for pipeline run ma-test-sandbox/child-run")
-}
-
-func unpackString(t *testing.T, value *gogotypes.Any) string {
-	t.Helper()
-	var wrapped gogotypes.StringValue
-	assert.NoError(t, gogotypes.UnmarshalAny(value, &wrapped))
-	return wrapped.Value
 }

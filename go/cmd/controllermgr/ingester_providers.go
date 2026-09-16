@@ -7,6 +7,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/components/ingester"
 	"github.com/michelangelo-ai/michelangelo/go/storage"
 	mysqlstorage "github.com/michelangelo-ai/michelangelo/go/storage/mysql"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -23,7 +24,7 @@ func provideMetadataStorage(
 		return nil, fmt.Errorf("metadata storage is enabled but mysql config is empty")
 	}
 
-	return mysqlstorage.NewMetadataStorage(mysqlConfig.ToMySQLConfig(), scheme, nil)
+	return mysqlstorage.NewMetadataStorage(mysqlConfig.ToMySQLConfig(), scheme, v2pb.IndexesPathToKeyMap)
 }
 
 func provideIngesterConfig(config baseconfig.IngesterConfig) ingester.Config {

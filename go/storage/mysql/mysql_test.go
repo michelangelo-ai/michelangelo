@@ -9,6 +9,7 @@ import (
 	"google.golang.org/grpc/status"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 
 	api "github.com/michelangelo-ai/michelangelo/go/api"
@@ -270,6 +271,17 @@ func TestBuildFieldSelectorSQL(t *testing.T) {
 			indexPathToKeyMap: map[string]string{"metadata.name": "name"},
 			want:              " AND `name`=?",
 			wantParams:        []interface{}{"alice"},
+		},
+		{
+			name:     "generated_model_map_rewrites_source_pipeline_run",
+			selector: "spec.source_pipeline_run.name=child-run",
+			indexPathToKeyMap: v2pb.IndexesPathToKeyMap[schema.GroupVersionKind{
+				Group:   "michelangelo.api",
+				Version: "v2",
+				Kind:    "Model",
+			}],
+			want:       " AND `src_pipeline_run_name`=?",
+			wantParams: []interface{}{"child-run"},
 		},
 		{
 			name:              "populated_map_rejects_unmapped_field",

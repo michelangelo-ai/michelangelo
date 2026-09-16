@@ -7,10 +7,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/gogo/protobuf/types"
 	"go.uber.org/zap"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
@@ -57,18 +56,6 @@ type (
 	}
 )
 
-func stringCriterion(fieldName, value string) (*apipb.Criterion, error) {
-	matchValue, err := types.MarshalAny(&types.StringValue{Value: value})
-	if err != nil {
-		return nil, err
-	}
-	return &apipb.Criterion{
-		FieldName:  fieldName,
-		MatchValue: matchValue,
-		Operator:   apipb.CRITERION_OPERATOR_EQUAL,
-	}, nil
-}
-
 // GetModelsByPipelineRun returns models whose indexed source provenance
 // points at the requested PipelineRun.
 func (r *activities) GetModelsByPipelineRun(ctx context.Context, request *GetModelsByPipelineRunRequest) (*GetModelsByPipelineRunResponse, error) {
@@ -76,21 +63,10 @@ func (r *activities) GetModelsByPipelineRun(ctx context.Context, request *GetMod
 		return nil, fmt.Errorf("both \"namespace\" and \"pipeline_run_name\" are required")
 	}
 
-	namespaceCriterion, err := stringCriterion("model.spec.source_pipeline_run.namespace", request.Namespace)
-	if err != nil {
-		return nil, err
-	}
-	runCriterion, err := stringCriterion("model.spec.source_pipeline_run.name", request.PipelineRunName)
-	if err != nil {
-		return nil, err
-	}
-
 	response, err := r.modelService.ListModel(ctx, &v2pb.ListModelRequest{
 		Namespace: request.Namespace,
-		ListOptionsExt: &apipb.ListOptionsExt{
-			Operation: &apipb.CriterionOperation{
-				Criterion: []*apipb.Criterion{namespaceCriterion, runCriterion},
-			},
+		ListOptions: &metav1.ListOptions{
+			FieldSelector: fmt.Sprintf("spec.source_pipeline_run.name=%s", request.PipelineRunName),
 		},
 	})
 	if err != nil {
@@ -101,7 +77,12 @@ func (r *activities) GetModelsByPipelineRun(ctx context.Context, request *GetMod
 	if response != nil && response.ModelList != nil {
 		for _, candidate := range response.ModelList.Items {
 			source := candidate.Spec.GetSourcePipelineRun()
-			if source.GetNamespace() != request.Namespace || source.GetName() != request.PipelineRunName {
+			modelNamespace := candidate.GetNamespace()
+			sourceNamespace := source.GetNamespace()
+			if sourceNamespace == "" {
+				sourceNamespace = modelNamespace
+			}
+			if modelNamespace != request.Namespace || sourceNamespace != request.Namespace || source.GetName() != request.PipelineRunName {
 				continue
 			}
 			models = append(models, PipelineRunModel{

@@ -4,7 +4,6 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
-from google.protobuf.wrappers_pb2 import StringValue
 
 from michelangelo.api.v2.services.gen.model import ModelService
 from michelangelo.gen.api.options_pb2 import ResourceIdentifier
@@ -17,14 +16,20 @@ from michelangelo.uniflow.plugins.model.search import get_models_by_pipeline_run
 _MODULE = "michelangelo.uniflow.plugins.model.search"
 
 
-def _model(name: str, revision_id: int, run_name: str = "child-run") -> Model:
+def _model(
+    name: str,
+    revision_id: int,
+    run_name: str = "child-run",
+    source_namespace: str = "default",
+    model_namespace: str = "default",
+) -> Model:
     return Model(
-        metadata=ObjectMeta(name=name, namespace="default"),
+        metadata=ObjectMeta(name=name, namespace=model_namespace),
         spec=ModelSpec(
             revision_id=revision_id,
             source_pipeline_run=ResourceIdentifier(
                 name=run_name,
-                namespace="default",
+                namespace=source_namespace,
             ),
         ),
     )
@@ -43,17 +48,9 @@ def test_get_models_by_pipeline_run_queries_provenance_and_sorts(mock_list_model
         {"name": "model-a", "namespace": "default", "revision_id": 3},
         {"name": "model-z", "namespace": "default", "revision_id": 2},
     ]
-    query = mock_list_model.call_args.kwargs["list_options_ext"]["operation"]
-    assert [criterion.field_name for criterion in query.criterion] == [
-        "model.spec.source_pipeline_run.namespace",
-        "model.spec.source_pipeline_run.name",
-    ]
-    values = []
-    for criterion in query.criterion:
-        value = StringValue()
-        assert criterion.match_value.Unpack(value)
-        values.append(value.value)
-    assert values == ["default", "child-run"]
+    assert mock_list_model.call_args.kwargs["list_options"] == {
+        "field_selector": "spec.source_pipeline_run.name=child-run"
+    }
 
 
 @patch(f"{_MODULE}.APIClient.ModelService.list_model")
@@ -65,8 +62,31 @@ def test_get_models_by_pipeline_run_rechecks_server_results(mock_list_model):
         get_models_by_pipeline_run("default", "child-run")
 
 
+@patch(f"{_MODULE}.APIClient.ModelService.list_model")
+def test_get_models_by_pipeline_run_accepts_implicit_source_namespace(mock_list_model):
+    """An omitted provenance namespace inherits the Model namespace."""
+    mock_list_model.return_value = ModelList(
+        items=[_model("trained-model", 4, source_namespace="")]
+    )
+
+    assert get_models_by_pipeline_run("default", "child-run") == [
+        {"name": "trained-model", "namespace": "default", "revision_id": 4}
+    ]
+
+
+@patch(f"{_MODULE}.APIClient.ModelService.list_model")
+def test_get_models_by_pipeline_run_rejects_foreign_source_namespace(mock_list_model):
+    """A server result with explicit foreign provenance is not returned."""
+    mock_list_model.return_value = ModelList(
+        items=[_model("wrong", 1, source_namespace="other")]
+    )
+
+    with pytest.raises(RuntimeError, match=r"no models found.*default/child-run"):
+        get_models_by_pipeline_run("default", "child-run")
+
+
 def test_pipeline_run_query_survives_generated_client_encoding():
-    """The generated client preserves the operation only for the dict path."""
+    """The generated client preserves the field selector from a dictionary."""
     context = MagicMock()
     context.header_provider.get_headers.return_value = {}
     service = ModelService(context)
@@ -80,13 +100,9 @@ def test_pipeline_run_query_survives_generated_client_encoding():
 
     assert result[0]["name"] == "trained-model"
     request = service._service_stub.ListModel.call_args.args[0]
-    assert [
-        criterion.field_name
-        for criterion in request.list_options_ext.operation.criterion
-    ] == [
-        "model.spec.source_pipeline_run.namespace",
-        "model.spec.source_pipeline_run.name",
-    ]
+    assert request.list_options.fieldSelector == (
+        "spec.source_pipeline_run.name=child-run"
+    )
 
 
 @pytest.mark.parametrize("namespace,pipeline_run_name", [("", "run"), ("ns", "")])
