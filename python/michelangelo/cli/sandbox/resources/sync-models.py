@@ -10,6 +10,8 @@ reconciles only the Triton pods scheduled there, so every replica is served by t
 daemon sharing its hostPath.
 """
 
+from __future__ import annotations
+
 import json
 import os
 import re

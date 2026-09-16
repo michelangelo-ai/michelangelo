@@ -7,7 +7,6 @@ import tempfile
 from pathlib import Path
 from unittest import TestCase
 
-
 _SCRIPT = (
     Path(__file__).resolve().parents[3]
     / "michelangelo"
@@ -52,8 +51,10 @@ class SafeExtractAllTest(TestCase):
         """A member outside the destination remains blocked."""
         with tempfile.TemporaryDirectory() as parent:
             destination = Path(parent) / "model"
-            with tarfile.open(fileobj=_model_archive("../escape.txt")) as archive:
-                with self.assertRaisesRegex(ValueError, "path escapes"):
-                    _SAFE_EXTRACTALL(archive, str(destination))
+            with (
+                tarfile.open(fileobj=_model_archive("../escape.txt")) as archive,
+                self.assertRaisesRegex(ValueError, "path escapes"),
+            ):
+                _SAFE_EXTRACTALL(archive, str(destination))
 
             self.assertFalse((Path(parent) / "escape.txt").exists())
