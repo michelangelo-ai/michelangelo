@@ -14,3 +14,4 @@ Michelangelo AI has evolved significantly since its launch in 2016 — from a ce
 - [Michelangelo AI Deep Dive: Interview with Uber AI Platform PM](https://www.youtube.com/watch?v=x5cIMPmYAzw) — Interview covering history, GenAI use cases, tiering strategy, and open-source plans
 - [Michelangelo AI Live Demo](https://www.youtube.com/watch?v=KJe8_FLMRx4) — Conference walkthrough of the full ML lifecycle, from project creation to deployment
 - [Michelangelo AI Open Source Overview](https://www.youtube.com/watch?v=qXgCdkRNCYM) — Short conference talk on Michelangelo AI's history and open-source roadmap
+- [Code to Cluster: Abstracting Kubernetes ML Complexity](https://www.youtube.com/watch?v=OoaxDU_sxjE) — Conference talk by Paul Zimmerman & Eric Wang on using Michelangelo AI to abstract Kubernetes, Ray, and Cadence Workflow complexity for ML platform teams
