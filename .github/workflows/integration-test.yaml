@@ -82,7 +82,7 @@ jobs:
       github.event_name != 'workflow_run' ||
       github.event.workflow_run.conclusion == 'success'
     runs-on: [self-hosted, linux, gcp]
-    timeout-minutes: 90
+    timeout-minutes: 120
     permissions:
       contents: read
     defaults:
@@ -315,13 +315,6 @@ jobs:
           done
           echo "WARNING: worker did not confirm Cadence connection after 300s, proceeding anyway"
 
-      - name: Run retrain local and remote e2e
-        run: ../.github/scripts/retrain-integration-test.sh
-        env:
-          MA_API_SERVER: localhost:15566
-          MA_NAMESPACE: default
-          RETRAIN_IMAGE_TAG: ${{ inputs.image_tag }}
-
       - name: Run CLI e2e tests
         run: |
           $GITHUB_WORKSPACE/python/.venv/bin/pytest \
@@ -376,6 +369,13 @@ jobs:
         working-directory: ${{ github.workspace }}/integration-test/browser
         env:
           MA_UI_URL: http://localhost:8090
+
+      - name: Run retrain local and remote e2e
+        run: ../.github/scripts/retrain-integration-test.sh
+        env:
+          MA_API_SERVER: localhost:15566
+          MA_NAMESPACE: default
+          RETRAIN_IMAGE_TAG: ${{ inputs.image_tag }}
 
       - name: Upload Playwright report
         if: always()
