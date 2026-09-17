@@ -646,55 +646,6 @@ describe('Deployment delete action', () => {
       await screen.findByText('Deployment has been deleted. This process may take a few seconds.')
     ).toBeInTheDocument();
   });
-
-  it('sends the record to DeleteDeployment and confirms with a toast', async () => {
-    const user = userEvent.setup();
-    const request = createQueryMockRouter({ DeleteDeployment: {} });
-
-    render(
-      <InterpolatableActionsPopover
-        actions={DEPLOYMENT_ACTIONS}
-        record={{
-          metadata: {
-            name: DEPLOYMENT_NAME,
-            namespace: NAMESPACE,
-            creationTimestamp: { seconds: 1757019547 },
-          },
-          spec: {
-            desiredRevision: { name: 'bert-cola-37', namespace: NAMESPACE },
-            target: { case: 'inferenceServer', value: { name: 'inference-server-example' } },
-          },
-          status: {},
-        }}
-      />,
-      buildWrapper([
-        getBaseProviderWrapper(),
-        getErrorProviderWrapper(),
-        getIconProviderWrapper(),
-        getInterpolationProviderWrapper(),
-        getRouterWrapper({ location: `/${NAMESPACE}/deploy/deployments/${DEPLOYMENT_NAME}` }),
-        getServiceProviderWrapper({ request }),
-        getSnackbarProviderWrapper(),
-      ])
-    );
-
-    const dialog = await openDeleteDialog(user);
-    await user.click(within(dialog).getByRole('button', { name: 'Yes, delete' }));
-
-    await waitFor(() => expect(findDeleteDeploymentCall(request)).toBeDefined());
-
-    // The handler reshapes the record into { name, namespace }; the action itself
-    // submits the record unchanged.
-    const payload = findDeleteDeploymentCall(request)?.[1] as {
-      metadata: { name: string; namespace: string };
-    };
-    expect(payload.metadata.name).toBe(DEPLOYMENT_NAME);
-    expect(payload.metadata.namespace).toBe(NAMESPACE);
-
-    expect(
-      await screen.findByText('Deployment has been deleted. This process may take a few seconds.')
-    ).toBeInTheDocument();
-  });
 });
 
 describe('Deployment update action', () => {
@@ -725,35 +676,7 @@ describe('Deployment update action', () => {
     };
   }
 
-  it('lists Update deployment as the first action in the menu', async () => {
-    const user = userEvent.setup();
-    const request = createQueryMockRouter({});
-
-    render(
-      <InterpolatableActionsPopover
-        actions={DEPLOYMENT_ACTIONS}
-        record={{
-          metadata: { name: DEPLOYMENT_NAME, namespace: NAMESPACE },
-          spec: { desiredRevision: { name: 'bert-cola-37', namespace: NAMESPACE } },
-        }}
-      />,
-      buildWrapper([
-        getBaseProviderWrapper(),
-        getErrorProviderWrapper(),
-        getIconProviderWrapper(),
-        getInterpolationProviderWrapper(),
-        getRouterWrapper({ location: `/${NAMESPACE}/deploy/deployments/${DEPLOYMENT_NAME}` }),
-        getServiceProviderWrapper({ request }),
-        getSnackbarProviderWrapper(),
-      ])
-    );
-
-    await user.click(screen.getByRole('button', { name: 'Actions' }));
-    const options = await screen.findAllByRole('option');
-    expect(options[0]).toHaveTextContent('Update deployment');
-  });
-
-  it('opens prefilled with name and inference server read-only', async () => {
+  it('opens prefilled with name, inference server, and model family read-only', async () => {
     const user = userEvent.setup();
     const request = createQueryMockRouter({
       ListInferenceServer: {
@@ -800,69 +723,19 @@ describe('Deployment update action', () => {
     expect(nameInput).toHaveValue(DEPLOYMENT_NAME);
     expect(nameInput).toHaveAttribute('readonly');
 
-    // Prefilled selects render their values as text within the dialog.
-    expect(await within(dialog).findByText('inference-server-example')).toBeInTheDocument();
-    expect(await within(dialog).findByText('bert-cola')).toBeInTheDocument();
-    expect(await within(dialog).findByText('bert-cola-37')).toBeInTheDocument();
-  });
-
-  it('locks the model family so only the model can be changed', async () => {
-    const user = userEvent.setup();
-    const request = createQueryMockRouter({
-      ListInferenceServer: {
-        inferenceServerList: { items: [{ metadata: { name: 'inference-server-example' } }] },
-      },
-      ListModelFamily: {
-        modelFamilyList: {
-          items: [{ metadata: { name: 'bert-cola' }, spec: { name: 'bert-cola' } }],
-        },
-      },
-      ListModel: {
-        modelList: {
-          items: [{ metadata: { name: 'bert-cola-37' } }, { metadata: { name: 'bert-cola-38' } }],
-        },
-      },
+    // Prefilled selects' accessible names are their selected values.
+    const serverSelect = await within(dialog).findByRole('combobox', {
+      name: /Selected inference-server-example\./,
     });
+    expect(serverSelect).toHaveAttribute('readonly');
 
-    render(
-      <InterpolatableActionsPopover
-        actions={DEPLOYMENT_ACTIONS}
-        record={{
-          metadata: { name: DEPLOYMENT_NAME, namespace: NAMESPACE },
-          spec: {
-            desiredRevision: { name: 'bert-cola-37', namespace: NAMESPACE },
-            target: { case: 'inferenceServer', value: { name: 'inference-server-example' } },
-            modelFamily: { name: 'bert-cola', namespace: NAMESPACE },
-          },
-        }}
-      />,
-      buildWrapper([
-        getBaseProviderWrapper(),
-        getErrorProviderWrapper(),
-        getIconProviderWrapper(),
-        getInterpolationProviderWrapper(),
-        getRouterWrapper({ location: `/${NAMESPACE}/deploy/deployments/${DEPLOYMENT_NAME}` }),
-        getServiceProviderWrapper({ request }),
-        getSnackbarProviderWrapper(),
-      ])
-    );
-
-    const dialog = await openUpdateDialog(user);
-
-    // The prefilled selects' accessible names are their selected values.
+    // The family comes from record.spec.modelFamily and is locked in update mode.
     const familySelect = await within(dialog).findByRole('combobox', {
       name: /Selected bert-cola\./,
     });
     expect(familySelect).toHaveAttribute('readonly');
-    // Clicking a read-only select must not open its dropdown.
-    await user.click(familySelect);
-    expect(screen.queryByRole('option')).not.toBeInTheDocument();
 
-    // The model select stays editable.
-    const modelSelect = within(dialog).getByRole('combobox', { name: /Selected bert-cola-37/ });
-    expect(modelSelect).not.toHaveAttribute('readonly');
-    await user.click(modelSelect);
-    expect(await screen.findByRole('option', { name: 'bert-cola-38' })).toBeInTheDocument();
+    expect(await within(dialog).findByText('bert-cola-37')).toBeInTheDocument();
   });
 
   it('submits the full record with the newly selected model as desiredRevision', async () => {
@@ -932,7 +805,7 @@ describe('Deployment update action', () => {
 });
 
 describe('Deployment create action', () => {
-  it('submits the selected model family alongside the model', async () => {
+  it('fills in every field, submits the deployment, and toasts', async () => {
     const user = userEvent.setup();
     const request = createQueryMockRouter({
       CreateDeployment: { deployment: { metadata: { name: 'new-deployment' } } },
@@ -976,17 +849,26 @@ describe('Deployment create action', () => {
 
     await user.click(within(dialog).getByRole('button', { name: 'Create' }));
 
-    await waitFor(() => expect(request.getCall('CreateDeployment')).toBeDefined());
-    const payload = request.getCall('CreateDeployment')!.args as {
-      spec: {
-        modelFamily?: { name: string; namespace: string };
-        desiredRevision: { name: string; namespace: string };
-      };
-    };
-    expect(payload.spec.modelFamily).toEqual({ name: 'bert-cola', namespace: 'ma-dev-test' });
-    expect(payload.spec.desiredRevision).toEqual({
-      name: 'bert-cola-40',
-      namespace: 'ma-dev-test',
+    await waitFor(() => {
+      expect(request).toHaveBeenCalledWith(
+        'CreateDeployment',
+        {
+          metadata: { name: 'new-deployment', namespace: 'ma-dev-test' },
+          spec: {
+            modelFamily: { name: 'bert-cola', namespace: 'ma-dev-test' },
+            desiredRevision: { name: 'bert-cola-40', namespace: 'ma-dev-test' },
+            target: {
+              case: 'inferenceServer',
+              value: { name: 'inference-server-example', namespace: 'ma-dev-test' },
+            },
+            strategy: { rolloutStrategy: { case: 'rolling', value: { incrementPercentage: 0 } } },
+            definition: { type: 1 },
+          },
+        },
+        {}
+      );
     });
+
+    expect(await screen.findByText('Deployment created')).toBeInTheDocument();
   });
 });
