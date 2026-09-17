@@ -58,9 +58,8 @@ describe('CreateInferenceServerForm', () => {
 
     await user.type(within(dialog).getByRole('textbox', { name: 'Name *' }), 'full-target');
 
-    await within(dialog).findByRole('combobox', {
-      name: 'Selected michelangelo-sandbox-inference.',
-    });
+    await user.click(within(dialog).getByRole('combobox', { name: 'Cluster targets *' }));
+    await user.click(await screen.findByRole('option', { name: 'michelangelo-sandbox-inference' }));
 
     await user.type(within(dialog).getByRole('textbox', { name: 'Server version' }), 'v1.2.3');
 
@@ -117,10 +116,6 @@ describe('CreateInferenceServerForm', () => {
         {}
       );
     });
-
-    // The form-only clusterIds field never reaches the wire.
-    const call = mockRequest.getCall('CreateInferenceServer');
-    expect(call?.args).not.toHaveProperty('clusterIds');
   });
 
   it('lets the user pick from multiple registered clusters and submits both as targets', async () => {
@@ -182,7 +177,6 @@ describe('CreateInferenceServerForm', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Create target' });
     await user.type(within(dialog).getByRole('textbox', { name: 'Name *' }), 'my-target');
 
-    // Nothing is preselected once more than one cluster is registered.
     const clusterField = within(dialog).getByRole('combobox', { name: 'Cluster targets *' });
     await user.click(clusterField);
     await user.click(await screen.findByRole('option', { name: 'inference-cluster-1' }));
@@ -233,10 +227,9 @@ describe('CreateInferenceServerForm', () => {
     );
 
     const dialog = await screen.findByRole('dialog', { name: 'Create target' });
-    // The sole cluster is preselected, so leaving the name blank is the only invalid field.
-    await within(dialog).findByRole('combobox', {
-      name: 'Selected michelangelo-sandbox-inference.',
-    });
+
+    await user.click(within(dialog).getByRole('combobox', { name: 'Cluster targets *' }));
+    await user.click(await screen.findByRole('option', { name: 'michelangelo-sandbox-inference' }));
 
     await user.click(within(dialog).getByRole('button', { name: 'Create' }));
 
@@ -317,5 +310,48 @@ describe('CreateInferenceServerForm', () => {
       expect.anything(),
       expect.anything()
     );
+  });
+
+  it('only offers clusters that have a REST connection', async () => {
+    const user = userEvent.setup();
+    const mockRequest = createQueryMockRouter({
+      ListCluster: {
+        clusterList: {
+          items: [
+            {
+              metadata: { name: 'connected', namespace: 'ma-system' },
+              spec: {
+                cluster: {
+                  case: 'kubernetes',
+                  value: { rest: { host: 'https://connected.example.com' } },
+                },
+              },
+            },
+            {
+              metadata: { name: 'no-connection', namespace: 'ma-system' },
+              spec: {},
+            },
+          ],
+        },
+      },
+    });
+
+    render(
+      <CreateInferenceServerForm onClose={vi.fn()} />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getIconProviderWrapper(),
+        getErrorProviderWrapper(),
+        getInterpolationProviderWrapper(),
+        getRouterWrapper({ location: '/ma-dev-test/deploy/targets' }),
+        getServiceProviderWrapper({ request: mockRequest }),
+      ])
+    );
+
+    const dialog = await screen.findByRole('dialog', { name: 'Create target' });
+
+    await user.click(within(dialog).getByRole('combobox', { name: 'Cluster targets *' }));
+    await screen.findByRole('option', { name: 'connected' });
+    expect(screen.queryByRole('option', { name: 'no-connection' })).not.toBeInTheDocument();
   });
 });

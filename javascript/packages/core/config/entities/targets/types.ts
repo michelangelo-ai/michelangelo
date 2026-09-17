@@ -43,22 +43,19 @@ export type InferenceServer = {
   };
 };
 
-/**
- * Form-only shape for the create dialog. `clusterIds` holds the names picked from the
- * registered Cluster list and is mapped to `spec.clusterTargets` before submission.
- */
-export type InferenceServerCreateInput = InferenceServer & {
-  clusterIds: string[];
-};
-
 /** Subset of a `Cluster` CR (as decoded by protobuf-es) needed to build a ClusterTarget. */
 export type RegisteredCluster = {
   metadata: { name: string; namespace: string };
   spec?: {
     region?: string;
     zone?: string;
-    cluster?: { case?: 'kubernetes'; value?: { rest?: Partial<ClusterConnection> } };
+    cluster?: { case?: 'kubernetes'; value?: { rest?: ClusterConnection } };
   };
+};
+
+/** A RegisteredCluster whose REST connection is present. */
+export type ConnectableCluster = RegisteredCluster & {
+  spec: { cluster: { value: { rest: ClusterConnection } } };
 };
 
 export type ClusterListResult = {

@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { Input } from 'baseui/input';
 
 import { FormControl } from '#core/components/form/components/form-control';
@@ -18,7 +19,6 @@ import {
 } from '#core/utils/crd-utils';
 import {
   InferenceServerClusterFields,
-  toClusterTargets,
   useRegisteredClusters,
 } from './inference-server-cluster-fields';
 import { InferenceServerOwnerFields } from './inference-server-owner-fields';
@@ -30,7 +30,7 @@ import {
 } from './shared';
 
 import type { CreateActionComponentProps } from '#core/components/actions/types';
-import type { InferenceServer, InferenceServerCreateInput } from './types';
+import type { InferenceServer } from './types';
 
 const CONTAINER_BUILD_TEMPLATE_OPTIONS = [
   { id: CONTAINER_BUILD_TEMPLATE.DEFAULT_TRITON, label: 'Triton' },
@@ -52,45 +52,43 @@ export const CreateInferenceServerForm = ({ onClose }: CreateActionComponentProp
     ],
   });
 
-  const handleCreate = async (values: InferenceServerCreateInput) => {
+  const handleCreate = async (values: InferenceServer) => {
     if (createInferenceServerMutation.isPending) return;
-    const { clusterIds, ...inferenceServer } = values;
-    await createInferenceServerMutation.mutateAsync({
-      ...inferenceServer,
-      spec: {
-        ...inferenceServer.spec,
-        clusterTargets: toClusterTargets(clusterIds, clusters),
-      },
-    });
+    await createInferenceServerMutation.mutateAsync(values);
   };
 
-  const initialValues: InferenceServerCreateInput = {
-    metadata: {
-      name: '',
-      namespace: projectId,
-    },
-    spec: {
-      tenancyType: TENANCY_TYPE.DEDICATED,
-      backendType: BACKEND_TYPE.TRITON,
-      initSpec: {
-        resourceSpec: {
-          cpu: 2,
-          memory: '4Gi',
-          diskSize: '',
-          gpu: 0,
-        },
-        servingSpec: {
-          version: '',
-          containerBuildTemplate: CONTAINER_BUILD_TEMPLATE.DEFAULT_TRITON,
-        },
-        numInstances: 1,
+  // Kept referentially stable so React Final Form doesn't reinitialize (and discard typed
+  // values) on re-renders such as the cluster list resolving.
+  const initialValues = useMemo<InferenceServer>(
+    () => ({
+      metadata: {
+        name: '',
+        namespace: projectId,
       },
-    },
-    clusterIds: clusters.length === 1 ? [clusters[0].metadata.name] : [],
-  };
+      spec: {
+        tenancyType: TENANCY_TYPE.DEDICATED,
+        backendType: BACKEND_TYPE.TRITON,
+        initSpec: {
+          resourceSpec: {
+            cpu: 2,
+            memory: '4Gi',
+            diskSize: '',
+            gpu: 0,
+          },
+          servingSpec: {
+            version: '',
+            containerBuildTemplate: CONTAINER_BUILD_TEMPLATE.DEFAULT_TRITON,
+          },
+          numInstances: 1,
+        },
+        clusterTargets: [],
+      },
+    }),
+    [projectId]
+  );
 
   return (
-    <FormDialog<InferenceServerCreateInput>
+    <FormDialog<InferenceServer>
       isOpen
       onDismiss={onClose}
       heading="Create target"
