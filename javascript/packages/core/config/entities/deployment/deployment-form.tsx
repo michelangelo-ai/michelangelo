@@ -14,7 +14,6 @@ import {
 import { ModelFamilyRevisionFields } from './model-family-revision-fields';
 import { TARGET_TYPE } from './shared';
 
-import type { ModelRecord } from '../model/types';
 import type { DeploymentCreateInput, DeploymentRecord, InferenceServerListResult } from './types';
 
 type DeploymentFormProps = { onClose: () => void } & (
@@ -46,15 +45,6 @@ export const DeploymentForm = ({ mode, record, onClose }: DeploymentFormProps) =
     id: item.metadata.name,
     label: item.metadata.name,
   }));
-
-  // spec.modelFamily exists on the Deployment proto but the controller never populates
-  // it, so it can't be relied on for prefill. Update mode instead resolves the family
-  // via GetModel on the currently deployed model, purely to prefill/filter the dropdown.
-  const { data: modelData, isLoading: isModelLoading } = useStudioQuery<{ model?: ModelRecord }>({
-    queryName: 'GetModel',
-    serviceOptions: { name: currentModelName },
-    clientOptions: { enabled: isUpdate && Boolean(currentModelName) },
-  });
 
   const createDeploymentMutation = useStudioMutation<DeploymentCreateInput, DeploymentCreateInput>({
     mutationName: 'CreateDeployment',
@@ -102,16 +92,13 @@ export const DeploymentForm = ({ mode, record, onClose }: DeploymentFormProps) =
     });
   };
 
-  // Wait for the family lookup so the cascade mounts with both values prefilled.
-  if (isUpdate && currentModelName && isModelLoading) return null;
-
   const initialValues: DeploymentCreateInput = {
     metadata: {
       name: record?.metadata?.name ?? '',
       namespace: projectId,
     },
     spec: {
-      ...(isUpdate && { modelFamilyName: modelData?.model?.spec?.modelFamily?.name ?? '' }),
+      ...(isUpdate && { modelFamilyName: record?.spec?.modelFamily?.name ?? '' }),
       desiredRevision: { name: currentModelName ?? '', namespace: projectId },
       target: {
         case: 'inferenceServer',

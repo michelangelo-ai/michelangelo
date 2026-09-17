@@ -860,6 +860,7 @@ describe('Deployment update action', () => {
         desiredRevision?: { name?: string };
         strategy?: { rolloutStrategy?: { case?: string } };
         target?: { value?: { name?: string } };
+        modelFamily?: { name?: string };
       };
       status?: unknown;
     };
@@ -896,7 +897,6 @@ describe('Deployment update action', () => {
   it('opens prefilled with name and inference server read-only', async () => {
     const user = userEvent.setup();
     const request = createQueryMockRouter({
-      GetModel: { model: { spec: { modelFamily: { name: 'bert-cola' } } } },
       ListInferenceServer: {
         inferenceServerList: { items: [{ metadata: { name: 'inference-server-example' } }] },
       },
@@ -920,6 +920,7 @@ describe('Deployment update action', () => {
           spec: {
             desiredRevision: { name: 'bert-cola-37', namespace: NAMESPACE },
             target: { case: 'inferenceServer', value: { name: 'inference-server-example' } },
+            modelFamily: { name: 'bert-cola', namespace: NAMESPACE },
           },
         }}
       />,
@@ -949,7 +950,6 @@ describe('Deployment update action', () => {
   it('locks the model family so only the model can be changed', async () => {
     const user = userEvent.setup();
     const request = createQueryMockRouter({
-      GetModel: { model: { spec: { modelFamily: { name: 'bert-cola' } } } },
       ListInferenceServer: {
         inferenceServerList: { items: [{ metadata: { name: 'inference-server-example' } }] },
       },
@@ -973,6 +973,7 @@ describe('Deployment update action', () => {
           spec: {
             desiredRevision: { name: 'bert-cola-37', namespace: NAMESPACE },
             target: { case: 'inferenceServer', value: { name: 'inference-server-example' } },
+            modelFamily: { name: 'bert-cola', namespace: NAMESPACE },
           },
         }}
       />,
@@ -1011,7 +1012,6 @@ describe('Deployment update action', () => {
       UpdateDeployment: {
         deployment: { metadata: { name: DEPLOYMENT_NAME, namespace: NAMESPACE } },
       },
-      GetModel: { model: { spec: { modelFamily: { name: 'bert-cola' } } } },
       ListInferenceServer: {
         inferenceServerList: { items: [{ metadata: { name: 'inference-server-example' } }] },
       },
@@ -1037,6 +1037,7 @@ describe('Deployment update action', () => {
             target: { case: 'inferenceServer', value: { name: 'inference-server-example' } },
             strategy: { rolloutStrategy: { case: 'rolling', value: { incrementPercentage: 10 } } },
             definition: { type: 1 },
+            modelFamily: { name: 'bert-cola', namespace: NAMESPACE },
           },
           status: { currentRevision: { name: 'bert-cola-37', namespace: NAMESPACE } },
         }}
@@ -1066,6 +1067,7 @@ describe('Deployment update action', () => {
     expect(payload.metadata.name).toBe(DEPLOYMENT_NAME);
     expect(payload.spec.target?.value?.name).toBe('inference-server-example');
     expect(payload.spec.strategy?.rolloutStrategy?.case).toBe('rolling');
+    expect(payload.spec.modelFamily?.name).toBe('bert-cola');
     expect(payload.status).toBeDefined();
   });
 });

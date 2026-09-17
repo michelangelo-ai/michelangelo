@@ -61,6 +61,7 @@ export type DeploymentRecord = {
     strategy?: { rolloutStrategy?: { case?: string } };
     target?: { case?: string; value?: ResourceRef };
     desiredRevision?: ResourceRef;
+    modelFamily?: ResourceRef;
     resourceLinks?: Record<string, string>;
   };
   status?: {
