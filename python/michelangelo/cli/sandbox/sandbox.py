@@ -9,9 +9,10 @@ import sys
 import tempfile
 import time
 import uuid
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import NamedTuple, Optional
 
 import yaml
 
@@ -151,6 +152,36 @@ _inference_compute_cluster_names = [
 ]
 
 
+class _DemoAction(NamedTuple):
+    """One `ma sandbox demo` action: argparse help text and the handler that runs it."""
+
+    help: str
+    handler: Callable[[], None]
+
+
+def _demo_actions() -> dict[str, _DemoAction]:
+    """The demo types `ma sandbox demo` accepts.
+
+    Both the CLI subparsers and the dispatch in `_create_demo_crs` are derived
+    from this, so a new demo needs only one entry here. Resolved lazily because
+    the handlers are defined further down the module.
+    """
+    return {
+        "pipeline": _DemoAction(
+            help="Create pipeline demo resources",
+            handler=_create_pipeline_demo_crs,
+        ),
+        "inference": _DemoAction(
+            help="Create inference server demo resources",
+            handler=_create_inference_demo_crs,
+        ),
+        "inference-multicluster": _DemoAction(
+            help="Create a multi-cluster inference server demo.",
+            handler=_create_inference_multicluster_demo_crs,
+        ),
+    }
+
+
 def init_arguments(p: argparse.ArgumentParser):
     """Initialize command-line arguments for the sandbox CLI."""
     sp = p.add_subparsers(dest="action", required=True)
@@ -258,12 +289,8 @@ def init_arguments(p: argparse.ArgumentParser):
     demo_sp = demo_p.add_subparsers(
         dest="demo_action", required=True, help="Demo type to create"
     )
-    _ = demo_sp.add_parser("pipeline", help="Create pipeline demo resources")
-    _ = demo_sp.add_parser("inference", help="Create inference server demo resources")
-    _ = demo_sp.add_parser(
-        "inference-multicluster",
-        help=("Create a multi-cluster inference server demo."),
-    )
+    for demo_action, spec in _demo_actions().items():
+        _ = demo_sp.add_parser(demo_action, help=spec.help)
 
     snapshot_p = sp.add_parser(
         "snapshot", help="Capture or restore Michelangelo CRD state."
@@ -1233,7 +1260,8 @@ def _assert_sandbox_cluster_running():
 def _create_demo_crs(ns: argparse.Namespace):
     """Create demo Custom Resources (CRs) for the sandbox environment."""
     assert ns
-    if ns.demo_action not in ("pipeline", "inference", "inference-multicluster"):
+    demo_actions = _demo_actions()
+    if ns.demo_action not in demo_actions:
         raise ValueError(f"Unsupported demo action: {ns.demo_action}")
 
     _assert_sandbox_cluster_running()
@@ -1258,14 +1286,7 @@ def _create_demo_crs(ns: argparse.Namespace):
     else:
         _err_exit(f"❌ Project CR not found at {project_yaml_path}, exiting...")
 
-    if ns.demo_action == "pipeline":
-        _create_pipeline_demo_crs()
-    elif ns.demo_action == "inference":
-        _create_inference_demo_crs()
-    elif ns.demo_action == "inference-multicluster":
-        _create_inference_multicluster_demo_crs()
-    else:
-        raise ValueError(f"Unsupported demo action: {ns.demo_action}")
+    demo_actions[ns.demo_action].handler()
 
 
 def _snapshot(ns: argparse.Namespace):
