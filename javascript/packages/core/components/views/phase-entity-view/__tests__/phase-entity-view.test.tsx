@@ -128,7 +128,6 @@ describe('PhaseEntityView', () => {
       );
 
       expect(await screen.findByRole('cell', { name: 'my-pipeline' })).toBeInTheDocument();
-      expect(screen.getByRole('columnheader', { name: /Name/ })).toBeInTheDocument();
       expect(screen.getByRole('option', { name: 'Pipelines' })).toBeInTheDocument();
       expect(screen.getByRole('option', { name: 'Revisions' })).toBeInTheDocument();
       expect(request).toHaveBeenCalledWith('ListPipeline', expect.anything(), expect.anything());
@@ -139,7 +138,7 @@ describe('PhaseEntityView', () => {
       const request = createQueryMockRouter({
         ListPipeline: { pipelineList: { items: [{ metadata: { name: 'my-pipeline' } }] } },
         ListRevision: {
-          revisionList: { items: [{ spec: { baseResource: { name: 'my-pipeline' } } }] },
+          revisionList: { items: [{ spec: { baseResource: { name: 'revision-pipeline' } } }] },
         },
       });
       render(
@@ -179,7 +178,8 @@ describe('PhaseEntityView', () => {
 
       await user.click(screen.getByRole('option', { name: 'Revisions' }));
 
-      expect(await screen.findByRole('columnheader', { name: /Pipeline/ })).toBeInTheDocument();
+      expect(await screen.findByRole('cell', { name: 'revision-pipeline' })).toBeInTheDocument();
+      expect(screen.queryByRole('cell', { name: 'my-pipeline' })).not.toBeInTheDocument();
       expect(request).toHaveBeenCalledWith('ListRevision', expect.anything(), expect.anything());
     });
   });

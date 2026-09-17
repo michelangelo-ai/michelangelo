@@ -6,10 +6,6 @@ const PIPELINE_TYPE_LABEL = 'michelangelo/PipelineType';
 
 /**
  * Builds the server-side list scoping for a phase entity.
- *
- * Selector keys are storage column names (the `key` of each `michelangelo.api.index`
- * option on the CRD proto), not proto paths — the apiserver passes them straight through
- * to SQL.
  */
 export function injectListOptions(
   service: QueryConfig['service'],

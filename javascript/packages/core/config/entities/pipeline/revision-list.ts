@@ -43,7 +43,6 @@ export const PIPELINE_REVISION_CELL_CONFIG: ColumnConfig<object>[] = [
 
 export const PIPELINE_REVISION_TABLE_CONFIG: TableConfig<object> = {
   columns: PIPELINE_REVISION_CELL_CONFIG,
-  /** Revisions are immutable snapshots — none of the pipeline row actions apply. */
   actions: [],
 };
 
