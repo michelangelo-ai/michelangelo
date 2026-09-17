@@ -1,6 +1,6 @@
 import { CellType } from '#core/components/cell/constants';
 import { DescriptionHierarchy } from '#core/components/cell/renderers/description/constants';
-import { PIPELINE_STATE_CELL, PIPELINE_TYPE_CELL, SORT_ORDER_DESC } from './shared';
+import { PIPELINE_STATE_CELL, PIPELINE_TYPE_CELL } from './shared';
 
 import type { ColumnConfig } from '#core/components/table/types/column-types';
 import type { TableConfig } from '#core/components/views/types';
@@ -45,17 +45,6 @@ export const PIPELINE_REVISION_TABLE_CONFIG: TableConfig<object> = {
   columns: PIPELINE_REVISION_CELL_CONFIG,
   /** Revisions are immutable snapshots — none of the pipeline row actions apply. */
   actions: [],
-};
-
-/**
- * Server-side options for the revision list: newest first, capped so the client-side
- * table never paginates over an unbounded history.
- */
-export const PIPELINE_REVISION_SERVICE_OPTIONS = {
-  listOptions: { limit: '250' },
-  listOptionsExt: {
-    orderBy: [{ field: 'metadata.update_timestamp', dir: SORT_ORDER_DESC }],
-  },
 };
 
 function formatRevisionId(revisionId?: string): string {

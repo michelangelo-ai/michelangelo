@@ -46,20 +46,13 @@ export function EntityTable<T extends object = object>({
     ? `${entityTableSettingsId}/${activeVariant.id}`
     : entityTableSettingsId;
 
-  const injectedListOptions = injectListOptions(service, pipelineTypes);
-  const variantListOptions = activeVariant?.serviceOptions?.listOptions;
-  const listOptions =
-    injectedListOptions || variantListOptions
-      ? { ...variantListOptions, ...injectedListOptions }
-      : undefined;
-  const listOptionsExt = activeVariant?.serviceOptions?.listOptionsExt;
+  const listOptions = injectListOptions(service, pipelineTypes);
 
   const { data, isLoading, error } = useStudioQuery<Record<`${string}List`, { items: T[] }>>({
     queryName: `List${capitalizeFirstLetter(service)}`,
     serviceOptions: {
       namespace: projectId,
       ...(listOptions && { listOptions }),
-      ...(listOptionsExt && { listOptionsExt }),
     },
   });
 

@@ -45,16 +45,6 @@ export interface ListViewVariant<T extends object = object> {
   service?: QueryConfig['service'];
   /** Table configuration for this variant; defaults to the list view's `tableConfig` */
   tableConfig?: TableConfig<T>;
-  /**
-   * Extra list request options (`listOptions`, `listOptionsExt`) merged with the phase-level
-   * pipeline type scoping applied by `injectListOptions`.
-   */
-  serviceOptions?: ListVariantServiceOptions;
-}
-
-export interface ListVariantServiceOptions {
-  listOptions?: Record<string, unknown>;
-  listOptionsExt?: Record<string, unknown>;
 }
 
 export interface DetailViewConfig<T extends object = object> {

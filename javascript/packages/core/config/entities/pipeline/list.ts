@@ -1,5 +1,5 @@
 import { CellType } from '#core/components/cell/constants';
-import { PIPELINE_REVISION_SERVICE_OPTIONS, PIPELINE_REVISION_TABLE_CONFIG } from './revision-list';
+import { PIPELINE_REVISION_TABLE_CONFIG } from './revision-list';
 import { PIPELINE_STATE_CELL, PIPELINE_TYPE_CELL } from './shared';
 
 import type { ColumnConfig } from '#core/components/table/types/column-types';
@@ -37,7 +37,6 @@ export const PIPELINE_LIST_CONFIG: ListViewConfig<object> = {
       label: 'Revisions',
       service: 'revision',
       tableConfig: PIPELINE_REVISION_TABLE_CONFIG,
-      serviceOptions: PIPELINE_REVISION_SERVICE_OPTIONS,
     },
   ],
 };
