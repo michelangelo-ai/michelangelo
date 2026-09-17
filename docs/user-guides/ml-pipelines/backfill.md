@@ -1,3 +1,7 @@
+---
+last_verified: 2026-09-17
+---
+
 # Backfill Pipelines
 
 A backfill lets you execute a Uniflow workflow as if it had been triggered at a specific point in the past. This is useful for reprocessing data for past date windows — for example, re-running a training pipeline on last quarter's data after fixing a bug.

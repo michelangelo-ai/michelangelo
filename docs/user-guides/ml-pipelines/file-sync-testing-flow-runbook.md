@@ -1,3 +1,7 @@
+---
+last_verified: 2026-09-17
+---
+
 # File Sync
 
 ## What you'll learn
