@@ -258,19 +258,6 @@ refresh_model_sync() {
     -n "${NAMESPACE}" --timeout=180s
 }
 
-cleanup_inference_demo_project() {
-  local demo_namespace="ma-dev-test"
-
-  if ! kubectl get projects.michelangelo.api "${demo_namespace}" \
-      -n "${demo_namespace}" >/dev/null 2>&1; then
-    return 0
-  fi
-
-  log "Removing the inference demo project before the CLI e2e reuses its namespace"
-  kubectl delete projects.michelangelo.api "${demo_namespace}" \
-    -n "${demo_namespace}" --wait=true --timeout=180s
-}
-
 pipeline_run_state() {
   local run_name="$1"
 
@@ -362,9 +349,13 @@ inference_state=$(kubectl get inferenceservers.michelangelo.api \
   2>/dev/null || true)
 if [[ "${inference_state}" != INFERENCE_SERVER_STATE_SERVING ]]; then
   log "Creating the inference-server-example sandbox demo"
-  "${MA_BIN}" sandbox demo inference
+  "${PYTHON_BIN}" - <<'PY'
+from michelangelo.cli.sandbox import sandbox
+
+sandbox._assert_sandbox_cluster_running()
+sandbox._create_inference_demo_crs()
+PY
 fi
-cleanup_inference_demo_project
 refresh_model_sync
 
 log "Ensuring the deployment-example template exists"
