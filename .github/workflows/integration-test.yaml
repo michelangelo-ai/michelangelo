@@ -324,6 +324,7 @@ jobs:
         env:
           MA_API_SERVER: localhost:15566
           MA_NAMESPACE: ma-dev-test
+          BERT_COLA_WORKER_INSTANCES: "0"
           MICHELANGELO_PYTHON_DIR: ${{ github.workspace }}/python
           PYTHONPATH: ${{ github.workspace }}/integration-test
 
