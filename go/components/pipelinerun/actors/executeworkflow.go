@@ -275,7 +275,11 @@ func (a *ExecuteWorkflowActor) Run(ctx context.Context, pipelineRun *v2.Pipeline
 	retryErr := a.processManualRetrySpec(ctx, pipelineRun)
 	if retryErr != nil {
 		logger.Error("failed to process manual retry spec", zap.Error(retryErr))
-		return nil, retryErr
+		if pipelinerunutils.IsTerminal(retryErr) {
+			return nil, retryErr
+		}
+		return pipelinerunutils.TransientCondition(pipelineRun, ExecuteWorkflowType,
+			pipelinerunutils.ReasonManualRetryFailed, retryErr, pipelinerunutils.StartupRetryDeadline)
 	}
 
 	executeWorkflowStep := pipelinerunutils.GetStep(pipelineRun, pipelinerunutils.ExecuteWorkflowStepName)
@@ -313,11 +317,12 @@ func (a *ExecuteWorkflowActor) Run(ctx context.Context, pipelineRun *v2.Pipeline
 	if pipelineRun.Spec.Kill {
 		workflowTerminated, err := a.processJobTermination(ctx, pipelineRun)
 		if err != nil {
+			// A failed cancel is a transport failure, not a failed pipeline. The
+			// workflow is still live, so requeue and try again rather than marking
+			// the run FAILED while its compute keeps running.
 			logger.Error("failed to terminate workflow", zap.Error(err))
-			return &apipb.Condition{
-				Type:   ExecuteWorkflowType,
-				Status: apipb.CONDITION_STATUS_FALSE,
-			}, fmt.Errorf("failed to terminate workflow: %w", err)
+			return pipelinerunutils.TransientCondition(pipelineRun, ExecuteWorkflowType,
+				pipelinerunutils.ReasonWorkflowTerminationFailed, err, pipelinerunutils.StartupRetryDeadline)
 		}
 		// check to see if workflow has been successfully terminated
 		if workflowTerminated {
@@ -340,26 +345,26 @@ func (a *ExecuteWorkflowActor) Run(ctx context.Context, pipelineRun *v2.Pipeline
 		logger.Info("deciding worker queue...")
 		err := a.apiHandler.Get(ctx, pipelineRun.Namespace, pipelineRun.Namespace, &metav1.GetOptions{}, project)
 		if err != nil {
-			logger.Warn("failed to get project, using config fallback", zap.Error(err), zap.String("projectName", pipelineRun.Namespace))
-			return &apipb.Condition{
-				Type:   ExecuteWorkflowType,
-				Status: apipb.CONDITION_STATUS_FALSE,
-			}, fmt.Errorf("failed to fetch project %w", err)
+			logger.Error("failed to get project", zap.Error(err), zap.String("projectName", pipelineRun.Namespace))
+			if !pipelinerunutils.RetryableAPIError(err) {
+				executeWorkflowStep.Message = fmt.Sprintf("project %s not found", pipelineRun.Namespace)
+				return nil, fmt.Errorf("failed to fetch project %s: %w", pipelineRun.Namespace, err)
+			}
+			return pipelinerunutils.TransientCondition(pipelineRun, ExecuteWorkflowType,
+				pipelinerunutils.ReasonProjectFetchFailed, err, pipelinerunutils.StartupRetryDeadline)
 		}
 
 		taskList, taskListErr := a.getTaskList(project, pipelineRun)
 		if taskListErr != nil {
-			return &apipb.Condition{
-				Type:   ExecuteWorkflowType,
-				Status: apipb.CONDITION_STATUS_FALSE,
-			}, fmt.Errorf("get workflow client config: %w", taskListErr)
+			// Resolving the worker queue reads a project annotation and static
+			// config; retrying cannot change the answer.
+			executeWorkflowStep.Message = "could not resolve the worker queue for this run"
+			return nil, fmt.Errorf("get workflow client config: %w", taskListErr)
 		}
 		if taskList == "" {
 			logger.Error("WorkflowClient TaskList is empty")
-			return &apipb.Condition{
-				Type:   ExecuteWorkflowType,
-				Status: apipb.CONDITION_STATUS_FALSE,
-			}, fmt.Errorf("WorkflowClient TaskList is empty")
+			executeWorkflowStep.Message = "no worker queue configured for this run"
+			return nil, fmt.Errorf("WorkflowClient TaskList is empty")
 		}
 
 		workflowExecution, err := a.StartWorkflow(ctx, pipelineRun, taskList)
@@ -369,10 +374,13 @@ func (a *ExecuteWorkflowActor) Run(ctx context.Context, pipelineRun *v2.Pipeline
 				zap.String("operation", "start_workflow"),
 				zap.String("namespace", pipelineRun.Namespace),
 				zap.String("name", pipelineRun.Name))
-			return &apipb.Condition{
-				Type:   ExecuteWorkflowType,
-				Status: apipb.CONDITION_STATUS_FALSE,
-			}, fmt.Errorf("start workflow for pipeline run %s/%s: %w", pipelineRun.Namespace, pipelineRun.Name, err)
+			if pipelinerunutils.IsTerminal(err) {
+				executeWorkflowStep.Message = err.Error()
+				return nil, fmt.Errorf("start workflow for pipeline run %s/%s: %w",
+					pipelineRun.Namespace, pipelineRun.Name, err)
+			}
+			return pipelinerunutils.TransientCondition(pipelineRun, ExecuteWorkflowType,
+				pipelinerunutils.ReasonWorkflowStartFailed, err, pipelinerunutils.StartupRetryDeadline)
 		}
 		executeWorkflowStep.State = v2.PIPELINE_RUN_STEP_STATE_RUNNING
 		executeWorkflowStep.StartTime = pbtypes.TimestampNow()
@@ -389,15 +397,21 @@ func (a *ExecuteWorkflowActor) Run(ctx context.Context, pipelineRun *v2.Pipeline
 	logger.Info("workflow run ID is not empty, checking workflow status")
 	workflowExecution, err := a.workflowClient.GetWorkflowExecutionInfo(ctx, pipelineRun.Status.WorkflowId, pipelineRun.Status.WorkflowRunId)
 	if err != nil {
-		return nil, fmt.Errorf("get workflow execution info for pipeline run %s/%s (workflow %s, run %s): %w",
-			pipelineRun.Namespace, pipelineRun.Name, pipelineRun.Status.WorkflowId, pipelineRun.Status.WorkflowRunId, err)
+		// The workflow exists and is the source of truth for this run's outcome, so
+		// being unable to read it says nothing about the pipeline. Retry without a
+		// deadline: a long workflow-service outage must not fail healthy runs.
+		logger.Error("failed to get workflow execution info", zap.Error(err))
+		return pipelinerunutils.TransientCondition(pipelineRun, ExecuteWorkflowType,
+			pipelinerunutils.ReasonWorkflowStatusUnavailable, err, pipelinerunutils.NoRetryDeadline)
 	}
 
 	// Query and update task-level status for all workflow states
 	taskSteps, queryErr := a.constructPipelineRunStepInfo(ctx, pipelineRun)
 	if queryErr != nil {
-		logger.Error("failed to query task progress", zap.Error(queryErr))
-		return nil, queryErr
+		// Task progress is display detail layered on the workflow status read just
+		// above. Failing to query it must not decide the run's fate, so keep the
+		// substeps already recorded and carry on to the status switch below.
+		logger.Warn("failed to query task progress, leaving substeps unchanged", zap.Error(queryErr))
 	} else if len(taskSteps) > 0 {
 		executeWorkflowStep.SubSteps = taskSteps
 	}
@@ -461,13 +475,23 @@ func (a *ExecuteWorkflowActor) processJobTermination(ctx context.Context, pipeli
 func (a *ExecuteWorkflowActor) StartWorkflow(ctx context.Context, pipelineRun *v2.PipelineRun, taskList string) (*clientInterfaces.WorkflowExecution, error) {
 	args, kwArgs, envs, err := getWorkflowInputs(pipelineRun)
 	if err != nil {
-		return nil, fmt.Errorf("get workflow inputs for pipeline run %s/%s: %w", pipelineRun.Namespace, pipelineRun.Name, err)
+		// Decoding the pipeline manifest is deterministic: a malformed manifest
+		// fails identically on every attempt.
+		return nil, pipelinerunutils.Terminalf("get workflow inputs for pipeline run %s/%s: %w",
+			pipelineRun.Namespace, pipelineRun.Name, err)
 	}
 	err = a.addTaskCacheEnv(ctx, pipelineRun, envs)
 	if err != nil {
+		if !pipelinerunutils.RetryableAPIError(err) {
+			return nil, pipelinerunutils.Terminalf("failed to add task cache env: %w", err)
+		}
 		return nil, fmt.Errorf("failed to add task cache env: %w", err)
 	}
 	pipeline := pipelineRun.Status.SourcePipeline.Pipeline
+	// TODO: the blob store reports every failure as an opaque error, so a missing
+	// tar is indistinguishable from an outage and is retried like one. Classify it
+	// as terminal once blobstore exposes a not-found - the azure client currently
+	// flattens a 404 into a formatted string with nothing wrapped.
 	tarContent, err := a.blobStore.Get(ctx, pipeline.Spec.Manifest.UniflowTar)
 	if err != nil {
 		return nil, fmt.Errorf("get tar content for pipeline %s/%s: %w", pipeline.Namespace, pipeline.Name, err)
@@ -1063,7 +1087,7 @@ func (a *ExecuteWorkflowActor) findTaskResetEventIDByActivityID(ctx context.Cont
 	}
 
 	if firstActivityScheduledEventID == 0 {
-		return 0, fmt.Errorf("could not find scheduled event for first activity %s", firstActivityID)
+		return 0, pipelinerunutils.Terminalf("could not find scheduled event for first activity %s", firstActivityID)
 	}
 
 	// Find the decision/workflow task completed event immediately before the first activity
@@ -1084,7 +1108,7 @@ func (a *ExecuteWorkflowActor) findTaskResetEventIDByActivityID(ctx context.Cont
 	}
 
 	if resetEventID == 0 {
-		return 0, fmt.Errorf("could not find safe reset boundary before first activity %s", firstActivityID)
+		return 0, pipelinerunutils.Terminalf("could not find safe reset boundary before first activity %s", firstActivityID)
 	}
 
 	logger.Info("found precise reset boundary using activity ID",
