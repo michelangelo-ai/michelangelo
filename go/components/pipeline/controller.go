@@ -24,9 +24,11 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	"github.com/michelangelo-ai/michelangelo/go/base/revision"
+	"github.com/michelangelo-ai/michelangelo/go/cascadedelete"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
@@ -48,6 +50,7 @@ type Reconciler struct {
 	logger            *zap.Logger
 	apiHandlerFactory apiHandler.Factory
 	revisionManager   revision.Manager
+	scheme            *runtime.Scheme
 	config            Config
 }
 
@@ -148,7 +151,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	// calls for the same commit are safe. Status is already persisted above, so
 	// a snapshot error requeues only this step without affecting the READY state.
 	if err == nil && r.config.RevisioningEnabled && pipeline.Status.State == v2pb.PIPELINE_STATE_READY {
-		if snapshotErr := r.snapshotRevision(ctx, pipeline); snapshotErr != nil {
+		// Pass originalPipeline's pre-reconcile Status.LatestRevision explicitly:
+		// by this point pipeline.Status.LatestRevision may already have been
+		// overwritten (above, for main/master commits) to point at the very
+		// revision being created here, so it cannot be read at snapshot time
+		// to determine the *parent* revision.
+		if snapshotErr := r.snapshotRevision(ctx, pipeline, originalPipeline.Status.GetLatestRevision()); snapshotErr != nil {
 			logger.Error("failed to snapshot pipeline revision", zap.Error(snapshotErr))
 			return result, snapshotErr
 		}
@@ -206,7 +214,12 @@ func isTerminatedState(state v2pb.PipelineState) bool {
 		state == v2pb.PIPELINE_STATE_ERROR
 }
 
-func (r *Reconciler) snapshotRevision(ctx context.Context, pipeline *v2pb.Pipeline) error {
+// snapshotRevision creates or updates a Revision CR snapshotting pipeline's
+// current content. priorLatestRevision is the base resource's
+// Status.LatestRevision as it was *before* this reconcile potentially
+// overwrote it (see the caller in Reconcile) — it becomes the new revision's
+// Spec.Parent when set, forming a lineage chain across snapshots.
+func (r *Reconciler) snapshotRevision(ctx context.Context, pipeline *v2pb.Pipeline, priorLatestRevision *apipb.ResourceIdentifier) error {
 	if pipeline.Spec.Commit == nil {
 		r.logger.Info("skipping revision snapshot: pipeline has no commit info",
 			zap.String("namespace", pipeline.Namespace),
@@ -214,9 +227,21 @@ func (r *Reconciler) snapshotRevision(ctx context.Context, pipeline *v2pb.Pipeli
 		return nil
 	}
 
-	content, err := pbtypes.MarshalAny(pipeline)
+	// Strip ManagedFields before marshaling: it is set by the Kubernetes API
+	// server, can grow unboundedly across many field-manager updates, and has
+	// no meaning as part of a point-in-time content snapshot — an unbounded
+	// ManagedFields blob landing in every Revision risks failing UpsertRevision
+	// on oversized objects.
+	contentSource := pipeline.DeepCopy()
+	contentSource.ObjectMeta.ManagedFields = nil
+	content, err := pbtypes.MarshalAny(contentSource)
 	if err != nil {
 		return fmt.Errorf("marshal pipeline content: %w", err)
+	}
+
+	var parent *apipb.ResourceIdentifier
+	if priorLatestRevision.GetName() != "" {
+		parent = priorLatestRevision
 	}
 
 	rev := &v2pb.Revision{
@@ -245,7 +270,24 @@ func (r *Reconciler) snapshotRevision(ctx context.Context, pipeline *v2pb.Pipeli
 			RevisionId: pipeline.Spec.Commit.GitRef,
 			Source:     revision.SourceGit,
 			GitCommit:  pipeline.Spec.Commit,
+			Parent:     parent,
 		},
+	}
+
+	// Stamp the Pipeline as the Revision's controller ownerReference so
+	// Kubernetes garbage collection cleans up Revisions when their owning
+	// Pipeline is deleted. Best-effort: StampOwnerRefOnCreate never fails the
+	// snapshot on a stamping error (e.g. a nil scheme in a misconfigured
+	// caller), matching how the pipelinerun apihook already uses the same
+	// helper for PipelineRun -> Pipeline ownership.
+	//
+	// Invariant: EnsureControllerRef enforces a single controller-owner per
+	// object. Nothing else stamps an owner on a Pipeline-sourced Revision
+	// today; if that ever changes, this call will start failing with an
+	// AlreadyOwnedError (logged, non-fatal) instead of silently overwriting
+	// the existing owner.
+	if err := cascadedelete.StampOwnerRefOnCreate(ctx, r.logger, r.scheme, rev, pipeline); err != nil {
+		return fmt.Errorf("stamp owner reference on pipeline revision: %w", err)
 	}
 
 	_, err = r.revisionManager.UpsertRevision(ctx, rev, revision.UpsertOpts{})
@@ -266,6 +308,7 @@ func (r *Reconciler) Register(mgr ctrl.Manager) error {
 		return err
 	}
 	r.Handler = handler
+	r.scheme = mgr.GetScheme()
 	if r.revisionManager == nil {
 		r.revisionManager = revision.NewManager(handler, r.logger)
 	}
