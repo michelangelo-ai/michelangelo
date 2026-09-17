@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import pytorch_lightning as pl
 import torch.nn as nn
 
 from michelangelo.lib.model_manager.interface.custom_model import Model
@@ -61,6 +60,12 @@ def resolve_training_framework(model_class_path: str | None) -> str | None:
         return None
     if issubclass(model_class, Model):
         return TRAINING_FRAMEWORK_CUSTOM
+
+    # Import Lightning only when the model did not already match the custom
+    # interface. Custom assembly does not require Lightning, and keeping this
+    # dependency lazy avoids loading its optional plotting stack.
+    import pytorch_lightning as pl
+
     if issubclass(model_class, pl.LightningModule):
         return TRAINING_FRAMEWORK_LIGHTNING
     if issubclass(model_class, nn.Module):

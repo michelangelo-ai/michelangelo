@@ -262,6 +262,54 @@ class ComputeClusterSetupTest(TestCase):
         self.assertEqual(exec_call_args[0], "kubectl")
         self.assertIn("apply", exec_call_args)
 
+    def test_control_plane_cluster_uses_in_cluster_api_endpoint(self):
+        """The controller reaches its own cluster through the service endpoint."""
+        self.assertEqual(
+            sandbox._compute_cluster_endpoint(
+                "michelangelo-sandbox", "https://0.0.0.0:12345"
+            ),
+            ("https://kubernetes.default.svc", "443"),
+        )
+
+    def test_dedicated_compute_cluster_uses_kubeconfig_endpoint(self):
+        """A separate compute cluster retains its kubeconfig endpoint."""
+        self.assertEqual(
+            sandbox._compute_cluster_endpoint(
+                "michelangelo-compute", "https://host.docker.internal:12345"
+            ),
+            ("https://host.docker.internal", "12345"),
+        )
+
+    @patch("michelangelo.cli.sandbox.sandbox._helm_wait")
+    @patch("michelangelo.cli.sandbox.sandbox._build_helm_set_args", return_value=[])
+    @patch("michelangelo.cli.sandbox.sandbox._helm_ensure_repos")
+    @patch("michelangelo.cli.sandbox.sandbox._ensure_credentials_secret")
+    @patch("michelangelo.cli.sandbox.sandbox._refresh_mysql_schema")
+    @patch("michelangelo.cli.sandbox.sandbox._create_compute_cluster_crd")
+    @patch("michelangelo.cli.sandbox.sandbox._exec")
+    @patch("michelangelo.cli.sandbox.sandbox.subprocess.run")
+    def test_sync_refreshes_control_plane_cluster_endpoint(
+        self,
+        mock_run,
+        mock_exec,
+        mock_create_crd,
+        mock_refresh_schema,
+        mock_ensure_credentials,
+        mock_ensure_repos,
+        mock_build_helm_args,
+        mock_helm_wait,
+    ):
+        """Sync repairs the compute endpoint in an existing sandbox."""
+        mock_run.side_effect = [
+            Mock(returncode=0),
+            Mock(returncode=0, stdout='{"status":"deployed"}'),
+            *(Mock(returncode=0) for _ in range(6)),
+        ]
+
+        sandbox._sync(Mock())
+
+        mock_create_crd.assert_called_once_with("michelangelo-sandbox")
+
     @patch("michelangelo.cli.sandbox.sandbox._exec")
     @patch("michelangelo.cli.sandbox.sandbox.subprocess.check_output")
     def test_create_secrets_success(self, mock_check_output, mock_exec):

@@ -675,9 +675,10 @@ func buildLabelCriterionSQL(op *apipb.CriterionOperation, tableName string) ([]s
 // Each fragment begins with a leading space (see convertCriterionOperator).
 //
 // indexPathToKeyMap (when non-nil) maps proto field paths to MySQL column
-// names; criteria referencing paths not in the map are rejected. When nil,
-// field names are passed through unchanged after the bare baseOrderByFields
-// rewrite (permissive mode).
+// names; criteria referencing neither a path nor an indexed column in the map
+// are rejected. Accepting indexed column names preserves the legacy
+// "<resource>.<column>" filter format. When nil, field names are passed through
+// unchanged after the bare baseOrderByFields rewrite (permissive mode).
 func buildFieldCriterionSQL(op *apipb.CriterionOperation, indexPathToKeyMap map[string]string) ([]string, []interface{}, error) {
 	var queryStrs []string
 	var params []interface{}
@@ -693,7 +694,7 @@ func buildFieldCriterionSQL(op *apipb.CriterionOperation, indexPathToKeyMap map[
 
 		// Resolve to a column name. Order: per-CRD indexPathToKeyMap, then
 		// baseOrderByFields, then permissive passthrough (only when no map).
-		if col, ok := indexPathToKeyMap[fieldName]; ok {
+		if col, ok := lookupIndexedColumn(fieldName, indexPathToKeyMap); ok {
 			fieldName = col
 		} else if col, ok := baseOrderByFields[fieldName]; ok {
 			fieldName = col
@@ -945,7 +946,8 @@ func buildLabelSelectorSQL(labelSelectorStr, tableName string) (labelSelectorPie
 // (including leading " AND" for each clause) and the bind params.
 //
 // Each requirement's key is looked up in indexPathToKeyMap (the proto path →
-// MySQL column map); fields not in the map are rejected with InvalidArgument.
+// MySQL column map), including its legacy indexed-column aliases; fields not
+// in the map are rejected with InvalidArgument.
 // When indexPathToKeyMap is nil, the path is used as the column name as-is
 // (permissive — matches our criterion-builder convention).
 //
@@ -967,7 +969,7 @@ func buildFieldSelectorSQL(fieldSelectorStr string, indexPathToKeyMap map[string
 	var params []interface{}
 	for _, req := range requirements {
 		col := req.Key()
-		if mapped, ok := indexPathToKeyMap[col]; ok {
+		if mapped, ok := lookupIndexedColumn(col, indexPathToKeyMap); ok {
 			col = mapped
 		} else if indexPathToKeyMap != nil {
 			return "", nil, status.Errorf(codes.InvalidArgument,
@@ -1030,8 +1032,9 @@ var validColumnName = regexp.MustCompile(`^[A-Za-z0-9_]+$`)
 //     orderByLabelColumn (which is a CTE column reference; the caller is
 //     responsible for prepending the matching WITH clause).
 //  4. Else if indexPathToKeyMap is non-nil: use the mapped column if the
-//     remainder is a key in it, otherwise reject (codes.InvalidArgument) —
-//     mirrors buildFieldCriterionSQL's map-enforcement pattern.
+//     remainder is a path or indexed-column alias in it, otherwise reject
+//     (codes.InvalidArgument) — mirrors buildFieldCriterionSQL's
+//     map-enforcement pattern.
 //  5. Otherwise the remainder is used as the bare column name, validated
 //     against validColumnName before interpolation.
 //
@@ -1054,7 +1057,7 @@ func buildOrderBySQL(orderBy []*apipb.OrderBy, indexPathToKeyMap map[string]stri
 			} else if remainder == orderByLabelField {
 				colName = orderByLabelColumn
 				isLabelValueColumn = true
-			} else if col, ok := indexPathToKeyMap[remainder]; ok {
+			} else if col, ok := lookupIndexedColumn(remainder, indexPathToKeyMap); ok {
 				colName = col
 			} else if indexPathToKeyMap != nil {
 				return "", status.Errorf(codes.InvalidArgument, "invalid order_by field: %v", order.Field)
@@ -1077,6 +1080,18 @@ func buildOrderBySQL(orderBy []*apipb.OrderBy, indexPathToKeyMap map[string]stri
 		}
 	}
 	return " ORDER BY " + strings.Join(clauses, ", "), nil
+}
+
+func lookupIndexedColumn(field string, indexPathToKeyMap map[string]string) (string, bool) {
+	if col, ok := indexPathToKeyMap[field]; ok {
+		return col, true
+	}
+	for _, col := range indexPathToKeyMap {
+		if col == field {
+			return col, true
+		}
+	}
+	return "", false
 }
 
 // extractMatchValue unpacks a gogo-protobuf types.Any match value into a string.

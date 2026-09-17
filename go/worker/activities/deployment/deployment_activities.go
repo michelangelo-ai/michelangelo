@@ -59,7 +59,8 @@ func (r *activities) UpdateDeployment(ctx context.Context, req *v2pb.UpdateDeplo
 	return resp.Deployment, nil
 }
 
-// SensorDeployment polls the live Deployment resource until it reaches a terminal state.
+// SensorDeployment polls the live Deployment resource until it reaches a terminal state
+// for the expected model revision.
 // Follows the same pattern as PipelineRunSensor, SensorSparkJob, SensorRayJob.
 // This ensures each workflow tracks its intended model revision, preventing race conditions
 // when multiple workflows update the same deployment concurrently.
@@ -98,14 +99,24 @@ func (r *activities) SensorDeployment(ctx context.Context, req SensorDeploymentR
 			fmt.Sprintf("deployment was updated by another workflow: expected model revision %s, but deployment now targets %s", req.ExpectedModelRevision, desiredRev))
 	}
 
-	// Check if deployment reached terminal state (success or failure)
-	if stage == v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE ||
-		stage == v2pb.DEPLOYMENT_STAGE_ROLLOUT_FAILED ||
+	// An update can expose the previous revision's ROLLOUT_COMPLETE status until
+	// the controller starts reconciling the new desired revision. Keep polling
+	// until the current revision confirms that the expected rollout completed.
+	if stage == v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE {
+		if req.ExpectedModelRevision == "" || currentRev == req.ExpectedModelRevision {
+			return deployment, nil
+		}
+		return nil, workflow.NewCustomError(ctx, yarpcerrors.CodeFailedPrecondition.String(),
+			fmt.Sprintf("deployment rollout is stale (current revision: %s, expected revision: %s)", currentRev, req.ExpectedModelRevision))
+	}
+
+	// Failed and rollback/cleanup terminal states return immediately so the
+	// caller can translate them into a workflow failure.
+	if stage == v2pb.DEPLOYMENT_STAGE_ROLLOUT_FAILED ||
 		stage == v2pb.DEPLOYMENT_STAGE_ROLLBACK_COMPLETE ||
 		stage == v2pb.DEPLOYMENT_STAGE_ROLLBACK_FAILED ||
 		stage == v2pb.DEPLOYMENT_STAGE_CLEAN_UP_COMPLETE ||
 		stage == v2pb.DEPLOYMENT_STAGE_CLEAN_UP_FAILED {
-		// Terminal state reached - return deployment and let caller handle success/failure
 		return deployment, nil
 	}
 

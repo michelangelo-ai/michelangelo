@@ -2,13 +2,19 @@
 
 from __future__ import annotations
 
+import builtins
+import importlib
 import unittest
 from typing import TYPE_CHECKING
+from unittest.mock import patch
 
 import pytorch_lightning as pl
 import torch.nn as nn
 
 from michelangelo.lib.model_manager.interface.custom_model import Model
+from michelangelo.workflow.tasks.tabular_assembler._private.model_class import (
+    resolve as resolve_module,
+)
 from michelangelo.workflow.tasks.tabular_assembler._private.model_class.resolve import (
     resolve_model_class,
     resolve_training_framework,
@@ -135,6 +141,24 @@ class ResolveTest(unittest.TestCase):
             resolve_training_framework(CUSTOM_MODEL_CLASS_PATH),
             TRAINING_FRAMEWORK_CUSTOM,
         )
+
+    def test_resolver_module_import_does_not_require_lightning(self):
+        """Custom model-class resolution does not load optional Lightning deps."""
+        original_import = builtins.__import__
+
+        def import_without_lightning(name, *args, **kwargs):
+            if name == "pytorch_lightning":
+                raise ModuleNotFoundError("blocked optional dependency")
+            return original_import(name, *args, **kwargs)
+
+        with patch("builtins.__import__", side_effect=import_without_lightning):
+            importlib.reload(resolve_module)
+            self.assertEqual(
+                resolve_module.resolve_model_class(
+                    CUSTOM_MODEL_CLASS_PATH, "metadata.fallback.Model"
+                ),
+                CUSTOM_MODEL_CLASS_PATH,
+            )
 
     def test_resolve_training_framework_structurally_conformant_model(self):
         """A structurally-conformant, non-inheriting class does not resolve to custom.
