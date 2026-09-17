@@ -9,7 +9,6 @@ import (
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	conditionsutil "github.com/michelangelo-ai/michelangelo/go/base/conditions/utils"
 	osscommon "github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory"
 	modelconfig "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
@@ -23,7 +22,6 @@ var _ conditionInterfaces.ConditionActor[*v2pb.Deployment] = &ModelCleanupActor{
 // created per cluster at actor-chain construction time.
 type ModelCleanupActor struct {
 	clientFactory       clientfactory.ClientFactory
-	backendRegistry     *backends.Registry
 	modelConfigProvider modelconfig.ModelConfigProvider
 	logger              *zap.Logger
 	target              *v2pb.ClusterTarget
@@ -32,14 +30,12 @@ type ModelCleanupActor struct {
 // NewModelCleanupActor creates a ModelCleanupActor for the given cluster.
 func NewModelCleanupActor(
 	clientFactory clientfactory.ClientFactory,
-	backendRegistry *backends.Registry,
 	modelConfigProvider modelconfig.ModelConfigProvider,
 	logger *zap.Logger,
 	target *v2pb.ClusterTarget,
 ) *ModelCleanupActor {
 	return &ModelCleanupActor{
 		clientFactory:       clientFactory,
-		backendRegistry:     backendRegistry,
 		modelConfigProvider: modelConfigProvider,
 		logger:              logger,
 		target:              target,
@@ -62,8 +58,12 @@ func noCleanupNeeded(deployment *v2pb.Deployment) bool {
 	return currentRevision.GetName() == deployment.Spec.GetDesiredRevision().GetName()
 }
 
-// Retrieve checks whether the previous model revision has been unloaded from Triton.
-// Returns TRUE immediately if this is the first rollout (no prior revision).
+// Retrieve checks whether this deployment's entry for the previous model revision has been
+// removed from the cluster's model config. Returns TRUE immediately if this is the first
+// rollout (no prior revision).
+//
+// The model config is the source of truth rather than Triton's loaded set, which keeps the
+// model while another deployment still serves it.
 func (a *ModelCleanupActor) Retrieve(ctx context.Context, deployment *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
 	if noCleanupNeeded(deployment) {
 		return conditionsutil.GenerateTrueCondition(condition), nil
@@ -74,26 +74,15 @@ func (a *ModelCleanupActor) Retrieve(ctx context.Context, deployment *v2pb.Deplo
 		return conditionsutil.GenerateFalseCondition(condition, "ClientUnavailable", err.Error()), nil
 	}
 
-	httpClient, err := a.clientFactory.GetHTTPClient(ctx, a.target)
-	if err != nil {
-		return conditionsutil.GenerateFalseCondition(condition, "HTTPClientUnavailable", err.Error()), nil
-	}
-
-	backend, err := a.backendRegistry.GetBackend(v2pb.BACKEND_TYPE_TRITON)
-	if err != nil {
-		return conditionsutil.GenerateFalseCondition(condition, "BackendUnavailable", err.Error()), nil
-	}
-
 	inferenceServerName := deployment.Spec.GetInferenceServer().GetName()
 	oldModel := deployment.Status.GetCurrentRevision().GetName()
 
-	apiServerURL := osscommon.APIServerURLFromTarget(a.target)
-	stillLoaded, err := backend.CheckModelStatus(ctx, a.logger, kubeClient, httpClient, apiServerURL, inferenceServerName, deployment.Namespace, oldModel)
+	stillPresent, err := osscommon.CheckModelExists(ctx, a.logger, a.modelConfigProvider, kubeClient, deployment.GetName(), oldModel, inferenceServerName, deployment.Namespace)
 	if err != nil {
 		return conditionsutil.GenerateFalseCondition(condition, "ModelStatusCheckFailed", err.Error()), nil
 	}
-	if stillLoaded {
-		return conditionsutil.GenerateFalseCondition(condition, "OldModelStillLoaded", fmt.Sprintf("model %s still loaded in cluster %s", oldModel, a.target.GetClusterId())), nil
+	if stillPresent {
+		return conditionsutil.GenerateFalseCondition(condition, "OldModelStillInConfig", fmt.Sprintf("model %s still in the model config for cluster %s", oldModel, a.target.GetClusterId())), nil
 	}
 
 	return conditionsutil.GenerateTrueCondition(condition), nil
@@ -115,7 +104,7 @@ func (a *ModelCleanupActor) Run(ctx context.Context, deployment *v2pb.Deployment
 	inferenceServerName := deployment.Spec.GetInferenceServer().GetName()
 	oldModel := deployment.Status.GetCurrentRevision().GetName()
 
-	if err := a.modelConfigProvider.RemoveModelFromConfig(ctx, a.logger, kubeClient, inferenceServerName, deployment.Namespace, oldModel); err != nil {
+	if err := a.modelConfigProvider.RemoveModelFromConfig(ctx, a.logger, kubeClient, inferenceServerName, deployment.Namespace, deployment.GetName(), oldModel); err != nil {
 		return conditionsutil.GenerateFalseCondition(condition, "RemoveModelFromConfigFailed", err.Error()), nil
 	}
 

@@ -63,7 +63,7 @@ func TestRetrieve(t *testing.T) {
 		{
 			name: "model still exists in inference server, cleanup required",
 			deployment: withSingleClusterAnnotation(t, &v2pb.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Namespace: namespace},
+				ObjectMeta: metav1.ObjectMeta{Name: deploymentName, Namespace: namespace},
 				Spec: v2pb.DeploymentSpec{
 					Target: &v2pb.DeploymentSpec_InferenceServer{
 						InferenceServer: &api.ResourceIdentifier{Name: isName},
@@ -75,7 +75,7 @@ func TestRetrieve(t *testing.T) {
 			}, clusterID),
 			setupMocks: func(mcp *modelconfigmocks.MockModelConfigProvider, rm *routingmocks.MockManager) {
 				mcp.EXPECT().GetModelsFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), isName, namespace).Return([]modelconfig.ModelConfigEntry{
-					{Name: currentModel, StoragePath: "gs://bucket/old-model"},
+					{Name: currentModel, StoragePath: "gs://bucket/old-model", DeploymentName: deploymentName},
 				}, nil)
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
@@ -84,7 +84,7 @@ func TestRetrieve(t *testing.T) {
 		{
 			name: "unable to check model in inference server",
 			deployment: withSingleClusterAnnotation(t, &v2pb.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Namespace: namespace},
+				ObjectMeta: metav1.ObjectMeta{Name: deploymentName, Namespace: namespace},
 				Spec: v2pb.DeploymentSpec{
 					Target: &v2pb.DeploymentSpec_InferenceServer{
 						InferenceServer: &api.ResourceIdentifier{Name: isName},
@@ -254,7 +254,7 @@ func TestRun(t *testing.T) {
 				},
 			}, clusterID),
 			setupMocks: func(mcp *modelconfigmocks.MockModelConfigProvider, rm *routingmocks.MockManager) {
-				mcp.EXPECT().RemoveModelFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), isName, namespace, currentModel).Return(nil)
+				mcp.EXPECT().RemoveModelFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), isName, namespace, deploymentName, currentModel).Return(nil)
 				rm.EXPECT().RemoveRules(gomock.Any(), gomock.Any(), trafficRouteName, namespace, trafficMatchPath).Return(nil)
 				rm.EXPECT().RemoveRules(gomock.Any(), gomock.Any(), discoveryRouteName, namespace, discoveryMatchPath).Return(nil)
 			},
@@ -276,7 +276,7 @@ func TestRun(t *testing.T) {
 				},
 			}, clusterID),
 			setupMocks: func(mcp *modelconfigmocks.MockModelConfigProvider, rm *routingmocks.MockManager) {
-				mcp.EXPECT().RemoveModelFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), isName, namespace, currentModel).Return(errors.New("removal failed"))
+				mcp.EXPECT().RemoveModelFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), isName, namespace, deploymentName, currentModel).Return(errors.New("removal failed"))
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
 			expectedConditionReason: "Failed to unload old model old-model from inference server in cluster test-cluster: removal failed",
@@ -296,7 +296,7 @@ func TestRun(t *testing.T) {
 				},
 			}, clusterID),
 			setupMocks: func(mcp *modelconfigmocks.MockModelConfigProvider, rm *routingmocks.MockManager) {
-				mcp.EXPECT().RemoveModelFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), isName, namespace, currentModel).Return(nil)
+				mcp.EXPECT().RemoveModelFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), isName, namespace, deploymentName, currentModel).Return(nil)
 				rm.EXPECT().RemoveRules(gomock.Any(), gomock.Any(), trafficRouteName, namespace, trafficMatchPath).Return(errors.New("removal failed"))
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
@@ -317,7 +317,7 @@ func TestRun(t *testing.T) {
 				},
 			}, clusterID),
 			setupMocks: func(mcp *modelconfigmocks.MockModelConfigProvider, rm *routingmocks.MockManager) {
-				mcp.EXPECT().RemoveModelFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), isName, namespace, currentModel).Return(nil)
+				mcp.EXPECT().RemoveModelFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), isName, namespace, deploymentName, currentModel).Return(nil)
 				rm.EXPECT().RemoveRules(gomock.Any(), gomock.Any(), trafficRouteName, namespace, trafficMatchPath).Return(nil)
 				rm.EXPECT().RemoveRules(gomock.Any(), gomock.Any(), discoveryRouteName, namespace, discoveryMatchPath).Return(errors.New("apply failed"))
 			},
@@ -407,7 +407,7 @@ func TestRunUnloadsModelFromEveryCluster(t *testing.T) {
 	}
 
 	mockModelConfigProvider.EXPECT().
-		RemoveModelFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), isName, namespace, currentModel).
+		RemoveModelFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), isName, namespace, deploymentName, currentModel).
 		Return(nil).Times(len(clusterIDs))
 	rm.EXPECT().
 		RemoveRules(gomock.Any(), gomock.Any(), routenames.TrafficRouteName(isName), namespace,

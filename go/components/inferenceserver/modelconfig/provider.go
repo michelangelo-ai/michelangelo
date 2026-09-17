@@ -1,8 +1,5 @@
 package modelconfig
 
-// TODO(#621): ghosharitra: There's only one modelconfigig per inference server and all deployments need to concurrently access these modelconfigs.
-// Add appropriate locking mechanisms to ensure data consistency.
-
 import (
 	"context"
 	"encoding/json"
@@ -12,7 +9,10 @@ import (
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/michelangelo-ai/michelangelo/go/components/common/keyedmutex"
 )
 
 const (
@@ -23,11 +23,14 @@ const (
 var _ ModelConfigProvider = &defaultModelConfigProvider{} // ensure implementation satisfies interface
 
 // defaultModelConfigProvider implements the ModelConfigProvider interface through a backing store of ConfigMaps.
-type defaultModelConfigProvider struct{}
+type defaultModelConfigProvider struct {
+	// mu serializes read-modify-write cycles per ConfigMap. See mutateModels.
+	mu *keyedmutex.Map
+}
 
 // NewDefaultModelConfigProvider creates a new defaultModelConfigProvider instance
 func NewDefaultModelConfigProvider() *defaultModelConfigProvider {
-	return &defaultModelConfigProvider{}
+	return &defaultModelConfigProvider{mu: keyedmutex.New()}
 }
 
 // CreateModelConfigMap creates a ModelConfigMap for model configuration
@@ -129,89 +132,30 @@ func (p *defaultModelConfigProvider) GetModelsFromConfig(ctx context.Context, lo
 
 // AddModelToConfig adds a model to a ConfigMap
 func (p *defaultModelConfigProvider) AddModelToConfig(ctx context.Context, logger *zap.Logger, kubeclient client.Client, inferenceServer string, namespace string, entry ModelConfigEntry) error {
-	configMapName := generateConfigMapName(inferenceServer)
-	logger.Info("Getting model ConfigMap", zap.String("configMap", configMapName), zap.String("namespace", namespace))
-	configMap := &corev1.ConfigMap{}
-	err := kubeclient.Get(ctx, client.ObjectKey{Name: configMapName, Namespace: namespace}, configMap)
-	if err != nil {
-		logger.Error("failed to get ConfigMap",
-			zap.Error(err),
-			zap.String("operation", "get_modelconfig"),
-			zap.String("namespace", namespace),
-			zap.String("configMap", configMapName))
-		return fmt.Errorf("failed to get ConfigMap %s/%s: %w",
-			namespace, configMapName, err)
-	}
-
-	currentConfigs, err := p.parseModelConfigsFromConfigMap(ctx, logger, kubeclient, configMap)
-	if err != nil {
-		return err
-	}
-
-	// Add new model if not found
-	found := false
-	for i, config := range currentConfigs {
-		if config.Name == entry.Name {
-			currentConfigs[i].StoragePath = entry.StoragePath
-			found = true
-			break
+	return p.mutateModels(ctx, logger, kubeclient, inferenceServer, namespace, func(currentConfigs []ModelConfigEntry) []ModelConfigEntry {
+		// Entries are keyed by (deployment, model): refresh this deployment's entry only.
+		for i, config := range currentConfigs {
+			if config.Name == entry.Name && config.DeploymentName == entry.DeploymentName {
+				currentConfigs[i].StoragePath = entry.StoragePath
+				return currentConfigs
+			}
 		}
-	}
-
-	if !found {
-		currentConfigs = append(currentConfigs, ModelConfigEntry{
-			Name:        entry.Name,
-			StoragePath: entry.StoragePath,
-		})
-	}
-
-	// Update ConfigMap
-	if err := p.updateConfigMapWithModels(ctx, logger, kubeclient, configMap, currentConfigs); err != nil {
-		logger.Error("failed to update ConfigMap",
-			zap.Error(err),
-			zap.String("operation", "update_modelconfig"),
-			zap.String("namespace", namespace),
-			zap.String("configMap", configMapName))
-		return err
-	}
-
-	return nil
+		return append(currentConfigs, entry)
+	})
 }
 
-// RemoveModelFromConfig removes a model from a configmap.
-func (p *defaultModelConfigProvider) RemoveModelFromConfig(ctx context.Context, logger *zap.Logger, kubeclient client.Client, inferenceServer string, namespace string, modelName string) error {
-	configMapName := generateConfigMapName(inferenceServer)
-	logger.Info("Getting model ConfigMap", zap.String("configMap", configMapName), zap.String("namespace", namespace))
-	configMap := &corev1.ConfigMap{}
-	err := kubeclient.Get(ctx, client.ObjectKey{Name: configMapName, Namespace: namespace}, configMap)
-	if err != nil {
-		logger.Error("failed to get ConfigMap",
-			zap.Error(err),
-			zap.String("operation", "get_modelconfig"),
-			zap.String("namespace", namespace),
-			zap.String("configMap", configMapName))
-		return fmt.Errorf("failed to get ConfigMap %s/%s: %w",
-			namespace, configMapName, err)
-	}
-
-	currentConfigs, err := p.parseModelConfigsFromConfigMap(ctx, logger, kubeclient, configMap)
-	if err != nil {
-		return err
-	}
-
-	updatedConfigs := []ModelConfigEntry{}
-	for _, config := range currentConfigs {
-		if config.Name != modelName {
-			updatedConfigs = append(updatedConfigs, config)
+// RemoveModelFromConfig removes the named deployment's entry for a model from a configmap.
+func (p *defaultModelConfigProvider) RemoveModelFromConfig(ctx context.Context, logger *zap.Logger, kubeclient client.Client, inferenceServer string, namespace string, deploymentName string, modelName string) error {
+	return p.mutateModels(ctx, logger, kubeclient, inferenceServer, namespace, func(currentConfigs []ModelConfigEntry) []ModelConfigEntry {
+		updatedConfigs := []ModelConfigEntry{}
+		for _, config := range currentConfigs {
+			if !ownsEntry(config, deploymentName, modelName) {
+				updatedConfigs = append(updatedConfigs, config)
+			}
 		}
-	}
-
-	// Update ConfigMap
-	if err := p.updateConfigMapWithModels(ctx, logger, kubeclient, configMap, updatedConfigs); err != nil {
-		return err
-	}
-	logger.Info("Model successfully removed from ConfigMap", zap.String("configMap", configMapName), zap.Int("modelCount", len(updatedConfigs)))
-	return nil
+		logger.Info("Removing model from ConfigMap", zap.String("deployment", deploymentName), zap.String("model", modelName), zap.Int("modelCount", len(updatedConfigs)))
+		return updatedConfigs
+	})
 }
 
 // DeleteModelConfig deletes a configmap for model configuration.
@@ -239,6 +183,39 @@ func (p *defaultModelConfigProvider) DeleteModelConfig(ctx context.Context, logg
 
 	logger.Info("Model ConfigMap deleted successfully", zap.String("configMap", configMapName))
 	return nil
+}
+
+// mutateModels applies mutate to an inference server's model list and writes the result back.
+//
+// A single ConfigMap holds the entries for every deployment on an inference server. The lock
+// serializes writers within this process; the retry re-reads and re-applies when an update is
+// rejected for a stale resourceVersion.
+func (p *defaultModelConfigProvider) mutateModels(ctx context.Context, logger *zap.Logger, kubeclient client.Client, inferenceServer string, namespace string, mutate func([]ModelConfigEntry) []ModelConfigEntry) error {
+	configMapName := generateConfigMapName(inferenceServer)
+
+	unlock := p.mu.Lock(namespace + "/" + configMapName)
+	defer unlock()
+
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		logger.Info("Getting model ConfigMap", zap.String("configMap", configMapName), zap.String("namespace", namespace))
+		configMap := &corev1.ConfigMap{}
+		if err := kubeclient.Get(ctx, client.ObjectKey{Name: configMapName, Namespace: namespace}, configMap); err != nil {
+			logger.Error("failed to get ConfigMap",
+				zap.Error(err),
+				zap.String("operation", "get_modelconfig"),
+				zap.String("namespace", namespace),
+				zap.String("configMap", configMapName))
+			return fmt.Errorf("failed to get ConfigMap %s/%s: %w",
+				namespace, configMapName, err)
+		}
+
+		currentConfigs, err := p.parseModelConfigsFromConfigMap(ctx, logger, kubeclient, configMap)
+		if err != nil {
+			return err
+		}
+
+		return p.updateConfigMapWithModels(ctx, logger, kubeclient, configMap, mutate(currentConfigs))
+	})
 }
 
 func (p *defaultModelConfigProvider) updateConfigMapWithModels(ctx context.Context, logger *zap.Logger, kubeclient client.Client, configMap *corev1.ConfigMap, modelConfigs []ModelConfigEntry) error {
@@ -303,4 +280,9 @@ func (p *defaultModelConfigProvider) parseModelConfigsFromConfigMap(ctx context.
 
 func generateConfigMapName(inferenceServer string) string {
 	return fmt.Sprintf("%s-%s", inferenceServer, modelConfigSuffix)
+}
+
+// ownsEntry reports whether an entry belongs to the named deployment's use of a model.
+func ownsEntry(entry ModelConfigEntry, deploymentName string, modelName string) bool {
+	return entry.Name == modelName && entry.DeploymentName == deploymentName
 }

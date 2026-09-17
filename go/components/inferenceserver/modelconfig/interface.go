@@ -9,10 +9,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// ModelConfigEntry represents a model configuration with name and storage location.
+// ModelConfigEntry is one deployment's use of a model, with the model's storage location.
+// Entries are identified by the (DeploymentName, Name) pair, so several deployments can
+// serve the same model, each with its own entry.
 type ModelConfigEntry struct {
-	Name        string `json:"name"`
-	StoragePath string `json:"storage_path"`
+	Name           string `json:"name"`
+	StoragePath    string `json:"storage_path"`
+	DeploymentName string `json:"deployment_name"`
 }
 
 // ModelConfigProvider manages model configurations for inference servers.
@@ -36,6 +39,7 @@ type ModelConfigProvider interface {
 	// AddModelToConfig adds a single model to an existing config.
 	AddModelToConfig(ctx context.Context, logger *zap.Logger, kubeclient client.Client, inferenceServerName string, namespace string, entry ModelConfigEntry) error
 
-	// RemoveModelFromConfig removes a model from a config.
-	RemoveModelFromConfig(ctx context.Context, logger *zap.Logger, kubeclient client.Client, inferenceServerName string, namespace string, modelName string) error
+	// RemoveModelFromConfig removes one deployment's entry for a model, leaving other
+	// deployments' entries for that model in place.
+	RemoveModelFromConfig(ctx context.Context, logger *zap.Logger, kubeclient client.Client, inferenceServerName string, namespace string, deploymentName string, modelName string) error
 }

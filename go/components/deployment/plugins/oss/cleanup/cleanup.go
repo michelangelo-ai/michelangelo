@@ -53,7 +53,7 @@ func (a *CleanupActor) Retrieve(ctx context.Context, deployment *v2pb.Deployment
 		if err != nil {
 			return conditionUtils.GenerateFalseCondition(condition, "UnableToCheckModelExists", fmt.Sprintf("Unable to get client for cluster %s: %v", clusterID, err)), nil
 		}
-		if exists, err := common.CheckModelExists(ctx, a.Logger, a.ModelConfigProvider, kubeClient, currentModel, isName, deployment.GetNamespace()); err != nil {
+		if exists, err := common.CheckModelExists(ctx, a.Logger, a.ModelConfigProvider, kubeClient, deployment.GetName(), currentModel, isName, deployment.GetNamespace()); err != nil {
 			return conditionUtils.GenerateFalseCondition(condition, "UnableToCheckModelExists", fmt.Sprintf("Unable to check if model %s exists in Inference Server in cluster %s: %v", currentModel, clusterID, err)), nil
 		} else if exists {
 			return conditionUtils.GenerateFalseCondition(condition, "ModelStillExistsInInferenceServer", fmt.Sprintf("Model %s still exists in Inference Server in cluster %s", currentModel, clusterID)), nil
@@ -118,7 +118,7 @@ func (a *CleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, condi
 		if err != nil {
 			return conditionUtils.GenerateFalseCondition(condition, "ModelUnloadingFailed", fmt.Sprintf("Failed to get client for cluster %s: %v", clusterID, err)), nil
 		}
-		if err := a.ModelConfigProvider.RemoveModelFromConfig(ctx, a.Logger, kubeClient, isName, resource.Namespace, currentModel); err != nil {
+		if err := a.ModelConfigProvider.RemoveModelFromConfig(ctx, a.Logger, kubeClient, isName, resource.Namespace, resource.GetName(), currentModel); err != nil {
 			a.Logger.Error("Failed to initiate unloading of old model", zap.Error(err), zap.String("operation", "unload_model"), zap.String("model", currentModel), zap.String("inferenceServerName", isName), zap.String("namespace", resource.Namespace), zap.String("cluster", clusterID), zap.String("backendType", v2pb.BACKEND_TYPE_TRITON.String()))
 			return conditionUtils.GenerateFalseCondition(condition, "ModelUnloadingFailed", fmt.Sprintf("Failed to unload old model %s from inference server in cluster %s: %v", currentModel, clusterID, err)), nil
 		}

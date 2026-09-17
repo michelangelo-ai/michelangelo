@@ -120,8 +120,9 @@ func (a *RollingRolloutActor) Run(ctx context.Context, deployment *v2pb.Deployme
 	}
 
 	if err := a.modelConfigProvider.AddModelToConfig(ctx, a.logger, kubeClient, inferenceServerName, deployment.Namespace, modelconfig.ModelConfigEntry{
-		Name:        modelName,
-		StoragePath: storagePath,
+		Name:           modelName,
+		StoragePath:    storagePath,
+		DeploymentName: deployment.GetName(),
 	}); err != nil {
 		return conditionsutil.GenerateFalseCondition(condition, "AddModelToConfigFailed", err.Error()), nil
 	}
