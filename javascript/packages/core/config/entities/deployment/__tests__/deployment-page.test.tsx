@@ -984,6 +984,9 @@ describe('Deployment create action', () => {
       };
     };
     expect(payload.spec.modelFamily).toEqual({ name: 'bert-cola', namespace: 'ma-dev-test' });
-    expect(payload.spec.desiredRevision).toEqual({ name: 'bert-cola-40', namespace: 'ma-dev-test' });
+    expect(payload.spec.desiredRevision).toEqual({
+      name: 'bert-cola-40',
+      namespace: 'ma-dev-test',
+    });
   });
 });
