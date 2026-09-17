@@ -136,6 +136,14 @@ func GetIngesterConfig(provider config.Provider) (IngesterConfig, error) {
 // server controller.
 type InferenceServerConfig struct {
 	Gateway GatewayConfig `yaml:"gateway"`
+	Triton  TritonConfig  `yaml:"triton"`
+}
+
+// TritonConfig holds operator-level defaults for the Triton backend. DefaultImage
+// is the container image for InferenceServers that do not set
+// spec.initSpec.servingSpec.image. Empty means the backend's built-in image.
+type TritonConfig struct {
+	DefaultImage string `yaml:"defaultImage"`
 }
 
 // GatewayConfig describes the k8s Gateway resource and its Istio-generated

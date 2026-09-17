@@ -31,11 +31,49 @@ var _ = codes.InvalidArgument
 var _ = status.Error
 var _ = strconv.Itoa
 
+// servingImageValidateExt is an extension hook for additional validation logic
+var servingImageValidateExt func(*ServingImage, string) error
+
+func (this *ServingImage) Validate(prefix string) error {
+
+	// Call extension validation if registered
+	if servingImageValidateExt != nil {
+		if err := servingImageValidateExt(this, prefix); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// RegisterServingImageValidateExt registers an extension validation function
+func RegisterServingImageValidateExt(f func(*ServingImage, string) error) {
+	servingImageValidateExt = f
+}
+
 // servingSpecValidateExt is an extension hook for additional validation logic
 var servingSpecValidateExt func(*ServingSpec, string) error
 
 func (this *ServingSpec) Validate(prefix string) error {
 
+	{
+		v := this.GetImage()
+		n := `image`
+		var i interface{}
+		if reflect.ValueOf(v).Kind() == reflect.Ptr {
+			i = reflect.ValueOf(v).Interface()
+			if reflect.ValueOf(v).IsNil() {
+				i = nil
+			}
+		} else {
+			i = reflect.ValueOf(&v).Interface()
+		}
+		validate, hasValidate := i.(interface{ Validate(string) error })
+		if hasValidate {
+			if err := validate.Validate(prefix + n + "."); err != nil {
+				return err
+			}
+		}
+	}
 	// Call extension validation if registered
 	if servingSpecValidateExt != nil {
 		if err := servingSpecValidateExt(this, prefix); err != nil {

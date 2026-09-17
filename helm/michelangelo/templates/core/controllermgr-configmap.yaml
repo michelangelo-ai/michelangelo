@@ -56,6 +56,8 @@ data:
         serviceName: {{ .gateway.serviceName | quote }}
         serviceNamespace: {{ .gateway.serviceNamespace | quote }}
         portName: {{ .gateway.portName | quote }}
+      triton:
+        defaultImage: {{ dig "triton" "defaultImage" "" . | quote }}
     {{- end }}
 
     workflowClient:

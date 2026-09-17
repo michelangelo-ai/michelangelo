@@ -81,3 +81,7 @@ inferenceServer:
     serviceName: ma-gateway-istio
     serviceNamespace: default
     portName: http
+  triton:
+    # defaultImage is used by Triton-backed InferenceServers that don't set
+    # spec.initSpec.servingSpec.image. Empty means the backend's built-in image.
+    defaultImage: "nvcr.io/nvidia/tritonserver:25.01-py3"
