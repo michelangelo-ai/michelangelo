@@ -78,11 +78,11 @@ export const DeploymentForm = ({ mode, record, onClose }: DeploymentFormProps) =
     }
 
     if (createDeploymentMutation.isPending) return;
-    const { modelFamilyName: _modelFamilyName, ...specRest } = values.spec;
     await createDeploymentMutation.mutateAsync({
       ...values,
       spec: {
-        ...specRest,
+        ...values.spec,
+        modelFamily: { ...values.spec.modelFamily, namespace: projectId },
         desiredRevision: { ...values.spec.desiredRevision, namespace: projectId },
         target: {
           case: 'inferenceServer',
@@ -98,7 +98,7 @@ export const DeploymentForm = ({ mode, record, onClose }: DeploymentFormProps) =
       namespace: projectId,
     },
     spec: {
-      ...(isUpdate && { modelFamilyName: record?.spec?.modelFamily?.name ?? '' }),
+      modelFamily: { name: record?.spec?.modelFamily?.name ?? '', namespace: projectId },
       desiredRevision: { name: currentModelName ?? '', namespace: projectId },
       target: {
         case: 'inferenceServer',

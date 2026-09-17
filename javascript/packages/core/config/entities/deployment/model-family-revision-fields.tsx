@@ -40,7 +40,7 @@ export const ModelFamilyRevisionFields = ({
 }: ModelFamilyRevisionFieldsProps) => {
   const form = useForm();
 
-  const { input: modelFamilyInput } = useField<string>('spec.modelFamilyName');
+  const { input: modelFamilyInput } = useField<string>('spec.modelFamily.name');
   const modelFamilyName = modelFamilyInput.value ?? '';
 
   const { data: modelFamilyData, isLoading: isModelFamilyLoading } =
@@ -76,7 +76,7 @@ export const ModelFamilyRevisionFields = ({
   return (
     <FormGroup title="Model" description="The selected model will be deployed">
       <SelectField
-        name="spec.modelFamilyName"
+        name="spec.modelFamily.name"
         label="Model family"
         caption="Model family the deployed model belongs to"
         options={modelFamilyOptions}

@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
 
 import { InterpolatableActionsPopover } from '#core/components/actions/interpolatable-actions-popover';
+import { CreateDeploymentForm } from '#core/config/entities/deployment/create-deployment-form';
 import { DEPLOYMENT_ENTITY_CONFIG } from '#core/config/entities/deployment/deployment';
 import {
   DEPLOYMENT_CONDITION_STATUS,
@@ -927,5 +928,62 @@ describe('Deployment update action', () => {
     expect(payload.spec.strategy?.rolloutStrategy?.case).toBe('rolling');
     expect(payload.spec.modelFamily?.name).toBe('bert-cola');
     expect(payload.status).toBeDefined();
+  });
+});
+
+describe('Deployment create action', () => {
+  it('submits the selected model family alongside the model', async () => {
+    const user = userEvent.setup();
+    const request = createQueryMockRouter({
+      CreateDeployment: { deployment: { metadata: { name: 'new-deployment' } } },
+      ListInferenceServer: {
+        inferenceServerList: { items: [{ metadata: { name: 'inference-server-example' } }] },
+      },
+      ListModelFamily: {
+        modelFamilyList: {
+          items: [{ metadata: { name: 'bert-cola' }, spec: { name: 'bert-cola' } }],
+        },
+      },
+      ListModel: {
+        modelList: { items: [{ metadata: { name: 'bert-cola-40' } }] },
+      },
+    });
+
+    render(
+      <CreateDeploymentForm onClose={vi.fn()} />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getErrorProviderWrapper(),
+        getIconProviderWrapper(),
+        getInterpolationProviderWrapper(),
+        getRouterWrapper({ location: '/ma-dev-test/deploy/deployments' }),
+        getServiceProviderWrapper({ request }),
+        getSnackbarProviderWrapper(),
+      ])
+    );
+
+    const dialog = await screen.findByRole('dialog', { name: 'Create deployment' });
+    await user.type(within(dialog).getByRole('textbox', { name: 'Name *' }), 'new-deployment');
+
+    await user.click(within(dialog).getByRole('combobox', { name: 'Inference server *' }));
+    await user.click(await screen.findByRole('option', { name: 'inference-server-example' }));
+
+    await user.click(within(dialog).getByRole('combobox', { name: 'Model family' }));
+    await user.click(await screen.findByRole('option', { name: 'bert-cola' }));
+
+    await user.click(await within(dialog).findByRole('combobox', { name: 'Model *' }));
+    await user.click(await screen.findByRole('option', { name: 'bert-cola-40' }));
+
+    await user.click(within(dialog).getByRole('button', { name: 'Create' }));
+
+    await waitFor(() => expect(request.getCall('CreateDeployment')).toBeDefined());
+    const payload = request.getCall('CreateDeployment')!.args as {
+      spec: {
+        modelFamily?: { name: string; namespace: string };
+        desiredRevision: { name: string; namespace: string };
+      };
+    };
+    expect(payload.spec.modelFamily).toEqual({ name: 'bert-cola', namespace: 'ma-dev-test' });
+    expect(payload.spec.desiredRevision).toEqual({ name: 'bert-cola-40', namespace: 'ma-dev-test' });
   });
 });
