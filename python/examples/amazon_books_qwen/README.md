@@ -12,11 +12,13 @@ Recommendation system demo using Qwen-based dual-encoder architecture for Amazon
 
 ## How to Run
 
+Run from the `python/` directory:
+
 ```bash
-cd michelangelo-ai/michelangelo/python
-source .venv/bin/activate
-PYTHONPATH=examples poetry run python examples/amazon_books_qwen/amazon_books_qwen.py
+PYTHONPATH="." poetry run python ./examples/amazon_books_qwen/amazon_books_qwen.py
 ```
+
+Downloading the dataset requires Kaggle API credentials.
 
 ## Expected Output
 
@@ -27,5 +29,9 @@ Amazon Books Qwen Dual-Encoder Pipeline
 Using smaller dataset
 ================================================================================
 ...
-Training completed with model saved to: /tmp/qwen_dual_encoder_model
+Training completed! Final train loss: 0.4132, Val loss: 0.5027
 ```
+
+Loss values will vary between runs. The local run writes its checkpoint to
+`/tmp/qwen_dual_encoder_local.pt`; the distributed path
+(`distributed=True`) writes to `/tmp/qwen_dual_encoder_distributed.pt`.

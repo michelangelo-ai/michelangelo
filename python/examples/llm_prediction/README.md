@@ -12,28 +12,28 @@ Batch inference with large language models using two execution backends: Hugging
 
 ## How to Run
 
+Both commands are run from the `python/` directory.
+
 ### HuggingFace Transformers (CPU or GPU)
 
+Requires the `example` extra (`poetry install -E example`):
+
 ```bash
-cd michelangelo-ai/michelangelo/python
-source .venv/bin/activate
-poetry run python examples/llm_prediction/hf_prediction.py
+PYTHONPATH="." poetry run python ./examples/llm_prediction/hf_prediction.py
 ```
 
 ### vLLM (GPU optimized)
 
+Requires the `vllm` extra (`poetry install -E vllm`), which only supports
+AMD64 machines with a CUDA-compatible GPU:
+
 ```bash
-cd /Users/sally.lee/Uber/michelangelo-ai/michelangelo/python
-source .venv/bin/activate
-poetry run python examples/llm_prediction/vllm_prediction.py
+PYTHONPATH="." poetry run python ./examples/llm_prediction/vllm_prediction.py
 ```
 
 ## Expected Output
 
-```
-Loading dataset: THUDM/LongBench (2wikimqa, test split)
-Processing 2 samples with batch_size=1
-Prediction completed: 2/2 samples
-Results written to: llm_prediction/
-ok.
-```
+Both workflows log their progress and print `ok.` on success. The HuggingFace
+path defaults to 2 samples at `batch_size=1`; the vLLM path defaults to 15
+samples at `batch_size=8`. Predictions are written out as a dataset, logged as
+`Wrote <n> items to <path>`.

@@ -4,27 +4,26 @@ Training Nomic BERT models on WikiText dataset using PyTorch Lightning and Ray. 
 
 ## Features
 
-- **Nomic BERT**: Long-context BERT model (2048 tokens)
-- **WikiText Dataset**: Standard language modeling benchmark
+- **Nomic BERT**: `nomic-ai/nomic-bert-2048`, tokenized at 512 tokens by default
+- **WikiText Dataset**: Standard language modeling benchmark (`wikitext-2-raw-v1`)
 - **PyTorch Lightning**: Training framework with best practices
 - **Distributed Execution**: Ray-based workflow
-- **Model Checkpoint**: Automatic model saving and evaluation
+- **Model Checkpoint**: Automatic model saving
 
 ## How to Run
 
+Run from the `python/` directory, with the `example` extra installed
+(`poetry install -E example`):
+
 ```bash
-cd michelangelo-ai/michelangelo/python
-source .venv/bin/activate
-poetry run python examples/nomic_ai/nomic_ai.py
+PYTHONPATH="." poetry run python ./examples/nomic_ai/nomic_ai.py
 ```
 
 ## Expected Output
 
-```
-Loading WikiText dataset...
-Training Nomic BERT model: nomic-ai/nomic-bert-2048
-Epoch 1: loss=3.245, perplexity=25.67
-Epoch 2: loss=2.812, perplexity=16.73
-Epoch 3: loss=2.534, perplexity=12.60
-Training Workflow Result: {'model_path': '/tmp/nomic_bert_model', 'metrics': {...}}
+PyTorch Lightning prints its own progress bars and per-epoch train/validation
+loss. The trained model is saved to `./nomic_ai`, and the workflow returns:
+
+```python
+{'status': 'Training completed successfully'}
 ```
