@@ -8,6 +8,7 @@ import { Row } from '#core/components/row/row';
 import { Signpost } from '#core/components/signpost/signpost';
 import { DetailViewPageRenderer } from '#core/components/views/detail-view/components/detail-view-page-renderer/detail-view-page-renderer';
 import { DetailViewPages } from '#core/components/views/detail-view/components/detail-view-pages/detail-view-pages';
+import { RevisionSelector } from '#core/components/views/detail-view/components/revision-selector/revision-selector';
 import { DetailView } from '#core/components/views/detail-view/detail-view';
 import { PHASES } from '#core/config/phases/phases';
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
@@ -89,6 +90,11 @@ export function EntityDetailRoute({ phases = PHASES }: { phases?: Record<string,
     [navigate, projectId, phase, entity, entityId, search]
   );
 
+  // Revision selection lives in the query string so the tab path is untouched.
+  const handleRevisionSelect = (nextRevisionId: string) => {
+    navigate({ pathname, search: `?revisionId=${encodeURIComponent(nextRevisionId)}` });
+  };
+
   const handleReturnToEntityList = () => {
     navigate(`/${projectId}/${phase}/${entity}`);
   };
@@ -150,6 +156,16 @@ export function EntityDetailRoute({ phases = PHASES }: { phases?: Record<string,
     <DetailView
       subtitle={entityConfig!.name}
       title={entityId}
+      titleEnhancer={
+        entityConfig!.revisioned && (
+          <RevisionSelector
+            service={service}
+            entityId={entityId}
+            selectedRevisionId={revisionId}
+            onSelect={handleRevisionSelect}
+          />
+        )
+      }
       onGoBack={handleReturnToEntityList}
       actions={entityConfig!.actions}
       record={entityData}
