@@ -42,6 +42,14 @@ const (
 	ClusterKilled      string = "ClusterKilled"
 	SparkAppNotRunning string = "SparkAppNotRunning"
 	SparkAppKilled     string = "SparkAppKilled"
+
+	// KueueQueueNotFound means the job's resolved LocalQueue does not exist
+	// on the Kueue-managed target cluster (or Kueue is not installed there),
+	// so dispatching would strand the job unadmitted.
+	KueueQueueNotFound string = "KueueQueueNotFound"
+	// KueueQueueCheckFailed means the LocalQueue existence check itself
+	// errored (target cluster unreachable etc.); the job is retried.
+	KueueQueueCheckFailed string = "KueueQueueCheckFailed"
 )
 
 // condition messages - the prefix
@@ -87,6 +95,14 @@ const (
 	RayClusterNameLabelKey string = "ray.io/cluster"
 	RayNodeTypeLabelKey    string = "ray.io/node-type"
 	RayNodeLabelKey        string = "ray.io/is-ray-node"
+)
+
+// Kueue label keys
+const (
+	// KueueQueueNameLabelKey is the label Kueue's integrations read to
+	// associate a workload with a LocalQueue. It is stamped on compute-cluster
+	// objects by the control plane (never copied from user-supplied labels).
+	KueueQueueNameLabelKey string = "kueue.x-k8s.io/queue-name"
 )
 
 // Secret label keys and values
