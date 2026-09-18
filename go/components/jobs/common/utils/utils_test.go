@@ -3,6 +3,7 @@ package utils
 import (
 	"testing"
 
+	maconfig "github.com/michelangelo-ai/michelangelo/go/base/config"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -155,6 +156,104 @@ func TestHasTerminalPodErrors(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.expected, HasTerminalPodErrors(tt.errors))
+		})
+	}
+}
+
+func TestProjectNameForJob(t *testing.T) {
+	tests := []struct {
+		name      string
+		labels    map[string]string
+		namespace string
+		expected  string
+	}{
+		{
+			name:      "label wins over namespace",
+			labels:    map[string]string{"ma/project-name": "proj1"},
+			namespace: "other-ns",
+			expected:  "proj1",
+		},
+		{
+			name:      "no label falls back to namespace",
+			labels:    map[string]string{"unrelated": "x"},
+			namespace: "proj-ns",
+			expected:  "proj-ns",
+		},
+		{
+			name:      "empty label value falls back to namespace",
+			labels:    map[string]string{"ma/project-name": ""},
+			namespace: "proj-ns",
+			expected:  "proj-ns",
+		},
+		{
+			name:      "nil labels fall back to namespace",
+			labels:    nil,
+			namespace: "proj-ns",
+			expected:  "proj-ns",
+		},
+		{
+			name:      "no identity at all",
+			labels:    nil,
+			namespace: "",
+			expected:  "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, ProjectNameForJob(tt.labels, tt.namespace))
+		})
+	}
+}
+
+func TestResolveLocalQueueName(t *testing.T) {
+	tests := []struct {
+		name    string
+		cfg     maconfig.KueueConfig
+		project string
+		want    string
+	}{
+		{
+			name:    "default template",
+			cfg:     maconfig.KueueConfig{},
+			project: "proj1",
+			want:    "ma-proj1",
+		},
+		{
+			name:    "custom template",
+			cfg:     maconfig.KueueConfig{LocalQueueTemplate: "queue-{project}-batch"},
+			project: "proj1",
+			want:    "queue-proj1-batch",
+		},
+		{
+			name: "override wins over template",
+			cfg: maconfig.KueueConfig{
+				LocalQueueTemplate:  "ma-{project}",
+				LocalQueueOverrides: map[string]string{"proj1": "custom-queue"},
+			},
+			project: "proj1",
+			want:    "custom-queue",
+		},
+		{
+			name: "empty override value falls back to template",
+			cfg: maconfig.KueueConfig{
+				LocalQueueOverrides: map[string]string{"proj1": ""},
+			},
+			project: "proj1",
+			want:    "ma-proj1",
+		},
+		{
+			name: "override for another project does not apply",
+			cfg: maconfig.KueueConfig{
+				LocalQueueOverrides: map[string]string{"other": "custom-queue"},
+			},
+			project: "proj1",
+			want:    "ma-proj1",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, ResolveLocalQueueName(tt.cfg, tt.project))
 		})
 	}
 }
