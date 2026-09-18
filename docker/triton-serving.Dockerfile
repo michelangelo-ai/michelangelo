@@ -9,6 +9,6 @@
 # and arm64, tagged with both the base version and the commit it was built
 # from. Editing this file publishes new tags; nothing repoints at them
 # automatically.
-FROM nvcr.io/nvidia/tritonserver:25.01-py3
+FROM nvcr.io/nvidia/tritonserver:26.08-py3
 
 RUN pip install --no-cache-dir torch==2.4.1 transformers==4.44.2
