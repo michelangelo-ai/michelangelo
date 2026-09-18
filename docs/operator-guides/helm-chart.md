@@ -138,6 +138,26 @@ monitoring:
 
 Every resource is CRD-gated — anything whose operator CRDs are absent is skipped, so the toggle is safe on any cluster. See [Monitoring & Observability](operations/monitoring.md) for the sub-toggles and the metrics behind each artifact.
 
+### Source remote-cluster credentials from an external secret store
+
+Remote-cluster credentials (the CA bundle and token Secrets referenced by
+cluster specs) default to the sample provider, which reads Secrets from the
+control-plane cluster and is intended for sandbox and testing. For
+production, install the [External Secrets Operator](https://external-secrets.io)
+and switch the provider:
+
+```yaml
+secretsProvider:
+  type: eso
+  esoNamespace: ma-secrets   # where your ExternalSecret resources sync Secrets to
+```
+
+You manage the `ExternalSecret` resources yourself (one per credential
+Secret, named to match the cluster spec's `caDataTag` / `tokenTag`), pointed
+at whatever store your operator is configured for -- Vault, AWS Secrets
+Manager, GCP Secret Manager, and so on. The services fail with a clear error
+if the operator's CRDs are absent or a referenced Secret has not synced.
+
 ### Expose the UI and API
 
 The chart includes per-service Ingress templates (`apiserver.ingress`, `envoy.ingress`, `ui.ingress`). Enable and configure them to expose the UI and API outside the cluster:
