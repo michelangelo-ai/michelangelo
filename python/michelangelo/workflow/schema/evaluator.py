@@ -88,7 +88,8 @@ class StepConfig:
         ConfigurationError: If neither or both fields are set.
 
     Example:
-        >>> StepConfig(custom_config=CustomEvalConfig(args={})).evaluation_config is None
+        >>> cfg = StepConfig(custom_config=CustomEvalConfig(args={}))
+        >>> cfg.evaluation_config is None
         True
     """
 
@@ -298,17 +299,20 @@ class SanityCheck:
                 raise ConfigurationError(
                     'operator is empty. In YAML a plain scalar cannot start with ">" '
                     "-- it opens a folded block scalar, so `operator: >` parses as an "
-                    'empty string. Quote it: `operator: ">"` (likewise `operator: ">="`).'
+                    'empty string. Quote it: `operator: ">"` (likewise '
+                    '`operator: ">="`).'
                 )
             try:
                 return SanityCheckOperator(stripped)
             except ValueError as exc:
                 valid = ", ".join(repr(op.value) for op in SanityCheckOperator)
                 raise ConfigurationError(
-                    f"operator {stripped!r} is not a valid comparison; expected one of {valid}."
+                    f"operator {stripped!r} is not a valid comparison; "
+                    f"expected one of {valid}."
                 ) from exc
         raise ConfigurationError(
-            f"operator must be a string or SanityCheckOperator; got {type(value).__name__}."
+            "operator must be a string or SanityCheckOperator; "
+            f"got {type(value).__name__}."
         )
 
     def _validate_abs_threshold(self) -> None:
@@ -334,7 +338,8 @@ class SanityCheck:
             raise ConfigurationError(
                 f"sanity_check on {self.metric!r} is unsatisfiable: |value| "
                 f"{self.operator.value} {self.threshold:g} can never be true, since "
-                f"abs() is never negative. Use a threshold {required} with use_abs=True."
+                f"abs() is never negative. Use a threshold {required} with "
+                "use_abs=True."
             )
 
 
@@ -456,6 +461,7 @@ class DataAnalyticsConfig:
         """Reject a sampling ratio that would profile nothing."""
         if not 0.0 < self.stats_sampling_ratio <= 1.0:
             raise ConfigurationError(
-                f"stats_sampling_ratio must be in (0, 1]; got {self.stats_sampling_ratio!r}. "
+                "stats_sampling_ratio must be in (0, 1]; got "
+                f"{self.stats_sampling_ratio!r}. "
                 "A ratio of 0 samples every split down to empty."
             )
