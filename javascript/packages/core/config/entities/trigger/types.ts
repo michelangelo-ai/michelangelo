@@ -63,6 +63,7 @@ export type RunTriggerPayload = {
   };
   spec: {
     pipeline: { name: string; namespace: string };
+    revision?: { name: string; namespace: string };
     trigger: ManifestTrigger;
     sourceTriggerName: string;
     autoFlip: boolean;

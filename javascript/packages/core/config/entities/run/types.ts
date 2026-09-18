@@ -58,6 +58,10 @@ export type PipelineRun = {
       name: string;
       namespace: string;
     };
+    revision?: {
+      name: string;
+      namespace: string;
+    };
     /** Optional human-readable description for this run. */
     description?: string;
     /**

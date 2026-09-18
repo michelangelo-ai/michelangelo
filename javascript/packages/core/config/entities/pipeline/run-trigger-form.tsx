@@ -22,7 +22,7 @@ import type { Pipeline, RunTriggerFormValues } from './types';
  * into the created TriggerRun, so it should come from the pipeline's current manifest, not
  * from a row that may have been sitting in a stale list.
  */
-export const RunTriggerForm = ({ record, onClose }: ActionComponentProps<Pipeline>) => {
+export const RunTriggerForm = ({ record, revision, onClose }: ActionComponentProps<Pipeline>) => {
   const { projectId } = useStudioParams('base');
   const pipelineName = record?.metadata?.name ?? '';
 
@@ -70,6 +70,7 @@ export const RunTriggerForm = ({ record, onClose }: ActionComponentProps<Pipelin
       },
       spec: {
         pipeline: { name: pipelineName, namespace: projectId },
+        ...(revision && { revision }),
         trigger: buildTriggerOverride(sourceTrigger, values),
         sourceTriggerName: values.sourceTriggerName,
         autoFlip: !!values.autoFlip,
@@ -87,6 +88,12 @@ export const RunTriggerForm = ({ record, onClose }: ActionComponentProps<Pipelin
       submitLabel="Run"
     >
       <StringField name="pipelineName" label="Pipeline" initialValue={pipelineName} readOnly />
+      <StringField
+        name="revisionName"
+        label="Revision ID"
+        initialValue={revision?.name ?? ''}
+        readOnly
+      />
 
       <SelectField
         name="sourceTriggerName"

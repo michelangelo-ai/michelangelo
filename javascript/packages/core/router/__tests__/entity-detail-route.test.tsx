@@ -199,8 +199,8 @@ describe('EntityDetailRoute', () => {
       // Header keeps the pipeline title.
       expect(screen.getByText('My-Pipeline')).toBeInTheDocument();
 
-      // Snapshot is immutable: the entity's actions are not offered.
-      expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument();
+      // The entity's actions stay available.
+      expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument();
 
       // The Revision CR is fetched by its controller-derived name.
       expect(mockRequest.getCall('GetRevision')?.args).toEqual({
@@ -214,7 +214,40 @@ describe('EntityDetailRoute', () => {
       );
     });
 
-    test('renders the live record and actions without revisionId', async () => {
+    test('redirects a bare entity URL to its latest revision', async () => {
+      const testPhases = {
+        train: buildPhase({ id: 'train', entities: [revisionedEntity] }),
+      };
+      const mockRequest = createQueryMockRouter({
+        GetPipeline: {
+          pipeline: {
+            ...livePipeline.pipeline,
+            status: { latestRevision: { name: 'pipeline-my-pipeline-3f2a1b9c0d4e' } },
+          },
+        },
+        GetRevision: revision,
+      });
+
+      render(
+        <EntityDetailRoute phases={testPhases} />,
+        buildWrapper([
+          getErrorProviderWrapper(),
+          getRouterWrapper({ location: '/myproject/train/pipelines/My-Pipeline/overview' }),
+          getServiceProviderWrapper({ request: mockRequest }),
+        ])
+      );
+
+      // The latest Revision is resolved by the name status.latestRevision points at.
+      expect(await screen.findByText('snapshot-owner')).toBeInTheDocument();
+      expect(screen.queryByText('live-owner')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument();
+      expect(mockRequest.getCall('GetRevision')?.args).toEqual({
+        namespace: 'myproject',
+        name: 'pipeline-my-pipeline-3f2a1b9c0d4e',
+      });
+    });
+
+    test('renders the live record when the entity has no revision yet', async () => {
       const testPhases = {
         train: buildPhase({ id: 'train', entities: [revisionedEntity] }),
       };

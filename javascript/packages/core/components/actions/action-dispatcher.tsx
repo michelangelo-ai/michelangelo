@@ -5,19 +5,21 @@ import type {
   ConfirmModalConfig,
   Data,
   MutationActionConfig,
+  RevisionRef,
   RouteActionConfig,
 } from './types';
 
 type Props<T extends Data> = {
   action: ActionConfig<T>;
   record: T;
+  revision?: RevisionRef;
   onClose: () => void;
 };
 
-export function ActionDispatcher<T extends Data>({ action, record, onClose }: Props<T>) {
+export function ActionDispatcher<T extends Data>({ action, record, revision, onClose }: Props<T>) {
   if (action.modal?.type === 'custom') {
     const Component = action.modal.component;
-    return <Component record={record} onClose={onClose} />;
+    return <Component record={record} revision={revision} onClose={onClose} />;
   }
   if (isConfirmAction(action)) {
     return <ConfirmDispatcher action={action} record={record} onClose={onClose} />;

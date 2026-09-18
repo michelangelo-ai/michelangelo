@@ -16,6 +16,9 @@ export interface Pipeline {
       triggerMap?: Record<string, ManifestTrigger>;
     };
   };
+  status?: {
+    latestRevision?: { name?: string; namespace?: string };
+  };
 }
 
 /**

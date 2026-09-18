@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { vi } from 'vitest';
 
 import { RunTriggerForm } from '#core/config/entities/pipeline/run-trigger-form';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
@@ -133,6 +134,55 @@ describe('RunTriggerForm', () => {
 
     await waitFor(() => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+  });
+
+  it('shows the given revision and pins the run to it', async () => {
+    const user = userEvent.setup();
+    const cronTrigger = {
+      triggerType: { case: 'cronSchedule' as const, value: { cron: '0 2 * * *' } },
+    };
+    const request = createQueryMockRouter({
+      GetPipeline: buildPipelineResponse({ nightly: cronTrigger }),
+      CreateTriggerRun: {},
+    });
+    const record = {
+      metadata: { name: 'test-pipeline', namespace: 'ma-dev-test' },
+      spec: { owner: { name: 'test-owner' } },
+    };
+    const revision = { name: 'pipeline-test-pipeline-3f2a1b9c0d4e', namespace: 'ma-dev-test' };
+
+    render(
+      <RunTriggerForm record={record} revision={revision} onClose={vi.fn()} />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getIconProviderWrapper(),
+        getErrorProviderWrapper(),
+        getInterpolationProviderWrapper(),
+        getRouterWrapper({ location: '/ma-dev-test/train/pipelines' }),
+        getServiceProviderWrapper({ request }),
+      ])
+    );
+
+    const dialog = await screen.findByRole('dialog', { name: 'Run trigger' });
+    expect(within(dialog).getByRole('textbox', { name: 'Revision ID' })).toHaveValue(
+      'pipeline-test-pipeline-3f2a1b9c0d4e'
+    );
+    await user.click(within(dialog).getByRole('combobox', { name: 'Trigger *' }));
+    await user.click(await screen.findByRole('option', { name: 'nightly — cron 0 2 * * *' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Run' }));
+
+    await waitFor(() => {
+      expect(request).toHaveBeenCalledWith(
+        'CreateTriggerRun',
+        expect.objectContaining({
+          spec: expect.objectContaining({
+            pipeline: { name: 'test-pipeline', namespace: 'ma-dev-test' },
+            revision,
+          }) as Record<string, unknown>,
+        }),
+        {}
+      );
     });
   });
 

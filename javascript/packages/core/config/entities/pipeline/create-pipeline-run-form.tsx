@@ -35,7 +35,11 @@ export const ALL_PIPELINE_RUN_EVENT_TYPES: NotificationEventType[] = [
   NotificationEventType.PIPELINE_RUN_STATE_SKIPPED,
 ];
 
-export const CreatePipelineRunForm = ({ record, onClose }: ActionComponentProps<Pipeline>) => {
+export const CreatePipelineRunForm = ({
+  record,
+  revision,
+  onClose,
+}: ActionComponentProps<Pipeline>) => {
   const { projectId } = useStudioParams('base');
   const pipelineName = record?.metadata?.name ?? '';
 
@@ -68,6 +72,7 @@ export const CreatePipelineRunForm = ({ record, onClose }: ActionComponentProps<
         name: pipelineName,
         namespace: projectId,
       },
+      revision,
     },
   };
 
@@ -81,6 +86,7 @@ export const CreatePipelineRunForm = ({ record, onClose }: ActionComponentProps<
       initialValues={initialValues}
     >
       <StringField name="spec.pipeline.name" label="Pipeline to run" readOnly />
+      <StringField name="spec.revision.name" label="Revision ID" readOnly />
 
       <InlineRadioField
         name={`metadata.labels.${ENVIRONMENT_LABEL_KEY}`}
