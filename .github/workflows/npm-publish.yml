@@ -26,6 +26,14 @@ jobs:
       contents: read
       id-token: write
 
+    env:
+      # actions/setup-node@v7's yarn-cache step resolves the registry's
+      # .yarnrc-embedded ${NODE_AUTH_TOKEN} placeholder as soon as `cache:
+      # yarn` + `registry-url` are both set -- before the "Publish to npm"
+      # step's own step-scoped env would otherwise supply it. Needs to be in
+      # scope job-wide, not just on the publish step.
+      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v7
@@ -94,5 +102,3 @@ jobs:
           else
             npm publish --provenance --access public
           fi
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
