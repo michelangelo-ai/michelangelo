@@ -413,18 +413,28 @@ func (a *ExecuteWorkflowActor) Run(ctx context.Context, pipelineRun *v2.Pipeline
 		executeWorkflowStep.EndTime = pbtypes.TimestampNow()
 		newCondition.Status = apipb.CONDITION_STATUS_TRUE
 	case clientInterfaces.WorkflowExecutionStatusFailed, clientInterfaces.WorkflowExecutionStatusTimedOut:
+		failureMessage := workflowExecution.FailureMessage
+		if failureMessage == "" {
+			failureMessage = "Failed due to workflow failure"
+		}
 		executeWorkflowStep.State = v2.PIPELINE_RUN_STEP_STATE_FAILED
 		executeWorkflowStep.EndTime = pbtypes.TimestampNow()
+		executeWorkflowStep.Message = failureMessage
 		newCondition.Status = apipb.CONDITION_STATUS_FALSE
 		// Propagate failed state to substeps to ensure no substeps remain in running state
-		a.propagateTerminalStateToSubsteps(executeWorkflowStep, v2.PIPELINE_RUN_STEP_STATE_FAILED, "Failed due to workflow failure")
+		a.propagateTerminalStateToSubsteps(executeWorkflowStep, v2.PIPELINE_RUN_STEP_STATE_FAILED, failureMessage)
 	case clientInterfaces.WorkflowExecutionStatusCanceled, clientInterfaces.WorkflowExecutionStatusTerminated:
+		killMessage := workflowExecution.FailureMessage
+		if killMessage == "" {
+			killMessage = defaultengine.KillReason
+		}
 		executeWorkflowStep.State = v2.PIPELINE_RUN_STEP_STATE_KILLED
 		executeWorkflowStep.EndTime = pbtypes.TimestampNow()
+		executeWorkflowStep.Message = killMessage
 		newCondition.Status = apipb.CONDITION_STATUS_FALSE
 		newCondition.Reason = defaultengine.KillReason
 		// Propagate appropriate states to substeps based on their current state
-		a.propagateTerminalStateToSubsteps(executeWorkflowStep, v2.PIPELINE_RUN_STEP_STATE_KILLED, defaultengine.KillReason)
+		a.propagateTerminalStateToSubsteps(executeWorkflowStep, v2.PIPELINE_RUN_STEP_STATE_KILLED, killMessage)
 	}
 	return newCondition, nil
 }
@@ -1166,6 +1176,9 @@ func (a *ExecuteWorkflowActor) processManualRetrySpec(ctx context.Context, pipel
 	// Update pipeline run status
 	pipelineRun.Status.State = v2.PIPELINE_RUN_STATE_RUNNING
 	pipelineRun.Status.WorkflowRunId = newWorkflowRun.RunID
+	// Clear the stale error from the previous failed/killed attempt so it doesn't
+	// linger on the object through the retry and into a later SUCCEEDED state.
+	pipelineRun.Status.ErrorMessage = ""
 
 	// Preserve retry history before mutating step state, so the snapshot
 	// captures the terminal state (FAILED/KILLED) the user wants to inspect.

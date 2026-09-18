@@ -12,6 +12,8 @@ import (
 	"github.com/stretchr/testify/require"
 	commonV1 "go.temporal.io/api/common/v1"
 	temporalEnumsV1 "go.temporal.io/api/enums/v1"
+	failureV1 "go.temporal.io/api/failure/v1"
+	historyV1 "go.temporal.io/api/history/v1"
 	"go.temporal.io/api/serviceerror"
 	workflowV1 "go.temporal.io/api/workflow/v1"
 	workflowserviceV1 "go.temporal.io/api/workflowservice/v1"
@@ -66,11 +68,12 @@ func TestStartWorkflow(t *testing.T) {
 
 func TestGetWorkflowExecutionInfo(t *testing.T) {
 	testCases := []struct {
-		name              string
-		mockFunc          func(mockTemporalClient *temporalMocks.Client)
-		errMsg            string
-		expectedStatus    clientInterface.WorkflowExecutionStatus
-		expectedExecution *clientInterface.WorkflowExecution
+		name                   string
+		mockFunc               func(mockTemporalClient *temporalMocks.Client)
+		errMsg                 string
+		expectedStatus         clientInterface.WorkflowExecutionStatus
+		expectedExecution      *clientInterface.WorkflowExecution
+		expectedFailureMessage string
 	}{
 		{
 			name: "unspecified",
@@ -120,9 +123,66 @@ func TestGetWorkflowExecutionInfo(t *testing.T) {
 					},
 					nil,
 				)
+				iter := temporalMocks.NewHistoryEventIterator(t)
+				iter.On("HasNext").Return(true).Once()
+				iter.On("Next").Return(&historyV1.HistoryEvent{
+					EventType: temporalEnumsV1.EVENT_TYPE_WORKFLOW_EXECUTION_FAILED,
+					Attributes: &historyV1.HistoryEvent_WorkflowExecutionFailedEventAttributes{
+						WorkflowExecutionFailedEventAttributes: &historyV1.WorkflowExecutionFailedEventAttributes{
+							Failure: &failureV1.Failure{Message: "got an unexpected keyword argument"},
+						},
+					},
+				}, nil).Once()
+				iter.On("HasNext").Return(false)
+				mockTemporalClient.On("GetWorkflowHistory", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(iter)
 			},
-			expectedStatus:    clientInterface.WorkflowExecutionStatusFailed,
-			expectedExecution: &clientInterface.WorkflowExecution{},
+			expectedStatus:         clientInterface.WorkflowExecutionStatusFailed,
+			expectedExecution:      &clientInterface.WorkflowExecution{},
+			expectedFailureMessage: "got an unexpected keyword argument",
+		},
+		{
+			name: "terminated",
+			mockFunc: func(mockTemporalClient *temporalMocks.Client) {
+				mockTemporalClient.On("DescribeWorkflowExecution", mock.Anything, mock.Anything, mock.Anything).Return(
+					&workflowserviceV1.DescribeWorkflowExecutionResponse{
+						WorkflowExecutionInfo: &workflowV1.WorkflowExecutionInfo{
+							Status: temporalEnumsV1.WORKFLOW_EXECUTION_STATUS_TERMINATED,
+						},
+					},
+					nil,
+				)
+				iter := temporalMocks.NewHistoryEventIterator(t)
+				iter.On("HasNext").Return(true).Once()
+				iter.On("Next").Return(&historyV1.HistoryEvent{
+					EventType: temporalEnumsV1.EVENT_TYPE_WORKFLOW_EXECUTION_TERMINATED,
+					Attributes: &historyV1.HistoryEvent_WorkflowExecutionTerminatedEventAttributes{
+						WorkflowExecutionTerminatedEventAttributes: &historyV1.WorkflowExecutionTerminatedEventAttributes{
+							Reason: "trigger killed",
+						},
+					},
+				}, nil).Once()
+				iter.On("HasNext").Return(false)
+				mockTemporalClient.On("GetWorkflowHistory", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(iter)
+			},
+			expectedStatus:         clientInterface.WorkflowExecutionStatusTerminated,
+			expectedExecution:      &clientInterface.WorkflowExecution{},
+			expectedFailureMessage: "trigger killed",
+		},
+		{
+			name: "timed out",
+			mockFunc: func(mockTemporalClient *temporalMocks.Client) {
+				mockTemporalClient.On("DescribeWorkflowExecution", mock.Anything, mock.Anything, mock.Anything).Return(
+					&workflowserviceV1.DescribeWorkflowExecutionResponse{
+						WorkflowExecutionInfo: &workflowV1.WorkflowExecutionInfo{
+							Status: temporalEnumsV1.WORKFLOW_EXECUTION_STATUS_TIMED_OUT,
+						},
+					},
+					nil,
+				)
+			},
+			expectedStatus:         clientInterface.WorkflowExecutionStatusTimedOut,
+			expectedExecution:      &clientInterface.WorkflowExecution{},
+			expectedFailureMessage: "Workflow execution timed out",
 		},
 		{
 			name: "error",
@@ -149,6 +209,7 @@ func TestGetWorkflowExecutionInfo(t *testing.T) {
 				require.NoError(t, err)
 				require.Equal(t, testCase.expectedStatus, status.Status)
 				require.Equal(t, testCase.expectedExecution, status.Execution)
+				require.Equal(t, testCase.expectedFailureMessage, status.FailureMessage)
 			}
 		})
 	}
