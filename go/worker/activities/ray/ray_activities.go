@@ -14,6 +14,7 @@ import (
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
+	"github.com/michelangelo-ai/michelangelo/go/worker/runnertoken"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
@@ -69,6 +70,9 @@ func (r *activities) CreateRayJob(ctx context.Context, request v2pb.CreateRayJob
 	logger.Info("activity-id-extracted", zap.String("activityID", activityID))
 
 	// Execute the original job creation logic
+	if request.RayJob != nil {
+		ctx = runnertoken.WithNamespace(ctx, request.RayJob.Namespace)
+	}
 	createRayJobResponse, err := r.rayJobService.CreateRayJob(ctx, &request)
 	if err != nil || createRayJobResponse == nil || createRayJobResponse.RayJob == nil ||
 		createRayJobResponse.RayJob.Name == "" {
@@ -101,6 +105,9 @@ func (r *activities) CreateRayCluster(ctx context.Context, request v2pb.CreateRa
 	logger.Info("activity-id-extracted", zap.String("activityID", activityID))
 
 	// Execute the original cluster creation logic
+	if request.RayCluster != nil {
+		ctx = runnertoken.WithNamespace(ctx, request.RayCluster.Namespace)
+	}
 	createRayClusterResponse, err := r.rayClusterService.CreateRayCluster(ctx, &request)
 	if err != nil {
 		logger.Error("activity-error: failed to create ray cluster", zap.Error(err))
@@ -137,6 +144,7 @@ func (r *activities) GetRayCluster(ctx context.Context, request v2pb.GetRayClust
 		Namespace:  request.Namespace,
 		GetOptions: &metav1.GetOptions{},
 	}
+	ctx = runnertoken.WithNamespace(ctx, request.Namespace)
 	getRayClusterResponse, err := r.rayClusterService.GetRayCluster(ctx, getRayClusterRequest)
 	if err != nil {
 		logger.Error("activity-error", zap.Any("error", err.Error()))
@@ -164,6 +172,7 @@ func (r *activities) GetRayJob(ctx context.Context, request v2pb.GetRayJobReques
 		Namespace:  request.Namespace,
 		GetOptions: &metav1.GetOptions{},
 	}
+	ctx = runnertoken.WithNamespace(ctx, request.Namespace)
 	getRayJobResponse, err := r.rayJobService.GetRayJob(ctx, getRayJobRequest)
 	if err != nil {
 		logger.Error("activity-error", zap.Any("error", err.Error()))
@@ -204,6 +213,7 @@ type SensorRayJobReadinessResponse struct {
 func (r *activities) SensorRayClusterReadiness(ctx context.Context, request v2pb.GetRayClusterRequest) (*SensorRayClusterReadinessResponse, error) {
 	logger := activity.GetLogger(ctx)
 	logger.Info("activity-start", zap.Any("request", request))
+	ctx = runnertoken.WithNamespace(ctx, request.Namespace)
 	getRayClusterResponse, err := r.rayClusterService.GetRayCluster(ctx, &request)
 	if err != nil {
 		logger.Error("activity-error", zap.Any("error", err.Error()))
@@ -247,6 +257,7 @@ func (r *activities) TerminateCluster(ctx context.Context, request TerminateClus
 	logger.Info("activity-start", zap.Any("request", request))
 
 	var cluster *v2pb.RayCluster
+	ctx = runnertoken.WithNamespace(ctx, request.Namespace)
 	err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
 		getRayClusterRequest := &v2pb.GetRayClusterRequest{
 			Name:       request.Name,
@@ -318,6 +329,7 @@ func (r *activities) SensorRayJob(ctx context.Context, request v2pb.GetRayJobReq
 	logger := activity.GetLogger(ctx)
 	logger.Info("activity-start", zap.Any("request", request))
 
+	ctx = runnertoken.WithNamespace(ctx, request.Namespace)
 	getRayJobResponse, err := r.rayJobService.GetRayJob(ctx, &request)
 	if err != nil {
 		logger.Error("activity-error", zap.Any("error", err.Error()))
