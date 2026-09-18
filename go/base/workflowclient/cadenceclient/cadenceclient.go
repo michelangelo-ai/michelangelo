@@ -85,13 +85,59 @@ func (c *CadenceClient) GetWorkflowExecutionInfo(ctx context.Context, workflowID
 		closeStatus = &status
 	}
 
+	status := mapCadenceStatusToInterface(closeStatus)
+
 	return &clientInterface.WorkflowExecutionInfo{
-		Status: mapCadenceStatusToInterface(closeStatus),
+		Status: status,
 		Execution: &clientInterface.WorkflowExecution{
 			ID:    cadenceWorkflowExecutionInfo.GetExecution().GetWorkflowId(),
 			RunID: cadenceWorkflowExecutionInfo.GetExecution().GetRunId(),
 		},
+		FailureMessage: c.getFailureMessage(ctx, workflowID, runID, status),
 	}, nil
+}
+
+// getFailureMessage returns a human-readable failure reason for a terminal, unsuccessful
+// workflow status. For Failed/Terminated it fetches just the closing history event (a single
+// event, not the full history) to extract the underlying failure text. A failure to fetch
+// history is swallowed - the workflow status itself is still valid without it.
+func (c *CadenceClient) getFailureMessage(ctx context.Context, workflowID string, runID string, status clientInterface.WorkflowExecutionStatus) string {
+	switch status {
+	case clientInterface.WorkflowExecutionStatusTimedOut:
+		return "Workflow execution timed out"
+	case clientInterface.WorkflowExecutionStatusFailed, clientInterface.WorkflowExecutionStatusTerminated:
+		message, err := c.getCloseEventFailureMessage(ctx, workflowID, runID)
+		if err != nil {
+			return ""
+		}
+		return message
+	default:
+		return ""
+	}
+}
+
+// getCloseEventFailureMessage fetches the closing history event for a workflow execution and
+// extracts a failure message from it, if any.
+func (c *CadenceClient) getCloseEventFailureMessage(ctx context.Context, workflowID string, runID string) (string, error) {
+	iter := c.Client.GetWorkflowHistory(ctx, workflowID, runID, false, shared.HistoryEventFilterTypeCloseEvent)
+	for iter.HasNext() {
+		event, err := iter.Next()
+		if err != nil {
+			return "", fmt.Errorf("failed to get close event: %w", err)
+		}
+
+		switch event.GetEventType() {
+		case shared.EventTypeWorkflowExecutionFailed:
+			if attr := event.WorkflowExecutionFailedEventAttributes; attr != nil {
+				return attr.GetReason(), nil
+			}
+		case shared.EventTypeWorkflowExecutionTerminated:
+			if attr := event.WorkflowExecutionTerminatedEventAttributes; attr != nil {
+				return attr.GetReason(), nil
+			}
+		}
+	}
+	return "", nil
 }
 
 func (c *CadenceClient) CancelWorkflow(ctx context.Context, workflowID string, runID string, reason string) error {

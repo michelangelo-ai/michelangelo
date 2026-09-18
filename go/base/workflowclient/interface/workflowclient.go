@@ -32,6 +32,10 @@ type WorkflowExecutionInfo struct {
 	Status        WorkflowExecutionStatus
 	Execution     *WorkflowExecution
 	ExecutionTime time.Time
+	// FailureMessage carries the underlying workflow engine's failure reason
+	// (e.g. a Temporal ApplicationFailure message or a Cadence failure reason).
+	// Populated when Status is Failed, TimedOut, or Terminated; empty otherwise.
+	FailureMessage string
 }
 
 type WorkflowExecution struct {

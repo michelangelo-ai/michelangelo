@@ -85,11 +85,12 @@ func TestGetWorkflowExecutionInfo(t *testing.T) {
 	runID := "testRunID"
 
 	testCases := []struct {
-		name              string
-		mockFunc          func(mockClient *cadencemocks.Client)
-		expectedStatus    clientInterface.WorkflowExecutionStatus
-		expectedExecution *clientInterface.WorkflowExecution
-		errMsg            string
+		name                   string
+		mockFunc               func(mockClient *cadencemocks.Client)
+		expectedStatus         clientInterface.WorkflowExecutionStatus
+		expectedExecution      *clientInterface.WorkflowExecution
+		expectedFailureMessage string
+		errMsg                 string
 	}{
 		{
 			name: "GetWorkflowExecutionInfo Succeeded -- workflow completed",
@@ -114,10 +115,36 @@ func TestGetWorkflowExecutionInfo(t *testing.T) {
 							CloseStatus: shared.WorkflowExecutionCloseStatusFailed.Ptr(),
 						},
 					}, nil)
+				iter := cadencemocks.NewHistoryEventIterator(t)
+				iter.On("HasNext").Return(true).Once()
+				iter.On("Next").Return(&shared.HistoryEvent{
+					EventType: shared.EventTypeWorkflowExecutionFailed.Ptr(),
+					WorkflowExecutionFailedEventAttributes: &shared.WorkflowExecutionFailedEventAttributes{
+						Reason: ptrString("got an unexpected keyword argument"),
+					},
+				}, nil).Once()
+				iter.On("HasNext").Return(false)
+				mockClient.On("GetWorkflowHistory", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(iter)
 			},
-			expectedStatus:    clientInterface.WorkflowExecutionStatusFailed,
-			expectedExecution: &clientInterface.WorkflowExecution{},
-			errMsg:            "",
+			expectedStatus:         clientInterface.WorkflowExecutionStatusFailed,
+			expectedExecution:      &clientInterface.WorkflowExecution{},
+			expectedFailureMessage: "got an unexpected keyword argument",
+			errMsg:                 "",
+		},
+		{
+			name: "GetWorkflowExecutionInfo Succeeded -- workflow timed out",
+			mockFunc: func(mockClient *cadencemocks.Client) {
+				mockClient.On("DescribeWorkflowExecution", mock.Anything, mock.Anything, mock.Anything).Return(
+					&shared.DescribeWorkflowExecutionResponse{
+						WorkflowExecutionInfo: &shared.WorkflowExecutionInfo{
+							CloseStatus: shared.WorkflowExecutionCloseStatusTimedOut.Ptr(),
+						},
+					}, nil)
+			},
+			expectedStatus:         clientInterface.WorkflowExecutionStatusTimedOut,
+			expectedExecution:      &clientInterface.WorkflowExecution{},
+			expectedFailureMessage: "Workflow execution timed out",
+			errMsg:                 "",
 		},
 		{
 			name: "GetWorkflowExecutionInfo Succeeded -- workflow running",
@@ -165,6 +192,7 @@ func TestGetWorkflowExecutionInfo(t *testing.T) {
 				assert.NoError(t, err)
 				assert.Equal(t, testCase.expectedStatus, workflowExecutionInfo.Status)
 				assert.Equal(t, testCase.expectedExecution, workflowExecutionInfo.Execution)
+				assert.Equal(t, testCase.expectedFailureMessage, workflowExecutionInfo.FailureMessage)
 			}
 		})
 	}
