@@ -38,7 +38,7 @@ def spark_task(
         namespace = os.environ.get("MA_NAMESPACE", "default")
         start_time_seconds = time.time()
         start_time_formatted_str = time.utc_format_seconds(TIME_FOMART, start_time_seconds)
-        final_cache_enabled = get_cache_enabled(cache_enabled, task_name)
+        final_cache_enabled, first_activity_id = get_cache_enabled(cache_enabled, task_name, namespace, task_path)
         if final_cache_enabled:  # Check if the result is cached
             cache_keys = get_cache_keys(task_path, task_name, args, kwargs, cache_version, CACHE_OPERATION_GET)
             cached_output = get_cached_output(namespace, cache_keys)
@@ -57,6 +57,7 @@ def spark_task(
                         end_time = end_time_formated_str,
                         output = cached_output.get("metadata", {}).get("name", ""),
                         retry_attempt_id = "",
+                        first_activity_id = first_activity_id,
                     )
                     result = io_read_json(cached_result_json_url)
                     print("spark | cached", "result:", result)
@@ -130,6 +131,7 @@ def spark_task(
                 total_retry_attempt = total_retry_attempt,
                 job_label = "Spark",
                 log_url_prefix = SPARK_LOG_URL_PREFIX,
+                first_activity_id = first_activity_id,
             )
 
             # Extract log URL from terminated job
