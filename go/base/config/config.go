@@ -24,6 +24,7 @@ const (
 	_mysqlConfigKey           = "mysql"
 	_ingesterConfigKey        = "ingester"
 	_inferenceServerConfigKey = "inferenceServer"
+	_schedulerConfigKey       = "jobs.scheduler"
 )
 
 // K8sConfig is the configuration for k8s REST client.
@@ -43,6 +44,30 @@ type WorkflowClientConfig struct {
 	ExecutionUrlFormat string `yaml:"executionUrlFormat"`
 }
 
+// KueueConfig configures the Kueue scheduler backend.
+type KueueConfig struct {
+	// LocalQueueTemplate resolves a project's LocalQueue name on the
+	// target cluster; "{project}" is substituted with the project name.
+	LocalQueueTemplate string `yaml:"localQueueTemplate"`
+	// LocalQueueOverrides maps a project name to an explicit LocalQueue
+	// name, winning over LocalQueueTemplate.
+	LocalQueueOverrides map[string]string `yaml:"localQueueOverrides"`
+	// APIVersion is the kueue.x-k8s.io API version used when talking to
+	// Kueue on compute clusters. Defaults to "v1beta2" (Kueue v0.15+); set
+	// "v1beta1" for older Kueue installations.
+	APIVersion string `yaml:"apiVersion"`
+}
+
+// SchedulerConfig selects and configures the job scheduler backend.
+type SchedulerConfig struct {
+	// Backend is the scheduler backend: "default" (or empty) for the
+	// built-in immediate-admission queue, "kueue" for Kueue-managed
+	// admission.
+	Backend string `yaml:"backend"`
+	// Kueue holds Kueue backend settings; ignored unless Backend is "kueue".
+	Kueue KueueConfig `yaml:"kueue"`
+}
+
 // Params defines the dependencies of the config fx module.
 type Params struct {
 	fx.In
@@ -60,6 +85,9 @@ type Result struct {
 // Module load config.Provider based on the environment context.
 var Module = fx.Module("config",
 	fx.Provide(New),
+	// SchedulerConfig is consumed by both the k8s engine mapper and the
+	// scheduler module, so it is provided once here.
+	fx.Provide(GetSchedulerConfig),
 )
 
 // New exports functionality similar to Module, but allows the caller to wrap
@@ -116,6 +144,13 @@ func GetWorkflowClientConfig(provider config.Provider) (WorkflowClientConfig, er
 	workflowClientConfig := WorkflowClientConfig{}
 	err := provider.Get(_workflowClientConfigKey).Populate(&workflowClientConfig)
 	return workflowClientConfig, err
+}
+
+// GetSchedulerConfig parses the configuration file and returns the job scheduler configuration
+func GetSchedulerConfig(provider config.Provider) (SchedulerConfig, error) {
+	schedulerConfig := SchedulerConfig{}
+	err := provider.Get(_schedulerConfigKey).Populate(&schedulerConfig)
+	return schedulerConfig, err
 }
 
 // GetMySQLConfig parses the configuration file and returns the MySQL configuration.

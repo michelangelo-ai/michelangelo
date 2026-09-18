@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	maconfig "github.com/michelangelo-ai/michelangelo/go/base/config"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -649,4 +650,88 @@ func TestMapLocalClusterStatusToGlobal_WithConditions(t *testing.T) {
 			assert.Equal(t, tt.expectReason, result.Reason)
 		})
 	}
+}
+
+func TestMapLabels(t *testing.T) {
+	controlPlaneLabels := map[string]string{
+		"michelangelo/cluster-affinity": "cluster-a",
+		"ma/project-name":               "proj1",
+		"ma/user":                       "someone",
+		"kueue.x-k8s.io/queue-name":     "user-forged-queue",
+	}
+
+	t.Run("no queue: nothing propagates", func(t *testing.T) {
+		assert.Nil(t, mapLabels(controlPlaneLabels, ""))
+	})
+
+	t.Run("queue set: only the resolved queue label, never source labels", func(t *testing.T) {
+		got := mapLabels(controlPlaneLabels, "ma-proj1")
+		assert.Equal(t, map[string]string{"kueue.x-k8s.io/queue-name": "ma-proj1"}, got)
+	})
+}
+
+func TestMapRayClusterKueueLabels(t *testing.T) {
+	m := Mapper{Scheduler: maconfig.SchedulerConfig{}}
+	rc := &v2pb.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "rc-1",
+			Labels: map[string]string{
+				"ma/project-name":               "proj1",
+				"michelangelo/cluster-affinity": "cluster-a",
+				"kueue.x-k8s.io/queue-name":     "user-forged-queue",
+			},
+		},
+		Spec: v2pb.RayClusterSpec{Head: &v2pb.RayHeadSpec{}},
+	}
+
+	t.Run("non-kueue cluster: no labels at all", func(t *testing.T) {
+		obj, err := m.MapGlobalJobClusterToLocal(rc, &v2pb.Cluster{})
+		require.NoError(t, err)
+		assert.Nil(t, obj.(*rayv1.RayCluster).Labels)
+	})
+
+	t.Run("nil cluster: no labels at all", func(t *testing.T) {
+		obj, err := m.MapGlobalJobClusterToLocal(rc, nil)
+		require.NoError(t, err)
+		assert.Nil(t, obj.(*rayv1.RayCluster).Labels)
+	})
+
+	t.Run("kueue cluster: resolved queue label only", func(t *testing.T) {
+		kueueCluster := &v2pb.Cluster{
+			Spec: v2pb.ClusterSpec{SchedulerType: v2pb.SCHEDULER_TYPE_KUEUE},
+		}
+		obj, err := m.MapGlobalJobClusterToLocal(rc, kueueCluster)
+		require.NoError(t, err)
+		assert.Equal(t,
+			map[string]string{"kueue.x-k8s.io/queue-name": "ma-proj1"},
+			obj.(*rayv1.RayCluster).Labels)
+	})
+
+	t.Run("kueue cluster without project label falls back to namespace", func(t *testing.T) {
+		unlabeled := &v2pb.RayCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: "rc-2", Namespace: "proj-ns"},
+			Spec:       v2pb.RayClusterSpec{Head: &v2pb.RayHeadSpec{}},
+		}
+		kueueCluster := &v2pb.Cluster{
+			Spec: v2pb.ClusterSpec{SchedulerType: v2pb.SCHEDULER_TYPE_KUEUE},
+		}
+		obj, err := m.MapGlobalJobClusterToLocal(unlabeled, kueueCluster)
+		require.NoError(t, err)
+		assert.Equal(t,
+			map[string]string{"kueue.x-k8s.io/queue-name": "ma-proj-ns"},
+			obj.(*rayv1.RayCluster).Labels)
+	})
+
+	t.Run("kueue cluster without any project identity fails dispatch", func(t *testing.T) {
+		anonymous := &v2pb.RayCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: "rc-3"},
+			Spec:       v2pb.RayClusterSpec{Head: &v2pb.RayHeadSpec{}},
+		}
+		kueueCluster := &v2pb.Cluster{
+			Spec: v2pb.ClusterSpec{SchedulerType: v2pb.SCHEDULER_TYPE_KUEUE},
+		}
+		_, err := m.MapGlobalJobClusterToLocal(anonymous, kueueCluster)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "LocalQueue")
+	})
 }
