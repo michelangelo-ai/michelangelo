@@ -139,9 +139,17 @@ export type BannerConfig = {
   icon?: string;
 };
 
+/** Reference to the Revision CR an action should operate against. */
+export type RevisionRef = { name: string; namespace: string };
+
 /** Props passed to a component rendered by {@link CustomModalConfig}. */
 export type ActionComponentProps<T = Data> = {
   record: T;
+  /**
+   * The revision of `record` the action targets, when the entity is revisioned: the viewed
+   * revision on a detail page, the latest revision on a list row. Unset when none is known.
+   */
+  revision?: RevisionRef;
   onClose: () => void;
 };
 

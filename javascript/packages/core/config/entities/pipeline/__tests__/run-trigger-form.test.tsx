@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { vi } from 'vitest';
 
 import { RunTriggerForm } from '#core/config/entities/pipeline/run-trigger-form';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
@@ -136,10 +137,7 @@ describe('RunTriggerForm', () => {
     });
   });
 
-  // Errors raised inside the submit handler — a rejected mutation, or the guard that throws
-  // when the selected trigger vanished from the manifest — all travel the same FormDialog
-  // catch (see form-dialog.tsx), so this pins that they render in-dialog rather than escaping.
-  it('pins the viewed revision when the URL carries a revisionId', async () => {
+  it('shows the given revision and pins the run to it', async () => {
     const user = userEvent.setup();
     const cronTrigger = {
       triggerType: { case: 'cronSchedule' as const, value: { cron: '0 2 * * *' } },
@@ -148,25 +146,30 @@ describe('RunTriggerForm', () => {
       GetPipeline: buildPipelineResponse({ nightly: cronTrigger }),
       CreateTriggerRun: {},
     });
+    const record = {
+      metadata: { name: 'test-pipeline', namespace: 'ma-dev-test' },
+      spec: { owner: { name: 'test-owner' } },
+    };
+    const revision = { name: 'pipeline-test-pipeline-3f2a1b9c0d4e', namespace: 'ma-dev-test' };
 
     render(
-      <FormWrapper />,
+      <RunTriggerForm record={record} revision={revision} onClose={vi.fn()} />,
       buildWrapper([
         getBaseProviderWrapper(),
         getIconProviderWrapper(),
         getErrorProviderWrapper(),
         getInterpolationProviderWrapper(),
-        getRouterWrapper({
-          location:
-            '/ma-dev-test/train/pipelines/test-pipeline/runs?revisionId=3f2a1b9c0d4e5f6a7b8c',
-        }),
+        getRouterWrapper({ location: '/ma-dev-test/train/pipelines' }),
         getServiceProviderWrapper({ request }),
       ])
     );
 
-    await user.click(await screen.findByRole('combobox', { name: 'Trigger *' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Run trigger' });
+    expect(within(dialog).getByRole('textbox', { name: 'Revision ID' })).toHaveValue(
+      'pipeline-test-pipeline-3f2a1b9c0d4e'
+    );
+    await user.click(within(dialog).getByRole('combobox', { name: 'Trigger *' }));
     await user.click(await screen.findByRole('option', { name: 'nightly — cron 0 2 * * *' }));
-    const dialog = screen.getByRole('dialog', { name: 'Run trigger' });
     await user.click(within(dialog).getByRole('button', { name: 'Run' }));
 
     await waitFor(() => {
@@ -175,7 +178,7 @@ describe('RunTriggerForm', () => {
         expect.objectContaining({
           spec: expect.objectContaining({
             pipeline: { name: 'test-pipeline', namespace: 'ma-dev-test' },
-            revision: { name: 'pipeline-test-pipeline-3f2a1b9c0d4e', namespace: 'ma-dev-test' },
+            revision,
           }) as Record<string, unknown>,
         }),
         {}
@@ -183,6 +186,9 @@ describe('RunTriggerForm', () => {
     });
   });
 
+  // Errors raised inside the submit handler — a rejected mutation, or the guard that throws
+  // when the selected trigger vanished from the manifest — all travel the same FormDialog
+  // catch (see form-dialog.tsx), so this pins that they render in-dialog rather than escaping.
   it('keeps the dialog open and shows the error when the submit fails', async () => {
     const user = userEvent.setup();
     const request = createQueryMockRouter({

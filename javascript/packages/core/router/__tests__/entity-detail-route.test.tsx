@@ -199,7 +199,7 @@ describe('EntityDetailRoute', () => {
       // Header keeps the pipeline title.
       expect(screen.getByText('My-Pipeline')).toBeInTheDocument();
 
-      // The entity's actions stay available; the forms pin the viewed revision themselves.
+      // The entity's actions stay available.
       expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument();
 
       // The Revision CR is fetched by its controller-derived name.
@@ -237,8 +237,7 @@ describe('EntityDetailRoute', () => {
         ])
       );
 
-      // The latest Revision is resolved by the name status.latestRevision points at, and the
-      // page lands on its snapshot rather than the live record.
+      // The latest Revision is resolved by the name status.latestRevision points at.
       expect(await screen.findByText('snapshot-owner')).toBeInTheDocument();
       expect(screen.queryByText('live-owner')).not.toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument();

@@ -27,7 +27,7 @@ import type { PhaseConfig } from '#core/types/common/studio-types';
  * - Revision snapshots: a `revisioned` entity is always viewed as a Revision. `?revisionId=`
  *   swaps the live record for the matching Revision's `spec.content`, rendered through the same
  *   detail view config; without it the route resolves the entity's `status.latestRevision` and
- *   redirects to it. Only an entity with no revision yet is shown as its live record.
+ *   redirects to it.
  *
  * @param phases - Phase configuration override for testing. Defaults to {@link PHASES}.
  */
@@ -60,8 +60,6 @@ export function EntityDetailRoute({ phases = PHASES }: { phases?: Record<string,
     | { status?: { latestRevision?: { name?: string } } }
     | undefined;
   const latestRevisionName = isRevisioned ? liveRecord?.status?.latestRevision?.name : undefined;
-  // `status.latestRevision` names the Revision CR, not its revisionId. Fetch it to learn the id
-  // the URL should carry; the redirect below then re-enters the GetRevision path above.
   const { data: latestRevisionData, isLoading: isLoadingLatestRevision } = useStudioQuery<{
     revision?: { spec?: { revisionId?: string } };
   }>({
@@ -79,7 +77,6 @@ export function EntityDetailRoute({ phases = PHASES }: { phases?: Record<string,
     );
   }, [isRevisionView, latestRevisionId, navigate, pathname]);
 
-  // Hold the skeleton while the latest revision resolves so the live record never flashes first.
   const isResolvingLatestRevision =
     !isRevisionView && !!latestRevisionName && (isLoadingLatestRevision || !!latestRevisionId);
   const loading = isLoading || isResolvingLatestRevision;
@@ -156,6 +153,11 @@ export function EntityDetailRoute({ phases = PHASES }: { phases?: Record<string,
       onGoBack={handleReturnToEntityList}
       actions={entityConfig!.actions}
       record={entityData}
+      revision={
+        isRevisionView
+          ? { name: buildRevisionName(service, entityId, revisionId), namespace: projectId }
+          : undefined
+      }
       loading={loading}
       headerContent={
         <Row items={resolvedDetailViewConfig!.metadata} record={entityData} loading={loading} />

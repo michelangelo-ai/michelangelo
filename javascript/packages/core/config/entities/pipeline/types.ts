@@ -17,7 +17,6 @@ export interface Pipeline {
     };
   };
   status?: {
-    /** The Revision CR snapshotting the newest default-branch commit; unset until one exists. */
     latestRevision?: { name?: string; namespace?: string };
   };
 }
