@@ -8,6 +8,11 @@ export const CRITERION_OPERATOR_EQUAL = 1;
 /** Criterion field name for the pipeline a PipelineRun belongs to. */
 export const PIPELINE_RUN_PIPELINE_NAME_FIELD = 'pipeline_run.pipeline_name';
 
+/**
+ * Criterion field name for the Revision a PipelineRun was pinned to (`spec.revision.name`).
+ */
+export const PIPELINE_RUN_REVISION_NAME_FIELD = 'pipeline_run.revision_name';
+
 export const PIPELINE_STATE_CELL: Cell = {
   id: 'status.state',
   label: 'State',

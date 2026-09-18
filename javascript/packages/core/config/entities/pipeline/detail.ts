@@ -1,16 +1,20 @@
 import { CellType } from '#core/components/cell/constants';
 import { SHARED_RUN_CELL_CONFIG } from '#core/config/entities/run/shared';
 import { TRIGGER_STATE_CELL_CONFIG } from '#core/config/entities/trigger/shared';
+import { interpolate } from '#core/interpolation/interpolate';
+import { buildRevisionName } from '#core/utils/revision-utils';
 import { formatTriggerSchedule } from './format-trigger-schedule';
 import {
   CRITERION_OPERATOR_EQUAL,
   PIPELINE_RUN_PIPELINE_NAME_FIELD,
+  PIPELINE_RUN_REVISION_NAME_FIELD,
   PIPELINE_STATE_CELL,
   PIPELINE_TYPE_CELL,
 } from './shared';
 
 import type { DetailViewConfig } from '#core/components/views/types';
 import type { TriggerRun } from '#core/config/entities/trigger/types';
+import type { Pipeline } from './types';
 
 export const PIPELINE_DETAIL_CONFIG: DetailViewConfig = {
   type: 'detail',
@@ -32,13 +36,26 @@ export const PIPELINE_DETAIL_CONFIG: DetailViewConfig = {
         serviceOptions: {
           listOptionsExt: {
             operation: {
-              criterion: [
-                {
-                  fieldName: PIPELINE_RUN_PIPELINE_NAME_FIELD,
-                  operator: CRITERION_OPERATOR_EQUAL,
-                  matchValue: '${page.metadata.name}',
-                },
-              ],
+              // A revision view lists only the runs pinned to that Revision CR; the live view
+              // lists every run of the pipeline regardless of revision.
+              criterion: interpolate(({ page, studio }) => {
+                // cast: page is unknown from interpolation context; always Pipeline in this
+                // entity config (a revision view passes the snapshot's content); see #1425
+                const pipelineName = (page as Pipeline).metadata.name;
+                return [
+                  studio.revisionId
+                    ? {
+                        fieldName: PIPELINE_RUN_REVISION_NAME_FIELD,
+                        operator: CRITERION_OPERATOR_EQUAL,
+                        matchValue: buildRevisionName('pipeline', pipelineName, studio.revisionId),
+                      }
+                    : {
+                        fieldName: PIPELINE_RUN_PIPELINE_NAME_FIELD,
+                        operator: CRITERION_OPERATOR_EQUAL,
+                        matchValue: pipelineName,
+                      },
+                ];
+              }),
             },
           },
         },
