@@ -2,8 +2,6 @@
 
 import argparse
 import base64
-import json
-import os
 import shutil
 import string
 import subprocess
@@ -31,11 +29,6 @@ _michelangelo_sandbox_kube_cluster_name = "michelangelo-sandbox"
 
 _cadence_domain = "default"
 _default_compute_kube_cluster_name = "michelangelo-compute-0"
-
-# Registry holding the default Triton serving image, and the Secret the demo
-# InferenceServers name in spec.initSpec.servingSpec.image.imagePullSecrets.
-_triton_registry = "ghcr.io"
-_triton_pull_secret_name = "ghcr-triton-pull"
 
 # Path to the Michelangelo Helm chart (relative to this file)
 _chart_dir = Path(__file__).parent.parent.parent.parent.parent / "helm" / "michelangelo"
@@ -2312,103 +2305,6 @@ def _apply_demo_model(demo_dir: Path):
     _kube_apply(model_path)
 
 
-def _ghcr_credentials() -> Optional[tuple]:
-    """Return (username, token) for ghcr.io, or None when none is available.
-
-    Prefers an explicit GHCR_TOKEN/GITHUB_TOKEN, then falls back to the token
-    the GitHub CLI already holds.
-    """
-    token = os.environ.get("GHCR_TOKEN") or os.environ.get("GITHUB_TOKEN")
-    if not token:
-        try:
-            token = (
-                subprocess.check_output(
-                    ["gh", "auth", "token"], stderr=subprocess.DEVNULL
-                )
-                .decode()
-                .strip()
-            )
-        except (subprocess.CalledProcessError, FileNotFoundError):
-            return None
-    if not token:
-        return None
-
-    username = os.environ.get("GITHUB_ACTOR", "")
-    if not username:
-        try:
-            username = (
-                subprocess.check_output(
-                    ["gh", "api", "user", "--jq", ".login"], stderr=subprocess.DEVNULL
-                )
-                .decode()
-                .strip()
-            )
-        except (subprocess.CalledProcessError, FileNotFoundError):
-            username = ""
-
-    # GHCR authenticates on the token alone; the username is not validated.
-    return username or "oauth", token
-
-
-def _create_triton_pull_secrets(is_yaml_path: Path):
-    """Create the ghcr.io pull Secret in every cluster the IS spec targets.
-
-    The default Triton serving image is a private GHCR package, so each cluster
-    running Triton needs credentials to pull it. A Secret is namespace-scoped,
-    so multi-cluster InferenceServers need one copy per target cluster.
-    """
-    credentials = _ghcr_credentials()
-    if credentials is None:
-        print(
-            f"⚠ No ghcr.io credentials found, skipping '{_triton_pull_secret_name}'.\n"
-            "  Set GHCR_TOKEN or run 'gh auth login' if the Triton image pull fails."
-        )
-        return
-
-    username, token = credentials
-    auth = base64.b64encode(f"{username}:{token}".encode()).decode()
-    docker_config = {
-        "auths": {
-            _triton_registry: {
-                "username": username,
-                "password": token,
-                "auth": auth,
-            }
-        }
-    }
-    secret = {
-        "apiVersion": "v1",
-        "kind": "Secret",
-        "type": "kubernetes.io/dockerconfigjson",
-        "metadata": {"name": _triton_pull_secret_name, "namespace": "default"},
-        "stringData": {".dockerconfigjson": json.dumps(docker_config)},
-    }
-
-    with open(is_yaml_path) as f:
-        is_yaml = yaml.safe_load(f)
-    cluster_ids = [
-        target["clusterId"]
-        for target in is_yaml.get("spec", {}).get("clusterTargets") or []
-    ] or [_michelangelo_sandbox_kube_cluster_name]
-
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as secret_file:
-        yaml.dump(secret, secret_file)
-        secret_file.flush()
-        for cluster_id in cluster_ids:
-            print(
-                f"✅ Creating '{_triton_pull_secret_name}' Secret "
-                f"in cluster '{cluster_id}'..."
-            )
-            _exec(
-                "kubectl",
-                "--context",
-                f"k3d-{cluster_id}",
-                "apply",
-                "-f",
-                secret_file.name,
-            )
-
-
 def _create_inference_demo_crs():
     """Create an inference server for the sandbox cluster for demo purposes."""
     print("🚀 Setting up Michelangelo AI Inference Demo...")
@@ -2430,8 +2326,6 @@ def _create_inference_demo_crs():
         _err_exit(
             f"❌ Inference server CR not found at {inference_server_path}, exiting..."
         )
-
-    _create_triton_pull_secrets(inference_server_path)
 
     print("✅ Creating Triton Inference Server...")
     _kube_apply(inference_server_path)
@@ -2552,8 +2446,6 @@ def _create_inference_multicluster_demo_crs():
         _err_exit(
             f"❌ Multi-cluster IS CR not found at {inference_server_path}, exiting..."
         )
-
-    _create_triton_pull_secrets(inference_server_path)
 
     print("\n✅ Creating multi-cluster Triton InferenceServer...")
     _kube_apply(inference_server_path)

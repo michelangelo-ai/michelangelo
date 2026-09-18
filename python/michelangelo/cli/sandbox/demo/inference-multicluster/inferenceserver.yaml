@@ -16,12 +16,6 @@ spec:
       memory: "4Gi"
     servingSpec:
       version: "latest"
-      # No uri, so the operator-configured default image applies. The pull
-      # secret is still needed because that default lives in a private
-      # registry; `ma sandbox demo` creates it in every target cluster.
-      image:
-        imagePullSecrets:
-          - ghcr-triton-pull
     numInstances: 1
   decomSpec:
     decommission: false
