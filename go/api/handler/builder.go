@@ -37,7 +37,8 @@ type APIHandlerBuilder struct {
 	blobStorage     storage.BlobStorage
 
 	// Configuration
-	storageConfig storage.MetadataStorageConfig
+	storageConfig      storage.MetadataStorageConfig
+	mysqlPrimaryPolicy storage.MySQLPrimaryPolicy
 
 	// Observability
 	logger  logr.Logger
@@ -72,6 +73,14 @@ func (b *APIHandlerBuilder) WithMetadataStorage(storage storage.MetadataStorage,
 // WithBlobStorage enables and configures blob storage.
 func (b *APIHandlerBuilder) WithBlobStorage(storage storage.BlobStorage) *APIHandlerBuilder {
 	b.blobStorage = storage
+	return b
+}
+
+// WithMySQLPrimaryPolicy sets the per-kind policy for MySQL-primary storage mode (kinds created
+// and updated directly in MetadataStorage, bypassing k8s/ETCD entirely). Optional; if unset, no
+// kind is treated as MySQL-primary.
+func (b *APIHandlerBuilder) WithMySQLPrimaryPolicy(policy storage.MySQLPrimaryPolicy) *APIHandlerBuilder {
+	b.mysqlPrimaryPolicy = policy
 	return b
 }
 
@@ -114,10 +123,11 @@ func (b *APIHandlerBuilder) Build() (api.Handler, error) {
 		logger:  b.logger,
 		metrics: b.metrics,
 		// Inject focused handlers to reduce coupling
-		k8sHandler:        k8sHandler,
-		metadataHandler:   metadataHandler,
-		blobHandler:       blobHandler,
-		validationHandler: validationHandler,
+		k8sHandler:         k8sHandler,
+		metadataHandler:    metadataHandler,
+		blobHandler:        blobHandler,
+		validationHandler:  validationHandler,
+		mysqlPrimaryPolicy: b.mysqlPrimaryPolicy,
 	}
 
 	return handler, nil
@@ -162,6 +172,10 @@ func NewAPIServerHandler(params Params) (api.Handler, error) {
 		builder = builder.WithBlobStorage(params.BlobStorage)
 	}
 
+	if params.MySQLPrimaryPolicy != nil {
+		builder = builder.WithMySQLPrimaryPolicy(params.MySQLPrimaryPolicy)
+	}
+
 	return builder.Build()
 }
 
@@ -185,6 +199,10 @@ func NewCtrlManagerHandler(params Params) (api.Handler, error) {
 	// Configure blob storage if provided
 	if params.BlobStorage != nil {
 		builder = builder.WithBlobStorage(params.BlobStorage)
+	}
+
+	if params.MySQLPrimaryPolicy != nil {
+		builder = builder.WithMySQLPrimaryPolicy(params.MySQLPrimaryPolicy)
 	}
 
 	return builder.Build()
@@ -224,11 +242,12 @@ type Factory interface {
 
 // apiHandlerFactory implements Factory using the builder pattern internally
 type apiHandlerFactory struct {
-	logger          logr.Logger
-	metrics         tally.Scope
-	metadataStorage storage.MetadataStorage
-	blobStorage     storage.BlobStorage
-	storageConfig   storage.MetadataStorageConfig
+	logger             logr.Logger
+	metrics            tally.Scope
+	metadataStorage    storage.MetadataStorage
+	blobStorage        storage.BlobStorage
+	storageConfig      storage.MetadataStorageConfig
+	mysqlPrimaryPolicy storage.MySQLPrimaryPolicy
 }
 
 // GetAPIHandler creates an API handler using the provided K8s client
@@ -248,6 +267,10 @@ func (f *apiHandlerFactory) GetAPIHandler(client ctrlRTClient.Client) (api.Handl
 		builder = builder.WithBlobStorage(f.blobStorage)
 	}
 
+	if f.mysqlPrimaryPolicy != nil {
+		builder = builder.WithMySQLPrimaryPolicy(f.mysqlPrimaryPolicy)
+	}
+
 	return builder.Build()
 }
 
@@ -255,10 +278,11 @@ func (f *apiHandlerFactory) GetAPIHandler(client ctrlRTClient.Client) (api.Handl
 // This provides the same interface as the old factory pattern but uses the builder internally
 func NewAPIHandlerFactory(params Params) Factory {
 	return &apiHandlerFactory{
-		logger:          zapr.NewLogger(params.Logger),
-		metrics:         params.Metrics,
-		metadataStorage: params.MetadataStorage,
-		blobStorage:     params.BlobStorage,
-		storageConfig:   params.StorageConfig,
+		logger:             zapr.NewLogger(params.Logger),
+		metrics:            params.Metrics,
+		metadataStorage:    params.MetadataStorage,
+		blobStorage:        params.BlobStorage,
+		storageConfig:      params.StorageConfig,
+		mysqlPrimaryPolicy: params.MySQLPrimaryPolicy,
 	}
 }
