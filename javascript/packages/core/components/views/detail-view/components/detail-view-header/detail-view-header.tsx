@@ -20,6 +20,7 @@ export function DetailViewHeader({
   children,
   actions,
   record,
+  revision,
   loading,
 }: DetailViewHeaderProps) {
   const [css, theme] = useStyletron();
@@ -85,7 +86,12 @@ export function DetailViewHeader({
         {titleEnhancer}
         {resolvedActions && (
           <div className={css({ marginLeft: 'auto', flexShrink: 0 })}>
-            <ActionsButtons actions={resolvedActions} record={record ?? {}} loading={loading} />
+            <ActionsButtons
+              actions={resolvedActions}
+              record={record ?? {}}
+              revision={revision}
+              loading={loading}
+            />
           </div>
         )}
       </div>

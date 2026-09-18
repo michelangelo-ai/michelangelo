@@ -58,10 +58,6 @@ export type PipelineRun = {
       name: string;
       namespace: string;
     };
-    /**
-     * Revision CR to execute. When set, the apihook resolves exactly this snapshot and rejects
-     * the create if it is missing; when unset it pins the pipeline's `status.latestRevision`.
-     */
     revision?: {
       name: string;
       namespace: string;

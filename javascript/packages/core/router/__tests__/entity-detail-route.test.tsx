@@ -236,8 +236,7 @@ describe('EntityDetailRoute', () => {
         ])
       );
 
-      // The latest Revision is resolved by the name status.latestRevision points at, and the
-      // page lands on its snapshot rather than the live record.
+      // The latest Revision is resolved by the name status.latestRevision points at.
       expect(await screen.findByText('snapshot-owner')).toBeInTheDocument();
       expect(screen.queryByText('live-owner')).not.toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument();

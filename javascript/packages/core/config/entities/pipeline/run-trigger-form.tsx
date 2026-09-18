@@ -7,7 +7,6 @@ import { useStudioMutation } from '#core/hooks/use-studio-mutation/use-studio-mu
 import { useStudioQuery } from '#core/hooks/use-studio-query';
 import { ENVIRONMENT_LABEL_KEY } from '#core/utils/environment-utils';
 import { generateSuffix } from '#core/utils/name-utils';
-import { buildRevisionName } from '#core/utils/revision-utils';
 import { formatTriggerSchedule } from './format-trigger-schedule';
 import { RunTriggerFields } from './run-trigger-fields';
 
@@ -25,13 +24,9 @@ import type { Pipeline, RunTriggerFormValues } from './types';
  * into the created TriggerRun, so it should come from the pipeline's current manifest, not
  * from a row that may have been sitting in a stale list.
  */
-export const RunTriggerForm = ({ record, onClose }: ActionComponentProps<Pipeline>) => {
-  const { projectId, revisionId } = useStudioParams('base');
+export const RunTriggerForm = ({ record, revision, onClose }: ActionComponentProps<Pipeline>) => {
+  const { projectId } = useStudioParams('base');
   const pipelineName = record?.metadata?.name ?? '';
-  // Pin the Revision the detail page is viewing so the trigger's runs execute that snapshot.
-  const revision = revisionId
-    ? { name: buildRevisionName('pipeline', pipelineName, revisionId), namespace: projectId }
-    : undefined;
 
   const { data, isLoading } = useStudioQuery<{ pipeline: Pipeline }>({
     queryName: 'GetPipeline',
@@ -96,6 +91,12 @@ export const RunTriggerForm = ({ record, onClose }: ActionComponentProps<Pipelin
       submitLabel="Run"
     >
       <StringField name="pipelineName" label="Pipeline" initialValue={pipelineName} readOnly />
+      <StringField
+        name="revisionName"
+        label="Revision ID"
+        initialValue={revision?.name ?? ''}
+        readOnly
+      />
 
       <SelectField
         name="sourceTriggerName"
