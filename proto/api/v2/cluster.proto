@@ -27,6 +27,20 @@ enum DCType {
   DC_TYPE_CLOUD_OCI = 3;
 }
 
+// SchedulerType selects the admission backend for jobs dispatched
+// to this cluster.
+enum SchedulerType {
+  // Invalid/unset: default scheduler behavior (immediate admission).
+  SCHEDULER_TYPE_INVALID = 0;
+
+  // Default internal queue with immediate admission.
+  SCHEDULER_TYPE_DEFAULT = 1;
+
+  // Kueue-managed admission: jobs dispatched to this cluster are
+  // gated by Kueue quota and admitted all-or-nothing.
+  SCHEDULER_TYPE_KUEUE = 2;
+}
+
 // Specification of the cluster where a ML job will be launched,
 // including the type, SLA, and optional region and/or zone
 // information.
@@ -65,6 +79,10 @@ message ClusterSpec {
 
   // DC type of the cluster
   DCType dc = 7;
+
+  // Admission backend for this cluster. Optional; unspecified
+  // preserves existing behavior.
+  SchedulerType scheduler_type = 8;
 }
 
 // ClusterStatus will have workload
