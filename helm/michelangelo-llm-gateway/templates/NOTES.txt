@@ -1,0 +1,13 @@
+{{- if .Values.tests.enabled }}
+Run only the wrapper-owned Helm test:
+
+  helm test {{ .Release.Name }} \
+    --namespace {{ .Release.Namespace }} \
+    --filter name={{ include "michelangelo-llm-gateway.fullname" . }}-test-connection \
+    --logs
+
+Unfiltered tests are unsupported because the pinned upstream chart contains
+unconditional test hooks with mutable public images.
+{{- else }}
+The wrapper-owned Helm test is disabled.
+{{- end }}
