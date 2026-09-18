@@ -139,6 +139,50 @@ describe('RunTriggerForm', () => {
   // Errors raised inside the submit handler — a rejected mutation, or the guard that throws
   // when the selected trigger vanished from the manifest — all travel the same FormDialog
   // catch (see form-dialog.tsx), so this pins that they render in-dialog rather than escaping.
+  it('pins the viewed revision when the URL carries a revisionId', async () => {
+    const user = userEvent.setup();
+    const cronTrigger = {
+      triggerType: { case: 'cronSchedule' as const, value: { cron: '0 2 * * *' } },
+    };
+    const request = createQueryMockRouter({
+      GetPipeline: buildPipelineResponse({ nightly: cronTrigger }),
+      CreateTriggerRun: {},
+    });
+
+    render(
+      <FormWrapper />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getIconProviderWrapper(),
+        getErrorProviderWrapper(),
+        getInterpolationProviderWrapper(),
+        getRouterWrapper({
+          location:
+            '/ma-dev-test/train/pipelines/test-pipeline/runs?revisionId=3f2a1b9c0d4e5f6a7b8c',
+        }),
+        getServiceProviderWrapper({ request }),
+      ])
+    );
+
+    await user.click(await screen.findByRole('combobox', { name: 'Trigger *' }));
+    await user.click(await screen.findByRole('option', { name: 'nightly — cron 0 2 * * *' }));
+    const dialog = screen.getByRole('dialog', { name: 'Run trigger' });
+    await user.click(within(dialog).getByRole('button', { name: 'Run' }));
+
+    await waitFor(() => {
+      expect(request).toHaveBeenCalledWith(
+        'CreateTriggerRun',
+        expect.objectContaining({
+          spec: expect.objectContaining({
+            pipeline: { name: 'test-pipeline', namespace: 'ma-dev-test' },
+            revision: { name: 'pipeline-test-pipeline-3f2a1b9c0d4e', namespace: 'ma-dev-test' },
+          }) as Record<string, unknown>,
+        }),
+        {}
+      );
+    });
+  });
+
   it('keeps the dialog open and shows the error when the submit fails', async () => {
     const user = userEvent.setup();
     const request = createQueryMockRouter({

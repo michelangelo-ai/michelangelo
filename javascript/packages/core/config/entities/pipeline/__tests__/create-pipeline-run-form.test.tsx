@@ -92,6 +92,46 @@ describe('CreatePipelineRunForm', () => {
     });
   });
 
+  it('pins the viewed revision when the URL carries a revisionId', async () => {
+    const user = userEvent.setup();
+    const mockRequest = createQueryMockRouter({ CreatePipelineRun: {} });
+
+    render(
+      <FormWrapper />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getIconProviderWrapper(),
+        getErrorProviderWrapper(),
+        getInterpolationProviderWrapper(),
+        getRouterWrapper({
+          location:
+            '/ma-dev-test/train/pipelines/test-pipeline/runs?revisionId=3f2a1b9c0d4e5f6a7b8c',
+        }),
+        getServiceProviderWrapper({ request: mockRequest }),
+      ])
+    );
+
+    const dialog = await screen.findByRole('dialog', { name: 'Start new pipeline run' });
+    expect(within(dialog).getByRole('textbox', { name: 'Revision' })).toHaveValue(
+      'pipeline-test-pipeline-3f2a1b9c0d4e'
+    );
+    await selectEnvironment(user, dialog, 'Development');
+    await user.click(within(dialog).getByRole('button', { name: 'Run' }));
+
+    await waitFor(() => {
+      expect(mockRequest).toHaveBeenCalledWith(
+        'CreatePipelineRun',
+        expect.objectContaining({
+          spec: expect.objectContaining({
+            pipeline: { name: 'test-pipeline', namespace: 'ma-dev-test' },
+            revision: { name: 'pipeline-test-pipeline-3f2a1b9c0d4e', namespace: 'ma-dev-test' },
+          }) as Record<string, unknown>,
+        }),
+        {}
+      );
+    });
+  });
+
   it('leaves notifications empty when the toggle is left off', async () => {
     const user = userEvent.setup();
     const mockRequest = createQueryMockRouter({ CreatePipelineRun: {} });

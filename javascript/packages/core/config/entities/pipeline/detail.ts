@@ -36,8 +36,8 @@ export const PIPELINE_DETAIL_CONFIG: DetailViewConfig = {
         serviceOptions: {
           listOptionsExt: {
             operation: {
-              // A revision view lists only the runs pinned to that Revision CR; the live view
-              // lists every run of the pipeline regardless of revision.
+              // The detail page always views a Revision, so runs are scoped to the one on screen.
+              // Only a pipeline with no revision yet falls back to every run of the pipeline.
               criterion: interpolate(({ page, studio }) => {
                 // cast: page is unknown from interpolation context; always Pipeline in this
                 // entity config (a revision view passes the snapshot's content); see #1425
