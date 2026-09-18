@@ -59,9 +59,7 @@ jobs:
           # .yarnrc-embedded ${NODE_AUTH_TOKEN} placeholder as soon as
           # `cache: yarn` + `registry-url` are both set, before "Publish to
           # npm"'s own env would otherwise supply it -- must be present here
-          # too. Deliberately NOT job-level: Install/Build run untrusted
-          # transitive postinstall/build scripts and shouldn't see a
-          # publish-capable token (per paulzim's PR #2121 review).
+          # too.
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Set up buf CLI
