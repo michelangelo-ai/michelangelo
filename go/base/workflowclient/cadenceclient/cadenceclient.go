@@ -47,6 +47,11 @@ func (c *CadenceClient) StartWorkflow(ctx context.Context, options clientInterfa
 	if options.StartPaused {
 		return nil, fmt.Errorf("starting a paused workflow is not supported by Cadence")
 	}
+	if !options.CatchUpFrom.IsZero() {
+		// Cadence cron has no schedule-backfill equivalent. Fail loudly rather than
+		// starting a trigger that silently never catches up.
+		return nil, fmt.Errorf("cron schedule startTime catch-up is not supported by Cadence")
+	}
 
 	cadenceOptions := cadenceClient.StartWorkflowOptions{
 		ID:                              options.ID,

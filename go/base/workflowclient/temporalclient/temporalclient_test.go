@@ -20,6 +20,9 @@ import (
 	temporalMocks "go.temporal.io/sdk/mocks"
 )
 
+// _catchUpFrom is a fixed point in the past used by the schedule catch-up tests.
+var _catchUpFrom = time.Now().Add(-3 * time.Hour).UTC().Truncate(time.Second)
+
 func TestStartWorkflow(t *testing.T) {
 	testCases := []struct {
 		name     string
@@ -584,6 +587,81 @@ func TestCreateScheduleForCron(t *testing.T) {
 			expectedRunID: "",
 			errMsg:        "",
 		},
+		{
+			name: "success - past catch-up start backfills missed occurrences",
+			options: clientInterface.StartWorkflowOptions{
+				ID:           "catchup-workflow",
+				TaskList:     "test-task-list",
+				CronSchedule: "0 * * * *",
+				CatchUpFrom:  _catchUpFrom,
+			},
+			workflowName: "test-workflow-name",
+			args:         []interface{}{"arg1"},
+			mockFunc: func(mockClient *temporalMocks.Client, mockScheduleClient *temporalMocks.ScheduleClient, mockScheduleHandle *temporalMocks.ScheduleHandle) {
+				mockClient.On("ScheduleClient").Return(mockScheduleClient)
+				mockScheduleClient.On("GetHandle", mock.Anything, "catchup-workflow-schedule").Return(mockScheduleHandle)
+				mockScheduleHandle.On("Describe", mock.Anything).Return(nil, fmt.Errorf("schedule not found"))
+				// The schedule keeps its steady-state SKIP policy; only the backfill
+				// request overrides overlap to BUFFER_ALL.
+				mockScheduleClient.On("Create", mock.Anything, mock.MatchedBy(func(options temporalClient.ScheduleOptions) bool {
+					return options.Overlap == temporalEnumsV1.SCHEDULE_OVERLAP_POLICY_SKIP &&
+						options.Spec.StartAt.IsZero()
+				})).Return(mockScheduleHandle, nil)
+				mockScheduleHandle.On("Backfill", mock.Anything, mock.MatchedBy(func(options temporalClient.ScheduleBackfillOptions) bool {
+					if len(options.Backfill) != 1 {
+						return false
+					}
+					backfill := options.Backfill[0]
+					return backfill.Start.Equal(_catchUpFrom) &&
+						backfill.End.After(_catchUpFrom) &&
+						backfill.Overlap == temporalEnumsV1.SCHEDULE_OVERLAP_POLICY_BUFFER_ALL
+				})).Return(nil)
+			},
+			expectedID:    "catchup-workflow-schedule",
+			expectedRunID: "",
+			errMsg:        "",
+		},
+		{
+			name: "catch-up skipped when schedule starts paused",
+			options: clientInterface.StartWorkflowOptions{
+				ID:           "paused-catchup-workflow",
+				TaskList:     "test-task-list",
+				CronSchedule: "0 * * * *",
+				CatchUpFrom:  _catchUpFrom,
+				StartPaused:  true,
+			},
+			workflowName: "test-workflow-name",
+			args:         []interface{}{"arg1"},
+			mockFunc: func(mockClient *temporalMocks.Client, mockScheduleClient *temporalMocks.ScheduleClient, mockScheduleHandle *temporalMocks.ScheduleHandle) {
+				mockClient.On("ScheduleClient").Return(mockScheduleClient)
+				mockScheduleClient.On("GetHandle", mock.Anything, "paused-catchup-workflow-schedule").Return(mockScheduleHandle)
+				mockScheduleHandle.On("Describe", mock.Anything).Return(nil, fmt.Errorf("schedule not found"))
+				mockScheduleClient.On("Create", mock.Anything, mock.Anything).Return(mockScheduleHandle, nil)
+				// No Backfill expectation: the strict mock fails the test if it is called.
+			},
+			expectedID:    "paused-catchup-workflow-schedule",
+			expectedRunID: "",
+			errMsg:        "",
+		},
+		{
+			name: "error - backfill failure is surfaced",
+			options: clientInterface.StartWorkflowOptions{
+				ID:           "failing-catchup-workflow",
+				TaskList:     "test-task-list",
+				CronSchedule: "0 * * * *",
+				CatchUpFrom:  _catchUpFrom,
+			},
+			workflowName: "test-workflow-name",
+			args:         []interface{}{"arg1"},
+			mockFunc: func(mockClient *temporalMocks.Client, mockScheduleClient *temporalMocks.ScheduleClient, mockScheduleHandle *temporalMocks.ScheduleHandle) {
+				mockClient.On("ScheduleClient").Return(mockScheduleClient)
+				mockScheduleClient.On("GetHandle", mock.Anything, "failing-catchup-workflow-schedule").Return(mockScheduleHandle)
+				mockScheduleHandle.On("Describe", mock.Anything).Return(nil, fmt.Errorf("schedule not found"))
+				mockScheduleClient.On("Create", mock.Anything, mock.Anything).Return(mockScheduleHandle, nil)
+				mockScheduleHandle.On("Backfill", mock.Anything, mock.Anything).Return(fmt.Errorf("backfill rejected"))
+			},
+			errMsg: "is live but catch-up",
+		},
 	}
 
 	for _, testCase := range testCases {
@@ -883,4 +961,40 @@ func TestUpdateTrigger(t *testing.T) {
 			}
 		})
 	}
+}
+
+// A failed backfill must report the schedule that was nonetheless created. Returning a
+// bare error would tell the caller the start failed, and the caller would mark the
+// TriggerRun terminal while the schedule kept firing with nothing reconciling it.
+func TestCreateScheduleReturnsLiveScheduleWhenBackfillFails(t *testing.T) {
+	mockClient := temporalMocks.NewClient(t)
+	mockScheduleClient := temporalMocks.NewScheduleClient(t)
+	mockScheduleHandle := temporalMocks.NewScheduleHandle(t)
+
+	mockClient.On("ScheduleClient").Return(mockScheduleClient)
+	mockScheduleClient.On("GetHandle", mock.Anything, "orphan-check-schedule").Return(mockScheduleHandle)
+	mockScheduleHandle.On("Describe", mock.Anything).Return(nil, fmt.Errorf("schedule not found"))
+	mockScheduleClient.On("Create", mock.Anything, mock.Anything).Return(mockScheduleHandle, nil)
+	mockScheduleHandle.On("Backfill", mock.Anything, mock.Anything).Return(fmt.Errorf("backfill rejected"))
+
+	client := &TemporalClient{Client: mockClient, Provider: "temporal", Domain: "default"}
+
+	result, err := client.createScheduleForCron(context.Background(), clientInterface.StartWorkflowOptions{
+		ID:           "orphan-check",
+		TaskList:     "test-task-list",
+		CronSchedule: "0 * * * *",
+		CatchUpFrom:  _catchUpFrom,
+	}, "test-workflow-name")
+
+	require.Error(t, err)
+	require.NotNil(t, result, "the schedule exists, so the caller must be told about it")
+	require.Equal(t, "orphan-check-schedule", result.ID)
+
+	// Typed so the caller can distinguish "created but not caught up" from "failed to create".
+	var catchUpErr *clientInterface.CatchUpError
+	require.ErrorAs(t, err, &catchUpErr)
+	require.Equal(t, "orphan-check-schedule", catchUpErr.ScheduleID)
+	require.True(t, _catchUpFrom.Equal(catchUpErr.CatchUpFrom),
+		"the unreplayed window must be reported so an operator can close it")
+	require.ErrorContains(t, catchUpErr.Err, "backfill rejected", "underlying cause must stay unwrappable")
 }

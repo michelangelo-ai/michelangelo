@@ -4,6 +4,8 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/cadence-workflow/starlark-worker/workflow"
@@ -34,6 +36,11 @@ const (
 	contextKeyTriggerContext = iota
 	contextKeylogicalTs
 )
+
+// scheduledOccurrenceSuffix matches the RFC3339 occurrence time a workflow engine appends
+// to the workflow ID of a scheduled action, e.g. "my-trigger-2026-09-06T14:55:00Z".
+var scheduledOccurrenceSuffix = regexp.MustCompile(
+	`-\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$`)
 
 var (
 	// defaultWaitSeconds is the default wait seconds for the trigger workflow
@@ -116,7 +123,7 @@ func (r *workflows) CronTrigger(ctx workflow.Context, req triggerrun.CreateTrigg
 		zap.String("trigger_run", tr.Name),
 		zap.String("namespace", tr.Namespace),
 	)
-	logicalTs := workflow.Now(ctx).UTC()
+	logicalTs := logicalTimestamp(ctx)
 	ctx = workflow.WithValue(ctx, contextKeylogicalTs, logicalTs)
 	triggerContext := Object{
 		"DS":            logicalTs.Format("2006-01-02"),
@@ -143,6 +150,41 @@ func (r *workflows) CronTrigger(ctx workflow.Context, req triggerrun.CreateTrigg
 	}
 	triggerContext["FinishedAt"] = workflow.Now(ctx)
 	return triggerContext, nil
+}
+
+// logicalTimestamp returns the time this trigger run logically represents, which is
+// what DS and other date-derived parameters are computed from.
+//
+// This is the scheduled occurrence, not the moment execution happened. The two differ
+// whenever an action runs late - most starkly during a catch-up backfill, where every
+// replayed occurrence executes at once. Using the execution clock there would stamp all
+// caught-up runs with today's date instead of the historical date each one stands for,
+// collapsing an N-period backfill into N duplicate runs for a single period.
+//
+// A workflow engine that schedules an action encodes the occurrence as an RFC3339 suffix
+// on the workflow ID ("my-trigger-2026-09-06T14:55:00Z"). When no such suffix is present -
+// a manually started run, or any run under Cadence, which has no schedules - the execution
+// clock is the best available answer and behavior is unchanged.
+func logicalTimestamp(ctx workflow.Context) time.Time {
+	return resolveLogicalTimestamp(workflow.GetInfo(ctx).ExecutionID(), workflow.Now(ctx))
+}
+
+// resolveLogicalTimestamp holds the mapping itself, split out from the workflow context
+// so it can be tested directly. Falls back to executedAt when executionID carries no
+// occurrence suffix.
+func resolveLogicalTimestamp(executionID string, executedAt time.Time) time.Time {
+	// Anchored at the end, and matched rather than split on the last "-", because the
+	// timestamp contains dashes of its own ("...-2026-09-06T14:55:00Z").
+	match := scheduledOccurrenceSuffix.FindString(executionID)
+	if match == "" {
+		return executedAt.UTC()
+	}
+
+	occurrence, err := time.Parse(time.RFC3339, strings.TrimPrefix(match, "-"))
+	if err != nil {
+		return executedAt.UTC()
+	}
+	return occurrence.UTC()
 }
 
 // batchRun executes trigger runs in batches with configurable wait times between batches

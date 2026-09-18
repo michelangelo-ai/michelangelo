@@ -36,6 +36,25 @@ var cronScheduleValidateExt func(*CronSchedule, string) error
 
 func (this *CronSchedule) Validate(prefix string) error {
 
+	{
+		v := this.GetStartTime()
+		n := `start_time`
+		var i interface{}
+		if reflect.ValueOf(v).Kind() == reflect.Ptr {
+			i = reflect.ValueOf(v).Interface()
+			if reflect.ValueOf(v).IsNil() {
+				i = nil
+			}
+		} else {
+			i = reflect.ValueOf(&v).Interface()
+		}
+		validate, hasValidate := i.(interface{ Validate(string) error })
+		if hasValidate {
+			if err := validate.Validate(prefix + n + "."); err != nil {
+				return err
+			}
+		}
+	}
 	// Call extension validation if registered
 	if cronScheduleValidateExt != nil {
 		if err := cronScheduleValidateExt(this, prefix); err != nil {
