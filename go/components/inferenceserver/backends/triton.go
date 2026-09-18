@@ -19,13 +19,14 @@ import (
 var _ Backend = &tritonBackend{}
 
 const (
-	// defaultTritonImage is used when neither the InferenceServer nor the operator
-	// config names an image. The tag is pinned rather than floating, so an
-	// InferenceServer's runtime only changes through an explicit edit.
-	// docker/triton-serving.Dockerfile's FROM should stay in sync with it.
-	defaultTritonImageRepository = "nvcr.io/nvidia/tritonserver"
-	defaultTritonImageTag        = "25.01-py3"
-	defaultTritonImage           = defaultTritonImageRepository + ":" + defaultTritonImageTag
+	// defaultTritonImage is the serving image for Triton-backed InferenceServers
+	// that name none themselves, and is the only place the default is recorded;
+	// inferenceServer.triton.defaultImage exists to override it, not to restate
+	// it. Built from docker/triton-serving.Dockerfile, which adds the ML
+	// framework dependencies the stock Triton image omits. The tag is pinned to a
+	// specific build rather than floating, so an InferenceServer's runtime only
+	// changes through an explicit edit.
+	defaultTritonImage = "ghcr.io/michelangelo-ai/triton-serving:sha-e9b9955"
 
 	// k8sProgressDeadlineExceeded is the Kubernetes DeploymentCondition reason string
 	// that signals a rolling update has stalled. Named constant prevents silent

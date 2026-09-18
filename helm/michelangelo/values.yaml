@@ -378,10 +378,11 @@ inferenceServer:
     portName: http
 
   triton:
-    # defaultImage is used by Triton-backed InferenceServers that don't set
-    # spec.initSpec.servingSpec.image. Empty means the controller's built-in
-    # image.
-    defaultImage: "nvcr.io/nvidia/tritonserver:25.01-py3"
+    # defaultImage overrides the serving image for Triton-backed
+    # InferenceServers that don't set spec.initSpec.servingSpec.image. Empty
+    # uses the controller's built-in default, which is the supported setting;
+    # set this only to pin a different image.
+    defaultImage: ""
 
 # -----------------------------------------------------------------------------
 # controllermgr — Kubernetes controller manager for Michelangelo CRDs.

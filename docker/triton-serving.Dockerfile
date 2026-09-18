@@ -5,8 +5,10 @@
 # transformers at load time fails with ModuleNotFoundError. This installs them
 # on top of the stock image.
 #
-# The base tag is pinned rather than floating. Keep it in sync with
-# defaultTritonImageTag in go/components/inferenceserver/backends/triton.go.
+# .github/workflows/build-triton-image.yaml publishes this to GHCR for amd64
+# and arm64. defaultTritonImage in go/components/inferenceserver/backends/
+# triton.go pins one of those builds, so a change here needs that tag bumped
+# to the resulting image.
 #
 # An InferenceServer needing other versions overrides the image through
 # spec.initSpec.servingSpec.image.
