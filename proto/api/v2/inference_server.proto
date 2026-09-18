@@ -15,6 +15,9 @@ import "michelangelo/api/v2/project.proto";
 import "michelangelo/api/v2/user.proto";
 
 // ServingImage selects the container image that runs the model server.
+//
+// TODO(#2115): Replace the bespoke workload fields with an embedded
+// k8s.io.api.core.v1.PodTemplateSpec, as RayCluster already does.
 message ServingImage {
   // Where the image comes from. Whatever the source, the image ends up in a
   // registry and the pod pulls it from there, so image_pull_policy and
