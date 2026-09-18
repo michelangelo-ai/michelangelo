@@ -64,6 +64,8 @@ export type RunTriggerPayload = {
   };
   spec: {
     pipeline: { name: string; namespace: string };
+    /** Revision CR the trigger's runs execute; unset runs the pipeline's latest revision. */
+    revision?: { name: string; namespace: string };
     trigger: ManifestTrigger;
     sourceTriggerName: string;
     autoFlip: boolean;

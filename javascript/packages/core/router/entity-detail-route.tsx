@@ -33,12 +33,13 @@ export function EntityDetailRoute({ phases = PHASES }: { phases?: Record<string,
   const [, theme] = useStyletron();
   const { phase, entity, entityId, projectId, entityTab, revisionId } = useStudioParams('detail');
   const navigate = useNavigate();
-  const { search } = useLocation();
+  const { pathname, search } = useLocation();
   const entityConfig = phases[phase].entities.find((e) => e.id === entity);
   const resolver = useInterpolationResolver();
 
   const service = entityConfig?.service ?? '';
-  const isRevisionView = !!revisionId && !!entityConfig?.revisioned;
+  const isRevisioned = !!entityConfig?.revisioned;
+  const isRevisionView = !!revisionId && isRevisioned;
 
   const { data, isLoading, error } = useStudioQuery<Record<string, unknown>>({
     queryName: isRevisionView ? 'GetRevision' : `Get${capitalizeFirstLetter(service)}`,
@@ -50,6 +51,36 @@ export function EntityDetailRoute({ phases = PHASES }: { phases?: Record<string,
       enabled: !!service && !!entityId,
     },
   });
+
+  // cast: PhaseEntityConfig carries no entity type generic; only the revision pointer is read
+  // from the live record here; see #1425
+  const liveRecord = data?.[service] as
+    | { status?: { latestRevision?: { name?: string } } }
+    | undefined;
+  const latestRevisionName = isRevisioned ? liveRecord?.status?.latestRevision?.name : undefined;
+  // `status.latestRevision` names the Revision CR, not its revisionId. Fetch it to learn the id
+  // the URL should carry; the redirect below then re-enters the GetRevision path above.
+  const { data: latestRevisionData, isLoading: isLoadingLatestRevision } = useStudioQuery<{
+    revision?: { spec?: { revisionId?: string } };
+  }>({
+    queryName: 'GetRevision',
+    serviceOptions: { namespace: projectId, name: latestRevisionName ?? '' },
+    clientOptions: { enabled: !isRevisionView && !!latestRevisionName },
+  });
+  const latestRevisionId = latestRevisionData?.revision?.spec?.revisionId;
+
+  React.useEffect(() => {
+    if (isRevisionView || !latestRevisionId) return;
+    navigate(
+      { pathname, search: `?revisionId=${encodeURIComponent(latestRevisionId)}` },
+      { replace: true }
+    );
+  }, [isRevisionView, latestRevisionId, navigate, pathname]);
+
+  // Hold the skeleton while the latest revision resolves so the live record never flashes first.
+  const isResolvingLatestRevision =
+    !isRevisionView && !!latestRevisionName && (isLoadingLatestRevision || !!latestRevisionId);
+  const loading = isLoading || isResolvingLatestRevision;
 
   // Tabs live in the path; the query string (e.g. `?revisionId=`) must survive tab changes.
   const handleTabNavigation = React.useCallback(
@@ -121,16 +152,16 @@ export function EntityDetailRoute({ phases = PHASES }: { phases?: Record<string,
       onGoBack={handleReturnToEntityList}
       actions={entityConfig!.actions}
       record={entityData}
-      loading={isLoading}
+      loading={loading}
       headerContent={
-        <Row items={resolvedDetailViewConfig!.metadata} record={entityData} loading={isLoading} />
+        <Row items={resolvedDetailViewConfig!.metadata} record={entityData} loading={loading} />
       }
     >
       <DetailViewPages
         tabs={resolvedDetailViewConfig!.pages.map((page) => ({
           id: page.id,
           label: page.label,
-          content: <DetailViewPageRenderer page={page} data={entityData} isLoading={isLoading} />,
+          content: <DetailViewPageRenderer page={page} data={entityData} isLoading={loading} />,
         }))}
         activeTabId={entityTab}
         onTabSelect={handleTabNavigation}

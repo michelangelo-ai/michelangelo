@@ -16,6 +16,7 @@ import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studi
 import { useStudioMutation } from '#core/hooks/use-studio-mutation/use-studio-mutation';
 import { ENVIRONMENT_LABEL_KEY } from '#core/utils/environment-utils';
 import { generateSuffix } from '#core/utils/name-utils';
+import { buildRevisionName } from '#core/utils/revision-utils';
 import { ResumeRunFields } from './resume-run-fields';
 
 import type { ActionComponentProps } from '#core/components/actions/types';
@@ -36,8 +37,13 @@ export const ALL_PIPELINE_RUN_EVENT_TYPES: NotificationEventType[] = [
 ];
 
 export const CreatePipelineRunForm = ({ record, onClose }: ActionComponentProps<Pipeline>) => {
-  const { projectId } = useStudioParams('base');
+  const { projectId, revisionId } = useStudioParams('base');
   const pipelineName = record?.metadata?.name ?? '';
+  // The detail page always views a Revision, so a run started from it pins that exact snapshot.
+  // Without one (e.g. opened from the list), the apihook falls back to `status.latestRevision`.
+  const revision = revisionId
+    ? { name: buildRevisionName('pipeline', pipelineName, revisionId), namespace: projectId }
+    : undefined;
 
   const createPipelineRunMutation = useStudioMutation<PipelineRun, PipelineRun>({
     mutationName: 'CreatePipelineRun',
@@ -68,6 +74,7 @@ export const CreatePipelineRunForm = ({ record, onClose }: ActionComponentProps<
         name: pipelineName,
         namespace: projectId,
       },
+      revision,
     },
   };
 
@@ -81,6 +88,7 @@ export const CreatePipelineRunForm = ({ record, onClose }: ActionComponentProps<
       initialValues={initialValues}
     >
       <StringField name="spec.pipeline.name" label="Pipeline to run" readOnly />
+      {revision && <StringField name="spec.revision.name" label="Revision" readOnly />}
 
       {/* TODO: #2155 "Production" is not currently restricted based on the pipeline's source branch. */}
       <InlineRadioField

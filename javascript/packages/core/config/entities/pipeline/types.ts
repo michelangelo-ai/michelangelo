@@ -16,6 +16,10 @@ export interface Pipeline {
       triggerMap?: Record<string, ManifestTrigger>;
     };
   };
+  status?: {
+    /** The Revision CR snapshotting the newest default-branch commit; unset until one exists. */
+    latestRevision?: { name?: string; namespace?: string };
+  };
 }
 
 /**

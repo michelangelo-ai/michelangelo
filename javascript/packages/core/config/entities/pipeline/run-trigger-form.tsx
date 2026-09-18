@@ -7,6 +7,7 @@ import { useStudioMutation } from '#core/hooks/use-studio-mutation/use-studio-mu
 import { useStudioQuery } from '#core/hooks/use-studio-query';
 import { ENVIRONMENT_LABEL_KEY } from '#core/utils/environment-utils';
 import { generateSuffix } from '#core/utils/name-utils';
+import { buildRevisionName } from '#core/utils/revision-utils';
 import { formatTriggerSchedule } from './format-trigger-schedule';
 import { RunTriggerFields } from './run-trigger-fields';
 
@@ -25,8 +26,12 @@ import type { Pipeline, RunTriggerFormValues } from './types';
  * from a row that may have been sitting in a stale list.
  */
 export const RunTriggerForm = ({ record, onClose }: ActionComponentProps<Pipeline>) => {
-  const { projectId } = useStudioParams('base');
+  const { projectId, revisionId } = useStudioParams('base');
   const pipelineName = record?.metadata?.name ?? '';
+  // Pin the Revision the detail page is viewing so the trigger's runs execute that snapshot.
+  const revision = revisionId
+    ? { name: buildRevisionName('pipeline', pipelineName, revisionId), namespace: projectId }
+    : undefined;
 
   const { data, isLoading } = useStudioQuery<{ pipeline: Pipeline }>({
     queryName: 'GetPipeline',
@@ -73,6 +78,7 @@ export const RunTriggerForm = ({ record, onClose }: ActionComponentProps<Pipelin
       },
       spec: {
         pipeline: { name: pipelineName, namespace: projectId },
+        ...(revision && { revision }),
         trigger: buildTriggerOverride(sourceTrigger, values),
         sourceTriggerName: values.sourceTriggerName,
         autoFlip: !!values.autoFlip,

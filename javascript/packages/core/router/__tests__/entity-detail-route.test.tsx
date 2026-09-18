@@ -213,6 +213,67 @@ describe('EntityDetailRoute', () => {
       );
     });
 
+    test('redirects a bare entity URL to its latest revision', async () => {
+      const testPhases = {
+        train: buildPhase({ id: 'train', entities: [revisionedEntity] }),
+      };
+      const mockRequest = createQueryMockRouter({
+        GetPipeline: {
+          pipeline: {
+            ...livePipeline.pipeline,
+            status: { latestRevision: { name: 'pipeline-my-pipeline-3f2a1b9c0d4e' } },
+          },
+        },
+        GetRevision: revision,
+      });
+
+      render(
+        <EntityDetailRoute phases={testPhases} />,
+        buildWrapper([
+          getErrorProviderWrapper(),
+          getRouterWrapper({ location: '/myproject/train/pipelines/My-Pipeline/overview' }),
+          getServiceProviderWrapper({ request: mockRequest }),
+        ])
+      );
+
+      // The latest Revision is resolved by the name status.latestRevision points at, and the
+      // page lands on its snapshot rather than the live record.
+      expect(await screen.findByText('snapshot-owner')).toBeInTheDocument();
+      expect(screen.queryByText('live-owner')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument();
+      expect(mockRequest.getCall('GetRevision')?.args).toEqual({
+        namespace: 'myproject',
+        name: 'pipeline-my-pipeline-3f2a1b9c0d4e',
+      });
+    });
+
+    test('renders the live record when the entity has no revision yet', async () => {
+      const testPhases = {
+        train: buildPhase({ id: 'train', entities: [revisionedEntity] }),
+      };
+      const mockRequest = createQueryMockRouter({
+        GetPipeline: livePipeline,
+        GetRevision: revision,
+      });
+
+      render(
+        <EntityDetailRoute phases={testPhases} />,
+        buildWrapper([
+          getErrorProviderWrapper(),
+          getRouterWrapper({ location: '/myproject/train/pipelines/My-Pipeline' }),
+          getServiceProviderWrapper({ request: mockRequest }),
+        ])
+      );
+
+      expect(await screen.findByText('live-owner')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument();
+      expect(mockRequest).not.toHaveBeenCalledWith(
+        'GetRevision',
+        expect.anything(),
+        expect.anything()
+      );
+    });
+
     test('ignores revisionId for an entity that is not revisioned', async () => {
       const testPhases = {
         train: buildPhase({
