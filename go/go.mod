@@ -33,10 +33,10 @@ require (
 	go.temporal.io/api v1.49.1
 	go.temporal.io/sdk v1.35.0
 	go.temporal.io/sdk/contrib/tally v0.2.0
-	go.uber.org/cadence v1.3.1-rc.11
+	go.uber.org/cadence v1.4.0-rc.5
 	go.uber.org/config v1.4.0
 	go.uber.org/fx v1.22.0
-	go.uber.org/yarpc v1.80.0
+	go.uber.org/yarpc v1.88.0
 	go.uber.org/zap v1.27.0
 	golang.org/x/tools v0.45.0
 	google.golang.org/api v0.287.1
@@ -125,6 +125,7 @@ require (
 	github.com/tidwall/pretty v1.2.0 // indirect
 	github.com/twmb/murmur3 v1.1.8 // indirect
 	github.com/uber-go/mapdecode v1.0.0 // indirect
+	github.com/uber/cadence-idl v0.0.0-20260818192101-d6d4d81fa739 // indirect
 	github.com/uber/tchannel-go v1.34.4 // indirect
 	github.com/vmihailenco/msgpack/v5 v5.4.1 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
