@@ -52,7 +52,7 @@ jobs:
           cp bazel-bin/go/cmd/${{ matrix.service }}/${{ matrix.service }}_/${{ matrix.service }} ${{ matrix.service }}
 
       - name: Login to Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.repository_owner }}
