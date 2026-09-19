@@ -10,9 +10,9 @@ on:
         description: >
           GHCR examples image tag to use as the task image.
           Use your branch name or a sha- tag to test a branch build.
-          Defaults to "latest" (built from main).
+          Defaults to "main" (the dev-tip build).
         required: false
-        default: "latest"
+        default: "main"
       integration_test_ref:
         description: >
           Branch or ref of michelangelo-ai/integration-test to check out.
@@ -25,7 +25,7 @@ on:
         description: "GHCR examples image tag"
         required: false
         type: string
-        default: "latest"
+        default: "main"
       integration_test_ref:
         description: "Branch or ref of michelangelo-ai/integration-test to check out"
         required: false
