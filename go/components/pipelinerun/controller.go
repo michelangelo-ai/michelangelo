@@ -210,6 +210,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	} else {
 		if conditionResult.IsKilled {
 			pipelineRun.Status.State = v2pb.PIPELINE_RUN_STATE_KILLED
+			pipelineRun.Status.ErrorMessage = findFailureMessage(pipelineRun.Status.Steps)
 		} else if !conditionResult.IsTerminal {
 			pipelineRun.Status.State = v2pb.PIPELINE_RUN_STATE_RUNNING
 		} else if conditionResult.AreSatisfied {
@@ -371,6 +372,7 @@ func (t *pipelineRunDrainTarget) Progress(ctx context.Context) (bool, error) {
 	}
 	if conditionResult.IsKilled {
 		t.run.Status.State = v2pb.PIPELINE_RUN_STATE_KILLED
+		t.run.Status.ErrorMessage = findFailureMessage(t.run.Status.Steps)
 	} else if !conditionResult.IsTerminal {
 		t.run.Status.State = v2pb.PIPELINE_RUN_STATE_RUNNING
 	} else if conditionResult.AreSatisfied {

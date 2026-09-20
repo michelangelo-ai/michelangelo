@@ -351,6 +351,149 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		{
+			name: "pipeline run's ExecuteWorkflow step already KILLED with a real kill message, ErrorMessage is populated from it",
+			initialObjects: []client.Object{
+				&v2.PipelineRun{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-pipeline-run",
+						Namespace: "test-namespace",
+					},
+					Spec: v2.PipelineRunSpec{
+						Pipeline: &apipb.ResourceIdentifier{
+							Name:      "test-pipeline",
+							Namespace: "test-namespace",
+						},
+					},
+					Status: v2.PipelineRunStatus{
+						WorkflowId:    "test-workflow-id",
+						WorkflowRunId: "test-run-id",
+						Conditions: []*apipb.Condition{
+							{
+								Type:   actors.SourcePipelineType,
+								Status: apipb.CONDITION_STATUS_TRUE,
+							},
+							{
+								Type:   actors.ImageBuildType,
+								Status: apipb.CONDITION_STATUS_TRUE,
+							},
+							{
+								Type:   actors.ExecuteWorkflowType,
+								Status: apipb.CONDITION_STATUS_UNKNOWN,
+							},
+						},
+						Steps: []*v2.PipelineRunStepInfo{
+							{
+								Name:  pipelinerunutils.SourcePipelineStepName,
+								State: v2.PIPELINE_RUN_STEP_STATE_PENDING,
+							},
+							{
+								Name:  pipelinerunutils.ImageBuildStepName,
+								State: v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED,
+							},
+							{
+								Name:  pipelinerunutils.ExecuteWorkflowStepName,
+								State: v2.PIPELINE_RUN_STEP_STATE_KILLED,
+								SubSteps: []*v2.PipelineRunStepInfo{
+									{
+										Name:    "task1",
+										State:   v2.PIPELINE_RUN_STEP_STATE_KILLED,
+										Message: "killed due to workflow termination",
+									},
+								},
+							},
+						},
+						SourcePipeline: &v2.SourcePipeline{
+							Pipeline: &v2.Pipeline{
+								ObjectMeta: metav1.ObjectMeta{
+									Name:      "test-pipeline",
+									Namespace: "test-namespace",
+									Annotations: map[string]string{
+										pipelinerunutils.ImageIDAnnotationKey: "test-image-id",
+									},
+								},
+								Spec: v2.PipelineSpec{
+									Manifest: &v2.PipelineManifest{
+										Content:    pipelineManifestContent,
+										UniflowTar: "mock://test-uniflow-tar",
+									},
+								},
+							},
+						},
+						State: v2.PIPELINE_RUN_STATE_RUNNING,
+					},
+				},
+				&v2.Pipeline{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-pipeline",
+						Namespace: "test-namespace",
+						Annotations: map[string]string{
+							pipelinerunutils.ImageIDAnnotationKey: "test-image-id",
+						},
+					},
+					Spec: v2.PipelineSpec{
+						Manifest: &v2.PipelineManifest{
+							Content:    pipelineManifestContent,
+							UniflowTar: "mock://test-uniflow-tar",
+						},
+					},
+				},
+			},
+			mockFunc: func(mockWorkflowClient *workflowClientMock.MockWorkflowClient, mockBlobStorageClient *blobStorageClientMock.MockBlobStoreClient) {
+				// SourcePipeline.Retrieve() returns TRUE, ImageBuild.Retrieve() returns TRUE.
+				// ExecuteWorkflow.Retrieve() sees the step already KILLED and returns FALSE
+				// with reason KillReason; ExecuteWorkflow.Run() short-circuits on the
+				// already-terminal step and returns without touching the workflow client,
+				// so no mocks are needed here.
+			},
+			expectedConditions: []*apipb.Condition{
+				{
+					Type:   actors.SourcePipelineType,
+					Status: apipb.CONDITION_STATUS_TRUE,
+				},
+				{
+					Type:   actors.ImageBuildType,
+					Status: apipb.CONDITION_STATUS_TRUE,
+				},
+				{
+					Type:   actors.ExecuteWorkflowType,
+					Status: apipb.CONDITION_STATUS_FALSE,
+					Reason: defaultEngine.KillReason,
+				},
+			},
+			expectedPipelineRunStatus: v2.PipelineRunStatus{
+				State:         v2.PIPELINE_RUN_STATE_KILLED,
+				WorkflowId:    "test-workflow-id",
+				WorkflowRunId: "test-run-id",
+			},
+			expectedSteps: []*v2.PipelineRunStepInfo{
+				{
+					Name:  pipelinerunutils.SourcePipelineStepName,
+					State: v2.PIPELINE_RUN_STEP_STATE_PENDING,
+				},
+				{
+					Name:  pipelinerunutils.ImageBuildStepName,
+					State: v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED,
+				},
+				{
+					Name:  pipelinerunutils.ExecuteWorkflowStepName,
+					State: v2.PIPELINE_RUN_STEP_STATE_KILLED,
+					SubSteps: []*v2.PipelineRunStepInfo{
+						{
+							Name:    "task1",
+							State:   v2.PIPELINE_RUN_STEP_STATE_KILLED,
+							Message: "killed due to workflow termination",
+						},
+					},
+				},
+			},
+			expectedErrorMessage: "killed due to workflow termination",
+			errMsg:               "",
+			expectedResult: ctrl.Result{
+				Requeue:      false,
+				RequeueAfter: 0,
+			},
+		},
+		{
 			name: "third reconcile, ExecuteWorkflow actor starts workflow",
 			initialObjects: []client.Object{
 				&v2.PipelineRun{
@@ -1461,6 +1604,24 @@ func TestFindFailureMessage(t *testing.T) {
 				},
 			},
 			expectedMessage: "parent failure message",
+		},
+		{
+			name: "single KILLED step with a message returns it",
+			steps: []*v2pb.PipelineRunStepInfo{
+				{
+					Name:    pipelinerunutils.ExecuteWorkflowStepName,
+					State:   v2pb.PIPELINE_RUN_STEP_STATE_KILLED,
+					Message: "",
+					SubSteps: []*v2pb.PipelineRunStepInfo{
+						{
+							Name:    "task1",
+							State:   v2pb.PIPELINE_RUN_STEP_STATE_KILLED,
+							Message: "killed due to workflow termination",
+						},
+					},
+				},
+			},
+			expectedMessage: "killed due to workflow termination",
 		},
 		{
 			name: "SUCCEEDED step with a message is ignored",
