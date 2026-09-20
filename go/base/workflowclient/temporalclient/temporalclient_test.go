@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cadence-workflow/starlark-worker/temporal"
 	clientInterface "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -20,6 +21,7 @@ import (
 	temporalClient "go.temporal.io/sdk/client"
 	temporalConverter "go.temporal.io/sdk/converter"
 	temporalMocks "go.temporal.io/sdk/mocks"
+	"go.uber.org/zap"
 )
 
 func TestStartWorkflow(t *testing.T) {
@@ -139,6 +141,51 @@ func TestGetWorkflowExecutionInfo(t *testing.T) {
 			expectedStatus:         clientInterface.WorkflowExecutionStatusFailed,
 			expectedExecution:      &clientInterface.WorkflowExecution{},
 			expectedFailureMessage: "got an unexpected keyword argument",
+		},
+		{
+			// The starlark-worker library (used by our pipeline workflows) reports
+			// application errors via workflow.NewCustomError(ctx, code, err.Error()),
+			// which stores the generic code (e.g. "invalid-argument") in Message and the
+			// actual descriptive text in Details, encoded with its own custom
+			// DataConverter. GetWorkflowExecutionInfo must prefer that decoded detail
+			// over the generic Message.
+			name: "failed with application error details",
+			mockFunc: func(mockTemporalClient *temporalMocks.Client) {
+				mockTemporalClient.On("DescribeWorkflowExecution", mock.Anything, mock.Anything, mock.Anything).Return(
+					&workflowserviceV1.DescribeWorkflowExecutionResponse{
+						WorkflowExecutionInfo: &workflowV1.WorkflowExecutionInfo{
+							Status: temporalEnumsV1.WORKFLOW_EXECUTION_STATUS_FAILED,
+						},
+					},
+					nil,
+				)
+				detailPayload, err := (temporal.DataConverter{Logger: zap.NewNop()}).ToPayload(
+					`function pipeline_220 got an unexpected keyword argument "task_1_d"`,
+				)
+				require.NoError(t, err)
+				iter := temporalMocks.NewHistoryEventIterator(t)
+				iter.On("HasNext").Return(true).Once()
+				iter.On("Next").Return(&historyV1.HistoryEvent{
+					EventType: temporalEnumsV1.EVENT_TYPE_WORKFLOW_EXECUTION_FAILED,
+					Attributes: &historyV1.HistoryEvent_WorkflowExecutionFailedEventAttributes{
+						WorkflowExecutionFailedEventAttributes: &historyV1.WorkflowExecutionFailedEventAttributes{
+							Failure: &failureV1.Failure{
+								Message: "invalid-argument",
+								FailureInfo: &failureV1.Failure_ApplicationFailureInfo{
+									ApplicationFailureInfo: &failureV1.ApplicationFailureInfo{
+										Details: &commonV1.Payloads{Payloads: []*commonV1.Payload{detailPayload}},
+									},
+								},
+							},
+						},
+					},
+				}, nil).Once()
+				iter.On("HasNext").Return(false)
+				mockTemporalClient.On("GetWorkflowHistory", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(iter)
+			},
+			expectedStatus:         clientInterface.WorkflowExecutionStatusFailed,
+			expectedExecution:      &clientInterface.WorkflowExecution{},
+			expectedFailureMessage: `function pipeline_220 got an unexpected keyword argument "task_1_d"`,
 		},
 		{
 			name: "terminated",

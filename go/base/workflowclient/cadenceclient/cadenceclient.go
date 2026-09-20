@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/cadence-workflow/starlark-worker/cadence"
 	clientInterface "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
 	"go.uber.org/cadence/.gen/go/shared"
 	cadenceClient "go.uber.org/cadence/client"
+	"go.uber.org/zap"
 )
 
 // mapCadenceStatusToInterface maps Cadence workflow status to our interface status
@@ -129,7 +131,7 @@ func (c *CadenceClient) getCloseEventFailureMessage(ctx context.Context, workflo
 		switch event.GetEventType() {
 		case shared.EventTypeWorkflowExecutionFailed:
 			if attr := event.WorkflowExecutionFailedEventAttributes; attr != nil {
-				return attr.GetReason(), nil
+				return extractCadenceFailureMessage(attr.GetReason(), attr.GetDetails()), nil
 			}
 		case shared.EventTypeWorkflowExecutionTerminated:
 			if attr := event.WorkflowExecutionTerminatedEventAttributes; attr != nil {
@@ -138,6 +140,23 @@ func (c *CadenceClient) getCloseEventFailureMessage(ctx context.Context, workflo
 		}
 	}
 	return "", nil
+}
+
+// extractCadenceFailureMessage returns the human-readable text of a Cadence workflow
+// failure. The starlark-worker library (used by our pipeline workflows) reports errors via
+// workflow.NewCustomError(ctx, code, err.Error()), which Cadence stores as: Reason = code
+// (e.g. "invalid-argument") and Details = the actual descriptive error text, encoded with
+// the same custom DataConverter the workflow used. Prefer decoding Details over the generic
+// code string in Reason, falling back to Reason when there are no decodable details.
+func extractCadenceFailureMessage(reason string, details []byte) string {
+	if len(details) > 0 {
+		converter := cadence.DataConverter{Logger: zap.NewNop()}
+		var detail string
+		if err := converter.FromData(details, &detail); err == nil && detail != "" {
+			return detail
+		}
+	}
+	return reason
 }
 
 func (c *CadenceClient) CancelWorkflow(ctx context.Context, workflowID string, runID string, reason string) error {

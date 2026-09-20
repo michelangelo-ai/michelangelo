@@ -7,10 +7,12 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/cadence-workflow/starlark-worker/temporal"
 	clientInterface "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
 	commonV1 "go.temporal.io/api/common/v1"
 	enumspb "go.temporal.io/api/enums/v1"
 	temporalEnumsV1 "go.temporal.io/api/enums/v1"
+	failureV1 "go.temporal.io/api/failure/v1"
 	filterV1 "go.temporal.io/api/filter/v1"
 	"go.temporal.io/api/serviceerror"
 	workflowserviceV1 "go.temporal.io/api/workflowservice/v1"
@@ -219,12 +221,34 @@ func (c *TemporalClient) getCloseEventFailureMessage(ctx context.Context, workfl
 
 		switch event.GetEventType() {
 		case temporalEnumsV1.EVENT_TYPE_WORKFLOW_EXECUTION_FAILED:
-			return event.GetWorkflowExecutionFailedEventAttributes().GetFailure().GetMessage(), nil
+			return c.extractFailureMessage(event.GetWorkflowExecutionFailedEventAttributes().GetFailure()), nil
 		case temporalEnumsV1.EVENT_TYPE_WORKFLOW_EXECUTION_TERMINATED:
 			return event.GetWorkflowExecutionTerminatedEventAttributes().GetReason(), nil
 		}
 	}
 	return "", nil
+}
+
+// extractFailureMessage returns the human-readable text of a Temporal failure. The
+// starlark-worker library (used by our pipeline workflows) reports errors via
+// workflow.NewCustomError(ctx, code, err.Error()), which Temporal's ApplicationError
+// stores as: Message = code (e.g. "invalid-argument") and Details = the actual
+// descriptive error text. So for ApplicationFailureInfo we prefer decoding the first
+// Details payload - using the same custom DataConverter the workflow encoded it with -
+// over the generic code string in Message, falling back to Message when there are no
+// decodable details.
+func (c *TemporalClient) extractFailureMessage(failure *failureV1.Failure) string {
+	if failure == nil {
+		return ""
+	}
+	if details := failure.GetApplicationFailureInfo().GetDetails(); len(details.GetPayloads()) > 0 {
+		converter := temporal.DataConverter{Logger: c.logger()}
+		var detail string
+		if err := converter.FromPayload(details.GetPayloads()[0], &detail); err == nil && detail != "" {
+			return detail
+		}
+	}
+	return failure.GetMessage()
 }
 
 // QueryWorkflow queries a workflow
