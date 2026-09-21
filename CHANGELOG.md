@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.11.0] - 2026-09-21
 
 
 ### Bug Fixes
@@ -45,6 +45,9 @@ All notable changes to this project will be documented in this file.
 
 
 - **go:** Unload models per deployment and per cluster on delete (#2111)
+
+
+- **ci:** Cherry-pick NODE_AUTH_TOKEN scoping fix to release/v0.11 (#2121) (#2124)
 
 
 ### CI/CD
@@ -96,6 +99,9 @@ All notable changes to this project will be documented in this file.
 
 
 - Add Code to Cluster conference talk to Further Reading (#2106)
+
+
+- Update CHANGELOG.md for v0.11.0-rc.1 (#2120)
 
 
 ### Features
@@ -192,6 +198,9 @@ All notable changes to this project will be documented in this file.
 
 
 - Bump version to 0.11.0-rc.1 (#2119)
+
+
+- Release 0.11.0 (#2133)
 
 
 ### Performance
