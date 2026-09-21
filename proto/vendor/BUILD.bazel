@@ -1,0 +1,9 @@
+# These vendored k8s.io protos exist only to feed tools/gen-grpc-client.sh
+# (JS/Python client generation) and tools/gen-descriptors.sh (descriptor
+# bundling) — see k8s.io/README.md. Go already compiles against the real
+# @io_k8s_apimachinery / @io_k8s_api external repos, so there's no reason to
+# also compile Go code from this copy, and doing so fails to build (its
+# go_proto_library deps resolve to those same external repos' Go types,
+# which don't satisfy what gogoslick generates locally, e.g. a missing
+# RawExtension.Equal method).
+# gazelle:go_generate_proto false

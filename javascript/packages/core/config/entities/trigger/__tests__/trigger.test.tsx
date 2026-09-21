@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 
 import { DetailViewHeader } from '#core/components/views/detail-view/components/detail-view-header/detail-view-header';
 import { TRIGGER_ENTITY_CONFIG } from '#core/config/entities/trigger/trigger';
-import { TriggerRunAction, TriggerRunState } from '#core/config/entities/trigger/types';
+import { TriggerRunAction } from '#core/config/entities/trigger/types';
 import { TRAIN_PHASE } from '#core/config/phases/train';
 import { PhaseListRoute } from '#core/router/phase-list-route';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
@@ -41,7 +41,7 @@ function buildRunningTriggerRun(overrides: Partial<TriggerRun> = {}): TriggerRun
       kill: false,
       action: TriggerRunAction.NO_ACTION,
     },
-    status: { state: TriggerRunState.RUNNING },
+    status: { state: 'TRIGGER_RUN_STATE_RUNNING' },
     ...overrides,
   };
 }
@@ -107,7 +107,7 @@ describe('TRIGGER_ENTITY_CONFIG: kill action', () => {
   });
 
   it('is enabled when the run is running', async () => {
-    const record = buildRunningTriggerRun({ status: { state: TriggerRunState.RUNNING } });
+    const record = buildRunningTriggerRun({ status: { state: 'TRIGGER_RUN_STATE_RUNNING' } });
 
     render(
       <DetailViewHeader title="my-trigger" actions={TRIGGER_ACTIONS} record={record} />,
@@ -127,7 +127,7 @@ describe('TRIGGER_ENTITY_CONFIG: kill action', () => {
 
   it('disables the action with a tooltip when the run is not killable', async () => {
     const user = userEvent.setup();
-    const record = buildRunningTriggerRun({ status: { state: TriggerRunState.SUCCEEDED } });
+    const record = buildRunningTriggerRun({ status: { state: 'TRIGGER_RUN_STATE_SUCCEEDED' } });
 
     render(
       <DetailViewHeader title="my-trigger" actions={TRIGGER_ACTIONS} record={record} />,
@@ -181,7 +181,7 @@ describe('TRIGGER_ENTITY_CONFIG: kill action', () => {
 describe('TRIGGER_ENTITY_CONFIG: rerun action', () => {
   function buildTerminalTriggerRun(overrides: Partial<TriggerRun> = {}): TriggerRun {
     return buildRunningTriggerRun({
-      status: { state: TriggerRunState.FAILED },
+      status: { state: 'TRIGGER_RUN_STATE_FAILED' },
       spec: {
         pipeline: { name: 'my-pipeline', namespace: 'test-ns' },
         revision: { name: 'rev-1', namespace: 'test-ns' },
@@ -222,7 +222,7 @@ describe('TRIGGER_ENTITY_CONFIG: rerun action', () => {
   });
 
   it("has Kill and Rerun's enabled state respond independently to the run's own status", async () => {
-    const runningRecord = buildTerminalTriggerRun({ status: { state: TriggerRunState.RUNNING } });
+    const runningRecord = buildTerminalTriggerRun({ status: { state: 'TRIGGER_RUN_STATE_RUNNING' } });
 
     const { unmount } = render(
       <DetailViewHeader title="my-trigger" actions={TRIGGER_ACTIONS} record={runningRecord} />,
@@ -234,7 +234,7 @@ describe('TRIGGER_ENTITY_CONFIG: rerun action', () => {
     expect(screen.getByRole('button', { name: 'Rerun' })).toBeDisabled();
     unmount();
 
-    const failedRecord = buildTerminalTriggerRun({ status: { state: TriggerRunState.FAILED } });
+    const failedRecord = buildTerminalTriggerRun({ status: { state: 'TRIGGER_RUN_STATE_FAILED' } });
 
     render(
       <DetailViewHeader title="my-trigger" actions={TRIGGER_ACTIONS} record={failedRecord} />,
@@ -248,7 +248,7 @@ describe('TRIGGER_ENTITY_CONFIG: rerun action', () => {
 
   it('disables Rerun with a tooltip when the trigger run has not terminated', async () => {
     const user = userEvent.setup();
-    const record = buildTerminalTriggerRun({ status: { state: TriggerRunState.RUNNING } });
+    const record = buildTerminalTriggerRun({ status: { state: 'TRIGGER_RUN_STATE_RUNNING' } });
 
     render(
       <DetailViewHeader title="my-trigger" actions={TRIGGER_ACTIONS} record={record} />,
@@ -266,7 +266,7 @@ describe('TRIGGER_ENTITY_CONFIG: rerun action', () => {
     ).toBeInTheDocument();
   });
 
-  it.each([TriggerRunState.FAILED, TriggerRunState.KILLED, TriggerRunState.SUCCEEDED])(
+  it.each(['TRIGGER_RUN_STATE_FAILED', 'TRIGGER_RUN_STATE_KILLED', 'TRIGGER_RUN_STATE_SUCCEEDED'])(
     'enables Rerun when the trigger run state is terminal (%i)',
     async (state) => {
       const record = buildTerminalTriggerRun({ status: { state } });

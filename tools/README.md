@@ -23,7 +23,9 @@ Scripts in the root `tools/` directory are for **development purposes** and may 
 - **`goimports`** - Go import formatter
 - **`mamockgen`** - Mock generator for Michelangelo AI
 - **`grpc-svc-gen.sh`** - gRPC service generator
-- **`gen-grpc-client.sh`** - gRPC client generator
+- **`gen-grpc-client.sh`** - Generates gRPC client language bindings (Python/JS classes); runs automatically via `yarn generate`. See `docs/contributing/dev/shell-scripts.md#gen-grpc-clientsh`
+- **`gen-descriptors.sh`** - Builds `helm/michelangelo/files/descriptors.pb` and the `grpc_json_transcoder` services allowlist; CI-enforced. See `docs/contributing/dev/shell-scripts.md#gen-descriptorssh`
+- **`check-transcoder-services.sh`** - CI backstop for `services.ts`-only changes. See `docs/contributing/dev/shell-scripts.md#check-transcoder-servicessh`
 - **`run_ruff.sh`** - Python linter runner
 - **`assert_python_version.py`** - Python version checker
 - **`utils.py`** - Common utilities

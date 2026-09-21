@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { vi } from 'vitest';
 
+import { PipelineRunState } from '#core/config/entities/run/types';
 import { TRAIN_PHASE } from '#core/config/phases/train';
 import { EntityDetailRoute } from '#core/router/entity-detail-route';
 import { PhaseListRoute } from '#core/router/phase-list-route';
@@ -67,7 +68,7 @@ describe('Run list page', () => {
                     creationTimestamp: { seconds: 1660000000 },
                   },
                   spec: { actor: { name: 'jsmith' }, pipeline: { name: 'prediction-pipeline' } },
-                  status: { state: 3 },
+                  status: { state: PipelineRunState.SUCCEEDED },
                 },
                 {
                   metadata: {
@@ -75,7 +76,7 @@ describe('Run list page', () => {
                     creationTimestamp: { seconds: 1650000000 },
                   },
                   spec: { actor: { name: 'jsmith' }, pipeline: { name: 'prediction-pipeline' } },
-                  status: { state: 3 },
+                  status: { state: PipelineRunState.SUCCEEDED },
                 },
               ],
             },
@@ -110,7 +111,7 @@ describe('Run detail page', () => {
         pipeline: { name: 'prediction-pipeline' },
       },
       status: {
-        state: 3,
+        state: PipelineRunState.SUCCEEDED,
         sourcePipeline: {
           pipeline: {
             spec: {
@@ -187,7 +188,7 @@ describe('Run detail page', () => {
             },
           },
         },
-        status: { state: 1 },
+        status: { state: PipelineRunState.PENDING },
       });
       render(
         <EntityDetailRoute phases={{ train: TRAIN_PHASE }} />,
@@ -201,7 +202,7 @@ describe('Run detail page', () => {
     it('shows an empty state when the manifest has no configuration content', async () => {
       const run = buildRun({
         status: {
-          state: 3,
+          state: PipelineRunState.SUCCEEDED,
           sourcePipeline: {
             pipeline: {
               spec: {

@@ -131,7 +131,7 @@ describe('Deployment detail page', () => {
             request: createQueryMockRouter({
               GetDeployment: {
                 deployment: {
-                  spec: { definition: { type: 1 } },
+                  spec: { definition: { type: 'TARGET_TYPE_INFERENCE_SERVER' } },
                 },
               },
             }),
@@ -212,7 +212,7 @@ describe('Deployment detail page', () => {
                   metadata: { creationTimestamp: { seconds: 1746000000 } },
                   spec: {
                     owner: { name: 'model-owner' },
-                    kind: 2,
+                    kind: 'MODEL_KIND_REGRESSION',
                     sourcePipelineRun: { name: 'run-20260825-080000' },
                   },
                 },
@@ -530,8 +530,8 @@ describe('Deployment detail page', () => {
         data: object
       ) => string;
 
-      const condition = (status: number) => ({ status });
-      const atStage = (stage: number) => ({ status: { stage } });
+      const condition = (status: string) => ({ status });
+      const atStage = (stage: string) => ({ status: { stage } });
 
       it('marks satisfied conditions as success', () => {
         const conditions = [condition(DEPLOYMENT_CONDITION_STATUS.TRUE)];
@@ -978,7 +978,7 @@ describe('Deployment update action', () => {
             desiredRevision: { name: 'bert-cola-37', namespace: NAMESPACE },
             target: { case: 'inferenceServer', value: { name: 'inference-server-example' } },
             strategy: { rolloutStrategy: { case: 'rolling', value: { incrementPercentage: 10 } } },
-            definition: { type: 1 },
+            definition: { type: 'TARGET_TYPE_INFERENCE_SERVER' },
             modelFamily: { name: 'bert-cola', namespace: NAMESPACE },
           },
           status: { currentRevision: { name: 'bert-cola-37', namespace: NAMESPACE } },
@@ -1072,7 +1072,7 @@ describe('Deployment create action', () => {
               value: { name: 'inference-server-example', namespace: 'ma-dev-test' },
             },
             strategy: { rolloutStrategy: { case: 'rolling', value: { incrementPercentage: 0 } } },
-            definition: { type: 1 },
+            definition: { type: 'TARGET_TYPE_INFERENCE_SERVER' },
           },
         },
         {}

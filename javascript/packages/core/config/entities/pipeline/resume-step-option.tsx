@@ -3,6 +3,7 @@ import { useStyletron } from 'baseui';
 import { TAG_BEHAVIOR, TAG_HIERARCHY, TAG_SIZE } from '#core/components/tag/constants';
 import { Tag } from '#core/components/tag/tag';
 import { STEP_STATE_COLOR_MAP, STEP_STATE_TEXT_MAP } from '#core/config/entities/run/shared';
+import { PipelineRunStepState } from '#core/config/entities/run/types';
 import { formatElapsedSeconds, timestampToString } from '#core/utils/time-utils';
 
 import type { PipelineRunStepInfo } from '#core/config/entities/run/types';
@@ -22,7 +23,7 @@ export const ResumeStepOption = ({ step }: { step?: PipelineRunStepInfo }) => {
   const start = timestampToString(step.startTime?.seconds);
   const end = timestampToString(step.endTime?.seconds);
   const duration = formatElapsedSeconds(step.startTime?.seconds, step.endTime?.seconds);
-  const state = step.state ?? 0;
+  const state = step.state ?? PipelineRunStepState.INVALID;
 
   const metadataStyles = css({ ...theme.typography.ParagraphXSmall });
 

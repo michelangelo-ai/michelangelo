@@ -1,6 +1,6 @@
 import { CellType } from '#core/components/cell/constants';
 import { TASK_STATE } from '#core/components/views/execution/constants';
-import { CONDITION_STATUS, INFERENCE_SERVER_STATE_CELL } from './shared';
+import { ConditionStatus, INFERENCE_SERVER_STATE_CELL } from './shared';
 
 import type { DetailViewConfig } from '#core/components/views/types';
 
@@ -64,13 +64,13 @@ export const TARGET_DETAIL_CONFIG: DetailViewConfig = {
             markdown: false,
           },
         ],
-        stateBuilder: (record: { status: number }) => {
+        stateBuilder: (record: { status: string }) => {
           switch (record.status) {
-            case CONDITION_STATUS.TRUE:
+            case ConditionStatus.TRUE:
               return TASK_STATE.SUCCESS;
-            case CONDITION_STATUS.FALSE:
+            case ConditionStatus.FALSE:
               return TASK_STATE.ERROR;
-            case CONDITION_STATUS.UNKNOWN:
+            case ConditionStatus.UNKNOWN:
             default:
               return TASK_STATE.RUNNING;
           }

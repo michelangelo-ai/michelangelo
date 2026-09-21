@@ -1,5 +1,6 @@
 import { CellType } from '#core/components/cell/constants';
 import { interpolate } from '#core/interpolation/interpolate';
+import { PipelineRunState, PipelineRunStepState } from './types';
 
 import type { Cell } from '#core/components/cell/types';
 import type { TagColor } from '#core/components/tag/types';
@@ -10,25 +11,25 @@ import type { RunWithManifest } from './types';
  * Shared by the Steps tab and the resume step picker so a step reads
  * the same wherever it appears.
  */
-export const STEP_STATE_TEXT_MAP: Record<number, string> = {
-  0: 'Pending',
-  1: 'Pending',
-  2: 'Running',
-  3: 'Success',
-  4: 'Killed',
-  5: 'Failed',
-  6: 'Skipped',
+export const STEP_STATE_TEXT_MAP: Record<PipelineRunStepState, string> = {
+  [PipelineRunStepState.INVALID]: 'Pending',
+  [PipelineRunStepState.PENDING]: 'Pending',
+  [PipelineRunStepState.RUNNING]: 'Running',
+  [PipelineRunStepState.SUCCEEDED]: 'Success',
+  [PipelineRunStepState.KILLED]: 'Killed',
+  [PipelineRunStepState.FAILED]: 'Failed',
+  [PipelineRunStepState.SKIPPED]: 'Skipped',
 };
 
 /** Colors matching {@link STEP_STATE_TEXT_MAP}, keyed by the proto enum value. */
-export const STEP_STATE_COLOR_MAP: Record<number, TagColor> = {
-  0: 'gray',
-  1: 'blue',
-  2: 'blue',
-  3: 'green',
-  4: 'red',
-  5: 'red',
-  6: 'gray',
+export const STEP_STATE_COLOR_MAP: Record<PipelineRunStepState, TagColor> = {
+  [PipelineRunStepState.INVALID]: 'gray',
+  [PipelineRunStepState.PENDING]: 'blue',
+  [PipelineRunStepState.RUNNING]: 'blue',
+  [PipelineRunStepState.SUCCEEDED]: 'green',
+  [PipelineRunStepState.KILLED]: 'red',
+  [PipelineRunStepState.FAILED]: 'red',
+  [PipelineRunStepState.SKIPPED]: 'gray',
 };
 
 /**
@@ -36,25 +37,25 @@ export const STEP_STATE_COLOR_MAP: Record<number, TagColor> = {
  * Distinct from {@link STEP_STATE_TEXT_MAP} — a run reads "Succeeded" where a step
  * reads "Success", and state 0 is a queued run but a pending step.
  */
-export const RUN_STATE_TEXT_MAP: Record<number, string> = {
-  0: 'Queued',
-  1: 'Pending',
-  2: 'Running',
-  3: 'Succeeded',
-  4: 'Killed',
-  5: 'Failed',
-  6: 'Skipped',
+export const RUN_STATE_TEXT_MAP: Record<PipelineRunState, string> = {
+  [PipelineRunState.QUEUED]: 'Queued',
+  [PipelineRunState.PENDING]: 'Pending',
+  [PipelineRunState.RUNNING]: 'Running',
+  [PipelineRunState.SUCCEEDED]: 'Succeeded',
+  [PipelineRunState.KILLED]: 'Killed',
+  [PipelineRunState.FAILED]: 'Failed',
+  [PipelineRunState.SKIPPED]: 'Skipped',
 };
 
 /** Colors matching {@link RUN_STATE_TEXT_MAP}, keyed by the proto enum value. */
-export const RUN_STATE_COLOR_MAP: Record<number, TagColor> = {
-  0: 'gray',
-  1: 'blue',
-  2: 'blue',
-  3: 'green',
-  4: 'red',
-  5: 'red',
-  6: 'gray',
+export const RUN_STATE_COLOR_MAP: Record<PipelineRunState, TagColor> = {
+  [PipelineRunState.QUEUED]: 'gray',
+  [PipelineRunState.PENDING]: 'blue',
+  [PipelineRunState.RUNNING]: 'blue',
+  [PipelineRunState.SUCCEEDED]: 'green',
+  [PipelineRunState.KILLED]: 'red',
+  [PipelineRunState.FAILED]: 'red',
+  [PipelineRunState.SKIPPED]: 'gray',
 };
 
 /** Created-date cell, shared between the run list and detail pages. */

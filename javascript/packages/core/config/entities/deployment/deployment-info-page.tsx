@@ -29,7 +29,7 @@ export function DeploymentInfoPage({ data, isLoading }: { data?: object; isLoadi
     {
       id: 'type-of-deployment',
       label: 'Type of deployment',
-      value: targetType != null ? (TARGET_TYPE_LABELS[targetType] ?? '') : '',
+      value: targetType ? (TARGET_TYPE_LABELS[targetType] ?? '') : '',
     },
   ];
 
