@@ -6,6 +6,7 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	pbtypes "github.com/gogo/protobuf/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -240,6 +241,161 @@ func TestReconcile_LatestRevisionOnlyOnDefaultBranch(t *testing.T) {
 	}
 }
 
+// TestReconcile_RevisioningEnabled_SetsParentLineage exercises the
+// Spec.Parent fix directly: the second reconcile's Revision must chain to
+// the *first* revision's identity, sourced from the pre-mutation
+// originalPipeline snapshot rather than the in-flight pipeline object (which
+// has already been overwritten to point at the new revision by the time
+// snapshotRevision runs, for main/master commits).
+func TestReconcile_RevisioningEnabled_SetsParentLineage(t *testing.T) {
+	pipeline := &v2pb.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pipeline",
+			Namespace: "test-namespace",
+		},
+		Spec: v2pb.PipelineSpec{
+			Type: v2pb.PIPELINE_TYPE_DATA_PREP,
+			Commit: &v2pb.CommitInfo{
+				GitRef: "abc123456789",
+				Branch: "main",
+			},
+		},
+	}
+
+	reconciler := setUpReconciler(t, []client.Object{pipeline}, env.Context{}, Config{RevisioningEnabled: true})
+	req := ctrl.Request{NamespacedName: types.NamespacedName{Name: "test-pipeline", Namespace: "test-namespace"}}
+
+	_, err := reconciler.Reconcile(context.Background(), req)
+	require.NoError(t, err)
+
+	firstRev := &v2pb.Revision{}
+	require.NoError(t, reconciler.Get(context.Background(), "test-namespace", "pipeline-test-pipeline-abc123456789", &metav1.GetOptions{}, firstRev))
+	assert.Nil(t, firstRev.Spec.Parent, "first revision has no prior revision to chain to")
+
+	// Advance to a new commit and reconcile again.
+	got := &v2pb.Pipeline{}
+	require.NoError(t, reconciler.Get(context.Background(), "test-namespace", "test-pipeline", &metav1.GetOptions{}, got))
+	got.Spec.Commit.GitRef = "def987654321"
+	require.NoError(t, reconciler.Update(context.Background(), got, &metav1.UpdateOptions{}))
+
+	_, err = reconciler.Reconcile(context.Background(), req)
+	require.NoError(t, err)
+
+	secondRev := &v2pb.Revision{}
+	require.NoError(t, reconciler.Get(context.Background(), "test-namespace", "pipeline-test-pipeline-def987654321", &metav1.GetOptions{}, secondRev))
+	require.Equal(t, &apipb.ResourceIdentifier{
+		Name:      "pipeline-test-pipeline-abc123456789",
+		Namespace: "test-namespace",
+	}, secondRev.Spec.Parent, "second revision must chain to the first, not self-reference")
+}
+
+// TestReconcile_RevisioningEnabled_FeatureBranch_ParentStillSet covers the
+// path where Reconcile never advances Status.LatestRevision (feature
+// branches): Spec.Parent must still be populated from whatever
+// Status.LatestRevision held going in, since originalPipeline and pipeline
+// never diverge on this field for a non-default branch.
+func TestReconcile_RevisioningEnabled_FeatureBranch_ParentStillSet(t *testing.T) {
+	pipeline := &v2pb.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pipeline",
+			Namespace: "test-namespace",
+		},
+		Spec: v2pb.PipelineSpec{
+			Commit: &v2pb.CommitInfo{
+				GitRef: "abc123456789",
+				Branch: "feature/my-mr",
+			},
+		},
+		Status: v2pb.PipelineStatus{
+			LatestRevision: &apipb.ResourceIdentifier{
+				Name:      "pipeline-test-pipeline-earlier",
+				Namespace: "test-namespace",
+			},
+		},
+	}
+
+	reconciler := setUpReconciler(t, []client.Object{pipeline}, env.Context{}, Config{RevisioningEnabled: true})
+	req := ctrl.Request{NamespacedName: types.NamespacedName{Name: "test-pipeline", Namespace: "test-namespace"}}
+
+	_, err := reconciler.Reconcile(context.Background(), req)
+	require.NoError(t, err)
+
+	rev := &v2pb.Revision{}
+	require.NoError(t, reconciler.Get(context.Background(), "test-namespace", "pipeline-test-pipeline-abc123456789", &metav1.GetOptions{}, rev))
+	require.Equal(t, &apipb.ResourceIdentifier{
+		Name:      "pipeline-test-pipeline-earlier",
+		Namespace: "test-namespace",
+	}, rev.Spec.Parent)
+}
+
+// TestReconcile_RevisioningEnabled_StripsManagedFields confirms
+// ObjectMeta.ManagedFields never rides along in the snapshotted content.
+func TestReconcile_RevisioningEnabled_StripsManagedFields(t *testing.T) {
+	pipeline := &v2pb.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pipeline",
+			Namespace: "test-namespace",
+			ManagedFields: []metav1.ManagedFieldsEntry{
+				{
+					Manager:    "some-field-manager",
+					Operation:  metav1.ManagedFieldsOperationUpdate,
+					APIVersion: pipelineAPIVersion,
+					FieldsType: "FieldsV1",
+				},
+			},
+		},
+		Spec: v2pb.PipelineSpec{
+			Commit: &v2pb.CommitInfo{
+				GitRef: "abc123456789",
+				Branch: "main",
+			},
+		},
+	}
+
+	reconciler := setUpReconciler(t, []client.Object{pipeline}, env.Context{}, Config{RevisioningEnabled: true})
+	_, err := reconciler.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{Name: "test-pipeline", Namespace: "test-namespace"}})
+	require.NoError(t, err)
+
+	rev := &v2pb.Revision{}
+	require.NoError(t, reconciler.Get(context.Background(), "test-namespace", "pipeline-test-pipeline-abc123456789", &metav1.GetOptions{}, rev))
+
+	content := &v2pb.Pipeline{}
+	require.NoError(t, pbtypes.UnmarshalAny(rev.Spec.Content, content))
+	assert.Empty(t, content.ObjectMeta.ManagedFields, "ManagedFields must be stripped before marshaling the snapshot content")
+}
+
+// TestReconcile_RevisioningEnabled_StampsOwnerRef confirms the created
+// Revision carries a controller ownerReference back to its Pipeline, so
+// Kubernetes garbage collection cleans up Revisions when the Pipeline is
+// deleted.
+func TestReconcile_RevisioningEnabled_StampsOwnerRef(t *testing.T) {
+	pipeline := &v2pb.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pipeline",
+			Namespace: "test-namespace",
+			UID:       "test-pipeline-uid",
+		},
+		Spec: v2pb.PipelineSpec{
+			Commit: &v2pb.CommitInfo{
+				GitRef: "abc123456789",
+				Branch: "main",
+			},
+		},
+	}
+
+	reconciler := setUpReconciler(t, []client.Object{pipeline}, env.Context{}, Config{RevisioningEnabled: true})
+	_, err := reconciler.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{Name: "test-pipeline", Namespace: "test-namespace"}})
+	require.NoError(t, err)
+
+	rev := &v2pb.Revision{}
+	require.NoError(t, reconciler.Get(context.Background(), "test-namespace", "pipeline-test-pipeline-abc123456789", &metav1.GetOptions{}, rev))
+
+	owner := metav1.GetControllerOf(rev)
+	require.NotNil(t, owner, "Revision must have a controller ownerReference")
+	assert.Equal(t, pipeline.UID, owner.UID)
+	assert.Equal(t, "test-pipeline", owner.Name)
+}
+
 func TestFormatRevisionName(t *testing.T) {
 	testCases := []struct {
 		name           string
@@ -319,6 +475,7 @@ func setUpReconciler(t *testing.T, initialObjects []client.Object, env env.Conte
 		Handler:         handler,
 		logger:          zaptest.NewLogger(t),
 		revisionManager: revision.NewManager(handler, zaptest.NewLogger(t)),
+		scheme:          scheme,
 		config:          cfg,
 	}
 }
