@@ -1,0 +1,120 @@
+[changelog]
+header = ""
+body = """
+{% set breaking_commits = commits | filter(attribute="breaking", value=true) %}\
+{% set feat_commits = commits | filter(attribute="group", value="🚀 Features") %}\
+{% set fix_commits = commits | filter(attribute="group", value="🐛 Bug Fixes") %}\
+{% set docs_commits = commits | filter(attribute="group", value="📚 Documentation") %}\
+{% set ci_commits = commits | filter(attribute="group", value="🔧 CI / Build") %}\
+{% set security_commits = commits | filter(attribute="group", value="🔒 Security") %}\
+{% if breaking_commits | length > 0 %}
+### ⚠ Breaking Changes
+
+{% if breaking_commits | length > 5 %}<details><summary>{{ breaking_commits | length }} changes</summary>
+
+{% endif -%}
+{% for commit in breaking_commits %}- {{ commit.message | upper_first }}{% if commit.remote.pr_author or commit.remote.username %} @{{ commit.remote.pr_author | default(value=commit.remote.username) }}{% endif %}{% if commit.remote.pr_number %} (#{{ commit.remote.pr_number }}){% endif %}
+{% endfor -%}
+{% if breaking_commits | length > 5 %}
+</details>
+{% endif %}
+{% endif -%}
+{% if feat_commits | length > 0 %}
+### 🚀 Features
+
+{% if feat_commits | length > 10 %}<details><summary>{{ feat_commits | length }} changes</summary>
+
+{% endif -%}
+{% for commit in feat_commits %}- {{ commit.message | upper_first }}{% if commit.remote.pr_author or commit.remote.username %} @{{ commit.remote.pr_author | default(value=commit.remote.username) }}{% endif %}{% if commit.remote.pr_number %} (#{{ commit.remote.pr_number }}){% endif %}
+{% endfor -%}
+{% if feat_commits | length > 10 %}
+</details>
+{% endif %}
+{% endif -%}
+{% if fix_commits | length > 0 %}
+### 🐛 Bug Fixes
+
+{% if fix_commits | length > 10 %}<details><summary>{{ fix_commits | length }} changes</summary>
+
+{% endif -%}
+{% for commit in fix_commits %}- {{ commit.message | upper_first }}{% if commit.remote.pr_author or commit.remote.username %} @{{ commit.remote.pr_author | default(value=commit.remote.username) }}{% endif %}{% if commit.remote.pr_number %} (#{{ commit.remote.pr_number }}){% endif %}
+{% endfor -%}
+{% if fix_commits | length > 10 %}
+</details>
+{% endif %}
+{% endif -%}
+{% if docs_commits | length > 0 %}
+### 📚 Documentation
+
+{% if docs_commits | length > 5 %}<details><summary>{{ docs_commits | length }} changes</summary>
+
+{% endif -%}
+{% for commit in docs_commits %}- {{ commit.message | upper_first }}{% if commit.remote.pr_author or commit.remote.username %} @{{ commit.remote.pr_author | default(value=commit.remote.username) }}{% endif %}{% if commit.remote.pr_number %} (#{{ commit.remote.pr_number }}){% endif %}
+{% endfor -%}
+{% if docs_commits | length > 5 %}
+</details>
+{% endif %}
+{% endif -%}
+{% if ci_commits | length > 0 %}
+### 🔧 CI / Build
+
+{% if ci_commits | length > 5 %}<details><summary>{{ ci_commits | length }} changes</summary>
+
+{% endif -%}
+{% for commit in ci_commits %}- {{ commit.message | upper_first }}{% if commit.remote.pr_author or commit.remote.username %} @{{ commit.remote.pr_author | default(value=commit.remote.username) }}{% endif %}{% if commit.remote.pr_number %} (#{{ commit.remote.pr_number }}){% endif %}
+{% endfor -%}
+{% if ci_commits | length > 5 %}
+</details>
+{% endif %}
+{% endif -%}
+{% if security_commits | length > 0 %}
+### 🔒 Security
+
+{% for commit in security_commits %}- {{ commit.message | upper_first }}{% if commit.remote.pr_author or commit.remote.username %} @{{ commit.remote.pr_author | default(value=commit.remote.username) }}{% endif %}{% if commit.remote.pr_number %} (#{{ commit.remote.pr_number }}){% endif %}
+{% endfor -%}
+{% endif -%}
+"""
+footer = ""
+trim = true
+
+[git]
+conventional_commits = true
+filter_unconventional = false
+split_commits = false
+protect_breaking_commits = true
+tag_pattern = "v[0-9].*"
+skip_tags = ".*\\.dev.*"
+ignore_tags = ".*-rc\\..*|.*-nightly\\..*"
+topo_order = false
+sort_commits = "oldest"
+
+# Squash-merge commit titles already end in " (#NNNN)" (GitHub's default);
+# strip it so the PR number can be re-added from remote.github's authoritative
+# pr_number instead of duplicating the text that's already in the title.
+commit_preprocessors = [
+    { pattern = "(?s)\\n.*", replace = "" },
+    { pattern = "\\s*\\(#\\d+\\)$", replace = "" },
+    { pattern = "\\.$", replace = "" },
+]
+
+# Coarser than cliff.toml's 8-group breakdown by design: mirrors
+# release-drafter.yml's categories exactly (ci/build/chore/refactor/perf/test
+# all fold into "CI / Build", matching its autolabeler groups), since this
+# config's only job is to reproduce that visual format for the GitHub Release
+# body. cliff.toml's CHANGELOG.md template and groups are untouched.
+commit_parsers = [
+    { message = "^feat", group = "🚀 Features" },
+    { message = "^fix", group = "🐛 Bug Fixes" },
+    { message = "^docs", group = "📚 Documentation" },
+    { message = "^ci", group = "🔧 CI / Build" },
+    { message = "^build", group = "🔧 CI / Build" },
+    { message = "^chore", group = "🔧 CI / Build" },
+    { message = "^refactor", group = "🔧 CI / Build" },
+    { message = "^perf", group = "🔧 CI / Build" },
+    { message = "^test", group = "🔧 CI / Build" },
+    { message = ".*", group = "🔧 CI / Build" },
+]
+
+[remote.github]
+owner = "michelangelo-ai"
+repo = "michelangelo"

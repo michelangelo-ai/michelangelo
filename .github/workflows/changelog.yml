@@ -134,6 +134,17 @@ jobs:
           OUTPUT: RELEASE_NOTES.md
           GITHUB_REPO: ${{ github.repository }}
 
+      - name: Generate release notes (GitHub Release format)
+        uses: orhun/git-cliff-action@3d96a18cc4ec17e9dc69ddcc424ccafaf1f78ce2 # v4.9.0
+        id: cliff-release-body
+        with:
+          config: cliff-release.toml
+          args: ${{ steps.range.outputs.range && format('{0} --strip header', steps.range.outputs.range) || '--latest --strip header' }}
+        env:
+          OUTPUT: RELEASE_BODY.md
+          GITHUB_REPO: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Update CHANGELOG.md (splice in the new section, never rewrite history)
         run: |
           python3 - <<'PYEOF'
@@ -180,7 +191,7 @@ jobs:
         with:
           tag_name: ${{ steps.tag.outputs.tag }}
           prerelease: ${{ contains(steps.tag.outputs.tag, '-rc') }}
-          body_path: RELEASE_NOTES.md
+          body_path: RELEASE_BODY.md
           append_body: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -214,4 +225,5 @@ jobs:
           path: |
             CHANGELOG.md
             RELEASE_NOTES.md
+            RELEASE_BODY.md
           retention-days: 90
