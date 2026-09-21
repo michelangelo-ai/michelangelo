@@ -1,7 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { vi } from 'vitest';
 
-import { CONDITION_STATUS, INFERENCE_SERVER_STATE } from '#core/config/entities/targets/shared';
 import { DEPLOY_PHASE } from '#core/config/phases/deploy';
 import { EntityDetailRoute } from '#core/router/entity-detail-route';
 import { PhaseListRoute } from '#core/router/phase-list-route';
@@ -77,7 +76,7 @@ describe('Target detail page', () => {
       owner: { name: 'user-example' },
     },
     status: {
-      state: INFERENCE_SERVER_STATE.SERVING,
+      state: 'INFERENCE_SERVER_STATE_SERVING',
       createTime: '2025-04-30T12:00:00Z',
       conditions: [] as object[],
     },
@@ -119,17 +118,17 @@ describe('Target detail page', () => {
             GetInferenceServer: {
               inferenceServer: buildTarget({
                 status: {
-                  state: INFERENCE_SERVER_STATE.SERVING,
+                  state: 'INFERENCE_SERVER_STATE_SERVING',
                   createTime: '2025-04-30T12:00:00Z',
                   conditions: [
                     {
                       type: 'ModelLoaded',
-                      status: CONDITION_STATUS.TRUE,
+                      status: 'CONDITION_STATUS_TRUE',
                       lastUpdatedTimestamp: '1746000600000',
                     },
                     {
                       type: 'ServerReady',
-                      status: CONDITION_STATUS.UNKNOWN,
+                      status: 'CONDITION_STATUS_UNKNOWN',
                       message: 'Waiting for server to become ready.',
                       reason: 'ServerNotReady',
                       lastUpdatedTimestamp: '1746002400000',
@@ -161,12 +160,12 @@ describe('Target detail page', () => {
             GetInferenceServer: {
               inferenceServer: buildTarget({
                 status: {
-                  state: INFERENCE_SERVER_STATE.SERVING,
+                  state: 'INFERENCE_SERVER_STATE_SERVING',
                   createTime: '2025-04-30T12:00:00Z',
                   conditions: [
                     {
                       type: 'ServerReady',
-                      status: CONDITION_STATUS.UNKNOWN,
+                      status: 'CONDITION_STATUS_UNKNOWN',
                       message: 'Waiting for server to become ready.',
                       reason: 'ServerNotReady',
                       lastUpdatedTimestamp: '1746002400000',

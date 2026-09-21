@@ -1,0 +1,9 @@
+load("@com_google_protobuf//bazel:proto_library.bzl", "proto_library")
+
+proto_library(
+    name = "resource_proto",
+    srcs = ["generated.proto"],
+    import_prefix = "michelangelo",
+    strip_import_prefix = "/proto",
+    visibility = ["//visibility:public"],
+)

@@ -1,5 +1,7 @@
 import { render, screen } from '@testing-library/react';
 
+import { DeploymentStage, DeploymentState } from '#core/config/entities/deployment/shared';
+import { ModelKind } from '#core/config/entities/model/constants';
 import { TRAIN_PHASE } from '#core/config/phases/train';
 import { EntityDetailRoute } from '#core/router/entity-detail-route';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
@@ -31,10 +33,7 @@ describe('Model detail page', () => {
                   },
                   spec: {
                     owner: { name: 'jsmith' },
-                    // The generated proto client decodes enum fields to their numeric
-                    // discriminant (MODEL_KIND_BINARY_CLASSIFICATION = 3), not the enum's
-                    // string name.
-                    kind: 3,
+                    kind: ModelKind.BINARY_CLASSIFICATION,
                     sourcePipelineRun: { name: 'fraud-classifier-run-1' },
                     description: 'Fraud detection model trained on transaction history.',
                   },
@@ -68,9 +67,8 @@ describe('Model detail page', () => {
         owner: { name: 'adoe' },
       },
       status: {
-        // DEPLOYMENT_STAGE_ROLLOUT_COMPLETE = 4, DEPLOYMENT_STATE_HEALTHY = 2
-        stage: 4,
-        state: 2,
+        stage: DeploymentStage.ROLLOUT_COMPLETE,
+        state: DeploymentState.HEALTHY,
         currentRevision: { name: 'fraud-classifier' },
       },
     };

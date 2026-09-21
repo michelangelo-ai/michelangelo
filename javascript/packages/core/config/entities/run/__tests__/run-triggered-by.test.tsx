@@ -1,6 +1,7 @@
 import { render, screen, within } from '@testing-library/react';
 
 import { TRIGGERED_BY_LABEL } from '#core/config/entities/run/shared';
+import { PipelineRunState } from '#core/config/entities/run/types';
 import { TRAIN_PHASE } from '#core/config/phases/train';
 import { EntityDetailRoute } from '#core/router/entity-detail-route';
 import { PhaseListRoute } from '#core/router/phase-list-route';
@@ -30,7 +31,7 @@ describe('Pipeline run "Triggered by"', () => {
                       namespace: 'myproject',
                       labels: { [TRIGGERED_BY_LABEL]: 'nightly-trigger' },
                     },
-                    status: { state: 3 },
+                    status: { state: PipelineRunState.SUCCEEDED },
                   },
                 ],
               },
@@ -59,7 +60,7 @@ describe('Pipeline run "Triggered by"', () => {
                 items: [
                   {
                     metadata: { name: 'manual-run', namespace: 'myproject' },
-                    status: { state: 3 },
+                    status: { state: PipelineRunState.SUCCEEDED },
                   },
                 ],
               },
@@ -90,7 +91,7 @@ describe('Pipeline run "Triggered by"', () => {
                   namespace: 'myproject',
                   labels: { [TRIGGERED_BY_LABEL]: 'nightly-trigger' },
                 },
-                status: { state: 3 },
+                status: { state: PipelineRunState.SUCCEEDED },
               },
             },
           }),

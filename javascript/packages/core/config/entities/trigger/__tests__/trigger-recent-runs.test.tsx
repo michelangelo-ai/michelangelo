@@ -1,6 +1,8 @@
 import { render, screen, waitFor } from '@testing-library/react';
 
 import { TRIGGERED_BY_LABEL } from '#core/config/entities/run/shared';
+import { PipelineRunState } from '#core/config/entities/run/types';
+import { TriggerRunState } from '#core/config/entities/trigger/shared';
 import { RETRAIN_PHASE } from '#core/config/phases/retrain';
 import { EntityDetailRoute } from '#core/router/entity-detail-route';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
@@ -26,7 +28,7 @@ describe('Trigger detail "Recent Runs"', () => {
         triggerRun: {
           metadata: { name: 'nightly-trigger', namespace: 'myproject' },
           spec: { pipeline: { name: 'my-pipeline', namespace: 'myproject' } },
-          status: { state: 1 },
+          status: { state: TriggerRunState.RUNNING },
         },
       },
       [`ListPipelineRun:{"listOptions":{"labelSelector":"${SELECTOR}"},"namespace":"myproject"}`]: {
@@ -34,7 +36,7 @@ describe('Trigger detail "Recent Runs"', () => {
           items: [
             {
               metadata: { name: 'run-1', labels: { [TRIGGERED_BY_LABEL]: 'nightly-trigger' } },
-              status: { state: 3 },
+              status: { state: PipelineRunState.SUCCEEDED },
             },
           ],
         },
@@ -73,7 +75,7 @@ describe('Trigger detail "Recent Runs"', () => {
               triggerRun: {
                 metadata: { name: 'nightly-trigger', namespace: 'myproject' },
                 spec: { pipeline: { name: 'my-pipeline', namespace: 'myproject' } },
-                status: { state: 1 },
+                status: { state: TriggerRunState.RUNNING },
               },
             },
             [`ListPipelineRun:{"listOptions":{"labelSelector":"${SELECTOR}"},"namespace":"myproject"}`]:
@@ -85,7 +87,7 @@ describe('Trigger detail "Recent Runs"', () => {
                         name: 'run-1',
                         labels: { [TRIGGERED_BY_LABEL]: 'nightly-trigger' },
                       },
-                      status: { state: 3 },
+                      status: { state: PipelineRunState.SUCCEEDED },
                     },
                   ],
                 },

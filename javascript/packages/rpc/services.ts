@@ -1,4 +1,4 @@
-import { create, createRegistry, fromJson, toJson } from '@bufbuild/protobuf';
+import { create, createRegistry, toJson } from '@bufbuild/protobuf';
 import {
   BoolValueSchema,
   DoubleValueSchema,
@@ -69,7 +69,7 @@ function createServiceClient<T extends DescService>(
         requestJson,
         headers
       );
-      return fromJson(method.output, responseJson, { registry: typeRegistry });
+      return responseJson;
     };
   }
 
