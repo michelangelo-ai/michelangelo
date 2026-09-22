@@ -128,6 +128,9 @@ func (c *TemporalClient) createScheduleForCron(ctx context.Context, options clie
 		ID: scheduleID,
 		Spec: temporalClient.ScheduleSpec{
 			CronExpressions: []string{options.CronSchedule},
+			// Zero values are treated as unset by the SDK.
+			StartAt: options.ScheduleStartAt,
+			EndAt:   options.ScheduleEndAt,
 		},
 		Action: &temporalClient.ScheduleWorkflowAction{
 			ID:        options.ID,
@@ -160,7 +163,8 @@ func (c *TemporalClient) createScheduleForCron(ctx context.Context, options clie
 	}
 
 	if !options.CatchUpFrom.IsZero() && !options.StartPaused {
-		if err := backfillSchedule(ctx, handle, options.CatchUpFrom); err != nil {
+		catchUpTo := catchUpEnd(options.ScheduleEndAt, time.Now())
+		if err := backfillSchedule(ctx, handle, options.CatchUpFrom, catchUpTo); err != nil {
 			// Return the execution alongside the error: the schedule was created and is
 			// firing forward, so the caller must keep the trigger alive. Reporting a bare
 			// failure here would strand a live schedule behind a terminated TriggerRun.
@@ -175,8 +179,18 @@ func (c *TemporalClient) createScheduleForCron(ctx context.Context, options clie
 	return execution, nil
 }
 
+// catchUpEnd bounds a catch-up replay. Occurrences are replayed up to now, or up to the
+// schedule's own end when that came first, so a window that already closed is not
+// replayed past its end.
+func catchUpEnd(scheduleEndAt, now time.Time) time.Time {
+	if !scheduleEndAt.IsZero() && scheduleEndAt.Before(now) {
+		return scheduleEndAt
+	}
+	return now
+}
+
 // backfillSchedule replays the occurrences the schedule would have taken between
-// catchUpFrom and now, one action each.
+// catchUpFrom and catchUpTo, one action each.
 //
 // ScheduleSpec.StartAt cannot do this - it only filters out times before it, and
 // CatchupWindow covers server downtime rather than a backdated start - so the
@@ -196,12 +210,12 @@ func (c *TemporalClient) createScheduleForCron(ctx context.Context, options clie
 // at maxConcurrency 3 would put 72 pipeline runs in flight. Temporal's overlap policies
 // are not numeric, so there is no setting for "at most N occurrences"; serializing them
 // is the only way to hold the bound.
-func backfillSchedule(ctx context.Context, handle temporalClient.ScheduleHandle, catchUpFrom time.Time) error {
+func backfillSchedule(ctx context.Context, handle temporalClient.ScheduleHandle, catchUpFrom, catchUpTo time.Time) error {
 	return handle.Backfill(ctx, temporalClient.ScheduleBackfillOptions{
 		Backfill: []temporalClient.ScheduleBackfill{
 			{
 				Start:   catchUpFrom,
-				End:     time.Now(),
+				End:     catchUpTo,
 				Overlap: temporalEnumsV1.SCHEDULE_OVERLAP_POLICY_BUFFER_ALL,
 			},
 		},

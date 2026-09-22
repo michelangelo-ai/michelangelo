@@ -770,6 +770,40 @@ func TestCreateScheduleForCron(t *testing.T) {
 			},
 			errMsg: "is live but catch-up",
 		},
+		{
+			name: "success - window maps to StartAt/EndAt and catch-up stops at the window end",
+			options: clientInterface.StartWorkflowOptions{
+				ID:              "windowed-workflow",
+				TaskList:        "test-task-list",
+				CronSchedule:    "0 * * * *",
+				ScheduleStartAt: _catchUpFrom,
+				ScheduleEndAt:   _catchUpFrom.Add(time.Hour), // closed, entirely in the past
+				CatchUpFrom:     _catchUpFrom,
+			},
+			workflowName: "test-workflow-name",
+			args:         []interface{}{"arg1"},
+			mockFunc: func(mockClient *temporalMocks.Client, mockScheduleClient *temporalMocks.ScheduleClient, mockScheduleHandle *temporalMocks.ScheduleHandle) {
+				mockClient.On("ScheduleClient").Return(mockScheduleClient)
+				mockScheduleClient.On("GetHandle", mock.Anything, "windowed-workflow-schedule").Return(mockScheduleHandle)
+				mockScheduleHandle.On("Describe", mock.Anything).Return(nil, fmt.Errorf("schedule not found"))
+				mockScheduleClient.On("Create", mock.Anything, mock.MatchedBy(func(options temporalClient.ScheduleOptions) bool {
+					return options.Spec.StartAt.Equal(_catchUpFrom) &&
+						options.Spec.EndAt.Equal(_catchUpFrom.Add(time.Hour))
+				})).Return(mockScheduleHandle, nil)
+				mockScheduleHandle.On("Backfill", mock.Anything, mock.MatchedBy(func(options temporalClient.ScheduleBackfillOptions) bool {
+					if len(options.Backfill) != 1 {
+						return false
+					}
+					backfill := options.Backfill[0]
+					// The replay must not run past the window's own end, even though now is later.
+					return backfill.Start.Equal(_catchUpFrom) &&
+						backfill.End.Equal(_catchUpFrom.Add(time.Hour))
+				})).Return(nil)
+			},
+			expectedID:    "windowed-workflow-schedule",
+			expectedRunID: "",
+			errMsg:        "",
+		},
 	}
 
 	for _, testCase := range testCases {

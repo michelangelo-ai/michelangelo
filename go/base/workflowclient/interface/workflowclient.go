@@ -14,9 +14,16 @@ type StartWorkflowOptions struct {
 	CronSchedule                    string
 	// StartPaused creates a recurring schedule without allowing its first action to fire.
 	StartPaused bool
-	// CatchUpFrom backfills the schedule's missed occurrences from this time up to
-	// schedule creation, one action per occurrence. Zero means no catch-up.
-	// Ignored when StartPaused is set, since a paused schedule takes no actions.
+	// ScheduleStartAt is the start of a recurring schedule's active window. Occurrences
+	// before it are never fired by the schedule itself. Zero means active from creation.
+	ScheduleStartAt time.Time
+	// ScheduleEndAt is the end of a recurring schedule's active window. Occurrences at or
+	// after it are not fired. Zero means the schedule has no end.
+	ScheduleEndAt time.Time
+	// CatchUpFrom replays the schedule's missed occurrences from this time up to
+	// min(now, ScheduleEndAt), one action per occurrence, in chronological order. Zero
+	// means no catch-up. Ignored when StartPaused is set, since a paused schedule takes
+	// no actions.
 	CatchUpFrom time.Time
 }
 

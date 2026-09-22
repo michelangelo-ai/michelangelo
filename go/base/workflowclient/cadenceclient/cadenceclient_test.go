@@ -91,7 +91,24 @@ func TestStartWorkflowRejectsCatchUpFrom(t *testing.T) {
 		"testWorkflow",
 	)
 
-	assert.EqualError(t, err, "cron schedule startTime catch-up is not supported by Cadence")
+	assert.EqualError(t, err, "catch-up (spec.catchup) is not supported by the Cadence cron provider")
+}
+
+// The legacy Cadence cron workflow cannot honour a window. Refusing it is better than
+// starting a schedule that silently ignores the dates in its spec.
+func TestStartWorkflowRejectsScheduleWindow(t *testing.T) {
+	client := &CadenceClient{Client: &cadencemocks.Client{}}
+
+	for name, options := range map[string]clientInterface.StartWorkflowOptions{
+		"start only": {ScheduleStartAt: time.Now().Add(time.Hour)},
+		"end only":   {ScheduleEndAt: time.Now().Add(48 * time.Hour)},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := client.StartWorkflow(context.Background(), options, "testWorkflow")
+			assert.ErrorContains(t, err, "schedule window")
+			assert.ErrorContains(t, err, "not supported by the Cadence cron provider")
+		})
+	}
 }
 
 func TestGetWorkflowExecutionInfo(t *testing.T) {
