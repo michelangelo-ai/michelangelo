@@ -198,8 +198,12 @@ def wait_for_deployment(
                 f"now targets {desired_rev}"
             )
 
-        # Check if deployment reached terminal state (success or failure)
-        if stage in _DEPLOYMENT_SUCCESS_STAGES:
+        # An update can briefly retain the previous revision's successful stage.
+        # Require the current revision to confirm this rollout completed.
+        if (
+            stage in _DEPLOYMENT_SUCCESS_STAGES
+            and current_rev == expected_model_revision_name
+        ):
             print(
                 f"Deployment completed successfully | Stage: {stage_name} | "
                 f"Elapsed: {elapsed_time:.1f}s"

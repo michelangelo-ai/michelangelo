@@ -1,6 +1,7 @@
 """Training task for fine-tuning a BERT model on the CoLA dataset."""
 
 import logging
+import os
 
 import numpy as np
 import torch
@@ -14,6 +15,8 @@ from michelangelo.uniflow.plugins.ray import RayTask
 from michelangelo.workflow.variables import ModelVariable
 
 log = logging.getLogger(__name__)
+
+_worker_instances = int(os.environ.get("BERT_COLA_WORKER_INSTANCES", "1"))
 
 
 # Model creation function
@@ -40,7 +43,7 @@ def create_model(
         head_memory="4Gi",
         worker_cpu=1,
         worker_memory="4Gi",
-        worker_instances=1,
+        worker_instances=_worker_instances,
         # breakpoint=True,
     ),
 )

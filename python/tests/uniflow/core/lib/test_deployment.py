@@ -211,6 +211,32 @@ class WaitForDeploymentTest(unittest.TestCase):
         self.assertEqual(result["stage"], "DEPLOYMENT_STAGE_ROLLOUT_COMPLETE")
         mock_sleep.assert_called_once_with(5)
 
+    @patch("michelangelo.uniflow.core.lib.deployment.time.sleep", return_value=None)
+    @patch("michelangelo.uniflow.core.lib.deployment.APIClient")
+    def test_stale_terminal_revision_then_success_polls(self, mock_client, mock_sleep):
+        """A completed stage for the previous revision is not accepted."""
+        stale = Deployment(spec=DeploymentSpec())
+        stale.spec.desired_revision.name = "rev-2"
+        stale.status.stage = DeploymentStage.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE
+        stale.status.current_revision.name = "rev-1"
+
+        done = Deployment(spec=DeploymentSpec())
+        done.spec.desired_revision.name = "rev-2"
+        done.status.stage = DeploymentStage.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE
+        done.status.current_revision.name = "rev-2"
+
+        mock_client.DeploymentService.get_deployment.side_effect = [stale, done]
+
+        result = wait_for_deployment(
+            namespace="ns",
+            deployment_name="dep",
+            expected_model_revision_name="rev-2",
+            poll=5,
+        )
+
+        self.assertEqual(result["current_revision"], "rev-2")
+        mock_sleep.assert_called_once_with(5)
+
     @patch(
         "michelangelo.uniflow.core.lib.deployment.time.time",
         side_effect=[0, 0, 100],

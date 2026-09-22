@@ -1,0 +1,100 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: triton-inference-server-example
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: triton-inference-server-example
+  template:
+    metadata:
+      labels:
+        app: triton-inference-server-example
+    spec:
+      containers:
+      - name: triton
+        image: python:3.11-slim
+        command: ["python", "-u", "-c"]
+        args:
+        - |
+          import json
+          import re
+          from http.server import BaseHTTPRequestHandler, HTTPServer
+          from urllib.parse import unquote
+
+          class Handler(BaseHTTPRequestHandler):
+              loaded_models = set()
+
+              def respond(self, payload=None, status=200):
+                  body = json.dumps(payload if payload is not None else {}).encode()
+                  self.send_response(status)
+                  self.send_header("Content-Type", "application/json")
+                  self.send_header("Content-Length", str(len(body)))
+                  self.end_headers()
+                  self.wfile.write(body)
+
+              def do_GET(self):
+                  match = re.fullmatch(r"/v2/models/([^/]+)/ready", self.path)
+                  if match:
+                      model = unquote(match.group(1))
+                      self.respond(status=200 if model in self.loaded_models else 404)
+                      return
+                  self.respond()
+
+              def do_POST(self):
+                  if self.path == "/v2/repository/index":
+                      models = [
+                          {"name": model, "state": "READY"}
+                          for model in sorted(self.loaded_models)
+                      ]
+                      self.respond(models)
+                      return
+
+                  match = re.fullmatch(
+                      r"/v2/repository/models/([^/]+)/(load|unload)", self.path
+                  )
+                  if match:
+                      model, operation = unquote(match.group(1)), match.group(2)
+                      if operation == "load":
+                          self.loaded_models.add(model)
+                      else:
+                          self.loaded_models.discard(model)
+                      self.respond()
+                      return
+
+                  self.respond()
+
+              def log_message(self, format, *args):
+                  print(format % args)
+
+          HTTPServer(("0.0.0.0", 8000), Handler).serve_forever()
+        ports:
+        - name: http
+          containerPort: 8000
+        readinessProbe:
+          httpGet:
+            path: /v2/health/ready
+            port: http
+          periodSeconds: 2
+        resources:
+          requests:
+            cpu: 25m
+            memory: 32Mi
+          limits:
+            cpu: 100m
+            memory: 64Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: inference-server-example-inference-service
+  namespace: default
+spec:
+  selector:
+    app: triton-inference-server-example
+  ports:
+  - name: http
+    port: 80
+    targetPort: http

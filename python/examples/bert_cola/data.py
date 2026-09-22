@@ -4,6 +4,7 @@ Loads and tokenizes the CoLA dataset from GLUE benchmark for BERT fine-tuning.
 """
 
 import logging
+import os
 
 import datasets
 import ray
@@ -17,6 +18,8 @@ tokenizer_path = "bert-base-cased"
 
 log = logging.getLogger(__name__)
 
+_worker_instances = int(os.environ.get("BERT_COLA_WORKER_INSTANCES", "1"))
+
 
 @uniflow.task(
     config=RayTask(
@@ -24,7 +27,7 @@ log = logging.getLogger(__name__)
         head_memory="2Gi",
         worker_cpu=1,
         worker_memory="2Gi",
-        worker_instances=1,
+        worker_instances=_worker_instances,
         # breakpoint=True,
     )
 )
