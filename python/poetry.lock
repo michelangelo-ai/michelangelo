@@ -2878,7 +2878,7 @@ description = "A platform independent file lock."
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version == \"3.9\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"trainer-deepspeed\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"trainer-xgboost\")"
+markers = "python_version == \"3.9\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"evaluator\" or extra == \"trainer-deepspeed\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"trainer-xgboost\")"
 files = [
     {file = "filelock-3.19.1-py3-none-any.whl", hash = "sha256:d38e30481def20772f5baf097c122c3babc4fcdb7e14e57049eb9d88c6dc017d"},
     {file = "filelock-3.19.1.tar.gz", hash = "sha256:66eda1888b0171c998b35be2bcc0f6d75c388a7ce20c3f3f37aa8e96c2dddf58"},
@@ -2891,7 +2891,7 @@ description = "A platform independent file lock."
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "(python_version < \"3.12\" or extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"trainer-deepspeed\") and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"trainer-deepspeed\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"trainer-xgboost\") and python_version >= \"3.10\""
+markers = "(python_version < \"3.12\" or extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"evaluator\" or extra == \"trainer-deepspeed\") and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"evaluator\" or extra == \"trainer-deepspeed\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"trainer-xgboost\") and python_version >= \"3.10\""
 files = [
     {file = "filelock-3.29.4-py3-none-any.whl", hash = "sha256:dac1648087d5115554850d113e7dd8c83ab2d38e3435dde2d4f163847e57b767"},
     {file = "filelock-3.29.4.tar.gz", hash = "sha256:10cdb3656fc44541cdf30652a93fb10ec6b05325620eb316bd26893e4201538a"},
@@ -4310,7 +4310,7 @@ description = "A very fast and expressive template engine."
 optional = false
 python-versions = ">=3.7"
 groups = ["main"]
-markers = "(python_version < \"3.12\" or extra == \"example\" or extra == \"trainer-mlflow\" or extra == \"dev\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-deepspeed\") and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"trainer-deepspeed\" or extra == \"trainer-mlflow\")"
+markers = "(python_version < \"3.12\" or extra == \"example\" or extra == \"trainer-mlflow\" or extra == \"dev\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"evaluator\" or extra == \"trainer-deepspeed\") and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"evaluator\" or extra == \"trainer-deepspeed\" or extra == \"trainer-mlflow\")"
 files = [
     {file = "jinja2-3.1.6-py3-none-any.whl", hash = "sha256:85ece4451f492d0c13c5dd7c13a64681a86afae63a5f347908daf103ce6d2f67"},
     {file = "jinja2-3.1.6.tar.gz", hash = "sha256:0137fb05990d35f1275a587e9aee6d56da821fc83491a0fb838183be43f66d6d"},
@@ -4879,7 +4879,7 @@ description = "Lightning toolbox for across the our ecosystem."
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\")"
+markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"evaluator\")"
 files = [
     {file = "lightning_utilities-0.15.2-py3-none-any.whl", hash = "sha256:ad3ab1703775044bbf880dbf7ddaaac899396c96315f3aa1779cec9d618a9841"},
     {file = "lightning_utilities-0.15.2.tar.gz", hash = "sha256:cdf12f530214a63dacefd713f180d1ecf5d165338101617b4742e8f22c032e24"},
@@ -4902,7 +4902,7 @@ description = "Lightning toolbox for across the our ecosystem."
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "python_version >= \"3.10\" and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\")"
+markers = "python_version >= \"3.10\" and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"evaluator\")"
 files = [
     {file = "lightning_utilities-0.15.3-py3-none-any.whl", hash = "sha256:6c55f1bee70084a1cbeaa41ada96e4b3a0fea5909e844dd335bd80f5a73c5f91"},
     {file = "lightning_utilities-0.15.3.tar.gz", hash = "sha256:792ae0204c79f6859721ac7f386c237a33b0ed06ba775009cb894e010a842033"},
@@ -5135,7 +5135,7 @@ description = "Safely add untrusted strings to HTML/XML markup."
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "(python_version < \"3.12\" or extra == \"example\" or extra == \"trainer-mlflow\" or extra == \"dev\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-deepspeed\") and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"trainer-deepspeed\" or extra == \"trainer-mlflow\")"
+markers = "(python_version < \"3.12\" or extra == \"example\" or extra == \"trainer-mlflow\" or extra == \"dev\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"evaluator\" or extra == \"trainer-deepspeed\") and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"evaluator\" or extra == \"trainer-deepspeed\" or extra == \"trainer-mlflow\")"
 files = [
     {file = "markupsafe-3.0.3-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:2f981d352f04553a7171b8e44369f2af4055f888dfb147d55e42d29e29e74559"},
     {file = "markupsafe-3.0.3-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:e1c1493fb6e50ab01d20a22826e57520f1284df32f2d8601fdd90b6304601419"},
@@ -6421,7 +6421,7 @@ description = "Python package for creating and manipulating graphs and networks"
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version == \"3.9\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"trainer-deepspeed\")"
+markers = "python_version == \"3.9\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"evaluator\" or extra == \"trainer-deepspeed\")"
 files = [
     {file = "networkx-3.2.1-py3-none-any.whl", hash = "sha256:f18c69adc97877c42332c170849c96cefa91881c99a7cb3e95b7c659ebdc1ec2"},
     {file = "networkx-3.2.1.tar.gz", hash = "sha256:9f1bb5cf3409bf324e0a722c20bdb4c20ee39bf1c30ce8ae499c8502b0b5e0c6"},
@@ -6441,7 +6441,7 @@ description = "Python package for creating and manipulating graphs and networks"
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "python_version == \"3.10\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"trainer-deepspeed\")"
+markers = "python_version == \"3.10\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"evaluator\" or extra == \"trainer-deepspeed\")"
 files = [
     {file = "networkx-3.4.2-py3-none-any.whl", hash = "sha256:df5d4365b724cf81b8c6a7312509d0c22386097011ad1abe274afd5e9d3bbc5f"},
     {file = "networkx-3.4.2.tar.gz", hash = "sha256:307c3669428c5362aab27c8a1260aa8f47c4e91d3891f48be0141738d8d053e1"},
@@ -6462,7 +6462,7 @@ description = "Python package for creating and manipulating graphs and networks"
 optional = false
 python-versions = "!=3.14.1,>=3.11"
 groups = ["main"]
-markers = "python_version == \"3.11\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"trainer-deepspeed\") or python_version >= \"3.11\" and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-deepspeed\")"
+markers = "python_version == \"3.11\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"evaluator\" or extra == \"trainer-deepspeed\") or python_version >= \"3.11\" and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"evaluator\" or extra == \"trainer-deepspeed\")"
 files = [
     {file = "networkx-3.6.1-py3-none-any.whl", hash = "sha256:d47fbf302e7d9cbbb9e2555a0d267983d2aa476bac30e90dfbe5669bd57f3762"},
     {file = "networkx-3.6.1.tar.gz", hash = "sha256:26b7c357accc0c8cde558ad486283728b65b6a95d85ee1cd66bafab4c8168509"},
@@ -6647,7 +6647,7 @@ description = "CUBLAS native runtime libraries"
 optional = false
 python-versions = ">=3"
 groups = ["main"]
-markers = "platform_system == \"Linux\" and platform_machine == \"x86_64\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"trainer-deepspeed\")"
+markers = "platform_system == \"Linux\" and platform_machine == \"x86_64\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"evaluator\" or extra == \"trainer-deepspeed\")"
 files = [
     {file = "nvidia_cublas_cu12-12.6.4.1-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:08ed2686e9875d01b58e3cb379c6896df8e76c75e0d4a7f7dace3d7b6d9ef8eb"},
     {file = "nvidia_cublas_cu12-12.6.4.1-py3-none-manylinux_2_27_aarch64.whl", hash = "sha256:235f728d6e2a409eddf1df58d5b0921cf80cfa9e72b9f2775ccb7b4a87984668"},
@@ -6661,7 +6661,7 @@ description = "CUDA profiling tools runtime libs."
 optional = false
 python-versions = ">=3"
 groups = ["main"]
-markers = "platform_system == \"Linux\" and platform_machine == \"x86_64\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"trainer-deepspeed\")"
+markers = "platform_system == \"Linux\" and platform_machine == \"x86_64\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"evaluator\" or extra == \"trainer-deepspeed\")"
 files = [
     {file = "nvidia_cuda_cupti_cu12-12.6.80-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:166ee35a3ff1587f2490364f90eeeb8da06cd867bd5b701bf7f9a02b78bc63fc"},
     {file = "nvidia_cuda_cupti_cu12-12.6.80-py3-none-manylinux2014_aarch64.whl", hash = "sha256:358b4a1d35370353d52e12f0a7d1769fc01ff74a191689d3870b2123156184c4"},
@@ -6677,7 +6677,7 @@ description = "NVRTC native runtime libraries"
 optional = false
 python-versions = ">=3"
 groups = ["main"]
-markers = "platform_system == \"Linux\" and platform_machine == \"x86_64\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"trainer-deepspeed\")"
+markers = "platform_system == \"Linux\" and platform_machine == \"x86_64\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"evaluator\" or extra == \"trainer-deepspeed\")"
 files = [
     {file = "nvidia_cuda_nvrtc_cu12-12.6.77-py3-none-manylinux2014_aarch64.whl", hash = "sha256:5847f1d6e5b757f1d2b3991a01082a44aad6f10ab3c5c0213fa3e25bddc25a13"},
     {file = "nvidia_cuda_nvrtc_cu12-12.6.77-py3-none-manylinux2014_x86_64.whl", hash = "sha256:35b0cc6ee3a9636d5409133e79273ce1f3fd087abb0532d2d2e8fff1fe9efc53"},
@@ -6691,7 +6691,7 @@ description = "CUDA Runtime native Libraries"
 optional = false
 python-versions = ">=3"
 groups = ["main"]
-markers = "platform_system == \"Linux\" and platform_machine == \"x86_64\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"trainer-deepspeed\")"
+markers = "platform_system == \"Linux\" and platform_machine == \"x86_64\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"evaluator\" or extra == \"trainer-deepspeed\")"
 files = [
     {file = "nvidia_cuda_runtime_cu12-12.6.77-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:6116fad3e049e04791c0256a9778c16237837c08b27ed8c8401e2e45de8d60cd"},
     {file = "nvidia_cuda_runtime_cu12-12.6.77-py3-none-manylinux2014_aarch64.whl", hash = "sha256:d461264ecb429c84c8879a7153499ddc7b19b5f8d84c204307491989a365588e"},
@@ -6707,7 +6707,7 @@ description = "cuDNN runtime libraries"
 optional = false
 python-versions = ">=3"
 groups = ["main"]
-markers = "platform_system == \"Linux\" and platform_machine == \"x86_64\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"trainer-deepspeed\")"
+markers = "platform_system == \"Linux\" and platform_machine == \"x86_64\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"evaluator\" or extra == \"trainer-deepspeed\")"
 files = [
     {file = "nvidia_cudnn_cu12-9.5.1.17-py3-none-manylinux_2_28_aarch64.whl", hash = "sha256:9fd4584468533c61873e5fda8ca41bac3a38bcb2d12350830c69b0a96a7e4def"},
     {file = "nvidia_cudnn_cu12-9.5.1.17-py3-none-manylinux_2_28_x86_64.whl", hash = "sha256:30ac3869f6db17d170e0e556dd6cc5eee02647abc31ca856634d5a40f82c15b2"},
@@ -6724,7 +6724,7 @@ description = "CUFFT native runtime libraries"
 optional = false
 python-versions = ">=3"
 groups = ["main"]
-markers = "platform_system == \"Linux\" and platform_machine == \"x86_64\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"trainer-deepspeed\")"
+markers = "platform_system == \"Linux\" and platform_machine == \"x86_64\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"evaluator\" or extra == \"trainer-deepspeed\")"
 files = [
     {file = "nvidia_cufft_cu12-11.3.0.4-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:d16079550df460376455cba121db6564089176d9bac9e4f360493ca4741b22a6"},
     {file = "nvidia_cufft_cu12-11.3.0.4-py3-none-manylinux2014_aarch64.whl", hash = "sha256:8510990de9f96c803a051822618d42bf6cb8f069ff3f48d93a8486efdacb48fb"},
@@ -6743,7 +6743,7 @@ description = "cuFile GPUDirect libraries"
 optional = false
 python-versions = ">=3"
 groups = ["main"]
-markers = "platform_system == \"Linux\" and platform_machine == \"x86_64\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"trainer-deepspeed\")"
+markers = "platform_system == \"Linux\" and platform_machine == \"x86_64\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"evaluator\" or extra == \"trainer-deepspeed\")"
 files = [
     {file = "nvidia_cufile_cu12-1.11.1.6-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:cc23469d1c7e52ce6c1d55253273d32c565dd22068647f3aa59b3c6b005bf159"},
     {file = "nvidia_cufile_cu12-1.11.1.6-py3-none-manylinux_2_27_aarch64.whl", hash = "sha256:8f57a0051dcf2543f6dc2b98a98cb2719c37d3cee1baba8965d57f3bbc90d4db"},
@@ -6756,7 +6756,7 @@ description = "CURAND native runtime libraries"
 optional = false
 python-versions = ">=3"
 groups = ["main"]
-markers = "platform_system == \"Linux\" and platform_machine == \"x86_64\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"trainer-deepspeed\")"
+markers = "platform_system == \"Linux\" and platform_machine == \"x86_64\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"evaluator\" or extra == \"trainer-deepspeed\")"
 files = [
     {file = "nvidia_curand_cu12-10.3.7.77-py3-none-manylinux2014_aarch64.whl", hash = "sha256:6e82df077060ea28e37f48a3ec442a8f47690c7499bff392a5938614b56c98d8"},
     {file = "nvidia_curand_cu12-10.3.7.77-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:a42cd1344297f70b9e39a1e4f467a4e1c10f1da54ff7a85c12197f6c652c8bdf"},
@@ -6772,7 +6772,7 @@ description = "CUDA solver native runtime libraries"
 optional = false
 python-versions = ">=3"
 groups = ["main"]
-markers = "platform_system == \"Linux\" and platform_machine == \"x86_64\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"trainer-deepspeed\")"
+markers = "platform_system == \"Linux\" and platform_machine == \"x86_64\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"evaluator\" or extra == \"trainer-deepspeed\")"
 files = [
     {file = "nvidia_cusolver_cu12-11.7.1.2-py3-none-manylinux2014_aarch64.whl", hash = "sha256:0ce237ef60acde1efc457335a2ddadfd7610b892d94efee7b776c64bb1cac9e0"},
     {file = "nvidia_cusolver_cu12-11.7.1.2-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:e9e49843a7707e42022babb9bcfa33c29857a93b88020c4e4434656a655b698c"},
@@ -6793,7 +6793,7 @@ description = "CUSPARSE native runtime libraries"
 optional = false
 python-versions = ">=3"
 groups = ["main"]
-markers = "platform_system == \"Linux\" and platform_machine == \"x86_64\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"trainer-deepspeed\")"
+markers = "platform_system == \"Linux\" and platform_machine == \"x86_64\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"evaluator\" or extra == \"trainer-deepspeed\")"
 files = [
     {file = "nvidia_cusparse_cu12-12.5.4.2-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:d25b62fb18751758fe3c93a4a08eff08effedfe4edf1c6bb5afd0890fe88f887"},
     {file = "nvidia_cusparse_cu12-12.5.4.2-py3-none-manylinux2014_aarch64.whl", hash = "sha256:7aa32fa5470cf754f72d1116c7cbc300b4e638d3ae5304cfa4a638a5b87161b1"},
@@ -6812,7 +6812,7 @@ description = "NVIDIA cuSPARSELt"
 optional = false
 python-versions = "*"
 groups = ["main"]
-markers = "platform_system == \"Linux\" and platform_machine == \"x86_64\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"trainer-deepspeed\")"
+markers = "platform_system == \"Linux\" and platform_machine == \"x86_64\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"evaluator\" or extra == \"trainer-deepspeed\")"
 files = [
     {file = "nvidia_cusparselt_cu12-0.6.3-py3-none-manylinux2014_aarch64.whl", hash = "sha256:8371549623ba601a06322af2133c4a44350575f5a3108fb75f3ef20b822ad5f1"},
     {file = "nvidia_cusparselt_cu12-0.6.3-py3-none-manylinux2014_x86_64.whl", hash = "sha256:e5c8a26c36445dd2e6812f1177978a24e2d37cacce7e090f297a688d1ec44f46"},
@@ -6839,7 +6839,7 @@ description = "NVIDIA Collective Communication Library (NCCL) Runtime"
 optional = false
 python-versions = ">=3"
 groups = ["main"]
-markers = "platform_system == \"Linux\" and platform_machine != \"aarch64\" and (platform_machine == \"x86_64\" or extra == \"dev\" or extra == \"trainer-xgboost\") and (extra == \"dev\" or extra == \"trainer-xgboost\" or extra == \"vllm\" or extra == \"example\" or extra == \"trainer\" or extra == \"trainer-deepspeed\")"
+markers = "platform_system == \"Linux\" and platform_machine != \"aarch64\" and (platform_machine == \"x86_64\" or extra == \"dev\" or extra == \"trainer-xgboost\") and (extra == \"dev\" or extra == \"trainer-xgboost\" or extra == \"vllm\" or extra == \"example\" or extra == \"trainer\" or extra == \"evaluator\" or extra == \"trainer-deepspeed\")"
 files = [
     {file = "nvidia_nccl_cu12-2.26.2-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:5c196e95e832ad30fbbb50381eb3cbd1fadd5675e587a548563993609af19522"},
     {file = "nvidia_nccl_cu12-2.26.2-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:694cf3879a206553cc9d7dbda76b13efaf610fdb70a50cba303de1b0d1530ac6"},
@@ -6852,7 +6852,7 @@ description = "Nvidia JIT LTO Library"
 optional = false
 python-versions = ">=3"
 groups = ["main"]
-markers = "platform_system == \"Linux\" and platform_machine == \"x86_64\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"trainer-deepspeed\")"
+markers = "platform_system == \"Linux\" and platform_machine == \"x86_64\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"evaluator\" or extra == \"trainer-deepspeed\")"
 files = [
     {file = "nvidia_nvjitlink_cu12-12.6.85-py3-none-manylinux2010_x86_64.manylinux_2_12_x86_64.whl", hash = "sha256:eedc36df9e88b682efe4309aa16b5b4e78c2407eac59e8c10a6a47535164369a"},
     {file = "nvidia_nvjitlink_cu12-12.6.85-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:cf4eaa7d4b6b543ffd69d6abfb11efdeb2db48270d94dfd3a452c24150829e41"},
@@ -6866,7 +6866,7 @@ description = "NVIDIA Tools Extension"
 optional = false
 python-versions = ">=3"
 groups = ["main"]
-markers = "platform_system == \"Linux\" and platform_machine == \"x86_64\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"trainer-deepspeed\")"
+markers = "platform_system == \"Linux\" and platform_machine == \"x86_64\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"evaluator\" or extra == \"trainer-deepspeed\")"
 files = [
     {file = "nvidia_nvtx_cu12-12.6.77-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:f44f8d86bb7d5629988d61c8d3ae61dddb2015dee142740536bc7481b022fe4b"},
     {file = "nvidia_nvtx_cu12-12.6.77-py3-none-manylinux2014_aarch64.whl", hash = "sha256:adcaabb9d436c9761fca2b13959a2d237c5f9fd406c8e4b723c695409ff88059"},
@@ -7520,7 +7520,7 @@ description = "Powerful data structures for data analysis, time series, and stat
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "extra == \"example\" or extra == \"vllm\" or extra == \"dev\" or extra == \"trainer-xgboost\" or extra == \"trainer-mlflow\""
+markers = "extra == \"example\" or extra == \"vllm\" or extra == \"dev\" or extra == \"evaluator\" or extra == \"trainer-xgboost\" or extra == \"trainer-mlflow\""
 files = [
     {file = "pandas-2.3.3-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:376c6446ae31770764215a6c937f72d917f214b43560603cd60da6408f183b6c"},
     {file = "pandas-2.3.3-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:e19d192383eab2f4ceb30b412b22ea30690c9e618f78870357ae1d682912015a"},
@@ -9376,7 +9376,7 @@ description = "Extensions to the standard Python datetime module"
 optional = true
 python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,>=2.7"
 groups = ["main"]
-markers = "extra == \"example\" or extra == \"vllm\" or extra == \"dev\" or extra == \"trainer-xgboost\" or extra == \"trainer-mlflow\""
+markers = "extra == \"example\" or extra == \"vllm\" or extra == \"dev\" or extra == \"evaluator\" or extra == \"trainer-xgboost\" or extra == \"trainer-mlflow\""
 files = [
     {file = "python-dateutil-2.9.0.post0.tar.gz", hash = "sha256:37dd54208da7e1cd875388217d5e00ebd4179249f90fb72437e91a35459a0ad3"},
     {file = "python_dateutil-2.9.0.post0-py2.py3-none-any.whl", hash = "sha256:a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427"},
@@ -9590,7 +9590,7 @@ description = "World timezone definitions, modern and historical"
 optional = true
 python-versions = "*"
 groups = ["main"]
-markers = "extra == \"example\" or extra == \"vllm\" or extra == \"dev\" or extra == \"trainer-xgboost\" or extra == \"trainer-mlflow\""
+markers = "extra == \"example\" or extra == \"vllm\" or extra == \"dev\" or extra == \"evaluator\" or extra == \"trainer-xgboost\" or extra == \"trainer-mlflow\""
 files = [
     {file = "pytz-2026.2-py2.py3-none-any.whl", hash = "sha256:04156e608bee23d3792fd45c94ae47fae1036688e75032eea2e3bf0323d1f126"},
     {file = "pytz-2026.2.tar.gz", hash = "sha256:0e60b47b29f21574376f218fe21abc009894a2321ea16c6754f3cad6eb7cdd6a"},
@@ -11712,7 +11712,7 @@ description = "Easily download, build, install, upgrade, and uninstall Python pa
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\") or python_version == \"3.9\" and platform_system == \"Linux\" and platform_machine == \"x86_64\" and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-deepspeed\") or extra == \"vllm\" and python_version >= \"3.10\" or python_version == \"3.10\" and (extra == \"vllm\" or extra == \"example\") or python_version >= \"3.12\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"trainer-deepspeed\" or extra == \"trainer-comet\") or platform_system == \"Linux\" and platform_machine == \"x86_64\" and python_version >= \"3.10\" and (extra == \"vllm\" or extra == \"example\" or extra == \"dev\" or extra == \"trainer\" or extra == \"trainer-deepspeed\") or python_version == \"3.10\" and platform_system == \"Linux\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"trainer-deepspeed\") and platform_machine == \"x86_64\""
+markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"evaluator\") or python_version == \"3.9\" and platform_system == \"Linux\" and platform_machine == \"x86_64\" and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"evaluator\" or extra == \"trainer-deepspeed\") or extra == \"vllm\" and python_version >= \"3.10\" or python_version == \"3.10\" and (extra == \"vllm\" or extra == \"example\") or python_version >= \"3.12\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"evaluator\" or extra == \"trainer-deepspeed\" or extra == \"trainer-comet\") or platform_system == \"Linux\" and platform_machine == \"x86_64\" and python_version >= \"3.10\" and (extra == \"vllm\" or extra == \"example\" or extra == \"dev\" or extra == \"trainer\" or extra == \"evaluator\" or extra == \"trainer-deepspeed\") or python_version == \"3.10\" and platform_system == \"Linux\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"evaluator\" or extra == \"trainer-deepspeed\") and platform_machine == \"x86_64\""
 files = [
     {file = "setuptools-79.0.1-py3-none-any.whl", hash = "sha256:e147c0549f27767ba362f9da434eab9c5dc0045d5304feb602a0af001089fc51"},
     {file = "setuptools-79.0.1.tar.gz", hash = "sha256:128ce7b8f33c3079fd1b067ecbb4051a66e8526e7b65f6cec075dfc650ddfa88"},
@@ -11854,7 +11854,7 @@ description = "Python 2 and 3 compatibility utilities"
 optional = false
 python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,>=2.7"
 groups = ["main"]
-markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"trainer-mlflow\""
+markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"evaluator\" or extra == \"trainer-mlflow\""
 files = [
     {file = "six-1.17.0-py2.py3-none-any.whl", hash = "sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274"},
     {file = "six-1.17.0.tar.gz", hash = "sha256:ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81"},
@@ -12349,7 +12349,7 @@ description = "Tensors and Dynamic neural networks in Python with strong GPU acc
 optional = false
 python-versions = ">=3.9.0"
 groups = ["main"]
-markers = "(python_version < \"3.12\" or extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-deepspeed\") and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"trainer-deepspeed\")"
+markers = "(python_version < \"3.12\" or extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"evaluator\" or extra == \"trainer-deepspeed\") and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"evaluator\" or extra == \"trainer-deepspeed\")"
 files = [
     {file = "torch-2.7.0-cp310-cp310-manylinux_2_28_aarch64.whl", hash = "sha256:c9afea41b11e1a1ab1b258a5c31afbd646d6319042bfe4f231b408034b51128b"},
     {file = "torch-2.7.0-cp310-cp310-manylinux_2_28_x86_64.whl", hash = "sha256:0b9960183b6e5b71239a3e6c883d8852c304e691c0b2955f7045e8a6d05b9183"},
@@ -12450,7 +12450,7 @@ description = "PyTorch native Metrics"
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\")"
+markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"evaluator\")"
 files = [
     {file = "torchmetrics-1.8.2-py3-none-any.whl", hash = "sha256:08382fd96b923e39e904c4d570f3d49e2cc71ccabd2a94e0f895d1f0dac86242"},
     {file = "torchmetrics-1.8.2.tar.gz", hash = "sha256:cf64a901036bf107f17a524009eea7781c9c5315d130713aeca5747a686fe7a5"},
@@ -12482,7 +12482,7 @@ description = "PyTorch native Metrics"
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "python_version >= \"3.10\" and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\")"
+markers = "python_version >= \"3.10\" and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"evaluator\")"
 files = [
     {file = "torchmetrics-1.9.0-py3-none-any.whl", hash = "sha256:bfdcbff3dd1d96b3374bb2496eb39f23c4b28b8a845b6a18c313688e0d2d9ca1"},
     {file = "torchmetrics-1.9.0.tar.gz", hash = "sha256:a488609948600df52d3db4fcdab02e62aab2a85ef34da67037dc3e65b8512faa"},
@@ -12654,7 +12654,7 @@ description = "A language and compiler for custom Deep Learning operations"
 optional = false
 python-versions = "*"
 groups = ["main"]
-markers = "platform_system == \"Linux\" and platform_machine == \"x86_64\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"trainer-deepspeed\")"
+markers = "platform_system == \"Linux\" and platform_machine == \"x86_64\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"evaluator\" or extra == \"trainer-deepspeed\")"
 files = [
     {file = "triton-3.3.0-cp310-cp310-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:fad99beafc860501d7fcc1fb7045d9496cbe2c882b1674640304949165a916e7"},
     {file = "triton-3.3.0-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:3161a2bf073d6b22c4e2f33f951f3e5e3001462b2570e6df9cd57565bdec2984"},
@@ -12744,7 +12744,7 @@ description = "Provider of IANA time zone data"
 optional = true
 python-versions = ">=2"
 groups = ["main"]
-markers = "extra == \"example\" or extra == \"vllm\" or extra == \"dev\" or extra == \"trainer-xgboost\" or extra == \"trainer-mlflow\""
+markers = "extra == \"example\" or extra == \"vllm\" or extra == \"dev\" or extra == \"evaluator\" or extra == \"trainer-xgboost\" or extra == \"trainer-mlflow\""
 files = [
     {file = "tzdata-2026.2-py2.py3-none-any.whl", hash = "sha256:bbe9af844f658da81a5f95019480da3a89415801f6cc966806612cc7169bffe7"},
     {file = "tzdata-2026.2.tar.gz", hash = "sha256:9173fde7d80d9018e02a662e168e5a2d04f87c41ea174b139fbef642eda62d10"},
@@ -14170,7 +14170,8 @@ test = ["big-O", "jaraco.functools", "jaraco.itertools", "jaraco.test", "more_it
 type = ["pytest-mypy (>=1.0.1) ; platform_python_implementation != \"PyPy\""]
 
 [extras]
-dev = ["coverage", "docker", "jinja2", "numpy", "pandas", "polars", "pre-commit", "pyarrow", "pytest", "pytest-cov", "pytorch_lightning", "ray", "ray", "ruff", "torch", "transformers", "xgboost"]
+dev = ["coverage", "docker", "jinja2", "numpy", "pandas", "polars", "pre-commit", "pyarrow", "pytest", "pytest-cov", "pytorch_lightning", "ray", "ray", "ruff", "torch", "torchmetrics", "transformers", "xgboost"]
+evaluator = ["numpy", "pandas", "torch", "torchmetrics"]
 example = ["accelerate", "boto3", "chronon-ai", "datasets", "einops", "kaggle", "minio", "mlflow", "numpy", "pandas", "peft", "pyarrow", "pyspark", "pytorch_lightning", "ray", "ray", "ray", "ray", "s3fs", "scikit-learn", "sqlglot", "thrift", "torch", "transformers"]
 mactl = []
 minio = ["minio"]
@@ -14186,4 +14187,4 @@ vllm = ["accelerate", "datasets", "einops", "numpy", "pandas", "pyarrow", "pytor
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.9.0"
-content-hash = "16c893d656f8c53aa3fa69a422edc3974ca0d7067bae640c02b974f225f2301b"
+content-hash = "5d22affcc425483d94b99f5b3265e1089abea80f6bd9da59deb9b9a12a1352be"

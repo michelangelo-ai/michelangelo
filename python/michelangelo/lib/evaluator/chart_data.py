@@ -168,11 +168,13 @@ def _binary_curve_rows(
     fp_arr = k_idx - tp_arr
     fn_arr = num_pos - tp_arr
     tn_arr = num_neg - fp_arr
-    tpr_arr = np.where(num_pos > 0, tp_arr / num_pos, 0.0)
-    fpr_arr = np.where(num_neg > 0, fp_arr / num_neg, 0.0)
-    # tp == fp == 0 at k_idx[0] leaves precision undefined; take sklearn's 1.0.
-    # create_pr_chart drops the point outright, since no constant plots well.
+    # np.where evaluates both branches, so a single-class group divides by zero
+    # before the guard selects the 0.0. tp == fp == 0 at k_idx[0] likewise
+    # leaves precision undefined; take sklearn's 1.0 there. create_pr_chart
+    # drops that point outright, since no constant plots well.
     with np.errstate(invalid="ignore", divide="ignore"):
+        tpr_arr = np.where(num_pos > 0, tp_arr / num_pos, 0.0)
+        fpr_arr = np.where(num_neg > 0, fp_arr / num_neg, 0.0)
         precision_arr = np.where((tp_arr + fp_arr) > 0, tp_arr / (tp_arr + fp_arr), 1.0)
 
     threshold_vals = sorted_preds_desc[np.maximum(k_idx - 1, 0)].copy()
