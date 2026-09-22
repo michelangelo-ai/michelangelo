@@ -7,8 +7,21 @@ body = """
 {% set docs_commits = commits | filter(attribute="group", value="📚 Documentation") %}\
 {% set ci_commits = commits | filter(attribute="group", value="🔧 CI / Build") %}\
 {% set security_commits = commits | filter(attribute="group", value="🔒 Security") %}\
+{% set total_count = commits | length %}\
+{% set feat_count = feat_commits | length %}\
+{% set fix_count = fix_commits | length %}\
+{% set docs_count = docs_commits | length %}\
+{% set ci_count = ci_commits | length %}\
+{% set security_count = security_commits | length %}\
+{% set other_count = total_count - feat_count - fix_count - docs_count - ci_count - security_count %}\
+{% if other_count > 0 %}
+## What's Changed
+
+{% for commit in commits %}{% if not commit.group %}- {{ commit.message | upper_first }}{% if commit.remote.pr_author or commit.remote.username %} @{{ commit.remote.pr_author | default(value=commit.remote.username) }}{% endif %}{% if commit.remote.pr_number %} (#{{ commit.remote.pr_number }}){% endif %}
+{% endif %}{% endfor -%}
+{% endif -%}
 {% if breaking_commits | length > 0 %}
-### ⚠ Breaking Changes
+## ⚠ Breaking Changes
 
 {% if breaking_commits | length > 5 %}<details><summary>{{ breaking_commits | length }} changes</summary>
 
@@ -20,7 +33,7 @@ body = """
 {% endif %}
 {% endif -%}
 {% if feat_commits | length > 0 %}
-### 🚀 Features
+## 🚀 Features
 
 {% if feat_commits | length > 10 %}<details><summary>{{ feat_commits | length }} changes</summary>
 
@@ -32,7 +45,7 @@ body = """
 {% endif %}
 {% endif -%}
 {% if fix_commits | length > 0 %}
-### 🐛 Bug Fixes
+## 🐛 Bug Fixes
 
 {% if fix_commits | length > 10 %}<details><summary>{{ fix_commits | length }} changes</summary>
 
@@ -44,7 +57,7 @@ body = """
 {% endif %}
 {% endif -%}
 {% if docs_commits | length > 0 %}
-### 📚 Documentation
+## 📚 Documentation
 
 {% if docs_commits | length > 5 %}<details><summary>{{ docs_commits | length }} changes</summary>
 
@@ -56,7 +69,7 @@ body = """
 {% endif %}
 {% endif -%}
 {% if ci_commits | length > 0 %}
-### 🔧 CI / Build
+## 🔧 CI / Build
 
 {% if ci_commits | length > 5 %}<details><summary>{{ ci_commits | length }} changes</summary>
 
@@ -68,10 +81,13 @@ body = """
 {% endif %}
 {% endif -%}
 {% if security_commits | length > 0 %}
-### 🔒 Security
+## 🔒 Security
 
 {% for commit in security_commits %}- {{ commit.message | upper_first }}{% if commit.remote.pr_author or commit.remote.username %} @{{ commit.remote.pr_author | default(value=commit.remote.username) }}{% endif %}{% if commit.remote.pr_number %} (#{{ commit.remote.pr_number }}){% endif %}
 {% endfor -%}
+{% endif -%}
+{% if previous.version and version %}
+**Full Changelog**: https://github.com/michelangelo-ai/michelangelo/compare/{{ previous.version }}...{{ version }}
 {% endif -%}
 """
 footer = ""
@@ -102,6 +118,17 @@ commit_preprocessors = [
 # all fold into "CI / Build", matching its autolabeler groups), since this
 # config's only job is to reproduce that visual format for the GitHub Release
 # body. cliff.toml's CHANGELOG.md template and groups are untouched.
+#
+# Deliberately NO catch-all ".*" parser: release-drafter's autolabeler only
+# assigns a category to PRs whose title/commit matches one of its rules, and
+# anything it can't categorize falls into the un-autolabeled "What's Changed"
+# bucket instead of being force-fit into a category. A commit here that
+# matches none of the prefixes below is left with no `group` (git-cliff
+# leaves it ungrouped rather than dropping it, since filter_unconventional =
+# false), and the template's "What's Changed" section above renders exactly
+# those ungrouped commits -- confirmed against v0.10.0's real release body,
+# where "What's Changed" held ~15 genuinely non-conventional-prefixed
+# commits that never appear again in any category section below it.
 commit_parsers = [
     { message = "^feat", group = "🚀 Features" },
     { message = "^fix", group = "🐛 Bug Fixes" },
@@ -112,7 +139,6 @@ commit_parsers = [
     { message = "^refactor", group = "🔧 CI / Build" },
     { message = "^perf", group = "🔧 CI / Build" },
     { message = "^test", group = "🔧 CI / Build" },
-    { message = ".*", group = "🔧 CI / Build" },
 ]
 
 [remote.github]
