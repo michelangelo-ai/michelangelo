@@ -17,7 +17,7 @@ body = """
 {% if other_count > 0 %}
 ## What's Changed
 
-{% for commit in commits %}{% if not commit.group %}- {{ commit.message | upper_first }}{% if commit.remote.pr_author or commit.remote.username %} @{{ commit.remote.pr_author | default(value=commit.remote.username) }}{% endif %}{% if commit.remote.pr_number %} (#{{ commit.remote.pr_number }}){% endif %}
+{% for commit in commits %}{% if not commit.group %}- {{ commit.raw_message }}{% if commit.remote.pr_author or commit.remote.username %} @{{ commit.remote.pr_author | default(value=commit.remote.username) }}{% endif %}{% if commit.remote.pr_number %} (#{{ commit.remote.pr_number }}){% endif %}
 {% endif %}{% endfor -%}
 {% endif -%}
 {% if breaking_commits | length > 0 %}
@@ -26,7 +26,7 @@ body = """
 {% if breaking_commits | length > 5 %}<details><summary>{{ breaking_commits | length }} changes</summary>
 
 {% endif -%}
-{% for commit in breaking_commits %}- {{ commit.message | upper_first }}{% if commit.remote.pr_author or commit.remote.username %} @{{ commit.remote.pr_author | default(value=commit.remote.username) }}{% endif %}{% if commit.remote.pr_number %} (#{{ commit.remote.pr_number }}){% endif %}
+{% for commit in breaking_commits %}- {{ commit.raw_message }}{% if commit.remote.pr_author or commit.remote.username %} @{{ commit.remote.pr_author | default(value=commit.remote.username) }}{% endif %}{% if commit.remote.pr_number %} (#{{ commit.remote.pr_number }}){% endif %}
 {% endfor -%}
 {% if breaking_commits | length > 5 %}
 </details>
@@ -38,7 +38,7 @@ body = """
 {% if feat_commits | length > 10 %}<details><summary>{{ feat_commits | length }} changes</summary>
 
 {% endif -%}
-{% for commit in feat_commits %}- {{ commit.message | upper_first }}{% if commit.remote.pr_author or commit.remote.username %} @{{ commit.remote.pr_author | default(value=commit.remote.username) }}{% endif %}{% if commit.remote.pr_number %} (#{{ commit.remote.pr_number }}){% endif %}
+{% for commit in feat_commits %}- {{ commit.raw_message }}{% if commit.remote.pr_author or commit.remote.username %} @{{ commit.remote.pr_author | default(value=commit.remote.username) }}{% endif %}{% if commit.remote.pr_number %} (#{{ commit.remote.pr_number }}){% endif %}
 {% endfor -%}
 {% if feat_commits | length > 10 %}
 </details>
@@ -50,7 +50,7 @@ body = """
 {% if fix_commits | length > 10 %}<details><summary>{{ fix_commits | length }} changes</summary>
 
 {% endif -%}
-{% for commit in fix_commits %}- {{ commit.message | upper_first }}{% if commit.remote.pr_author or commit.remote.username %} @{{ commit.remote.pr_author | default(value=commit.remote.username) }}{% endif %}{% if commit.remote.pr_number %} (#{{ commit.remote.pr_number }}){% endif %}
+{% for commit in fix_commits %}- {{ commit.raw_message }}{% if commit.remote.pr_author or commit.remote.username %} @{{ commit.remote.pr_author | default(value=commit.remote.username) }}{% endif %}{% if commit.remote.pr_number %} (#{{ commit.remote.pr_number }}){% endif %}
 {% endfor -%}
 {% if fix_commits | length > 10 %}
 </details>
@@ -62,7 +62,7 @@ body = """
 {% if docs_commits | length > 5 %}<details><summary>{{ docs_commits | length }} changes</summary>
 
 {% endif -%}
-{% for commit in docs_commits %}- {{ commit.message | upper_first }}{% if commit.remote.pr_author or commit.remote.username %} @{{ commit.remote.pr_author | default(value=commit.remote.username) }}{% endif %}{% if commit.remote.pr_number %} (#{{ commit.remote.pr_number }}){% endif %}
+{% for commit in docs_commits %}- {{ commit.raw_message }}{% if commit.remote.pr_author or commit.remote.username %} @{{ commit.remote.pr_author | default(value=commit.remote.username) }}{% endif %}{% if commit.remote.pr_number %} (#{{ commit.remote.pr_number }}){% endif %}
 {% endfor -%}
 {% if docs_commits | length > 5 %}
 </details>
@@ -74,7 +74,7 @@ body = """
 {% if ci_commits | length > 5 %}<details><summary>{{ ci_commits | length }} changes</summary>
 
 {% endif -%}
-{% for commit in ci_commits %}- {{ commit.message | upper_first }}{% if commit.remote.pr_author or commit.remote.username %} @{{ commit.remote.pr_author | default(value=commit.remote.username) }}{% endif %}{% if commit.remote.pr_number %} (#{{ commit.remote.pr_number }}){% endif %}
+{% for commit in ci_commits %}- {{ commit.raw_message }}{% if commit.remote.pr_author or commit.remote.username %} @{{ commit.remote.pr_author | default(value=commit.remote.username) }}{% endif %}{% if commit.remote.pr_number %} (#{{ commit.remote.pr_number }}){% endif %}
 {% endfor -%}
 {% if ci_commits | length > 5 %}
 </details>
@@ -83,7 +83,7 @@ body = """
 {% if security_commits | length > 0 %}
 ## 🔒 Security
 
-{% for commit in security_commits %}- {{ commit.message | upper_first }}{% if commit.remote.pr_author or commit.remote.username %} @{{ commit.remote.pr_author | default(value=commit.remote.username) }}{% endif %}{% if commit.remote.pr_number %} (#{{ commit.remote.pr_number }}){% endif %}
+{% for commit in security_commits %}- {{ commit.raw_message }}{% if commit.remote.pr_author or commit.remote.username %} @{{ commit.remote.pr_author | default(value=commit.remote.username) }}{% endif %}{% if commit.remote.pr_number %} (#{{ commit.remote.pr_number }}){% endif %}
 {% endfor -%}
 {% endif -%}
 {% if previous.version and version %}
