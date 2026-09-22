@@ -83,6 +83,16 @@ affinity: {}
 controllermgr:
   metadataStorage:
     enable: true
+  # Revisioning is off by default platform-wide (helm/michelangelo/values.yaml)
+  # pending a retention/pruning policy for Revision objects, which have no
+  # TTL or history-limit mechanism today. The sandbox turns it on anyway so
+  # pipeline-revision behavior (Revision CR snapshots, PipelineRun
+  # auto-pin-to-latest) is exercisable end-to-end for local development and
+  # example-pipeline validation — a handful of example pipelines in a
+  # throwaway sandbox never approaches the unbounded-growth risk that gates
+  # the production default. Empirically confirmed working end-to-end.
+  pipeline:
+    revisioningEnabled: true
   jobs:
     k8sengine:
       mapper:
