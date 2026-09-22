@@ -2,7 +2,7 @@
 # Pinned by digest (rather than the floating `alpine` tag) so Dependabot can
 # track and propose base-image updates -- see .github/dependabot.yml's
 # "docker" entry.
-FROM nginx:alpine@sha256:db35bfc6b2951e7f8a72db5db120288c127ffaeeb4a6d4b95a26fead017d5913
+FROM nginx:alpine@sha256:62ff2089abf5a9ed33bd232895bef5e22f7bb4b200675cec49a5ebc48e3d4ac8
 
 # Copy pre-built UI assets
 COPY javascript/app/dist /usr/share/nginx/html
