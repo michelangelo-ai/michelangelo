@@ -75,7 +75,7 @@ func TestRetrieve(t *testing.T) {
 			},
 			setupMocks: func(mcp *modelconfigmocks.MockModelConfigProvider) {
 				mcp.EXPECT().GetModelsFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default").Return([]modelconfig.ModelConfigEntry{
-					{Name: "failed-model"},
+					{Name: "failed-model", DeploymentName: "test-deployment"},
 				}, nil)
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
@@ -147,7 +147,7 @@ func TestRun(t *testing.T) {
 				},
 			},
 			setupMocks: func(mcp *modelconfigmocks.MockModelConfigProvider) {
-				mcp.EXPECT().RemoveModelFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default", "failed-model").Return(nil)
+				mcp.EXPECT().RemoveModelFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default", "test-deployment", "failed-model").Return(nil)
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_TRUE,
 			expectedConditionReason: "",
@@ -166,7 +166,7 @@ func TestRun(t *testing.T) {
 				},
 			},
 			setupMocks: func(mcp *modelconfigmocks.MockModelConfigProvider) {
-				mcp.EXPECT().RemoveModelFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default", "failed-model").Return(errors.New("removal failed"))
+				mcp.EXPECT().RemoveModelFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default", "test-deployment", "failed-model").Return(errors.New("removal failed"))
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
 			expectedConditionReason: "Failed to remove candidate model failed-model from model config: removal failed",

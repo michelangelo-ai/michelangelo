@@ -28,6 +28,7 @@ export const SHARED_PROJECT_CELL_CONFIG = [
   {
     id: 'spec.tier',
     label: 'Tier',
+    description: "The tier identifies this project's criticality.",
     type: CellType.TAG,
   },
 ];

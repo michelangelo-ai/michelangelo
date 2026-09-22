@@ -10,6 +10,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/michelangelo-ai/michelangelo/go/api"
+	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/client/clientmocks"
 	jobscluster "github.com/michelangelo-ai/michelangelo/go/components/jobs/cluster"
 	jobtypes "github.com/michelangelo-ai/michelangelo/go/components/jobs/common/types"
@@ -121,6 +123,39 @@ func TestReconciler_Reconcile(t *testing.T) {
 				assert.Equal(t, time.Duration(0), res.RequeueAfter)
 			},
 			verifyConditions: func(t *testing.T, job *v2pb.RayJob) {},
+		},
+		{
+			// An immutable RayJob must be skipped entirely. A non-immutable job with
+			// no cluster set would be marked FAILED ("cluster is not set"); a job left
+			// in its seeded INVALID state with no status conditions and no requeue
+			// proves reconciliation was short-circuited by the immutable check.
+			name: "immutable job is skipped",
+			setup: func() []client.Object {
+				objects := make([]client.Object, 0)
+				rayJob := &v2pb.RayJob{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:        rayJobName,
+						Namespace:   testNamespace,
+						Generation:  1,
+						Annotations: map[string]string{api.ImmutableAnnotation: "true"},
+					},
+					Spec: v2pb.RayJobSpec{
+						Cluster: nil,
+					},
+				}
+				objects = append(objects, rayJob)
+				return objects
+			},
+			setupMocks:      func(ctrl *gomock.Controller, mfc *clientmocks.MockFederatedClient, mcc *mockClusterCache) {},
+			expectedState:   v2pb.RAY_JOB_STATE_INVALID,
+			expectedMessage: "",
+			errorAssertion:  require.NoError,
+			postCheck: func(res ctrl.Result) {
+				assert.Equal(t, time.Duration(0), res.RequeueAfter)
+			},
+			verifyConditions: func(t *testing.T, job *v2pb.RayJob) {
+				assert.Empty(t, job.Status.StatusConditions, "immutable job must not be reconciled")
+			},
 		},
 		{
 			name: "Cluster not found",
@@ -622,6 +657,10 @@ func TestReconciler_Reconcile(t *testing.T) {
 			},
 			verifyConditions: func(t *testing.T, job *v2pb.RayJob) {
 				assert.Equal(t, "SUCCEEDED", job.Status.JobStatus)
+				// job is re-fetched via the client after Reconcile, so this only
+				// passes if the annotation reached the API server, not just the
+				// in-memory object.
+				assert.True(t, utils.IsImmutable(job), "terminal RayJob should be marked immutable")
 			},
 		},
 		{
@@ -690,6 +729,7 @@ func TestReconciler_Reconcile(t *testing.T) {
 			},
 			verifyConditions: func(t *testing.T, job *v2pb.RayJob) {
 				assert.Equal(t, "FAILED", job.Status.JobStatus)
+				assert.True(t, utils.IsImmutable(job), "terminal RayJob should be marked immutable")
 			},
 		},
 		{
@@ -758,6 +798,7 @@ func TestReconciler_Reconcile(t *testing.T) {
 			},
 			verifyConditions: func(t *testing.T, job *v2pb.RayJob) {
 				assert.Equal(t, "STOPPED", job.Status.JobStatus)
+				assert.True(t, utils.IsImmutable(job), "terminal RayJob should be marked immutable")
 			},
 		},
 		{
@@ -987,4 +1028,205 @@ func TestReconciler_Reconcile(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestReconciler_Reconcile_NoOpSkipsStatusWrite verifies that a reconcile pass
+// which produces no actual status change performs no write at all. The
+// original dirty-check compared a *v2pb.RayJob to a v2pb.RayJob with
+// reflect.DeepEqual, which reports distinct types as unequal regardless of
+// content -- so status was rewritten, and a new watch event fired, on every
+// single reconcile, even when nothing changed.
+func TestReconciler_Reconcile_NoOpSkipsStatusWrite(t *testing.T) {
+	ctx := context.Background()
+
+	scheme := runtime.NewScheme()
+	kubescheme.AddToScheme(scheme)
+	v2pb.AddToScheme(scheme)
+
+	rayJob := &v2pb.RayJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       rayJobName,
+			Namespace:  testNamespace,
+			Generation: 1,
+		},
+		Spec: v2pb.RayJobSpec{
+			Cluster: &apipb.ResourceIdentifier{
+				Name:      testClusterName,
+				Namespace: testNamespace,
+			},
+			Entrypoint: "echo Hello World",
+		},
+		Status: v2pb.RayJobStatus{
+			State:        v2pb.RAY_JOB_STATE_RUNNING,
+			JobStatus:    string(v1.JobStatusRunning),
+			DashboardUrl: "http://dashboard.example.com",
+			StatusConditions: []*apipb.Condition{
+				{
+					Type:   "Launched",
+					Status: apipb.CONDITION_STATUS_TRUE,
+				},
+			},
+		},
+	}
+	cluster := &v2pb.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       testClusterName,
+			Namespace:  testNamespace,
+			Generation: 1,
+		},
+		Status: v2pb.RayClusterStatus{
+			State: v2pb.RAY_CLUSTER_STATE_READY,
+			Assignment: &v2pb.AssignmentInfo{
+				Cluster: assignedCluster,
+			},
+		},
+	}
+
+	objects := make([]client.Object, 0)
+	objects = append(objects, rayJob)
+	objects = append(objects, cluster)
+	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(objects...).WithStatusSubresource(objects...).Build()
+
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	mockFedClient := clientmocks.NewMockFederatedClient(mockCtrl)
+	mockCache := newMockClusterCache()
+	mockCache.addCluster(assignedCluster, &v2pb.Cluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: assignedCluster,
+		},
+	})
+	// The federated status poll reports back exactly what is already stored,
+	// so this reconcile has nothing new to persist.
+	mockFedClient.EXPECT().GetJobStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(&jobtypes.JobStatus{
+		Ray: &v2pb.RayJobStatus{
+			JobStatus:    string(v1.JobStatusRunning),
+			State:        v2pb.RAY_JOB_STATE_RUNNING,
+			DashboardUrl: "http://dashboard.example.com",
+		},
+	}, nil)
+
+	r := &Reconciler{
+		Client:          fakeClient,
+		federatedClient: mockFedClient,
+		clusterCache:    mockCache,
+	}
+
+	requestRayJob := types.NamespacedName{
+		Name:      rayJobName,
+		Namespace: testNamespace,
+	}
+
+	var before v2pb.RayJob
+	require.NoError(t, r.Get(ctx, requestRayJob, &before))
+
+	_, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: requestRayJob})
+	require.NoError(t, err)
+
+	var after v2pb.RayJob
+	require.NoError(t, r.Get(ctx, requestRayJob, &after))
+
+	// A changed resourceVersion means either Status().Update or the plain
+	// Update fired -- and neither should, since nothing actually changed.
+	assert.Equal(t, before.ResourceVersion, after.ResourceVersion, "no-op reconcile must not write the RayJob")
+}
+
+// TestReconciler_Reconcile_RetriesImmutableAnnotationWhenStatusUnchanged
+// covers a RayJob that is already terminal but not yet immutable -- e.g. a
+// prior reconcile persisted the terminal status but its immutable-annotation
+// write failed -- and whose status happens not to change on this pass. The
+// immutable check must not be gated behind the status dirty-check, or a job
+// like this would stay terminal-but-mutable forever once its status stopped
+// changing.
+func TestReconciler_Reconcile_RetriesImmutableAnnotationWhenStatusUnchanged(t *testing.T) {
+	ctx := context.Background()
+
+	scheme := runtime.NewScheme()
+	kubescheme.AddToScheme(scheme)
+	v2pb.AddToScheme(scheme)
+
+	rayJob := &v2pb.RayJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       rayJobName,
+			Namespace:  testNamespace,
+			Generation: 1,
+		},
+		Spec: v2pb.RayJobSpec{
+			Cluster: &apipb.ResourceIdentifier{
+				Name:      testClusterName,
+				Namespace: testNamespace,
+			},
+			Entrypoint: "echo Hello World",
+		},
+		Status: v2pb.RayJobStatus{
+			// Already terminal, and deliberately missing the immutable
+			// annotation -- simulating a prior reconcile whose status write
+			// succeeded but whose annotation write did not.
+			State:     v2pb.RAY_JOB_STATE_SUCCEEDED,
+			JobStatus: "SUCCEEDED",
+			StatusConditions: []*apipb.Condition{
+				{
+					Type:   "Launched",
+					Status: apipb.CONDITION_STATUS_TRUE,
+				},
+			},
+		},
+	}
+	cluster := &v2pb.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       testClusterName,
+			Namespace:  testNamespace,
+			Generation: 1,
+		},
+		Status: v2pb.RayClusterStatus{
+			State: v2pb.RAY_CLUSTER_STATE_READY,
+			Assignment: &v2pb.AssignmentInfo{
+				Cluster: assignedCluster,
+			},
+		},
+	}
+
+	objects := make([]client.Object, 0)
+	objects = append(objects, rayJob)
+	objects = append(objects, cluster)
+	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(objects...).WithStatusSubresource(objects...).Build()
+
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	mockFedClient := clientmocks.NewMockFederatedClient(mockCtrl)
+	mockCache := newMockClusterCache()
+	mockCache.addCluster(assignedCluster, &v2pb.Cluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: assignedCluster,
+		},
+	})
+	// The federated status poll reports back exactly the terminal status
+	// already stored, so there is nothing new for the status dirty-check to
+	// catch -- only the pending immutable annotation.
+	mockFedClient.EXPECT().GetJobStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(&jobtypes.JobStatus{
+		Ray: &v2pb.RayJobStatus{
+			JobStatus: "SUCCEEDED",
+			State:     v2pb.RAY_JOB_STATE_SUCCEEDED,
+		},
+	}, nil)
+
+	r := &Reconciler{
+		Client:          fakeClient,
+		federatedClient: mockFedClient,
+		clusterCache:    mockCache,
+	}
+
+	requestRayJob := types.NamespacedName{
+		Name:      rayJobName,
+		Namespace: testNamespace,
+	}
+
+	_, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: requestRayJob})
+	require.NoError(t, err)
+
+	var after v2pb.RayJob
+	require.NoError(t, r.Get(ctx, requestRayJob, &after))
+	assert.True(t, utils.IsImmutable(&after), "already-terminal RayJob must still be marked immutable even when this pass made no status change")
 }

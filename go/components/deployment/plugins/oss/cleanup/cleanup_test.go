@@ -63,7 +63,7 @@ func TestRetrieve(t *testing.T) {
 		{
 			name: "model still exists in inference server, cleanup required",
 			deployment: withSingleClusterAnnotation(t, &v2pb.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Namespace: namespace},
+				ObjectMeta: metav1.ObjectMeta{Name: deploymentName, Namespace: namespace},
 				Spec: v2pb.DeploymentSpec{
 					Target: &v2pb.DeploymentSpec_InferenceServer{
 						InferenceServer: &api.ResourceIdentifier{Name: isName},
@@ -75,16 +75,16 @@ func TestRetrieve(t *testing.T) {
 			}, clusterID),
 			setupMocks: func(mcp *modelconfigmocks.MockModelConfigProvider, rm *routingmocks.MockManager) {
 				mcp.EXPECT().GetModelsFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), isName, namespace).Return([]modelconfig.ModelConfigEntry{
-					{Name: currentModel, StoragePath: "gs://bucket/old-model"},
+					{Name: currentModel, StoragePath: "gs://bucket/old-model", DeploymentName: deploymentName},
 				}, nil)
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
-			expectedConditionReason: "Model old-model still exists in Inference Server",
+			expectedConditionReason: "Model old-model still exists in Inference Server in cluster test-cluster",
 		},
 		{
 			name: "unable to check model in inference server",
 			deployment: withSingleClusterAnnotation(t, &v2pb.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Namespace: namespace},
+				ObjectMeta: metav1.ObjectMeta{Name: deploymentName, Namespace: namespace},
 				Spec: v2pb.DeploymentSpec{
 					Target: &v2pb.DeploymentSpec_InferenceServer{
 						InferenceServer: &api.ResourceIdentifier{Name: isName},
@@ -98,7 +98,7 @@ func TestRetrieve(t *testing.T) {
 				mcp.EXPECT().GetModelsFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), isName, namespace).Return(nil, errors.New("connection error"))
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
-			expectedConditionReason: "Unable to check if model old-model exists in Inference Server: connection error",
+			expectedConditionReason: "Unable to check if model old-model exists in Inference Server in cluster test-cluster: connection error",
 		},
 		{
 			name: "TrafficRoute still exists, cleanup required",
@@ -199,6 +199,7 @@ func TestRetrieve(t *testing.T) {
 			rm := routingmocks.NewMockManager(ctrl)
 			mockClientFactory := clientfactorymocks.NewMockClientFactory(ctrl)
 			mockClientFactory.EXPECT().GetDynamicClient(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+			mockClientFactory.EXPECT().GetClient(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 
 			tt.setupMocks(mockModelConfigProvider, rm)
 
@@ -253,7 +254,7 @@ func TestRun(t *testing.T) {
 				},
 			}, clusterID),
 			setupMocks: func(mcp *modelconfigmocks.MockModelConfigProvider, rm *routingmocks.MockManager) {
-				mcp.EXPECT().RemoveModelFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), isName, namespace, currentModel).Return(nil)
+				mcp.EXPECT().RemoveModelFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), isName, namespace, deploymentName, currentModel).Return(nil)
 				rm.EXPECT().RemoveRules(gomock.Any(), gomock.Any(), trafficRouteName, namespace, trafficMatchPath).Return(nil)
 				rm.EXPECT().RemoveRules(gomock.Any(), gomock.Any(), discoveryRouteName, namespace, discoveryMatchPath).Return(nil)
 			},
@@ -275,10 +276,10 @@ func TestRun(t *testing.T) {
 				},
 			}, clusterID),
 			setupMocks: func(mcp *modelconfigmocks.MockModelConfigProvider, rm *routingmocks.MockManager) {
-				mcp.EXPECT().RemoveModelFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), isName, namespace, currentModel).Return(errors.New("removal failed"))
+				mcp.EXPECT().RemoveModelFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), isName, namespace, deploymentName, currentModel).Return(errors.New("removal failed"))
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
-			expectedConditionReason: "Failed to unload old model old-model from inference server: removal failed",
+			expectedConditionReason: "Failed to unload old model old-model from inference server in cluster test-cluster: removal failed",
 		},
 		{
 			name: "TrafficRoute removal fails",
@@ -295,7 +296,7 @@ func TestRun(t *testing.T) {
 				},
 			}, clusterID),
 			setupMocks: func(mcp *modelconfigmocks.MockModelConfigProvider, rm *routingmocks.MockManager) {
-				mcp.EXPECT().RemoveModelFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), isName, namespace, currentModel).Return(nil)
+				mcp.EXPECT().RemoveModelFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), isName, namespace, deploymentName, currentModel).Return(nil)
 				rm.EXPECT().RemoveRules(gomock.Any(), gomock.Any(), trafficRouteName, namespace, trafficMatchPath).Return(errors.New("removal failed"))
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
@@ -316,7 +317,7 @@ func TestRun(t *testing.T) {
 				},
 			}, clusterID),
 			setupMocks: func(mcp *modelconfigmocks.MockModelConfigProvider, rm *routingmocks.MockManager) {
-				mcp.EXPECT().RemoveModelFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), isName, namespace, currentModel).Return(nil)
+				mcp.EXPECT().RemoveModelFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), isName, namespace, deploymentName, currentModel).Return(nil)
 				rm.EXPECT().RemoveRules(gomock.Any(), gomock.Any(), trafficRouteName, namespace, trafficMatchPath).Return(nil)
 				rm.EXPECT().RemoveRules(gomock.Any(), gomock.Any(), discoveryRouteName, namespace, discoveryMatchPath).Return(errors.New("apply failed"))
 			},
@@ -334,6 +335,7 @@ func TestRun(t *testing.T) {
 			rm := routingmocks.NewMockManager(ctrl)
 			mockClientFactory := clientfactorymocks.NewMockClientFactory(ctrl)
 			mockClientFactory.EXPECT().GetDynamicClient(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+			mockClientFactory.EXPECT().GetClient(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 
 			tt.setupMocks(mockModelConfigProvider, rm)
 
@@ -352,4 +354,91 @@ func TestRun(t *testing.T) {
 			assert.Contains(t, condition.Reason, tt.expectedConditionReason)
 		})
 	}
+}
+
+// TestRunUnloadsModelFromEveryCluster guards the multi-cluster deletion path: the model
+// config is a per-cluster ConfigMap, so removing it only from the control plane leaves
+// remote inference servers serving the model after the Deployment is gone.
+func TestRunUnloadsModelFromEveryCluster(t *testing.T) {
+	isName := "test-server"
+	deploymentName := "test-deployment"
+	namespace := "default"
+	currentModel := "old-model"
+	clusterIDs := []string{"cluster-a", "cluster-b"}
+
+	targets := make([]*v2pb.ClusterTarget, 0, len(clusterIDs))
+	for _, id := range clusterIDs {
+		targets = append(targets, &v2pb.ClusterTarget{
+			ClusterId: id,
+			Connection: &v2pb.ClusterTarget_Kubernetes{
+				Kubernetes: &v2pb.ConnectionSpec{Host: "https://kubernetes.default.svc", Port: "443"},
+			},
+		})
+	}
+
+	deployment := &v2pb.Deployment{
+		ObjectMeta: metav1.ObjectMeta{Name: deploymentName, Namespace: namespace},
+		Spec: v2pb.DeploymentSpec{
+			Target: &v2pb.DeploymentSpec_InferenceServer{
+				InferenceServer: &api.ResourceIdentifier{Name: isName},
+			},
+		},
+		Status: v2pb.DeploymentStatus{
+			CurrentRevision: &api.ResourceIdentifier{Name: currentModel},
+			Stage:           v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE,
+		},
+	}
+	if err := osscommon.WriteTargetClustersAnnotation(deployment, targets); err != nil {
+		t.Fatalf("seed target-clusters annotation: %v", err)
+	}
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockModelConfigProvider := modelconfigmocks.NewMockModelConfigProvider(ctrl)
+	rm := routingmocks.NewMockManager(ctrl)
+	mockClientFactory := clientfactorymocks.NewMockClientFactory(ctrl)
+
+	// One client per target cluster, not one control-plane client reused.
+	for _, id := range clusterIDs {
+		matchesCluster := clusterTargetMatcher(id)
+		mockClientFactory.EXPECT().GetClient(gomock.Any(), matchesCluster).Return(nil, nil)
+		mockClientFactory.EXPECT().GetDynamicClient(gomock.Any(), matchesCluster).Return(nil, nil)
+	}
+
+	mockModelConfigProvider.EXPECT().
+		RemoveModelFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), isName, namespace, deploymentName, currentModel).
+		Return(nil).Times(len(clusterIDs))
+	rm.EXPECT().
+		RemoveRules(gomock.Any(), gomock.Any(), routenames.TrafficRouteName(isName), namespace,
+			routenames.TrafficMatchPath(isName, deploymentName)).
+		Return(nil).Times(len(clusterIDs))
+	rm.EXPECT().
+		RemoveRules(gomock.Any(), gomock.Any(), routenames.DiscoveryRouteName(isName), namespace,
+			routenames.DiscoveryMatchPath(isName, deploymentName)).
+		Return(nil)
+
+	actor := &CleanupActor{
+		ModelConfigProvider: mockModelConfigProvider,
+		RouteManager:        rm,
+		ClientFactory:       mockClientFactory,
+		Logger:              zap.NewNop(),
+	}
+
+	condition, err := actor.Run(context.Background(), deployment, &api.Condition{})
+
+	assert.NoError(t, err)
+	assert.Equal(t, api.CONDITION_STATUS_TRUE, condition.Status)
+}
+
+// clusterTargetMatcher matches a ClusterTarget argument by cluster ID.
+type clusterTargetMatcher string
+
+func (m clusterTargetMatcher) Matches(x interface{}) bool {
+	target, ok := x.(*v2pb.ClusterTarget)
+	return ok && target.GetClusterId() == string(m)
+}
+
+func (m clusterTargetMatcher) String() string {
+	return "cluster target " + string(m)
 }

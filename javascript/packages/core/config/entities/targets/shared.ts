@@ -34,10 +34,13 @@ export const BACKEND_TYPE = {
   TORCHSERVE: 4,
 } as const;
 
+export const BACKEND_TYPE_OPTIONS = [{ id: BACKEND_TYPE.TRITON, label: 'Triton' }];
+
+/** Namespace where platform operators register compute clusters as `Cluster` CRs. */
+export const CLUSTER_REGISTRY_NAMESPACE = 'ma-system';
+
 export const CONTAINER_BUILD_TEMPLATE = {
   DEFAULT_TRITON: 'default_triton',
-  DEFAULT_TRITON_GPU: 'default_triton_gpu',
-  DEFAULT_TRITON_PYTHON: 'default_triton_python',
 } as const;
 
 export const INFERENCE_SERVER_STATE_CELL: Cell = {

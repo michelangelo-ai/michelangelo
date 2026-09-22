@@ -1,24 +1,14 @@
 # Michelangelo's default Triton serving image.
 #
-# The stock nvcr.io/nvidia/tritonserver image's python backend has no ML
-# framework deps installed, so any custom python-backend model (produced by
-# CustomTritonPackager) that imports torch/transformers at load time fails
-# with ModuleNotFoundError. This adds those on top of the stock image so it
-# works as the default serving image for Triton-backed InferenceServers --
-# see go/components/inferenceserver/backends/triton.go's tritonImage().
+# The stock nvcr.io/nvidia/tritonserver image ships a python backend without
+# ML framework dependencies, so a python-backend model that imports torch or
+# transformers at load time fails with ModuleNotFoundError. This installs them
+# on top of the stock image.
 #
-# torch==2.4.1/transformers==4.44.2 were originally pinned because the prior
-# 23.04 base shipped Python 3.8, which capped what was installable. 25.01
-# ships Python 3.12, so that cap no longer applies -- these pins are no
-# longer forced, just not yet revisited.
-#
-# Pinned to 25.01 specifically (not a newer release) because that's the
-# version already running in production internally, via Uber's own
-# ml_gpu_base vendoring -- not the latest available, but the one with actual
-# production track record behind it.
-#
-# A model needing deps/versions outside this image can still override it via
-# InferenceServer.spec.initSpec.servingSpec.containerBuildTemplate.
+# .github/workflows/build-triton-image.yaml publishes this to GHCR for amd64
+# and arm64, tagged with both the base version and the commit it was built
+# from. Editing this file publishes new tags; nothing repoints at them
+# automatically.
 FROM nvcr.io/nvidia/tritonserver:25.01-py3
 
 RUN pip install --no-cache-dir torch==2.4.1 transformers==4.44.2

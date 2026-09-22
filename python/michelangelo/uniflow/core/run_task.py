@@ -5,6 +5,8 @@ import argparse
 import logging
 import sys
 
+import fsspec
+
 from michelangelo.uniflow.core.codec import decoder
 from michelangelo.uniflow.core.utils import LOGGING_FORMAT, import_attribute
 
@@ -18,17 +20,25 @@ def main():
 
     p = argparse.ArgumentParser()
     p.add_argument("--task", required=True, type=str)
-    p.add_argument("--args", required=True, type=_decode_arg)
-    p.add_argument("--kwargs", required=True, type=_decode_arg)
+    p.add_argument("--args", required=True, type=str)
+    kwargs_group = p.add_mutually_exclusive_group(required=True)
+    kwargs_group.add_argument("--kwargs", type=str)
+    kwargs_group.add_argument("--kwargs-file", type=str)
     p.add_argument("--result-url", required=True, type=str)
-    p.add_argument("--overrides", type=_decode_arg)
+    p.add_argument("--overrides", type=str)
     ns = p.parse_args()
 
-    assert isinstance(ns.args, list), (
-        f"Expected args to be a list, but got {type(ns.args)}"
+    args = _decode_arg(ns.args)
+    kwargs = (
+        _decode_arg(ns.kwargs)
+        if ns.kwargs is not None
+        else _decode_kwargs_file(ns.kwargs_file)
     )
-    assert isinstance(ns.kwargs, dict), (
-        f"Expected kwargs to be a dict, but got {type(ns.kwargs)}"
+    overrides = _decode_arg(ns.overrides) if ns.overrides is not None else None
+
+    assert isinstance(args, list), f"Expected args to be a list, but got {type(args)}"
+    assert isinstance(kwargs, dict), (
+        f"Expected kwargs to be a dict, but got {type(kwargs)}"
     )
     assert isinstance(ns.result_url, str), (
         f"Expected result_url to be a string, but got {type(ns.result_url)}"
@@ -43,13 +53,13 @@ def main():
         f"Expected task to be a TaskFunction instance, but got instance of {type(task)}"
     )
 
-    if ns.overrides:
-        assert isinstance(ns.overrides, dict)
-        task = task.with_overrides(**ns.overrides)
+    if overrides:
+        assert isinstance(overrides, dict)
+        task = task.with_overrides(**overrides)
 
     task(
-        *ns.args,
-        **ns.kwargs,
+        *args,
+        **kwargs,
         _uf_result_url=ns.result_url,
     )
     log.info("[ ok ]")
@@ -68,6 +78,17 @@ def _decode_arg(value: str):
         return decoder.decode(value)
     except Exception as e:
         error_message = f"Failed to decode argument: {value}"
+        log.error(error_message, exc_info=True)
+        raise argparse.ArgumentTypeError(error_message) from e
+
+
+def _decode_kwargs_file(path: str):
+    """Read and decode task keyword arguments from an fsspec URL or path."""
+    try:
+        with fsspec.open(path, mode="rt", encoding="utf-8") as stream:
+            return decoder.decode(stream.read())
+    except Exception as e:
+        error_message = f"Failed to decode kwargs file: {path}"
         log.error(error_message, exc_info=True)
         raise argparse.ArgumentTypeError(error_message) from e
 

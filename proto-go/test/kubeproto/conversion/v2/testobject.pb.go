@@ -3010,7 +3010,6 @@ func init() {
 	YamlSchemas["TestObject"] = `apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
-  creationTimestamp: null
   name: testobjects.test.api
 spec:
   group: test.api

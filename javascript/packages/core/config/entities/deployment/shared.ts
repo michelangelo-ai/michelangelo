@@ -85,3 +85,32 @@ export const DEPLOYMENT_STATE_CELL: Cell = {
     [DEPLOYMENT_STATE.EMPTY]: 'gray',
   },
 };
+
+export const DEPLOYMENT_TYPE_CELL: Cell = {
+  id: 'spec.definition.type',
+  label: 'Type',
+  type: CellType.TAG,
+  accessor: (data: unknown) => {
+    // cast: accessor receives unknown data; narrowing to expected proto shape for property
+    // access; see #1425
+    const type = (data as { spec?: { definition?: { type?: string } } })?.spec?.definition?.type;
+    if (!type) return null;
+    if (type === 'TARGET_TYPE_OFFLINE') return 'Offline';
+    if (type === 'TARGET_TYPE_MOBILE') return 'Mobile';
+    return 'Online';
+  },
+};
+
+export const DEPLOYMENT_TARGET_CELL: Cell = {
+  id: 'spec.inferenceServer.name',
+  label: 'Target',
+  type: CellType.TEXT,
+  accessor: (data: unknown) => {
+    // cast: accessor receives unknown data; narrowing to expected proto shape for property
+    // access; see #1425
+    const target = (data as { spec?: { target?: { case?: string; value?: { name?: string } } } })
+      ?.spec?.target;
+    if (target?.case === 'inferenceServer') return target.value?.name ?? null;
+    return null;
+  },
+};

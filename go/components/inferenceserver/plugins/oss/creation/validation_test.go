@@ -30,6 +30,7 @@ func TestValidationActor_Retrieve(t *testing.T) {
 		backendType     v2pb.BackendType
 		clusterTargets  []*v2pb.ClusterTarget
 		annotations     map[string]string
+		servingImage    *v2pb.ServingImage
 		expectedStatus  apipb.ConditionStatus
 		expectedReason  string
 		expectedMessage string
@@ -80,6 +81,44 @@ func TestValidationActor_Retrieve(t *testing.T) {
 			expectedReason:  `unknown cluster rollout strategy "blast"; supported: rolling`,
 			expectedErr:     false,
 		},
+		{
+			name:           "custom serving image with explicit tag",
+			backendType:    v2pb.BACKEND_TYPE_TRITON,
+			clusterTargets: []*v2pb.ClusterTarget{{ClusterId: "c1"}},
+			servingImage:   &v2pb.ServingImage{Source: &v2pb.ServingImage_Uri{Uri: "myreg.io/team/triton:24.12-py3"}},
+			expectedStatus: apipb.CONDITION_STATUS_TRUE,
+			expectedErr:    false,
+		},
+		{
+			name:            "serving image without a tag",
+			backendType:     v2pb.BACKEND_TYPE_TRITON,
+			clusterTargets:  []*v2pb.ClusterTarget{{ClusterId: "c1"}},
+			servingImage:    &v2pb.ServingImage{Source: &v2pb.ServingImage_Uri{Uri: "myreg.io/team/triton"}},
+			expectedStatus:  apipb.CONDITION_STATUS_FALSE,
+			expectedMessage: "InvalidServingImage",
+			expectedReason:  `spec.initSpec.servingSpec.image.uri "myreg.io/team/triton": must include an explicit tag or digest`,
+			expectedErr:     false,
+		},
+		{
+			name:            "serving image with unsupported pull policy",
+			backendType:     v2pb.BACKEND_TYPE_TRITON,
+			clusterTargets:  []*v2pb.ClusterTarget{{ClusterId: "c1"}},
+			servingImage:    &v2pb.ServingImage{ImagePullPolicy: "Sometimes"},
+			expectedStatus:  apipb.CONDITION_STATUS_FALSE,
+			expectedMessage: "InvalidServingImage",
+			expectedReason:  `spec.initSpec.servingSpec.image.imagePullPolicy "Sometimes": must be one of "Always", "IfNotPresent", or "Never"`,
+			expectedErr:     false,
+		},
+		{
+			name:            "serving image with empty pull secret name",
+			backendType:     v2pb.BACKEND_TYPE_TRITON,
+			clusterTargets:  []*v2pb.ClusterTarget{{ClusterId: "c1"}},
+			servingImage:    &v2pb.ServingImage{ImagePullSecrets: []string{"regcred", " "}},
+			expectedStatus:  apipb.CONDITION_STATUS_FALSE,
+			expectedMessage: "InvalidServingImage",
+			expectedReason:  "spec.initSpec.servingSpec.image.imagePullSecrets must not contain empty names",
+			expectedErr:     false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -102,6 +141,9 @@ func TestValidationActor_Retrieve(t *testing.T) {
 				Spec: v2pb.InferenceServerSpec{
 					BackendType:    tt.backendType,
 					ClusterTargets: tt.clusterTargets,
+					InitSpec: &v2pb.InitSpec{
+						ServingSpec: &v2pb.ServingSpec{Image: tt.servingImage},
+					},
 				},
 			}
 
@@ -122,6 +164,43 @@ func TestValidationActor_Retrieve(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestValidateImageURI(t *testing.T) {
+	tests := []struct {
+		name    string
+		uri     string
+		wantErr string
+	}{
+		{name: "tagged image", uri: "nvcr.io/nvidia/tritonserver:25.01-py3"},
+		{name: "digest pinned image", uri: "myreg.io/team/triton@sha256:6f1a"},
+		{name: "registry port with tag", uri: "localhost:5000/team/triton:25.01"},
+		{name: "docker hub short form with tag", uri: "tritonserver:25.01-py3"},
+		// The colon here is a registry port, not a tag.
+		{name: "registry port without tag", uri: "localhost:5000/team/triton", wantErr: "must include an explicit tag or digest"},
+		{name: "no tag", uri: "nvcr.io/nvidia/tritonserver", wantErr: "must include an explicit tag or digest"},
+		{name: "empty tag", uri: "nvcr.io/nvidia/tritonserver:", wantErr: `tag is empty after ":"`},
+		{name: "empty digest", uri: "myreg.io/team/triton@", wantErr: `digest is empty after "@"`},
+		{name: "embedded whitespace", uri: "myreg.io/team/triton :25.01", wantErr: "must not contain whitespace"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateImageURI(tt.uri)
+			if tt.wantErr == "" {
+				assert.NoError(t, err)
+				return
+			}
+			require.Error(t, err)
+			assert.Equal(t, tt.wantErr, err.Error())
+		})
+	}
+}
+
+func TestValidateServingImageAllowsUnsetImage(t *testing.T) {
+	assert.NoError(t, validateServingImage(nil))
+	// A pull policy without a URI applies to the default image.
+	assert.NoError(t, validateServingImage(&v2pb.ServingImage{ImagePullPolicy: "Always"}))
 }
 
 func TestValidationActor_Run(t *testing.T) {

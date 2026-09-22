@@ -227,6 +227,9 @@ func (r *Reconciler) snapshotRevision(ctx context.Context, pipeline *v2pb.Pipeli
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      formatRevisionName(pipeline),
 			Namespace: pipeline.Namespace,
+			Labels: map[string]string{
+				api.PipelineTypeLabelName: pipeline.Spec.GetType().String(),
+			},
 		},
 		Spec: v2pb.RevisionSpec{
 			BaseType: &metav1.TypeMeta{

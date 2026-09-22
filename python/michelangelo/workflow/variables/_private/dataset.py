@@ -198,11 +198,17 @@ class DatasetVariable(Variable):
 
         self._save_value_using_io(SparkIO)
 
-    def save_ray_dataset(self) -> None:
-        """Persist the Ray Dataset to ``self.path`` via ``RayDatasetIO``."""
+    def save_ray_dataset(self, **write_kwargs: Any) -> None:
+        """Persist the Ray Dataset to ``self.path`` via ``RayDatasetIO``.
+
+        Args:
+            **write_kwargs: Additional kwargs forwarded to
+                ``ray.data.Dataset.write_parquet`` via ``RayDatasetIO.write()``
+                (e.g. ``max_rows_per_file``, ``min_rows_per_file``).
+        """
         from michelangelo.uniflow.plugins.ray.io import RayDatasetIO
 
-        self._save_value_using_io(RayDatasetIO)
+        self._save_value_using_io(RayDatasetIO, **write_kwargs)
 
     # ------------------------------------------------------------------
     # Load — delegates to Variable._load_value_using_io
@@ -248,8 +254,15 @@ class DatasetVariable(Variable):
 
         self._load_value_using_io(SparkIO)
 
-    def load_ray_dataset(self) -> None:
-        """Load the dataset from ``self.path`` as a Ray Dataset."""
+    def load_ray_dataset(self, **read_kwargs: Any) -> None:
+        """Load the dataset from ``self.path`` as a Ray Dataset.
+
+        Args:
+            **read_kwargs: Additional kwargs forwarded to
+                ``ray.data.read_parquet`` via
+                ``RayDatasetIO.read()`` (e.g. as produced by
+                :func:`~michelangelo.uniflow.plugins.ray.parquet_io.parquet_read_config_to_kwargs`).
+        """
         from michelangelo.uniflow.plugins.ray.io import RayDatasetIO
 
-        self._load_value_using_io(RayDatasetIO)
+        self._load_value_using_io(RayDatasetIO, **read_kwargs)

@@ -14,6 +14,31 @@ import "michelangelo/api/v2/pod.proto";
 import "michelangelo/api/v2/project.proto";
 import "michelangelo/api/v2/user.proto";
 
+// ServingImage selects the container image that runs the model server.
+//
+// TODO(#2115): Replace the bespoke workload fields with an embedded
+// k8s.io.api.core.v1.PodTemplateSpec, as RayCluster already does.
+message ServingImage {
+  // Where the image comes from. Whatever the source, the image ends up in a
+  // registry and the pod pulls it from there, so image_pull_policy and
+  // image_pull_secrets apply to every variant.
+  oneof source {
+    // Fully-qualified reference to an image that is already pushed, including a
+    // tag or a digest. Examples: "nvcr.io/nvidia/tritonserver:25.01-py3",
+    // "myregistry.io/team/triton@sha256:6f1a...".
+    string uri = 1;
+  }
+
+  // Pull policy for the image: "Always", "IfNotPresent", or "Never". Defaults
+  // to "IfNotPresent" when empty.
+  string image_pull_policy = 2;
+
+  // Names of kubernetes.io/dockerconfigjson Secrets used to pull from a private
+  // registry. Each must already exist in the InferenceServer's namespace in
+  // every target cluster.
+  repeated string image_pull_secrets = 3;
+}
+
 // ServingSpec encapsulates serving service specification.
 message ServingSpec {
   // Optional version to deploy. This can either be a server version or the git sha of
@@ -24,6 +49,10 @@ message ServingSpec {
   // Optional template to use when generating container (pinocchio) files. If not specified then
   // a default template will be used.
   string container_build_template = 2;
+
+  // Optional override for the model server container image. When unset, the
+  // operator-configured default is used, then the backend's built-in image.
+  ServingImage image = 3;
 
   // TODO(#933): Add serving time dependencies.
 }

@@ -21,14 +21,14 @@ export const TRAIN_PHASE: PhaseConfig = {
     MODEL_ENTITY_CONFIG,
     {
       id: 'evaluations',
-      name: 'Evaluations',
+      name: 'evaluations',
       state: 'disabled',
       service: 'evaluationReport',
       views: [],
     },
     {
       id: 'notebooks',
-      name: 'Notebooks',
+      name: 'notebooks',
       state: 'disabled',
       service: 'notebook',
       views: [],

@@ -1008,7 +1008,6 @@ func init() {
 	YamlSchemas["TestCRD"] = `apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
-  creationTimestamp: null
   name: testcrds.michelangelo.api
 spec:
   group: michelangelo.api

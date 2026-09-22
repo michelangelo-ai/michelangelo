@@ -249,6 +249,37 @@ def read_model_list(server: str) -> list[dict]:
         return []
 
 
+def build_desired(config: list[dict]) -> dict[str, dict]:
+    """Collapse the model list into one entry per model name.
+
+    The list holds one entry per (deployment, model). Triton keys its repository by
+    model name, so entries sharing a name describe a single model that stays loaded
+    until the last deployment referencing it goes away.
+    """
+    desired: dict[str, dict] = {}
+    for entry in config:
+        name = entry.get("name")
+        if name:
+            desired.setdefault(name, entry)
+    return desired
+
+
+def format_claims(config: list[dict]) -> str:
+    """Render each desired model with the deployments claiming it, for the sync log."""
+    claims: dict[str, set[str]] = {}
+    for entry in config:
+        name = entry.get("name")
+        if name:
+            claims.setdefault(name, set()).add(entry.get("deployment_name") or "?")
+    return (
+        ", ".join(
+            f"{name}[{','.join(sorted(owners))}]"
+            for name, owners in sorted(claims.items())
+        )
+        or "(none)"
+    )
+
+
 def reconcile_pod(pod_ip: str, desired: dict) -> None:
     """Reconcile load/unload state on a single Triton pod."""
     if not triton_ready(pod_ip):
@@ -278,8 +309,8 @@ def reconcile_server(server: str, endpoint_url: str, node_name: str) -> None:
     print(f"  pods on this node: {pod_ips}")
 
     config = read_model_list(server)
-    desired = {entry["name"]: entry for entry in config if entry.get("name")}
-    print(f"  desired: {sorted(desired)}")
+    desired = build_desired(config)
+    print(f"  desired: {format_claims(config)}")
 
     server_dir = os.path.join(MODEL_BASE_DIR, server)
     os.makedirs(server_dir, exist_ok=True)

@@ -7,14 +7,17 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cadence-workflow/starlark-worker/cadence"
 	clientInterface "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/cadence/.gen/go/shared"
 	cadenceClient "go.uber.org/cadence/client"
 	"go.uber.org/cadence/encoded"
 	cadencemocks "go.uber.org/cadence/mocks"
 	cadenceworkflow "go.uber.org/cadence/workflow"
+	"go.uber.org/zap"
 )
 
 func TestStartWorkflow(t *testing.T) {
@@ -96,11 +99,12 @@ func TestGetWorkflowExecutionInfo(t *testing.T) {
 	runID := "testRunID"
 
 	testCases := []struct {
-		name              string
-		mockFunc          func(mockClient *cadencemocks.Client)
-		expectedStatus    clientInterface.WorkflowExecutionStatus
-		expectedExecution *clientInterface.WorkflowExecution
-		errMsg            string
+		name                   string
+		mockFunc               func(mockClient *cadencemocks.Client)
+		expectedStatus         clientInterface.WorkflowExecutionStatus
+		expectedExecution      *clientInterface.WorkflowExecution
+		expectedFailureMessage string
+		errMsg                 string
 	}{
 		{
 			name: "GetWorkflowExecutionInfo Succeeded -- workflow completed",
@@ -125,10 +129,72 @@ func TestGetWorkflowExecutionInfo(t *testing.T) {
 							CloseStatus: shared.WorkflowExecutionCloseStatusFailed.Ptr(),
 						},
 					}, nil)
+				iter := cadencemocks.NewHistoryEventIterator(t)
+				iter.On("HasNext").Return(true).Once()
+				iter.On("Next").Return(&shared.HistoryEvent{
+					EventType: shared.EventTypeWorkflowExecutionFailed.Ptr(),
+					WorkflowExecutionFailedEventAttributes: &shared.WorkflowExecutionFailedEventAttributes{
+						Reason: ptrString("got an unexpected keyword argument"),
+					},
+				}, nil).Once()
+				iter.On("HasNext").Return(false)
+				mockClient.On("GetWorkflowHistory", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(iter)
 			},
-			expectedStatus:    clientInterface.WorkflowExecutionStatusFailed,
-			expectedExecution: &clientInterface.WorkflowExecution{},
-			errMsg:            "",
+			expectedStatus:         clientInterface.WorkflowExecutionStatusFailed,
+			expectedExecution:      &clientInterface.WorkflowExecution{},
+			expectedFailureMessage: "got an unexpected keyword argument",
+			errMsg:                 "",
+		},
+		{
+			// The starlark-worker library (used by our pipeline workflows) reports
+			// application errors via workflow.NewCustomError(ctx, code, err.Error()),
+			// which stores the generic code (e.g. "invalid-argument") in Reason and the
+			// actual descriptive text in Details, encoded with its own custom
+			// DataConverter. GetWorkflowExecutionInfo must prefer that decoded detail
+			// over the generic Reason.
+			name: "GetWorkflowExecutionInfo Succeeded -- workflow failed with encoded details",
+			mockFunc: func(mockClient *cadencemocks.Client) {
+				mockClient.On("DescribeWorkflowExecution", mock.Anything, mock.Anything, mock.Anything).Return(
+					&shared.DescribeWorkflowExecutionResponse{
+						WorkflowExecutionInfo: &shared.WorkflowExecutionInfo{
+							CloseStatus: shared.WorkflowExecutionCloseStatusFailed.Ptr(),
+						},
+					}, nil)
+				detailBytes, err := (&cadence.DataConverter{Logger: zap.NewNop()}).ToData(
+					`function pipeline_220 got an unexpected keyword argument "task_1_d"`,
+				)
+				require.NoError(t, err)
+				iter := cadencemocks.NewHistoryEventIterator(t)
+				iter.On("HasNext").Return(true).Once()
+				iter.On("Next").Return(&shared.HistoryEvent{
+					EventType: shared.EventTypeWorkflowExecutionFailed.Ptr(),
+					WorkflowExecutionFailedEventAttributes: &shared.WorkflowExecutionFailedEventAttributes{
+						Reason:  ptrString("invalid-argument"),
+						Details: detailBytes,
+					},
+				}, nil).Once()
+				iter.On("HasNext").Return(false)
+				mockClient.On("GetWorkflowHistory", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(iter)
+			},
+			expectedStatus:         clientInterface.WorkflowExecutionStatusFailed,
+			expectedExecution:      &clientInterface.WorkflowExecution{},
+			expectedFailureMessage: `function pipeline_220 got an unexpected keyword argument "task_1_d"`,
+			errMsg:                 "",
+		},
+		{
+			name: "GetWorkflowExecutionInfo Succeeded -- workflow timed out",
+			mockFunc: func(mockClient *cadencemocks.Client) {
+				mockClient.On("DescribeWorkflowExecution", mock.Anything, mock.Anything, mock.Anything).Return(
+					&shared.DescribeWorkflowExecutionResponse{
+						WorkflowExecutionInfo: &shared.WorkflowExecutionInfo{
+							CloseStatus: shared.WorkflowExecutionCloseStatusTimedOut.Ptr(),
+						},
+					}, nil)
+			},
+			expectedStatus:         clientInterface.WorkflowExecutionStatusTimedOut,
+			expectedExecution:      &clientInterface.WorkflowExecution{},
+			expectedFailureMessage: "Workflow execution timed out",
+			errMsg:                 "",
 		},
 		{
 			name: "GetWorkflowExecutionInfo Succeeded -- workflow running",
@@ -176,6 +242,7 @@ func TestGetWorkflowExecutionInfo(t *testing.T) {
 				assert.NoError(t, err)
 				assert.Equal(t, testCase.expectedStatus, workflowExecutionInfo.Status)
 				assert.Equal(t, testCase.expectedExecution, workflowExecutionInfo.Execution)
+				assert.Equal(t, testCase.expectedFailureMessage, workflowExecutionInfo.FailureMessage)
 			}
 		})
 	}

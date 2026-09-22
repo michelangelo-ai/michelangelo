@@ -210,12 +210,14 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	} else {
 		if conditionResult.IsKilled {
 			pipelineRun.Status.State = v2pb.PIPELINE_RUN_STATE_KILLED
+			pipelineRun.Status.ErrorMessage = findFailureMessage(pipelineRun.Status.Steps)
 		} else if !conditionResult.IsTerminal {
 			pipelineRun.Status.State = v2pb.PIPELINE_RUN_STATE_RUNNING
 		} else if conditionResult.AreSatisfied {
 			pipelineRun.Status.State = v2pb.PIPELINE_RUN_STATE_SUCCEEDED
 		} else {
 			pipelineRun.Status.State = v2pb.PIPELINE_RUN_STATE_FAILED
+			pipelineRun.Status.ErrorMessage = findFailureMessage(pipelineRun.Status.Steps)
 		}
 	}
 
@@ -370,12 +372,14 @@ func (t *pipelineRunDrainTarget) Progress(ctx context.Context) (bool, error) {
 	}
 	if conditionResult.IsKilled {
 		t.run.Status.State = v2pb.PIPELINE_RUN_STATE_KILLED
+		t.run.Status.ErrorMessage = findFailureMessage(t.run.Status.Steps)
 	} else if !conditionResult.IsTerminal {
 		t.run.Status.State = v2pb.PIPELINE_RUN_STATE_RUNNING
 	} else if conditionResult.AreSatisfied {
 		t.run.Status.State = v2pb.PIPELINE_RUN_STATE_SUCCEEDED
 	} else {
 		t.run.Status.State = v2pb.PIPELINE_RUN_STATE_FAILED
+		t.run.Status.ErrorMessage = findFailureMessage(t.run.Status.Steps)
 	}
 	if err := t.r.updatePipelineRunStatus(ctx, t.run, originalPipelineRun); err != nil {
 		return false, err
@@ -697,4 +701,22 @@ func getFailureReason(pipelineRun *v2pb.PipelineRun) string {
 		return "unknown_failure"
 	}
 	return "none"
+}
+
+// findFailureMessage walks steps depth-first looking for the first FAILED or KILLED step
+// with a non-empty Message, checking each step before its substeps so a workflow-level
+// failure (attached to the top-level step) takes priority over any substep detail.
+func findFailureMessage(steps []*v2pb.PipelineRunStepInfo) string {
+	for _, step := range steps {
+		if step == nil {
+			continue
+		}
+		if (step.State == v2pb.PIPELINE_RUN_STEP_STATE_FAILED || step.State == v2pb.PIPELINE_RUN_STEP_STATE_KILLED) && step.Message != "" {
+			return step.Message
+		}
+		if message := findFailureMessage(step.SubSteps); message != "" {
+			return message
+		}
+	}
+	return ""
 }

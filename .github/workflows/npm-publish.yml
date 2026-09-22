@@ -48,12 +48,19 @@ jobs:
 
       - name: Setup Node.js
         if: steps.check.outputs.changed == 'true'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 24.18.0
           registry-url: 'https://registry.npmjs.org'
           cache: 'yarn'
           cache-dependency-path: javascript/yarn.lock
+        env:
+          # setup-node@v7's yarn-cache step resolves the registry's
+          # .yarnrc-embedded ${NODE_AUTH_TOKEN} placeholder as soon as
+          # `cache: yarn` + `registry-url` are both set, before "Publish to
+          # npm"'s own env would otherwise supply it -- must be present here
+          # too.
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Set up buf CLI
         if: steps.check.outputs.changed == 'true'

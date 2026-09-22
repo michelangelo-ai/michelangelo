@@ -110,15 +110,15 @@ func (mr *MockModelConfigProviderMockRecorder) GetModelsFromConfig(ctx, logger, 
 }
 
 // RemoveModelFromConfig mocks base method.
-func (m *MockModelConfigProvider) RemoveModelFromConfig(ctx context.Context, logger *zap.Logger, kubeclient client.Client, inferenceServerName, namespace, modelName string) error {
+func (m *MockModelConfigProvider) RemoveModelFromConfig(ctx context.Context, logger *zap.Logger, kubeclient client.Client, inferenceServerName, namespace, deploymentName, modelName string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RemoveModelFromConfig", ctx, logger, kubeclient, inferenceServerName, namespace, modelName)
+	ret := m.ctrl.Call(m, "RemoveModelFromConfig", ctx, logger, kubeclient, inferenceServerName, namespace, deploymentName, modelName)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // RemoveModelFromConfig indicates an expected call of RemoveModelFromConfig.
-func (mr *MockModelConfigProviderMockRecorder) RemoveModelFromConfig(ctx, logger, kubeclient, inferenceServerName, namespace, modelName interface{}) *gomock.Call {
+func (mr *MockModelConfigProviderMockRecorder) RemoveModelFromConfig(ctx, logger, kubeclient, inferenceServerName, namespace, deploymentName, modelName interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveModelFromConfig", reflect.TypeOf((*MockModelConfigProvider)(nil).RemoveModelFromConfig), ctx, logger, kubeclient, inferenceServerName, namespace, modelName)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveModelFromConfig", reflect.TypeOf((*MockModelConfigProvider)(nil).RemoveModelFromConfig), ctx, logger, kubeclient, inferenceServerName, namespace, deploymentName, modelName)
 }

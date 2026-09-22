@@ -56,6 +56,7 @@ func TestReconcile(t *testing.T) {
 		expectedConditions        []*apipb.Condition
 		expectedPipelineRunStatus v2.PipelineRunStatus
 		expectedSteps             []*v2.PipelineRunStepInfo
+		expectedErrorMessage      string
 		errMsg                    string
 		expectedResult            ctrl.Result
 	}{
@@ -214,7 +215,279 @@ func TestReconcile(t *testing.T) {
 					State: v2.PIPELINE_RUN_STEP_STATE_FAILED,
 				},
 			},
-			errMsg: "",
+			expectedErrorMessage: fmt.Sprintf("%s not found in source pipeline annotations", pipelinerunutils.ImageIDAnnotationKey),
+			errMsg:               "",
+			expectedResult: ctrl.Result{
+				Requeue:      false,
+				RequeueAfter: 0,
+			},
+		},
+		{
+			name: "pipeline run's ExecuteWorkflow step already FAILED with a real failure message, ErrorMessage is populated from it",
+			initialObjects: []client.Object{
+				&v2.PipelineRun{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-pipeline-run",
+						Namespace: "test-namespace",
+					},
+					Spec: v2.PipelineRunSpec{
+						Pipeline: &apipb.ResourceIdentifier{
+							Name:      "test-pipeline",
+							Namespace: "test-namespace",
+						},
+					},
+					Status: v2.PipelineRunStatus{
+						WorkflowId:    "test-workflow-id",
+						WorkflowRunId: "test-run-id",
+						Conditions: []*apipb.Condition{
+							{
+								Type:   actors.SourcePipelineType,
+								Status: apipb.CONDITION_STATUS_TRUE,
+							},
+							{
+								Type:   actors.ImageBuildType,
+								Status: apipb.CONDITION_STATUS_TRUE,
+							},
+							{
+								Type:   actors.ExecuteWorkflowType,
+								Status: apipb.CONDITION_STATUS_UNKNOWN,
+							},
+						},
+						Steps: []*v2.PipelineRunStepInfo{
+							{
+								Name:  pipelinerunutils.SourcePipelineStepName,
+								State: v2.PIPELINE_RUN_STEP_STATE_PENDING,
+							},
+							{
+								Name:  pipelinerunutils.ImageBuildStepName,
+								State: v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED,
+							},
+							{
+								Name:    pipelinerunutils.ExecuteWorkflowStepName,
+								State:   v2.PIPELINE_RUN_STEP_STATE_FAILED,
+								Message: "got an unexpected keyword argument",
+							},
+						},
+						SourcePipeline: &v2.SourcePipeline{
+							Pipeline: &v2.Pipeline{
+								ObjectMeta: metav1.ObjectMeta{
+									Name:      "test-pipeline",
+									Namespace: "test-namespace",
+									Annotations: map[string]string{
+										pipelinerunutils.ImageIDAnnotationKey: "test-image-id",
+									},
+								},
+								Spec: v2.PipelineSpec{
+									Manifest: &v2.PipelineManifest{
+										Content:    pipelineManifestContent,
+										UniflowTar: "mock://test-uniflow-tar",
+									},
+								},
+							},
+						},
+						State: v2.PIPELINE_RUN_STATE_RUNNING,
+					},
+				},
+				&v2.Pipeline{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-pipeline",
+						Namespace: "test-namespace",
+						Annotations: map[string]string{
+							pipelinerunutils.ImageIDAnnotationKey: "test-image-id",
+						},
+					},
+					Spec: v2.PipelineSpec{
+						Manifest: &v2.PipelineManifest{
+							Content:    pipelineManifestContent,
+							UniflowTar: "mock://test-uniflow-tar",
+						},
+					},
+				},
+			},
+			mockFunc: func(mockWorkflowClient *workflowClientMock.MockWorkflowClient, mockBlobStorageClient *blobStorageClientMock.MockBlobStoreClient) {
+				// SourcePipeline.Retrieve() returns TRUE, ImageBuild.Retrieve() returns TRUE.
+				// ExecuteWorkflow.Retrieve() sees the step already FAILED and returns FALSE;
+				// ExecuteWorkflow.Run() short-circuits on the already-terminal step and returns
+				// without touching the workflow client, so no mocks are needed here.
+			},
+			expectedConditions: []*apipb.Condition{
+				{
+					Type:   actors.SourcePipelineType,
+					Status: apipb.CONDITION_STATUS_TRUE,
+				},
+				{
+					Type:   actors.ImageBuildType,
+					Status: apipb.CONDITION_STATUS_TRUE,
+				},
+				{
+					Type:   actors.ExecuteWorkflowType,
+					Status: apipb.CONDITION_STATUS_FALSE,
+				},
+			},
+			expectedPipelineRunStatus: v2.PipelineRunStatus{
+				State:         v2.PIPELINE_RUN_STATE_FAILED,
+				WorkflowId:    "test-workflow-id",
+				WorkflowRunId: "test-run-id",
+			},
+			expectedSteps: []*v2.PipelineRunStepInfo{
+				{
+					Name:  pipelinerunutils.SourcePipelineStepName,
+					State: v2.PIPELINE_RUN_STEP_STATE_PENDING,
+				},
+				{
+					Name:  pipelinerunutils.ImageBuildStepName,
+					State: v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED,
+				},
+				{
+					Name:  pipelinerunutils.ExecuteWorkflowStepName,
+					State: v2.PIPELINE_RUN_STEP_STATE_FAILED,
+				},
+			},
+			expectedErrorMessage: "got an unexpected keyword argument",
+			errMsg:               "",
+			expectedResult: ctrl.Result{
+				Requeue:      false,
+				RequeueAfter: 0,
+			},
+		},
+		{
+			name: "pipeline run's ExecuteWorkflow step already KILLED with a real kill message, ErrorMessage is populated from it",
+			initialObjects: []client.Object{
+				&v2.PipelineRun{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-pipeline-run",
+						Namespace: "test-namespace",
+					},
+					Spec: v2.PipelineRunSpec{
+						Pipeline: &apipb.ResourceIdentifier{
+							Name:      "test-pipeline",
+							Namespace: "test-namespace",
+						},
+					},
+					Status: v2.PipelineRunStatus{
+						WorkflowId:    "test-workflow-id",
+						WorkflowRunId: "test-run-id",
+						Conditions: []*apipb.Condition{
+							{
+								Type:   actors.SourcePipelineType,
+								Status: apipb.CONDITION_STATUS_TRUE,
+							},
+							{
+								Type:   actors.ImageBuildType,
+								Status: apipb.CONDITION_STATUS_TRUE,
+							},
+							{
+								Type:   actors.ExecuteWorkflowType,
+								Status: apipb.CONDITION_STATUS_UNKNOWN,
+							},
+						},
+						Steps: []*v2.PipelineRunStepInfo{
+							{
+								Name:  pipelinerunutils.SourcePipelineStepName,
+								State: v2.PIPELINE_RUN_STEP_STATE_PENDING,
+							},
+							{
+								Name:  pipelinerunutils.ImageBuildStepName,
+								State: v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED,
+							},
+							{
+								Name:  pipelinerunutils.ExecuteWorkflowStepName,
+								State: v2.PIPELINE_RUN_STEP_STATE_KILLED,
+								SubSteps: []*v2.PipelineRunStepInfo{
+									{
+										Name:    "task1",
+										State:   v2.PIPELINE_RUN_STEP_STATE_KILLED,
+										Message: "killed due to workflow termination",
+									},
+								},
+							},
+						},
+						SourcePipeline: &v2.SourcePipeline{
+							Pipeline: &v2.Pipeline{
+								ObjectMeta: metav1.ObjectMeta{
+									Name:      "test-pipeline",
+									Namespace: "test-namespace",
+									Annotations: map[string]string{
+										pipelinerunutils.ImageIDAnnotationKey: "test-image-id",
+									},
+								},
+								Spec: v2.PipelineSpec{
+									Manifest: &v2.PipelineManifest{
+										Content:    pipelineManifestContent,
+										UniflowTar: "mock://test-uniflow-tar",
+									},
+								},
+							},
+						},
+						State: v2.PIPELINE_RUN_STATE_RUNNING,
+					},
+				},
+				&v2.Pipeline{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-pipeline",
+						Namespace: "test-namespace",
+						Annotations: map[string]string{
+							pipelinerunutils.ImageIDAnnotationKey: "test-image-id",
+						},
+					},
+					Spec: v2.PipelineSpec{
+						Manifest: &v2.PipelineManifest{
+							Content:    pipelineManifestContent,
+							UniflowTar: "mock://test-uniflow-tar",
+						},
+					},
+				},
+			},
+			mockFunc: func(mockWorkflowClient *workflowClientMock.MockWorkflowClient, mockBlobStorageClient *blobStorageClientMock.MockBlobStoreClient) {
+				// SourcePipeline.Retrieve() returns TRUE, ImageBuild.Retrieve() returns TRUE.
+				// ExecuteWorkflow.Retrieve() sees the step already KILLED and returns FALSE
+				// with reason KillReason; ExecuteWorkflow.Run() short-circuits on the
+				// already-terminal step and returns without touching the workflow client,
+				// so no mocks are needed here.
+			},
+			expectedConditions: []*apipb.Condition{
+				{
+					Type:   actors.SourcePipelineType,
+					Status: apipb.CONDITION_STATUS_TRUE,
+				},
+				{
+					Type:   actors.ImageBuildType,
+					Status: apipb.CONDITION_STATUS_TRUE,
+				},
+				{
+					Type:   actors.ExecuteWorkflowType,
+					Status: apipb.CONDITION_STATUS_FALSE,
+					Reason: defaultEngine.KillReason,
+				},
+			},
+			expectedPipelineRunStatus: v2.PipelineRunStatus{
+				State:         v2.PIPELINE_RUN_STATE_KILLED,
+				WorkflowId:    "test-workflow-id",
+				WorkflowRunId: "test-run-id",
+			},
+			expectedSteps: []*v2.PipelineRunStepInfo{
+				{
+					Name:  pipelinerunutils.SourcePipelineStepName,
+					State: v2.PIPELINE_RUN_STEP_STATE_PENDING,
+				},
+				{
+					Name:  pipelinerunutils.ImageBuildStepName,
+					State: v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED,
+				},
+				{
+					Name:  pipelinerunutils.ExecuteWorkflowStepName,
+					State: v2.PIPELINE_RUN_STEP_STATE_KILLED,
+					SubSteps: []*v2.PipelineRunStepInfo{
+						{
+							Name:    "task1",
+							State:   v2.PIPELINE_RUN_STEP_STATE_KILLED,
+							Message: "killed due to workflow termination",
+						},
+					},
+				},
+			},
+			expectedErrorMessage: "killed due to workflow termination",
+			errMsg:               "",
 			expectedResult: ctrl.Result{
 				Requeue:      false,
 				RequeueAfter: 0,
@@ -793,6 +1066,7 @@ func TestReconcile(t *testing.T) {
 			require.Equal(t, testCase.expectedPipelineRunStatus.State, pipelineRun.Status.State)
 			require.Equal(t, testCase.expectedPipelineRunStatus.WorkflowId, pipelineRun.Status.WorkflowId)
 			require.Equal(t, testCase.expectedPipelineRunStatus.WorkflowRunId, pipelineRun.Status.WorkflowRunId)
+			require.Equal(t, testCase.expectedErrorMessage, pipelineRun.Status.ErrorMessage)
 			for i, step := range pipelineRun.Status.Steps {
 				require.Equal(t, testCase.expectedSteps[i].Name, step.Name)
 				require.Equal(t, testCase.expectedSteps[i].State, step.State)
@@ -1264,6 +1538,124 @@ func TestMapWorkflowStatusToPipelineRunState(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := mapWorkflowStatusToPipelineRunState(tt.workflowStatus)
 			assert.Equal(t, tt.expectedState, result)
+		})
+	}
+}
+
+func TestFindFailureMessage(t *testing.T) {
+	testCases := []struct {
+		name            string
+		steps           []*v2pb.PipelineRunStepInfo
+		expectedMessage string
+	}{
+		{
+			name:            "nil steps returns empty string",
+			steps:           nil,
+			expectedMessage: "",
+		},
+		{
+			name:            "empty steps returns empty string",
+			steps:           []*v2pb.PipelineRunStepInfo{},
+			expectedMessage: "",
+		},
+		{
+			name: "single FAILED step with a message returns it",
+			steps: []*v2pb.PipelineRunStepInfo{
+				{
+					Name:    pipelinerunutils.ExecuteWorkflowStepName,
+					State:   v2pb.PIPELINE_RUN_STEP_STATE_FAILED,
+					Message: "got an unexpected keyword argument",
+				},
+			},
+			expectedMessage: "got an unexpected keyword argument",
+		},
+		{
+			name: "FAILED step with empty message falls through to a FAILED substep's message",
+			steps: []*v2pb.PipelineRunStepInfo{
+				{
+					Name:    pipelinerunutils.ExecuteWorkflowStepName,
+					State:   v2pb.PIPELINE_RUN_STEP_STATE_FAILED,
+					Message: "",
+					SubSteps: []*v2pb.PipelineRunStepInfo{
+						{
+							Name:    "task1",
+							State:   v2pb.PIPELINE_RUN_STEP_STATE_FAILED,
+							Message: "substep failure message",
+						},
+					},
+				},
+			},
+			expectedMessage: "substep failure message",
+		},
+		{
+			name: "parent step's own message takes priority over a FAILED substep's message",
+			steps: []*v2pb.PipelineRunStepInfo{
+				{
+					Name:    pipelinerunutils.ExecuteWorkflowStepName,
+					State:   v2pb.PIPELINE_RUN_STEP_STATE_FAILED,
+					Message: "parent failure message",
+					SubSteps: []*v2pb.PipelineRunStepInfo{
+						{
+							Name:    "task1",
+							State:   v2pb.PIPELINE_RUN_STEP_STATE_FAILED,
+							Message: "substep failure message",
+						},
+					},
+				},
+			},
+			expectedMessage: "parent failure message",
+		},
+		{
+			name: "single KILLED step with a message returns it",
+			steps: []*v2pb.PipelineRunStepInfo{
+				{
+					Name:    pipelinerunutils.ExecuteWorkflowStepName,
+					State:   v2pb.PIPELINE_RUN_STEP_STATE_KILLED,
+					Message: "",
+					SubSteps: []*v2pb.PipelineRunStepInfo{
+						{
+							Name:    "task1",
+							State:   v2pb.PIPELINE_RUN_STEP_STATE_KILLED,
+							Message: "killed due to workflow termination",
+						},
+					},
+				},
+			},
+			expectedMessage: "killed due to workflow termination",
+		},
+		{
+			name: "SUCCEEDED step with a message is ignored",
+			steps: []*v2pb.PipelineRunStepInfo{
+				{
+					Name:    pipelinerunutils.ImageBuildStepName,
+					State:   v2pb.PIPELINE_RUN_STEP_STATE_SUCCEEDED,
+					Message: "should be ignored",
+				},
+			},
+			expectedMessage: "",
+		},
+		{
+			name: "SUCCEEDED step is skipped in favor of a later FAILED step",
+			steps: []*v2pb.PipelineRunStepInfo{
+				{
+					Name:    pipelinerunutils.ImageBuildStepName,
+					State:   v2pb.PIPELINE_RUN_STEP_STATE_SUCCEEDED,
+					Message: "should be ignored",
+				},
+				{
+					Name:    pipelinerunutils.ExecuteWorkflowStepName,
+					State:   v2pb.PIPELINE_RUN_STEP_STATE_FAILED,
+					Message: "real failure message",
+				},
+			},
+			expectedMessage: "real failure message",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			result := findFailureMessage(testCase.steps)
+			require.Equal(t, testCase.expectedMessage, result)
 		})
 	}
 }

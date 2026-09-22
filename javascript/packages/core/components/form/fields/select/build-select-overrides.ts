@@ -11,9 +11,12 @@ export function buildSelectOverrides(
   // When rendered inside modals, dropdown options can overflow past the modal body into its backdrop.
   // name is forwarded to the internal <input> so form-focus libraries (e.g. final-form-focus) can
   // match this control to its field error by name.
+  // BaseUI Tag truncates its text at ~100px by default, which hides most resource names.
+  // Let multi-select tags grow to their content instead.
   const base = {
     Popover: { props: { ignoreBoundary: true } },
     Input: { props: { name } },
+    Tag: { props: { overrides: { Text: { style: { maxWidth: 'none' } } } } },
   };
 
   if (disabled) {

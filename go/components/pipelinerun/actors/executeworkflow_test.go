@@ -953,6 +953,97 @@ func TestExecuteWorkflowActor(t *testing.T) {
 	}
 }
 
+// TestExecuteWorkflowActor_FailureMessage covers propagation of the real
+// workflow FailureMessage (from workflowclient.WorkflowExecutionInfo) into
+// the ExecuteWorkflow step's Message field, and into any still-running
+// substep via propagateTerminalStateToSubsteps, when the workflow ends in a
+// Failed status.
+func TestExecuteWorkflowActor_FailureMessage(t *testing.T) {
+	testCases := []struct {
+		name            string
+		failureMessage  string
+		expectedMessage string
+	}{
+		{
+			name:            "Real failure message from workflow history is propagated",
+			failureMessage:  `got an unexpected keyword argument "task_1_d"`,
+			expectedMessage: `got an unexpected keyword argument "task_1_d"`,
+		},
+		{
+			name:            "Empty failure message falls back to generic message",
+			failureMessage:  "",
+			expectedMessage: "Failed due to workflow failure",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			workflowClient := workflowclientMock.NewMockWorkflowClient(ctrl)
+			blobStoreClient := blobstoreMock.NewMockBlobStoreClient(ctrl)
+
+			pipelineRun := &v2.PipelineRun{
+				Status: v2.PipelineRunStatus{
+					Steps: []*v2.PipelineRunStepInfo{
+						{
+							Name:        pipelinerunutils.ExecuteWorkflowStepName,
+							DisplayName: pipelinerunutils.ExecuteWorkflowStepName,
+							State:       v2.PIPELINE_RUN_STEP_STATE_RUNNING,
+							StartTime:   pbtypes.TimestampNow(),
+							SubSteps: []*v2.PipelineRunStepInfo{
+								{
+									Name:        "task1",
+									DisplayName: "task1",
+									State:       v2.PIPELINE_RUN_STEP_STATE_RUNNING,
+								},
+							},
+						},
+					},
+					Conditions: []*apipb.Condition{
+						{
+							Type:   ExecuteWorkflowType,
+							Status: apipb.CONDITION_STATUS_UNKNOWN,
+						},
+					},
+					WorkflowRunId: "test-run-id",
+					WorkflowId:    "test-workflow-id",
+				},
+			}
+
+			workflowClient.EXPECT().GetWorkflowExecutionInfo(gomock.Any(), "test-workflow-id", "test-run-id").Return(&clientInterfaces.WorkflowExecutionInfo{
+				Status:         clientInterfaces.WorkflowExecutionStatusFailed,
+				FailureMessage: testCase.failureMessage,
+			}, nil)
+			workflowClient.EXPECT().QueryWorkflow(gomock.Any(), "test-workflow-id", "test-run-id", "task_progress", gomock.Any()).Return(nil)
+
+			scheme := runtime.NewScheme()
+			err := v2.AddToScheme(scheme)
+			require.NoError(t, err)
+			k8sClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+			apiHandlerInstance := apiHandler.NewFakeAPIHandler(k8sClient)
+			actor := setUpExecuteWorkflowActor(t, workflowClient, blobStoreClient, apiHandlerInstance)
+
+			previousCondition := conditionUtils.GetCondition(pipelinerunutils.ExecuteWorkflowStepName, pipelineRun.Status.Conditions)
+			condition, err := actor.Run(context.Background(), pipelineRun, previousCondition)
+			require.NoError(t, err)
+			require.Equal(t, apipb.CONDITION_STATUS_FALSE, condition.Status)
+
+			executeWorkflowStep := pipelinerunutils.GetStep(pipelineRun, pipelinerunutils.ExecuteWorkflowStepName)
+			require.NotNil(t, executeWorkflowStep)
+			require.Equal(t, v2.PIPELINE_RUN_STEP_STATE_FAILED, executeWorkflowStep.State)
+			require.Equal(t, testCase.expectedMessage, executeWorkflowStep.Message)
+
+			// The still-running substep should have been terminated with the
+			// same failure message via propagateTerminalStateToSubsteps.
+			require.Len(t, executeWorkflowStep.SubSteps, 1)
+			require.Equal(t, v2.PIPELINE_RUN_STEP_STATE_FAILED, executeWorkflowStep.SubSteps[0].State)
+			require.Equal(t, testCase.expectedMessage, executeWorkflowStep.SubSteps[0].Message)
+		})
+	}
+}
+
 func TestGetWorkflowInputsUFStorageURL(t *testing.T) {
 	testCases := []struct {
 		name                 string
@@ -2586,6 +2677,7 @@ func TestProcessManualRetrySpec(t *testing.T) {
 				Status: v2.PipelineRunStatus{
 					WorkflowId:    "test-workflow-id",
 					WorkflowRunId: "current-run-id",
+					ErrorMessage:  "stale error from previous failed attempt",
 					Steps: []*v2.PipelineRunStepInfo{
 						{
 							Name:  pipelinerunutils.ExecuteWorkflowStepName,
@@ -2747,6 +2839,7 @@ func TestProcessManualRetrySpec(t *testing.T) {
 
 			if testCase.expectedRunning {
 				require.Equal(t, v2.PIPELINE_RUN_STATE_RUNNING, testCase.pipelineRun.Status.State)
+				require.Empty(t, testCase.pipelineRun.Status.ErrorMessage, "stale error message from previous attempt must be cleared on retry")
 				executeStep := pipelinerunutils.GetStep(testCase.pipelineRun, pipelinerunutils.ExecuteWorkflowStepName)
 				if executeStep != nil {
 					require.Equal(t, v2.PIPELINE_RUN_STEP_STATE_RUNNING, executeStep.State)

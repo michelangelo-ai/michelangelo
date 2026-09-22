@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 )
 
@@ -52,51 +53,49 @@ func TestModelCleanupActor_Retrieve(t *testing.T) {
 			expectedReasonSub: "auth refused",
 		},
 		{
-			name:              "GetHTTPClient errors",
-			currentRevision:   oldModelName,
-			clientErrs:        clientErrors{getHTTPClient: errors.New("dial timeout")},
-			registerBackend:   true,
-			setupMocks:        func(*rolloutMocks) {},
-			expectedStatus:    apipb.CONDITION_STATUS_FALSE,
-			expectedReasonSub: "dial timeout",
-		},
-		{
-			name:              "backend not in registry",
-			currentRevision:   oldModelName,
-			registerBackend:   false,
-			setupMocks:        func(*rolloutMocks) {},
-			expectedStatus:    apipb.CONDITION_STATUS_FALSE,
-			expectedReasonSub: "backend not found",
-		},
-		{
-			name:            "CheckModelStatus errors",
+			name:            "reading the model config errors",
 			currentRevision: oldModelName,
 			registerBackend: true,
 			setupMocks: func(m *rolloutMocks) {
-				m.backend.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
-					testISName, testNamespace, oldModelName).Return(false, errors.New("api error"))
+				m.modelConfigProvider.EXPECT().GetModelsFromConfig(gomock.Any(), gomock.Any(), gomock.Any(),
+					testISName, testNamespace).Return(nil, errors.New("api error"))
 			},
 			expectedStatus:    apipb.CONDITION_STATUS_FALSE,
 			expectedReasonSub: "api error",
 		},
 		{
-			name:            "old model still loaded",
+			name:            "this deployment's entry for the old model is still present",
 			currentRevision: oldModelName,
 			registerBackend: true,
 			setupMocks: func(m *rolloutMocks) {
-				m.backend.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
-					testISName, testNamespace, oldModelName).Return(true, nil)
+				m.modelConfigProvider.EXPECT().GetModelsFromConfig(gomock.Any(), gomock.Any(), gomock.Any(),
+					testISName, testNamespace).Return([]modelconfig.ModelConfigEntry{
+					{Name: oldModelName, DeploymentName: testDeploymentName},
+				}, nil)
 			},
 			expectedStatus:    apipb.CONDITION_STATUS_FALSE,
-			expectedReasonSub: "model model-v0 still loaded in cluster c1",
+			expectedReasonSub: "model model-v0 still in the model config for cluster c1",
 		},
 		{
-			name:            "old model unloaded",
+			// Cleanup is complete once this deployment's own entry is gone.
+			name:            "another deployment still serves the old model",
 			currentRevision: oldModelName,
 			registerBackend: true,
 			setupMocks: func(m *rolloutMocks) {
-				m.backend.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
-					testISName, testNamespace, oldModelName).Return(false, nil)
+				m.modelConfigProvider.EXPECT().GetModelsFromConfig(gomock.Any(), gomock.Any(), gomock.Any(),
+					testISName, testNamespace).Return([]modelconfig.ModelConfigEntry{
+					{Name: oldModelName, DeploymentName: "other-deployment"},
+				}, nil)
+			},
+			expectedStatus: apipb.CONDITION_STATUS_TRUE,
+		},
+		{
+			name:            "old model removed from the config",
+			currentRevision: oldModelName,
+			registerBackend: true,
+			setupMocks: func(m *rolloutMocks) {
+				m.modelConfigProvider.EXPECT().GetModelsFromConfig(gomock.Any(), gomock.Any(), gomock.Any(),
+					testISName, testNamespace).Return([]modelconfig.ModelConfigEntry{}, nil)
 			},
 			expectedStatus: apipb.CONDITION_STATUS_TRUE,
 		},
@@ -107,7 +106,7 @@ func TestModelCleanupActor_Retrieve(t *testing.T) {
 			mocks, target := newRolloutFixture(t, tt.clientErrs, tt.registerBackend)
 			tt.setupMocks(mocks)
 
-			actor := NewModelCleanupActor(mocks.factory, mocks.backendRegistry, mocks.modelConfigProvider, zap.NewNop(), target)
+			actor := NewModelCleanupActor(mocks.factory, mocks.modelConfigProvider, zap.NewNop(), target)
 			got, err := actor.Retrieve(context.Background(), rolloutDeployment(tt.currentRevision), &apipb.Condition{})
 
 			require.NoError(t, err)
@@ -147,7 +146,7 @@ func TestModelCleanupActor_Run(t *testing.T) {
 			currentRevision: oldModelName,
 			setupMocks: func(m *rolloutMocks) {
 				m.modelConfigProvider.EXPECT().RemoveModelFromConfig(gomock.Any(), gomock.Any(), gomock.Any(),
-					testISName, testNamespace, oldModelName).Return(errors.New("apply failed"))
+					testISName, testNamespace, testDeploymentName, oldModelName).Return(errors.New("apply failed"))
 			},
 			expectedStatus:    apipb.CONDITION_STATUS_FALSE,
 			expectedReasonSub: "apply failed",
@@ -157,7 +156,7 @@ func TestModelCleanupActor_Run(t *testing.T) {
 			currentRevision: oldModelName,
 			setupMocks: func(m *rolloutMocks) {
 				m.modelConfigProvider.EXPECT().RemoveModelFromConfig(gomock.Any(), gomock.Any(), gomock.Any(),
-					testISName, testNamespace, oldModelName).Return(nil)
+					testISName, testNamespace, testDeploymentName, oldModelName).Return(nil)
 			},
 			expectedStatus:    apipb.CONDITION_STATUS_UNKNOWN,
 			expectedReasonSub: "model model-v0 unloading from cluster c1",
@@ -169,7 +168,7 @@ func TestModelCleanupActor_Run(t *testing.T) {
 			mocks, target := newRolloutFixture(t, tt.clientErrs, true)
 			tt.setupMocks(mocks)
 
-			actor := NewModelCleanupActor(mocks.factory, mocks.backendRegistry, mocks.modelConfigProvider, zap.NewNop(), target)
+			actor := NewModelCleanupActor(mocks.factory, mocks.modelConfigProvider, zap.NewNop(), target)
 			got, err := actor.Run(context.Background(), rolloutDeployment(tt.currentRevision), &apipb.Condition{})
 
 			require.NoError(t, err)
@@ -183,6 +182,6 @@ func TestModelCleanupActor_Run(t *testing.T) {
 
 func TestModelCleanupActor_GetType(t *testing.T) {
 	mocks, target := newRolloutFixture(t, clientErrors{}, true)
-	actor := NewModelCleanupActor(mocks.factory, mocks.backendRegistry, mocks.modelConfigProvider, zap.NewNop(), target)
+	actor := NewModelCleanupActor(mocks.factory, mocks.modelConfigProvider, zap.NewNop(), target)
 	assert.Equal(t, "ModelCleanupComplete-"+testCluster, actor.GetType())
 }

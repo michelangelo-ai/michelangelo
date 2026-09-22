@@ -34,7 +34,6 @@ type Params struct {
 func NewCleanupPlugin(p Params) conditionInterfaces.Plugin[*v2pb.Deployment] {
 	return &conditionPlugin{actors: []conditionInterfaces.ConditionActor[*v2pb.Deployment]{
 		&CleanupActor{
-			Client:              p.Client,
 			DynamicClient:       p.DynamicClient,
 			ClientFactory:       p.ClientFactory,
 			RouteManager:        p.RouteManager,

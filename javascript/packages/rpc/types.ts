@@ -6,6 +6,7 @@ import type {
   MessageInitShape,
   MessageShape,
 } from '@bufbuild/protobuf';
+import type { ClusterService } from './gen/michelangelo/api/v2/cluster_svc_pb';
 import type { DeploymentService } from './gen/michelangelo/api/v2/deployment_svc_pb';
 import type { InferenceServerService } from './gen/michelangelo/api/v2/inference_server_svc_pb';
 import type { ModelFamilyService } from './gen/michelangelo/api/v2/model_family_svc_pb';
@@ -13,6 +14,7 @@ import type { ModelService } from './gen/michelangelo/api/v2/model_svc_pb';
 import type { PipelineRunService } from './gen/michelangelo/api/v2/pipeline_run_svc_pb';
 import type { PipelineService } from './gen/michelangelo/api/v2/pipeline_svc_pb';
 import type { ProjectService } from './gen/michelangelo/api/v2/project_svc_pb';
+import type { RevisionService } from './gen/michelangelo/api/v2/revision_svc_pb';
 import type { TriggerRunService } from './gen/michelangelo/api/v2/trigger_run_svc_pb';
 import type { getRpcHandlers } from './handlers';
 
@@ -61,6 +63,7 @@ export type ServiceClient<T extends DescService> = {
 };
 
 export type Services = {
+  ClusterService: ServiceClient<typeof ClusterService>;
   DeploymentService: ServiceClient<typeof DeploymentService>;
   InferenceServerService: ServiceClient<typeof InferenceServerService>;
   ProjectService: ServiceClient<typeof ProjectService>;
@@ -69,6 +72,7 @@ export type Services = {
   TriggerRunService: ServiceClient<typeof TriggerRunService>;
   ModelService: ServiceClient<typeof ModelService>;
   ModelFamilyService: ServiceClient<typeof ModelFamilyService>;
+  RevisionService: ServiceClient<typeof RevisionService>;
 };
 
 /**

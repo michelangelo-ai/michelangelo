@@ -300,8 +300,9 @@ func TestRollingRolloutActor_Run(t *testing.T) {
 					testISName, testNamespace, gomock.Any()).
 					DoAndReturn(func(_ context.Context, _ *zap.Logger, _ client.Client, _, _ string, entry modelconfig.ModelConfigEntry) error {
 						assert.Equal(t, modelconfig.ModelConfigEntry{
-							Name:        testModelName,
-							StoragePath: testModelStoragePath,
+							Name:           testModelName,
+							StoragePath:    testModelStoragePath,
+							DeploymentName: testDeploymentName,
 						}, entry)
 						return nil
 					})

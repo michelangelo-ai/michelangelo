@@ -11,6 +11,7 @@ go_library(
     deps = [
         "//go/api:go_default_library",
         "//go/api/handler:go_default_library",
+        "//go/base/config:go_default_library",
         "//go/components/jobs/cluster:go_default_library",
         "//go/components/jobs/common/constants:go_default_library",
         "//go/components/jobs/common/scheduler:go_default_library",
@@ -18,6 +19,7 @@ go_library(
         "//go/components/jobs/common/utils:go_default_library",
         "//go/components/jobs/metrics:go_default_library",
         "//go/components/jobs/scheduler/framework:go_default_library",
+        "//go/components/jobs/scheduler/kueue:go_default_library",
         "//go/components/libs/goroutine:go_default_library",
         "//proto/api:go_default_library",
         "//proto/api/v2:go_default_library",
@@ -35,11 +37,15 @@ go_library(
 
 go_test(
     name = "go_default_test",
-    srcs = ["scheduler_test.go"],
+    srcs = [
+        "module_test.go",
+        "scheduler_test.go",
+    ],
     embed = [":go_default_library"],
     deps = [
         "//go/api/handler:go_default_library",
         "//go/api/handler/handlermocks:go_default_library",
+        "//go/base/config:go_default_library",
         "//go/components/jobs/cluster/clustermocks:go_default_library",
         "//go/components/jobs/common/constants:go_default_library",
         "//go/components/jobs/common/scheduler:go_default_library",
@@ -47,6 +53,8 @@ go_test(
         "//go/components/jobs/common/utils:go_default_library",
         "//go/components/jobs/scheduler/framework:go_default_library",
         "//go/components/jobs/scheduler/framework/frameworkmocks:go_default_library",
+        "//go/components/jobs/scheduler/kueue:go_default_library",
+        "//go/components/jobs/scheduler/kueue/kueuemocks:go_default_library",
         "//proto/api:go_default_library",
         "//proto/api/v2:go_default_library",
         "@com_github_go_logr_zapr//:go_default_library",

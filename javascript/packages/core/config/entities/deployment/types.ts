@@ -6,8 +6,7 @@ export type DeploymentCreateInput = {
     namespace: string;
   };
   spec: {
-    /** UI-only: filters the Model dropdown by family. Stripped before submission in handleCreate. */
-    modelFamilyName?: string;
+    modelFamily: { name: string; namespace?: string };
     desiredRevision: { name: string; namespace?: string };
     target: {
       case: 'inferenceServer';
@@ -21,6 +20,11 @@ export type DeploymentCreateInput = {
     };
     definition: { type: number };
   };
+};
+
+export type DeploymentUpdateInput = {
+  metadata: { name: string };
+  spec: { desiredRevision?: ResourceRef; target?: { case?: string; value?: ResourceRef } };
 };
 
 export type InferenceServerListResult = {
@@ -43,6 +47,7 @@ export type ModelListResult = {
 
 export type DeploymentRecord = {
   metadata?: {
+    name?: string;
     labels?: Record<string, string>;
     annotations?: Record<string, string>;
   };
@@ -55,6 +60,7 @@ export type DeploymentRecord = {
     strategy?: { rolloutStrategy?: { case?: string } };
     target?: { case?: string; value?: ResourceRef };
     desiredRevision?: ResourceRef;
+    modelFamily?: ResourceRef;
     resourceLinks?: Record<string, string>;
   };
   status?: {

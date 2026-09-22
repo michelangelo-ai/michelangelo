@@ -81,3 +81,9 @@ inferenceServer:
     serviceName: ma-gateway-istio
     serviceNamespace: default
     portName: http
+  triton:
+    # defaultImage overrides the serving image for Triton-backed
+    # InferenceServers that don't set spec.initSpec.servingSpec.image. Empty
+    # uses the controller's built-in default, which is the supported setting;
+    # set this only to pin a different image.
+    defaultImage: ""

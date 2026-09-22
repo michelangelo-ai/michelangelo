@@ -48,7 +48,7 @@ Contributions typically fall into one of these layers. If you are unsure which p
 
 Ensure you have the following installed before building:
 
-- **[Bazel](https://bazel.build/install)** — the project uses Bazel `7.4.1` (see `.bazelversion`)
+- **[Bazel](https://bazel.build/install)** — the project uses Bazel `8.8.0` (see `.bazelversion`)
 - **[Go](https://go.dev/doc/install)** — version `1.24.0+` (see `go/go.mod`)
 - **[Python](https://www.python.org/downloads/)** — version `3.9+`
 - **[Poetry](https://python-poetry.org/docs/#installation)** — for Python dependency management

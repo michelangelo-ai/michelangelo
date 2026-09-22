@@ -41,6 +41,21 @@ describe('injectListOptions', () => {
       pipelineTypes: ['batch'],
       expected: { labelSelector: 'michelangelo/SourcePipelineType in (batch)' },
     },
+    {
+      name: 'revision with pipeline types scopes to Pipeline revisions and a type labelSelector',
+      service: 'revision',
+      pipelineTypes: ['batch', 'streaming'],
+      expected: {
+        fieldSelector: 'base_type=Pipeline',
+        labelSelector: 'michelangelo/PipelineType in (batch,streaming)',
+      },
+    },
+    {
+      name: 'revision with no pipeline types still scopes to Pipeline revisions',
+      service: 'revision',
+      pipelineTypes: undefined,
+      expected: { fieldSelector: 'base_type=Pipeline' },
+    },
   ])('$name', ({ service, pipelineTypes, expected }) => {
     expect(injectListOptions(service, pipelineTypes)).toEqual(expected);
   });

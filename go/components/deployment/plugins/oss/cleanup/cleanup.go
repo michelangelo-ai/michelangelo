@@ -7,7 +7,6 @@ import (
 	"go.uber.org/zap"
 
 	"k8s.io/client-go/dynamic"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	conditionUtils "github.com/michelangelo-ai/michelangelo/go/base/conditions/utils"
 	"github.com/michelangelo-ai/michelangelo/go/components/common/routing"
@@ -21,7 +20,6 @@ import (
 
 // CleanupActor removes models from ConfigMap and tears down the deployment's routing during deletion.
 type CleanupActor struct {
-	Client              client.Client
 	DynamicClient       dynamic.Interface
 	ClientFactory       clientfactory.ClientFactory
 	RouteManager        routing.Manager
@@ -36,22 +34,32 @@ func (a *CleanupActor) GetType() string {
 
 // Retrieve checks if model is still loaded in inference server and the deployment's routing still exists.
 func (a *CleanupActor) Retrieve(ctx context.Context, deployment *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
-	// check if model still exists in inference server
-	if exists, err := common.CheckModelExists(ctx, a.Logger, a.ModelConfigProvider, a.Client, deployment.Status.GetCurrentRevision().GetName(), deployment.Spec.GetInferenceServer().GetName(), deployment.GetNamespace()); err != nil {
-		return conditionUtils.GenerateFalseCondition(condition, "UnableToCheckModelExists", fmt.Sprintf("Unable to check if model %s exists in Inference Server: %v", deployment.Status.CurrentRevision.Name, err)), nil
-	} else if exists {
-		return conditionUtils.GenerateFalseCondition(condition, "ModelStillExistsInInferenceServer", fmt.Sprintf("Model %s still exists in Inference Server", deployment.Status.CurrentRevision.Name)), nil
-	}
-
 	isName := deployment.Spec.GetInferenceServer().GetName()
 	currentModel := deployment.Status.GetCurrentRevision().GetName()
 
-	// Check the per-cluster traffic route on every cluster the rollout placed the deployment in.
-	// Cleanup is only complete when every cluster has had its rule removed.
+	// Every check below runs against each cluster the rollout placed the deployment in.
+	// Cleanup is only complete once all of them are clear.
 	targets, err := common.ReadTargetClustersAnnotation(deployment)
 	if err != nil {
 		return conditionUtils.GenerateFalseCondition(condition, "UnableToReadTargetClusters", fmt.Sprintf("Unable to read target-clusters annotation: %v", err)), nil
 	}
+
+	// The model config is per-cluster, so cleanup is only complete once every cluster has
+	// dropped the entry. Checking only the control plane would release the finalizer while
+	// remote clusters keep serving the model.
+	for _, target := range targets {
+		clusterID := target.GetClusterId()
+		kubeClient, err := a.ClientFactory.GetClient(ctx, target)
+		if err != nil {
+			return conditionUtils.GenerateFalseCondition(condition, "UnableToCheckModelExists", fmt.Sprintf("Unable to get client for cluster %s: %v", clusterID, err)), nil
+		}
+		if exists, err := common.CheckModelExists(ctx, a.Logger, a.ModelConfigProvider, kubeClient, deployment.GetName(), currentModel, isName, deployment.GetNamespace()); err != nil {
+			return conditionUtils.GenerateFalseCondition(condition, "UnableToCheckModelExists", fmt.Sprintf("Unable to check if model %s exists in Inference Server in cluster %s: %v", currentModel, clusterID, err)), nil
+		} else if exists {
+			return conditionUtils.GenerateFalseCondition(condition, "ModelStillExistsInInferenceServer", fmt.Sprintf("Model %s still exists in Inference Server in cluster %s", currentModel, clusterID)), nil
+		}
+	}
+
 	trafficMatchPath := routenames.TrafficMatchPath(isName, deployment.Name)
 	trafficRewritePath := routenames.TrafficRewritePath(currentModel)
 	for _, target := range targets {
@@ -94,14 +102,9 @@ func (a *CleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, condi
 		zap.String("current_model", currentModel),
 		zap.String("inference_server", isName))
 
-	// Initiate unloading of old model from inference server
-	a.Logger.Info("Unloading old model from inference server", zap.String("old_model", currentModel))
-	if err := a.ModelConfigProvider.RemoveModelFromConfig(ctx, a.Logger, a.Client, isName, resource.Namespace, currentModel); err != nil {
-		a.Logger.Error("Failed to initiate unloading of old model", zap.Error(err), zap.String("operation", "unload_model"), zap.String("model", currentModel), zap.String("inferenceServerName", isName), zap.String("namespace", resource.Namespace), zap.String("backendType", v2pb.BACKEND_TYPE_TRITON.String()))
-		return conditionUtils.GenerateFalseCondition(condition, "ModelUnloadingFailed", fmt.Sprintf("Failed to unload old model %s from inference server: %v", currentModel, err)), nil
-	}
-
-	// Remove the per-cluster TrafficRoute rules that the rollout placed.
+	// Unload the model and remove the TrafficRoute rule on every cluster the rollout
+	// placed the deployment in. The model config is a per-cluster ConfigMap, so removing
+	// it only from the control plane would leave remote Tritons serving the model.
 	targets, err := common.ReadTargetClustersAnnotation(resource)
 	if err != nil {
 		return conditionUtils.GenerateFalseCondition(condition, "UnableToReadTargetClusters", fmt.Sprintf("Unable to read target-clusters annotation: %v", err)), nil
@@ -109,6 +112,17 @@ func (a *CleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, condi
 	trafficMatchPath := routenames.TrafficMatchPath(isName, resource.Name)
 	for _, target := range targets {
 		clusterID := target.GetClusterId()
+
+		a.Logger.Info("Unloading old model from inference server", zap.String("old_model", currentModel), zap.String("cluster", clusterID))
+		kubeClient, err := a.ClientFactory.GetClient(ctx, target)
+		if err != nil {
+			return conditionUtils.GenerateFalseCondition(condition, "ModelUnloadingFailed", fmt.Sprintf("Failed to get client for cluster %s: %v", clusterID, err)), nil
+		}
+		if err := a.ModelConfigProvider.RemoveModelFromConfig(ctx, a.Logger, kubeClient, isName, resource.Namespace, resource.GetName(), currentModel); err != nil {
+			a.Logger.Error("Failed to initiate unloading of old model", zap.Error(err), zap.String("operation", "unload_model"), zap.String("model", currentModel), zap.String("inferenceServerName", isName), zap.String("namespace", resource.Namespace), zap.String("cluster", clusterID), zap.String("backendType", v2pb.BACKEND_TYPE_TRITON.String()))
+			return conditionUtils.GenerateFalseCondition(condition, "ModelUnloadingFailed", fmt.Sprintf("Failed to unload old model %s from inference server in cluster %s: %v", currentModel, clusterID, err)), nil
+		}
+
 		dynClient, err := a.ClientFactory.GetDynamicClient(ctx, target)
 		if err != nil {
 			return conditionUtils.GenerateFalseCondition(condition, "TrafficRouteRemovalFailed", fmt.Sprintf("Failed to get dynamic client for cluster %s: %v", clusterID, err)), nil

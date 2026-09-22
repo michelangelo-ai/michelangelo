@@ -74,11 +74,13 @@ export type PipelineRun = {
   };
   status?: {
     /** Snapshot of the pipeline this run executes, captured when the run starts. */
-    sourcePipeline?: {
-      pipeline?: { spec?: PipelineSnapshotSpec };
-      draftPipeline?: { spec?: PipelineSnapshotSpec };
-    };
+    sourcePipeline?: SourcePipelineSnapshot;
   };
+};
+
+export type SourcePipelineSnapshot = {
+  pipeline?: { spec?: PipelineSnapshotSpec };
+  draftPipeline?: { spec?: PipelineSnapshotSpec };
 };
 
 export type PipelineSnapshotSpec = {
@@ -171,10 +173,14 @@ export type PipelineRunSummary = {
         name?: string;
       };
     };
+    input?: unknown;
+    pipelineSpec?: PipelineSnapshotSpec;
   };
   status?: {
     state?: number;
     steps?: PipelineRunStepInfo[];
+    errorMessage?: string;
+    sourcePipeline?: SourcePipelineSnapshot;
   };
 };
 
@@ -186,4 +192,12 @@ export type ListPipelineRunResponse = {
 
 export type GetPipelineRunResponse = {
   pipelineRun?: PipelineRunSummary;
+};
+
+/** A label/value pair rendered as a read-only text box on the Information tab. */
+export type ReadOnlyField = { id: string; label: string; value: string };
+
+export type RunWithManifest = {
+  spec?: { pipelineSpec?: PipelineSnapshotSpec };
+  status?: { sourcePipeline?: SourcePipelineSnapshot };
 };

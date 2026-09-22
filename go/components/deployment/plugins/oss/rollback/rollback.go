@@ -39,7 +39,7 @@ func (a *RollbackActor) Retrieve(ctx context.Context, resource *v2pb.Deployment,
 	a.logger.Info("Checking if rollback is required", zap.String("candidate_model", candidateModel))
 	// Use the model config as the source of truth for model existence. A model removed from
 	// the config may briefly remain in the inference server until the sidecar unloads it.
-	if exists, err := common.CheckModelExists(ctx, a.logger, a.modelConfigProvider, a.client, candidateModel, resource.Spec.GetInferenceServer().GetName(), resource.GetNamespace()); err != nil {
+	if exists, err := common.CheckModelExists(ctx, a.logger, a.modelConfigProvider, a.client, resource.GetName(), candidateModel, resource.Spec.GetInferenceServer().GetName(), resource.GetNamespace()); err != nil {
 		return conditionsutil.GenerateFalseCondition(condition, "UnableToCheckModelExistsInModelConfig", fmt.Sprintf("Unable to check if model %s exists in model config: %v", candidateModel, err)), nil
 	} else if exists {
 		return conditionsutil.GenerateFalseCondition(condition, "ModelStillExistsInModelConfig", fmt.Sprintf("Candidate Model %s still exists in model config", candidateModel)), nil
@@ -55,7 +55,7 @@ func (a *RollbackActor) Run(ctx context.Context, resource *v2pb.Deployment, cond
 		zap.String("candidate_model", candidateModel),
 		zap.String("inference_server", inferenceServerName))
 
-	if err := a.modelConfigProvider.RemoveModelFromConfig(ctx, a.logger, a.client, inferenceServerName, resource.Namespace, candidateModel); err != nil {
+	if err := a.modelConfigProvider.RemoveModelFromConfig(ctx, a.logger, a.client, inferenceServerName, resource.Namespace, resource.GetName(), candidateModel); err != nil {
 		a.logger.Error("Failed to remove candidate model from model config", zap.String("model", candidateModel), zap.Error(err))
 		return conditionsutil.GenerateFalseCondition(condition, "RemoveCandidateModelFromModelConfigFailed", fmt.Sprintf("Failed to remove candidate model %s from model config: %v", candidateModel, err)), nil
 	}

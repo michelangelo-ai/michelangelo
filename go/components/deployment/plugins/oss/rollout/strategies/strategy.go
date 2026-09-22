@@ -90,7 +90,7 @@ func getRollingActors(params Params, deployment *v2pb.Deployment) ([]conditionIn
 	}
 	actors = append(actors, strategiesCommon.NewDiscoveryRoutingActor(params.DynamicClient, params.RouteManager))
 	for _, target := range targets {
-		actors = append(actors, strategiesCommon.NewModelCleanupActor(params.ClientFactory, params.BackendRegistry, params.ModelConfigProvider, params.Logger, target))
+		actors = append(actors, strategiesCommon.NewModelCleanupActor(params.ClientFactory, params.ModelConfigProvider, params.Logger, target))
 	}
 
 	return actors, nil

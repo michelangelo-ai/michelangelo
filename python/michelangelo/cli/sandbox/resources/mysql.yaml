@@ -19,6 +19,9 @@ spec:
           value: temporal
       # Note: Cadence auto-setup will create cadence/cadence_visibility databases
       # Ingester will create michelangelo database via mysql-ingester.yaml Job
+      volumeMounts:
+        - mountPath: /var/lib/mysql
+          name: mysql-data
       readinessProbe:
         exec:
           command:
@@ -49,6 +52,11 @@ spec:
         timeoutSeconds: 5
         successThreshold: 1
         failureThreshold: 3
+  volumes:
+    - name: mysql-data
+      hostPath:
+        path: /shared/mysql-data
+        type: DirectoryOrCreate
 ---
 apiVersion: v1
 kind: Service

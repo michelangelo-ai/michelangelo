@@ -85,6 +85,105 @@ describe('PhaseEntityView', () => {
     expect(await screen.findByRole('cell', { name: 'my-pipeline' })).toBeInTheDocument();
   });
 
+  describe('list variants', () => {
+    it('renders the first variant by default with a segmented control', async () => {
+      const request = createQueryMockRouter({
+        ListPipeline: { pipelineList: { items: [{ metadata: { name: 'my-pipeline' } }] } },
+        ListRevision: {
+          revisionList: { items: [{ spec: { baseResource: { name: 'my-pipeline' } } }] },
+        },
+      });
+      render(
+        <PhaseEntityView
+          phaseConfig={buildPhaseConfig({ pipelineTypes: ['PIPELINE_TYPE_TRAIN'] })}
+          entities={[
+            buildPipelineEntityConfig({
+              views: [
+                {
+                  type: 'list',
+                  tableConfig: { columns: [{ id: 'metadata.name', label: 'Name' }] },
+                  variants: [
+                    { id: 'pipelines', label: 'Pipelines' },
+                    {
+                      id: 'revisions',
+                      label: 'Revisions',
+                      service: 'revision',
+                      tableConfig: {
+                        columns: [{ id: 'spec.baseResource.name', label: 'Pipeline' }],
+                      },
+                    },
+                  ],
+                },
+              ],
+            }) as ListableEntity,
+          ]}
+        />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getErrorProviderWrapper(),
+          getServiceProviderWrapper({ request }),
+          getRouterWrapper({ location: '/project-1/training/pipelines' }),
+          getIconProviderWrapper(),
+        ])
+      );
+
+      expect(await screen.findByRole('cell', { name: 'my-pipeline' })).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: 'Pipelines' })).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: 'Revisions' })).toBeInTheDocument();
+      expect(request).toHaveBeenCalledWith('ListPipeline', expect.anything(), expect.anything());
+    });
+
+    it('switches data source and scopes the query when a segment is clicked', async () => {
+      const user = userEvent.setup();
+      const request = createQueryMockRouter({
+        ListPipeline: { pipelineList: { items: [{ metadata: { name: 'my-pipeline' } }] } },
+        ListRevision: {
+          revisionList: { items: [{ spec: { baseResource: { name: 'revision-pipeline' } } }] },
+        },
+      });
+      render(
+        <PhaseEntityView
+          phaseConfig={buildPhaseConfig({ pipelineTypes: ['PIPELINE_TYPE_TRAIN'] })}
+          entities={[
+            buildPipelineEntityConfig({
+              views: [
+                {
+                  type: 'list',
+                  tableConfig: { columns: [{ id: 'metadata.name', label: 'Name' }] },
+                  variants: [
+                    { id: 'pipelines', label: 'Pipelines' },
+                    {
+                      id: 'revisions',
+                      label: 'Revisions',
+                      service: 'revision',
+                      tableConfig: {
+                        columns: [{ id: 'spec.baseResource.name', label: 'Pipeline' }],
+                      },
+                    },
+                  ],
+                },
+              ],
+            }) as ListableEntity,
+          ]}
+        />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getErrorProviderWrapper(),
+          getServiceProviderWrapper({ request }),
+          getRouterWrapper({ location: '/project-1/training/pipelines' }),
+          getIconProviderWrapper(),
+        ])
+      );
+      await screen.findByRole('cell', { name: 'my-pipeline' });
+
+      await user.click(screen.getByRole('option', { name: 'Revisions' }));
+
+      expect(await screen.findByRole('cell', { name: 'revision-pipeline' })).toBeInTheDocument();
+      expect(screen.queryByRole('cell', { name: 'my-pipeline' })).not.toBeInTheDocument();
+      expect(request).toHaveBeenCalledWith('ListRevision', expect.anything(), expect.anything());
+    });
+  });
+
   it('opens the action component when an action menu item is clicked', async () => {
     const user = userEvent.setup();
     const RunDialog = () => <div role="dialog">Run dialog</div>;

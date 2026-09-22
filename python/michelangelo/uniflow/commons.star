@@ -1,4 +1,4 @@
-load("@plugin", "cachedoutput", "hashlib", "json", "os", "progress", "storage", "time", "uuid", "workflow")
+load("@plugin", "atexit", "cachedoutput", "hashlib", "json", "os", "progress", "spark", "storage", "time", "uuid", "workflow")
 
 ENV = {
     "UF_REMOTE_RUN": "1",
@@ -374,3 +374,358 @@ def process_terminated_job(
             fail("{} job failed after all attempts were exhausted".format(job_type))
 
     return retryable
+
+# Shared SparkJob-CRD submission/sensor/report logic for plugins that run work
+# via the SparkJob CRD + Spark Operator (spark.create_job / spark.sensor_job) -
+# today spark_task and scala_task. Parameterized by job_label ("Spark"/"Scala")
+# and log_url_prefix so each caller gets byte-identical messages to before.
+
+def get_job_log_url(log_url_prefix, job_name):
+    """
+    Generate a log URL for a SparkJob-CRD-based job, based on the job name.
+    Only generates a URL when log_url_prefix is provided.
+    Expected format: {log_url_prefix}/{job_name}.log
+
+    Args:
+        log_url_prefix: the configured log URL prefix, or None/"" if unset
+        job_name: the name of the SparkJob (e.g., "uniflow-sp-abc123")
+
+    Returns:
+        str: the complete log URL or empty string if prefix not configured
+    """
+    if log_url_prefix and job_name:
+        return "{}/{}.log".format(log_url_prefix, job_name)
+    return ""
+
+def build_spark_crd_job(
+        image,
+        main_file,
+        main_class,
+        main_args,
+        driver_resource,
+        executor_resource,
+        executor_instances,
+        generate_name_prefix,
+        env):
+    """
+    Build the SparkJob CRD dict shared by spark_task and scala_task.
+
+    Args:
+        image: the task image for driver and executor pods
+        main_file: the Spark mainApplicationFile (a run_task.py wrapper for
+            spark_task, or the user's own JAR for scala_task)
+        main_class: the Spark mainClass
+        main_args: list of args passed to mainClass (empty for scala_task)
+        driver_resource: resource_dict() for the driver pod
+        executor_resource: resource_dict() for the executor pod
+        executor_instances: number of executor instances
+        generate_name_prefix: CRD metadata.generateName prefix
+            (e.g. "uniflow-sp-" or "uniflow-sc-")
+        env: list of {"name":..., "value":...} env var dicts for driver/executor pods
+    Returns:
+        spark_crd_job: the SparkJob CRD dict
+    """
+    preemptible = True
+
+    return {
+        "kind": "SparkJob",
+        "apiVersion": "michelangelo.api.v2",
+        "metadata": {
+            "namespace": "default",
+            "generateName": generate_name_prefix,
+        },
+        "spec": {
+            "user": {
+                "name": "test",
+            },
+            "driver": {
+                "pod": {
+                    "resource": driver_resource,
+                    "image": image,
+                    "imagePullingPolicy": "Never",
+                    "env": env,
+                    "envFrom": [
+                        {
+                            "configMapRef": {
+                                "localObjectReference": {
+                                    "name": "michelangelo-config",
+                                },
+                            },
+                        },
+                    ],
+                },
+            },
+            "executor": {
+                "pod": {
+                    "resource": executor_resource,
+                    "image": image,
+                    "imagePullingPolicy": "Never",
+                    "env": env,
+                    "envFrom": [
+                        {
+                            "configMapRef": {
+                                "localObjectReference": {
+                                    "name": "michelangelo-config",
+                                },
+                            },
+                        },
+                    ],
+                },
+                "instances": executor_instances,
+            },
+            "sparkConf": {
+                "spark.peloton.run-as-user": "true",
+                "spark.peloton.driver.docker.image": image,
+                "spark.peloton.executor.docker.image": image,
+                "spark.peloton.usecrets.enable": "true",
+                "spark.sql.optimizer.excludedRules": "org.apache.spark.sql.catalyst.optimizer.MergeScalarSubqueries",
+                "spark.sql.adaptive.enabled": "false",
+                "spark.driver.extraJavaOptions": "-Dcontainer.log.enableTerraBlobIntegration=true",
+                "spark.executor.extraJavaOptions": "-Dcontainer.log.enableTerraBlobIntegration=true",
+            },
+            "mainApplicationFile": main_file,
+            "mainArgs": main_args,
+            "mainClass": main_class,
+            "deps": {},
+            "scheduling": {
+                "preemptible": preemptible,
+            },
+            "sparkVersion": "3.5.5",
+        },
+    }
+
+def report_spark_crd_job_terminated(
+        job,
+        task_name,
+        task_path,
+        start_time_formatted_str,
+        retry_attempt_id,
+        first_activity_id,
+        job_label,
+        log_url_prefix,
+        unexpected_exit = False,
+        job_name = ""):
+    """
+    Report task progress based on the succeeded/killed conditions of a
+    SparkJob-CRD-based job (shared by spark_task and scala_task).
+
+    Args:
+        job: the SparkJob crd
+        task_name: the task name
+        task_path: the task path
+        start_time_formatted_str: the UTC formatted string of the task start time
+        retry_attempt_id: the attempt id
+        first_activity_id: the first activity id
+        job_label: "Spark" or "Scala", used verbatim in report messages
+        log_url_prefix: the configured log URL prefix for this job type
+        unexpected_exit: whether the job failed unexpectedly
+        job_name: the SparkJob's generated metadata.name, for log URL generation
+    Returns:
+        The job state, one of the following:
+            - TASK_STATE_SUCCEEDED
+            - TASK_STATE_KILLED
+            - TASK_STATE_FAILED
+    """
+    if type(job) != "dict":
+        return TASK_STATE_FAILED
+
+    conditions = job.get("status", {}).get("statusConditions", [])
+    driver_log_url = job.get("status", {}).get("jobUrl", "")
+    generated_log_url = get_job_log_url(log_url_prefix, job_name)
+    log_url = generated_log_url if generated_log_url else driver_log_url
+    end_time_seconds = time.time()
+    end_time_formated_str = time.utc_format_seconds(TIME_FOMART, end_time_seconds)
+    killed_condition = None
+    succeeded_condition = None
+
+    # we find the succeeded condition and the killed condition
+    for condition in conditions:
+        if condition == None:
+            continue
+        if condition["type"] == spark.succeeded_condition_type:
+            succeeded_condition = condition
+        if condition["type"] == spark.killed_condition_type:
+            killed_condition = condition
+
+    if killed_condition != None:
+        killed_status = killed_condition.get("status", "CONDITION_STATUS_UNKNOWN")
+        if killed_status == "CONDITION_STATUS_TRUE":
+            report_progress(
+                task_name = task_name,
+                task_path = task_path,
+                task_state = TASK_STATE_KILLED,
+                start_time = start_time_formatted_str,
+                end_time = end_time_formated_str,
+                task_message = "{}: {}".format(killed_condition.get("message", "{} job killed".format(job_label)), killed_condition.get("reason", "unknown reason")),
+                task_log = log_url,
+                retry_attempt_id = retry_attempt_id,
+                activity_id = first_activity_id,
+            )
+            return TASK_STATE_KILLED
+
+    if succeeded_condition != None:
+        succeeded_status = succeeded_condition.get("status", "CONDITION_STATUS_UNKNOWN")
+        if succeeded_status == "CONDITION_STATUS_TRUE":
+            report_progress(
+                task_name = task_name,
+                task_path = task_path,
+                task_state = TASK_STATE_SUCCEEDED,
+                start_time = start_time_formatted_str,
+                end_time = end_time_formated_str,
+                task_message = "{} job succeeded".format(job_label),
+                task_log = log_url,
+                retry_attempt_id = retry_attempt_id,
+                activity_id = first_activity_id,
+            )
+            return TASK_STATE_SUCCEEDED
+
+        if succeeded_status == "CONDITION_STATUS_FALSE":
+            message = succeeded_condition.get("message", "{} job failed".format(job_label))
+            reason = succeeded_condition.get("reason", "unknown reason")
+            report_progress(
+                task_name = task_name,
+                task_path = task_path,
+                task_state = TASK_STATE_FAILED,
+                start_time = start_time_formatted_str,
+                end_time = end_time_formated_str,
+                task_message = "{}:{}".format(reason, message),
+                task_log = log_url,
+                retry_attempt_id = retry_attempt_id,
+                activity_id = first_activity_id,
+            )
+            if unexpected_exit == True:
+                fail("{} job failed: {} {} driver url: {}".format(job_label.lower(), reason, message, driver_log_url))
+            return TASK_STATE_FAILED
+
+    return ""
+
+def check_spark_crd_job_final_state_at_workflow_exit(
+        created_spark_job,
+        task_name,
+        task_path,
+        start_time_formatted_str,
+        retry_attempt_id,
+        first_activity_id,
+        job_label,
+        log_url_prefix):
+    """
+    Check the final state of a SparkJob-CRD-based job at workflow exit, to
+    ensure task state is reported correctly even if the workflow is killed.
+    """
+    final_job = spark.sensor_job(job = created_spark_job)
+    report_spark_crd_job_terminated(final_job, task_name, task_path, start_time_formatted_str, retry_attempt_id, first_activity_id, job_label, log_url_prefix, unexpected_exit = True)
+    return
+
+def execute_spark_crd_job(
+        namespace,
+        task_name,
+        task_path,
+        spark_crd_job,
+        start_time_formatted_str,
+        retry_attempt_id,
+        total_retry_attempt,
+        job_label,
+        log_url_prefix):
+    """
+    Submit a SparkJob CRD and sense it through to a terminal state, shared by
+    spark_task and scala_task.
+
+    Args:
+        namespace: the namespace to submit the job in
+        task_name: the task name
+        task_path: the task path
+        spark_crd_job: the SparkJob CRD dict, e.g. from build_spark_crd_job()
+        start_time_formatted_str: the UTC formatted string of the task start time
+        retry_attempt_id: the current attempt number
+        total_retry_attempt: the total number of attempts
+        job_label: "Spark" or "Scala", used verbatim in print/report messages
+        log_url_prefix: the configured log URL prefix for this job type
+    Returns:
+        (job_state, terminated_job) tuple
+    """
+    log_prefix = job_label.lower()
+    print("{} job running, attempt ({} / {})".format(job_label, str(retry_attempt_id), str(total_retry_attempt)))
+
+    driver_log_url = ""
+
+    # submit spark job
+    print("{} | submit job. ns:".format(log_prefix), namespace, "task_name:", task_name)
+
+    spark_job_response = spark.create_job(spark_crd_job)
+
+    created_spark_job = spark_job_response["sparkJob"]
+    first_activity_id = spark_job_response["activityId"]
+
+    print("{} | first activity ID:".format(log_prefix), first_activity_id)
+
+    if created_spark_job == None:
+        end_time_seconds = time.time()
+        end_time_formated_str = time.utc_format_seconds(TIME_FOMART, end_time_seconds)
+        report_progress(
+            task_path = task_path,
+            task_name = task_name,
+            task_log = "",
+            task_message = "{} Job Creation Failed".format(job_label),
+            task_state = TASK_STATE_FAILED,
+            start_time = start_time_formatted_str,
+            end_time = end_time_formated_str,
+            output = "",
+            retry_attempt_id = retry_attempt_id,
+            first_activity_id = first_activity_id,
+        )
+        fail("{} | job creation failed, activityId=".format(log_prefix) + first_activity_id)
+
+    print("{} | job created:".format(log_prefix), "ns=" + namespace, "task_name=" + task_name)
+
+    spark_job_name = ""
+    if type(created_spark_job) == "dict":
+        driver_log_url = created_spark_job.get("status", {}).get("jobUrl", "")
+        spark_job_name = created_spark_job.get("metadata", {}).get("name", "")
+
+    generated_log_url = get_job_log_url(log_url_prefix, spark_job_name)
+
+    report_progress(
+        task_path = task_path,
+        task_name = task_name,
+        task_log = generated_log_url if generated_log_url else driver_log_url,
+        task_message = "{} job has been submitted".format(job_label),
+        task_state = TASK_STATE_PENDING,
+        start_time = start_time_formatted_str,
+        end_time = "",
+        output = "",
+        retry_attempt_id = retry_attempt_id,
+        first_activity_id = first_activity_id,
+    )
+
+    # register the check function to be called at the end of the workflow.
+    # this is to ensure that the task state is reported correctly even if the
+    # workflow is killed
+    atexit.register(check_spark_crd_job_final_state_at_workflow_exit, created_spark_job, task_name, task_path, start_time_formatted_str, retry_attempt_id, first_activity_id, job_label, log_url_prefix)
+
+    # sensor spark job until it is running and driver log url is available
+    running_job = spark.sensor_job(job = created_spark_job, assert_condition_type = spark.running_condition_type)
+    print("{} | job running. ns:".format(log_prefix), namespace, "task_name:", task_name)
+
+    if type(running_job) == "dict":
+        driver_log_url = running_job.get("status", {}).get("jobUrl", "")
+
+    report_progress(
+        task_name = task_name,
+        task_path = task_path,
+        task_state = TASK_STATE_RUNNING,
+        start_time = start_time_formatted_str,
+        task_message = "{} job is running".format(job_label),
+        task_log = generated_log_url if generated_log_url else driver_log_url,
+        retry_attempt_id = retry_attempt_id,
+        activity_id = first_activity_id,
+    )
+
+    # sensor spark job until it is terminated
+    print("{} | sensor job until terminated. ns:".format(log_prefix), namespace, "task_name:", task_name)
+    terminated_job = spark.sensor_job(job = created_spark_job)
+    print("{} | job terminated. ns:".format(log_prefix), namespace, "task_name:", task_name)
+    job_state = report_spark_crd_job_terminated(terminated_job, task_name, task_path, start_time_formatted_str, retry_attempt_id, first_activity_id, job_label, log_url_prefix, job_name = spark_job_name)
+    if job_state == TASK_STATE_SUCCEEDED:
+        atexit.unregister(check_spark_crd_job_final_state_at_workflow_exit)
+
+    return (job_state, terminated_job)

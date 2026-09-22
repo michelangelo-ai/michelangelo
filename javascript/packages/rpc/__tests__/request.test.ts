@@ -1,5 +1,13 @@
+import { create, toBinary } from '@bufbuild/protobuf';
+import { anyPack } from '@bufbuild/protobuf/wkt';
 import { expect, it, vi } from 'vitest';
 
+import { TypedStructSchema } from '../gen/michelangelo/api/typed_struct_pb';
+import {
+  PipelineManifest_Type,
+  PipelineSchema,
+  PipelineType,
+} from '../gen/michelangelo/api/v2/pipeline_pb';
 import { request } from '../request';
 
 vi.mock('../handlers', () => ({
@@ -49,4 +57,97 @@ it('handles arrays containing objects with protobuf internals', async () => {
   });
 
   expect(await request('GetPipelineRun', {} as never)).toEqual({ items: [{ x: 1 }, { x: 2 }] });
+});
+
+it('unpacks a registered Any payload (Pipeline) into a plain object', async () => {
+  const pipeline = create(PipelineSchema, {
+    metadata: { name: 'my-pipeline' },
+    spec: { type: PipelineType.DATA_PREP, commit: { branch: 'main' } },
+  });
+  mockHandler({
+    $typeName: 'michelangelo.api.v2.Revision',
+    spec: {
+      $typeName: 'michelangelo.api.v2.RevisionSpec',
+      revisionId: 'abc',
+      content: {
+        $typeName: 'google.protobuf.Any',
+        typeUrl: 'type.googleapis.com/michelangelo.api.v2.Pipeline',
+        value: toBinary(PipelineSchema, pipeline),
+      },
+    },
+  });
+
+  const result = (await request('GetPipelineRun', {} as never)) as {
+    spec: {
+      content: { metadata: { name: string }; spec: { type: number; commit: { branch: string } } };
+    };
+  };
+
+  expect(result.spec.content.metadata.name).toBe('my-pipeline');
+  expect(result.spec.content.spec.type).toBe(PipelineType.DATA_PREP);
+  expect(result.spec.content.spec.commit.branch).toBe('main');
+  expect(result.spec.content).not.toHaveProperty('$typeName');
+});
+
+it('unpacks a registered Any payload whose own fields contain a nested TypedStruct Any', async () => {
+  // The Pipeline packed into Revision.spec.content (a registry-typed Any) has its own
+  // manifest.content field, which is a TypedStruct. Both must unpack in one pass: toPlainObject
+  // recurses into the decoded Pipeline and finds the inner Any too.
+  const manifestContent = anyPack(
+    TypedStructSchema,
+    create(TypedStructSchema, {
+      typeUrl: 'type.googleapis.com/michelangelo.pipeline.dataprep.Config',
+      value: { source: 'hive' },
+    })
+  );
+  const pipeline = create(PipelineSchema, {
+    metadata: { name: 'my-pipeline' },
+    spec: {
+      type: PipelineType.DATA_PREP,
+      commit: { branch: 'main' },
+      manifest: {
+        type: PipelineManifest_Type.PIPELINE_MANIFEST_TYPE_YAML,
+        content: manifestContent,
+      },
+    },
+  });
+  mockHandler({
+    $typeName: 'michelangelo.api.v2.Revision',
+    spec: {
+      $typeName: 'michelangelo.api.v2.RevisionSpec',
+      revisionId: 'abc',
+      content: {
+        $typeName: 'google.protobuf.Any',
+        typeUrl: 'type.googleapis.com/michelangelo.api.v2.Pipeline',
+        value: toBinary(PipelineSchema, pipeline),
+      },
+    },
+  });
+
+  const result = (await request('GetPipelineRun', {} as never)) as {
+    spec: {
+      content: {
+        spec: { manifest: { content: { typeUrl: string; value: { source: string } } } };
+      };
+    };
+  };
+
+  expect(result.spec.content.spec.manifest.content).toEqual({
+    typeUrl: 'type.googleapis.com/michelangelo.pipeline.dataprep.Config',
+    value: { source: 'hive' },
+  });
+});
+
+it('leaves an unregistered Any payload untouched', async () => {
+  const bytes = new Uint8Array([9, 9]);
+  mockHandler({
+    $typeName: 'google.protobuf.Any',
+    typeUrl: 'type.googleapis.com/unknown.Type',
+    value: bytes,
+  });
+
+  expect(await request('GetPipelineRun', {} as never)).toEqual({
+    typeUrl: 'type.googleapis.com/unknown.Type',
+    value: bytes,
+  });
 });
