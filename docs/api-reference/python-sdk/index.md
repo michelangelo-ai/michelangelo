@@ -61,7 +61,7 @@ isn't generated into this reference yet — see the note above).
 | Module | Description |
 |--------|-------------|
 | [`lib.trainer.torch.data_collate_functions`](reference/lib/trainer/torch/data_collate_functions.md) | Collate functions for data loading |
-| `lib.trainer.torch.utils` | Trainer utilities |
+| [`lib.trainer.torch.utils`](reference/lib/trainer/torch/utils.md) | Trainer utilities |
 
 ## Native Transform
 
@@ -79,7 +79,7 @@ Typed dataset and metadata variables for pipeline IO.
 
 | Module | Description |
 |--------|-------------|
-| `workflow.variables.types` | `DatasetVariable` and related types |
+| [`workflow.variables.types`](reference/workflow/variables/types.md) | `DatasetVariable` and related types |
 | `workflow.variables.metadata` | Variable metadata types |
 
 ## Regenerating this reference

@@ -33,4 +33,12 @@ renderer:
   docs_base_path: docs/api-reference/python-sdk
   relative_output_path: reference
   relative_sidebar_path: sidebar.json
+  markdown:
+    # The Docusaurus renderer subclasses MarkdownRenderer and flips
+    # escape_html_in_docstring to True, which HTML-escapes every double quote in
+    # a docstring -- including inside fenced Python blocks, so examples render as
+    # `if __name__ == &quot;__main__&quot;:`. Docusaurus renders Markdown through
+    # MDX and handles the quoting itself, so the escaping is unnecessary here and
+    # only corrupts the output.
+    escape_html_in_docstring: false
   sidebar_top_level_label: null
