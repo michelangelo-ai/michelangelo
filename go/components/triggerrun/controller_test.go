@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/go-logr/zapr"
+	pbtypes "github.com/gogo/protobuf/types"
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	apiutils "github.com/michelangelo-ai/michelangelo/go/api/utils"
 	clientInterface "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
@@ -18,6 +19,7 @@ import (
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 	temporalClient "go.temporal.io/sdk/client"
 	"go.uber.org/zap/zaptest"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -554,6 +556,133 @@ func TestGetRunner(t *testing.T) {
 
 		})
 	}
+}
+
+// TestReconcile_BackfillSuccessor exercises the sequencing this package adds
+// on top of existing backfill/cron triggers: a backfill TriggerRun annotated
+// with AnnotationSuccessorTrigger must, in the same reconcile pass that first
+// observes a terminal status, create the recurring cron TriggerRun before
+// that terminal status is persisted (see the comment on backfillSuccessorPending
+// for why it must happen in that pass and not a later one).
+func TestReconcile_BackfillSuccessor(t *testing.T) {
+	newBackfillRun := func() v2pb.TriggerRun {
+		tr := _triggerRun.DeepCopy()
+		tr.Name = "backfill-run"
+		tr.Annotations = map[string]string{AnnotationSuccessorTrigger: "true"}
+		start, err := pbtypes.TimestampProto(time.Now().Add(-48 * time.Hour))
+		require.NoError(t, err)
+		end, err := pbtypes.TimestampProto(time.Now().Add(-24 * time.Hour))
+		require.NoError(t, err)
+		tr.Spec.StartTimestamp = start
+		tr.Spec.EndTimestamp = end
+		return *tr
+	}
+
+	tests := []struct {
+		name            string
+		backfillState   v2pb.TriggerRunState
+		expectSuccessor bool
+	}{
+		{name: "succeeded backfill creates successor", backfillState: v2pb.TRIGGER_RUN_STATE_SUCCEEDED, expectSuccessor: true},
+		{name: "failed backfill still creates successor", backfillState: v2pb.TRIGGER_RUN_STATE_FAILED, expectSuccessor: true},
+		{name: "still-running backfill creates nothing yet", backfillState: v2pb.TRIGGER_RUN_STATE_RUNNING, expectSuccessor: false},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := context.Background()
+			initialObj := newBackfillRun()
+			initialObj.Status = v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_RUNNING}
+
+			mockBackfillRunner := &MockRunner{}
+			mockBackfillRunner.On("Update", mock.Anything, mock.Anything, mock.Anything).
+				Return(v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_RUNNING}, false, nil)
+			mockBackfillRunner.On("GetStatus", mock.Anything, mock.Anything).
+				Return(v2pb.TriggerRunStatus{State: test.backfillState}, nil)
+
+			params := Params{
+				Logger:          zapr.NewLogger(zaptest.NewLogger(t)),
+				CronTrigger:     &MockRunner{},
+				BackfillTrigger: mockBackfillRunner,
+			}
+			reconciler := setUpReconciler(t, []runtime.Object{initialObj.DeepCopy()}, params)
+
+			req := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: _namespace, Name: initialObj.Name}}
+			_, err := reconciler.Reconcile(ctx, req)
+			assert.NoError(t, err)
+
+			tr := &v2pb.TriggerRun{}
+			assert.NoError(t, reconciler.Get(ctx, _namespace, initialObj.Name, &metav1.GetOptions{}, tr))
+			assert.Equal(t, test.backfillState, tr.Status.State,
+				"backfill status must still advance to the terminal state once the successor is handled")
+
+			successor := &v2pb.TriggerRun{}
+			successorErr := reconciler.Get(ctx, _namespace, generateSuccessorTriggerRunName(initialObj.Name),
+				&metav1.GetOptions{}, successor)
+			if test.expectSuccessor {
+				require.NoError(t, successorErr)
+				assert.Nil(t, successor.Spec.StartTimestamp)
+				assert.Nil(t, successor.Spec.EndTimestamp)
+				assert.Empty(t, successor.Annotations, "successor must not inherit AnnotationSuccessorTrigger")
+				assert.Equal(t, TriggerTypeCron, GetTriggerType(successor))
+			} else {
+				assert.True(t, apiutils.IsNotFoundError(successorErr))
+			}
+		})
+	}
+}
+
+// TestReconcile_BackfillSuccessorCreateFailureRetries verifies that when
+// successor creation fails, the backfill's terminal status is NOT persisted --
+// reconcile() short-circuits on an already-terminal status before the state
+// machine runs, so persisting the terminal state on a failed successor-create
+// would permanently strand the backfill without ever spawning its successor.
+func TestReconcile_BackfillSuccessorCreateFailureRetries(t *testing.T) {
+	ctx := context.Background()
+	backfillRun := func() v2pb.TriggerRun {
+		tr := _triggerRun.DeepCopy()
+		tr.Name = "backfill-run"
+		tr.Annotations = map[string]string{AnnotationSuccessorTrigger: "true"}
+		start, err := pbtypes.TimestampProto(time.Now().Add(-48 * time.Hour))
+		require.NoError(t, err)
+		end, err := pbtypes.TimestampProto(time.Now().Add(-24 * time.Hour))
+		require.NoError(t, err)
+		tr.Spec.StartTimestamp = start
+		tr.Spec.EndTimestamp = end
+		// An interval-schedule trigger has no cron schedule to hand to a
+		// successor, so generateSuccessorTriggerRunSpec fails deterministically.
+		tr.Spec.Trigger = &v2pb.Trigger{
+			TriggerType: &v2pb.Trigger_IntervalSchedule{
+				IntervalSchedule: &v2pb.IntervalSchedule{Interval: &pbtypes.Duration{Seconds: 3600}},
+			},
+		}
+		return *tr
+	}()
+	backfillRun.Status = v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_RUNNING}
+
+	mockBackfillRunner := &MockRunner{}
+	mockBackfillRunner.On("Update", mock.Anything, mock.Anything, mock.Anything).
+		Return(v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_RUNNING}, false, nil)
+	mockBackfillRunner.On("GetStatus", mock.Anything, mock.Anything).
+		Return(v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_SUCCEEDED}, nil)
+
+	params := Params{
+		Logger:          zapr.NewLogger(zaptest.NewLogger(t)),
+		CronTrigger:     &MockRunner{},
+		BackfillTrigger: mockBackfillRunner,
+	}
+	reconciler := setUpReconciler(t, []runtime.Object{backfillRun.DeepCopy()}, params)
+
+	req := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: _namespace, Name: backfillRun.Name}}
+	res, err := reconciler.Reconcile(ctx, req)
+	assert.NoError(t, err)
+	assert.NotZero(t, res.RequeueAfter, "must requeue to retry successor creation")
+
+	tr := &v2pb.TriggerRun{}
+	assert.NoError(t, reconciler.Get(ctx, _namespace, backfillRun.Name, &metav1.GetOptions{}, tr))
+	assert.Equal(t, v2pb.TRIGGER_RUN_STATE_RUNNING, tr.Status.State,
+		"terminal status must not be persisted until successor creation succeeds")
+	assert.Contains(t, tr.Status.ErrorMessage, "failed to create successor trigger run")
 }
 
 // TestWatchPredicateIgnoresStatusOnlyUpdates locks in the fix for the

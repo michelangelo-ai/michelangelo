@@ -227,7 +227,13 @@ func (b *backfillTrigger) Resume(ctx context.Context, triggerRun *v2pb.TriggerRu
 // Backfill triggers execute a single workflow and then complete. They don't
 // have recurring schedules to update. This method always returns success.
 //
-// Returns current TriggerRunStatus (state unchanged).
+// It returns the current status unchanged rather than rebuilding one from just
+// the state. The reconciler assigns this return value wholesale
+// (triggerRun.Status = status), so returning a partially-populated status drops
+// every other field -- including ExecutionWorkflowId, which GetStatus needs to
+// find the workflow. Dropping it made the very next reconcile of a healthy
+// running backfill report "execution workflow id is empty" and mark the run
+// FAILED.
 func (b *backfillTrigger) Update(ctx context.Context, triggerRun *v2pb.TriggerRun, action v2pb.TriggerRunAction) (v2pb.TriggerRunStatus, bool, error) {
 	return triggerRun.Status, false, nil
 }
