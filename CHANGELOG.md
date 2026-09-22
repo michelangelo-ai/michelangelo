@@ -214,6 +214,218 @@ All notable changes to this project will be documented in this file.
 
 - **core:** Add getCall to createQueryMockRouter (#2067)
 
+## [0.11.0] - 2026-09-21
+
+
+### Bug Fixes
+
+
+- **javascript:** Audit placeholder text for accessibility and UX guidelines (#2036)
+
+
+- **go:** Stamp SourcePipelineType label unconditionally on PipelineRun create (#1965)
+
+
+- Route go-vet pre-commit hook through bazel nogo (#1855)
+
+
+- Delete recycled TriggerRuns from metadata storage (#1976)
+
+
+- **native_transform:** Use proper ceiling division for stats batch_count (#1918)
+
+
+- **core:** Render breadcrumb entity names in Title Case (#2029)
+
+
+- **core:** Title-case entity names in remaining nav consumers (#2040)
+
+
+- **ray:** Persist RayJob immutable annotation and fix always-dirty status check (#2055)
+
+
+- **ray:** Drop reconciles for immutable RayCluster/RayJob objects (#2053)
+
+
+- **sandbox:** Back the mysql Pod with a data volume so restarts keep the databases (#1980)
+
+
+- **proto-go:** Sync gen-proto-go.sh's Go version with MODULE.bazel's SDK pin (#2065)
+
+
+- Revert name reflection (#2085)
+
+
+- **go:** Unload models per deployment and per cluster on delete (#2111)
+
+
+- **ci:** Cherry-pick NODE_AUTH_TOKEN scoping fix to release/v0.11 (#2121) (#2124)
+
+
+### CI/CD
+
+
+- Bump softprops/action-gh-release from 2.6.2 to 3.0.3 (#2025)
+
+
+- Bump actions/checkout from 4 to 7 (#2024)
+
+
+- Bump orhun/git-cliff-action from 4.8.0 to 4.9.0 in the actions-minor-and-patch group (#2038)
+
+
+- Bump slackapi/slack-github-action from 1.27.0 to 4.0.0 (#2039)
+
+
+- Bump docker/build-push-action from 5 to 7 (#1970)
+
+
+- **changelog:** Fix range fallback to survive release-branch deletion (#2064)
+
+
+- Bump actions/setup-node from 4 to 7 (#2076)
+
+
+- Bump actions/deploy-pages from 4 to 5 (#2075)
+
+
+- Bump actions/github-script from 6 to 9 (#2074)
+
+
+- Build the Triton serving image for arm64 as well as amd64 (#2116)
+
+
+### Documentation
+
+
+- Add distributed training guide for LightningTrainer (#2010)
+
+
+- **architecture:** Reject client-side filtering of option lists (#2035)
+
+
+- Regenerate changelog snapshot for 0.9.0 and 0.10.0 (#2058)
+
+
+- **ui:** Document lowercase-canonical entity name convention (#2059)
+
+
+- Add Code to Cluster conference talk to Further Reading (#2106)
+
+
+- Update CHANGELOG.md for v0.11.0-rc.1 (#2120)
+
+
+### Features
+
+
+- **model:** Validate description length on create/update (#2002)
+
+
+- **raycluster:** Terminate cluster missing from remote and mark all terminal states immutable (#2006)
+
+
+- **ui:** Add retire button (#2037)
+
+
+- **uniflow:** Add scala plugin for pre-compiled Spark JAR tasks (#1690)
+
+
+- **native_transform:** Add tabular_native_transform workflow task (#1919)
+
+
+- **ui:** Add deployment table on model detail page (#2080)
+
+
+- **deployment-plugin:** Add Starlark deployment worker plugin (#2086)
+
+
+- **ui:** Add info tab for pipeline run detail page (#2077)
+
+
+- **ui:** Add delete button (#2042)
+
+
+- **pipeline:** Stamp michelangelo/PipelineType label on Revision (#2087)
+
+
+- **core:** Describe row labels with tooltips (#2107)
+
+
+- **python:** Support file-backed task kwargs (#2015)
+
+
+- **ui:** Add update deployment button  (#2044)
+
+
+- **rpc:** Register RevisionService and unpack registered Any payloads (#2088)
+
+
+- **studio:** Add Revisions list view for pipeline (#2089)
+
+
+- **ui:** Add more fields to inference server form (#2104)
+
+
+- **go:** Support a custom Triton serving image on InferenceServer (#2114)
+
+
+### Miscellaneous
+
+
+- **docker:** Bump nvidia/tritonserver to 25.01-py3 (matches internal), wire it into InferenceServer (#1999)
+
+
+- **examples:** Remove california_housing_xgb pipeline (migrated to michelangelo-examples) (#1751)
+
+
+- Populate Model.Spec.SourcePipelineRun from pipeline-run identity env vars (#2034)
+
+
+- Merge back release/v0.10 to main (#2032)
+
+
+- **go:** Bump k8s.io/* and controller-runtime to current stable (#2060)
+
+
+- Catch zero-arg and unused-overrides test fixtures (#1960)
+
+
+- Add ma-sandbox-deploy Claude Code skill (#1638)
+
+
+- Add ma-sandbox-setup Claude Code skill (#1637)
+
+
+- Add ma-sandbox-reset Claude Code skill (#1639)
+
+
+- Add ma-sandbox-debug Claude Code skill (#1640)
+
+
+- **go:** Bump Go SDK, rules_go, and gazelle to latest stable (#2069)
+
+
+- Upgrade Bazel from 7.4.1 to 8.8.0 (#2050)
+
+
+- Bump version to 0.11.0-rc.1 (#2119)
+
+
+- Release 0.11.0 (#2133)
+
+
+### Performance
+
+
+- Improve mobile page load performance (#2028)
+
+
+### Testing
+
+
+- **core:** Add getCall to createQueryMockRouter (#2067)
+
 ## [0.10.0] - 2026-09-08
 
 
