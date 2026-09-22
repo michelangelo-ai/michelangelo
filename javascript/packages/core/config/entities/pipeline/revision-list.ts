@@ -1,6 +1,6 @@
 import { CellType } from '#core/components/cell/constants';
 import { DescriptionHierarchy } from '#core/components/cell/renderers/description/constants';
-import { formatRevisionId } from '#core/utils/revision-utils';
+import { formatRevisionLabel } from '#core/utils/revision-utils';
 import { PIPELINE_STATE_CELL, PIPELINE_TYPE_CELL } from './shared';
 
 import type { ColumnConfig } from '#core/components/table/types/column-types';
@@ -28,7 +28,7 @@ export const PIPELINE_REVISION_CELL_CONFIG: ColumnConfig<object>[] = [
         hierarchy: DescriptionHierarchy.PRIMARY,
         // cast: accessor rows are untyped in table config; always a PipelineRevision on this
         // variant's query; see #1425
-        accessor: (row: unknown) => formatRevisionId((row as PipelineRevision).spec?.revisionId),
+        accessor: (row: unknown) => formatRevisionLabel((row as PipelineRevision).spec?.revisionId),
       },
     ],
   },

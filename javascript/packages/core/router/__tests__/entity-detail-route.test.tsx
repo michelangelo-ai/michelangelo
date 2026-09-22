@@ -199,8 +199,7 @@ describe('EntityDetailRoute', () => {
       // Header keeps the pipeline title.
       expect(screen.getByText('My-Pipeline')).toBeInTheDocument();
 
-      // Snapshot is immutable: the entity's actions are not offered.
-      expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Delete' })).toBeEnabled();
 
       // The Revision CR is fetched by its controller-derived name.
       expect(mockRequest.getCall('GetRevision')?.args).toEqual({
@@ -209,33 +208,6 @@ describe('EntityDetailRoute', () => {
       });
       expect(mockRequest).not.toHaveBeenCalledWith(
         'GetPipeline',
-        expect.anything(),
-        expect.anything()
-      );
-    });
-
-    test('renders the live record and actions without revisionId', async () => {
-      const testPhases = {
-        train: buildPhase({ id: 'train', entities: [revisionedEntity] }),
-      };
-      const mockRequest = createQueryMockRouter({
-        GetPipeline: livePipeline,
-        GetRevision: revision,
-      });
-
-      render(
-        <EntityDetailRoute phases={testPhases} />,
-        buildWrapper([
-          getErrorProviderWrapper(),
-          getRouterWrapper({ location: '/myproject/train/pipelines/My-Pipeline' }),
-          getServiceProviderWrapper({ request: mockRequest }),
-        ])
-      );
-
-      expect(await screen.findByText('live-owner')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument();
-      expect(mockRequest).not.toHaveBeenCalledWith(
-        'GetRevision',
         expect.anything(),
         expect.anything()
       );

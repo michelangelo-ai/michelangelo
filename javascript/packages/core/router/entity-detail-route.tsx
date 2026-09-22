@@ -13,7 +13,7 @@ import { PHASES } from '#core/config/phases/phases';
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
 import { useStudioQuery } from '#core/hooks/use-studio-query';
 import { useInterpolationResolver } from '#core/interpolation/use-interpolation-resolver';
-import { buildRevisionName, formatRevisionId } from '#core/utils/revision-utils';
+import { buildRevisionName } from '#core/utils/revision-utils';
 import { capitalizeFirstLetter } from '#core/utils/string-utils';
 
 import type { PhaseConfig } from '#core/types/common/studio-types';
@@ -24,7 +24,7 @@ import type { PhaseConfig } from '#core/types/common/studio-types';
  * Maps URL parameters to specific entity detail pages and handles:
  * - Entity not found scenarios
  * - Navigation back to entity list
- * - Revision snapshots: for a `revisioned` entity, `?revisionId=` swaps the live record for the
+ * - Revision snapshots: for a `revisioned` entity, `?revisionId=` swaps the entity for the
  *   matching Revision's `spec.content`, rendered through the same detail view config
  *
  * @param phases - Phase configuration override for testing. Defaults to {@link PHASES}.
@@ -88,9 +88,7 @@ export function EntityDetailRoute({ phases = PHASES }: { phases?: Record<string,
     return (
       <Signpost
         title="Entity not found"
-        description={`Could not load ${entity} "${entityId}"${
-          isRevisionView ? ` at ${formatRevisionId(revisionId).toLowerCase()}` : ''
-        }. ${error.message}`}
+        description={`Could not load ${entity} "${entityId}". ${error.message}`}
         illustration={
           <CircleExclamationMark
             kind={CircleExclamationMarkKind.ERROR}
@@ -121,7 +119,7 @@ export function EntityDetailRoute({ phases = PHASES }: { phases?: Record<string,
       subtitle={entityConfig!.name}
       title={entityId}
       onGoBack={handleReturnToEntityList}
-      actions={isRevisionView ? undefined : entityConfig!.actions}
+      actions={entityConfig!.actions}
       record={entityData}
       loading={isLoading}
       headerContent={
