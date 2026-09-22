@@ -91,6 +91,8 @@ controllermgr:
   # example-pipeline validation — a handful of example pipelines in a
   # throwaway sandbox never approaches the unbounded-growth risk that gates
   # the production default. Empirically confirmed working end-to-end.
+  # TODO(#2139): revisit once Revision retention/pruning is designed, then
+  # consider flipping this on as the platform-wide production default too.
   pipeline:
     revisioningEnabled: true
   jobs:
