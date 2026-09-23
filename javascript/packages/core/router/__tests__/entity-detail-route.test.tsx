@@ -213,7 +213,7 @@ describe('EntityDetailRoute', () => {
       );
     });
 
-    test('redirects a bare entity URL to its latest revision', async () => {
+    test('renders the latest revision for a bare entity URL', async () => {
       const testPhases = {
         train: buildPhase({ id: 'train', entities: [revisionedEntity] }),
       };
@@ -236,7 +236,8 @@ describe('EntityDetailRoute', () => {
         ])
       );
 
-      // The latest Revision is resolved by the name status.latestRevision points at.
+      // The latest Revision is resolved by the name status.latestRevision points at and rendered
+      // in place.
       expect(await screen.findByText('snapshot-owner')).toBeInTheDocument();
       expect(screen.queryByText('live-owner')).not.toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument();
@@ -244,9 +245,10 @@ describe('EntityDetailRoute', () => {
         namespace: 'myproject',
         name: 'pipeline-my-pipeline-3f2a1b9c0d4e',
       });
+      expect(screen.queryByText(/revisionId=/)).not.toBeInTheDocument();
     });
 
-    test('renders the live record when the entity has no revision yet', async () => {
+    test('shows not found when a revisioned entity has no revision', async () => {
       const testPhases = {
         train: buildPhase({ id: 'train', entities: [revisionedEntity] }),
       };
@@ -264,8 +266,9 @@ describe('EntityDetailRoute', () => {
         ])
       );
 
-      expect(await screen.findByText('live-owner')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument();
+      expect(await screen.findByText('Entity not found')).toBeInTheDocument();
+      expect(screen.getByText(/No revision found\./)).toBeInTheDocument();
+      expect(screen.queryByText('live-owner')).not.toBeInTheDocument();
       expect(mockRequest).not.toHaveBeenCalledWith(
         'GetRevision',
         expect.anything(),

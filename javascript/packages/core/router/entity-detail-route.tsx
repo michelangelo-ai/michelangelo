@@ -16,6 +16,7 @@ import { useInterpolationResolver } from '#core/interpolation/use-interpolation-
 import { buildRevisionName } from '#core/utils/revision-utils';
 import { capitalizeFirstLetter } from '#core/utils/string-utils';
 
+import type { RevisionRef } from '#core/components/actions/types';
 import type { PhaseConfig } from '#core/types/common/studio-types';
 
 /**
@@ -24,9 +25,9 @@ import type { PhaseConfig } from '#core/types/common/studio-types';
  * Maps URL parameters to specific entity detail pages and handles:
  * - Entity not found scenarios
  * - Navigation back to entity list
- * - Revision snapshots: for a `revisioned` entity, `?revisionId=` swaps the entity for the
- *   matching Revision's `spec.content`, rendered through the same detail view config. Without
- *   it the route resolves the entity's `status.latestRevision` and redirects to it.
+ * - Revision snapshots: a `revisioned` entity always renders from a Revision's `spec.content`,
+ *   through the same detail view config. `?revisionId=` picks that Revision explicitly; without
+ *   it the route follows the entity's `status.latestRevision`.
  *
  * @param phases - Phase configuration override for testing. Defaults to {@link PHASES}.
  */
@@ -34,19 +35,22 @@ export function EntityDetailRoute({ phases = PHASES }: { phases?: Record<string,
   const [, theme] = useStyletron();
   const { phase, entity, entityId, projectId, entityTab, revisionId } = useStudioParams('detail');
   const navigate = useNavigate();
-  const { pathname, search } = useLocation();
+  const { search } = useLocation();
   const entityConfig = phases[phase].entities.find((e) => e.id === entity);
   const resolver = useInterpolationResolver();
 
   const service = entityConfig?.service ?? '';
   const isRevisioned = !!entityConfig?.revisioned;
   const isRevisionView = !!revisionId && isRevisioned;
+  const viewedRevisionName = isRevisionView
+    ? buildRevisionName(service, entityId, revisionId)
+    : undefined;
 
   const { data, isLoading, error } = useStudioQuery<Record<string, unknown>>({
     queryName: isRevisionView ? 'GetRevision' : `Get${capitalizeFirstLetter(service)}`,
     serviceOptions: {
       namespace: projectId,
-      name: isRevisionView ? buildRevisionName(service, entityId, revisionId) : entityId,
+      name: viewedRevisionName ?? entityId,
     },
     clientOptions: {
       enabled: !!service && !!entityId,
@@ -58,27 +62,29 @@ export function EntityDetailRoute({ phases = PHASES }: { phases?: Record<string,
   const liveRecord = data?.[service] as
     | { status?: { latestRevision?: { name?: string } } }
     | undefined;
-  const latestRevisionName = isRevisioned ? liveRecord?.status?.latestRevision?.name : undefined;
-  const { data: latestRevisionData, isLoading: isLoadingLatestRevision } = useStudioQuery<{
-    revision?: { spec?: { revisionId?: string } };
-  }>({
+  const latestRevisionName =
+    isRevisioned && !isRevisionView ? liveRecord?.status?.latestRevision?.name : undefined;
+  const {
+    data: latestRevisionData,
+    isLoading: isLoadingLatestRevision,
+    error: latestRevisionError,
+  } = useStudioQuery<{ revision?: { spec?: { content?: Record<string, unknown> } } }>({
     queryName: 'GetRevision',
     serviceOptions: { namespace: projectId, name: latestRevisionName ?? '' },
-    clientOptions: { enabled: !isRevisionView && !!latestRevisionName },
+    clientOptions: { enabled: !!latestRevisionName },
   });
-  const latestRevisionId = latestRevisionData?.revision?.spec?.revisionId;
 
-  React.useEffect(() => {
-    if (isRevisionView || !latestRevisionId) return;
-    navigate(
-      { pathname, search: `?revisionId=${encodeURIComponent(latestRevisionId)}` },
-      { replace: true }
-    );
-  }, [isRevisionView, latestRevisionId, navigate, pathname]);
+  const revisionName = viewedRevisionName ?? latestRevisionName;
+  const revision: RevisionRef | undefined = revisionName
+    ? { name: revisionName, namespace: projectId }
+    : undefined;
 
-  const isResolvingLatestRevision =
-    !isRevisionView && !!latestRevisionName && (isLoadingLatestRevision || !!latestRevisionId);
-  const loading = isLoading || isResolvingLatestRevision;
+  const loading = isLoading || isLoadingLatestRevision;
+  const hasNoRevision = isRevisioned && !isRevisionView && !!data && !latestRevisionName;
+  const errorMessage =
+    error?.message ??
+    latestRevisionError?.message ??
+    (hasNoRevision ? 'No revision found.' : undefined);
 
   // Tabs live in the path; the query string (e.g. `?revisionId=`) must survive tab changes.
   const handleTabNavigation = React.useCallback(
@@ -97,7 +103,7 @@ export function EntityDetailRoute({ phases = PHASES }: { phases?: Record<string,
     (entityConfig?.views ?? []).find((view) => view.type === 'detail') ?? undefined;
 
   React.useEffect(() => {
-    if (error || isLoading) return;
+    if (errorMessage || loading) return;
 
     if (!entityId || !detailViewConfig?.pages?.length) return;
 
@@ -111,13 +117,13 @@ export function EntityDetailRoute({ phases = PHASES }: { phases?: Record<string,
       // Invalid tab - redirect to first tab
       handleTabNavigation(firstTabId, { replace: true });
     }
-  }, [entityTab, detailViewConfig, isLoading, error, handleTabNavigation]);
+  }, [entityTab, detailViewConfig, loading, errorMessage, handleTabNavigation]);
 
-  if (error) {
+  if (errorMessage) {
     return (
       <Signpost
         title="Entity not found"
-        description={`Could not load ${entity} "${entityId}". ${error.message}`}
+        description={`Could not load ${entity} "${entityId}". ${errorMessage}`}
         illustration={
           <CircleExclamationMark
             kind={CircleExclamationMarkKind.ERROR}
@@ -133,16 +139,19 @@ export function EntityDetailRoute({ phases = PHASES }: { phases?: Record<string,
     );
   }
 
-  // cast: the Revision response is untyped here; the route only reads the wrapped entity at
-  // spec.content, which the RPC layer unpacks into a plain object; see #1425
-  const revision = data?.revision as { spec?: { content?: Record<string, unknown> } } | undefined;
+  // cast: the explicit Revision response is untyped here; the route only reads the wrapped
+  // entity at spec.content, which the RPC layer unpacks into a plain object; see #1425
+  const viewedRevision = data?.revision as
+    | { spec?: { content?: Record<string, unknown> } }
+    | undefined;
+  const revisionResponse = isRevisionView ? viewedRevision : latestRevisionData?.revision;
   // cast: PhaseEntityConfig carries no entity type generic, so the runtime-selected service key's
-  // value is assumed to be the entity object; related to #1425. In a revision view the snapshot
-  // is the same entity shape, so the same detail config reads from it unchanged.
-  const entityData = (isRevisionView ? revision?.spec?.content : data?.[service]) as
+  // value is assumed to be the entity object; related to #1425. A revision snapshot is the same
+  // entity shape, so the same detail config reads from it unchanged.
+  const entityData = (isRevisioned ? revisionResponse?.spec?.content : data?.[service]) as
     | Record<string, unknown>
     | undefined;
-  const resolvedDetailViewConfig = resolver(detailViewConfig, { page: entityData });
+  const resolvedDetailViewConfig = resolver(detailViewConfig, { page: entityData, revision });
   return (
     <DetailView
       subtitle={entityConfig!.name}
@@ -150,11 +159,7 @@ export function EntityDetailRoute({ phases = PHASES }: { phases?: Record<string,
       onGoBack={handleReturnToEntityList}
       actions={entityConfig!.actions}
       record={entityData}
-      revision={
-        isRevisionView
-          ? { name: buildRevisionName(service, entityId, revisionId), namespace: projectId }
-          : undefined
-      }
+      revision={revision}
       loading={loading}
       headerContent={
         <Row items={resolvedDetailViewConfig!.metadata} record={entityData} loading={loading} />
