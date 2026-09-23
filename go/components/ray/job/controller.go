@@ -273,7 +273,14 @@ func (r *Reconciler) updateJobStatusIfLaunched(ctx context.Context, logger logr.
 // wrote the status subresource -- and retries on conflict, keeping the
 // resourceVersion current against that write and any concurrent writer.
 func (r *Reconciler) markImmutableIfTerminal(ctx context.Context, rayJob *v2pb.RayJob) error {
-	if err := retry.OnError(retry.DefaultRetry, jobsutils.IsRetriableError, func() error {
+	// A conflict here means a concurrent writer -- the reconcile loop and the
+	// watcher both reach this path -- won the race. The closure re-fetches, so a
+	// retry simply observes their write and no-ops; without this the caller would
+	// surface a spurious error for an outcome that is already correct.
+	isRetriable := func(err error) bool {
+		return apiErrors.IsConflict(err) || jobsutils.IsRetriableError(err)
+	}
+	if err := retry.OnError(retry.DefaultRetry, isRetriable, func() error {
 		latest := &v2pb.RayJob{}
 		if err := r.Get(ctx, types.NamespacedName{Namespace: rayJob.Namespace, Name: rayJob.Name}, latest); err != nil {
 			return err

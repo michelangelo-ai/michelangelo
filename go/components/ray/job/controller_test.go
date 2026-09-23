@@ -6,9 +6,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-logr/zapr"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest"
+	"go.uber.org/zap/zaptest/observer"
 
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
@@ -30,6 +35,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 )
 
 const (
@@ -979,6 +985,11 @@ func TestRayJobDeleteEventHandler(t *testing.T) {
 
 		killed := jobsutils.GetCondition(&updated.Status.StatusConditions, constants.KilledCondition, updated.Generation)
 		assert.Equal(t, apipb.CONDITION_STATUS_TRUE, killed.Status)
+
+		assert.Equal(t, v2pb.RAY_JOB_STATE_KILLED, updated.Status.State,
+			"a job whose backing object is gone must reach a terminal state")
+		assert.True(t, utils.IsImmutable(&updated),
+			"a terminal job must be frozen so the ingester can archive it")
 	})
 
 	t.Run("controller-initiated deletion clears killing and sets killed", func(t *testing.T) {
@@ -1015,5 +1026,179 @@ func TestRayJobDeleteEventHandler(t *testing.T) {
 
 		killed := jobsutils.GetCondition(&updated.Status.StatusConditions, constants.KilledCondition, updated.Generation)
 		assert.Equal(t, apipb.CONDITION_STATUS_TRUE, killed.Status)
+
+		assert.Equal(t, v2pb.RAY_JOB_STATE_KILLED, updated.Status.State,
+			"a job whose backing object is gone must reach a terminal state")
+		assert.True(t, utils.IsImmutable(&updated),
+			"a terminal job must be frozen so the ingester can archive it")
 	})
+
+	// A job whose outcome is already recorded must survive KubeRay removing the
+	// backing object (TTL cleanup, cluster teardown, an operator sweep): that is
+	// garbage collection, not a kill, and must not overwrite the terminal record.
+	for _, tc := range []struct {
+		name      string
+		state     v2pb.RayJobState
+		immutable bool
+	}{
+		{name: "succeeded job", state: v2pb.RAY_JOB_STATE_SUCCEEDED},
+		{name: "failed job", state: v2pb.RAY_JOB_STATE_FAILED},
+		{name: "killed job", state: v2pb.RAY_JOB_STATE_KILLED},
+		{name: "immutable non-terminal job", state: v2pb.RAY_JOB_STATE_RUNNING, immutable: true},
+	} {
+		t.Run("external deletion leaves "+tc.name+" untouched", func(t *testing.T) {
+			rayJob := &v2pb.RayJob{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       rayJobName,
+					Namespace:  testNamespace,
+					Generation: 1,
+				},
+				Status: v2pb.RayJobStatus{
+					State: tc.state,
+					StatusConditions: []*apipb.Condition{
+						{
+							Type:   constants.LaunchedCondition,
+							Status: apipb.CONDITION_STATUS_TRUE,
+						},
+					},
+				},
+			}
+			if tc.immutable {
+				utils.MarkImmutable(rayJob)
+			}
+			fakeClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(rayJob).
+				WithStatusSubresource(rayJob).
+				Build()
+			r := &Reconciler{Client: fakeClient, logger: ctrl.Log.WithName("test")}
+
+			r.rayJobDeleteEventHandler(newLocalRayJob())
+
+			var updated v2pb.RayJob
+			require.NoError(t, r.Get(context.Background(),
+				types.NamespacedName{Namespace: testNamespace, Name: rayJobName}, &updated))
+
+			assert.Equal(t, tc.state, updated.Status.State)
+			assert.Len(t, updated.Status.StatusConditions, 1,
+				"delete handler must not add conditions to a job it should skip")
+
+			succeeded := jobsutils.GetCondition(&updated.Status.StatusConditions, constants.SucceededCondition, updated.Generation)
+			assert.NotEqual(t, apipb.CONDITION_STATUS_FALSE, succeeded.Status,
+				"a job that already finished must not be reported as failed")
+
+			killed := jobsutils.GetCondition(&updated.Status.StatusConditions, constants.KilledCondition, updated.Generation)
+			assert.NotEqual(t, apipb.CONDITION_STATUS_TRUE, killed.Status,
+				"garbage collection of the backing object is not a kill")
+		})
+	}
+}
+
+// setupJobWatcherTestWithoutGlobal builds a Reconciler whose store holds no
+// global RayJob, and returns a counter of every write the handlers attempt.
+//
+// Counting the writes is what makes the assertion meaningful: asserting only
+// that the handler did not error would also pass if it went on to resurrect the
+// job, since the fake client happily creates an object on write.
+func setupJobWatcherTestWithoutGlobal(t *testing.T) (*Reconciler, *int, *observer.ObservedLogs) {
+	t.Helper()
+
+	writes := 0
+	fakeClient := fake.NewClientBuilder().
+		WithScheme(newTestScheme()).
+		WithStatusSubresource(&v2pb.RayJob{}).
+		WithInterceptorFuncs(interceptor.Funcs{
+			Update: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+				writes++
+				return c.Update(ctx, obj, opts...)
+			},
+			SubResourceUpdate: func(ctx context.Context, c client.Client, subResource string, obj client.Object, opts ...client.SubResourceUpdateOption) error {
+				writes++
+				return c.SubResource(subResource).Update(ctx, obj, opts...)
+			},
+			Patch: func(ctx context.Context, c client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+				writes++
+				return c.Patch(ctx, obj, patch, opts...)
+			},
+		}).
+		Build()
+
+	// Tee the test logger into an observer so the assertions can inspect the
+	// severity the handlers logged at, not just whether they wrote.
+	observed, logs := observer.New(zapcore.DebugLevel)
+	zapLogger := zaptest.NewLogger(t).WithOptions(
+		zap.WrapCore(func(core zapcore.Core) zapcore.Core {
+			return zapcore.NewTee(core, observed)
+		}))
+
+	return &Reconciler{Client: fakeClient, logger: zapr.NewLogger(zapLogger)}, &writes, logs
+}
+
+// errorLogs returns the message of every error-level entry captured, so a
+// failing assertion names the offending log line instead of only counting it.
+func errorLogs(logs *observer.ObservedLogs) []string {
+	var msgs []string
+	for _, entry := range logs.FilterLevelExact(zapcore.ErrorLevel).All() {
+		msgs = append(msgs, entry.Message)
+	}
+	return msgs
+}
+
+// TestJobWatcherHandlersIgnoreMissingGlobalJob asserts that both handlers treat
+// a missing global RayJob as an expected, silent no-op.
+//
+// The KubeRay RayJob outlives the global CR: the ingester archives a terminal
+// job out of etcd as soon as it finishes, while KubeRay keeps its own object
+// until TTLSecondsAfterFinished elapses. Every event in that window -- the
+// trailing status updates and the eventual GC delete -- arrives with nothing
+// left to record it on.
+func TestJobWatcherHandlersIgnoreMissingGlobalJob(t *testing.T) {
+	newLocal := func() *rayv1.RayJob {
+		return &rayv1.RayJob{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      rayJobName,
+				Namespace: testNamespace,
+				Labels:    map[string]string{constants.ProjectNameLabelKey: testNamespace},
+			},
+			Status: rayv1.RayJobStatus{
+				JobStatus:           rayv1.JobStatusSucceeded,
+				JobDeploymentStatus: rayv1.JobDeploymentStatusComplete,
+			},
+		}
+	}
+
+	tests := []struct {
+		name  string
+		event func(r *Reconciler)
+	}{
+		{
+			name:  "status update",
+			event: func(r *Reconciler) { r.rayJobEventHandler(newLocal()) },
+		},
+		{
+			name:  "delete",
+			event: func(r *Reconciler) { r.rayJobDeleteEventHandler(newLocal()) },
+		},
+		{
+			name: "delete via tombstone",
+			event: func(r *Reconciler) {
+				r.rayJobDeleteEventHandler(cache.DeletedFinalStateUnknown{
+					Key: testNamespace + "/" + rayJobName,
+					Obj: newLocal(),
+				})
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r, writes, logs := setupJobWatcherTestWithoutGlobal(t)
+
+			require.NotPanics(t, func() { tt.event(r) })
+
+			assert.Zero(t, *writes, "a global job that no longer exists must not be written to")
+			assert.Empty(t, errorLogs(logs),
+				"losing the race against teardown is routine and must not be logged as an error")
+		})
+	}
 }
