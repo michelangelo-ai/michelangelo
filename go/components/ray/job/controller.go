@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/uber-go/tally"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -17,8 +18,8 @@ import (
 	jobsclient "github.com/michelangelo-ai/michelangelo/go/components/jobs/client"
 	jobscluster "github.com/michelangelo-ai/michelangelo/go/components/jobs/cluster"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/constants"
-	matypes "github.com/michelangelo-ai/michelangelo/go/components/jobs/common/types"
 	jobsutils "github.com/michelangelo-ai/michelangelo/go/components/jobs/common/utils"
+	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/watch"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
@@ -32,10 +33,12 @@ const (
 // Reconciler reconciles a Ray Job object
 type Reconciler struct {
 	client.Client
-	logger          logr.Logger
-	federatedClient jobsclient.FederatedClient
-	clusterCache    jobscluster.RegisteredClustersCache
-	env             env.Context
+	logger           logr.Logger
+	federatedClient  jobsclient.FederatedClient
+	clusterCache     jobscluster.RegisteredClustersCache
+	env              env.Context
+	federatedWatcher watch.FederatedWatcher
+	metricsScope     tally.Scope
 }
 
 // NewReconciler constructs a Reconciler with required dependencies.
@@ -48,6 +51,7 @@ func NewReconciler(
 	env env.Context,
 	federatedClient jobsclient.FederatedClient,
 	clusterCache jobscluster.RegisteredClustersCache,
+	metricsScope tally.Scope,
 ) *Reconciler {
 	return &Reconciler{
 		logger:          logger,
@@ -55,6 +59,7 @@ func NewReconciler(
 		federatedClient: federatedClient,
 		clusterCache:    clusterCache,
 		env:             env,
+		metricsScope:    metricsScope,
 	}
 }
 
@@ -131,6 +136,14 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 func (r *Reconciler) Register(mgr ctrl.Manager) error {
 	r.logger = mgr.GetLogger().WithName("rayjob")
+
+	r.federatedWatcher = r.getFederatedWatcher()
+
+	go func() {
+		<-mgr.Elected()
+		r.federatedWatcher.Start(context.TODO())
+	}()
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v2pb.RayJob{}).
 		Complete(r)
@@ -241,46 +254,11 @@ func (r *Reconciler) createRayJobIfNotLaunched(ctx context.Context, logger logr.
 	res.RequeueAfter = requeueAfter
 }
 
-// updateJobStatusIfLaunched updates the job status if it has already been launched.
+// updateJobStatusIfLaunched handles job status after launch.
+// Job status is now updated by the federated watcher event handlers
+// rather than polling via GetJobStatus.
 func (r *Reconciler) updateJobStatusIfLaunched(ctx context.Context, logger logr.Logger, rayJob *v2pb.RayJob, rayCluster *v2pb.RayCluster, res *ctrl.Result) {
-	assignedCluster := r.getAssignedCluster(logger, rayCluster)
-	if assignedCluster == nil {
-		logger.Error(fmt.Errorf("cluster not found"), "assigned cluster not in cache")
-		rayJob.Status.Message = "waiting for RayCluster assignment"
-		res.RequeueAfter = requeueAfter
-		return
-	}
-
-	// TODO(#605): Remove after introducing Federated Watcher for watching RayJob instead of polling for job status
-
-	jobStatus, err := r.federatedClient.GetJobStatus(ctx, rayJob, assignedCluster)
-	if err != nil {
-		logger.Error(err, "error to get ray job status")
-		res.RequeueAfter = requeueAfter
-		return
-	}
-
-	r.applyRayJobStatus(logger, rayJob, jobStatus, res)
-}
-
-func (r *Reconciler) applyRayJobStatus(
-	logger logr.Logger,
-	rayJob *v2pb.RayJob,
-	jobStatus *matypes.JobStatus,
-	res *ctrl.Result,
-) {
-	if jobStatus == nil || jobStatus.Ray == nil {
-		logger.Error(fmt.Errorf("job status is nil"), "job status is nil")
-		rayJob.Status.State = v2pb.RAY_JOB_STATE_INVALID
-		rayJob.Status.Message = "job status is nil"
-		return
-	}
-	rayJob.Status.State = jobStatus.Ray.State
-	rayJob.Status.JobStatus = jobStatus.Ray.JobStatus
-	rayJob.Status.Message = jobStatus.Ray.Message
-	rayJob.Status.DashboardUrl = jobStatus.Ray.DashboardUrl
-
-	if !isTerminalRayJobState(jobStatus.Ray.State) {
+	if !isTerminalRayJobState(rayJob.Status.State) {
 		res.RequeueAfter = requeueAfter
 	}
 }
@@ -295,7 +273,14 @@ func (r *Reconciler) applyRayJobStatus(
 // wrote the status subresource -- and retries on conflict, keeping the
 // resourceVersion current against that write and any concurrent writer.
 func (r *Reconciler) markImmutableIfTerminal(ctx context.Context, rayJob *v2pb.RayJob) error {
-	if err := retry.OnError(retry.DefaultRetry, jobsutils.IsRetriableError, func() error {
+	// A conflict here means a concurrent writer -- the reconcile loop and the
+	// watcher both reach this path -- won the race. The closure re-fetches, so a
+	// retry simply observes their write and no-ops; without this the caller would
+	// surface a spurious error for an outcome that is already correct.
+	isRetriable := func(err error) bool {
+		return apiErrors.IsConflict(err) || jobsutils.IsRetriableError(err)
+	}
+	if err := retry.OnError(retry.DefaultRetry, isRetriable, func() error {
 		latest := &v2pb.RayJob{}
 		if err := r.Get(ctx, types.NamespacedName{Namespace: rayJob.Namespace, Name: rayJob.Name}, latest); err != nil {
 			return err
