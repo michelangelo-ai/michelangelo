@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	maconfig "github.com/michelangelo-ai/michelangelo/go/base/config"
+	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -17,8 +18,24 @@ import (
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
+// withControlPlaneLabels returns own plus the control-plane labels a mapped
+// object is expected to carry for RuntimeEnvironment "staging" in namespace
+// "proj1". own is left untouched — mapping must not write back into the
+// Michelangelo CR's own pod template.
+func withControlPlaneLabels(own map[string]string) map[string]string {
+	labels := map[string]string{
+		"ma/owner-service":     "michelangelo-ray",
+		"ma/control-plane-env": "staging",
+		"ma/project-name":      "proj1",
+	}
+	for key, value := range own {
+		labels[key] = value
+	}
+	return labels
+}
+
 func TestMapper_MapGlobalJobToLocal(t *testing.T) {
-	m := Mapper{}
+	m := Mapper{Env: env.Context{RuntimeEnvironment: "staging"}}
 
 	headPod := &corev1.PodTemplateSpec{
 		ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"role": "head"}},
@@ -67,7 +84,7 @@ func TestMapper_MapGlobalJobToLocal(t *testing.T) {
 	}
 
 	rayJob := &v2pb.RayJob{
-		ObjectMeta: metav1.ObjectMeta{Name: "test-job"},
+		ObjectMeta: metav1.ObjectMeta{Name: "test-job", Namespace: "proj1"},
 		Spec:       v2pb.RayJobSpec{Entrypoint: "python main.py"},
 	}
 	rayCluster := &v2pb.RayCluster{
@@ -109,6 +126,13 @@ func TestMapper_MapGlobalJobToLocal(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      rayJob.Name,
 					Namespace: RayLocalNamespace,
+					// Routing labels: how the federated watchers find this
+					// object and map its events back to the RayJob CR.
+					Labels: map[string]string{
+						"ma/owner-service":     "michelangelo-ray",
+						"ma/control-plane-env": "staging",
+						"ma/project-name":      "proj1",
+					},
 				},
 				Spec: rayv1.RayJobSpec{
 					Entrypoint: rayJob.Spec.Entrypoint,
@@ -177,13 +201,13 @@ func TestMapper_MapGlobalJobToLocal(t *testing.T) {
 }
 
 func TestMapper_MapGlobalJobClusterToLocal(t *testing.T) {
-	m := Mapper{}
+	m := Mapper{Env: env.Context{RuntimeEnvironment: "staging"}}
 
 	headPod := &corev1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"role": "head"}}}
 	workerPod := &corev1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"role": "worker"}}}
 
 	rayCluster := &v2pb.RayCluster{
-		ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
+		ObjectMeta: metav1.ObjectMeta{Name: "test-cluster", Namespace: "proj1"},
 		Spec: v2pb.RayClusterSpec{
 			RayVersion: "2.3.1",
 			Head: &v2pb.RayHeadSpec{
@@ -223,6 +247,13 @@ func TestMapper_MapGlobalJobClusterToLocal(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      rayCluster.Name,
 					Namespace: RayLocalNamespace,
+					// Routing labels: how the federated watchers find this
+					// object and map its events back to the RayCluster CR.
+					Labels: map[string]string{
+						"ma/owner-service":     "michelangelo-ray",
+						"ma/control-plane-env": "staging",
+						"ma/project-name":      "proj1",
+					},
 				},
 				Spec: rayv1.RayClusterSpec{
 					HeadGroupSpec: rayv1.HeadGroupSpec{
@@ -230,7 +261,9 @@ func TestMapper_MapGlobalJobClusterToLocal(t *testing.T) {
 						RayStartParams: rayCluster.Spec.Head.RayStartParams,
 						Template: corev1.PodTemplateSpec{
 							ObjectMeta: metav1.ObjectMeta{
-								Labels: headPod.Labels,
+								// KubeRay copies these onto the head pod, which
+								// is the only way the pod watch can see it.
+								Labels: withControlPlaneLabels(headPod.Labels),
 							},
 						},
 					},
@@ -244,7 +277,7 @@ func TestMapper_MapGlobalJobClusterToLocal(t *testing.T) {
 							RayStartParams: rayCluster.Spec.Workers[0].RayStartParams,
 							Template: corev1.PodTemplateSpec{
 								ObjectMeta: metav1.ObjectMeta{
-									Labels: workerPod.Labels,
+									Labels: withControlPlaneLabels(workerPod.Labels),
 								},
 							},
 						},
@@ -652,59 +685,124 @@ func TestMapLocalClusterStatusToGlobal_WithConditions(t *testing.T) {
 	}
 }
 
-func TestMapLabels(t *testing.T) {
-	controlPlaneLabels := map[string]string{
-		"michelangelo/cluster-affinity": "cluster-a",
-		"ma/project-name":               "proj1",
-		"ma/user":                       "someone",
-		"kueue.x-k8s.io/queue-name":     "user-forged-queue",
-	}
+func TestControlPlaneLabels(t *testing.T) {
+	m := Mapper{Env: env.Context{RuntimeEnvironment: "staging"}}
 
-	t.Run("no queue: nothing propagates", func(t *testing.T) {
-		assert.Nil(t, mapLabels(controlPlaneLabels, ""))
+	t.Run("identifies the owning control plane and namespace", func(t *testing.T) {
+		assert.Equal(t, map[string]string{
+			"ma/owner-service":     "michelangelo-ray",
+			"ma/control-plane-env": "staging",
+			"ma/project-name":      "proj1",
+		}, m.controlPlaneLabels("proj1"))
 	})
 
-	t.Run("queue set: only the resolved queue label, never source labels", func(t *testing.T) {
-		got := mapLabels(controlPlaneLabels, "ma-proj1")
-		assert.Equal(t, map[string]string{"kueue.x-k8s.io/queue-name": "ma-proj1"}, got)
+	t.Run("no queue: no queue label", func(t *testing.T) {
+		assert.NotContains(t, m.objectLabels("proj1", ""), "kueue.x-k8s.io/queue-name")
+	})
+
+	t.Run("queue set: resolved queue label is added", func(t *testing.T) {
+		assert.Equal(t, "ma-proj1", m.objectLabels("proj1", "ma-proj1")["kueue.x-k8s.io/queue-name"])
 	})
 }
 
-func TestMapRayClusterKueueLabels(t *testing.T) {
-	m := Mapper{Scheduler: maconfig.SchedulerConfig{}}
+func TestMapRayClusterLabels(t *testing.T) {
+	m := Mapper{Scheduler: maconfig.SchedulerConfig{}, Env: env.Context{RuntimeEnvironment: "staging"}}
+	// Every label here is attacker-controlled: the source CR's labels come from
+	// the job author. None of them may reach the compute cluster.
 	rc := &v2pb.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "rc-1",
+			Name:      "rc-1",
+			Namespace: "proj1",
 			Labels: map[string]string{
-				"ma/project-name":               "proj1",
+				"ma/project-name":               "victim-namespace",
+				"ma/owner-service":              "not-michelangelo",
+				"ma/control-plane-env":          "production",
 				"michelangelo/cluster-affinity": "cluster-a",
 				"kueue.x-k8s.io/queue-name":     "user-forged-queue",
 			},
 		},
-		Spec: v2pb.RayClusterSpec{Head: &v2pb.RayHeadSpec{}},
+		Spec: v2pb.RayClusterSpec{
+			Head: &v2pb.RayHeadSpec{},
+			Workers: []*v2pb.RayWorkerSpec{
+				{Pod: &corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"role": "worker"}},
+				}},
+			},
+		},
 	}
 
-	t.Run("non-kueue cluster: no labels at all", func(t *testing.T) {
+	controlPlane := map[string]string{
+		"ma/owner-service":     "michelangelo-ray",
+		"ma/control-plane-env": "staging",
+		"ma/project-name":      "proj1",
+	}
+
+	t.Run("non-kueue cluster: control-plane labels only", func(t *testing.T) {
 		obj, err := m.MapGlobalJobClusterToLocal(rc, &v2pb.Cluster{})
 		require.NoError(t, err)
-		assert.Nil(t, obj.(*rayv1.RayCluster).Labels)
+		assert.Equal(t, controlPlane, obj.(*rayv1.RayCluster).Labels)
 	})
 
-	t.Run("nil cluster: no labels at all", func(t *testing.T) {
+	t.Run("nil cluster: control-plane labels only", func(t *testing.T) {
 		obj, err := m.MapGlobalJobClusterToLocal(rc, nil)
 		require.NoError(t, err)
-		assert.Nil(t, obj.(*rayv1.RayCluster).Labels)
+		assert.Equal(t, controlPlane, obj.(*rayv1.RayCluster).Labels)
 	})
 
-	t.Run("kueue cluster: resolved queue label only", func(t *testing.T) {
+	// The pod watch selects on these; KubeRay only propagates what the group
+	// templates already carry.
+	t.Run("head and worker templates carry the control-plane labels", func(t *testing.T) {
+		obj, err := m.MapGlobalJobClusterToLocal(rc, &v2pb.Cluster{})
+		require.NoError(t, err)
+		local := obj.(*rayv1.RayCluster)
+
+		assert.Equal(t, controlPlane, local.Spec.HeadGroupSpec.Template.Labels)
+
+		require.Len(t, local.Spec.WorkerGroupSpecs, 1)
+		worker := local.Spec.WorkerGroupSpecs[0].Template.Labels
+		for key, value := range controlPlane {
+			assert.Equal(t, value, worker[key])
+		}
+		assert.Equal(t, "worker", worker["role"], "template's own labels are preserved")
+	})
+
+	// The mapped template starts as a shallow copy of the CR's pod spec, so a
+	// merge that wrote through its label map would stamp control-plane labels
+	// onto the caller's object.
+	t.Run("mapping does not label the source CR's pod template", func(t *testing.T) {
+		_, err := m.MapGlobalJobClusterToLocal(rc, &v2pb.Cluster{})
+		require.NoError(t, err)
+		assert.Equal(t, map[string]string{"role": "worker"}, rc.Spec.Workers[0].Pod.Labels)
+	})
+
+	// Kueue's pod integration would treat labelled pods as separately admissible
+	// workloads, so the queue label stays on the RayCluster.
+	t.Run("kueue cluster: queue label on the object, not on the pods", func(t *testing.T) {
 		kueueCluster := &v2pb.Cluster{
 			Spec: v2pb.ClusterSpec{SchedulerType: v2pb.SCHEDULER_TYPE_KUEUE},
 		}
 		obj, err := m.MapGlobalJobClusterToLocal(rc, kueueCluster)
 		require.NoError(t, err)
-		assert.Equal(t,
-			map[string]string{"kueue.x-k8s.io/queue-name": "ma-proj1"},
-			obj.(*rayv1.RayCluster).Labels)
+		local := obj.(*rayv1.RayCluster)
+
+		assert.Equal(t, "ma-victim-namespace", local.Labels["kueue.x-k8s.io/queue-name"],
+			"queue resolution keeps its existing ma/project-name precedence")
+		assert.NotContains(t, local.Spec.HeadGroupSpec.Template.Labels, "kueue.x-k8s.io/queue-name")
+	})
+
+	t.Run("routing labels ignore the source CR's own labels", func(t *testing.T) {
+		kueueCluster := &v2pb.Cluster{
+			Spec: v2pb.ClusterSpec{SchedulerType: v2pb.SCHEDULER_TYPE_KUEUE},
+		}
+		obj, err := m.MapGlobalJobClusterToLocal(rc, kueueCluster)
+		require.NoError(t, err)
+		local := obj.(*rayv1.RayCluster)
+
+		assert.Equal(t, "proj1", local.Labels["ma/project-name"],
+			"a forged ma/project-name must not redirect the watcher at another namespace")
+		assert.Equal(t, "michelangelo-ray", local.Labels["ma/owner-service"])
+		assert.Equal(t, "staging", local.Labels["ma/control-plane-env"])
+		assert.NotContains(t, local.Labels, "michelangelo/cluster-affinity")
 	})
 
 	t.Run("kueue cluster without project label falls back to namespace", func(t *testing.T) {
@@ -717,9 +815,7 @@ func TestMapRayClusterKueueLabels(t *testing.T) {
 		}
 		obj, err := m.MapGlobalJobClusterToLocal(unlabeled, kueueCluster)
 		require.NoError(t, err)
-		assert.Equal(t,
-			map[string]string{"kueue.x-k8s.io/queue-name": "ma-proj-ns"},
-			obj.(*rayv1.RayCluster).Labels)
+		assert.Equal(t, "ma-proj-ns", obj.(*rayv1.RayCluster).Labels["kueue.x-k8s.io/queue-name"])
 	})
 
 	t.Run("kueue cluster without any project identity fails dispatch", func(t *testing.T) {

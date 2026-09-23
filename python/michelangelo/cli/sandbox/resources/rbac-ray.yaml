@@ -13,6 +13,14 @@ rules:
 - apiGroups: ["ray.io"]
   resources: ["rayclusters", "rayjobs"]
   verbs: ["create","get","list","watch","update","patch","delete"]
+# The federated watchers run against this cluster with this ServiceAccount's
+# token. The RayCluster watch covers ray.io above; the pod watch is what surfaces
+# per-pod failures (ImagePullBackOff, CrashLoopBackOff, unschedulable) into the
+# Michelangelo RayCluster CR, and it needs read access to core pods. Read-only:
+# Michelangelo never creates or deletes pods directly — KubeRay owns them.
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get","list","watch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
