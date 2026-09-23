@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import json
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import TestCase
@@ -140,22 +141,32 @@ class TestRayClusterSpec(TestCase):
         self.assertEqual(spec["spec"]["workers"][0]["rayStartParams"], expected)
 
 
-class TestTaskResourcePlumbing(TestCase):
-    """End-to-end tests that task() forwards resources into the cluster spec.
+class _TaskHarness:
+    """Runs the real task() from task.star with the plugin runtime stubbed out.
 
-    Runs the real task() from task.star with the plugin runtime stubbed out,
-    capturing the cluster spec handed to execute_ray_task. This is the exact
-    regression surface of the silently-dropped gpu/disk/object-store settings.
+    Captures the cluster spec handed to execute_ray_task and the kwargs handed
+    to process_terminated_job, so tests can assert on what task() plumbs
+    downstream without standing up a Ray cluster.
     """
 
     _DEFAULT_DISK = "512Gi"
 
-    def _run_task(self, environ: dict | None = None, **task_kwargs):
+    def _run_task(
+        self,
+        environ: dict | None = None,
+        cluster_log_url: str = "",
+        **task_kwargs,
+    ):
         captured = {}
+        terminated = {}
+
+        def process_terminated_job(**kwargs):
+            terminated.update(kwargs)
+            return False
 
         def execute_ray_task(**kwargs):
             captured.update(kwargs)
-            return "SUCCEEDED", None, "http://cluster", "ray-job-1"
+            return "SUCCEEDED", None, "http://cluster", cluster_log_url
 
         stubs = {
             "DEFAULT_RETRY_ATTEMPTS": 1,
@@ -170,7 +181,6 @@ class TestTaskResourcePlumbing(TestCase):
             "RAY_DEFAULT_WORKER_INSTANCES": "1",
             "RAY_DEFAULT_GPU_SKU": "",
             "RAY_DEFAULT_ZONE": "",
-            "RAY_LOG_URL_PREFIX": None,
             "TIME_FOMART": "%Y-%m-%dT%H:%M:%S",
             "TASK_STATE_SKIPPED": "SKIPPED",
             "CACHE_OPERATION_GET": "GET",
@@ -184,22 +194,30 @@ class TestTaskResourcePlumbing(TestCase):
             "get_result_url": lambda: "s3://bucket/result.json",
             "get_task_image": lambda task_name: "test-image",
             "execute_ray_task": execute_ray_task,
-            "process_terminated_job": lambda **kwargs: False,
+            "process_terminated_job": process_terminated_job,
             "io_read_json": lambda url: {"ok": True},
             "report_progress": lambda **kwargs: None,
             "callable_object": lambda func: func,
         }
-        task, _, _, _, _ = _load_star_functions(
+        task, _, _, _ = _load_star_functions(
             "task",
             "ray_cluster_spec",
             "container_resources",
             "ray_config",
-            "get_ray_log_url",
             extra_globals=stubs,
         )
         result = task(task_path="examples.demo.train", **task_kwargs)()
         self.assertEqual(result, {"ok": True})
+        self._terminated = terminated
         return captured["cluster"]
+
+
+class TestTaskResourcePlumbing(_TaskHarness, TestCase):
+    """End-to-end tests that task() forwards resources into the cluster spec.
+
+    This is the exact regression surface of the silently-dropped gpu/disk/
+    object-store settings.
+    """
 
     def _containers(self, cluster):
         head = cluster["spec"]["head"]["pod"]["spec"]["containers"][0]
@@ -262,3 +280,204 @@ class TestTaskResourcePlumbing(TestCase):
         head, _ = self._containers(cluster)
         self.assertEqual(head["resources"]["requests"]["nvidia.com/gpu"], 2)
         self.assertEqual(head["resources"]["limits"], {"nvidia.com/gpu": 2})
+
+
+class TestTaskLogURL(_TaskHarness, TestCase):
+    """task() must report the log URL published on the RayCluster CR.
+
+    RayClusterStatus.log_url is rendered by the controller from the platform's
+    logPersistence.logURLFormat and points at durable, post-mortem logs. The
+    dashboard URL in status.job_url dies with the cluster, so it is only a
+    fallback for when log persistence is switched off.
+    """
+
+    _CR_LOG_URL = "http://localhost:9090/browser/ma/logs/uf-ray-abc_ray/"
+
+    def test_cr_log_url_is_reported(self):
+        """The CR's logUrl reaches process_terminated_job verbatim."""
+        self._run_task(cluster_log_url=self._CR_LOG_URL)
+
+        self.assertEqual(self._terminated["log_url"], self._CR_LOG_URL)
+
+    def test_falls_back_to_dashboard_when_log_persistence_disabled(self):
+        """An empty logUrl (persistence off) falls back to the cluster URL."""
+        self._run_task(cluster_log_url="")
+
+        self.assertEqual(self._terminated["log_url"], "http://cluster")
+
+
+class TestReportRayTaskResultLogURL(TestCase):
+    """report_ray_task_result() stamps the persisted log URL on every report.
+
+    task_log is what the control plane records as the substep's logUrl
+    (executeworkflow.go copies TaskProgress.TaskLog into StepInfo.LogUrl), so a
+    terminal report carrying the live dashboard URL leaves operators with a link
+    that stops resolving the moment the cluster is reclaimed.
+    """
+
+    _LOG_URL = "http://localhost:9090/browser/ray-history/log/uf-ray-abc_default/"
+
+    def _report(self, job_state: str):
+        """Run report_ray_task_result for a job state, returning (state, report)."""
+        reports = []
+
+        stubs = {
+            "TIME_FOMART": "%Y-%m-%dT%H:%M:%S",
+            "TASK_STATE_SUCCEEDED": "SUCCEEDED",
+            "TASK_STATE_KILLED": "KILLED",
+            "TASK_STATE_FAILED": "FAILED",
+            "CACHE_OPERATION_PUT": "PUT",
+            "json": json,
+            "time": SimpleNamespace(
+                time=lambda: 0.0,
+                utc_format_seconds=lambda fmt, seconds: "1970-01-01T00:00:00",
+            ),
+            "get_cache_keys": lambda *args: [],
+            "create_cached_output": lambda **kwargs: {"metadata": {"name": "cached-1"}},
+            "report_progress": lambda **kwargs: reports.append(kwargs),
+        }
+        (report_ray_task_result,) = _load_star_functions(
+            "report_ray_task_result",
+            extra_globals=stubs,
+        )
+        state = report_ray_task_result(
+            {"status": {"state": job_state}},
+            "examples.demo.train",
+            "train",
+            self._LOG_URL,
+            "1970-01-01T00:00:00",
+            (),
+            {},
+            1,
+            "v1",
+            "demo",
+            "s3://bucket/result.json",
+        )
+        self.assertEqual(len(reports), 1)
+        return state, reports[0]
+
+    def test_succeeded_reports_persisted_log_url(self):
+        """A successful job's terminal report carries the CR log URL."""
+        state, report = self._report("RAY_JOB_STATE_SUCCEEDED")
+
+        self.assertEqual(state, "SUCCEEDED")
+        self.assertEqual(report["task_log"], self._LOG_URL)
+
+    def test_killed_reports_persisted_log_url(self):
+        """A killed job's terminal report carries the CR log URL."""
+        state, report = self._report("RAY_JOB_STATE_KILLED")
+
+        self.assertEqual(state, "KILLED")
+        self.assertEqual(report["task_log"], self._LOG_URL)
+
+    def test_failed_reports_persisted_log_url(self):
+        """A failed job's terminal report carries the CR log URL.
+
+        This is the branch that matters most: a failure is exactly when someone
+        follows the link, and by then the cluster has already been torn down.
+        """
+        state, report = self._report("RAY_JOB_STATE_ERROR")
+
+        self.assertEqual(state, "FAILED")
+        self.assertEqual(report["task_log"], self._LOG_URL)
+
+
+class TestExecuteRayTaskLogURL(TestCase):
+    """execute_ray_task() must never report the dashboard URL as the task log.
+
+    Exercises the real execute_ray_task and report_ray_task_result together
+    against a RayCluster CR shaped like the sandbox's: status.logUrl populated
+    by the controller, status.jobUrl absent. Before the fix every progress
+    report carried the jobUrl fallback string, which is what operators saw in
+    the pipeline run's substep logUrl.
+    """
+
+    _LOG_URL = "http://localhost:9090/browser/ray-history/log/uf-ray-tp8z5_default/"
+    _JOB_URL_FALLBACK = "UAPI did not report RayJob URL"
+
+    def _execute(self, status: dict):
+        """Run execute_ray_task against a CR status, returning (result, reports)."""
+        reports = []
+        cluster = {
+            "metadata": {"name": "uf-ray-tp8z5", "namespace": "california-housing"},
+            "status": status,
+        }
+
+        stubs = {
+            "DEFAULT_CREATE_CLUSTER_TIMEOUT_SECONDS": 600,
+            "TIME_FOMART": "%Y-%m-%dT%H:%M:%S",
+            "TASK_STATE_PENDING": "PENDING",
+            "TASK_STATE_RUNNING": "RUNNING",
+            "TASK_STATE_SUCCEEDED": "SUCCEEDED",
+            "TASK_STATE_KILLED": "KILLED",
+            "TASK_STATE_FAILED": "FAILED",
+            "CACHE_OPERATION_PUT": "PUT",
+            "json": json,
+            "time": SimpleNamespace(
+                time=lambda: 0.0,
+                utc_format_seconds=lambda fmt, seconds: "1970-01-01T00:00:00",
+                sleep=lambda seconds: None,
+            ),
+            "atexit": SimpleNamespace(
+                register=lambda *args, **kwargs: None,
+                unregister=lambda *args, **kwargs: None,
+            ),
+            "ray": SimpleNamespace(
+                create_cluster=lambda cluster, timeout_seconds: {
+                    "rayCluster": cluster,
+                    "activityId": "activity-1",
+                },
+                create_job=lambda entrypoint, ray_job_namespace, ray_job_name: {
+                    "status": {"state": "RAY_JOB_STATE_SUCCEEDED"}
+                },
+                terminate_cluster=lambda *args: None,
+            ),
+            "ray_job_entrypoint": lambda *args: "python -m run_task",
+            "fail": lambda message: self.fail(message),
+            "get_cache_keys": lambda *args: [],
+            "create_cached_output": lambda **kwargs: {"metadata": {"name": "cached-1"}},
+            "report_progress": lambda **kwargs: reports.append(kwargs),
+        }
+        execute_ray_task, _, _ = _load_star_functions(
+            "execute_ray_task",
+            "report_ray_task_result",
+            "terminate_cluster",
+            extra_globals=stubs,
+        )
+        result = execute_ray_task(
+            task_path="examples.demo.train",
+            task_name="train",
+            cluster=cluster,
+            cluster_namespace="california-housing",
+            runtime_env={},
+            start_time_formated_str="1970-01-01T00:00:00",
+            result_url="s3://bucket/result.json",
+            args=(),
+            kwargs={},
+            retry_attempt_id=1,
+            total_retry_attempt=1,
+            cache_version="v1",
+            namespace="california-housing",
+        )
+        return result, reports
+
+    def test_cr_log_url_replaces_the_job_url_everywhere(self):
+        """With logUrl set and jobUrl absent, no report carries the fallback."""
+        result, reports = self._execute({"logUrl": self._LOG_URL})
+        _, _, cluster_url, cluster_log_url = result
+
+        # The CR has no jobUrl, so cluster_url is the fallback string. That is
+        # precisely the value that must not reach any progress report.
+        self.assertEqual(cluster_url, self._JOB_URL_FALLBACK)
+        self.assertEqual(cluster_log_url, self._LOG_URL)
+
+        logs = [report["task_log"] for report in reports]
+        self.assertNotIn(self._JOB_URL_FALLBACK, logs)
+        self.assertEqual([log for log in logs if log], [self._LOG_URL] * 2)
+
+    def test_falls_back_to_dashboard_when_log_persistence_disabled(self):
+        """Without a CR logUrl the reports carry the dashboard URL."""
+        _, reports = self._execute({"jobUrl": "http://dashboard:8265"})
+
+        logs = [report["task_log"] for report in reports]
+        self.assertEqual([log for log in logs if log], ["http://dashboard:8265"] * 2)
