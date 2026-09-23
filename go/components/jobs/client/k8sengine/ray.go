@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/constants"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -53,7 +54,7 @@ func (m Mapper) mapRay(rayJob *v2pb.RayJob, jobClusterObject runtime.Object, clu
 			// RayJobs target an existing RayCluster via ClusterSelector, so
 			// they are never Kueue-queued themselves (Kueue admits the
 			// cluster); no queue label is resolved here.
-			Labels: mapLabels(rayJob.GetLabels(), ""),
+			Labels: m.objectLabels(rayJob.GetNamespace(), ""),
 		},
 		Spec: rayv1.RayJobSpec{
 			ClusterSelector: map[string]string{
@@ -147,6 +148,15 @@ func (m Mapper) mapRayCluster(rayCluster *v2pb.RayCluster, cluster *v2pb.Cluster
 		return nil, err
 	}
 
+	// KubeRay copies a group template's labels onto the pods it creates but adds
+	// nothing of Michelangelo's own, so the pod watch only sees head and worker
+	// pods if the control-plane labels are on the templates.
+	podLabels := m.controlPlaneLabels(rayCluster.GetNamespace())
+	addPodTemplateLabels(&headGroupSpec.Template, podLabels)
+	for i := range workerGroupSpecs {
+		addPodTemplateLabels(&workerGroupSpecs[i].Template, podLabels)
+	}
+
 	rayV1Cluster := &rayv1.RayCluster{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       RayClusterKind,
@@ -155,7 +165,7 @@ func (m Mapper) mapRayCluster(rayCluster *v2pb.RayCluster, cluster *v2pb.Cluster
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      rayCluster.Name,
 			Namespace: RayLocalNamespace,
-			Labels:    mapLabels(rayCluster.GetLabels(), queueName),
+			Labels:    m.objectLabels(rayCluster.GetNamespace(), queueName),
 		},
 		Spec: rayv1.RayClusterSpec{
 			HeadGroupSpec:    headGroupSpec,
@@ -182,6 +192,22 @@ func nonNilRayStartParams(params map[string]string) map[string]string {
 		return map[string]string{}
 	}
 	return params
+}
+
+// addPodTemplateLabels merges labels into a pod template, keeping any the
+// caller already set. It always assigns a fresh map rather than writing through
+// the existing one: the template here is a shallow copy of the pod spec held by
+// the Michelangelo CR, so mutating its label map in place would stamp
+// control-plane labels onto the caller's own object.
+func addPodTemplateLabels(template *corev1.PodTemplateSpec, labels map[string]string) {
+	merged := make(map[string]string, len(template.Labels)+len(labels))
+	for key, value := range template.Labels {
+		merged[key] = value
+	}
+	for key, value := range labels {
+		merged[key] = value
+	}
+	template.Labels = merged
 }
 
 func getHeadGroupSpec(head *v2pb.RayHeadSpec) rayv1.HeadGroupSpec {
@@ -413,7 +439,7 @@ func injectCollectorSidecar(podTemplate *corev1.PodTemplateSpec, config LogPersi
 
 	// 4. Build collector sidecar container using command (not args) per official config
 	collectorContainer := corev1.Container{
-		Name:            "collector",
+		Name:            constants.CollectorContainerName,
 		Image:           config.CollectorImage,
 		ImagePullPolicy: corev1.PullIfNotPresent,
 		Command: []string{
