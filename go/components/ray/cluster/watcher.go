@@ -86,11 +86,7 @@ func (r *Reconciler) podAddEventHandler(obj interface{}) {
 	if !ok {
 		return
 	}
-	// We only care about the head pod for the add event.
-	if !jobsutils.IsRayHeadNode(pod) {
-		return
-	}
-	r.podEventHandler(pod)
+	r.handlePodEvent(pod)
 }
 
 func (r *Reconciler) podUpdateEventHandler(_, newObj interface{}) {
@@ -98,22 +94,103 @@ func (r *Reconciler) podUpdateEventHandler(_, newObj interface{}) {
 	if !ok {
 		return
 	}
-	// We only care about the head pod for the update event. We re-inspect even
-	// if already recorded to handle the case where we missed the original event.
-	if !jobsutils.IsRayHeadNode(pod) {
+	r.handlePodEvent(pod)
+}
+
+// handlePodEvent splits an add/update into the two things the pod watcher owns.
+//
+// Head-node connection details need a running head pod. Pod errors do not, and
+// must not wait for one: a container wedged in ImagePullBackOff or
+// CrashLoopBackOff keeps its pod alive indefinitely, so podDeleteEventHandler
+// never fires and the failure would otherwise never reach the CR. Worker pods
+// are checked too -- the informer already watches every Ray node, and the
+// delete path has always handled both.
+func (r *Reconciler) handlePodEvent(pod *corev1.Pod) {
+	// We re-inspect even if already recorded to handle the case where we missed
+	// the original event.
+	if pod.Status.Phase == corev1.PodRunning && jobsutils.IsRayHeadNode(pod) {
+		r.podEventHandler(pod)
+	}
+	r.podErrorEventHandler(pod)
+}
+
+// podErrorEventHandler records a container-level failure on a pod that is still
+// alive. It uses the container-only extraction: a pod that is merely starting
+// up reports ContainersReady=False, which is progress, not an error.
+func (r *Reconciler) podErrorEventHandler(pod *corev1.Pod) {
+	podError := jobsutils.GetContainerErrorFromPodStatus(pod, isRayContainer)
+	if podError == nil {
+		// A pod the scheduler could not place has no container statuses to
+		// inspect, and it is never deleted either, so the delete path will not
+		// pick it up later. Its PodScheduled condition is the only record of
+		// why the cluster is not coming up.
+		podError = jobsutils.GetSchedulingErrorFromPodStatus(pod)
+	}
+	if podError == nil {
 		return
 	}
-	r.podEventHandler(pod)
+	r.recordPodError(pod, podError, "podErrorEventHandler")
+}
+
+// isRayContainer matches the containers whose failures belong to the cluster.
+//
+// The ray containers are named by the job author, so there is no fixed name to
+// match on. The only container michelangelo names itself is the log-collector
+// sidecar it appends to every pod template, so everything that is not the
+// collector is the author's workload and its failures are the cluster's.
+func isRayContainer(containerStatus corev1.ContainerStatus) bool {
+	return containerStatus.Name != constants.CollectorContainerName
+}
+
+// recordPodError merges a pod-level failure onto the owning RayCluster CR.
+//
+// Both the live path and the delete path funnel through here so the two cannot
+// double-count the same pod, and so the mutation is idempotent:
+// UpdateStatusWithRetries re-runs its closure on conflict, which an append
+// would turn into duplicate entries. The cap on the number of recorded errors
+// is enforced by mergePodErrors.
+func (r *Reconciler) recordPodError(pod *corev1.Pod, podError *v2pb.PodErrors, fieldManager string) {
+	log := r.logger.WithValues("pod_name", pod.Name, "reason", podError.GetReason())
+
+	namespace, err := jobsutils.GetProjectNameFromLabels(pod.Labels)
+	if err != nil {
+		log.Error(err, "unable to determine namespace of ray cluster - not recording the pod error")
+		return
+	}
+	clusterName, err := getClusterName(pod)
+	if err != nil {
+		log.Error(err, "unable to get cluster name - not recording the pod error")
+		return
+	}
+	log = log.WithValues("namespace", namespace, "ray_cluster", clusterName)
+
+	ctx, cancel := context.WithTimeout(context.Background(), _eventHandlerTimeout)
+	defer cancel()
+
+	var rayCluster v2pb.RayCluster
+	if err = r.Get(ctx, namespace, clusterName, &metav1.GetOptions{}, &rayCluster); err != nil {
+		if utils.IsNotFoundError(err) {
+			// The global RayCluster is gone, so there is nothing to record the pod error
+			// on. Pods outlive the cluster CR during teardown, so this is expected.
+			log.V(1).Info("global ray cluster no longer exists, not recording the pod error")
+			return
+		}
+		log.Error(err, "could not fetch the ray cluster for the pod - not recording the pod error")
+		return
+	}
+
+	if err = jobsutils.UpdateStatusWithRetries(ctx, r, &rayCluster,
+		func(obj client.Object) {
+			mergePodErrors(obj.(*v2pb.RayCluster), []*v2pb.PodErrors{podError})
+		}, &metav1.UpdateOptions{
+			FieldManager: fieldManager,
+		}); err != nil {
+		log.Error(err, "could not update the ray cluster with the pod error")
+	}
 }
 
 func (r *Reconciler) podEventHandler(pod *corev1.Pod) {
 	log := r.logger.WithValues("pod_name", pod.Name)
-
-	if pod.Status.Phase != corev1.PodRunning {
-		log.Info("head pod is not in running state, will wait for next pod event",
-			"pod_phase", pod.Status.Phase)
-		return
-	}
 
 	clusterName, err := getClusterName(pod)
 	if err != nil {
@@ -122,14 +199,18 @@ func (r *Reconciler) podEventHandler(pod *corev1.Pod) {
 	}
 	log = log.WithValues("ray_cluster", clusterName)
 
+	// The dynamic port annotations are optional -- a cluster that publishes neither
+	// is a valid configuration, not a fault. getPort reports the absence as an error
+	// and yields -1, which is recorded verbatim below, so keep this at debug level
+	// instead of logging two errors for every head pod event.
 	clientPort, err := getClientPort(pod)
 	if err != nil {
-		log.Error(err, "unable to get head pod client port")
+		log.V(1).Info("no client port published for the head pod", "reason", err.Error())
 	}
 
 	jupyterNotebookPort, err := getJupyterNotebookPort(pod)
 	if err != nil {
-		log.Error(err, "unable to get head pod jupyter notebook port")
+		log.V(1).Info("no jupyter notebook port published for the head pod", "reason", err.Error())
 	}
 
 	log.Info("Retrieved head pod info",
@@ -149,6 +230,10 @@ func (r *Reconciler) podEventHandler(pod *corev1.Pod) {
 
 	var rayCluster v2pb.RayCluster
 	if err = r.Get(ctx, namespace, clusterName, &metav1.GetOptions{}, &rayCluster); err != nil {
+		if utils.IsNotFoundError(err) {
+			log.V(1).Info("global ray cluster no longer exists, ignoring pod event")
+			return
+		}
 		log.Error(err, "could not fetch the ray cluster for the pod")
 		return
 	}
@@ -214,46 +299,19 @@ func (r *Reconciler) podDeleteEventHandler(obj interface{}) {
 	}
 	log = log.WithValues("ray_cluster", clusterName)
 
-	ctx, cancel := context.WithTimeout(context.Background(), _eventHandlerTimeout)
-	defer cancel()
-
-	var rayCluster v2pb.RayCluster
-	if err = r.Get(ctx, namespace, clusterName, &metav1.GetOptions{}, &rayCluster); err != nil {
-		log.Error(err, "could not fetch the ray cluster for the pod - not processing pod delete event further")
-		return
-	}
-
 	if pod.Status.Phase == corev1.PodFailed {
 		log.Info("pod failed", "reason", pod.Status.Reason, "status_message", pod.Status.Message,
 			"container_statuses", pod.Status.ContainerStatuses, "init_container_statuses", pod.Status.InitContainerStatuses)
 	}
 
-	// Limit the number of possible pod errors to avoid large status updates.
-	maxPodErrorLength := 2 * (1 + jobsutils.NumRayWorkers(&rayCluster))
-	if len(rayCluster.Status.PodErrors) >= maxPodErrorLength {
-		log.Info("reached max pod errors limit, skipping further pod error updates",
-			"max_pod_error_length", maxPodErrorLength,
-			"current_pod_error_length", len(rayCluster.Status.PodErrors))
-		return
-	}
-
-	podError := jobsutils.GetErrorFromPodStatus(pod, func(containerStatus corev1.ContainerStatus) bool {
-		return containerStatus.Name == constants.HeadContainerName || containerStatus.Name == constants.WorkerContainerName
-	})
+	// On delete the pod conditions are worth consulting as well: the pod is
+	// gone, so ContainersReady=False is a final verdict rather than progress.
+	podError := jobsutils.GetErrorFromPodStatus(pod, isRayContainer)
 	// If no container errors are found we do not need to update the status.
 	if podError == nil {
 		return
 	}
-
-	if err = jobsutils.UpdateStatusWithRetries(ctx, r, &rayCluster,
-		func(obj client.Object) {
-			cluster := obj.(*v2pb.RayCluster)
-			cluster.Status.PodErrors = append(cluster.Status.PodErrors, podError)
-		}, &metav1.UpdateOptions{
-			FieldManager: "podDeleteEventHandler",
-		}); err != nil {
-		log.Error(err, "could not update the ray cluster with the pod error")
-	}
+	r.recordPodError(pod, podError, "podDeleteEventHandler")
 }
 
 // KubeRay RayCluster event handlers — own RayCluster.Status.State and conditions.
@@ -302,6 +360,13 @@ func (r *Reconciler) rayClusterDeleteEventHandler(obj interface{}) {
 
 	var globalCluster v2pb.RayCluster
 	if err := r.Get(ctx, projectName, local.Name, &metav1.GetOptions{}, &globalCluster); err != nil {
+		if utils.IsNotFoundError(err) {
+			// The global RayCluster is gone: the ingester moved a terminal cluster to
+			// metadata storage, or it was deleted outright. The KubeRay object outlives
+			// it during teardown, so its trailing events are expected here.
+			log.V(1).Info("global ray cluster no longer exists, ignoring event")
+			return
+		}
 		log.Error(err, "could not fetch the global ray cluster")
 		return
 	}
@@ -390,6 +455,13 @@ func (r *Reconciler) rayClusterEventHandler(obj interface{}) {
 
 	var globalCluster v2pb.RayCluster
 	if err := r.Get(ctx, projectName, local.Name, &metav1.GetOptions{}, &globalCluster); err != nil {
+		if utils.IsNotFoundError(err) {
+			// The global RayCluster is gone: the ingester moved a terminal cluster to
+			// metadata storage, or it was deleted outright. The KubeRay object outlives
+			// it during teardown, so its trailing events are expected here.
+			log.V(1).Info("global ray cluster no longer exists, ignoring event")
+			return
+		}
 		log.Error(err, "could not fetch the global ray cluster")
 		return
 	}
@@ -402,6 +474,26 @@ func (r *Reconciler) rayClusterEventHandler(obj interface{}) {
 	if globalCluster.GetDeletionTimestamp() != nil {
 		log.V(1).Info("skipping status update for cluster being deleted")
 		return
+	}
+
+	// Derive the globally-meaningful parts of the status from the compute-cluster
+	// object. The mapper owns that translation — it knows the log-URL template,
+	// the compute-cluster Ray namespace, and how to read a reason and pod errors
+	// out of KubeRay's conditions — so surfacing what it returns keeps the
+	// event-driven path reporting exactly what the polling path used to.
+	var (
+		logURL             string
+		reason             string
+		conditionPodErrors []*v2pb.PodErrors
+	)
+	if globalStatus, err := r.mapper.MapLocalClusterStatusToGlobal(local); err != nil {
+		log.Error(err, "could not map the local ray cluster status, falling back to state only")
+	} else if globalStatus != nil {
+		reason = globalStatus.Reason
+		if globalStatus.Ray != nil {
+			logURL = globalStatus.Ray.LogUrl
+			conditionPodErrors = globalStatus.Ray.PodErrors
+		}
 	}
 
 	newState := mapKubeRayClusterState(local.Status.State)
@@ -417,7 +509,10 @@ func (r *Reconciler) rayClusterEventHandler(obj interface{}) {
 	// Cache re-sync gives Update events even when the local cluster did not
 	// change. Exit early if global already reflects the local state to avoid
 	// unnecessary CRD writes.
-	if globalCluster.Status.State == newState && newState == v2pb.RAY_CLUSTER_STATE_READY {
+	// The log URL clause keeps a cluster that went ready under an older build
+	// (or before log persistence was configured) from being skipped forever.
+	if globalCluster.Status.State == newState && newState == v2pb.RAY_CLUSTER_STATE_READY &&
+		(logURL == "" || globalCluster.Status.LogUrl != "") {
 		launchedCond := jobsutils.GetCondition(&globalCluster.Status.StatusConditions, LaunchedCondition, globalCluster.Generation)
 		if launchedCond.GetStatus() == apipb.CONDITION_STATUS_TRUE {
 			log.V(1).Info("ray cluster already ready, skipping update")
@@ -431,6 +526,10 @@ func (r *Reconciler) rayClusterEventHandler(obj interface{}) {
 		func(obj client.Object) {
 			cluster := obj.(*v2pb.RayCluster)
 			cluster.Status.State = newState
+			if logURL != "" {
+				cluster.Status.LogUrl = logURL
+			}
+			mergePodErrors(cluster, conditionPodErrors)
 
 			switch newState {
 			case v2pb.RAY_CLUSTER_STATE_READY:
@@ -440,19 +539,31 @@ func (r *Reconciler) rayClusterEventHandler(obj interface{}) {
 					Generation: cluster.Generation,
 					Reason:     "ClusterReady",
 				})
+				// A cluster that was waiting for admission is admitted now. Only
+				// flip an existing Queued condition: clusters that were never
+				// suspended should not grow one.
+				for _, cond := range cluster.Status.StatusConditions {
+					if cond.GetType() == QueuedCondition && cond.GetStatus() == apipb.CONDITION_STATUS_TRUE {
+						jobsutils.UpdateCondition(cond, jobsutils.ConditionUpdateParams{
+							Status:     apipb.CONDITION_STATUS_FALSE,
+							Generation: cluster.Generation,
+							Reason:     "ClusterAdmitted",
+						})
+					}
+				}
 			case v2pb.RAY_CLUSTER_STATE_FAILED:
 				succeededCond := jobsutils.GetCondition(&cluster.Status.StatusConditions, SucceededCondition, cluster.Generation)
 				jobsutils.UpdateCondition(succeededCond, jobsutils.ConditionUpdateParams{
 					Status:     apipb.CONDITION_STATUS_FALSE,
 					Generation: cluster.Generation,
-					Reason:     "ClusterFailed",
+					Reason:     reasonOr(reason, "ClusterFailed"),
 				})
 			case v2pb.RAY_CLUSTER_STATE_UNHEALTHY:
 				succeededCond := jobsutils.GetCondition(&cluster.Status.StatusConditions, SucceededCondition, cluster.Generation)
 				jobsutils.UpdateCondition(succeededCond, jobsutils.ConditionUpdateParams{
 					Status:     apipb.CONDITION_STATUS_FALSE,
 					Generation: cluster.Generation,
-					Reason:     "ClusterUnhealthy",
+					Reason:     reasonOr(reason, "ClusterUnhealthy"),
 				})
 			case v2pb.RAY_CLUSTER_STATE_UNKNOWN:
 				// If the cluster is in an unknown state but we have already recorded
@@ -463,7 +574,7 @@ func (r *Reconciler) rayClusterEventHandler(obj interface{}) {
 					jobsutils.UpdateCondition(succeededCond, jobsutils.ConditionUpdateParams{
 						Status:     apipb.CONDITION_STATUS_FALSE,
 						Generation: cluster.Generation,
-						Reason:     "ClusterFailedWithPodErrors",
+						Reason:     reasonOr(reason, "ClusterFailedWithPodErrors"),
 					})
 				}
 			case v2pb.RAY_CLUSTER_STATE_SUSPENDED:
@@ -473,11 +584,72 @@ func (r *Reconciler) rayClusterEventHandler(obj interface{}) {
 				// touching the Succeeded condition. Deliberately no
 				// terminal-pod-error check here — while suspended, pod-level
 				// signals carry no meaning. Mirrors #1700's controller handling.
+				// Surface the wait as a Queued condition so callers can tell
+				// "held for admission" apart from "launching".
+				queuedCond := jobsutils.GetCondition(&cluster.Status.StatusConditions, QueuedCondition, cluster.Generation)
+				jobsutils.UpdateCondition(queuedCond, jobsutils.ConditionUpdateParams{
+					Status:     apipb.CONDITION_STATUS_TRUE,
+					Generation: cluster.Generation,
+					Reason:     "AwaitingAdmission",
+					Message:    reason,
+				})
 			}
 		}, &metav1.UpdateOptions{
 			FieldManager: "rayClusterEventHandler",
 		}); err != nil {
 		log.Error(err, "failed to update global ray cluster status")
+	}
+}
+
+// reasonOr returns the mapper-derived reason, falling back to a generic one when
+// KubeRay's conditions carry nothing more specific.
+func reasonOr(reason, fallback string) string {
+	if reason == "" {
+		return fallback
+	}
+	return reason
+}
+
+// mergePodErrors upserts pod errors onto the global status.
+//
+// Entries are keyed by name, which is the condition type ("ReplicaFailure")
+// for errors derived from the KubeRay RayCluster and the pod name for those
+// derived from a Pod. The two therefore never collide, and repeated events —
+// cache re-syncs fire every _reSyncPeriod, and a wedged pod is re-reported on
+// every status change — update in place rather than growing the list. That
+// also keeps the mutation idempotent under UpdateStatusWithRetries, which
+// re-runs its closure on conflict. The list is bounded by two errors per
+// expected pod; at the bound, existing entries can still be refreshed but new
+// ones are dropped.
+func mergePodErrors(cluster *v2pb.RayCluster, podErrors []*v2pb.PodErrors) {
+	if len(podErrors) == 0 {
+		return
+	}
+	maxPodErrorLength := 2 * (1 + jobsutils.NumRayWorkers(cluster))
+	indexByName := make(map[string]int, len(cluster.Status.PodErrors))
+	for i, podError := range cluster.Status.PodErrors {
+		indexByName[podError.GetName()] = i
+	}
+	for _, podError := range podErrors {
+		if i, ok := indexByName[podError.GetName()]; ok {
+			// Killing a failed cluster deletes its pods, and the kubelet then
+			// reports every container as ContainerStatusUnknown. Overwriting on
+			// that would leave the CR describing only the teardown -- "the
+			// container could not be located when the pod was terminated" --
+			// and erase the ImagePullBackOff or CrashLoopBackOff that actually
+			// caused the failure, which is the one thing a user reading a dead
+			// cluster needs.
+			if jobsutils.IsPostMortemPodError(podError) && !jobsutils.IsPostMortemPodError(cluster.Status.PodErrors[i]) {
+				continue
+			}
+			cluster.Status.PodErrors[i] = podError
+			continue
+		}
+		if len(cluster.Status.PodErrors) >= maxPodErrorLength {
+			return
+		}
+		indexByName[podError.GetName()] = len(cluster.Status.PodErrors)
+		cluster.Status.PodErrors = append(cluster.Status.PodErrors, podError)
 	}
 }
 
