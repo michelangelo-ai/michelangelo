@@ -74,9 +74,33 @@ func ResolveLocalQueueName(cfg maconfig.KueueConfig, project string) string {
 // GetErrorFromPodStatus attempts to extract an error from the pod status
 func GetErrorFromPodStatus(pod *corev1.Pod, containerFilter func(containerStatus corev1.ContainerStatus) bool) *v2pb.PodErrors {
 	// First check for container specific errors to get more detailed errors
-	for _, containerStatus := range pod.Status.ContainerStatuses {
+	if podError := GetContainerErrorFromPodStatus(pod, containerFilter); podError != nil {
+		return podError
+	}
+	// next retrieve any error from the pod conditions
+	return extractErrorFromPodConditions(pod)
+}
+
+// GetContainerErrorFromPodStatus extracts a container-level failure from a pod
+// that is still alive.
+//
+// Unlike GetErrorFromPodStatus it deliberately does not fall back to the pod
+// conditions: a pod that is merely still starting up reports
+// ContainersReady=False with reason ContainersNotReady, which is normal
+// progress rather than an error. That fallback is only meaningful once the pod
+// is gone, which is why it stays in GetErrorFromPodStatus.
+func GetContainerErrorFromPodStatus(pod *corev1.Pod, containerFilter func(containerStatus corev1.ContainerStatus) bool) *v2pb.PodErrors {
+	// Init containers are scanned alongside the regular ones. KubeRay gives
+	// every worker a wait-gcs-ready init container built from the job's own
+	// image, and while that one is wedged the regular containers only report
+	// PodInitializing — so the init status is the only place the real failure
+	// shows up.
+	containerStatuses := make([]corev1.ContainerStatus, 0, len(pod.Status.ContainerStatuses)+len(pod.Status.InitContainerStatuses))
+	containerStatuses = append(containerStatuses, pod.Status.ContainerStatuses...)
+	containerStatuses = append(containerStatuses, pod.Status.InitContainerStatuses...)
+
+	for _, containerStatus := range containerStatuses {
 		if containerFilter(containerStatus) && containerStatus.State.Terminated != nil && isContainerErrorTheRootCause(containerStatus.State.Terminated) {
-			// update the job status with the pod error
 			return &v2pb.PodErrors{
 				Name:          pod.Name,
 				ContainerName: containerStatus.Name,
@@ -86,9 +110,36 @@ func GetErrorFromPodStatus(pod *corev1.Pod, containerFilter func(containerStatus
 			}
 		}
 	}
+	// A container that never started has no terminated state. It sits in
+	// Waiting indefinitely and its pod is never deleted, so unless the waiting
+	// reason is picked up here the failure never reaches the CR at all.
+	for _, containerStatus := range containerStatuses {
+		if containerFilter(containerStatus) && containerStatus.State.Waiting != nil &&
+			waitingStateErrorReasons[containerStatus.State.Waiting.Reason] {
+			return &v2pb.PodErrors{
+				Name:          pod.Name,
+				ContainerName: containerStatus.Name,
+				Reason:        containerStatus.State.Waiting.Reason,
+				Message:       containerStatus.State.Waiting.Message,
+			}
+		}
+	}
+	return nil
+}
 
-	// next retrieve any error from the pod conditions
-	return extractErrorFromPodConditions(pod)
+// waitingStateErrorReasons are container Waiting reasons that mean the
+// container failed to start, as opposed to the ordinary startup reasons
+// (ContainerCreating, PodInitializing) a healthy pod passes through. Each is
+// also listed in terminalPodErrorReasons, which is what lets a cluster whose
+// image cannot be pulled converge on FAILED instead of sitting in UNKNOWN.
+var waitingStateErrorReasons = map[string]bool{
+	"ImagePullBackOff":           true,
+	"ErrImagePull":               true,
+	"InvalidImageName":           true,
+	"CrashLoopBackOff":           true,
+	"CreateContainerConfigError": true,
+	"CreateContainerError":       true,
+	"RunContainerError":          true,
 }
 
 var _podErrorConditionTypes = map[string]corev1.ConditionStatus{
@@ -113,6 +164,43 @@ func extractErrorFromPodConditions(pod *corev1.Pod) *v2pb.PodErrors {
 				Reason:  cond.Reason,
 				Message: cond.Message,
 			}
+		}
+	}
+	return nil
+}
+
+// schedulingErrorReasons are the PodScheduled=False reasons that describe a
+// pod the scheduler has given up on, as opposed to one it has not got to yet.
+// SchedulingGated is deliberately absent: a gated pod is waiting on Kueue
+// admission, which is the queueing working as intended.
+var schedulingErrorReasons = map[string]bool{
+	corev1.PodReasonUnschedulable:  true,
+	corev1.PodReasonSchedulerError: true,
+}
+
+// GetSchedulingErrorFromPodStatus surfaces a pod the scheduler could not place.
+//
+// Such a pod never starts a container, so it has no container statuses at all
+// and the container-level extraction finds nothing to report. The actionable
+// detail -- "0/1 nodes are available: 1 Insufficient cpu" -- exists only on the
+// PodScheduled condition, so without this the CR shows a cluster stuck in
+// UNKNOWN with no explanation.
+//
+// Only PodScheduled is consulted, never the pod conditions at large: a pod that
+// is merely starting up reports ContainersReady=False, which is progress rather
+// than failure and must not be recorded as an error while the pod is alive.
+func GetSchedulingErrorFromPodStatus(pod *corev1.Pod) *v2pb.PodErrors {
+	for _, cond := range pod.Status.Conditions {
+		if cond.Type != corev1.PodScheduled || cond.Status != corev1.ConditionFalse {
+			continue
+		}
+		if !schedulingErrorReasons[cond.Reason] {
+			continue
+		}
+		return &v2pb.PodErrors{
+			Name:    pod.Name,
+			Reason:  cond.Reason,
+			Message: cond.Message,
 		}
 	}
 	return nil
@@ -213,6 +301,20 @@ var terminalPodErrorReasons = map[string]bool{
 	"CreateContainerError":       true,
 	"ErrImagePull":               true,
 	"RunContainerError":          true,
+}
+
+// postMortemPodErrorReasons are reasons the kubelet reports about a pod that
+// has already been torn down. They diagnose nothing on their own -- the kubelet
+// simply no longer has a container to inspect -- so they must never displace an
+// error recorded while the pod was still alive.
+var postMortemPodErrorReasons = map[string]bool{
+	"ContainerStatusUnknown": true,
+}
+
+// IsPostMortemPodError reports whether a pod error only describes the aftermath
+// of a teardown rather than its cause.
+func IsPostMortemPodError(podError *v2pb.PodErrors) bool {
+	return postMortemPodErrorReasons[podError.GetReason()]
 }
 
 func HasTerminalPodErrors(podErrors []*v2pb.PodErrors) bool {

@@ -57,6 +57,7 @@ type Reconciler struct {
 	schedulerQueue    scheduler.JobQueue                  // Queue for enqueuing jobs to scheduler
 	federatedClient   jobsclient.FederatedClient          // Client for creating clusters on remote K8s
 	clusterCache      jobscluster.RegisteredClustersCache // Cache for looking up assigned clusters
+	mapper            matypes.Mapper                      // Maps compute-cluster objects to global status
 	metricsScope      tally.Scope                         // Metrics scope for telemetry
 }
 
@@ -71,6 +72,7 @@ func NewReconciler(
 	schedulerQueue scheduler.JobQueue,
 	federatedClient jobsclient.FederatedClient,
 	clusterCache jobscluster.RegisteredClustersCache,
+	mapper matypes.Mapper,
 	metricsScope tally.Scope,
 ) *Reconciler {
 	return &Reconciler{
@@ -80,6 +82,7 @@ func NewReconciler(
 		schedulerQueue:    schedulerQueue,
 		federatedClient:   federatedClient,
 		clusterCache:      clusterCache,
+		mapper:            mapper,
 		metricsScope:      metricsScope,
 	}
 }
@@ -573,7 +576,14 @@ func (r *Reconciler) finalizeIfTerminal(ctx context.Context, cluster *v2pb.RayCl
 // re-fetch also avoids a resourceVersion conflict with that preceding update, and the
 // whole operation retries on conflict for the same reason.
 func (r *Reconciler) markImmutableIfTerminal(ctx context.Context, cluster *v2pb.RayCluster) error {
-	if err := retry.OnError(retry.DefaultRetry, jobsutils.IsRetriableError, func() error {
+	// A conflict here means a concurrent writer -- the reconcile loop and the
+	// watcher both reach this path -- won the race. The closure re-fetches, so a
+	// retry simply observes their write and no-ops; without this the caller would
+	// surface a spurious error for an outcome that is already correct.
+	isRetriable := func(err error) bool {
+		return apiErrors.IsConflict(err) || jobsutils.IsRetriableError(err)
+	}
+	if err := retry.OnError(retry.DefaultRetry, isRetriable, func() error {
 		latest := &v2pb.RayCluster{}
 		if err := r.Get(ctx, cluster.Namespace, cluster.Name, &metav1.GetOptions{}, latest); err != nil {
 			return err
