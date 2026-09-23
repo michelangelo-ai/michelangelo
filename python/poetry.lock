@@ -7631,34 +7631,6 @@ files = [
 playground = ["rich"]
 
 [[package]]
-name = "peft"
-version = "0.3.0"
-description = "Parameter-Efficient Fine-Tuning (PEFT)"
-optional = true
-python-versions = ">=3.7.0"
-groups = ["main"]
-markers = "extra == \"example\""
-files = [
-    {file = "peft-0.3.0-py3-none-any.whl", hash = "sha256:824c2ba148febb743c70363e597dafb35d996e075956ad7bc36506f09fea0349"},
-    {file = "peft-0.3.0.tar.gz", hash = "sha256:bbdeee4de3653ee43cb6bbe7505816e6e9b4cf8275471be1707d9c253dfe8e0b"},
-]
-
-[package.dependencies]
-accelerate = "*"
-numpy = ">=1.17"
-packaging = ">=20.0"
-psutil = "*"
-pyyaml = "*"
-torch = ">=1.13.0"
-transformers = "*"
-
-[package.extras]
-dev = ["black (>=22.0,<23.0)", "hf-doc-builder", "ruff (>=0.0.241)"]
-docs-specific = ["hf-doc-builder"]
-quality = ["black (>=22.0,<23.0)", "ruff (>=0.0.241)"]
-test = ["black (>=22.0,<23.0)", "datasets", "hf-doc-builder", "parameterized", "pytest", "pytest-xdist", "ruff (>=0.0.241)"]
-
-[[package]]
 name = "pillow"
 version = "11.3.0"
 description = "Python Imaging Library (Fork)"
@@ -14172,7 +14144,7 @@ type = ["pytest-mypy (>=1.0.1) ; platform_python_implementation != \"PyPy\""]
 [extras]
 dev = ["coverage", "docker", "jinja2", "numpy", "pandas", "polars", "pre-commit", "pyarrow", "pytest", "pytest-cov", "pytorch_lightning", "ray", "ray", "ruff", "torch", "torchmetrics", "transformers", "xgboost"]
 evaluator = ["numpy", "pandas", "torch", "torchmetrics"]
-example = ["accelerate", "boto3", "chronon-ai", "datasets", "einops", "kaggle", "minio", "mlflow", "numpy", "pandas", "peft", "pyarrow", "pyspark", "pytorch_lightning", "ray", "ray", "ray", "ray", "s3fs", "scikit-learn", "sqlglot", "thrift", "torch", "transformers"]
+example = ["accelerate", "boto3", "chronon-ai", "datasets", "einops", "kaggle", "minio", "mlflow", "numpy", "pandas", "pyarrow", "pyspark", "pytorch_lightning", "ray", "ray", "ray", "ray", "s3fs", "scikit-learn", "sqlglot", "thrift", "torch", "transformers"]
 mactl = []
 minio = ["minio"]
 plugin = ["pyspark", "ray", "ray"]
@@ -14187,4 +14159,4 @@ vllm = ["accelerate", "datasets", "einops", "numpy", "pandas", "pyarrow", "pytor
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.9.0"
-content-hash = "5d22affcc425483d94b99f5b3265e1089abea80f6bd9da59deb9b9a12a1352be"
+content-hash = "e03e0aa0b89e0a5a345f3dd4d1f7735df06813372da3821af20cc8fcf34c5220"

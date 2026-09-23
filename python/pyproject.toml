@@ -76,7 +76,6 @@ xgboost = {version = "2.1.4", optional = true }
 # For MLflow model packaging
 mlflow = { version = "^2.0.0", optional = true }
 boto3 = { version = "^1.40.0", optional = true }
-peft = { version = "^0.3.0", optional = true }
 
 # For MinIO storage backend
 minio = { version = ">=7.2,<8", optional = true }
@@ -95,7 +94,7 @@ ma = 'michelangelo.cli.cli:main'
 dev = ["pytest", "pytest-cov", "coverage", "ruff", "jinja2", "pre-commit", "docker", "torch", "pandas", "numpy", "transformers", "pyarrow", "pytorch_lightning", "ray", "polars", "xgboost", "torchmetrics"]
 plugin = ["ray", "pyspark"]
 ray-polars = ["ray", "polars"]  # Polars fallback for PyArrow nested-data bug (ray-project/ray#61675)
-example = ["accelerate", "datasets", "numpy", "pandas", "pyarrow", "ray", "s3fs", "torch", "transformers", "pytorch_lightning", "einops", "kaggle", "scikit-learn", "chronon-ai", "thrift", "sqlglot", "pyspark", "ray", "mlflow", "boto3", "peft", "minio"]
+example = ["accelerate", "datasets", "numpy", "pandas", "pyarrow", "ray", "s3fs", "torch", "transformers", "pytorch_lightning", "einops", "kaggle", "scikit-learn", "chronon-ai", "thrift", "sqlglot", "pyspark", "ray", "mlflow", "boto3", "minio"]
 minio = ["minio"]
 vllm = ["accelerate", "datasets", "numpy", "pandas", "pyarrow", "ray", "s3fs", "torch", "transformers", "pytorch_lightning", "einops", "vllm", "setuptools"]
 mactl = []
