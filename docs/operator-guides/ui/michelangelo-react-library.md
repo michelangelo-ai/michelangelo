@@ -220,7 +220,7 @@ import YourCheckIcon from '@your-icon-library/check-circle';
 const customIcons = {
   arrowLaunch: YourLaunchIcon,
   circleCheckFilled: YourCheckIcon,
-  // Map other required icons
+  // ...one entry per key Studio looks up — full list in the Icon Registry guide below
 };
 
 const dependencies = {
