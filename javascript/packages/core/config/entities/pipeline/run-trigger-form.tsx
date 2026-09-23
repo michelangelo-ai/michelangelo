@@ -104,6 +104,7 @@ export const RunTriggerForm = ({ record, onClose }: ActionComponentProps<Pipelin
         }
       />
 
+      {/* TODO: #2155 "Production" is not currently restricted based on the pipeline's source branch. */}
       <RadioField
         name="environment"
         label="Which environment do you want to use?"

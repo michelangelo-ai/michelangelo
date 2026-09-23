@@ -82,6 +82,7 @@ export const CreatePipelineRunForm = ({ record, onClose }: ActionComponentProps<
     >
       <StringField name="spec.pipeline.name" label="Pipeline to run" readOnly />
 
+      {/* TODO: #2155 "Production" is not currently restricted based on the pipeline's source branch. */}
       <InlineRadioField
         name={`metadata.labels.${ENVIRONMENT_LABEL_KEY}`}
         label="Which environment do you want to use?"
