@@ -123,3 +123,9 @@ jobs:
         run: |
           tools/gen-proto-go.sh
           git diff --exit-code || (echo "proto-go is out of date. Please run tools/gen-proto-go.sh before commit." && exit 1)
+
+      - name: Check transcoder-services.json is up to date
+        run: |
+          tools/gen-transcoder-services.sh
+          git diff --exit-code -- helm/michelangelo/files/transcoder-services.json \
+            || (echo "helm/michelangelo/files/transcoder-services.json is out of date. Please run tools/gen-transcoder-services.sh before commit." && exit 1)

@@ -1,0 +1,35 @@
+name: Transcoder services check
+
+# Narrow: catches a javascript/packages/rpc/services.ts change with no
+# matching transcoder-services.json regen. Proto-side staleness is caught
+# unconditionally by main.yml's dirty-check job instead, which doesn't run
+# on javascript/**-only changes — that's the gap this job covers.
+on:
+  pull_request:
+    paths:
+      - 'javascript/packages/rpc/services.ts'
+      - 'helm/michelangelo/files/**'
+      - 'tools/gen-transcoder-services.sh'
+      - 'tools/check-transcoder-services.sh'
+  push:
+    branches:
+      - main
+    paths:
+      - 'javascript/packages/rpc/services.ts'
+      - 'helm/michelangelo/files/**'
+      - 'tools/gen-transcoder-services.sh'
+      - 'tools/check-transcoder-services.sh'
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Verify transcoder-services.json matches services.ts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Check transcoder-services.json is up to date
+        run: tools/check-transcoder-services.sh
