@@ -27,6 +27,8 @@ After editing any `.proto` file, regenerate the Go bindings:
 4. Run `tools/gen-proto-go.sh` to regenerate alias `BUILD.bazel` files under `proto-go/`, sync dependency versions from `go/go.mod` into `proto-go/go.mod`, set `proto-go/go.mod`'s `go` toolchain directive from `MODULE.bazel`'s `go_sdk.download(version = ...)` pin (failing loudly if that pin can't be found), and run `go mod tidy` in `proto-go/`
 5. Check in both the `.proto` changes and the generated `proto-go/` changes
 
+If the change adds, removes, or renames a service the JS client should use, also update `javascript/packages/rpc/services.ts` and run `tools/gen-transcoder-services.sh` to regenerate `helm/michelangelo/files/transcoder-services.json` — see [gen-transcoder-services.sh](shell-scripts.md#gen-transcoder-servicessh) for why this allowlist stays narrower than every service under `proto/api`.
+
 ## Service Pattern
 
 Each ML entity (Pipeline, InferenceServer, Model, etc.) has a corresponding `*_svc.proto` file that defines a gRPC service with standard CRUD methods. For example, `pipeline_svc.proto` defines `PipelineService` with `CreatePipeline`, `GetPipeline`, `ListPipelines`, `UpdatePipeline`, and `DeletePipeline` RPCs.

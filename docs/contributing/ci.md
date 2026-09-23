@@ -13,8 +13,9 @@ CI is path-filtered: jobs only run when their relevant files change. Opening a P
 | Job | Trigger | What it does |
 |-----|---------|-------------|
 | **Bazel Test** (`main.yml`) | Changes to `go/`, `proto/` | Builds and tests all Go packages and proto targets: `bazel test //go/... //proto/... --build_tests_only` |
-| **Dirty Check** (`main.yml`) | Changes to `go/`, `proto/` | Runs Gazelle, `go mod tidy`, `goimports`, and `gen-proto-go.sh` — fails if any of these produce a diff |
+| **Dirty Check** (`main.yml`) | Changes to `go/`, `proto/` | Runs Gazelle, `go mod tidy`, `goimports`, `gen-proto-go.sh`, and `gen-transcoder-services.sh` — fails if any of these produce a diff |
 | **Go Lint** (`go-lint.yml`) | Changes to `go/**/*.go` | Runs `golangci-lint`; also checks that all `TODO` comments reference a GitHub issue (`TODO(#123): description`) |
+| **Transcoder Services Check** (`transcoder-services-check.yaml`) | Changes to `javascript/packages/rpc/services.ts`, `helm/michelangelo/files/**`, `tools/gen-transcoder-services.sh`, `tools/check-transcoder-services.sh` | Runs `tools/check-transcoder-services.sh` to verify `helm/michelangelo/files/transcoder-services.json` matches `services.ts` |
 
 ### Python Components
 
@@ -88,14 +89,16 @@ The job prints exactly what changed. Common causes:
 | `go.mod or go.sum files are not up to date` | Run `cd go && ../tools/go mod tidy` from repo root |
 | `Go files are not formatted` | Run `tools/goimports -w go` |
 | `proto-go is out of date` | Run `tools/gen-proto-go.sh` |
+| `helm/michelangelo/files/transcoder-services.json is out of date` | Run `tools/gen-transcoder-services.sh` |
 
-All four checks must pass before pushing. Run them together:
+All five checks must pass before pushing. Run them together:
 
 ```bash
 tools/gazelle
 cd go && ../tools/go mod tidy && cd ..
 tools/goimports -w go
 tools/gen-proto-go.sh
+tools/gen-transcoder-services.sh
 ```
 
 ### Go Lint failure
