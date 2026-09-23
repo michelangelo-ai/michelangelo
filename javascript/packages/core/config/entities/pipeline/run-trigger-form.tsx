@@ -1,9 +1,11 @@
 import { FormDialog } from '#core/components/form/components/form-dialog/form-dialog';
+import { RadioField } from '#core/components/form/fields/radio/radio-field';
 import { SelectField } from '#core/components/form/fields/select/select-field';
 import { StringField } from '#core/components/form/fields/string/string-field';
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
 import { useStudioMutation } from '#core/hooks/use-studio-mutation/use-studio-mutation';
 import { useStudioQuery } from '#core/hooks/use-studio-query';
+import { ENVIRONMENT_LABEL_KEY } from '#core/utils/environment-utils';
 import { generateSuffix } from '#core/utils/name-utils';
 import { formatTriggerSchedule } from './format-trigger-schedule';
 import { RunTriggerFields } from './run-trigger-fields';
@@ -67,6 +69,7 @@ export const RunTriggerForm = ({ record, onClose }: ActionComponentProps<Pipelin
       metadata: {
         name: buildTriggerRunName(sourceTrigger, values.isBackfill),
         namespace: projectId,
+        labels: { [ENVIRONMENT_LABEL_KEY]: values.environment ?? 'development' },
       },
       spec: {
         pipeline: { name: pipelineName, namespace: projectId },
@@ -99,6 +102,17 @@ export const RunTriggerForm = ({ record, onClose }: ActionComponentProps<Pipelin
             ? 'This pipeline declares no triggers. Add one to its manifest to run it.'
             : 'The pipeline runs on the schedule this trigger defines.'
         }
+      />
+
+      <RadioField
+        name="environment"
+        label="Which environment do you want to use?"
+        required
+        initialValue="development"
+        options={[
+          { value: 'development', label: 'Development' },
+          { value: 'production', label: 'Production' },
+        ]}
       />
 
       <RunTriggerFields triggerMap={triggerMap} />

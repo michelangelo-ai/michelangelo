@@ -67,6 +67,8 @@ export type PipelineRunFormValues = PipelineRun & {
  */
 export type RunTriggerFormValues = {
   sourceTriggerName: string;
+  /** `'development' | 'production'`, written to `metadata.labels[ENVIRONMENT_LABEL_KEY]` on submit. */
+  environment?: string;
   autoFlip?: boolean;
   isBackfill?: boolean;
   startTimestamp?: string;

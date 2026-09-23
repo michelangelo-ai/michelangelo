@@ -76,6 +76,87 @@ describe('RunTriggerForm', () => {
     expect(screen.getByRole('option', { name: 'nightly — cron 0 2 * * *' })).toBeInTheDocument();
   });
 
+  it('defaults the Environment field to Development', async () => {
+    const user = userEvent.setup();
+    render(
+      <FormWrapper />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getIconProviderWrapper(),
+        getErrorProviderWrapper(),
+        getInterpolationProviderWrapper(),
+        getRouterWrapper({ location: '/ma-dev-test/train/pipelines' }),
+        getServiceProviderWrapper({
+          request: createQueryMockRouter({
+            GetPipeline: buildPipelineResponse({
+              nightly: {
+                triggerType: { case: 'cronSchedule' as const, value: { cron: '0 2 * * *' } },
+              },
+            }),
+          }),
+        }),
+      ])
+    );
+
+    await user.click(await screen.findByRole('combobox', { name: 'Trigger *' }));
+    await user.click(await screen.findByRole('option', { name: 'nightly — cron 0 2 * * *' }));
+
+    expect(screen.getByRole('radio', { name: 'Development' })).toBeChecked();
+    expect(screen.getByRole('radio', { name: 'Production' })).not.toBeChecked();
+  });
+
+  it('submits the selected environment as a metadata label', async () => {
+    const user = userEvent.setup();
+    const cronTrigger = {
+      triggerType: { case: 'cronSchedule' as const, value: { cron: '0 2 * * *' } },
+    };
+    const request = createQueryMockRouter({
+      GetPipeline: buildPipelineResponse({ nightly: cronTrigger }),
+      CreateTriggerRun: {
+        triggerRun: { metadata: { name: 'cron-nightly-20240101-120000-abcd1234' } },
+      },
+    });
+
+    render(
+      <FormWrapper />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getIconProviderWrapper(),
+        getErrorProviderWrapper(),
+        getInterpolationProviderWrapper(),
+        getRouterWrapper({ location: '/ma-dev-test/train/pipelines' }),
+        getServiceProviderWrapper({ request }),
+      ])
+    );
+
+    await user.click(await screen.findByRole('combobox', { name: 'Trigger *' }));
+    await user.click(await screen.findByRole('option', { name: 'nightly — cron 0 2 * * *' }));
+    await user.click(screen.getByRole('radio', { name: 'Production' }));
+
+    const dialog = screen.getByRole('dialog', { name: 'Run trigger' });
+    await user.click(within(dialog).getByRole('button', { name: 'Run' }));
+
+    await waitFor(() => {
+      expect(request).toHaveBeenCalledWith(
+        'CreateTriggerRun',
+        {
+          metadata: {
+            name: expect.stringMatching(/^cron-\d{8}-\d{6}-.+$/) as string,
+            namespace: 'ma-dev-test',
+            labels: { 'michelangelo/environment': 'production' },
+          },
+          spec: {
+            pipeline: { name: 'test-pipeline', namespace: 'ma-dev-test' },
+            trigger: cronTrigger,
+            sourceTriggerName: 'nightly',
+            autoFlip: false,
+          },
+        },
+        {}
+      );
+    });
+  });
+
   /**
    * The schedule has to travel on `spec.trigger`. The reconciler reads it directly to pick a
    * runner (`GetTriggerType` in go/components/triggerrun/util.go) and nothing on the backend
@@ -119,6 +200,7 @@ describe('RunTriggerForm', () => {
           metadata: {
             name: expect.stringMatching(/^cron-\d{8}-\d{6}-.+$/) as string,
             namespace: 'ma-dev-test',
+            labels: { 'michelangelo/environment': 'development' },
           },
           spec: {
             pipeline: { name: 'test-pipeline', namespace: 'ma-dev-test' },
@@ -213,6 +295,7 @@ describe('RunTriggerForm', () => {
           metadata: {
             name: expect.stringMatching(/^cron-\d{8}-\d{6}-.+$/) as string,
             namespace: 'ma-dev-test',
+            labels: { 'michelangelo/environment': 'development' },
           },
           spec: {
             pipeline: { name: 'test-pipeline', namespace: 'ma-dev-test' },
@@ -304,6 +387,7 @@ describe('RunTriggerForm', () => {
           metadata: {
             name: expect.stringMatching(/^backfill-\d{8}-\d{6}-.+$/) as string,
             namespace: 'ma-dev-test',
+            labels: { 'michelangelo/environment': 'development' },
           },
           spec: {
             pipeline: { name: 'test-pipeline', namespace: 'ma-dev-test' },

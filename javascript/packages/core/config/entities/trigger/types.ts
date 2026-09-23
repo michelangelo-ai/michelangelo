@@ -60,6 +60,7 @@ export type RunTriggerPayload = {
   metadata: {
     name: string;
     namespace: string;
+    labels?: Record<string, string>;
   };
   spec: {
     pipeline: { name: string; namespace: string };
