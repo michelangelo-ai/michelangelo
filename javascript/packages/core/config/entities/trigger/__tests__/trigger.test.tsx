@@ -4,6 +4,8 @@ import userEvent from '@testing-library/user-event';
 import { InterpolatableActionsPopover } from '#core/components/actions/interpolatable-actions-popover';
 import { TRIGGER_ENTITY_CONFIG } from '#core/config/entities/trigger/trigger';
 import { TriggerRunAction, TriggerRunState } from '#core/config/entities/trigger/types';
+import { TRAIN_PHASE } from '#core/config/phases/train';
+import { PhaseListRoute } from '#core/router/phase-list-route';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getBaseProviderWrapper } from '#core/test/wrappers/get-base-provider-wrapper';
 import { getErrorProviderWrapper } from '#core/test/wrappers/get-error-provider-wrapper';
@@ -15,6 +17,7 @@ import {
   getServiceProviderWrapper,
 } from '#core/test/wrappers/get-service-provider-wrapper';
 import { getSnackbarProviderWrapper } from '#core/test/wrappers/get-snackbar-provider-wrapper';
+import { getUserProviderWrapper } from '#core/test/wrappers/get-user-provider-wrapper';
 
 import type { ActionConfigSchema, Data } from '#core/components/actions/types';
 import type { TriggerRun } from '#core/config/entities/trigger/types';
@@ -133,5 +136,107 @@ describe('TRIGGER_ENTITY_CONFIG: kill action', () => {
 
     await within(dialog).findByText(/Test error/);
     expect(screen.getByRole('dialog', { name: 'Kill Trigger Run' })).toBeInTheDocument();
+  });
+});
+
+describe('Trigger list page', () => {
+  it('renders the column headers in order', async () => {
+    render(
+      <PhaseListRoute phases={{ train: TRAIN_PHASE }} />,
+      buildWrapper([
+        getErrorProviderWrapper(),
+        getRouterWrapper({ location: '/myproject/train/triggers' }),
+        getUserProviderWrapper(),
+        getServiceProviderWrapper({
+          request: vi.fn().mockResolvedValue({ triggerRunList: { items: [] } }),
+        }),
+      ])
+    );
+
+    const headers = await screen.findAllByRole('columnheader');
+    const headerLabels = headers.map((header) => header.textContent).filter(Boolean);
+    expect(headerLabels).toEqual([
+      'Name',
+      'Pipeline',
+      'Creation time',
+      'Cron',
+      'Interval seconds',
+      'Owner',
+      'State',
+      'Environment',
+      'Auto switch to latest main',
+    ]);
+  });
+
+  it('renders Cron/Interval, Environment, and Auto-switch values, with fallbacks', async () => {
+    render(
+      <PhaseListRoute phases={{ train: TRAIN_PHASE }} />,
+      buildWrapper([
+        getErrorProviderWrapper(),
+        getRouterWrapper({ location: '/myproject/train/triggers' }),
+        getUserProviderWrapper(),
+        getServiceProviderWrapper({
+          request: vi.fn().mockResolvedValue({
+            triggerRunList: {
+              items: [
+                {
+                  metadata: {
+                    name: 'cron-trigger',
+                    creationTimestamp: { seconds: 1660000000 },
+                    labels: { 'michelangelo/environment': 'production' },
+                  },
+                  spec: {
+                    pipeline: { name: 'my-pipeline' },
+                    revision: { name: 'rev-1' },
+                    trigger: {
+                      triggerType: { case: 'cronSchedule', value: { cron: '0 2 * * *' } },
+                    },
+                    actor: { name: 'jsmith' },
+                    autoFlip: true,
+                  },
+                  status: { state: 1 },
+                },
+                {
+                  metadata: {
+                    name: 'interval-trigger',
+                    creationTimestamp: { seconds: 1650000000 },
+                  },
+                  spec: {
+                    pipeline: { name: 'my-pipeline' },
+                    revision: { name: 'rev-2' },
+                    trigger: {
+                      triggerType: {
+                        case: 'intervalSchedule',
+                        value: { interval: { seconds: 3600 } },
+                      },
+                    },
+                    actor: { name: 'jsmith' },
+                    autoFlip: false,
+                  },
+                  status: { state: 1 },
+                },
+              ],
+            },
+          }),
+        }),
+      ])
+    );
+
+    // Cron row: Cron cell shows the raw cron string, Interval seconds cell is blank (em dash).
+    expect(await screen.findByText('0 2 * * *')).toBeInTheDocument();
+    // Interval row: Interval seconds cell shows the numeric seconds value, Cron cell is blank.
+    expect(await screen.findByText('3600')).toBeInTheDocument();
+    // Both schedule-absent cells render the standard TextCell em-dash placeholder, one per row.
+    expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(2);
+
+    // Environment: present on the cron row, absent (blank) on the interval row.
+    expect(screen.getByText('Production')).toBeInTheDocument();
+
+    // Auto switch to latest main: true renders the label text via BooleanCell; false renders
+    // nothing at all (no text node). Scope to each data row (index 0 is the header row) so the
+    // assertion isn't satisfied by the column header repeating the same label text.
+    const rows = await screen.findAllByRole('row');
+    expect(within(rows[1]).getByText('Auto switch to latest main')).toBeInTheDocument();
+    expect(within(rows[2]).queryByText('Auto switch to latest main')).not.toBeInTheDocument();
   });
 });

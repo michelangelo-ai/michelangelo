@@ -19,8 +19,8 @@ const RUN_CELLS_EXCLUDING_TRIGGER = SHARED_RUN_CELL_CONFIG.filter(
 export const TRIGGER_DETAIL_CONFIG: DetailViewConfig = {
   type: 'detail',
   metadata: [
-    { id: 'metadata.creationTimestamp.seconds', label: 'Created', type: CellType.DATE },
-    { id: 'spec.actor.name', label: 'Started by', type: CellType.TEXT },
+    { id: 'metadata.creationTimestamp.seconds', label: 'Creation time', type: CellType.DATE },
+    { id: 'spec.actor.name', label: 'Owner', type: CellType.TEXT },
     TRIGGER_PIPELINE_CELL_CONFIG,
     TRIGGER_STATE_CELL_CONFIG,
   ],
