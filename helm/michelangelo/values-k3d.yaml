@@ -29,7 +29,11 @@ workflow:
   # Cadence gRPC frontend. Source: michelangelo-worker.yaml:42 and
   # michelangelo-controllermgr.yaml:101 both use port 7833. Port 7933 is the
   # TChannel endpoint used by the Cadence CLI, not by the worker.
-  endpoint: cadence:7833
+  #
+  # Must name the Service the Cadence subchart actually renders
+  # ({{ .Release.Name }}-cadence-frontend); `ma sandbox` passes the same value
+  # via --set, so this default only applies to a direct `helm install`.
+  endpoint: michelangelo-cadence-frontend:7833
   domain: default
 
 images:
