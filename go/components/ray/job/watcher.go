@@ -98,6 +98,14 @@ func (r *Reconciler) rayJobEventHandler(obj interface{}) {
 
 	var rayJob v2pb.RayJob
 	if err = r.Get(ctx, types.NamespacedName{Namespace: projectName, Name: local.Name}, &rayJob); err != nil {
+		if utils.IsNotFoundError(err) {
+			// The global RayJob is gone: the ingester moved a terminal job to metadata
+			// storage, or it was deleted outright. The KubeRay object outlives it until
+			// TTL cleanup, so its trailing events are expected and there is nothing to
+			// update.
+			log.V(1).Info("global ray job no longer exists, ignoring event")
+			return
+		}
 		log.Error(err, "could not fetch the global ray job")
 		return
 	}
@@ -182,7 +190,25 @@ func (r *Reconciler) rayJobDeleteEventHandler(obj interface{}) {
 
 	var rayJob v2pb.RayJob
 	if err = r.Get(ctx, types.NamespacedName{Namespace: projectName, Name: local.Name}, &rayJob); err != nil {
+		if utils.IsNotFoundError(err) {
+			// The global RayJob is gone: the ingester moved a terminal job to metadata
+			// storage, or it was deleted outright. The KubeRay object outlives it until
+			// TTL cleanup, so its trailing events are expected and there is nothing to
+			// update.
+			log.V(1).Info("global ray job no longer exists, ignoring event")
+			return
+		}
 		log.Error(err, "could not fetch the global ray job")
+		return
+	}
+
+	// A job that already reached a terminal state has its outcome recorded. KubeRay
+	// removing the object afterwards -- TTL cleanup, cluster teardown, an operator
+	// sweep -- is garbage collection, not a kill, so the terminal record stands.
+	// Terminal status and immutability are written by separate passes, so both are
+	// checked to close the window between them.
+	if utils.IsImmutable(&rayJob) || isTerminalRayJobState(rayJob.Status.State) {
+		log.Info("skipping delete event for ray job that already reached a terminal state", "state", rayJob.Status.State)
 		return
 	}
 
@@ -207,9 +233,18 @@ func (r *Reconciler) rayJobDeleteEventHandler(obj interface{}) {
 				Status:     apipb.CONDITION_STATUS_TRUE,
 				Generation: current.Generation,
 			})
+			// The backing object is confirmed gone, so the job is terminal. Recording
+			// the state alongside the conditions is what lets markImmutableIfTerminal
+			// freeze the job: without it the CR keeps a non-terminal state forever,
+			// is never archived by the ingester, and re-reconciles on every requeue.
+			current.Status.State = v2pb.RAY_JOB_STATE_KILLED
 			return r.Status().Update(ctx, &current)
 		}); err != nil {
 			log.Error(err, "failed to update status on external delete")
+			return
+		}
+		if err = r.markImmutableIfTerminal(ctx, &rayJob); err != nil {
+			log.Error(err, "failed to mark ray job immutable after external delete")
 			return
 		}
 		log.Info("job externally deleted, marked as killed")
@@ -232,9 +267,14 @@ func (r *Reconciler) rayJobDeleteEventHandler(obj interface{}) {
 			Status:     apipb.CONDITION_STATUS_TRUE,
 			Generation: current.Generation,
 		})
+		current.Status.State = v2pb.RAY_JOB_STATE_KILLED
 		return r.Status().Update(ctx, &current)
 	}); err != nil {
 		log.Error(err, "failed to update status on expected delete")
+		return
+	}
+	if err = r.markImmutableIfTerminal(ctx, &rayJob); err != nil {
+		log.Error(err, "failed to mark ray job immutable after kill")
 		return
 	}
 	log.Info("job killed successfully")
