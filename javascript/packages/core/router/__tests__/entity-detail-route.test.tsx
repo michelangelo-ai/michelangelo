@@ -310,7 +310,14 @@ describe('EntityDetailRoute', () => {
         train: buildPhase({ id: 'train', entities: [revisionedEntity] }),
       };
       const mockRequest = createQueryMockRouter({
-        GetPipeline: livePipeline,
+        // status.latestRevision must be set here — unlike the "no revision" test below,
+        // this one exercises the dropdown against an entity that already has a revision.
+        GetPipeline: {
+          pipeline: {
+            ...livePipeline.pipeline,
+            status: { latestRevision: { name: 'pipeline-my-pipeline-aaaaaaaaaaaa' } },
+          },
+        },
         GetRevision: revision,
         ListRevision: revisionList,
       });
@@ -336,7 +343,12 @@ describe('EntityDetailRoute', () => {
       expect(screen.getByRole('button', { name: /Select revision/ })).toHaveTextContent(
         'Revision 3f2a1b9c0d4e'
       );
-      expect(mockRequest.getCall('GetRevision')?.args).toEqual({
+      // getCall returns the first match; the mount also fires a GetRevision for
+      // status.latestRevision, so the picked revision's call is the last one instead.
+      const getRevisionCalls = vi
+        .mocked(mockRequest)
+        .mock.calls.filter(([name]) => name === 'GetRevision');
+      expect(getRevisionCalls.at(-1)?.[1]).toEqual({
         namespace: 'myproject',
         name: 'pipeline-my-pipeline-3f2a1b9c0d4e',
       });

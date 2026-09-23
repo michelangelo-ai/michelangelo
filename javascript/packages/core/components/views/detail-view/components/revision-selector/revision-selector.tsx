@@ -6,7 +6,7 @@ import { DateTime } from '#core/components/date-time/date-time';
 import { Icon } from '#core/components/icon/icon';
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
 import { useStudioQuery } from '#core/hooks/use-studio-query';
-import { formatRevisionId } from '#core/utils/revision-utils';
+import { formatRevisionLabel } from '#core/utils/revision-utils';
 import { capitalizeFirstLetter } from '#core/utils/string-utils';
 import {
   RevisionColumns,
@@ -37,6 +37,11 @@ export function RevisionSelector({
     queryName: 'ListRevision',
     serviceOptions: {
       namespace: projectId,
+      // `listOptions.fieldSelector` rather than a `listOptionsExt` criterion: unlike criteria,
+      // which are silently ignored unless metadata storage is enabled (see
+      // resume-run-fields.tsx's buildPipelineRunFilter), fieldSelector is always honored. This
+      // filter is the only thing narrowing the list to this entity's revisions — there's no
+      // client-side fallback — so it can't be allowed to silently no-op.
       listOptions: {
         fieldSelector: `base_type=${capitalizeFirstLetter(service)},base_resource_name=${entityId}`,
       },
@@ -44,7 +49,6 @@ export function RevisionSelector({
         orderBy: [{ field: 'metadata.update_timestamp', dir: SORT_ORDER_DESC }],
       },
     },
-    clientOptions: { enabled: !!entityId },
   });
 
   const revisions = data?.revisionList?.items ?? [];
@@ -106,7 +110,7 @@ export function RevisionSelector({
 function renderRevisionCells(revision: RevisionOption) {
   return (
     <>
-      <span>{formatRevisionId(revision.spec.revisionId)}</span>
+      <span>{formatRevisionLabel(revision.spec.revisionId)}</span>
       <span>{revision.spec.gitCommit?.branch ?? '—'}</span>
       <span>
         <DateTime timestamp={revision.metadata.creationTimestamp?.seconds} />
