@@ -20,6 +20,9 @@ import type { RevisionOption, RevisionSelectorProps } from './types';
 /** `SORT_ORDER_DESC` from `proto/api/list.proto` — protobuf-es encodes enums by number. */
 const SORT_ORDER_DESC = 2;
 
+/** `CRITERION_OPERATOR_EQUAL` from `proto/api/list.proto`. */
+const CRITERION_OPERATOR_EQUAL = 1;
+
 /**
  * Header dropdown listing the Revision snapshots of a revisioned entity.
  *
@@ -37,15 +40,21 @@ export function RevisionSelector({
     queryName: 'ListRevision',
     serviceOptions: {
       namespace: projectId,
-      // `listOptions.fieldSelector` rather than a `listOptionsExt` criterion: unlike criteria,
-      // which are silently ignored unless metadata storage is enabled (see
-      // resume-run-fields.tsx's buildPipelineRunFilter), fieldSelector is always honored. This
-      // filter is the only thing narrowing the list to this entity's revisions — there's no
-      // client-side fallback — so it can't be allowed to silently no-op.
-      listOptions: {
-        fieldSelector: `base_type=${capitalizeFirstLetter(service)},base_resource_name=${entityId}`,
-      },
       listOptionsExt: {
+        operation: {
+          criterion: [
+            {
+              fieldName: 'revision.base_type',
+              operator: CRITERION_OPERATOR_EQUAL,
+              matchValue: capitalizeFirstLetter(service),
+            },
+            {
+              fieldName: 'revision.base_resource_name',
+              operator: CRITERION_OPERATOR_EQUAL,
+              matchValue: entityId,
+            },
+          ],
+        },
         orderBy: [{ field: 'metadata.update_timestamp', dir: SORT_ORDER_DESC }],
       },
     },

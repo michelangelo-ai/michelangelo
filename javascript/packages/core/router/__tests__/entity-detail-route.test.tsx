@@ -354,7 +354,14 @@ describe('EntityDetailRoute', () => {
       });
       expect(mockRequest.getCall('ListRevision')?.args).toMatchObject({
         namespace: 'myproject',
-        listOptions: { fieldSelector: 'base_type=Pipeline,base_resource_name=My-Pipeline' },
+        listOptionsExt: {
+          operation: {
+            criterion: [
+              { fieldName: 'revision.base_type', operator: 1, matchValue: 'Pipeline' },
+              { fieldName: 'revision.base_resource_name', operator: 1, matchValue: 'My-Pipeline' },
+            ],
+          },
+        },
       });
     });
 
