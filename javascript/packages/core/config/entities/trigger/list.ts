@@ -3,6 +3,7 @@ import { readEnvironmentLabel } from '#core/utils/environment-utils';
 import { TRIGGER_PIPELINE_CELL_CONFIG, TRIGGER_STATE_CELL_CONFIG } from './shared';
 
 import type { ListViewConfig } from '#core/components/views/types';
+import type { ManifestTrigger } from './types';
 
 export const TRIGGER_LIST_CONFIG: ListViewConfig<object> = {
   type: 'list',
@@ -31,21 +32,10 @@ export const TRIGGER_LIST_CONFIG: ListViewConfig<object> = {
           // text-cell stringifier can't serialize. Read the value only for an
           // interval-scheduled trigger and coerce it to a number so it renders the
           // same way any other numeric text cell does.
-          const triggerType =
-            // cast: accessor receives unknown data; narrowing to expected proto shape for
-            // property access
-            (
-              data as {
-                spec?: {
-                  trigger?: {
-                    triggerType?: {
-                      case?: string;
-                      value?: { interval?: { seconds?: bigint | number | string } };
-                    };
-                  };
-                };
-              }
-            )?.spec?.trigger?.triggerType;
+          // cast: accessor receives unknown data; narrowing to expected proto shape for
+          // property access
+          const triggerType = (data as { spec?: { trigger?: ManifestTrigger } })?.spec?.trigger
+            ?.triggerType;
           if (triggerType?.case !== 'intervalSchedule') return undefined;
           const seconds = triggerType.value?.interval?.seconds;
           return seconds === undefined ? undefined : Number(seconds);
