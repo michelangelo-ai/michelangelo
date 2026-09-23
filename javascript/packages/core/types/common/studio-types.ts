@@ -2,6 +2,9 @@ import type { ActionConfigSchema, CreateActionConfig } from '#core/components/ac
 import type { ViewConfig } from '#core/components/views/types';
 import type { QueryConfig } from '#core/types/query-types';
 
+/** Reference to a Revision CR. */
+export type RevisionRef = { name: string; namespace: string };
+
 /**
  * Represents the different phases in the Michelangelo Studio workflow.
  * Each phase corresponds to a specific stage in the machine learning lifecycle.

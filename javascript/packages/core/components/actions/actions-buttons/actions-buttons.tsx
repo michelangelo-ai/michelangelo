@@ -9,13 +9,11 @@ import { ActionsPopover } from '#core/components/actions/actions-popover';
 import { ActionButton } from './action-button';
 import { partitionActions } from './utils';
 
-import type { ActionConfig, Data, RevisionRef } from '#core/components/actions/types';
+import type { ActionConfig, Data } from '#core/components/actions/types';
 
 type ActionsButtonsProps<T extends Data = Data> = {
   actions: ActionConfig<T>[];
   record: T;
-  /** Forwarded to custom action components; see {@link ActionComponentProps.revision}. */
-  revision?: RevisionRef;
   loading?: boolean;
 };
 
@@ -28,7 +26,6 @@ type ActionsButtonsProps<T extends Data = Data> = {
 export function ActionsButtons<T extends Data>({
   actions,
   record,
-  revision,
   loading,
 }: ActionsButtonsProps<T>) {
   const [css, theme] = useStyletron();
@@ -73,7 +70,6 @@ export function ActionsButtons<T extends Data>({
           <ActionsPopover
             actions={tertiary}
             record={record}
-            revision={revision}
             popoverProps={{ placement: PLACEMENT.bottomRight }}
           />
         )}
@@ -82,7 +78,6 @@ export function ActionsButtons<T extends Data>({
         <ActionDispatcher
           action={activeAction}
           record={record}
-          revision={revision}
           onClose={() => setActiveAction(null)}
         />
       )}

@@ -93,23 +93,28 @@ describe('CreatePipelineRunForm', () => {
     });
   });
 
-  it('shows the given revision and pins the run to it', async () => {
+  it('uses the revision specified in the revisionId query param', async () => {
     const user = userEvent.setup();
     const mockRequest = createQueryMockRouter({ CreatePipelineRun: {} });
     const record = {
       metadata: { name: 'test-pipeline', namespace: 'ma-dev-test' },
       spec: { owner: { name: 'test-owner' } },
+      status: {
+        latestRevision: { name: 'pipeline-test-pipeline-000000000000', namespace: 'ma-dev-test' },
+      },
     };
-    const revision = { name: 'pipeline-test-pipeline-3f2a1b9c0d4e', namespace: 'ma-dev-test' };
 
     render(
-      <CreatePipelineRunForm record={record} revision={revision} onClose={vi.fn()} />,
+      <CreatePipelineRunForm record={record} onClose={vi.fn()} />,
       buildWrapper([
         getBaseProviderWrapper(),
         getIconProviderWrapper(),
         getErrorProviderWrapper(),
         getInterpolationProviderWrapper(),
-        getRouterWrapper({ location: '/ma-dev-test/train/pipelines' }),
+        getRouterWrapper({
+          location:
+            '/ma-dev-test/train/pipelines/test-pipeline/runs?revisionId=3f2a1b9c0d4e5f6a7b8c',
+        }),
         getServiceProviderWrapper({ request: mockRequest }),
       ])
     );
@@ -127,7 +132,53 @@ describe('CreatePipelineRunForm', () => {
         expect.objectContaining({
           spec: expect.objectContaining({
             pipeline: { name: 'test-pipeline', namespace: 'ma-dev-test' },
-            revision,
+            revision: { name: 'pipeline-test-pipeline-3f2a1b9c0d4e', namespace: 'ma-dev-test' },
+          }) as Record<string, unknown>,
+        }),
+        {}
+      );
+    });
+  });
+
+  it('uses the latest revision when the URL names none', async () => {
+    const user = userEvent.setup();
+    const mockRequest = createQueryMockRouter({ CreatePipelineRun: {} });
+    const latestRevision = {
+      name: 'pipeline-test-pipeline-9a8b7c6d5e4f',
+      namespace: 'ma-dev-test',
+    };
+    const record = {
+      metadata: { name: 'test-pipeline', namespace: 'ma-dev-test' },
+      spec: { owner: { name: 'test-owner' } },
+      status: { latestRevision },
+    };
+
+    render(
+      <CreatePipelineRunForm record={record} onClose={vi.fn()} />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getIconProviderWrapper(),
+        getErrorProviderWrapper(),
+        getInterpolationProviderWrapper(),
+        getRouterWrapper({ location: '/ma-dev-test/train/pipelines' }),
+        getServiceProviderWrapper({ request: mockRequest }),
+      ])
+    );
+
+    const dialog = await screen.findByRole('dialog', { name: 'Start new pipeline run' });
+    expect(within(dialog).getByRole('textbox', { name: 'Revision ID' })).toHaveValue(
+      latestRevision.name
+    );
+    await selectEnvironment(user, dialog, 'Development');
+    await user.click(within(dialog).getByRole('button', { name: 'Run' }));
+
+    await waitFor(() => {
+      expect(mockRequest).toHaveBeenCalledWith(
+        'CreatePipelineRun',
+        expect.objectContaining({
+          spec: expect.objectContaining({
+            pipeline: { name: 'test-pipeline', namespace: 'ma-dev-test' },
+            revision: latestRevision,
           }) as Record<string, unknown>,
         }),
         {}

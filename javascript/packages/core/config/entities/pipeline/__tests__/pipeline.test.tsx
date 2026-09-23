@@ -37,12 +37,15 @@ function getSubmitButton(dialog: HTMLElement) {
  */
 function withLatestRevision(pipeline: object) {
   const latestRevision = { name: 'pipeline-eval-pipeline-3f2a1b9c0d4e', namespace: 'ma-dev-test' };
+  // The controller stamps status.latestRevision before snapshotting, so the latest Revision's
+  // content carries the pointer to itself.
+  const revisioned = { ...pipeline, status: { latestRevision } };
   return {
-    GetPipeline: { pipeline: { ...pipeline, status: { latestRevision } } },
+    GetPipeline: { pipeline: revisioned },
     GetRevision: {
       revision: {
         metadata: latestRevision,
-        spec: { revisionId: '3f2a1b9c0d4e5f6a7b8c', content: pipeline },
+        spec: { revisionId: '3f2a1b9c0d4e5f6a7b8c', content: revisioned },
       },
     },
   };
@@ -205,10 +208,10 @@ describe('PIPELINE_ENTITY_CONFIG: delete action', () => {
       await waitFor(() => {
         expect(mockRequest).toHaveBeenCalledWith(
           'DeletePipeline',
-          {
+          expect.objectContaining({
             metadata: { name: 'eval-pipeline', namespace: 'ma-dev-test' },
             spec: { owner: { name: 'me' } },
-          },
+          }),
           {}
         );
       });
@@ -462,6 +465,38 @@ describe('PIPELINE_ENTITY_CONFIG: actions on a revision snapshot', () => {
       const deleteOption = await screen.findByRole('option', { name: 'Delete' });
       await user.click(deleteOption);
       expect(await screen.findByRole('dialog', { name: 'Delete Pipeline' })).toBeInTheDocument();
+    });
+
+    it("pins Run to the viewed revision rather than the snapshot's latest pointer", async () => {
+      const user = userEvent.setup();
+      const mockRequest = createQueryMockRouter({
+        GetRevision: {
+          revision: {
+            metadata: { name: 'pipeline-eval-pipeline-3f2a1b9c0d4e' },
+            spec: {
+              content: {
+                metadata: { name: 'eval-pipeline', namespace: 'ma-dev-test' },
+                spec: { owner: { name: 'me' } },
+                status: {
+                  latestRevision: {
+                    name: 'pipeline-eval-pipeline-000000000000',
+                    namespace: 'ma-dev-test',
+                  },
+                },
+              },
+            },
+          },
+        },
+        ListPipelineRun: { pipelineRunList: { items: [] } },
+      });
+
+      renderRevisionDetail(mockRequest);
+
+      await user.click(await screen.findByRole('button', { name: 'Run' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Start new pipeline run' });
+      expect(within(dialog).getByRole('textbox', { name: 'Revision ID' })).toHaveValue(
+        'pipeline-eval-pipeline-3f2a1b9c0d4e'
+      );
     });
   });
 });

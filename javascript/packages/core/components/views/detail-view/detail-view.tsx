@@ -12,7 +12,6 @@ export function DetailView({
   children,
   actions,
   record,
-  revision,
   loading,
   titleEnhancer,
 }: DetailViewProps) {
@@ -27,7 +26,6 @@ export function DetailView({
         onGoBack={onGoBack}
         actions={actions}
         record={record}
-        revision={revision}
         loading={loading}
       >
         {headerContent}

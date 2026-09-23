@@ -219,7 +219,7 @@ describe('RunTriggerForm', () => {
     });
   });
 
-  it('shows the given revision and pins the run to it', async () => {
+  it('pins the run to the revision named in the URL', async () => {
     const user = userEvent.setup();
     const cronTrigger = {
       triggerType: { case: 'cronSchedule' as const, value: { cron: '0 2 * * *' } },
@@ -228,20 +228,26 @@ describe('RunTriggerForm', () => {
       GetPipeline: buildPipelineResponse({ nightly: cronTrigger }),
       CreateTriggerRun: {},
     });
+    // The record's own pointer names an older revision; the URL must win over it.
     const record = {
       metadata: { name: 'test-pipeline', namespace: 'ma-dev-test' },
       spec: { owner: { name: 'test-owner' } },
+      status: {
+        latestRevision: { name: 'pipeline-test-pipeline-000000000000', namespace: 'ma-dev-test' },
+      },
     };
-    const revision = { name: 'pipeline-test-pipeline-3f2a1b9c0d4e', namespace: 'ma-dev-test' };
 
     render(
-      <RunTriggerForm record={record} revision={revision} onClose={vi.fn()} />,
+      <RunTriggerForm record={record} onClose={vi.fn()} />,
       buildWrapper([
         getBaseProviderWrapper(),
         getIconProviderWrapper(),
         getErrorProviderWrapper(),
         getInterpolationProviderWrapper(),
-        getRouterWrapper({ location: '/ma-dev-test/train/pipelines' }),
+        getRouterWrapper({
+          location:
+            '/ma-dev-test/train/pipelines/test-pipeline/runs?revisionId=3f2a1b9c0d4e5f6a7b8c',
+        }),
         getServiceProviderWrapper({ request }),
       ])
     );
@@ -260,7 +266,60 @@ describe('RunTriggerForm', () => {
         expect.objectContaining({
           spec: expect.objectContaining({
             pipeline: { name: 'test-pipeline', namespace: 'ma-dev-test' },
-            revision,
+            revision: { name: 'pipeline-test-pipeline-3f2a1b9c0d4e', namespace: 'ma-dev-test' },
+          }) as Record<string, unknown>,
+        }),
+        {}
+      );
+    });
+  });
+
+  it('pins the run to the latest revision when the URL names none', async () => {
+    const user = userEvent.setup();
+    const cronTrigger = {
+      triggerType: { case: 'cronSchedule' as const, value: { cron: '0 2 * * *' } },
+    };
+    const request = createQueryMockRouter({
+      GetPipeline: buildPipelineResponse({ nightly: cronTrigger }),
+      CreateTriggerRun: {},
+    });
+    const latestRevision = {
+      name: 'pipeline-test-pipeline-9a8b7c6d5e4f',
+      namespace: 'ma-dev-test',
+    };
+    const record = {
+      metadata: { name: 'test-pipeline', namespace: 'ma-dev-test' },
+      spec: { owner: { name: 'test-owner' } },
+      status: { latestRevision },
+    };
+
+    render(
+      <RunTriggerForm record={record} onClose={vi.fn()} />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getIconProviderWrapper(),
+        getErrorProviderWrapper(),
+        getInterpolationProviderWrapper(),
+        getRouterWrapper({ location: '/ma-dev-test/train/pipelines' }),
+        getServiceProviderWrapper({ request }),
+      ])
+    );
+
+    const dialog = await screen.findByRole('dialog', { name: 'Run trigger' });
+    expect(within(dialog).getByRole('textbox', { name: 'Revision ID' })).toHaveValue(
+      latestRevision.name
+    );
+    await user.click(within(dialog).getByRole('combobox', { name: 'Trigger *' }));
+    await user.click(await screen.findByRole('option', { name: 'nightly — cron 0 2 * * *' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Run' }));
+
+    await waitFor(() => {
+      expect(request).toHaveBeenCalledWith(
+        'CreateTriggerRun',
+        expect.objectContaining({
+          spec: expect.objectContaining({
+            pipeline: { name: 'test-pipeline', namespace: 'ma-dev-test' },
+            revision: latestRevision,
           }) as Record<string, unknown>,
         }),
         {}

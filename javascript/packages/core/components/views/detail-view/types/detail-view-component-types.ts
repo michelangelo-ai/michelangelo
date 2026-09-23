@@ -1,4 +1,4 @@
-import type { ActionConfigSchema, RevisionRef } from '#core/components/actions/types';
+import type { ActionConfigSchema } from '#core/components/actions/types';
 
 export interface DetailViewProps extends DetailHeaderBaseProps {
   /**
@@ -35,9 +35,6 @@ export interface DetailHeaderBaseProps {
 
   /** The data for the currently viewed entity. */
   record?: Record<string, unknown>;
-
-  /** The revision of `record` being viewed, when the entity is revisioned. Passed to actions. */
-  revision?: RevisionRef;
 
   /** Loading state for the currently viewed entity. Indicates that record data may be incomplete. */
   loading?: boolean;

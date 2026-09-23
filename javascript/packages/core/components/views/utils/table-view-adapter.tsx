@@ -1,5 +1,4 @@
 import { InterpolatableActionsPopover } from '#core/components/actions/interpolatable-actions-popover';
-import { getLatestRevisionRef } from '#core/utils/revision-utils';
 
 import type { ActionConfigSchema, Data } from '#core/components/actions/types';
 import type { TableActionBarConfig } from '#core/components/table/components/table-action-bar/types';
@@ -45,8 +44,6 @@ export function adaptTableConfigToTableProps<T extends TableData = TableData>(
               // cast: entity records are always plain objects; Data is the typed narrowing over
               // TableData = unknown; see #1416
               record={row.record as Data}
-              // A list row is the entity, so its actions target the latest revision.
-              revision={getLatestRevisionRef(row.record)}
             />
           )
         : undefined,

@@ -17,6 +17,7 @@ import { useStudioMutation } from '#core/hooks/use-studio-mutation/use-studio-mu
 import { ENVIRONMENT_LABEL_KEY } from '#core/utils/environment-utils';
 import { generateSuffix } from '#core/utils/name-utils';
 import { ResumeRunFields } from './resume-run-fields';
+import { useTargetRevision } from './use-target-revision';
 
 import type { ActionComponentProps } from '#core/components/actions/types';
 import type { Pipeline, PipelineRunFormValues } from '#core/config/entities/pipeline/types';
@@ -35,13 +36,10 @@ export const ALL_PIPELINE_RUN_EVENT_TYPES: NotificationEventType[] = [
   NotificationEventType.PIPELINE_RUN_STATE_SKIPPED,
 ];
 
-export const CreatePipelineRunForm = ({
-  record,
-  revision,
-  onClose,
-}: ActionComponentProps<Pipeline>) => {
+export const CreatePipelineRunForm = ({ record, onClose }: ActionComponentProps<Pipeline>) => {
   const { projectId } = useStudioParams('base');
   const pipelineName = record?.metadata?.name ?? '';
+  const revision = useTargetRevision(record);
 
   const createPipelineRunMutation = useStudioMutation<PipelineRun, PipelineRun>({
     mutationName: 'CreatePipelineRun',

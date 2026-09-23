@@ -16,8 +16,7 @@ import { useInterpolationResolver } from '#core/interpolation/use-interpolation-
 import { buildRevisionName } from '#core/utils/revision-utils';
 import { capitalizeFirstLetter } from '#core/utils/string-utils';
 
-import type { RevisionRef } from '#core/components/actions/types';
-import type { PhaseConfig } from '#core/types/common/studio-types';
+import type { PhaseConfig, RevisionRef } from '#core/types/common/studio-types';
 
 /**
  * Route component that handles entity detail views.
@@ -159,7 +158,6 @@ export function EntityDetailRoute({ phases = PHASES }: { phases?: Record<string,
       onGoBack={handleReturnToEntityList}
       actions={entityConfig!.actions}
       record={entityData}
-      revision={revision}
       loading={loading}
       headerContent={
         <Row items={resolvedDetailViewConfig!.metadata} record={entityData} loading={loading} />

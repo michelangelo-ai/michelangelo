@@ -11,14 +11,12 @@ import { useResolvedActionItems } from './use-resolved-action-items';
 
 import type { ButtonProps } from 'baseui/button';
 import type { BasePopoverProps } from 'baseui/popover';
-import type { ActionConfig, Data, RevisionRef } from './types';
+import type { ActionConfig, Data } from './types';
 
 type ActionsPopoverProps<T extends Data> = {
   actions: ActionConfig<T>[];
   buttonProps?: ButtonProps;
   record: T;
-  /** Forwarded to custom action components; see {@link ActionComponentProps.revision}. */
-  revision?: RevisionRef;
   popoverProps?: BasePopoverProps;
 };
 
@@ -26,7 +24,6 @@ export function ActionsPopover<T extends Data>({
   actions,
   buttonProps,
   record,
-  revision,
   popoverProps,
 }: ActionsPopoverProps<T>) {
   const scrollDisabledRef = useRef(false);
@@ -104,7 +101,6 @@ export function ActionsPopover<T extends Data>({
         <ActionDispatcher
           action={activeAction}
           record={record}
-          revision={revision}
           onClose={() => setActiveAction(null)}
         />
       )}

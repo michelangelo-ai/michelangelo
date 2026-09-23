@@ -1,4 +1,4 @@
-import type { RevisionRef } from '#core/components/actions/types';
+import type { RevisionRef } from '#core/types/common/studio-types';
 
 /**
  * Revision ids are git refs. To follow the controller naming scheme for

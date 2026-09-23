@@ -4,12 +4,11 @@ import { useInterpolationResolver } from '#core/interpolation/use-interpolation-
 import { ActionsPopover } from './actions-popover';
 
 import type { BasePopoverProps } from 'baseui/popover';
-import type { ActionConfig, ActionConfigSchema, Data, RevisionRef } from './types';
+import type { ActionConfig, ActionConfigSchema, Data } from './types';
 
 type InterpolatableActionsPopoverProps = {
   actions: ActionConfigSchema<Data>[];
   record: Data;
-  revision?: RevisionRef;
   popoverProps?: BasePopoverProps;
 };
 
