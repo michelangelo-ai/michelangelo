@@ -7,10 +7,18 @@ import type { RevisionRef } from '#core/types/common/studio-types';
 export const REVISION_ID_DISPLAY_LENGTH = 12;
 
 /**
+ * Truncates the revisionId to REVISION_ID_DISPLAY_LENGTH, for display alongside a
+ * "Revision" column/section heading that already supplies the label.
+ */
+export function formatRevisionId(revisionId?: string): string {
+  return revisionId ? revisionId.slice(0, REVISION_ID_DISPLAY_LENGTH) : '';
+}
+
+/**
  * Builds human-readable label and truncates the revisionId by REVISION_ID_DISPLAY_LENGTH
  */
 export function formatRevisionLabel(revisionId?: string): string {
-  return revisionId ? `Revision ${revisionId.slice(0, REVISION_ID_DISPLAY_LENGTH)}` : '';
+  return revisionId ? `Revision ${formatRevisionId(revisionId)}` : '';
 }
 
 /**

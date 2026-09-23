@@ -1,6 +1,12 @@
-import { buildRevisionName, formatRevisionLabel } from '../revision-utils';
+import { buildRevisionName, formatRevisionId, formatRevisionLabel } from '../revision-utils';
 
 describe('revision-utils', () => {
+  test('formatRevisionId truncates to the display length', () => {
+    expect(formatRevisionId('3f2a1b9c0d4e5f6a7b8c')).toBe('3f2a1b9c0d4e');
+    expect(formatRevisionId('short')).toBe('short');
+    expect(formatRevisionId(undefined)).toBe('');
+  });
+
   test('formatRevisionLabel truncates to the display length', () => {
     expect(formatRevisionLabel('3f2a1b9c0d4e5f6a7b8c')).toBe('Revision 3f2a1b9c0d4e');
     expect(formatRevisionLabel('short')).toBe('Revision short');
