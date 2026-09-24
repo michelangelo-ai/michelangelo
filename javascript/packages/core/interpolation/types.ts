@@ -1,7 +1,6 @@
 import type { ComponentType } from 'react';
 import type { ViewTypeToParamType } from '#core/hooks/routing/use-studio-params/types';
 import type { RepeatedLayoutState } from '#core/providers/repeated-layout-provider/types';
-import type { RevisionRef } from '#core/types/common/studio-types';
 import type { StudioParamsView } from '#core/types/common/view-types';
 import type { FunctionInterpolation } from './function-interpolation';
 import type { StringInterpolation } from './string-interpolation';
@@ -45,10 +44,6 @@ export interface UserDataSources {
    * Name of the mutation that was invoked to generate the {@link response} interpolation property
    */
   mutationName?: string;
-  /**
-   * The Revision a detail view renders {@link page} from, when the entity is revisioned.
-   */
-  revision?: RevisionRef;
 }
 
 /**
