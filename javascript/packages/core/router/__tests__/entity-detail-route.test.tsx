@@ -105,7 +105,8 @@ describe('EntityDetailRoute', () => {
     );
 
     expect(screen.getByRole('button', { name: /go back/i })).toBeInTheDocument();
-    expect(screen.getByText('Pipeline Runs')).toBeInTheDocument(); // subtitle from entity config
+    // Subtitle is the entity config's name ("Pipeline Runs"), singularized and capitalized.
+    expect(screen.getByText('Pipeline Run')).toBeInTheDocument();
     expect(screen.getByText('run-123')).toBeInTheDocument(); // title from URL entityId
 
     // Wait for and verify metadata is rendered
@@ -116,6 +117,52 @@ describe('EntityDetailRoute', () => {
     expect(screen.getByText('Execution')).toBeInTheDocument();
     await screen.findAllByText('Data Preparation');
     await screen.findAllByText('Model Training');
+  });
+
+  test('singularizes and capitalizes the entity name for the header subtitle', async () => {
+    const testPhases = {
+      train: buildPhase({
+        id: 'train',
+        entities: [
+          buildEntityConfigFactory({ id: 'triggers', name: 'triggers', service: 'triggerRun' })({
+            views: [
+              {
+                type: 'detail',
+                metadata: [],
+                pages: [
+                  {
+                    id: 'overview',
+                    label: 'Overview',
+                    type: 'custom',
+                    component: () => <div>Overview</div>,
+                  } as CustomDetailPageConfig,
+                ],
+              },
+            ],
+          }),
+        ],
+      }),
+    };
+
+    const mockRequest = vi.fn().mockResolvedValue({
+      triggerRun: {
+        metadata: { creationTimestamp: { seconds: 1640995200 } },
+        status: { state: 'SUCCESS' },
+      },
+    });
+
+    render(
+      <EntityDetailRoute phases={testPhases} />,
+      buildWrapper([
+        getErrorProviderWrapper(),
+        getRouterWrapper({ location: '/myproject/train/triggers/trigger-123' }),
+        getServiceProviderWrapper({ request: mockRequest }),
+      ])
+    );
+
+    // "triggers" (the plural, registered entity name) renders as singular "Trigger".
+    expect(await screen.findByText('Trigger')).toBeInTheDocument();
+    expect(screen.queryByText('triggers')).not.toBeInTheDocument();
   });
 
   describe('revision view', () => {
@@ -406,7 +453,7 @@ describe('EntityDetailRoute', () => {
     );
 
     // Should still render header and metadata
-    expect(screen.getByText('Pipeline Runs')).toBeInTheDocument();
+    expect(screen.getByText('Pipeline Run')).toBeInTheDocument();
     await screen.findByText('Success');
 
     expect(screen.getByText('No tabs available')).toBeInTheDocument();

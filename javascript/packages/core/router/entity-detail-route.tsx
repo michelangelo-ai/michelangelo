@@ -1,6 +1,7 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom-v5-compat';
 import { useStyletron } from 'baseui';
+import pluralize from 'pluralize';
 
 import { CircleExclamationMark } from '#core/components/illustrations/circle-exclamation-mark/circle-exclamation-mark';
 import { CircleExclamationMarkKind } from '#core/components/illustrations/circle-exclamation-mark/types';
@@ -116,7 +117,10 @@ export function EntityDetailRoute({ phases = PHASES }: { phases?: Record<string,
   const resolvedDetailViewConfig = resolver(detailViewConfig, { page: entityData });
   return (
     <DetailView
-      subtitle={entityConfig!.name}
+      // Entity names are registered in plural form (e.g. "triggers"); the detail page's
+      // small header label reads better singular, matching how a person refers to the
+      // one record they're looking at ("Trigger", not "Triggers").
+      subtitle={capitalizeFirstLetter(pluralize.singular(entityConfig!.name))}
       title={entityId}
       onGoBack={handleReturnToEntityList}
       actions={entityConfig!.actions}
