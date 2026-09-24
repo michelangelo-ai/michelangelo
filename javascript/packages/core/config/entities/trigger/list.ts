@@ -26,12 +26,6 @@ export const TRIGGER_LIST_CONFIG: ListViewConfig<object> = {
         label: 'Interval seconds',
         type: CellType.TEXT,
         accessor: (data: unknown) => {
-          // The generated client decodes a trigger's schedule `oneof` as a tagged
-          // `{ case, value }` union (see `ManifestTrigger`), and a real interval's
-          // `seconds` arrives as a protobuf-es `Duration` bigint, which the default
-          // text-cell stringifier can't serialize. Read the value only for an
-          // interval-scheduled trigger and coerce it to a number so it renders the
-          // same way any other numeric text cell does.
           // cast: accessor receives unknown data; narrowing to expected proto shape for
           // property access
           const triggerType = (data as { spec?: { trigger?: ManifestTrigger } })?.spec?.trigger
