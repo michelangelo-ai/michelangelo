@@ -1,5 +1,5 @@
 diff --git a/historyserver/pkg/historyserver/router.go b/historyserver/pkg/historyserver/router.go
-index 28ff4d6..04956ab 100644
+index 28ff4d6..0b5b855 100644
 --- a/historyserver/pkg/historyserver/router.go
 +++ b/historyserver/pkg/historyserver/router.go
 @@ -10,6 +10,7 @@ import (
@@ -86,7 +86,7 @@ index 28ff4d6..04956ab 100644
 +		if isHomePage {
 +			homepagePath = path.Join(s.dashboardDir, "homepage", "index.html")
 +		} else {
-+			homepagePath = path.Join(s.dashboardDir, "client", "build", "index.html")
++			homepagePath = path.Join(s.dashboardDir, "client", "index.html")
 +		}
 +
 +		data, readErr := os.ReadFile(homepagePath)
@@ -104,7 +104,7 @@ index 28ff4d6..04956ab 100644
 +// other top-level files (favicon.ico, asset-manifest.json, etc.) referenced by
 +// the dashboard's index.html via relative paths.
 +func routerStaticAssets(s *ServerHandler) {
-+	buildDir := path.Join(s.dashboardDir, "client", "build")
++	buildDir := path.Join(s.dashboardDir, "client")
 +	fileServer := http.FileServer(http.Dir(buildDir))
 +	http.Handle("/static/", fileServer)
 +	http.Handle("/favicon.ico", fileServer)
