@@ -87,6 +87,7 @@ export const CreatePipelineRunForm = ({ record, onClose }: ActionComponentProps<
         name={`metadata.labels.${ENVIRONMENT_LABEL_KEY}`}
         label="Which environment do you want to use?"
         required
+        initialValue="development"
         options={[
           { value: 'development', label: 'Development' },
           { value: 'production', label: 'Production' },

@@ -354,10 +354,7 @@ describe('CreatePipelineRunForm', () => {
     expect(within(dialog).getByRole('radio', { name: 'Production' })).toBeInTheDocument();
   });
 
-  it('blocks submission until an environment is selected', async () => {
-    const user = userEvent.setup();
-    const mockRequest = createQueryMockRouter({ CreatePipelineRun: {} });
-
+  it('defaults the Environment field to Development', async () => {
     render(
       <FormWrapper />,
       buildWrapper([
@@ -366,19 +363,14 @@ describe('CreatePipelineRunForm', () => {
         getErrorProviderWrapper(),
         getInterpolationProviderWrapper(),
         getRouterWrapper({ location: '/ma-dev-test/train/pipelines' }),
-        getServiceProviderWrapper({ request: mockRequest }),
+        getServiceProviderWrapper({ request: createQueryMockRouter({ CreatePipelineRun: {} }) }),
       ])
     );
 
     const dialog = await screen.findByRole('dialog', { name: 'Start new pipeline run' });
-    await user.click(within(dialog).getByRole('button', { name: 'Run' }));
 
-    expect(mockRequest).not.toHaveBeenCalledWith(
-      'CreatePipelineRun',
-      expect.anything(),
-      expect.anything()
-    );
-    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(within(dialog).getByRole('radio', { name: 'Development' })).toBeChecked();
+    expect(within(dialog).getByRole('radio', { name: 'Production' })).not.toBeChecked();
   });
 
   it('submits the selected environment as a metadata label', async () => {
