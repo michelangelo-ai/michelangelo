@@ -1,3 +1,7 @@
+---
+last_verified: 2026-09-22
+---
+
 # Running Uniflow Pipelines
 
 This guide covers how to run Uniflow pipelines locally and remotely.
@@ -39,7 +43,7 @@ Local execution runs workflows directly in a standard Python environment, making
 - Simple to run and test locally
 
 #### Limitations
-- **No caching or retries**: Features like caching, retries, and `apply_local_diff` are not supported.
+- **No caching or retries**: Caching and retries are not supported. Neither is the mechanism that applies your uncommitted working-tree changes on top of a registered revision for remote runs — local mode runs your working tree directly, so it does not apply.
 - **No resource constraints**: Configurations for CPU, GPU, memory, and worker instances are ignored.
 - **No authentication support**: If your tasks depend on external cloud services (e.g., S3, HDFS, Kubernetes APIs), local mode does not support automatic authentication. Test these interactions in remote environments.
 
