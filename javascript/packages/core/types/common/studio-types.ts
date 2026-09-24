@@ -107,8 +107,10 @@ export interface PhaseEntityConfig<T extends object = object> {
   /** State controlling whether this entity is interactive */
   state: PhaseEntityState;
   /**
-   * Whether the entity is snapshotted into Revision CRs. When set, the detail view honors a
-   * `?revisionId=` query param by loading that Revision's `spec.content` in place of the record.
+   * Opts the entity into rendering its detail view with a Revision: the one `?revisionId=` names,
+   * or on a bare URL the one the entity's `status.latestRevision` points at. Setting this
+   * requires the entity to carry that pointer. Entities that have Revisions but should render
+   * live leave it unset.
    */
   revisioned?: boolean;
   /** List of view configurations for this entity */
