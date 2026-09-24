@@ -4,6 +4,7 @@ import { CreatePipelineRunForm } from './create-pipeline-run-form';
 import { PIPELINE_DETAIL_CONFIG } from './detail';
 import { PIPELINE_LIST_CONFIG } from './list';
 import { RunTriggerForm } from './run-trigger-form';
+import { isPipelineRevision } from './types';
 
 import type { PhaseEntityConfig } from '#core/types/common/studio-types';
 import type { Pipeline } from './types';
@@ -11,11 +12,17 @@ import type { Pipeline } from './types';
 /**
  * A record without a manifest (still loading, or a pipeline registered without one) means
  * "unknown", not "no triggers" — fail open and let the dialog explain an empty trigger list.
+ * `record` is a live Pipeline from the "Pipelines" list row or the wrapping Revision from the
+ * (always-revisioned) pipeline detail page — the manifest reads from `spec.content` for the
+ * latter.
  */
 const hasNoTriggers = (record: unknown): boolean => {
-  // cast: record is unknown from the action predicate context; always Pipeline in this entity
-  // config; see #1425
-  const manifest = (record as Pipeline).spec?.manifest;
+  // cast: record is unknown from the action predicate context; a live Pipeline when it isn't a
+  // PipelineRevision; see #1425
+  const pipeline = record as Pipeline;
+  const manifest = isPipelineRevision(record)
+    ? record.spec.content?.spec?.manifest
+    : pipeline.spec?.manifest;
   return !!manifest && Object.keys(manifest.triggerMap ?? {}).length === 0;
 };
 

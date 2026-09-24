@@ -35,7 +35,7 @@ export function EntityDetailRoute({ phases = PHASES }: { phases?: Record<string,
   const entityConfig = phases[phase].entities.find((e) => e.id === entity);
   const resolver = useInterpolationResolver();
 
-  const { record, revision, loading, errorMessage } = useEntityRecord({
+  const { record, loading, errorMessage } = useEntityRecord({
     service: entityConfig?.service ?? '',
     revisioned: !!entityConfig?.revisioned,
     projectId,
@@ -96,7 +96,7 @@ export function EntityDetailRoute({ phases = PHASES }: { phases?: Record<string,
     );
   }
 
-  const resolvedDetailViewConfig = resolver(detailViewConfig, { page: record, revision });
+  const resolvedDetailViewConfig = resolver(detailViewConfig, { page: record });
   return (
     <DetailView
       subtitle={entityConfig!.name}

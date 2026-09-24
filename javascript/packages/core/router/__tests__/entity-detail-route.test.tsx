@@ -135,17 +135,19 @@ describe('EntityDetailRoute', () => {
         {
           type: 'detail',
           metadata: [
-            { id: 'spec.owner.name', label: 'Owner', type: CellType.TEXT },
-            { id: 'spec.commit.branch', label: 'Branch', type: CellType.TEXT },
+            { id: 'spec.content.spec.owner.name', label: 'Owner', type: CellType.TEXT },
+            { id: 'spec.content.spec.commit.branch', label: 'Branch', type: CellType.TEXT },
           ],
           pages: [
             {
               id: 'overview',
               label: 'Overview',
               type: 'custom',
-              component: ({ data }: { data: { metadata?: { name?: string } } | undefined }) => (
-                <div>Page for {data?.metadata?.name}</div>
-              ),
+              component: ({
+                data,
+              }: {
+                data: { spec?: { content?: { metadata?: { name?: string } } } } | undefined;
+              }) => <div>Page for {data?.spec?.content?.metadata?.name}</div>,
             } as CustomDetailPageConfig,
           ],
         },
@@ -277,10 +279,25 @@ describe('EntityDetailRoute', () => {
     });
 
     test('ignores revisionId for an entity that is not revisioned', async () => {
+      // A non-revisioned entity's record is the live entity itself, with no `spec.content`
+      // wrapper — so its config (unlike `revisionedEntity`'s) reads fields unprefixed.
+      const nonRevisionedEntity = buildEntity({
+        id: 'pipelines',
+        name: 'pipelines',
+        service: 'pipeline',
+        revisioned: false,
+        views: [
+          {
+            type: 'detail',
+            metadata: [{ id: 'spec.owner.name', label: 'Owner', type: CellType.TEXT }],
+            pages: [],
+          },
+        ],
+      });
       const testPhases = {
         train: buildPhase({
           id: 'train',
-          entities: [{ ...revisionedEntity, revisioned: false }],
+          entities: [nonRevisionedEntity],
         }),
       };
       const mockRequest = createQueryMockRouter({

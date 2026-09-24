@@ -1,21 +1,21 @@
-import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
-import { buildRevisionName, getLatestRevisionRef } from '#core/utils/revision-utils';
+import { getLatestRevisionRef } from '#core/utils/revision-utils';
+import { isPipelineRevision } from './types';
 
 import type { RevisionRef } from '#core/types/common/studio-types';
-import type { Pipeline } from './types';
+import type { Pipeline, PipelineRevision } from './types';
 
 /**
- * The Revision a run started from the current page should pin to.
+ * The Revision a run started from this record should pin to.
  *
- * `?revisionId=` names it when a specific revision is being viewed; otherwise it defaults
- * to the latestRevision of the pipeline.
+ * A Revision record already names the exact revision being viewed — its own identity,
+ * no lookup needed. A Pipeline record has no specific revision in view, so this falls 
+ * back to its `status.latestRevision` pointer.
  */
-export function useTargetRevision(record: Pipeline | undefined): RevisionRef | undefined {
-  const { projectId, revisionId } = useStudioParams('base');
-  const pipelineName = record?.metadata?.name;
-
-  if (revisionId && pipelineName) {
-    return { name: buildRevisionName('pipeline', pipelineName, revisionId), namespace: projectId };
+export function useTargetRevision(
+  record: Pipeline | PipelineRevision | undefined
+): RevisionRef | undefined {
+  if (isPipelineRevision(record)) {
+    return { name: record.metadata.name, namespace: record.metadata.namespace };
   }
   return getLatestRevisionRef(record);
 }

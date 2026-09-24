@@ -93,14 +93,15 @@ describe('CreatePipelineRunForm', () => {
     });
   });
 
-  it('uses the revision specified in the revisionId query param', async () => {
+  it('uses the run to the record when it is the Revision being viewed', async () => {
     const user = userEvent.setup();
     const mockRequest = createQueryMockRouter({ CreatePipelineRun: {} });
     const record = {
-      metadata: { name: 'test-pipeline', namespace: 'ma-dev-test' },
-      spec: { owner: { name: 'test-owner' } },
-      status: {
-        latestRevision: { name: 'pipeline-test-pipeline-000000000000', namespace: 'ma-dev-test' },
+      metadata: { name: 'pipeline-test-pipeline-3f2a1b9c0d4e', namespace: 'ma-dev-test' },
+      spec: {
+        baseResource: { name: 'test-pipeline', namespace: 'ma-dev-test' },
+        revisionId: '3f2a1b9c0d4e5f6a7b8c',
+        owner: { name: 'test-owner' },
       },
     };
 
@@ -111,10 +112,7 @@ describe('CreatePipelineRunForm', () => {
         getIconProviderWrapper(),
         getErrorProviderWrapper(),
         getInterpolationProviderWrapper(),
-        getRouterWrapper({
-          location:
-            '/ma-dev-test/train/pipelines/test-pipeline/runs?revisionId=3f2a1b9c0d4e5f6a7b8c',
-        }),
+        getRouterWrapper({ location: '/ma-dev-test/train/pipelines/test-pipeline/runs' }),
         getServiceProviderWrapper({ request: mockRequest }),
       ])
     );

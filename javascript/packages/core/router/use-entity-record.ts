@@ -2,14 +2,14 @@ import { useStudioQuery } from '#core/hooks/use-studio-query';
 import { buildRevisionName } from '#core/utils/revision-utils';
 import { capitalizeFirstLetter } from '#core/utils/string-utils';
 
-import type { RevisionRef } from '#core/types/common/studio-types';
-
 /**
  * Loads the record an entity detail page renders.
  *
- * A plain entity is fetched and rendered as-is. A `revisioned` entity always renders a
- * Revision's `spec.content` instead (a snapshot with the entity's own shape): the Revision
- * `?revisionId=` names, or else the one the entity's `status.latestRevision` points at.
+ * A plain entity is fetched and rendered as-is. A `revisioned` entity always renders the
+ * Revision itself instead — not just its wrapped `spec.content` — so configs can read the
+ * Revision's own identity (e.g. `metadata.name`) the same way list rows for that entity already
+ * do: the Revision `?revisionId=` names, or else the one the entity's `status.latestRevision`
+ * points at.
  */
 export function useEntityRecord({
   service,
@@ -25,8 +25,6 @@ export function useEntityRecord({
   revisionId?: string;
 }): {
   record: Record<string, unknown> | undefined;
-  /** The Revision `record` was read from, when the entity is revisioned. */
-  revision: RevisionRef | undefined;
   loading: boolean;
   errorMessage: string | undefined;
 } {
@@ -54,9 +52,7 @@ export function useEntityRecord({
     : undefined;
 
   const revisionName = revisionNameFromUrl ?? revisionNameFromEntity;
-  const revisionQuery = useStudioQuery<{
-    revision?: { spec?: { content?: Record<string, unknown> } };
-  }>({
+  const revisionQuery = useStudioQuery<{ revision?: Record<string, unknown> }>({
     queryName: 'GetRevision',
     serviceOptions: { namespace: projectId, name: revisionName },
     clientOptions: { enabled: !!revisionName },
@@ -67,8 +63,7 @@ export function useEntityRecord({
   const hasNoRevisionToRender = revisioned && !!entityQuery.data && !revisionName;
 
   return {
-    record: revisioned ? revisionQuery.data?.revision?.spec?.content : entityRecord,
-    revision: revisionName ? { name: revisionName, namespace: projectId } : undefined,
+    record: revisioned ? revisionQuery.data?.revision : entityRecord,
     loading: entityQuery.isLoading || revisionQuery.isLoading,
     errorMessage:
       entityQuery.error?.message ??

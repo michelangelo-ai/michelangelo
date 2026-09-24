@@ -12,15 +12,16 @@ import {
 
 import type { DetailViewConfig } from '#core/components/views/types';
 import type { TriggerRun } from '#core/config/entities/trigger/types';
+import type { PipelineRevision } from './types';
 
 export const PIPELINE_DETAIL_CONFIG: DetailViewConfig = {
   type: 'detail',
   metadata: [
     { id: 'metadata.creationTimestamp.seconds', label: 'Created', type: CellType.DATE },
     { id: 'spec.owner.name', label: 'Owner', type: CellType.TEXT },
-    PIPELINE_TYPE_CELL,
-    { id: 'spec.commit.branch', label: 'Branch', type: CellType.TEXT },
-    PIPELINE_STATE_CELL,
+    { ...PIPELINE_TYPE_CELL, id: 'spec.content.spec.type' },
+    { id: 'spec.gitCommit.branch', label: 'Branch', type: CellType.TEXT },
+    { ...PIPELINE_STATE_CELL, id: 'spec.content.status.state' },
   ],
   pages: [
     {
@@ -33,11 +34,13 @@ export const PIPELINE_DETAIL_CONFIG: DetailViewConfig = {
         serviceOptions: {
           listOptionsExt: {
             operation: {
-              criterion: interpolate(({ revision }) => [
+              criterion: interpolate(({ page }) => [
                 {
                   fieldName: PIPELINE_RUN_REVISION_NAME_FIELD,
                   operator: CRITERION_OPERATOR_EQUAL,
-                  matchValue: revision?.name,
+                  // cast: page is unknown from interpolation context; always the viewed
+                  // PipelineRevision, since pipeline is always revisioned; see #1425
+                  matchValue: (page as PipelineRevision)?.metadata?.name,
                 },
               ]),
             },
@@ -64,7 +67,7 @@ export const PIPELINE_DETAIL_CONFIG: DetailViewConfig = {
         service: 'triggerRun',
         serviceOptions: {
           listOptions: {
-            fieldSelector: 'pipeline_name=${page.metadata.name}',
+            fieldSelector: 'pipeline_name=${page.spec.baseResource.name}',
           },
         },
       },
