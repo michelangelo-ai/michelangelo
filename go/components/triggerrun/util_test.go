@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/go-logr/zapr"
+	pbtypes "github.com/gogo/protobuf/types"
 	"github.com/golang/mock/gomock"
 	clientInterface "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
 	interfaceMock "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface/interface_mock"
@@ -53,6 +54,39 @@ func TestGetTriggerType(t *testing.T) {
 		}
 		result := GetTriggerType(triggerRun)
 		assert.Equal(t, TriggerTypeUnknown, result)
+	})
+
+	cronWithWindow := func(catchup bool) *v2pb.TriggerRun {
+		return &v2pb.TriggerRun{
+			Spec: v2pb.TriggerRunSpec{
+				Trigger: &v2pb.Trigger{
+					TriggerType: &v2pb.Trigger_CronSchedule{
+						CronSchedule: &v2pb.CronSchedule{Cron: "0 0 * * *"},
+					},
+				},
+				StartTimestamp: &pbtypes.Timestamp{Seconds: 1_700_000_000},
+				EndTimestamp:   &pbtypes.Timestamp{Seconds: 1_700_086_400},
+				Catchup:        catchup,
+			},
+		}
+	}
+
+	t.Run("closed window without catchup keeps the legacy backfill runner", func(t *testing.T) {
+		assert.Equal(t, TriggerTypeBackfill, GetTriggerType(cronWithWindow(false)))
+	})
+
+	// The type must follow the trigger oneof once catchup is set, so that adding or
+	// removing an end date on a running schedule never flips it to a different runner.
+	t.Run("closed window with catchup stays a cron trigger", func(t *testing.T) {
+		assert.Equal(t, TriggerTypeCron, GetTriggerType(cronWithWindow(true)))
+	})
+
+	t.Run("open window is a cron trigger regardless of catchup", func(t *testing.T) {
+		tr := cronWithWindow(false)
+		tr.Spec.EndTimestamp = nil
+		assert.Equal(t, TriggerTypeCron, GetTriggerType(tr))
+		tr.Spec.Catchup = true
+		assert.Equal(t, TriggerTypeCron, GetTriggerType(tr))
 	})
 }
 

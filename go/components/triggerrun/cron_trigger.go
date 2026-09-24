@@ -2,13 +2,16 @@ package triggerrun
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/go-logr/logr"
 	gogoproto "github.com/gogo/protobuf/proto"
+	pbtypes "github.com/gogo/protobuf/types"
 	clientInterface "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
+	"github.com/robfig/cron"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 )
 
@@ -61,6 +64,14 @@ func (r *cronTrigger) Run(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2p
 		Name:      triggerRun.Name,
 	})
 	wid := generateWorkflowID(triggerRun)
+	window, err := resolveScheduleWindow(triggerRun, time.Now())
+	if err != nil {
+		return v2pb.TriggerRunStatus{
+				ErrorMessage: err.Error(),
+				State:        v2pb.TRIGGER_RUN_STATE_FAILED,
+			}, fmt.Errorf("resolve schedule window for trigger %s/%s: %w",
+				triggerRun.Namespace, triggerRun.Name, err)
+	}
 	opt := clientInterface.StartWorkflowOptions{
 		ID:                              wid,
 		TaskList:                        "trigger_run",
@@ -68,6 +79,9 @@ func (r *cronTrigger) Run(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2p
 		DecisionTaskStartToCloseTimeout: 30 * time.Second,
 		CronSchedule:                    triggerRun.Spec.Trigger.GetCronSchedule().GetCron(),
 		StartPaused:                     triggerRun.Spec.Action == v2pb.TRIGGER_RUN_ACTION_PAUSE,
+		ScheduleStartAt:                 window.startAt,
+		ScheduleEndAt:                   window.endAt,
+		CatchUpFrom:                     window.catchUpFrom,
 	}
 	domain := r.WorkflowClient.GetDomain()
 	rid, err := getWorkflowOpenRunID(ctx, wid, r.WorkflowClient, domain)
@@ -122,6 +136,26 @@ func (r *cronTrigger) Run(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2p
 		"taskList", opt.TaskList)
 	exec, err := r.WorkflowClient.StartWorkflow(
 		ctx, opt, "trigger.CronTrigger", CreateTriggerRequest{TriggerRun: scheduleWorkflowInput(triggerRun)})
+
+	// A failed catch-up is not a failed start. The schedule is live and firing forward, so
+	// failing here would mark the TriggerRun terminal (see isTerminateState) and leave a
+	// running schedule that nothing reconciles. Keep the trigger running and record the
+	// missed window instead. It is not replayed automatically yet: until the reconciler
+	// derives the pending occurrences from the engine's own run list, re-issuing a
+	// backfill whose outcome is unknown risks duplicate runs for the same period.
+	var catchUpWarning string
+	var catchUpErr *clientInterface.CatchUpError
+	if errors.As(err, &catchUpErr) {
+		log.Error(err, "cron trigger is running but its catch-up did not replay",
+			"operation", "start_workflow",
+			"namespace", triggerRun.Namespace,
+			"name", triggerRun.Name,
+			"workflowId", opt.ID,
+			"catchUpFrom", catchUpErr.CatchUpFrom.UTC().Format(time.RFC3339))
+		catchUpWarning = err.Error()
+		err = nil
+	}
+
 	if err != nil {
 		log.Error(err, "failed to start scheduled workflow",
 			"operation", "start_workflow",
@@ -145,7 +179,98 @@ func (r *cronTrigger) Run(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2p
 	if opt.StartPaused {
 		status.State = v2pb.TRIGGER_RUN_STATE_PAUSED
 	}
+	// Carried on a running trigger so the missed window stays visible to an operator
+	// rather than only appearing once in the controller log.
+	status.ErrorMessage = catchUpWarning
 	return status, nil
+}
+
+// maxCatchUpOccurrences bounds how many missed occurrences one catch-up may replay.
+//
+// The bound is on occurrence count rather than wall-clock age so that a daily cron can
+// catch up more than a year while a per-minute cron is stopped after a few hours. A
+// mistyped year on a frequent cron would otherwise enqueue thousands of pipeline runs,
+// so an over-large window is rejected rather than silently clamped.
+const maxCatchUpOccurrences = 500
+
+// scheduleWindow is the engine-facing reading of spec.start_timestamp,
+// spec.end_timestamp and spec.catchup. Zero times mean "unset".
+type scheduleWindow struct {
+	startAt     time.Time
+	endAt       time.Time
+	catchUpFrom time.Time
+}
+
+// resolveScheduleWindow validates the window and decides whether a catch-up is due.
+//
+// Nothing here depends on "now" except the catch-up range itself: the window is
+// passed to the engine as-is, and catch-up is requested only when the spec asks for
+// it and the window has already opened. A future start simply idles the schedule.
+//
+// The explicit nil checks are required: types.TimestampFromProto maps a nil timestamp
+// to the Unix epoch, which would read as a window starting in 1970.
+func resolveScheduleWindow(triggerRun *v2pb.TriggerRun, now time.Time) (scheduleWindow, error) {
+	var window scheduleWindow
+	spec := &triggerRun.Spec
+	if spec.StartTimestamp != nil {
+		startAt, err := pbtypes.TimestampFromProto(spec.StartTimestamp)
+		if err != nil {
+			return window, fmt.Errorf("invalid start_timestamp: %w", err)
+		}
+		window.startAt = startAt.UTC()
+	}
+	if spec.EndTimestamp != nil {
+		endAt, err := pbtypes.TimestampFromProto(spec.EndTimestamp)
+		if err != nil {
+			return window, fmt.Errorf("invalid end_timestamp: %w", err)
+		}
+		window.endAt = endAt.UTC()
+	}
+	if !window.startAt.IsZero() && !window.endAt.IsZero() && !window.endAt.After(window.startAt) {
+		return window, fmt.Errorf("end_timestamp %s must be after start_timestamp %s",
+			window.endAt.Format(time.RFC3339), window.startAt.Format(time.RFC3339))
+	}
+	if !spec.Catchup || window.startAt.IsZero() || !window.startAt.Before(now) {
+		return window, nil
+	}
+
+	catchUpTo := now
+	if !window.endAt.IsZero() && window.endAt.Before(now) {
+		catchUpTo = window.endAt
+	}
+	cronExpr := spec.Trigger.GetCronSchedule().GetCron()
+	occurrences, err := countCronOccurrences(cronExpr, window.startAt, catchUpTo, maxCatchUpOccurrences)
+	if err != nil {
+		return window, err
+	}
+	if occurrences > maxCatchUpOccurrences {
+		return window, fmt.Errorf(
+			"catch-up from %s would replay more than %d occurrences of %q; "+
+				"narrow the window or split it across several TriggerRuns",
+			window.startAt.Format(time.RFC3339), maxCatchUpOccurrences, cronExpr)
+	}
+	window.catchUpFrom = window.startAt
+	return window, nil
+}
+
+// countCronOccurrences counts the cron occurrences in [from, to). It stops as soon as
+// the count exceeds limit, so an absurd window is rejected without being walked.
+func countCronOccurrences(cronExpr string, from, to time.Time, limit int) (int, error) {
+	schedule, err := cron.ParseStandard(cronExpr)
+	if err != nil {
+		return 0, fmt.Errorf("invalid cron expression %q: %w", cronExpr, err)
+	}
+	count := 0
+	// Next is strictly after its argument at second granularity; step back one second
+	// so an occurrence that falls exactly on `from` is counted. A zero result means the
+	// schedule has no further occurrence within the parser's search horizon.
+	for t := schedule.Next(from.Add(-time.Second)); !t.IsZero() && t.Before(to); t = schedule.Next(t) {
+		count++
+		if count > limit {
+			break
+		}
+	}
+	return count, nil
 }
 
 func recurringTriggerStatus(

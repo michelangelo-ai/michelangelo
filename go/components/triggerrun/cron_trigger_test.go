@@ -2,11 +2,13 @@ package triggerrun
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
 
 	"github.com/go-logr/zapr"
+	pbtypes "github.com/gogo/protobuf/types"
 	"github.com/golang/mock/gomock"
 	clientInterface "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
 	interfaceMock "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface/interface_mock"
@@ -172,6 +174,254 @@ func TestRunStartsSchedulePaused(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, v2pb.TRIGGER_RUN_STATE_PAUSED, status.State)
 	assert.Equal(t, mustScheduleInputHash(t, triggerRun), status.ActualScheduleInputHash)
+}
+
+// runCapturingStartOptions runs a cron trigger against a mock client and returns the
+// StartWorkflowOptions the trigger passed to StartWorkflow.
+func runCapturingStartOptions(
+	t *testing.T, triggerRun *v2pb.TriggerRun,
+) (clientInterface.StartWorkflowOptions, v2pb.TriggerRunStatus, error) {
+	t.Helper()
+	ctrl := gomock.NewController(t)
+	mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
+	mockClient.EXPECT().GetDomain().Return("test-domain")
+	mockClient.EXPECT().GetProvider().Return("test-provider").AnyTimes()
+	mockClient.EXPECT().ListOpenWorkflow(gomock.Any(), gomock.Any()).Return(
+		&clientInterface.ListOpenWorkflowExecutionsResponse{}, nil)
+
+	var captured clientInterface.StartWorkflowOptions
+	mockClient.EXPECT().StartWorkflow(
+		gomock.Any(), gomock.Any(), "trigger.CronTrigger", gomock.Any(),
+	).DoAndReturn(func(
+		_ context.Context,
+		options clientInterface.StartWorkflowOptions,
+		_ string,
+		_ ...interface{},
+	) (*clientInterface.WorkflowExecution, error) {
+		captured = options
+		return &clientInterface.WorkflowExecution{ID: _workflowID, RunID: _runID}, nil
+	})
+
+	status, err := setupCronTrigger(t, mockClient).Run(context.Background(), triggerRun)
+	return captured, status, err
+}
+
+func TestRunPassesCatchUpFromForPastStartWithCatchup(t *testing.T) {
+	startAt := time.Now().Add(-2 * time.Hour).UTC().Truncate(time.Second)
+	triggerRun := _triggerRun.DeepCopy()
+	triggerRun.Spec.StartTimestamp = &pbtypes.Timestamp{Seconds: startAt.Unix()}
+	triggerRun.Spec.Catchup = true
+
+	options, status, err := runCapturingStartOptions(t, triggerRun)
+
+	require.NoError(t, err)
+	assert.Equal(t, v2pb.TRIGGER_RUN_STATE_RUNNING, status.State)
+	assert.Equal(t, startAt, options.CatchUpFrom.UTC())
+	assert.Equal(t, startAt, options.ScheduleStartAt.UTC(), "the window start is also the schedule's StartAt")
+	assert.True(t, options.ScheduleEndAt.IsZero(), "no end_timestamp means an open-ended schedule")
+}
+
+// A past start without catchup is a window start only: the schedule fires from now
+// forward and nothing is replayed.
+func TestRunLeavesCatchUpFromUnsetWithoutCatchupFlag(t *testing.T) {
+	startAt := time.Now().Add(-2 * time.Hour).UTC().Truncate(time.Second)
+	triggerRun := _triggerRun.DeepCopy()
+	triggerRun.Spec.StartTimestamp = &pbtypes.Timestamp{Seconds: startAt.Unix()}
+	require.False(t, triggerRun.Spec.Catchup)
+
+	options, status, err := runCapturingStartOptions(t, triggerRun)
+
+	require.NoError(t, err)
+	assert.Equal(t, v2pb.TRIGGER_RUN_STATE_RUNNING, status.State)
+	assert.True(t, options.CatchUpFrom.IsZero(), "expected zero time, got %s", options.CatchUpFrom)
+	assert.Equal(t, startAt, options.ScheduleStartAt.UTC())
+}
+
+// Nil timestamps must yield zero times, not the Unix epoch: types.TimestampFromProto
+// maps nil to 1970, which downstream would read as a window opening 56 years ago.
+func TestRunLeavesWindowUnsetWithoutTimestamps(t *testing.T) {
+	triggerRun := _triggerRun.DeepCopy()
+	triggerRun.Spec.Catchup = true
+	require.Nil(t, triggerRun.Spec.StartTimestamp)
+	require.Nil(t, triggerRun.Spec.EndTimestamp)
+
+	options, status, err := runCapturingStartOptions(t, triggerRun)
+
+	require.NoError(t, err)
+	assert.Equal(t, v2pb.TRIGGER_RUN_STATE_RUNNING, status.State)
+	assert.True(t, options.ScheduleStartAt.IsZero())
+	assert.True(t, options.ScheduleEndAt.IsZero())
+	assert.True(t, options.CatchUpFrom.IsZero(), "catchup with no start has nothing to replay")
+}
+
+// A future start idles the schedule until then. It is neither rejected nor caught up,
+// whatever the catchup flag says, because there is nothing behind it to replay.
+func TestRunFutureStartIdlesScheduleWithoutCatchUp(t *testing.T) {
+	startAt := time.Now().Add(2 * time.Hour).UTC().Truncate(time.Second)
+	triggerRun := _triggerRun.DeepCopy()
+	triggerRun.Spec.StartTimestamp = &pbtypes.Timestamp{Seconds: startAt.Unix()}
+	triggerRun.Spec.Catchup = true
+
+	options, status, err := runCapturingStartOptions(t, triggerRun)
+
+	require.NoError(t, err)
+	assert.Equal(t, v2pb.TRIGGER_RUN_STATE_RUNNING, status.State)
+	assert.Equal(t, startAt, options.ScheduleStartAt.UTC())
+	assert.True(t, options.CatchUpFrom.IsZero(), "expected zero time, got %s", options.CatchUpFrom)
+}
+
+func TestRunPassesEndTimestampAsScheduleEnd(t *testing.T) {
+	endAt := time.Now().Add(72 * time.Hour).UTC().Truncate(time.Second)
+	triggerRun := _triggerRun.DeepCopy()
+	triggerRun.Spec.EndTimestamp = &pbtypes.Timestamp{Seconds: endAt.Unix()}
+
+	options, status, err := runCapturingStartOptions(t, triggerRun)
+
+	require.NoError(t, err)
+	assert.Equal(t, v2pb.TRIGGER_RUN_STATE_RUNNING, status.State)
+	assert.Equal(t, endAt, options.ScheduleEndAt.UTC())
+	assert.True(t, options.ScheduleStartAt.IsZero())
+}
+
+func TestRunRejectsEndBeforeStart(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
+	mockClient.EXPECT().StartWorkflow(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+
+	now := time.Now()
+	triggerRun := _triggerRun.DeepCopy()
+	triggerRun.Spec.StartTimestamp = &pbtypes.Timestamp{Seconds: now.Add(-time.Hour).Unix()}
+	triggerRun.Spec.EndTimestamp = &pbtypes.Timestamp{Seconds: now.Add(-2 * time.Hour).Unix()}
+	triggerRun.Spec.Catchup = true
+
+	status, err := setupCronTrigger(t, mockClient).Run(context.Background(), triggerRun)
+
+	require.Error(t, err)
+	assert.Equal(t, v2pb.TRIGGER_RUN_STATE_FAILED, status.State)
+	assert.Contains(t, status.ErrorMessage, "must be after start_timestamp")
+}
+
+// The cap is on occurrences, not age: ten hours of a per-minute cron is 600 replays and
+// must be refused, while the same ten hours of an hourly cron (see the test below) is
+// fine.
+func TestRunRejectsCatchUpBeyondOccurrenceLimit(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
+	mockClient.EXPECT().StartWorkflow(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+
+	triggerRun := _triggerRun.DeepCopy()
+	triggerRun.Spec.Trigger.GetCronSchedule().Cron = "* * * * *"
+	triggerRun.Spec.StartTimestamp = &pbtypes.Timestamp{Seconds: time.Now().Add(-10 * time.Hour).Unix()}
+	triggerRun.Spec.Catchup = true
+
+	status, err := setupCronTrigger(t, mockClient).Run(context.Background(), triggerRun)
+
+	require.Error(t, err)
+	assert.Equal(t, v2pb.TRIGGER_RUN_STATE_FAILED, status.State)
+	assert.Contains(t, status.ErrorMessage, "more than 500 occurrences")
+}
+
+func TestRunAllowsLongCatchUpOnSparseCron(t *testing.T) {
+	// 400 days of a daily cron is 400 occurrences: far beyond any age-based cap, and
+	// well within the occurrence cap.
+	startAt := time.Now().Add(-400 * 24 * time.Hour).UTC().Truncate(time.Second)
+	triggerRun := _triggerRun.DeepCopy()
+	triggerRun.Spec.Trigger.GetCronSchedule().Cron = "0 2 * * *"
+	triggerRun.Spec.StartTimestamp = &pbtypes.Timestamp{Seconds: startAt.Unix()}
+	triggerRun.Spec.Catchup = true
+
+	options, status, err := runCapturingStartOptions(t, triggerRun)
+
+	require.NoError(t, err)
+	assert.Equal(t, v2pb.TRIGGER_RUN_STATE_RUNNING, status.State)
+	assert.Equal(t, startAt, options.CatchUpFrom.UTC())
+}
+
+// A closed window in the past with catchup replays only up to its end; the count that
+// gates it must be computed against the end, not against now.
+func TestRunCountsCatchUpOccurrencesOnlyUpToEnd(t *testing.T) {
+	now := time.Now()
+	triggerRun := _triggerRun.DeepCopy()
+	triggerRun.Spec.Trigger.GetCronSchedule().Cron = "* * * * *"
+	// 20 hours back to 19 hours back: 60 per-minute occurrences, though 1200 lie
+	// between start and now.
+	triggerRun.Spec.StartTimestamp = &pbtypes.Timestamp{Seconds: now.Add(-20 * time.Hour).Unix()}
+	triggerRun.Spec.EndTimestamp = &pbtypes.Timestamp{Seconds: now.Add(-19 * time.Hour).Unix()}
+	triggerRun.Spec.Catchup = true
+
+	options, status, err := runCapturingStartOptions(t, triggerRun)
+
+	require.NoError(t, err)
+	assert.Equal(t, v2pb.TRIGGER_RUN_STATE_RUNNING, status.State)
+	assert.False(t, options.CatchUpFrom.IsZero())
+	assert.False(t, options.ScheduleEndAt.IsZero())
+}
+
+func TestCountCronOccurrences(t *testing.T) {
+	from := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+
+	t.Run("hourly over three days", func(t *testing.T) {
+		n, err := countCronOccurrences("0 * * * *", from, from.Add(72*time.Hour), 1000)
+		require.NoError(t, err)
+		assert.Equal(t, 72, n)
+	})
+
+	t.Run("occurrence exactly at from is counted, exactly at to is not", func(t *testing.T) {
+		n, err := countCronOccurrences("0 0 * * *", from, from.Add(24*time.Hour), 1000)
+		require.NoError(t, err)
+		assert.Equal(t, 1, n, "[from, to) is half-open")
+	})
+
+	t.Run("stops early once past the limit", func(t *testing.T) {
+		n, err := countCronOccurrences("* * * * *", from, from.Add(365*24*time.Hour), 10)
+		require.NoError(t, err)
+		assert.Equal(t, 11, n, "returns limit+1 rather than walking the whole year")
+	})
+
+	t.Run("empty range", func(t *testing.T) {
+		n, err := countCronOccurrences("0 * * * *", from, from, 1000)
+		require.NoError(t, err)
+		assert.Equal(t, 0, n)
+	})
+
+	t.Run("invalid cron", func(t *testing.T) {
+		_, err := countCronOccurrences("not a cron", from, from.Add(time.Hour), 1000)
+		require.Error(t, err)
+	})
+}
+
+// A catch-up that fails after the schedule exists must leave the trigger RUNNING. Marking
+// it FAILED would be terminal (isTerminateState), stranding a live schedule that keeps
+// creating pipeline runs with nothing left to reconcile it.
+func TestRunStaysRunningWhenCatchUpFails(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
+	mockClient.EXPECT().GetDomain().Return("test-domain")
+	mockClient.EXPECT().GetProvider().Return("test-provider").AnyTimes()
+	mockClient.EXPECT().ListOpenWorkflow(gomock.Any(), gomock.Any()).Return(
+		&clientInterface.ListOpenWorkflowExecutionsResponse{}, nil)
+
+	catchUpFrom := time.Now().Add(-3 * time.Hour)
+	// The client reports the live schedule alongside the catch-up failure.
+	mockClient.EXPECT().StartWorkflow(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(
+		&clientInterface.WorkflowExecution{ID: "ma-dev-test.trigger-schedule"},
+		&clientInterface.CatchUpError{
+			ScheduleID:  "ma-dev-test.trigger-schedule",
+			CatchUpFrom: catchUpFrom,
+			Err:         errors.New("backfill rpc failed"),
+		})
+
+	triggerRun := _triggerRun.DeepCopy()
+	triggerRun.Spec.StartTimestamp = &pbtypes.Timestamp{Seconds: catchUpFrom.Unix()}
+	triggerRun.Spec.Catchup = true
+
+	status, err := setupCronTrigger(t, mockClient).Run(context.Background(), triggerRun)
+
+	require.NoError(t, err, "a failed catch-up must not fail the trigger")
+	assert.Equal(t, v2pb.TRIGGER_RUN_STATE_RUNNING, status.State)
+	assert.Contains(t, status.ErrorMessage, "catch-up", "missed window must stay visible in status")
+	assert.Contains(t, status.ErrorMessage, "backfill rpc failed")
+	assert.NotNil(t, status.ActualTrigger, "schedule is live, so drift tracking must still be populated")
 }
 
 func TestRunPausesExistingScheduleImmediately(t *testing.T) {
