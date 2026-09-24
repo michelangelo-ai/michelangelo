@@ -55,7 +55,27 @@ func (m *revisionManager) UpsertRevision(ctx context.Context, rev client.Object,
 		return false, fmt.Errorf("cannot update immutable revision %s to mutable", name)
 	}
 
+	// rev is freshly constructed by the caller on every call (see
+	// pipeline.snapshotRevision), so it carries none of the metadata Kubernetes or the
+	// ingester attach out-of-band. A plain Update would silently wipe them:
+	//   - Finalizers: the ingester's own finalizer (added at Create time) is what lets a
+	//     GC-driven cascade delete soft-delete this revision's row instead of just
+	//     vanishing it. Losing it here means cascade delete stops working from the very
+	//     next reconcile after creation.
+	//   - Annotations: the ingester stamps `michelangelo/MetadataStoragePrimaryKey` onto
+	//     the object asynchronously; overwriting it causes a lost-update/conflict loop
+	//     with the ingester's own reconciler.
+	// So carry both forward, with rev's own annotations (if any) taking precedence.
 	rev.SetResourceVersion(existing.GetResourceVersion())
+	rev.SetFinalizers(existing.GetFinalizers())
+	mergedAnnotations := existing.GetAnnotations()
+	if mergedAnnotations == nil {
+		mergedAnnotations = map[string]string{}
+	}
+	for k, v := range rev.GetAnnotations() {
+		mergedAnnotations[k] = v
+	}
+	rev.SetAnnotations(mergedAnnotations)
 	if opts.Immutable {
 		apiutils.MarkImmutable(rev)
 	}
