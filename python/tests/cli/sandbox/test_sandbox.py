@@ -16,9 +16,12 @@ class CreateFunctionTest(TestCase):
     @patch("michelangelo.cli.sandbox.sandbox._create_spark_operator")
     @patch("michelangelo.cli.sandbox.sandbox._create_kuberay_operator")
     @patch("michelangelo.cli.sandbox.sandbox.subprocess.check_output")
+    @patch("michelangelo.cli.sandbox.sandbox.subprocess.run")
+    @patch("michelangelo.cli.sandbox.sandbox.subprocess.Popen")
     @patch("michelangelo.cli.sandbox.sandbox._assert_command")
     @patch("michelangelo.cli.sandbox.sandbox._kube_create")
     @patch("michelangelo.cli.sandbox.sandbox._exec")
+    @patch("michelangelo.cli.sandbox.sandbox._helm_upgrade_with_adoption")
     @patch("michelangelo.cli.sandbox.sandbox.tempfile.NamedTemporaryFile")
     @patch("michelangelo.cli.sandbox.sandbox._create_compute_cluster_secrets")
     @patch("michelangelo.cli.sandbox.sandbox._apply_compute_cluster_rbac")
@@ -31,9 +34,12 @@ class CreateFunctionTest(TestCase):
         mock_apply_rbac,
         mock_create_secrets,
         mock_tempfile,
+        mock_helm_upgrade,
         mock_exec,
         mock_kube_create,
         mock_assert_command,
+        mock_popen,
+        mock_run,
         mock_check_output,
         mock_create_kuberay,
         mock_create_spark,
@@ -54,6 +60,7 @@ class CreateFunctionTest(TestCase):
         mock_check_output.return_value = (
             b"kuberay\thttps://ray-project.github.io/kuberay-helm\n"
         )
+        mock_run.return_value = Mock(returncode=0, stdout="", stderr="")
         mock_registry_file = Mock()
         mock_registry_file.name = "/tmp/test-registry.json"
         mock_registry_file.__enter__ = Mock(return_value=mock_registry_file)
@@ -74,9 +81,12 @@ class CreateFunctionTest(TestCase):
     @patch("michelangelo.cli.sandbox.sandbox._create_spark_operator")
     @patch("michelangelo.cli.sandbox.sandbox._create_kuberay_operator")
     @patch("michelangelo.cli.sandbox.sandbox.subprocess.check_output")
+    @patch("michelangelo.cli.sandbox.sandbox.subprocess.run")
+    @patch("michelangelo.cli.sandbox.sandbox.subprocess.Popen")
     @patch("michelangelo.cli.sandbox.sandbox._assert_command")
     @patch("michelangelo.cli.sandbox.sandbox._kube_create")
     @patch("michelangelo.cli.sandbox.sandbox._exec")
+    @patch("michelangelo.cli.sandbox.sandbox._helm_upgrade_with_adoption")
     @patch("michelangelo.cli.sandbox.sandbox.tempfile.NamedTemporaryFile")
     @patch("michelangelo.cli.sandbox.sandbox._create_compute_cluster_secrets")
     @patch("michelangelo.cli.sandbox.sandbox._apply_compute_cluster_rbac")
@@ -89,9 +99,12 @@ class CreateFunctionTest(TestCase):
         mock_apply_rbac,
         mock_create_secrets,
         mock_tempfile,
+        mock_helm_upgrade,
         mock_exec,
         mock_kube_create,
         mock_assert_command,
+        mock_popen,
+        mock_run,
         mock_check_output,
         mock_create_kuberay,
         mock_create_spark,
@@ -112,6 +125,7 @@ class CreateFunctionTest(TestCase):
         mock_check_output.return_value = (
             b"kuberay\thttps://ray-project.github.io/kuberay-helm\n"
         )
+        mock_run.return_value = Mock(returncode=0, stdout="", stderr="")
         mock_registry_file = Mock()
         mock_registry_file.name = "/tmp/test-registry.json"
         mock_registry_file.__enter__ = Mock(return_value=mock_registry_file)
