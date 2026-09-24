@@ -1,7 +1,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-import { InterpolatableActionsPopover } from '#core/components/actions/interpolatable-actions-popover';
+import { DetailViewHeader } from '#core/components/views/detail-view/components/detail-view-header/detail-view-header';
 import { TRIGGER_ENTITY_CONFIG } from '#core/config/entities/trigger/trigger';
 import { TriggerRunAction, TriggerRunState } from '#core/config/entities/trigger/types';
 import { TRAIN_PHASE } from '#core/config/phases/train';
@@ -23,7 +23,7 @@ import type { ActionConfigSchema, Data } from '#core/components/actions/types';
 import type { TriggerRun } from '#core/config/entities/trigger/types';
 
 // PhaseEntityConfig.actions is ActionConfigSchema<T>[] where T is the entity's
-// generic parameter; InterpolatableActionsPopover expects Data (Record<string, unknown>).
+// generic parameter; DetailViewHeader expects ActionConfigSchema<object>[].
 // TriggerRun is structurally compatible at runtime; cast to unify.
 const KILL_ACTIONS = TRIGGER_ENTITY_CONFIG.actions as ActionConfigSchema<Data>[];
 
@@ -46,13 +46,35 @@ function buildRunningTriggerRun(overrides: Partial<TriggerRun> = {}): TriggerRun
 }
 
 describe('TRIGGER_ENTITY_CONFIG: kill action', () => {
+  it('renders Kill as a top-level header button, not tucked into an overflow menu', async () => {
+    const record = buildRunningTriggerRun();
+
+    render(
+      <DetailViewHeader title="my-trigger" actions={KILL_ACTIONS} record={record} />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getErrorProviderWrapper(),
+        getIconProviderWrapper(),
+        getInterpolationProviderWrapper(),
+        getRouterWrapper({ location: '/test-ns/triggers' }),
+        getServiceProviderWrapper({ request: vi.fn() }),
+        getSnackbarProviderWrapper(),
+      ])
+    );
+
+    expect(await screen.findByRole('button', { name: 'Kill' })).toBeInTheDocument();
+    // No overflow trigger should be rendered — Kill is the only action, and it's
+    // always shown directly rather than collapsing into a "..." popover.
+    expect(screen.queryByRole('button', { name: 'Actions' })).not.toBeInTheDocument();
+  });
+
   it('opens a confirm dialog naming the run and pipeline, fires UpdateTriggerRun with spec.action=KILL', async () => {
     const user = userEvent.setup();
     const record = buildRunningTriggerRun();
     const mockRequest = createQueryMockRouter({ UpdateTriggerRun: { triggerRun: record } });
 
     render(
-      <InterpolatableActionsPopover actions={KILL_ACTIONS} record={record} />,
+      <DetailViewHeader title="my-trigger" actions={KILL_ACTIONS} record={record} />,
       buildWrapper([
         getBaseProviderWrapper(),
         getErrorProviderWrapper(),
@@ -64,8 +86,7 @@ describe('TRIGGER_ENTITY_CONFIG: kill action', () => {
       ])
     );
 
-    await user.click(screen.getByRole('button', { name: 'Actions' }));
-    await user.click(await screen.findByRole('option', { name: 'Kill' }));
+    await user.click(await screen.findByRole('button', { name: 'Kill' }));
 
     const dialog = await screen.findByRole('dialog', { name: 'Kill Trigger Run' });
     expect(within(dialog).getByText(/Kill run/)).toHaveTextContent(
@@ -87,12 +108,11 @@ describe('TRIGGER_ENTITY_CONFIG: kill action', () => {
     });
   });
 
-  it('disables the action with a tooltip when the run is not killable', async () => {
-    const user = userEvent.setup();
-    const record = buildRunningTriggerRun({ status: { state: TriggerRunState.SUCCEEDED } });
+  it('is enabled when the run is running', async () => {
+    const record = buildRunningTriggerRun({ status: { state: TriggerRunState.RUNNING } });
 
     render(
-      <InterpolatableActionsPopover actions={KILL_ACTIONS} record={record} />,
+      <DetailViewHeader title="my-trigger" actions={KILL_ACTIONS} record={record} />,
       buildWrapper([
         getBaseProviderWrapper(),
         getErrorProviderWrapper(),
@@ -104,8 +124,30 @@ describe('TRIGGER_ENTITY_CONFIG: kill action', () => {
       ])
     );
 
-    await user.click(screen.getByRole('button', { name: 'Actions' }));
-    await user.hover(await screen.findByRole('option', { name: 'Kill' }));
+    expect(await screen.findByRole('button', { name: 'Kill' })).toBeEnabled();
+  });
+
+  it('disables the action with a tooltip when the run is not killable', async () => {
+    const user = userEvent.setup();
+    const record = buildRunningTriggerRun({ status: { state: TriggerRunState.SUCCEEDED } });
+
+    render(
+      <DetailViewHeader title="my-trigger" actions={KILL_ACTIONS} record={record} />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getErrorProviderWrapper(),
+        getIconProviderWrapper(),
+        getInterpolationProviderWrapper(),
+        getRouterWrapper({ location: '/test-ns/triggers' }),
+        getServiceProviderWrapper({ request: vi.fn() }),
+        getSnackbarProviderWrapper(),
+      ])
+    );
+
+    const killButton = await screen.findByRole('button', { name: 'Kill' });
+    expect(killButton).toBeDisabled();
+
+    await user.hover(killButton);
     expect(
       await screen.findByText('Only running or paused trigger runs can be killed')
     ).toBeInTheDocument();
@@ -117,7 +159,7 @@ describe('TRIGGER_ENTITY_CONFIG: kill action', () => {
     const mockRequest = createQueryMockRouter({ UpdateTriggerRun: new Error('Kill failed') });
 
     render(
-      <InterpolatableActionsPopover actions={KILL_ACTIONS} record={record} />,
+      <DetailViewHeader title="my-trigger" actions={KILL_ACTIONS} record={record} />,
       buildWrapper([
         getBaseProviderWrapper(),
         getErrorProviderWrapper(),
@@ -129,8 +171,7 @@ describe('TRIGGER_ENTITY_CONFIG: kill action', () => {
       ])
     );
 
-    await user.click(screen.getByRole('button', { name: 'Actions' }));
-    await user.click(await screen.findByRole('option', { name: 'Kill' }));
+    await user.click(await screen.findByRole('button', { name: 'Kill' }));
     const dialog = await screen.findByRole('dialog', { name: 'Kill Trigger Run' });
     await user.click(within(dialog).getByRole('button', { name: 'Kill' }));
 

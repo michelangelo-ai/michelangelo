@@ -23,9 +23,11 @@ export const TRIGGER_ENTITY_CONFIG: PhaseEntityConfig = {
   actions: [
     {
       display: { label: 'Kill', icon: 'stopCircle' },
-      hierarchy: interpolate(({ data }) =>
-        isKillable(data) ? ActionHierarchy.SECONDARY : ActionHierarchy.TERTIARY
-      ),
+      // Kill is the only action on this entity, so it's always shown as the top-level
+      // action button (see run.ts's Retry action for the same lone-action convention),
+      // rather than demoted to the overflow menu when the run isn't currently killable.
+      // Non-killability is expressed via the `disabled` rule below instead.
+      hierarchy: ActionHierarchy.PRIMARY,
       disabled: [
         {
           condition: interpolate(({ data }) => !isKillable(data)),
