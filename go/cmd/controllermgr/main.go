@@ -44,7 +44,9 @@ const serverName = "ma-controllermgr"
 // when removed by a non-apiserver delete (cascade GC, kubectl, GitOps). These are the
 // Pipeline's children; the scope is deliberately Pipeline-only. It is injected as a
 // cascadedelete.RetainPolicy. Keep this in sync with the kinds that implement the cascade
-// DrainTarget adapter (see go/components/{pipelinerun,triggerrun}).
+// DrainTarget adapter (see go/components/{pipelinerun,triggerrun}). Revision is also a
+// Pipeline-owned child but is intentionally absent: cascade-deleted Revisions are
+// soft-deleted, not retained.
 var cascadeRetainKinds = []string{"PipelineRun", "TriggerRun"}
 
 // scheme provides a Kubernetes runtime.Scheme object.
