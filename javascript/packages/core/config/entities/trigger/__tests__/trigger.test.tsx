@@ -2,6 +2,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { InterpolatableActionsPopover } from '#core/components/actions/interpolatable-actions-popover';
+import { DetailViewHeader } from '#core/components/views/detail-view/components/detail-view-header/detail-view-header';
 import { TRIGGER_ENTITY_CONFIG } from '#core/config/entities/trigger/trigger';
 import { TriggerRunAction, TriggerRunState } from '#core/config/entities/trigger/types';
 import { TRAIN_PHASE } from '#core/config/phases/train';
@@ -21,11 +22,14 @@ import { getUserProviderWrapper } from '#core/test/wrappers/get-user-provider-wr
 
 import type { ActionConfigSchema, Data } from '#core/components/actions/types';
 import type { TriggerRun } from '#core/config/entities/trigger/types';
+import type { ServiceContextType } from '#core/providers/service-provider/types';
 
 // PhaseEntityConfig.actions is ActionConfigSchema<T>[] where T is the entity's
-// generic parameter; InterpolatableActionsPopover expects Data (Record<string, unknown>).
-// TriggerRun is structurally compatible at runtime; cast to unify.
-const KILL_ACTIONS = TRIGGER_ENTITY_CONFIG.actions as ActionConfigSchema<Data>[];
+// generic parameter; InterpolatableActionsPopover/DetailViewHeader expect Data
+// (Record<string, unknown>). TriggerRun is structurally compatible at runtime; cast to unify.
+const TRIGGER_ACTIONS = TRIGGER_ENTITY_CONFIG.actions as ActionConfigSchema<Data>[];
+// Kept as an alias for the existing Kill-focused tests below, which predate Rerun.
+const KILL_ACTIONS = TRIGGER_ACTIONS;
 
 function buildRunningTriggerRun(overrides: Partial<TriggerRun> = {}): TriggerRun {
   return {
@@ -136,6 +140,124 @@ describe('TRIGGER_ENTITY_CONFIG: kill action', () => {
 
     await within(dialog).findByText(/Test error/);
     expect(screen.getByRole('dialog', { name: 'Kill Trigger Run' })).toBeInTheDocument();
+  });
+});
+
+describe('TRIGGER_ENTITY_CONFIG: rerun action', () => {
+  function buildTerminalTriggerRun(overrides: Partial<TriggerRun> = {}): TriggerRun {
+    return buildRunningTriggerRun({
+      status: { state: TriggerRunState.FAILED },
+      spec: {
+        pipeline: { name: 'my-pipeline', namespace: 'test-ns' },
+        revision: { name: 'rev-1', namespace: 'test-ns' },
+        actor: { name: 'me' },
+        trigger: { triggerType: { case: 'cronSchedule', value: { cron: '0 * * * *' } } },
+        sourceTriggerName: 'nightly',
+        autoFlip: false,
+        notifications: [],
+        kill: false,
+        action: TriggerRunAction.NO_ACTION,
+      },
+      ...overrides,
+    });
+  }
+
+  function buildRerunWrappers(request: ServiceContextType['request']) {
+    return [
+      getBaseProviderWrapper(),
+      getErrorProviderWrapper(),
+      getIconProviderWrapper(),
+      getInterpolationProviderWrapper(),
+      getRouterWrapper({ location: '/test-ns/triggers' }),
+      getSnackbarProviderWrapper(),
+      getServiceProviderWrapper({ request }),
+    ];
+  }
+
+  it('renders Rerun as a direct header button even when Kill is demoted to the overflow menu', async () => {
+    const record = buildTerminalTriggerRun();
+
+    render(
+      <DetailViewHeader title="my-trigger" actions={TRIGGER_ACTIONS} record={record} />,
+      buildWrapper(buildRerunWrappers(vi.fn()))
+    );
+
+    // A failed run isn't killable, so Kill collapses into the overflow menu — but Rerun is
+    // a static secondary action and always renders directly as its own button.
+    expect(await screen.findByRole('button', { name: 'Rerun' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Actions' })).toBeInTheDocument();
+  });
+
+  it('disables Rerun with a tooltip when the trigger run has not terminated', async () => {
+    const user = userEvent.setup();
+    const record = buildTerminalTriggerRun({ status: { state: TriggerRunState.RUNNING } });
+
+    render(
+      <DetailViewHeader title="my-trigger" actions={TRIGGER_ACTIONS} record={record} />,
+      buildWrapper(buildRerunWrappers(vi.fn()))
+    );
+
+    const rerunButton = await screen.findByRole('button', { name: 'Rerun' });
+    expect(rerunButton).toBeDisabled();
+
+    await user.hover(rerunButton);
+    expect(
+      await screen.findByText(
+        'Only terminated trigger runs (failed, killed, or succeeded) can be rerun'
+      )
+    ).toBeInTheDocument();
+  });
+
+  it.each([TriggerRunState.FAILED, TriggerRunState.KILLED, TriggerRunState.SUCCEEDED])(
+    'enables Rerun when the trigger run state is terminal (%i)',
+    async (state) => {
+      const record = buildTerminalTriggerRun({ status: { state } });
+
+      render(
+        <DetailViewHeader title="my-trigger" actions={TRIGGER_ACTIONS} record={record} />,
+        buildWrapper(buildRerunWrappers(vi.fn()))
+      );
+
+      expect(await screen.findByRole('button', { name: 'Rerun' })).toBeEnabled();
+    }
+  );
+
+  it('creates a new TriggerRun copying pipeline/revision/schedule and clearing kill state', async () => {
+    const user = userEvent.setup();
+    const record = buildTerminalTriggerRun();
+    const mockRequest = createQueryMockRouter({ CreateTriggerRun: { triggerRun: record } });
+
+    render(
+      <DetailViewHeader title="my-trigger" actions={TRIGGER_ACTIONS} record={record} />,
+      buildWrapper(buildRerunWrappers(mockRequest))
+    );
+
+    await user.click(await screen.findByRole('button', { name: 'Rerun' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Rerun Trigger' });
+    await user.click(within(dialog).getByRole('button', { name: 'Rerun' }));
+
+    await waitFor(() => {
+      expect(mockRequest).toHaveBeenCalledWith('CreateTriggerRun', expect.anything(), {});
+    });
+
+    const call = mockRequest.getCall('CreateTriggerRun');
+    const payload = call?.args as TriggerRun;
+
+    // A cron trigger with no batch/backfill markers is named with the "cron-" prefix.
+    expect(payload.metadata.name).toMatch(/^cron-/);
+    expect(payload.metadata.namespace).toBe('test-ns');
+    // Pipeline, revision, and the trigger's own schedule carry over unchanged.
+    expect(payload.spec.pipeline).toEqual({ name: 'my-pipeline', namespace: 'test-ns' });
+    expect(payload.spec.revision).toEqual({ name: 'rev-1', namespace: 'test-ns' });
+    expect(payload.spec.trigger).toEqual({
+      triggerType: { case: 'cronSchedule', value: { cron: '0 * * * *' } },
+    });
+    // The new run must not spawn already killed, even though the source (being FAILED) is terminal.
+    expect(payload.spec.action).toBe(TriggerRunAction.NO_ACTION);
+    expect(payload.spec.kill).toBe(false);
+    // Server-owned fields from the source run must not carry over onto the new one.
+    expect(payload.spec.actor).toBeUndefined();
+    expect(payload.status).toBeUndefined();
   });
 });
 

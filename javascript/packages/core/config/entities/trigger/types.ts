@@ -77,6 +77,7 @@ export type TriggerRun = {
   metadata: {
     name: string;
     namespace: string;
+    labels?: Record<string, string>;
   };
   spec: {
     pipeline: { name: string; namespace: string };
@@ -91,6 +92,10 @@ export type TriggerRun = {
     kill: boolean;
     /** proto field 11 — replaces deprecated kill boolean */
     action: TriggerRunAction;
+    /** Backfill window start; present only for a backfill-created trigger run. */
+    startTimestamp?: { seconds: string };
+    /** Backfill window end; present only for a backfill-created trigger run. */
+    endTimestamp?: { seconds: string };
   };
   status: {
     state: TriggerRunState;
