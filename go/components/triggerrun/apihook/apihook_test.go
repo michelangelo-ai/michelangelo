@@ -101,6 +101,48 @@ func TestBeforeCreatePipelineLookupErrorDoesNotFailCreation(t *testing.T) {
 	require.Empty(t, request.TriggerRun.GetLabels())
 }
 
+func TestBeforeCreateRevisionMissingEnvironmentLabelRejected(t *testing.T) {
+	mc := gomock.NewController(t)
+	defer mc.Finish()
+
+	// No Get call is expected: the environment-label check must
+	// short-circuit before any Revision (or Pipeline) lookup is attempted.
+	mockAPI := apimocks.NewMockHandler(mc)
+
+	h := apiHook{logger: zaptest.NewLogger(t), apiHandler: mockAPI, scheme: testScheme(t)}
+	request := &v2.CreateTriggerRunRequest{
+		TriggerRun: &v2.TriggerRun{
+			ObjectMeta: metav1.ObjectMeta{Name: "run", Namespace: "test-ns"},
+			Spec: v2.TriggerRunSpec{
+				Revision: &api.ResourceIdentifier{Name: "test-revision"},
+			},
+		},
+	}
+
+	err := h.BeforeCreate(context.Background(), request)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), mlapi.EnvironmentLabel)
+}
+
+func TestBeforeCreateNoRevisionSkipsEnvironmentCheck(t *testing.T) {
+	mc := gomock.NewController(t)
+	defer mc.Finish()
+
+	// No Get call is expected: BeforeCreate must return early without hitting the API.
+	mockAPI := apimocks.NewMockHandler(mc)
+
+	h := apiHook{logger: zaptest.NewLogger(t), apiHandler: mockAPI, scheme: testScheme(t)}
+	request := &v2.CreateTriggerRunRequest{
+		TriggerRun: &v2.TriggerRun{
+			ObjectMeta: metav1.ObjectMeta{Name: "run", Namespace: "test-ns"},
+			Spec:       v2.TriggerRunSpec{},
+		},
+	}
+
+	require.NoError(t, h.BeforeCreate(context.Background(), request))
+	require.Empty(t, request.TriggerRun.GetLabels())
+}
+
 func TestBeforeCreateNoPipelineRefIsNoop(t *testing.T) {
 	mc := gomock.NewController(t)
 	defer mc.Finish()

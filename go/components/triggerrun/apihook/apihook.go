@@ -2,6 +2,7 @@ package apihook
 
 import (
 	"context"
+	"fmt"
 
 	"go.uber.org/zap"
 
@@ -34,6 +35,10 @@ type apiHook struct {
 }
 
 func (a apiHook) BeforeCreate(ctx context.Context, request *v2.CreateTriggerRunRequest) error {
+	if err := a.checkRevisionEnvironment(ctx, request); err != nil {
+		return err
+	}
+
 	pipelineRef := request.TriggerRun.Spec.GetPipeline()
 	if pipelineRef == nil || pipelineRef.GetName() == "" {
 		return nil
@@ -58,4 +63,29 @@ func (a apiHook) BeforeCreate(ctx context.Context, request *v2.CreateTriggerRunR
 	}
 
 	return cascadedelete.StampOwnerRefOnCreate(ctx, a.logger, a.scheme, request.TriggerRun, pipeline)
+}
+
+// checkRevisionEnvironment enforces environment-label presence for a
+// TriggerRun that pins a specific Revision. The check is skipped entirely
+// when Spec.Revision is unset, since this rule only guards the
+// revision-pinned creation path.
+func (a apiHook) checkRevisionEnvironment(ctx context.Context, request *v2.CreateTriggerRunRequest) error {
+	revisionRef := request.TriggerRun.Spec.GetRevision()
+	if revisionRef == nil || revisionRef.GetName() == "" {
+		return nil
+	}
+
+	envLabel := request.TriggerRun.GetLabels()[api.EnvironmentLabel]
+	if envLabel == "" {
+		return fmt.Errorf("environment label is not set; a trigger run pinned to a revision must have %s set", api.EnvironmentLabel)
+	}
+
+	// TODO(https://github.com/michelangelo-ai/michelangelo/issues/2155): add a
+	// production-environment branch-protection check here — when envLabel is
+	// "production", resolve the pinned Revision (via a.apiHandler.Get, the
+	// same pattern as pipelinerun/apihook.go's resolveRevision) and reject
+	// the create unless the revision's git branch is master/main. Deferred
+	// pending that issue's design; presence enforcement above is unaffected.
+
+	return nil
 }
