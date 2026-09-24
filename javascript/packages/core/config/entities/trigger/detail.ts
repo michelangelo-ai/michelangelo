@@ -21,9 +21,8 @@ const RUN_CELLS_EXCLUDING_TRIGGER = SHARED_RUN_CELL_CONFIG.filter(
 export const TRIGGER_DETAIL_CONFIG: DetailViewConfig = {
   type: 'detail',
   metadata: [
-    { id: 'metadata.creationTimestamp.seconds', label: 'Creation time', type: CellType.DATE },
-    { id: 'spec.actor.name', label: 'Owner', type: CellType.TEXT },
     TRIGGER_PIPELINE_CELL_CONFIG,
+    { id: 'metadata.creationTimestamp.seconds', label: 'Creation time', type: CellType.DATE },
     {
       id: 'spec.trigger.triggerType.value.cron',
       label: 'Cron',
@@ -88,6 +87,7 @@ export const TRIGGER_DETAIL_CONFIG: DetailViewConfig = {
       type: CellType.DATE,
       hideEmpty: true,
     },
+    { id: 'spec.actor.name', label: 'Owner', type: CellType.TEXT },
     TRIGGER_STATE_CELL_CONFIG,
   ],
   pages: [
