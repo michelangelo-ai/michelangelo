@@ -8,7 +8,7 @@ import type { Pipeline, PipelineRevision } from './types';
  * The Revision a run started from this record should pin to.
  *
  * A Revision record already names the exact revision being viewed — its own identity,
- * no lookup needed. A Pipeline record has no specific revision in view, so this falls 
+ * no lookup needed. A Pipeline record has no specific revision in view, so this falls
  * back to its `status.latestRevision` pointer.
  */
 export function useTargetRevision(

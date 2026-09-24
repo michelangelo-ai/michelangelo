@@ -188,10 +188,7 @@ describe('PIPELINE_ENTITY_CONFIG: delete action', () => {
       );
     }
 
-    // TODO: the Delete action still reads/sends `data.metadata.name` verbatim, which is now the
-    // viewed Revision's own identity, not the pipeline's — needs to unwrap `spec.content` (or
-    // target a different mutation) before this passes again. Deferred per team decision.
-    it.skip('opens dialog to confirm deletion of pipeline, deletes pipeline and navigates to list view', async () => {
+    it('opens dialog to confirm deletion of pipeline, deletes pipeline and navigates to list view', async () => {
       const user = userEvent.setup();
       const mockRequest = createQueryMockRouter({
         ...withLatestRevision({
@@ -214,12 +211,15 @@ describe('PIPELINE_ENTITY_CONFIG: delete action', () => {
 
       await user.click(getSubmitButton(dialog));
 
+      // The record is the viewed Revision, not the Pipeline — mutation middleware retargets
+      // `metadata` at `spec.baseResource` (the Revision's pointer to the Pipeline) before
+      // sending, since deleteCrd (packages/rpc/handlers.ts) only reads `metadata.name`/
+      // `metadata.namespace`.
       await waitFor(() => {
         expect(mockRequest).toHaveBeenCalledWith(
           'DeletePipeline',
           expect.objectContaining({
             metadata: { name: 'eval-pipeline', namespace: 'ma-dev-test' },
-            spec: { owner: { name: 'me' } },
           }),
           {}
         );

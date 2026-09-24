@@ -57,6 +57,17 @@ export const PIPELINE_ENTITY_CONFIG: PhaseEntityConfig = {
         type: 'mutation',
         mutation: {
           mutationName: 'DeletePipeline',
+          // The record on the pipeline detail page is the viewed PipelineRevision, not the
+          // Pipeline — deleteCrd (packages/rpc/handlers.ts) only reads `metadata.name`/
+          // `metadata.namespace`, so retargeting `metadata` at `spec.baseResource` (the
+          // Revision's pointer to the Pipeline it snapshots) is enough to delete the right
+          // resource. A no-op on the list page, where `record` is already a Pipeline with no
+          // `spec.baseResource`.
+          middleware: {
+            operations: [
+              { source: 'spec.baseResource', destination: 'metadata', transformation: (v) => v },
+            ],
+          },
           successOperations: [
             { type: 'invalidate', targets: ['ListPipeline'] },
             { type: 'route', route: '/${studio.projectId}/${studio.phase}/pipelines' },
@@ -66,12 +77,15 @@ export const PIPELINE_ENTITY_CONFIG: PhaseEntityConfig = {
       modal: {
         type: 'confirm',
         header: { title: 'Delete Pipeline' },
-        body: interpolate(
-          ({ data }) =>
-            // cast: data is unknown from interpolation context; always Pipeline in this entity
-            // config; see #1425
-            `Delete pipeline **${(data as Pipeline).metadata.name}**? This action cannot be undone.`
-        ),
+        body: interpolate(({ data }) => {
+          // cast: data is unknown from interpolation context; a live Pipeline from list rows,
+          // or the wrapping PipelineRevision on the always-revisioned detail page; see #1425
+          const pipeline = data as Pipeline;
+          const name = isPipelineRevision(data)
+            ? data.spec.baseResource.name
+            : pipeline.metadata.name;
+          return `Delete pipeline **${name}**? This action cannot be undone.`;
+        }),
         button: { label: 'Delete' },
         destructive: true,
       },
