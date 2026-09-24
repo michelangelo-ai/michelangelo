@@ -194,7 +194,7 @@ describe('Trigger list page', () => {
                     actor: { name: 'jsmith' },
                     autoFlip: true,
                   },
-                  status: { state: 1 },
+                  status: { state: 'TRIGGER_RUN_STATE_RUNNING' },
                 },
                 {
                   metadata: {
@@ -213,7 +213,7 @@ describe('Trigger list page', () => {
                     actor: { name: 'jsmith' },
                     autoFlip: false,
                   },
-                  status: { state: 1 },
+                  status: { state: 'TRIGGER_RUN_STATE_RUNNING' },
                 },
               ],
             },

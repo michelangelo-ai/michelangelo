@@ -87,8 +87,8 @@ describe('CreateInferenceServerForm', () => {
         expect.objectContaining({
           metadata: { name: 'full-target', namespace: 'ma-dev-test' },
           spec: {
-            tenancyType: 1,
-            backendType: 1,
+            tenancyType: 'TENANCY_TYPE_DEDICATED',
+            backendType: 'BACKEND_TYPE_TRITON',
             initSpec: {
               resourceSpec: { cpu: 4, memory: '8Gi', diskSize: '', gpu: 1 },
               servingSpec: {

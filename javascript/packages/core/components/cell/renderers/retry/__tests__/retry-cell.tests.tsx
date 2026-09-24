@@ -18,7 +18,11 @@ describe('RetryCell', () => {
   const mockPipelineRunData = {
     pipelineRun: {
       spec: { existingKey: 'existingValue' },
-      status: { state: 4, workflowId: 'wf-123', workflowRunId: 'wfr-456' },
+      status: {
+        state: 'PIPELINE_RUN_STATE_KILLED',
+        workflowId: 'wf-123',
+        workflowRunId: 'wfr-456',
+      },
     },
   };
 
@@ -59,7 +63,11 @@ describe('RetryCell', () => {
     const runningData = {
       pipelineRun: {
         spec: { existingKey: 'existingValue' },
-        status: { state: 1, workflowId: 'wf-123', workflowRunId: 'wfr-456' },
+        status: {
+          state: 'PIPELINE_RUN_STATE_PENDING',
+          workflowId: 'wf-123',
+          workflowRunId: 'wfr-456',
+        },
       },
     };
 
