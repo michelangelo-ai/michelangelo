@@ -8,6 +8,7 @@ import {
   PIPELINE_RUN_REVISION_NAME_FIELD,
 } from '#core/config/entities/pipeline/shared';
 import { PipelineRunState } from '#core/config/entities/run/types';
+import { TriggerRunState } from '#core/config/entities/trigger/shared';
 import { TRIGGER_ENTITY_CONFIG } from '#core/config/entities/trigger/trigger';
 import { EntityDetailRoute } from '#core/router/entity-detail-route';
 import { PhaseListRoute } from '#core/router/phase-list-route';
@@ -631,7 +632,7 @@ describe('PIPELINE_ENTITY_CONFIG: Triggers tab', () => {
                   actor: { name: 'me' },
                   trigger: { triggerType: { case: 'cronSchedule', value: { cron: '0 2 * * *' } } },
                 },
-                status: { state: 1 },
+                status: { state: TriggerRunState.RUNNING },
               },
             ],
           },

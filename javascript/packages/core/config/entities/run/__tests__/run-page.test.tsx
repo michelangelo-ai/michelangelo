@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react';
 
+import { PipelineRunState, PipelineRunStepState } from '#core/config/entities/run/types';
 import { TRAIN_PHASE } from '#core/config/phases/train';
 import { EntityDetailRoute } from '#core/router/entity-detail-route';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
@@ -23,12 +24,12 @@ describe('Run detail page', () => {
         pipeline: { name: 'prediction-pipeline' },
       },
       status: {
-        state: 3,
+        state: PipelineRunState.SUCCEEDED,
         steps: [
           {
             name: 'Execute Workflow',
             displayName: 'Execute Workflow',
-            state: 3,
+            state: PipelineRunStepState.SUCCEEDED,
             startTime: { seconds: '1700000010' },
             endTime: { seconds: '1700003186' },
             logUrl: 'https://workflow.example.com/run-1',
@@ -82,7 +83,7 @@ describe('Run detail page', () => {
               GetPipelineRun: {
                 pipelineRun: buildRun({
                   status: {
-                    state: 5,
+                    state: PipelineRunState.FAILED,
                     steps: [],
                     errorMessage: 'Task train failed:\nOOMKilled',
                   },
@@ -156,7 +157,7 @@ describe('Run detail page', () => {
                     },
                   },
                   status: {
-                    state: 3,
+                    state: PipelineRunState.SUCCEEDED,
                     steps: [],
                     sourcePipeline: {
                       pipeline: {
@@ -226,7 +227,7 @@ describe('Run detail page', () => {
           getServiceProviderWrapper({
             request: createQueryMockRouter({
               GetPipelineRun: {
-                pipelineRun: buildRun({ status: { state: 1, steps: [] } }),
+                pipelineRun: buildRun({ status: { state: PipelineRunState.PENDING, steps: [] } }),
               },
             }),
           }),

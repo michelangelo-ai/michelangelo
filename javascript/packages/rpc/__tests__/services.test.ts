@@ -42,12 +42,11 @@ it('decodes a ListPipelineRun response containing a TypedStruct Any field', asyn
     result as unknown as { pipelineRunList: { items: { status: { details: unknown[] } }[] } }
   ).pipelineRunList.items[0].status.details;
 
-  // The registry decodes the Any to a binary TypedStruct, and toPlainObject unpacks it to
-  // { typeUrl, value } where typeUrl names the inner config type and value is its plain
-  // JSON. Without TypedStructSchema in the registry, fromJson throws before reaching here.
-  expect(details[0]).toEqual({
+  // The service client no longer decodes the response through fromJson/registry — it
+  // returns the raw JSON from the wire, so the Any comes through as-is with its '@type'.
+  expect(details[0]).toMatchObject({
+    '@type': 'type.googleapis.com/michelangelo.api.TypedStruct',
     typeUrl: 'type.googleapis.com/michelangelo.UniFlowConf',
-    value: {},
   });
 });
 

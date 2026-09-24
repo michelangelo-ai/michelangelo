@@ -4,6 +4,7 @@ import { formatElapsedSeconds } from '#core/utils/time-utils';
 import { RunConfigurationPage } from './run-configuration-page';
 import { RunInfoPage } from './run-info-page';
 import { SHARED_RUN_CELL_CONFIG, STEP_STATE_COLOR_MAP, STEP_STATE_TEXT_MAP } from './shared';
+import { PipelineRunStepState } from './types';
 
 import type { DetailViewConfig } from '#core/components/views/types';
 
@@ -88,19 +89,19 @@ export const RUN_DETAIL_CONFIG: DetailViewConfig = {
             markdown: false,
           },
         ],
-        stateBuilder: (record: { state: number }) => {
+        stateBuilder: (record: { state: PipelineRunStepState }) => {
           switch (record.state) {
-            case 1:
+            case PipelineRunStepState.PENDING:
               return TASK_STATE.PENDING;
-            case 2:
+            case PipelineRunStepState.RUNNING:
               return TASK_STATE.RUNNING;
-            case 3:
+            case PipelineRunStepState.SUCCEEDED:
               return TASK_STATE.SUCCESS;
-            case 4:
+            case PipelineRunStepState.KILLED:
               return TASK_STATE.ERROR;
-            case 5:
+            case PipelineRunStepState.FAILED:
               return TASK_STATE.ERROR;
-            case 6:
+            case PipelineRunStepState.SKIPPED:
               return TASK_STATE.SKIPPED;
             default:
               return TASK_STATE.PENDING;

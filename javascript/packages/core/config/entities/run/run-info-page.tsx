@@ -203,8 +203,7 @@ function getExecutionTimestampSeconds(run: PipelineRunSummary | undefined): stri
  */
 function formatRunDuration(run: PipelineRunSummary | undefined): string | null {
   const startSeconds = Number(run?.metadata?.creationTimestamp?.seconds);
-  // cast: the API returns the state as a bare number; it always holds a PipelineRunState value
-  const state = run?.status?.state as PipelineRunState | undefined;
+  const state = run?.status?.state;
   if (isNaN(startSeconds) || state === undefined) {
     return null;
   }

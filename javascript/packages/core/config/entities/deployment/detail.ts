@@ -2,10 +2,10 @@ import { CellType } from '#core/components/cell/constants';
 import { TASK_STATE } from '#core/components/views/execution/constants';
 import { DeploymentInfoPage } from './deployment-info-page';
 import {
-  DEPLOYMENT_CONDITION_STATUS,
-  DEPLOYMENT_STAGE,
   DEPLOYMENT_STAGE_CELL,
   DEPLOYMENT_STATE_CELL,
+  DeploymentConditionStatus,
+  DeploymentStage,
 } from './shared';
 
 import type { DetailViewConfig } from '#core/components/views/types';
@@ -35,10 +35,10 @@ export const DEPLOYMENT_DETAIL_CONFIG: DetailViewConfig = {
       },
       tasks: {
         accessor: (data: {
-          status?: { stage?: number; conditions?: object[]; conditionsSnapshot?: object[] };
+          status?: { stage?: string; conditions?: object[]; conditionsSnapshot?: object[] };
         }) => {
           const conditions =
-            data?.status?.stage === DEPLOYMENT_STAGE.ROLLOUT_FAILED
+            data?.status?.stage === DeploymentStage.ROLLOUT_FAILED
               ? data?.status?.conditionsSnapshot
               : data?.status?.conditions;
           return conditions ?? [];
@@ -71,13 +71,13 @@ export const DEPLOYMENT_DETAIL_CONFIG: DetailViewConfig = {
             markdown: false,
           },
         ],
-        stateBuilder: (record: { status: number }) => {
+        stateBuilder: (record: { status: string }) => {
           switch (record.status) {
-            case DEPLOYMENT_CONDITION_STATUS.TRUE:
+            case DeploymentConditionStatus.TRUE:
               return TASK_STATE.SUCCESS;
-            case DEPLOYMENT_CONDITION_STATUS.FALSE:
+            case DeploymentConditionStatus.FALSE:
               return TASK_STATE.ERROR;
-            case DEPLOYMENT_CONDITION_STATUS.UNKNOWN:
+            case DeploymentConditionStatus.UNKNOWN:
             default:
               return TASK_STATE.RUNNING;
           }
