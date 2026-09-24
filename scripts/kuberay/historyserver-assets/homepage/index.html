@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Ray History Server</title>
+<style>
+  body { font-family: -apple-system, sans-serif; margin: 2rem; color: #222; }
+  h1 { font-size: 1.25rem; }
+  table { border-collapse: collapse; width: 100%; max-width: 900px; }
+  th, td { text-align: left; padding: 0.4rem 0.8rem; border-bottom: 1px solid #ddd; font-size: 0.9rem; }
+  th { color: #666; font-weight: 600; }
+  a { color: #0366d6; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .live { color: #1a7f37; font-weight: 600; }
+  .empty { color: #666; padding: 1rem 0; }
+</style>
+</head>
+<body>
+<h1>Ray History Server &mdash; Clusters</h1>
+<div id="content" class="empty">Loading clusters&hellip;</div>
+<script>
+fetch('/clusters/')
+  .then(function (r) { return r.json(); })
+  .then(function (clusters) {
+    var el = document.getElementById('content');
+    if (!clusters || clusters.length === 0) {
+      el.textContent = 'No Ray clusters found.';
+      return;
+    }
+    var rows = clusters.map(function (c) {
+      var href = '/enter_cluster/' + encodeURIComponent(c.namespace) + '/' +
+        encodeURIComponent(c.name) + '/' + encodeURIComponent(c.sessionName) + '?redirect=1';
+      var sessionLabel = c.sessionName === 'live'
+        ? '<span class="live">live</span>'
+        : c.sessionName;
+      return '<tr><td>' + c.namespace + '</td><td>' + c.name + '</td><td>' +
+        sessionLabel + '</td><td>' + (c.createTime || '') + '</td><td><a href="' +
+        href + '">Open</a></td></tr>';
+    });
+    el.outerHTML = '<table><thead><tr><th>Namespace</th><th>Cluster</th>' +
+      '<th>Session</th><th>Created</th><th></th></tr></thead><tbody>' +
+      rows.join('') + '</tbody></table>';
+  })
+  .catch(function (err) {
+    document.getElementById('content').textContent = 'Failed to load clusters: ' + err;
+  });
+</script>
+</body>
+</html>

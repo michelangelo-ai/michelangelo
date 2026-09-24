@@ -1,0 +1,220 @@
+diff --git a/historyserver/pkg/historyserver/router.go b/historyserver/pkg/historyserver/router.go
+index 28ff4d6..04956ab 100644
+--- a/historyserver/pkg/historyserver/router.go
++++ b/historyserver/pkg/historyserver/router.go
+@@ -10,6 +10,7 @@ import (
+ 	"math"
+ 	"mime"
+ 	"net/http"
++	"os"
+ 	"path"
+ 	"sort"
+ 	"strconv"
+@@ -193,63 +194,104 @@ func routerAPI(s *ServerHandler) {
+ 		Writes(""))
+ }
+ 
+-// func routerRoot(s *ServerHandler) {
+-// 	ws := new(restful.WebService)
+-// 	defer restful.Add(ws)
+-// 	ws.Filter(RequestLogFilter)
+-// 	ws.Route(ws.GET("/").To(func(req *restful.Request, w *restful.Response) {
+-// 		isHomePage := true
+-// 		_, err := req.Request.Cookie(COOKIE_CLUSTER_NAME_KEY)
+-// 		isHomePage = err != nil
+-// 		prefix := ""
+-// 		if isHomePage {
+-// 			prefix = "homepage"
+-// 		} else {
+-// 			version := "v2.51.0"
+-// 			if versionCookie, err := req.Request.Cookie(COOKIE_DASHBOARD_VERSION_KEY); err == nil {
+-// 				version = versionCookie.Value
+-// 			}
+-// 			prefix = version + "/client/build"
+-// 		}
+-// 		// Check if homepage file exists; if so use it, otherwise use default index.html
+-// 		homepagePath := path.Join(s.dashboardDir, prefix, "index.html")
+-
+-// 		var data []byte
+-
+-// 		if _, statErr := os.Stat(homepagePath); !os.IsNotExist(statErr) {
+-// 			data, err = os.ReadFile(homepagePath)
+-// 		} else {
+-// 			http.Error(w, "could not read HTML file", http.StatusInternalServerError)
+-// 			logrus.Errorf("could not read HTML file: %v", statErr)
+-// 			return
+-// 		}
+-
+-// 		if err != nil {
+-// 			http.Error(w, "could not read HTML file", http.StatusInternalServerError)
+-// 			logrus.Errorf("could not read HTML file: %v", err)
+-// 			return
+-// 		}
+-// 		w.Header().Set("Content-Type", "text/html")
+-// 		w.Write(data)
+-// 	}).Writes(""))
+-// }
+-
+-// TODO: this is the frontend's entry.
+-// func routerHomepage(s *ServerHandler) {
+-// 	ws := new(restful.WebService)
+-// 	defer restful.Add(ws)
+-// 	ws.Path("/homepage").Consumes("*/*").Produces("*/*").Filter(RequestLogFilter)
+-// 	ws.Route(ws.GET("/").To(func(_ *restful.Request, w *restful.Response) {
+-// 		data, err := os.ReadFile(path.Join(s.dashboardDir, "homepage/index.html"))
+-// 		if err != nil {
+-// 			// Fallback to root path
+-// 			routerRoot(s)
+-// 			return
+-// 		}
+-// 		w.Header().Set("Content-Type", "text/html")
+-// 		w.Write(data)
+-// 	}).Writes(""))
+-// }
++// routerRoot serves the bundled Ray Dashboard SPA at "/" once a cluster/session
++// has been selected (via the cookies set by /enter_cluster or /enter_latest_cluster),
++// and a minimal cluster-picker homepage otherwise.
++func routerRoot(s *ServerHandler) {
++	ws := new(restful.WebService)
++	defer restful.Add(ws)
++	ws.Filter(RequestLogFilter)
++	ws.Route(ws.GET("/").To(func(req *restful.Request, w *restful.Response) {
++		_, err := req.Request.Cookie(COOKIE_CLUSTER_NAME_KEY)
++		isHomePage := err != nil
++
++		var homepagePath string
++		if isHomePage {
++			homepagePath = path.Join(s.dashboardDir, "homepage", "index.html")
++		} else {
++			homepagePath = path.Join(s.dashboardDir, "client", "build", "index.html")
++		}
++
++		data, readErr := os.ReadFile(homepagePath)
++		if readErr != nil {
++			http.Error(w, "could not read HTML file", http.StatusInternalServerError)
++			logrus.Errorf("could not read HTML file %s: %v", homepagePath, readErr)
++			return
++		}
++		w.Header().Set("Content-Type", "text/html")
++		w.Write(data)
++	}).Writes(""))
++}
++
++// routerStaticAssets serves the SPA's static bundle (JS/CSS/images) and any
++// other top-level files (favicon.ico, asset-manifest.json, etc.) referenced by
++// the dashboard's index.html via relative paths.
++func routerStaticAssets(s *ServerHandler) {
++	buildDir := path.Join(s.dashboardDir, "client", "build")
++	fileServer := http.FileServer(http.Dir(buildDir))
++	http.Handle("/static/", fileServer)
++	http.Handle("/favicon.ico", fileServer)
++	http.Handle("/asset-manifest.json", fileServer)
++	http.Handle("/speedscope-1.5.3/", fileServer)
++}
++
++// enterCluster sets the cluster/namespace/session cookies used by CookieHandle
++// and, if requested via redirect=1 (what a browser link should use), redirects
++// to "/" to load the dashboard SPA instead of returning a JSON body.
++func (s *ServerHandler) enterCluster(r1 *restful.Request, r2 *restful.Response) {
++	name := r1.PathParameter("name")
++	namespace := r1.PathParameter("namespace")
++	session := r1.PathParameter("session")
++	http.SetCookie(r2, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_CLUSTER_NAME_KEY, Value: name})
++	http.SetCookie(r2, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_CLUSTER_NAMESPACE_KEY, Value: namespace})
++	http.SetCookie(r2, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_SESSION_NAME_KEY, Value: session})
++
++	if r1.QueryParameter("redirect") == "1" {
++		http.Redirect(r2, r1.Request, "/", http.StatusFound)
++		return
++	}
++	r2.WriteJson(map[string]interface{}{
++		"result":    "success",
++		"name":      name,
++		"namespace": namespace,
++		"session":   session,
++	}, "application/json")
++}
++
++// enterLatestCluster resolves the most recent session (live if currently
++// running, else the latest historical session read back from storage) for a
++// given cluster name+namespace, then redirects to "/" with cookies set. This
++// gives callers a stable link that only needs the cluster identity (name +
++// namespace) — the session name, which is only known once Ray has actually
++// started, is resolved server-side.
++func (s *ServerHandler) enterLatestCluster(r1 *restful.Request, r2 *restful.Response) {
++	name := r1.PathParameter("name")
++	namespace := r1.PathParameter("namespace")
++
++	clusters := s.listClusters(s.maxClusters)
++	var best *utils.ClusterInfo
++	for i, c := range clusters {
++		if c.Name != name || c.Namespace != namespace {
++			continue
++		}
++		if best == nil || c.SessionName == "live" || c.CreateTimeStamp > best.CreateTimeStamp {
++			ci := clusters[i]
++			best = &ci
++			if c.SessionName == "live" {
++				break
++			}
++		}
++	}
++	if best == nil {
++		r2.WriteErrorString(http.StatusNotFound, fmt.Sprintf("no sessions found for cluster %s/%s", namespace, name))
++		return
++	}
++
++	http.SetCookie(r2, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_CLUSTER_NAME_KEY, Value: best.Name})
++	http.SetCookie(r2, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_CLUSTER_NAMESPACE_KEY, Value: best.Namespace})
++	http.SetCookie(r2, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_SESSION_NAME_KEY, Value: best.SessionName})
++	http.Redirect(r2, r1.Request, "/", http.StatusFound)
++}
+ 
+ func routerHealthz(s *ServerHandler) {
+ 
+@@ -294,25 +336,19 @@ func routerRayClusterSet(s *ServerHandler) {
+ 	defer restful.Add(ws)
+ 
+ 	ws.Path("/enter_cluster").Consumes(restful.MIME_JSON).Produces(restful.MIME_JSON).Filter(RequestLogFilter)
+-	ws.Route(ws.GET("/{namespace}/{name}/{session}").To(func(r1 *restful.Request, r2 *restful.Response) {
+-		name := r1.PathParameter("name")
+-		namespace := r1.PathParameter("namespace")
+-		session := r1.PathParameter("session")
+-		http.SetCookie(r2, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_CLUSTER_NAME_KEY, Value: name})
+-		http.SetCookie(r2, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_CLUSTER_NAMESPACE_KEY, Value: namespace})
+-		http.SetCookie(r2, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_SESSION_NAME_KEY, Value: session})
+-		r2.WriteJson(map[string]interface{}{
+-			"result":    "success",
+-			"name":      name,
+-			"namespace": namespace,
+-			"session":   session,
+-		}, "application/json")
+-	}).
+-		Doc("set cookie for cluster").
++	ws.Route(ws.GET("/{namespace}/{name}/{session}").To(s.enterCluster).
++		Doc("set cookie for cluster, optionally redirecting to the dashboard SPA with redirect=1").
+ 		Param(ws.PathParameter("namespace", "namespace")).
+ 		Param(ws.PathParameter("name", "name")).
+ 		Param(ws.PathParameter("session", "session")).
++		Param(ws.QueryParameter("redirect", "set to 1 to redirect to / instead of returning JSON")).
+ 		Writes("")) // Placeholder for specific return type
++
++	ws.Route(ws.GET("/{namespace}/{name}").To(s.enterLatestCluster).
++		Doc("resolve the latest (live if running, else most recent historical) session for a cluster and redirect to the dashboard SPA").
++		Param(ws.PathParameter("namespace", "namespace")).
++		Param(ws.PathParameter("name", "name")).
++		Writes(""))
+ }
+ 
+ func (s *ServerHandler) RegisterRouter() {
+@@ -322,8 +358,8 @@ func (s *ServerHandler) RegisterRouter() {
+ 	routerNodes(s)
+ 	routerEvents(s)
+ 	routerAPI(s)
+-	// routerRoot(s)
+-	// routerHomepage(s)
++	routerRoot(s)
++	routerStaticAssets(s)
+ 	routerHealthz(s)
+ 	routerLogical(s)
+ }
