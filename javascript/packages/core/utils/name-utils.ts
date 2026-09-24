@@ -41,3 +41,22 @@ export const generateSuffix = (config: { withDate: boolean } = { withDate: false
 
   return uuidSuffix;
 };
+
+/**
+ * Classifies the generated-name prefix for a trigger run from the schedule type it runs on
+ * and whether it's a backfill, mirroring the priority order the reconciler itself uses to
+ * classify a run (`GetTriggerType` in go/components/triggerrun/util.go): a batch rerun stays
+ * a batch rerun even with a backfill window set, a backfill window on a cron or interval
+ * trigger makes the run a backfill, and otherwise the run is named for its own schedule type.
+ *
+ * Shared by every place a TriggerRun name is generated — starting one fresh from a trigger's
+ * manifest and replaying an existing run as a rerun both need the same classification.
+ */
+export function resolveTriggerRunTypePrefix(
+  triggerTypeCase: string | undefined,
+  isBackfill: boolean
+): string {
+  if (triggerTypeCase === 'batchRerun') return 'batch-rerun';
+  if (isBackfill) return 'backfill';
+  return triggerTypeCase === 'intervalSchedule' ? 'interval' : 'cron';
+}

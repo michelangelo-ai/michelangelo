@@ -6,7 +6,7 @@ import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studi
 import { useStudioMutation } from '#core/hooks/use-studio-mutation/use-studio-mutation';
 import { useStudioQuery } from '#core/hooks/use-studio-query';
 import { ENVIRONMENT_LABEL_KEY } from '#core/utils/environment-utils';
-import { generateSuffix } from '#core/utils/name-utils';
+import { generateSuffix, resolveTriggerRunTypePrefix } from '#core/utils/name-utils';
 import { formatTriggerSchedule } from './format-trigger-schedule';
 import { RunTriggerFields } from './run-trigger-fields';
 import { isPipelineRevision } from './types';
@@ -138,23 +138,11 @@ export const RunTriggerForm = ({
 
 /**
  * Names the created TriggerRun after the type of run it represents, so it's identifiable in
- * the "Triggered by" column. The prefix mirrors how the reconciler will actually classify
- * the run (`GetTriggerType` in go/components/triggerrun/util.go, same priority order): a
- * batch rerun stays a batch rerun even with a backfill window set, while a backfill window
- * on a cron or interval trigger makes the run a backfill.
+ * the "Triggered by" column. See `resolveTriggerRunTypePrefix` for the classification rule.
  */
 function buildTriggerRunName(trigger: ManifestTrigger, isBackfill: boolean | undefined): string {
-  const typePrefix = resolveTriggerRunTypePrefix(trigger, isBackfill);
+  const typePrefix = resolveTriggerRunTypePrefix(trigger.triggerType?.case, !!isBackfill);
   return `${typePrefix}${generateSuffix({ withDate: true })}`;
-}
-
-function resolveTriggerRunTypePrefix(
-  trigger: ManifestTrigger,
-  isBackfill: boolean | undefined
-): string {
-  if (trigger.triggerType?.case === 'batchRerun') return 'batch-rerun';
-  if (isBackfill) return 'backfill';
-  return trigger.triggerType?.case === 'intervalSchedule' ? 'interval' : 'cron';
 }
 
 function buildTriggerOverride(
