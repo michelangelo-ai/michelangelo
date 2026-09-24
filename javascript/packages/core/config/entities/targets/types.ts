@@ -16,8 +16,8 @@ export type InferenceServer = {
     namespace: string;
   };
   spec: {
-    tenancyType: number;
-    backendType: number;
+    tenancyType: string;
+    backendType: string;
     ownerSpec?: {
       ownerInfo?: {
         owningTeam?: string;

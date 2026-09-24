@@ -116,9 +116,7 @@ describe('Run detail page', () => {
           pipeline: {
             spec: {
               manifest: {
-                // The generated proto client decodes enum fields to their numeric
-                // discriminant (PIPELINE_MANIFEST_TYPE_YAML = 1), not the enum's string name.
-                type: 1,
+                type: 'PIPELINE_MANIFEST_TYPE_YAML',
                 filePath: 'python/examples/boston/pipeline.yaml',
                 content: {
                   typeUrl: 'type.googleapis.com/michelangelo.PredictionPipelineConf',
@@ -172,7 +170,7 @@ describe('Run detail page', () => {
           actor: { name: 'jsmith' },
           pipelineSpec: {
             manifest: {
-              type: 1,
+              type: 'PIPELINE_MANIFEST_TYPE_YAML',
               content: {
                 typeUrl: 'type.googleapis.com/michelangelo.PredictionPipelineConf',
                 value: {
@@ -206,7 +204,10 @@ describe('Run detail page', () => {
           sourcePipeline: {
             pipeline: {
               spec: {
-                manifest: { type: 3, uniflowTar: 's3://default/bert_local.tar' },
+                manifest: {
+                  type: 'PIPELINE_MANIFEST_TYPE_UNIFLOW',
+                  uniflowTar: 's3://default/bert_local.tar',
+                },
               },
             },
           },

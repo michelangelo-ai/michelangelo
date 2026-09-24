@@ -163,7 +163,7 @@ describe('Run detail page', () => {
                       pipeline: {
                         spec: {
                           manifest: {
-                            type: 1,
+                            type: 'PIPELINE_MANIFEST_TYPE_YAML',
                             content: {
                               typeUrl: 'type.googleapis.com/michelangelo.PredictionPipelineConf',
                               value: { meta: { workflow_version: 'v2' } },

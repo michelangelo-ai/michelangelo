@@ -12,7 +12,12 @@ import { useStudioQuery } from '#core/hooks/use-studio-query';
 import type { CellRendererProps } from '#core/components/cell/types';
 import type { PipelineRunData } from './types';
 
-const TERMINATED_STATES = new Set([3, 4, 5, 6]);
+const TERMINATED_STATES = new Set([
+  'PIPELINE_RUN_STATE_SUCCEEDED',
+  'PIPELINE_RUN_STATE_KILLED',
+  'PIPELINE_RUN_STATE_FAILED',
+  'PIPELINE_RUN_STATE_SKIPPED',
+]);
 
 export const RetryCell = (props: CellRendererProps<string>) => {
   const { value } = props;

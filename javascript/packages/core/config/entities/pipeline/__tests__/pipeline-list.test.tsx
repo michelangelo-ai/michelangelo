@@ -134,7 +134,10 @@ describe('Pipeline list page', () => {
                         revisionId: '3f2a1b9c0d4e5f6a7b8c',
                         owner: { name: 'jsmith' },
                         gitCommit: { branch: 'feature/x' },
-                        content: { spec: { type: 1 }, status: { state: 3 } },
+                        content: {
+                          spec: { type: 'PIPELINE_TYPE_TRAIN' },
+                          status: { state: 'PIPELINE_STATE_READY' },
+                        },
                       },
                     },
                   ],

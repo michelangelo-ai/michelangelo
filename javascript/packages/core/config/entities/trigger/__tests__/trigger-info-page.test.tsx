@@ -14,13 +14,16 @@ describe('Trigger detail "Information" tab', () => {
   const buildTriggerRun = (overrides: Record<string, unknown> = {}) => ({
     metadata: { name: 'nightly-trigger', namespace: 'myproject' },
     spec: { pipeline: { name: 'my-pipeline', namespace: 'myproject' } },
-    status: { state: 1 },
+    status: { state: 'TRIGGER_RUN_STATE_RUNNING' },
     ...overrides,
   });
 
   it('renders a log link when status.logUrl is set', async () => {
     const triggerRun = buildTriggerRun({
-      status: { state: 1, logUrl: 'https://workflow.example.com/trigger-1' },
+      status: {
+        state: 'TRIGGER_RUN_STATE_RUNNING',
+        logUrl: 'https://workflow.example.com/trigger-1',
+      },
     });
 
     render(
@@ -63,7 +66,7 @@ describe('Trigger detail "Information" tab', () => {
 
   it('shows the error message section only when status.errorMessage is present', async () => {
     const triggerRun = buildTriggerRun({
-      status: { state: 3, errorMessage: 'Task train failed:\nOOMKilled' },
+      status: { state: 'TRIGGER_RUN_STATE_FAILED', errorMessage: 'Task train failed:\nOOMKilled' },
     });
 
     render(
