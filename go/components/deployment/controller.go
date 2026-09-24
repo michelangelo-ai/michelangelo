@@ -361,7 +361,7 @@ func (r *Reconciler) processPlugin(ctx context.Context, log logr.Logger, metrics
 
 		desiredModelChanged := ShouldRollback(*deployment)
 		rollbackAlertsEnabled := RollbackAlertsEnabled(*deployment)
-		if (!isHealthy || desiredModelChanged) && rollbackAlertsEnabled {
+		if isRollbackNeeded(deployment, isHealthy, desiredModelChanged) && rollbackAlertsEnabled {
 			if !IsRollbackStage(deployment.GetStatus().Stage) {
 				deployment.Status.Message = fmt.Sprintf("Detected that a rollback should occur due to alert firing=[%v], or due to the desired model changing=[%v]", isHealthy, desiredModelChanged)
 				log.Info("detected that a rollback should occur")
@@ -698,6 +698,21 @@ func TriggerNewRollout(deployment v2pb.Deployment) bool {
 	result := desiredCandidateDiffer && terminalOrInit
 
 	return result
+}
+
+// isRollbackNeeded determines whether a failing health check or a changed desired model should
+// trigger a rollback of an in-progress rollout.
+//
+// A failing health check (isHealthy == false) is only a rollback signal when there is a prior
+// revision to roll back to (deployment.Status.CurrentRevision != nil). On a deployment's
+// first-ever rollout, CurrentRevision is nil -- the backend hasn't had a chance to become
+// healthy yet, and treating that as a rollback trigger dead-ends at
+// DEPLOYMENT_STAGE_ROLLBACK_FAILED before the rollout plugin ever runs, since there is nothing
+// to roll back to. desiredModelChanged always triggers rollback regardless of prior revision,
+// since it reflects an explicit user-driven change to the desired target, not a health signal.
+func isRollbackNeeded(deployment *v2pb.Deployment, isHealthy bool, desiredModelChanged bool) bool {
+	hasPriorRevision := deployment.Status.CurrentRevision != nil
+	return (!isHealthy && hasPriorRevision) || desiredModelChanged
 }
 
 // ShouldRollback determines if the deployment should be rolled back to a previous version.
