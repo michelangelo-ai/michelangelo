@@ -1,6 +1,6 @@
 import { vi } from 'vitest';
 
-import { generateSuffix } from '../name-utils';
+import { generateSuffix, resolveTriggerRunTypePrefix } from '../name-utils';
 
 const originalDate = Date;
 
@@ -36,5 +36,26 @@ describe('generateSuffix', () => {
   it('should generate suffix with date when withDate is true', () => {
     const result = generateSuffix({ withDate: true });
     expect(result).toBe('-20240101-120000-abcd1234');
+  });
+});
+
+describe('resolveTriggerRunTypePrefix', () => {
+  it('classifies a batch rerun regardless of the backfill flag', () => {
+    expect(resolveTriggerRunTypePrefix('batchRerun', false)).toBe('batch-rerun');
+    expect(resolveTriggerRunTypePrefix('batchRerun', true)).toBe('batch-rerun');
+  });
+
+  it('classifies a backfill window on a cron or interval trigger as a backfill', () => {
+    expect(resolveTriggerRunTypePrefix('cronSchedule', true)).toBe('backfill');
+    expect(resolveTriggerRunTypePrefix('intervalSchedule', true)).toBe('backfill');
+  });
+
+  it('classifies an interval trigger with no backfill window as interval', () => {
+    expect(resolveTriggerRunTypePrefix('intervalSchedule', false)).toBe('interval');
+  });
+
+  it('falls back to cron for a cron trigger, or when the trigger type is unknown', () => {
+    expect(resolveTriggerRunTypePrefix('cronSchedule', false)).toBe('cron');
+    expect(resolveTriggerRunTypePrefix(undefined, false)).toBe('cron');
   });
 });
