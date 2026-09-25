@@ -13,6 +13,46 @@ data:
       - targets: ['michelangelo-controllermgr:8091']
       scrape_interval: 5s
       metrics_path: /metrics
+    # Discovers Ray head/worker pods by their "metrics" container port (set
+    # by the controllermgr's KubeRay mapper -- see ray.go rayMetricsExportPort)
+    # so the Ray Jobs Grafana dashboard has live data.
+    - job_name: 'ray'
+      kubernetes_sd_configs:
+      - role: pod
+      relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_ray_io_cluster]
+        action: keep
+        regex: .+
+      - source_labels: [__meta_kubernetes_pod_container_port_name]
+        action: keep
+        regex: metrics
+      - source_labels: [__meta_kubernetes_namespace]
+        target_label: namespace
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: pod
+      - source_labels: [__meta_kubernetes_pod_label_ray_io_cluster]
+        target_label: ray_io_cluster
+      - source_labels: [__meta_kubernetes_pod_label_ray_io_node_type]
+        target_label: ray_io_node_type
+    # Discovers Triton InferenceServer pods by their "metrics" container port
+    # (backends/triton.go createTritonDeployment exposes 8002 as "metrics")
+    # so the Model Serving Grafana dashboard has live inference data.
+    - job_name: 'triton-model-serving'
+      kubernetes_sd_configs:
+      - role: pod
+      relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_app]
+        action: keep
+        regex: triton-.+
+      - source_labels: [__meta_kubernetes_pod_container_port_name]
+        action: keep
+        regex: metrics
+      - source_labels: [__meta_kubernetes_namespace]
+        target_label: namespace
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: pod
+      - source_labels: [__meta_kubernetes_pod_label_app]
+        target_label: inference_server
 
 ---
 apiVersion: apps/v1
