@@ -289,7 +289,17 @@ describe('TRIGGER_ENTITY_CONFIG: rerun action', () => {
 
   it('creates a new TriggerRun copying pipeline/revision/schedule and clearing kill state', async () => {
     const user = userEvent.setup();
-    const record = buildTerminalTriggerRun();
+    // resourceVersion/uid/generation mirror what a real fetched TriggerRun's metadata carries;
+    // the API rejects a create request that still has them set (see the sibling test below).
+    const record = buildTerminalTriggerRun({
+      metadata: {
+        name: 'nightly',
+        namespace: 'test-ns',
+        resourceVersion: '42',
+        uid: 'source-uid',
+        generation: 3,
+      },
+    });
     const mockRequest = createQueryMockRouter({ CreateTriggerRun: { triggerRun: record } });
 
     render(
@@ -324,6 +334,9 @@ describe('TRIGGER_ENTITY_CONFIG: rerun action', () => {
     // Server-owned fields from the source run must not carry over onto the new one.
     expect(payload.spec.actor).toBeUndefined();
     expect(payload.status).toBeUndefined();
+    // The API rejects a create request carrying a source object's resourceVersion/uid/
+    // generation, so the new run's metadata must be rebuilt with only name and namespace.
+    expect(payload.metadata).toEqual({ name: payload.metadata.name, namespace: 'test-ns' });
   });
 
   it('keeps the dialog open and shows the error when the mutation fails', async () => {

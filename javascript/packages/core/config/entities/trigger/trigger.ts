@@ -70,6 +70,20 @@ const RERUN_OPERATIONS: MiddlewareOperation[] = [
   { destination: 'spec.kill', default: false },
   { destination: 'spec.actor', transformation: 'unset' },
   { destination: 'status', transformation: 'unset' },
+  // Rebuilt wholesale rather than field-by-field, matching run.ts's Retry action: the API
+  // rejects a create carrying uid or resourceVersion, and creationTimestamp, finalizers,
+  // ownerReferences, labels, annotations and managedFields all describe the source run.
+  // Runs last so it captures the name the first operation set above.
+  {
+    source: 'metadata',
+    destination: 'metadata',
+    transformation: (metadata) => {
+      // cast: middleware sources are unknown; this path always holds the (already-renamed)
+      // trigger run's metadata
+      const { name, namespace } = metadata as { name: string; namespace: string };
+      return { name, namespace };
+    },
+  },
 ];
 
 export const TRIGGER_ENTITY_CONFIG: PhaseEntityConfig = {
