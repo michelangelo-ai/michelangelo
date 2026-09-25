@@ -122,15 +122,22 @@ type RevisionedIndex struct {
 	Fields []IndexedField
 }
 
-// ParseRevisionedIndex returns the base CRD's michelangelo.api.index set
-// together with the wrapper kinds listed in resource.revisioned_in that mirror
-// it into "<base>_<kind>_unmarshaled" sidecar tables. Each index path resolves
-// against the base CRD message itself, which is what each wrapper stores at
-// spec.content, so every kind mirrors the same base index set.
+// ParseRevisionedIndex returns the base CRD's michelangelo.api.index set,
+// with a synthesized "name" field (metadata.name) always prepended, together
+// with the wrapper kinds listed in resource.revisioned_in that mirror it into
+// "<base>_<kind>_unmarshaled" sidecar tables. Each index path resolves against
+// the base CRD message itself, which is what each wrapper stores at
+// spec.content, so every kind mirrors the same base index set. The base
+// object's own SQL table always carries a "name" column regardless of
+// michelangelo.api.index (see protoc-gen-sql's CRDMySQLMainTableColumn), so
+// sidecar tables mirror that same guarantee rather than requiring every
+// revisioned CRD to redeclare "metadata.name" explicitly.
 //
 // Returns nil when the CRD is not revisioned (resource.revisioned_in is empty).
-// Panics if revisioned_in is set but names an empty kind, or is set on a CRD
-// that declares no michelangelo.api.index fields to mirror.
+// Panics if revisioned_in is set but names an empty kind, is set on a CRD that
+// declares no michelangelo.api.index fields to mirror, or if the CRD declares
+// an index field with the reserved key "name" (which would collide with the
+// synthesized metadata.name column).
 func ParseRevisionedIndex(crdRootMsg *protogen.Message, crdOptions *pboptions.Options) *RevisionedIndex {
 	kindCount := int(crdOptions.Int64("resource.len(revisioned_in)"))
 	if kindCount == 0 {
@@ -152,6 +159,16 @@ func ParseRevisionedIndex(crdRootMsg *protogen.Message, crdOptions *pboptions.Op
 		logger.Panicf("Invalid revisioned_in annotation on %v. CRD declares revisioned_in %v "+
 			"but has no michelangelo.api.index fields to mirror", crdRootMsg.GoIdent.GoName, kinds)
 	}
+	for _, field := range fields {
+		if field.Key == "name" {
+			logger.Panicf("Invalid index annotation on %v. key \"name\" is reserved for the "+
+				"synthesized metadata.name column mirrored onto revisioned sidecar tables",
+				crdRootMsg.GoIdent.GoName)
+		}
+	}
+
+	nameField := buildIndexedField("name", "metadata.name", "", crdRootMsg)
+	fields = append([]IndexedField{nameField}, fields...)
 
 	return &RevisionedIndex{Kinds: kinds, Fields: fields}
 }

@@ -1175,6 +1175,14 @@ func (m *TestBase) GetRevisionedIndexKeyValuePairs() map[string][]storage.Indexe
 	var indexedFields []storage.IndexedField
 	var indexedField storage.IndexedField
 
+	indexedField.Key = "name"
+	if m != nil {
+		indexedField.Value = m.Name
+	} else {
+		indexedField.Value = nil
+	}
+	indexedFields = append(indexedFields, indexedField)
+
 	indexedField.Key = "test_name"
 	if m != nil {
 		indexedField.Value = m.Spec.Name
@@ -1218,6 +1226,7 @@ func (m *TestBase) RevisionedIndexSpecs() []storage.RevisionedIndexSpec {
 			Table: "test_base_test_wrapper_unmarshaled",
 			UIDCol: "test_wrapper_uid",
 			Fields: []storage.RevisionedIndexField{
+				{Path: "spec.content.metadata.name", Column: "name"},
 				{Path: "spec.content.spec.name", Column: "test_name"},
 				{Path: "spec.content.spec.ref.namespace", Column: "test_ref_namespace"},
 				{Path: "spec.content.spec.ref.name", Column: "test_ref_name"},
