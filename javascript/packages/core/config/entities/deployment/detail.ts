@@ -11,17 +11,6 @@ import {
 
 import type { DetailViewConfig } from '#core/components/views/types';
 
-/**
- * State-cell keys per condition status. CONDITION_STATUS_UNKNOWN is 0, which
- * the state cell drops as a missing value — map to string keys so every
- * status renders.
- */
-const CONDITION_STATUS_KEYS: Record<number, string> = {
-  [DEPLOYMENT_CONDITION_STATUS.TRUE]: 'CONDITION_STATUS_TRUE',
-  [DEPLOYMENT_CONDITION_STATUS.FALSE]: 'CONDITION_STATUS_FALSE',
-  [DEPLOYMENT_CONDITION_STATUS.UNKNOWN]: 'CONDITION_STATUS_UNKNOWN',
-};
-
 export const DEPLOYMENT_DETAIL_CONFIG: DetailViewConfig = {
   type: 'detail',
   metadata: [
@@ -70,21 +59,24 @@ export const DEPLOYMENT_DETAIL_CONFIG: DetailViewConfig = {
               },
             },
             {
-              id: 'status',
+              // taskState is the stateBuilder result, injected by TaskHeader, so the
+              // chip always agrees with the task icon and card color.
+              id: 'taskState',
               label: 'State',
               type: CellType.STATE,
-              accessor: (record: { status?: number }) =>
-                CONDITION_STATUS_KEYS[record.status ?? DEPLOYMENT_CONDITION_STATUS.UNKNOWN] ??
-                'CONDITION_STATUS_UNKNOWN',
               stateTextMap: {
-                CONDITION_STATUS_TRUE: 'Succeeded',
-                CONDITION_STATUS_FALSE: 'Running',
-                CONDITION_STATUS_UNKNOWN: 'Pending',
+                [TASK_STATE.SUCCESS]: 'Succeeded',
+                [TASK_STATE.RUNNING]: 'Running',
+                [TASK_STATE.PENDING]: 'Pending',
+                [TASK_STATE.ERROR]: 'Failed',
+                [TASK_STATE.SKIPPED]: 'Skipped',
               },
               stateColorMap: {
-                CONDITION_STATUS_TRUE: TAG_COLOR.green,
-                CONDITION_STATUS_FALSE: TAG_COLOR.blue,
-                CONDITION_STATUS_UNKNOWN: TAG_COLOR.gray,
+                [TASK_STATE.SUCCESS]: TAG_COLOR.green,
+                [TASK_STATE.RUNNING]: TAG_COLOR.blue,
+                [TASK_STATE.PENDING]: TAG_COLOR.gray,
+                [TASK_STATE.ERROR]: TAG_COLOR.red,
+                [TASK_STATE.SKIPPED]: TAG_COLOR.gray,
               },
             },
           ],

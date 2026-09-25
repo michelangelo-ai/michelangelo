@@ -419,7 +419,7 @@ describe('Deployment detail page', () => {
       await screen.findByText('NoCapacity');
     });
 
-    it('renders a state chip per condition mapped from the condition status', async () => {
+    it('renders state chips matching the task states during an active rollout', async () => {
       render(
         <EntityDetailRoute phases={{ deploy: DEPLOY_PHASE }} />,
         buildWrapper([
@@ -435,7 +435,7 @@ describe('Deployment detail page', () => {
                     state: DEPLOYMENT_STATE.INITIALIZING,
                     stage: DEPLOYMENT_STAGE.PLACEMENT,
                     conditions: [
-                      { type: 'Validated', status: DEPLOYMENT_CONDITION_STATUS.TRUE },
+                      { type: 'Validation', status: DEPLOYMENT_CONDITION_STATUS.TRUE },
                       { type: 'Placement', status: DEPLOYMENT_CONDITION_STATUS.UNKNOWN },
                       { type: 'RolloutCompleted', status: DEPLOYMENT_CONDITION_STATUS.FALSE },
                     ],
@@ -448,8 +448,44 @@ describe('Deployment detail page', () => {
       );
 
       expect(await screen.findByText('Succeeded')).toBeInTheDocument();
-      expect(screen.getByText('Pending')).toBeInTheDocument();
       expect(screen.getByText('Running')).toBeInTheDocument();
+      expect(screen.getByText('Pending')).toBeInTheDocument();
+      expect(screen.queryByText('Failed')).not.toBeInTheDocument();
+    });
+
+    it('renders a "Failed" chip on the first incomplete condition when the rollout failed', async () => {
+      render(
+        <EntityDetailRoute phases={{ deploy: DEPLOY_PHASE }} />,
+        buildWrapper([
+          getErrorProviderWrapper(),
+          getRouterWrapper({
+            location: '/myproject/deploy/deployments/sentiment-deployment/ongoing-operations',
+          }),
+          getServiceProviderWrapper({
+            request: createQueryMockRouter({
+              GetDeployment: {
+                deployment: buildDeployment({
+                  status: {
+                    state: DEPLOYMENT_STATE.UNHEALTHY,
+                    stage: DEPLOYMENT_STAGE.ROLLOUT_FAILED,
+                    conditions: [],
+                    conditionsSnapshot: [
+                      { type: 'Validation', status: DEPLOYMENT_CONDITION_STATUS.TRUE },
+                      { type: 'Placement', status: DEPLOYMENT_CONDITION_STATUS.FALSE },
+                      { type: 'RolloutCompleted', status: DEPLOYMENT_CONDITION_STATUS.FALSE },
+                    ],
+                  },
+                }),
+              },
+            }),
+          }),
+        ])
+      );
+
+      expect(await screen.findByText('Succeeded')).toBeInTheDocument();
+      expect(screen.getByText('Failed')).toBeInTheDocument();
+      expect(screen.getByText('Pending')).toBeInTheDocument();
+      expect(screen.queryByText('Running')).not.toBeInTheDocument();
     });
 
     it('falls back to live conditions when a failed rollout has an empty snapshot', async () => {
