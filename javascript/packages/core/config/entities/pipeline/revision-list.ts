@@ -1,7 +1,7 @@
 import { CellType } from '#core/components/cell/constants';
 import { DescriptionHierarchy } from '#core/components/cell/renderers/description/constants';
 import { formatRevisionLabel } from '#core/utils/revision-utils';
-import { PIPELINE_STATE_CELL, PIPELINE_TYPE_CELL } from './shared';
+import { PIPELINE_LAST_UPDATED_CELL, PIPELINE_STATE_CELL, PIPELINE_TYPE_CELL } from './shared';
 
 import type { ColumnConfig } from '#core/components/table/types/column-types';
 import type { TableConfig } from '#core/components/views/types';
@@ -32,7 +32,7 @@ export const PIPELINE_REVISION_CELL_CONFIG: ColumnConfig<object>[] = [
       },
     ],
   },
-  { id: 'metadata.creationTimestamp.seconds', label: 'Created', type: CellType.DATE },
+  PIPELINE_LAST_UPDATED_CELL,
   { ...PIPELINE_TYPE_CELL, id: 'spec.content.spec.type' },
   { id: 'spec.owner.name', label: 'Owner', type: CellType.TEXT },
   { id: 'spec.gitCommit.branch', label: 'Branch', type: CellType.TEXT },
