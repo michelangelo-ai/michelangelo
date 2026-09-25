@@ -65,6 +65,12 @@ class CastArrayToDtypeTest(TestCase):
         array[0] = 99.0
         self.assertEqual(tensor[0].item(), 1.0)
 
+    def test_accepts_an_arrow_backed_column(self):
+        """Accepts an Arrow-backed column, as read back from Ray."""
+        column = pd.array([1.0, 2.0], dtype="double[pyarrow]")
+        tensor = cast_array_to_dtype(column, torch.float32)
+        self.assertEqual(tensor.tolist(), [1.0, 2.0])
+
 
 class EncodeCategoricalColumnTest(TestCase):
     """encode_categorical_column_to_tensor handles string columns."""
@@ -81,6 +87,12 @@ class EncodeCategoricalColumnTest(TestCase):
             np.array([1.0, 2.5]), torch.float, factorize_strings=False
         )
         self.assertEqual(tensor.tolist(), [1.0, 2.5])
+
+    def test_accepts_an_arrow_backed_column(self):
+        """Accepts an Arrow-backed column, whose dtype exposes no `.kind`."""
+        column = pd.array(["a", "b", "a"], dtype="string[pyarrow]")
+        tensor = encode_categorical_column_to_tensor(column)
+        self.assertEqual(tensor.tolist(), [0, 1, 0])
 
     def test_factorization_can_be_disabled_for_numeric_columns(self):
         """Factorization can be disabled for numeric columns."""

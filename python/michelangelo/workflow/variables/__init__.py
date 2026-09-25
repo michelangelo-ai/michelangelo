@@ -12,6 +12,8 @@ from michelangelo.workflow.variables.metadata import (
 )
 from michelangelo.workflow.variables.types import (
     AssembledModel,
+    EvaluationMetrics,
+    EvaluationResult,
     FeaturePackageArtifact,
     ModelArtifact,
     NativeTransformResult,
@@ -22,6 +24,8 @@ __all__ = [
     "AssembledModel",
     "DatasetMetadata",
     "DatasetVariable",
+    "EvaluationMetrics",
+    "EvaluationResult",
     "FeaturePackageArtifact",
     "FeaturePackageMetadata",
     "MessageVariable",
