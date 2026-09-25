@@ -29,6 +29,23 @@ pipeline:
 pipelineRun:
   # ttlDays: 0  # 0 disables TTL eviction; set e.g. 30 to evict runs older than 30 days
 
+# executeWorkflow config for the ExecuteWorkflowActor (go/components/pipelinerun/actors).
+# Deliberately a separate top-level key from "pipelineRun" above, which is
+# owned by pipelinerun.Config and unmarshals strictly.
+executeWorkflow:
+  metrics:
+    # grafanaUrlFormat is a Go text/template that builds a deep link into the
+    # Ray Jobs Grafana dashboard (resources/grafana.yaml, uid "ray-jobs"),
+    # scoped to the cluster a step ran on and to its actual execution window.
+    # Available vars: {{.Namespace}}, {{.ClusterName}}, {{.From}}, {{.To}} (the
+    # latter two epoch milliseconds, padded a few minutes past the step's
+    # start/end — see metricsTimeRange in executeworkflow.go). Cluster
+    # name/namespace are parsed from the step's log_url (see
+    # enrichStepMetricsUrl), so this only takes effect when logPersistence's
+    # logURLFormat uses the /enter_cluster/{namespace}/{name} route. Empty
+    # disables the metrics link.
+    grafanaUrlFormat: "http://localhost:13000/d/ray-jobs/ray-jobs?var-ray_io_cluster={{.ClusterName}}&from={{.From}}&to={{.To}}"
+
 # Notification configuration for PipelineRun state-change workflows.
 # To use a custom worker task list, change taskList here and in helm values.yaml,
 # and register the notification workflow/activities on that task list in your

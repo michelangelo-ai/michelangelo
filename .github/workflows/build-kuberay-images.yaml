@@ -9,9 +9,11 @@ on:
     branches: [main]
     paths:
       - .github/workflows/build-kuberay-images.yaml
+      - scripts/kuberay/**
   pull_request:
     paths:
       - .github/workflows/build-kuberay-images.yaml
+      - scripts/kuberay/**
   workflow_dispatch:
     inputs:
       kuberay_ref:
@@ -41,12 +43,53 @@ jobs:
           - { name: kuberay-historyserver, dockerfile: Dockerfile.historyserver }
 
     steps:
+      - name: Check out this repo
+        uses: actions/checkout@v7
+        with:
+          path: repo
+
       - name: Check out kuberay (upstream)
         uses: actions/checkout@v7
         with:
           repository: ray-project/kuberay
           ref: ${{ github.event.inputs.kuberay_ref || env.KUBERAY_REF_DEFAULT }}
           path: kuberay
+
+      - name: Apply historyserver dashboard-UI patch
+        # Upstream v1.6.1 ships the historyserver as a pure JSON REST API — the
+        # routes that would serve a browsable dashboard SPA (routerRoot /
+        # routerHomepage) are present in source but commented out, and no
+        # frontend build is bundled. This patch re-enables serving a bundled
+        # SPA at "/" plus /enter_cluster and /enter_cluster/{ns}/{name}
+        # (session auto-resolved) redirect helpers, so the log URLs
+        # Michelangelo generates are actually clickable.
+        if: matrix.component.name == 'kuberay-historyserver'
+        run: git -C kuberay apply "$GITHUB_WORKSPACE/repo/scripts/kuberay/patches/historyserver-dashboard-ui.patch"
+
+      - name: Fetch Ray dashboard client build
+        # The historyserver's REST API intentionally mirrors the Ray Dashboard
+        # API, so the stock Ray Dashboard frontend (pure static assets bundled
+        # in the `ray` PyPI wheel) renders against it directly. Pull just that
+        # static build out of the wheel without installing all of ray.
+        if: matrix.component.name == 'kuberay-historyserver'
+        env:
+          RAY_VERSION: "2.51.1"
+        run: |
+          pip download --no-deps ray=="$RAY_VERSION" -d /tmp/ray-wheel
+          mkdir -p /tmp/ray-extract
+          unzip -q -o /tmp/ray-wheel/ray-"$RAY_VERSION"-*.whl "ray/dashboard/client/build/*" -d /tmp/ray-extract
+          mkdir -p kuberay/historyserver/dashboard-assets
+          cp -r /tmp/ray-extract/ray/dashboard/client/build kuberay/historyserver/dashboard-assets/client
+          cp -r repo/scripts/kuberay/historyserver-assets/homepage kuberay/historyserver/dashboard-assets/homepage
+
+      - name: Patch Dockerfile to bundle dashboard assets
+        if: matrix.component.name == 'kuberay-historyserver'
+        working-directory: kuberay/historyserver
+        run: |
+          sed -i.bak \
+            -e 's|^COPY --from=builder /historyserver/output/bin/historyserver /usr/local/bin/historyserver$|COPY --from=builder /historyserver/output/bin/historyserver /usr/local/bin/historyserver\nCOPY dashboard-assets/client /dashboard/client\nCOPY dashboard-assets/homepage /dashboard/homepage|' \
+            Dockerfile.historyserver
+          rm -f Dockerfile.historyserver.bak
 
       - name: Patch Dockerfile to honor TARGETARCH
         # Produces true multi-arch binaries. The upstream Dockerfile hardcodes

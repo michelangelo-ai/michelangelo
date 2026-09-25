@@ -5,7 +5,7 @@ import grpc
 from michelangelo.gen.api.v2 import trigger_run_svc_pb2 as michelangelo_dot_api_dot_v2_dot_trigger__run__svc__pb2
 
 
-class TriggerRunServiceStub(object):
+class TriggerRunServiceStub:
     """TriggerRun Service defines the TriggerRun related methods, such as CRUD and list.
     """
 
@@ -47,7 +47,7 @@ class TriggerRunServiceStub(object):
                 _registered_method=True)
 
 
-class TriggerRunServiceServicer(object):
+class TriggerRunServiceServicer:
     """TriggerRun Service defines the TriggerRun related methods, such as CRUD and list.
     """
 
@@ -135,7 +135,7 @@ def add_TriggerRunServiceServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class TriggerRunService(object):
+class TriggerRunService:
     """TriggerRun Service defines the TriggerRun related methods, such as CRUD and list.
     """
 

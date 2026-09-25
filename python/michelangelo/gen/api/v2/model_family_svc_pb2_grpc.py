@@ -5,7 +5,7 @@ import grpc
 from michelangelo.gen.api.v2 import model_family_svc_pb2 as michelangelo_dot_api_dot_v2_dot_model__family__svc__pb2
 
 
-class ModelFamilyServiceStub(object):
+class ModelFamilyServiceStub:
     """ModelFamily Service defines the ModelFamily related methods, such as CRUD and list.
     """
 
@@ -47,7 +47,7 @@ class ModelFamilyServiceStub(object):
                 _registered_method=True)
 
 
-class ModelFamilyServiceServicer(object):
+class ModelFamilyServiceServicer:
     """ModelFamily Service defines the ModelFamily related methods, such as CRUD and list.
     """
 
@@ -135,7 +135,7 @@ def add_ModelFamilyServiceServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class ModelFamilyService(object):
+class ModelFamilyService:
     """ModelFamily Service defines the ModelFamily related methods, such as CRUD and list.
     """
 

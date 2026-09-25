@@ -5,7 +5,7 @@ import grpc
 from michelangelo.gen.api.v2 import deployment_svc_pb2 as michelangelo_dot_api_dot_v2_dot_deployment__svc__pb2
 
 
-class DeploymentServiceStub(object):
+class DeploymentServiceStub:
     """Deployment Service defines the Deployment related methods, such as CRUD and list.
     """
 
@@ -47,7 +47,7 @@ class DeploymentServiceStub(object):
                 _registered_method=True)
 
 
-class DeploymentServiceServicer(object):
+class DeploymentServiceServicer:
     """Deployment Service defines the Deployment related methods, such as CRUD and list.
     """
 
@@ -135,7 +135,7 @@ def add_DeploymentServiceServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class DeploymentService(object):
+class DeploymentService:
     """Deployment Service defines the Deployment related methods, such as CRUD and list.
     """
 

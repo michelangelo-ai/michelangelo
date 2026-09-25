@@ -5,7 +5,7 @@ import grpc
 from michelangelo.gen.api.v2 import cluster_svc_pb2 as michelangelo_dot_api_dot_v2_dot_cluster__svc__pb2
 
 
-class ClusterServiceStub(object):
+class ClusterServiceStub:
     """Cluster Service defines the Cluster related methods, such as CRUD and list.
     """
 
@@ -47,7 +47,7 @@ class ClusterServiceStub(object):
                 _registered_method=True)
 
 
-class ClusterServiceServicer(object):
+class ClusterServiceServicer:
     """Cluster Service defines the Cluster related methods, such as CRUD and list.
     """
 
@@ -135,7 +135,7 @@ def add_ClusterServiceServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class ClusterService(object):
+class ClusterService:
     """Cluster Service defines the Cluster related methods, such as CRUD and list.
     """
 

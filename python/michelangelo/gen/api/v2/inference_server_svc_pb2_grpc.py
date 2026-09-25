@@ -5,7 +5,7 @@ import grpc
 from michelangelo.gen.api.v2 import inference_server_svc_pb2 as michelangelo_dot_api_dot_v2_dot_inference__server__svc__pb2
 
 
-class InferenceServerServiceStub(object):
+class InferenceServerServiceStub:
     """InferenceServer Service defines the InferenceServer related methods, such as CRUD and list.
     """
 
@@ -47,7 +47,7 @@ class InferenceServerServiceStub(object):
                 _registered_method=True)
 
 
-class InferenceServerServiceServicer(object):
+class InferenceServerServiceServicer:
     """InferenceServer Service defines the InferenceServer related methods, such as CRUD and list.
     """
 
@@ -135,7 +135,7 @@ def add_InferenceServerServiceServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class InferenceServerService(object):
+class InferenceServerService:
     """InferenceServer Service defines the InferenceServer related methods, such as CRUD and list.
     """
 

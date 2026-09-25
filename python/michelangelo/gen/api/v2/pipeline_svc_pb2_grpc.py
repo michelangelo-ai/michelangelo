@@ -5,7 +5,7 @@ import grpc
 from michelangelo.gen.api.v2 import pipeline_svc_pb2 as michelangelo_dot_api_dot_v2_dot_pipeline__svc__pb2
 
 
-class PipelineServiceStub(object):
+class PipelineServiceStub:
     """Pipeline Service defines the Pipeline related methods, such as CRUD and list.
     """
 
@@ -47,7 +47,7 @@ class PipelineServiceStub(object):
                 _registered_method=True)
 
 
-class PipelineServiceServicer(object):
+class PipelineServiceServicer:
     """Pipeline Service defines the Pipeline related methods, such as CRUD and list.
     """
 
@@ -135,7 +135,7 @@ def add_PipelineServiceServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class PipelineService(object):
+class PipelineService:
     """Pipeline Service defines the Pipeline related methods, such as CRUD and list.
     """
 

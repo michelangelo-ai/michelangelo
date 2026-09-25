@@ -91,6 +91,246 @@ data:
 apiVersion: v1
 kind: ConfigMap
 metadata:
+  name: grafana-dashboard-ray-jobs
+data:
+  ray-jobs.json: |
+    {
+      "id": null,
+      "uid": "ray-jobs",
+      "title": "Ray Jobs",
+      "tags": ["michelangelo", "ray", "ray-jobs"],
+      "style": "dark",
+      "timezone": "browser",
+      "schemaVersion": 39,
+      "refresh": "10s",
+      "time": {
+        "from": "now-1h",
+        "to": "now"
+      },
+      "templating": {
+        "list": [
+          {
+            "name": "ray_io_cluster",
+            "type": "query",
+            "datasource": { "type": "prometheus", "uid": "Prometheus" },
+            "query": "label_values(ray_running_jobs, ray_io_cluster)",
+            "includeAll": true,
+            "multi": true,
+            "current": { "text": "All", "value": "$__all" },
+            "refresh": 2
+          }
+        ]
+      },
+      "panels": [
+        {
+          "id": 1,
+          "type": "row",
+          "title": "Ray Job Status",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+          "collapsed": false,
+          "panels": []
+        },
+        {
+          "id": 2,
+          "title": "Running Jobs by Cluster",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 1 },
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "targets": [
+            {
+              "expr": "sum by(ray_io_cluster) (ray_running_jobs{ray_io_cluster=~\"$ray_io_cluster\"})",
+              "legendFormat": "{{ray_io_cluster}}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "title": "Finished Jobs Rate by Cluster",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 1 },
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "targets": [
+            {
+              "expr": "sum by(ray_io_cluster) (rate(ray_finished_jobs_total{ray_io_cluster=~\"$ray_io_cluster\"}[5m]))",
+              "legendFormat": "{{ray_io_cluster}}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "title": "Job Duration (s)",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 9 },
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "targets": [
+            {
+              "expr": "ray_job_duration_s{ray_io_cluster=~\"$ray_io_cluster\"}",
+              "legendFormat": "{{ray_io_cluster}} - {{pod}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] }
+        },
+        {
+          "id": 5,
+          "title": "Active Tasks by Cluster",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 9 },
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "targets": [
+            {
+              "expr": "sum by(ray_io_cluster, State) (ray_tasks{ray_io_cluster=~\"$ray_io_cluster\"})",
+              "legendFormat": "{{ray_io_cluster}} - {{State}}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 6,
+          "type": "row",
+          "title": "Cluster Node Resource Usage",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 17 },
+          "collapsed": false,
+          "panels": []
+        },
+        {
+          "id": 7,
+          "title": "Node CPU Utilization by Cluster & Node Type",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 18 },
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "targets": [
+            {
+              "expr": "ray_node_cpu_utilization{ray_io_cluster=~\"$ray_io_cluster\"}",
+              "legendFormat": "{{ray_io_cluster}} - {{ray_io_node_type}} ({{pod}})",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": { "defaults": { "unit": "percentunit" }, "overrides": [] }
+        },
+        {
+          "id": 8,
+          "title": "Node Memory Used vs Total by Node",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 18 },
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "targets": [
+            {
+              "expr": "ray_node_mem_used{ray_io_cluster=~\"$ray_io_cluster\"}",
+              "legendFormat": "{{pod}} - used",
+              "refId": "A"
+            },
+            {
+              "expr": "ray_node_mem_total{ray_io_cluster=~\"$ray_io_cluster\"}",
+              "legendFormat": "{{pod}} - total",
+              "refId": "B"
+            }
+          ],
+          "fieldConfig": { "defaults": { "unit": "bytes" }, "overrides": [] }
+        },
+        {
+          "id": 14,
+          "title": "GPU Utilization by Cluster",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 26 },
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "targets": [
+            {
+              "expr": "ray_data_cluster_gpu_utilization{ray_io_cluster=~\"$ray_io_cluster\"}",
+              "legendFormat": "{{ray_io_cluster}} - {{pod}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": { "defaults": { "unit": "percentunit" }, "overrides": [] }
+        },
+        {
+          "id": 9,
+          "title": "Active Actors by Cluster",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 26 },
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "targets": [
+            {
+              "expr": "sum by(ray_io_cluster, State) (ray_actors{ray_io_cluster=~\"$ray_io_cluster\"})",
+              "legendFormat": "{{ray_io_cluster}} - {{State}}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 10,
+          "title": "Cluster Active/Idle/Failed Nodes",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 34 },
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "targets": [
+            {
+              "expr": "ray_cluster_active_nodes{ray_io_cluster=~\"$ray_io_cluster\"}",
+              "legendFormat": "{{ray_io_cluster}} - active",
+              "refId": "A"
+            },
+            {
+              "expr": "ray_cluster_idle_nodes{ray_io_cluster=~\"$ray_io_cluster\"}",
+              "legendFormat": "{{ray_io_cluster}} - idle",
+              "refId": "B"
+            },
+            {
+              "expr": "ray_cluster_failed_nodes{ray_io_cluster=~\"$ray_io_cluster\"}",
+              "legendFormat": "{{ray_io_cluster}} - failed",
+              "refId": "C"
+            }
+          ]
+        },
+        {
+          "id": 11,
+          "type": "row",
+          "title": "Michelangelo PipelineRun (Ray Job orchestration)",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 42 },
+          "collapsed": false,
+          "panels": []
+        },
+        {
+          "id": 12,
+          "title": "PipelineRun Step Success Rate",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 43 },
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "targets": [
+            {
+              "expr": "sum by(pipeline_run) (rate(pipelinerun_step_success_total[5m]))",
+              "legendFormat": "{{pipeline_run}}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 13,
+          "title": "PipelineRun Result Success vs Failure",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 43 },
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "targets": [
+            {
+              "expr": "sum(rate(pipelinerun_result_success_total[5m]))",
+              "legendFormat": "success",
+              "refId": "A"
+            },
+            {
+              "expr": "sum(rate(pipelinerun_result_failure_total[5m]))",
+              "legendFormat": "failure",
+              "refId": "B"
+            }
+          ]
+        }
+      ]
+    }
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
   name: grafana-dashboards-config
 data:
   dashboards.yaml: |
@@ -144,6 +384,8 @@ spec:
           mountPath: /etc/grafana/provisioning/dashboards
         - name: grafana-dashboard-crd-metrics
           mountPath: /var/lib/grafana/dashboards
+        - name: grafana-dashboard-ray-jobs
+          mountPath: /var/lib/grafana/dashboards/ray-jobs
       volumes:
       - name: grafana-storage
         emptyDir: {}
@@ -156,6 +398,9 @@ spec:
       - name: grafana-dashboard-crd-metrics
         configMap:
           name: grafana-dashboard-crd-metrics
+      - name: grafana-dashboard-ray-jobs
+        configMap:
+          name: grafana-dashboard-ray-jobs
 
 ---
 apiVersion: v1
