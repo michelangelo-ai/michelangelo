@@ -1,5 +1,6 @@
 const SPEC_UPDATE_TIMESTAMP_LABEL_KEY = 'michelangelo/SpecUpdateTimestamp';
 const UPDATE_TIMESTAMP_LABEL_KEY = 'michelangelo/UpdateTimestamp';
+const EXECUTION_TIMESTAMP_LABEL_KEY = 'pipelinerun.michelangelo/execution-timestamp';
 const MICROSECONDS_PER_SECOND = 1_000_000;
 
 /**
@@ -67,6 +68,30 @@ export function getCrdLastUpdatedSeconds(data: {
   metadata?: { labels?: Record<string, string>; creationTimestamp?: { seconds: number } };
 }): number | undefined {
   const label = data.metadata?.labels?.[UPDATE_TIMESTAMP_LABEL_KEY];
+  if (label) return Number(label) / MICROSECONDS_PER_SECOND;
+  return data.metadata?.creationTimestamp?.seconds;
+}
+
+/**
+ * Resolves the epoch-seconds timestamp to display as a pipeline run's execution time.
+ *
+ * Pipeline runs stamp the actual dispatch time via a `pipelinerun.michelangelo/execution-timestamp`
+ * metadata label (microseconds since epoch, same encoding as {@link getCrdUpdatedSeconds}'s label),
+ * falling back to `metadata.creationTimestamp` for rows created before the label existed.
+ *
+ * @example
+ * getCrdExecutionTimestampSeconds({
+ *   metadata: { labels: { 'pipelinerun.michelangelo/execution-timestamp': '1700000000000000' } },
+ * }) // 1700000000
+ *
+ * getCrdExecutionTimestampSeconds({
+ *   metadata: { creationTimestamp: { seconds: 1650000000 } },
+ * }) // 1650000000 (label absent, falls back to creation time)
+ */
+export function getCrdExecutionTimestampSeconds(data: {
+  metadata?: { labels?: Record<string, string>; creationTimestamp?: { seconds: number } };
+}): number | undefined {
+  const label = data.metadata?.labels?.[EXECUTION_TIMESTAMP_LABEL_KEY];
   if (label) return Number(label) / MICROSECONDS_PER_SECOND;
   return data.metadata?.creationTimestamp?.seconds;
 }
