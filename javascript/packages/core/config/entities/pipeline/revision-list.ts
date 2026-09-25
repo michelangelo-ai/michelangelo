@@ -1,7 +1,7 @@
 import { CellType } from '#core/components/cell/constants';
 import { DescriptionHierarchy } from '#core/components/cell/renderers/description/constants';
 import { formatRevisionLabel } from '#core/utils/revision-utils';
-import { PIPELINE_STATE_CELL, PIPELINE_TYPE_CELL } from './shared';
+import { PIPELINE_ACTIONS, PIPELINE_STATE_CELL, PIPELINE_TYPE_CELL } from './shared';
 
 import type { ColumnConfig } from '#core/components/table/types/column-types';
 import type { TableConfig } from '#core/components/views/types';
@@ -41,5 +41,5 @@ export const PIPELINE_REVISION_CELL_CONFIG: ColumnConfig<object>[] = [
 
 export const PIPELINE_REVISION_TABLE_CONFIG: TableConfig<object> = {
   columns: PIPELINE_REVISION_CELL_CONFIG,
-  actions: [],
+  actions: PIPELINE_ACTIONS,
 };
