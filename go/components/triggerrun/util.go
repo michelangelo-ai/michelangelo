@@ -3,12 +3,13 @@ package triggerrun
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"time"
 
 	"github.com/cenkalti/backoff"
-
 	"github.com/go-logr/logr"
+	uberconfig "go.uber.org/config"
+
+	"github.com/michelangelo-ai/michelangelo/go/base/config"
 	clientInterface "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
@@ -293,42 +294,26 @@ func generateWorkflowID(tr *v2pb.TriggerRun) string {
 	return tr.Namespace + "." + tr.Name
 }
 
-// getWorkflowURL constructs a web UI URL for workflow monitoring.
+// getWorkflowURL constructs the monitoring URL for a TriggerRun's workflow
+// execution by delegating to the same config-driven ExecutionUrlFormat
+// template pipeline_run's GetWorkflowUrl uses (config.WorkflowClientConfig.
+// BuildWorkflowUrl), so trigger runs resolve to the same Cadence/Temporal
+// Web deep-link shape pipeline runs do.
 //
-// This function generates URLs to access workflow execution details in either
-// Cadence Web or Temporal Web UI. The URL format differs between providers:
+// runID identifies the specific workflow execution; pass "" only if it
+// isn't known yet -- see BuildWorkflowUrl's doc comment for why a
+// run-ID-less URL resolves to the wrong (listing) page. Every current
+// caller of this function already has a run ID in hand by the time it's
+// called (see cron_trigger.go/backfill_trigger.go call sites).
 //
-// Temporal:
-//   - Base URL: http://localhost:8080
-//   - Path: /namespaces/{domain}/workflows/{workflowId}
-//
-// Cadence (default):
-//   - Base URL: http://localhost:8088
-//   - Path: /domains/{domain}/workflows/{workflowId}
-//
-// Note: These URLs are configured for local development. In production environments,
-// the base URLs should be configured based on the actual Cadence/Temporal deployment.
-//
-// Returns a complete URL string for workflow monitoring.
-func getWorkflowURL(wid string, provider string) string {
-	domain := "default" // Default domain for both Cadence and Temporal
-	var (
-		logURL  string
-		urlPath string
-	)
-	if provider == "temporal" {
-		// Temporal Web UI configuration
-		// For local development: localhost:8080
-		logURL = "http://localhost:8080"
-		urlPath = fmt.Sprintf("/namespaces/%s/workflows/%s", domain, wid)
-	} else {
-		// Cadence Web UI configuration (default)
-		// For local development: localhost:8088
-		logURL = "http://localhost:8088"
-		urlPath = fmt.Sprintf("/domains/%s/workflows/%s", domain, wid)
+// Returns "" if the workflow client configuration cannot be retrieved, or
+// if ExecutionUrlFormat or Domain is unset in that configuration.
+func getWorkflowURL(configProvider uberconfig.Provider, executionID string, runID string) string {
+	workflowConfig, err := config.GetWorkflowClientConfig(configProvider)
+	if err != nil {
+		return ""
 	}
-	path, _ := url.PathUnescape(urlPath)
-	return logURL + path
+	return workflowConfig.BuildWorkflowUrl(executionID, runID)
 }
 
 // isTerminateState checks if a TriggerRun is in a terminal state.

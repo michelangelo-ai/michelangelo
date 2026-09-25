@@ -1,7 +1,9 @@
 package config
 
 import (
+	"bytes"
 	"flag"
+	"text/template"
 
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	"go.uber.org/config"
@@ -42,6 +44,38 @@ type WorkflowClientConfig struct {
 	Provider           string `yaml:"provider"`
 	UseTLS             bool   `yaml:"useTLS"`
 	ExecutionUrlFormat string `yaml:"executionUrlFormat"`
+}
+
+// BuildWorkflowUrl constructs a monitoring URL for a workflow execution from
+// this config's ExecutionUrlFormat template.
+//
+// executionID identifies the workflow (e.g. a pipeline run's name, or
+// TriggerRun's generated "<namespace>.<name>" workflow ID), and runID is the
+// specific execution's run ID. Cadence/Temporal Web route a workflow's
+// detail/summary page by (workflow ID, run ID) together, not by workflow ID
+// alone, so a format string that only references {{.ExecutionID}} resolves
+// to a listing rather than a specific execution. Pass "" for runID only if
+// it isn't known yet -- callers should defer calling this until it is,
+// rather than publish a URL that won't resolve to the intended execution.
+//
+// Returns "" if ExecutionUrlFormat or Domain is unset.
+func (c WorkflowClientConfig) BuildWorkflowUrl(executionID string, runID string) string {
+	if c.ExecutionUrlFormat == "" || c.Domain == "" {
+		return ""
+	}
+	tmpl, err := template.New("url").Parse(c.ExecutionUrlFormat)
+	if err != nil {
+		return ""
+	}
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, map[string]string{
+		"Domain":      c.Domain,
+		"ExecutionID": executionID,
+		"RunID":       runID,
+	}); err != nil {
+		return ""
+	}
+	return buf.String()
 }
 
 // KueueConfig configures the Kueue scheduler backend.

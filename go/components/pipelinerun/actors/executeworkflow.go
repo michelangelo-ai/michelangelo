@@ -1,11 +1,9 @@
 package actors
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"text/template"
 	"time"
 
 	"github.com/gogo/protobuf/jsonpb"
@@ -238,20 +236,11 @@ func (a *ExecuteWorkflowActor) Retrieve(ctx context.Context, resource *v2.Pipeli
 // Returns a formatted URL string for the workflow monitoring interface, or an
 // empty string if the workflow client configuration cannot be retrieved.
 func (a *ExecuteWorkflowActor) GetWorkflowUrl(name string, runID string) string {
-	workflowConfig, getWorkflowClientConfigErr := config.GetWorkflowClientConfig(a.configProvider)
-	if getWorkflowClientConfigErr != nil {
+	workflowConfig, err := config.GetWorkflowClientConfig(a.configProvider)
+	if err != nil {
 		return ""
 	}
-
-	// Check if the required configuration fields are present
-	if workflowConfig.ExecutionUrlFormat == "" || workflowConfig.Domain == "" {
-		return ""
-	}
-
-	tmpl, _ := template.New("url").Parse(workflowConfig.ExecutionUrlFormat)
-	var buf bytes.Buffer
-	tmpl.Execute(&buf, map[string]string{"Domain": workflowConfig.Domain, "ExecutionID": name, "RunID": runID})
-	return buf.String()
+	return workflowConfig.BuildWorkflowUrl(name, runID)
 }
 
 // Run executes and monitors the workflow for a pipeline run.
