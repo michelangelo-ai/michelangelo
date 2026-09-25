@@ -5,7 +5,7 @@ import grpc
 from michelangelo.gen.api.v2 import pipeline_run_svc_pb2 as michelangelo_dot_api_dot_v2_dot_pipeline__run__svc__pb2
 
 
-class PipelineRunServiceStub(object):
+class PipelineRunServiceStub:
     """PipelineRun Service defines the PipelineRun related methods, such as CRUD and list.
     """
 
@@ -47,7 +47,7 @@ class PipelineRunServiceStub(object):
                 _registered_method=True)
 
 
-class PipelineRunServiceServicer(object):
+class PipelineRunServiceServicer:
     """PipelineRun Service defines the PipelineRun related methods, such as CRUD and list.
     """
 
@@ -135,7 +135,7 @@ def add_PipelineRunServiceServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class PipelineRunService(object):
+class PipelineRunService:
     """PipelineRun Service defines the PipelineRun related methods, such as CRUD and list.
     """
 

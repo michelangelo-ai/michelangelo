@@ -5,7 +5,7 @@ import grpc
 from michelangelo.gen.api.v2 import cached_output_svc_pb2 as michelangelo_dot_api_dot_v2_dot_cached__output__svc__pb2
 
 
-class CachedOutputServiceStub(object):
+class CachedOutputServiceStub:
     """CachedOutput Service defines the CachedOutput related methods, such as CRUD and list.
     """
 
@@ -47,7 +47,7 @@ class CachedOutputServiceStub(object):
                 _registered_method=True)
 
 
-class CachedOutputServiceServicer(object):
+class CachedOutputServiceServicer:
     """CachedOutput Service defines the CachedOutput related methods, such as CRUD and list.
     """
 
@@ -135,7 +135,7 @@ def add_CachedOutputServiceServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class CachedOutputService(object):
+class CachedOutputService:
     """CachedOutput Service defines the CachedOutput related methods, such as CRUD and list.
     """
 
