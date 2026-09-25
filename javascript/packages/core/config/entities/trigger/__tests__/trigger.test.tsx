@@ -289,8 +289,9 @@ describe('TRIGGER_ENTITY_CONFIG: rerun action', () => {
 
   it('creates a new TriggerRun copying pipeline/revision/schedule and clearing kill state', async () => {
     const user = userEvent.setup();
-    // resourceVersion/uid/generation mirror what a real fetched TriggerRun's metadata carries;
-    // the API rejects a create request that still has them set (see the sibling test below).
+    // resourceVersion/uid/generation mirror what a real fetched TriggerRun's metadata carries
+    // on the wire (the local TriggerRun type only declares the subset other code paths use);
+    // the API rejects a create request that still has them set (see the assertion below).
     const record = buildTerminalTriggerRun({
       metadata: {
         name: 'nightly',
@@ -298,7 +299,7 @@ describe('TRIGGER_ENTITY_CONFIG: rerun action', () => {
         resourceVersion: '42',
         uid: 'source-uid',
         generation: 3,
-      },
+      } as TriggerRun['metadata'],
     });
     const mockRequest = createQueryMockRouter({ CreateTriggerRun: { triggerRun: record } });
 
