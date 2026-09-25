@@ -14,6 +14,7 @@ import { DetailView } from '#core/components/views/detail-view/detail-view';
 import { PHASES } from '#core/config/phases/phases';
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
 import { useInterpolationResolver } from '#core/interpolation/use-interpolation-resolver';
+import { capitalizeFirstLetter } from '#core/utils/string-utils';
 import { useEntityRecord } from './use-entity-record';
 
 import type { PhaseConfig } from '#core/types/common/studio-types';
