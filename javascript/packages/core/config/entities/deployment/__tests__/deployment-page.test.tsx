@@ -588,15 +588,24 @@ describe('Deployment detail page', () => {
         ).toEqual(conditions);
       });
 
-      it.each([
-        ['rollout failed', DEPLOYMENT_STAGE.ROLLOUT_FAILED],
-        ['rollback failed', DEPLOYMENT_STAGE.ROLLBACK_FAILED],
-      ])('returns the snapshot when %s', (_label, stage) => {
+      it('returns the snapshot when the rollout has failed', () => {
         const conditions = [{ type: 'Live' }];
         const conditionsSnapshot = [{ type: 'Snapshot' }];
-        expect(accessor({ status: { stage, conditions, conditionsSnapshot } })).toEqual(
-          conditionsSnapshot
-        );
+        expect(
+          accessor({
+            status: { stage: DEPLOYMENT_STAGE.ROLLOUT_FAILED, conditions, conditionsSnapshot },
+          })
+        ).toEqual(conditionsSnapshot);
+      });
+
+      it('returns live conditions when the rollback has failed, even if a snapshot exists', () => {
+        const conditions = [{ type: 'Live' }];
+        const conditionsSnapshot = [{ type: 'Snapshot' }];
+        expect(
+          accessor({
+            status: { stage: DEPLOYMENT_STAGE.ROLLBACK_FAILED, conditions, conditionsSnapshot },
+          })
+        ).toEqual(conditions);
       });
 
       it('falls back to live conditions when the failed-rollout snapshot is empty', () => {

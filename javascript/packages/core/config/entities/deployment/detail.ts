@@ -4,6 +4,7 @@ import { TASK_STATE } from '#core/components/views/execution/constants';
 import { DeploymentInfoPage } from './deployment-info-page';
 import {
   DEPLOYMENT_CONDITION_STATUS,
+  DEPLOYMENT_STAGE,
   DEPLOYMENT_STAGE_CELL,
   DEPLOYMENT_STATE_CELL,
   FAILED_ROLLOUT_STAGES,
@@ -40,8 +41,11 @@ export const DEPLOYMENT_DETAIL_CONFIG: DetailViewConfig = {
         }) => {
           const status = data?.status;
           const hasSnapshot = (status?.conditionsSnapshot?.length ?? 0) > 0;
+          // The controller only snapshots ROLLOUT_FAILED; a ROLLBACK_FAILED deployment's
+          // snapshot (if any) is left over from an earlier rollout failure, so read live
+          // conditions for it instead.
           const conditions =
-            isFailedRollout(status?.stage) && hasSnapshot
+            status?.stage === DEPLOYMENT_STAGE.ROLLOUT_FAILED && hasSnapshot
               ? status?.conditionsSnapshot
               : status?.conditions;
           return conditions ?? [];
