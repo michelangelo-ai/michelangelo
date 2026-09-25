@@ -27,11 +27,11 @@ describe('getCrdUpdatedSeconds', () => {
 });
 
 describe('getCrdExecutionTimestampSeconds', () => {
-  test('prefers the execution-timestamp label when present, converting microseconds to seconds', () => {
+  test('prefers the execution-timestamp label when present, taken as-is (already epoch seconds, unlike the microsecond-encoded SpecUpdateTimestamp/UpdateTimestamp labels)', () => {
     expect(
       getCrdExecutionTimestampSeconds({
         metadata: {
-          labels: { 'pipelinerun.michelangelo/execution-timestamp': '1700000000000000' },
+          labels: { 'pipelinerun.michelangelo/execution-timestamp': '1700000000' },
           creationTimestamp: { seconds: 1650000000 },
         },
       })
