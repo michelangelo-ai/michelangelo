@@ -1290,10 +1290,11 @@ func (a *ExecuteWorkflowActor) enrichStepOutput(ctx context.Context, namespace s
 // run on a Ray cluster, or whose log URL predates this format, simply won't match.
 var rayClusterLogURLPattern = regexp.MustCompile(`/enter_cluster/([^/?]+)/([^/?]+)`)
 
-// metricsConfigKey is the config path for the Grafana metrics URL template, a
-// sibling of jobs.k8sengine.mapper.logPersistence but scoped to the pipelinerun
-// component since that's where step-level enrichment happens.
-const metricsConfigKey = "pipelinerun.executeWorkflow.metrics"
+// metricsConfigKey is the config path for the Grafana metrics URL template.
+// Deliberately NOT nested under "pipelineRun" — that key is already owned by
+// pipelinerun.Config (go/components/pipelinerun/module.go), which unmarshals
+// strictly and rejects unrecognized fields.
+const metricsConfigKey = "executeWorkflow.metrics"
 
 type metricsConfig struct {
 	// GrafanaURLFormat is a Go text/template rendered with .Namespace and
