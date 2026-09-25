@@ -12,6 +12,7 @@ from michelangelo.workflow.variables.metadata import (
 
 if TYPE_CHECKING:
     from michelangelo.workflow.variables._private.dataset import DatasetVariable
+    from michelangelo.workflow.variables._private.message import MessageVariable
     from michelangelo.workflow.variables._private.model import ModelVariable
 
 
@@ -177,3 +178,52 @@ class PusherResult:
     success: bool
     value: dict[str, Any] = field(default_factory=dict)
     error: str | None = None
+
+
+@dataclass
+class EvaluationMetrics:
+    """One evaluated dataset's metric tables.
+
+    Attributes:
+        summary_metrics: One row per scope -- the aggregate ``GLOBAL`` row plus
+            one row per surviving segment -- and one column per metric. Wrapped
+            as a ``DatasetVariable`` so a downstream task (a pusher writing to a
+            warehouse table, say) can read it back without the evaluator holding
+            it in memory.
+        instance_metrics: Per-row metric values, when the evaluator produced
+            them. The TorchMetrics path aggregates rather than scoring each row,
+            so it leaves this holding ``None``.
+
+    Example:
+        >>> metrics = EvaluationMetrics()
+        >>> metrics.instance_metrics is None
+        True
+    """
+
+    summary_metrics: DatasetVariable | None = None
+    instance_metrics: DatasetVariable | None = None
+
+
+@dataclass
+class EvaluationResult:
+    """The result of the evaluator task.
+
+    Attributes:
+        metrics: Mapping of dataset name (e.g. ``"train"``, ``"validation"``,
+            ``"test"``) to that dataset's :class:`EvaluationMetrics`.
+        reports: Mapping of report name to a ``MessageVariable`` holding a
+            rendered ``EvaluationReport``.
+            Holds one entry per evaluated dataset, keyed by dataset name, plus
+            a ``"performance_evaluation_report"`` entry combining them all --
+            the one a pusher publishes.
+
+    Example:
+        >>> result = EvaluationResult()
+        >>> result.metrics
+        {}
+        >>> result.reports
+        {}
+    """
+
+    metrics: dict[str, EvaluationMetrics] = field(default_factory=dict)
+    reports: dict[str, MessageVariable] = field(default_factory=dict)
