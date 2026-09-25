@@ -76,12 +76,19 @@ export function getCrdLastUpdatedSeconds(data: {
  * Resolves the epoch-seconds timestamp to display as a pipeline run's execution time.
  *
  * Pipeline runs stamp the actual dispatch time via a `pipelinerun.michelangelo/execution-timestamp`
- * metadata label (microseconds since epoch, same encoding as {@link getCrdUpdatedSeconds}'s label),
- * falling back to `metadata.creationTimestamp` for rows created before the label existed.
+ * metadata label, falling back to `metadata.creationTimestamp` for rows created before the label
+ * existed.
+ *
+ * Unlike {@link getCrdUpdatedSeconds}'s and {@link getCrdLastUpdatedSeconds}'s labels — both
+ * stamped by the apiserver in microseconds (`time.Now().UnixMicro()` in `go/api/handler/handler.go`)
+ * — this label is stamped by the trigger workflow in already-epoch-seconds
+ * (`fmt.Sprintf("%d", ts.Unix())` in `go/worker/workflows/trigger/cron_trigger_workflows.go`), the
+ * same value it exports to the pipeline's own environment as `STARLARK_TIME=unix:<seconds>`
+ * (`go/components/pipelinerun/actors/executeworkflow.go`). No scaling needed.
  *
  * @example
  * getCrdExecutionTimestampSeconds({
- *   metadata: { labels: { 'pipelinerun.michelangelo/execution-timestamp': '1700000000000000' } },
+ *   metadata: { labels: { 'pipelinerun.michelangelo/execution-timestamp': '1700000000' } },
  * }) // 1700000000
  *
  * getCrdExecutionTimestampSeconds({
@@ -92,6 +99,6 @@ export function getCrdExecutionTimestampSeconds(data: {
   metadata?: { labels?: Record<string, string>; creationTimestamp?: { seconds: number } };
 }): number | undefined {
   const label = data.metadata?.labels?.[EXECUTION_TIMESTAMP_LABEL_KEY];
-  if (label) return Number(label) / MICROSECONDS_PER_SECOND;
+  if (label) return Number(label);
   return data.metadata?.creationTimestamp?.seconds;
 }

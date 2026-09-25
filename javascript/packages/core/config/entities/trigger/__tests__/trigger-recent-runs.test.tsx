@@ -252,7 +252,7 @@ describe('Trigger detail "Triggered Runs"', () => {
               {
                 metadata: {
                   name: 'run-with-exec-ts',
-                  labels: { 'pipelinerun.michelangelo/execution-timestamp': '1700000000000000' },
+                  labels: { 'pipelinerun.michelangelo/execution-timestamp': '1700000000' },
                 },
                 status: { state: 3 },
               },
