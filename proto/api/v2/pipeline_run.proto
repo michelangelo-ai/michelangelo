@@ -508,6 +508,13 @@ message PipelineRunStepInfo {
   // Non-empty list means the step has been retried, with attempt_details[0] = attempt 1 (first retry),
   // attempt_details[1] = attempt 2 (second retry), etc. The current execution state represents the latest attempt.
   repeated AttemptDetails attempt_details = 15;
+
+  // URL to a Grafana dashboard showing CPU/memory/GPU metrics for the Ray
+  // cluster this step ran on, filtered to that cluster. Populated only for
+  // steps that ran on a Ray cluster with a resolvable cluster name (parsed
+  // from log_url) and only when a Grafana dashboard URL format is configured.
+  // Optional field that may be empty if metrics are not available.
+  string metrics_url = 16;
 }
 
 // PipelineRunStepCachedOutputs contains cached outputs from a pipeline step execution.

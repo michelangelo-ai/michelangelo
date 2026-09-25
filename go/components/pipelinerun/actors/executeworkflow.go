@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"text/template"
 	"time"
 
@@ -829,6 +830,7 @@ func (a *ExecuteWorkflowActor) constructPipelineRunStepInfo(ctx context.Context,
 			stepOrder = append(stepOrder, taskName)
 			stepInfo := getStepInfoFromTaskProgress(&taskProgress, pipelineRun.Namespace)
 			a.enrichStepOutput(ctx, pipelineRun.Namespace, &taskProgress, stepInfo)
+			a.enrichStepMetricsUrl(stepInfo)
 			stepMap[taskName] = stepInfo
 			continue
 		}
@@ -837,6 +839,7 @@ func (a *ExecuteWorkflowActor) constructPipelineRunStepInfo(ctx context.Context,
 		oldStepInfo := stepMap[taskName]
 		newStepInfo := getStepInfoFromTaskProgress(&taskProgress, pipelineRun.Namespace)
 		a.enrichStepOutput(ctx, pipelineRun.Namespace, &taskProgress, newStepInfo)
+		a.enrichStepMetricsUrl(newStepInfo)
 		stepMap[taskName] = mergePipelineRunStepInfo(oldStepInfo, newStepInfo)
 	}
 
@@ -1279,4 +1282,52 @@ func (a *ExecuteWorkflowActor) enrichStepOutput(ctx context.Context, namespace s
 		}
 	}
 	stepInfo.Output = s
+}
+
+// rayClusterLogURLPattern extracts the (namespace, cluster name) that the History
+// Server's LogURLFormat encodes as /enter_cluster/{namespace}/{name} (see
+// go/components/jobs/client/k8sengine/mapper.go's buildLogURL). Steps that didn't
+// run on a Ray cluster, or whose log URL predates this format, simply won't match.
+var rayClusterLogURLPattern = regexp.MustCompile(`/enter_cluster/([^/?]+)/([^/?]+)`)
+
+// metricsConfigKey is the config path for the Grafana metrics URL template, a
+// sibling of jobs.k8sengine.mapper.logPersistence but scoped to the pipelinerun
+// component since that's where step-level enrichment happens.
+const metricsConfigKey = "pipelinerun.executeWorkflow.metrics"
+
+type metricsConfig struct {
+	// GrafanaURLFormat is a Go text/template rendered with .Namespace and
+	// .ClusterName, e.g.:
+	//   http://localhost:30012/d/ray-job-metrics/ray-job-metrics?var-ray_io_cluster={{.ClusterName}}&from=now-3h&to=now
+	GrafanaURLFormat string `yaml:"grafanaUrlFormat"`
+}
+
+// enrichStepMetricsUrl populates stepInfo.MetricsUrl with a Grafana deep link
+// scoped to the Ray cluster this step ran on, parsed out of the step's already-set
+// LogUrl. Leaves MetricsUrl unset (rather than erroring) when the step didn't run
+// on a Ray cluster, when the log URL doesn't match the expected format, or when no
+// Grafana URL template is configured — this is a best-effort enrichment, not a
+// required one.
+func (a *ExecuteWorkflowActor) enrichStepMetricsUrl(stepInfo *v2.PipelineRunStepInfo) {
+	matches := rayClusterLogURLPattern.FindStringSubmatch(stepInfo.LogUrl)
+	if len(matches) != 3 {
+		return
+	}
+	namespace, clusterName := matches[1], matches[2]
+
+	var conf metricsConfig
+	if err := a.configProvider.Get(metricsConfigKey).Populate(&conf); err != nil || conf.GrafanaURLFormat == "" {
+		return
+	}
+	tmpl, err := template.New("metricsUrl").Parse(conf.GrafanaURLFormat)
+	if err != nil {
+		a.logger.Warn("Invalid grafanaUrlFormat template", zap.Error(err))
+		return
+	}
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, struct{ Namespace, ClusterName string }{namespace, clusterName}); err != nil {
+		a.logger.Warn("Failed to render Grafana metrics URL", zap.Error(err))
+		return
+	}
+	stepInfo.MetricsUrl = buf.String()
 }

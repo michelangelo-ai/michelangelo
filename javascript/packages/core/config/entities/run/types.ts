@@ -153,6 +153,7 @@ export type PipelineRunStepInfo = {
   startTime?: StepTimestamp;
   endTime?: StepTimestamp;
   logUrl?: string;
+  metricsUrl?: string;
   subSteps?: PipelineRunStepInfo[];
 };
 
