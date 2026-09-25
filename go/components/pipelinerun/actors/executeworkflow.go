@@ -1297,16 +1297,45 @@ var rayClusterLogURLPattern = regexp.MustCompile(`/enter_cluster/([^/?]+)/([^/?]
 const metricsConfigKey = "executeWorkflow.metrics"
 
 type metricsConfig struct {
-	// GrafanaURLFormat is a Go text/template rendered with .Namespace and
-	// .ClusterName, e.g.:
-	//   http://localhost:30012/d/ray-job-metrics/ray-job-metrics?var-ray_io_cluster={{.ClusterName}}&from=now-3h&to=now
+	// GrafanaURLFormat is a Go text/template rendered with .Namespace,
+	// .ClusterName, .From and .To (the latter two epoch milliseconds — Grafana's
+	// dashboard URL time-range params take ms, not seconds), e.g.:
+	//   http://localhost:13000/d/ray-jobs/ray-jobs?var-ray_io_cluster={{.ClusterName}}&from={{.From}}&to={{.To}}
 	GrafanaURLFormat string `yaml:"grafanaUrlFormat"`
 }
 
+// metricsTimeRangePadding widens the Grafana time window beyond the step's exact
+// start/end so panels aren't cropped right at the edges of the cluster's
+// lifetime — metrics are scraped on an interval and pod/Prometheus clocks can
+// skew slightly, so the very first/last data points can otherwise fall outside
+// a tightly-cropped range.
+const metricsTimeRangePadding = 5 * time.Minute
+
+// metricsTimeRange returns the Grafana dashboard time range, as epoch
+// milliseconds, scoped to this step's actual execution window. Falls back to
+// "now" for the end bound while the step is still running (EndTime unset), and
+// to a trailing 3-hour window if StartTime itself is unset (shouldn't happen
+// for a step whose LogUrl already matched a Ray cluster, but avoids handing a
+// bogus 1970 epoch to the template if it ever does).
+func metricsTimeRange(stepInfo *v2.PipelineRunStepInfo) (from, to int64) {
+	end := time.Now()
+	if stepInfo.EndTime != nil {
+		end = time.Unix(stepInfo.EndTime.Seconds, int64(stepInfo.EndTime.Nanos))
+	}
+
+	start := end.Add(-3 * time.Hour)
+	if stepInfo.StartTime != nil {
+		start = time.Unix(stepInfo.StartTime.Seconds, int64(stepInfo.StartTime.Nanos))
+	}
+
+	return start.Add(-metricsTimeRangePadding).UnixMilli(), end.Add(metricsTimeRangePadding).UnixMilli()
+}
+
 // enrichStepMetricsUrl populates stepInfo.MetricsUrl with a Grafana deep link
-// scoped to the Ray cluster this step ran on, parsed out of the step's already-set
-// LogUrl. Leaves MetricsUrl unset (rather than erroring) when the step didn't run
-// on a Ray cluster, when the log URL doesn't match the expected format, or when no
+// scoped to the Ray cluster this step ran on and to its execution time window,
+// parsed and read out of the step's already-set LogUrl/StartTime/EndTime.
+// Leaves MetricsUrl unset (rather than erroring) when the step didn't run on a
+// Ray cluster, when the log URL doesn't match the expected format, or when no
 // Grafana URL template is configured — this is a best-effort enrichment, not a
 // required one.
 func (a *ExecuteWorkflowActor) enrichStepMetricsUrl(stepInfo *v2.PipelineRunStepInfo) {
@@ -1325,8 +1354,13 @@ func (a *ExecuteWorkflowActor) enrichStepMetricsUrl(stepInfo *v2.PipelineRunStep
 		a.logger.Warn("Invalid grafanaUrlFormat template", zap.Error(err))
 		return
 	}
+
+	from, to := metricsTimeRange(stepInfo)
 	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, struct{ Namespace, ClusterName string }{namespace, clusterName}); err != nil {
+	if err := tmpl.Execute(&buf, struct {
+		Namespace, ClusterName string
+		From, To               int64
+	}{namespace, clusterName, from, to}); err != nil {
 		a.logger.Warn("Failed to render Grafana metrics URL", zap.Error(err))
 		return
 	}
