@@ -1,7 +1,13 @@
 import { CellType } from '#core/components/cell/constants';
 import {
-  RUN_TRIGGERED_BY_COLUMN,
-  SHARED_RUN_CELL_CONFIG,
+  RUN_ENVIRONMENT_COLUMN,
+  RUN_EXECUTION_TIMESTAMP_COLUMN,
+  RUN_PARAMETER_ID_COLUMN,
+  RUN_PIPELINE_COLUMN,
+  RUN_RESUME_FROM_COLUMN,
+  RUN_STARTED_BY_COLUMN,
+  RUN_STATE_COLUMN_WITH_KILLING,
+  RUN_UPDATED_COLUMN,
   TRIGGERED_BY_LABEL,
 } from '#core/config/entities/run/shared';
 import { TRIGGER_PIPELINE_CELL_CONFIG, TRIGGER_STATE_CELL_CONFIG } from './shared';
@@ -9,14 +15,6 @@ import { TriggerInfoPage } from './trigger-info-page';
 
 import type { DetailViewConfig } from '#core/components/views/types';
 import type { TriggerRun } from './types';
-
-/**
- * Every row on this tab is already scoped to the trigger being viewed, so the
- * "Triggered by" column would repeat the page's own name and link back to itself.
- */
-const RUN_CELLS_EXCLUDING_TRIGGER = SHARED_RUN_CELL_CONFIG.filter(
-  (cell) => cell !== RUN_TRIGGERED_BY_COLUMN
-);
 
 export const TRIGGER_DETAIL_CONFIG: DetailViewConfig = {
   type: 'detail',
@@ -113,13 +111,23 @@ export const TRIGGER_DETAIL_CONFIG: DetailViewConfig = {
         },
       },
       tableConfig: {
+        // Every row here is already scoped to the trigger being viewed, so a "Triggered
+        // by" column (present on the generic pipeline run list) is deliberately omitted —
+        // it would repeat the page's own name and link back to itself.
         columns: [
           {
             id: 'metadata.name',
-            label: 'Name',
+            label: 'Pipeline run name',
             url: '/${studio.projectId}/${studio.phase}/runs/${row.metadata.name}',
           },
-          ...RUN_CELLS_EXCLUDING_TRIGGER,
+          RUN_PIPELINE_COLUMN,
+          RUN_UPDATED_COLUMN,
+          RUN_PARAMETER_ID_COLUMN,
+          RUN_EXECUTION_TIMESTAMP_COLUMN,
+          RUN_ENVIRONMENT_COLUMN,
+          RUN_RESUME_FROM_COLUMN,
+          { ...RUN_STARTED_BY_COLUMN, label: 'Owner' },
+          RUN_STATE_COLUMN_WITH_KILLING,
         ],
       },
     },
