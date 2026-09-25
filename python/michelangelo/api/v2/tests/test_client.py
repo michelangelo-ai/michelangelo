@@ -23,6 +23,7 @@ class TestAPIClientClassLevelSingleton(TestCase):
 
         for svc in [
             "CachedOutputService",
+            "DeploymentService",
             "ModelService",
             "ModelFamilyService",
             "PipelineService",

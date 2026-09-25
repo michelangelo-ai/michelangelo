@@ -9,9 +9,15 @@ go_library(
     importpath = "github.com/michelangelo-ai/michelangelo/go/worker/activities/model",
     visibility = ["//visibility:public"],
     deps = [
+        "//proto/api:go_default_library",
         "//proto/api/v2:go_default_library",
+        "@com_github_cadence_workflow_starlark_worker//activity:go_default_library",
         "@com_github_cadence_workflow_starlark_worker//worker:go_default_library",
+        "@com_github_cadence_workflow_starlark_worker//workflow:go_default_library",
+        "@com_github_gogo_protobuf//types:go_default_library",
+        "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
         "@org_uber_go_fx//:go_default_library",
+        "@org_uber_go_yarpc//yarpcerrors:go_default_library",
         "@org_uber_go_zap//:go_default_library",
     ],
 )
@@ -30,5 +36,6 @@ go_test(
         "@com_github_stretchr_testify//assert:go_default_library",
         "@com_github_stretchr_testify//suite:go_default_library",
         "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
+        "@org_uber_go_yarpc//yarpcerrors:go_default_library",
     ],
 )
