@@ -44,6 +44,7 @@ class CreateFunctionTest(TestCase):
         # Setup namespace with create_compute_cluster=True
         ns = argparse.Namespace(
             workflow="cadence",
+            object_store="minio",
             exclude=[],
             include_experimental=[],
             create_compute_cluster=True,
@@ -102,6 +103,7 @@ class CreateFunctionTest(TestCase):
         # Setup namespace with create_compute_cluster=False
         ns = argparse.Namespace(
             workflow="cadence",
+            object_store="minio",
             exclude=[],
             include_experimental=[],
             create_compute_cluster=False,
@@ -441,3 +443,73 @@ class ArgumentParsingTest(TestCase):
         """`ma sandbox create` without --set should default helm_set to []."""
         ns = self._parse(["create"])
         self.assertEqual(ns.helm_set, [])
+
+    def test_create_object_store_defaults_to_minio(self):
+        """`ma sandbox create` without --object-store should default to minio."""
+        ns = self._parse(["create"])
+        self.assertEqual(ns.object_store, "minio")
+
+    def test_sync_object_store_defaults_to_minio(self):
+        """`ma sandbox sync` without --object-store should default to minio."""
+        ns = self._parse(["sync"])
+        self.assertEqual(ns.object_store, "minio")
+
+    def test_create_accepts_object_store_seaweedfs(self):
+        """`ma sandbox create --object-store seaweedfs` parses through."""
+        ns = self._parse(["create", "--object-store", "seaweedfs"])
+        self.assertEqual(ns.object_store, "seaweedfs")
+
+    def test_create_rejects_unknown_object_store(self):
+        """An unsupported --object-store value is rejected by argparse."""
+        with self.assertRaises(SystemExit):
+            self._parse(["create", "--object-store", "ceph"])
+
+
+class DeployServicesObjectStoreTest(TestCase):
+    """Tests for `_deploy_services`'s object-store resource selection."""
+
+    def _run_deploy_services(self, object_store):
+        ns = argparse.Namespace(
+            workflow="cadence",
+            object_store=object_store,
+            exclude=[],
+            include_experimental=[],
+            create_compute_cluster=False,
+            compute_cluster_name="test-compute-cluster",
+        )
+        with (
+            patch("michelangelo.cli.sandbox.sandbox._kube_apply") as mock_kube_apply,
+            patch("michelangelo.cli.sandbox.sandbox._create_bucket_setup"),
+            patch("michelangelo.cli.sandbox.sandbox._ensure_credentials_secret"),
+            patch("michelangelo.cli.sandbox.sandbox._sync_config_from_secret"),
+            patch("michelangelo.cli.sandbox.sandbox._assert_command"),
+            patch(
+                "michelangelo.cli.sandbox.sandbox.subprocess.check_output",
+                return_value=b"",
+            ),
+            patch("michelangelo.cli.sandbox.sandbox._create_kuberay_operator"),
+            patch("michelangelo.cli.sandbox.sandbox._create_spark_operator"),
+            patch("michelangelo.cli.sandbox.sandbox._kube_wait"),
+            patch("michelangelo.cli.sandbox.sandbox._deploy_app_services"),
+            patch("michelangelo.cli.sandbox.sandbox._create_cadence_domain"),
+            patch("michelangelo.cli.sandbox.sandbox._create_compute_cluster_crd"),
+            patch("michelangelo.cli.sandbox.sandbox._apply_compute_cluster_rbac"),
+            patch("michelangelo.cli.sandbox.sandbox._create_compute_cluster_secrets"),
+        ):
+            sandbox._deploy_services(ns)
+        applied = {call.args[0].name for call in mock_kube_apply.call_args_list}
+        return applied
+
+    def test_default_object_store_applies_minio_yaml(self):
+        """object_store="minio" (default) applies minio.yaml only."""
+        applied = self._run_deploy_services("minio")
+        self.assertIn("minio.yaml", applied)
+        self.assertNotIn("weed-server.yaml", applied)
+        self.assertNotIn("seaweedfs-s3-config.yaml", applied)
+
+    def test_seaweedfs_object_store_applies_weed_server_yaml(self):
+        """object_store="seaweedfs" applies weed-server.yaml + its ConfigMap, not minio.yaml."""
+        applied = self._run_deploy_services("seaweedfs")
+        self.assertIn("weed-server.yaml", applied)
+        self.assertIn("seaweedfs-s3-config.yaml", applied)
+        self.assertNotIn("minio.yaml", applied)
