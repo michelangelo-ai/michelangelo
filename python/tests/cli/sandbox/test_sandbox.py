@@ -508,7 +508,7 @@ class DeployServicesObjectStoreTest(TestCase):
         self.assertNotIn("seaweedfs-s3-config.yaml", applied)
 
     def test_seaweedfs_object_store_applies_weed_server_yaml(self):
-        """object_store="seaweedfs" applies weed-server.yaml + its ConfigMap, not minio.yaml."""
+        """object_store="seaweedfs" applies weed-server.yaml + its ConfigMap."""
         applied = self._run_deploy_services("seaweedfs")
         self.assertIn("weed-server.yaml", applied)
         self.assertIn("seaweedfs-s3-config.yaml", applied)
