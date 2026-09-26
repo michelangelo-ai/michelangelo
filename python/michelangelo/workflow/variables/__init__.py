@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from michelangelo.workflow.variables._private.dataset import DatasetVariable
+from michelangelo.workflow.variables._private.message import MessageVariable
 from michelangelo.workflow.variables._private.model import ModelVariable
 from michelangelo.workflow.variables.metadata import (
     DatasetMetadata,
@@ -23,6 +24,7 @@ __all__ = [
     "DatasetVariable",
     "FeaturePackageArtifact",
     "FeaturePackageMetadata",
+    "MessageVariable",
     "ModelArtifact",
     "ModelMetadata",
     "ModelVariable",
