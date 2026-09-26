@@ -925,12 +925,11 @@ def _deploy_services(ns: argparse.Namespace):
         # admin UI on port 9090, so no console link is printed for this
         # backend. This is intentional, not a gap: the sandbox intentionally
         # stays on the lightweight single-Pod `weed server` all-in-one mode
-        # for fast spin-up/teardown, rather than the full multi-Pod
-        # master/volume/filer/admin topology the official SeaweedFS Helm
-        # chart deploys. For a real admin UI/file browser, install the
-        # bundled `seaweedfs` subchart directly (helm/michelangelo's
-        # `seaweedfs.enabled`/`seaweedfs.admin.enabled` values, see
-        # design.md's Stage 5) rather than through this sandbox CLI.
+        # for fast spin-up/teardown, rather than SeaweedFS's full
+        # master/volume/filer/admin topology. A real admin UI/file browser
+        # requires running SeaweedFS's official Helm chart separately
+        # (https://seaweedfs.github.io/seaweedfs/helm, `admin.enabled`) —
+        # not available through this sandbox CLI today.
     else:
         resources.append("minio.yaml")
         links.append(
