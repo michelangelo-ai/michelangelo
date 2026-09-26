@@ -1,0 +1,50 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    app: minio
+  name: minio
+spec:
+  containers:
+    - name: minio
+      image: chrislusf/seaweedfs:4.47
+      imagePullPolicy: IfNotPresent
+      command:
+        - /bin/sh
+        - -c
+      args:
+        - >
+          weed server -dir=/data
+          -master.port=9333 -volume.port=8080 -filer.port=8888
+          -s3 -s3.port=9091 -s3.config=/etc/seaweedfs/s3_config.json
+      volumeMounts:
+        - mountPath: /data
+          name: data-volume
+        - mountPath: /etc/seaweedfs
+          name: s3-config-volume
+  volumes:
+    - name: data-volume
+      hostPath:
+        path: /shared/minio-data
+        type: DirectoryOrCreate
+    - name: s3-config-volume
+      configMap:
+        name: seaweedfs-s3-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio
+  labels:
+    app: minio
+spec:
+  type: NodePort
+  ports:
+    - port: 9090
+      nodePort: 30008
+      name: "9090"
+    - port: 9091
+      nodePort: 30007
+      name: "9091"
+  selector:
+    app: minio
