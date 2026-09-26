@@ -5,11 +5,14 @@ on:
   push:
     branches: [ main ]
     tags: ['v*']
-    paths-ignore:
-      - 'docs/**'
-      - 'website/**'
-      - 'python/**'
-      - 'go/**'
+    paths:
+      # Everything this workflow's build-ui-image job actually reads: the
+      # built UI assets and the Dockerfile that packages them. Kept as an
+      # explicit allowlist (not paths-ignore) since those two are the
+      # complete, known input set -- see H-054 for why this must include
+      # the Dockerfile itself, not just javascript/**.
+      - 'javascript/**'
+      - 'docker/ui-prebuilt.Dockerfile'
 
 env:
   REGISTRY: ghcr.io
