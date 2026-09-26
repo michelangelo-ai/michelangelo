@@ -145,7 +145,7 @@ jobs:
             [View detailed HTML report in artifacts](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
 
       - name: Upload coverage artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: go-coverage-reports
           path: |
