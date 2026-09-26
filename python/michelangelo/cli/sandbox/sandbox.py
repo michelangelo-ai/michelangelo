@@ -180,6 +180,12 @@ def init_arguments(p: argparse.ArgumentParser):
         help="Choose workflow engine: cadence or temporal (default: cadence).",
     )
     create_p.add_argument(
+        "--object-store",
+        choices=["minio", "seaweedfs"],
+        default="minio",
+        help="Choose object storage backend: minio or seaweedfs (default: minio).",
+    )
+    create_p.add_argument(
         "--wait-timeout",
         type=int,
         default=600,
@@ -237,6 +243,12 @@ def init_arguments(p: argparse.ArgumentParser):
         choices=["cadence", "temporal"],
         default="cadence",
         help="Choose workflow engine: cadence or temporal (default: cadence).",
+    )
+    sync_p.add_argument(
+        "--object-store",
+        choices=["minio", "seaweedfs"],
+        default="minio",
+        help="Choose object storage backend: minio or seaweedfs (default: minio).",
     )
     sync_p.add_argument(
         "--wait-timeout",
@@ -902,16 +914,31 @@ def _deploy_services(ns: argparse.Namespace):
             check=False,
         )
 
-    # MinIO
+    # Object storage. Regardless of backend, the Kubernetes Service is named
+    # "minio" with NodePorts 9090/9091 so that consumers (sandbox-bucket-setup.yaml,
+    # history-server.yaml, michelangelo-config.yaml, etc.) never need to change.
 
-    resources.append("minio.yaml")
-    links.append(
-        (
-            "MinIO Console",
-            "http://localhost:9090",
-            "[Username: minioadmin; Password: minioadmin]",
+    if ns.object_store == "seaweedfs":
+        resources.append("seaweedfs-s3-config.yaml")
+        resources.append("weed-server.yaml")
+        # SeaweedFS's all-in-one server mode has no MinIO-console-equivalent
+        # admin UI on port 9090, so no console link is printed for this
+        # backend. This is intentional, not a gap: the sandbox intentionally
+        # stays on the lightweight single-Pod `weed server` all-in-one mode
+        # for fast spin-up/teardown, rather than SeaweedFS's full
+        # master/volume/filer/admin topology. A real admin UI/file browser
+        # requires running SeaweedFS's official Helm chart separately
+        # (https://seaweedfs.github.io/seaweedfs/helm, `admin.enabled`) —
+        # not available through this sandbox CLI today.
+    else:
+        resources.append("minio.yaml")
+        links.append(
+            (
+                "MinIO Console",
+                "http://localhost:9090",
+                "[Username: minioadmin; Password: minioadmin]",
+            )
         )
-    )
 
     # KubeRay History Server (core resource, deployed alongside MinIO)
     resources.append("history-server.yaml")

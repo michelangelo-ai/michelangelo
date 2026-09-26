@@ -375,6 +375,7 @@ The `ma sandbox` commands manage a local K3d development environment. For prereq
 |---------|-------------|
 | `ma sandbox create` | Create a K3d cluster with all Michelangelo AI services |
 | `ma sandbox create --workflow temporal` | Create with Temporal instead of Cadence |
+| `ma sandbox create --object-store seaweedfs` | Create with SeaweedFS instead of MinIO |
 | `ma sandbox create --exclude ui` | Create without specific services |
 | `ma sandbox create --create-compute-cluster` | Create with a Ray compute cluster |
 | `ma sandbox delete` | Tear down the cluster and all resources |
