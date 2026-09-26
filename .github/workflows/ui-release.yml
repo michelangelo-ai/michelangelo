@@ -6,7 +6,13 @@ on:
     branches: [ main ]
     tags: ['v*']
     paths:
+      # Everything this workflow's build-ui-image job actually reads: the
+      # built UI assets and the Dockerfile that packages them. Kept as an
+      # explicit allowlist (not paths-ignore) since those two are the
+      # complete, known input set -- see H-054 for why this must include
+      # the Dockerfile itself, not just javascript/**.
       - 'javascript/**'
+      - 'docker/ui-prebuilt.Dockerfile'
 
 env:
   REGISTRY: ghcr.io
@@ -39,7 +45,14 @@ jobs:
 
   build-ui-image:
     needs: check-version-change
-    if: needs.check-version-change.outputs.version-changed == 'true' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+    # Always rebuild/republish :main, :sha, etc. on every push that reaches
+    # this workflow (or a manual dispatch) -- this image is a rolling tag
+    # that downstream tooling (e.g. CVE Scan) expects to track current
+    # source, so gating the rebuild itself on a package.json version bump
+    # (as this job used to) let :main silently go stale for any push that
+    # didn't also bump the version. check-version-change's output is still
+    # used below, but only to decide whether to *additionally* cut a
+    # v${version} tag -- not whether to build at all.
     runs-on: ubuntu-latest
 
     permissions:
@@ -87,7 +100,7 @@ jobs:
             type=ref,event=branch
             type=ref,event=tag
             type=ref,prefix=pr-,event=pr
-            type=raw,value=v${{ needs.check-version-change.outputs.new-version }},enable={{is_default_branch}}
+            type=raw,value=v${{ needs.check-version-change.outputs.new-version }},enable=${{ github.ref == 'refs/heads/main' && needs.check-version-change.outputs.version-changed == 'true' }}
             type=raw,value=${{ steps.bare_version.outputs.version }},enable=${{ steps.bare_version.outputs.is_tag }}
             type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') && !contains(github.ref, '-rc') && !contains(github.ref, '-alpha') && !contains(github.ref, '-beta') }}
 
