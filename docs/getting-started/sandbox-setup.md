@@ -137,6 +137,10 @@ ma sandbox demo pipeline
 
 `ma sandbox create` defaults to **Cadence**, which is the recommended choice for most users — it's the most-tested path and matches the examples in this guide. Pass `--workflow temporal` only if you specifically want to develop or test against Temporal (for example, if your team is migrating to it). The two engines are interchangeable from a workflow-author perspective; the choice mainly affects which web UI and CLI you use.
 
+### Choosing an object storage backend
+
+`ma sandbox create` defaults to **MinIO**. Pass `--object-store seaweedfs` to run [SeaweedFS](https://github.com/seaweedfs/seaweedfs) instead — both are S3-compatible, so pipelines that read/write via `objectStorage.endpoint` work identically against either backend. SeaweedFS's sandbox deployment runs its lightweight all-in-one mode (no admin/browsing UI); it's intended for exercising the S3 API path, not for browsing objects interactively.
+
 ### Verifying success
 
 When `ma sandbox create` completes, all Michelangelo AI services start in your k3d cluster. Verify with:
@@ -176,6 +180,7 @@ ma sandbox create [OPTIONS]
 | Flag | Description | Default |
 |------|-------------|---------|
 | `--workflow cadence\|temporal` | Choose workflow engine | `cadence` |
+| `--object-store minio\|seaweedfs` | Choose object storage backend | `minio` |
 | `--exclude [services]` | Exclude services: `apiserver`, `controllermgr`, `ui`, `worker`, `prometheus`, `grafana` | none |
 | `--create-compute-cluster` | Create an additional Ray compute cluster for distributed jobs | disabled |
 | `--compute-cluster-name <name>` | Custom name for the compute cluster | auto-generated |
