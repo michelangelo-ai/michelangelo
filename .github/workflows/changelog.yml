@@ -125,7 +125,7 @@ jobs:
 
 
       - name: Generate release notes
-        uses: orhun/git-cliff-action@3d96a18cc4ec17e9dc69ddcc424ccafaf1f78ce2 # v4.9.0
+        uses: orhun/git-cliff-action@a9a95522b26fe6403f7bb24031f21fb573d0f5ff # v4.9.1
         id: cliff-latest
         with:
           config: cliff.toml
@@ -135,7 +135,7 @@ jobs:
           GITHUB_REPO: ${{ github.repository }}
 
       - name: Generate release notes (GitHub Release format)
-        uses: orhun/git-cliff-action@3d96a18cc4ec17e9dc69ddcc424ccafaf1f78ce2 # v4.9.0
+        uses: orhun/git-cliff-action@a9a95522b26fe6403f7bb24031f21fb573d0f5ff # v4.9.1
         id: cliff-release-body
         with:
           config: cliff-release.toml
