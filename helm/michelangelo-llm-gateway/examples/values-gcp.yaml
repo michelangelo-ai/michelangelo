@@ -1,0 +1,76 @@
+# Use this file alone on Autopilot. On Standard GKE, also apply
+# values-gcp-standard.yaml after enabling the metadata server on eligible nodes.
+litellm:
+  serviceAccount:
+    name: litellm
+    annotations:
+      iam.gke.io/gcp-service-account: litellm@REPLACE_WITH_GCP_PROJECT.iam.gserviceaccount.com
+
+  service:
+    type: LoadBalancer
+    annotations:
+      networking.gke.io/load-balancer-type: "Internal"
+
+  masterkeySecretName: litellm-secrets
+  masterkeySecretKey: masterkey
+
+  extraEnvVars:
+    - name: LITELLM_SALT_KEY
+      valueFrom:
+        secretKeyRef:
+          name: litellm-secrets
+          key: saltkey
+    - name: DATABASE_URL
+      valueFrom:
+        secretKeyRef:
+          name: litellm-secrets
+          key: database-url
+    - name: OPENAI_API_KEY
+      valueFrom:
+        secretKeyRef:
+          name: litellm-secrets
+          key: openai-api-key
+    - name: DISABLE_SCHEMA_UPDATE
+      value: "true"
+
+  proxy_config:
+    model_list:
+      - model_name: openai-default
+        litellm_params:
+          model: openai/REPLACE_WITH_APPROVED_OPENAI_MODEL
+          api_key: os.environ/OPENAI_API_KEY
+      - model_name: vertex-default
+        litellm_params:
+          model: vertex_ai/REPLACE_WITH_APPROVED_VERTEX_MODEL
+          vertex_project: REPLACE_WITH_GCP_PROJECT
+          vertex_location: REPLACE_WITH_VERTEX_LOCATION
+    general_settings:
+      master_key: os.environ/PROXY_MASTER_KEY
+      disable_prisma_schema_update: true
+    litellm_settings:
+      cache: false
+      success_callback:
+        - prometheus
+
+  ingress:
+    enabled: false
+
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: topology.kubernetes.io/zone
+      whenUnsatisfiable: DoNotSchedule
+      labelSelector:
+        matchLabels:
+          app.kubernetes.io/name: litellm
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: DoNotSchedule
+      labelSelector:
+        matchLabels:
+          app.kubernetes.io/name: litellm
+
+networkPolicy:
+  enabled: false
+
+serviceMonitor:
+  enabled: false
