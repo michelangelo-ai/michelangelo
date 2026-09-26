@@ -923,7 +923,14 @@ def _deploy_services(ns: argparse.Namespace):
         resources.append("weed-server.yaml")
         # SeaweedFS's all-in-one server mode has no MinIO-console-equivalent
         # admin UI on port 9090, so no console link is printed for this
-        # backend (documented UX gap, tracked for a future docs pass).
+        # backend. This is intentional, not a gap: the sandbox intentionally
+        # stays on the lightweight single-Pod `weed server` all-in-one mode
+        # for fast spin-up/teardown, rather than the full multi-Pod
+        # master/volume/filer/admin topology the official SeaweedFS Helm
+        # chart deploys. For a real admin UI/file browser, install the
+        # bundled `seaweedfs` subchart directly (helm/michelangelo's
+        # `seaweedfs.enabled`/`seaweedfs.admin.enabled` values, see
+        # design.md's Stage 5) rather than through this sandbox CLI.
     else:
         resources.append("minio.yaml")
         links.append(
