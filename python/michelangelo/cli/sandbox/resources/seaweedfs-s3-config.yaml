@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: seaweedfs-s3-config
+data:
+  s3_config.json: |
+    {
+      "identities": [
+        {
+          "name": "minioadmin",
+          "credentials": [
+            {
+              "accessKey": "minioadmin",
+              "secretKey": "minioadmin"
+            }
+          ],
+          "actions": ["Admin", "Read", "Write"]
+        }
+      ]
+    }
