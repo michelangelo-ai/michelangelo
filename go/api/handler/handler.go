@@ -203,14 +203,6 @@ func (handler *apiHandler) UpdateStatus(ctx context.Context, obj ctrlRTClient.Ob
 	log, headers := initLogger(ctx, handler.logger, "UpdateStatus", obj.GetNamespace(), obj.GetName(), kind)
 	defer emitAPIMetrics("UpdateStatus", handler.metrics, log, start, kind, headers)
 
-	if handler.validationHandler != nil {
-		if err := handler.validationHandler.ValidateUpdate(obj); err != nil {
-			return err
-		}
-	} else if err := api.Validate(obj); err != nil {
-		return err
-	}
-
 	tmpObj, ok := obj.DeepCopyObject().(ctrlRTClient.Object)
 	if !ok {
 		return status.Errorf(codes.InvalidArgument, "object does not implement the controller-runtime client.Object interface")
