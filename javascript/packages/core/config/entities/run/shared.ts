@@ -122,8 +122,6 @@ export const RUN_TRIGGERED_BY_COLUMN: Cell = {
   label: 'Triggered by',
   type: CellType.LINK,
   url: interpolate<string>(({ studio, data }) => {
-    // cast: data is `any` from the interpolation context — row in list views, page in
-    // detail views; always a PipelineRun for these cells. See #1425
     const triggerName = (data as { metadata?: { labels?: Record<string, string> } })?.metadata
       ?.labels?.[TRIGGERED_BY_LABEL];
 
@@ -178,8 +176,6 @@ export const RUN_ENVIRONMENT_COLUMN: Cell = {
   label: 'Environment',
   type: CellType.TEXT,
   accessor: (data: unknown) => {
-    // cast: accessor receives unknown data; narrowing to expected proto shape for property
-    // access
     const labels = (data as { metadata?: { labels?: Record<string, string> } })?.metadata?.labels;
     return readEnvironmentLabel(labels) || null;
   },
@@ -221,8 +217,6 @@ export const RUN_STATE_COLUMN_WITH_KILLING: Cell = {
   stateTextMap: RUN_STATE_TEXT_MAP_WITH_KILLING,
   stateColorMap: RUN_STATE_COLOR_MAP_WITH_KILLING,
   accessor: (data: unknown) => {
-    // cast: accessor receives unknown data; narrowing to expected proto shape for property
-    // access
     const run = data as { spec?: { kill?: boolean }; status?: { state?: number } };
     if (run.spec?.kill && run.status?.state !== PipelineRunState.KILLED) {
       return 'KILLING';
