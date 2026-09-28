@@ -6,6 +6,7 @@ import (
 	"text/template"
 
 	maconfig "github.com/michelangelo-ai/michelangelo/go/base/config"
+	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/constants"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/types"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/utils"
@@ -20,6 +21,7 @@ import (
 type Mapper struct {
 	LogPersistence LogPersistenceConfig
 	Scheduler      maconfig.SchedulerConfig
+	Env            env.Context
 	logURLTemplate *template.Template
 }
 
@@ -47,7 +49,7 @@ func NewLogPersistenceConfig(provider config.Provider) (LogPersistenceConfig, er
 
 // NewMapper constructs the Mapper. Panics if LogURLFormat is set but does not
 // parse as a valid Go text/template — config errors should fail at startup.
-func NewMapper(logPersistence LogPersistenceConfig, scheduler maconfig.SchedulerConfig) MapperResult {
+func NewMapper(logPersistence LogPersistenceConfig, scheduler maconfig.SchedulerConfig, environment env.Context) MapperResult {
 	var tmpl *template.Template
 	if logPersistence.Enabled && logPersistence.LogURLFormat != "" {
 		tmpl = template.Must(template.New("logURL").Parse(logPersistence.LogURLFormat))
@@ -56,23 +58,45 @@ func NewMapper(logPersistence LogPersistenceConfig, scheduler maconfig.Scheduler
 		Mapper: Mapper{
 			LogPersistence: logPersistence,
 			Scheduler:      scheduler,
+			Env:            environment,
 			logURLTemplate: tmpl,
 		},
 	}
 }
 
-// mapLabels builds the label set for objects created on compute clusters.
-// Control-plane labels (michelangelo/*, ma/*) deliberately do not cross the
-// cluster boundary: the compute-cluster operators do not understand them, and
-// wholesale copying would let user-controlled labels (in particular
-// kueue.x-k8s.io/queue-name) steer admission. Labels the compute cluster
-// genuinely needs are added explicitly — today that is only the Kueue queue
-// label, resolved by the control plane and passed in as queueName.
-func mapLabels(_ map[string]string, queueName string) map[string]string {
-	if queueName == "" {
-		return nil
+// controlPlaneLabels are the labels Michelangelo stamps on every object it
+// creates on a compute cluster, and the only channel the federated watchers
+// have for attributing a compute-cluster event back to a control-plane CR:
+//
+//   - ma/owner-service and ma/control-plane-env scope each watch to the objects
+//     this control plane owns, so one compute cluster can be shared by several
+//     Michelangelo environments without their watchers crossing over.
+//   - ma/project-name carries the namespace the CR lives in, which is how an
+//     event is routed back to it.
+//
+// A job author's own labels deliberately do not cross the cluster boundary: the
+// compute-cluster operators do not understand them, and copying them wholesale
+// would let a caller forge ma/project-name and point this control plane's
+// writes at another tenant's namespace. Every value below is therefore resolved
+// here — namespace is the CR's own, which is bound by authorization.
+func (m Mapper) controlPlaneLabels(namespace string) map[string]string {
+	return map[string]string{
+		constants.OwnerServiceLabelKey:  constants.MAOwnerServiceLabelValue,
+		constants.JobControlPlaneEnvKey: m.Env.RuntimeEnvironment,
+		constants.ProjectNameLabelKey:   namespace,
 	}
-	return map[string]string{constants.KueueQueueNameLabelKey: queueName}
+}
+
+// objectLabels are the controlPlaneLabels plus the Kueue LocalQueue label when
+// the target cluster is Kueue-managed. It belongs on the workload object only —
+// stamping it on pod templates too would expose the pods to Kueue's pod
+// integration as separately admissible workloads.
+func (m Mapper) objectLabels(namespace, queueName string) map[string]string {
+	labels := m.controlPlaneLabels(namespace)
+	if queueName != "" {
+		labels[constants.KueueQueueNameLabelKey] = queueName
+	}
+	return labels
 }
 
 // kueueQueueName resolves the LocalQueue for a job dispatched to cluster, or
