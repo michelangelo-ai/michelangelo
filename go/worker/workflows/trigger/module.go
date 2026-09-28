@@ -15,5 +15,6 @@ func register(workers []worker.Worker, workflow workflow.Workflow) {
 	for _, w := range workers {
 		w.RegisterWorkflow(ws.CronTrigger, "trigger.CronTrigger")
 		w.RegisterWorkflow(ws.BackfillTrigger, "trigger.BackfillTrigger")
+		w.RegisterWorkflow(ws.BatchRerunTrigger, "trigger.BatchRerunTrigger")
 	}
 }
