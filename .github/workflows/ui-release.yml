@@ -6,11 +6,6 @@ on:
     branches: [ main ]
     tags: ['v*']
     paths:
-      # Everything this workflow's build-ui-image job actually reads: the
-      # built UI assets and the Dockerfile that packages them. Kept as an
-      # explicit allowlist (not paths-ignore) since those two are the
-      # complete, known input set -- see H-054 for why this must include
-      # the Dockerfile itself, not just javascript/**.
       - 'javascript/**'
       - 'docker/ui-prebuilt.Dockerfile'
 
@@ -45,14 +40,6 @@ jobs:
 
   build-ui-image:
     needs: check-version-change
-    # Always rebuild/republish :main, :sha, etc. on every push that reaches
-    # this workflow (or a manual dispatch) -- this image is a rolling tag
-    # that downstream tooling (e.g. CVE Scan) expects to track current
-    # source, so gating the rebuild itself on a package.json version bump
-    # (as this job used to) let :main silently go stale for any push that
-    # didn't also bump the version. check-version-change's output is still
-    # used below, but only to decide whether to *additionally* cut a
-    # v${version} tag -- not whether to build at all.
     runs-on: ubuntu-latest
 
     permissions:
