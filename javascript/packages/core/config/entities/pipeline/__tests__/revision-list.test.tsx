@@ -20,7 +20,7 @@ describe('PIPELINE_ENTITY_CONFIG: Revisions list variant', () => {
     await user.click(await screen.findByRole('option', { name: 'Revisions' }));
   }
 
-  it('shows the same action menu (Run, Run trigger, Delete) as the Pipelines list', async () => {
+  it('shows the same action menu (Run, Run trigger) as the Pipelines list, with Delete disabled', async () => {
     const user = userEvent.setup();
     render(
       <PhaseListRoute
@@ -83,7 +83,11 @@ describe('PIPELINE_ENTITY_CONFIG: Revisions list variant', () => {
 
     expect(screen.getByRole('option', { name: 'Run' })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'Run trigger' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'Delete' })).toBeInTheDocument();
+
+    await user.hover(screen.getByRole('option', { name: 'Delete' }));
+    expect(
+      await screen.findByText('Return to the Pipelines list view to delete a pipeline')
+    ).toBeInTheDocument();
 
     await user.keyboard('{Escape}');
   });
