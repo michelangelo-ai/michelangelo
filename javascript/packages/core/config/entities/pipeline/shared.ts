@@ -1,4 +1,5 @@
 import { CellType } from '#core/components/cell/constants';
+import { getCrdLastUpdatedSeconds } from '#core/utils/crd-utils';
 
 import type { Cell } from '#core/components/cell/types';
 
@@ -12,6 +13,24 @@ export const PIPELINE_RUN_PIPELINE_NAME_FIELD = 'pipeline_run.pipeline_name';
  * Criterion field name for the Revision a PipelineRun was pinned to (`spec.revision.name`).
  */
 export const PIPELINE_RUN_REVISION_NAME_FIELD = 'pipeline_run.revision_name';
+
+/**
+ * Shared by the pipeline and revision lists. Reads the apiserver's `michelangelo/UpdateTimestamp`
+ * label, falling back to creation time for rows that have never been updated.
+ */
+export const PIPELINE_LAST_UPDATED_CELL: Cell = {
+  id: 'metadata',
+  label: 'Last updated',
+  type: CellType.DATE,
+  accessor: (data: unknown) => {
+    // cast: accessor receives unknown data; narrowing to expected proto shape for property
+    // access; see #1425
+    const row = data as {
+      metadata?: { labels?: Record<string, string>; creationTimestamp?: { seconds: number } };
+    };
+    return getCrdLastUpdatedSeconds(row);
+  },
+};
 
 export const PIPELINE_STATE_CELL: Cell = {
   id: 'status.state',
