@@ -53,8 +53,8 @@ class S3SinkConfig:
         backend = MinioStorageBackend(
             endpoint="localhost:9000",
             bucket="my-bucket",
-            access_key="minioadmin",
-            secret_key="minioadmin",
+            access_key="michelangeloadmin",
+            secret_key="michelangeloadmin",
             secure=False,
             create_bucket_if_missing=True,
         )
