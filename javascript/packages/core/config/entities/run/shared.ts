@@ -145,8 +145,6 @@ export const RUN_UPDATED_COLUMN: Cell = {
   label: 'Last updated',
   type: CellType.DATE,
   accessor: (data: unknown) => {
-    // cast: accessor receives unknown data; narrowing to expected proto shape for property
-    // access
     const row = data as {
       metadata?: { labels?: Record<string, string>; creationTimestamp?: { seconds: number } };
     };
@@ -167,8 +165,6 @@ export const RUN_EXECUTION_TIMESTAMP_COLUMN: Cell = {
   label: 'Execution Timestamp',
   type: CellType.DATE,
   accessor: (data: unknown) => {
-    // cast: accessor receives unknown data; narrowing to expected proto shape for property
-    // access
     const row = data as {
       metadata?: { labels?: Record<string, string>; creationTimestamp?: { seconds: number } };
     };
