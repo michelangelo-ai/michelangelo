@@ -254,6 +254,12 @@ StateMachine:
 	case v2pb.TRIGGER_RUN_STATE_RUNNING:
 		log.Info("TRIGGER_RUN_STATE_RUNNING")
 
+		if err := r.applyAutoFlip(ctx, log, triggerRun); err != nil {
+			log.Error(err, "failed to apply auto_flip")
+			triggerRun.Status.ErrorMessage = err.Error()
+			break StateMachine
+		}
+
 		// Handle actions using the new action field (preferred) or deprecated boolean fields (backward compatibility)
 		actionToPerform := triggerRun.Spec.Action
 
@@ -408,6 +414,55 @@ StateMachine:
 		}
 	}
 	return ctrl.Result{RequeueAfter: 60 * time.Second}, nil
+}
+
+// applyAutoFlip moves triggerRun.Spec.Revision to the pipeline's latest
+// revision when Spec.AutoFlip is set.
+//
+// Pipeline.Status.LatestRevision is only ever set for main/master commits
+// (see pipeline.Controller.reconcile), so no separate branch check is
+// needed here: any non-nil LatestRevision is already known-good. When the
+// pipeline has no such revision yet, auto_flip disables itself and records
+// a warning instead of leaving the trigger run pinned to a stale revision
+// with no way to reach the intended behavior.
+func (r *Reconciler) applyAutoFlip(ctx context.Context, log logr.Logger, triggerRun *v2pb.TriggerRun) error {
+	if !triggerRun.Spec.AutoFlip {
+		return nil
+	}
+
+	pipelineRef := triggerRun.Spec.GetPipeline()
+	namespace := pipelineRef.GetNamespace()
+	if namespace == "" {
+		namespace = triggerRun.GetNamespace()
+	}
+
+	pipeline := &v2pb.Pipeline{}
+	err := r.Get(ctx, namespace, pipelineRef.GetName(), &metav1.GetOptions{}, pipeline)
+	if err != nil && !apiutils.IsNotFoundError(err) {
+		return err
+	}
+
+	latest := pipeline.Status.GetLatestRevision()
+	if err != nil || latest == nil {
+		triggerRun.Spec.AutoFlip = false
+		triggerRun.Status.ErrorMessage = fmt.Sprintf(
+			"auto_flip disabled: pipeline %s/%s has no revision on main or master",
+			namespace, pipelineRef.GetName())
+		log.Info("auto_flip disabled, no main/master revision found",
+			"pipeline", pipelineRef.GetName())
+		return nil
+	}
+
+	if triggerRun.Spec.Revision.GetName() == latest.GetName() &&
+		triggerRun.Spec.Revision.GetNamespace() == latest.GetNamespace() {
+		return nil
+	}
+
+	log.Info("auto_flip updating revision",
+		"from", triggerRun.Spec.Revision.GetName(),
+		"to", latest.GetName())
+	triggerRun.Spec.Revision = latest
+	return nil
 }
 
 // ensureOwnerRef is a transitional MIGRATION: it stamps the owning Pipeline as
