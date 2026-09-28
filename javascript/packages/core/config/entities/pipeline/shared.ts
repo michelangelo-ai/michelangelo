@@ -122,7 +122,7 @@ export const PIPELINE_DELETE_ACTION: ActionConfigSchema<object> = {
       // row; see #1425
       const pipeline = data as Pipeline;
       const name = isPipelineRevision(data) ? data.spec.baseResource.name : pipeline.metadata.name;
-      return `Delete pipeline **${name}**? This action cannot be undone.`;
+      return `Delete pipeline **${name}**? This will delete the pipeline and all of its revisions. This action cannot be undone.`;
     }),
     button: { label: 'Delete' },
     destructive: true,
