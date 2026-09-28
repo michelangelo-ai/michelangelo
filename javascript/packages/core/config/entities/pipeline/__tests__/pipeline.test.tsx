@@ -107,7 +107,7 @@ describe('PIPELINE_ENTITY_CONFIG: delete action', () => {
 
       const dialog = await screen.findByRole('dialog', { name: 'Delete Pipeline' });
       expect(within(dialog).getByText(/Delete pipeline/)).toHaveTextContent(
-        /Delete pipeline eval-pipeline\? This action cannot be undone\./
+        /Delete pipeline eval-pipeline\? This will delete the pipeline and all of its revisions\. This action cannot be undone\./
       );
 
       await user.click(getSubmitButton(dialog));
@@ -206,7 +206,7 @@ describe('PIPELINE_ENTITY_CONFIG: delete action', () => {
 
       const dialog = await screen.findByRole('dialog', { name: 'Delete Pipeline' });
       expect(within(dialog).getByText(/Delete pipeline/)).toHaveTextContent(
-        /Delete pipeline eval-pipeline\? This action cannot be undone\./
+        /Delete pipeline eval-pipeline\? This will delete the pipeline and all of its revisions\. This action cannot be undone\./
       );
 
       await user.click(getSubmitButton(dialog));

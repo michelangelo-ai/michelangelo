@@ -1,8 +1,15 @@
 import { CellType } from '#core/components/cell/constants';
 import { DescriptionHierarchy } from '#core/components/cell/renderers/description/constants';
 import { formatRevisionLabel } from '#core/utils/revision-utils';
-import { PIPELINE_LAST_UPDATED_CELL, PIPELINE_STATE_CELL, PIPELINE_TYPE_CELL } from './shared';
+import {
+  PIPELINE_ACTIONS,
+  PIPELINE_DELETE_ACTION,
+  PIPELINE_LAST_UPDATED_CELL,
+  PIPELINE_STATE_CELL,
+  PIPELINE_TYPE_CELL,
+} from './shared';
 
+import type { ActionConfigSchema } from '#core/components/actions/types';
 import type { ColumnConfig } from '#core/components/table/types/column-types';
 import type { TableConfig } from '#core/components/views/types';
 import type { PipelineRevision } from './types';
@@ -39,7 +46,26 @@ export const PIPELINE_REVISION_CELL_CONFIG: ColumnConfig<object>[] = [
   { ...PIPELINE_STATE_CELL, id: 'spec.content.status.state' },
 ];
 
+/**
+ * Same as {@link PIPELINE_ACTIONS}, but Delete is disabled here: deleting a pipeline from
+ * the Revisions list would need to resolve which pipeline a revision belongs to and only
+ * makes sense from the Pipelines list, where that pipeline is the row itself.
+ */
+const PIPELINE_REVISION_ACTIONS: ActionConfigSchema<object>[] = PIPELINE_ACTIONS.map((action) =>
+  action === PIPELINE_DELETE_ACTION
+    ? {
+        ...action,
+        disabled: [
+          {
+            condition: true,
+            message: 'Return to the Pipelines list view to delete a pipeline',
+          },
+        ],
+      }
+    : action
+);
+
 export const PIPELINE_REVISION_TABLE_CONFIG: TableConfig<object> = {
   columns: PIPELINE_REVISION_CELL_CONFIG,
-  actions: [],
+  actions: PIPELINE_REVISION_ACTIONS,
 };
