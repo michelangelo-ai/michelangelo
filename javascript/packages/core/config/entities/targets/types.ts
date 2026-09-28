@@ -7,7 +7,7 @@ export type ClusterConnection = {
 
 export type ClusterTarget = {
   clusterId: string;
-  connection: { case: 'kubernetes'; value: ClusterConnection };
+  kubernetes: ClusterConnection;
 };
 
 export type InferenceServer = {
@@ -43,19 +43,19 @@ export type InferenceServer = {
   };
 };
 
-/** Subset of a `Cluster` CR (as decoded by protobuf-es) needed to build a ClusterTarget. */
+/** Subset of a `Cluster` CR needed to build a ClusterTarget. */
 export type RegisteredCluster = {
   metadata: { name: string; namespace: string };
   spec?: {
     region?: string;
     zone?: string;
-    cluster?: { case?: 'kubernetes'; value?: { rest?: ClusterConnection } };
+    kubernetes?: { rest?: ClusterConnection };
   };
 };
 
 /** A RegisteredCluster whose REST connection is present. */
 export type ConnectableCluster = RegisteredCluster & {
-  spec: { cluster: { value: { rest: ClusterConnection } } };
+  spec: { kubernetes: { rest: ClusterConnection } };
 };
 
 export type ClusterListResult = {

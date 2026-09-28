@@ -7,6 +7,7 @@ import { useStudioMutation } from '#core/hooks/use-studio-mutation/use-studio-mu
 import { useStudioQuery } from '#core/hooks/use-studio-query';
 import { ENVIRONMENT_LABEL_KEY } from '#core/utils/environment-utils';
 import { generateSuffix, resolveTriggerRunTypePrefix } from '#core/utils/name-utils';
+import { getDateFromEpochSeconds } from '#core/utils/time-utils';
 import { formatTriggerSchedule } from './format-trigger-schedule';
 import { RunTriggerFields } from './run-trigger-fields';
 import { isPipelineRevision } from './types';
@@ -141,7 +142,7 @@ export const RunTriggerForm = ({
  * the "Triggered by" column. See `resolveTriggerRunTypePrefix` for the classification rule.
  */
 function buildTriggerRunName(trigger: ManifestTrigger, isBackfill: boolean | undefined): string {
-  const typePrefix = resolveTriggerRunTypePrefix(trigger.triggerType?.case, !!isBackfill);
+  const typePrefix = resolveTriggerRunTypePrefix(trigger, !!isBackfill);
   return `${typePrefix}${generateSuffix({ withDate: true })}`;
 }
 
@@ -178,7 +179,7 @@ function buildBackfillWindow(
   }
 
   return {
-    startTimestamp: { seconds: values.startTimestamp },
-    endTimestamp: { seconds: values.endTimestamp },
+    startTimestamp: getDateFromEpochSeconds(Number(values.startTimestamp)).toISOString(),
+    endTimestamp: getDateFromEpochSeconds(Number(values.endTimestamp)).toISOString(),
   };
 }

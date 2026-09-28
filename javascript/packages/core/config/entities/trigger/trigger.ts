@@ -41,7 +41,7 @@ const isRerunnable = (record: unknown) => {
  */
 function buildRerunName(spec: TriggerRun['spec']): string {
   const typePrefix = resolveTriggerRunTypePrefix(
-    spec.trigger?.triggerType?.case,
+    spec.trigger,
     !!(spec.startTimestamp && spec.endTimestamp)
   );
   const sourceNameSegment = spec.sourceTriggerName ? `-${spec.sourceTriggerName}` : '';

@@ -10,18 +10,14 @@ export type Trigger = {
     name: string;
   };
   spec: {
-    trigger: {
-      triggerType: {
-        case: 'cronSchedule' | 'batchRerun' | 'intervalSchedule';
-      };
-    };
+    trigger: Pick<ManifestTrigger, 'cronSchedule' | 'intervalSchedule' | 'batchRerun'>;
   };
 };
 
 /**
- * A trigger declared in a pipeline's manifest (`PipelineManifest.trigger_map`), as
- * protobuf-es decodes the proto `Trigger` message: the `oneof trigger_type` becomes a
- * tagged `{ case, value }` union.
+ * A trigger declared in a pipeline's manifest (`PipelineManifest.trigger_map`), in the proto
+ * `Trigger` message's proto3 JSON form: the `oneof trigger_type` is whichever one of
+ * `cronSchedule`, `intervalSchedule`, or `batchRerun` is set.
  *
  * The whole object is copied (and, for a backfill run, partially overridden) into
  * {@link RunTriggerPayload.spec.trigger} on submit, so fields not read directly by the UI
@@ -29,10 +25,10 @@ export type Trigger = {
  * unless a form field needs to read or override them (see `parametersMap`, `maxConcurrency`).
  */
 export type ManifestTrigger = {
-  triggerType?:
-    | { case: 'cronSchedule'; value: { cron?: string } }
-    | { case: 'intervalSchedule'; value: { interval?: { seconds?: bigint | number | string } } }
-    | { case: 'batchRerun'; value: BatchRerun };
+  cronSchedule?: { cron?: string };
+  /** `interval` is a proto3 JSON `google.protobuf.Duration`, e.g. "3600s". */
+  intervalSchedule?: { interval?: string };
+  batchRerun?: BatchRerun;
   /** Dynamic pipeline parameters this trigger can run with, keyed by parameter ID. */
   parametersMap?: Record<string, unknown>;
   /** Default cap on concurrent runs for this trigger; overridable for a backfill run. */
@@ -82,9 +78,9 @@ export type RunTriggerPayload = {
     trigger: ManifestTrigger;
     sourceTriggerName: string;
     autoFlip: boolean;
-    /** Epoch-seconds window bounds; present only for a backfill run. */
-    startTimestamp?: { seconds: string };
-    endTimestamp?: { seconds: string };
+    /** RFC 3339 window bounds (proto3 JSON `google.protobuf.Timestamp`); present only for a backfill run. */
+    startTimestamp?: string;
+    endTimestamp?: string;
   };
 };
 
@@ -98,7 +94,7 @@ export type TriggerRun = {
     pipeline: { name: string; namespace: string };
     revision: { name: string; namespace: string };
     actor: { name: string };
-    /** The trigger definition this run executes; its `triggerType` decides the schedule. */
+    /** The trigger definition this run executes; whichever `trigger_type` member is set decides the schedule. */
     trigger?: ManifestTrigger;
     sourceTriggerName: string;
     autoFlip: boolean;
@@ -108,9 +104,9 @@ export type TriggerRun = {
     /** proto field 11 — replaces deprecated kill boolean */
     action: TriggerRunAction;
     /** Backfill window start; present only for a backfill-created trigger run. */
-    startTimestamp?: { seconds: string };
+    startTimestamp?: string;
     /** Backfill window end; present only for a backfill-created trigger run. */
-    endTimestamp?: { seconds: string };
+    endTimestamp?: string;
   };
   status: {
     state: (typeof TriggerRunState)[keyof typeof TriggerRunState];
@@ -122,8 +118,8 @@ export type TriggerRun = {
 };
 
 /**
- * Mirrors proto TriggerRunAction enum (trigger_run.proto). Requests are built with `create()`,
- * which takes the proto's native numeric enum representation, not the JSON string name.
+ * Mirrors proto TriggerRunAction enum (trigger_run.proto). Requests are parsed as proto3 JSON,
+ * which accepts the numeric value as well as the string name.
  */
 export enum TriggerRunAction {
   NO_ACTION = 0,

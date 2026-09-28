@@ -186,7 +186,7 @@ describe('TRIGGER_ENTITY_CONFIG: rerun action', () => {
         pipeline: { name: 'my-pipeline', namespace: 'test-ns' },
         revision: { name: 'rev-1', namespace: 'test-ns' },
         actor: { name: 'me' },
-        trigger: { triggerType: { case: 'cronSchedule', value: { cron: '0 * * * *' } } },
+        trigger: { cronSchedule: { cron: '0 * * * *' } },
         sourceTriggerName: 'nightly',
         autoFlip: false,
         notifications: [],
@@ -320,7 +320,7 @@ describe('TRIGGER_ENTITY_CONFIG: rerun action', () => {
     expect(payload.spec.pipeline).toEqual({ name: 'my-pipeline', namespace: 'test-ns' });
     expect(payload.spec.revision).toEqual({ name: 'rev-1', namespace: 'test-ns' });
     expect(payload.spec.trigger).toEqual({
-      triggerType: { case: 'cronSchedule', value: { cron: '0 * * * *' } },
+      cronSchedule: { cron: '0 * * * *' },
     });
     // The new run must not spawn already killed, even though the source (being FAILED) is terminal.
     expect(payload.spec.action).toBe(TriggerRunAction.NO_ACTION);
@@ -402,7 +402,7 @@ describe('Trigger list page', () => {
                     pipeline: { name: 'my-pipeline' },
                     revision: { name: 'rev-1' },
                     trigger: {
-                      triggerType: { case: 'cronSchedule', value: { cron: '0 2 * * *' } },
+                      cronSchedule: { cron: '0 2 * * *' },
                     },
                     actor: { name: 'jsmith' },
                     autoFlip: true,
@@ -418,10 +418,7 @@ describe('Trigger list page', () => {
                     pipeline: { name: 'my-pipeline' },
                     revision: { name: 'rev-2' },
                     trigger: {
-                      triggerType: {
-                        case: 'intervalSchedule',
-                        value: { interval: { seconds: 3600 } },
-                      },
+                      intervalSchedule: { interval: '3600s' },
                     },
                     actor: { name: 'jsmith' },
                     autoFlip: false,

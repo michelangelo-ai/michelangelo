@@ -23,15 +23,12 @@ describe('CreateInferenceServerForm', () => {
             {
               metadata: { name: 'michelangelo-sandbox-inference', namespace: 'ma-system' },
               spec: {
-                cluster: {
-                  case: 'kubernetes',
-                  value: {
-                    rest: {
-                      host: 'https://kubernetes.default.svc',
-                      port: '443',
-                      tokenTag: 'cluster-michelangelo-sandbox-is-token',
-                      caDataTag: 'cluster-michelangelo-sandbox-ca-data',
-                    },
+                kubernetes: {
+                  rest: {
+                    host: 'https://kubernetes.default.svc',
+                    port: '443',
+                    tokenTag: 'cluster-michelangelo-sandbox-is-token',
+                    caDataTag: 'cluster-michelangelo-sandbox-ca-data',
                   },
                 },
               },
@@ -100,14 +97,11 @@ describe('CreateInferenceServerForm', () => {
             clusterTargets: [
               {
                 clusterId: 'michelangelo-sandbox-inference',
-                connection: {
-                  case: 'kubernetes',
-                  value: {
-                    host: 'https://kubernetes.default.svc',
-                    port: '443',
-                    tokenTag: 'cluster-michelangelo-sandbox-is-token',
-                    caDataTag: 'cluster-michelangelo-sandbox-ca-data',
-                  },
+                kubernetes: {
+                  host: 'https://kubernetes.default.svc',
+                  port: '443',
+                  tokenTag: 'cluster-michelangelo-sandbox-is-token',
+                  caDataTag: 'cluster-michelangelo-sandbox-ca-data',
                 },
               },
             ],
@@ -127,15 +121,12 @@ describe('CreateInferenceServerForm', () => {
             {
               metadata: { name: 'michelangelo-sandbox-inference', namespace: 'ma-system' },
               spec: {
-                cluster: {
-                  case: 'kubernetes',
-                  value: {
-                    rest: {
-                      host: 'https://kubernetes.default.svc',
-                      port: '443',
-                      tokenTag: 'cluster-michelangelo-sandbox-is-token',
-                      caDataTag: 'cluster-michelangelo-sandbox-ca-data',
-                    },
+                kubernetes: {
+                  rest: {
+                    host: 'https://kubernetes.default.svc',
+                    port: '443',
+                    tokenTag: 'cluster-michelangelo-sandbox-is-token',
+                    caDataTag: 'cluster-michelangelo-sandbox-ca-data',
                   },
                 },
               },
@@ -143,15 +134,12 @@ describe('CreateInferenceServerForm', () => {
             {
               metadata: { name: 'inference-cluster-1', namespace: 'ma-system' },
               spec: {
-                cluster: {
-                  case: 'kubernetes',
-                  value: {
-                    rest: {
-                      host: 'https://k3d-inference-cluster-1-server-0',
-                      port: '6443',
-                      tokenTag: 'cluster-inference-cluster-1-is-token',
-                      caDataTag: 'cluster-inference-cluster-1-ca-data',
-                    },
+                kubernetes: {
+                  rest: {
+                    host: 'https://k3d-inference-cluster-1-server-0',
+                    port: '6443',
+                    tokenTag: 'cluster-inference-cluster-1-is-token',
+                    caDataTag: 'cluster-inference-cluster-1-ca-data',
                   },
                 },
               },
@@ -203,10 +191,7 @@ describe('CreateInferenceServerForm', () => {
             {
               metadata: { name: 'michelangelo-sandbox-inference', namespace: 'ma-system' },
               spec: {
-                cluster: {
-                  case: 'kubernetes',
-                  value: { rest: { host: 'https://kubernetes.default.svc' } },
-                },
+                kubernetes: { rest: { host: 'https://kubernetes.default.svc' } },
               },
             },
           ],
@@ -259,19 +244,13 @@ describe('CreateInferenceServerForm', () => {
             {
               metadata: { name: 'cluster-a', namespace: 'ma-system' },
               spec: {
-                cluster: {
-                  case: 'kubernetes',
-                  value: { rest: { host: 'https://cluster-a.example.com' } },
-                },
+                kubernetes: { rest: { host: 'https://cluster-a.example.com' } },
               },
             },
             {
               metadata: { name: 'cluster-b', namespace: 'ma-system' },
               spec: {
-                cluster: {
-                  case: 'kubernetes',
-                  value: { rest: { host: 'https://cluster-b.example.com' } },
-                },
+                kubernetes: { rest: { host: 'https://cluster-b.example.com' } },
               },
             },
           ],
@@ -321,10 +300,7 @@ describe('CreateInferenceServerForm', () => {
             {
               metadata: { name: 'connected', namespace: 'ma-system' },
               spec: {
-                cluster: {
-                  case: 'kubernetes',
-                  value: { rest: { host: 'https://connected.example.com' } },
-                },
+                kubernetes: { rest: { host: 'https://connected.example.com' } },
               },
             },
             {

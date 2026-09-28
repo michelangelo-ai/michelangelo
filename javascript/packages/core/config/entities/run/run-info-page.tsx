@@ -11,7 +11,7 @@ import { TextEditor } from '#core/components/text-editor/text-editor';
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
 import { TimeZone } from '#core/types/time-types';
 import { decodeStruct, isStruct } from '#core/utils/proto/struct-utils';
-import { timestampToString } from '#core/utils/time-utils';
+import { timestampToString, toEpochSeconds } from '#core/utils/time-utils';
 import { getRunManifestContent } from './shared';
 import { PipelineRunState, TERMINAL_RUN_STATES } from './types';
 
@@ -210,7 +210,7 @@ function formatRunDuration(run: PipelineRunSummary | undefined): string | null {
 
   if (TERMINAL_RUN_STATES.has(state)) {
     const stepEndTimes = (run?.status?.steps ?? [])
-      .map((step) => Number(step.endTime?.seconds))
+      .map((step) => (step.endTime ? toEpochSeconds(step.endTime) : NaN))
       .filter((seconds) => !isNaN(seconds));
     if (stepEndTimes.length === 0) {
       return null;

@@ -1,8 +1,10 @@
 import {
+  durationToSeconds,
   formatElapsedSeconds,
   getDateFromEpochSeconds,
   getEpochSecondsFromDate,
   parseIsoString,
+  toEpochSeconds,
 } from '../time-utils';
 
 describe('time-utils', () => {
@@ -117,6 +119,10 @@ describe('time-utils', () => {
       expect(formatElapsedSeconds('1704067200', '1704067752')).toBe('552s');
     });
 
+    test('accepts RFC 3339 timestamps', () => {
+      expect(formatElapsedSeconds('2024-01-01T00:00:00Z', '2024-01-01T00:09:12Z')).toBe('552s');
+    });
+
     test('returns 0s when a step started and ended within the same second', () => {
       expect(formatElapsedSeconds(1704067200, 1704067200)).toBe('0s');
     });
@@ -131,6 +137,33 @@ describe('time-utils', () => {
 
     test('returns null for unparseable timestamps', () => {
       expect(formatElapsedSeconds('not-a-number', 1704067752)).toBeNull();
+    });
+  });
+
+  describe('toEpochSeconds', () => {
+    test.each([
+      ['a number', 1704067200],
+      ['a numeric string', '1704067200'],
+      ['an RFC 3339 string', '2024-01-01T00:00:00Z'],
+    ])('reads %s', (_label, timestamp) => {
+      expect(toEpochSeconds(timestamp)).toBe(1704067200);
+    });
+
+    test('returns NaN for an unparseable string', () => {
+      expect(toEpochSeconds('not-a-timestamp')).toBeNaN();
+    });
+  });
+
+  describe('durationToSeconds', () => {
+    test.each([
+      ['3600s', 3600],
+      ['1.5s', 1.5],
+    ])('parses %s', (duration, expected) => {
+      expect(durationToSeconds(duration)).toBe(expected);
+    });
+
+    test.each([undefined, '', 'not-a-duration'])('returns undefined for %s', (duration) => {
+      expect(durationToSeconds(duration)).toBeUndefined();
     });
   });
 });

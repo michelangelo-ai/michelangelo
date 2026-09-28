@@ -20,8 +20,7 @@ export function DeploymentInfoPage({ data, isLoading }: { data?: object; isLoadi
   // expected proto shape for property access; see #1425
   const deployment = data as DeploymentRecord | undefined;
 
-  const target = deployment?.spec?.target;
-  const targetName = target?.case === 'inferenceServer' ? target.value?.name : undefined;
+  const targetName = deployment?.spec?.inferenceServer?.name;
   const links = [{ name: targetName, url: `/${projectId}/${phase}/targets/${targetName}` }];
   const targetType = deployment?.spec?.definition?.type;
 

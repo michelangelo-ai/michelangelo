@@ -552,8 +552,8 @@ describe('CreatePipelineRunForm', () => {
                   name: 'tasks/feature_gen',
                   displayName: 'feature_gen',
                   state: PipelineRunStepState.FAILED,
-                  startTime: { seconds: '1755440100' },
-                  endTime: { seconds: '1755440652' },
+                  startTime: '2025-08-17T14:15:00Z',
+                  endTime: '2025-08-17T14:24:12Z',
                 },
                 {
                   name: 'tasks/train_model',

@@ -63,7 +63,7 @@ describe('Model detail page', () => {
       metadata: { name: 'fraud-classifier-prod', creationTimestamp: { seconds: 1700000000 } },
       spec: {
         definition: { type: 'TARGET_TYPE_INFERENCE_SERVER' },
-        target: { case: 'inferenceServer', value: { name: 'ma-endpoint-fraud' } },
+        inferenceServer: { name: 'ma-endpoint-fraud' },
         owner: { name: 'adoe' },
       },
       status: {

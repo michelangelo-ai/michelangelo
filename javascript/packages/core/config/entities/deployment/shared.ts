@@ -115,12 +115,4 @@ export const DEPLOYMENT_TARGET_CELL: Cell = {
   id: 'spec.inferenceServer.name',
   label: 'Target',
   type: CellType.TEXT,
-  accessor: (data: unknown) => {
-    // cast: accessor receives unknown data; narrowing to expected proto shape for property
-    // access; see #1425
-    const target = (data as { spec?: { target?: { case?: string; value?: { name?: string } } } })
-      ?.spec?.target;
-    if (target?.case === 'inferenceServer') return target.value?.name ?? null;
-    return null;
-  },
 };

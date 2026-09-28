@@ -1,3 +1,5 @@
+import { durationToSeconds } from '#core/utils/time-utils';
+
 import type { ManifestTrigger } from '#core/config/entities/trigger/types';
 
 const INTERVAL_UNITS = [
@@ -14,26 +16,20 @@ const INTERVAL_UNITS = [
  * so callers can fall back to showing the trigger name on its own.
  */
 export const formatTriggerSchedule = (trigger: ManifestTrigger | undefined): string => {
-  const triggerType = trigger?.triggerType;
-
-  switch (triggerType?.case) {
-    case 'cronSchedule':
-      return triggerType.value.cron ? `cron ${triggerType.value.cron}` : '';
-    case 'intervalSchedule':
-      return formatInterval(triggerType.value.interval?.seconds);
-    case 'batchRerun':
-      return 'batch rerun';
-    default:
-      return '';
+  if (trigger?.cronSchedule) {
+    return trigger.cronSchedule.cron ? `cron ${trigger.cronSchedule.cron}` : '';
   }
+  if (trigger?.intervalSchedule) {
+    return formatInterval(trigger.intervalSchedule.interval);
+  }
+  if (trigger?.batchRerun) {
+    return 'batch rerun';
+  }
+  return '';
 };
 
-/**
- * Durations reach the client as a protobuf-es `Duration`, whose `seconds` is a bigint —
- * except in tests and hand-built fixtures, where it is whatever the fixture wrote.
- */
-function formatInterval(seconds: bigint | number | string | undefined): string {
-  const total = Number(seconds ?? 0);
+function formatInterval(interval: string | undefined): string {
+  const total = durationToSeconds(interval) ?? 0;
   if (!Number.isFinite(total) || total <= 0) return '';
 
   for (const { unit, seconds: unitSeconds } of INTERVAL_UNITS) {

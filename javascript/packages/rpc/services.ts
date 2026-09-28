@@ -1,4 +1,4 @@
-import { create, createRegistry, toJson } from '@bufbuild/protobuf';
+import { createRegistry, fromJson, toJson } from '@bufbuild/protobuf';
 import {
   BoolValueSchema,
   DoubleValueSchema,
@@ -22,14 +22,14 @@ import { TriggerRunService } from './gen/michelangelo/api/v2/trigger_run_svc_pb'
 import { packAnyFields } from './pack-any-fields';
 import { getRuntimeConfig } from './runtime-config';
 
-import type { DescService } from '@bufbuild/protobuf';
+import type { DescService, JsonValue } from '@bufbuild/protobuf';
 import type { FetchTransport, ServiceClient, Services } from './types';
 
 // Every message type that can appear inside a google.protobuf.Any on the wire must be
 // registered here — protobuf-es resolves an Any's typeUrl against this registry both when
-// JSON-encoding requests (ListOptionsExt criteria packed by packAnyFields) and when decoding
-// responses (fromJson throws on an unregistered typeUrl). PipelineSchema covers
-// Revision.spec.content for Pipeline revisions.
+// parsing and re-encoding requests (fromJson/toJson throw on an unregistered typeUrl), e.g.
+// ListOptionsExt criteria packed by packAnyFields. PipelineSchema covers
+// Revision.spec.content for Pipeline revisions sent back on update.
 export const typeRegistry = createRegistry(
   TypedStructSchema,
   PipelineSchema,
@@ -40,10 +40,11 @@ export const typeRegistry = createRegistry(
 );
 
 /**
- * Builds a service client whose methods JSON-encode the request, POST it
- * through the fetch transport, and decode the JSON response back into a
- * protobuf-es message. Envoy's grpc_json_transcoder handles the JSON<->binary
- * conversion on the wire, so this client only ever sees JSON.
+ * Builds a service client that speaks proto3 JSON in both directions: requests are
+ * proto3 JSON objects (string enums, oneof members set directly, Any as `@type` plus
+ * fields), validated and normalized through the message schema before being POSTed
+ * through the fetch transport; responses are returned exactly as Envoy's
+ * grpc_json_transcoder emits them.
  */
 function createServiceClient<T extends DescService>(
   service: T,
@@ -58,10 +59,15 @@ function createServiceClient<T extends DescService>(
     if (method.methodKind !== 'unary') continue;
 
     client[method.localName] = async (request, headers) => {
-      // cast: packAnyFields recurses generically over `unknown`; called with a Record it
-      // returns one, just with Any fields packed into the shape create() expects
-      const packedRequest = packAnyFields(method.input, request) as Record<string, unknown>;
-      const message = create(method.input, packedRequest);
+      // cast: packAnyFields recurses generically over `unknown`; called with a JSON object it
+      // returns one, just with Any fields packed into their proto3 JSON form
+      const packedRequest = packAnyFields(method.input, request) as JsonValue;
+      // ignoreUnknownFields: callers pass whole records back (e.g. form state), and
+      // extra keys shouldn't fail the request
+      const message = fromJson(method.input, packedRequest, {
+        registry: typeRegistry,
+        ignoreUnknownFields: true,
+      });
       const requestJson = toJson(method.input, message, { registry: typeRegistry });
       const responseJson = await transport.callUnary(
         service.typeName,

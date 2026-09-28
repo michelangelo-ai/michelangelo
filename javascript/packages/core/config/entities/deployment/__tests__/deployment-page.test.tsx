@@ -156,7 +156,7 @@ describe('Deployment detail page', () => {
               GetDeployment: {
                 deployment: {
                   spec: {
-                    target: { case: 'inferenceServer', value: { name: 'triton-server' } },
+                    inferenceServer: { name: 'triton-server' },
                   },
                 },
               },
@@ -643,7 +643,7 @@ describe('Deployment retire action', () => {
       },
       spec: {
         desiredRevision: { name: 'bert-cola-37', namespace: NAMESPACE },
-        target: { case: 'inferenceServer', value: { name: 'inference-server-example' } },
+        inferenceServer: { name: 'inference-server-example' },
       },
       status: {
         currentRevision: { name: 'bert-cola-37', namespace: NAMESPACE },
@@ -694,10 +694,7 @@ describe('Deployment retire action', () => {
     // The absent desiredRevision is what tells the backend to run cleanup; the rest of
     // the spec must be sent through intact.
     expect(payload.spec.desiredRevision).toBeUndefined();
-    expect(payload.spec.target).toEqual({
-      case: 'inferenceServer',
-      value: { name: 'inference-server-example' },
-    });
+    expect(payload.spec.inferenceServer).toEqual({ name: 'inference-server-example' });
     expect(payload.metadata.name).toBe(DEPLOYMENT_NAME);
 
     expect(
@@ -714,7 +711,7 @@ describe('Deployment retire action', () => {
     });
 
     const record = buildDeployedRecord({
-      spec: { target: { case: 'inferenceServer', value: { name: 'inference-server-example' } } },
+      spec: { inferenceServer: { name: 'inference-server-example' } },
       status: {},
     });
 
@@ -753,7 +750,7 @@ describe('Deployment retire action', () => {
     // desiredRevision already cleared but a candidate is mid-rollout — retiring must
     // still be possible to abort the rollout, matching the backend's cleanup trigger.
     const record = buildDeployedRecord({
-      spec: { target: { case: 'inferenceServer', value: { name: 'inference-server-example' } } },
+      spec: { inferenceServer: { name: 'inference-server-example' } },
       status: { candidateRevision: { name: 'bert-cola-37', namespace: NAMESPACE } },
     });
 
@@ -806,7 +803,7 @@ describe('Deployment delete action', () => {
       },
       spec: {
         desiredRevision: { name: 'bert-cola-37', namespace: NAMESPACE },
-        target: { case: 'inferenceServer', value: { name: 'inference-server-example' } },
+        inferenceServer: { name: 'inference-server-example' },
       },
       status: {},
     };
@@ -878,8 +875,8 @@ describe('Deployment update action', () => {
       metadata: { name: string };
       spec: {
         desiredRevision?: { name?: string };
-        strategy?: { rolloutStrategy?: { case?: string } };
-        target?: { value?: { name?: string } };
+        strategy?: { rolling?: object };
+        inferenceServer?: { name?: string };
         modelFamily?: { name?: string };
       };
       status?: unknown;
@@ -911,7 +908,7 @@ describe('Deployment update action', () => {
           metadata: { name: DEPLOYMENT_NAME, namespace: NAMESPACE },
           spec: {
             desiredRevision: { name: 'bert-cola-37', namespace: NAMESPACE },
-            target: { case: 'inferenceServer', value: { name: 'inference-server-example' } },
+            inferenceServer: { name: 'inference-server-example' },
             modelFamily: { name: 'bert-cola', namespace: NAMESPACE },
           },
         }}
@@ -976,8 +973,8 @@ describe('Deployment update action', () => {
           metadata: { name: DEPLOYMENT_NAME, namespace: NAMESPACE },
           spec: {
             desiredRevision: { name: 'bert-cola-37', namespace: NAMESPACE },
-            target: { case: 'inferenceServer', value: { name: 'inference-server-example' } },
-            strategy: { rolloutStrategy: { case: 'rolling', value: { incrementPercentage: 10 } } },
+            inferenceServer: { name: 'inference-server-example' },
+            strategy: { rolling: { incrementPercentage: 10 } },
             definition: { type: 'TARGET_TYPE_INFERENCE_SERVER' },
             modelFamily: { name: 'bert-cola', namespace: NAMESPACE },
           },
@@ -1007,8 +1004,8 @@ describe('Deployment update action', () => {
     expect(payload.spec.desiredRevision?.name).toBe('bert-cola-38');
     // Everything else on the record rides along unchanged.
     expect(payload.metadata.name).toBe(DEPLOYMENT_NAME);
-    expect(payload.spec.target?.value?.name).toBe('inference-server-example');
-    expect(payload.spec.strategy?.rolloutStrategy?.case).toBe('rolling');
+    expect(payload.spec.inferenceServer?.name).toBe('inference-server-example');
+    expect(payload.spec.strategy?.rolling).toBeDefined();
     expect(payload.spec.modelFamily?.name).toBe('bert-cola');
     expect(payload.status).toBeDefined();
   });
@@ -1067,11 +1064,8 @@ describe('Deployment create action', () => {
           spec: {
             modelFamily: { name: 'bert-cola', namespace: 'ma-dev-test' },
             desiredRevision: { name: 'bert-cola-40', namespace: 'ma-dev-test' },
-            target: {
-              case: 'inferenceServer',
-              value: { name: 'inference-server-example', namespace: 'ma-dev-test' },
-            },
-            strategy: { rolloutStrategy: { case: 'rolling', value: { incrementPercentage: 0 } } },
+            inferenceServer: { name: 'inference-server-example', namespace: 'ma-dev-test' },
+            strategy: { rolling: { incrementPercentage: 0 } },
             definition: { type: 'TARGET_TYPE_INFERENCE_SERVER' },
           },
         },

@@ -313,7 +313,7 @@ describe('PIPELINE_ENTITY_CONFIG: Run trigger action', () => {
             owner: { name: 'me' },
             manifest: {
               triggerMap: {
-                nightly: { triggerType: { case: 'cronSchedule', value: { cron: '0 2 * * *' } } },
+                nightly: { cronSchedule: { cron: '0 2 * * *' } },
               },
             },
           },
@@ -455,7 +455,7 @@ describe('PIPELINE_ENTITY_CONFIG: actions on a revision snapshot', () => {
                   manifest: {
                     triggerMap: {
                       nightly: {
-                        triggerType: { case: 'cronSchedule', value: { cron: '0 2 * * *' } },
+                        cronSchedule: { cron: '0 2 * * *' },
                       },
                     },
                   },
@@ -689,7 +689,7 @@ describe('PIPELINE_ENTITY_CONFIG: Triggers tab', () => {
                 spec: {
                   pipeline: { name: 'eval-pipeline', namespace: 'ma-dev-test' },
                   actor: { name: 'me' },
-                  trigger: { triggerType: { case: 'cronSchedule', value: { cron: '0 2 * * *' } } },
+                  trigger: { cronSchedule: { cron: '0 2 * * *' } },
                 },
                 status: { state: TriggerRunState.RUNNING },
               },
@@ -739,7 +739,7 @@ describe('PIPELINE_ENTITY_CONFIG: Triggers tab', () => {
       '/ma-dev-test/train/triggers/nightly-20240101-120000-abcd1234'
     );
 
-    // One formatted Schedule column covers the triggerType oneof (cron/interval/batch rerun).
+    // One formatted Schedule column covers the trigger_type oneof (cron/interval/batch rerun).
     expect(screen.getByRole('columnheader', { name: 'Schedule' })).toBeInTheDocument();
     expect(screen.getByText('cron 0 2 * * *')).toBeInTheDocument();
 
