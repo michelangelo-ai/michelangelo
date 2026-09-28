@@ -4,12 +4,15 @@ import { PLACEMENT, StatefulPopover } from 'baseui/popover';
 
 import { DateTime } from '#core/components/date-time/date-time';
 import { Icon } from '#core/components/icon/icon';
+import { TAG_COLOR, TAG_SIZE } from '#core/components/tag/constants';
+import { Tag } from '#core/components/tag/tag';
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
 import { useStudioQuery } from '#core/hooks/use-studio-query';
 import { formatRevisionLabel } from '#core/utils/revision-utils';
 import { capitalizeFirstLetter } from '#core/utils/string-utils';
 import {
   RevisionColumns,
+  RevisionLabel,
   RevisionList,
   RevisionListHeader,
   RevisionRow,
@@ -24,13 +27,15 @@ const SORT_ORDER_DESC = 2;
 const CRITERION_OPERATOR_EQUAL = 1;
 
 /**
- * Header dropdown listing the Revision snapshots of a revisioned entity.
- *
+ * Header dropdown listing the Revision snapshots of a revisioned entity. The Revision that
+ * `latestRevisionName` names is badged "Latest", both in the list and on the trigger when it
+ * is the one shown.
  */
 export function RevisionSelector({
   service,
   entityId,
   selectedRevisionId,
+  latestRevisionName,
   onSelect,
 }: RevisionSelectorProps) {
   const [css, theme] = useStyletron();
@@ -61,8 +66,12 @@ export function RevisionSelector({
   });
 
   const revisions = data?.revisionList?.items ?? [];
+  const isLatest = (revision: RevisionOption) => revision.metadata.name === latestRevisionName;
+  // With no `?revisionId=`, the page renders the latest Revision, so the trigger should too.
   const selected =
-    revisions.find((revision) => revision.spec.revisionId === selectedRevisionId) ?? revisions[0];
+    revisions.find((revision) => revision.spec.revisionId === selectedRevisionId) ??
+    revisions.find(isLatest) ??
+    revisions[0];
 
   if (!selected) return null;
 
@@ -92,7 +101,9 @@ export function RevisionSelector({
                   close();
                 }}
               >
-                <RevisionColumns>{renderRevisionCells(revision)}</RevisionColumns>
+                <RevisionColumns>
+                  {renderRevisionCells(revision, isLatest(revision))}
+                </RevisionColumns>
               </RevisionRow>
             );
           })}
@@ -109,17 +120,24 @@ export function RevisionSelector({
         }}
       >
         <span className={css({ display: 'flex', gap: theme.sizing.scale800 })}>
-          {renderRevisionCells(selected)}
+          {renderRevisionCells(selected, isLatest(selected))}
         </span>
       </Button>
     </StatefulPopover>
   );
 }
 
-function renderRevisionCells(revision: RevisionOption) {
+function renderRevisionCells(revision: RevisionOption, latest: boolean) {
   return (
     <>
-      <span>{formatRevisionLabel(revision.spec.revisionId)}</span>
+      <RevisionLabel>
+        {formatRevisionLabel(revision.spec.revisionId)}
+        {latest && (
+          <Tag color={TAG_COLOR.green} size={TAG_SIZE.xSmall} closeable={false}>
+            Latest
+          </Tag>
+        )}
+      </RevisionLabel>
       <span>{revision.spec.gitCommit?.branch ?? '—'}</span>
       <span>
         <DateTime timestamp={revision.metadata.creationTimestamp?.seconds} />

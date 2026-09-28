@@ -43,6 +43,12 @@ export const RevisionRow = styled<'button', { $isSelected: boolean }>(
   })
 );
 
+export const RevisionLabel = styled('span', ({ $theme }) => ({
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: $theme.sizing.scale300,
+}));
+
 export const RevisionColumns = styled('span', ({ $theme }) => ({
   display: 'grid',
   gridTemplateColumns: '2fr 2fr 3fr',
