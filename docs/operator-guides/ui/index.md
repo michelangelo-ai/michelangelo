@@ -28,6 +28,17 @@ Set up a development environment for contributing to the UI codebase.
 
 → **[Local Development Setup](./local-development-setup.md)**
 
+## Customization
+
+### Icon Registry
+Supply the icons Studio renders, and understand how those entries also affect icons
+inside BaseWeb components.
+
+- **For: Frontend developers, application teams**
+- **Use case: Branding Studio, or diagnosing a missing or unexpected icon**
+
+→ **[Icon Registry](./icon-registry.md)**
+
 ## Architecture
 
 The Michelangelo AI UI is built with React and communicates with the Michelangelo AI API server through gRPC-Web. The UI supports two main consumption methods:
