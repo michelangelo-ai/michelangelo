@@ -102,10 +102,10 @@ tools/gen-proto-go.sh
 
 The job posts a comment on the PR with lint output. Two distinct checks run:
 
-**golangci-lint** — standard Go linter. Fix the specific rule violation shown. To run locally:
+**golangci-lint** — standard Go linter. Fix the specific rule violation shown. CI only reports issues introduced since your PR's base commit (`--new-from-rev`), not the full pre-existing backlog, so reproduce it locally the same way:
 
 ```bash
-cd go && golangci-lint run ./...
+cd go && golangci-lint run --new-from-rev=origin/main ./...
 ```
 
 **TODO format check** — every `TODO` must link to a GitHub issue:

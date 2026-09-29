@@ -98,7 +98,9 @@ example = ["accelerate", "datasets", "numpy", "pandas", "pyarrow", "ray", "s3fs"
 minio = ["minio"]
 vllm = ["accelerate", "datasets", "numpy", "pandas", "pyarrow", "ray", "s3fs", "torch", "transformers", "pytorch_lightning", "einops", "vllm", "setuptools"]
 mactl = []
-evaluator = ["torch", "torchmetrics", "numpy", "pandas"]
+# `ray` is needed by the evaluator workflow task (michelangelo.workflow.tasks.evaluator),
+# which distributes per-segment metrics; michelangelo.lib.evaluator alone does not need it.
+evaluator = ["torch", "torchmetrics", "numpy", "pandas", "ray", "pyarrow"]
 trainer = ["ray", "torch", "pytorch_lightning", "transformers", "numpy"]
 trainer-comet = ["comet_ml"]
 trainer-mlflow = ["mlflow"]

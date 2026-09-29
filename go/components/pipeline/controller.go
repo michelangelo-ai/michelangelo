@@ -4,6 +4,8 @@
 //   - Updating the latest revision reference
 //   - Managing pipeline state transitions
 //   - Scheduling periodic reconciliation for non-terminal states
+//   - Snapshotting Revision CRs owned by the Pipeline, so deleting the Pipeline
+//     cascade-deletes its Revisions
 //
 // The controller integrates with the Michelangelo API handler to perform CRUD
 // operations on Pipeline resources and updates their status accordingly.
@@ -24,9 +26,11 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	"github.com/michelangelo-ai/michelangelo/go/base/revision"
+	"github.com/michelangelo-ai/michelangelo/go/cascadedelete"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
@@ -49,6 +53,7 @@ type Reconciler struct {
 	apiHandlerFactory apiHandler.Factory
 	revisionManager   revision.Manager
 	config            Config
+	scheme            *runtime.Scheme
 }
 
 // NewReconciler constructs a Reconciler with required dependencies.
@@ -248,6 +253,14 @@ func (r *Reconciler) snapshotRevision(ctx context.Context, pipeline *v2pb.Pipeli
 		},
 	}
 
+	// A controller ownerReference is what makes deleting the Pipeline cascade to its
+	// Revisions via Kubernetes GC. Revisions carry no in-flight work, so unlike
+	// PipelineRun/TriggerRun they need no drain finalizer, and they are deliberately
+	// not a cascade-retain kind: the ingester soft-deletes their rows instead.
+	if _, err := cascadedelete.EnsureControllerRef(rev, pipeline, r.scheme); err != nil {
+		return fmt.Errorf("set pipeline ownerReference on revision %s/%s: %w", rev.Namespace, rev.Name, err)
+	}
+
 	_, err = r.revisionManager.UpsertRevision(ctx, rev, revision.UpsertOpts{})
 	return err
 }
@@ -266,6 +279,7 @@ func (r *Reconciler) Register(mgr ctrl.Manager) error {
 		return err
 	}
 	r.Handler = handler
+	r.scheme = mgr.GetScheme()
 	if r.revisionManager == nil {
 		r.revisionManager = revision.NewManager(handler, r.logger)
 	}

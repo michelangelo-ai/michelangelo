@@ -145,7 +145,7 @@ func TestCronTriggerUpdateRefreshesChangedScheduleInput(t *testing.T) {
 		gomock.Eq([]interface{}{CreateTriggerRequest{TriggerRun: scheduleWorkflowInput(triggerRun)}}),
 	).Return(nil)
 
-	status, handled, err := NewCronTrigger(zapr.NewLogger(zap.NewNop()), mockClient).Update(
+	status, handled, err := NewCronTrigger(zapr.NewLogger(zap.NewNop()), mockClient, newTestConfigProvider(t)).Update(
 		context.Background(), triggerRun, v2pb.TRIGGER_RUN_ACTION_NO_ACTION)
 
 	require.NoError(t, err)
@@ -174,7 +174,7 @@ func TestCronTriggerUpdateBackfillsMissingHashOnce(t *testing.T) {
 		gomock.Any(),
 	).Return(nil).Times(1)
 
-	runner := NewCronTrigger(zapr.NewLogger(zap.NewNop()), mockClient)
+	runner := NewCronTrigger(zapr.NewLogger(zap.NewNop()), mockClient, newTestConfigProvider(t))
 	firstStatus, _, err := runner.Update(
 		context.Background(), triggerRun, v2pb.TRIGGER_RUN_ACTION_NO_ACTION)
 	require.NoError(t, err)
@@ -209,7 +209,7 @@ func TestCronTriggerUpdateDoesNotAdvanceHashOnFailure(t *testing.T) {
 		gomock.Any(),
 	).Return(assert.AnError)
 
-	status, _, err := NewCronTrigger(zapr.NewLogger(zap.NewNop()), mockClient).Update(
+	status, _, err := NewCronTrigger(zapr.NewLogger(zap.NewNop()), mockClient, newTestConfigProvider(t)).Update(
 		context.Background(), triggerRun, v2pb.TRIGGER_RUN_ACTION_NO_ACTION)
 
 	require.Error(t, err)
@@ -240,7 +240,7 @@ func TestCronTriggerUpdatePauseWithInputDriftIsAtomic(t *testing.T) {
 		gomock.Eq([]interface{}{CreateTriggerRequest{TriggerRun: scheduleWorkflowInput(triggerRun)}}),
 	).Return(nil)
 
-	status, handled, err := NewCronTrigger(zapr.NewLogger(zap.NewNop()), mockClient).Update(
+	status, handled, err := NewCronTrigger(zapr.NewLogger(zap.NewNop()), mockClient, newTestConfigProvider(t)).Update(
 		context.Background(), triggerRun, v2pb.TRIGGER_RUN_ACTION_PAUSE)
 
 	require.NoError(t, err)

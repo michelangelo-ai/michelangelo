@@ -4,7 +4,6 @@ import userEvent from '@testing-library/user-event';
 import { PIPELINE_ENTITY_CONFIG } from '#core/config/entities/pipeline/pipeline';
 import {
   CRITERION_OPERATOR_EQUAL,
-  PIPELINE_RUN_PIPELINE_NAME_FIELD,
   PIPELINE_RUN_REVISION_NAME_FIELD,
 } from '#core/config/entities/pipeline/shared';
 import { PipelineRunState } from '#core/config/entities/run/types';
@@ -30,6 +29,32 @@ function getSubmitButton(dialog: HTMLElement) {
   const footer = dialog.querySelector('[data-baseweb="button-dock"]');
   if (!footer) throw new Error('Expected dialog to render a button-dock footer');
   return within(footer as HTMLElement).getByRole('button', { name: 'Delete' });
+}
+
+/**
+ * A pipeline detail page always renders the pipeline's latest Revision, so every bare-URL
+ * fixture needs the pointer on the pipeline and the Revision it points at.
+ */
+function withLatestRevision(
+  pipeline: { metadata: { name: string; namespace: string } } & Record<string, unknown>
+) {
+  const latestRevision = { name: 'pipeline-eval-pipeline-3f2a1b9c0d4e', namespace: 'ma-dev-test' };
+  // The controller stamps status.latestRevision before snapshotting, so the latest Revision's
+  // content carries the pointer to itself.
+  const revisioned = { ...pipeline, status: { latestRevision } };
+  return {
+    GetPipeline: { pipeline: revisioned },
+    GetRevision: {
+      revision: {
+        metadata: latestRevision,
+        spec: {
+          revisionId: '3f2a1b9c0d4e5f6a7b8c',
+          baseResource: pipeline.metadata,
+          content: revisioned,
+        },
+      },
+    },
+  };
 }
 
 describe('PIPELINE_ENTITY_CONFIG: delete action', () => {
@@ -82,7 +107,7 @@ describe('PIPELINE_ENTITY_CONFIG: delete action', () => {
 
       const dialog = await screen.findByRole('dialog', { name: 'Delete Pipeline' });
       expect(within(dialog).getByText(/Delete pipeline/)).toHaveTextContent(
-        /Delete pipeline eval-pipeline\? This action cannot be undone\./
+        /Delete pipeline eval-pipeline\? This will delete the pipeline and all of its revisions\. This action cannot be undone\./
       );
 
       await user.click(getSubmitButton(dialog));
@@ -166,12 +191,10 @@ describe('PIPELINE_ENTITY_CONFIG: delete action', () => {
     it('opens dialog to confirm deletion of pipeline, deletes pipeline and navigates to list view', async () => {
       const user = userEvent.setup();
       const mockRequest = createQueryMockRouter({
-        GetPipeline: {
-          pipeline: {
-            metadata: { name: 'eval-pipeline', namespace: 'ma-dev-test' },
-            spec: { owner: { name: 'me' } },
-          },
-        },
+        ...withLatestRevision({
+          metadata: { name: 'eval-pipeline', namespace: 'ma-dev-test' },
+          spec: { owner: { name: 'me' } },
+        }),
         ListPipelineRun: { pipelineRunList: { items: [] } },
         DeletePipeline: {},
       });
@@ -183,18 +206,21 @@ describe('PIPELINE_ENTITY_CONFIG: delete action', () => {
 
       const dialog = await screen.findByRole('dialog', { name: 'Delete Pipeline' });
       expect(within(dialog).getByText(/Delete pipeline/)).toHaveTextContent(
-        /Delete pipeline eval-pipeline\? This action cannot be undone\./
+        /Delete pipeline eval-pipeline\? This will delete the pipeline and all of its revisions\. This action cannot be undone\./
       );
 
       await user.click(getSubmitButton(dialog));
 
+      // The record is the viewed Revision, not the Pipeline — mutation middleware retargets
+      // `metadata` at `spec.baseResource` (the Revision's pointer to the Pipeline) before
+      // sending, since deleteCrd (packages/rpc/handlers.ts) only reads `metadata.name`/
+      // `metadata.namespace`.
       await waitFor(() => {
         expect(mockRequest).toHaveBeenCalledWith(
           'DeletePipeline',
-          {
+          expect.objectContaining({
             metadata: { name: 'eval-pipeline', namespace: 'ma-dev-test' },
-            spec: { owner: { name: 'me' } },
-          },
+          }),
           {}
         );
       });
@@ -210,12 +236,10 @@ describe('PIPELINE_ENTITY_CONFIG: delete action', () => {
     it('keeps the dialog open and shows the error when delete fails', async () => {
       const user = userEvent.setup();
       const mockRequest = createQueryMockRouter({
-        GetPipeline: {
-          pipeline: {
-            metadata: { name: 'eval-pipeline', namespace: 'ma-dev-test' },
-            spec: { owner: { name: 'me' } },
-          },
-        },
+        ...withLatestRevision({
+          metadata: { name: 'eval-pipeline', namespace: 'ma-dev-test' },
+          spec: { owner: { name: 'me' } },
+        }),
         ListPipelineRun: { pipelineRunList: { items: [] } },
         DeletePipeline: new Error('Delete failed'),
       });
@@ -263,15 +287,10 @@ describe('PIPELINE_ENTITY_CONFIG: Run trigger action', () => {
     it('is greyed out with an explanatory tooltip when the pipeline declares no triggers', async () => {
       const user = userEvent.setup();
       const mockRequest = createQueryMockRouter({
-        GetPipeline: {
-          pipeline: {
-            ...{
-              metadata: { name: 'eval-pipeline', namespace: 'ma-dev-test' },
-              spec: { owner: { name: 'me' } },
-            },
-            spec: { ...{ owner: { name: 'me' } }, manifest: {} },
-          },
-        },
+        ...withLatestRevision({
+          metadata: { name: 'eval-pipeline', namespace: 'ma-dev-test' },
+          spec: { owner: { name: 'me' }, manifest: {} },
+        }),
         ListPipelineRun: { pipelineRunList: { items: [] } },
       });
 
@@ -287,22 +306,17 @@ describe('PIPELINE_ENTITY_CONFIG: Run trigger action', () => {
     it('stays enabled once the pipeline declares a trigger', async () => {
       const user = userEvent.setup();
       const mockRequest = createQueryMockRouter({
-        GetPipeline: {
-          pipeline: {
-            ...{
-              metadata: { name: 'eval-pipeline', namespace: 'ma-dev-test' },
-              spec: { owner: { name: 'me' } },
-            },
-            spec: {
-              ...{ owner: { name: 'me' } },
-              manifest: {
-                triggerMap: {
-                  nightly: { triggerType: { case: 'cronSchedule', value: { cron: '0 2 * * *' } } },
-                },
+        ...withLatestRevision({
+          metadata: { name: 'eval-pipeline', namespace: 'ma-dev-test' },
+          spec: {
+            owner: { name: 'me' },
+            manifest: {
+              triggerMap: {
+                nightly: { triggerType: { case: 'cronSchedule', value: { cron: '0 2 * * *' } } },
               },
             },
           },
-        },
+        }),
         ListPipelineRun: { pipelineRunList: { items: [] } },
       });
 
@@ -427,8 +441,9 @@ describe('PIPELINE_ENTITY_CONFIG: actions on a revision snapshot', () => {
       const mockRequest = createQueryMockRouter({
         GetRevision: {
           revision: {
-            metadata: { name: 'pipeline-eval-pipeline-3f2a1b9c0d4e' },
+            metadata: { name: 'pipeline-eval-pipeline-3f2a1b9c0d4e', namespace: 'ma-dev-test' },
             spec: {
+              baseResource: { name: 'eval-pipeline', namespace: 'ma-dev-test' },
               content: {
                 metadata: { name: 'eval-pipeline', namespace: 'ma-dev-test' },
                 spec: {
@@ -461,19 +476,56 @@ describe('PIPELINE_ENTITY_CONFIG: actions on a revision snapshot', () => {
       await user.click(deleteOption);
       expect(await screen.findByRole('dialog', { name: 'Delete Pipeline' })).toBeInTheDocument();
     });
+
+    it("pins Run to the viewed revision rather than the snapshot's latest pointer", async () => {
+      const user = userEvent.setup();
+      const mockRequest = createQueryMockRouter({
+        GetRevision: {
+          revision: {
+            metadata: { name: 'pipeline-eval-pipeline-3f2a1b9c0d4e', namespace: 'ma-dev-test' },
+            spec: {
+              baseResource: { name: 'eval-pipeline', namespace: 'ma-dev-test' },
+              content: {
+                metadata: { name: 'eval-pipeline', namespace: 'ma-dev-test' },
+                spec: { owner: { name: 'me' } },
+                status: {
+                  latestRevision: {
+                    name: 'pipeline-eval-pipeline-000000000000',
+                    namespace: 'ma-dev-test',
+                  },
+                },
+              },
+            },
+          },
+        },
+        ListPipelineRun: { pipelineRunList: { items: [] } },
+      });
+
+      renderRevisionDetail(mockRequest);
+
+      await user.click(await screen.findByRole('button', { name: 'Run' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Start new pipeline run' });
+      expect(within(dialog).getByRole('textbox', { name: 'Revision ID' })).toHaveValue(
+        'pipeline-eval-pipeline-3f2a1b9c0d4e'
+      );
+    });
   });
 });
 
 describe('PIPELINE_DETAIL_CONFIG: runs tab', () => {
-  it('filters runs by pipeline name via listOptionsExt criterion', async () => {
+  it('filters runs by the latest revision on a bare pipeline URL', async () => {
     const mockRequest = createQueryMockRouter({
-      GetPipeline: { pipeline: { metadata: { name: 'eval-pipeline', namespace: 'ma-dev-test' } } },
+      ...withLatestRevision({ metadata: { name: 'eval-pipeline', namespace: 'ma-dev-test' } }),
       ListPipelineRun: {
         pipelineRunList: {
           items: [
             {
               metadata: { name: 'eval-pipeline-run-1', creationTimestamp: { seconds: 1700000000 } },
-              spec: { pipeline: { name: 'eval-pipeline' }, actor: { name: 'me' } },
+              spec: {
+                pipeline: { name: 'eval-pipeline' },
+                revision: { name: 'pipeline-eval-pipeline-3f2a1b9c0d4e' },
+                actor: { name: 'me' },
+              },
               status: { state: PipelineRunState.SUCCEEDED },
             },
           ],
@@ -512,9 +564,9 @@ describe('PIPELINE_DETAIL_CONFIG: runs tab', () => {
             operation: {
               criterion: [
                 {
-                  fieldName: PIPELINE_RUN_PIPELINE_NAME_FIELD,
+                  fieldName: PIPELINE_RUN_REVISION_NAME_FIELD,
                   operator: CRITERION_OPERATOR_EQUAL,
-                  matchValue: 'eval-pipeline',
+                  matchValue: 'pipeline-eval-pipeline-3f2a1b9c0d4e',
                 },
               ],
             },
@@ -614,12 +666,10 @@ describe('PIPELINE_ENTITY_CONFIG: Triggers tab', () => {
   it('lists trigger runs scoped to this pipeline, linking each to its detail page', async () => {
     const user = userEvent.setup();
     const mockRequest = createQueryMockRouter({
-      GetPipeline: {
-        pipeline: {
-          metadata: { name: 'eval-pipeline', namespace: 'ma-dev-test' },
-          spec: { owner: { name: 'me' } },
-        },
-      },
+      ...withLatestRevision({
+        metadata: { name: 'eval-pipeline', namespace: 'ma-dev-test' },
+        spec: { owner: { name: 'me' } },
+      }),
       [`ListTriggerRun:{"listOptions":{"fieldSelector":"${TRIGGER_RUN_SELECTOR}"},"namespace":"ma-dev-test"}`]:
         {
           triggerRunList: {

@@ -55,7 +55,14 @@ func (m *revisionManager) UpsertRevision(ctx context.Context, rev client.Object,
 		return false, fmt.Errorf("cannot update immutable revision %s to mutable", name)
 	}
 
+	// rev is freshly constructed by the caller on every call (see
+	// pipeline.snapshotRevision), so it carries none of the metadata Kubernetes attaches
+	// out-of-band. A plain Update would silently wipe the ingester's own finalizer (added
+	// at Create time) — the finalizer is what lets a GC-driven cascade delete soft-delete
+	// this revision's row instead of just vanishing it. Losing it here means cascade
+	// delete stops working from the very next reconcile after creation.
 	rev.SetResourceVersion(existing.GetResourceVersion())
+	rev.SetFinalizers(existing.GetFinalizers())
 	if opts.Immutable {
 		apiutils.MarkImmutable(rev)
 	}

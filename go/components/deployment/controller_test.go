@@ -123,6 +123,59 @@ func TestReconciler_Reconcile(t *testing.T) {
 	assert.Equal(t, "test-model-v1", finalDeployment.Status.CurrentRevision.Name)
 }
 
+func TestIsRollbackNeeded(t *testing.T) {
+	priorRevision := &apipb.ResourceIdentifier{Name: "model-v1"}
+
+	tests := []struct {
+		name                string
+		currentRevision     *apipb.ResourceIdentifier
+		isHealthy           bool
+		desiredModelChanged bool
+		wantRollbackNeeded  bool
+	}{
+		{
+			name:                "first rollout, unhealthy, no prior revision -- must not roll back",
+			currentRevision:     nil,
+			isHealthy:           false,
+			desiredModelChanged: false,
+			wantRollbackNeeded:  false,
+		},
+		{
+			name:                "unhealthy with a prior revision -- should roll back",
+			currentRevision:     priorRevision,
+			isHealthy:           false,
+			desiredModelChanged: false,
+			wantRollbackNeeded:  true,
+		},
+		{
+			name:                "healthy, desired model changed mid-rollout -- should roll back regardless of prior revision",
+			currentRevision:     nil,
+			isHealthy:           true,
+			desiredModelChanged: true,
+			wantRollbackNeeded:  true,
+		},
+		{
+			name:                "healthy, no change -- steady, no rollback",
+			currentRevision:     priorRevision,
+			isHealthy:           true,
+			desiredModelChanged: false,
+			wantRollbackNeeded:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			deployment := &v2pb.Deployment{
+				Status: v2pb.DeploymentStatus{
+					CurrentRevision: tt.currentRevision,
+				},
+			}
+			got := isRollbackNeeded(deployment, tt.isHealthy, tt.desiredModelChanged)
+			assert.Equal(t, tt.wantRollbackNeeded, got)
+		})
+	}
+}
+
 // Mock implementations
 type mockAPIHandlerFactory struct {
 	handler api.Handler

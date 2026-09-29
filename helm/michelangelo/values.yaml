@@ -433,8 +433,11 @@ controllermgr:
 
   # Workflow client extras (controllermgr-only).
   workflowClient:
-    # Cadence Web URL template. Empty by default; set in values-k3d.yaml for
-    # the local sandbox or in production to your own Cadence/Temporal UI.
+    # Cadence/Temporal Web URL template, e.g.
+    # "http://cadence-web:8088/domains/{{.Domain}}/workflows/{{.ExecutionID}}/{{.RunID}}".
+    # Empty by default; not currently set in values-k3d.yaml for the local
+    # sandbox (unlike this comment previously implied) -- set it there or in
+    # production to point at your own Cadence/Temporal UI.
     executionUrlFormat: ""
 
   # Ray cluster log persistence via the KubeRay collector sidecar.

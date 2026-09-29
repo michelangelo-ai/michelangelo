@@ -14,6 +14,12 @@ export function TaskHeader<TTaskRecord extends object>(props: TaskHeaderProps<TT
   const { task, id, metadata } = props;
   const { name, state } = task;
 
+  // taskState exposes the stateBuilder result so metadata cells (e.g. a State
+  // chip) stay consistent with the task icon and card color.
+  // cast: TTaskRecord extends object lacks an index signature; always a plain record at
+  // runtime; see #1443
+  const metadataRecord = { ...(task.record as Record<string, unknown>), taskState: state };
+
   return (
     <TaskContentStack id={id}>
       <div className={css({ display: 'flex', gap: theme.sizing.scale500 })}>
@@ -29,11 +35,7 @@ export function TaskHeader<TTaskRecord extends object>(props: TaskHeaderProps<TT
           {name}
         </div>
       </div>
-      {metadata && (
-        // cast: TTaskRecord extends object lacks an index signature; always a plain record at
-        // runtime; see #1443
-        <Row items={metadata} record={task.record as Record<string, unknown>} />
-      )}
+      {metadata && <Row items={metadata} record={metadataRecord} />}
     </TaskContentStack>
   );
 }
