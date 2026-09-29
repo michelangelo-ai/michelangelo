@@ -180,8 +180,6 @@ func (c evaluationReportServiceHandler) CreateEvaluationReport(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "CreateEvaluationReport",
-		logging.NamespaceTag:    request.EvaluationReport.ObjectMeta.Namespace,
-		logging.EntityNameTag:   request.EvaluationReport.ObjectMeta.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildEvaluationReportAuditLogEventForCreate(
@@ -252,8 +250,6 @@ func (c evaluationReportServiceHandler) GetEvaluationReport(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "GetEvaluationReport",
-		logging.NamespaceTag:    request.Namespace,
-		logging.EntityNameTag:   request.Name,
 	})
 
 	getOptions := &metav1.GetOptions{}
@@ -311,8 +307,6 @@ func (c evaluationReportServiceHandler) UpdateEvaluationReport(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "UpdateEvaluationReport",
-		logging.NamespaceTag:    request.EvaluationReport.ObjectMeta.Namespace,
-		logging.EntityNameTag:   request.EvaluationReport.ObjectMeta.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildEvaluationReportAuditLogEventForUpdate(
@@ -383,8 +377,6 @@ func (c evaluationReportServiceHandler) DeleteEvaluationReport(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "DeleteEvaluationReport",
-		logging.NamespaceTag:    request.Namespace,
-		logging.EntityNameTag:   request.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildEvaluationReportAuditLogEventForDelete(
@@ -457,7 +449,6 @@ func (c evaluationReportServiceHandler) DeleteEvaluationReportCollection(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "DeleteEvaluationReportCollection",
-		logging.NamespaceTag:    request.Namespace,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildEvaluationReportAuditLogEventForDeleteCollection(
@@ -533,7 +524,6 @@ func (c evaluationReportServiceHandler) ListEvaluationReport(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "ListEvaluationReport",
-		logging.NamespaceTag:    request.Namespace,
 	})
 
 	result := &EvaluationReportList{}

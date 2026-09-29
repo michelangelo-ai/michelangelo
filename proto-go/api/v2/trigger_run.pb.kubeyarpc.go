@@ -179,8 +179,6 @@ func (c triggerRunServiceHandler) CreateTriggerRun(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "CreateTriggerRun",
-		logging.NamespaceTag:    request.TriggerRun.ObjectMeta.Namespace,
-		logging.EntityNameTag:   request.TriggerRun.ObjectMeta.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildTriggerRunAuditLogEventForCreate(
@@ -251,8 +249,6 @@ func (c triggerRunServiceHandler) GetTriggerRun(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "GetTriggerRun",
-		logging.NamespaceTag:    request.Namespace,
-		logging.EntityNameTag:   request.Name,
 	})
 
 	getOptions := &metav1.GetOptions{}
@@ -310,8 +306,6 @@ func (c triggerRunServiceHandler) UpdateTriggerRun(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "UpdateTriggerRun",
-		logging.NamespaceTag:    request.TriggerRun.ObjectMeta.Namespace,
-		logging.EntityNameTag:   request.TriggerRun.ObjectMeta.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildTriggerRunAuditLogEventForUpdate(
@@ -382,8 +376,6 @@ func (c triggerRunServiceHandler) DeleteTriggerRun(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "DeleteTriggerRun",
-		logging.NamespaceTag:    request.Namespace,
-		logging.EntityNameTag:   request.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildTriggerRunAuditLogEventForDelete(
@@ -456,7 +448,6 @@ func (c triggerRunServiceHandler) DeleteTriggerRunCollection(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "DeleteTriggerRunCollection",
-		logging.NamespaceTag:    request.Namespace,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildTriggerRunAuditLogEventForDeleteCollection(
@@ -532,7 +523,6 @@ func (c triggerRunServiceHandler) ListTriggerRun(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "ListTriggerRun",
-		logging.NamespaceTag:    request.Namespace,
 	})
 
 	result := &TriggerRunList{}

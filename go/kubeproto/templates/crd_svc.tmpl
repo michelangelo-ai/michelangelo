@@ -160,8 +160,6 @@ func (c {{.LowerKindName}}ServiceHandler) Create{{.KindName}}(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "Create{{.KindName}}",
-		logging.NamespaceTag:    request.{{.KindName}}.ObjectMeta.Namespace,
-		logging.EntityNameTag:   request.{{.KindName}}.ObjectMeta.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.build{{.KindName}}AuditLogEventForCreate(
@@ -232,8 +230,6 @@ func (c {{.LowerKindName}}ServiceHandler) Get{{.KindName}}(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "Get{{.KindName}}",
-		logging.NamespaceTag:    request.Namespace,
-		logging.EntityNameTag:   request.Name,
 	})
 
 	getOptions := &metav1.GetOptions{}
@@ -291,8 +287,6 @@ func (c {{.LowerKindName}}ServiceHandler) Update{{.KindName}}(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "Update{{.KindName}}",
-		logging.NamespaceTag:    request.{{.KindName}}.ObjectMeta.Namespace,
-		logging.EntityNameTag:   request.{{.KindName}}.ObjectMeta.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.build{{.KindName}}AuditLogEventForUpdate(
@@ -363,8 +357,6 @@ func (c {{.LowerKindName}}ServiceHandler) Delete{{.KindName}}(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "Delete{{.KindName}}",
-		logging.NamespaceTag:    request.Namespace,
-		logging.EntityNameTag:   request.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.build{{.KindName}}AuditLogEventForDelete(
@@ -437,7 +429,6 @@ func (c {{.LowerKindName}}ServiceHandler) Delete{{.KindName}}Collection(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "Delete{{.KindName}}Collection",
-		logging.NamespaceTag:    request.Namespace,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.build{{.KindName}}AuditLogEventForDeleteCollection(
@@ -513,7 +504,6 @@ func (c {{.LowerKindName}}ServiceHandler) List{{.KindName}}(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "List{{.KindName}}",
-		logging.NamespaceTag:    request.Namespace,
 	})
 
 	result := &{{.KindName}}List{}

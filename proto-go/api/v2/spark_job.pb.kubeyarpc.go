@@ -179,8 +179,6 @@ func (c sparkJobServiceHandler) CreateSparkJob(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "CreateSparkJob",
-		logging.NamespaceTag:    request.SparkJob.ObjectMeta.Namespace,
-		logging.EntityNameTag:   request.SparkJob.ObjectMeta.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildSparkJobAuditLogEventForCreate(
@@ -251,8 +249,6 @@ func (c sparkJobServiceHandler) GetSparkJob(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "GetSparkJob",
-		logging.NamespaceTag:    request.Namespace,
-		logging.EntityNameTag:   request.Name,
 	})
 
 	getOptions := &metav1.GetOptions{}
@@ -310,8 +306,6 @@ func (c sparkJobServiceHandler) UpdateSparkJob(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "UpdateSparkJob",
-		logging.NamespaceTag:    request.SparkJob.ObjectMeta.Namespace,
-		logging.EntityNameTag:   request.SparkJob.ObjectMeta.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildSparkJobAuditLogEventForUpdate(
@@ -382,8 +376,6 @@ func (c sparkJobServiceHandler) DeleteSparkJob(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "DeleteSparkJob",
-		logging.NamespaceTag:    request.Namespace,
-		logging.EntityNameTag:   request.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildSparkJobAuditLogEventForDelete(
@@ -456,7 +448,6 @@ func (c sparkJobServiceHandler) DeleteSparkJobCollection(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "DeleteSparkJobCollection",
-		logging.NamespaceTag:    request.Namespace,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildSparkJobAuditLogEventForDeleteCollection(
@@ -532,7 +523,6 @@ func (c sparkJobServiceHandler) ListSparkJob(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "ListSparkJob",
-		logging.NamespaceTag:    request.Namespace,
 	})
 
 	result := &SparkJobList{}

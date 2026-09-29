@@ -179,8 +179,6 @@ func (c deploymentServiceHandler) CreateDeployment(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "CreateDeployment",
-		logging.NamespaceTag:    request.Deployment.ObjectMeta.Namespace,
-		logging.EntityNameTag:   request.Deployment.ObjectMeta.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildDeploymentAuditLogEventForCreate(
@@ -251,8 +249,6 @@ func (c deploymentServiceHandler) GetDeployment(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "GetDeployment",
-		logging.NamespaceTag:    request.Namespace,
-		logging.EntityNameTag:   request.Name,
 	})
 
 	getOptions := &metav1.GetOptions{}
@@ -310,8 +306,6 @@ func (c deploymentServiceHandler) UpdateDeployment(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "UpdateDeployment",
-		logging.NamespaceTag:    request.Deployment.ObjectMeta.Namespace,
-		logging.EntityNameTag:   request.Deployment.ObjectMeta.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildDeploymentAuditLogEventForUpdate(
@@ -382,8 +376,6 @@ func (c deploymentServiceHandler) DeleteDeployment(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "DeleteDeployment",
-		logging.NamespaceTag:    request.Namespace,
-		logging.EntityNameTag:   request.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildDeploymentAuditLogEventForDelete(
@@ -456,7 +448,6 @@ func (c deploymentServiceHandler) DeleteDeploymentCollection(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "DeleteDeploymentCollection",
-		logging.NamespaceTag:    request.Namespace,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildDeploymentAuditLogEventForDeleteCollection(
@@ -532,7 +523,6 @@ func (c deploymentServiceHandler) ListDeployment(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "ListDeployment",
-		logging.NamespaceTag:    request.Namespace,
 	})
 
 	result := &DeploymentList{}

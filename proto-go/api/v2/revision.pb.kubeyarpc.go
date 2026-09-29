@@ -179,8 +179,6 @@ func (c revisionServiceHandler) CreateRevision(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "CreateRevision",
-		logging.NamespaceTag:    request.Revision.ObjectMeta.Namespace,
-		logging.EntityNameTag:   request.Revision.ObjectMeta.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildRevisionAuditLogEventForCreate(
@@ -251,8 +249,6 @@ func (c revisionServiceHandler) GetRevision(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "GetRevision",
-		logging.NamespaceTag:    request.Namespace,
-		logging.EntityNameTag:   request.Name,
 	})
 
 	getOptions := &metav1.GetOptions{}
@@ -310,8 +306,6 @@ func (c revisionServiceHandler) UpdateRevision(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "UpdateRevision",
-		logging.NamespaceTag:    request.Revision.ObjectMeta.Namespace,
-		logging.EntityNameTag:   request.Revision.ObjectMeta.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildRevisionAuditLogEventForUpdate(
@@ -382,8 +376,6 @@ func (c revisionServiceHandler) DeleteRevision(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "DeleteRevision",
-		logging.NamespaceTag:    request.Namespace,
-		logging.EntityNameTag:   request.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildRevisionAuditLogEventForDelete(
@@ -456,7 +448,6 @@ func (c revisionServiceHandler) DeleteRevisionCollection(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "DeleteRevisionCollection",
-		logging.NamespaceTag:    request.Namespace,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildRevisionAuditLogEventForDeleteCollection(
@@ -532,7 +523,6 @@ func (c revisionServiceHandler) ListRevision(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "ListRevision",
-		logging.NamespaceTag:    request.Namespace,
 	})
 
 	result := &RevisionList{}

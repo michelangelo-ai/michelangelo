@@ -179,8 +179,6 @@ func (c clusterServiceHandler) CreateCluster(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "CreateCluster",
-		logging.NamespaceTag:    request.Cluster.ObjectMeta.Namespace,
-		logging.EntityNameTag:   request.Cluster.ObjectMeta.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildClusterAuditLogEventForCreate(
@@ -251,8 +249,6 @@ func (c clusterServiceHandler) GetCluster(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "GetCluster",
-		logging.NamespaceTag:    request.Namespace,
-		logging.EntityNameTag:   request.Name,
 	})
 
 	getOptions := &metav1.GetOptions{}
@@ -310,8 +306,6 @@ func (c clusterServiceHandler) UpdateCluster(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "UpdateCluster",
-		logging.NamespaceTag:    request.Cluster.ObjectMeta.Namespace,
-		logging.EntityNameTag:   request.Cluster.ObjectMeta.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildClusterAuditLogEventForUpdate(
@@ -382,8 +376,6 @@ func (c clusterServiceHandler) DeleteCluster(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "DeleteCluster",
-		logging.NamespaceTag:    request.Namespace,
-		logging.EntityNameTag:   request.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildClusterAuditLogEventForDelete(
@@ -456,7 +448,6 @@ func (c clusterServiceHandler) DeleteClusterCollection(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "DeleteClusterCollection",
-		logging.NamespaceTag:    request.Namespace,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildClusterAuditLogEventForDeleteCollection(
@@ -532,7 +523,6 @@ func (c clusterServiceHandler) ListCluster(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "ListCluster",
-		logging.NamespaceTag:    request.Namespace,
 	})
 
 	result := &ClusterList{}
