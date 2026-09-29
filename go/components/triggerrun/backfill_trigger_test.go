@@ -28,7 +28,6 @@ func TestRunBackfill(t *testing.T) {
 				ctrl := gomock.NewController(t)
 				mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
 				mockClient.EXPECT().GetDomain().Return("test-domain")
-				mockClient.EXPECT().GetProvider().Return("test-provider").AnyTimes()
 				mockClient.EXPECT().ListOpenWorkflow(
 					gomock.Any(),
 					gomock.Any(),
@@ -55,7 +54,6 @@ func TestRunBackfill(t *testing.T) {
 				ctrl := gomock.NewController(t)
 				mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
 				mockClient.EXPECT().GetDomain().Return("test-domain")
-				mockClient.EXPECT().GetProvider().Return("test-provider").AnyTimes()
 				mockClient.EXPECT().ListOpenWorkflow(gomock.Any(), gomock.Any()).AnyTimes().Return(nil, fmt.Errorf("failed to list open workflow"))
 				mockClient.EXPECT().StartWorkflow(
 					gomock.Any(),
@@ -78,7 +76,6 @@ func TestRunBackfill(t *testing.T) {
 				ctrl := gomock.NewController(t)
 				mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
 				mockClient.EXPECT().GetDomain().Return("test-domain")
-				mockClient.EXPECT().GetProvider().Return("test-provider").AnyTimes()
 				mockClient.EXPECT().ListOpenWorkflow(gomock.Any(), gomock.Any()).AnyTimes().Return(
 					&clientInterface.ListOpenWorkflowExecutionsResponse{
 						Executions: []clientInterface.WorkflowExecutionInfo{
@@ -106,7 +103,6 @@ func TestRunBackfill(t *testing.T) {
 				ctrl := gomock.NewController(t)
 				mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
 				mockClient.EXPECT().GetDomain().Return("test-domain")
-				mockClient.EXPECT().GetProvider().Return("test-provider").AnyTimes()
 				mockClient.EXPECT().ListOpenWorkflow(gomock.Any(), gomock.Any()).AnyTimes().Return(
 					&clientInterface.ListOpenWorkflowExecutionsResponse{
 						Executions: []clientInterface.WorkflowExecutionInfo{
@@ -153,7 +149,6 @@ func TestKillBackfill(t *testing.T) {
 			workflowClientProvider: func(t *testing.T) clientInterface.WorkflowClient {
 				ctrl := gomock.NewController(t)
 				mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
-				mockClient.EXPECT().GetProvider().Return("test-provider").AnyTimes()
 				return mockClient
 			},
 			triggerRunStatus: v2pb.TriggerRunStatus{
@@ -171,7 +166,6 @@ func TestKillBackfill(t *testing.T) {
 			workflowClientProvider: func(t *testing.T) clientInterface.WorkflowClient {
 				ctrl := gomock.NewController(t)
 				mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
-				mockClient.EXPECT().GetProvider().Return("test-provider").AnyTimes()
 				mockClient.EXPECT().GetDomain().Return("test-domain")
 				mockClient.EXPECT().ListOpenWorkflow(gomock.Any(), gomock.Any()).Return(&clientInterface.ListOpenWorkflowExecutionsResponse{
 					Executions: []clientInterface.WorkflowExecutionInfo{
@@ -196,7 +190,6 @@ func TestKillBackfill(t *testing.T) {
 			workflowClientProvider: func(t *testing.T) clientInterface.WorkflowClient {
 				ctrl := gomock.NewController(t)
 				mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
-				mockClient.EXPECT().GetProvider().Return("test-provider").AnyTimes()
 				mockClient.EXPECT().GetDomain().Return("test-domain")
 				mockClient.EXPECT().ListOpenWorkflow(gomock.Any(), gomock.Any()).Return(&clientInterface.ListOpenWorkflowExecutionsResponse{
 					Executions: []clientInterface.WorkflowExecutionInfo{
@@ -248,7 +241,6 @@ func TestGetStatusBackfill(t *testing.T) {
 				ctrl := gomock.NewController(t)
 				mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
 				mockClient.EXPECT().GetDomain().Return("test-domain")
-				mockClient.EXPECT().GetProvider().Return("test-provider").AnyTimes()
 				return mockClient
 			},
 			expectedStatus: v2pb.TriggerRunStatus{
@@ -264,7 +256,6 @@ func TestGetStatusBackfill(t *testing.T) {
 				ctrl := gomock.NewController(t)
 				mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
 				mockClient.EXPECT().GetDomain().Return("test-domain")
-				mockClient.EXPECT().GetProvider().Return("test-provider").AnyTimes()
 				mockClient.EXPECT().GetWorkflowExecutionInfo(
 					gomock.Any(),
 					gomock.Any(),
@@ -285,7 +276,6 @@ func TestGetStatusBackfill(t *testing.T) {
 				ctrl := gomock.NewController(t)
 				mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
 				mockClient.EXPECT().GetDomain().Return("test-domain")
-				mockClient.EXPECT().GetProvider().Return("test-provider").AnyTimes()
 				mockClient.EXPECT().GetWorkflowExecutionInfo(
 					gomock.Any(),
 					gomock.Any(),
@@ -306,7 +296,6 @@ func TestGetStatusBackfill(t *testing.T) {
 				ctrl := gomock.NewController(t)
 				mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
 				mockClient.EXPECT().GetDomain().Return("test-domain")
-				mockClient.EXPECT().GetProvider().Return("test-provider").AnyTimes()
 				mockClient.EXPECT().GetWorkflowExecutionInfo(
 					gomock.Any(),
 					gomock.Any(),
@@ -330,7 +319,6 @@ func TestGetStatusBackfill(t *testing.T) {
 				ctrl := gomock.NewController(t)
 				mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
 				mockClient.EXPECT().GetDomain().Return("test-domain")
-				mockClient.EXPECT().GetProvider().Return("test-provider").AnyTimes()
 				mockClient.EXPECT().GetWorkflowExecutionInfo(
 					gomock.Any(),
 					gomock.Any(),
@@ -354,7 +342,6 @@ func TestGetStatusBackfill(t *testing.T) {
 				ctrl := gomock.NewController(t)
 				mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
 				mockClient.EXPECT().GetDomain().Return("test-domain")
-				mockClient.EXPECT().GetProvider().Return("test-provider").AnyTimes()
 				mockClient.EXPECT().GetWorkflowExecutionInfo(
 					gomock.Any(),
 					gomock.Any(),
@@ -378,7 +365,6 @@ func TestGetStatusBackfill(t *testing.T) {
 				ctrl := gomock.NewController(t)
 				mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
 				mockClient.EXPECT().GetDomain().Return("test-domain")
-				mockClient.EXPECT().GetProvider().Return("test-provider").AnyTimes()
 				mockClient.EXPECT().GetWorkflowExecutionInfo(
 					gomock.Any(),
 					gomock.Any(),
@@ -402,7 +388,6 @@ func TestGetStatusBackfill(t *testing.T) {
 				ctrl := gomock.NewController(t)
 				mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
 				mockClient.EXPECT().GetDomain().Return("test-domain")
-				mockClient.EXPECT().GetProvider().Return("test-provider").AnyTimes()
 				mockClient.EXPECT().GetWorkflowExecutionInfo(
 					gomock.Any(),
 					gomock.Any(),
@@ -426,7 +411,6 @@ func TestGetStatusBackfill(t *testing.T) {
 				ctrl := gomock.NewController(t)
 				mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
 				mockClient.EXPECT().GetDomain().Return("test-domain")
-				mockClient.EXPECT().GetProvider().Return("test-provider").AnyTimes()
 				mockClient.EXPECT().GetWorkflowExecutionInfo(
 					gomock.Any(),
 					gomock.Any(),
@@ -461,6 +445,7 @@ func setupBackfillTrigger(t *testing.T, workflowClient clientInterface.WorkflowC
 	trigger := NewBackfillTrigger(
 		zapr.NewLogger(zap.NewNop()),
 		workflowClient,
+		newTestConfigProvider(t),
 	).(*backfillTrigger)
 	assert.NotNil(t, trigger)
 	return trigger
@@ -486,7 +471,7 @@ func TestBackfillTrigger_Update(t *testing.T) {
 	mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
 	// No workflow client calls expected - backfill update is a no-op
 
-	backfillTrigger := NewBackfillTrigger(logger, mockClient)
+	backfillTrigger := NewBackfillTrigger(logger, mockClient, newTestConfigProvider(t))
 	status, _, err := backfillTrigger.Update(context.Background(), triggerRun, v2pb.TRIGGER_RUN_ACTION_NO_ACTION)
 
 	assert.NoError(t, err)

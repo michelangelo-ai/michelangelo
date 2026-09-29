@@ -75,7 +75,7 @@ func TestBeforeCreatePipelineNotFoundDoesNotFailCreation(t *testing.T) {
 	}
 
 	require.NoError(t, h.BeforeCreate(context.Background(), request))
-	require.Empty(t, request.TriggerRun.GetLabels())
+	require.Equal(t, mlapi.UnspecifiedEnvironment, request.TriggerRun.GetLabels()[mlapi.EnvironmentLabel])
 }
 
 func TestBeforeCreatePipelineLookupErrorDoesNotFailCreation(t *testing.T) {
@@ -98,7 +98,7 @@ func TestBeforeCreatePipelineLookupErrorDoesNotFailCreation(t *testing.T) {
 	}
 
 	require.NoError(t, h.BeforeCreate(context.Background(), request))
-	require.Empty(t, request.TriggerRun.GetLabels())
+	require.Equal(t, mlapi.UnspecifiedEnvironment, request.TriggerRun.GetLabels()[mlapi.EnvironmentLabel])
 }
 
 func TestBeforeCreateNoPipelineRefIsNoop(t *testing.T) {
@@ -117,5 +117,83 @@ func TestBeforeCreateNoPipelineRefIsNoop(t *testing.T) {
 	}
 
 	require.NoError(t, h.BeforeCreate(context.Background(), request))
-	require.Empty(t, request.TriggerRun.GetLabels())
+	require.Equal(t, mlapi.UnspecifiedEnvironment, request.TriggerRun.GetLabels()[mlapi.EnvironmentLabel])
+}
+
+func TestBeforeCreateMissingEnvironmentLabelDefaulted(t *testing.T) {
+	mc := gomock.NewController(t)
+	defer mc.Finish()
+
+	mockAPI := apimocks.NewMockHandler(mc)
+
+	h := apiHook{logger: zaptest.NewLogger(t), apiHandler: mockAPI, scheme: testScheme(t), defaultEnv: "development"}
+	request := &v2.CreateTriggerRunRequest{
+		TriggerRun: &v2.TriggerRun{
+			ObjectMeta: metav1.ObjectMeta{Name: "run", Namespace: "test-ns"},
+			Spec:       v2.TriggerRunSpec{},
+		},
+	}
+
+	require.NoError(t, h.BeforeCreate(context.Background(), request))
+	require.Equal(t, "development", request.TriggerRun.GetLabels()[mlapi.EnvironmentLabel])
+}
+
+func TestBeforeCreateMissingEnvironmentLabelDefaultsToUnspecified(t *testing.T) {
+	mc := gomock.NewController(t)
+	defer mc.Finish()
+
+	mockAPI := apimocks.NewMockHandler(mc)
+
+	h := apiHook{logger: zaptest.NewLogger(t), apiHandler: mockAPI, scheme: testScheme(t)}
+	request := &v2.CreateTriggerRunRequest{
+		TriggerRun: &v2.TriggerRun{
+			ObjectMeta: metav1.ObjectMeta{Name: "run", Namespace: "test-ns"},
+			Spec:       v2.TriggerRunSpec{},
+		},
+	}
+
+	require.NoError(t, h.BeforeCreate(context.Background(), request))
+	require.Equal(t, mlapi.UnspecifiedEnvironment, request.TriggerRun.GetLabels()[mlapi.EnvironmentLabel])
+}
+
+func TestBeforeCreateExistingEnvironmentLabelNotOverwritten(t *testing.T) {
+	mc := gomock.NewController(t)
+	defer mc.Finish()
+
+	mockAPI := apimocks.NewMockHandler(mc)
+
+	h := apiHook{logger: zaptest.NewLogger(t), apiHandler: mockAPI, scheme: testScheme(t), defaultEnv: "development"}
+	request := &v2.CreateTriggerRunRequest{
+		TriggerRun: &v2.TriggerRun{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "run",
+				Namespace: "test-ns",
+				Labels:    map[string]string{mlapi.EnvironmentLabel: "production"},
+			},
+			Spec: v2.TriggerRunSpec{},
+		},
+	}
+
+	require.NoError(t, h.BeforeCreate(context.Background(), request))
+	require.Equal(t, "production", request.TriggerRun.GetLabels()[mlapi.EnvironmentLabel])
+}
+
+func TestBeforeCreateRevisionPinnedMissingEnvironmentLabelDefaulted(t *testing.T) {
+	mc := gomock.NewController(t)
+	defer mc.Finish()
+
+	mockAPI := apimocks.NewMockHandler(mc)
+
+	h := apiHook{logger: zaptest.NewLogger(t), apiHandler: mockAPI, scheme: testScheme(t), defaultEnv: "development"}
+	request := &v2.CreateTriggerRunRequest{
+		TriggerRun: &v2.TriggerRun{
+			ObjectMeta: metav1.ObjectMeta{Name: "run", Namespace: "test-ns"},
+			Spec: v2.TriggerRunSpec{
+				Revision: &api.ResourceIdentifier{Name: "test-revision"},
+			},
+		},
+	}
+
+	require.NoError(t, h.BeforeCreate(context.Background(), request))
+	require.Equal(t, "development", request.TriggerRun.GetLabels()[mlapi.EnvironmentLabel])
 }

@@ -3,8 +3,10 @@ import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
 
 import { InterpolatableActionsPopover } from '#core/components/actions/interpolatable-actions-popover';
+import { TASK_STATE } from '#core/components/views/execution/constants';
 import { CreateDeploymentForm } from '#core/config/entities/deployment/create-deployment-form';
 import { DEPLOYMENT_ENTITY_CONFIG } from '#core/config/entities/deployment/deployment';
+import { DEPLOYMENT_DETAIL_CONFIG } from '#core/config/entities/deployment/detail';
 import {
   DEPLOYMENT_CONDITION_STATUS,
   DEPLOYMENT_STAGE,
@@ -26,6 +28,7 @@ import {
 import { getSnackbarProviderWrapper } from '#core/test/wrappers/get-snackbar-provider-wrapper';
 
 import type { ActionConfigSchema, Data } from '#core/components/actions/types';
+import type { ExecutionDetailPageConfig } from '#core/components/views/detail-view/types/detail-view-schema-types';
 import type { DeploymentUpdateInput } from '#core/config/entities/deployment/types';
 
 describe('Deployment list page', () => {
@@ -414,6 +417,213 @@ describe('Deployment detail page', () => {
       await screen.findAllByText('SnapshotValidation');
       await screen.findAllByText('SnapshotPlacement');
       await screen.findByText('NoCapacity');
+    });
+
+    it('renders state chips matching the task states during an active rollout', async () => {
+      render(
+        <EntityDetailRoute phases={{ deploy: DEPLOY_PHASE }} />,
+        buildWrapper([
+          getErrorProviderWrapper(),
+          getRouterWrapper({
+            location: '/myproject/deploy/deployments/sentiment-deployment/ongoing-operations',
+          }),
+          getServiceProviderWrapper({
+            request: createQueryMockRouter({
+              GetDeployment: {
+                deployment: buildDeployment({
+                  status: {
+                    state: DEPLOYMENT_STATE.INITIALIZING,
+                    stage: DEPLOYMENT_STAGE.PLACEMENT,
+                    conditions: [
+                      { type: 'Validation', status: DEPLOYMENT_CONDITION_STATUS.TRUE },
+                      { type: 'Placement', status: DEPLOYMENT_CONDITION_STATUS.UNKNOWN },
+                      { type: 'RolloutCompleted', status: DEPLOYMENT_CONDITION_STATUS.FALSE },
+                    ],
+                  },
+                }),
+              },
+            }),
+          }),
+        ])
+      );
+
+      expect(await screen.findByText('Succeeded')).toBeInTheDocument();
+      expect(screen.getByText('Running')).toBeInTheDocument();
+      expect(screen.getByText('Pending')).toBeInTheDocument();
+      expect(screen.queryByText('Failed')).not.toBeInTheDocument();
+    });
+
+    it('renders a "Failed" chip on the first incomplete condition when the rollout failed', async () => {
+      render(
+        <EntityDetailRoute phases={{ deploy: DEPLOY_PHASE }} />,
+        buildWrapper([
+          getErrorProviderWrapper(),
+          getRouterWrapper({
+            location: '/myproject/deploy/deployments/sentiment-deployment/ongoing-operations',
+          }),
+          getServiceProviderWrapper({
+            request: createQueryMockRouter({
+              GetDeployment: {
+                deployment: buildDeployment({
+                  status: {
+                    state: DEPLOYMENT_STATE.UNHEALTHY,
+                    stage: DEPLOYMENT_STAGE.ROLLOUT_FAILED,
+                    conditions: [],
+                    conditionsSnapshot: [
+                      { type: 'Validation', status: DEPLOYMENT_CONDITION_STATUS.TRUE },
+                      { type: 'Placement', status: DEPLOYMENT_CONDITION_STATUS.FALSE },
+                      { type: 'RolloutCompleted', status: DEPLOYMENT_CONDITION_STATUS.FALSE },
+                    ],
+                  },
+                }),
+              },
+            }),
+          }),
+        ])
+      );
+
+      expect(await screen.findByText('Succeeded')).toBeInTheDocument();
+      expect(screen.getByText('Failed')).toBeInTheDocument();
+      expect(screen.getByText('Pending')).toBeInTheDocument();
+      expect(screen.queryByText('Running')).not.toBeInTheDocument();
+    });
+
+    it('falls back to live conditions when a failed rollout has an empty snapshot', async () => {
+      render(
+        <EntityDetailRoute phases={{ deploy: DEPLOY_PHASE }} />,
+        buildWrapper([
+          getErrorProviderWrapper(),
+          getRouterWrapper({
+            location: '/myproject/deploy/deployments/sentiment-deployment/ongoing-operations',
+          }),
+          getServiceProviderWrapper({
+            request: createQueryMockRouter({
+              GetDeployment: {
+                deployment: buildDeployment({
+                  status: {
+                    state: DEPLOYMENT_STATE.UNHEALTHY,
+                    stage: DEPLOYMENT_STAGE.ROLLOUT_FAILED,
+                    conditions: [
+                      { type: 'LiveCondition', status: DEPLOYMENT_CONDITION_STATUS.FALSE },
+                    ],
+                    conditionsSnapshot: [],
+                  },
+                }),
+              },
+            }),
+          }),
+        ])
+      );
+
+      await screen.findAllByText('LiveCondition');
+    });
+
+    describe('stages', () => {
+      const page = DEPLOYMENT_DETAIL_CONFIG.pages.find((p) => p.id === 'ongoing-operations') as
+        | ExecutionDetailPageConfig
+        | undefined;
+      const accessor = page?.tasks.accessor as (data: object) => object[];
+      const stateBuilder = page?.tasks.stateBuilder as (
+        record: object,
+        index: number,
+        siblings: object[],
+        data: object
+      ) => string;
+
+      const condition = (status: number) => ({ status });
+      const atStage = (stage: number) => ({ status: { stage } });
+
+      it('marks satisfied conditions as success', () => {
+        const conditions = [condition(DEPLOYMENT_CONDITION_STATUS.TRUE)];
+        expect(
+          stateBuilder(conditions[0], 0, conditions, atStage(DEPLOYMENT_STAGE.PLACEMENT))
+        ).toBe(TASK_STATE.SUCCESS);
+      });
+
+      it('marks the first incomplete condition as running and later ones as pending during an active rollout', () => {
+        const conditions = [
+          condition(DEPLOYMENT_CONDITION_STATUS.TRUE),
+          condition(DEPLOYMENT_CONDITION_STATUS.FALSE),
+          condition(DEPLOYMENT_CONDITION_STATUS.UNKNOWN),
+        ];
+        const data = atStage(DEPLOYMENT_STAGE.PLACEMENT);
+
+        expect(stateBuilder(conditions[1], 1, conditions, data)).toBe(TASK_STATE.RUNNING);
+        expect(stateBuilder(conditions[2], 2, conditions, data)).toBe(TASK_STATE.PENDING);
+      });
+
+      it('treats an unknown-status condition as the running step when it is first incomplete', () => {
+        const conditions = [
+          condition(DEPLOYMENT_CONDITION_STATUS.UNKNOWN),
+          condition(DEPLOYMENT_CONDITION_STATUS.FALSE),
+        ];
+        const data = atStage(DEPLOYMENT_STAGE.VALIDATION);
+
+        expect(stateBuilder(conditions[0], 0, conditions, data)).toBe(TASK_STATE.RUNNING);
+        expect(stateBuilder(conditions[1], 1, conditions, data)).toBe(TASK_STATE.PENDING);
+      });
+
+      it.each([
+        ['rollout failed', DEPLOYMENT_STAGE.ROLLOUT_FAILED],
+        ['rollback failed', DEPLOYMENT_STAGE.ROLLBACK_FAILED],
+      ])('marks the first incomplete condition as error when %s', (_label, stage) => {
+        const conditions = [
+          condition(DEPLOYMENT_CONDITION_STATUS.TRUE),
+          condition(DEPLOYMENT_CONDITION_STATUS.FALSE),
+          condition(DEPLOYMENT_CONDITION_STATUS.UNKNOWN),
+        ];
+        const data = atStage(stage);
+
+        expect(stateBuilder(conditions[1], 1, conditions, data)).toBe(TASK_STATE.ERROR);
+        expect(stateBuilder(conditions[2], 2, conditions, data)).toBe(TASK_STATE.PENDING);
+      });
+
+      it('returns live conditions during an active rollout', () => {
+        const conditions = [{ type: 'Live' }];
+        const conditionsSnapshot = [{ type: 'Snapshot' }];
+        expect(
+          accessor({
+            status: { stage: DEPLOYMENT_STAGE.PLACEMENT, conditions, conditionsSnapshot },
+          })
+        ).toEqual(conditions);
+      });
+
+      it('returns the snapshot when the rollout has failed', () => {
+        const conditions = [{ type: 'Live' }];
+        const conditionsSnapshot = [{ type: 'Snapshot' }];
+        expect(
+          accessor({
+            status: { stage: DEPLOYMENT_STAGE.ROLLOUT_FAILED, conditions, conditionsSnapshot },
+          })
+        ).toEqual(conditionsSnapshot);
+      });
+
+      it('returns live conditions when the rollback has failed, even if a snapshot exists', () => {
+        const conditions = [{ type: 'Live' }];
+        const conditionsSnapshot = [{ type: 'Snapshot' }];
+        expect(
+          accessor({
+            status: { stage: DEPLOYMENT_STAGE.ROLLBACK_FAILED, conditions, conditionsSnapshot },
+          })
+        ).toEqual(conditions);
+      });
+
+      it('falls back to live conditions when the failed-rollout snapshot is empty', () => {
+        const conditions = [{ type: 'Live' }];
+        expect(
+          accessor({
+            status: {
+              stage: DEPLOYMENT_STAGE.ROLLOUT_FAILED,
+              conditions,
+              conditionsSnapshot: [],
+            },
+          })
+        ).toEqual(conditions);
+      });
+
+      it('returns an empty list when status is missing', () => {
+        expect(accessor({})).toEqual([]);
+      });
     });
   });
 });

@@ -29,7 +29,11 @@ workflow:
   # Cadence gRPC frontend. Source: michelangelo-worker.yaml:42 and
   # michelangelo-controllermgr.yaml:101 both use port 7833. Port 7933 is the
   # TChannel endpoint used by the Cadence CLI, not by the worker.
-  endpoint: cadence:7833
+  #
+  # Must name the Service the Cadence subchart actually renders
+  # ({{ .Release.Name }}-cadence-frontend); `ma sandbox` passes the same value
+  # via --set, so this default only applies to a direct `helm install`.
+  endpoint: michelangelo-cadence-frontend:7833
   domain: default
 
 images:
@@ -83,6 +87,30 @@ affinity: {}
 controllermgr:
   metadataStorage:
     enable: true
+  # Revisioning is off by default platform-wide (helm/michelangelo/values.yaml)
+  # pending a retention/pruning policy for Revision objects, which have no
+  # TTL or history-limit mechanism today. The sandbox turns it on anyway so
+  # pipeline-revision behavior (Revision CR snapshots, PipelineRun
+  # auto-pin-to-latest) is exercisable end-to-end for local development and
+  # example-pipeline validation — a handful of example pipelines in a
+  # throwaway sandbox never approaches the unbounded-growth risk that gates
+  # the production default. Empirically confirmed working end-to-end.
+  # TODO(#2139): revisit once Revision retention/pruning is designed, then
+  # consider flipping this on as the platform-wide production default too.
+  pipeline:
+    revisioningEnabled: true
+  # Cadence Web URL template for the local sandbox's default engine (cadence
+  # -- see workflow.engine above). {{.RunID}} is required: Cadence Web routes
+  # a workflow's detail/summary page by (workflow ID, run ID) together, so a
+  # format string that only references {{.ExecutionID}} resolves to a
+  # listing rather than a specific execution (see PipelineRun's
+  # GetWorkflowUrl and TriggerRun's BuildWorkflowUrl doc comments,
+  # go/base/config/config.go). `ma sandbox`'s own --workflow flag overrides
+  # this dynamically per engine (sandbox.py's _build_helm_set_args) when
+  # driven through the CLI; this static default covers a plain
+  # `helm install/upgrade -f values-k3d.yaml` invocation that bypasses it.
+  workflowClient:
+    executionUrlFormat: "http://localhost:8088/domains/{{.Domain}}/workflows/{{.ExecutionID}}/{{.RunID}}/summary"
   jobs:
     k8sengine:
       mapper:

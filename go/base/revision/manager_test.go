@@ -121,6 +121,35 @@ func TestUpsertRevision_UpdateMutable(t *testing.T) {
 	assert.True(t, updated)
 }
 
+// UpsertRevision builds a brand-new object on every call (see
+// pipeline.snapshotRevision), which historically clobbered Finalizers added
+// out-of-band by the ingester on the Update path. A GC-driven cascade delete relies
+// on the ingester's finalizer surviving repeated re-snapshots, so this must not
+// regress.
+func TestUpsertRevision_UpdatePreservesFinalizers(t *testing.T) {
+	mgr, h := newTestManager(t)
+	ctx := context.Background()
+
+	_, err := mgr.UpsertRevision(ctx, testRevision(t), UpsertOpts{})
+	require.NoError(t, err)
+
+	// Simulate what the API handler stamps onto the object out-of-band, independent of
+	// the caller's UpsertRevision input.
+	rev := getRevision(t, h, "test-ns", "pipeline-my-pipeline-abc123456789")
+	rev.SetFinalizers([]string{"michelangelo.uber.com/ingester"})
+	require.NoError(t, h.Update(ctx, rev, &metav1.UpdateOptions{}))
+
+	// A second snapshot of the same revision (e.g. the next Pipeline reconcile) passes a
+	// fresh object with no Finalizers set.
+	updated, err := mgr.UpsertRevision(ctx, testRevision(t), UpsertOpts{})
+	require.NoError(t, err)
+	assert.True(t, updated)
+
+	got := getRevision(t, h, "test-ns", "pipeline-my-pipeline-abc123456789")
+	assert.Equal(t, []string{"michelangelo.uber.com/ingester"}, got.GetFinalizers(),
+		"ingester finalizer must survive a re-snapshot, or GC-driven cascade delete can never soft-delete this revision")
+}
+
 func TestUpsertRevision_MutableThenImmutable(t *testing.T) {
 	mgr, h := newTestManager(t)
 	ctx := context.Background()

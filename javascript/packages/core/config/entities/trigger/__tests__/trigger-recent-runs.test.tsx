@@ -11,7 +11,7 @@ import {
   getServiceProviderWrapper,
 } from '#core/test/wrappers/get-service-provider-wrapper';
 
-describe('Trigger detail "Recent Runs"', () => {
+describe('Trigger detail "Triggered Runs"', () => {
   const SELECTOR = `${TRIGGERED_BY_LABEL}=nightly-trigger`;
 
   /**
@@ -45,7 +45,7 @@ describe('Trigger detail "Recent Runs"', () => {
       <EntityDetailRoute phases={{ retrain: RETRAIN_PHASE }} />,
       buildWrapper([
         getErrorProviderWrapper(),
-        getRouterWrapper({ location: '/myproject/retrain/triggers/nightly-trigger' }),
+        getRouterWrapper({ location: '/myproject/retrain/triggers/nightly-trigger/runs' }),
         getServiceProviderWrapper({ request }),
       ])
     );
@@ -66,7 +66,7 @@ describe('Trigger detail "Recent Runs"', () => {
       <EntityDetailRoute phases={{ retrain: RETRAIN_PHASE }} />,
       buildWrapper([
         getErrorProviderWrapper(),
-        getRouterWrapper({ location: '/myproject/retrain/triggers/nightly-trigger' }),
+        getRouterWrapper({ location: '/myproject/retrain/triggers/nightly-trigger/runs' }),
         getServiceProviderWrapper({
           request: createQueryMockRouter({
             GetTriggerRun: {

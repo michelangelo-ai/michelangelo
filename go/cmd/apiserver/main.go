@@ -55,7 +55,9 @@ func opts() fx.Option {
 		fx.Invoke(func(logger *zap.Logger, apiHandler api.Handler, scheme *runtime.Scheme, conf apihandler.Config) {
 			pipelinerunapihook.RegisterPipelineRunAPIHook(logger, apiHandler, scheme, conf.PipelineRunDefaultEnvironment)
 		}),
-		fx.Invoke(triggerrunapihook.RegisterTriggerRunAPIHook),
+		fx.Invoke(func(logger *zap.Logger, apiHandler api.Handler, scheme *runtime.Scheme, conf apihandler.Config) {
+			triggerrunapihook.RegisterTriggerRunAPIHook(logger, apiHandler, scheme, conf.PipelineRunDefaultEnvironment)
+		}),
 		fx.Invoke(func(logger *zap.Logger, apiHandler api.Handler, conf apihandler.Config) {
 			modelapihook.RegisterModelAPIHook(logger, apiHandler, conf.PipelineRunDefaultEnvironment)
 		}),

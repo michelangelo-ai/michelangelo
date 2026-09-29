@@ -35,6 +35,18 @@ export type ManifestTrigger = {
   parametersMap?: Record<string, unknown>;
   /** Default cap on concurrent runs for this trigger; overridable for a backfill run. */
   maxConcurrency?: number;
+  /**
+   * Rate-limits how many pipeline runs this trigger creates at once. Mutually exclusive
+   * with {@link ManifestTrigger.maxConcurrency} in practice — a trigger configured with
+   * `maxConcurrency` ignores `batchPolicy` (see {@link TRIGGER_DETAIL_CONFIG}'s metadata,
+   * which hides one group when the other is set).
+   */
+  batchPolicy?: {
+    /** Number of pipeline runs created in one batch. */
+    batchSize?: number;
+    /** Wait time between batches, in seconds. */
+    waitSeconds?: bigint | number | string;
+  };
 };
 
 /** Reruns a set of existing pipeline runs, optionally from/up to specific DAG nodes (proto `BatchRerun`). */
@@ -60,9 +72,11 @@ export type RunTriggerPayload = {
   metadata: {
     name: string;
     namespace: string;
+    labels?: Record<string, string>;
   };
   spec: {
     pipeline: { name: string; namespace: string };
+    revision?: { name: string; namespace: string };
     trigger: ManifestTrigger;
     sourceTriggerName: string;
     autoFlip: boolean;
@@ -90,9 +104,17 @@ export type TriggerRun = {
     kill: boolean;
     /** proto field 11 — replaces deprecated kill boolean */
     action: TriggerRunAction;
+    /** Backfill window start; present only for a backfill-created trigger run. */
+    startTimestamp?: { seconds: string };
+    /** Backfill window end; present only for a backfill-created trigger run. */
+    endTimestamp?: { seconds: string };
   };
   status: {
     state: TriggerRunState;
+    /** Populated when the run failed; drives the Information tab's error-message section. */
+    errorMessage?: string;
+    /** Trigger-run-level workflow log link; omitted from the Information tab's links when unset. */
+    logUrl?: string;
   };
 };
 
