@@ -9,7 +9,8 @@ import { capitalizeFirstLetter } from '#core/utils/string-utils';
  * Revision itself instead — not just its wrapped `spec.content` — so configs can read the
  * Revision's own identity (e.g. `metadata.name`) the same way list rows for that entity already
  * do: the Revision `?revisionId=` names, or else the one the entity's `status.latestRevision`
- * points at.
+ * points at. The live entity is always loaded for a revisioned entity, even when the URL names
+ * the Revision, so the page can tell which Revision is the latest.
  */
 export function useEntityRecord({
   service,
@@ -25,6 +26,8 @@ export function useEntityRecord({
   revisionId?: string;
 }): {
   record: Record<string, unknown> | undefined;
+  /** Name of the Revision the entity's `status.latestRevision` points at, if revisioned. */
+  latestRevisionName: string | undefined;
   loading: boolean;
   errorMessage: string | undefined;
 } {
@@ -32,11 +35,11 @@ export function useEntityRecord({
     revisioned && revisionId ? buildRevisionName(service, entityId, revisionId) : undefined;
 
   // The live entity: the record itself for a plain entity, or the pointer to the latest
-  // Revision for a revisioned one. Not needed when the URL already names the Revision.
+  // Revision for a revisioned one.
   const entityQuery = useStudioQuery<Record<string, unknown>>({
     queryName: `Get${capitalizeFirstLetter(service)}`,
     serviceOptions: { namespace: projectId, name: entityId },
-    clientOptions: { enabled: !!service && !revisionNameFromUrl },
+    clientOptions: { enabled: !!service },
   });
 
   // cast: PhaseEntityConfig carries no entity type generic, so the runtime-selected service
@@ -64,6 +67,7 @@ export function useEntityRecord({
 
   return {
     record: revisioned ? revisionQuery.data?.revision : entityRecord,
+    latestRevisionName: revisionNameFromEntity,
     loading: entityQuery.isLoading || revisionQuery.isLoading,
     errorMessage:
       entityQuery.error?.message ??

@@ -172,9 +172,7 @@ func (c revisionServiceHandler) CreateRevision(
 	ctx context.Context, request *CreateRevisionRequest) (resp *CreateRevisionResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
 
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Revision.ObjectMeta.Namespace, "name", request.Revision.ObjectMeta.Name)
 	logger.Info("CreateRevision Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
@@ -244,9 +242,7 @@ func (c revisionServiceHandler) CreateRevision(
 func (c revisionServiceHandler) GetRevision(
 	ctx context.Context, request *GetRevisionRequest) (resp *GetRevisionResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace, "name", request.Name)
 	logger.Info("GetRevision Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
@@ -303,9 +299,7 @@ func (c revisionServiceHandler) GetRevision(
 func (c revisionServiceHandler) UpdateRevision(
 	ctx context.Context, request *UpdateRevisionRequest) (resp *UpdateRevisionResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Revision.ObjectMeta.Namespace, "name", request.Revision.ObjectMeta.Name)
 	logger.Info("UpdateRevision Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
@@ -375,9 +369,7 @@ func (c revisionServiceHandler) UpdateRevision(
 func (c revisionServiceHandler) DeleteRevision(
 	ctx context.Context, request *DeleteRevisionRequest) (resp *DeleteRevisionResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace, "name", request.Name)
 	logger.Info("DeleteRevision Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
@@ -449,9 +441,7 @@ func (c revisionServiceHandler) DeleteRevision(
 func (c revisionServiceHandler) DeleteRevisionCollection(
 	ctx context.Context, request *DeleteRevisionCollectionRequest) (resp *DeleteRevisionCollectionResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace)
 	logger.Info("DeleteRevisionCollection Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
@@ -525,9 +515,7 @@ func (c revisionServiceHandler) ListRevision(
 	ctx context.Context, request *ListRevisionRequest) (resp *ListRevisionResponse, err error) {
 
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace)
 	logger.Info("ListRevision Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{

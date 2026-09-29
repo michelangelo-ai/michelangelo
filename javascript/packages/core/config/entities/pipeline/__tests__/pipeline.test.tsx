@@ -439,6 +439,9 @@ describe('PIPELINE_ENTITY_CONFIG: actions on a revision snapshot', () => {
     it('keeps Run, Run trigger, and Delete actions available for a pipeline revision', async () => {
       const user = userEvent.setup();
       const mockRequest = createQueryMockRouter({
+        GetPipeline: {
+          pipeline: { metadata: { name: 'eval-pipeline', namespace: 'ma-dev-test' } },
+        },
         GetRevision: {
           revision: {
             metadata: { name: 'pipeline-eval-pipeline-3f2a1b9c0d4e', namespace: 'ma-dev-test' },
@@ -480,6 +483,9 @@ describe('PIPELINE_ENTITY_CONFIG: actions on a revision snapshot', () => {
     it("pins Run to the viewed revision rather than the snapshot's latest pointer", async () => {
       const user = userEvent.setup();
       const mockRequest = createQueryMockRouter({
+        GetPipeline: {
+          pipeline: { metadata: { name: 'eval-pipeline', namespace: 'ma-dev-test' } },
+        },
         GetRevision: {
           revision: {
             metadata: { name: 'pipeline-eval-pipeline-3f2a1b9c0d4e', namespace: 'ma-dev-test' },
@@ -584,6 +590,9 @@ describe('PIPELINE_DETAIL_CONFIG: runs tab', () => {
 
   it('filters runs by the Revision name', async () => {
     const mockRequest = createQueryMockRouter({
+      GetPipeline: {
+        pipeline: { metadata: { name: 'eval-pipeline', namespace: 'ma-dev-test' } },
+      },
       GetRevision: {
         revision: {
           metadata: { name: 'pipeline-eval-pipeline-3f2a1b9c0d4e', namespace: 'ma-dev-test' },

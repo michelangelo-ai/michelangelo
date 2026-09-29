@@ -172,9 +172,7 @@ func (c rayJobServiceHandler) CreateRayJob(
 	ctx context.Context, request *CreateRayJobRequest) (resp *CreateRayJobResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
 
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.RayJob.ObjectMeta.Namespace, "name", request.RayJob.ObjectMeta.Name)
 	logger.Info("CreateRayJob Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
@@ -244,9 +242,7 @@ func (c rayJobServiceHandler) CreateRayJob(
 func (c rayJobServiceHandler) GetRayJob(
 	ctx context.Context, request *GetRayJobRequest) (resp *GetRayJobResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace, "name", request.Name)
 	logger.Info("GetRayJob Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
@@ -303,9 +299,7 @@ func (c rayJobServiceHandler) GetRayJob(
 func (c rayJobServiceHandler) UpdateRayJob(
 	ctx context.Context, request *UpdateRayJobRequest) (resp *UpdateRayJobResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.RayJob.ObjectMeta.Namespace, "name", request.RayJob.ObjectMeta.Name)
 	logger.Info("UpdateRayJob Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
@@ -375,9 +369,7 @@ func (c rayJobServiceHandler) UpdateRayJob(
 func (c rayJobServiceHandler) DeleteRayJob(
 	ctx context.Context, request *DeleteRayJobRequest) (resp *DeleteRayJobResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace, "name", request.Name)
 	logger.Info("DeleteRayJob Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
@@ -449,9 +441,7 @@ func (c rayJobServiceHandler) DeleteRayJob(
 func (c rayJobServiceHandler) DeleteRayJobCollection(
 	ctx context.Context, request *DeleteRayJobCollectionRequest) (resp *DeleteRayJobCollectionResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace)
 	logger.Info("DeleteRayJobCollection Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
@@ -525,9 +515,7 @@ func (c rayJobServiceHandler) ListRayJob(
 	ctx context.Context, request *ListRayJobRequest) (resp *ListRayJobResponse, err error) {
 
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace)
 	logger.Info("ListRayJob Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
