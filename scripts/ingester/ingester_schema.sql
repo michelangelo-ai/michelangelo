@@ -642,6 +642,50 @@ CREATE TABLE IF NOT EXISTS `evaluation_report_annotations` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ==============================================================================
+-- 16. METRIC
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS `metric` (
+    `uid` VARCHAR(255) NOT NULL,
+    `group_ver` VARCHAR(255) NOT NULL,
+    `namespace` VARCHAR(255) NOT NULL,
+    `name` VARCHAR(255) NOT NULL,
+    `res_version` BIGINT UNSIGNED NOT NULL,
+    `create_time` DATETIME NOT NULL,
+    `update_time` DATETIME,
+    `delete_time` DATETIME,
+    `proto` MEDIUMBLOB,
+    `json` JSON,
+    `type_name` VARCHAR(255),
+    `group` VARCHAR(255),
+    `data_source` VARCHAR(255),
+    PRIMARY KEY (`uid`),
+    KEY `metric_namespace_name` (`namespace`, `name`),
+    KEY `metric_create_time` (`create_time`),
+    KEY `metric_type_name` (`type_name`),
+    KEY `metric_group` (`group`),
+    KEY `metric_data_source` (`data_source`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `metric_labels` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT,
+    `obj_uid` VARCHAR(255) NOT NULL,
+    `key` VARCHAR(255) NOT NULL,
+    `value` VARCHAR(63),
+    PRIMARY KEY (`id`),
+    KEY `metric_labels_uid` (`obj_uid`),
+    KEY `metric_labels_key_value` (`key`, `value`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `metric_annotations` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT,
+    `obj_uid` VARCHAR(255) NOT NULL,
+    `key` VARCHAR(255) NOT NULL,
+    `value` TEXT,
+    PRIMARY KEY (`id`),
+    KEY `metric_annotations_uid` (`obj_uid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ==============================================================================
 -- SUMMARY
 -- ==============================================================================
 SELECT 'Complete schema initialization finished!' as status;

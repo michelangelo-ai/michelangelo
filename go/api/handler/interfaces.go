@@ -68,9 +68,20 @@ type MetadataHandler interface {
 	// This is typically used as a fallback when objects are not found in Kubernetes.
 	Get(ctx context.Context, namespace, name string, obj ctrlRTClient.Object) error
 
+	// Create persists a brand-new object in the metadata storage, writing its full spec/status.
+	// Used for the initial Create of a MySQL-primary kind (see storage.MySQLPrimaryPolicy), where
+	// there is no etcd copy and thus no k8s Create to fall back from.
+	Create(ctx context.Context, obj ctrlRTClient.Object) error
+
 	// Update persists or updates an object in the metadata storage.
 	// This operation is idempotent and handles both creation and updates.
 	Update(ctx context.Context, obj ctrlRTClient.Object) error
+
+	// UpdateFull performs a full spec/status/metadata update of an object in the metadata storage,
+	// enforcing optimistic concurrency on resourceVersion. Used for Update and UpdateStatus on a
+	// MySQL-primary kind (see storage.MySQLPrimaryPolicy); unlike Update, the incoming spec/status
+	// are actually persisted rather than discarded.
+	UpdateFull(ctx context.Context, obj ctrlRTClient.Object) error
 
 	// Delete removes an object from the metadata storage.
 	// This may also trigger cleanup of associated blob storage if configured.
