@@ -4462,7 +4462,7 @@ description = "Lightweight pipelining with Python functions"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "extra == \"example\" or extra == \"trainer-mlflow\""
+markers = "extra == \"dev\" or extra == \"example\" or extra == \"evaluator\" or extra == \"trainer-mlflow\""
 files = [
     {file = "joblib-1.5.3-py3-none-any.whl", hash = "sha256:5fc3c5039fc5ca8c0276333a188bbd59d6b7ab37fe6632daa76bc7f9ec18e713"},
     {file = "joblib-1.5.3.tar.gz", hash = "sha256:8561a3269e6801106863fd0d6d84bb737be9e7631e33aaed3fb9ce5953688da3"},
@@ -6381,7 +6381,7 @@ description = "Extremely lightweight compatibility layer between dataframe libra
 optional = true
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "python_version >= \"3.11\" and (extra == \"example\" or extra == \"trainer-mlflow\")"
+markers = "python_version >= \"3.11\" and (extra == \"dev\" or extra == \"example\" or extra == \"evaluator\" or extra == \"trainer-mlflow\")"
 files = [
     {file = "narwhals-2.22.1-py3-none-any.whl", hash = "sha256:60567d774edf77db53906f89d9fbd164e66e56d66d388e1e6990f17ac33cfb53"},
     {file = "narwhals-2.22.1.tar.gz", hash = "sha256:d62920805a0a43b7ff8b54b0c0d3142d796f8a9301836ada37e573d6a33cbcd9"},
@@ -11162,7 +11162,7 @@ description = "A set of python modules for machine learning and data mining"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version == \"3.9\" and (extra == \"example\" or extra == \"trainer-mlflow\")"
+markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"example\" or extra == \"evaluator\" or extra == \"trainer-mlflow\")"
 files = [
     {file = "scikit_learn-1.6.1-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:d056391530ccd1e501056160e3c9673b4da4805eb67eb2bdf4e983e1f9c9204e"},
     {file = "scikit_learn-1.6.1-cp310-cp310-macosx_12_0_arm64.whl", hash = "sha256:0c8d036eb937dbb568c6242fa598d551d88fb4399c0344d95c001980ec1c7d36"},
@@ -11218,7 +11218,7 @@ description = "A set of python modules for machine learning and data mining"
 optional = true
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "python_version == \"3.10\" and (extra == \"example\" or extra == \"trainer-mlflow\")"
+markers = "python_version == \"3.10\" and (extra == \"dev\" or extra == \"example\" or extra == \"evaluator\" or extra == \"trainer-mlflow\")"
 files = [
     {file = "scikit_learn-1.7.2-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:6b33579c10a3081d076ab403df4a4190da4f4432d443521674637677dc91e61f"},
     {file = "scikit_learn-1.7.2-cp310-cp310-macosx_12_0_arm64.whl", hash = "sha256:36749fb62b3d961b1ce4fedf08fa57a1986cd409eff2d783bca5d4b9b5fce51c"},
@@ -11275,7 +11275,7 @@ description = "A set of python modules for machine learning and data mining"
 optional = true
 python-versions = ">=3.11"
 groups = ["main"]
-markers = "python_version >= \"3.11\" and (extra == \"example\" or extra == \"trainer-mlflow\")"
+markers = "python_version >= \"3.11\" and (extra == \"dev\" or extra == \"example\" or extra == \"evaluator\" or extra == \"trainer-mlflow\")"
 files = [
     {file = "scikit_learn-1.9.0-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:9db6f4d34e68c8899e4cab27fdf8eafe6ed21f2ba52ceb25ea250cd237f8e47b"},
     {file = "scikit_learn-1.9.0-cp311-cp311-macosx_12_0_arm64.whl", hash = "sha256:f401448645a3e7bc115aa3c094097865155b34bff1cba8101857d9104e99074c"},
@@ -11333,7 +11333,7 @@ description = "Fundamental algorithms for scientific computing in Python"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version == \"3.9\" and (extra == \"vllm\" or extra == \"example\" or extra == \"trainer-mlflow\" or extra == \"dev\" or extra == \"trainer-xgboost\")"
+markers = "python_version == \"3.9\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"evaluator\" or extra == \"trainer-mlflow\" or extra == \"trainer-xgboost\")"
 files = [
     {file = "scipy-1.13.1-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:20335853b85e9a49ff7572ab453794298bcf0354d8068c5f6775a0eabf350aca"},
     {file = "scipy-1.13.1-cp310-cp310-macosx_12_0_arm64.whl", hash = "sha256:d605e9c23906d1994f55ace80e0125c587f96c020037ea6aa98d01b4bd2e222f"},
@@ -11377,7 +11377,7 @@ description = "Fundamental algorithms for scientific computing in Python"
 optional = true
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "python_version == \"3.10\" and (extra == \"vllm\" or extra == \"example\" or extra == \"trainer-mlflow\" or extra == \"dev\" or extra == \"trainer-xgboost\")"
+markers = "python_version == \"3.10\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"evaluator\" or extra == \"trainer-mlflow\" or extra == \"trainer-xgboost\")"
 files = [
     {file = "scipy-1.15.3-cp310-cp310-macosx_10_13_x86_64.whl", hash = "sha256:a345928c86d535060c9c2b25e71e87c39ab2f22fc96e9636bd74d1dbf9de448c"},
     {file = "scipy-1.15.3-cp310-cp310-macosx_12_0_arm64.whl", hash = "sha256:ad3432cb0f9ed87477a8d97f03b763fd1d57709f1bbde3c9369b1dff5503b253"},
@@ -11442,7 +11442,7 @@ description = "Fundamental algorithms for scientific computing in Python"
 optional = true
 python-versions = ">=3.11"
 groups = ["main"]
-markers = "python_version >= \"3.11\" and (python_version < \"3.13\" or extra == \"example\" or extra == \"trainer-mlflow\" or extra == \"dev\" or extra == \"trainer-xgboost\") and (python_version == \"3.11\" or extra == \"example\" or extra == \"trainer-mlflow\" or extra == \"dev\" or extra == \"trainer-xgboost\" or extra == \"vllm\") and (extra == \"vllm\" or extra == \"example\" or extra == \"trainer-mlflow\" or extra == \"dev\" or extra == \"trainer-xgboost\")"
+markers = "python_version >= \"3.11\" and (python_version < \"3.13\" or extra == \"dev\" or extra == \"example\" or extra == \"evaluator\" or extra == \"trainer-mlflow\" or extra == \"trainer-xgboost\") and (python_version == \"3.11\" or extra == \"dev\" or extra == \"example\" or extra == \"evaluator\" or extra == \"trainer-mlflow\" or extra == \"trainer-xgboost\" or extra == \"vllm\") and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"evaluator\" or extra == \"trainer-mlflow\" or extra == \"trainer-xgboost\")"
 files = [
     {file = "scipy-1.17.1-cp311-cp311-macosx_10_14_x86_64.whl", hash = "sha256:1f95b894f13729334fb990162e911c9e5dc1ab390c58aa6cbecb389c5b5e28ec"},
     {file = "scipy-1.17.1-cp311-cp311-macosx_12_0_arm64.whl", hash = "sha256:e18f12c6b0bc5a592ed23d3f7b891f68fd7f8241d69b7883769eb5d5dfb52696"},
@@ -12121,7 +12121,7 @@ description = "threadpoolctl"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "extra == \"example\" or extra == \"trainer-mlflow\""
+markers = "extra == \"dev\" or extra == \"example\" or extra == \"evaluator\" or extra == \"trainer-mlflow\""
 files = [
     {file = "threadpoolctl-3.6.0-py3-none-any.whl", hash = "sha256:43a0b8fd5a2928500110039e43a5eed8480b918967083ea48dc3ab9f13c4a7fb"},
     {file = "threadpoolctl-3.6.0.tar.gz", hash = "sha256:8ab8b4aa3491d812b623328249fab5302a68d2d71745c8a4c719a2fcaba9f44e"},
@@ -14142,8 +14142,8 @@ test = ["big-O", "jaraco.functools", "jaraco.itertools", "jaraco.test", "more_it
 type = ["pytest-mypy (>=1.0.1) ; platform_python_implementation != \"PyPy\""]
 
 [extras]
-dev = ["coverage", "docker", "jinja2", "numpy", "pandas", "polars", "pre-commit", "pyarrow", "pytest", "pytest-cov", "pytorch_lightning", "ray", "ray", "ruff", "torch", "torchmetrics", "transformers", "xgboost"]
-evaluator = ["numpy", "pandas", "pyarrow", "ray", "ray", "torch", "torchmetrics"]
+dev = ["coverage", "docker", "jinja2", "numpy", "pandas", "polars", "pre-commit", "pyarrow", "pytest", "pytest-cov", "pytorch_lightning", "ray", "ray", "ruff", "scikit-learn", "torch", "torchmetrics", "transformers", "xgboost"]
+evaluator = ["numpy", "pandas", "pyarrow", "ray", "ray", "scikit-learn", "torch", "torchmetrics"]
 example = ["accelerate", "boto3", "chronon-ai", "datasets", "einops", "kaggle", "minio", "mlflow", "numpy", "pandas", "pyarrow", "pyspark", "pytorch_lightning", "ray", "ray", "ray", "ray", "s3fs", "scikit-learn", "sqlglot", "thrift", "torch", "transformers"]
 mactl = []
 minio = ["minio"]
@@ -14159,4 +14159,4 @@ vllm = ["accelerate", "datasets", "einops", "numpy", "pandas", "pyarrow", "pytor
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.9.0"
-content-hash = "ab3607a21d9265720a1bcaa54830145869cf39b5edf162915c0b84ddff4e1427"
+content-hash = "a0d3eb3b7765791990693fe56394da9b18b06aefcbd7922be1c3ebb65316f361"

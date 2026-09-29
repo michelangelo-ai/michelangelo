@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import torch
+from torchmetrics.aggregation import MaxMetric, MeanMetric, MinMetric, SumMetric
 
 from michelangelo.lib.evaluator.chart_data import apply_filter_expr
 from michelangelo.lib.evaluator.config import (
@@ -35,48 +36,47 @@ __all__ = ["TorchMetricEvaluator", "create_evaluator"]
 
 _logger = logging.getLogger(__name__)
 
-_AGGREGATION_METRIC_NAMES = frozenset(
-    {"MeanMetric", "SumMetric", "MinMetric", "MaxMetric"}
-)
+_AGGREGATION_METRICS = (MeanMetric, SumMetric, MinMetric, MaxMetric)
 
 
-def _is_aggregation_only(collection: Any) -> bool:
+def _is_aggregation_only(collection: Any, target_dtype: torch.dtype | None) -> bool:
     """Report whether every metric in a collection consumes predictions only.
+
+    Predictions-only collections: ``target_dtype`` is ``None``
+    (aggregation-typed metrics, including custom ones tagged
+    ``_metric_type = "aggregation"`` -- no targets tensor is extracted for
+    them), or all built-in aggregation classes. The isinstance check keeps a
+    subclass whose path does not resolve to aggregation on this path, where
+    passing targets would silently become ``MeanMetric``'s ``weight`` argument.
 
     Args:
         collection: The ``MetricCollection`` to inspect.
+        target_dtype: The collection's resolved target dtype.
 
     Returns:
-        Whether the collection holds nothing but aggregation metrics.
+        Whether the collection is updated with predictions only.
     """
-    try:
-        from torchmetrics.aggregation import (
-            MaxMetric,
-            MeanMetric,
-            MinMetric,
-            SumMetric,
-        )
-
-        aggregations = (MeanMetric, SumMetric, MinMetric, MaxMetric)
-        return all(isinstance(metric, aggregations) for metric in collection.values())
-    except ImportError:
-        # Fall back to name comparison if the aggregation module ever moves.
-        return all(
-            type(metric).__name__ in _AGGREGATION_METRIC_NAMES
-            for metric in collection.values()
-        )
+    return target_dtype is None or all(
+        isinstance(metric, _AGGREGATION_METRICS) for metric in collection.values()
+    )
 
 
-def _update_collection(collection: Any, data: dict[str, torch.Tensor]) -> None:
+def _update_collection(
+    collection: Any,
+    data: dict[str, torch.Tensor],
+    target_dtype: torch.dtype | None,
+) -> None:
     """Feed one batch of extracted tensors into every metric in a collection.
 
     Args:
         collection: The ``MetricCollection`` to update.
         data: Tensors from :func:`extract_data_for_collection`.
+        target_dtype: The collection's resolved target dtype; ``None`` when
+            no targets tensor was extracted.
     """
     extra_kwargs = data.get("extra_cols", {})
 
-    if _is_aggregation_only(collection):
+    if _is_aggregation_only(collection, target_dtype):
         for metric in collection.values():
             metric.update(data["predictions"])
         return
@@ -217,7 +217,7 @@ class TorchMetricEvaluator:
             data = extract_data_for_collection(
                 df_filtered, column_mapping, pred_dtype, target_dtype
             )
-            _update_collection(collection, data)
+            _update_collection(collection, data, target_dtype)
             del data  # Free the tensors now that the update has consumed them.
 
             results.update(_scalarize(collection.compute()))

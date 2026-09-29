@@ -91,7 +91,7 @@ ma = 'michelangelo.cli.cli:main'
 
 
 [tool.poetry.extras]
-dev = ["pytest", "pytest-cov", "coverage", "ruff", "jinja2", "pre-commit", "docker", "torch", "pandas", "numpy", "transformers", "pyarrow", "pytorch_lightning", "ray", "polars", "xgboost", "torchmetrics"]
+dev = ["pytest", "pytest-cov", "coverage", "ruff", "jinja2", "pre-commit", "docker", "torch", "pandas", "numpy", "transformers", "pyarrow", "pytorch_lightning", "ray", "polars", "xgboost", "torchmetrics", "scikit-learn"]
 plugin = ["ray", "pyspark"]
 ray-polars = ["ray", "polars"]  # Polars fallback for PyArrow nested-data bug (ray-project/ray#61675)
 example = ["accelerate", "datasets", "numpy", "pandas", "pyarrow", "ray", "s3fs", "torch", "transformers", "pytorch_lightning", "einops", "kaggle", "scikit-learn", "chronon-ai", "thrift", "sqlglot", "pyspark", "ray", "mlflow", "boto3", "minio"]
@@ -100,7 +100,7 @@ vllm = ["accelerate", "datasets", "numpy", "pandas", "pyarrow", "ray", "s3fs", "
 mactl = []
 # `ray` is needed by the evaluator workflow task (michelangelo.workflow.tasks.evaluator),
 # which distributes per-segment metrics; michelangelo.lib.evaluator alone does not need it.
-evaluator = ["torch", "torchmetrics", "numpy", "pandas", "ray", "pyarrow"]
+evaluator = ["torch", "torchmetrics", "numpy", "pandas", "ray", "pyarrow", "scikit-learn"]
 trainer = ["ray", "torch", "pytorch_lightning", "transformers", "numpy"]
 trainer-comet = ["comet_ml"]
 trainer-mlflow = ["mlflow"]
