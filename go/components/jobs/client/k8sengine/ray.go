@@ -447,10 +447,48 @@ func injectCollectorSidecar(podTemplate *corev1.PodTemplateSpec, config LogPersi
 				corev1.ResourceMemory: resource.MustParse("128Mi"),
 			},
 		},
-		VolumeMounts: []corev1.VolumeMount{rayLogsVolumeMount},
+		VolumeMounts:    []corev1.VolumeMount{rayLogsVolumeMount},
+		SecurityContext: collectorSecurityContext(&podTemplate.Spec),
 	}
 
 	podTemplate.Spec.Containers = append(podTemplate.Spec.Containers, collectorContainer)
+}
+
+// collectorSecurityContext picks the identity the collector sidecar runs as.
+//
+// The v1.7 collector does not start collecting until it can dial the raylet
+// unix socket under RAY_TMP_ROOT (historyserver utils.GetSessionDir ->
+// IsSessionDirActive). Connecting to a unix socket needs write permission on
+// the socket file, which Ray creates 0755 owned by whatever uid runs
+// `ray start`. The collector image runs as 1000:1000, so against a Ray image
+// that runs as root (michelangelo-examples and most custom task images) the
+// dial fails with EACCES, the collector gives up after 60s and exits 1,
+// kubelet restarts it into CrashLoopBackOff, utils.terminalPodErrorReasons
+// then kills the whole cluster, and nothing is ever uploaded.
+//
+// The image USER is not visible from the pod spec, so match the Ray container
+// (Containers[0], KubeRay's convention) instead of assuming uid 1000:
+//   - explicit container-level runAsUser on the Ray container: mirror it;
+//   - pod-level runAsUser: return nil so the sidecar inherits that identity;
+//   - otherwise: root, which can open any uid's socket and read any uid's logs.
+func collectorSecurityContext(podSpec *corev1.PodSpec) *corev1.SecurityContext {
+	if len(podSpec.Containers) > 0 {
+		if sc := podSpec.Containers[0].SecurityContext; sc != nil && sc.RunAsUser != nil {
+			uid := *sc.RunAsUser
+			out := &corev1.SecurityContext{RunAsUser: &uid}
+			if sc.RunAsGroup != nil {
+				gid := *sc.RunAsGroup
+				out.RunAsGroup = &gid
+			}
+			return out
+		}
+	}
+	if podSpec.SecurityContext != nil && podSpec.SecurityContext.RunAsUser != nil {
+		return nil
+	}
+	root := int64(0)
+	rootGroup := int64(0)
+	return &corev1.SecurityContext{RunAsUser: &root, RunAsGroup: &rootGroup}
 }
 
 // getRayClusterStateFromStatus maps KubeRay v1 cluster state to our internal v2pb.RayClusterState

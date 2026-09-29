@@ -230,6 +230,92 @@ func TestInjectCollectorSidecar(t *testing.T) {
 // than 2.54, which reject "ALL". Michelangelo does not own the Ray image — it
 // comes from the user's task spec — so the explicit list must reach the Ray
 // containers verbatim.
+// The collector must be able to dial the raylet unix socket the Ray container
+// creates; that only works when it runs as the same uid or as root. See
+// collectorSecurityContext.
+func TestInjectCollectorSidecar_SecurityContext(t *testing.T) {
+	config := LogPersistenceConfig{
+		Enabled:           true,
+		StorageEndpoint:   "minio:9091",
+		Bucket:            "ray-history",
+		PathPrefix:        "log",
+		Region:            "us-east-1",
+		CredentialsSecret: "minio-credentials",
+		CollectorImage:    "quay.io/kuberay/collector:v1.7.1",
+	}
+	int64p := func(v int64) *int64 { return &v }
+
+	collectorOf := func(t *testing.T, pt *corev1.PodTemplateSpec) corev1.Container {
+		t.Helper()
+		for _, c := range pt.Spec.Containers {
+			if c.Name == "collector" {
+				return c
+			}
+		}
+		t.Fatal("collector container not injected")
+		return corev1.Container{}
+	}
+
+	t.Run("defaults to root when the Ray container declares no identity", func(t *testing.T) {
+		// Images that run Ray as root (michelangelo-examples) own the raylet
+		// socket as root; uid 1000 cannot connect to it.
+		pt := &corev1.PodTemplateSpec{Spec: corev1.PodSpec{Containers: []corev1.Container{
+			{Name: "ray-head", Image: "ghcr.io/michelangelo-ai/michelangelo-examples:california-housing"},
+		}}}
+		injectCollectorSidecar(pt, config, "Head")
+
+		sc := collectorOf(t, pt).SecurityContext
+		require.NotNil(t, sc)
+		require.NotNil(t, sc.RunAsUser)
+		require.NotNil(t, sc.RunAsGroup)
+		assert.Equal(t, int64(0), *sc.RunAsUser)
+		assert.Equal(t, int64(0), *sc.RunAsGroup)
+	})
+
+	t.Run("mirrors an explicit Ray container runAsUser", func(t *testing.T) {
+		pt := &corev1.PodTemplateSpec{Spec: corev1.PodSpec{Containers: []corev1.Container{
+			{
+				Name:            "ray-head",
+				Image:           "rayproject/ray:2.56.0",
+				SecurityContext: &corev1.SecurityContext{RunAsUser: int64p(1000), RunAsGroup: int64p(100)},
+			},
+		}}}
+		injectCollectorSidecar(pt, config, "Worker")
+
+		sc := collectorOf(t, pt).SecurityContext
+		require.NotNil(t, sc)
+		require.NotNil(t, sc.RunAsUser)
+		require.NotNil(t, sc.RunAsGroup)
+		assert.Equal(t, int64(1000), *sc.RunAsUser)
+		assert.Equal(t, int64(100), *sc.RunAsGroup)
+		// The Ray container's own context must be untouched.
+		assert.Equal(t, int64(1000), *pt.Spec.Containers[0].SecurityContext.RunAsUser)
+	})
+
+	t.Run("mirrors runAsUser without a group when none is set", func(t *testing.T) {
+		pt := &corev1.PodTemplateSpec{Spec: corev1.PodSpec{Containers: []corev1.Container{
+			{Name: "ray-head", SecurityContext: &corev1.SecurityContext{RunAsUser: int64p(1000)}},
+		}}}
+		injectCollectorSidecar(pt, config, "Head")
+
+		sc := collectorOf(t, pt).SecurityContext
+		require.NotNil(t, sc)
+		assert.Equal(t, int64(1000), *sc.RunAsUser)
+		assert.Nil(t, sc.RunAsGroup)
+	})
+
+	t.Run("inherits a pod-level runAsUser", func(t *testing.T) {
+		pt := &corev1.PodTemplateSpec{Spec: corev1.PodSpec{
+			SecurityContext: &corev1.PodSecurityContext{RunAsUser: int64p(1000)},
+			Containers:      []corev1.Container{{Name: "ray-head", Image: "rayproject/ray:2.56.0"}},
+		}}
+		injectCollectorSidecar(pt, config, "Head")
+
+		// nil container context = the pod-level identity applies to the sidecar too.
+		assert.Nil(t, collectorOf(t, pt).SecurityContext)
+	})
+}
+
 func TestInjectCollectorSidecar_LegacyExposableEventTypes(t *testing.T) {
 	config := LogPersistenceConfig{
 		Enabled:             true,
