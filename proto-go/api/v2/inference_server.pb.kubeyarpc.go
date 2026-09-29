@@ -172,9 +172,7 @@ func (c inferenceServerServiceHandler) CreateInferenceServer(
 	ctx context.Context, request *CreateInferenceServerRequest) (resp *CreateInferenceServerResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
 
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.InferenceServer.ObjectMeta.Namespace, "name", request.InferenceServer.ObjectMeta.Name)
 	logger.Info("CreateInferenceServer Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
@@ -244,9 +242,7 @@ func (c inferenceServerServiceHandler) CreateInferenceServer(
 func (c inferenceServerServiceHandler) GetInferenceServer(
 	ctx context.Context, request *GetInferenceServerRequest) (resp *GetInferenceServerResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace, "name", request.Name)
 	logger.Info("GetInferenceServer Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
@@ -303,9 +299,7 @@ func (c inferenceServerServiceHandler) GetInferenceServer(
 func (c inferenceServerServiceHandler) UpdateInferenceServer(
 	ctx context.Context, request *UpdateInferenceServerRequest) (resp *UpdateInferenceServerResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.InferenceServer.ObjectMeta.Namespace, "name", request.InferenceServer.ObjectMeta.Name)
 	logger.Info("UpdateInferenceServer Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
@@ -375,9 +369,7 @@ func (c inferenceServerServiceHandler) UpdateInferenceServer(
 func (c inferenceServerServiceHandler) DeleteInferenceServer(
 	ctx context.Context, request *DeleteInferenceServerRequest) (resp *DeleteInferenceServerResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace, "name", request.Name)
 	logger.Info("DeleteInferenceServer Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
@@ -449,9 +441,7 @@ func (c inferenceServerServiceHandler) DeleteInferenceServer(
 func (c inferenceServerServiceHandler) DeleteInferenceServerCollection(
 	ctx context.Context, request *DeleteInferenceServerCollectionRequest) (resp *DeleteInferenceServerCollectionResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace)
 	logger.Info("DeleteInferenceServerCollection Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
@@ -525,9 +515,7 @@ func (c inferenceServerServiceHandler) ListInferenceServer(
 	ctx context.Context, request *ListInferenceServerRequest) (resp *ListInferenceServerResponse, err error) {
 
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace)
 	logger.Info("ListInferenceServer Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{

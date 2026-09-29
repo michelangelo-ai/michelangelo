@@ -172,9 +172,7 @@ func (c modelFamilyServiceHandler) CreateModelFamily(
 	ctx context.Context, request *CreateModelFamilyRequest) (resp *CreateModelFamilyResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
 
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.ModelFamily.ObjectMeta.Namespace, "name", request.ModelFamily.ObjectMeta.Name)
 	logger.Info("CreateModelFamily Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
@@ -244,9 +242,7 @@ func (c modelFamilyServiceHandler) CreateModelFamily(
 func (c modelFamilyServiceHandler) GetModelFamily(
 	ctx context.Context, request *GetModelFamilyRequest) (resp *GetModelFamilyResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace, "name", request.Name)
 	logger.Info("GetModelFamily Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
@@ -303,9 +299,7 @@ func (c modelFamilyServiceHandler) GetModelFamily(
 func (c modelFamilyServiceHandler) UpdateModelFamily(
 	ctx context.Context, request *UpdateModelFamilyRequest) (resp *UpdateModelFamilyResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.ModelFamily.ObjectMeta.Namespace, "name", request.ModelFamily.ObjectMeta.Name)
 	logger.Info("UpdateModelFamily Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
@@ -375,9 +369,7 @@ func (c modelFamilyServiceHandler) UpdateModelFamily(
 func (c modelFamilyServiceHandler) DeleteModelFamily(
 	ctx context.Context, request *DeleteModelFamilyRequest) (resp *DeleteModelFamilyResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace, "name", request.Name)
 	logger.Info("DeleteModelFamily Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
@@ -449,9 +441,7 @@ func (c modelFamilyServiceHandler) DeleteModelFamily(
 func (c modelFamilyServiceHandler) DeleteModelFamilyCollection(
 	ctx context.Context, request *DeleteModelFamilyCollectionRequest) (resp *DeleteModelFamilyCollectionResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace)
 	logger.Info("DeleteModelFamilyCollection Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
@@ -525,9 +515,7 @@ func (c modelFamilyServiceHandler) ListModelFamily(
 	ctx context.Context, request *ListModelFamilyRequest) (resp *ListModelFamilyResponse, err error) {
 
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace)
 	logger.Info("ListModelFamily Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{

@@ -171,9 +171,7 @@ func (c modelServiceHandler) CreateModel(
 	ctx context.Context, request *CreateModelRequest) (resp *CreateModelResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
 
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Model.ObjectMeta.Namespace, "name", request.Model.ObjectMeta.Name)
 	logger.Info("CreateModel Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
@@ -243,9 +241,7 @@ func (c modelServiceHandler) CreateModel(
 func (c modelServiceHandler) GetModel(
 	ctx context.Context, request *GetModelRequest) (resp *GetModelResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace, "name", request.Name)
 	logger.Info("GetModel Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
@@ -302,9 +298,7 @@ func (c modelServiceHandler) GetModel(
 func (c modelServiceHandler) UpdateModel(
 	ctx context.Context, request *UpdateModelRequest) (resp *UpdateModelResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Model.ObjectMeta.Namespace, "name", request.Model.ObjectMeta.Name)
 	logger.Info("UpdateModel Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
@@ -374,9 +368,7 @@ func (c modelServiceHandler) UpdateModel(
 func (c modelServiceHandler) DeleteModel(
 	ctx context.Context, request *DeleteModelRequest) (resp *DeleteModelResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace, "name", request.Name)
 	logger.Info("DeleteModel Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
@@ -448,9 +440,7 @@ func (c modelServiceHandler) DeleteModel(
 func (c modelServiceHandler) DeleteModelCollection(
 	ctx context.Context, request *DeleteModelCollectionRequest) (resp *DeleteModelCollectionResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace)
 	logger.Info("DeleteModelCollection Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
@@ -524,9 +514,7 @@ func (c modelServiceHandler) ListModel(
 	ctx context.Context, request *ListModelRequest) (resp *ListModelResponse, err error) {
 
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace)
 	logger.Info("ListModel Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
