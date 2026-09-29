@@ -1,5 +1,3 @@
-import { durationToSeconds } from '#core/utils/time-utils';
-
 import type { ManifestTrigger } from '#core/config/entities/trigger/types';
 
 const INTERVAL_UNITS = [
@@ -20,7 +18,7 @@ export const formatTriggerSchedule = (trigger: ManifestTrigger | undefined): str
     return trigger.cronSchedule.cron ? `cron ${trigger.cronSchedule.cron}` : '';
   }
   if (trigger?.intervalSchedule) {
-    return formatInterval(trigger.intervalSchedule.interval);
+    return formatInterval(trigger.intervalSchedule.interval?.seconds);
   }
   if (trigger?.batchRerun) {
     return 'batch rerun';
@@ -28,8 +26,8 @@ export const formatTriggerSchedule = (trigger: ManifestTrigger | undefined): str
   return '';
 };
 
-function formatInterval(interval: string | undefined): string {
-  const total = durationToSeconds(interval) ?? 0;
+function formatInterval(seconds: string | number | undefined): string {
+  const total = Number(seconds ?? 0);
   if (!Number.isFinite(total) || total <= 0) return '';
 
   for (const { unit, seconds: unitSeconds } of INTERVAL_UNITS) {

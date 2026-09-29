@@ -1,6 +1,5 @@
 import { CellType } from '#core/components/cell/constants';
 import { readEnvironmentLabel } from '#core/utils/environment-utils';
-import { durationToSeconds } from '#core/utils/time-utils';
 import { TRIGGER_PIPELINE_CELL_CONFIG, TRIGGER_STATE_CELL_CONFIG } from './shared';
 
 import type { ListViewConfig } from '#core/components/views/types';
@@ -23,16 +22,16 @@ export const TRIGGER_LIST_CONFIG: ListViewConfig<object> = {
         type: CellType.TEXT,
       },
       {
-        id: 'spec.trigger.intervalSchedule.interval',
+        id: 'spec.trigger.intervalSchedule.interval.seconds',
         label: 'Interval seconds',
         type: CellType.TEXT,
-        accessor: (data: unknown) =>
-          durationToSeconds(
-            // cast: accessor receives unknown data; narrowing to expected proto shape for
-            // property access
-            (data as { spec?: { trigger?: ManifestTrigger } })?.spec?.trigger?.intervalSchedule
-              ?.interval
-          ),
+        accessor: (data: unknown) => {
+          // cast: accessor receives unknown data; narrowing to expected proto shape for
+          // property access
+          const seconds = (data as { spec?: { trigger?: ManifestTrigger } })?.spec?.trigger
+            ?.intervalSchedule?.interval?.seconds;
+          return seconds === undefined ? undefined : Number(seconds);
+        },
       },
       { id: 'spec.actor.name', label: 'Owner', type: CellType.TEXT },
       TRIGGER_STATE_CELL_CONFIG,

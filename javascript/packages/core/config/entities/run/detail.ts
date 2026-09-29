@@ -33,12 +33,12 @@ export const RUN_DETAIL_CONFIG: DetailViewConfig = {
           heading: 'displayName',
           metadata: [
             {
-              id: 'startTime',
+              id: 'startTime.seconds',
               label: 'Start time',
               type: CellType.DATE,
             },
             {
-              id: 'endTime',
+              id: 'endTime.seconds',
               label: 'End time',
               type: CellType.DATE,
             },
@@ -46,8 +46,10 @@ export const RUN_DETAIL_CONFIG: DetailViewConfig = {
               id: 'duration',
               label: 'Duration',
               type: CellType.TEXT,
-              accessor: (record: { startTime?: string; endTime?: string }) =>
-                formatElapsedSeconds(record.startTime, record.endTime),
+              accessor: (record: {
+                startTime: { seconds: string };
+                endTime: { seconds: string };
+              }) => formatElapsedSeconds(record.startTime?.seconds, record.endTime?.seconds),
             },
             {
               id: 'logUrl',

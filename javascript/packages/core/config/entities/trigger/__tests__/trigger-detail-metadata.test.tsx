@@ -47,7 +47,7 @@ describe('Trigger detail page metadata header', () => {
       spec: {
         pipeline: { name: 'my-pipeline', namespace: 'myproject' },
         trigger: {
-          intervalSchedule: { interval: '3600s' },
+          intervalSchedule: { interval: { seconds: 3600 } },
         },
       },
     });
@@ -124,8 +124,8 @@ describe('Trigger detail page metadata header', () => {
     const triggerRun = buildTriggerRun({
       spec: {
         pipeline: { name: 'my-pipeline', namespace: 'myproject' },
-        startTimestamp: '2023-11-14T22:13:20Z',
-        endTimestamp: '2023-11-14T23:13:20Z',
+        startTimestamp: { seconds: '1700000000' },
+        endTimestamp: { seconds: '1700003600' },
       },
     });
 

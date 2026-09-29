@@ -5,6 +5,7 @@ import type {
   JsonValue,
   MessageJsonType,
 } from '@bufbuild/protobuf';
+import type { DurationSchema, TimestampSchema } from '@bufbuild/protobuf/wkt';
 import type { ClusterService } from './gen/michelangelo/api/v2/cluster_svc_pb';
 import type { DeploymentService } from './gen/michelangelo/api/v2/deployment_svc_pb';
 import type { InferenceServerService } from './gen/michelangelo/api/v2/inference_server_svc_pb';
@@ -55,6 +56,10 @@ export interface FetchTransport {
  * Maps a service's generated method descriptors to a client object shaped
  * like Connect's `Client<T>` — one async function per unary RPC, taking and
  * returning the proto3 JSON shape of its messages (the generated `FooJson` types).
+ *
+ * Exception: Timestamp/Duration fields are `{ seconds, nanos }` at runtime (see
+ * convert-time-fields), though `FooJson` types them as strings — the generated
+ * `TimestampJson`/`DurationJson` are plain `string` aliases, so they can't be remapped here.
  */
 export type ServiceClient<T extends DescService> = {
   [K in keyof T['method']]: T['method'][K] extends DescMethodUnary<infer I, infer O>
@@ -111,4 +116,10 @@ export type MessageVisitor = (
   desc: DescMessage,
   value: unknown,
   descend: (desc: DescMessage, value: unknown) => unknown
+) => unknown;
+
+/** Rewrites one Timestamp/Duration value; see `convert-time-fields.ts`. */
+export type ConvertTime = (
+  schema: typeof TimestampSchema | typeof DurationSchema,
+  value: unknown
 ) => unknown;

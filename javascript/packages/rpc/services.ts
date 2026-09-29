@@ -6,6 +6,7 @@ import {
   StringValueSchema,
 } from '@bufbuild/protobuf/wkt';
 
+import { timesToObjects, timesToStrings } from './convert-time-fields';
 import { createFetchTransport } from './create-fetch-transport';
 import { TypedStructSchema } from './gen/michelangelo/api/typed_struct_pb';
 import { ClusterService } from './gen/michelangelo/api/v2/cluster_svc_pb';
@@ -43,8 +44,9 @@ export const typeRegistry = createRegistry(
  * Builds a service client that speaks proto3 JSON in both directions: requests are
  * proto3 JSON objects (string enums, oneof members set directly, Any as `@type` plus
  * fields), validated and normalized through the message schema before being POSTed
- * through the fetch transport; responses are returned exactly as Envoy's
- * grpc_json_transcoder emits them.
+ * through the fetch transport; responses are returned as Envoy's grpc_json_transcoder
+ * emits them. The one exception, both ways, is Timestamp/Duration fields: the UI works
+ * with `{ seconds, nanos }` rather than proto3 JSON's strings (see convert-time-fields).
  */
 function createServiceClient<T extends DescService>(
   service: T,
@@ -61,7 +63,10 @@ function createServiceClient<T extends DescService>(
     client[method.localName] = async (request, headers) => {
       // cast: packAnyFields recurses generically over `unknown`; called with a JSON object it
       // returns one, just with Any fields packed into their proto3 JSON form
-      const packedRequest = packAnyFields(method.input, request) as JsonValue;
+      const packedRequest = packAnyFields(
+        method.input,
+        timesToStrings(method.input, request, typeRegistry)
+      ) as JsonValue;
       // ignoreUnknownFields: callers pass whole records back (e.g. form state), and
       // extra keys shouldn't fail the request
       const message = fromJson(method.input, packedRequest, {
@@ -75,7 +80,7 @@ function createServiceClient<T extends DescService>(
         requestJson,
         headers
       );
-      return responseJson;
+      return timesToObjects(method.output, responseJson, typeRegistry);
     };
   }
 

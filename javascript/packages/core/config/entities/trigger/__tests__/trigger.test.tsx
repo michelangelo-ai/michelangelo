@@ -418,7 +418,7 @@ describe('Trigger list page', () => {
                     pipeline: { name: 'my-pipeline' },
                     revision: { name: 'rev-2' },
                     trigger: {
-                      intervalSchedule: { interval: '3600s' },
+                      intervalSchedule: { interval: { seconds: 3600 } },
                     },
                     actor: { name: 'jsmith' },
                     autoFlip: false,

@@ -20,9 +20,9 @@ export const ResumeStepOption = ({ step }: { step?: PipelineRunStepInfo }) => {
 
   if (!step) return null;
 
-  const start = timestampToString(step.startTime);
-  const end = timestampToString(step.endTime);
-  const duration = formatElapsedSeconds(step.startTime, step.endTime);
+  const start = timestampToString(step.startTime?.seconds);
+  const end = timestampToString(step.endTime?.seconds);
+  const duration = formatElapsedSeconds(step.startTime?.seconds, step.endTime?.seconds);
   const state = step.state ?? PipelineRunStepState.INVALID;
 
   const metadataStyles = css({ ...theme.typography.ParagraphXSmall });

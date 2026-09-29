@@ -26,10 +26,6 @@ describe('time-utils', () => {
       );
     });
 
-    test('formats an RFC 3339 timestamp the same as the equivalent epoch seconds', () => {
-      expect(timestampToString('2024-07-02T08:00:00Z')).toBe(timestampToString(1719907200));
-    });
-
     test('formats date correctly without the timezone', () => {
       expect(timestampToString(1719907200)).toBe('2024/07/02 10:00:00 (GMT+2)');
       expect(timestampToString(1720656639)).toBe('2024/07/11 02:10:39 (GMT+2)');

@@ -60,7 +60,7 @@ describe('RunTriggerForm', () => {
                 cronSchedule: { cron: '0 2 * * *' },
               },
               hourly: {
-                intervalSchedule: { interval: '3600s' },
+                intervalSchedule: { interval: { seconds: 3600 } },
               },
             }),
           }),
@@ -497,8 +497,8 @@ describe('RunTriggerForm', () => {
             trigger: { ...trigger, parametersMap: { a: {} }, maxConcurrency: 5 },
             sourceTriggerName: 'nightly',
             autoFlip: false,
-            startTimestamp: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/) as string,
-            endTimestamp: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/) as string,
+            startTimestamp: { seconds: expect.any(String) as string },
+            endTimestamp: { seconds: expect.any(String) as string },
           },
         },
         {}
