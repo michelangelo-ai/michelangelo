@@ -17,7 +17,7 @@ func TestProvideDispatcher(t *testing.T) {
 		Host: "localhost",
 		Port: 0,
 	}
-	dispatcher, err := provideDispatcher(conf, zap.NewNop())
+	dispatcher, err := provideDispatcher(DispatcherParams{Config: conf, Logger: zap.NewNop()})
 	assert.NoError(t, err)
 	assert.NotNil(t, dispatcher)
 
@@ -25,15 +25,15 @@ func TestProvideDispatcher(t *testing.T) {
 		Host: "fake-host",
 		Port: 0,
 	}
-	dispatcher, err = provideDispatcher(conf, zap.NewNop())
+	dispatcher, err = provideDispatcher(DispatcherParams{Config: conf, Logger: zap.NewNop()})
 	assert.Error(t, err)
 }
 
 func TestRegisterProcedures(t *testing.T) {
-	dispatcher, err := provideDispatcher(YARPCConfig{
-		Host: "localhost",
-		Port: 0,
-	}, zap.NewNop())
+	dispatcher, err := provideDispatcher(DispatcherParams{
+		Config: YARPCConfig{Host: "localhost", Port: 0},
+		Logger: zap.NewNop(),
+	})
 	assert.NoError(t, err)
 	assert.NotNil(t, dispatcher)
 	params := RegisterParams{
@@ -61,10 +61,10 @@ func TestRegisterProcedures(t *testing.T) {
 }
 
 func TestStartYARPCServer(t *testing.T) {
-	dispatcher, err := provideDispatcher(YARPCConfig{
-		Host: "localhost",
-		Port: 0,
-	}, zap.NewNop())
+	dispatcher, err := provideDispatcher(DispatcherParams{
+		Config: YARPCConfig{Host: "localhost", Port: 0},
+		Logger: zap.NewNop(),
+	})
 	assert.NoError(t, err)
 	assert.NotNil(t, dispatcher)
 	lc := fxtest.NewLifecycle(t)
