@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
 
@@ -275,16 +275,60 @@ describe('EntityDetailRoute', () => {
 
       expect(screen.getByRole('button', { name: 'Delete' })).toBeEnabled();
 
-      // The Revision CR is fetched by its controller-derived name.
+      // The Revision CR is fetched by its controller-derived name. The live pipeline is
+      // fetched so the page knows which Revision is the latest.
       expect(mockRequest.getCall('GetRevision')?.args).toEqual({
         namespace: 'myproject',
         name: 'pipeline-my-pipeline-3f2a1b9c0d4e',
       });
-      expect(mockRequest).not.toHaveBeenCalledWith(
-        'GetPipeline',
-        expect.anything(),
-        expect.anything()
+      expect(mockRequest.getCall('GetPipeline')?.args).toEqual({
+        namespace: 'myproject',
+        name: 'My-Pipeline',
+      });
+    });
+
+    test('badges the latest revision in the dropdown and on the trigger', async () => {
+      const user = userEvent.setup();
+      const testPhases = {
+        train: buildPhase({ id: 'train', entities: [revisionedEntity] }),
+      };
+      const mockRequest = createQueryMockRouter({
+        GetPipeline: {
+          pipeline: {
+            ...livePipeline.pipeline,
+            status: { latestRevision: { name: 'pipeline-my-pipeline-aaaaaaaaaaaa' } },
+          },
+        },
+        GetRevision: revision,
+        ListRevision: revisionList,
+      });
+
+      render(
+        <EntityDetailRoute phases={testPhases} />,
+        buildWrapper([
+          getErrorProviderWrapper(),
+          getRouterWrapper({ location: '/myproject/train/pipelines/My-Pipeline/overview' }),
+          getServiceProviderWrapper({ request: mockRequest }),
+        ])
       );
+
+      // A bare URL shows the latest Revision, so the trigger carries the badge.
+      const trigger = await screen.findByRole('button', { name: /Select revision/ });
+      expect(trigger).toHaveTextContent('Revision aaaaaaaaaaaa');
+      expect(within(trigger).getByText('Latest')).toBeInTheDocument();
+
+      await user.click(trigger);
+      const latestOption = await screen.findByRole('option', { name: /Revision aaaaaaaaaaaa/ });
+      const olderOption = screen.getByRole('option', { name: /Revision 3f2a1b9c0d4e/ });
+      expect(within(latestOption).getByText('Latest')).toBeInTheDocument();
+      expect(within(olderOption).queryByText('Latest')).not.toBeInTheDocument();
+
+      // Switching to an older Revision drops the badge from the trigger.
+      await user.click(olderOption);
+      expect(await screen.findByText('snapshot-owner')).toBeInTheDocument();
+      expect(
+        within(screen.getByRole('button', { name: /Select revision/ })).queryByText('Latest')
+      ).not.toBeInTheDocument();
     });
 
     test('renders the latest revision for a bare entity URL', async () => {

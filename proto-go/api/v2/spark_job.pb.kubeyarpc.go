@@ -172,9 +172,7 @@ func (c sparkJobServiceHandler) CreateSparkJob(
 	ctx context.Context, request *CreateSparkJobRequest) (resp *CreateSparkJobResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
 
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.SparkJob.ObjectMeta.Namespace, "name", request.SparkJob.ObjectMeta.Name)
 	logger.Info("CreateSparkJob Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
@@ -244,9 +242,7 @@ func (c sparkJobServiceHandler) CreateSparkJob(
 func (c sparkJobServiceHandler) GetSparkJob(
 	ctx context.Context, request *GetSparkJobRequest) (resp *GetSparkJobResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace, "name", request.Name)
 	logger.Info("GetSparkJob Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
@@ -303,9 +299,7 @@ func (c sparkJobServiceHandler) GetSparkJob(
 func (c sparkJobServiceHandler) UpdateSparkJob(
 	ctx context.Context, request *UpdateSparkJobRequest) (resp *UpdateSparkJobResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.SparkJob.ObjectMeta.Namespace, "name", request.SparkJob.ObjectMeta.Name)
 	logger.Info("UpdateSparkJob Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
@@ -375,9 +369,7 @@ func (c sparkJobServiceHandler) UpdateSparkJob(
 func (c sparkJobServiceHandler) DeleteSparkJob(
 	ctx context.Context, request *DeleteSparkJobRequest) (resp *DeleteSparkJobResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace, "name", request.Name)
 	logger.Info("DeleteSparkJob Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
@@ -449,9 +441,7 @@ func (c sparkJobServiceHandler) DeleteSparkJob(
 func (c sparkJobServiceHandler) DeleteSparkJobCollection(
 	ctx context.Context, request *DeleteSparkJobCollectionRequest) (resp *DeleteSparkJobCollectionResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace)
 	logger.Info("DeleteSparkJobCollection Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
@@ -525,9 +515,7 @@ func (c sparkJobServiceHandler) ListSparkJob(
 	ctx context.Context, request *ListSparkJobRequest) (resp *ListSparkJobResponse, err error) {
 
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace)
 	logger.Info("ListSparkJob Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{

@@ -5,6 +5,8 @@ export interface RevisionSelectorProps {
   entityId: string;
   /** Revision id currently shown, from the `?revisionId=` query param */
   selectedRevisionId?: string;
+  /** `metadata.name` of the Revision the entity's `status.latestRevision` points at */
+  latestRevisionName?: string;
   onSelect: (revisionId: string) => void;
 }
 

@@ -172,9 +172,7 @@ func (c pipelineRunServiceHandler) CreatePipelineRun(
 	ctx context.Context, request *CreatePipelineRunRequest) (resp *CreatePipelineRunResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
 
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.PipelineRun.ObjectMeta.Namespace, "name", request.PipelineRun.ObjectMeta.Name)
 	logger.Info("CreatePipelineRun Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
@@ -244,9 +242,7 @@ func (c pipelineRunServiceHandler) CreatePipelineRun(
 func (c pipelineRunServiceHandler) GetPipelineRun(
 	ctx context.Context, request *GetPipelineRunRequest) (resp *GetPipelineRunResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace, "name", request.Name)
 	logger.Info("GetPipelineRun Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
@@ -303,9 +299,7 @@ func (c pipelineRunServiceHandler) GetPipelineRun(
 func (c pipelineRunServiceHandler) UpdatePipelineRun(
 	ctx context.Context, request *UpdatePipelineRunRequest) (resp *UpdatePipelineRunResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.PipelineRun.ObjectMeta.Namespace, "name", request.PipelineRun.ObjectMeta.Name)
 	logger.Info("UpdatePipelineRun Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
@@ -375,9 +369,7 @@ func (c pipelineRunServiceHandler) UpdatePipelineRun(
 func (c pipelineRunServiceHandler) DeletePipelineRun(
 	ctx context.Context, request *DeletePipelineRunRequest) (resp *DeletePipelineRunResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace, "name", request.Name)
 	logger.Info("DeletePipelineRun Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
@@ -449,9 +441,7 @@ func (c pipelineRunServiceHandler) DeletePipelineRun(
 func (c pipelineRunServiceHandler) DeletePipelineRunCollection(
 	ctx context.Context, request *DeletePipelineRunCollectionRequest) (resp *DeletePipelineRunCollectionResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace)
 	logger.Info("DeletePipelineRunCollection Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
@@ -525,9 +515,7 @@ func (c pipelineRunServiceHandler) ListPipelineRun(
 	ctx context.Context, request *ListPipelineRunRequest) (resp *ListPipelineRunResponse, err error) {
 
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace)
 	logger.Info("ListPipelineRun Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
