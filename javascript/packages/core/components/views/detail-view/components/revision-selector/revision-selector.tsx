@@ -116,7 +116,9 @@ export function RevisionSelector({
           BaseButton: { style: { ...theme.typography.LabelMedium, fontWeight: 'normal' } },
         }}
       >
-        <span className={css({ display: 'flex', gap: theme.sizing.scale800 })}>
+        <span
+          className={css({ display: 'flex', alignItems: 'center', gap: theme.sizing.scale800 })}
+        >
           {renderRevisionCells(selected, isLatest(selected))}
         </span>
       </Button>
