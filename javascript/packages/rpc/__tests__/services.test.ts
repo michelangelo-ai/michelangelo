@@ -251,6 +251,31 @@ describe('outgoing request — proto3 JSON input', () => {
 
     expect(lastRequestBody().inferenceServer).not.toHaveProperty('notAField');
   });
+
+  it('drops metadata.deletionGracePeriodSeconds, including inside Any payloads', async () => {
+    await request('UpdatePipelineRun', {
+      metadata: { name: 'run', deletionGracePeriodSeconds: '0' },
+      status: {
+        details: [
+          {
+            '@type': 'type.googleapis.com/michelangelo.api.v2.Pipeline',
+            metadata: { name: 'pipeline', deletionGracePeriodSeconds: '0' },
+          },
+        ],
+      },
+    } as never);
+
+    const { pipelineRun } = lastRequestBody();
+    expect(pipelineRun.metadata).toEqual({ name: 'run' });
+    expect(pipelineRun.status).toEqual({
+      details: [
+        {
+          '@type': 'type.googleapis.com/michelangelo.api.v2.Pipeline',
+          metadata: { name: 'pipeline' },
+        },
+      ],
+    });
+  });
 });
 
 describe('Timestamp/Duration fields', () => {

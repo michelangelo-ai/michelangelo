@@ -20,6 +20,7 @@ import { PipelineService } from './gen/michelangelo/api/v2/pipeline_svc_pb';
 import { ProjectService } from './gen/michelangelo/api/v2/project_svc_pb';
 import { RevisionService } from './gen/michelangelo/api/v2/revision_svc_pb';
 import { TriggerRunService } from './gen/michelangelo/api/v2/trigger_run_svc_pb';
+import { omitDeletionGracePeriod } from './omit-deletion-grace-period';
 import { packAnyFields } from './pack-any-fields';
 import { getRuntimeConfig } from './runtime-config';
 
@@ -45,8 +46,9 @@ export const typeRegistry = createRegistry(
  * proto3 JSON objects (string enums, oneof members set directly, Any as `@type` plus
  * fields), validated and normalized through the message schema before being POSTed
  * through the fetch transport; responses are returned as Envoy's grpc_json_transcoder
- * emits them. The one exception, both ways, is Timestamp/Duration fields: the UI works
- * with `{ seconds, nanos }` rather than proto3 JSON's strings (see convert-time-fields).
+ * emits them, default values included. The one exception, both ways, is Timestamp/Duration
+ * fields: the UI works with `{ seconds, nanos }` rather than proto3 JSON's strings (see
+ * convert-time-fields).
  */
 function createServiceClient<T extends DescService>(
   service: T,
@@ -65,7 +67,7 @@ function createServiceClient<T extends DescService>(
       // returns one, just with Any fields packed into their proto3 JSON form
       const packedRequest = packAnyFields(
         method.input,
-        timesToStrings(method.input, request, typeRegistry)
+        timesToStrings(method.input, omitDeletionGracePeriod(request), typeRegistry)
       ) as JsonValue;
       // ignoreUnknownFields: callers pass whole records back (e.g. form state), and
       // extra keys shouldn't fail the request

@@ -88,6 +88,13 @@ data:
                             # already Envoy's default, but is set explicitly
                             # so it doesn't silently flip on an Envoy upgrade.
                             always_print_enums_as_ints: false
+                            # Print fields left at their default ("", 0, false,
+                            # [], the zero enum value) instead of omitting
+                            # them, so the UI sees every field. This also
+                            # prints unset proto2 fields such as
+                            # metadata.deletionGracePeriodSeconds, which the
+                            # UI's RPC client strips before sending updates.
+                            always_print_primitive_fields: true
                       - name: envoy.filters.http.cors
                         typed_config:
                           "@type": type.googleapis.com/envoy.extensions.filters.http.cors.v3.Cors
