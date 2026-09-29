@@ -9,8 +9,8 @@
 # Environment variables (all optional, defaults shown):
 #   MA_NAMESPACE     – project namespace               (ma-dev-test)
 #   MINIO_ENDPOINT   – MinIO API endpoint              (http://localhost:9091)
-#   MINIO_ACCESS_KEY – MinIO access key               (minioadmin)
-#   MINIO_SECRET_KEY – MinIO secret key               (minioadmin)
+#   MINIO_ACCESS_KEY – MinIO access key               (michelangeloadmin)
+#   MINIO_SECRET_KEY – MinIO secret key               (michelangeloadmin)
 #   POLL_INTERVAL    – seconds between status checks  (30)
 #   TIMEOUT          – max seconds to wait per run    (1800)
 
@@ -20,9 +20,9 @@ NAMESPACE="${MA_NAMESPACE:-ma-dev-test}"
 MINIO_ENDPOINT="${MINIO_ENDPOINT:-http://localhost:9091}"
 # Read credentials from the minio-credentials k8s Secret so the script
 # automatically picks up whatever the sandbox VM is configured with.
-# Falls back to minioadmin for local dev where the Secret has defaults.
-MINIO_ACCESS_KEY="${MINIO_ACCESS_KEY:-$(kubectl get secret minio-credentials -o jsonpath='{.data.AWS_ACCESS_KEY_ID}' 2>/dev/null | base64 -d || echo minioadmin)}"
-MINIO_SECRET_KEY="${MINIO_SECRET_KEY:-$(kubectl get secret minio-credentials -o jsonpath='{.data.AWS_SECRET_ACCESS_KEY}' 2>/dev/null | base64 -d || echo minioadmin)}"
+# Falls back to michelangeloadmin for local dev where the Secret has defaults.
+MINIO_ACCESS_KEY="${MINIO_ACCESS_KEY:-$(kubectl get secret minio-credentials -o jsonpath='{.data.AWS_ACCESS_KEY_ID}' 2>/dev/null | base64 -d || echo michelangeloadmin)}"
+MINIO_SECRET_KEY="${MINIO_SECRET_KEY:-$(kubectl get secret minio-credentials -o jsonpath='{.data.AWS_SECRET_ACCESS_KEY}' 2>/dev/null | base64 -d || echo michelangeloadmin)}"
 POLL_INTERVAL="${POLL_INTERVAL:-30}"
 TIMEOUT="${TIMEOUT:-1800}"
 

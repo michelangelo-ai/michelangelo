@@ -909,7 +909,7 @@ def _deploy_services(ns: argparse.Namespace):
         (
             "MinIO Console",
             "http://localhost:9090",
-            "[Username: minioadmin; Password: minioadmin]",
+            "[Username: michelangeloadmin; Password: michelangeloadmin]",
         )
     )
 
@@ -1501,7 +1501,7 @@ def _ensure_credentials_secret():
     This is deliberately create-only: a sandbox VM that was pre-configured
     with non-default credentials (e.g. the GCP CI runner) keeps its own
     values across every ``ma sandbox sync`` run.  Local dev gets the
-    default minioadmin credentials from the YAML files on first create.
+    default michelangeloadmin credentials from the YAML files on first create.
     """
     for secret_name, yaml_file in [
         ("object-storage-credentials", "object-storage-credentials.yaml"),
@@ -1529,7 +1529,7 @@ def _sync_config_from_secret():
     """Patch michelangelo-config ConfigMap credentials from object-storage-credentials.
 
     Ray pods consume the michelangelo-config ConfigMap via envFrom. After the
-    ConfigMap is (re)applied from the YAML file (which contains minioadmin
+    ConfigMap is (re)applied from the YAML file (which contains michelangeloadmin
     defaults), this function overwrites the credential fields with whatever
     is actually in the object-storage-credentials Secret, so all consumers see
     the same credentials.
