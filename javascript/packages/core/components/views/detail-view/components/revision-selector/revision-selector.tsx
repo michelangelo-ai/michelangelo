@@ -67,11 +67,8 @@ export function RevisionSelector({
 
   const revisions = data?.revisionList?.items ?? [];
   const isLatest = (revision: RevisionOption) => revision.metadata.name === latestRevisionName;
-  // With no `?revisionId=`, the page renders the latest Revision, so the trigger should too.
   const selected =
-    revisions.find((revision) => revision.spec.revisionId === selectedRevisionId) ??
-    revisions.find(isLatest) ??
-    revisions[0];
+    revisions.find((revision) => revision.spec.revisionId === selectedRevisionId) ?? revisions[0];
 
   if (!selected) return null;
 

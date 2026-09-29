@@ -275,7 +275,7 @@ describe('EntityDetailRoute', () => {
 
       expect(screen.getByRole('button', { name: 'Delete' })).toBeEnabled();
 
-      // The Revision CR is fetched by its controller-derived name. The live pipeline is still
+      // The Revision CR is fetched by its controller-derived name. The live pipeline is
       // fetched so the page knows which Revision is the latest.
       expect(mockRequest.getCall('GetRevision')?.args).toEqual({
         namespace: 'myproject',
