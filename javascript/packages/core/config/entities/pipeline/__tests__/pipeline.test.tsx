@@ -437,7 +437,7 @@ describe('PIPELINE_ENTITY_CONFIG: actions on a revision snapshot', () => {
       );
     }
 
-    it('keeps Run, Run trigger, and Delete actions available for a pipeline revision', async () => {
+    it('keeps Run and Run trigger available for an older revision but disables Delete', async () => {
       const user = userEvent.setup();
       const mockRequest = createQueryMockRouter({
         GetPipeline: {
@@ -475,10 +475,12 @@ describe('PIPELINE_ENTITY_CONFIG: actions on a revision snapshot', () => {
       const runTriggerButton = screen.getByRole('button', { name: 'Run trigger' });
       expect(runTriggerButton).toBeEnabled();
 
+      // `?revisionId=` pins an older Revision, so the pipeline on screen isn't the current one.
       await user.click(await screen.findByRole('button', { name: 'Actions' }));
-      const deleteOption = await screen.findByRole('option', { name: 'Delete' });
-      await user.click(deleteOption);
-      expect(await screen.findByRole('dialog', { name: 'Delete Pipeline' })).toBeInTheDocument();
+      await user.hover(await screen.findByRole('option', { name: 'Delete' }));
+      expect(
+        await screen.findByText('Switch to the latest revision to delete this pipeline')
+      ).toBeInTheDocument();
     });
 
     it("pins Run to the viewed revision rather than the snapshot's latest pointer", async () => {
