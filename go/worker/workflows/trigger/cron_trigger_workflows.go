@@ -43,7 +43,7 @@ var (
 	defaultParameterID = "default"
 
 	// TriggerredByLabel stores the name of the TriggerRun which triggered the pipeline_run
-	TriggerredByLabel = "pipelinerun.michelangelo/triggered-by"
+	TriggerredByLabel = triggerrun.TriggeredByLabel
 
 	// legacyEnvironmentLabel is the pre-rename mgapi.EnvironmentLabel key.
 	//
