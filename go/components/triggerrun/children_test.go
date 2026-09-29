@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/go-logr/logr"
+	gogotypes "github.com/gogo/protobuf/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -17,6 +18,7 @@ import (
 
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	apiutils "github.com/michelangelo-ai/michelangelo/go/api/utils"
+	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
@@ -197,4 +199,25 @@ func TestReconcile_DeleteKilledTriggerCancelsChildren(t *testing.T) {
 	assert.True(t, getChild(t, c, "running").Spec.Kill)
 	assert.True(t, ctrlutil.ContainsFinalizer(getTrigger(t, c, "tr"), drainFinalizer))
 	mockRunner.AssertNotCalled(t, "Kill", mock.Anything, mock.Anything)
+}
+
+// TestActiveChildListOptionsExt: the metadata-storage filter repeats the triggered-by
+// match (the LabelSelector string is ignored once an Operation is set) and limits
+// the list to active states.
+func TestActiveChildListOptionsExt(t *testing.T) {
+	ext, err := activeChildListOptionsExt(&v2pb.TriggerRun{ObjectMeta: metav1.ObjectMeta{Name: "tr"}})
+	require.NoError(t, err)
+	require.NotNil(t, ext.Operation)
+	assert.Equal(t, apipb.LOGICAL_OPERATOR_AND, ext.Operation.LogicalOperator)
+	require.Len(t, ext.Operation.Criterion, 2)
+
+	values := map[string]string{}
+	for _, c := range ext.Operation.Criterion {
+		var sv gogotypes.StringValue
+		require.NoError(t, gogotypes.UnmarshalAny(c.MatchValue, &sv))
+		values[c.FieldName] = sv.Value
+	}
+	assert.Equal(t, "tr", values["pipeline_run.metadata.labels."+TriggeredByLabel])
+	assert.Equal(t, "PIPELINE_RUN_STATE_INVALID,PIPELINE_RUN_STATE_PENDING,PIPELINE_RUN_STATE_RUNNING",
+		values["pipeline_run.status.state"])
 }
