@@ -1,6 +1,6 @@
 import { getRpcHandlers } from './handlers';
 
-import type { OmitTypeName, RpcHandlerType } from './types';
+import type { RpcHandlerType } from './types';
 
 /**
  * Makes a gRPC-web request to the Michelangelo API.
@@ -21,13 +21,13 @@ import type { OmitTypeName, RpcHandlerType } from './types';
  */
 export async function request<RpcId extends keyof RpcHandlerType>(
   rpcId: RpcId,
-  args: OmitTypeName<Parameters<RpcHandlerType[RpcId]>[0]>,
+  args: Parameters<RpcHandlerType[RpcId]>[0],
   headers?: Record<string, string>
-): Promise<OmitTypeName<Awaited<ReturnType<RpcHandlerType[RpcId]>>>> {
+): Promise<Awaited<ReturnType<RpcHandlerType[RpcId]>>> {
   const handlers = await getRpcHandlers();
   // cast: dynamic key lookup on handlers loses the specific RPC signature; we know RpcId is a valid
   // key with matching handler shape
   const handler = handlers[rpcId] as (a: unknown, h?: Record<string, string>) => Promise<unknown>;
   // cast: handler returns unknown via dynamic dispatch; RpcId determines the concrete return type
-  return (await handler(args, headers)) as OmitTypeName<Awaited<ReturnType<RpcHandlerType[RpcId]>>>;
+  return (await handler(args, headers)) as Awaited<ReturnType<RpcHandlerType[RpcId]>>;
 }

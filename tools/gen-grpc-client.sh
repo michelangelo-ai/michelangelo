@@ -109,9 +109,12 @@ plugins:
     out: gen/python
     include_imports: true
 
-  - remote: buf.build/bufbuild/es:v2.2.5
+  # json_types emits a FooJson type per message describing its proto3 JSON shape,
+  # which is what the RPC client sends and receives.
+  - remote: buf.build/bufbuild/es:v2.10.1
     out: gen/javascript
     include_imports: true
+    opt: json_types=true
 EOF
 
 # generate gRPC code
