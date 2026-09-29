@@ -52,6 +52,7 @@ _infra_ports = [
     "3000:30012",  # Grafana
     "9092:30015",  # Prometheus
     "5001:30013",  # MLflow Tracking Server
+    "3001:30016",  # Ray History Server
 ]
 
 # Infra ports owned by optionally-excluded services. When the user passes
@@ -1119,7 +1120,7 @@ def _create_kuberay_operator(helm_existing_repos):
         "kuberay-operator",
         "kuberay/kuberay-operator",
         "--version",
-        "1.4.2",
+        "1.7.1",
         "--namespace",
         "ray-system",
         "--create-namespace",
@@ -1132,13 +1133,13 @@ def _create_kuberay_operator(helm_existing_repos):
 
 
 _KUBERAY_IMAGES = [
-    "ghcr.io/michelangelo-ai/kuberay-collector:main",
-    "ghcr.io/michelangelo-ai/kuberay-historyserver:main",
+    "quay.io/kuberay/collector:v1.7.1",
+    "quay.io/kuberay/historyserver:v1.7.1",
 ]
 
 
 def _import_kuberay_images():
-    """Pull kuberay images from GHCR and import them into k3d.
+    """Pull the official kuberay images from quay.io and import them into k3d.
 
     Non-fatal: prints a warning on failure since the collector sidecar and
     history server are optional for basic sandbox usage.
@@ -1873,7 +1874,7 @@ def _create_compute_cluster(cluster_name: str):
         "kuberay-operator",
         "kuberay/kuberay-operator",
         "--version",
-        "1.4.2",
+        "1.7.1",
         "--namespace",
         "ray-system",
         "--create-namespace",

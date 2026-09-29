@@ -381,7 +381,7 @@ The Envoy ConfigMap references `{{ include "michelangelo.fullname" . }}-apiserve
 
 ### KubeRay log-collector sidecar
 
-When enabled via `controllermgr.jobs.k8sengine.mapper.logPersistence`, controllermgr injects a `kuberayCollector` sidecar into Ray jobs to persist logs to object storage. See `values.yaml` comments for the available knobs.
+When enabled via `controllermgr.jobs.k8sengine.mapper.logPersistence`, controllermgr injects a `kuberayCollector` sidecar into Ray jobs to persist logs to object storage. The sidecar image is `images.kuberayCollector`, which defaults to the official upstream release `quay.io/kuberay/collector:v1.7.1`. The `logPersistence.exposableEventTypes` knob controls which Ray event types the dashboard aggregator exposes: leave it empty to use the built-in default `"ALL"`, which requires Ray >= 2.54, and set the explicit event list instead for older Ray images. See `values.yaml` comments for the available knobs.
 
 ## Next steps
 
