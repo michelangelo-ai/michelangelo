@@ -172,9 +172,7 @@ func (c rayClusterServiceHandler) CreateRayCluster(
 	ctx context.Context, request *CreateRayClusterRequest) (resp *CreateRayClusterResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
 
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.RayCluster.ObjectMeta.Namespace, "name", request.RayCluster.ObjectMeta.Name)
 	logger.Info("CreateRayCluster Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
@@ -244,9 +242,7 @@ func (c rayClusterServiceHandler) CreateRayCluster(
 func (c rayClusterServiceHandler) GetRayCluster(
 	ctx context.Context, request *GetRayClusterRequest) (resp *GetRayClusterResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace, "name", request.Name)
 	logger.Info("GetRayCluster Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
@@ -303,9 +299,7 @@ func (c rayClusterServiceHandler) GetRayCluster(
 func (c rayClusterServiceHandler) UpdateRayCluster(
 	ctx context.Context, request *UpdateRayClusterRequest) (resp *UpdateRayClusterResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.RayCluster.ObjectMeta.Namespace, "name", request.RayCluster.ObjectMeta.Name)
 	logger.Info("UpdateRayCluster Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
@@ -375,9 +369,7 @@ func (c rayClusterServiceHandler) UpdateRayCluster(
 func (c rayClusterServiceHandler) DeleteRayCluster(
 	ctx context.Context, request *DeleteRayClusterRequest) (resp *DeleteRayClusterResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace, "name", request.Name)
 	logger.Info("DeleteRayCluster Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
@@ -449,9 +441,7 @@ func (c rayClusterServiceHandler) DeleteRayCluster(
 func (c rayClusterServiceHandler) DeleteRayClusterCollection(
 	ctx context.Context, request *DeleteRayClusterCollectionRequest) (resp *DeleteRayClusterCollectionResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace)
 	logger.Info("DeleteRayClusterCollection Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
@@ -525,9 +515,7 @@ func (c rayClusterServiceHandler) ListRayCluster(
 	ctx context.Context, request *ListRayClusterRequest) (resp *ListRayClusterResponse, err error) {
 
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace)
 	logger.Info("ListRayCluster Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{

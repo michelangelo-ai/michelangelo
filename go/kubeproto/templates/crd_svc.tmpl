@@ -153,9 +153,7 @@ func (c {{.LowerKindName}}ServiceHandler) Create{{.KindName}}(
 	ctx context.Context, request *Create{{.KindName}}Request) (resp *Create{{.KindName}}Response, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
 
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.{{.KindName}}.ObjectMeta.Namespace, "name", request.{{.KindName}}.ObjectMeta.Name)
 	logger.Info("Create{{.KindName}} Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
@@ -225,9 +223,7 @@ func (c {{.LowerKindName}}ServiceHandler) Create{{.KindName}}(
 func (c {{.LowerKindName}}ServiceHandler) Get{{.KindName}}(
 	ctx context.Context, request *Get{{.KindName}}Request) (resp *Get{{.KindName}}Response, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace, "name", request.Name)
 	logger.Info("Get{{.KindName}} Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
@@ -284,9 +280,7 @@ func (c {{.LowerKindName}}ServiceHandler) Get{{.KindName}}(
 func (c {{.LowerKindName}}ServiceHandler) Update{{.KindName}}(
 	ctx context.Context, request *Update{{.KindName}}Request) (resp *Update{{.KindName}}Response, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.{{.KindName}}.ObjectMeta.Namespace, "name", request.{{.KindName}}.ObjectMeta.Name)
 	logger.Info("Update{{.KindName}} Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
@@ -356,9 +350,7 @@ func (c {{.LowerKindName}}ServiceHandler) Update{{.KindName}}(
 func (c {{.LowerKindName}}ServiceHandler) Delete{{.KindName}}(
 	ctx context.Context, request *Delete{{.KindName}}Request) (resp *Delete{{.KindName}}Response, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace, "name", request.Name)
 	logger.Info("Delete{{.KindName}} Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
@@ -430,9 +422,7 @@ func (c {{.LowerKindName}}ServiceHandler) Delete{{.KindName}}(
 func (c {{.LowerKindName}}ServiceHandler) Delete{{.KindName}}Collection(
 	ctx context.Context, request *Delete{{.KindName}}CollectionRequest) (resp *Delete{{.KindName}}CollectionResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace)
 	logger.Info("Delete{{.KindName}}Collection Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
@@ -506,9 +496,7 @@ func (c {{.LowerKindName}}ServiceHandler) List{{.KindName}}(
 	ctx context.Context, request *List{{.KindName}}Request) (resp *List{{.KindName}}Response, err error) {
 
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace)
 	logger.Info("List{{.KindName}} Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{

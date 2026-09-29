@@ -172,9 +172,7 @@ func (c triggerRunServiceHandler) CreateTriggerRun(
 	ctx context.Context, request *CreateTriggerRunRequest) (resp *CreateTriggerRunResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
 
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.TriggerRun.ObjectMeta.Namespace, "name", request.TriggerRun.ObjectMeta.Name)
 	logger.Info("CreateTriggerRun Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
@@ -244,9 +242,7 @@ func (c triggerRunServiceHandler) CreateTriggerRun(
 func (c triggerRunServiceHandler) GetTriggerRun(
 	ctx context.Context, request *GetTriggerRunRequest) (resp *GetTriggerRunResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace, "name", request.Name)
 	logger.Info("GetTriggerRun Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
@@ -303,9 +299,7 @@ func (c triggerRunServiceHandler) GetTriggerRun(
 func (c triggerRunServiceHandler) UpdateTriggerRun(
 	ctx context.Context, request *UpdateTriggerRunRequest) (resp *UpdateTriggerRunResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.TriggerRun.ObjectMeta.Namespace, "name", request.TriggerRun.ObjectMeta.Name)
 	logger.Info("UpdateTriggerRun Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
@@ -375,9 +369,7 @@ func (c triggerRunServiceHandler) UpdateTriggerRun(
 func (c triggerRunServiceHandler) DeleteTriggerRun(
 	ctx context.Context, request *DeleteTriggerRunRequest) (resp *DeleteTriggerRunResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace, "name", request.Name)
 	logger.Info("DeleteTriggerRun Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
@@ -449,9 +441,7 @@ func (c triggerRunServiceHandler) DeleteTriggerRun(
 func (c triggerRunServiceHandler) DeleteTriggerRunCollection(
 	ctx context.Context, request *DeleteTriggerRunCollectionRequest) (resp *DeleteTriggerRunCollectionResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace)
 	logger.Info("DeleteTriggerRunCollection Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
@@ -525,9 +515,7 @@ func (c triggerRunServiceHandler) ListTriggerRun(
 	ctx context.Context, request *ListTriggerRunRequest) (resp *ListTriggerRunResponse, err error) {
 
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace)
 	logger.Info("ListTriggerRun Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
