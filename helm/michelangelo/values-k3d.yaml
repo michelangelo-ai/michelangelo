@@ -121,9 +121,11 @@ controllermgr:
           bucket: ray-history
           pathPrefix: log
           s3DisableSSL: true
-          # KubeRay v1.7 object layout:
-          # {pathPrefix}/cluster-history/raycluster/{namespace}/{cluster}/...
-          logURLFormat: "http://localhost:9090/browser/{{.Bucket}}/{{.PathPrefix}}/cluster-history/raycluster/{{.RayLocalNamespace}}/{{.ClusterName}}/"
+          # Deep link into the Ray Dashboard served by the sandbox History
+          # Server pod (host port 3001): live dashboard while the cluster runs,
+          # stored replay afterwards. Raw objects sit under the KubeRay v1.7
+          # layout {pathPrefix}/cluster-history/raycluster/{namespace}/{cluster}/...
+          logURLFormat: "http://localhost:3001/enter_cluster/{{.RayLocalNamespace}}/raycluster/{{.ClusterName}}/#/overview"
 
 
 

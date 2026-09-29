@@ -919,7 +919,7 @@ def _deploy_services(ns: argparse.Namespace):
     links.append(
         (
             "Ray History Server",
-            "http://localhost:3001",
+            "http://localhost:3001/select_cluster",
             "",
         )
     )
@@ -1129,22 +1129,31 @@ def _create_kuberay_operator(helm_existing_repos):
         "20m",
     )
 
-    _import_kuberay_images()
+    _import_log_persistence_images()
 
 
-_KUBERAY_IMAGES = [
+_LOG_PERSISTENCE_IMAGES = [
+    # KubeRay log persistence: collector sidecar + History Server API.
     "quay.io/kuberay/collector:v1.7.1",
     "quay.io/kuberay/historyserver:v1.7.1",
+    # History Server frontend (resources/history-server.yaml): nginx serves the
+    # Ray Dashboard build copied out of the Ray image. Keep the Ray tag on the
+    # version the collector targets so the dashboard matches the replayed API.
+    "rayproject/ray:2.55.0",
+    "nginx:1.27-alpine",
 ]
 
 
-def _import_kuberay_images():
-    """Pull the official kuberay images from quay.io and import them into k3d.
+def _import_log_persistence_images():
+    """Pull the Ray log-persistence images and import them into k3d.
 
+    Pulling on the host rather than letting the node do it keeps working
+    behind corporate TLS interception, where the k3d node trusts no extra CA.
     Non-fatal: prints a warning on failure since the collector sidecar and
-    history server are optional for basic sandbox usage.
+    history server are optional for basic sandbox usage, and the pods use
+    imagePullPolicy IfNotPresent so the node still pulls what is missing.
     """
-    for image in _KUBERAY_IMAGES:
+    for image in _LOG_PERSISTENCE_IMAGES:
         print(f"Importing {image} into k3d...")
         pull = subprocess.run(
             ["docker", "pull", image],

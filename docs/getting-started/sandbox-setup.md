@@ -301,16 +301,18 @@ See [Recovering from a failed create](#recovering-from-a-failed-create) for the 
 
 ### `history-server` stuck in `ImagePullBackOff`
 
-Once the cluster is up, the History Server UI is served at [http://localhost:3001](http://localhost:3001) — host port `3001` maps to its NodePort `30016`. If that URL does not respond, check the pod first.
+Once the cluster is up, the Ray Dashboard for your Ray clusters is served by the History Server pod at [http://localhost:3001/select_cluster](http://localhost:3001/select_cluster) — host port `3001` maps to its NodePort `30016`. Every Ray task step on a pipeline run page links straight into it through `RayCluster.status.logUrl` (`http://localhost:3001/enter_cluster/<namespace>/raycluster/<cluster>/#/overview`): while the cluster is running that is the live dashboard, afterwards it is the replay built from the persisted logs. If the URL does not respond, check the pod first.
 
-The History Server runs the official upstream image `quay.io/kuberay/historyserver:v1.7.1`, pulled from quay.io at deploy time — there is no local build step. An `ImagePullBackOff` here means the cluster could not reach the registry. Check the pull error, then confirm whether the host itself has access:
+The pod runs three images with no local build step: the official `quay.io/kuberay/historyserver:v1.7.1` API from quay.io, plus `rayproject/ray:2.55.0` (an init container copies the Ray Dashboard frontend out of it) and `nginx:1.27-alpine` (serves that frontend and proxies the API) from Docker Hub. `ma sandbox create` pulls all of them on the host and imports them into k3d, so a node that cannot reach a registry still starts them. An `ImagePullBackOff` here means an image was neither imported nor pullable by the node. Check the pull error, then confirm whether the host itself has access:
 
 ```bash
 kubectl describe pod -l app=history-server | grep -A 5 "Events"
 docker pull quay.io/kuberay/historyserver:v1.7.1
+docker pull rayproject/ray:2.55.0
+docker pull nginx:1.27-alpine
 ```
 
-If the `docker pull` also fails, the problem is host or proxy network access to quay.io rather than anything sandbox-specific. Once the pull works, redeploy without recreating the cluster:
+If the `docker pull` also fails, the problem is host or proxy network access to the registry rather than anything sandbox-specific. Once the pull works, redeploy without recreating the cluster:
 
 ```bash
 ma sandbox sync

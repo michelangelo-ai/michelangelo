@@ -512,7 +512,10 @@ controllermgr:
           # Go text/template for the human-browsable log URL written to RayClusterStatus.LogUrl.
           # Available vars: {{.Bucket}}, {{.PathPrefix}}, {{.ClusterName}}, {{.RayLocalNamespace}}.
           # Empty string disables log_url emission.
-          # Example (sandbox MinIO console): "http://localhost:9090/browser/{{.Bucket}}/{{.PathPrefix}}/cluster-history/raycluster/{{.RayLocalNamespace}}/{{.ClusterName}}/"
+          # Example (History Server deep link, live or replayed dashboard; see values-k3d.yaml):
+          #   "http://localhost:3001/enter_cluster/{{.RayLocalNamespace}}/raycluster/{{.ClusterName}}/#/overview"
+          # Example (object-storage console, raw files only):
+          #   "http://localhost:9090/browser/{{.Bucket}}/{{.PathPrefix}}/cluster-history/raycluster/{{.RayLocalNamespace}}/{{.ClusterName}}/"
           logURLFormat: ""
 
   resources: {}

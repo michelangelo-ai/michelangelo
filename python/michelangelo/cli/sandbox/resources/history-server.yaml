@@ -8,11 +8,37 @@
 #   - resources and --session-cache-max-memory scaled down for a single-node
 #     k3d node (~31Gi); upstream asks for 500m/2Gi with a 12Gi limit and an
 #     8Gi session cache
+#   - --enable-live-clusters, so one URL shows the live dashboard while a
+#     cluster is running and the stored replay once it is gone. The server
+#     resolves the head service from the RayCluster CR (hence the ClusterRole)
+#     and reaches it by bare service name, so live access works for clusters in
+#     the history server's own namespace.
 #
 # As of v1.7 the server is configured entirely through env
 # (STORAGE_BACKEND / STORAGE_ROOT_DIR) instead of the v1.6 command-line flags,
 # and reads the standard AWS_* credential names instead of the fork's custom
 # aliases.
+#
+# The upstream image is a JSON API only: it bundles no Ray Dashboard frontend,
+# and the /select_cluster page it embeds hands off to "/#/overview" expecting
+# something else to serve the dashboard there (Ray's own guide runs a local
+# `ray start --head --proxy-server-url=<history server>` for that, see
+# https://docs.ray.io/en/latest/cluster/kubernetes/user-guides/kuberay-history-server.html).
+# This pod fronts the server with nginx (container `frontend`) instead, which
+#   - serves the stock Ray Dashboard SPA, copied out of the rayproject/ray
+#     image by the `dashboard-assets` init container -- the history server's
+#     REST API is a drop-in for the dashboard's own, so the unmodified frontend
+#     renders against it;
+#   - forwards every other path (/api, /nodes, /events, /logical, /clusters,
+#     /select_cluster, ...) to the history server on 127.0.0.1:8080;
+#   - turns a browser navigation to /enter_cluster/{ns}/{kind}/{name}[/{session}]
+#     into a one-click deep link: it performs the history server's own
+#     /enter_cluster call, relays the five cluster-context cookies it sets, and
+#     answers with a tiny bootstrap page that loads "/" plus the URL fragment
+#     (e.g. #/overview). That is the URL shape logPersistence.logURLFormat
+#     emits, and the contract kuberay is adopting server-side
+#     (ray-project/kuberay#5086), so the links keep working unchanged once the
+#     history server serves the bootstrap page itself.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -41,6 +67,98 @@ roleRef:
   name: raycluster-reader
   apiGroup: rbac.authorization.k8s.io
 ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: history-server-frontend
+data:
+  nginx.conf: |
+    worker_processes 1;
+    pid /tmp/nginx.pid;
+    error_log /dev/stderr warn;
+    events { worker_connections 256; }
+    http {
+      include /etc/nginx/mime.types;
+      default_type application/octet-stream;
+      access_log off;
+      sendfile on;
+      # The first /enter_cluster of a session loads and indexes it, which can
+      # take a while (--session-process-timeout defaults to 2m).
+      proxy_read_timeout 180s;
+      proxy_http_version 1.1;
+      proxy_set_header Host $host;
+      proxy_set_header Connection "";
+
+      upstream historyserver { server 127.0.0.1:8080; }
+
+      server {
+        listen 8000;
+        root /dashboard;
+        index index.html;
+
+        # Ray Dashboard SPA: whatever exists in the client build is served
+        # from disk, everything else belongs to the history server.
+        location / {
+          try_files $uri $uri/ @historyserver;
+        }
+
+        location @historyserver {
+          proxy_pass http://historyserver;
+          proxy_buffering off;
+        }
+
+        # Deep link into one cluster's dashboard. auth_request performs the
+        # real /enter_cluster call (the page is only served when it succeeds),
+        # $upstream_cookie_* captures each cookie it set, and the bootstrap page
+        # carries them to the browser on a 200 -- deliberately not a redirect,
+        # which a proxy in front could follow and swallow together with the
+        # cookies.
+        location /enter_cluster/ {
+          auth_request /_enter_cluster;
+          auth_request_set $ck_cluster_name      $upstream_cookie_cluster_name;
+          auth_request_set $ck_cluster_namespace $upstream_cookie_cluster_namespace;
+          auth_request_set $ck_session_name      $upstream_cookie_session_name;
+          auth_request_set $ck_owner_kind        $upstream_cookie_owner_kind;
+          auth_request_set $ck_owner_name        $upstream_cookie_owner_name;
+          add_header Set-Cookie "cluster_name=$ck_cluster_name; Path=/; Max-Age=600";
+          add_header Set-Cookie "cluster_namespace=$ck_cluster_namespace; Path=/; Max-Age=600";
+          add_header Set-Cookie "session_name=$ck_session_name; Path=/; Max-Age=600";
+          add_header Set-Cookie "owner_kind=$ck_owner_kind; Path=/; Max-Age=600";
+          add_header Set-Cookie "owner_name=$ck_owner_name; Path=/; Max-Age=600";
+          add_header Cache-Control "no-store";
+          # auth_request maps any non-2xx from the history server onto
+          # 401/403/500; replay the request so the browser gets the server's
+          # real status and message instead (e.g. 404 "not found" while a
+          # terminated cluster's logs are still being uploaded).
+          error_page 401 403 500 = @enter_cluster_error;
+          root /etc/nginx/frontend;
+          try_files /enter_cluster.html =404;
+        }
+        location = /_enter_cluster {
+          internal;
+          proxy_pass http://historyserver$request_uri;
+          proxy_method GET;
+          proxy_pass_request_body off;
+          proxy_set_header Content-Length "";
+          # The v1.7.1 route is declared JSON-only and answers 406 to a bare
+          # text/html Accept.
+          proxy_set_header Accept application/json;
+        }
+        location @enter_cluster_error {
+          proxy_pass http://historyserver;
+        }
+      }
+    }
+  enter_cluster.html: |
+    <!DOCTYPE html>
+    <html>
+      <head><meta charset="utf-8"><title>Ray History Server</title></head>
+      <body>
+        <script>location.replace("/" + location.hash);</script>
+        <noscript>Cluster selected. <a href="/">Open the Ray Dashboard</a>.</noscript>
+      </body>
+    </html>
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -58,7 +176,57 @@ spec:
         app: history-server
     spec:
       serviceAccountName: historyserver
+      initContainers:
+      # Copies the Ray Dashboard client build (static HTML/JS/CSS) out of the
+      # Ray image into the shared volume nginx serves. The path is resolved
+      # through Python so it survives a Ray image bump; the frontend version
+      # should track the Ray version the collector targets.
+      - name: dashboard-assets
+        image: rayproject/ray:2.55.0
+        imagePullPolicy: IfNotPresent
+        command: ["sh", "-c"]
+        args:
+        - |
+          set -e
+          build="$(python -c 'import os, ray.dashboard; print(os.path.join(os.path.dirname(ray.dashboard.__file__), "client", "build"))')"
+          cp -r "$build/." /dashboard/
+          echo "copied Ray Dashboard build from $build"
+        volumeMounts:
+        - name: dashboard
+          mountPath: /dashboard
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
       containers:
+      - name: frontend
+        image: nginx:1.27-alpine
+        imagePullPolicy: IfNotPresent
+        command: ["nginx", "-g", "daemon off;", "-c", "/etc/nginx/frontend/nginx.conf"]
+        ports:
+        - containerPort: 8000
+          name: http
+        volumeMounts:
+        - name: dashboard
+          mountPath: /dashboard
+          readOnly: true
+        - name: frontend
+          mountPath: /etc/nginx/frontend
+          readOnly: true
+        readinessProbe:
+          httpGet:
+            # Proxied to the history server, so the pod is Ready only once the
+            # whole path works.
+            path: /readz
+            port: 8000
+          periodSeconds: 5
+        resources:
+          requests:
+            cpu: "50m"
+            memory: "32Mi"
+          limits:
+            cpu: "200m"
+            memory: "128Mi"
       - name: history-server
         image: quay.io/kuberay/historyserver:v1.7.1
         imagePullPolicy: IfNotPresent
@@ -66,6 +234,7 @@ spec:
         # The cache cap is a soft limit, so limits.memory must sit above it.
         args:
         - --session-cache-max-memory=1Gi
+        - --enable-live-clusters=true
         env:
         - name: STORAGE_BACKEND
           value: "s3"
@@ -98,7 +267,12 @@ spec:
           value: "true"
         ports:
         - containerPort: 8080
-          name: http
+          name: api
+        readinessProbe:
+          httpGet:
+            path: /readz
+            port: 8080
+          periodSeconds: 5
         resources:
           requests:
             cpu: "250m"
@@ -106,6 +280,12 @@ spec:
           limits:
             cpu: "500m"
             memory: "2Gi"
+      volumes:
+      - name: dashboard
+        emptyDir: {}
+      - name: frontend
+        configMap:
+          name: history-server-frontend
 ---
 apiVersion: v1
 kind: Service
@@ -117,6 +297,7 @@ spec:
   ports:
   - name: http
     port: 8080
-    targetPort: 8080
+    # nginx front door; the history server API itself stays pod-local on 8080.
+    targetPort: 8000
     nodePort: 30016
   type: NodePort
