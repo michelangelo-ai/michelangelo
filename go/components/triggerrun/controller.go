@@ -165,15 +165,11 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	// On cascade delete (deletionTimestamp set), hand off to the drain driver
 	// before the state machine so a deleting run can't re-arm its cron.
 	if !triggerRun.GetDeletionTimestamp().IsZero() {
-		isTerminal, err := r.isDrained(ctx, log, triggerRun)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
 		st := cascadedelete.DrainState{
 			Object:      triggerRun,
 			Kind:        metricKind,
 			Finalizer:   drainFinalizer,
-			IsTerminal:  isTerminal,
+			IsTerminal:  r.isDrained(ctx, log, triggerRun),
 			WorkStarted: triggerRunWorkStarted(triggerRun),
 		}
 		return cascadedelete.RunDrainStep(ctx, st, &triggerRunDrainTarget{r: r, log: log, run: triggerRun}, drainRequeueInterval)
@@ -509,15 +505,20 @@ func triggerRunWorkStarted(run *v2pb.TriggerRun) bool {
 // isDrained reports whether a deleting trigger run has no in-flight work left: the
 // run itself is terminal and none of its child PipelineRuns are still active. The
 // drain finalizer is only removed once this holds (or the drain times out).
-func (r *Reconciler) isDrained(ctx context.Context, log logr.Logger, triggerRun *v2pb.TriggerRun) (bool, error) {
+//
+// A failed child probe is logged and reported as not drained rather than returned,
+// so RunDrainStep still evaluates the drain timeout; RequestCancel/Progress re-run
+// the child cancel after that check and surface the error for retry.
+func (r *Reconciler) isDrained(ctx context.Context, log logr.Logger, triggerRun *v2pb.TriggerRun) bool {
 	if !isTerminateState(triggerRun) || !ctrlutil.ContainsFinalizer(triggerRun, drainFinalizer) {
-		return isTerminateState(triggerRun), nil
+		return isTerminateState(triggerRun)
 	}
 	active, err := r.cancelActiveChildPipelineRuns(ctx, log, triggerRun)
 	if err != nil {
-		return false, err
+		log.Error(err, "failed to probe child pipeline runs during drain; treating as not drained")
+		return false
 	}
-	return active == 0, nil
+	return active == 0
 }
 
 // killIfActive kills the trigger's workflow and persists the terminal status. It is

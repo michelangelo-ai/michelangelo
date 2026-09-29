@@ -3,9 +3,11 @@ package triggerrun
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/go-logr/logr"
 	gogotypes "github.com/gogo/protobuf/types"
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -14,10 +16,14 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	ctrlutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	apiutils "github.com/michelangelo-ai/michelangelo/go/api/utils"
+	clientInterface "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
+	interfaceMock "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface/interface_mock"
+	"github.com/michelangelo-ai/michelangelo/go/cascadedelete"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
@@ -220,4 +226,47 @@ func TestActiveChildListOptionsExt(t *testing.T) {
 	assert.Equal(t, "tr", values["pipeline_run.metadata.labels."+TriggeredByLabel])
 	assert.Equal(t, "PIPELINE_RUN_STATE_INVALID,PIPELINE_RUN_STATE_PENDING,PIPELINE_RUN_STATE_RUNNING",
 		values["pipeline_run.status.state"])
+}
+
+// TestReconcile_DeleteTimeoutNotBlockedByChildProbeError: a persistent failure
+// listing children must not bypass the drain timeout, or the finalizer would stick.
+func TestReconcile_DeleteTimeoutNotBlockedByChildProbeError(t *testing.T) {
+	scheme := cascadeScheme(t)
+	expired := metav1.NewTime(time.Now().Add(-cascadedelete.CascadeDrainTimeout - time.Minute))
+	trigger := &v2pb.TriggerRun{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "tr", Namespace: "ns", UID: types.UID("t1"),
+			Finalizers: []string{drainFinalizer}, DeletionTimestamp: &expired,
+		},
+		Status: v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_KILLED},
+	}
+	c := fake.NewClientBuilder().WithScheme(scheme).
+		WithObjects(trigger).WithStatusSubresource(trigger).
+		WithInterceptorFuncs(interceptor.Funcs{
+			List: func(ctx context.Context, cl client.WithWatch, list client.ObjectList, opts ...client.ListOption) error {
+				if _, ok := list.(*v2pb.PipelineRunList); ok {
+					return assert.AnError
+				}
+				return cl.List(ctx, list, opts...)
+			},
+		}).Build()
+
+	mockWorkflowClient := interfaceMock.NewMockWorkflowClient(gomock.NewController(t))
+	mockWorkflowClient.EXPECT().GetDomain().Return("default").AnyTimes()
+	mockWorkflowClient.EXPECT().ListOpenWorkflow(gomock.Any(), gomock.Any()).
+		Return(&clientInterface.ListOpenWorkflowExecutionsResponse{}, nil).AnyTimes()
+	mockWorkflowClient.EXPECT().DeleteTrigger(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	r := &Reconciler{Handler: apiHandler.NewFakeAPIHandler(c), scheme: scheme, log: logr.Discard(),
+		cronTrigger: &MockRunner{}, workflowClient: mockWorkflowClient}
+
+	_, err := r.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{Name: "tr", Namespace: "ns"}})
+	require.NoError(t, err)
+
+	got := &v2pb.TriggerRun{}
+	err = c.Get(context.Background(), types.NamespacedName{Name: "tr", Namespace: "ns"}, got)
+	if err == nil {
+		assert.False(t, ctrlutil.ContainsFinalizer(got, drainFinalizer), "timeout must still release the finalizer")
+	} else {
+		assert.True(t, apiutils.IsNotFoundError(err))
+	}
 }
