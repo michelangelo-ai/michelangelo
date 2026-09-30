@@ -10,7 +10,7 @@ from logging import getLogger
 from types import MethodType
 from typing import Optional
 
-from google.protobuf.json_format import MessageToDict, ParseDict
+from google.protobuf.json_format import MessageToDict
 from google.protobuf.message import Message
 from grpc import Channel
 
@@ -137,19 +137,22 @@ def generate_kill(crd: CRD, channel: Channel, parser: Optional[ArgumentParser] =
         current_resource = _self.get(_namespace, _name)
         _LOG.info("Retrieved PipelineRun resource for kill: %r", current_resource)
 
-        # Convert to dict and set kill flag
-        current_dict = MessageToDict(current_resource, preserving_proto_field_name=True)
-
+        # Copy the resource across as a proto rather than round-tripping it
+        # through a dict: MessageToDict cannot render an Any whose type is
+        # absent from the descriptor pool, and ParseDict then rejects the
+        # readback outright, so the kill fails on resources the server itself
+        # returned. CopyFrom carries such fields through as opaque bytes.
         resource_name = _self.name
-        if resource_name in current_dict and "spec" in current_dict[resource_name]:
-            current_dict[resource_name]["spec"]["kill"] = True
-        else:
+        current_source = getattr(current_resource, resource_name, None)
+        if current_source is None or not current_source.HasField("spec"):
             _LOG.error("Missing required spec field in the resource structure")
             raise ValueError(f"Cannot set kill flag on {resource_name}")
 
         # Create update request
         request_input = input_class()
-        ParseDict(current_dict, request_input, ignore_unknown_fields=True)
+        target = getattr(request_input, resource_name)
+        target.CopyFrom(current_source)
+        target.spec.kill = True
         apply_dry_run_to_request(request_input, "update_options", bound_args.arguments)
         _dry_run = bound_args.arguments.get("dry_run", False)
 
