@@ -137,11 +137,13 @@ def generate_kill(crd: CRD, channel: Channel, parser: Optional[ArgumentParser] =
         current_resource = _self.get(_namespace, _name)
         _LOG.info("Retrieved PipelineRun resource for kill: %r", current_resource)
 
-        # Copy the resource across as a proto rather than round-tripping it
-        # through a dict: MessageToDict cannot render an Any whose type is
-        # absent from the descriptor pool, and ParseDict then rejects the
-        # readback outright, so the kill fails on resources the server itself
-        # returned. CopyFrom carries such fields through as opaque bytes.
+        # Move the resource into the request as wire bytes. A dict round trip
+        # cannot represent an Any whose type is missing from the descriptor
+        # pool, which made the kill fail on resources the server itself had
+        # just returned. Bytes are also all the two sides share: the CRD
+        # framework builds its message classes from server reflection, so the
+        # fetched resource and the request field are distinct Python classes
+        # for the same proto.
         resource_name = _self.name
         current_source = getattr(current_resource, resource_name, None)
         if current_source is None or not current_source.HasField("spec"):
@@ -151,10 +153,6 @@ def generate_kill(crd: CRD, channel: Channel, parser: Optional[ArgumentParser] =
         # Create update request
         request_input = input_class()
         target = getattr(request_input, resource_name)
-        # Serialize/parse rather than CopyFrom: the CRD framework builds message
-        # classes by reflection, so the fetched resource and the request field are
-        # distinct Python classes for the same proto and CopyFrom rejects them.
-        # The wire form carries opaque Any payloads through untouched.
         target.MergeFromString(current_source.SerializeToString())
         target.spec.kill = True
         apply_dry_run_to_request(request_input, "update_options", bound_args.arguments)
