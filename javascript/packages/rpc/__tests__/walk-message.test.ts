@@ -36,6 +36,22 @@ describe('walkMessage', () => {
     });
   });
 
+  it('with a registry, walks an Any payload as the message its @type names', () => {
+    const { registry, TreeSchema } = createTestSchemas();
+    const visited: string[] = [];
+    const visit: MessageVisitor = (desc, value, descend) => {
+      visited.push(desc.typeName);
+      return descend(desc, value);
+    };
+    const known = { '@type': 'type.googleapis.com/test.Tree', leaf: { name: 'a' } };
+    const unknown = { '@type': 'type.googleapis.com/some.Unregistered', leaf: { name: 'b' } };
+
+    const result = walkMessage(TreeSchema, { extras: { known, unknown } }, visit, registry);
+
+    expect(visited).toEqual(['google.protobuf.Any', 'test.Leaf', 'google.protobuf.Any']);
+    expect(result).toEqual({ extras: { known, unknown } });
+  });
+
   it('copies scalar fields and keys that are not fields unchanged', () => {
     const { TreeSchema } = createTestSchemas();
     const result = walkMessage(TreeSchema, { label: 'x', notAField: { nested: true } }, () => {

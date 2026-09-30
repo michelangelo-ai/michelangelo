@@ -64,7 +64,11 @@ function createServiceClient<T extends DescService>(
       // cast: each step returns the JSON object it was given, rewritten
       const packedRequest = packAnyFields(
         method.input,
-        timesToStrings(method.input, omitDeletionGracePeriod(request), typeRegistry)
+        timesToStrings(
+          method.input,
+          omitDeletionGracePeriod(method.input, request, typeRegistry),
+          typeRegistry
+        )
       ) as JsonValue;
       // Parsing and re-serializing checks every value against its field type and drops keys
       // that aren't fields. Callers pass whole records back (e.g. form state), so unknown keys
