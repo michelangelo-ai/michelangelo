@@ -10,8 +10,8 @@ data:
           "name": "michelangeloadmin",
           "credentials": [
             {
-              "accessKey": "minioadmin",
-              "secretKey": "minioadmin"
+              "accessKey": "michelangeloadmin",
+              "secretKey": "michelangeloadmin"
             }
           ],
           "actions": ["Admin", "Read", "Write"]
