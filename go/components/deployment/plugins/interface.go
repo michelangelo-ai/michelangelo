@@ -23,8 +23,10 @@ type Plugin interface {
 	// GetRolloutPlugin returns the condition plugin for progressive rollout operations.
 	GetRolloutPlugin(ctx context.Context, resource *v2pb.Deployment) (conditionInterfaces.Plugin[*v2pb.Deployment], error)
 
-	// GetRollbackPlugin returns the condition plugin for rollback operations.
-	GetRollbackPlugin() conditionInterfaces.Plugin[*v2pb.Deployment]
+	// GetRollbackPlugin returns the condition plugin for rollback operations. Like the rollout
+	// plugin it is built per deployment, because a rollback has to undo the rollout cluster by
+	// cluster and the set of clusters is only known from the deployment's placement.
+	GetRollbackPlugin(ctx context.Context, resource *v2pb.Deployment) (conditionInterfaces.Plugin[*v2pb.Deployment], error)
 
 	// GetCleanupPlugin returns the condition plugin for resource cleanup operations.
 	GetCleanupPlugin() conditionInterfaces.Plugin[*v2pb.Deployment]

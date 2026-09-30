@@ -3,9 +3,12 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 go_library(
     name = "go_default_library",
     srcs = [
+        "canary_rollout_actor.go",
+        "deps.go",
         "discovery_routing_actor.go",
         "model_cleanup_actor.go",
         "rolling_rollout_actor.go",
+        "soak_actor.go",
         "traffic_routing_actor.go",
     ],
     importpath = "github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/rollout/strategies/common",
@@ -31,9 +34,11 @@ go_library(
 go_test(
     name = "go_default_test",
     srcs = [
+        "canary_rollout_actor_test.go",
         "discovery_routing_actor_test.go",
         "model_cleanup_actor_test.go",
         "rolling_rollout_actor_test.go",
+        "soak_actor_test.go",
         "traffic_routing_actor_test.go",
     ],
     embed = [":go_default_library"],

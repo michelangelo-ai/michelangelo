@@ -16,7 +16,10 @@ func NewBackendRegistry(isConfig maconfig.InferenceServerConfig) *Registry {
 	registry := NewRegistry()
 
 	// Register default backends
-	registry.Register(v2pb.BACKEND_TYPE_TRITON, NewTritonBackend(isConfig.Triton.DefaultImage))
+	registry.Register(v2pb.BACKEND_TYPE_TRITON, NewTritonBackend(
+		isConfig.Triton.DefaultImage,
+		WithReadinessProbe(isConfig.Triton.ReadinessProbe),
+	))
 
 	return registry
 }

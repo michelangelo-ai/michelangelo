@@ -87,3 +87,45 @@ inferenceServer:
     # uses the controller's built-in default, which is the supported setting;
     # set this only to pin a different image.
     defaultImage: ""
+    # readinessProbe selects how Triton replicas report readiness to their
+    # Service. "model-aware" (default) keeps a replica out of the Service until
+    # every serving model in the inference server's model config is loaded, so
+    # traffic never reaches a replica that is still loading after a restart.
+    # "server" uses Triton's /v2/health/ready only; "none" adds no probe.
+    # model-aware needs python3 in the serving image (the py3 Triton images).
+    readinessProbe: model-aware
+
+# Deployment controller (OSS plugin) rollout safety settings.
+deployment:
+  rollout:
+    # skipCanary disables the per-cluster canary phase, in which the new model is
+    # loaded and validated on one replica before the rest of the cluster loads it.
+    skipCanary: false
+    # modelLoadTimeout bounds how long a cluster may take to load the new model on
+    # every replica (canary and full load each get this budget). Exceeding it fails
+    # the rollout, which rolls the candidate back.
+    modelLoadTimeout: 30m
+    # soakPeriod is how long to keep serving from a cluster, with the health and
+    # metric gates active, before moving on to the next cluster. A Zonal strategy's
+    # rolloutPeriodInSeconds overrides it; Blast skips soaking. 0s disables it.
+    soakPeriod: 0s
+  rollback:
+    # modelLoadTimeout bounds how long a rollback waits for the previous model to be
+    # loaded again on every replica before restoring traffic to it.
+    modelLoadTimeout: 15m
+  metricGate:
+    # prometheusURL enables the metric gate: while a rollout or soak is in progress
+    # the queries below are evaluated every reconcile and any breach rolls the
+    # candidate back. Empty disables the gate. In the sandbox, the Prometheus
+    # bundled with the Temporal chart answers at
+    # http://michelangelo-prometheus-server.default.svc:80.
+    prometheusURL: ""
+    timeout: 10s
+    # failClosed treats an unreachable Prometheus as a gate failure. The default
+    # keeps rolling out and logs the outage instead.
+    failClosed: false
+    # queries are Go templates over {{.Model}}, {{.Deployment}}, {{.Namespace}} and
+    # {{.InferenceServer}}. A query breaches when any returned sample compares true
+    # against threshold ("gt" by default, or "lt"). With no queries configured the
+    # gate uses Triton's per-model failure ratio over 5m with a 5% threshold.
+    queries: []

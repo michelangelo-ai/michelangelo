@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -14,12 +15,14 @@ import (
 	"google.golang.org/grpc/status"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/dynamic"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	goapi "github.com/michelangelo-ai/michelangelo/go/api"
 	"github.com/michelangelo-ai/michelangelo/go/api/apimocks"
 	"github.com/michelangelo-ai/michelangelo/go/api/handler"
+	"github.com/michelangelo-ai/michelangelo/go/components/common/routing/routingmocks"
 	osscommon "github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends/backendsmocks"
@@ -41,20 +44,53 @@ const (
 	testModelStoragePath = "s3://custom-bucket/artifacts/model-v1/"
 )
 
-type clientErrors struct {
-	getClient     error
-	getHTTPClient error
+// testNow is the fixed clock every actor under test reads. Timeouts are exercised by
+// writing an older start time into the condition, never by sleeping.
+var testNow = time.Unix(1_700_000_000, 0)
+
+// testSettings are the rollout knobs used unless a test overrides them.
+var testSettings = osscommon.RolloutSettings{
+	Canary:           true,
+	ModelLoadTimeout: 10 * time.Minute,
+	RollbackTimeout:  5 * time.Minute,
 }
 
-// rolloutMocks groups every mock used by both rolling-rollout and model-cleanup tests so
-// per-test setup callbacks can program them in one place.
+type clientErrors struct {
+	getClient        error
+	getHTTPClient    error
+	getDynamicClient error
+}
+
+// rolloutMocks groups every mock used by the per-cluster actor tests so per-test setup
+// callbacks can program them in one place.
 type rolloutMocks struct {
 	factory             *clientfactorymocks.MockClientFactory
 	backend             *backendsmocks.MockBackend
 	modelConfigProvider *modelconfigmocks.MockModelConfigProvider
+	routeManager        *routingmocks.MockManager
 	backendRegistry     *backends.Registry
 	// controlPlane serves the Model the actor resolves the storage path from.
 	controlPlane goapi.Handler
+}
+
+// deps wires the mocks into the dependency bundle the actors take.
+func (m *rolloutMocks) deps(settings osscommon.RolloutSettings) ClusterActorDeps {
+	return ClusterActorDeps{
+		ClientFactory:       m.factory,
+		APIHandler:          m.controlPlane,
+		BackendRegistry:     m.backendRegistry,
+		ModelConfigProvider: m.modelConfigProvider,
+		RouteManager:        m.routeManager,
+		Logger:              zap.NewNop(),
+		Settings:            settings,
+		Now:                 func() time.Time { return testNow },
+	}
+}
+
+// expectModelStatus programs one GetModelStatus probe for the model.
+func (m *rolloutMocks) expectModelStatus(model string, status *backends.ModelStatus, err error) {
+	m.backend.EXPECT().GetModelStatus(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
+		testISName, testNamespace, model).Return(status, err)
 }
 
 // newControlPlaneClient builds a control-plane API handler seeded with the supplied objects.
@@ -89,8 +125,8 @@ func testModel() *v2pb.Model {
 }
 
 // newRolloutFixture builds a target wired to the supplied mocks. clientErrs lets a test
-// inject GetClient / GetHTTPClient failures without re-mocking the factory each time;
-// when both are nil the factory returns nil, nil for both methods.
+// inject client factory failures without re-mocking the factory each time; when all are nil
+// the factory returns nil clients without error.
 //
 // registerBackend controls whether the BackendRegistry has a backend registered for Triton;
 // when false, GetBackend returns an error so the actor's BackendUnavailable branch fires.
@@ -103,6 +139,7 @@ func newRolloutFixture(t *testing.T, clientErrs clientErrors, registerBackend bo
 		factory:             clientfactorymocks.NewMockClientFactory(ctrl),
 		backend:             backendsmocks.NewMockBackend(ctrl),
 		modelConfigProvider: modelconfigmocks.NewMockModelConfigProvider(ctrl),
+		routeManager:        routingmocks.NewMockManager(ctrl),
 		controlPlane:        newControlPlaneClient(t, testModel()),
 	}
 
@@ -110,6 +147,8 @@ func newRolloutFixture(t *testing.T, clientErrs clientErrors, registerBackend bo
 		Return(client.Client(nil), clientErrs.getClient).AnyTimes()
 	mocks.factory.EXPECT().GetHTTPClient(gomock.Any(), gomock.Any()).
 		Return((*http.Client)(nil), clientErrs.getHTTPClient).AnyTimes()
+	mocks.factory.EXPECT().GetDynamicClient(gomock.Any(), gomock.Any()).
+		Return(dynamic.Interface(nil), clientErrs.getDynamicClient).AnyTimes()
 
 	mocks.backendRegistry = backends.NewRegistry()
 	if registerBackend {
@@ -140,74 +179,168 @@ func rolloutDeployment(currentRevision string) *v2pb.Deployment {
 	return dep
 }
 
+// conditionWithProgress returns a condition carrying the given rollout progress, or an empty
+// condition when progress is nil.
+func conditionWithProgress(t *testing.T, progress *osscommon.RolloutProgress) *apipb.Condition {
+	t.Helper()
+	condition := &apipb.Condition{}
+	if progress != nil {
+		require.NoError(t, osscommon.WriteRolloutProgress(condition, *progress))
+	}
+	return condition
+}
+
+// startedAgo is a progress record whose clock started the given duration before testNow.
+func startedAgo(ago time.Duration, replica string) *osscommon.RolloutProgress {
+	return &osscommon.RolloutProgress{StartedAt: testNow.Add(-ago).Unix(), Replica: replica}
+}
+
+// terminalCondition is what Retrieve hands Run after a terminal failure.
+func terminalCondition(reason string) *apipb.Condition {
+	return &apipb.Condition{Status: apipb.CONDITION_STATUS_FALSE, Message: reason, Reason: "details"}
+}
+
+func readyReplica(name string) backends.ReplicaModelStatus {
+	return backends.ReplicaModelStatus{Replica: name, Running: true, State: backends.ModelLoadStateReady}
+}
+
+func loadingReplica(name string) backends.ReplicaModelStatus {
+	return backends.ReplicaModelStatus{Replica: name, Running: true, State: backends.ModelLoadStateLoading, Reason: "model not yet loaded"}
+}
+
+func failedReplica(name, reason string) backends.ReplicaModelStatus {
+	return backends.ReplicaModelStatus{Replica: name, Running: true, State: backends.ModelLoadStateFailed, Reason: reason}
+}
+
+func pendingReplica(name string) backends.ReplicaModelStatus {
+	return backends.ReplicaModelStatus{Replica: name, Running: false, State: backends.ModelLoadStateLoading, Reason: "pod is Pending"}
+}
+
+func statusOf(desired int32, replicas ...backends.ReplicaModelStatus) *backends.ModelStatus {
+	return &backends.ModelStatus{Desired: desired, Replicas: replicas}
+}
+
 func TestRollingRolloutActor_Retrieve(t *testing.T) {
 	tests := []struct {
 		name              string
 		clientErrs        clientErrors
 		registerBackend   bool
+		progress          *osscommon.RolloutProgress
 		setupMocks        func(*rolloutMocks)
-		preWriteFlag      bool // pre-write the ModelLoaded flag to test the short-circuit
 		expectedStatus    apipb.ConditionStatus
+		expectedMessage   string
 		expectedReasonSub string
+		expectDone        bool
 	}{
 		{
-			name:            "short-circuit via cached loaded flag",
+			name:            "short-circuit once the load is recorded as done",
 			registerBackend: true,
+			progress:        &osscommon.RolloutProgress{StartedAt: testNow.Unix(), Done: true},
 			setupMocks:      func(*rolloutMocks) {}, // no calls expected
-			preWriteFlag:    true,
 			expectedStatus:  apipb.CONDITION_STATUS_TRUE,
+			expectDone:      true,
+		},
+		{
+			name:              "not started yet means no probe",
+			registerBackend:   true,
+			setupMocks:        func(*rolloutMocks) {}, // no calls expected
+			expectedStatus:    apipb.CONDITION_STATUS_FALSE,
+			expectedMessage:   ReasonModelLoadNotStarted,
+			expectedReasonSub: "load of model model-v1 not started in cluster c1",
 		},
 		{
 			name:              "GetClient errors",
 			clientErrs:        clientErrors{getClient: errors.New("auth refused")},
 			registerBackend:   true,
+			progress:          startedAgo(time.Minute, ""),
 			setupMocks:        func(*rolloutMocks) {},
 			expectedStatus:    apipb.CONDITION_STATUS_FALSE,
+			expectedMessage:   osscommon.ReasonClientUnavailable,
 			expectedReasonSub: "auth refused",
 		},
 		{
 			name:              "GetHTTPClient errors",
 			clientErrs:        clientErrors{getHTTPClient: errors.New("dial timeout")},
 			registerBackend:   true,
+			progress:          startedAgo(time.Minute, ""),
 			setupMocks:        func(*rolloutMocks) {},
 			expectedStatus:    apipb.CONDITION_STATUS_FALSE,
+			expectedMessage:   osscommon.ReasonHTTPClientUnavailable,
 			expectedReasonSub: "dial timeout",
 		},
 		{
 			name:              "backend not in registry",
 			registerBackend:   false,
+			progress:          startedAgo(time.Minute, ""),
 			setupMocks:        func(*rolloutMocks) {},
 			expectedStatus:    apipb.CONDITION_STATUS_FALSE,
+			expectedMessage:   osscommon.ReasonBackendUnavailable,
 			expectedReasonSub: "backend not found",
 		},
 		{
-			name:            "CheckModelStatus errors",
+			name:            "GetModelStatus errors",
 			registerBackend: true,
+			progress:        startedAgo(time.Minute, ""),
 			setupMocks: func(m *rolloutMocks) {
-				m.backend.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
-					testISName, testNamespace, testModelName).Return(false, errors.New("api error"))
+				m.expectModelStatus(testModelName, nil, errors.New("api error"))
 			},
 			expectedStatus:    apipb.CONDITION_STATUS_FALSE,
+			expectedMessage:   osscommon.ReasonModelStatusCheckFailed,
 			expectedReasonSub: "api error",
 		},
 		{
-			name:            "model not ready",
+			name:            "one replica still loading keeps waiting",
 			registerBackend: true,
+			progress:        startedAgo(time.Minute, ""),
 			setupMocks: func(m *rolloutMocks) {
-				m.backend.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
-					testISName, testNamespace, testModelName).Return(false, nil)
+				m.expectModelStatus(testModelName, statusOf(2, readyReplica("pod-a"), loadingReplica("pod-b")), nil)
 			},
 			expectedStatus:    apipb.CONDITION_STATUS_FALSE,
+			expectedMessage:   ReasonModelNotReady,
 			expectedReasonSub: "model model-v1 not yet loaded in cluster c1",
 		},
 		{
-			name:            "model ready",
+			name:            "fewer replicas than desired keeps waiting",
 			registerBackend: true,
+			progress:        startedAgo(time.Minute, ""),
 			setupMocks: func(m *rolloutMocks) {
-				m.backend.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
-					testISName, testNamespace, testModelName).Return(true, nil)
+				m.expectModelStatus(testModelName, statusOf(2, readyReplica("pod-a")), nil)
+			},
+			expectedStatus:    apipb.CONDITION_STATUS_FALSE,
+			expectedMessage:   ReasonModelNotReady,
+			expectedReasonSub: "1/2",
+		},
+		{
+			name:            "a failed replica is terminal",
+			registerBackend: true,
+			progress:        startedAgo(time.Minute, ""),
+			setupMocks: func(m *rolloutMocks) {
+				m.expectModelStatus(testModelName, statusOf(2, readyReplica("pod-a"), failedReplica("pod-b", "bad config.pbtxt")), nil)
+			},
+			expectedStatus:    apipb.CONDITION_STATUS_FALSE,
+			expectedMessage:   ReasonModelLoadFailed,
+			expectedReasonSub: "pod-b: bad config.pbtxt",
+		},
+		{
+			name:            "load budget exhausted is terminal",
+			registerBackend: true,
+			progress:        startedAgo(testSettings.ModelLoadTimeout+time.Second, ""),
+			setupMocks: func(m *rolloutMocks) {
+				m.expectModelStatus(testModelName, statusOf(2, readyReplica("pod-a"), loadingReplica("pod-b")), nil)
+			},
+			expectedStatus:    apipb.CONDITION_STATUS_FALSE,
+			expectedMessage:   ReasonModelLoadTimeout,
+			expectedReasonSub: "within 10m0s",
+		},
+		{
+			name:            "all replicas ready",
+			registerBackend: true,
+			progress:        startedAgo(time.Minute, ""),
+			setupMocks: func(m *rolloutMocks) {
+				m.expectModelStatus(testModelName, statusOf(2, readyReplica("pod-a"), readyReplica("pod-b")), nil)
 			},
 			expectedStatus: apipb.CONDITION_STATUS_TRUE,
+			expectDone:     true,
 		},
 	}
 
@@ -216,26 +349,20 @@ func TestRollingRolloutActor_Retrieve(t *testing.T) {
 			mocks, target := newRolloutFixture(t, tt.clientErrs, tt.registerBackend)
 			tt.setupMocks(mocks)
 
-			condition := &apipb.Condition{}
-			if tt.preWriteFlag {
-				require.NoError(t, osscommon.WriteModelLoadedFlag(condition))
-			}
-
-			actor := NewRollingRolloutActor(mocks.factory, mocks.controlPlane, mocks.backendRegistry, mocks.modelConfigProvider, zap.NewNop(), target)
-			got, err := actor.Retrieve(context.Background(), rolloutDeployment(""), condition)
+			actor := NewRollingRolloutActor(mocks.deps(testSettings), target)
+			got, err := actor.Retrieve(context.Background(), rolloutDeployment(""), conditionWithProgress(t, tt.progress))
 
 			require.NoError(t, err)
 			assert.Equal(t, tt.expectedStatus, got.Status)
+			if tt.expectedMessage != "" {
+				assert.Equal(t, tt.expectedMessage, got.Message)
+			}
 			if tt.expectedReasonSub != "" {
 				assert.Contains(t, got.Reason, tt.expectedReasonSub)
 			}
-			if got.Status == apipb.CONDITION_STATUS_TRUE && !tt.preWriteFlag {
-				// When CheckModelStatus returned ready, the actor should record the loaded flag
-				// on the condition so subsequent Retrieves short-circuit.
-				loaded, err := osscommon.ReadModelLoadedFlag(got)
-				require.NoError(t, err)
-				assert.True(t, loaded, "loaded flag should be set after model is ready")
-			}
+			progress, err := osscommon.ReadRolloutProgress(got)
+			require.NoError(t, err)
+			assert.Equal(t, tt.expectDone, progress.Done, "done flag recorded on the condition")
 		})
 	}
 }
@@ -244,12 +371,21 @@ func TestRollingRolloutActor_Run(t *testing.T) {
 	tests := []struct {
 		name              string
 		clientErrs        clientErrors
+		condition         *apipb.Condition
 		setupMocks        func(*rolloutMocks)
 		controlPlane      goapi.Handler // when set, replaces the default model-seeded handler
 		expectedStatus    apipb.ConditionStatus
+		expectedMessage   string
 		expectedReasonSub string
-		expectEntry       *modelconfig.ModelConfigEntry // when set, asserted against the captured AddModelToConfig arg
+		expectedStartedAt int64 // when non-zero, asserted against the recorded progress
 	}{
+		{
+			name:            "terminal failure from Retrieve passes through untouched",
+			condition:       terminalCondition(ReasonModelLoadFailed),
+			setupMocks:      func(*rolloutMocks) {}, // no calls expected
+			expectedStatus:  apipb.CONDITION_STATUS_FALSE,
+			expectedMessage: ReasonModelLoadFailed,
+		},
 		{
 			name:              "GetClient errors",
 			clientErrs:        clientErrors{getClient: errors.New("auth refused")},
@@ -294,7 +430,7 @@ func TestRollingRolloutActor_Run(t *testing.T) {
 			expectedReasonSub: "metadata storage unreachable",
 		},
 		{
-			name: "happy path uses the storage path from the Model CR",
+			name: "happy path stages the model with the storage path from the Model CR",
 			setupMocks: func(m *rolloutMocks) {
 				m.modelConfigProvider.EXPECT().AddModelToConfig(gomock.Any(), gomock.Any(), gomock.Any(),
 					testISName, testNamespace, gomock.Any()).
@@ -303,12 +439,25 @@ func TestRollingRolloutActor_Run(t *testing.T) {
 							Name:           testModelName,
 							StoragePath:    testModelStoragePath,
 							DeploymentName: testDeploymentName,
+							Phase:          modelconfig.ModelPhaseStaged,
 						}, entry)
 						return nil
 					})
 			},
 			expectedStatus:    apipb.CONDITION_STATUS_UNKNOWN,
+			expectedMessage:   ReasonModelLoading,
 			expectedReasonSub: "model model-v1 loading in cluster c1",
+			expectedStartedAt: testNow.Unix(),
+		},
+		{
+			name:      "a later run keeps the original start time",
+			condition: conditionWithProgress(t, startedAgo(5*time.Minute, "")),
+			setupMocks: func(m *rolloutMocks) {
+				m.modelConfigProvider.EXPECT().AddModelToConfig(gomock.Any(), gomock.Any(), gomock.Any(),
+					testISName, testNamespace, gomock.Any()).Return(nil)
+			},
+			expectedStatus:    apipb.CONDITION_STATUS_UNKNOWN,
+			expectedStartedAt: testNow.Add(-5 * time.Minute).Unix(),
 		},
 	}
 
@@ -319,14 +468,26 @@ func TestRollingRolloutActor_Run(t *testing.T) {
 				mocks.controlPlane = tt.controlPlane
 			}
 			tt.setupMocks(mocks)
+			condition := tt.condition
+			if condition == nil {
+				condition = &apipb.Condition{}
+			}
 
-			actor := NewRollingRolloutActor(mocks.factory, mocks.controlPlane, mocks.backendRegistry, mocks.modelConfigProvider, zap.NewNop(), target)
-			got, err := actor.Run(context.Background(), rolloutDeployment(""), &apipb.Condition{})
+			actor := NewRollingRolloutActor(mocks.deps(testSettings), target)
+			got, err := actor.Run(context.Background(), rolloutDeployment(""), condition)
 
 			require.NoError(t, err)
 			assert.Equal(t, tt.expectedStatus, got.Status)
+			if tt.expectedMessage != "" {
+				assert.Equal(t, tt.expectedMessage, got.Message)
+			}
 			if tt.expectedReasonSub != "" {
 				assert.Contains(t, got.Reason, tt.expectedReasonSub)
+			}
+			if tt.expectedStartedAt != 0 {
+				progress, err := osscommon.ReadRolloutProgress(got)
+				require.NoError(t, err)
+				assert.Equal(t, tt.expectedStartedAt, progress.StartedAt)
 			}
 		})
 	}
@@ -334,6 +495,6 @@ func TestRollingRolloutActor_Run(t *testing.T) {
 
 func TestRollingRolloutActor_GetType(t *testing.T) {
 	mocks, target := newRolloutFixture(t, clientErrors{}, true)
-	actor := NewRollingRolloutActor(mocks.factory, mocks.controlPlane, mocks.backendRegistry, mocks.modelConfigProvider, zap.NewNop(), target)
+	actor := NewRollingRolloutActor(mocks.deps(testSettings), target)
 	assert.Equal(t, "RollingRolloutComplete-"+testCluster, actor.GetType())
 }

@@ -73,6 +73,7 @@ const (
 
 	_alertFiredMessage          = "Alert fired"
 	_desiredModelChangedMessage = "Desired model changed"
+	_rolloutFailedMessage       = "Rollout failed"
 
 	_timeFormat = "20060102-121314"
 )
@@ -361,7 +362,11 @@ func (r *Reconciler) processPlugin(ctx context.Context, log logr.Logger, metrics
 
 		desiredModelChanged := ShouldRollback(*deployment)
 		rollbackAlertsEnabled := RollbackAlertsEnabled(*deployment)
-		if isRollbackNeeded(deployment, isHealthy, desiredModelChanged) && rollbackAlertsEnabled {
+		// A rollback that has started runs to completion. The health gate turning green again
+		// mid-rollback (for example once the previous model is loaded again) must not resume
+		// the rollout of the candidate that was just judged bad.
+		if IsRollbackStage(deployment.GetStatus().Stage) ||
+			(isRollbackNeeded(deployment, isHealthy, desiredModelChanged) && rollbackAlertsEnabled) {
 			if !IsRollbackStage(deployment.GetStatus().Stage) {
 				deployment.Status.Message = fmt.Sprintf("Detected that a rollback should occur due to alert firing=[%v], or due to the desired model changing=[%v]", isHealthy, desiredModelChanged)
 				log.Info("detected that a rollback should occur")
@@ -372,7 +377,14 @@ func (r *Reconciler) processPlugin(ctx context.Context, log logr.Logger, metrics
 				r.updateRollbackReason(deployment, isHealthy)
 			}
 
-			conditionPlugin = plugin.GetRollbackPlugin()
+			conditionPlugin, err = plugin.GetRollbackPlugin(ctx, deployment)
+			if err != nil {
+				log.Error(err, "failed to retrieve rollback plugin",
+					"operation", "get_rollback_plugin",
+					"namespace", deployment.Namespace,
+					"deployment", deployment.Name)
+				return result, err
+			}
 			result, err = r.engine.Run(ctx, conditionPlugin, deployment)
 			if err != nil {
 				log.Error(err, "Rollback plugin processing failed with error")
@@ -392,6 +404,30 @@ func (r *Reconciler) processPlugin(ctx context.Context, log logr.Logger, metrics
 				log.Error(err, "Rollout plugin processing failed with error")
 				return result, err
 			}
+		}
+	} else if RolloutFailedNeedsRollback(*deployment) {
+		// A failed rollout leaves the candidate loaded, and possibly routed, in the clusters
+		// it reached. Roll it back so the previous revision serves everywhere again and the
+		// candidate is unloaded, instead of leaving the deployment half-flipped.
+		log.Info("rollout failed; rolling back to the previous revision")
+		metrics.rollbackMetrics.initiatedCount.Inc(1)
+		deployment.Status.Message = fmt.Sprintf("Rollout of %s failed; rolling back to %s",
+			deployment.Status.GetCandidateRevision().GetName(), describeRevision(deployment.Status.GetCurrentRevision()))
+		deployment.Status.Stage = v2pb.DEPLOYMENT_STAGE_ROLLBACK_IN_PROGRESS
+		r.setRollbackReason(deployment, _rolloutFailedMessage)
+
+		conditionPlugin, err = plugin.GetRollbackPlugin(ctx, deployment)
+		if err != nil {
+			log.Error(err, "failed to retrieve rollback plugin",
+				"operation", "get_rollback_plugin",
+				"namespace", deployment.Namespace,
+				"deployment", deployment.Name)
+			return result, err
+		}
+		result, err = r.engine.Run(ctx, conditionPlugin, deployment)
+		if err != nil {
+			log.Error(err, "Rollback plugin processing failed with error")
+			return result, err
 		}
 	} else if TriggerNewRollout(*deployment) {
 		log.Info("detected new rollout")
@@ -533,6 +569,8 @@ func (r *Reconciler) handleStageTransition(
 		break
 	case v2pb.DEPLOYMENT_STAGE_ROLLBACK_COMPLETE:
 		metrics.rollbackMetrics.completedCount.Inc(1)
+		// Keep the message that explains why the rollback happened instead of clearing it.
+		messages = append(messages, fmt.Sprintf("Rolled back to %s", describeRevision(deployment.Status.GetCurrentRevision())))
 		break
 	case v2pb.DEPLOYMENT_STAGE_ROLLBACK_FAILED:
 		metrics.rollbackMetrics.failedCount.Inc(1)
@@ -592,15 +630,26 @@ func (r *Reconciler) incrementRolloutCount(deployment *v2pb.Deployment, log logr
 }
 
 func (r *Reconciler) updateRollbackReason(deployment *v2pb.Deployment, isHealthy bool) {
+	if !isHealthy {
+		r.setRollbackReason(deployment, _alertFiredMessage)
+	} else {
+		r.setRollbackReason(deployment, _desiredModelChangedMessage)
+	}
+}
+
+func (r *Reconciler) setRollbackReason(deployment *v2pb.Deployment, reason string) {
 	if deployment.Annotations == nil {
 		deployment.Annotations = make(map[string]string)
 	}
+	deployment.Annotations[_deploymentRollbackReason] = reason
+}
 
-	if !isHealthy {
-		deployment.Annotations[_deploymentRollbackReason] = _alertFiredMessage
-	} else {
-		deployment.Annotations[_deploymentRollbackReason] = _desiredModelChangedMessage
+// describeRevision names a revision for status messages, or "no previous revision" when nil.
+func describeRevision(revision *protoapi.ResourceIdentifier) string {
+	if revision == nil {
+		return "no previous revision"
 	}
+	return revision.GetName()
 }
 
 func (r *Reconciler) getObservability(log logr.Logger, namespace string) plugins.ObservabilityContext {
@@ -713,6 +762,18 @@ func TriggerNewRollout(deployment v2pb.Deployment) bool {
 func isRollbackNeeded(deployment *v2pb.Deployment, isHealthy bool, desiredModelChanged bool) bool {
 	hasPriorRevision := deployment.Status.CurrentRevision != nil
 	return (!isHealthy && hasPriorRevision) || desiredModelChanged
+}
+
+// RolloutFailedNeedsRollback reports whether a rollout ended in ROLLOUT_FAILED with a
+// candidate that never graduated. Such a candidate may still be loaded, and in the clusters
+// the rollout reached even routed, so the controller rolls it back rather than leaving the
+// deployment half-flipped. Once the rollback completes (or fails), the stage is no longer
+// ROLLOUT_FAILED and this returns false.
+func RolloutFailedNeedsRollback(deployment v2pb.Deployment) bool {
+	candidateRevision := deployment.Status.GetCandidateRevision()
+	return deployment.Status.GetStage() == v2pb.DEPLOYMENT_STAGE_ROLLOUT_FAILED &&
+		candidateRevision != nil &&
+		!revisionEqual(candidateRevision, deployment.Status.GetCurrentRevision())
 }
 
 // ShouldRollback determines if the deployment should be rolled back to a previous version.

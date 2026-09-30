@@ -39,21 +39,6 @@ func (m *MockBackend) EXPECT() *MockBackendMockRecorder {
 	return m.recorder
 }
 
-// CheckModelStatus mocks base method.
-func (m *MockBackend) CheckModelStatus(ctx context.Context, logger *zap.Logger, kubeClient client.Client, httpClient *http.Client, apiServerURL, inferenceServerName, namespace, modelName string) (bool, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CheckModelStatus", ctx, logger, kubeClient, httpClient, apiServerURL, inferenceServerName, namespace, modelName)
-	ret0, _ := ret[0].(bool)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// CheckModelStatus indicates an expected call of CheckModelStatus.
-func (mr *MockBackendMockRecorder) CheckModelStatus(ctx, logger, kubeClient, httpClient, apiServerURL, inferenceServerName, namespace, modelName interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckModelStatus", reflect.TypeOf((*MockBackend)(nil).CheckModelStatus), ctx, logger, kubeClient, httpClient, apiServerURL, inferenceServerName, namespace, modelName)
-}
-
 // CreateServer mocks base method.
 func (m *MockBackend) CreateServer(ctx context.Context, logger *zap.Logger, kubeClient client.Client, inferenceServer *v2.InferenceServer) (*backends.ServerStatus, error) {
 	m.ctrl.T.Helper()
@@ -81,6 +66,21 @@ func (m *MockBackend) DeleteServer(ctx context.Context, logger *zap.Logger, kube
 func (mr *MockBackendMockRecorder) DeleteServer(ctx, logger, kubeClient, inferenceServerName, namespace interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteServer", reflect.TypeOf((*MockBackend)(nil).DeleteServer), ctx, logger, kubeClient, inferenceServerName, namespace)
+}
+
+// GetModelStatus mocks base method.
+func (m *MockBackend) GetModelStatus(ctx context.Context, logger *zap.Logger, kubeClient client.Client, httpClient *http.Client, apiServerURL, inferenceServerName, namespace, modelName string) (*backends.ModelStatus, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetModelStatus", ctx, logger, kubeClient, httpClient, apiServerURL, inferenceServerName, namespace, modelName)
+	ret0, _ := ret[0].(*backends.ModelStatus)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetModelStatus indicates an expected call of GetModelStatus.
+func (mr *MockBackendMockRecorder) GetModelStatus(ctx, logger, kubeClient, httpClient, apiServerURL, inferenceServerName, namespace, modelName interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetModelStatus", reflect.TypeOf((*MockBackend)(nil).GetModelStatus), ctx, logger, kubeClient, httpClient, apiServerURL, inferenceServerName, namespace, modelName)
 }
 
 // GetServerStatus mocks base method.
