@@ -6,6 +6,7 @@ Tests the kill command functionality for pipeline runs.
 from unittest import TestCase
 from unittest.mock import MagicMock, Mock, patch
 
+from google.protobuf import descriptor_pb2, descriptor_pool, message_factory
 from google.protobuf.message import Message
 
 from michelangelo.cli.mactl.crd import CRD
@@ -325,6 +326,33 @@ class KillGrpcMetadataTest(TestCase):
         self.assertEqual(kwargs["metadata"], [*crd_metadata, ("ttl", "600")])
 
 
+def _reflection_built(message_class):
+    """Rebuild `message_class` in its own pool, yielding a distinct Python class.
+
+    The CRD framework builds its message classes from server reflection, so the
+    fetched resource and the Update request field are different classes for the
+    same proto. Anything that requires them to be the same class fails there but
+    not against the statically generated pb2 modules.
+    """
+    pool = descriptor_pool.DescriptorPool()
+    added = set()
+
+    def add(file_descriptor):
+        if file_descriptor.name in added:
+            return
+        added.add(file_descriptor.name)
+        for dependency in file_descriptor.dependencies:
+            add(dependency)
+        proto = descriptor_pb2.FileDescriptorProto()
+        file_descriptor.CopyToProto(proto)
+        pool.Add(proto)
+
+    add(message_class.DESCRIPTOR.file)
+    return message_factory.GetMessageClass(
+        pool.FindMessageTypeByName(message_class.DESCRIPTOR.full_name)
+    )
+
+
 class KillOpaqueAnyTest(TestCase):
     """Regression: a resource carrying an Any the descriptor pool cannot resolve.
 
@@ -339,7 +367,7 @@ class KillOpaqueAnyTest(TestCase):
         opaque_type = "type.googleapis.com/example.NotInDescriptorPool"
         payload = b"\x08\x01opaque-payload-bytes"
 
-        fetched = pipeline_run_svc_pb2.GetPipelineRunResponse()
+        fetched = _reflection_built(pipeline_run_svc_pb2.GetPipelineRunResponse)()
         fetched.pipeline_run.spec.kill = False
         detail = fetched.pipeline_run.status.details.add()
         detail.type_url = opaque_type

@@ -133,7 +133,11 @@ def generate_kill(
 
         request_input = input_class()
         target = getattr(request_input, resource_name)
-        target.CopyFrom(current_source)
+        # Serialize/parse rather than CopyFrom: the CRD framework builds message
+        # classes by reflection, so the fetched resource and the request field are
+        # distinct Python classes for the same proto and CopyFrom rejects them.
+        # The wire form carries opaque Any payloads through untouched.
+        target.MergeFromString(current_source.SerializeToString())
         target.spec.kill = True
         crd_module.apply_dry_run_to_request(
             request_input, "update_options", bound_args.arguments
