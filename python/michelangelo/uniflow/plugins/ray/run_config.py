@@ -1,7 +1,7 @@
 """Ray Train ``RunConfig`` helper defaulted to UniFlow-managed storage.
 
 Any Ray-based workflow task (trainer, and future tasks with their own Ray
-Train steps) can call :func:`create_run_config` instead of hand-rolling its
+Train steps) can call ``create_run_config`` instead of hand-rolling its
 own ``storage_path``/``storage_filesystem`` defaulting from a task-specific
 ``storage_backend`` parameter. Centralizing this here keeps "where does Ray
 Train write checkpoints" in one shared place as the task catalog grows,
@@ -30,7 +30,7 @@ def create_run_config(**kwargs) -> ray.train.RunConfig:
     Resolves ``storage_path``/``storage_filesystem`` from the same
     ``UF_STORAGE_URL`` environment variable that ``DatasetVariable`` and
     ``ModelVariable`` already use for their own storage location, via the
-    existing :func:`michelangelo.uniflow.plugins.ray.io._fs_path` filesystem
+    existing ``michelangelo.uniflow.plugins.ray.io._fs_path`` filesystem
     resolver (native PyArrow S3, or fsspec when
     ``UF_PLUGIN_RAY_USE_FSSPEC=1``). Falls back to a local temp directory
     when ``UF_STORAGE_URL`` is unset, so local/sandbox runs keep working

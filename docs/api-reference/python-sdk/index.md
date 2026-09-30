@@ -37,8 +37,8 @@ Compute-backend plugins that extend `@task` with Ray, Spark, or Pandas execution
 | Module | Description |
 |--------|-------------|
 | [`uniflow.plugins.ray.task`](reference/uniflow/plugins/ray/task.md) | `RayTask` config for Ray-backed tasks |
-| `uniflow.plugins.ray.run_config` | Ray run configuration |
-| `uniflow.plugins.ray.io` | Ray dataset IO |
+| [`uniflow.plugins.ray.run_config`](reference/uniflow/plugins/ray/run_config.md) | Ray run configuration |
+| [`uniflow.plugins.ray.io`](reference/uniflow/plugins/ray/io.md) | Ray dataset IO |
 | [`uniflow.plugins.spark.task`](reference/uniflow/plugins/spark/task.md) | `SparkTask` config for Spark-backed tasks |
 | [`uniflow.plugins.spark.io`](reference/uniflow/plugins/spark/io.md) | Spark dataset IO |
 | `uniflow.plugins.pandas.io` | Pandas dataset IO |
@@ -70,8 +70,8 @@ TorchScript- and ONNX-exportable transform layers for train/serve parity.
 | Module | Description |
 |--------|-------------|
 | `lib.native_transform.torch.base_layers` | Base transform layer classes |
-| `lib.native_transform.torch.id_hash_tokenizer` | ID hashing tokenizer layer |
-| `lib.native_transform.torch.utils` | Transform utilities |
+| [`lib.native_transform.torch.id_hash_tokenizer`](reference/lib/native_transform/torch/id_hash_tokenizer.md) | ID hashing tokenizer layer |
+| [`lib.native_transform.torch.utils`](reference/lib/native_transform/torch/utils.md) | Transform utilities |
 
 ## Workflow Variables
 

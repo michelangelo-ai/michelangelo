@@ -32,14 +32,14 @@ class IDHashTokenizer(nn.Module):
     The input ``vocabulary`` may be unsorted. The mapping from an original
     vocabulary value to its new index is based on its position in the *provided*
     vocabulary list (i.e. ``vocabulary[i]`` maps to ``i``). Internally the values
-    are sorted for an efficient :func:`torch.bucketize` lookup, then remapped back
+    are sorted for an efficient ``torch.bucketize`` lookup, then remapped back
     to their original positions, so ordering of the provided list is preserved in
     the output indices.
 
     The layer is compatible with both TorchScript and ONNX export.
 
     Despite the name "Hash", this performs an exact vocabulary lookup via
-    :func:`torch.bucketize` (not a hash); the name is kept for parity with the
+    ``torch.bucketize`` (not a hash); the name is kept for parity with the
     internal SDK layer it was migrated from.
 
     Args:
@@ -138,7 +138,7 @@ class IDHashTokenizer(nn.Module):
     def forward(self, input_ids: torch.Tensor) -> torch.Tensor:
         """Map input integer IDs to contiguous vocabulary indices.
 
-        Values not found in the vocabulary are mapped to :attr:`unk_index`.
+        Values not found in the vocabulary are mapped to ``unk_index``.
 
         Args:
             input_ids: Tensor of integer IDs of any shape (e.g.

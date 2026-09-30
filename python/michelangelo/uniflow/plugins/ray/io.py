@@ -181,7 +181,7 @@ class RayDatasetIO(IO[Dataset]):
             _metadata: Unused; pass ``None``.
             **read_kwargs: Additional kwargs forwarded to
                 ``ray.data.read_parquet`` (e.g. as produced by
-                :func:`~michelangelo.uniflow.plugins.ray.parquet_io.parquet_read_config_to_kwargs`).
+                ``michelangelo.uniflow.plugins.ray.parquet_io.parquet_read_config_to_kwargs``).
                 Must not set ``filesystem`` or ``file_extensions``, which
                 this method always supplies itself.
 
