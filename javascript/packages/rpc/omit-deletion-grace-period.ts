@@ -17,7 +17,7 @@ export function omitDeletionGracePeriod(value: unknown): unknown {
   }
   const { metadata } = result;
   if (metadata !== null && typeof metadata === 'object' && !Array.isArray(metadata)) {
-    // cast: narrowed to a plain object just above
+    // cast: metadata is a non-null, non-array object
     const { deletionGracePeriodSeconds: _omitted, ...rest } = metadata as Record<string, unknown>;
     result.metadata = rest;
   }

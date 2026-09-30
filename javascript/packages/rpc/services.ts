@@ -27,11 +27,10 @@ import { getRuntimeConfig } from './runtime-config';
 import type { DescService, JsonValue } from '@bufbuild/protobuf';
 import type { FetchTransport, ServiceClient, Services } from './types';
 
-// Every message type that can appear inside a google.protobuf.Any on the wire must be
-// registered here — protobuf-es resolves an Any's typeUrl against this registry both when
-// parsing and re-encoding requests (fromJson/toJson throw on an unregistered typeUrl), e.g.
-// ListOptionsExt criteria packed by packAnyFields. PipelineSchema covers
-// Revision.spec.content for Pipeline revisions sent back on update.
+// Every message type that can appear inside a google.protobuf.Any must be registered here:
+// requests with an unregistered `@type` fail (fromJson/toJson throw), and time fields inside
+// an unregistered payload aren't converted. The wrapper types cover packed ListOptionsExt
+// criteria; PipelineSchema covers Revision.spec.content for Pipeline revisions.
 export const typeRegistry = createRegistry(
   TypedStructSchema,
   PipelineSchema,
@@ -42,13 +41,10 @@ export const typeRegistry = createRegistry(
 );
 
 /**
- * Builds a service client that speaks proto3 JSON in both directions: requests are
- * proto3 JSON objects (string enums, oneof members set directly, Any as `@type` plus
- * fields), validated and normalized through the message schema before being POSTed
- * through the fetch transport; responses are returned as Envoy's grpc_json_transcoder
- * emits them, default values included. The one exception, both ways, is Timestamp/Duration
- * fields: the UI works with `{ seconds, nanos }` rather than proto3 JSON's strings (see
- * convert-time-fields).
+ * Builds a service client that sends and receives proto3 JSON. Responses are returned as
+ * Envoy's grpc_json_transcoder emits them, default values included. Timestamp/Duration fields
+ * are the exception in both directions: callers see `{ seconds, nanos }` instead of proto3
+ * JSON strings (convert-time-fields.ts).
  */
 function createServiceClient<T extends DescService>(
   service: T,
@@ -63,14 +59,16 @@ function createServiceClient<T extends DescService>(
     if (method.methodKind !== 'unary') continue;
 
     client[method.localName] = async (request, headers) => {
-      // cast: packAnyFields recurses generically over `unknown`; called with a JSON object it
-      // returns one, just with Any fields packed into their proto3 JSON form
+      // Turn the caller's object into proto3 JSON: drop the server-owned grace period, convert
+      // { seconds, nanos } back to strings, and wrap plain values given for Any fields.
+      // cast: each step returns the JSON object it was given, rewritten
       const packedRequest = packAnyFields(
         method.input,
         timesToStrings(method.input, omitDeletionGracePeriod(request), typeRegistry)
       ) as JsonValue;
-      // ignoreUnknownFields: callers pass whole records back (e.g. form state), and
-      // extra keys shouldn't fail the request
+      // Parsing and re-serializing checks every value against its field type and drops keys
+      // that aren't fields. Callers pass whole records back (e.g. form state), so unknown keys
+      // are expected rather than an error.
       const message = fromJson(method.input, packedRequest, {
         registry: typeRegistry,
         ignoreUnknownFields: true,

@@ -6,8 +6,8 @@ import type { ConvertTime } from './types';
 
 /**
  * Converts every google.protobuf.Timestamp/Duration field in a response from its proto3 JSON
- * string form ("2026-09-28T23:11:19.992Z", "3600s") to `{ seconds, nanos }`, so all time fields
- * reach the UI in one shape. Envoy's transcoder always prints these types as strings.
+ * string ("2026-09-28T23:11:19.992Z", "3600s") to `{ seconds, nanos }`, the shape the UI's time
+ * handling reads.
  */
 export function timesToObjects(desc: DescMessage, value: unknown, registry: Registry): unknown {
   return walkMessage(desc, value, registry, (schema, time) => {
@@ -30,6 +30,10 @@ export function timesToStrings(desc: DescMessage, value: unknown, registry: Regi
   });
 }
 
+/**
+ * Copies `value`, passing every Timestamp/Duration field under `desc` through `convert`.
+ * Keys that aren't fields of `desc` are copied unchanged.
+ */
 function walkMessage(
   desc: DescMessage,
   value: unknown,

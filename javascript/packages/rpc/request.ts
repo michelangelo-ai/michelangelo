@@ -5,12 +5,13 @@ import type { RpcHandlerType } from './types';
 /**
  * Makes a gRPC-web request to the Michelangelo API.
  *
- * Responses are plain proto3 JSON objects, exactly as Envoy's grpc_json_transcoder emits them.
+ * Responses are proto3 JSON as Envoy's grpc_json_transcoder emits it, except Timestamp/Duration
+ * fields, which arrive as `{ seconds, nanos }`.
  *
  * @param rpcId - The ID of the RPC handler to call.
  * @param args - The arguments to pass to the RPC handler.
  * @param headers - Optional HTTP headers to send with the request (e.g. user identity).
- * @returns A promise that resolves to the RPC response as a plain proto3 JSON object.
+ * @returns The RPC response.
  *
  * @example
  * ```ts
