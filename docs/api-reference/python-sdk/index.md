@@ -15,8 +15,8 @@ Start here if you're authoring pipelines with the Python SDK.
 
 Some modules below aren't linked yet — coming soon. Two modules referenced elsewhere
 in this reference, the XGBoost trainer and `LightningTrainer` itself, aren't in the
-current generator config and have no page yet either; only the Torch collate-function
-utilities under **Trainer** are covered so far.
+current generator config and have no page yet either; the **Trainer** section covers
+only the Torch collate-function and memory-estimation utilities so far.
 
 ## Uniflow — Tasks & Workflows
 

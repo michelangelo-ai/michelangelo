@@ -38,8 +38,8 @@ the output indices.
 The layer is compatible with both TorchScript and ONNX export.
 
 Despite the name "Hash", this performs an exact vocabulary lookup via
-``torch.bucketize`` (not a hash); the name is kept for parity with the
-internal SDK layer it was migrated from.
+``torch.bucketize`` (not a hash); the name is retained for backward
+compatibility.
 
 **Arguments**:
 
@@ -55,9 +55,11 @@ internal SDK layer it was migrated from.
 
 **Example**:
 
-  >>> tokenizer = IDHashTokenizer(vocabulary=[-10, -3, 0, 2, 4, 6])
-  >>> tokenizer(torch.tensor([-10, 0, 5], dtype=torch.long))
-  tensor([0, 2, 6])
+```python
+>>> tokenizer = IDHashTokenizer(vocabulary=[-10, -3, 0, 2, 4, 6])
+>>> tokenizer(torch.tensor([-10, 0, 5], dtype=torch.long))
+tensor([0, 2, 6])
+```
 
 #### \_\_init\_\_
 

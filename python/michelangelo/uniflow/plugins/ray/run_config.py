@@ -30,11 +30,10 @@ def create_run_config(**kwargs) -> ray.train.RunConfig:
     Resolves ``storage_path``/``storage_filesystem`` from the same
     ``UF_STORAGE_URL`` environment variable that ``DatasetVariable`` and
     ``ModelVariable`` already use for their own storage location, via the
-    existing ``michelangelo.uniflow.plugins.ray.io._fs_path`` filesystem
-    resolver (native PyArrow S3, or fsspec when
-    ``UF_PLUGIN_RAY_USE_FSSPEC=1``). Falls back to a local temp directory
-    when ``UF_STORAGE_URL`` is unset, so local/sandbox runs keep working
-    without extra configuration.
+    same filesystem-resolution logic ``RayDatasetIO`` uses (native PyArrow
+    S3, or fsspec when ``UF_PLUGIN_RAY_USE_FSSPEC=1``). Falls back to a
+    local temp directory when ``UF_STORAGE_URL`` is unset, so local/sandbox
+    runs keep working without extra configuration.
 
     Args:
         **kwargs: Any ``ray.train.RunConfig`` keyword argument. Explicitly

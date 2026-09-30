@@ -39,8 +39,8 @@ class IDHashTokenizer(nn.Module):
     The layer is compatible with both TorchScript and ONNX export.
 
     Despite the name "Hash", this performs an exact vocabulary lookup via
-    ``torch.bucketize`` (not a hash); the name is kept for parity with the
-    internal SDK layer it was migrated from.
+    ``torch.bucketize`` (not a hash); the name is retained for backward
+    compatibility.
 
     Args:
         vocabulary: List of integer values to map to contiguous indices. Duplicate
@@ -51,9 +51,11 @@ class IDHashTokenizer(nn.Module):
         ValueError: If ``vocabulary`` is empty.
 
     Example:
-        >>> tokenizer = IDHashTokenizer(vocabulary=[-10, -3, 0, 2, 4, 6])
-        >>> tokenizer(torch.tensor([-10, 0, 5], dtype=torch.long))
-        tensor([0, 2, 6])
+    ```python
+    >>> tokenizer = IDHashTokenizer(vocabulary=[-10, -3, 0, 2, 4, 6])
+    >>> tokenizer(torch.tensor([-10, 0, 5], dtype=torch.long))
+    tensor([0, 2, 6])
+    ```
     """
 
     def __init__(self, vocabulary: list[int]) -> None:

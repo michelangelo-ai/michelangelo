@@ -41,9 +41,9 @@ On **read**:
 and parallel-checks remaining files for non-empty row groups.
 2. ``ray.data.read_parquet`` reads the survivors.
 3. If PyArrow raises ``ArrowNotImplementedError`` on nested columns
-(ray-project/ray#61675), the Polars fallback ``_ParquetPolarsDatasource``
-retries the read. **Requires ``polars`` to be installed**
-(``pip install michelangelo[ray-polars]``).
+(https://github.com/ray-project/ray/issues/61675), the Polars fallback
+``_ParquetPolarsDatasource`` retries the read. **Requires ``polars`` to
+be installed** (``pip install michelangelo[ray-polars]``).
 
 **Raises**:
 
@@ -52,14 +52,16 @@ retries the read. **Requires ``polars`` to be installed**
 
 **Example**:
 
-  >>> import ray, tempfile, pandas as pd
-  >>> ds = ray.data.from_pandas(pd.DataFrame([{"x": 1}]))
-  >>> io = RayDatasetIO()
-  >>> dest = tempfile.mkdtemp()
-  >>> io.write(dest, ds)
-  >>> result = io.read(dest, None)
-  >>> result.count()
-  1
+```python
+>>> import ray, tempfile, pandas as pd
+>>> ds = ray.data.from_pandas(pd.DataFrame([{"x": 1}]))
+>>> io = RayDatasetIO()
+>>> dest = tempfile.mkdtemp()
+>>> io.write(dest, ds)
+>>> result = io.read(dest, None)
+>>> result.count()
+1
+```
 
 #### write
 
@@ -98,9 +100,9 @@ Read a Ray Dataset from *url*, skipping empty parquet files.
 - `_metadata` - Unused; pass ``None``.
 - `**read_kwargs` - Additional kwargs forwarded to
   ``ray.data.read_parquet`` (e.g. as produced by
-  ``michelangelo.uniflow.plugins.ray.parquet_io.parquet_read_config_to_kwargs``).
-  Must not set ``filesystem`` or ``file_extensions``, which
-  this method always supplies itself.
+  ``parquet_read_config_to_kwargs``). Must not set
+  ``filesystem`` or ``file_extensions``, which this method
+  always supplies itself.
   
 
 **Returns**:
