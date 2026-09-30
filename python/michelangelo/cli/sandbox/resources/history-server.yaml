@@ -35,10 +35,12 @@
 #     into a one-click deep link: it performs the history server's own
 #     /enter_cluster call, relays the five cluster-context cookies it sets, and
 #     answers with a tiny bootstrap page that loads "/" plus the URL fragment
-#     (e.g. #/overview). That is the URL shape logPersistence.logURLFormat
-#     emits, and the contract kuberay is adopting server-side
-#     (ray-project/kuberay#5086), so the links keep working unchanged once the
-#     history server serves the bootstrap page itself.
+#     (e.g. #/overview). Only an HTML navigation (Accept: text/html) gets that
+#     page; the /select_cluster picker fetches the same URL for its JSON reply
+#     and is proxied through untouched. That is the URL shape
+#     logPersistence.logURLFormat emits, and the contract kuberay is adopting
+#     server-side (ray-project/kuberay#5086), so the links keep working
+#     unchanged once the history server serves the bootstrap page itself.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -91,6 +93,17 @@ data:
 
       upstream historyserver { server 127.0.0.1:8080; }
 
+      # /enter_cluster/... is both an API call and a deep link. The history
+      # server's own /select_cluster page fetches it (Accept: */*) and parses
+      # the JSON reply before moving to /#/overview; a browser following a
+      # logUrl navigates to it with Accept: text/html. Only the latter gets the
+      # bootstrap page below; everything else is proxied through unchanged, so
+      # the picker sees exactly what the history server answers.
+      map $http_accept $enter_cluster_page {
+        default       0;
+        "~*text/html" 1;
+      }
+
       server {
         listen 8000;
         root /dashboard;
@@ -107,13 +120,20 @@ data:
           proxy_buffering off;
         }
 
-        # Deep link into one cluster's dashboard. auth_request performs the
-        # real /enter_cluster call (the page is only served when it succeeds),
-        # $upstream_cookie_* captures each cookie it set, and the bootstrap page
-        # carries them to the browser on a 200 -- deliberately not a redirect,
-        # which a proxy in front could follow and swallow together with the
-        # cookies.
         location /enter_cluster/ {
+          if ($enter_cluster_page) { rewrite ^ /_enter_cluster_page last; }
+          proxy_pass http://historyserver;
+          proxy_buffering off;
+        }
+
+        # Deep link into one cluster's dashboard, HTML navigations only (see
+        # $enter_cluster_page). auth_request performs the real /enter_cluster
+        # call (the page is only served when it succeeds), $upstream_cookie_*
+        # captures each cookie it set, and the bootstrap page carries them to
+        # the browser on a 200 -- deliberately not a redirect, which a proxy in
+        # front could follow and swallow together with the cookies.
+        location = /_enter_cluster_page {
+          internal;
           auth_request /_enter_cluster;
           auth_request_set $ck_cluster_name      $upstream_cookie_cluster_name;
           auth_request_set $ck_cluster_namespace $upstream_cookie_cluster_namespace;
@@ -145,7 +165,8 @@ data:
           proxy_set_header Accept application/json;
         }
         location @enter_cluster_error {
-          proxy_pass http://historyserver;
+          # $request_uri: the rewrite above left $uri at /_enter_cluster_page.
+          proxy_pass http://historyserver$request_uri;
         }
       }
     }
