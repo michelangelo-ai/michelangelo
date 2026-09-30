@@ -177,8 +177,6 @@ func (c projectServiceHandler) CreateProject(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "CreateProject",
-		logging.NamespaceTag:    request.Project.ObjectMeta.Namespace,
-		logging.EntityNameTag:   request.Project.ObjectMeta.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildProjectAuditLogEventForCreate(
@@ -247,8 +245,6 @@ func (c projectServiceHandler) GetProject(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "GetProject",
-		logging.NamespaceTag:    request.Namespace,
-		logging.EntityNameTag:   request.Name,
 	})
 
 	getOptions := &metav1.GetOptions{}
@@ -304,8 +300,6 @@ func (c projectServiceHandler) UpdateProject(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "UpdateProject",
-		logging.NamespaceTag:    request.Project.ObjectMeta.Namespace,
-		logging.EntityNameTag:   request.Project.ObjectMeta.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildProjectAuditLogEventForUpdate(
@@ -374,8 +368,6 @@ func (c projectServiceHandler) DeleteProject(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "DeleteProject",
-		logging.NamespaceTag:    request.Namespace,
-		logging.EntityNameTag:   request.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildProjectAuditLogEventForDelete(
@@ -446,7 +438,6 @@ func (c projectServiceHandler) DeleteProjectCollection(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "DeleteProjectCollection",
-		logging.NamespaceTag:    request.Namespace,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildProjectAuditLogEventForDeleteCollection(
@@ -520,7 +511,6 @@ func (c projectServiceHandler) ListProject(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "ListProject",
-		logging.NamespaceTag:    request.Namespace,
 	})
 
 	result := &ProjectList{}

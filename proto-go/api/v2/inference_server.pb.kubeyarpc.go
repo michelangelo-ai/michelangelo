@@ -177,8 +177,6 @@ func (c inferenceServerServiceHandler) CreateInferenceServer(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "CreateInferenceServer",
-		logging.NamespaceTag:    request.InferenceServer.ObjectMeta.Namespace,
-		logging.EntityNameTag:   request.InferenceServer.ObjectMeta.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildInferenceServerAuditLogEventForCreate(
@@ -247,8 +245,6 @@ func (c inferenceServerServiceHandler) GetInferenceServer(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "GetInferenceServer",
-		logging.NamespaceTag:    request.Namespace,
-		logging.EntityNameTag:   request.Name,
 	})
 
 	getOptions := &metav1.GetOptions{}
@@ -304,8 +300,6 @@ func (c inferenceServerServiceHandler) UpdateInferenceServer(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "UpdateInferenceServer",
-		logging.NamespaceTag:    request.InferenceServer.ObjectMeta.Namespace,
-		logging.EntityNameTag:   request.InferenceServer.ObjectMeta.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildInferenceServerAuditLogEventForUpdate(
@@ -374,8 +368,6 @@ func (c inferenceServerServiceHandler) DeleteInferenceServer(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "DeleteInferenceServer",
-		logging.NamespaceTag:    request.Namespace,
-		logging.EntityNameTag:   request.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildInferenceServerAuditLogEventForDelete(
@@ -446,7 +438,6 @@ func (c inferenceServerServiceHandler) DeleteInferenceServerCollection(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "DeleteInferenceServerCollection",
-		logging.NamespaceTag:    request.Namespace,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildInferenceServerAuditLogEventForDeleteCollection(
@@ -520,7 +511,6 @@ func (c inferenceServerServiceHandler) ListInferenceServer(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "ListInferenceServer",
-		logging.NamespaceTag:    request.Namespace,
 	})
 
 	result := &InferenceServerList{}

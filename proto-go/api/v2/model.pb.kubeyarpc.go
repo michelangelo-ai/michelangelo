@@ -176,8 +176,6 @@ func (c modelServiceHandler) CreateModel(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "CreateModel",
-		logging.NamespaceTag:    request.Model.ObjectMeta.Namespace,
-		logging.EntityNameTag:   request.Model.ObjectMeta.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildModelAuditLogEventForCreate(
@@ -246,8 +244,6 @@ func (c modelServiceHandler) GetModel(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "GetModel",
-		logging.NamespaceTag:    request.Namespace,
-		logging.EntityNameTag:   request.Name,
 	})
 
 	getOptions := &metav1.GetOptions{}
@@ -303,8 +299,6 @@ func (c modelServiceHandler) UpdateModel(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "UpdateModel",
-		logging.NamespaceTag:    request.Model.ObjectMeta.Namespace,
-		logging.EntityNameTag:   request.Model.ObjectMeta.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildModelAuditLogEventForUpdate(
@@ -373,8 +367,6 @@ func (c modelServiceHandler) DeleteModel(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "DeleteModel",
-		logging.NamespaceTag:    request.Namespace,
-		logging.EntityNameTag:   request.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildModelAuditLogEventForDelete(
@@ -445,7 +437,6 @@ func (c modelServiceHandler) DeleteModelCollection(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "DeleteModelCollection",
-		logging.NamespaceTag:    request.Namespace,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildModelAuditLogEventForDeleteCollection(
@@ -519,7 +510,6 @@ func (c modelServiceHandler) ListModel(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "ListModel",
-		logging.NamespaceTag:    request.Namespace,
 	})
 
 	result := &ModelList{}

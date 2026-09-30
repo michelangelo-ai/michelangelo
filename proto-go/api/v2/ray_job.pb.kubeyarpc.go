@@ -177,8 +177,6 @@ func (c rayJobServiceHandler) CreateRayJob(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "CreateRayJob",
-		logging.NamespaceTag:    request.RayJob.ObjectMeta.Namespace,
-		logging.EntityNameTag:   request.RayJob.ObjectMeta.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildRayJobAuditLogEventForCreate(
@@ -247,8 +245,6 @@ func (c rayJobServiceHandler) GetRayJob(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "GetRayJob",
-		logging.NamespaceTag:    request.Namespace,
-		logging.EntityNameTag:   request.Name,
 	})
 
 	getOptions := &metav1.GetOptions{}
@@ -304,8 +300,6 @@ func (c rayJobServiceHandler) UpdateRayJob(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "UpdateRayJob",
-		logging.NamespaceTag:    request.RayJob.ObjectMeta.Namespace,
-		logging.EntityNameTag:   request.RayJob.ObjectMeta.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildRayJobAuditLogEventForUpdate(
@@ -374,8 +368,6 @@ func (c rayJobServiceHandler) DeleteRayJob(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "DeleteRayJob",
-		logging.NamespaceTag:    request.Namespace,
-		logging.EntityNameTag:   request.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildRayJobAuditLogEventForDelete(
@@ -446,7 +438,6 @@ func (c rayJobServiceHandler) DeleteRayJobCollection(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "DeleteRayJobCollection",
-		logging.NamespaceTag:    request.Namespace,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildRayJobAuditLogEventForDeleteCollection(
@@ -520,7 +511,6 @@ func (c rayJobServiceHandler) ListRayJob(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "ListRayJob",
-		logging.NamespaceTag:    request.Namespace,
 	})
 
 	result := &RayJobList{}

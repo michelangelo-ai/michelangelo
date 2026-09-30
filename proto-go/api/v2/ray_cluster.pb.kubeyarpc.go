@@ -177,8 +177,6 @@ func (c rayClusterServiceHandler) CreateRayCluster(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "CreateRayCluster",
-		logging.NamespaceTag:    request.RayCluster.ObjectMeta.Namespace,
-		logging.EntityNameTag:   request.RayCluster.ObjectMeta.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildRayClusterAuditLogEventForCreate(
@@ -247,8 +245,6 @@ func (c rayClusterServiceHandler) GetRayCluster(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "GetRayCluster",
-		logging.NamespaceTag:    request.Namespace,
-		logging.EntityNameTag:   request.Name,
 	})
 
 	getOptions := &metav1.GetOptions{}
@@ -304,8 +300,6 @@ func (c rayClusterServiceHandler) UpdateRayCluster(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "UpdateRayCluster",
-		logging.NamespaceTag:    request.RayCluster.ObjectMeta.Namespace,
-		logging.EntityNameTag:   request.RayCluster.ObjectMeta.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildRayClusterAuditLogEventForUpdate(
@@ -374,8 +368,6 @@ func (c rayClusterServiceHandler) DeleteRayCluster(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "DeleteRayCluster",
-		logging.NamespaceTag:    request.Namespace,
-		logging.EntityNameTag:   request.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildRayClusterAuditLogEventForDelete(
@@ -446,7 +438,6 @@ func (c rayClusterServiceHandler) DeleteRayClusterCollection(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "DeleteRayClusterCollection",
-		logging.NamespaceTag:    request.Namespace,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildRayClusterAuditLogEventForDeleteCollection(
@@ -520,7 +511,6 @@ func (c rayClusterServiceHandler) ListRayCluster(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "ListRayCluster",
-		logging.NamespaceTag:    request.Namespace,
 	})
 
 	result := &RayClusterList{}

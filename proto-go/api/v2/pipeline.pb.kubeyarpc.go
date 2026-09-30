@@ -177,8 +177,6 @@ func (c pipelineServiceHandler) CreatePipeline(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "CreatePipeline",
-		logging.NamespaceTag:    request.Pipeline.ObjectMeta.Namespace,
-		logging.EntityNameTag:   request.Pipeline.ObjectMeta.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildPipelineAuditLogEventForCreate(
@@ -247,8 +245,6 @@ func (c pipelineServiceHandler) GetPipeline(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "GetPipeline",
-		logging.NamespaceTag:    request.Namespace,
-		logging.EntityNameTag:   request.Name,
 	})
 
 	getOptions := &metav1.GetOptions{}
@@ -304,8 +300,6 @@ func (c pipelineServiceHandler) UpdatePipeline(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "UpdatePipeline",
-		logging.NamespaceTag:    request.Pipeline.ObjectMeta.Namespace,
-		logging.EntityNameTag:   request.Pipeline.ObjectMeta.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildPipelineAuditLogEventForUpdate(
@@ -374,8 +368,6 @@ func (c pipelineServiceHandler) DeletePipeline(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "DeletePipeline",
-		logging.NamespaceTag:    request.Namespace,
-		logging.EntityNameTag:   request.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildPipelineAuditLogEventForDelete(
@@ -446,7 +438,6 @@ func (c pipelineServiceHandler) DeletePipelineCollection(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "DeletePipelineCollection",
-		logging.NamespaceTag:    request.Namespace,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildPipelineAuditLogEventForDeleteCollection(
@@ -520,7 +511,6 @@ func (c pipelineServiceHandler) ListPipeline(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "ListPipeline",
-		logging.NamespaceTag:    request.Namespace,
 	})
 
 	result := &PipelineList{}

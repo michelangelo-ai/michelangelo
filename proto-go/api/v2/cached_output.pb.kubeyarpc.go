@@ -177,8 +177,6 @@ func (c cachedOutputServiceHandler) CreateCachedOutput(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "CreateCachedOutput",
-		logging.NamespaceTag:    request.CachedOutput.ObjectMeta.Namespace,
-		logging.EntityNameTag:   request.CachedOutput.ObjectMeta.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildCachedOutputAuditLogEventForCreate(
@@ -247,8 +245,6 @@ func (c cachedOutputServiceHandler) GetCachedOutput(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "GetCachedOutput",
-		logging.NamespaceTag:    request.Namespace,
-		logging.EntityNameTag:   request.Name,
 	})
 
 	getOptions := &metav1.GetOptions{}
@@ -304,8 +300,6 @@ func (c cachedOutputServiceHandler) UpdateCachedOutput(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "UpdateCachedOutput",
-		logging.NamespaceTag:    request.CachedOutput.ObjectMeta.Namespace,
-		logging.EntityNameTag:   request.CachedOutput.ObjectMeta.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildCachedOutputAuditLogEventForUpdate(
@@ -374,8 +368,6 @@ func (c cachedOutputServiceHandler) DeleteCachedOutput(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "DeleteCachedOutput",
-		logging.NamespaceTag:    request.Namespace,
-		logging.EntityNameTag:   request.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildCachedOutputAuditLogEventForDelete(
@@ -446,7 +438,6 @@ func (c cachedOutputServiceHandler) DeleteCachedOutputCollection(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "DeleteCachedOutputCollection",
-		logging.NamespaceTag:    request.Namespace,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildCachedOutputAuditLogEventForDeleteCollection(
@@ -520,7 +511,6 @@ func (c cachedOutputServiceHandler) ListCachedOutput(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "ListCachedOutput",
-		logging.NamespaceTag:    request.Namespace,
 	})
 
 	result := &CachedOutputList{}

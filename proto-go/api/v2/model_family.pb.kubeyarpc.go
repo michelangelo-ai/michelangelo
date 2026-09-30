@@ -177,8 +177,6 @@ func (c modelFamilyServiceHandler) CreateModelFamily(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "CreateModelFamily",
-		logging.NamespaceTag:    request.ModelFamily.ObjectMeta.Namespace,
-		logging.EntityNameTag:   request.ModelFamily.ObjectMeta.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildModelFamilyAuditLogEventForCreate(
@@ -247,8 +245,6 @@ func (c modelFamilyServiceHandler) GetModelFamily(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "GetModelFamily",
-		logging.NamespaceTag:    request.Namespace,
-		logging.EntityNameTag:   request.Name,
 	})
 
 	getOptions := &metav1.GetOptions{}
@@ -304,8 +300,6 @@ func (c modelFamilyServiceHandler) UpdateModelFamily(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "UpdateModelFamily",
-		logging.NamespaceTag:    request.ModelFamily.ObjectMeta.Namespace,
-		logging.EntityNameTag:   request.ModelFamily.ObjectMeta.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildModelFamilyAuditLogEventForUpdate(
@@ -374,8 +368,6 @@ func (c modelFamilyServiceHandler) DeleteModelFamily(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "DeleteModelFamily",
-		logging.NamespaceTag:    request.Namespace,
-		logging.EntityNameTag:   request.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildModelFamilyAuditLogEventForDelete(
@@ -446,7 +438,6 @@ func (c modelFamilyServiceHandler) DeleteModelFamilyCollection(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "DeleteModelFamilyCollection",
-		logging.NamespaceTag:    request.Namespace,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildModelFamilyAuditLogEventForDeleteCollection(
@@ -520,7 +511,6 @@ func (c modelFamilyServiceHandler) ListModelFamily(
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "ListModelFamily",
-		logging.NamespaceTag:    request.Namespace,
 	})
 
 	result := &ModelFamilyList{}
