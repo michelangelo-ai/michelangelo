@@ -59,17 +59,10 @@ function createServiceClient<T extends DescService>(
     if (method.methodKind !== 'unary') continue;
 
     client[method.localName] = async (request, headers) => {
-      // Turn the caller's object into proto3 JSON: drop the server-owned grace period, convert
-      // { seconds, nanos } back to strings, and wrap plain values given for Any fields.
+      const withoutGracePeriod = omitDeletionGracePeriod(method.input, request, typeRegistry);
+      const withTimeStrings = timesToStrings(method.input, withoutGracePeriod, typeRegistry);
       // cast: each step returns the JSON object it was given, rewritten
-      const packedRequest = packAnyFields(
-        method.input,
-        timesToStrings(
-          method.input,
-          omitDeletionGracePeriod(method.input, request, typeRegistry),
-          typeRegistry
-        )
-      ) as JsonValue;
+      const packedRequest = packAnyFields(method.input, withTimeStrings) as JsonValue;
       // Parsing and re-serializing checks every value against its field type and drops keys
       // that aren't fields. Callers pass whole records back (e.g. form state), so unknown keys
       // are expected rather than an error.
