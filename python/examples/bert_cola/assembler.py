@@ -59,7 +59,7 @@ def _resolve_storage_backend(tmp_prefix: str):
         if not endpoint:
             raise ValueError(
                 f"AWS_ENDPOINT_URL={s3_endpoint!r} is missing a scheme. "
-                "Use a full URL like http://minio:9091"
+                "Use a full URL like http://objectstore:9091"
             )
         bucket = (
             os.environ.get("AWS_S3_BUCKET")
