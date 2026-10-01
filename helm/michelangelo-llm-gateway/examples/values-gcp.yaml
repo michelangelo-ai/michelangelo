@@ -6,6 +6,8 @@ litellm:
     annotations:
       iam.gke.io/gcp-service-account: litellm@REPLACE_WITH_GCP_PROJECT.iam.gserviceaccount.com
 
+  # Internal load balancing does not provide TLS or caller/admin authorization.
+  # Configure source restrictions and the encrypted access boundary separately.
   service:
     type: LoadBalancer
     annotations:
@@ -70,7 +72,11 @@ litellm:
           app.kubernetes.io/name: litellm
 
 networkPolicy:
+  # Enable after defining caller, database, provider, DNS, and metadata-server rules.
+  # Migration hooks also need a pre-existing policy and migration.managedExternally=true.
   enabled: false
 
 serviceMonitor:
+  # Enable after installing Prometheus Operator and provisioning a restricted
+  # LiteLLM /metrics key Secret; set authorization.secretName and secretKey.
   enabled: false

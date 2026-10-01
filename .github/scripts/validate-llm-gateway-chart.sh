@@ -84,6 +84,20 @@ assert_not_contains() {
   fi
 }
 
+extra_env_fixture() {
+  local schema_update_value="$1"
+  local example_value="$2"
+
+  cat <<EOF
+[
+  {"name":"LITELLM_SALT_KEY","valueFrom":{"secretKeyRef":{"name":"litellm-secrets","key":"saltkey"}}},
+  {"name":"DATABASE_URL","valueFrom":{"secretKeyRef":{"name":"litellm-secrets","key":"database-url"}}},
+  {"name":"DISABLE_SCHEMA_UPDATE","value":$schema_update_value},
+  {"name":"EXAMPLE_VALUE","value":$example_value}
+]
+EOF
+}
+
 validate_profile
 validate_profile -f "$CHART_DIR/examples/values-gcp.yaml"
 validate_profile \
@@ -112,6 +126,16 @@ validate_profile \
   --set-string 'litellm.keda.triggers[0].metadata.type=Utilization' \
   --set-string 'litellm.keda.triggers[0].metadata.value=70'
 render --set-string litellm.resources.requests.cpu=1E
+
+quoted_env_values="$(extra_env_fixture '"true"' '"42"')"
+render --set-json "litellm.extraEnvVars=$quoted_env_values"
+quoted_env_output="$(helm template litellm "$CHART_DIR" \
+  --namespace litellm \
+  --show-only charts/litellm/templates/deployment.yaml \
+  --set-json "litellm.extraEnvVars=$quoted_env_values")"
+assert_contains "$quoted_env_output" 'value: "true"'
+assert_contains "$quoted_env_output" 'value: "42"'
+assert_contains "$quoted_env_output" 'secretKeyRef:'
 
 default_output="$(helm template litellm "$CHART_DIR" --namespace litellm)"
 assert_contains "$default_output" 'ghcr.io/berriai/litellm-non_root:v1.85.1@sha256:97ce25938fc7f38f14a4036df78ba3d57725706b6183488af9931750e395c673'
@@ -272,6 +296,12 @@ expect_failure "KEDA without triggers" "litellm.keda.triggers" \
   --set litellm.keda.enabled=true
 expect_failure "plaintext secret" "cannot contain reserved or sensitive variable API_TOKEN" \
   --set litellm.envVars.API_TOKEN=secret
+expect_failure "boolean migration environment value" "litellm.extraEnvVars.2.value" \
+  --set-json "litellm.extraEnvVars=$(extra_env_fixture true '"42"')"
+expect_failure "boolean environment value" "litellm.extraEnvVars.3.value" \
+  --set-json "litellm.extraEnvVars=$(extra_env_fixture '"true"' true)"
+expect_failure "numeric environment value" "litellm.extraEnvVars.3.value" \
+  --set-json "litellm.extraEnvVars=$(extra_env_fixture '"true"' 42)"
 expect_failure "plaintext proxy API key" "litellm.proxy_config.model_list[0].litellm_params.api_key must use os.environ/ENV_VAR" \
   --set 'litellm.proxy_config.model_list[0].model_name=unsafe' \
   --set 'litellm.proxy_config.model_list[0].litellm_params.model=openai/gpt-4o' \

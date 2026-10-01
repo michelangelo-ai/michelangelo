@@ -190,7 +190,7 @@
                 "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
               },
               "value": {
-                "type": ["string", "number", "boolean"]
+                "type": "string"
               },
               "valueFrom": {
                 "type": "object",

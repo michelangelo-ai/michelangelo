@@ -75,6 +75,8 @@ litellm:
 
   environmentSecrets: []
   environmentConfigMaps: []
+  # Literal values must be strings (for example, "true" or "42"); use
+  # valueFrom.secretKeyRef for credentials instead of embedding them here.
   extraEnvVars:
     - name: LITELLM_SALT_KEY
       valueFrom:
@@ -171,10 +173,15 @@ litellm:
   serviceMonitor:
     enabled: false
 
+# Runs database migrations before gateway Pods start. Exactly one of enabled
+# and managedExternally must be true.
 migrationJob:
   enabled: true
+  # Set true only when another deployment step runs the qualified migrations.
   managedExternally: false
+  # Must already exist: pre-install/PreSync hooks run before chart resources.
   serviceAccountName: default
+  # Bound migration retries and retain completed Jobs for one day.
   activeDeadlineSeconds: 900
   backoffLimit: 4
   ttlSecondsAfterFinished: 86400
@@ -187,41 +194,59 @@ migrationJob:
       cpu: 500m
       memory: 2Gi
   hooks:
+    # Select exactly one hook engine when migrationJob.enabled is true.
     helm:
       enabled: true
       weight: 0
     argocd:
       enabled: false
 
+# Restricts gateway traffic when the cluster's network plugin enforces policies.
 networkPolicy:
   enabled: false
   migration:
+    # With managed migration hooks, enable only after installing a separate
+    # migration policy; the regular gateway policy is created after the hook.
     managedExternally: false
+  # Allow TCP/UDP DNS to these selectors; adapt them to the cluster's DNS Pods.
   allowDNS: true
   dns:
     namespaceSelector:
       kubernetes.io/metadata.name: kube-system
     podSelector:
       k8s-app: kube-dns
+  # Kubernetes NetworkPolicy rules for approved callers and monitoring clients.
   ingress: []
+  # Permit the database, providers, and identity endpoints used by this release.
+  # Empty rules deny other egress; DNS is controlled separately by allowDNS.
   egress: []
 
+# Requires the Prometheus Operator ServiceMonitor CRD and authenticated metrics.
 serviceMonitor:
   enabled: false
+  # Match the labels selected by the cluster's Prometheus installation.
   labels: {}
   annotations: {}
   interval: 15s
   scrapeTimeout: 10s
   path: /metrics
+  # Empty selects Services in this release's namespace.
   namespaceSelector: {}
   authorization:
+    # Required when enabled: existing same-namespace Secret containing a
+    # LiteLLM credential authorized to scrape metrics, not a plaintext token.
     secretName: ""
     secretKey: token
 
+# Authenticated /v1/models smoke test; not a scoped-key inference/policy test.
+# Run only this wrapper hook with helm test --filter
+# name=<release>-michelangelo-llm-gateway-test-connection.
 tests:
   enabled: true
   image:
+    # Keep the qualified digest when mirroring this image to a private registry.
     repository: curlimages/curl
     tag: "8.12.1@sha256:94e9e444bcba979c2ea12e27ae39bee4cd10bc7041a472c4727a558e213744e6"
     pullPolicy: IfNotPresent
+  # Maximum duration of the HTTP request, in seconds.
   timeoutSeconds: 10
