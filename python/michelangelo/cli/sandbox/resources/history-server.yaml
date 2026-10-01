@@ -1,3 +1,18 @@
+# Ray History Server for the k3d sandbox.
+#
+# Source: upstream kuberay historyserver/config/historyserver.yaml @ v1.7.1,
+# adapted for the sandbox:
+#   - MinIO instead of real S3 (S3_ENDPOINT minio:9091, path-style, SSL off),
+#     credentials from the object-storage-credentials Secret
+#   - NodePort 30016 instead of the upstream ClusterIP
+#   - resources and --session-cache-max-memory scaled down for a single-node
+#     k3d node (~31Gi); upstream asks for 500m/2Gi with a 12Gi limit and an
+#     8Gi session cache
+#
+# As of v1.7 the server is configured entirely through env
+# (STORAGE_BACKEND / STORAGE_ROOT_DIR) instead of the v1.6 command-line flags,
+# and reads the standard AWS_* credential names instead of the fork's custom
+# aliases.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -11,7 +26,7 @@ metadata:
 rules:
 - apiGroups: ["ray.io"]
   resources: ["rayclusters"]
-  verbs: ["list", "get"]
+  verbs: ["get", "list", "watch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -45,29 +60,31 @@ spec:
       serviceAccountName: historyserver
       containers:
       - name: history-server
-        image: ghcr.io/michelangelo-ai/kuberay-historyserver:main
+        image: quay.io/kuberay/historyserver:v1.7.1
         imagePullPolicy: IfNotPresent
-        command:
-        - historyserver
-        - --runtime-class-name=s3
-        - --ray-root-dir=log
+        # No command override: the image entrypoints the historyserver binary.
+        # The cache cap is a soft limit, so limits.memory must sit above it.
+        args:
+        - --session-cache-max-memory=1Gi
         env:
-        - name: S3DISABLE_SSL
-          value: "true"
-        # Upstream kuberay's storage/s3 reads creds from custom names
-        # AWS_S3ID/AWS_S3SECRET/AWS_S3TOKEN, NOT the standard AWS env vars.
-        # See historyserver/pkg/storage/s3/config.go.
-        - name: AWS_S3ID
+        - name: STORAGE_BACKEND
+          value: "s3"
+        # Root dir inside the bucket. Must match the collector sidecar's
+        # STORAGE_ROOT_DIR (logPersistence pathPrefix), otherwise the server
+        # reads an empty prefix and lists no sessions.
+        - name: STORAGE_ROOT_DIR
+          value: "log"
+        - name: AWS_ACCESS_KEY_ID
           valueFrom:
             secretKeyRef:
               name: "object-storage-credentials"
               key: "AWS_ACCESS_KEY_ID"
-        - name: AWS_S3SECRET
+        - name: AWS_SECRET_ACCESS_KEY
           valueFrom:
             secretKeyRef:
               name: "object-storage-credentials"
               key: "AWS_SECRET_ACCESS_KEY"
-        - name: AWS_S3TOKEN
+        - name: AWS_SESSION_TOKEN
           value: ""
         - name: S3_BUCKET
           value: "ray-history"
@@ -77,15 +94,18 @@ spec:
           value: "us-east-1"
         - name: S3FORCE_PATH_STYLE
           value: "true"
+        - name: S3DISABLE_SSL
+          value: "true"
         ports:
         - containerPort: 8080
           name: http
         resources:
           requests:
-            cpu: "100m"
-            memory: "128Mi"
+            cpu: "250m"
+            memory: "512Mi"
           limits:
             cpu: "500m"
+            memory: "2Gi"
 ---
 apiVersion: v1
 kind: Service

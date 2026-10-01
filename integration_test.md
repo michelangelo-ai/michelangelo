@@ -159,7 +159,7 @@ k3d cluster: michelangelo-sandbox (k3s v1.31, Docker-in-Docker [2])
     ├── envoy             Pod      HTTP proxy → michelangelo-ui
     └── michelangelo-ui   Deployment  React UI (TypeScript/React [12])
 ├── ray-system namespace
-│   └── kuberay-operator  Deployment  KubeRay operator v1.4.2 [4]
+│   └── kuberay-operator  Deployment  KubeRay operator v1.7.1 [4]
 └── spark-operator namespace
     └── spark-operator    Deployment  Spark Operator v2.x [5]
 ```

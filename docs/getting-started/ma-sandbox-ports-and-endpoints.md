@@ -22,6 +22,7 @@ The most common URLs you'll open after the sandbox is up:
 | Prometheus | http://localhost:9092 | none |
 | MLflow Tracking (with `--include-experimental mlflow`) | http://localhost:5001 | none |
 | Ray Dashboard (with `--create-compute-cluster`) | http://localhost:8265 | none |
+| Ray History Server | http://localhost:3001 | none |
 
 The MySQL root password is `root` (database: `temporal`). Connect with `mysql -h 127.0.0.1 -P 3306 -u root -proot`.
 
@@ -49,6 +50,7 @@ These mappings are created automatically by `ma sandbox create`:
 | Grafana | 3000 | 30012 | `grafana` | 3000 | Dashboards (skipped with `--exclude grafana`) |
 | Prometheus | 9092 | 30015 | `prometheus` | 9090 | Metrics (skipped with `--exclude prometheus`) |
 | MLflow Tracking | 5001 | 30013 | `mlflow` | 5000 | Experiment tracking (only deployed with `--include-experimental mlflow`) |
+| Ray History Server | 3001 | 30016 | `history-server` | 8080 | Replay the Ray Dashboard for finished Ray clusters — only has data once log persistence has captured one |
 
 ### Temporal workflow engine
 

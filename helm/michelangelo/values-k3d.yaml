@@ -83,7 +83,8 @@ affinity: {}
 # Ray cluster log persistence — enabled for sandbox to wire up the KubeRay
 # History Server. The collector sidecar uses the in-cluster MinIO endpoint
 # (minio:9091) and the chart-managed object-storage-credentials Secret.
-# The collector image is pulled from GHCR automatically (no local build needed).
+# The collector image is the official quay.io/kuberay/collector release pulled
+# on demand (no local build needed) — see images.kuberayCollector.
 controllermgr:
   metadataStorage:
     enable: true
@@ -120,7 +121,9 @@ controllermgr:
           bucket: ray-history
           pathPrefix: log
           s3DisableSSL: true
-          logURLFormat: "http://localhost:9090/browser/{{.Bucket}}/{{.PathPrefix}}/{{.ClusterName}}_{{.RayLocalNamespace}}/"
+          # KubeRay v1.7 object layout:
+          # {pathPrefix}/cluster-history/raycluster/{namespace}/{cluster}/...
+          logURLFormat: "http://localhost:9090/browser/{{.Bucket}}/{{.PathPrefix}}/cluster-history/raycluster/{{.RayLocalNamespace}}/{{.ClusterName}}/"
 
 
 

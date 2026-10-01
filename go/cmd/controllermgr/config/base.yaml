@@ -56,13 +56,20 @@ jobs:
         pathPrefix: log
         region: us-east-1
         credentialsSecret: minio-credentials
-        collectorImage: ghcr.io/michelangelo-ai/kuberay-collector:main
+        collectorImage: quay.io/kuberay/collector:v1.7.1
         s3DisableSSL: true
+        # exposableEventTypes sets RAY_DASHBOARD_AGGREGATOR_AGENT_EXPOSABLE_EVENT_TYPES
+        # on every Ray container. "ALL" requires Ray >= 2.54; for older Ray images
+        # replace it with the explicit list:
+        # TASK_DEFINITION_EVENT,TASK_LIFECYCLE_EVENT,ACTOR_TASK_DEFINITION_EVENT,TASK_PROFILE_EVENT,DRIVER_JOB_DEFINITION_EVENT,DRIVER_JOB_LIFECYCLE_EVENT,ACTOR_DEFINITION_EVENT,ACTOR_LIFECYCLE_EVENT,NODE_DEFINITION_EVENT,NODE_LIFECYCLE_EVENT
+        exposableEventTypes: "ALL"
         # logURLFormat is a Go text/template that builds the human-browsable
         # log URL. Available vars: {{.Bucket}}, {{.PathPrefix}}, {{.ClusterName}},
         # {{.RayLocalNamespace}}. Sandbox default points at the in-cluster MinIO
         # console; production overlays point at OCI Object Storage / S3 console.
-        logURLFormat: "http://localhost:9090/browser/{{.Bucket}}/{{.PathPrefix}}/{{.ClusterName}}_{{.RayLocalNamespace}}/"
+        # Path mirrors the KubeRay v1.7 object layout:
+        # {pathPrefix}/cluster-history/raycluster/{namespace}/{cluster}/...
+        logURLFormat: "http://localhost:9090/browser/{{.Bucket}}/{{.PathPrefix}}/cluster-history/raycluster/{{.RayLocalNamespace}}/{{.ClusterName}}/"
 
 minio:
   awsRegion: us-east-1
