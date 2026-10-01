@@ -919,7 +919,7 @@ def _deploy_services(ns: argparse.Namespace):
     links.append(
         (
             "Ray History Server",
-            "http://localhost:3001",
+            "http://localhost:3001/select_cluster",
             "",
         )
     )
@@ -995,6 +995,10 @@ def _deploy_services(ns: argparse.Namespace):
         # helm repo list returns non-zero exit status when no repositories
         # are configured
         helm_existing_repos = ""
+
+    # The History Server above is deployed even with --exclude ray, so its
+    # images are imported outside the KubeRay operator step.
+    _import_log_persistence_images()
 
     if "ray" not in ns.exclude:
         _create_kuberay_operator(helm_existing_repos)
@@ -1129,45 +1133,83 @@ def _create_kuberay_operator(helm_existing_repos):
         "20m",
     )
 
-    _import_kuberay_images()
 
-
-_KUBERAY_IMAGES = [
+_LOG_PERSISTENCE_IMAGES = [
+    # KubeRay log persistence: collector sidecar + History Server API.
     "quay.io/kuberay/collector:v1.7.1",
     "quay.io/kuberay/historyserver:v1.7.1",
+    # History Server frontend (resources/history-server.yaml): nginx serves the
+    # Ray Dashboard build copied out of the Ray image. Keep the Ray tag on the
+    # version the collector targets so the dashboard matches the replayed API.
+    "rayproject/ray:2.55.0",
+    "nginx:1.27-alpine",
 ]
 
 
-def _import_kuberay_images():
-    """Pull the official kuberay images from quay.io and import them into k3d.
+def _import_log_persistence_images():
+    """Pull the Ray log-persistence images and import them into k3d.
 
+    Pulling on the host rather than letting the node do it keeps working
+    behind corporate TLS interception, where the k3d node trusts no extra CA.
+    When the pull fails, a copy already on the host is imported instead.
     Non-fatal: prints a warning on failure since the collector sidecar and
-    history server are optional for basic sandbox usage.
+    history server are optional for basic sandbox usage, and the pods use
+    imagePullPolicy IfNotPresent so the node still pulls what is missing.
     """
-    for image in _KUBERAY_IMAGES:
+    for image in _LOG_PERSISTENCE_IMAGES:
         print(f"Importing {image} into k3d...")
         pull = subprocess.run(
             ["docker", "pull", image],
             capture_output=True,
         )
         if pull.returncode != 0:
-            print(f"Warning: could not pull {image}. Skipping.")
-            continue
+            local = subprocess.run(
+                ["docker", "image", "inspect", image],
+                capture_output=True,
+            )
+            if local.returncode != 0:
+                print(f"Warning: could not pull {image}. Skipping.")
+                continue
+            print(f"Warning: could not pull {image}; importing the local copy.")
+        if _k3d_import_image(image):
+            print(f"Successfully imported {image} into k3d.")
+        else:
+            print(f"Warning: could not import {image} into k3d.")
+
+
+def _k3d_import_image(image: str) -> bool:
+    """Import a host image into the sandbox's k3d nodes; True on success.
+
+    ``k3d image import <image>`` exits 0 yet imports nothing when Docker uses
+    the containerd image store: it saves a multi-platform archive whose other
+    platforms were never pulled, and the nodes skip it. Saving only the
+    Docker server's platform to a tarball and importing that works with
+    either image store. Docker without ``docker save --platform`` falls back
+    to the plain import, which works with the classic image store.
+    """
+    platform = subprocess.run(
+        ["docker", "version", "--format", "{{.Server.Os}}/{{.Server.Arch}}"],
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    with tempfile.TemporaryDirectory() as tmp:
+        archive = str(Path(tmp) / "image.tar")
+        save = subprocess.run(
+            ["docker", "save", "--platform", platform, "-o", archive, image],
+            capture_output=True,
+        )
         result = subprocess.run(
             [
                 "k3d",
                 "image",
                 "import",
-                image,
+                archive if save.returncode == 0 else image,
                 "-c",
                 _michelangelo_sandbox_kube_cluster_name,
             ],
             capture_output=True,
         )
-        if result.returncode != 0:
-            print(f"Warning: could not import {image} into k3d.")
-        else:
-            print(f"Successfully imported {image} into k3d.")
+    return result.returncode == 0
 
 
 def _create_cadence_domain(links):
