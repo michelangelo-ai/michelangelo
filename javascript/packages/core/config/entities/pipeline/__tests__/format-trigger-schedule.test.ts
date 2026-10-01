@@ -6,13 +6,13 @@ describe('formatTriggerSchedule', () => {
   });
 
   it.each([
-    [86400, 'every day'],
-    [3600, 'every hour'],
-    [7200, 'every 2 hours'],
-    [900, 'every 15 minutes'],
-    [90, 'every 90 seconds'],
-  ])('renders an interval of %i seconds as "%s"', (seconds, expected) => {
-    expect(formatTriggerSchedule({ intervalSchedule: { interval: { seconds } } })).toBe(expected);
+    ['86400s', 'every day'],
+    ['3600s', 'every hour'],
+    ['7200s', 'every 2 hours'],
+    ['900s', 'every 15 minutes'],
+    ['90s', 'every 90 seconds'],
+  ])('renders an interval of %s as "%s"', (interval, expected) => {
+    expect(formatTriggerSchedule({ intervalSchedule: { interval } })).toBe(expected);
   });
 
   it('names a batch rerun rather than describing a schedule', () => {

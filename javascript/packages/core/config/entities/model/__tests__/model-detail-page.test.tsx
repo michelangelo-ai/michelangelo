@@ -29,7 +29,7 @@ describe('Model detail page', () => {
                 model: {
                   metadata: {
                     name: 'fraud-classifier',
-                    creationTimestamp: { seconds: 1700000000 },
+                    creationTimestamp: '2023-11-14T22:13:20Z',
                   },
                   spec: {
                     owner: { name: 'jsmith' },
@@ -60,7 +60,7 @@ describe('Model detail page', () => {
 
   describe('information tab', () => {
     const DEPLOYED_TO_ONLINE = {
-      metadata: { name: 'fraud-classifier-prod', creationTimestamp: { seconds: 1700000000 } },
+      metadata: { name: 'fraud-classifier-prod', creationTimestamp: '2023-11-14T22:13:20Z' },
       spec: {
         definition: { type: 'TARGET_TYPE_INFERENCE_SERVER' },
         inferenceServer: { name: 'ma-endpoint-fraud' },
@@ -80,7 +80,7 @@ describe('Model detail page', () => {
           model: {
             metadata: {
               name: 'fraud-classifier',
-              creationTimestamp: { seconds: 1700000000 },
+              creationTimestamp: '2023-11-14T22:13:20Z',
             },
             spec: {
               owner: { name: 'jsmith' },

@@ -1,3 +1,5 @@
+import { toEpochSeconds } from '#core/utils/time-utils';
+
 const SPEC_UPDATE_TIMESTAMP_LABEL_KEY = 'michelangelo/SpecUpdateTimestamp';
 const UPDATE_TIMESTAMP_LABEL_KEY = 'michelangelo/UpdateTimestamp';
 const MICROSECONDS_PER_SECOND = 1_000_000;
@@ -32,15 +34,16 @@ export const K8S_NAME_RULES_MESSAGE =
  * }) // 1700000000
  *
  * getCrdUpdatedSeconds({
- *   metadata: { creationTimestamp: { seconds: 1650000000 } },
+ *   metadata: { creationTimestamp: '2022-04-15T05:20:00Z' },
  * }) // 1650000000 (label absent, falls back to creation time)
  */
 export function getCrdUpdatedSeconds(data: {
-  metadata?: { labels?: Record<string, string>; creationTimestamp?: { seconds: number } };
+  metadata?: { labels?: Record<string, string>; creationTimestamp?: string };
 }): number | undefined {
   const label = data.metadata?.labels?.[SPEC_UPDATE_TIMESTAMP_LABEL_KEY];
   if (label) return Number(label) / MICROSECONDS_PER_SECOND;
-  return data.metadata?.creationTimestamp?.seconds;
+  const created = data.metadata?.creationTimestamp;
+  return created === undefined ? undefined : toEpochSeconds(created);
 }
 
 /**
@@ -60,13 +63,14 @@ export function getCrdUpdatedSeconds(data: {
  * }) // 1700000000
  *
  * getCrdLastUpdatedSeconds({
- *   metadata: { creationTimestamp: { seconds: 1650000000 } },
+ *   metadata: { creationTimestamp: '2022-04-15T05:20:00Z' },
  * }) // 1650000000 (label absent, falls back to creation time)
  */
 export function getCrdLastUpdatedSeconds(data: {
-  metadata?: { labels?: Record<string, string>; creationTimestamp?: { seconds: number } };
+  metadata?: { labels?: Record<string, string>; creationTimestamp?: string };
 }): number | undefined {
   const label = data.metadata?.labels?.[UPDATE_TIMESTAMP_LABEL_KEY];
   if (label) return Number(label) / MICROSECONDS_PER_SECOND;
-  return data.metadata?.creationTimestamp?.seconds;
+  const created = data.metadata?.creationTimestamp;
+  return created === undefined ? undefined : toEpochSeconds(created);
 }

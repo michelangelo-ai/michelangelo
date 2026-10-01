@@ -155,18 +155,15 @@ export const TERMINAL_RUN_STATES: ReadonlySet<PipelineRunState> = new Set([
   PipelineRunState.SKIPPED,
 ]);
 
-/** Timestamp as returned by the API for pipeline run steps. */
-type StepTimestamp = {
-  seconds?: string;
-};
-
 /** The subset of `PipelineRunStepInfo` the resume step picker and information tab read. */
 export type PipelineRunStepInfo = {
   name?: string;
   displayName?: string;
   state?: PipelineRunStepState;
-  startTime?: StepTimestamp;
-  endTime?: StepTimestamp;
+  /** RFC 3339 (proto3 JSON `google.protobuf.Timestamp`). */
+  startTime?: string;
+  /** RFC 3339 (proto3 JSON `google.protobuf.Timestamp`). */
+  endTime?: string;
   logUrl?: string;
   subSteps?: PipelineRunStepInfo[];
 };
@@ -176,7 +173,8 @@ export type PipelineRunSummary = {
   metadata?: {
     name?: string;
     namespace?: string;
-    creationTimestamp?: StepTimestamp;
+    /** k8s `Time`; `seconds` is an int64, which proto3 JSON encodes as a string. */
+    creationTimestamp?: string;
     labels?: Record<string, string>;
   };
   spec?: {

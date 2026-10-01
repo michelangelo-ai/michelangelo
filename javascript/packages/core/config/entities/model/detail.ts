@@ -15,7 +15,7 @@ export const MODEL_DETAIL_CONFIG: DetailViewConfig = {
       url: '/${studio.projectId}/${studio.phase}/runs/${page.spec.sourcePipelineRun.name}',
     },
     { id: 'spec.owner.name', label: 'Trained by', type: CellType.TEXT },
-    { id: 'metadata.creationTimestamp.seconds', label: 'Creation time', type: CellType.DATE },
+    { id: 'metadata.creationTimestamp', label: 'Creation time', type: CellType.DATE },
     {
       id: 'lastUpdated',
       label: 'Last updated',
@@ -24,7 +24,7 @@ export const MODEL_DETAIL_CONFIG: DetailViewConfig = {
         // cast: accessor receives unknown data; narrowing to expected proto shape for property
         // access; see #1425
         const row = data as {
-          metadata?: { labels?: Record<string, string>; creationTimestamp?: { seconds: number } };
+          metadata?: { labels?: Record<string, string>; creationTimestamp?: string };
         };
         return getCrdUpdatedSeconds(row);
       },

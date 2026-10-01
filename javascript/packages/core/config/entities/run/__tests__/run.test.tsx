@@ -65,7 +65,7 @@ describe('Run list page', () => {
                     // Distinct from run-without-labels' creationTimestamp below so this row's
                     // Created value (which always reads creationTimestamp) doesn't collide with
                     // the other row's Last Updated fallback (which also reads creationTimestamp).
-                    creationTimestamp: { seconds: 1660000000 },
+                    creationTimestamp: '2022-08-08T23:06:40Z',
                   },
                   spec: { actor: { name: 'jsmith' }, pipeline: { name: 'prediction-pipeline' } },
                   status: { state: PipelineRunState.SUCCEEDED },
@@ -73,7 +73,7 @@ describe('Run list page', () => {
                 {
                   metadata: {
                     name: 'run-without-labels',
-                    creationTimestamp: { seconds: 1650000000 },
+                    creationTimestamp: '2022-04-15T05:20:00Z',
                   },
                   spec: { actor: { name: 'jsmith' }, pipeline: { name: 'prediction-pipeline' } },
                   status: { state: PipelineRunState.SUCCEEDED },
@@ -89,12 +89,12 @@ describe('Run list page', () => {
     expect(screen.getByText('Production')).toBeInTheDocument();
     // The UpdateTimestamp label (1700000000 seconds) is used over creationTimestamp.
     expect(screen.getByText('2023/11/14 22:13:20 (UTC)')).toBeInTheDocument();
-    // Created always reads creationTimestamp (1660000000 seconds), independent of Last Updated.
+    // Created always reads creationTimestamp (2022-08-08T23:06:40Z), independent of Last Updated.
     expect(screen.getByText('2022/08/08 23:06:40 (UTC)')).toBeInTheDocument();
 
     expect(screen.getByRole('link', { name: 'run-without-labels' })).toBeInTheDocument();
-    // No UpdateTimestamp label: Last Updated falls back to creationTimestamp (1650000000
-    // seconds), the same value Created reads directly — both cells render this text.
+    // No UpdateTimestamp label: Last Updated falls back to creationTimestamp
+    // (2022-04-15T05:20:00Z), the same value Created reads directly — both cells render this text.
     expect(screen.getAllByText('2022/04/15 05:20:00 (UTC)')).toHaveLength(2);
     // No environment label: renders no Environment text at all.
     expect(screen.queryByText('Development')).not.toBeInTheDocument();
@@ -105,7 +105,7 @@ describe('Run list page', () => {
 describe('Run detail page', () => {
   describe('configuration tab', () => {
     const buildRun = (overrides: Record<string, unknown> = {}) => ({
-      metadata: { name: 'run-1', creationTimestamp: { seconds: 1700000000 } },
+      metadata: { name: 'run-1', creationTimestamp: '2023-11-14T22:13:20Z' },
       spec: {
         actor: { name: 'jsmith' },
         pipeline: { name: 'prediction-pipeline' },

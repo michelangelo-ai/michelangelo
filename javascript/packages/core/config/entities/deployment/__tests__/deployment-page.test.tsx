@@ -209,7 +209,7 @@ describe('Deployment detail page', () => {
               },
               GetModel: {
                 model: {
-                  metadata: { creationTimestamp: { seconds: 1746000000 } },
+                  metadata: { creationTimestamp: '2025-04-30T08:00:00Z' },
                   spec: {
                     owner: { name: 'model-owner' },
                     kind: 'MODEL_KIND_REGRESSION',
@@ -639,7 +639,7 @@ describe('Deployment retire action', () => {
       metadata: {
         name: DEPLOYMENT_NAME,
         namespace: NAMESPACE,
-        creationTimestamp: { seconds: 1757019547 },
+        creationTimestamp: '2025-09-04T20:59:07Z',
       },
       spec: {
         desiredRevision: { name: 'bert-cola-37', namespace: NAMESPACE },
@@ -799,7 +799,7 @@ describe('Deployment delete action', () => {
       metadata: {
         name: DEPLOYMENT_NAME,
         namespace: NAMESPACE,
-        creationTimestamp: { seconds: 1757019547 },
+        creationTimestamp: '2025-09-04T20:59:07Z',
       },
       spec: {
         desiredRevision: { name: 'bert-cola-37', namespace: NAMESPACE },

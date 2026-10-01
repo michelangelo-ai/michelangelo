@@ -12,6 +12,6 @@ export interface RevisionSelectorProps {
 
 /** The slice of a Revision CR the selector renders. */
 export interface RevisionOption {
-  metadata: { name: string; creationTimestamp?: { seconds?: string | number } };
+  metadata: { name: string; creationTimestamp?: string };
   spec: { revisionId: string; gitCommit?: { branch?: string } };
 }

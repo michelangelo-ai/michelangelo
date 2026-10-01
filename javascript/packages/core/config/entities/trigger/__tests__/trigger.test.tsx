@@ -395,7 +395,7 @@ describe('Trigger list page', () => {
                 {
                   metadata: {
                     name: 'cron-trigger',
-                    creationTimestamp: { seconds: 1660000000 },
+                    creationTimestamp: '2022-08-08T23:06:40Z',
                     labels: { 'michelangelo/environment': 'production' },
                   },
                   spec: {
@@ -412,13 +412,13 @@ describe('Trigger list page', () => {
                 {
                   metadata: {
                     name: 'interval-trigger',
-                    creationTimestamp: { seconds: 1650000000 },
+                    creationTimestamp: '2022-04-15T05:20:00Z',
                   },
                   spec: {
                     pipeline: { name: 'my-pipeline' },
                     revision: { name: 'rev-2' },
                     trigger: {
-                      intervalSchedule: { interval: { seconds: 3600 } },
+                      intervalSchedule: { interval: '3600s' },
                     },
                     actor: { name: 'jsmith' },
                     autoFlip: false,

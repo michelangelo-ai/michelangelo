@@ -527,7 +527,7 @@ describe('PIPELINE_DETAIL_CONFIG: runs tab', () => {
         pipelineRunList: {
           items: [
             {
-              metadata: { name: 'eval-pipeline-run-1', creationTimestamp: { seconds: 1700000000 } },
+              metadata: { name: 'eval-pipeline-run-1', creationTimestamp: '2023-11-14T22:13:20Z' },
               spec: {
                 pipeline: { name: 'eval-pipeline' },
                 revision: { name: 'pipeline-eval-pipeline-3f2a1b9c0d4e' },
@@ -607,7 +607,7 @@ describe('PIPELINE_DETAIL_CONFIG: runs tab', () => {
         pipelineRunList: {
           items: [
             {
-              metadata: { name: 'eval-pipeline-run-2', creationTimestamp: { seconds: 1700000000 } },
+              metadata: { name: 'eval-pipeline-run-2', creationTimestamp: '2023-11-14T22:13:20Z' },
               spec: {
                 pipeline: { name: 'eval-pipeline' },
                 revision: { name: 'pipeline-eval-pipeline-3f2a1b9c0d4e' },

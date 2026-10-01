@@ -1,6 +1,6 @@
 import { DatetimeColumn } from 'baseui/data-table';
 
-import { getDateFromEpochSeconds } from '#core/utils/time-utils';
+import { getDateFromEpochSeconds, toEpochSeconds } from '#core/utils/time-utils';
 import { getCellValueForColumn } from '../categorical/get-cell-value-for-column';
 
 import type { Row } from '@tanstack/react-table';
@@ -54,7 +54,7 @@ export function useDatetimeFilterFactory<T extends TableData = TableData>(): (
         const cellValue = getCellValueForColumn(column, row, id);
 
         const cellDate = getDateFromEpochSeconds(
-          typeof cellValue === 'number' ? cellValue : parseFloat(String(cellValue))
+          typeof cellValue === 'number' ? cellValue : toEpochSeconds(String(cellValue))
         );
 
         return DatetimeColumn({

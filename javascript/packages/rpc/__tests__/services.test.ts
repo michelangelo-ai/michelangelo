@@ -287,31 +287,16 @@ describe('Timestamp/Duration fields', () => {
     } as Response);
   }
 
-  it('arrive as { seconds, nanos }, including inside repeated fields and Any payloads', async () => {
-    respondWith({
-      pipelineRun: {
-        metadata: { creationTimestamp: '2026-09-24T23:07:46Z' },
-        status: {
-          steps: [{ startTime: '2026-09-28T23:11:19.992009180Z' }],
-          details: [
-            {
-              '@type': 'type.googleapis.com/michelangelo.api.v2.Pipeline',
-              metadata: { creationTimestamp: '2026-09-01T00:00:00Z' },
-            },
-          ],
-        },
-      },
-    });
-
-    const { pipelineRun } = (await request('GetPipelineRun', {} as never)) as unknown as {
-      pipelineRun: Record<string, Record<string, unknown>>;
+  it('arrive as proto3 JSON strings', async () => {
+    const pipelineRun = {
+      metadata: { creationTimestamp: '2026-09-24T23:07:46Z' },
+      status: { steps: [{ startTime: '2026-09-28T23:11:19.992009180Z' }] },
     };
+    respondWith({ pipelineRun });
 
-    expect(pipelineRun.metadata.creationTimestamp).toEqual({ seconds: '1790291266', nanos: 0 });
-    expect(pipelineRun.status).toMatchObject({
-      steps: [{ startTime: { seconds: '1790637079', nanos: 992009180 } }],
-      details: [{ metadata: { creationTimestamp: { seconds: '1788220800', nanos: 0 } } }],
-    });
+    const response = await request('GetPipelineRun', {} as never);
+
+    expect(response).toEqual({ pipelineRun });
   });
 
   it('are sent as proto3 JSON strings', async () => {
@@ -320,8 +305,8 @@ describe('Timestamp/Duration fields', () => {
     await request('CreateTriggerRun', {
       metadata: { name: 'backfill' },
       spec: {
-        startTimestamp: { seconds: '1700000000' },
-        trigger: { intervalSchedule: { interval: { seconds: 3600 } } },
+        startTimestamp: '2023-11-14T22:13:20Z',
+        trigger: { intervalSchedule: { interval: '3600s' } },
       },
     } as never);
 

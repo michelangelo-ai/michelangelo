@@ -6,7 +6,6 @@ import {
   StringValueSchema,
 } from '@bufbuild/protobuf/wkt';
 
-import { timesToObjects, timesToStrings } from './convert-time-fields';
 import { createFetchTransport } from './create-fetch-transport';
 import { TypedStructSchema } from './gen/michelangelo/api/typed_struct_pb';
 import { ClusterService } from './gen/michelangelo/api/v2/cluster_svc_pb';
@@ -28,9 +27,9 @@ import type { DescService, JsonValue } from '@bufbuild/protobuf';
 import type { FetchTransport, ServiceClient, Services } from './types';
 
 // Every message type that can appear inside a google.protobuf.Any must be registered here:
-// requests with an unregistered `@type` fail (fromJson/toJson throw), and time fields inside
-// an unregistered payload aren't converted. The wrapper types cover packed ListOptionsExt
-// criteria; PipelineSchema covers Revision.spec.content for Pipeline revisions.
+// requests with an unregistered `@type` fail (fromJson/toJson throw). The wrapper types cover
+// packed ListOptionsExt criteria; PipelineSchema covers Revision.spec.content for Pipeline
+// revisions.
 export const typeRegistry = createRegistry(
   TypedStructSchema,
   PipelineSchema,
@@ -42,9 +41,7 @@ export const typeRegistry = createRegistry(
 
 /**
  * Builds a service client that sends and receives proto3 JSON. Responses are returned as
- * Envoy's grpc_json_transcoder emits them, default values included. Timestamp/Duration fields
- * are the exception in both directions: callers see `{ seconds, nanos }` instead of proto3
- * JSON strings (convert-time-fields.ts).
+ * Envoy's grpc_json_transcoder emits them, default values included.
  */
 function createServiceClient<T extends DescService>(
   service: T,
@@ -60,9 +57,8 @@ function createServiceClient<T extends DescService>(
 
     client[method.localName] = async (request, headers) => {
       const withoutGracePeriod = omitDeletionGracePeriod(method.input, request, typeRegistry);
-      const withTimeStrings = timesToStrings(method.input, withoutGracePeriod, typeRegistry);
       // cast: each step returns the JSON object it was given, rewritten
-      const packedRequest = packAnyFields(method.input, withTimeStrings) as JsonValue;
+      const packedRequest = packAnyFields(method.input, withoutGracePeriod) as JsonValue;
       // Parsing and re-serializing checks every value against its field type and drops keys
       // that aren't fields. Callers pass whole records back (e.g. form state), so unknown keys
       // are expected rather than an error.
@@ -71,13 +67,7 @@ function createServiceClient<T extends DescService>(
         ignoreUnknownFields: true,
       });
       const requestJson = toJson(method.input, message, { registry: typeRegistry });
-      const responseJson = await transport.callUnary(
-        service.typeName,
-        method.name,
-        requestJson,
-        headers
-      );
-      return timesToObjects(method.output, responseJson, typeRegistry);
+      return transport.callUnary(service.typeName, method.name, requestJson, headers);
     };
   }
 

@@ -60,7 +60,7 @@ export const RUN_STATE_COLOR_MAP: Record<PipelineRunState, TagColor> = {
 
 /** Created-date cell, shared between the run list and detail pages. */
 export const RUN_CREATED_COLUMN: Cell = {
-  id: 'metadata.creationTimestamp.seconds',
+  id: 'metadata.creationTimestamp',
   label: 'Created',
   type: CellType.DATE,
 };

@@ -16,7 +16,7 @@ describe('Run detail page', () => {
     const buildRun = (overrides: Record<string, unknown> = {}) => ({
       metadata: {
         name: 'run-1',
-        creationTimestamp: { seconds: '1700000000' },
+        creationTimestamp: '2023-11-14T22:13:20Z',
         labels: { 'michelangelo/environment': 'development' },
       },
       spec: {
@@ -30,8 +30,8 @@ describe('Run detail page', () => {
             name: 'Execute Workflow',
             displayName: 'Execute Workflow',
             state: PipelineRunStepState.SUCCEEDED,
-            startTime: { seconds: '1700000010' },
-            endTime: { seconds: '1700003186' },
+            startTime: '2023-11-14T22:13:30Z',
+            endTime: '2023-11-14T23:06:26Z',
             logUrl: 'https://workflow.example.com/run-1',
           },
         ],
@@ -112,7 +112,7 @@ describe('Run detail page', () => {
                 pipelineRun: buildRun({
                   metadata: {
                     name: 'run-1',
-                    creationTimestamp: { seconds: '1700000000' },
+                    creationTimestamp: '2023-11-14T22:13:20Z',
                     labels: {
                       'michelangelo/environment': 'production',
                       // 2023-07-22T05:46:40Z — a backfill slot well before the object was created.
@@ -236,6 +236,32 @@ describe('Run detail page', () => {
 
       expect(await screen.findByLabelText('Duration')).toHaveValue('');
       expect(screen.queryByRole('link', { name: /Resumed from/ })).not.toBeInTheDocument();
+    });
+
+    it('counts step end times in whole seconds, like the creation timestamp', async () => {
+      render(
+        <EntityDetailRoute phases={{ train: TRAIN_PHASE }} />,
+        buildWrapper([
+          getErrorProviderWrapper(),
+          getRouterWrapper({
+            location: '/myproject/train/runs/run-1/information',
+          }),
+          getServiceProviderWrapper({
+            request: createQueryMockRouter({
+              GetPipelineRun: {
+                pipelineRun: buildRun({
+                  status: {
+                    state: PipelineRunState.SUCCEEDED,
+                    steps: [{ name: 'step', endTime: '2023-11-14T22:13:20.992009180Z' }],
+                  },
+                }),
+              },
+            }),
+          }),
+        ])
+      );
+
+      expect(await screen.findByLabelText('Duration')).toHaveValue('0 seconds');
     });
   });
 });

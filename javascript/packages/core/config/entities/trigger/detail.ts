@@ -4,6 +4,7 @@ import {
   SHARED_RUN_CELL_CONFIG,
   TRIGGERED_BY_LABEL,
 } from '#core/config/entities/run/shared';
+import { durationToSeconds } from '#core/utils/time-utils';
 import { TRIGGER_PIPELINE_CELL_CONFIG, TRIGGER_STATE_CELL_CONFIG } from './shared';
 import { TriggerInfoPage } from './trigger-info-page';
 
@@ -22,7 +23,7 @@ export const TRIGGER_DETAIL_CONFIG: DetailViewConfig = {
   type: 'detail',
   metadata: [
     TRIGGER_PIPELINE_CELL_CONFIG,
-    { id: 'metadata.creationTimestamp.seconds', label: 'Creation time', type: CellType.DATE },
+    { id: 'metadata.creationTimestamp', label: 'Creation time', type: CellType.DATE },
     {
       id: 'spec.trigger.cronSchedule.cron',
       label: 'Cron',
@@ -34,12 +35,10 @@ export const TRIGGER_DETAIL_CONFIG: DetailViewConfig = {
       id: 'interval-seconds',
       label: 'Interval seconds',
       hideEmpty: true,
-      accessor: (record: unknown) => {
+      accessor: (record: unknown) =>
         // cast: accessor receives unknown data; narrowing to expected proto shape for
         // property access
-        const seconds = (record as TriggerRun).spec?.trigger?.intervalSchedule?.interval?.seconds;
-        return seconds === undefined ? undefined : Number(seconds);
-      },
+        durationToSeconds((record as TriggerRun).spec?.trigger?.intervalSchedule?.interval),
     },
     {
       id: 'batch-size',
@@ -72,13 +71,13 @@ export const TRIGGER_DETAIL_CONFIG: DetailViewConfig = {
       hideEmpty: true,
     },
     {
-      id: 'spec.startTimestamp.seconds',
+      id: 'spec.startTimestamp',
       label: 'Start time',
       type: CellType.DATE,
       hideEmpty: true,
     },
     {
-      id: 'spec.endTimestamp.seconds',
+      id: 'spec.endTimestamp',
       label: 'End time',
       type: CellType.DATE,
       hideEmpty: true,

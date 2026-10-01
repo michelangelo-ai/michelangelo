@@ -141,7 +141,7 @@ function renderRevisionCells(revision: RevisionOption, latest: boolean) {
       </RevisionLabel>
       <span>{revision.spec.gitCommit?.branch ?? '—'}</span>
       <span>
-        <DateTime timestamp={revision.metadata.creationTimestamp?.seconds} />
+        <DateTime timestamp={revision.metadata.creationTimestamp} />
       </span>
     </>
   );

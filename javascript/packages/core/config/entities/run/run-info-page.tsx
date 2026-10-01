@@ -11,7 +11,7 @@ import { TextEditor } from '#core/components/text-editor/text-editor';
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
 import { TimeZone } from '#core/types/time-types';
 import { decodeStruct, isStruct } from '#core/utils/proto/struct-utils';
-import { timestampToString } from '#core/utils/time-utils';
+import { timestampToString, toEpochSeconds } from '#core/utils/time-utils';
 import { getRunManifestContent } from './shared';
 import { PipelineRunState, TERMINAL_RUN_STATES } from './types';
 
@@ -193,7 +193,7 @@ function getExecutionTimestampSeconds(run: PipelineRunSummary | undefined): stri
   if (label && !isNaN(Number(label))) {
     return label;
   }
-  return run?.metadata?.creationTimestamp?.seconds;
+  return run?.metadata?.creationTimestamp;
 }
 
 /**
@@ -202,15 +202,16 @@ function getExecutionTimestampSeconds(run: PipelineRunSummary | undefined): stri
  * never populated, so the end bound comes from step timings instead.
  */
 function formatRunDuration(run: PipelineRunSummary | undefined): string | null {
-  const startSeconds = Number(run?.metadata?.creationTimestamp?.seconds);
+  const startSeconds = toEpochSeconds(run?.metadata?.creationTimestamp ?? NaN);
   const state = run?.status?.state;
   if (isNaN(startSeconds) || state === undefined) {
     return null;
   }
 
   if (TERMINAL_RUN_STATES.has(state)) {
+    // Whole seconds, like creationTimestamp, so a sub-second run doesn't round up to 1 second
     const stepEndTimes = (run?.status?.steps ?? [])
-      .map((step) => Number(step.endTime?.seconds))
+      .map((step) => (step.endTime ? Math.floor(toEpochSeconds(step.endTime)) : NaN))
       .filter((seconds) => !isNaN(seconds));
     if (stepEndTimes.length === 0) {
       return null;

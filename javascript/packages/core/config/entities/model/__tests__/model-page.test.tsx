@@ -42,7 +42,7 @@ describe('Model list page', () => {
                   metadata: {
                     name: 'fraud-classifier',
                     labels: { 'michelangelo/environment': 'production' },
-                    creationTimestamp: { seconds: 1700000000 },
+                    creationTimestamp: '2023-11-14T22:13:20Z',
                   },
                   spec: {
                     description: 'model workflow=fraud-classifier git=abc123',
@@ -54,7 +54,7 @@ describe('Model list page', () => {
                   metadata: {
                     name: 'demand-forecaster',
                     labels: { 'michelangelo/environment': 'development' },
-                    creationTimestamp: { seconds: 1700000000 },
+                    creationTimestamp: '2023-11-14T22:13:20Z',
                   },
                   spec: {
                     description: 'model workflow=demand-forecaster git=def456',
@@ -66,7 +66,7 @@ describe('Model list page', () => {
                   metadata: {
                     name: 'user-segmenter',
                     labels: { 'michelangelo/environment': 'testing' },
-                    creationTimestamp: { seconds: 1700000000 },
+                    creationTimestamp: '2023-11-14T22:13:20Z',
                   },
                   spec: {
                     description: 'model workflow=user-segmenter git=ghi789',

@@ -26,8 +26,8 @@ export type Trigger = {
  */
 export type ManifestTrigger = {
   cronSchedule?: { cron?: string };
-  /** `interval` is a `google.protobuf.Duration`; its int64 `seconds` arrives as a string. */
-  intervalSchedule?: { interval?: { seconds?: string | number } };
+  /** `interval` is a proto3 JSON `google.protobuf.Duration`, e.g. "3600s". */
+  intervalSchedule?: { interval?: string };
   batchRerun?: BatchRerun;
   /** Dynamic pipeline parameters this trigger can run with, keyed by parameter ID. */
   parametersMap?: Record<string, unknown>;
@@ -78,9 +78,9 @@ export type RunTriggerPayload = {
     trigger: ManifestTrigger;
     sourceTriggerName: string;
     autoFlip: boolean;
-    /** Epoch-seconds window bounds; present only for a backfill run. */
-    startTimestamp?: { seconds: string };
-    endTimestamp?: { seconds: string };
+    /** RFC 3339 window bounds (proto3 JSON `google.protobuf.Timestamp`); present only for a backfill run. */
+    startTimestamp?: string;
+    endTimestamp?: string;
   };
 };
 
@@ -104,9 +104,9 @@ export type TriggerRun = {
     /** proto field 11 — replaces deprecated kill boolean */
     action: TriggerRunAction;
     /** Backfill window start; present only for a backfill-created trigger run. */
-    startTimestamp?: { seconds: string };
+    startTimestamp?: string;
     /** Backfill window end; present only for a backfill-created trigger run. */
-    endTimestamp?: { seconds: string };
+    endTimestamp?: string;
   };
   status: {
     state: (typeof TriggerRunState)[keyof typeof TriggerRunState];
