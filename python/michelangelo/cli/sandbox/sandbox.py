@@ -996,6 +996,10 @@ def _deploy_services(ns: argparse.Namespace):
         # are configured
         helm_existing_repos = ""
 
+    # The History Server above is deployed even with --exclude ray, so its
+    # images are imported outside the KubeRay operator step.
+    _import_log_persistence_images()
+
     if "ray" not in ns.exclude:
         _create_kuberay_operator(helm_existing_repos)
 
@@ -1128,8 +1132,6 @@ def _create_kuberay_operator(helm_existing_repos):
         "--timeout",
         "20m",
     )
-
-    _import_log_persistence_images()
 
 
 _LOG_PERSISTENCE_IMAGES = [
