@@ -1,0 +1,153 @@
+// Declarative pipeline manifest contract.
+//
+// A DECLARATIVE pipeline manifest carries the whole workflow as data: a map
+// of tasks, graph-wide settings, and parameter declarations. The manifest
+// holds no user code. A platform interpreter, pinned on the Pipeline record
+// by the apiserver, executes the graph.
+//
+// The messages below are the body of PipelineManifest.content when
+// PipelineManifest.type is PIPELINE_MANIFEST_TYPE_DECLARATIVE. The Any type
+// URL is type.googleapis.com/michelangelo.api.v2.DeclarativeWorkflow.
+
+syntax = "proto3";
+
+package michelangelo.api.v2;
+
+option go_package = "v2";
+
+import "google/protobuf/duration.proto";
+import "google/protobuf/struct.proto";
+
+// DeclarativeWorkflow is the typed body of a DECLARATIVE pipeline manifest.
+message DeclarativeWorkflow {
+  // Schema version of the manifest format. The only accepted value is
+  // "v1alpha1". The apiserver rejects any other value, and rejects unknown
+  // top-level fields of this message. schema_version is the guard for
+  // nested shape changes.
+  string schema_version = 1;
+
+  // Graph-wide settings. Every task inherits them.
+  WorkflowSettings workflow_config = 2;
+
+  // Pipeline parameters. Task config references a parameter as
+  // {{ params.NAME }}. Every reference must name a key of this map.
+  map<string, ParameterSpec> parameters = 3;
+
+  // The task graph. Keys are task names and must match
+  // ^[a-z][a-z0-9_]{0,62}$. The apiserver limits the task count; the default
+  // limit is 500.
+  map<string, DeclarativeTask> tasks = 4;
+}
+
+// WorkflowSettings holds graph-wide settings.
+message WorkflowSettings {
+  // Maximum number of tasks that run at the same time within one execution
+  // level. 0 means no limit.
+  uint32 max_concurrency = 1;
+
+  // Retry policy for tasks that declare no retry of their own. A task's own
+  // retry replaces this value as a whole; fields are not merged.
+  RetryPolicy default_retry = 2;
+}
+
+// ParameterSpec declares one pipeline parameter.
+message ParameterSpec {
+  // Default value. The value keeps its JSON type: number, boolean, string,
+  // list, or object. A run-time override from
+  // PipelineExecutionParameters.parameter_map is parsed as JSON and must
+  // have the same JSON type. An override that is not valid JSON is a string.
+  google.protobuf.Value default = 1;
+
+  // Human-readable description.
+  string description = 2;
+
+  // Whether a run must supply the parameter. A parameter that is required
+  // and also has a default is rejected.
+  bool required = 3;
+}
+
+// DeclarativeTask is one node of the task graph.
+message DeclarativeTask {
+  // Task type registry key, for example "core/ray". The apiserver resolves
+  // it against the pinned interpreter release.
+  string task_function = 1;
+
+  // Type-scoped configuration. The apiserver validates it against the task
+  // type's config schema. The interpreter resolves {{ params.NAME }} and
+  // {{ tasks.NAME.output[.FIELD] }} references before dispatch.
+  google.protobuf.Struct config = 2;
+
+  // Type-scoped resource request. The apiserver validates it against the
+  // task type's job_specs schema.
+  google.protobuf.Struct job_specs = 3;
+
+  // Edges into this task. An empty list makes the task a root task.
+  repeated TaskDependency depends_on = 4;
+
+  // This task's own retry policy. When set, it replaces
+  // WorkflowSettings.default_retry as a whole.
+  RetryPolicy retry = 5;
+}
+
+// TaskDependency is one edge of the task graph. The referencing task runs
+// only when the named dependency reaches the gate outcome.
+message TaskDependency {
+  // Name of the dependency task. Must be a key of DeclarativeWorkflow.tasks
+  // and must not be the referencing task.
+  string task = 1;
+
+  // Gate outcome on the edge.
+  enum Outcome {
+    // Unspecified means OUTCOME_SUCCEEDED.
+    OUTCOME_UNSPECIFIED = 0;
+    // The dependency succeeded.
+    OUTCOME_SUCCEEDED = 1;
+    // The dependency failed. A failure handler reports and cleans up; it
+    // never changes the run outcome.
+    OUTCOME_FAILED = 2;
+    // The dependency reached a terminal state, SUCCEEDED or FAILED. A skipped
+    // or killed dependency satisfies no gate.
+    OUTCOME_COMPLETED = 3;
+  }
+  Outcome when = 2;
+
+  // Field 3 is reserved for a future value condition on the edge.
+  reserved 3;
+}
+
+// RetryPolicy maps onto the task type's retry behaviour.
+message RetryPolicy {
+  // Total attempts, including the first. 0 means the platform default.
+  uint32 max_attempts = 1;
+
+  // Base interval between attempts.
+  google.protobuf.Duration initial_interval = 2;
+}
+
+// ExplainPlan is the dry-run result for a DECLARATIVE pipeline.
+//
+// On a dry-run CreatePipeline or UpdatePipeline request, the apiserver sets
+// the annotation "michelangelo/declarative-explain-plan" on the returned
+// Pipeline. The annotation value is the protojson encoding of this message.
+// The apiserver never sets the annotation on a request that is not a dry
+// run.
+message ExplainPlan {
+  // Interpreter release the pipeline is, or would be, pinned to.
+  string interpreter_version = 1;
+
+  // Execution levels in topological order. Tasks in one level have no
+  // dependency on each other.
+  repeated ExecutionLevel levels = 2;
+
+  // Non-fatal findings, one sentence each.
+  repeated string warnings = 3;
+
+  // Number of tasks in the graph.
+  uint32 task_count = 4;
+}
+
+// ExecutionLevel is one topological level of the task graph.
+message ExecutionLevel {
+  // Task names in this level, sorted.
+  repeated string tasks = 1;
+}
