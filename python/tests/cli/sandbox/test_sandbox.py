@@ -536,3 +536,27 @@ class K3dImageImportTest(TestCase):
 
         k3d = mock_run.call_args_list[2][0][0]
         self.assertEqual(k3d[:4], ["k3d", "image", "import", "nginx:1.27-alpine"])
+
+
+class ImportLogPersistenceImagesTest(TestCase):
+    """Tests for _import_log_persistence_images."""
+
+    @patch("michelangelo.cli.sandbox.sandbox._LOG_PERSISTENCE_IMAGES", ["img:1"])
+    @patch("michelangelo.cli.sandbox.sandbox._k3d_import_image", return_value=True)
+    @patch("michelangelo.cli.sandbox.sandbox.subprocess.run")
+    def test_failed_pull_imports_local_copy(self, mock_run, mock_import):
+        """A failed pull still imports a copy already on the host."""
+        mock_run.side_effect = lambda cmd, **kwargs: Mock(
+            returncode=1 if cmd[:2] == ["docker", "pull"] else 0
+        )
+        sandbox._import_log_persistence_images()
+        mock_import.assert_called_once_with("img:1")
+
+    @patch("michelangelo.cli.sandbox.sandbox._LOG_PERSISTENCE_IMAGES", ["img:1"])
+    @patch("michelangelo.cli.sandbox.sandbox._k3d_import_image")
+    @patch("michelangelo.cli.sandbox.sandbox.subprocess.run")
+    def test_failed_pull_without_local_copy_skips(self, mock_run, mock_import):
+        """A failed pull with no copy on the host skips the image."""
+        mock_run.return_value = Mock(returncode=1)
+        sandbox._import_log_persistence_images()
+        mock_import.assert_not_called()
