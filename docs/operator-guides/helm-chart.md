@@ -397,6 +397,7 @@ When enabled via `controllermgr.jobs.k8sengine.mapper.logPersistence`, controlle
 
 ## Next steps
 
+- [LiteLLM gateway](#optional-litellm-gateway) — install and operate the optional gateway as a separate Helm release
 - [Platform Setup](setup/platform-setup.md) — configure the components installed by this chart through their ConfigMaps
 - [Network & Ingress](setup/network.md) — TLS and multi-cluster connectivity
 - [Authentication](setup/authentication.md) — connect an identity provider and configure RBAC

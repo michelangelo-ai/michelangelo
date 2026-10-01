@@ -173,19 +173,25 @@ litellm:
   serviceMonitor:
     enabled: false
 
-# Runs database migrations before gateway Pods start. Exactly one of enabled
+# Runs database migrations before gateway installation/upgrade. Exactly one of enabled
 # and managedExternally must be true.
 migrationJob:
   enabled: true
-  # Set true only when another deployment step runs the qualified migrations.
+  # Use with enabled=false when another deployment step runs the qualified migrations.
   managedExternally: false
   # Must already exist: pre-install/PreSync hooks run before chart resources.
   serviceAccountName: default
-  # Bound migration retries and retain completed Jobs for one day.
+  # Deadline in seconds for the whole Job; must be at least 1.
   activeDeadlineSeconds: 900
+  # Retry limit before the Job is marked failed; 0 disables retries.
   backoffLimit: 4
+  # Seconds after finishing before a Job is eligible for TTL cleanup; 0 is immediate.
+  # Successful hooks are deleted on success. A later hook run can remove failed
+  # Jobs before this TTL expires, so this is not a guaranteed log-retention period.
   ttlSecondsAfterFinished: 86400
+  # Extra Job annotations; chart-owned hook annotations cannot be overridden.
   annotations: {}
+  # Migration container requests/limits, independent of the serving Pods' resources.
   resources:
     requests:
       cpu: 100m
@@ -196,9 +202,12 @@ migrationJob:
   hooks:
     # Select exactly one hook engine when migrationJob.enabled is true.
     helm:
+      # Run before Helm installs or upgrades the gateway release.
       enabled: true
+      # Lower weights run before higher weights in the same hook phase.
       weight: 0
     argocd:
+      # Use an Argo CD PreSync hook instead of the Helm hooks.
       enabled: false
 
 # Restricts gateway traffic when the cluster's network plugin enforces policies.
@@ -215,19 +224,24 @@ networkPolicy:
       kubernetes.io/metadata.name: kube-system
     podSelector:
       k8s-app: kube-dns
-  # Kubernetes NetworkPolicy rules for approved callers and monitoring clients.
+  # Caller/monitoring rules; wrapper-test ingress is added when tests.enabled.
+  # An empty list grants no other ingress through this policy.
   ingress: []
   # Permit the database, providers, and identity endpoints used by this release.
-  # Empty rules deny other egress; DNS is controlled separately by allowDNS.
+  # Empty rules grant no egress beyond the DNS rule controlled by allowDNS.
   egress: []
 
 # Requires the Prometheus Operator ServiceMonitor CRD and authenticated metrics.
 serviceMonitor:
+  # Rendering fails if enabled without authorization.secretName or secretKey.
   enabled: false
   # Match the labels selected by the cluster's Prometheus installation.
   labels: {}
+  # Extra annotations on the ServiceMonitor, not the gateway Pods.
   annotations: {}
+  # How often to scrape, as a Prometheus duration such as 15s or 1m.
   interval: 15s
+  # Per-scrape timeout; do not exceed interval.
   scrapeTimeout: 10s
   path: /metrics
   # Empty selects Services in this release's namespace.
@@ -236,6 +250,7 @@ serviceMonitor:
     # Required when enabled: existing same-namespace Secret containing a
     # LiteLLM credential authorized to scrape metrics, not a plaintext token.
     secretName: ""
+    # Key in that Secret containing the metrics bearer token.
     secretKey: token
 
 # Authenticated /v1/models smoke test; not a scoped-key inference/policy test.
@@ -246,6 +261,7 @@ tests:
   image:
     # Keep the qualified digest when mirroring this image to a private registry.
     repository: curlimages/curl
+    # The schema enforces this exact tag/digest; upgrades require a newly qualified pin.
     tag: "8.12.1@sha256:94e9e444bcba979c2ea12e27ae39bee4cd10bc7041a472c4727a558e213744e6"
     pullPolicy: IfNotPresent
   # Maximum duration of the HTTP request, in seconds.
