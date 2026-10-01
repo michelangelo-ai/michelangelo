@@ -234,7 +234,7 @@ Pass Temporal subchart values under the `temporal:` key. See the [official Tempo
 
 The prerelease `michelangelo-llm-gateway` chart installs LiteLLM as a separate inference data plane. It is **not** a subchart of `michelangelo`: installing the control plane does not install the gateway. The gateway requires Helm 3.17 or newer, its own PostgreSQL database, existing credential Secrets, and an approved provider configuration.
 
-Starting with the first Michelangelo release that includes the gateway, both charts are published from the same release tag and share the same chart `version`. The gateway's `appVersion` identifies the independently pinned LiteLLM runtime, not the Michelangelo version. The existing `v0.10.0` release predates the gateway chart; use a later release that publishes both packages for a matching compatibility coordinate.
+Starting with the first Michelangelo release that includes the gateway, both charts are published from the same release tag and share the same chart `version`. The gateway's `appVersion` identifies the independently pinned LiteLLM runtime, not the Michelangelo version. Releases published before this chart lands do not include it; choose a subsequent release that publishes both packages.
 
 Shared publication does not combine the Helm releases. Install the gateway in its own namespace and manage its installation, scaling, upgrades, and rollback separately from the control plane. An upgrade or rollback of one release does not change the other.
 
