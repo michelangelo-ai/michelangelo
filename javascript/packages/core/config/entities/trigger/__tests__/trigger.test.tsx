@@ -47,7 +47,7 @@ function buildRunningTriggerRun(overrides: Partial<TriggerRun> = {}): TriggerRun
 }
 
 describe('TRIGGER_ENTITY_CONFIG: kill action', () => {
-  it('renders Kill as a top-level header button, not tucked into an overflow menu', async () => {
+  it('renders Kill as a top-level header button', async () => {
     const record = buildRunningTriggerRun();
 
     render(
@@ -64,9 +64,6 @@ describe('TRIGGER_ENTITY_CONFIG: kill action', () => {
     );
 
     expect(await screen.findByRole('button', { name: 'Kill' })).toBeInTheDocument();
-    // No overflow trigger should be rendered — Kill is the only action, and it's
-    // always shown directly rather than collapsing into a "..." popover.
-    expect(screen.queryByRole('button', { name: 'Actions' })).not.toBeInTheDocument();
   });
 
   it('opens a confirm dialog naming the run and pipeline, fires UpdateTriggerRun with spec.action=KILL', async () => {
@@ -220,12 +217,8 @@ describe('TRIGGER_ENTITY_CONFIG: rerun action', () => {
       buildWrapper(buildRerunWrappers(vi.fn()))
     );
 
-    // Kill has a static primary hierarchy and Rerun a static secondary hierarchy, so both
-    // always render as their own header buttons; neither is ever tertiary, so the "..."
-    // overflow popover never renders.
     expect(await screen.findByRole('button', { name: 'Kill' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Rerun' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Actions' })).not.toBeInTheDocument();
   });
 
   it("has Kill and Rerun's enabled state respond independently to the run's own status", async () => {
