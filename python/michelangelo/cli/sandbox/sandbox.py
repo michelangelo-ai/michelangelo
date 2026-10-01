@@ -1151,6 +1151,7 @@ def _import_log_persistence_images():
 
     Pulling on the host rather than letting the node do it keeps working
     behind corporate TLS interception, where the k3d node trusts no extra CA.
+    When the pull fails, a copy already on the host is imported instead.
     Non-fatal: prints a warning on failure since the collector sidecar and
     history server are optional for basic sandbox usage, and the pods use
     imagePullPolicy IfNotPresent so the node still pulls what is missing.
@@ -1162,8 +1163,14 @@ def _import_log_persistence_images():
             capture_output=True,
         )
         if pull.returncode != 0:
-            print(f"Warning: could not pull {image}. Skipping.")
-            continue
+            local = subprocess.run(
+                ["docker", "image", "inspect", image],
+                capture_output=True,
+            )
+            if local.returncode != 0:
+                print(f"Warning: could not pull {image}. Skipping.")
+                continue
+            print(f"Warning: could not pull {image}; importing the local copy.")
         if _k3d_import_image(image):
             print(f"Successfully imported {image} into k3d.")
         else:
