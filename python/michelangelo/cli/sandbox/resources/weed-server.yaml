@@ -2,11 +2,11 @@ apiVersion: v1
 kind: Pod
 metadata:
   labels:
-    app: minio
-  name: minio
+    app: seaweedfs
+  name: seaweedfs
 spec:
   containers:
-    - name: minio
+    - name: seaweedfs
       image: chrislusf/seaweedfs:4.47
       imagePullPolicy: IfNotPresent
       command:
@@ -47,4 +47,4 @@ spec:
       nodePort: 30007
       name: "9091"
   selector:
-    app: minio
+    app: seaweedfs
