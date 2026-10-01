@@ -67,9 +67,8 @@ message PipelineManifest {
     PIPELINE_MANIFEST_TYPE_INVALID = 0;
     // YAML config based manifest type.
     PIPELINE_MANIFEST_TYPE_YAML = 1;
-    // Value 2 belonged to a manifest type that was removed before the
-    // project was open-sourced. Never reuse the number: stored objects can
-    // still carry it as an unknown enum value.
+    // Pre-open-source ASL manifest type. Never reuse the number: stored
+    // objects can still carry it as an unknown enum value.
     reserved 2;
     // UniFlow (Python SDK) based manifest type.
     PIPELINE_MANIFEST_TYPE_UNIFLOW = 3;
