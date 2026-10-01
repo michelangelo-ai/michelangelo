@@ -66,11 +66,11 @@ jobs:
         # logURLFormat is a Go text/template that builds the human-browsable
         # log URL. Available vars: {{.Bucket}}, {{.PathPrefix}}, {{.ClusterName}},
         # {{.RayLocalNamespace}}. The sandbox default deep-links into the Ray
-        # Dashboard served by the History Server pod (host port 3001): the
-        # server resolves "latest" to the live cluster while it runs and to the
-        # newest stored session once it is gone, and the URL fragment picks the
-        # dashboard page. Production overlays point at their own History Server
-        # entry; the raw objects live at
+        # Dashboard served by the History Server pod (host port 3001). The URL
+        # names no session, so the server opens the live cluster while it runs
+        # and its newest stored session once it is gone; the URL fragment picks
+        # the dashboard page. Production overlays point at their own History
+        # Server entry; the raw objects live at
         # {pathPrefix}/cluster-history/raycluster/{namespace}/{cluster}/...
         logURLFormat: "http://localhost:3001/enter_cluster/{{.RayLocalNamespace}}/raycluster/{{.ClusterName}}/#/overview"
 
