@@ -11,6 +11,7 @@ from michelangelo.cli.sandbox import sandbox
 class CreateFunctionTest(TestCase):
     """Tests for _create function logic."""
 
+    @patch("michelangelo.cli.sandbox.sandbox._import_log_persistence_images")
     @patch("michelangelo.cli.sandbox.sandbox._kube_wait")
     @patch("michelangelo.cli.sandbox.sandbox._create_cadence_domain")
     @patch("michelangelo.cli.sandbox.sandbox._create_spark_operator")
@@ -39,6 +40,7 @@ class CreateFunctionTest(TestCase):
         mock_create_spark,
         mock_create_cadence_domain,
         mock_kube_wait,
+        mock_import_images,
     ):
         """Test dedicated cluster functions called with compute cluster name."""
         # Setup namespace with create_compute_cluster=True
@@ -69,6 +71,7 @@ class CreateFunctionTest(TestCase):
         mock_apply_rbac.assert_called_once_with("test-compute-cluster")
         mock_create_secrets.assert_called_once_with("test-compute-cluster")
 
+    @patch("michelangelo.cli.sandbox.sandbox._import_log_persistence_images")
     @patch("michelangelo.cli.sandbox.sandbox._kube_wait")
     @patch("michelangelo.cli.sandbox.sandbox._create_cadence_domain")
     @patch("michelangelo.cli.sandbox.sandbox._create_spark_operator")
@@ -97,6 +100,7 @@ class CreateFunctionTest(TestCase):
         mock_create_spark,
         mock_create_cadence_domain,
         mock_kube_wait,
+        mock_import_images,
     ):
         """Test control plane cluster functions called with sandbox cluster name."""
         # Setup namespace with create_compute_cluster=False
@@ -128,6 +132,58 @@ class CreateFunctionTest(TestCase):
         mock_create_crd.assert_called_once_with("michelangelo-sandbox")
         mock_apply_rbac.assert_called_once_with("michelangelo-sandbox")
         mock_create_secrets.assert_called_once_with("michelangelo-sandbox")
+
+    @patch("michelangelo.cli.sandbox.sandbox._import_log_persistence_images")
+    @patch("michelangelo.cli.sandbox.sandbox._kube_wait")
+    @patch("michelangelo.cli.sandbox.sandbox._create_cadence_domain")
+    @patch("michelangelo.cli.sandbox.sandbox._create_spark_operator")
+    @patch("michelangelo.cli.sandbox.sandbox._create_kuberay_operator")
+    @patch("michelangelo.cli.sandbox.sandbox.subprocess.check_output")
+    @patch("michelangelo.cli.sandbox.sandbox._assert_command")
+    @patch("michelangelo.cli.sandbox.sandbox._kube_create")
+    @patch("michelangelo.cli.sandbox.sandbox._exec")
+    @patch("michelangelo.cli.sandbox.sandbox.tempfile.NamedTemporaryFile")
+    @patch("michelangelo.cli.sandbox.sandbox._create_compute_cluster_secrets")
+    @patch("michelangelo.cli.sandbox.sandbox._apply_compute_cluster_rbac")
+    @patch("michelangelo.cli.sandbox.sandbox._create_compute_cluster_crd")
+    @patch("michelangelo.cli.sandbox.sandbox._create_compute_cluster")
+    def test_create_without_ray_imports_history_server_images(
+        self,
+        mock_create_compute_cluster,
+        mock_create_crd,
+        mock_apply_rbac,
+        mock_create_secrets,
+        mock_tempfile,
+        mock_exec,
+        mock_kube_create,
+        mock_assert_command,
+        mock_check_output,
+        mock_create_kuberay,
+        mock_create_spark,
+        mock_create_cadence_domain,
+        mock_kube_wait,
+        mock_import_images,
+    ):
+        """With --exclude ray, the History Server images are still imported."""
+        ns = argparse.Namespace(
+            workflow="cadence",
+            exclude=["ray"],
+            include_experimental=[],
+            create_compute_cluster=False,
+            compute_cluster_name="test-compute-cluster",
+        )
+
+        mock_check_output.return_value = b""
+        mock_registry_file = Mock()
+        mock_registry_file.name = "/tmp/test-registry.json"
+        mock_registry_file.__enter__ = Mock(return_value=mock_registry_file)
+        mock_registry_file.__exit__ = Mock(return_value=False)
+        mock_tempfile.return_value = mock_registry_file
+
+        sandbox._create(ns)
+
+        mock_create_kuberay.assert_not_called()
+        mock_import_images.assert_called_once_with()
 
 
 class ComputeClusterSetupTest(TestCase):
