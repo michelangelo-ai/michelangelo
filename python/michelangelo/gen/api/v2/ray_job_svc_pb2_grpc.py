@@ -5,7 +5,7 @@ import grpc
 from michelangelo.gen.api.v2 import ray_job_svc_pb2 as michelangelo_dot_api_dot_v2_dot_ray__job__svc__pb2
 
 
-class RayJobServiceStub(object):
+class RayJobServiceStub:
     """RayJob Service defines the RayJob related methods, such as CRUD and list.
     """
 
@@ -47,7 +47,7 @@ class RayJobServiceStub(object):
                 _registered_method=True)
 
 
-class RayJobServiceServicer(object):
+class RayJobServiceServicer:
     """RayJob Service defines the RayJob related methods, such as CRUD and list.
     """
 
@@ -135,7 +135,7 @@ def add_RayJobServiceServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class RayJobService(object):
+class RayJobService:
     """RayJob Service defines the RayJob related methods, such as CRUD and list.
     """
 

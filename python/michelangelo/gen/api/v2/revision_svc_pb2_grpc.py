@@ -5,7 +5,7 @@ import grpc
 from michelangelo.gen.api.v2 import revision_svc_pb2 as michelangelo_dot_api_dot_v2_dot_revision__svc__pb2
 
 
-class RevisionServiceStub(object):
+class RevisionServiceStub:
     """Revision Service defines the Revision related methods, such as CRUD and list.
     """
 
@@ -47,7 +47,7 @@ class RevisionServiceStub(object):
                 _registered_method=True)
 
 
-class RevisionServiceServicer(object):
+class RevisionServiceServicer:
     """Revision Service defines the Revision related methods, such as CRUD and list.
     """
 
@@ -135,7 +135,7 @@ def add_RevisionServiceServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class RevisionService(object):
+class RevisionService:
     """Revision Service defines the Revision related methods, such as CRUD and list.
     """
 

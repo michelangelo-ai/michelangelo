@@ -5,7 +5,7 @@ import grpc
 from michelangelo.gen.api.v2 import ray_cluster_svc_pb2 as michelangelo_dot_api_dot_v2_dot_ray__cluster__svc__pb2
 
 
-class RayClusterServiceStub(object):
+class RayClusterServiceStub:
     """RayCluster Service defines the RayCluster related methods, such as CRUD and list.
     """
 
@@ -47,7 +47,7 @@ class RayClusterServiceStub(object):
                 _registered_method=True)
 
 
-class RayClusterServiceServicer(object):
+class RayClusterServiceServicer:
     """RayCluster Service defines the RayCluster related methods, such as CRUD and list.
     """
 
@@ -135,7 +135,7 @@ def add_RayClusterServiceServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class RayClusterService(object):
+class RayClusterService:
     """RayCluster Service defines the RayCluster related methods, such as CRUD and list.
     """
 

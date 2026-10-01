@@ -55,6 +55,11 @@ export const RUN_DETAIL_CONFIG: DetailViewConfig = {
               label: 'Logs',
             },
             {
+              id: 'metricsUrl',
+              label: 'Metrics',
+              hideEmpty: true,
+            },
+            {
               id: 'state',
               label: 'Status',
               type: CellType.STATE,

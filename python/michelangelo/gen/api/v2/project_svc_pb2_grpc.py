@@ -5,7 +5,7 @@ import grpc
 from michelangelo.gen.api.v2 import project_svc_pb2 as michelangelo_dot_api_dot_v2_dot_project__svc__pb2
 
 
-class ProjectServiceStub(object):
+class ProjectServiceStub:
     """Project Service defines the Project related methods, such as CRUD and list.
     """
 
@@ -47,7 +47,7 @@ class ProjectServiceStub(object):
                 _registered_method=True)
 
 
-class ProjectServiceServicer(object):
+class ProjectServiceServicer:
     """Project Service defines the Project related methods, such as CRUD and list.
     """
 
@@ -135,7 +135,7 @@ def add_ProjectServiceServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class ProjectService(object):
+class ProjectService:
     """Project Service defines the Project related methods, such as CRUD and list.
     """
 

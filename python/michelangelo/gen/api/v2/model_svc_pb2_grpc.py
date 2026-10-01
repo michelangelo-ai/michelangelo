@@ -5,7 +5,7 @@ import grpc
 from michelangelo.gen.api.v2 import model_svc_pb2 as michelangelo_dot_api_dot_v2_dot_model__svc__pb2
 
 
-class ModelServiceStub(object):
+class ModelServiceStub:
     """Model Service defines the Model related methods, such as CRUD and list.
     """
 
@@ -47,7 +47,7 @@ class ModelServiceStub(object):
                 _registered_method=True)
 
 
-class ModelServiceServicer(object):
+class ModelServiceServicer:
     """Model Service defines the Model related methods, such as CRUD and list.
     """
 
@@ -135,7 +135,7 @@ def add_ModelServiceServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class ModelService(object):
+class ModelService:
     """Model Service defines the Model related methods, such as CRUD and list.
     """
 

@@ -5,7 +5,7 @@ import grpc
 from michelangelo.gen.api.v2 import evaluation_report_svc_pb2 as michelangelo_dot_api_dot_v2_dot_evaluation__report__svc__pb2
 
 
-class EvaluationReportServiceStub(object):
+class EvaluationReportServiceStub:
     """EvaluationReport Service defines the EvaluationReport related methods, such as CRUD and list.
     """
 
@@ -47,7 +47,7 @@ class EvaluationReportServiceStub(object):
                 _registered_method=True)
 
 
-class EvaluationReportServiceServicer(object):
+class EvaluationReportServiceServicer:
     """EvaluationReport Service defines the EvaluationReport related methods, such as CRUD and list.
     """
 
@@ -135,7 +135,7 @@ def add_EvaluationReportServiceServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class EvaluationReportService(object):
+class EvaluationReportService:
     """EvaluationReport Service defines the EvaluationReport related methods, such as CRUD and list.
     """
 

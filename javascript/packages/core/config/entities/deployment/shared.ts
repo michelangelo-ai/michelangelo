@@ -23,6 +23,20 @@ export const DEPLOYMENT_STAGE = {
   CLEAN_UP_FAILED: 11,
 } as const;
 
+/**
+ * Stages at which the deployment has reached a final outcome (success or failure) and will
+ * not progress further on its own. A condition still evaluating FALSE at one of these stages
+ * reflects a genuine failure rather than work still in progress.
+ */
+export const DEPLOYMENT_TERMINAL_STAGES: ReadonlySet<number> = new Set([
+  DEPLOYMENT_STAGE.ROLLOUT_COMPLETE,
+  DEPLOYMENT_STAGE.ROLLOUT_FAILED,
+  DEPLOYMENT_STAGE.ROLLBACK_COMPLETE,
+  DEPLOYMENT_STAGE.ROLLBACK_FAILED,
+  DEPLOYMENT_STAGE.CLEAN_UP_COMPLETE,
+  DEPLOYMENT_STAGE.CLEAN_UP_FAILED,
+]);
+
 export const DEPLOYMENT_STATE = {
   INVALID: 0,
   INITIALIZING: 1,

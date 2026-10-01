@@ -6,6 +6,7 @@ import {
   DEPLOYMENT_STAGE,
   DEPLOYMENT_STAGE_CELL,
   DEPLOYMENT_STATE_CELL,
+  DEPLOYMENT_TERMINAL_STAGES,
 } from './shared';
 
 import type { DetailViewConfig } from '#core/components/views/types';
@@ -71,12 +72,24 @@ export const DEPLOYMENT_DETAIL_CONFIG: DetailViewConfig = {
             markdown: false,
           },
         ],
-        stateBuilder: (record: { status: number }) => {
+        stateBuilder: (
+          record: { status: number },
+          _index,
+          _siblings,
+          data: { status?: { stage?: number } }
+        ) => {
           switch (record.status) {
             case DEPLOYMENT_CONDITION_STATUS.TRUE:
               return TASK_STATE.SUCCESS;
             case DEPLOYMENT_CONDITION_STATUS.FALSE:
-              return TASK_STATE.ERROR;
+              // A condition is FALSE both while its stage is still in progress and once the
+              // deployment has terminally failed — conditionsSnapshot (see the accessor above)
+              // means a FALSE condition read here is only ever the latter, since it's swapped
+              // in exclusively when status.stage === ROLLOUT_FAILED. For any other stage, a
+              // FALSE condition just hasn't been satisfied yet, not failed.
+              return DEPLOYMENT_TERMINAL_STAGES.has(data?.status?.stage ?? DEPLOYMENT_STAGE.INVALID)
+                ? TASK_STATE.ERROR
+                : TASK_STATE.RUNNING;
             case DEPLOYMENT_CONDITION_STATUS.UNKNOWN:
             default:
               return TASK_STATE.RUNNING;
