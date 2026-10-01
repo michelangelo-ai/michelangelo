@@ -441,3 +441,42 @@ class ArgumentParsingTest(TestCase):
         """`ma sandbox create` without --set should default helm_set to []."""
         ns = self._parse(["create"])
         self.assertEqual(ns.helm_set, [])
+
+
+class K3dImageImportTest(TestCase):
+    """Tests for _k3d_import_image."""
+
+    @staticmethod
+    def _fake_run(save_returncode):
+        def run(cmd, **kwargs):
+            if cmd[:2] == ["docker", "version"]:
+                return Mock(returncode=0, stdout="linux/arm64\n")
+            if cmd[:2] == ["docker", "save"]:
+                return Mock(returncode=save_returncode)
+            return Mock(returncode=0)
+
+        return run
+
+    @patch("michelangelo.cli.sandbox.sandbox.subprocess.run")
+    def test_imports_single_platform_archive(self, mock_run):
+        """k3d imports a tarball holding only the Docker server's platform."""
+        mock_run.side_effect = self._fake_run(save_returncode=0)
+
+        self.assertTrue(sandbox._k3d_import_image("nginx:1.27-alpine"))
+
+        save = mock_run.call_args_list[1][0][0]
+        k3d = mock_run.call_args_list[2][0][0]
+        self.assertEqual(save[:4], ["docker", "save", "--platform", "linux/arm64"])
+        self.assertEqual(save[-1], "nginx:1.27-alpine")
+        archive = save[save.index("-o") + 1]
+        self.assertEqual(k3d[:4], ["k3d", "image", "import", archive])
+
+    @patch("michelangelo.cli.sandbox.sandbox.subprocess.run")
+    def test_falls_back_to_plain_import(self, mock_run):
+        """Without `docker save --platform`, k3d imports the image by name."""
+        mock_run.side_effect = self._fake_run(save_returncode=1)
+
+        self.assertTrue(sandbox._k3d_import_image("nginx:1.27-alpine"))
+
+        k3d = mock_run.call_args_list[2][0][0]
+        self.assertEqual(k3d[:4], ["k3d", "image", "import", "nginx:1.27-alpine"])

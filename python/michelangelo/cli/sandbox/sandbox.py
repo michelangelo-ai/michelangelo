@@ -1162,21 +1162,45 @@ def _import_log_persistence_images():
         if pull.returncode != 0:
             print(f"Warning: could not pull {image}. Skipping.")
             continue
+        if _k3d_import_image(image):
+            print(f"Successfully imported {image} into k3d.")
+        else:
+            print(f"Warning: could not import {image} into k3d.")
+
+
+def _k3d_import_image(image: str) -> bool:
+    """Import a host image into the sandbox's k3d nodes; True on success.
+
+    ``k3d image import <image>`` exits 0 yet imports nothing when Docker uses
+    the containerd image store: it saves a multi-platform archive whose other
+    platforms were never pulled, and the nodes skip it. Saving only the
+    Docker server's platform to a tarball and importing that works with
+    either image store. Docker without ``docker save --platform`` falls back
+    to the plain import, which works with the classic image store.
+    """
+    platform = subprocess.run(
+        ["docker", "version", "--format", "{{.Server.Os}}/{{.Server.Arch}}"],
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    with tempfile.TemporaryDirectory() as tmp:
+        archive = str(Path(tmp) / "image.tar")
+        save = subprocess.run(
+            ["docker", "save", "--platform", platform, "-o", archive, image],
+            capture_output=True,
+        )
         result = subprocess.run(
             [
                 "k3d",
                 "image",
                 "import",
-                image,
+                archive if save.returncode == 0 else image,
                 "-c",
                 _michelangelo_sandbox_kube_cluster_name,
             ],
             capture_output=True,
         )
-        if result.returncode != 0:
-            print(f"Warning: could not import {image} into k3d.")
-        else:
-            print(f"Successfully imported {image} into k3d.")
+    return result.returncode == 0
 
 
 def _create_cadence_domain(links):
