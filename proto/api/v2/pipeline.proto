@@ -67,8 +67,17 @@ message PipelineManifest {
     PIPELINE_MANIFEST_TYPE_INVALID = 0;
     // YAML config based manifest type.
     PIPELINE_MANIFEST_TYPE_YAML = 1;
+    // Value 2 belonged to a manifest type that was removed before the
+    // project was open-sourced. Never reuse the number: stored objects can
+    // still carry it as an unknown enum value.
+    reserved 2;
     // UniFlow (Python SDK) based manifest type.
     PIPELINE_MANIFEST_TYPE_UNIFLOW = 3;
+    // Declarative task-graph manifest type. `content` carries a
+    // michelangelo.api.v2.DeclarativeWorkflow packed as google.protobuf.Any.
+    // The Any type URL must be
+    // type.googleapis.com/michelangelo.api.v2.DeclarativeWorkflow.
+    PIPELINE_MANIFEST_TYPE_DECLARATIVE = 4;
   }
 
   // Type of the manifest file.
@@ -77,12 +86,12 @@ message PipelineManifest {
   // Path to the manifest file.
   string file_path = 2;
 
-  // Content of the manifest file for specific pipeline templates like
-  // training, evaluation, prediction etc. Only available for
-  // YAML based manifest type. To support dynamic extensibility other
-  // than built-in pipeline templates, like TrainingTemplate etc, we
-  // recommend to use an embedded TypedStruct as suggested by the Envoy
-  // Proxy project.
+  // Content of the manifest. The field is shared by every manifest type:
+  // - YAML: a built-in pipeline template packed as TypedStruct.
+  // - UNIFLOW: optional TypedStruct metadata written by mactl.
+  // - DECLARATIVE: the DeclarativeWorkflow task graph.
+  // To support dynamic extensibility we recommend an embedded TypedStruct
+  // as suggested by the Envoy Proxy project:
   // https://blog.envoyproxy.io/dynamic-extensibility-and-protocol-buffers-dcd0bf0b8801
   google.protobuf.Any content = 4 [(michelangelo.api.external_storage) = true];
 
@@ -129,6 +138,31 @@ message PipelineManifest {
   // - Dependencies and execution order
   repeated TaskSpec task_specs = 10;
 
+  // Field 11 is reserved for a future by-reference declarative spec
+  // (declarative_ref).
+  reserved 11;
+
+  // Interpreter release that executes a DECLARATIVE pipeline. The apiserver
+  // writes this field on create. On update, the apiserver preserves the
+  // stored value unless the request names a different `version`. A client
+  // must not set `artifact` or `digest`. Unset for YAML and UNIFLOW.
+  InterpreterPin interpreter_pin = 12;
+}
+
+// InterpreterPin identifies one immutable interpreter release.
+message InterpreterPin {
+  // Release name, for example "core-v1.4.2". The only field a client may
+  // set, and only on update, to request an explicit upgrade.
+  string version = 1;
+
+  // Blob storage URI of the interpreter tar for this release. Written by
+  // the apiserver from its release configuration.
+  string artifact = 2;
+
+  // Digest of the tar bytes at `artifact`, formatted "sha256:<hex>".
+  // Written by the apiserver. The run controller compares the fetched tar
+  // against this value before it starts a workflow.
+  string digest = 3;
 }
 
 // PipelineType enumerates the different types of ML pipelines supported:
