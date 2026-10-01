@@ -17,6 +17,17 @@ spec:
         - -c
       args:
         - minio server /data --console-address :9090 --address :9091
+      env:
+        - name: MINIO_ROOT_USER
+          valueFrom:
+            secretKeyRef:
+              name: "minio-credentials"
+              key: "AWS_ACCESS_KEY_ID"
+        - name: MINIO_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: "minio-credentials"
+              key: "AWS_SECRET_ACCESS_KEY"
       volumeMounts:
         - mountPath: /data
           name: data-volume
