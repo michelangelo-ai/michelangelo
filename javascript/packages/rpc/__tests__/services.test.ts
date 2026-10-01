@@ -1,4 +1,4 @@
-import { create } from '@bufbuild/protobuf';
+import { create, isMessage } from '@bufbuild/protobuf';
 import { anyPack, anyUnpack, StringValueSchema } from '@bufbuild/protobuf/wkt';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -238,6 +238,9 @@ describe('declarative type registry', () => {
     expect(packed.typeUrl).toBe('type.googleapis.com/michelangelo.api.v2.DeclarativeWorkflow');
     const out = anyUnpack(packed, typeRegistry);
     expect(out).toBeDefined();
-    expect((out as any).schemaVersion).toBe('v1alpha1');
+    expect(isMessage(out, DeclarativeWorkflowSchema)).toBe(true);
+    if (isMessage(out, DeclarativeWorkflowSchema)) {
+      expect(out.schemaVersion).toBe('v1alpha1');
+    }
   });
 });
