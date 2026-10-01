@@ -9,6 +9,7 @@ import {
 import { createFetchTransport } from './create-fetch-transport';
 import { TypedStructSchema } from './gen/michelangelo/api/typed_struct_pb';
 import { ClusterService } from './gen/michelangelo/api/v2/cluster_svc_pb';
+import { DeclarativeWorkflowSchema } from './gen/michelangelo/api/v2/declarative_pb';
 import { DeploymentService } from './gen/michelangelo/api/v2/deployment_svc_pb';
 import { InferenceServerService } from './gen/michelangelo/api/v2/inference_server_svc_pb';
 import { ModelFamilyService } from './gen/michelangelo/api/v2/model_family_svc_pb';
@@ -32,6 +33,11 @@ import type { FetchTransport, ServiceClient, Services } from './types';
 // Revision.spec.content for Pipeline revisions.
 export const typeRegistry = createRegistry(
   TypedStructSchema,
+  // DeclarativeWorkflow is packed into manifest.content for
+  // PIPELINE_MANIFEST_TYPE_DECLARATIVE pipelines. Without it here, decoding
+  // a pipeline list that contains a declarative pipeline fails with
+  // "not in the type registry".
+  DeclarativeWorkflowSchema,
   PipelineSchema,
   StringValueSchema,
   BoolValueSchema,
