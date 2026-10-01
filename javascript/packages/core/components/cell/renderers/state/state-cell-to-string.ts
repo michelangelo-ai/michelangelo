@@ -9,6 +9,7 @@ export const stateToString = ({
 }: CellToStringParams<string, StateCellConfig>): string => {
   if (!value) return '';
   if (column.stateTextMap?.[value]) return column.stateTextMap[value];
+  if (typeof value !== 'string') return String(value);
   if (value.endsWith('_INVALID')) return 'Queued';
   return sentenceCaseEnumValue(value, /(\w+_)STATE_/);
 };
