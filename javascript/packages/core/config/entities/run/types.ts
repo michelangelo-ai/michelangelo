@@ -75,6 +75,12 @@ export type PipelineRun = {
     /** Inline pipeline spec for dev runs; regular runs reference a Pipeline instead. */
     pipelineSpec?: PipelineSnapshotSpec;
     notifications?: PipelineRunNotification[];
+    /**
+     * Set when a user requests this run be stopped. The run keeps reporting its real
+     * `status.state` until the kill actually takes effect, so callers that want to show
+     * an in-progress "Killing" state need to check this alongside `status.state`.
+     */
+    kill?: boolean;
   };
   status?: {
     /** Snapshot of the pipeline this run executes, captured when the run starts. */

@@ -1,9 +1,12 @@
 import { CellType } from '#core/components/cell/constants';
 import { interpolate } from '#core/interpolation/interpolate';
+import { getCrdExecutionTimestampSeconds, getCrdLastUpdatedSeconds } from '#core/utils/crd-utils';
+import { readEnvironmentLabel } from '#core/utils/environment-utils';
+import { TERMINAL_RUN_STATES } from './types';
 
 import type { Cell } from '#core/components/cell/types';
 import type { TagColor } from '#core/components/tag/types';
-import type { RunWithManifest } from './types';
+import type { PipelineRunState, RunWithManifest } from './types';
 
 /**
  * Labels for `PipelineRunStepState`, keyed by the proto enum value.
@@ -32,11 +35,13 @@ export const STEP_STATE_COLOR_MAP: Record<number, TagColor> = {
 };
 
 /**
- * Labels for `PipelineRunState`, keyed by the proto enum value.
+ * Labels for `PipelineRunState`, keyed by the proto enum value, plus a synthetic `KILLING`
+ * entry (never collides with the real numeric values) for a run that has a kill requested
+ * (`spec.kill`) but hasn't reached a terminal state yet — see {@link RUN_STATE_COLUMN}.
  * Distinct from {@link STEP_STATE_TEXT_MAP} — a run reads "Succeeded" where a step
  * reads "Success", and state 0 is a queued run but a pending step.
  */
-export const RUN_STATE_TEXT_MAP: Record<number, string> = {
+export const RUN_STATE_TEXT_MAP: Record<number | string, string> = {
   0: 'Queued',
   1: 'Pending',
   2: 'Running',
@@ -44,10 +49,11 @@ export const RUN_STATE_TEXT_MAP: Record<number, string> = {
   4: 'Killed',
   5: 'Failed',
   6: 'Skipped',
+  KILLING: 'Killing',
 };
 
 /** Colors matching {@link RUN_STATE_TEXT_MAP}, keyed by the proto enum value. */
-export const RUN_STATE_COLOR_MAP: Record<number, TagColor> = {
+export const RUN_STATE_COLOR_MAP: Record<number | string, TagColor> = {
   0: 'gray',
   1: 'blue',
   2: 'blue',
@@ -55,6 +61,9 @@ export const RUN_STATE_COLOR_MAP: Record<number, TagColor> = {
   4: 'red',
   5: 'red',
   6: 'gray',
+  // Matches the existing precedent for an in-progress/transitional state: `trigger/shared.ts`'s
+  // TRIGGER_STATE_CELL_CONFIG uses 'yellow' for its analogous "Pending Kill" state.
+  KILLING: 'yellow',
 };
 
 /** Created-date cell, shared between the run list and detail pages. */
@@ -87,13 +96,29 @@ export const RUN_STARTED_BY_COLUMN: Cell = {
   type: CellType.TEXT,
 };
 
-/** Run state cell, shared between the run list and detail pages. */
+/**
+ * Run state cell, shared between the run list and detail pages. Renders a synthetic
+ * "Killing" value in place of the real state while a kill has been requested
+ * (`spec.kill`) but the run hasn't reached a terminal state yet — a completed run can
+ * finish with `spec.kill` still true if it succeeded before the kill took effect, so this
+ * is scoped to {@link TERMINAL_RUN_STATES} rather than just excluding `KILLED`.
+ */
 export const RUN_STATE_COLUMN: Cell = {
   id: 'status.state',
   label: 'State',
   type: CellType.STATE,
   stateTextMap: RUN_STATE_TEXT_MAP,
   stateColorMap: RUN_STATE_COLOR_MAP,
+  accessor: (data: unknown) => {
+    // cast: accessor receives unknown data; narrowing to expected proto shape for property
+    // access
+    const run = data as { spec?: { kill?: boolean }; status?: { state?: number } };
+    // cast: status.state is typed as a bare number but always holds a PipelineRunState value
+    if (run.spec?.kill && !TERMINAL_RUN_STATES.has(run.status?.state as PipelineRunState)) {
+      return 'KILLING';
+    }
+    return run.status?.state;
+  },
 };
 
 /**
@@ -126,6 +151,71 @@ export const RUN_TRIGGERED_BY_COLUMN: Cell = {
 
     return triggerName ? `/${studio.projectId}/${studio.phase}/triggers/${triggerName}` : '';
   }),
+};
+
+/**
+ * Last-updated cell using any-update semantics (see {@link getCrdLastUpdatedSeconds}), the
+ * same as `run/list.ts`'s "Last Updated" column, so a run shows one value on both pages. A
+ * run's spec is effectively immutable, so spec-only semantics would show creation time.
+ */
+export const RUN_UPDATED_COLUMN: Cell = {
+  // Distinct from RUN_EXECUTION_TIMESTAMP_COLUMN's id below — both cells read `metadata` in
+  // their accessor, but column ids must be unique within a table, so a plain `'metadata'`
+  // (which would collide once both cells are used together, e.g. on the trigger detail page)
+  // isn't usable for either.
+  id: 'last-updated',
+  label: 'Last updated',
+  type: CellType.DATE,
+  accessor: (data: unknown) => {
+    // cast: accessor receives unknown data; narrowing to expected proto shape for property
+    // access
+    const row = data as {
+      metadata?: { labels?: Record<string, string>; creationTimestamp?: { seconds: number } };
+    };
+    return getCrdLastUpdatedSeconds(row);
+  },
+};
+
+/** Raw pipeline-run parameter-id label, blank when the run wasn't parameterized. */
+export const RUN_PARAMETER_ID_COLUMN: Cell = {
+  id: `metadata.labels['pipelinerun.michelangelo/parameter-id']`,
+  label: 'Parameter ID',
+  type: CellType.TEXT,
+};
+
+/** Execution-timestamp cell; see {@link getCrdExecutionTimestampSeconds} for its fallback rule. */
+export const RUN_EXECUTION_TIMESTAMP_COLUMN: Cell = {
+  id: 'execution-timestamp',
+  label: 'Execution Timestamp',
+  type: CellType.DATE,
+  accessor: (data: unknown) => {
+    // cast: accessor receives unknown data; narrowing to expected proto shape for property
+    // access
+    const row = data as {
+      metadata?: { labels?: Record<string, string>; creationTimestamp?: { seconds: number } };
+    };
+    return getCrdExecutionTimestampSeconds(row);
+  },
+};
+
+/** Normalized environment label, blank when absent or unrecognized. */
+export const RUN_ENVIRONMENT_COLUMN: Cell = {
+  id: 'metadata.labels',
+  label: 'Environment',
+  type: CellType.TEXT,
+  accessor: (data: unknown) => {
+    // cast: accessor receives unknown data; narrowing to expected proto shape for property
+    // access
+    const labels = (data as { metadata?: { labels?: Record<string, string> } })?.metadata?.labels;
+    return readEnvironmentLabel(labels) || null;
+  },
+};
+
+/** Name of the run this run resumed from, blank for a non-resume run. */
+export const RUN_RESUME_FROM_COLUMN: Cell = {
+  id: 'spec.resume.pipelineRun.name',
+  label: 'Resume from',
+  type: CellType.TEXT,
 };
 
 /**
