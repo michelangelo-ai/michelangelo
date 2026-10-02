@@ -6,7 +6,7 @@ import {
   RUN_PIPELINE_COLUMN,
   RUN_RESUME_FROM_COLUMN,
   RUN_STARTED_BY_COLUMN,
-  RUN_STATE_COLUMN_WITH_KILLING,
+  RUN_STATE_COLUMN,
   RUN_UPDATED_COLUMN,
   TRIGGERED_BY_LABEL,
 } from '#core/config/entities/run/shared';
@@ -127,7 +127,7 @@ export const TRIGGER_DETAIL_CONFIG: DetailViewConfig = {
           RUN_ENVIRONMENT_COLUMN,
           RUN_RESUME_FROM_COLUMN,
           { ...RUN_STARTED_BY_COLUMN, label: 'Owner' },
-          RUN_STATE_COLUMN_WITH_KILLING,
+          RUN_STATE_COLUMN,
         ],
       },
     },
