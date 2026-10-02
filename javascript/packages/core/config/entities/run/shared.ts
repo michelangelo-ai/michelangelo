@@ -1,6 +1,6 @@
 import { CellType } from '#core/components/cell/constants';
 import { interpolate } from '#core/interpolation/interpolate';
-import { getCrdExecutionTimestampSeconds, getCrdUpdatedSeconds } from '#core/utils/crd-utils';
+import { getCrdExecutionTimestampSeconds, getCrdLastUpdatedSeconds } from '#core/utils/crd-utils';
 import { readEnvironmentLabel } from '#core/utils/environment-utils';
 import { TERMINAL_RUN_STATES } from './types';
 
@@ -154,9 +154,9 @@ export const RUN_TRIGGERED_BY_COLUMN: Cell = {
 };
 
 /**
- * Last-updated cell using spec-only semantics (see {@link getCrdUpdatedSeconds}) — distinct
- * from `run/list.ts`'s own "Last Updated" column, which intentionally uses any-update
- * semantics for that page.
+ * Last-updated cell using any-update semantics (see {@link getCrdLastUpdatedSeconds}), the
+ * same as `run/list.ts`'s "Last Updated" column, so a run shows one value on both pages. A
+ * run's spec is effectively immutable, so spec-only semantics would show creation time.
  */
 export const RUN_UPDATED_COLUMN: Cell = {
   // Distinct from RUN_EXECUTION_TIMESTAMP_COLUMN's id below — both cells read `metadata` in
@@ -172,7 +172,7 @@ export const RUN_UPDATED_COLUMN: Cell = {
     const row = data as {
       metadata?: { labels?: Record<string, string>; creationTimestamp?: { seconds: number } };
     };
-    return getCrdUpdatedSeconds(row);
+    return getCrdLastUpdatedSeconds(row);
   },
 };
 

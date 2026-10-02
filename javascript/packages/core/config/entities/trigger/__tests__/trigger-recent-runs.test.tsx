@@ -169,7 +169,7 @@ describe('Trigger detail "Triggered Runs"', () => {
     expect(link).toHaveAttribute('href', '/myproject/retrain/runs/run-1');
   });
 
-  it('renders "Last updated" from the SpecUpdateTimestamp label, falling back to creation time', async () => {
+  it('renders "Last updated" from the UpdateTimestamp label, falling back to creation time', async () => {
     render(
       <EntityDetailRoute phases={{ retrain: RETRAIN_PHASE }} />,
       buildWrapper([
@@ -181,7 +181,7 @@ describe('Trigger detail "Triggered Runs"', () => {
               {
                 metadata: {
                   name: 'run-with-label',
-                  labels: { 'michelangelo/SpecUpdateTimestamp': '1700000000000000' },
+                  labels: { 'michelangelo/UpdateTimestamp': '1700000000000000' },
                 },
                 status: { state: 3 },
               },
@@ -384,6 +384,11 @@ describe('Trigger detail "Triggered Runs"', () => {
                 spec: { kill: true },
                 status: { state: 4 }, // KILLED — must not show "Killing" once state catches up
               },
+              {
+                metadata: { name: 'run-succeeded-with-kill' },
+                spec: { kill: true },
+                status: { state: 3 }, // SUCCEEDED before the kill took effect — must stay "Succeeded"
+              },
             ])
           ),
         }),
@@ -400,5 +405,9 @@ describe('Trigger detail "Triggered Runs"', () => {
     const killedRow = await screen.findByRole('row', { name: /run-already-killed/ });
     expect(killedRow).toHaveTextContent('Killed');
     expect(killedRow).not.toHaveTextContent('Killing');
+
+    const succeededRow = await screen.findByRole('row', { name: /run-succeeded-with-kill/ });
+    expect(succeededRow).toHaveTextContent('Succeeded');
+    expect(succeededRow).not.toHaveTextContent('Killing');
   });
 });
