@@ -145,8 +145,8 @@ class EmbeddingMetricSamplingTest(unittest.TestCase):
         # rows, and one whose peer saw none. A sync leaves the list states as
         # concatenated tensors.
         peers = {
-            "same rows": lambda t, group=None: [t, t],  # noqa: ARG005
-            "no rows": lambda t, group=None: [  # noqa: ARG005
+            "same rows": lambda t, group=None: [t, t],
+            "no rows": lambda t, group=None: [
                 t,
                 t if t.dim() == 0 else t[:0],
             ],
