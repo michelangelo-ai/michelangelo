@@ -237,31 +237,5 @@ describe('Run detail page', () => {
       expect(await screen.findByLabelText('Duration')).toHaveValue('');
       expect(screen.queryByRole('link', { name: /Resumed from/ })).not.toBeInTheDocument();
     });
-
-    it('counts step end times in whole seconds, like the creation timestamp', async () => {
-      render(
-        <EntityDetailRoute phases={{ train: TRAIN_PHASE }} />,
-        buildWrapper([
-          getErrorProviderWrapper(),
-          getRouterWrapper({
-            location: '/myproject/train/runs/run-1/information',
-          }),
-          getServiceProviderWrapper({
-            request: createQueryMockRouter({
-              GetPipelineRun: {
-                pipelineRun: buildRun({
-                  status: {
-                    state: PipelineRunState.SUCCEEDED,
-                    steps: [{ name: 'step', endTime: '2023-11-14T22:13:20.992009180Z' }],
-                  },
-                }),
-              },
-            }),
-          }),
-        ])
-      );
-
-      expect(await screen.findByLabelText('Duration')).toHaveValue('0 seconds');
-    });
   });
 });

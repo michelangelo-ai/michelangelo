@@ -209,9 +209,8 @@ function formatRunDuration(run: PipelineRunSummary | undefined): string | null {
   }
 
   if (TERMINAL_RUN_STATES.has(state)) {
-    // Whole seconds, like creationTimestamp, so a sub-second run doesn't round up to 1 second
     const stepEndTimes = (run?.status?.steps ?? [])
-      .map((step) => (step.endTime ? Math.floor(toEpochSeconds(step.endTime)) : NaN))
+      .map((step) => (step.endTime ? toEpochSeconds(step.endTime) : NaN))
       .filter((seconds) => !isNaN(seconds));
     if (stepEndTimes.length === 0) {
       return null;
