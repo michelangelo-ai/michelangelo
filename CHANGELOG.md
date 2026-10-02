@@ -2,6 +2,230 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+
+### Bug Fixes
+
+
+- **ci:** Scope NODE_AUTH_TOKEN to the npm-publish job, not just its final step (#2121)
+
+
+- **pipelinerun:** Propagate Temporal/Cadence workflow failure into error_message (#2126)
+
+
+- **ci:** Scan :main instead of stale :latest tag in CVE Scan (#2127)
+
+
+- **sandbox:** Point minio image at quay.io mirror (#2146)
+
+
+- **uniflow:** Read the Ray task log URL from the RayCluster CR (#2152)
+
+
+- **docker:** Bump ui base image to patched nginx:alpine digest (#2140)
+
+
+- **go:** Bump grpc, thrift, x/crypto to close CVE Scan findings (#2141)
+
+
+- **sandbox:** Point k3d workflow.endpoint at the rendered Cadence Service (#2154)
+
+
+- **ci:** Make CVE Scan's exit-code gate respect its own severity filter (#2159)
+
+
+- **ui:** Default Environment field to Development in Start new pipeline run dialog (#2160)
+
+
+- **docker:** Upgrade libexpat to close CVE-2026-93990 in ui image (#2162)
+
+
+- **deployment:** Don't roll back a deployment's first-ever rollout (#2163)
+
+
+- **ci:** Resolve golangci-lint/Go version mismatch in go-lint.yml (#2166)
+
+
+- **sandbox:** Mirror minio sandbox image to ghcr.io instead of quay.io (#2170)
+
+
+- **ui:** Add missing import for function (#2179)
+
+
+- **triggerrun:** Include run ID in TriggerRun log URLs (#2171)
+
+
+- **ci:** Scope ui-release.yml's push trigger to build-ui-image's actual inputs (#2188)
+
+
+- **kubeyarpc:** Omit request bodies from handler logs (#2197)
+
+
+- **kubeyarpc:** Drop namespace and name tags from API handler metrics (#2198)
+
+
+- **uniflow:** Avoid eager deployment plugin imports (#2204)
+
+
+- **sandbox:** Wire MinIO's own root credentials to michelangeloadmin (#2219)
+
+
+- **ui:** Add Paused to stateTextMap (#2221)
+
+
+### CI/CD
+
+
+- Bump release-drafter/release-drafter from 6.4.0 to 7.7.0 (#2131)
+
+
+- Bump docker/login-action from 3 to 4 (#2132)
+
+
+- Bump codecov/codecov-action from 7.0.0 to 7.1.1 in the actions-minor-and-patch group (#2130)
+
+
+- **release:** Unify GitHub Release body format on git-cliff, retire release-drafter (#2136)
+
+
+- Bump dorny/paths-filter from 3.0.4 to 4.0.3 (#2186)
+
+
+- Bump actions/upload-artifact from 4 to 7 (#2187)
+
+
+- Bump orhun/git-cliff-action from 4.9.0 to 4.9.1 in the actions-minor-and-patch group (#2185)
+
+
+- Fix cve-scan.yml Slack notify to v4's method/payload schema (#2174)
+
+
+### Documentation
+
+
+- **user-guides:** Record verification of backfill and file-sync guides (#2113)
+
+
+- **examples:** Fix broken run commands and fabricated output in example READMEs (#2112)
+
+
+- **contributing:** Document the tag-ancestry / merge-back invariant (#1978)
+
+
+- **scheduler:** Operator guide for the Kueue backend and updated extension guide (#1985)
+
+
+- **api-reference:** Fix generator HTML escaping and add two Python SDK pages (#2144)
+
+
+- Update CHANGELOG.md for v0.11.0 (#2149)
+
+
+- **core:** Remove stray comment on trigger interval-seconds accessor (#2158)
+
+
+- Update SECURITY.md supported-versions table to 0.11.x/0.10.x (#2173)
+
+
+- Replace Slack invite-by-email with a shareable invite link (#2202)
+
+
+### Features
+
+
+- **trainer:** Add an MLflow-backed ExperimentStore for auto-resume (#1872)
+
+
+- **schema:** Add evaluator task configuration schema (#2125)
+
+
+- **evaluator:** Add EvaluationReport chart builders (#2135)
+
+
+- **ui:** Add pipeline revision detail page (#2091)
+
+
+- **evaluator:** Add the evaluator core -- metrics, gating, and chart… (#2143)
+
+
+- **ui:** Add Environment field to Run trigger dialog (#2153)
+
+
+- **core:** Trigger list column parity (schedule, environment, auto-flip) (#2151)
+
+
+- **triggerrun:** Default environment label on TriggerRun create (#2157)
+
+
+- Cascade delete revisions on DeletePipeline (#2167)
+
+
+- **ui:** Use latest revision on pipeline detail page (#2118)
+
+
+- **ui:** Add revision selector on detail page (#2117)
+
+
+- **trigger:** Add Information tab and detail metadata parity (#2161)
+
+
+- **ui:** Render stages as pending (#2014)
+
+
+- **variables:** Add MessageVariable, copied from the internal SDK (#2183)
+
+
+- **ui:** Update columns for pipeline/revision list view (#2194)
+
+
+- **evaluator:** Add the evaluator workflow task, preprocessor, and e… (#2181)
+
+
+- **ui:** Add action menu for revision list item (#2178)
+
+
+- **ui:** Badge the latest revision in the detail page revision selector (#2195)
+
+
+- **evaluator:** Add intrinsic embedding metrics (#2201)
+
+
+- **ray:** Move Ray log persistence to official KubeRay v1.7.1 images (#2200)
+
+
+### Miscellaneous
+
+
+- Merge release/v0.11 back to main (#2123)
+
+
+- **examples:** Remove gpt_oss_20b_finetune from core, now in michelangelo-examples (#2150)
+
+
+- **sandbox:** Enable pipeline revisioning in k3d values (#2138)
+
+
+- **sandbox:** Rename default credential from minioadmin to michelangeloadmin (#2193)
+
+
+- **go:** Bump go.uber.org/cadence to v1.4.0 (#2128)
+
+
+- **examples:** Remove movielens from core, now in michelangelo-examples (#2217)
+
+
+- Add Rerun action alongside a static-primary Kill action on trigger runs (#2168)
+
+
+- Bump version to 0.12.0-rc.1 (#2223)
+
+
+### Testing
+
+
+- **trainer:** Add a real regression guard for MlflowExperimentStore resume (#2079)
+
 ## [0.11.0] - 2026-09-21
 
 
