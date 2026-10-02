@@ -1,6 +1,4 @@
-import { create } from '@bufbuild/protobuf';
 import {
-  anyPack,
   BoolValueSchema,
   DoubleValueSchema,
   Int64ValueSchema,
@@ -12,14 +10,15 @@ import { walkMessage } from './walk-message';
 import type { DescMessage } from '@bufbuild/protobuf';
 
 const ANY_TYPE_NAME = 'google.protobuf.Any';
+const TYPE_URL_PREFIX = 'type.googleapis.com/';
 
 /**
- * Walks a request object against its proto descriptor, packing JS primitives into well-known
- * wrapper types wherever the schema has a `google.protobuf.Any` field.
+ * Walks a proto3 JSON request object against its proto descriptor, packing JS primitives into
+ * the JSON form of well-known wrapper types wherever the schema has a `google.protobuf.Any` field.
  *
  * @example
  * packAnyFields(CriterionSchema, { fieldName: "x", matchValue: "my-pipeline" })
- * // matchValue -> anyPack(StringValueSchema, create(StringValueSchema, { value: "my-pipeline" }))
+ * // matchValue -> { "@type": "type.googleapis.com/google.protobuf.StringValue", value: "my-pipeline" }
  */
 export function packAnyFields(desc: DescMessage, value: unknown): unknown {
   return walkMessage(desc, value, (message, item, descend) =>
@@ -28,28 +27,31 @@ export function packAnyFields(desc: DescMessage, value: unknown): unknown {
 }
 
 function packAny(value: unknown): unknown {
-  // Already a packed Any object (has typeUrl) — pass through
-  if (typeof value === 'object' && value !== null && 'typeUrl' in value) {
+  // Already a proto3 JSON Any (has @type) — pass through
+  if (typeof value === 'object' && value !== null && '@type' in value) {
     return value;
   }
 
   if (typeof value === 'string') {
-    return anyPack(StringValueSchema, create(StringValueSchema, { value }));
+    return packWrapper(StringValueSchema, value);
   }
   if (typeof value === 'boolean') {
-    return anyPack(BoolValueSchema, create(BoolValueSchema, { value }));
+    return packWrapper(BoolValueSchema, value);
   }
   if (typeof value === 'number') {
     if (Number.isInteger(value)) {
-      return anyPack(Int64ValueSchema, create(Int64ValueSchema, { value: BigInt(value) }));
+      // proto3 JSON encodes int64 as a string
+      return packWrapper(Int64ValueSchema, String(value));
     }
-    return anyPack(DoubleValueSchema, create(DoubleValueSchema, { value }));
+    return packWrapper(DoubleValueSchema, value);
   }
 
-  // create() doesn't validate an Any's shape, so passing this through would silently produce
-  // an empty Any (typeUrl: '') instead of a visible error.
   throw new Error(
     `packAnyFields: cannot auto-pack ${typeof value} into google.protobuf.Any — ` +
       `expected a string, number, or boolean primitive`
   );
+}
+
+function packWrapper(schema: DescMessage, value: unknown) {
+  return { '@type': `${TYPE_URL_PREFIX}${schema.typeName}`, value };
 }

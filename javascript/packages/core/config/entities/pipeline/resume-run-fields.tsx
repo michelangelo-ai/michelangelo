@@ -4,9 +4,9 @@ import { SelectField } from '#core/components/form/fields/select/select-field';
 import { useField } from '#core/components/form/hooks/use-field';
 import { FormGroup } from '#core/components/form/layout/form-group/form-group';
 import { RUN_STATE_TEXT_MAP } from '#core/config/entities/run/shared';
-import { TERMINAL_RUN_STATES } from '#core/config/entities/run/types';
+import { PipelineRunState, TERMINAL_RUN_STATES } from '#core/config/entities/run/types';
 import { useStudioQuery } from '#core/hooks/use-studio-query';
-import { timestampToString } from '#core/utils/time-utils';
+import { timestampToString, toEpochSeconds } from '#core/utils/time-utils';
 import { ResumeStepOption } from './resume-step-option';
 import { CRITERION_OPERATOR_EQUAL, PIPELINE_RUN_PIPELINE_NAME_FIELD } from './shared';
 
@@ -178,8 +178,8 @@ function buildSourceRunOptions(
     )
     .sort(
       (a, b) =>
-        Number(b.metadata?.creationTimestamp?.seconds ?? 0) -
-        Number(a.metadata?.creationTimestamp?.seconds ?? 0)
+        toEpochSeconds(b.metadata?.creationTimestamp ?? 0) -
+        toEpochSeconds(a.metadata?.creationTimestamp ?? 0)
     )
     .slice(0, MAX_SOURCE_RUN_OPTIONS)
     .map((run) => ({
@@ -189,8 +189,8 @@ function buildSourceRunOptions(
 }
 
 function buildSourceRunLabel(run: PipelineRunSummary): string {
-  const state = RUN_STATE_TEXT_MAP[run.status?.state ?? 0] ?? 'Unknown';
-  const created = timestampToString(run.metadata?.creationTimestamp?.seconds);
+  const state = RUN_STATE_TEXT_MAP[run.status?.state ?? PipelineRunState.QUEUED] ?? 'Unknown';
+  const created = timestampToString(run.metadata?.creationTimestamp);
 
   return [run.metadata?.name, state, created].filter(Boolean).join(' · ');
 }

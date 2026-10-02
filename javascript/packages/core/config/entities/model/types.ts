@@ -2,7 +2,7 @@ export type ModelRecord = {
   metadata?: {
     name?: string;
     labels?: Record<string, string>;
-    creationTimestamp?: { seconds: number };
+    creationTimestamp?: string;
   };
   spec?: {
     owner?: { name?: string };

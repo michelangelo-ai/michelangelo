@@ -121,13 +121,24 @@ export type Resume = {
 
 /** Mirrors proto PipelineRunState enum (pipeline_run.proto). */
 export enum PipelineRunState {
-  QUEUED = 0,
-  PENDING = 1,
-  RUNNING = 2,
-  SUCCEEDED = 3,
-  KILLED = 4,
-  FAILED = 5,
-  SKIPPED = 6,
+  QUEUED = 'PIPELINE_RUN_STATE_INVALID',
+  PENDING = 'PIPELINE_RUN_STATE_PENDING',
+  RUNNING = 'PIPELINE_RUN_STATE_RUNNING',
+  SUCCEEDED = 'PIPELINE_RUN_STATE_SUCCEEDED',
+  KILLED = 'PIPELINE_RUN_STATE_KILLED',
+  FAILED = 'PIPELINE_RUN_STATE_FAILED',
+  SKIPPED = 'PIPELINE_RUN_STATE_SKIPPED',
+}
+
+/** Mirrors proto PipelineRunStepState enum (pipeline_run.proto). */
+export enum PipelineRunStepState {
+  INVALID = 'PIPELINE_RUN_STEP_STATE_INVALID',
+  PENDING = 'PIPELINE_RUN_STEP_STATE_PENDING',
+  RUNNING = 'PIPELINE_RUN_STEP_STATE_RUNNING',
+  SUCCEEDED = 'PIPELINE_RUN_STEP_STATE_SUCCEEDED',
+  KILLED = 'PIPELINE_RUN_STEP_STATE_KILLED',
+  FAILED = 'PIPELINE_RUN_STEP_STATE_FAILED',
+  SKIPPED = 'PIPELINE_RUN_STEP_STATE_SKIPPED',
 }
 
 /**
@@ -144,18 +155,15 @@ export const TERMINAL_RUN_STATES: ReadonlySet<PipelineRunState> = new Set([
   PipelineRunState.SKIPPED,
 ]);
 
-/** Timestamp as returned by the API for pipeline run steps. */
-type StepTimestamp = {
-  seconds?: string;
-};
-
 /** The subset of `PipelineRunStepInfo` the resume step picker and information tab read. */
 export type PipelineRunStepInfo = {
   name?: string;
   displayName?: string;
-  state?: number;
-  startTime?: StepTimestamp;
-  endTime?: StepTimestamp;
+  state?: PipelineRunStepState;
+  /** RFC 3339 (proto3 JSON `google.protobuf.Timestamp`). */
+  startTime?: string;
+  /** RFC 3339 (proto3 JSON `google.protobuf.Timestamp`). */
+  endTime?: string;
   logUrl?: string;
   subSteps?: PipelineRunStepInfo[];
 };
@@ -165,7 +173,8 @@ export type PipelineRunSummary = {
   metadata?: {
     name?: string;
     namespace?: string;
-    creationTimestamp?: StepTimestamp;
+    /** k8s `Time`; `seconds` is an int64, which proto3 JSON encodes as a string. */
+    creationTimestamp?: string;
     labels?: Record<string, string>;
   };
   spec?: {
@@ -181,7 +190,7 @@ export type PipelineRunSummary = {
     pipelineSpec?: PipelineSnapshotSpec;
   };
   status?: {
-    state?: number;
+    state?: PipelineRunState;
     steps?: PipelineRunStepInfo[];
     errorMessage?: string;
     sourcePipeline?: SourcePipelineSnapshot;

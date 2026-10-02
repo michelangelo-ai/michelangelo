@@ -3,11 +3,12 @@ import { interpolate } from '#core/interpolation/interpolate';
 import { generateSuffix, resolveTriggerRunTypePrefix } from '#core/utils/name-utils';
 import { TRIGGER_DETAIL_CONFIG } from './detail';
 import { TRIGGER_LIST_CONFIG } from './list';
-import { TriggerRunAction, TriggerRunState } from './types';
+import { TriggerRunState } from './shared';
+import { TriggerRunAction } from './types';
 
 import type { MiddlewareOperation } from '#core/hooks/use-schema-middleware/types';
 import type { PhaseEntityConfig } from '#core/types/common/studio-types';
-import type { TriggerRun } from './types';
+import type { TriggerRun, TriggerRunStateValue } from './types';
 
 const isKillable = (record: unknown) => {
   // cast: record is unknown from the action predicate context; always TriggerRun in this entity
@@ -17,7 +18,7 @@ const isKillable = (record: unknown) => {
 };
 
 /** States a trigger run no longer progresses out of — the only ones it can be rerun from. */
-const TERMINAL_TRIGGER_RUN_STATES: ReadonlySet<TriggerRunState> = new Set([
+const TERMINAL_TRIGGER_RUN_STATES: ReadonlySet<TriggerRunStateValue> = new Set([
   TriggerRunState.FAILED,
   TriggerRunState.KILLED,
   TriggerRunState.SUCCEEDED,
@@ -40,7 +41,7 @@ const isRerunnable = (record: unknown) => {
  */
 function buildRerunName(spec: TriggerRun['spec']): string {
   const typePrefix = resolveTriggerRunTypePrefix(
-    spec.trigger?.triggerType?.case,
+    spec.trigger,
     !!(spec.startTimestamp && spec.endTimestamp)
   );
   const sourceNameSegment = spec.sourceTriggerName ? `-${spec.sourceTriggerName}` : '';

@@ -15,7 +15,7 @@ import type { DetailViewConfig } from '#core/components/views/types';
 export const DEPLOYMENT_DETAIL_CONFIG: DetailViewConfig = {
   type: 'detail',
   metadata: [
-    { id: 'metadata.creationTimestamp.seconds', label: 'Created', type: CellType.DATE },
+    { id: 'metadata.creationTimestamp', label: 'Created', type: CellType.DATE },
     { id: 'spec.owner.name', label: 'Owner', type: CellType.TEXT },
     DEPLOYMENT_STAGE_CELL,
     DEPLOYMENT_STATE_CELL,
@@ -37,7 +37,7 @@ export const DEPLOYMENT_DETAIL_CONFIG: DetailViewConfig = {
       },
       tasks: {
         accessor: (data: {
-          status?: { stage?: number; conditions?: object[]; conditionsSnapshot?: object[] };
+          status?: { stage?: string; conditions?: object[]; conditionsSnapshot?: object[] };
         }) => {
           const status = data?.status;
           const hasSnapshot = (status?.conditionsSnapshot?.length ?? 0) > 0;
@@ -100,10 +100,10 @@ export const DEPLOYMENT_DETAIL_CONFIG: DetailViewConfig = {
           },
         ],
         stateBuilder: (
-          record: { status: number },
+          record: { status: string },
           index: number,
-          siblings: { status: number }[],
-          data: { status?: { stage?: number } }
+          siblings: { status: string }[],
+          data: { status?: { stage?: string } }
         ) => {
           if (record.status === DEPLOYMENT_CONDITION_STATUS.TRUE) return TASK_STATE.SUCCESS;
 
@@ -123,6 +123,6 @@ export const DEPLOYMENT_DETAIL_CONFIG: DetailViewConfig = {
   ],
 };
 
-function isFailedRollout(stage: number | undefined): boolean {
+function isFailedRollout(stage: string | undefined): boolean {
   return stage != null && FAILED_ROLLOUT_STAGES.includes(stage);
 }

@@ -3,9 +3,7 @@ import type {
   DescMethodUnary,
   DescService,
   JsonValue,
-  Message,
-  MessageInitShape,
-  MessageShape,
+  MessageJsonType,
 } from '@bufbuild/protobuf';
 import type { ClusterService } from './gen/michelangelo/api/v2/cluster_svc_pb';
 import type { DeploymentService } from './gen/michelangelo/api/v2/deployment_svc_pb';
@@ -55,11 +53,12 @@ export interface FetchTransport {
 
 /**
  * Maps a service's generated method descriptors to a client object shaped
- * like Connect's `Client<T>` — one async function per unary RPC.
+ * like Connect's `Client<T>`: one async function per unary RPC, taking and
+ * returning the generated `FooJson` type for its messages.
  */
 export type ServiceClient<T extends DescService> = {
   [K in keyof T['method']]: T['method'][K] extends DescMethodUnary<infer I, infer O>
-    ? (request: MessageInitShape<I>, headers?: Record<string, string>) => Promise<MessageShape<O>>
+    ? (request: MessageJsonType<I>, headers?: Record<string, string>) => Promise<MessageJsonType<O>>
     : never;
 };
 
@@ -103,41 +102,6 @@ export type ExtractUnaryRpc<T> = T extends (
 ) => Promise<infer R>
   ? (args: Record<string, unknown>, headers?: Record<string, string>) => Promise<R>
   : never;
-
-/**
- * @description
- * Removes the `$typeName` and `$unknown` properties from a message. These are properties
- * that are added by the protobuf-es library. We don't need them for our RPC calls.
- *
- * @example
- * ```ts
- * type MyMessage = {
- *   $typeName: string;
- *   $unknown: unknown;
- *   myField: string;
- * };
- *
- * type MyMessageWithoutTypeName = OmitTypeName<MyMessage>;
- * const message: MyMessageWithoutTypeName = { myField: 'hello' };
- * ```
- *
- * @see https://github.com/bufbuild/protobuf-es/issues/1016
- */
-export type OmitTypeName<T> = {
-  [P in keyof T as P extends '$typeName' | '$unknown' ? never : P]: Recurse<T[P]>;
-};
-
-type Recurse<F> = F extends (infer U)[]
-  ? Recurse<U>[]
-  : F extends Message
-    ? OmitTypeName<F>
-    : F extends { case: infer C extends string; value: infer V extends Message }
-      ? { case: C; value: OmitTypeName<V> }
-      : F extends Record<string, infer V extends Message>
-        ? Record<string, OmitTypeName<V>>
-        : F extends Record<number, infer V extends Message>
-          ? Record<number, OmitTypeName<V>>
-          : F;
 
 /**
  * Called by `walkMessage` on each message-typed value it reaches. Returns the value to put in

@@ -17,7 +17,7 @@ import type { PipelineRevision } from './types';
 export const PIPELINE_DETAIL_CONFIG: DetailViewConfig = {
   type: 'detail',
   metadata: [
-    { id: 'metadata.creationTimestamp.seconds', label: 'Created', type: CellType.DATE },
+    { id: 'metadata.creationTimestamp', label: 'Created', type: CellType.DATE },
     { id: 'spec.owner.name', label: 'Owner', type: CellType.TEXT },
     { ...PIPELINE_TYPE_CELL, id: 'spec.content.spec.type' },
     { id: 'spec.gitCommit.branch', label: 'Branch', type: CellType.TEXT },
@@ -78,7 +78,7 @@ export const PIPELINE_DETAIL_CONFIG: DetailViewConfig = {
             label: 'Name',
             url: '/${studio.projectId}/${studio.phase}/triggers/${row.metadata.name}',
           },
-          { id: 'metadata.creationTimestamp.seconds', label: 'Created', type: CellType.DATE },
+          { id: 'metadata.creationTimestamp', label: 'Created', type: CellType.DATE },
           { id: 'spec.actor.name', label: 'Started by', type: CellType.TEXT },
           {
             id: 'schedule',

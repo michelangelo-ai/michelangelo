@@ -61,7 +61,7 @@ describe('PIPELINE_ENTITY_CONFIG: Revisions list variant', () => {
                           manifest: {
                             triggerMap: {
                               nightly: {
-                                triggerType: { case: 'cronSchedule', value: { cron: '0 2 * * *' } },
+                                cronSchedule: { cron: '0 2 * * *' },
                               },
                             },
                           },

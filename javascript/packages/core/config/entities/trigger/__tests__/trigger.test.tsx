@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 
 import { DetailViewHeader } from '#core/components/views/detail-view/components/detail-view-header/detail-view-header';
 import { TRIGGER_ENTITY_CONFIG } from '#core/config/entities/trigger/trigger';
-import { TriggerRunAction, TriggerRunState } from '#core/config/entities/trigger/types';
+import { TriggerRunAction } from '#core/config/entities/trigger/types';
 import { TRAIN_PHASE } from '#core/config/phases/train';
 import { PhaseListRoute } from '#core/router/phase-list-route';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
@@ -41,7 +41,7 @@ function buildRunningTriggerRun(overrides: Partial<TriggerRun> = {}): TriggerRun
       kill: false,
       action: TriggerRunAction.NO_ACTION,
     },
-    status: { state: TriggerRunState.RUNNING },
+    status: { state: 'TRIGGER_RUN_STATE_RUNNING' },
     ...overrides,
   };
 }
@@ -107,7 +107,7 @@ describe('TRIGGER_ENTITY_CONFIG: kill action', () => {
   });
 
   it('is enabled when the run is running', async () => {
-    const record = buildRunningTriggerRun({ status: { state: TriggerRunState.RUNNING } });
+    const record = buildRunningTriggerRun({ status: { state: 'TRIGGER_RUN_STATE_RUNNING' } });
 
     render(
       <DetailViewHeader title="my-trigger" actions={TRIGGER_ACTIONS} record={record} />,
@@ -127,7 +127,7 @@ describe('TRIGGER_ENTITY_CONFIG: kill action', () => {
 
   it('disables the action with a tooltip when the run is not killable', async () => {
     const user = userEvent.setup();
-    const record = buildRunningTriggerRun({ status: { state: TriggerRunState.SUCCEEDED } });
+    const record = buildRunningTriggerRun({ status: { state: 'TRIGGER_RUN_STATE_SUCCEEDED' } });
 
     render(
       <DetailViewHeader title="my-trigger" actions={TRIGGER_ACTIONS} record={record} />,
@@ -181,12 +181,12 @@ describe('TRIGGER_ENTITY_CONFIG: kill action', () => {
 describe('TRIGGER_ENTITY_CONFIG: rerun action', () => {
   function buildTerminalTriggerRun(overrides: Partial<TriggerRun> = {}): TriggerRun {
     return buildRunningTriggerRun({
-      status: { state: TriggerRunState.FAILED },
+      status: { state: 'TRIGGER_RUN_STATE_FAILED' },
       spec: {
         pipeline: { name: 'my-pipeline', namespace: 'test-ns' },
         revision: { name: 'rev-1', namespace: 'test-ns' },
         actor: { name: 'me' },
-        trigger: { triggerType: { case: 'cronSchedule', value: { cron: '0 * * * *' } } },
+        trigger: { cronSchedule: { cron: '0 * * * *' } },
         sourceTriggerName: 'nightly',
         autoFlip: false,
         notifications: [],
@@ -222,7 +222,9 @@ describe('TRIGGER_ENTITY_CONFIG: rerun action', () => {
   });
 
   it("has Kill and Rerun's enabled state respond independently to the run's own status", async () => {
-    const runningRecord = buildTerminalTriggerRun({ status: { state: TriggerRunState.RUNNING } });
+    const runningRecord = buildTerminalTriggerRun({
+      status: { state: 'TRIGGER_RUN_STATE_RUNNING' },
+    });
 
     const { unmount } = render(
       <DetailViewHeader title="my-trigger" actions={TRIGGER_ACTIONS} record={runningRecord} />,
@@ -234,7 +236,7 @@ describe('TRIGGER_ENTITY_CONFIG: rerun action', () => {
     expect(screen.getByRole('button', { name: 'Rerun' })).toBeDisabled();
     unmount();
 
-    const failedRecord = buildTerminalTriggerRun({ status: { state: TriggerRunState.FAILED } });
+    const failedRecord = buildTerminalTriggerRun({ status: { state: 'TRIGGER_RUN_STATE_FAILED' } });
 
     render(
       <DetailViewHeader title="my-trigger" actions={TRIGGER_ACTIONS} record={failedRecord} />,
@@ -248,7 +250,7 @@ describe('TRIGGER_ENTITY_CONFIG: rerun action', () => {
 
   it('disables Rerun with a tooltip when the trigger run has not terminated', async () => {
     const user = userEvent.setup();
-    const record = buildTerminalTriggerRun({ status: { state: TriggerRunState.RUNNING } });
+    const record = buildTerminalTriggerRun({ status: { state: 'TRIGGER_RUN_STATE_RUNNING' } });
 
     render(
       <DetailViewHeader title="my-trigger" actions={TRIGGER_ACTIONS} record={record} />,
@@ -266,19 +268,20 @@ describe('TRIGGER_ENTITY_CONFIG: rerun action', () => {
     ).toBeInTheDocument();
   });
 
-  it.each([TriggerRunState.FAILED, TriggerRunState.KILLED, TriggerRunState.SUCCEEDED])(
-    'enables Rerun when the trigger run state is terminal (%i)',
-    async (state) => {
-      const record = buildTerminalTriggerRun({ status: { state } });
+  it.each([
+    'TRIGGER_RUN_STATE_FAILED',
+    'TRIGGER_RUN_STATE_KILLED',
+    'TRIGGER_RUN_STATE_SUCCEEDED',
+  ] as const)('enables Rerun when the trigger run state is terminal (%s)', async (state) => {
+    const record = buildTerminalTriggerRun({ status: { state } });
 
-      render(
-        <DetailViewHeader title="my-trigger" actions={TRIGGER_ACTIONS} record={record} />,
-        buildWrapper(buildRerunWrappers(vi.fn()))
-      );
+    render(
+      <DetailViewHeader title="my-trigger" actions={TRIGGER_ACTIONS} record={record} />,
+      buildWrapper(buildRerunWrappers(vi.fn()))
+    );
 
-      expect(await screen.findByRole('button', { name: 'Rerun' })).toBeEnabled();
-    }
-  );
+    expect(await screen.findByRole('button', { name: 'Rerun' })).toBeEnabled();
+  });
 
   it('creates a new TriggerRun copying pipeline/revision/schedule and clearing kill state', async () => {
     const user = userEvent.setup();
@@ -320,7 +323,7 @@ describe('TRIGGER_ENTITY_CONFIG: rerun action', () => {
     expect(payload.spec.pipeline).toEqual({ name: 'my-pipeline', namespace: 'test-ns' });
     expect(payload.spec.revision).toEqual({ name: 'rev-1', namespace: 'test-ns' });
     expect(payload.spec.trigger).toEqual({
-      triggerType: { case: 'cronSchedule', value: { cron: '0 * * * *' } },
+      cronSchedule: { cron: '0 * * * *' },
     });
     // The new run must not spawn already killed, even though the source (being FAILED) is terminal.
     expect(payload.spec.action).toBe(TriggerRunAction.NO_ACTION);
@@ -395,38 +398,35 @@ describe('Trigger list page', () => {
                 {
                   metadata: {
                     name: 'cron-trigger',
-                    creationTimestamp: { seconds: 1660000000 },
+                    creationTimestamp: '2022-08-08T23:06:40Z',
                     labels: { 'michelangelo/environment': 'production' },
                   },
                   spec: {
                     pipeline: { name: 'my-pipeline' },
                     revision: { name: 'rev-1' },
                     trigger: {
-                      triggerType: { case: 'cronSchedule', value: { cron: '0 2 * * *' } },
+                      cronSchedule: { cron: '0 2 * * *' },
                     },
                     actor: { name: 'jsmith' },
                     autoFlip: true,
                   },
-                  status: { state: 1 },
+                  status: { state: 'TRIGGER_RUN_STATE_RUNNING' },
                 },
                 {
                   metadata: {
                     name: 'interval-trigger',
-                    creationTimestamp: { seconds: 1650000000 },
+                    creationTimestamp: '2022-04-15T05:20:00Z',
                   },
                   spec: {
                     pipeline: { name: 'my-pipeline' },
                     revision: { name: 'rev-2' },
                     trigger: {
-                      triggerType: {
-                        case: 'intervalSchedule',
-                        value: { interval: { seconds: 3600 } },
-                      },
+                      intervalSchedule: { interval: '3600s' },
                     },
                     actor: { name: 'jsmith' },
                     autoFlip: false,
                   },
-                  status: { state: 1 },
+                  status: { state: 'TRIGGER_RUN_STATE_RUNNING' },
                 },
               ],
             },

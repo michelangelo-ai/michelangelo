@@ -8,23 +8,15 @@ export type DeploymentCreateInput = {
   spec: {
     modelFamily: { name: string; namespace?: string };
     desiredRevision: { name: string; namespace?: string };
-    target: {
-      case: 'inferenceServer';
-      value: { name: string; namespace?: string };
-    };
-    strategy: {
-      rolloutStrategy: {
-        case: 'rolling';
-        value: { incrementPercentage: number };
-      };
-    };
-    definition: { type: number };
+    inferenceServer: { name: string; namespace?: string };
+    strategy: { rolling: { incrementPercentage: number } };
+    definition: { type: string };
   };
 };
 
 export type DeploymentUpdateInput = {
   metadata: { name: string };
-  spec: { desiredRevision?: ResourceRef; target?: { case?: string; value?: ResourceRef } };
+  spec: { desiredRevision?: ResourceRef; inferenceServer?: ResourceRef };
 };
 
 export type InferenceServerListResult = {
@@ -52,20 +44,20 @@ export type DeploymentRecord = {
     annotations?: Record<string, string>;
   };
   spec?: {
-    definition?: { type?: number };
+    definition?: { type?: string };
     selector?: {
       matchLabels?: Record<string, string>;
       matchExpressions?: { values?: string[] }[];
     };
-    strategy?: { rolloutStrategy?: { case?: string } };
-    target?: { case?: string; value?: ResourceRef };
+    strategy?: { rolling?: { incrementPercentage?: number } };
+    inferenceServer?: ResourceRef;
     desiredRevision?: ResourceRef;
     modelFamily?: ResourceRef;
     resourceLinks?: Record<string, string>;
   };
   status?: {
     message?: string;
-    stage?: number;
+    stage?: string;
     currentRevision?: ResourceRef;
     candidateRevision?: ResourceRef;
   };

@@ -7,6 +7,7 @@ import {
   PIPELINE_RUN_REVISION_NAME_FIELD,
 } from '#core/config/entities/pipeline/shared';
 import { PipelineRunState } from '#core/config/entities/run/types';
+import { TriggerRunState } from '#core/config/entities/trigger/shared';
 import { TRIGGER_ENTITY_CONFIG } from '#core/config/entities/trigger/trigger';
 import { EntityDetailRoute } from '#core/router/entity-detail-route';
 import { PhaseListRoute } from '#core/router/phase-list-route';
@@ -312,7 +313,7 @@ describe('PIPELINE_ENTITY_CONFIG: Run trigger action', () => {
             owner: { name: 'me' },
             manifest: {
               triggerMap: {
-                nightly: { triggerType: { case: 'cronSchedule', value: { cron: '0 2 * * *' } } },
+                nightly: { cronSchedule: { cron: '0 2 * * *' } },
               },
             },
           },
@@ -454,7 +455,7 @@ describe('PIPELINE_ENTITY_CONFIG: actions on a revision snapshot', () => {
                   manifest: {
                     triggerMap: {
                       nightly: {
-                        triggerType: { case: 'cronSchedule', value: { cron: '0 2 * * *' } },
+                        cronSchedule: { cron: '0 2 * * *' },
                       },
                     },
                   },
@@ -526,7 +527,7 @@ describe('PIPELINE_DETAIL_CONFIG: runs tab', () => {
         pipelineRunList: {
           items: [
             {
-              metadata: { name: 'eval-pipeline-run-1', creationTimestamp: { seconds: 1700000000 } },
+              metadata: { name: 'eval-pipeline-run-1', creationTimestamp: '2023-11-14T22:13:20Z' },
               spec: {
                 pipeline: { name: 'eval-pipeline' },
                 revision: { name: 'pipeline-eval-pipeline-3f2a1b9c0d4e' },
@@ -606,7 +607,7 @@ describe('PIPELINE_DETAIL_CONFIG: runs tab', () => {
         pipelineRunList: {
           items: [
             {
-              metadata: { name: 'eval-pipeline-run-2', creationTimestamp: { seconds: 1700000000 } },
+              metadata: { name: 'eval-pipeline-run-2', creationTimestamp: '2023-11-14T22:13:20Z' },
               spec: {
                 pipeline: { name: 'eval-pipeline' },
                 revision: { name: 'pipeline-eval-pipeline-3f2a1b9c0d4e' },
@@ -688,9 +689,9 @@ describe('PIPELINE_ENTITY_CONFIG: Triggers tab', () => {
                 spec: {
                   pipeline: { name: 'eval-pipeline', namespace: 'ma-dev-test' },
                   actor: { name: 'me' },
-                  trigger: { triggerType: { case: 'cronSchedule', value: { cron: '0 2 * * *' } } },
+                  trigger: { cronSchedule: { cron: '0 2 * * *' } },
                 },
-                status: { state: 1 },
+                status: { state: TriggerRunState.RUNNING },
               },
             ],
           },
@@ -738,7 +739,7 @@ describe('PIPELINE_ENTITY_CONFIG: Triggers tab', () => {
       '/ma-dev-test/train/triggers/nightly-20240101-120000-abcd1234'
     );
 
-    // One formatted Schedule column covers the triggerType oneof (cron/interval/batch rerun).
+    // One formatted Schedule column covers the trigger_type oneof (cron/interval/batch rerun).
     expect(screen.getByRole('columnheader', { name: 'Schedule' })).toBeInTheDocument();
     expect(screen.getByText('cron 0 2 * * *')).toBeInTheDocument();
 

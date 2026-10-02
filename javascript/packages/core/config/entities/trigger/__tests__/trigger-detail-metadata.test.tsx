@@ -14,7 +14,7 @@ describe('Trigger detail page metadata header', () => {
   const buildTriggerRun = (overrides: Record<string, unknown> = {}) => ({
     metadata: { name: 'nightly-trigger', namespace: 'myproject' },
     spec: { pipeline: { name: 'my-pipeline', namespace: 'myproject' } },
-    status: { state: 1 },
+    status: { state: 'TRIGGER_RUN_STATE_RUNNING' },
     ...overrides,
   });
 
@@ -22,7 +22,7 @@ describe('Trigger detail page metadata header', () => {
     const triggerRun = buildTriggerRun({
       spec: {
         pipeline: { name: 'my-pipeline', namespace: 'myproject' },
-        trigger: { triggerType: { case: 'cronSchedule', value: { cron: '0 0 * * *' } } },
+        trigger: { cronSchedule: { cron: '0 0 * * *' } },
       },
     });
 
@@ -47,7 +47,7 @@ describe('Trigger detail page metadata header', () => {
       spec: {
         pipeline: { name: 'my-pipeline', namespace: 'myproject' },
         trigger: {
-          triggerType: { case: 'intervalSchedule', value: { interval: { seconds: 3600 } } },
+          intervalSchedule: { interval: '3600s' },
         },
       },
     });
@@ -124,8 +124,8 @@ describe('Trigger detail page metadata header', () => {
     const triggerRun = buildTriggerRun({
       spec: {
         pipeline: { name: 'my-pipeline', namespace: 'myproject' },
-        startTimestamp: { seconds: '1700000000' },
-        endTimestamp: { seconds: '1700003600' },
+        startTimestamp: '2023-11-14T22:13:20Z',
+        endTimestamp: '2023-11-14T23:13:20Z',
       },
     });
 

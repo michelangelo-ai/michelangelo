@@ -47,7 +47,7 @@ describe('EntityDetailRoute', () => {
                 type: 'detail',
                 metadata: [
                   {
-                    id: 'metadata.creationTimestamp.seconds',
+                    id: 'metadata.creationTimestamp',
                     label: 'Created',
                     type: CellType.DATE,
                   },
@@ -70,9 +70,7 @@ describe('EntityDetailRoute', () => {
     const mockEntityData = {
       pipelineRun: {
         metadata: {
-          creationTimestamp: {
-            seconds: 1640995200, // 2022-01-01
-          },
+          creationTimestamp: '2022-01-01T00:00:00Z',
         },
         status: {
           state: 'RUNNING',
@@ -146,7 +144,7 @@ describe('EntityDetailRoute', () => {
 
     const mockRequest = vi.fn().mockResolvedValue({
       triggerRun: {
-        metadata: { creationTimestamp: { seconds: 1640995200 } },
+        metadata: { creationTimestamp: '2022-01-01T00:00:00Z' },
         status: { state: 'SUCCESS' },
       },
     });
@@ -225,14 +223,14 @@ describe('EntityDetailRoute', () => {
           {
             metadata: {
               name: 'pipeline-my-pipeline-aaaaaaaaaaaa',
-              creationTimestamp: { seconds: '1700000000' },
+              creationTimestamp: '2023-11-14T22:13:20Z',
             },
             spec: { revisionId: 'aaaaaaaaaaaa0000', gitCommit: { branch: 'main' } },
           },
           {
             metadata: {
               name: 'pipeline-my-pipeline-3f2a1b9c0d4e',
-              creationTimestamp: { seconds: '1600000000' },
+              creationTimestamp: '2020-09-13T12:26:40Z',
             },
             spec: { revisionId: '3f2a1b9c0d4e5f6a7b8c', gitCommit: { branch: 'topic/y' } },
           },
@@ -541,9 +539,7 @@ describe('EntityDetailRoute', () => {
     const mockRequest = vi.fn().mockResolvedValue({
       pipelineRun: {
         metadata: {
-          creationTimestamp: {
-            seconds: 1640995200, // 2022-01-01
-          },
+          creationTimestamp: '2022-01-01T00:00:00Z',
         },
         status: {
           state: 'SUCCESS',
@@ -598,9 +594,7 @@ describe('EntityDetailRoute', () => {
     const mockRequest = vi.fn().mockResolvedValue({
       pipelineRun: {
         metadata: {
-          creationTimestamp: {
-            seconds: 1640995200, // 2022-01-01
-          },
+          creationTimestamp: '2022-01-01T00:00:00Z',
         },
         status: {
           state: 'SUCCESS',
@@ -645,9 +639,7 @@ describe('EntityDetailRoute', () => {
     const mockRequest = vi.fn().mockResolvedValue({
       pipelineRun: {
         metadata: {
-          creationTimestamp: {
-            seconds: 1640995200, // 2022-01-01
-          },
+          creationTimestamp: '2022-01-01T00:00:00Z',
         },
         status: {
           state: 'SUCCESS',
@@ -698,9 +690,7 @@ describe('EntityDetailRoute', () => {
     const mockRequest = vi.fn().mockResolvedValue({
       pipelineRun: {
         metadata: {
-          creationTimestamp: {
-            seconds: 1640995200, // 2022-01-01
-          },
+          creationTimestamp: '2022-01-01T00:00:00Z',
         },
         status: {
           state: 'SUCCESS',
@@ -838,9 +828,7 @@ describe('EntityDetailRoute', () => {
     const mockEntityData = {
       pipelineRun: {
         metadata: {
-          creationTimestamp: {
-            seconds: 1640995200,
-          },
+          creationTimestamp: '2022-01-01T00:00:00Z',
         },
         status: {
           state: 'SUCCESS',
@@ -909,7 +897,7 @@ describe('EntityDetailRoute', () => {
 
     const mockEntityData = {
       pipelineRun: {
-        metadata: { creationTimestamp: { seconds: 1640995200 } },
+        metadata: { creationTimestamp: '2022-01-01T00:00:00Z' },
         status: { state: 'SUCCESS' },
       },
     };
@@ -970,9 +958,7 @@ describe('EntityDetailRoute', () => {
     const mockEntityData = {
       pipelineRun: {
         metadata: {
-          creationTimestamp: {
-            seconds: 1640995200,
-          },
+          creationTimestamp: '2022-01-01T00:00:00Z',
         },
         status: {
           state: 'SUCCESS',
@@ -1056,7 +1042,7 @@ describe('EntityDetailRoute', () => {
           metadata: {
             name: 'test-trigger-123',
             namespace: 'myproject',
-            creationTimestamp: { seconds: 1640995200 },
+            creationTimestamp: '2022-01-01T00:00:00Z',
           },
           status: { state: 'SUCCESS' },
         },
@@ -1147,7 +1133,7 @@ describe('EntityDetailRoute', () => {
 
     const mockRequest = vi.fn().mockResolvedValue({
       pipelineRun: {
-        metadata: { creationTimestamp: { seconds: 1640995200 } },
+        metadata: { creationTimestamp: '2022-01-01T00:00:00Z' },
         status: { state: 'SUCCESS', steps: [] },
       },
     });
@@ -1205,7 +1191,7 @@ describe('EntityDetailRoute', () => {
 
     const mockRequest = vi.fn().mockResolvedValue({
       pipelineRun: {
-        metadata: { creationTimestamp: { seconds: 1640995200 } },
+        metadata: { creationTimestamp: '2022-01-01T00:00:00Z' },
         status: { state: 'PAUSED', steps: [] },
       },
     });
@@ -1268,7 +1254,7 @@ describe('EntityDetailRoute', () => {
 
     const mockRequest = vi.fn().mockResolvedValue({
       pipelineRun: {
-        metadata: { creationTimestamp: { seconds: 1640995200 } },
+        metadata: { creationTimestamp: '2022-01-01T00:00:00Z' },
         status: { state: 'RUNNING', steps: [] },
       },
     });
@@ -1328,7 +1314,7 @@ describe('EntityDetailRoute', () => {
       const user = userEvent.setup();
       const mockRequest = vi.fn().mockResolvedValue({
         pipelineRun: {
-          metadata: { creationTimestamp: { seconds: 1640995200 } },
+          metadata: { creationTimestamp: '2022-01-01T00:00:00Z' },
           status: { state: 'SUCCESS' },
         },
       });
@@ -1361,7 +1347,7 @@ describe('EntityDetailRoute', () => {
       const user = userEvent.setup();
       const mockRequest = vi.fn().mockResolvedValue({
         pipelineRun: {
-          metadata: { creationTimestamp: { seconds: 1640995200 } },
+          metadata: { creationTimestamp: '2022-01-01T00:00:00Z' },
           status: { state: 'SUCCESS' },
         },
       });
@@ -1393,7 +1379,7 @@ describe('EntityDetailRoute', () => {
       const user = userEvent.setup();
       const mockRequest = vi.fn().mockResolvedValue({
         pipelineRun: {
-          metadata: { creationTimestamp: { seconds: 1640995200 } },
+          metadata: { creationTimestamp: '2022-01-01T00:00:00Z' },
           status: { state: 'SUCCESS' },
         },
       });
@@ -1432,7 +1418,7 @@ describe('EntityDetailRoute', () => {
       const user = userEvent.setup();
       const mockRequest = vi.fn().mockResolvedValue({
         pipelineRun: {
-          metadata: { creationTimestamp: { seconds: 1640995200 } },
+          metadata: { creationTimestamp: '2022-01-01T00:00:00Z' },
           status: { state: 'SUCCESS' },
         },
       });

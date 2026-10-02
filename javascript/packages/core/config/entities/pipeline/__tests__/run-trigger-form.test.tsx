@@ -57,13 +57,10 @@ describe('RunTriggerForm', () => {
           request: createQueryMockRouter({
             GetPipeline: buildPipelineResponse({
               nightly: {
-                triggerType: { case: 'cronSchedule' as const, value: { cron: '0 2 * * *' } },
+                cronSchedule: { cron: '0 2 * * *' },
               },
               hourly: {
-                triggerType: {
-                  case: 'intervalSchedule' as const,
-                  value: { interval: { seconds: 3600 } },
-                },
+                intervalSchedule: { interval: '3600s' },
               },
             }),
           }),
@@ -91,7 +88,7 @@ describe('RunTriggerForm', () => {
           request: createQueryMockRouter({
             GetPipeline: buildPipelineResponse({
               nightly: {
-                triggerType: { case: 'cronSchedule' as const, value: { cron: '0 2 * * *' } },
+                cronSchedule: { cron: '0 2 * * *' },
               },
             }),
           }),
@@ -109,7 +106,7 @@ describe('RunTriggerForm', () => {
   it('submits the selected environment as a metadata label', async () => {
     const user = userEvent.setup();
     const cronTrigger = {
-      triggerType: { case: 'cronSchedule' as const, value: { cron: '0 2 * * *' } },
+      cronSchedule: { cron: '0 2 * * *' },
     };
     const request = createQueryMockRouter({
       GetPipeline: buildPipelineResponse({ nightly: cronTrigger }),
@@ -167,7 +164,7 @@ describe('RunTriggerForm', () => {
   it('copies the selected trigger into the created TriggerRun', async () => {
     const user = userEvent.setup();
     const cronTrigger = {
-      triggerType: { case: 'cronSchedule' as const, value: { cron: '0 2 * * *' } },
+      cronSchedule: { cron: '0 2 * * *' },
     };
     const request = createQueryMockRouter({
       GetPipeline: buildPipelineResponse({ nightly: cronTrigger }),
@@ -222,7 +219,7 @@ describe('RunTriggerForm', () => {
   it('pins the run to the record when it is the Revision being viewed', async () => {
     const user = userEvent.setup();
     const cronTrigger = {
-      triggerType: { case: 'cronSchedule' as const, value: { cron: '0 2 * * *' } },
+      cronSchedule: { cron: '0 2 * * *' },
     };
     const request = createQueryMockRouter({
       GetPipeline: buildPipelineResponse({ nightly: cronTrigger }),
@@ -274,7 +271,7 @@ describe('RunTriggerForm', () => {
   it('pins the run to the latest revision when the URL names none', async () => {
     const user = userEvent.setup();
     const cronTrigger = {
-      triggerType: { case: 'cronSchedule' as const, value: { cron: '0 2 * * *' } },
+      cronSchedule: { cron: '0 2 * * *' },
     };
     const request = createQueryMockRouter({
       GetPipeline: buildPipelineResponse({ nightly: cronTrigger }),
@@ -331,7 +328,7 @@ describe('RunTriggerForm', () => {
     const user = userEvent.setup();
     const request = createQueryMockRouter({
       GetPipeline: buildPipelineResponse({
-        nightly: { triggerType: { case: 'cronSchedule' as const, value: { cron: '0 2 * * *' } } },
+        nightly: { cronSchedule: { cron: '0 2 * * *' } },
       }),
       CreateTriggerRun: new Error('Create failed'),
     });
@@ -361,7 +358,7 @@ describe('RunTriggerForm', () => {
   it('shows the autoFlip choice as disabled and "Coming soon", and always sends autoFlip false', async () => {
     const user = userEvent.setup();
     const cronTrigger = {
-      triggerType: { case: 'cronSchedule' as const, value: { cron: '0 2 * * *' } },
+      cronSchedule: { cron: '0 2 * * *' },
     };
     const request = createQueryMockRouter({
       GetPipeline: buildPipelineResponse({ nightly: cronTrigger }),
@@ -429,7 +426,7 @@ describe('RunTriggerForm', () => {
           request: createQueryMockRouter({
             GetPipeline: buildPipelineResponse({
               nightly: {
-                triggerType: { case: 'cronSchedule' as const, value: { cron: '0 2 * * *' } },
+                cronSchedule: { cron: '0 2 * * *' },
               },
             }),
           }),
@@ -451,7 +448,7 @@ describe('RunTriggerForm', () => {
   it('sends a backfill window and restricts the trigger to the selected parameters', async () => {
     const user = userEvent.setup();
     const trigger = {
-      ...{ triggerType: { case: 'cronSchedule' as const, value: { cron: '0 2 * * *' } } },
+      ...{ cronSchedule: { cron: '0 2 * * *' } },
       parametersMap: { a: {}, b: {} },
       maxConcurrency: 5,
     };
@@ -500,8 +497,8 @@ describe('RunTriggerForm', () => {
             trigger: { ...trigger, parametersMap: { a: {} }, maxConcurrency: 5 },
             sourceTriggerName: 'nightly',
             autoFlip: false,
-            startTimestamp: { seconds: expect.any(String) as string },
-            endTimestamp: { seconds: expect.any(String) as string },
+            startTimestamp: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/) as string,
+            endTimestamp: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/) as string,
           },
         },
         {}
@@ -513,7 +510,7 @@ describe('RunTriggerForm', () => {
     const user = userEvent.setup();
     const request = createQueryMockRouter({
       GetPipeline: buildPipelineResponse({
-        nightly: { triggerType: { case: 'cronSchedule' as const, value: { cron: '0 2 * * *' } } },
+        nightly: { cronSchedule: { cron: '0 2 * * *' } },
       }),
       CreateTriggerRun: {},
     });

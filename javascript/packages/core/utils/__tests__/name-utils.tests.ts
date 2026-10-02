@@ -41,21 +41,21 @@ describe('generateSuffix', () => {
 
 describe('resolveTriggerRunTypePrefix', () => {
   it('classifies a batch rerun regardless of the backfill flag', () => {
-    expect(resolveTriggerRunTypePrefix('batchRerun', false)).toBe('batch-rerun');
-    expect(resolveTriggerRunTypePrefix('batchRerun', true)).toBe('batch-rerun');
+    expect(resolveTriggerRunTypePrefix({ batchRerun: {} }, false)).toBe('batch-rerun');
+    expect(resolveTriggerRunTypePrefix({ batchRerun: {} }, true)).toBe('batch-rerun');
   });
 
   it('classifies a backfill window on a cron or interval trigger as a backfill', () => {
-    expect(resolveTriggerRunTypePrefix('cronSchedule', true)).toBe('backfill');
-    expect(resolveTriggerRunTypePrefix('intervalSchedule', true)).toBe('backfill');
+    expect(resolveTriggerRunTypePrefix({ cronSchedule: {} }, true)).toBe('backfill');
+    expect(resolveTriggerRunTypePrefix({ intervalSchedule: {} }, true)).toBe('backfill');
   });
 
   it('classifies an interval trigger with no backfill window as interval', () => {
-    expect(resolveTriggerRunTypePrefix('intervalSchedule', false)).toBe('interval');
+    expect(resolveTriggerRunTypePrefix({ intervalSchedule: {} }, false)).toBe('interval');
   });
 
   it('falls back to cron for a cron trigger, or when the trigger type is unknown', () => {
-    expect(resolveTriggerRunTypePrefix('cronSchedule', false)).toBe('cron');
+    expect(resolveTriggerRunTypePrefix({ cronSchedule: {} }, false)).toBe('cron');
     expect(resolveTriggerRunTypePrefix(undefined, false)).toBe('cron');
   });
 });

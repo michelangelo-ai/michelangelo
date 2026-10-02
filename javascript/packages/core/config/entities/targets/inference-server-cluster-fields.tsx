@@ -60,10 +60,10 @@ export function useRegisteredClusters() {
 export function toClusterTarget(cluster: ConnectableCluster): ClusterTarget {
   return {
     clusterId: cluster.metadata.name,
-    connection: { case: 'kubernetes', value: cluster.spec.cluster.value.rest },
+    kubernetes: cluster.spec.kubernetes.rest,
   };
 }
 
 function hasRestConnection(cluster: RegisteredCluster): cluster is ConnectableCluster {
-  return cluster.spec?.cluster?.value?.rest !== undefined;
+  return cluster.spec?.kubernetes?.rest !== undefined;
 }

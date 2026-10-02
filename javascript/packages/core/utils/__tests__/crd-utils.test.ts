@@ -6,7 +6,7 @@ describe('getCrdUpdatedSeconds', () => {
       getCrdUpdatedSeconds({
         metadata: {
           labels: { 'michelangelo/SpecUpdateTimestamp': '1700000000000000' },
-          creationTimestamp: { seconds: 1650000000 },
+          creationTimestamp: '2022-04-15T05:20:00Z',
         },
       })
     ).toEqual(1700000000);
@@ -15,7 +15,7 @@ describe('getCrdUpdatedSeconds', () => {
   test('falls back to creationTimestamp when the label is absent', () => {
     expect(
       getCrdUpdatedSeconds({
-        metadata: { creationTimestamp: { seconds: 1650000000 } },
+        metadata: { creationTimestamp: '2022-04-15T05:20:00Z' },
       })
     ).toEqual(1650000000);
   });

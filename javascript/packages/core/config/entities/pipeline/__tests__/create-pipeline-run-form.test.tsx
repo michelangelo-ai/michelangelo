@@ -8,6 +8,8 @@ import {
   NotificationEventType,
   NotificationResourceType,
   NotificationType,
+  PipelineRunState,
+  PipelineRunStepState,
 } from '#core/config/entities/run/types';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getBaseProviderWrapper } from '#core/test/wrappers/get-base-provider-wrapper';
@@ -509,19 +511,19 @@ describe('CreatePipelineRunForm', () => {
       pipelineRunList: {
         items: [
           {
-            metadata: { name: SOURCE_RUN, creationTimestamp: { seconds: '1755440000' } },
+            metadata: { name: SOURCE_RUN, creationTimestamp: '2025-08-17T14:13:20Z' },
             spec: { pipeline: { name: 'test-pipeline' } },
-            status: { state: 5 },
+            status: { state: PipelineRunState.FAILED },
           },
           {
-            metadata: { name: 'run-other-pipeline', creationTimestamp: { seconds: '1755450000' } },
+            metadata: { name: 'run-other-pipeline', creationTimestamp: '2025-08-17T17:00:00Z' },
             spec: { pipeline: { name: 'some-other-pipeline' } },
-            status: { state: 3 },
+            status: { state: PipelineRunState.SUCCEEDED },
           },
           {
-            metadata: { name: 'run-still-running', creationTimestamp: { seconds: '1755460000' } },
+            metadata: { name: 'run-still-running', creationTimestamp: '2025-08-17T19:46:40Z' },
             spec: { pipeline: { name: 'test-pipeline' } },
-            status: { state: 2 },
+            status: { state: PipelineRunState.RUNNING },
           },
         ],
       },
@@ -536,23 +538,27 @@ describe('CreatePipelineRunForm', () => {
         metadata: { name: SOURCE_RUN },
         status: {
           steps: [
-            { name: 'Image Build', displayName: 'Image Build', state: 3 },
+            {
+              name: 'Image Build',
+              displayName: 'Image Build',
+              state: PipelineRunStepState.SUCCEEDED,
+            },
             {
               name: 'Execute Workflow',
               displayName: 'Execute Workflow',
-              state: 5,
+              state: PipelineRunStepState.FAILED,
               subSteps: [
                 {
                   name: 'tasks/feature_gen',
                   displayName: 'feature_gen',
-                  state: 5,
-                  startTime: { seconds: '1755440100' },
-                  endTime: { seconds: '1755440652' },
+                  state: PipelineRunStepState.FAILED,
+                  startTime: '2025-08-17T14:15:00Z',
+                  endTime: '2025-08-17T14:24:12Z',
                 },
                 {
                   name: 'tasks/train_model',
                   displayName: 'train_model',
-                  state: 6,
+                  state: PipelineRunStepState.SKIPPED,
                 },
               ],
             },
