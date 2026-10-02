@@ -5,6 +5,8 @@
 
 import type { TriggerRunState } from './shared';
 
+export type TriggerRunStateValue = (typeof TriggerRunState)[keyof typeof TriggerRunState];
+
 export type Trigger = {
   metadata: {
     name: string;
@@ -109,7 +111,7 @@ export type TriggerRun = {
     endTimestamp?: string;
   };
   status: {
-    state: (typeof TriggerRunState)[keyof typeof TriggerRunState];
+    state: TriggerRunStateValue;
     /** Populated when the run failed; drives the Information tab's error-message section. */
     errorMessage?: string;
     /** Trigger-run-level workflow log link; omitted from the Information tab's links when unset. */

@@ -222,7 +222,9 @@ describe('TRIGGER_ENTITY_CONFIG: rerun action', () => {
   });
 
   it("has Kill and Rerun's enabled state respond independently to the run's own status", async () => {
-    const runningRecord = buildTerminalTriggerRun({ status: { state: 'TRIGGER_RUN_STATE_RUNNING' } });
+    const runningRecord = buildTerminalTriggerRun({
+      status: { state: 'TRIGGER_RUN_STATE_RUNNING' },
+    });
 
     const { unmount } = render(
       <DetailViewHeader title="my-trigger" actions={TRIGGER_ACTIONS} record={runningRecord} />,
@@ -266,19 +268,20 @@ describe('TRIGGER_ENTITY_CONFIG: rerun action', () => {
     ).toBeInTheDocument();
   });
 
-  it.each(['TRIGGER_RUN_STATE_FAILED', 'TRIGGER_RUN_STATE_KILLED', 'TRIGGER_RUN_STATE_SUCCEEDED'])(
-    'enables Rerun when the trigger run state is terminal (%i)',
-    async (state) => {
-      const record = buildTerminalTriggerRun({ status: { state } });
+  it.each([
+    'TRIGGER_RUN_STATE_FAILED',
+    'TRIGGER_RUN_STATE_KILLED',
+    'TRIGGER_RUN_STATE_SUCCEEDED',
+  ] as const)('enables Rerun when the trigger run state is terminal (%s)', async (state) => {
+    const record = buildTerminalTriggerRun({ status: { state } });
 
-      render(
-        <DetailViewHeader title="my-trigger" actions={TRIGGER_ACTIONS} record={record} />,
-        buildWrapper(buildRerunWrappers(vi.fn()))
-      );
+    render(
+      <DetailViewHeader title="my-trigger" actions={TRIGGER_ACTIONS} record={record} />,
+      buildWrapper(buildRerunWrappers(vi.fn()))
+    );
 
-      expect(await screen.findByRole('button', { name: 'Rerun' })).toBeEnabled();
-    }
-  );
+    expect(await screen.findByRole('button', { name: 'Rerun' })).toBeEnabled();
+  });
 
   it('creates a new TriggerRun copying pipeline/revision/schedule and clearing kill state', async () => {
     const user = userEvent.setup();

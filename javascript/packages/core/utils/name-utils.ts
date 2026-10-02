@@ -53,9 +53,7 @@ export const generateSuffix = (config: { withDate: boolean } = { withDate: false
  * manifest and replaying an existing run as a rerun both need the same classification.
  */
 export function resolveTriggerRunTypePrefix(
-  trigger:
-    | { batchRerun?: unknown; cronSchedule?: unknown; intervalSchedule?: unknown }
-    | undefined,
+  trigger: { batchRerun?: unknown; cronSchedule?: unknown; intervalSchedule?: unknown } | undefined,
   isBackfill: boolean
 ): string {
   if (trigger?.batchRerun) return 'batch-rerun';

@@ -8,7 +8,7 @@ import { TriggerRunAction } from './types';
 
 import type { MiddlewareOperation } from '#core/hooks/use-schema-middleware/types';
 import type { PhaseEntityConfig } from '#core/types/common/studio-types';
-import type { TriggerRun } from './types';
+import type { TriggerRun, TriggerRunStateValue } from './types';
 
 const isKillable = (record: unknown) => {
   // cast: record is unknown from the action predicate context; always TriggerRun in this entity
@@ -18,7 +18,7 @@ const isKillable = (record: unknown) => {
 };
 
 /** States a trigger run no longer progresses out of — the only ones it can be rerun from. */
-const TERMINAL_TRIGGER_RUN_STATES: ReadonlySet<TriggerRunState> = new Set([
+const TERMINAL_TRIGGER_RUN_STATES: ReadonlySet<TriggerRunStateValue> = new Set([
   TriggerRunState.FAILED,
   TriggerRunState.KILLED,
   TriggerRunState.SUCCEEDED,
