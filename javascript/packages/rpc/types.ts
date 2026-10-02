@@ -1,4 +1,5 @@
 import type {
+  DescMessage,
   DescMethodUnary,
   DescService,
   JsonValue,
@@ -137,3 +138,13 @@ type Recurse<F> = F extends (infer U)[]
         : F extends Record<number, infer V extends Message>
           ? Record<number, OmitTypeName<V>>
           : F;
+
+/**
+ * Called by `walkMessage` on each message-typed value it reaches. Returns the value to put in
+ * its place; call `descend` to walk the message's own fields instead of replacing it.
+ */
+export type MessageVisitor = (
+  desc: DescMessage,
+  value: unknown,
+  descend: (desc: DescMessage, value: unknown) => unknown
+) => unknown;
