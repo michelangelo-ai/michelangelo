@@ -204,7 +204,7 @@ func TestConditionalUpsert(t *testing.T) {
 		newCRD.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["spec"].Properties["meta"].Properties["testProperty"] = testProperty
 		err = crdGateway.ConditionalUpsert(ctx, newCRD, false)
 		assert.Error(t, err)
-		assert.True(t, strings.Contains(err.Error(), "Abort updating CRD"))
+		assert.True(t, strings.Contains(err.Error(), "schema incompatible with existing instances"))
 	})
 
 	t.Run("test failed to create CRD", func(t *testing.T) {

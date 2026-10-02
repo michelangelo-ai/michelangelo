@@ -3,7 +3,9 @@ package crd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 
@@ -127,7 +129,9 @@ func (r *gateway) ConditionalUpsert(
 			return e
 		}
 		if has {
-			return fmt.Errorf("failed to update CRD. Schema is incompatible, and there are existing instances. Abort updating CRD %s", crd.Name)
+			r.logSchemaDiff(crdOnServer, crd, compareResult.IncompatibilityDetails)
+			return fmt.Errorf("failed to update CRD %s: schema incompatible with existing instances%s",
+				crd.Name, formatIncompatibilityDetails(compareResult.IncompatibilityDetails))
 		}
 	}
 
@@ -169,6 +173,58 @@ func (r *gateway) List(ctx context.Context) (*apiextv1.CustomResourceDefinitionL
 	}
 
 	return listResponse, nil
+}
+
+func formatIncompatibilityDetails(details []VersionIncompatibility) string {
+	if len(details) == 0 {
+		return ""
+	}
+	var parts []string
+	for _, d := range details {
+		if len(d.Reasons) > 0 {
+			parts = append(parts, fmt.Sprintf("version %s: [%s]", d.Version, strings.Join(d.Reasons, "; ")))
+		} else {
+			parts = append(parts, fmt.Sprintf("version %s: incompatible (no details)", d.Version))
+		}
+	}
+	return "; " + strings.Join(parts, ", ")
+}
+
+// logSchemaDiff emits a debug log with the full old and new OpenAPI schemas for each
+// incompatible version, enabling side-by-side comparison without a redeploy.
+// Enable via the /debug/logging endpoint (uMonitor debug admin tab).
+func (r *gateway) logSchemaDiff(oldCRD, newCRD *apiextv1.CustomResourceDefinition, details []VersionIncompatibility) {
+	if !r.logger.Core().Enabled(zap.DebugLevel) {
+		return
+	}
+	oldVersions := make(map[string]*apiextv1.CustomResourceDefinitionVersion, len(oldCRD.Spec.Versions))
+	for i := range oldCRD.Spec.Versions {
+		oldVersions[oldCRD.Spec.Versions[i].Name] = &oldCRD.Spec.Versions[i]
+	}
+	newVersions := make(map[string]*apiextv1.CustomResourceDefinitionVersion, len(newCRD.Spec.Versions))
+	for i := range newCRD.Spec.Versions {
+		newVersions[newCRD.Spec.Versions[i].Name] = &newCRD.Spec.Versions[i]
+	}
+	for _, d := range details {
+		oldSchema, newSchema := "{}", "{}"
+		if v, ok := oldVersions[d.Version]; ok && v.Schema != nil {
+			if b, err := json.Marshal(v.Schema.OpenAPIV3Schema); err == nil {
+				oldSchema = string(b)
+			}
+		}
+		if v, ok := newVersions[d.Version]; ok && v.Schema != nil {
+			if b, err := json.Marshal(v.Schema.OpenAPIV3Schema); err == nil {
+				newSchema = string(b)
+			}
+		}
+		r.logger.Debug("incompatible CRD schema diff",
+			zap.String("name", oldCRD.Name),
+			zap.String("version", d.Version),
+			zap.Strings("reasons", d.Reasons),
+			zap.String("old_schema", oldSchema),
+			zap.String("new_schema", newSchema),
+		)
+	}
 }
 
 func (r *gateway) hasInstances(ctx context.Context, crd *apiextv1.CustomResourceDefinition) (bool, error) {

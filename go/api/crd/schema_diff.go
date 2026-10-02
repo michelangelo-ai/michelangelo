@@ -139,6 +139,32 @@ func (d *schemaDiff) compatible() bool {
 	return true
 }
 
+func (d *schemaDiff) incompatibleReasons(path string) []string {
+	if d == nil {
+		return nil
+	}
+	var reasons []string
+	if d.typeDiff != nil && !d.typeDiff.compatible() {
+		reasons = append(reasons, fmt.Sprintf("type changed at %q: %v → %v", path, d.typeDiff.from, d.typeDiff.to))
+	}
+	if d.propertiesDiff != nil {
+		reasons = append(reasons, d.propertiesDiff.incompatibleReasons(path)...)
+	}
+	if d.itemsDiff != nil && !d.itemsDiff.compatible() {
+		reasons = append(reasons, d.itemsDiff.incompatibleReasons(path+"[*]")...)
+	}
+	if d.anyOfDiff != nil && !d.anyOfDiff.compatible() {
+		reasons = append(reasons, d.anyOfDiff.incompatibleReasons(path+".anyOf")...)
+	}
+	if d.allOfDiff != nil && !d.allOfDiff.compatible() {
+		reasons = append(reasons, d.allOfDiff.incompatibleReasons(path+".allOf")...)
+	}
+	if d.oneOfDiff != nil && !d.oneOfDiff.compatible() {
+		reasons = append(reasons, d.oneOfDiff.incompatibleReasons(path+".oneOf")...)
+	}
+	return reasons
+}
+
 // schemaArrayDiff compares two arrays of JSON property schemas
 type schemaArrayDiff struct {
 	deleted  []*apiextv1.JSONSchemaProps
@@ -194,6 +220,20 @@ func (d *schemaArrayDiff) compatible() bool {
 	}
 
 	return true
+}
+
+func (d *schemaArrayDiff) incompatibleReasons(prefix string) []string {
+	if d == nil {
+		return nil
+	}
+	var reasons []string
+	for i := range d.deleted {
+		reasons = append(reasons, fmt.Sprintf("deleted element at %s[%d]", prefix, i))
+	}
+	for _, mod := range d.modified {
+		reasons = append(reasons, mod.incompatibleReasons(prefix)...)
+	}
+	return reasons
 }
 
 // schemaObjectDiff compares the property maps of two JSON object schemas
@@ -261,11 +301,32 @@ func (d *schemaObjectDiff) compatible() bool {
 	return true
 }
 
+func (d *schemaObjectDiff) incompatibleReasons(prefix string) []string {
+	if d == nil {
+		return nil
+	}
+	var reasons []string
+	for name := range d.deleted {
+		reasons = append(reasons, fmt.Sprintf("deleted field %s.%s", prefix, name))
+	}
+	for name, mod := range d.modified {
+		reasons = append(reasons, mod.incompatibleReasons(fmt.Sprintf("%s.%s", prefix, name))...)
+	}
+	return reasons
+}
+
+// VersionIncompatibility describes which fields made a specific CRD version's schema incompatible.
+type VersionIncompatibility struct {
+	Version string
+	Reasons []string
+}
+
 // CompareResult is the result of CompareCRDSchemas function,
 // indicating whether there is a change and whether the change is compatible
 type CompareResult struct {
-	HasChange  bool
-	Compatible bool
+	HasChange              bool
+	Compatible             bool
+	IncompatibilityDetails []VersionIncompatibility // populated when Compatible=false
 }
 
 // CompareCRDSchemas compares two CRD schemas
@@ -282,14 +343,15 @@ func CompareCRDSchemas(oldCRD *apiextv1.CustomResourceDefinition, newCRD *apiext
 		}, nil
 	}
 
-	changeCompatible, err := isSpecChangeCompatible(oldCRD, newCRD)
+	details, err := incompatibleVersions(oldCRD, newCRD)
 	if err != nil {
 		return nil, err
 	}
 
 	return &CompareResult{
-		HasChange:  true,
-		Compatible: changeCompatible,
+		HasChange:              true,
+		Compatible:             len(details) == 0,
+		IncompatibilityDetails: details,
 	}, nil
 }
 
@@ -300,6 +362,14 @@ func hasChange(oldCRD *apiextv1.CustomResourceDefinition, newCRD *apiextv1.Custo
 }
 
 func isSpecChangeCompatible(oldCRD *apiextv1.CustomResourceDefinition, newCRD *apiextv1.CustomResourceDefinition) (bool, error) {
+	details, err := incompatibleVersions(oldCRD, newCRD)
+	if err != nil {
+		return false, err
+	}
+	return len(details) == 0, nil
+}
+
+func incompatibleVersions(oldCRD *apiextv1.CustomResourceDefinition, newCRD *apiextv1.CustomResourceDefinition) ([]VersionIncompatibility, error) {
 	oldVersions := map[string]*apiextv1.CustomResourceDefinitionVersion{}
 	for _, v := range oldCRD.Spec.Versions {
 		oldVersions[v.Name] = &v
@@ -310,25 +380,28 @@ func isSpecChangeCompatible(oldCRD *apiextv1.CustomResourceDefinition, newCRD *a
 	}
 
 	if len(newVersions) == 0 {
-		// new CRD has no versions defined
-		return false, nil
+		return []VersionIncompatibility{{Version: "*", Reasons: []string{"new CRD has no versions defined"}}}, nil
 	}
 
+	var result []VersionIncompatibility
 	for k, oldVersion := range oldVersions {
 		newVersion, present := newVersions[k]
 		if !present {
-			return false, fmt.Errorf("CRD %s has version %s that is not in the new CRD", oldCRD.Name, k)
+			return nil, fmt.Errorf("CRD %s has version %s that is not in the new CRD", oldCRD.Name, k)
 		}
 
 		// compare the two schemas with the same version name
 		diff := newSchemaDiff(oldVersion.Schema.OpenAPIV3Schema, newVersion.Schema.OpenAPIV3Schema)
 
 		if diff != nil && !diff.compatible() {
-			return false, nil
+			result = append(result, VersionIncompatibility{
+				Version: k,
+				Reasons: diff.incompatibleReasons(""),
+			})
 		}
 	}
 
 	// Allow adding new CRD versions, so no need to check newVersions again
 
-	return true, nil
+	return result, nil
 }
