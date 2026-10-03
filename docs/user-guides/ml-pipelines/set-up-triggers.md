@@ -171,6 +171,31 @@ In this example, the cron schedule is "daily at 9 AM" and the window covers Janu
 
 > **Tip:** Make sure your time window actually includes at least one cron cycle. For example, if your cron runs weekly on Saturdays (`"0 9 * * 6"`), a window from Monday to Friday won't generate any runs!
 
+## Rerunning Failed Pipeline Runs (Batch Rerun)
+
+A batch rerun creates a new pipeline run for each failed run you give it. Each
+new run resumes from a point in the pipeline DAG, instead of starting over.
+Use this to recover from transient failures without reprocessing everything.
+
+Run this command to start a batch rerun:
+
+```bash
+ma trigger_run rerun \
+  --namespace=ml-team \
+  --name=training-pipeline-rerun-jan \
+  --pipeline=training-pipeline \
+  --pipeline-run=training-pipeline-run-1 \
+  --pipeline-run=training-pipeline-run-2 \
+  --resume-from=feature_gen
+```
+
+A few things to keep in mind:
+
+- **`--pipeline-run`** is repeatable. Pass it once for each failed run you want to rerun.
+- **`--resume-from`** sets the DAG node each rerun starts from. Leave it out to resume from the point each run failed.
+- **`--resume-up-to`** sets the DAG node each rerun stops at, inclusive. Leave it out to run to completion.
+- **`--revision`** pins the reruns to a specific pipeline revision. Leave it out to use the pipeline's current revision.
+
 ## Advanced Configuration
 
 ### Automatic Revision Tracking (auto_flip) — Preview
@@ -370,9 +395,8 @@ Running into issues? Here are a few common things to check:
 We're working on additional trigger types to give you even more flexibility:
 
 - **Interval Schedule** — Trigger pipeline runs at a fixed time interval (for example, every 2 hours) instead of using cron expressions. Great for simple, recurring schedules.
-- **Batch Rerun** — Rerun a set of failed pipeline runs in bulk, with the option to resume from a specific point in the pipeline DAG. Useful for recovering from transient failures without reprocessing everything.
 
-These features are defined in the system but not yet fully available. Stay tuned for updates!
+This feature is defined in the system but not yet fully available. Stay tuned for updates!
 
 ## What's Next
 

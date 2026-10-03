@@ -239,23 +239,34 @@ func runPipeline(ctx workflow.Context, triggerRun *v2pb.TriggerRun, param parame
 	log := workflow.GetLogger(ctx)
 	name := generatePipelineRunName(workflow.Now(ctx))
 
-	// Get parameter ID and execution timestamp directly from param methods
-	logicalTs := ctx.Value(contextKeylogicalTs).(time.Time)
-	paramID := param.GetParameterID()
-	executionTimestamp := param.GetExecutionTimestamp(logicalTs)
+	var (
+		createRequest      v2pb.CreatePipelineRunRequest
+		executionTimestamp time.Time
+		err                error
+	)
+	if param.BatchRerun.PipelineRun != nil {
+		// Batch rerun resumes a prior run; it has no schedule-derived execution
+		// timestamp or input parameters, so it skips generatePipelineRunRequest.
+		executionTimestamp = workflow.Now(ctx)
+		createRequest = generateBatchRerunPipelineRunRequest(triggerRun, name, param.BatchRerun.PipelineRun)
+	} else {
+		// Get parameter ID and execution timestamp directly from param methods
+		logicalTs := ctx.Value(contextKeylogicalTs).(time.Time)
+		paramID := param.GetParameterID()
+		executionTimestamp = param.GetExecutionTimestamp(logicalTs)
 
-	// Compute the previous scheduled time from the trigger's schedule so the pipeline
-	// run can determine the gap to process via os.environ["LAST_SCHEDULE_TIMESTAMP"].
-	lastTs := prevScheduledTime(triggerRun.Spec.Trigger, executionTimestamp)
+		// Compute the previous scheduled time from the trigger's schedule so the pipeline
+		// run can determine the gap to process via os.environ["LAST_SCHEDULE_TIMESTAMP"].
+		lastTs := prevScheduledTime(triggerRun.Spec.Trigger, executionTimestamp)
 
-	// Generate pipeline run request
-	createRequest, err := generatePipelineRunRequest(triggerRun, paramID, name, executionTimestamp, lastTs)
-	if err != nil {
-		log.Error("failed to generate pipeline run request",
-			zap.String("operation", "run_pipeline"),
-			zap.Any("param", param),
-			zap.Error(err))
-		return err
+		createRequest, err = generatePipelineRunRequest(triggerRun, paramID, name, executionTimestamp, lastTs)
+		if err != nil {
+			log.Error("failed to generate pipeline run request",
+				zap.String("operation", "run_pipeline"),
+				zap.Any("param", param),
+				zap.Error(err))
+			return err
+		}
 	}
 
 	// Create pipeline run
@@ -387,6 +398,58 @@ func generatePipelineRunRequest(
 	return v2pb.CreatePipelineRunRequest{
 		PipelineRun: pr,
 	}, nil
+}
+
+// generateBatchRerunPipelineRunRequest builds a create request that resumes target, using
+// the batch rerun trigger's own Pipeline/Revision/Actor/Notifications (the pipeline_runs
+// being rerun already belong to that same Pipeline). ResumeFrom/ResumeUpTo come from the
+// trigger's BatchRerun spec, applying to every resumed run in the batch.
+func generateBatchRerunPipelineRunRequest(
+	triggerRun *v2pb.TriggerRun, pipelineRunName string, target *api.ResourceIdentifier,
+) v2pb.CreatePipelineRunRequest {
+	labels := map[string]string{
+		TriggerredByLabel:  triggerRun.Name,
+		SourceTriggerLabel: triggerRun.Name,
+		PipelineNameLabel:  triggerRun.Spec.Pipeline.Name,
+	}
+	if env, ok := triggerRun.ObjectMeta.Labels[mgapi.EnvironmentLabel]; ok {
+		labels[mgapi.EnvironmentLabel] = env
+	} else if env, ok := triggerRun.ObjectMeta.Labels[legacyEnvironmentLabel]; ok {
+		labels[mgapi.EnvironmentLabel] = env
+	}
+	batchRerun := triggerRun.Spec.Trigger.GetBatchRerun()
+	pr := &v2pb.PipelineRun{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      pipelineRunName,
+			Namespace: triggerRun.Namespace,
+			Labels:    labels,
+		},
+		Spec: v2pb.PipelineRunSpec{
+			Pipeline: &api.ResourceIdentifier{
+				Namespace: triggerRun.Spec.Pipeline.Namespace,
+				Name:      triggerRun.Spec.Pipeline.Name,
+			},
+			Resume: &v2pb.Resume{
+				PipelineRun: target,
+				ResumeFrom:  batchRerun.GetResumeFrom(),
+				ResumeUpTo:  batchRerun.GetResumeUpTo(),
+			},
+		},
+	}
+	if triggerRun.Spec.Actor != nil {
+		pr.Spec.Actor = &v2pb.UserInfo{Name: triggerRun.Spec.Actor.Name}
+	}
+	if triggerRun.Spec.Revision != nil {
+		pr.Spec.Revision = &api.ResourceIdentifier{
+			Namespace: triggerRun.Spec.Revision.Namespace,
+			Name:      triggerRun.Spec.Revision.Name,
+		}
+	}
+	if len(triggerRun.Spec.Notifications) > 0 {
+		pr.Spec.Notifications = triggerRun.Spec.Notifications
+	}
+	pr.Labels[PipelineManifestTypeLabel] = triggerRun.Labels[PipelineManifestTypeLabel]
+	return v2pb.CreatePipelineRunRequest{PipelineRun: pr}
 }
 
 // generateUniflowPRInput generates a uniflow pipeline run input due to pipeline execution parameters
