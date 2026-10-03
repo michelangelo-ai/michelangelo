@@ -8,7 +8,7 @@ data:
   MA_FILE_SYSTEM_S3_SCHEME: http
   AWS_ACCESS_KEY_ID: michelangeloadmin
   AWS_SECRET_ACCESS_KEY: michelangeloadmin
-  AWS_ENDPOINT_URL: http://minio:9091
+  AWS_ENDPOINT_URL: http://objectstore:9091
   # Model registry endpoint for push_step-style tasks. Without this,
   # push.py silently falls back to an in-memory, non-persisted registry
   # client instead of registering via the real apiserver API.

@@ -17,7 +17,7 @@ metadataStorage:
   rootPassword: root
 
 objectStorage:
-  endpoint: minio:9091
+  endpoint: objectstore:9091
   secure: false
   region: us-east-1
   bucket: michelangelo
@@ -81,10 +81,10 @@ tolerations: []
 affinity: {}
 
 # Ray cluster log persistence — enabled for sandbox to wire up the KubeRay
-# History Server. The collector sidecar uses the in-cluster MinIO endpoint
-# (minio:9091) and the chart-managed object-storage-credentials Secret.
-# The collector image is the official quay.io/kuberay/collector release pulled
-# on demand (no local build needed) — see images.kuberayCollector.
+# History Server. The collector sidecar uses the in-cluster object-storage
+# endpoint (objectstore:9091) and the chart-managed object-storage-credentials
+# Secret.
+# The collector image is pulled from GHCR automatically (no local build needed).
 controllermgr:
   metadataStorage:
     enable: true
@@ -117,7 +117,7 @@ controllermgr:
       mapper:
         logPersistence:
           enabled: true
-          # storageEndpoint defaults to objectStorage.endpoint (minio:9091) — no override needed
+          # storageEndpoint defaults to objectStorage.endpoint (objectstore:9091) — no override needed
           bucket: ray-history
           pathPrefix: log
           s3DisableSSL: true

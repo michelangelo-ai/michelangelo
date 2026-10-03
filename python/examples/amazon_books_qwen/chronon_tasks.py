@@ -249,7 +249,7 @@ def compute_chronon_features_with_spark(
         )
         spark.conf.set(
             "spark.hadoop.fs.s3a.endpoint",
-            os.getenv("AWS_ENDPOINT_URL", "http://minio:9000"),
+            os.getenv("AWS_ENDPOINT_URL", "http://objectstore:9000"),
         )
         spark.conf.set("spark.hadoop.fs.s3a.path.style.access", "true")
         spark.conf.set("spark.hadoop.fs.s3a.connection.ssl.enabled", "false")

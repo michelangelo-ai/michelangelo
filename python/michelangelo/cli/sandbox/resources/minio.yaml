@@ -40,9 +40,9 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: minio
+  name: objectstore
   labels:
-    app: minio
+    app: objectstore
 spec:
   type: NodePort
   ports:
