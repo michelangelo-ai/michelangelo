@@ -11,6 +11,7 @@ go_library(
     deps = [
         "//go/api/utils:go_default_library",
         "//go/worker/plugins/utils:go_default_library",
+        "//go/worker/runnertoken:go_default_library",
         "//proto/api:go_default_library",
         "//proto/api/v2:go_default_library",
         "@com_github_cadence_workflow_starlark_worker//activity:go_default_library",
