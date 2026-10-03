@@ -127,10 +127,21 @@ export const PIPELINE_TYPE_CELL: Cell = {
  * (the pipeline detail page, or a Revisions list row), it retargets `metadata` at
  * `spec.baseResource` (the Revision's pointer to the Pipeline it snapshots) so the
  * mutation still deletes the Pipeline.
+ *
+ * On the detail page, deleting is only offered while viewing the latest Revision, so the
+ * Pipeline being removed is the one on screen rather than an older snapshot of it. A bare
+ * detail URL renders the latest Revision, and picking the latest one from the header dropdown
+ * navigates back to that bare URL, so `?revisionId=` being set means an older one is shown.
  */
 export const PIPELINE_DELETE_ACTION: ActionConfigSchema<object> = {
   display: { label: 'Delete', icon: 'trashCan' },
   hierarchy: ActionHierarchy.TERTIARY,
+  disabled: [
+    {
+      condition: interpolate(({ data, studio }) => isPipelineRevision(data) && !!studio.revisionId),
+      message: 'Switch to the latest revision to delete this pipeline',
+    },
+  ],
   operation: {
     type: 'mutation',
     mutation: {
