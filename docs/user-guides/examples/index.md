@@ -60,7 +60,7 @@ python -m michelangelo_examples.california_housing.pipelines.xgb_train.pipeline 
   remote-run \
   --image ghcr.io/michelangelo-ai/michelangelo-examples:california-housing \
   --storage-url s3://michelangelo/workflows \
-  --environ AWS_ENDPOINT_URL=http://minio:9091 \
+  --environ AWS_ENDPOINT_URL=http://objectstore:9091 \
   --environ AWS_ACCESS_KEY_ID=michelangeloadmin \
   --environ AWS_SECRET_ACCESS_KEY=michelangeloadmin \
   --environ REGISTRY_ENDPOINT=michelangelo-apiserver:15566 \

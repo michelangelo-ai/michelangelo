@@ -30,7 +30,7 @@ spec:
         - name: AWS_SECRET_ACCESS_KEY
           value: "michelangeloadmin"
         - name: MLFLOW_S3_ENDPOINT_URL
-          value: "http://minio:9000"
+          value: "http://objectstore:9000"
         - name: MLFLOW_TRACKING_SERVER_HOST
           value: "0.0.0.0"
         - name: MLFLOW_DISABLE_SECURITY

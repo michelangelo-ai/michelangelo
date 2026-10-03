@@ -916,8 +916,9 @@ def _deploy_services(ns: argparse.Namespace):
         )
 
     # Object storage. Regardless of backend, the Kubernetes Service is named
-    # "minio" with NodePorts 9090/9091 so that consumers (sandbox-bucket-setup.yaml,
-    # history-server.yaml, michelangelo-config.yaml, etc.) never need to change.
+    # "objectstore" with NodePorts 9090/9091 so that consumers
+    # (sandbox-bucket-setup.yaml, history-server.yaml, michelangelo-config.yaml,
+    # etc.) never need to change.
 
     if ns.object_store == "seaweedfs":
         resources.append("seaweedfs-s3-config.yaml")
