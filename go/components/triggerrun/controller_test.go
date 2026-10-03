@@ -520,6 +520,98 @@ func TestReconcile(t *testing.T) {
 
 }
 
+func TestApplyAutoFlip(t *testing.T) {
+	tests := []struct {
+		name             string
+		triggerRun       func() *v2pb.TriggerRun
+		pipeline         *v2pb.Pipeline
+		expectedRevision *api.ResourceIdentifier
+		expectedAutoFlip bool
+		expectedWarning  string
+	}{
+		{
+			name: "flips to the latest revision",
+			triggerRun: func() *v2pb.TriggerRun {
+				tr := _triggerRun.DeepCopy()
+				tr.Spec.AutoFlip = true
+				return tr
+			},
+			pipeline: &v2pb.Pipeline{
+				ObjectMeta: metav1.ObjectMeta{Namespace: _namespace, Name: "test-pipeline-name"},
+				Status: v2pb.PipelineStatus{
+					LatestRevision: &api.ResourceIdentifier{Namespace: _namespace, Name: "new-revision"},
+				},
+			},
+			expectedRevision: &api.ResourceIdentifier{Namespace: _namespace, Name: "new-revision"},
+			expectedAutoFlip: true,
+		},
+		{
+			name: "already on the latest revision, no-op",
+			triggerRun: func() *v2pb.TriggerRun {
+				tr := _triggerRun.DeepCopy()
+				tr.Spec.AutoFlip = true
+				return tr
+			},
+			pipeline: &v2pb.Pipeline{
+				ObjectMeta: metav1.ObjectMeta{Namespace: _namespace, Name: "test-pipeline-name"},
+				Status: v2pb.PipelineStatus{
+					LatestRevision: &api.ResourceIdentifier{Namespace: _namespace, Name: "test-revision-name"},
+				},
+			},
+			expectedRevision: &api.ResourceIdentifier{Namespace: _namespace, Name: "test-revision-name"},
+			expectedAutoFlip: true,
+		},
+		{
+			name: "disables and warns when the pipeline has no main/master revision",
+			triggerRun: func() *v2pb.TriggerRun {
+				tr := _triggerRun.DeepCopy()
+				tr.Spec.AutoFlip = true
+				return tr
+			},
+			pipeline: &v2pb.Pipeline{
+				ObjectMeta: metav1.ObjectMeta{Namespace: _namespace, Name: "test-pipeline-name"},
+			},
+			expectedRevision: &api.ResourceIdentifier{Namespace: _namespace, Name: "test-revision-name"},
+			expectedAutoFlip: false,
+			expectedWarning:  "auto_flip disabled",
+		},
+		{
+			name: "auto_flip off is a no-op",
+			triggerRun: func() *v2pb.TriggerRun {
+				return _triggerRun.DeepCopy()
+			},
+			pipeline: &v2pb.Pipeline{
+				ObjectMeta: metav1.ObjectMeta{Namespace: _namespace, Name: "test-pipeline-name"},
+				Status: v2pb.PipelineStatus{
+					LatestRevision: &api.ResourceIdentifier{Namespace: _namespace, Name: "new-revision"},
+				},
+			},
+			expectedRevision: &api.ResourceIdentifier{Namespace: _namespace, Name: "test-revision-name"},
+			expectedAutoFlip: false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			reconciler := setUpReconciler(t, []runtime.Object{test.pipeline}, Params{
+				Logger: zapr.NewLogger(zaptest.NewLogger(t)),
+			})
+			tr := test.triggerRun()
+
+			err := reconciler.applyAutoFlip(context.Background(), reconciler.log, tr)
+
+			assert.NoError(t, err, test.name)
+			assert.Equal(t, test.expectedRevision, tr.Spec.Revision, test.name)
+			assert.Equal(t, test.expectedAutoFlip, tr.Spec.AutoFlip, test.name)
+			if test.expectedWarning != "" {
+				assert.Contains(t, tr.Status.ErrorMessage, test.expectedWarning, test.name)
+			} else {
+				assert.Empty(t, tr.Status.ErrorMessage, test.name)
+			}
+		})
+	}
+}
+
 func TestGetRunner(t *testing.T) {
 	tests := []struct {
 		name       string
