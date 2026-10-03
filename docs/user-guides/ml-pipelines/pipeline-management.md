@@ -1,3 +1,7 @@
+---
+last_verified: 2026-09-22
+---
+
 # Pipeline Management
 
 In general, there are two categories of Michelangelo AI pipelines: those that leverage the **standard workflows** and those that depend on user-created **custom workflows**.
@@ -265,19 +269,23 @@ ma pipeline run --namespace=<namespace> --name=<pipeline_name>
 ma pipeline run --namespace=my-project --name=simple-custom-train
 ```
 
-#### Run the pipeline revision using ma
+#### Running a pipeline registered from a private branch
 
-If the pipeline is registered from a remote private branch, a new pipeline revision is created under the private branch, and the default revision for the pipeline is not updated. Therefore, you should run the pipeline with the revision.
+If the pipeline is registered from a remote private branch, a new pipeline revision is created under that branch, but the pipeline's default revision is **not** updated.
 
-```bash
-ma pipeline run -n <namespace> --revision <pipeline_revision_name>
-```
-
-**Example**
+`ma pipeline run` always runs the pipeline's current default revision. It takes the pipeline name, not a revision name, and has no flag for selecting a revision:
 
 ```bash
-ma pipeline run -n my-project --revision pipeline-simple-custom-train-511e3b3be42f
+ma pipeline run -n <namespace> --name <pipeline_name>
 ```
+
+##### Example
+
+```bash
+ma pipeline run -n my-project --name simple-custom-train
+```
+
+To make a private-branch revision runnable this way, it must first become the pipeline's default revision. The `PipelineRun` API itself does carry a `revision` field, but the `ma pipeline run` command does not populate it.
 
 ## Deleting a Pipeline
 

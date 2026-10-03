@@ -1,3 +1,7 @@
+---
+last_verified: 2026-09-22
+---
+
 # Uniflow caching and pipeline run resume
 
 ## What you'll learn
@@ -56,7 +60,7 @@ Uniflow pipeline runs support resume from a specific step. This relies on the Un
 Resume from a specific step using the `ma` CLI (the `-n` flag specifies your project):
 
 ```bash
-ma pipeline run -n <namespace> --revision <pipeline-revision-name> --resume_from <pipeline-run-name>:<step-name>
+ma pipeline run -n <namespace> --name <pipeline-name> --resume_from <pipeline-run-name>:<step-name>
 ```
 
 **Important:** To skip a step during resume, Uniflow requires that the input of the step has not changed.
