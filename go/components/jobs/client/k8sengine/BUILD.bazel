@@ -32,6 +32,7 @@ go_test(
     srcs = [
         "mapper_test.go",
         "ray_collector_test.go",
+        "ray_toleration_test.go",
     ],
     embed = [":go_default_library"],
     deps = [
