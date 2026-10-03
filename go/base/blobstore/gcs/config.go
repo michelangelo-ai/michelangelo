@@ -24,10 +24,26 @@ type Config struct {
 	// Anonymous disables authentication. Only useful for public buckets
 	// and emulators.
 	Anonymous bool `yaml:"anonymous"`
+
+	// configured records whether a "gcs" section was present in the
+	// application config at all (even an empty one). Deployments that
+	// declare the section get an eagerly constructed client so that
+	// misconfiguration fails at startup; deployments without it keep
+	// the lazy, zero-cost path. Unexported so it cannot be set from
+	// YAML directly.
+	configured bool
 }
 
 func newConfig(provider config.Provider) (Config, error) {
 	conf := Config{}
-	err := provider.Get(configKey).Populate(&conf)
-	return conf, err
+	value := provider.Get(configKey)
+	if err := value.Populate(&conf); err != nil {
+		return conf, err
+	}
+	// HasValue is deprecated for populating defaults, but it is the only
+	// way to distinguish "gcs section present" (opt in to eager
+	// construction) from "gcs section absent" (stay lazy): an explicit
+	// but empty section still counts as present.
+	conf.configured = value.HasValue()
+	return conf, nil
 }
