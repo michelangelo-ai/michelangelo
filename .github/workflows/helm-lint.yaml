@@ -136,6 +136,22 @@ jobs:
             --set controllermgr.enabled=false \
             2>/dev/null
 
+      - name: Template — ESO secrets provider enabled
+        run: |
+          helm template michelangelo helm/michelangelo \
+            -f helm/michelangelo/values-k3d.yaml \
+            --set secretsProvider.type=eso \
+            --set secretsProvider.esoNamespace=ma-secrets \
+            --debug \
+            > /dev/null
+
+      - name: Validate fail-fast guard (unknown secretsProvider.type must fail)
+        run: |
+          ! helm template michelangelo helm/michelangelo \
+            -f helm/michelangelo/values-k3d.yaml \
+            --set secretsProvider.type=vault \
+            2>/dev/null
+
       - name: Template — Ingress enabled (UI + Envoy, hosts[] syntax)
         run: |
           helm template michelangelo helm/michelangelo \

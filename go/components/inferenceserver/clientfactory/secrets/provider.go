@@ -46,8 +46,9 @@ type SecretProvider interface {
 // The secret names are pulled from the ClusterTarget's `CaDataTag` and `TokenTag` fields.
 //
 // NOTE: This implementation is intended for sandbox and testing use. Production deployments
-// should use an external secret manager (e.g. HashiCorp Vault, AWS Secrets Manager, GCP
-// Secret Manager) and provide their own SecretProvider implementation.
+// should set `secrets.provider: eso` to use the External Secrets Operator backed
+// ESOProvider, which sources credentials from an external secret manager (e.g. HashiCorp
+// Vault, AWS Secrets Manager, GCP Secret Manager).
 type Provider struct {
 	kubeClient client.Client
 }
