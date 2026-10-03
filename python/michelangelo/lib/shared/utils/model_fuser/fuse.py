@@ -13,13 +13,6 @@ tracing. ONNX export itself delegates to the shared
 :func:`michelangelo.lib.model_manager.utils.onnx.torch_onnx.export_torch_to_onnx`,
 which the non-fused ``model_manager`` Triton packager also uses, so fused and
 non-fused models get equivalent ONNX output quality.
-
-Building the Hydra reconstruction spec for a fused *native-transform* model's
-Python-backend package (:func:`~._private.fuse._build_tx_hydra_spec`)
-requires the native transform package, which has not yet been migrated to
-OSS. Until it lands, that one function raises ``NotImplementedError``; every
-other function in this module (TorchScript export, ONNX export, field-order
-recovery, sample-data merge) works standalone.
 """
 
 from __future__ import annotations
@@ -330,12 +323,6 @@ def fuse_models_to_python(
         A tuple ``(dest_path, fused_model_class, fused_hyperparameters)``:
         the saved state dict path, ``FusedModel``'s dotted class name, and
         the serve-time reconstruction spec.
-
-    Raises:
-        NotImplementedError: Building ``fused_hyperparameters["transform_module"]``
-            requires the native-transform package (see
-            :func:`~._private.fuse._build_tx_hydra_spec`), which is not yet
-            available in OSS.
     """
     hyperparameters = hyperparameters or {}
     tx_hyperparameters = tx_hyperparameters or {}
