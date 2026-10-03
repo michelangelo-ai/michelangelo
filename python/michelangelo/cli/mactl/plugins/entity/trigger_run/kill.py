@@ -6,7 +6,7 @@ from logging import getLogger
 from types import MethodType
 from typing import Optional
 
-from google.protobuf.json_format import MessageToDict, ParseDict
+from google.protobuf.json_format import MessageToDict
 from google.protobuf.message import Message
 from grpc import Channel
 
@@ -120,17 +120,23 @@ def generate_kill(
         current_resource = _self.get(_namespace, _name)
         _LOG.info("Retrieved resource for kill: %r", current_resource)
 
-        current_dict = MessageToDict(current_resource, preserving_proto_field_name=True)
-
+        # Move the resource into the request as wire bytes. A dict round trip
+        # cannot represent an Any whose type is missing from the descriptor
+        # pool, which made the kill fail on resources the server itself had
+        # just returned. Bytes are also all the two sides share: the CRD
+        # framework builds its message classes from server reflection, so the
+        # fetched resource and the request field are distinct Python classes
+        # for the same proto.
         resource_name = _self.name
-        if resource_name in current_dict and "spec" in current_dict[resource_name]:
-            current_dict[resource_name]["spec"]["kill"] = True
-        else:
+        current_source = getattr(current_resource, resource_name, None)
+        if current_source is None or not current_source.HasField("spec"):
             _LOG.error("Missing required spec field in the resource structure")
             raise ValueError(f"Cannot set kill flag on {resource_name}")
 
         request_input = input_class()
-        ParseDict(current_dict, request_input, ignore_unknown_fields=True)
+        target = getattr(request_input, resource_name)
+        target.MergeFromString(current_source.SerializeToString())
+        target.spec.kill = True
         crd_module.apply_dry_run_to_request(
             request_input, "update_options", bound_args.arguments
         )
