@@ -9,6 +9,12 @@ FROM nginx:alpine@sha256:62ff2089abf5a9ed33bd232895bef5e22f7bb4b200675cec49a5ebc
 # an upstream nginx:alpine rebuild -- upgrade explicitly rather than wait.
 RUN apk add --no-cache --upgrade libexpat
 
+# CVE-2026-103111 (pcre2 out-of-bounds write via crafted regex, HIGH): fixed
+# in Alpine's own package repo (pcre2 10.49-r0) but not yet picked up by an
+# upstream nginx:alpine rebuild (base is digest-pinned, see comment above) --
+# upgrade explicitly rather than wait, same pattern as the libexpat fix above.
+RUN apk add --no-cache --upgrade pcre2
+
 # Copy pre-built UI assets
 COPY javascript/app/dist /usr/share/nginx/html
 
