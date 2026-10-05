@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.12.0] - 2026-10-05
 
 
 ### Bug Fixes
@@ -131,6 +131,9 @@ All notable changes to this project will be documented in this file.
 - Replace Slack invite-by-email with a shareable invite link (#2202)
 
 
+- Update CHANGELOG.md for v0.12.0-rc.1 (#2224)
+
+
 ### Features
 
 
@@ -219,6 +222,9 @@ All notable changes to this project will be documented in this file.
 
 
 - Bump version to 0.12.0-rc.1 (#2223)
+
+
+- Release 0.12.0 (#2230)
 
 
 ### Testing
