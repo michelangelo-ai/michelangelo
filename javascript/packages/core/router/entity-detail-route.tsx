@@ -14,6 +14,7 @@ import { DetailView } from '#core/components/views/detail-view/detail-view';
 import { PHASES } from '#core/config/phases/phases';
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
 import { useInterpolationResolver } from '#core/interpolation/use-interpolation-resolver';
+import { buildRevisionName } from '#core/utils/revision-utils';
 import { capitalizeFirstLetter } from '#core/utils/string-utils';
 import { useEntityRecord } from './use-entity-record';
 
@@ -54,9 +55,17 @@ export function EntityDetailRoute({ phases = PHASES }: { phases?: Record<string,
     [navigate, projectId, phase, entity, entityId, search]
   );
 
-  // Revision selection lives in the query string so the tab path is untouched.
+  // Revision selection lives in the query string so the tab path is untouched. The latest
+  // Revision is what a bare URL renders, so picking it clears the query string instead —
+  // configs can then treat `?revisionId=` as "an older Revision is shown".
   const handleRevisionSelect = (nextRevisionId: string) => {
-    navigate({ pathname, search: `?revisionId=${encodeURIComponent(nextRevisionId)}` });
+    const isLatest =
+      buildRevisionName(entityConfig?.service ?? '', entityId, nextRevisionId) ===
+      latestRevisionName;
+    navigate({
+      pathname,
+      search: isLatest ? '' : `?revisionId=${encodeURIComponent(nextRevisionId)}`,
+    });
   };
 
   const handleReturnToEntityList = () => {
