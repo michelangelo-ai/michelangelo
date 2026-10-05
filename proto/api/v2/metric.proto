@@ -1,0 +1,144 @@
+// Metric API provides interfaces for managing ML metric type definitions in Michelangelo.
+// A Metric represents a reusable metric definition (e.g. AUC, RMSE, R2) along with its
+// available dimensions and filters, used by downstream monitoring/reporting flows.
+//
+// Metric objects are created once per metric type and later updated in place as their
+// dimensions/filters evolve (unlike write-once kinds such as RayJob/SparkJob results).
+
+syntax = "proto3";
+
+package michelangelo.api.v2;
+
+option go_package = "v2";
+
+import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
+import "michelangelo/api/options.proto";
+
+// defines the possible metric, dimension and filter data type
+enum MetricDataType {
+  METRIC_DATA_TYPE_INVALID = 0;
+  METRIC_DATA_TYPE_DOUBLE = 1;
+  METRIC_DATA_TYPE_INTEGER = 2;
+  METRIC_DATA_TYPE_STRING = 3;
+}
+
+// MetricTypeGroup defines all the possible metric type family groups.
+enum MetricTypeGroup {
+  METRIC_TYPE_GROUP_INVALID = 0;
+  METRIC_TYPE_GROUP_CLASSIFICATION_ACCURACY = 1;
+  METRIC_TYPE_GROUP_REGRESSION_ACCURACY = 2;
+  METRIC_TYPE_GROUP_FEATURE_DISTRIBUTION = 3;
+  METRIC_TYPE_GROUP_FEATURE_QUALITY = 4;
+  METRIC_TYPE_GROUP_FEATURE_NUMERICAL_CONSISTENCY = 5;
+  METRIC_TYPE_GROUP_FEATURE_CATEGORICAL_CONSISTENCY = 6;
+  METRIC_TYPE_GROUP_MES = 7;
+  METRIC_TYPE_GROUP_COLUMN_STATS_PROFILING = 8;
+  METRIC_TYPE_GROUP_PIPELINE_HEALTH = 9;
+  METRIC_TYPE_GROUP_FEATURE_CONSISTENCY = 10;
+  METRIC_TYPE_GROUP_FEATURE_EMBEDDINGS_CONSISTENCY = 11;
+  METRIC_TYPE_GROUP_FEATURE_SEQUENTIAL_NUMERIC_CONSISTENCY = 12;
+}
+
+// MetricType defines the nature of the metric.
+message MetricType {
+  // The metric type name. Each metric type name represents a metric calculation algorithm,
+  // such as AUC, RMSE, R2 etc.
+  string name = 1;
+  // Metric type group of the metric.
+  MetricTypeGroup group = 2;
+  // data type of the metric, like numeric, string etc.
+  MetricDataType data_type = 3;
+}
+
+// MetricDataSource defines the list of the metric data sources so metric consumers
+// know where to fetch the underlying metric values.
+enum MetricDataSource {
+  METRIC_DATA_SOURCE_INVALID = 0;
+  METRIC_DATA_SOURCE_METRIC_STORE = 1;
+  METRIC_DATA_SOURCE_FEATURE_NRT = 2;
+  METRIC_DATA_SOURCE_M3 = 3;
+  METRIC_DATA_SOURCE_HUE = 4;
+}
+
+// MetricSpec defines the spec of an ML metric type definition. Dimensions and filters
+// may be added/changed after creation, so Metric objects are mutable in place.
+message MetricSpec {
+  // Description of the metric.
+  string description = 1;
+
+  // The metric type, e.g. auc, r2, rmse.
+  MetricType type = 2;
+
+  // Metric group used to group a series of metrics together for management purposes.
+  string group = 3;
+
+  // Possible dimensions for the metric.
+  repeated MetricDimension dimensions = 4;
+
+  // Possible filters for the metric.
+  repeated MetricFilter filters = 5;
+
+  // Data source of the metric entity.
+  MetricDataSource data_source = 6;
+}
+
+// MetricDimension is one of the available dimensions for a set of metrics; used for
+// grouping the metric.
+message MetricDimension {
+  string name = 1;
+  // statistic count of current dimension for the metric
+  int32 count = 2;
+  // dimension data type
+  MetricDataType data_type = 3;
+}
+
+// MetricFilter is one of the available filters for a set of metrics.
+message MetricFilter {
+  string name = 1;
+  // filter data type
+  MetricDataType data_type = 2;
+}
+
+// MetricStatus defines the observed status of a Metric.
+message MetricStatus {
+}
+
+// Metric represents a reusable ML metric type definition.
+message Metric {
+  option (michelangelo.api.resource) = {};
+
+  option (michelangelo.api.index) = {
+    path: "spec.type.name",
+    key: "type_name",
+  };
+
+  option (michelangelo.api.index) = {
+    path: "spec.group",
+    key: "group",
+  };
+
+  option (michelangelo.api.index) = {
+    path: "spec.data_source",
+    key: "data_source",
+  };
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 2;
+
+  MetricSpec spec = 3;
+
+  MetricStatus status = 4;
+}
+
+// A list of Metric objects.
+message MetricList {
+  option (michelangelo.api.resource_list) = {};
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 2;
+
+  // A list of Metric
+  repeated Metric items = 3;
+}
