@@ -1581,7 +1581,9 @@ def _kube_apply(path: Path, context: Optional[str] = None):
     _exec(*args)
 
 
-def _apply_model_sync(is_name: str, namespace: str = "default", context: Optional[str] = None):
+def _apply_model_sync(
+    is_name: str, namespace: str = "default", context: Optional[str] = None
+):
     """Apply the model-sync ConfigMap (Python script) and DaemonSet for one IS.
 
     Two-step apply:

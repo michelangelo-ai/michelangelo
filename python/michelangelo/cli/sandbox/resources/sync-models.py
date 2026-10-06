@@ -73,6 +73,7 @@ class PodStates:
     """
 
     def __init__(self) -> None:
+        """Initialize the unload-grace and failed-load backoff timers."""
         self.undesired_since: dict[tuple[str, str], float] = {}
         self.failed_load_at: dict[tuple[str, str], float] = {}
 
@@ -108,7 +109,7 @@ def http_post_json(url: str, payload: dict) -> tuple[int, str]:
 
 
 def list_pods(service: str, node_name: str | None = None) -> list[tuple[str, str]]:
-    """Return (pod IP, pod name) pairs backing the given Service via its Endpoints object.
+    """Return (pod IP, pod name) pairs backing the given Service's Endpoints.
 
     Not-ready addresses are included on purpose: with the model-aware readiness probe a
     fresh replica stays not-ready until this daemon has loaded its serving models, so
@@ -327,7 +328,7 @@ def read_model_list(server: str) -> list[dict] | None:
 
 
 def entry_phase(entry: dict) -> str:
-    """Return the entry's rollout phase; entries written before phases exist are serving."""
+    """Return the entry's rollout phase; entries without a phase are serving."""
     return entry.get("phase") or PHASE_SERVING
 
 
@@ -418,7 +419,10 @@ def reconcile_pod(
         since = state.undesired_since.setdefault((pod_name, name), now)
         remaining = UNLOAD_GRACE_SECONDS - (now - since)
         if remaining > 0:
-            print(f"    {pod_name}: {name} no longer desired, unloading in {int(remaining)}s")
+            print(
+                f"    {pod_name}: {name} no longer desired, "
+                f"unloading in {int(remaining)}s"
+            )
             continue
         unload_model(pod_ip, name)
         state.undesired_since.pop((pod_name, name), None)
@@ -426,7 +430,7 @@ def reconcile_pod(
     for name in sorted(wanted - loaded):
         key = (pod_name, name)
         if name not in failed:
-            # Never attempted, or unloaded: (re)issue the load and forget any old failure.
+            # Never attempted, or unloaded: (re)issue the load, forget old failures.
             state.failed_load_at.pop(key, None)
             if not load_model(pod_ip, name):
                 state.failed_load_at[key] = now
@@ -434,7 +438,10 @@ def reconcile_pod(
         last_attempt = state.failed_load_at.get(key)
         if last_attempt is not None and now - last_attempt < LOAD_RETRY_SECONDS:
             wait = int(LOAD_RETRY_SECONDS - (now - last_attempt))
-            print(f"    {pod_name}: {name} failed to load ({failed[name]}); retry in {wait}s")
+            print(
+                f"    {pod_name}: {name} failed to load ({failed[name]}); "
+                f"retry in {wait}s"
+            )
             continue
         # Triton accepted the previous load request but the load itself failed. Record
         # the attempt regardless of the HTTP outcome so the model does not flap between

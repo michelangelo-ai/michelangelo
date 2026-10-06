@@ -13,8 +13,8 @@ import (
 
 	goapi "github.com/michelangelo-ai/michelangelo/go/api"
 	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
-	maconfig "github.com/michelangelo-ai/michelangelo/go/base/config"
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
+	maconfig "github.com/michelangelo-ai/michelangelo/go/base/config"
 	"github.com/michelangelo-ai/michelangelo/go/base/pluginmanager"
 	"github.com/michelangelo-ai/michelangelo/go/components/common/routing"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins"
