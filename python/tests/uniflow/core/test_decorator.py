@@ -33,8 +33,7 @@ class Data:
 
 @task(config=TaskA(cpu=2))
 def generate_random_text(spec: RandomTextSpec) -> Data:
-    """Generates random text based on the given spec. Returns the generated text as bytes.
-    """
+    """Generates random text based on the given spec. Returns the generated text as bytes."""
     # Ensure that the task decorator has called the TaskA.pre_run hook which initializes the global a_environ.
     assert a_environ
     assert isinstance(a_environ["config"], TaskA)
@@ -237,6 +236,49 @@ class TaskTest(unittest.TestCase):
 
 
 class TestWorkflow(unittest.TestCase):
+    def test_on_failure_receives_classified_failure_and_reraises(self):
+        """Local handlers receive classification without swallowing the error."""
+        failures = []
+
+        @workflow(on_failure=failures.append)
+        def failing_workflow():
+            raise ValueError("source failed")
+
+        with self.assertRaisesRegex(ValueError, "source failed"):
+            failing_workflow()
+
+        self.assertEqual(len(failures), 1)
+        self.assertEqual(failures[0].reason, "ValueError")
+        self.assertEqual(failures[0].details, {"exception_type": "ValueError"})
+        self.assertIn("source failed", failures[0].backtrace)
+
+    def test_on_failure_preserves_original_if_handler_fails(self):
+        """A failed reporter must not replace the workflow error."""
+
+        def failing_handler(_failure):
+            raise RuntimeError("handler failed")
+
+        @workflow(on_failure=failing_handler)
+        def failing_workflow():
+            raise ValueError("source failed")
+
+        with (
+            self.assertLogs("michelangelo.uniflow.core.decorator", level="ERROR"),
+            self.assertRaisesRegex(ValueError, "source failed"),
+        ):
+            failing_workflow()
+
+    def test_on_failure_is_not_called_after_success(self):
+        """Successful workflows do not invoke the failure handler."""
+        failures = []
+
+        @workflow(on_failure=failures.append)
+        def successful_workflow():
+            return "ok"
+
+        self.assertEqual(successful_workflow(), "ok")
+        self.assertEqual(failures, [])
+
     @mock.patch.dict(
         "os.environ",
         {

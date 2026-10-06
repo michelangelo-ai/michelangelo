@@ -5,15 +5,17 @@ from michelangelo.uniflow.core.decorator import (
     task_context,
     workflow,
 )
+from michelangelo.uniflow.core.failure import WorkflowFailure
 from michelangelo.uniflow.core.image_spec import ImageSpec
 from michelangelo.uniflow.core.io_registry import IO
 
 __all__ = [
     "IO",
     "ImageSpec",
+    "WorkflowFailure",
     "create_context",
     "star_plugin",
-    "task_context",
     "task",
+    "task_context",
     "workflow",
 ]

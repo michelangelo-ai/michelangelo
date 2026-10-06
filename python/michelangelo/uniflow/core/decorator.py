@@ -34,12 +34,14 @@ import json
 import logging
 import sys
 import threading
+import traceback
 from functools import update_wrapper, wraps
 from typing import Callable, Generic, Optional, TypeVar
 
 import fsspec
 
 from michelangelo.uniflow.core.codec import encoder
+from michelangelo.uniflow.core.failure import FailureLowering, WorkflowFailure
 from michelangelo.uniflow.core.image_spec import ImageSpec
 from michelangelo.uniflow.core.io_registry import IORegistry, default_io
 from michelangelo.uniflow.core.ref import Ref, ref, unref
@@ -430,12 +432,20 @@ def task(
     return decorator
 
 
-def workflow():
+def workflow(
+    on_failure: Optional[Callable[[WorkflowFailure], object]] = None,
+    *,
+    _failure_lowering: Optional[FailureLowering] = None,
+):
     """Decorator for defining a Uniflow workflow.
 
-    Marks a function as a workflow entry point. Workflows orchestrate multiple
-    tasks together and define the overall execution flow. Unlike tasks, workflows
-    are always executed locally and serve as the coordination layer.
+    Marks a function as a workflow entry point. When provided, on_failure is
+    called after an execution error; the original error is always re-raised.
+    Remote execution requires a failure-lowering backend at build time.
+
+    Args:
+        on_failure: Callback receiving the workflow failure after execution fails.
+        _failure_lowering: Optional backend implementation for remote workflows.
 
     Returns:
         A decorator that marks a function as a workflow.
@@ -472,6 +482,8 @@ def workflow():
 
                 return {"model": model, "metrics": metrics}
     """
+    if on_failure is not None and not callable(on_failure):
+        raise TypeError("on_failure must be callable")
 
     def decorator(fn: Callable[P, R]) -> Callable[P, R]:
         """Mark function as a workflow.
@@ -495,9 +507,28 @@ def workflow():
             Returns:
                 The result of executing the workflow.
             """
-            return fn(*args, **kwargs)
+            if on_failure is None:
+                return fn(*args, **kwargs)
+
+            try:
+                return fn(*args, **kwargs)
+            except Exception as error:
+                try:
+                    on_failure(
+                        WorkflowFailure(
+                            message=str(error),
+                            reason=type(error).__name__,
+                            details={"exception_type": type(error).__name__},
+                            backtrace=traceback.format_exc(),
+                        )
+                    )
+                except Exception:
+                    log.exception("workflow failure handler failed")
+                raise
 
         fn._uf_workflow = True
+        wrapper._uf_on_failure = on_failure
+        wrapper._uf_failure_lowering = _failure_lowering
         return wrapper
 
     return decorator
