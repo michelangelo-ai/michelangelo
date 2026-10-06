@@ -509,7 +509,7 @@ func emitAPIMetrics(action string, scope tally.Scope, logger logr.Logger, t time
 	scope.Tagged(tag).Histogram(apiActionLatencyMetric, tally.MustMakeExponentialDurationBuckets(time.Millisecond, 2.0,
 		16)).RecordDuration(took)
 	scope.Tagged(tag).Counter("calls")
-	logger.Info(fmt.Sprintf("API %s took %d milli seconds", action, took.Milliseconds()), "headers", headers)
+	logger.Info("API request completed", "duration_ms", took.Milliseconds(), "headers", headers)
 }
 
 // isSpecEqual checks whether the Spec of two objects are equal.

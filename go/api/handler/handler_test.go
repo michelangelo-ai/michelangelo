@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net"
 	"reflect"
@@ -9,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-logr/logr/funcr"
 	"github.com/golang/mock/gomock"
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
@@ -1068,4 +1070,35 @@ func TestUpdateEchoesCallerSpecForMetadataOnlyObjects(t *testing.T) {
 		"the object returned to the client keeps the URI it sent, though it was not persisted")
 	assert.Equal(t, "8", incoming.GetResourceVersion(),
 		"the new resource version must still reach the caller")
+}
+
+func TestAPITimingLog(t *testing.T) {
+	for _, action := range []string{"Create", "Get", "Update", "UpdateStatus", "Delete", "List", "DeleteCollection"} {
+		t.Run(action, func(t *testing.T) {
+			var entries []map[string]interface{}
+			logger := funcr.NewJSON(func(entry string) {
+				var fields map[string]interface{}
+				assert.NoError(t, json.Unmarshal([]byte(entry), &fields))
+				entries = append(entries, fields)
+			}, funcr.Options{})
+			logger, _ = initLogger(context.Background(), logger, action, "project", "resource", "Model")
+			headers := map[string]string{"request-id": "request-1"}
+			start := time.Now().Add(-1250 * time.Millisecond)
+
+			emitAPIMetrics(action, tally.NoopScope, logger, start, "Model", headers)
+
+			if !assert.Len(t, entries, 1) {
+				return
+			}
+			entry := entries[0]
+			assert.Equal(t, "API request completed", entry["msg"])
+			assert.Equal(t, float64(0), entry["level"])
+			assert.Equal(t, action, entry["action"])
+			assert.Equal(t, "project", entry["namespace"])
+			assert.Equal(t, "resource", entry["name"])
+			assert.Equal(t, "Model", entry["kind"])
+			assert.GreaterOrEqual(t, entry["duration_ms"], float64(1250))
+			assert.Equal(t, map[string]interface{}{"request-id": "request-1"}, entry["headers"])
+		})
+	}
 }

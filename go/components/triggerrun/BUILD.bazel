@@ -75,5 +75,6 @@ go_test(
         "@org_uber_go_config//:go_default_library",
         "@org_uber_go_zap//:go_default_library",
         "@org_uber_go_zap//zaptest:go_default_library",
+        "@org_uber_go_zap//zaptest/observer:go_default_library",
     ],
 )

@@ -19,7 +19,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	temporalClient "go.temporal.io/sdk/client"
+	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
+	"go.uber.org/zap/zaptest/observer"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -320,6 +322,17 @@ func TestReconcile(t *testing.T) {
 			expectRequeue:  true,
 		},
 		{
+			name:          "triggerrun in succeeded status",
+			request:       ctrl.Request{NamespacedName: types.NamespacedName{Namespace: _namespace, Name: _triggerRun.Name}},
+			initialObject: _triggerRun,
+			initialStatus: v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_SUCCEEDED},
+			cronRunnerProvider: func() Runner {
+				return &MockRunner{}
+			},
+			expectedStatus: v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_SUCCEEDED},
+			isImmutable:    true,
+		},
+		{
 			name:          "triggerrun in failed status",
 			request:       ctrl.Request{NamespacedName: types.NamespacedName{Namespace: _namespace, Name: _triggerRun.Name}},
 			initialObject: _triggerRun,
@@ -490,6 +503,8 @@ func TestReconcile(t *testing.T) {
 				CronTrigger: test.cronRunnerProvider(),
 			}
 			reconciler := setUpReconciler(t, initialObjects, params)
+			core, logs := observer.New(zap.InfoLevel)
+			reconciler.log = zapr.NewLogger(zap.New(core))
 			tr := &v2pb.TriggerRun{}
 			err := reconciler.Get(ctx, _namespace, test.request.NamespacedName.Name, &metav1.GetOptions{}, tr)
 			assert.NoError(t, err, test.name)
@@ -514,6 +529,13 @@ func TestReconcile(t *testing.T) {
 			}
 			if test.isImmutable {
 				assert.True(t, apiutils.IsImmutable(tr))
+				terminalLogs := logs.FilterMessage("reached terminal state").All()
+				if assert.Len(t, terminalLogs, 1) {
+					entry := terminalLogs[0]
+					assert.Equal(t, zap.InfoLevel, entry.Level)
+					assert.Equal(t, test.initialStatus.State.String(), entry.ContextMap()["state"])
+					assert.Equal(t, test.request.NamespacedName.MarshalLog(), entry.ContextMap()["triggerRun"])
+				}
 			}
 		})
 	}

@@ -2,12 +2,16 @@ package deployment
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/go-logr/zapr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ktypes "k8s.io/apimachinery/pkg/types"
@@ -70,7 +74,8 @@ func TestReconciler_Reconcile(t *testing.T) {
 
 	// Create reconciler with registrar
 	reconciler := NewReconciler(mockFactory, registrar)
-	reconciler.log = logr.Discard()
+	core, logs := observer.New(zap.InfoLevel)
+	reconciler.log = zapr.NewLogger(zap.New(core))
 	reconciler.recorder = &record.FakeRecorder{}
 
 	// Set up with fake manager data
@@ -121,6 +126,54 @@ func TestReconciler_Reconcile(t *testing.T) {
 	// Note: Message may be cleared by controller's handleStageTransition logic
 	assert.NotNil(t, finalDeployment.Status.CurrentRevision)
 	assert.Equal(t, "test-model-v1", finalDeployment.Status.CurrentRevision.Name)
+
+	transitions := logs.FilterMessage("state transition").All()
+	require.NotEmpty(t, transitions)
+	for _, entry := range transitions {
+		assert.Equal(t, zap.InfoLevel, entry.Level)
+		fields := entry.ContextMap()
+		assert.Equal(t, "test-namespace/test-deployment", fields[_deploymentKey])
+		assert.Contains(t, fields, _originalStageKey)
+		assert.Contains(t, fields, _newStageKey)
+		assert.NotEqual(t, fields[_originalStageKey], fields[_newStageKey])
+	}
+}
+
+func TestDeploymentTerminalStageLog(t *testing.T) {
+	core, logs := observer.New(zap.InfoLevel)
+	reconciler := &Reconciler{log: zapr.NewLogger(zap.New(core))}
+	deployment := &v2pb.Deployment{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "test-namespace"},
+		Status: v2pb.DeploymentStatus{
+			Stage: v2pb.DEPLOYMENT_STAGE_ROLLOUT_FAILED,
+			Conditions: []*apipb.Condition{
+				{
+					Type:                 "LoadModel",
+					Status:               apipb.CONDITION_STATUS_FALSE,
+					Message:              "model load failed",
+					Reason:               "load error",
+					LastUpdatedTimestamp: 123,
+				},
+				{Type: "CreateConfig", Status: apipb.CONDITION_STATUS_TRUE},
+			},
+		},
+	}
+
+	terminal := reconciler.handleStageTransition(context.Background(), NewControllerMetrics(nil),
+		deployment, errors.New("reconciliation failed"))
+
+	assert.True(t, terminal)
+	entries := logs.All()
+	require.Len(t, entries, 1)
+	assert.Equal(t, "deployment terminal stage", entries[0].Message)
+	assert.Equal(t, zap.InfoLevel, entries[0].Level)
+	fields := entries[0].ContextMap()
+	assert.Equal(t, "test-namespace/test-deployment", fields[_deploymentKey])
+	assert.Equal(t, []interface{}{
+		"Failed to rollout deployment",
+		"Actor: LoadModel, Message: model load failed, Reason: load error, UpdatedTimestamp: 123",
+		"Error from latest reconciliation: reconciliation failed",
+	}, fields["messages"])
 }
 
 func TestIsRollbackNeeded(t *testing.T) {
