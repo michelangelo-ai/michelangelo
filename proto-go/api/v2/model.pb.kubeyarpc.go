@@ -19,10 +19,11 @@ import (
 type FxModelServiceHandlerParams struct {
 	fx.In
 
-	Handler      api.Handler
-	MetricsScope tally.Scope
-	Auth         authapi.Auth
-	AuditLog     logging.AuditLog
+	Handler       api.Handler
+	MetricsScope  tally.Scope
+	Authenticator authapi.TokenAuthenticator
+	Authorizer    authapi.Authorizer
+	AuditLog      logging.AuditLog
 }
 
 var modelApiHooks []ModelAPIHook
@@ -46,7 +47,8 @@ func NewModelServiceHandler(params FxModelServiceHandlerParams) ModelServiceYARP
 	return &modelServiceHandler{
 		apiHandler:      params.Handler,
 		MetricsScope:    params.MetricsScope.SubScope(logging.MichelangeloAPIScopeName),
-		auth:            params.Auth,
+		authenticator:   params.Authenticator,
+		authorizer:      params.Authorizer,
 		auditLogEmitter: params.AuditLog,
 	}
 }
@@ -54,7 +56,8 @@ func NewModelServiceHandler(params FxModelServiceHandlerParams) ModelServiceYARP
 type modelServiceHandler struct {
 	apiHandler      api.Handler
 	MetricsScope    tally.Scope
-	auth            authapi.Auth
+	authenticator   authapi.TokenAuthenticator
+	authorizer      authapi.Authorizer
 	auditLogEmitter logging.AuditLog
 }
 
@@ -187,8 +190,8 @@ func (c modelServiceHandler) CreateModel(
 	)
 
 	// Authentication
-	userAuthenticated, err := c.auth.UserAuthenticated(ctx)
-	if !userAuthenticated {
+	userInfo, err := authapi.Authenticate(ctx, c.authenticator)
+	if err != nil {
 		logger.Error(err, "User is not authenticated")
 		metric.Counter("unauthenticated").Inc(1)
 		return nil, err
@@ -196,9 +199,7 @@ func (c modelServiceHandler) CreateModel(
 
 	// Authorization
 	projectName := request.Model.Namespace
-	userAuthorized, err := c.auth.UserAuthorized(ctx, projectName, authapi.Create, "Model")
-
-	if !userAuthorized {
+	if err = authapi.Authorize(ctx, c.authorizer, userInfo, projectName, authapi.Create, "Model"); err != nil {
 		logger.Error(err, "User is not authorized")
 		metric.Counter("unauthorized").Inc(1)
 		return nil, err
@@ -246,14 +247,6 @@ func (c modelServiceHandler) GetModel(
 		logging.APIProcedureTag: "GetModel",
 	})
 
-	getOptions := &metav1.GetOptions{}
-	if request.GetOptions != nil {
-		getOptions = request.GetOptions
-	}
-
-	result := &Model{}
-	err = c.apiHandler.Get(ctx, request.Namespace, request.Name, getOptions, result)
-
 	defer c.auditLogEmitter.Emit(ctx, c.buildModelAuditLogEventForGet(
 		ctx,
 		request,
@@ -261,6 +254,30 @@ func (c modelServiceHandler) GetModel(
 		err,
 	),
 	)
+
+	// Authentication
+	userInfo, err := authapi.Authenticate(ctx, c.authenticator)
+	if err != nil {
+		logger.Error(err, "User is not authenticated")
+		metric.Counter("unauthenticated").Inc(1)
+		return nil, err
+	}
+
+	// Authorization
+	projectName := request.Namespace
+	if err = authapi.Authorize(ctx, c.authorizer, userInfo, projectName, authapi.Get, "Model"); err != nil {
+		logger.Error(err, "User is not authorized")
+		metric.Counter("unauthorized").Inc(1)
+		return nil, err
+	}
+
+	getOptions := &metav1.GetOptions{}
+	if request.GetOptions != nil {
+		getOptions = request.GetOptions
+	}
+
+	result := &Model{}
+	err = c.apiHandler.Get(ctx, request.Namespace, request.Name, getOptions, result)
 
 	if err != nil {
 		logger.Error(err, "Cannot get Model request info from k8s/ETCD", "error", err, "api_msg_tag", "GetModel")
@@ -310,8 +327,8 @@ func (c modelServiceHandler) UpdateModel(
 	)
 
 	// Authentication
-	userAuthenticated, err := c.auth.UserAuthenticated(ctx)
-	if !userAuthenticated {
+	userInfo, err := authapi.Authenticate(ctx, c.authenticator)
+	if err != nil {
 		logger.Error(err, "User is not authenticated")
 		metric.Counter("unauthenticated").Inc(1)
 		return nil, err
@@ -319,9 +336,7 @@ func (c modelServiceHandler) UpdateModel(
 
 	// Authorization
 	projectName := request.Model.Namespace
-	userAuthorized, err := c.auth.UserAuthorized(ctx, projectName, authapi.Update, "Model")
-
-	if !userAuthorized {
+	if err = authapi.Authorize(ctx, c.authorizer, userInfo, projectName, authapi.Update, "Model"); err != nil {
 		logger.Error(err, "User is not authorized")
 		metric.Counter("unauthorized").Inc(1)
 		return nil, err
@@ -378,8 +393,8 @@ func (c modelServiceHandler) DeleteModel(
 	)
 
 	// Authentication
-	userAuthenticated, err := c.auth.UserAuthenticated(ctx)
-	if !userAuthenticated {
+	userInfo, err := authapi.Authenticate(ctx, c.authenticator)
+	if err != nil {
 		logger.Error(err, "User is not authenticated")
 		metric.Counter("unauthenticated").Inc(1)
 		return nil, err
@@ -387,9 +402,7 @@ func (c modelServiceHandler) DeleteModel(
 
 	// Authorization
 	projectName := request.Namespace
-	userAuthorized, err := c.auth.UserAuthorized(ctx, projectName, authapi.Delete, "Model")
-
-	if !userAuthorized {
+	if err = authapi.Authorize(ctx, c.authorizer, userInfo, projectName, authapi.Delete, "Model"); err != nil {
 		logger.Error(err, "User is not authorized")
 		metric.Counter("unauthorized").Inc(1)
 		return nil, err
@@ -448,8 +461,8 @@ func (c modelServiceHandler) DeleteModelCollection(
 	)
 
 	// Authentication
-	userAuthenticated, err := c.auth.UserAuthenticated(ctx)
-	if !userAuthenticated {
+	userInfo, err := authapi.Authenticate(ctx, c.authenticator)
+	if err != nil {
 		logger.Error(err, "User is not authenticated")
 		metric.Counter("unauthenticated").Inc(1)
 		return nil, err
@@ -457,9 +470,7 @@ func (c modelServiceHandler) DeleteModelCollection(
 
 	// Authorization
 	projectName := request.Namespace
-	userAuthorized, err := c.auth.UserAuthorized(ctx, projectName, authapi.DeleteCollection, "Model")
-
-	if !userAuthorized {
+	if err = authapi.Authorize(ctx, c.authorizer, userInfo, projectName, authapi.DeleteCollection, "Model"); err != nil {
 		logger.Error(err, "User is not authorized")
 		metric.Counter("unauthorized").Inc(1)
 		return nil, err
@@ -512,6 +523,30 @@ func (c modelServiceHandler) ListModel(
 		logging.APIProcedureTag: "ListModel",
 	})
 
+	defer c.auditLogEmitter.Emit(ctx, c.buildModelAuditLogEventForList(
+		ctx,
+		request,
+		resp,
+		err,
+	),
+	)
+
+	// Authentication
+	userInfo, err := authapi.Authenticate(ctx, c.authenticator)
+	if err != nil {
+		logger.Error(err, "User is not authenticated")
+		metric.Counter("unauthenticated").Inc(1)
+		return nil, err
+	}
+
+	// Authorization
+	projectName := request.Namespace
+	if err = authapi.Authorize(ctx, c.authorizer, userInfo, projectName, authapi.List, "Model"); err != nil {
+		logger.Error(err, "User is not authorized")
+		metric.Counter("unauthorized").Inc(1)
+		return nil, err
+	}
+
 	result := &ModelList{}
 	listOptions := &metav1.ListOptions{}
 	if request.ListOptions != nil {
@@ -522,14 +557,6 @@ func (c modelServiceHandler) ListModel(
 		listOptionsExt = request.ListOptionsExt
 	}
 	err = c.apiHandler.List(ctx, request.Namespace, listOptions, listOptionsExt, result)
-
-	defer c.auditLogEmitter.Emit(ctx, c.buildModelAuditLogEventForList(
-		ctx,
-		request,
-		resp,
-		err,
-	),
-	)
 
 	if err != nil {
 		logger.Error(err, "API Handler failed to List Model", "error", err, "api_msg_tag", "ListModel")
