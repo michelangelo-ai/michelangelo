@@ -273,7 +273,7 @@ func (r *Reconciler) reconcile(ctx context.Context, log logr.Logger, metrics *Co
 
 	if originalStage != stage {
 		message := fmt.Sprintf("state transition from %s to %s", originalStage, stage)
-		log.Info(message)
+		log.Info("state transition")
 		deployment.Status.Stage = stage
 		terminal := r.handleStageTransition(ctx, metrics, deployment, err)
 		// TODO(#534): Deployment revision upsert + cleanup not yet wired up.
@@ -555,7 +555,7 @@ func (r *Reconciler) handleStageTransition(
 	}
 
 	if len(messages) > 0 {
-		log.Info(strings.Join(messages, ". "))
+		log.Info("deployment terminal stage", "messages", messages)
 	} else {
 		deployment.Status.Message = ""
 	}

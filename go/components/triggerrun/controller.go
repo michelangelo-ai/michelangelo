@@ -215,7 +215,7 @@ func (r *Reconciler) reconcile(
 			}
 			log.Info("trigger_run resource marked as immutable")
 		}
-		log.Info(fmt.Sprintf("reached terminal state: %s", triggerRun.Status.State.String()))
+		log.Info("reached terminal state", "state", triggerRun.Status.State.String())
 		// do not requeue
 		return ctrl.Result{}, nil
 	}
