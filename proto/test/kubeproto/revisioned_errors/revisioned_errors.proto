@@ -23,7 +23,7 @@ message UnresolvedWrapperBase {
   };
   option (michelangelo.api.index) = {
     path: "spec.name";
-    key:  "name";
+    key:  "test_name";
   };
 
   k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
@@ -57,7 +57,7 @@ message NotAResourceBase {
   };
   option (michelangelo.api.index) = {
     path: "spec.name";
-    key:  "name";
+    key:  "test_name";
   };
 
   k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
@@ -99,7 +99,7 @@ message MissingContentBase {
   };
   option (michelangelo.api.index) = {
     path: "spec.name";
-    key:  "name";
+    key:  "test_name";
   };
 
   k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
@@ -142,7 +142,7 @@ message WrongTypeContentBase {
   };
   option (michelangelo.api.index) = {
     path: "spec.name";
-    key:  "name";
+    key:  "test_name";
   };
 
   k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
@@ -175,7 +175,7 @@ message NoSpecBase {
   };
   option (michelangelo.api.index) = {
     path: "spec.name";
-    key:  "name";
+    key:  "test_name";
   };
 
   k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
@@ -218,7 +218,7 @@ message RepeatedContentBase {
   };
   option (michelangelo.api.index) = {
     path: "spec.name";
-    key:  "name";
+    key:  "test_name";
   };
 
   k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
@@ -261,7 +261,7 @@ message RepeatedSpecBase {
   };
   option (michelangelo.api.index) = {
     path: "spec.name";
-    key:  "name";
+    key:  "test_name";
   };
 
   k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
