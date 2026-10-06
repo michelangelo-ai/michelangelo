@@ -1,3 +1,5 @@
+import type { RevisionRef } from '#core/types/common/studio-types';
+
 /**
  * Revision ids are git refs. To follow the controller naming scheme for
  * revisioned entity, we display the first 12 characters of the git ref.
@@ -21,4 +23,19 @@ export function buildRevisionName(service: string, entityId: string, revisionId:
     default:
       return entityId;
   }
+}
+
+/**
+ * The `status.latestRevision` pointer of a revisioned entity, or undefined when the entity has
+ * none yet (or isn't revisioned). Both fields are required on the wire when the pointer is set;
+ * this narrows the loosely-typed record to a usable {@link RevisionRef}.
+ */
+export function getLatestRevisionRef(record: unknown): RevisionRef | undefined {
+  // cast: table rows are untyped; only the latestRevision pointer is read, and it is
+  // narrowed below before use; see #1425
+  const latest = (record as { status?: { latestRevision?: { name?: string; namespace?: string } } })
+    ?.status?.latestRevision;
+  return latest?.name && latest.namespace
+    ? { name: latest.name, namespace: latest.namespace }
+    : undefined;
 }

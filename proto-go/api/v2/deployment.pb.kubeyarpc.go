@@ -172,15 +172,11 @@ func (c deploymentServiceHandler) CreateDeployment(
 	ctx context.Context, request *CreateDeploymentRequest) (resp *CreateDeploymentResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
 
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Deployment.ObjectMeta.Namespace, "name", request.Deployment.ObjectMeta.Name)
 	logger.Info("CreateDeployment Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "CreateDeployment",
-		logging.NamespaceTag:    request.Deployment.ObjectMeta.Namespace,
-		logging.EntityNameTag:   request.Deployment.ObjectMeta.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildDeploymentAuditLogEventForCreate(
@@ -244,15 +240,11 @@ func (c deploymentServiceHandler) CreateDeployment(
 func (c deploymentServiceHandler) GetDeployment(
 	ctx context.Context, request *GetDeploymentRequest) (resp *GetDeploymentResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace, "name", request.Name)
 	logger.Info("GetDeployment Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "GetDeployment",
-		logging.NamespaceTag:    request.Namespace,
-		logging.EntityNameTag:   request.Name,
 	})
 
 	getOptions := &metav1.GetOptions{}
@@ -303,15 +295,11 @@ func (c deploymentServiceHandler) GetDeployment(
 func (c deploymentServiceHandler) UpdateDeployment(
 	ctx context.Context, request *UpdateDeploymentRequest) (resp *UpdateDeploymentResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Deployment.ObjectMeta.Namespace, "name", request.Deployment.ObjectMeta.Name)
 	logger.Info("UpdateDeployment Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "UpdateDeployment",
-		logging.NamespaceTag:    request.Deployment.ObjectMeta.Namespace,
-		logging.EntityNameTag:   request.Deployment.ObjectMeta.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildDeploymentAuditLogEventForUpdate(
@@ -375,15 +363,11 @@ func (c deploymentServiceHandler) UpdateDeployment(
 func (c deploymentServiceHandler) DeleteDeployment(
 	ctx context.Context, request *DeleteDeploymentRequest) (resp *DeleteDeploymentResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace, "name", request.Name)
 	logger.Info("DeleteDeployment Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "DeleteDeployment",
-		logging.NamespaceTag:    request.Namespace,
-		logging.EntityNameTag:   request.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildDeploymentAuditLogEventForDelete(
@@ -449,14 +433,11 @@ func (c deploymentServiceHandler) DeleteDeployment(
 func (c deploymentServiceHandler) DeleteDeploymentCollection(
 	ctx context.Context, request *DeleteDeploymentCollectionRequest) (resp *DeleteDeploymentCollectionResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace)
 	logger.Info("DeleteDeploymentCollection Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "DeleteDeploymentCollection",
-		logging.NamespaceTag:    request.Namespace,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildDeploymentAuditLogEventForDeleteCollection(
@@ -525,14 +506,11 @@ func (c deploymentServiceHandler) ListDeployment(
 	ctx context.Context, request *ListDeploymentRequest) (resp *ListDeploymentResponse, err error) {
 
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace)
 	logger.Info("ListDeployment Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "ListDeployment",
-		logging.NamespaceTag:    request.Namespace,
 	})
 
 	result := &DeploymentList{}

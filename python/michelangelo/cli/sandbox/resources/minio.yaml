@@ -7,13 +7,27 @@ metadata:
 spec:
   containers:
     - name: minio
-      image: quay.io/minio/minio:RELEASE.2025-05-24T17-08-30Z
+      # Mirrored to ghcr.io (rather than quay.io/minio/minio directly) so the
+      # sandbox doesn't depend on an external registry's pull rate limits/
+      # availability -- see https://github.com/michelangelo-ai/michelangelo/pkgs/container/minio
+      image: ghcr.io/michelangelo-ai/minio:RELEASE.2025-05-24T17-08-30Z
       imagePullPolicy: IfNotPresent
       command:
         - /bin/bash
         - -c
       args:
         - minio server /data --console-address :9090 --address :9091
+      env:
+        - name: MINIO_ROOT_USER
+          valueFrom:
+            secretKeyRef:
+              name: "minio-credentials"
+              key: "AWS_ACCESS_KEY_ID"
+        - name: MINIO_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: "minio-credentials"
+              key: "AWS_SECRET_ACCESS_KEY"
       volumeMounts:
         - mountPath: /data
           name: data-volume

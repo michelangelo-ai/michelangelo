@@ -30,7 +30,7 @@ const MODEL_DEPLOYMENT_COLUMNS: ColumnConfig<object>[] = [
   DEPLOYMENT_TYPE_CELL,
   DEPLOYMENT_STAGE_CELL,
   DEPLOYMENT_TARGET_CELL,
-  { id: 'metadata.creationTimestamp.seconds', label: 'Creation time', type: CellType.DATE },
+  { id: 'metadata.creationTimestamp', label: 'Creation time', type: CellType.DATE },
   { id: 'spec.owner.name', label: 'Owner', type: CellType.TEXT },
   DEPLOYMENT_STATE_CELL,
 ];

@@ -1,6 +1,8 @@
 import { render, screen, waitFor } from '@testing-library/react';
 
 import { TRIGGERED_BY_LABEL } from '#core/config/entities/run/shared';
+import { PipelineRunState } from '#core/config/entities/run/types';
+import { TriggerRunState } from '#core/config/entities/trigger/shared';
 import { RETRAIN_PHASE } from '#core/config/phases/retrain';
 import { EntityDetailRoute } from '#core/router/entity-detail-route';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
@@ -11,7 +13,7 @@ import {
   getServiceProviderWrapper,
 } from '#core/test/wrappers/get-service-provider-wrapper';
 
-describe('Trigger detail "Recent Runs"', () => {
+describe('Trigger detail "Triggered Runs"', () => {
   const SELECTOR = `${TRIGGERED_BY_LABEL}=nightly-trigger`;
 
   /**
@@ -26,7 +28,7 @@ describe('Trigger detail "Recent Runs"', () => {
         triggerRun: {
           metadata: { name: 'nightly-trigger', namespace: 'myproject' },
           spec: { pipeline: { name: 'my-pipeline', namespace: 'myproject' } },
-          status: { state: 1 },
+          status: { state: TriggerRunState.RUNNING },
         },
       },
       [`ListPipelineRun:{"listOptions":{"labelSelector":"${SELECTOR}"},"namespace":"myproject"}`]: {
@@ -34,7 +36,7 @@ describe('Trigger detail "Recent Runs"', () => {
           items: [
             {
               metadata: { name: 'run-1', labels: { [TRIGGERED_BY_LABEL]: 'nightly-trigger' } },
-              status: { state: 3 },
+              status: { state: PipelineRunState.SUCCEEDED },
             },
           ],
         },
@@ -45,7 +47,7 @@ describe('Trigger detail "Recent Runs"', () => {
       <EntityDetailRoute phases={{ retrain: RETRAIN_PHASE }} />,
       buildWrapper([
         getErrorProviderWrapper(),
-        getRouterWrapper({ location: '/myproject/retrain/triggers/nightly-trigger' }),
+        getRouterWrapper({ location: '/myproject/retrain/triggers/nightly-trigger/runs' }),
         getServiceProviderWrapper({ request }),
       ])
     );
@@ -66,14 +68,14 @@ describe('Trigger detail "Recent Runs"', () => {
       <EntityDetailRoute phases={{ retrain: RETRAIN_PHASE }} />,
       buildWrapper([
         getErrorProviderWrapper(),
-        getRouterWrapper({ location: '/myproject/retrain/triggers/nightly-trigger' }),
+        getRouterWrapper({ location: '/myproject/retrain/triggers/nightly-trigger/runs' }),
         getServiceProviderWrapper({
           request: createQueryMockRouter({
             GetTriggerRun: {
               triggerRun: {
                 metadata: { name: 'nightly-trigger', namespace: 'myproject' },
                 spec: { pipeline: { name: 'my-pipeline', namespace: 'myproject' } },
-                status: { state: 1 },
+                status: { state: TriggerRunState.RUNNING },
               },
             },
             [`ListPipelineRun:{"listOptions":{"labelSelector":"${SELECTOR}"},"namespace":"myproject"}`]:
@@ -85,7 +87,7 @@ describe('Trigger detail "Recent Runs"', () => {
                         name: 'run-1',
                         labels: { [TRIGGERED_BY_LABEL]: 'nightly-trigger' },
                       },
-                      status: { state: 3 },
+                      status: { state: PipelineRunState.SUCCEEDED },
                     },
                   ],
                 },

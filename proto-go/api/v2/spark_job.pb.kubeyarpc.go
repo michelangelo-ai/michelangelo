@@ -172,15 +172,11 @@ func (c sparkJobServiceHandler) CreateSparkJob(
 	ctx context.Context, request *CreateSparkJobRequest) (resp *CreateSparkJobResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
 
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.SparkJob.ObjectMeta.Namespace, "name", request.SparkJob.ObjectMeta.Name)
 	logger.Info("CreateSparkJob Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "CreateSparkJob",
-		logging.NamespaceTag:    request.SparkJob.ObjectMeta.Namespace,
-		logging.EntityNameTag:   request.SparkJob.ObjectMeta.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildSparkJobAuditLogEventForCreate(
@@ -244,15 +240,11 @@ func (c sparkJobServiceHandler) CreateSparkJob(
 func (c sparkJobServiceHandler) GetSparkJob(
 	ctx context.Context, request *GetSparkJobRequest) (resp *GetSparkJobResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace, "name", request.Name)
 	logger.Info("GetSparkJob Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "GetSparkJob",
-		logging.NamespaceTag:    request.Namespace,
-		logging.EntityNameTag:   request.Name,
 	})
 
 	getOptions := &metav1.GetOptions{}
@@ -303,15 +295,11 @@ func (c sparkJobServiceHandler) GetSparkJob(
 func (c sparkJobServiceHandler) UpdateSparkJob(
 	ctx context.Context, request *UpdateSparkJobRequest) (resp *UpdateSparkJobResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.SparkJob.ObjectMeta.Namespace, "name", request.SparkJob.ObjectMeta.Name)
 	logger.Info("UpdateSparkJob Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "UpdateSparkJob",
-		logging.NamespaceTag:    request.SparkJob.ObjectMeta.Namespace,
-		logging.EntityNameTag:   request.SparkJob.ObjectMeta.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildSparkJobAuditLogEventForUpdate(
@@ -375,15 +363,11 @@ func (c sparkJobServiceHandler) UpdateSparkJob(
 func (c sparkJobServiceHandler) DeleteSparkJob(
 	ctx context.Context, request *DeleteSparkJobRequest) (resp *DeleteSparkJobResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace, "name", request.Name)
 	logger.Info("DeleteSparkJob Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "DeleteSparkJob",
-		logging.NamespaceTag:    request.Namespace,
-		logging.EntityNameTag:   request.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildSparkJobAuditLogEventForDelete(
@@ -449,14 +433,11 @@ func (c sparkJobServiceHandler) DeleteSparkJob(
 func (c sparkJobServiceHandler) DeleteSparkJobCollection(
 	ctx context.Context, request *DeleteSparkJobCollectionRequest) (resp *DeleteSparkJobCollectionResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace)
 	logger.Info("DeleteSparkJobCollection Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "DeleteSparkJobCollection",
-		logging.NamespaceTag:    request.Namespace,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildSparkJobAuditLogEventForDeleteCollection(
@@ -525,14 +506,11 @@ func (c sparkJobServiceHandler) ListSparkJob(
 	ctx context.Context, request *ListSparkJobRequest) (resp *ListSparkJobResponse, err error) {
 
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace)
 	logger.Info("ListSparkJob Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "ListSparkJob",
-		logging.NamespaceTag:    request.Namespace,
 	})
 
 	result := &SparkJobList{}

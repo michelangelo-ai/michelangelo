@@ -36,7 +36,7 @@ function buildFailedRun(overrides: Record<string, unknown> = {}) {
       namespace: NAMESPACE,
       uid: 'c4e05215-7c1b-45bf-89cc-5370c32fc6c7',
       resourceVersion: '5841',
-      creationTimestamp: { seconds: '1787084016' },
+      creationTimestamp: '2026-08-18T20:13:36Z',
       finalizers: ['pipelineruns.michelangelo.uber.com/drain'],
       ownerReferences: [{ kind: 'Pipeline', name: 'bert-cola-test' }],
     },

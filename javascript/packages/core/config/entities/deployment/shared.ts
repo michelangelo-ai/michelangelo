@@ -2,44 +2,54 @@ import { CellType } from '#core/components/cell/constants';
 
 import type { Cell } from '#core/components/cell/types';
 
+/**
+ * Mirror the generated proto enums in deployment.proto, using the string names the RPC layer
+ * returns. Colocated here until core has access to the shared generated package.
+ */
 export const DEPLOYMENT_CONDITION_STATUS = {
-  UNKNOWN: 0,
-  TRUE: 1,
-  FALSE: 2,
+  UNKNOWN: 'CONDITION_STATUS_UNKNOWN',
+  TRUE: 'CONDITION_STATUS_TRUE',
+  FALSE: 'CONDITION_STATUS_FALSE',
 } as const;
 
 export const DEPLOYMENT_STAGE = {
-  INVALID: 0,
-  VALIDATION: 1,
-  PLACEMENT: 2,
-  RESOURCE_ACQUISITION: 3,
-  ROLLOUT_COMPLETE: 4,
-  ROLLOUT_FAILED: 5,
-  ROLLBACK_IN_PROGRESS: 6,
-  ROLLBACK_COMPLETE: 7,
-  ROLLBACK_FAILED: 8,
-  CLEAN_UP_IN_PROGRESS: 9,
-  CLEAN_UP_COMPLETE: 10,
-  CLEAN_UP_FAILED: 11,
+  INVALID: 'DEPLOYMENT_STAGE_INVALID',
+  VALIDATION: 'DEPLOYMENT_STAGE_VALIDATION',
+  PLACEMENT: 'DEPLOYMENT_STAGE_PLACEMENT',
+  RESOURCE_ACQUISITION: 'DEPLOYMENT_STAGE_RESOURCE_ACQUISITION',
+  ROLLOUT_COMPLETE: 'DEPLOYMENT_STAGE_ROLLOUT_COMPLETE',
+  ROLLOUT_FAILED: 'DEPLOYMENT_STAGE_ROLLOUT_FAILED',
+  ROLLBACK_IN_PROGRESS: 'DEPLOYMENT_STAGE_ROLLBACK_IN_PROGRESS',
+  ROLLBACK_COMPLETE: 'DEPLOYMENT_STAGE_ROLLBACK_COMPLETE',
+  ROLLBACK_FAILED: 'DEPLOYMENT_STAGE_ROLLBACK_FAILED',
+  CLEAN_UP_IN_PROGRESS: 'DEPLOYMENT_STAGE_CLEAN_UP_IN_PROGRESS',
+  CLEAN_UP_COMPLETE: 'DEPLOYMENT_STAGE_CLEAN_UP_COMPLETE',
+  CLEAN_UP_FAILED: 'DEPLOYMENT_STAGE_CLEAN_UP_FAILED',
 } as const;
 
+/** Stages in which a FALSE condition marks a real failure rather than "not reached yet". */
+export const FAILED_ROLLOUT_STAGES: string[] = [
+  DEPLOYMENT_STAGE.ROLLOUT_FAILED,
+  DEPLOYMENT_STAGE.ROLLBACK_FAILED,
+];
+
 export const DEPLOYMENT_STATE = {
-  INVALID: 0,
-  INITIALIZING: 1,
-  HEALTHY: 2,
-  UNHEALTHY: 3,
-  EMPTY: 4,
+  INVALID: 'DEPLOYMENT_STATE_INVALID',
+  INITIALIZING: 'DEPLOYMENT_STATE_INITIALIZING',
+  HEALTHY: 'DEPLOYMENT_STATE_HEALTHY',
+  UNHEALTHY: 'DEPLOYMENT_STATE_UNHEALTHY',
+  EMPTY: 'DEPLOYMENT_STATE_EMPTY',
 } as const;
 
 export const TARGET_TYPE = {
-  INVALID: 0,
-  INFERENCE_SERVER: 1,
-  OFFLINE: 2,
-  MOBILE: 3,
-  SELF_HOSTED: 4,
+  INVALID: 'TARGET_TYPE_INVALID',
+  INFERENCE_SERVER: 'TARGET_TYPE_INFERENCE_SERVER',
+  OFFLINE: 'TARGET_TYPE_OFFLINE',
+  MOBILE: 'TARGET_TYPE_MOBILE',
+  SELF_HOSTED: 'TARGET_TYPE_SELF_HOSTED',
 } as const;
 
-export const TARGET_TYPE_LABELS: Record<number, string> = {
+export const TARGET_TYPE_LABELS: Record<string, string> = {
   [TARGET_TYPE.INFERENCE_SERVER]: 'Online',
   [TARGET_TYPE.OFFLINE]: 'Offline',
   [TARGET_TYPE.MOBILE]: 'Mobile',
@@ -105,12 +115,4 @@ export const DEPLOYMENT_TARGET_CELL: Cell = {
   id: 'spec.inferenceServer.name',
   label: 'Target',
   type: CellType.TEXT,
-  accessor: (data: unknown) => {
-    // cast: accessor receives unknown data; narrowing to expected proto shape for property
-    // access; see #1425
-    const target = (data as { spec?: { target?: { case?: string; value?: { name?: string } } } })
-      ?.spec?.target;
-    if (target?.case === 'inferenceServer') return target.value?.name ?? null;
-    return null;
-  },
 };

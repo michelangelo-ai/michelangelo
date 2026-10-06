@@ -27,7 +27,7 @@ We are **incrementally open-sourcing Michelangelo AI's core capabilities**, ensu
 ## Features
 
 - **Feature Management**: Efficiently handle large datasets with built-in support for data ingestion, transformation, and storage.
-- **Model Training**: Train models using various algorithms, including support for distributed training across multiple nodes. The [`michelangelo.lib.trainer.torch.pytorch_lightning`](python/michelangelo/lib/trainer/torch/pytorch_lightning/) package provides a Ray Train wrapper around PyTorch Lightning, with pluggable experiment tracking (Comet, MLflow). See the [MovieLens NCF example](python/examples/movielens/) for an end-to-end walkthrough.
+- **Model Training**: Train models using various algorithms, including support for distributed training across multiple nodes. The [`michelangelo.lib.trainer.torch.pytorch_lightning`](python/michelangelo/lib/trainer/torch/pytorch_lightning/) package provides a Ray Train wrapper around PyTorch Lightning, with pluggable experiment tracking (Comet, MLflow). See the [MovieLens NCF example](https://github.com/michelangelo-ai/michelangelo-examples/tree/main/src/michelangelo_examples/movielens/pipelines/train) (in [michelangelo-examples](https://github.com/michelangelo-ai/michelangelo-examples)) for an end-to-end walkthrough.
 - **Model Evaluation**: Assess model performance with a range of metrics and visualization tools.
 - **Model Deployment**: Seamlessly deploy models to production environments with support for both batch and real-time inference.
 - **Monitoring and Logging**: Continuously monitor model performance and log predictions to ensure reliability and accuracy.
@@ -47,9 +47,6 @@ git clone https://github.com/michelangelo-ai/michelangelo.git
 cd michelangelo/python
 poetry install
 source .venv/bin/activate
-
-# Build the local-only images the sandbox needs
-cd .. && bash scripts/kuberay/build-kuberay-images.sh
 
 # Spin up a local sandbox cluster
 ma sandbox create
@@ -73,7 +70,7 @@ def my_pipeline(learning_rate: float = 0.01):
     model = train(learning_rate=learning_rate)
 ```
 
-See the [Sandbox Setup](https://michelangelo-ai.org/docs/getting-started/sandbox-setup/) guide for prerequisites (including `docker buildx`) and platform-specific notes before running the above.
+See the [Sandbox Setup](https://michelangelo-ai.org/docs/getting-started/sandbox-setup/) guide for prerequisites and platform-specific notes before running the above.
 
 For a full walkthrough, see the [Getting Started with ML Pipelines](https://michelangelo-ai.org/docs/user-guides/getting-started/getting-started) guide.
 

@@ -99,7 +99,6 @@ kubectl rollout status deployment/michelangelo-apiserver --timeout=60s
 ## Expected noise (not actual errors)
 
 - `cadence-schema-init`, `ingester-schema-init`, `sandbox-bucket-setup` — reach `Completed` and stay there; this is correct
-- `ray-history-server` in `ImagePullBackOff` — non-blocking; Ray jobs still work without it
 
 ## Still stuck?
 

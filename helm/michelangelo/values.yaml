@@ -124,7 +124,7 @@ images:
     repository: ghcr.io/michelangelo-ai/controllermgr
     tag: ""
   envoy:            envoyproxy/envoy:v1.29-latest
-  kuberayCollector: ghcr.io/michelangelo-ai/kuberay-collector:main
+  kuberayCollector: quay.io/kuberay/collector:v1.7.1
 
   # IfNotPresent (default), Always, or Never. Use Always when pinning to
   # mutable tags like ":main" in development.
@@ -433,15 +433,25 @@ controllermgr:
 
   # Workflow client extras (controllermgr-only).
   workflowClient:
-    # Cadence Web URL template. Empty by default; set in values-k3d.yaml for
-    # the local sandbox or in production to your own Cadence/Temporal UI.
+    # Cadence/Temporal Web URL template, e.g.
+    # "http://cadence-web:8088/domains/{{.Domain}}/workflows/{{.ExecutionID}}/{{.RunID}}".
+    # Empty by default; not currently set in values-k3d.yaml for the local
+    # sandbox (unlike this comment previously implied) -- set it there or in
+    # production to point at your own Cadence/Temporal UI.
     executionUrlFormat: ""
 
   # Ray cluster log persistence via the KubeRay collector sidecar.
   # Mirrors the Go config path: jobs.k8sengine.mapper.logPersistence
-  # When enabled, the controllermgr injects a kuberay-collector container into
-  # every RayCluster head + worker pod to stream logs into S3-compatible storage.
+  # When enabled, the controllermgr injects a "collector" container into every
+  # RayCluster head + worker pod to stream logs into S3-compatible storage.
   # The History Server can then replay the Ray Dashboard for torn-down clusters.
+  #
+  # The sidecar is the official upstream release -- see images.kuberayCollector
+  # (quay.io/kuberay/collector:v1.7.1); Michelangelo no longer builds its own.
+  # It runs the image entrypoint and is configured purely by environment
+  # variables: no command override, no PostStart hook.
+  # Objects land under
+  # {pathPrefix}/cluster-history/raycluster/{namespace}/{cluster}/{session}/{node}/
   # Ref: https://github.com/ray-project/kuberay/tree/master/historyserver
   jobs:
     # Job admission backend. Mirrors the Go config path: jobs.scheduler
@@ -491,10 +501,18 @@ controllermgr:
           # Set S3DISABLE_SSL=true on the collector. Enable for in-cluster MinIO; disable for OCI/S3.
           s3DisableSSL: true
 
+          # RAY_DASHBOARD_AGGREGATOR_AGENT_EXPOSABLE_EVENT_TYPES on every Ray
+          # container. Empty uses the built-in default "ALL", which requires
+          # Ray >= 2.54 (the v1.7 collector targets Ray >= 2.55). Michelangelo
+          # does not own the Ray runtime image -- it comes from the user's task
+          # spec -- so for Ray < 2.54 set the explicit list instead:
+          # "TASK_DEFINITION_EVENT,TASK_LIFECYCLE_EVENT,ACTOR_TASK_DEFINITION_EVENT,TASK_PROFILE_EVENT,DRIVER_JOB_DEFINITION_EVENT,DRIVER_JOB_LIFECYCLE_EVENT,ACTOR_DEFINITION_EVENT,ACTOR_LIFECYCLE_EVENT,NODE_DEFINITION_EVENT,NODE_LIFECYCLE_EVENT"
+          exposableEventTypes: ""
+
           # Go text/template for the human-browsable log URL written to RayClusterStatus.LogUrl.
           # Available vars: {{.Bucket}}, {{.PathPrefix}}, {{.ClusterName}}, {{.RayLocalNamespace}}.
           # Empty string disables log_url emission.
-          # Example (sandbox MinIO console): "http://localhost:9090/browser/{{.Bucket}}/{{.PathPrefix}}/{{.ClusterName}}_{{.RayLocalNamespace}}/"
+          # Example (sandbox MinIO console): "http://localhost:9090/browser/{{.Bucket}}/{{.PathPrefix}}/cluster-history/raycluster/{{.RayLocalNamespace}}/{{.ClusterName}}/"
           logURLFormat: ""
 
   resources: {}

@@ -10,7 +10,7 @@ require (
 	github.com/michelangelo-ai/michelangelo/go v0.0.0-00010101000000-000000000000
 	github.com/uber-go/tally v3.5.10+incompatible
 	go.uber.org/fx v1.22.0
-	go.uber.org/yarpc v1.80.0
+	go.uber.org/yarpc v1.88.0
 	google.golang.org/grpc v1.83.2
 	k8s.io/api v0.34.8
 	k8s.io/apimachinery v0.34.8

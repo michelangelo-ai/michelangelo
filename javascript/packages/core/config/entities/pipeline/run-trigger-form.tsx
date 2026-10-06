@@ -6,14 +6,17 @@ import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studi
 import { useStudioMutation } from '#core/hooks/use-studio-mutation/use-studio-mutation';
 import { useStudioQuery } from '#core/hooks/use-studio-query';
 import { ENVIRONMENT_LABEL_KEY } from '#core/utils/environment-utils';
-import { generateSuffix } from '#core/utils/name-utils';
+import { generateSuffix, resolveTriggerRunTypePrefix } from '#core/utils/name-utils';
+import { getDateFromEpochSeconds } from '#core/utils/time-utils';
 import { formatTriggerSchedule } from './format-trigger-schedule';
 import { RunTriggerFields } from './run-trigger-fields';
+import { isPipelineRevision } from './types';
+import { useTargetRevision } from './use-target-revision';
 
 import type { ActionComponentProps } from '#core/components/actions/types';
 import type { SelectOption } from '#core/components/form/fields/select/types';
 import type { ManifestTrigger, RunTriggerPayload } from '#core/config/entities/trigger/types';
-import type { Pipeline, RunTriggerFormValues } from './types';
+import type { Pipeline, PipelineRevision, RunTriggerFormValues } from './types';
 
 /**
  * Runs a pipeline from one of the triggers declared in its manifest — either on the
@@ -24,9 +27,15 @@ import type { Pipeline, RunTriggerFormValues } from './types';
  * into the created TriggerRun, so it should come from the pipeline's current manifest, not
  * from a row that may have been sitting in a stale list.
  */
-export const RunTriggerForm = ({ record, onClose }: ActionComponentProps<Pipeline>) => {
+export const RunTriggerForm = ({
+  record,
+  onClose,
+}: ActionComponentProps<Pipeline | PipelineRevision>) => {
   const { projectId } = useStudioParams('base');
-  const pipelineName = record?.metadata?.name ?? '';
+  const pipelineName = isPipelineRevision(record)
+    ? record.spec.baseResource.name
+    : (record?.metadata?.name ?? '');
+  const revision = useTargetRevision(record);
 
   const { data, isLoading } = useStudioQuery<{ pipeline: Pipeline }>({
     queryName: 'GetPipeline',
@@ -73,6 +82,7 @@ export const RunTriggerForm = ({ record, onClose }: ActionComponentProps<Pipelin
       },
       spec: {
         pipeline: { name: pipelineName, namespace: projectId },
+        ...(revision && { revision }),
         trigger: buildTriggerOverride(sourceTrigger, values),
         sourceTriggerName: values.sourceTriggerName,
         autoFlip: !!values.autoFlip,
@@ -90,6 +100,12 @@ export const RunTriggerForm = ({ record, onClose }: ActionComponentProps<Pipelin
       submitLabel="Run"
     >
       <StringField name="pipelineName" label="Pipeline" initialValue={pipelineName} readOnly />
+      <StringField
+        name="revisionName"
+        label="Revision ID"
+        initialValue={revision?.name ?? ''}
+        readOnly
+      />
 
       <SelectField
         name="sourceTriggerName"
@@ -123,23 +139,11 @@ export const RunTriggerForm = ({ record, onClose }: ActionComponentProps<Pipelin
 
 /**
  * Names the created TriggerRun after the type of run it represents, so it's identifiable in
- * the "Triggered by" column. The prefix mirrors how the reconciler will actually classify
- * the run (`GetTriggerType` in go/components/triggerrun/util.go, same priority order): a
- * batch rerun stays a batch rerun even with a backfill window set, while a backfill window
- * on a cron or interval trigger makes the run a backfill.
+ * the "Triggered by" column. See `resolveTriggerRunTypePrefix` for the classification rule.
  */
 function buildTriggerRunName(trigger: ManifestTrigger, isBackfill: boolean | undefined): string {
-  const typePrefix = resolveTriggerRunTypePrefix(trigger, isBackfill);
+  const typePrefix = resolveTriggerRunTypePrefix(trigger, !!isBackfill);
   return `${typePrefix}${generateSuffix({ withDate: true })}`;
-}
-
-function resolveTriggerRunTypePrefix(
-  trigger: ManifestTrigger,
-  isBackfill: boolean | undefined
-): string {
-  if (trigger.triggerType?.case === 'batchRerun') return 'batch-rerun';
-  if (isBackfill) return 'backfill';
-  return trigger.triggerType?.case === 'intervalSchedule' ? 'interval' : 'cron';
 }
 
 function buildTriggerOverride(
@@ -175,7 +179,7 @@ function buildBackfillWindow(
   }
 
   return {
-    startTimestamp: { seconds: values.startTimestamp },
-    endTimestamp: { seconds: values.endTimestamp },
+    startTimestamp: getDateFromEpochSeconds(Number(values.startTimestamp)).toISOString(),
+    endTimestamp: getDateFromEpochSeconds(Number(values.endTimestamp)).toISOString(),
   };
 }

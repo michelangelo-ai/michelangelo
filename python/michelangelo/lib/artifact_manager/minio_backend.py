@@ -24,8 +24,8 @@ Typical usage::
     backend = MinioStorageBackend(
         endpoint="localhost:9000",
         bucket="michelangelo-models",
-        access_key="minioadmin",
-        secret_key="minioadmin",
+        access_key="michelangeloadmin",
+        secret_key="michelangeloadmin",
         secure=False,            # local dev only — do not use in production
         create_bucket_if_missing=True,
     )
@@ -102,8 +102,8 @@ class MinioStorageBackend(StorageBackend):
         backend = MinioStorageBackend(
             endpoint="localhost:9000",
             bucket="my-bucket",
-            access_key="minioadmin",
-            secret_key="minioadmin",
+            access_key="michelangeloadmin",
+            secret_key="michelangeloadmin",
             secure=False,            # local dev only
             create_bucket_if_missing=True,
         )

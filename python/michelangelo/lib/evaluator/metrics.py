@@ -56,14 +56,16 @@ def cast_array_to_dtype(array_data: np.ndarray, dtype: torch.dtype) -> torch.Ten
     """Convert a numpy array to a torch tensor with an explicit dtype.
 
     Args:
-        array_data: Source array. Copied, so the tensor never aliases a
+        array_data: Source array. Coerced to numpy first -- a column read back
+            from Ray arrives as a pandas ``ArrowExtensionArray``, which
+            ``torch.from_numpy`` rejects. Copied, so the tensor never aliases a
             DataFrame column.
         dtype: Target torch dtype.
 
     Returns:
         The converted tensor.
     """
-    return torch.from_numpy(array_data.copy()).to(dtype)
+    return torch.from_numpy(np.asarray(array_data).copy()).to(dtype)
 
 
 def encode_categorical_column_to_tensor(
@@ -91,6 +93,9 @@ def encode_categorical_column_to_tensor(
         ... )
         tensor([1.0000, 2.5000])
     """
+    # Arrow-backed columns (anything round-tripped through Ray) are not numpy
+    # arrays and expose an ArrowDtype with no `.kind`, so coerce before probing.
+    column_data = np.asarray(column_data)
     is_string_type = column_data.dtype == np.object_ or column_data.dtype.kind in (
         "U",
         "S",
@@ -149,13 +154,13 @@ def extract_data_for_collection(
     """
     data = {}
 
-    pred_array = df[column_mapping.prediction_col].values
+    pred_array = df[column_mapping.prediction_col].to_numpy()
     if len(pred_array) > 0 and isinstance(pred_array[0], (list, np.ndarray)):
         pred_array = np.vstack(pred_array)
     data["predictions"] = cast_array_to_dtype(pred_array, pred_dtype)
 
     if target_dtype is not None:
-        target_array = df[column_mapping.target_col].values
+        target_array = df[column_mapping.target_col].to_numpy()
         if len(target_array) > 0 and isinstance(target_array[0], (list, np.ndarray)):
             target_array = np.vstack(target_array)
         data["targets"] = cast_array_to_dtype(target_array, target_dtype)
@@ -164,7 +169,7 @@ def extract_data_for_collection(
 
     if column_mapping.index_col and column_mapping.index_col in df.columns:
         data["indexes"] = encode_categorical_column_to_tensor(
-            df[column_mapping.index_col].values,
+            df[column_mapping.index_col].to_numpy(),
             target_dtype=torch.long,
             factorize_strings=True,
         )
@@ -174,7 +179,7 @@ def extract_data_for_collection(
         and column_mapping.sample_weight_col in df.columns
     ):
         data["sample_weights"] = encode_categorical_column_to_tensor(
-            df[column_mapping.sample_weight_col].values,
+            df[column_mapping.sample_weight_col].to_numpy(),
             target_dtype=torch.float,
             factorize_strings=False,
         )
@@ -184,7 +189,7 @@ def extract_data_for_collection(
         for logical_name, col_name in column_mapping.extra_cols.items():
             if col_name in df.columns:
                 extra[logical_name] = torch.from_numpy(
-                    df[col_name].values.copy()
+                    np.asarray(df[col_name].to_numpy()).copy()
                 ).float()
         if extra:
             data["extra_cols"] = extra

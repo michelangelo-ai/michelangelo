@@ -15,13 +15,14 @@ The most common URLs you'll open after the sandbox is up:
 | Service | URL | Default credentials |
 |---|---|---|
 | MA Studio UI | http://localhost:8090 | none |
-| MinIO Console | http://localhost:9090 | `minioadmin` / `minioadmin` |
+| MinIO Console | http://localhost:9090 | `michelangeloadmin` / `michelangeloadmin` |
 | Cadence Web (default) | http://localhost:8088 | none |
 | Temporal Web (with `--workflow temporal`) | http://localhost:8080 | none |
 | Grafana | http://localhost:3000 | `admin` / `admin` |
 | Prometheus | http://localhost:9092 | none |
 | MLflow Tracking (with `--include-experimental mlflow`) | http://localhost:5001 | none |
 | Ray Dashboard (with `--create-compute-cluster`) | http://localhost:8265 | none |
+| Ray History Server | http://localhost:3001 | none |
 
 The MySQL root password is `root` (database: `temporal`). Connect with `mysql -h 127.0.0.1 -P 3306 -u root -proot`.
 
@@ -49,6 +50,7 @@ These mappings are created automatically by `ma sandbox create`:
 | Grafana | 3000 | 30012 | `grafana` | 3000 | Dashboards (skipped with `--exclude grafana`) |
 | Prometheus | 9092 | 30015 | `prometheus` | 9090 | Metrics (skipped with `--exclude prometheus`) |
 | MLflow Tracking | 5001 | 30013 | `mlflow` | 5000 | Experiment tracking (only deployed with `--include-experimental mlflow`) |
+| Ray History Server | 3001 | 30016 | `history-server` | 8080 | Replay the Ray Dashboard for finished Ray clusters — only has data once log persistence has captured one |
 
 ### Temporal workflow engine
 
@@ -90,7 +92,7 @@ grpcurl -plaintext localhost:15566 list
 mysql -h 127.0.0.1 -P 3306 -u root -proot temporal
 
 # Use MinIO with the AWS CLI (S3-compatible)
-AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin \
+AWS_ACCESS_KEY_ID=michelangeloadmin AWS_SECRET_ACCESS_KEY=michelangeloadmin \
   aws --endpoint-url http://localhost:9091 --region us-east-1 s3 ls
 ```
 

@@ -9,6 +9,7 @@ import (
 	gogoproto "github.com/gogo/protobuf/proto"
 	clientInterface "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
+	uberconfig "go.uber.org/config"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 )
 
@@ -23,6 +24,7 @@ import (
 type cronTrigger struct {
 	Log            logr.Logger                    // Structured logger for trigger operations
 	WorkflowClient clientInterface.WorkflowClient // Workflow engine client (Cadence/Temporal)
+	ConfigProvider uberconfig.Provider            // Workflow client config provider, for building monitoring URLs
 }
 
 // NewCronTrigger creates a new cron trigger Runner.
@@ -30,10 +32,11 @@ type cronTrigger struct {
 // The returned Runner manages recurring scheduled workflows using cron expressions.
 // It requires a logger for structured logging and a workflow client for interacting
 // with the workflow engine.
-func NewCronTrigger(log logr.Logger, workflowClient clientInterface.WorkflowClient) Runner {
+func NewCronTrigger(log logr.Logger, workflowClient clientInterface.WorkflowClient, configProvider uberconfig.Provider) Runner {
 	return &cronTrigger{
 		Log:            log,
 		WorkflowClient: workflowClient,
+		ConfigProvider: configProvider,
 	}
 }
 
@@ -92,7 +95,7 @@ func (r *cronTrigger) Run(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2p
 		// reconciliation.
 		status := v2pb.TriggerRunStatus{
 			State:  v2pb.TRIGGER_RUN_STATE_RUNNING,
-			LogUrl: getWorkflowURL(wid, r.WorkflowClient.GetProvider()),
+			LogUrl: getWorkflowURL(r.ConfigProvider, wid, *rid),
 		}
 		if opt.StartPaused {
 			paused := true
@@ -141,7 +144,7 @@ func (r *cronTrigger) Run(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2p
 		"paused", opt.StartPaused,
 		"execution_id", exec.ID,
 		"run_id", exec.RunID)
-	status := recurringTriggerStatus(triggerRun, wid, opt.CronSchedule, inputHash, r.WorkflowClient.GetProvider())
+	status := recurringTriggerStatus(triggerRun, wid, opt.CronSchedule, inputHash, r.ConfigProvider, exec.RunID)
 	if opt.StartPaused {
 		status.State = v2pb.TRIGGER_RUN_STATE_PAUSED
 	}
@@ -149,11 +152,12 @@ func (r *cronTrigger) Run(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2p
 }
 
 func recurringTriggerStatus(
-	triggerRun *v2pb.TriggerRun, workflowID string, cron string, inputHash string, provider string,
+	triggerRun *v2pb.TriggerRun, workflowID string, cron string, inputHash string,
+	configProvider uberconfig.Provider, runID string,
 ) v2pb.TriggerRunStatus {
 	return v2pb.TriggerRunStatus{
 		State:  v2pb.TRIGGER_RUN_STATE_RUNNING,
-		LogUrl: getWorkflowURL(workflowID, provider),
+		LogUrl: getWorkflowURL(configProvider, workflowID, runID),
 		ActualTrigger: &v2pb.Trigger{
 			TriggerType: &v2pb.Trigger_CronSchedule{
 				CronSchedule: &v2pb.CronSchedule{Cron: cron},

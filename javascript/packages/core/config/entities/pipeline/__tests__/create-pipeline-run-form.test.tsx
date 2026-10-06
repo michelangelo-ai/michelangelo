@@ -1,12 +1,15 @@
 import { useState } from 'react';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { vi } from 'vitest';
 
 import { CreatePipelineRunForm } from '#core/config/entities/pipeline/create-pipeline-run-form';
 import {
   NotificationEventType,
   NotificationResourceType,
   NotificationType,
+  PipelineRunState,
+  PipelineRunStepState,
 } from '#core/config/entities/run/types';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getBaseProviderWrapper } from '#core/test/wrappers/get-base-provider-wrapper';
@@ -89,6 +92,97 @@ describe('CreatePipelineRunForm', () => {
 
     await waitFor(() => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+  });
+
+  it('uses the run to the record when it is the Revision being viewed', async () => {
+    const user = userEvent.setup();
+    const mockRequest = createQueryMockRouter({ CreatePipelineRun: {} });
+    const record = {
+      metadata: { name: 'pipeline-test-pipeline-3f2a1b9c0d4e', namespace: 'ma-dev-test' },
+      spec: {
+        baseResource: { name: 'test-pipeline', namespace: 'ma-dev-test' },
+        revisionId: '3f2a1b9c0d4e5f6a7b8c',
+        owner: { name: 'test-owner' },
+      },
+    };
+
+    render(
+      <CreatePipelineRunForm record={record} onClose={vi.fn()} />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getIconProviderWrapper(),
+        getErrorProviderWrapper(),
+        getInterpolationProviderWrapper(),
+        getRouterWrapper({ location: '/ma-dev-test/train/pipelines/test-pipeline/runs' }),
+        getServiceProviderWrapper({ request: mockRequest }),
+      ])
+    );
+
+    const dialog = await screen.findByRole('dialog', { name: 'Start new pipeline run' });
+    expect(within(dialog).getByRole('textbox', { name: 'Revision ID' })).toHaveValue(
+      'pipeline-test-pipeline-3f2a1b9c0d4e'
+    );
+    await selectEnvironment(user, dialog, 'Development');
+    await user.click(within(dialog).getByRole('button', { name: 'Run' }));
+
+    await waitFor(() => {
+      expect(mockRequest).toHaveBeenCalledWith(
+        'CreatePipelineRun',
+        expect.objectContaining({
+          spec: expect.objectContaining({
+            pipeline: { name: 'test-pipeline', namespace: 'ma-dev-test' },
+            revision: { name: 'pipeline-test-pipeline-3f2a1b9c0d4e', namespace: 'ma-dev-test' },
+          }) as Record<string, unknown>,
+        }),
+        {}
+      );
+    });
+  });
+
+  it('uses the latest revision when the URL names none', async () => {
+    const user = userEvent.setup();
+    const mockRequest = createQueryMockRouter({ CreatePipelineRun: {} });
+    const latestRevision = {
+      name: 'pipeline-test-pipeline-9a8b7c6d5e4f',
+      namespace: 'ma-dev-test',
+    };
+    const record = {
+      metadata: { name: 'test-pipeline', namespace: 'ma-dev-test' },
+      spec: { owner: { name: 'test-owner' } },
+      status: { latestRevision },
+    };
+
+    render(
+      <CreatePipelineRunForm record={record} onClose={vi.fn()} />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getIconProviderWrapper(),
+        getErrorProviderWrapper(),
+        getInterpolationProviderWrapper(),
+        getRouterWrapper({ location: '/ma-dev-test/train/pipelines' }),
+        getServiceProviderWrapper({ request: mockRequest }),
+      ])
+    );
+
+    const dialog = await screen.findByRole('dialog', { name: 'Start new pipeline run' });
+    expect(within(dialog).getByRole('textbox', { name: 'Revision ID' })).toHaveValue(
+      latestRevision.name
+    );
+    await selectEnvironment(user, dialog, 'Development');
+    await user.click(within(dialog).getByRole('button', { name: 'Run' }));
+
+    await waitFor(() => {
+      expect(mockRequest).toHaveBeenCalledWith(
+        'CreatePipelineRun',
+        expect.objectContaining({
+          spec: expect.objectContaining({
+            pipeline: { name: 'test-pipeline', namespace: 'ma-dev-test' },
+            revision: latestRevision,
+          }) as Record<string, unknown>,
+        }),
+        {}
+      );
     });
   });
 
@@ -417,19 +511,19 @@ describe('CreatePipelineRunForm', () => {
       pipelineRunList: {
         items: [
           {
-            metadata: { name: SOURCE_RUN, creationTimestamp: { seconds: '1755440000' } },
+            metadata: { name: SOURCE_RUN, creationTimestamp: '2025-08-17T14:13:20Z' },
             spec: { pipeline: { name: 'test-pipeline' } },
-            status: { state: 5 },
+            status: { state: PipelineRunState.FAILED },
           },
           {
-            metadata: { name: 'run-other-pipeline', creationTimestamp: { seconds: '1755450000' } },
+            metadata: { name: 'run-other-pipeline', creationTimestamp: '2025-08-17T17:00:00Z' },
             spec: { pipeline: { name: 'some-other-pipeline' } },
-            status: { state: 3 },
+            status: { state: PipelineRunState.SUCCEEDED },
           },
           {
-            metadata: { name: 'run-still-running', creationTimestamp: { seconds: '1755460000' } },
+            metadata: { name: 'run-still-running', creationTimestamp: '2025-08-17T19:46:40Z' },
             spec: { pipeline: { name: 'test-pipeline' } },
-            status: { state: 2 },
+            status: { state: PipelineRunState.RUNNING },
           },
         ],
       },
@@ -444,23 +538,27 @@ describe('CreatePipelineRunForm', () => {
         metadata: { name: SOURCE_RUN },
         status: {
           steps: [
-            { name: 'Image Build', displayName: 'Image Build', state: 3 },
+            {
+              name: 'Image Build',
+              displayName: 'Image Build',
+              state: PipelineRunStepState.SUCCEEDED,
+            },
             {
               name: 'Execute Workflow',
               displayName: 'Execute Workflow',
-              state: 5,
+              state: PipelineRunStepState.FAILED,
               subSteps: [
                 {
                   name: 'tasks/feature_gen',
                   displayName: 'feature_gen',
-                  state: 5,
-                  startTime: { seconds: '1755440100' },
-                  endTime: { seconds: '1755440652' },
+                  state: PipelineRunStepState.FAILED,
+                  startTime: '2025-08-17T14:15:00Z',
+                  endTime: '2025-08-17T14:24:12Z',
                 },
                 {
                   name: 'tasks/train_model',
                   displayName: 'train_model',
-                  state: 6,
+                  state: PipelineRunStepState.SKIPPED,
                 },
               ],
             },

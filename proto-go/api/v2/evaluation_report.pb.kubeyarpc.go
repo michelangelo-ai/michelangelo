@@ -173,15 +173,11 @@ func (c evaluationReportServiceHandler) CreateEvaluationReport(
 	ctx context.Context, request *CreateEvaluationReportRequest) (resp *CreateEvaluationReportResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
 
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.EvaluationReport.ObjectMeta.Namespace, "name", request.EvaluationReport.ObjectMeta.Name)
 	logger.Info("CreateEvaluationReport Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "CreateEvaluationReport",
-		logging.NamespaceTag:    request.EvaluationReport.ObjectMeta.Namespace,
-		logging.EntityNameTag:   request.EvaluationReport.ObjectMeta.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildEvaluationReportAuditLogEventForCreate(
@@ -245,15 +241,11 @@ func (c evaluationReportServiceHandler) CreateEvaluationReport(
 func (c evaluationReportServiceHandler) GetEvaluationReport(
 	ctx context.Context, request *GetEvaluationReportRequest) (resp *GetEvaluationReportResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace, "name", request.Name)
 	logger.Info("GetEvaluationReport Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "GetEvaluationReport",
-		logging.NamespaceTag:    request.Namespace,
-		logging.EntityNameTag:   request.Name,
 	})
 
 	getOptions := &metav1.GetOptions{}
@@ -304,15 +296,11 @@ func (c evaluationReportServiceHandler) GetEvaluationReport(
 func (c evaluationReportServiceHandler) UpdateEvaluationReport(
 	ctx context.Context, request *UpdateEvaluationReportRequest) (resp *UpdateEvaluationReportResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.EvaluationReport.ObjectMeta.Namespace, "name", request.EvaluationReport.ObjectMeta.Name)
 	logger.Info("UpdateEvaluationReport Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "UpdateEvaluationReport",
-		logging.NamespaceTag:    request.EvaluationReport.ObjectMeta.Namespace,
-		logging.EntityNameTag:   request.EvaluationReport.ObjectMeta.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildEvaluationReportAuditLogEventForUpdate(
@@ -376,15 +364,11 @@ func (c evaluationReportServiceHandler) UpdateEvaluationReport(
 func (c evaluationReportServiceHandler) DeleteEvaluationReport(
 	ctx context.Context, request *DeleteEvaluationReportRequest) (resp *DeleteEvaluationReportResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace, "name", request.Name)
 	logger.Info("DeleteEvaluationReport Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "DeleteEvaluationReport",
-		logging.NamespaceTag:    request.Namespace,
-		logging.EntityNameTag:   request.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildEvaluationReportAuditLogEventForDelete(
@@ -450,14 +434,11 @@ func (c evaluationReportServiceHandler) DeleteEvaluationReport(
 func (c evaluationReportServiceHandler) DeleteEvaluationReportCollection(
 	ctx context.Context, request *DeleteEvaluationReportCollectionRequest) (resp *DeleteEvaluationReportCollectionResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace)
 	logger.Info("DeleteEvaluationReportCollection Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "DeleteEvaluationReportCollection",
-		logging.NamespaceTag:    request.Namespace,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildEvaluationReportAuditLogEventForDeleteCollection(
@@ -526,14 +507,11 @@ func (c evaluationReportServiceHandler) ListEvaluationReport(
 	ctx context.Context, request *ListEvaluationReportRequest) (resp *ListEvaluationReportResponse, err error) {
 
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace)
 	logger.Info("ListEvaluationReport Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "ListEvaluationReport",
-		logging.NamespaceTag:    request.Namespace,
 	})
 
 	result := &EvaluationReportList{}

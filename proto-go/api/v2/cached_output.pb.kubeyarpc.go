@@ -172,15 +172,11 @@ func (c cachedOutputServiceHandler) CreateCachedOutput(
 	ctx context.Context, request *CreateCachedOutputRequest) (resp *CreateCachedOutputResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
 
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.CachedOutput.ObjectMeta.Namespace, "name", request.CachedOutput.ObjectMeta.Name)
 	logger.Info("CreateCachedOutput Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "CreateCachedOutput",
-		logging.NamespaceTag:    request.CachedOutput.ObjectMeta.Namespace,
-		logging.EntityNameTag:   request.CachedOutput.ObjectMeta.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildCachedOutputAuditLogEventForCreate(
@@ -244,15 +240,11 @@ func (c cachedOutputServiceHandler) CreateCachedOutput(
 func (c cachedOutputServiceHandler) GetCachedOutput(
 	ctx context.Context, request *GetCachedOutputRequest) (resp *GetCachedOutputResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace, "name", request.Name)
 	logger.Info("GetCachedOutput Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "GetCachedOutput",
-		logging.NamespaceTag:    request.Namespace,
-		logging.EntityNameTag:   request.Name,
 	})
 
 	getOptions := &metav1.GetOptions{}
@@ -303,15 +295,11 @@ func (c cachedOutputServiceHandler) GetCachedOutput(
 func (c cachedOutputServiceHandler) UpdateCachedOutput(
 	ctx context.Context, request *UpdateCachedOutputRequest) (resp *UpdateCachedOutputResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.CachedOutput.ObjectMeta.Namespace, "name", request.CachedOutput.ObjectMeta.Name)
 	logger.Info("UpdateCachedOutput Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "UpdateCachedOutput",
-		logging.NamespaceTag:    request.CachedOutput.ObjectMeta.Namespace,
-		logging.EntityNameTag:   request.CachedOutput.ObjectMeta.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildCachedOutputAuditLogEventForUpdate(
@@ -375,15 +363,11 @@ func (c cachedOutputServiceHandler) UpdateCachedOutput(
 func (c cachedOutputServiceHandler) DeleteCachedOutput(
 	ctx context.Context, request *DeleteCachedOutputRequest) (resp *DeleteCachedOutputResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace, "name", request.Name)
 	logger.Info("DeleteCachedOutput Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "DeleteCachedOutput",
-		logging.NamespaceTag:    request.Namespace,
-		logging.EntityNameTag:   request.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildCachedOutputAuditLogEventForDelete(
@@ -449,14 +433,11 @@ func (c cachedOutputServiceHandler) DeleteCachedOutput(
 func (c cachedOutputServiceHandler) DeleteCachedOutputCollection(
 	ctx context.Context, request *DeleteCachedOutputCollectionRequest) (resp *DeleteCachedOutputCollectionResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace)
 	logger.Info("DeleteCachedOutputCollection Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "DeleteCachedOutputCollection",
-		logging.NamespaceTag:    request.Namespace,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildCachedOutputAuditLogEventForDeleteCollection(
@@ -525,14 +506,11 @@ func (c cachedOutputServiceHandler) ListCachedOutput(
 	ctx context.Context, request *ListCachedOutputRequest) (resp *ListCachedOutputResponse, err error) {
 
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace)
 	logger.Info("ListCachedOutput Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "ListCachedOutput",
-		logging.NamespaceTag:    request.Namespace,
 	})
 
 	result := &CachedOutputList{}

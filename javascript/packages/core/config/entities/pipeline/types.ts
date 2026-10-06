@@ -16,6 +16,9 @@ export interface Pipeline {
       triggerMap?: Record<string, ManifestTrigger>;
     };
   };
+  status?: {
+    latestRevision?: { name?: string; namespace?: string };
+  };
 }
 
 /**
@@ -34,11 +37,18 @@ export interface PipelineRevision {
     owner?: { name: string };
     gitCommit?: { branch?: string; gitRef?: string };
     content?: {
-      spec?: { type?: number };
+      spec?: { type?: number; manifest?: Pipeline['spec']['manifest'] };
       status?: { state?: number };
     };
   };
   status?: { state?: number };
+}
+
+/** True when `record` is a Revision CR rather than a Pipeline. */
+export function isPipelineRevision(record: unknown): record is PipelineRevision {
+  // cast: narrowing an unknown record to check for a field only a PipelineRevision has; the
+  // type predicate return type is the real guarantee callers rely on
+  return !!(record as PipelineRevision | undefined)?.spec?.baseResource;
 }
 
 /**

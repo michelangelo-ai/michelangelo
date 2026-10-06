@@ -15,8 +15,8 @@ Start here if you're authoring pipelines with the Python SDK.
 
 Some modules below aren't linked yet — coming soon. Two modules referenced elsewhere
 in this reference, the XGBoost trainer and `LightningTrainer` itself, aren't in the
-current generator config and have no page yet either; only the Torch collate-function
-utilities under **Trainer** are covered so far.
+current generator config and have no page yet either; the **Trainer** section covers
+only the Torch collate-function and memory-estimation utilities so far.
 
 ## Uniflow — Tasks & Workflows
 
@@ -37,8 +37,8 @@ Compute-backend plugins that extend `@task` with Ray, Spark, or Pandas execution
 | Module | Description |
 |--------|-------------|
 | [`uniflow.plugins.ray.task`](reference/uniflow/plugins/ray/task.md) | `RayTask` config for Ray-backed tasks |
-| `uniflow.plugins.ray.run_config` | Ray run configuration |
-| `uniflow.plugins.ray.io` | Ray dataset IO |
+| [`uniflow.plugins.ray.run_config`](reference/uniflow/plugins/ray/run_config.md) | Ray run configuration |
+| [`uniflow.plugins.ray.io`](reference/uniflow/plugins/ray/io.md) | Ray dataset IO |
 | [`uniflow.plugins.spark.task`](reference/uniflow/plugins/spark/task.md) | `SparkTask` config for Spark-backed tasks |
 | [`uniflow.plugins.spark.io`](reference/uniflow/plugins/spark/io.md) | Spark dataset IO |
 | `uniflow.plugins.pandas.io` | Pandas dataset IO |
@@ -70,8 +70,8 @@ TorchScript- and ONNX-exportable transform layers for train/serve parity.
 | Module | Description |
 |--------|-------------|
 | `lib.native_transform.torch.base_layers` | Base transform layer classes |
-| `lib.native_transform.torch.id_hash_tokenizer` | ID hashing tokenizer layer |
-| `lib.native_transform.torch.utils` | Transform utilities |
+| [`lib.native_transform.torch.id_hash_tokenizer`](reference/lib/native_transform/torch/id_hash_tokenizer.md) | ID hashing tokenizer layer |
+| [`lib.native_transform.torch.utils`](reference/lib/native_transform/torch/utils.md) | Transform utilities |
 
 ## Workflow Variables
 

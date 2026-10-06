@@ -5,12 +5,14 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 from unittest import TestCase
+from unittest.mock import patch
 
 import pandas as pd
 import torch
 from pandas.errors import UndefinedVariableError
 from torchmetrics import Metric
 
+from michelangelo.lib.evaluator.embedding_metrics import EmbeddingCosineSimilarity
 from michelangelo.lib.evaluator.evaluator import (
     TorchMetricEvaluator,
     create_evaluator,
@@ -170,6 +172,66 @@ class EvaluateTest(TestCase):
         )
         results = TorchMetricEvaluator(config).evaluate(_DF)
         self.assertAlmostEqual(results["mean_pred"], 0.525, places=5)
+
+    def test_custom_aggregation_metric_gets_predictions_only(self):
+        """A custom metric tagged ``_metric_type = "aggregation"`` gets no target.
+
+        No targets tensor is extracted for it, so passing one would KeyError.
+        """
+        config = EvaluatorConfig(
+            metrics=[
+                MetricConfig(
+                    name="emb_cosine_mean",
+                    metric=f"{EmbeddingCosineSimilarity.__module__}.{EmbeddingCosineSimilarity.__name__}",
+                    params={"stat": "mean"},
+                    columns=ColumnMapping(
+                        prediction_col="embedding", target_col="user_id"
+                    ),
+                ),
+            ]
+        )
+
+        # Every row points the same way, so all pairwise cosines are 1.
+        data = pd.DataFrame(
+            {
+                "embedding": [[1.0, 1.0], [2.0, 2.0], [3.0, 3.0]],
+                "user_id": ["a", "b", "c"],
+            }
+        )
+
+        results = TorchMetricEvaluator(config).evaluate(data)
+
+        self.assertAlmostEqual(results["emb_cosine_mean"], 1.0, places=5)
+
+    def test_aggregation_subclass_outside_torchmetrics_ignores_target(self):
+        """A MeanMetric subclass outside torchmetrics still gets predictions only.
+
+        Its path does not resolve to aggregation; otherwise the target would
+        become MeanMetric's ``weight``.
+        """
+        from torchmetrics.aggregation import MeanMetric
+
+        class TeamMean(MeanMetric):
+            pass
+
+        config = EvaluatorConfig(
+            metrics=[
+                MetricConfig(
+                    name="team_mean",
+                    metric="team.custom_metrics.TeamMean",
+                    params={},
+                    columns=ColumnMapping(prediction_col="values", target_col="label"),
+                ),
+            ]
+        )
+        data = pd.DataFrame({"values": [1.0, 2.0, 3.0], "label": [0, 0, 1]})
+
+        mock_module = type("MockModule", (), {"TeamMean": TeamMean})()
+        with patch("importlib.import_module", return_value=mock_module):
+            results = TorchMetricEvaluator(config).evaluate(data)
+
+        # Unweighted mean is 2.0; treating `label` as weights would give 3.0.
+        self.assertAlmostEqual(results["team_mean"], 2.0, places=5)
 
     def test_extra_columns_reach_a_custom_metric(self):
         """Extra columns reach a custom metric."""

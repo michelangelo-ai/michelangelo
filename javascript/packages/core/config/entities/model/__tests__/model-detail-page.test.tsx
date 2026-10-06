@@ -1,5 +1,7 @@
 import { render, screen } from '@testing-library/react';
 
+import { DEPLOYMENT_STAGE, DEPLOYMENT_STATE } from '#core/config/entities/deployment/shared';
+import { ModelKind } from '#core/config/entities/model/constants';
 import { TRAIN_PHASE } from '#core/config/phases/train';
 import { EntityDetailRoute } from '#core/router/entity-detail-route';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
@@ -27,14 +29,11 @@ describe('Model detail page', () => {
                 model: {
                   metadata: {
                     name: 'fraud-classifier',
-                    creationTimestamp: { seconds: 1700000000 },
+                    creationTimestamp: '2023-11-14T22:13:20Z',
                   },
                   spec: {
                     owner: { name: 'jsmith' },
-                    // The generated proto client decodes enum fields to their numeric
-                    // discriminant (MODEL_KIND_BINARY_CLASSIFICATION = 3), not the enum's
-                    // string name.
-                    kind: 3,
+                    kind: ModelKind.BINARY_CLASSIFICATION,
                     sourcePipelineRun: { name: 'fraud-classifier-run-1' },
                     description: 'Fraud detection model trained on transaction history.',
                   },
@@ -61,16 +60,15 @@ describe('Model detail page', () => {
 
   describe('information tab', () => {
     const DEPLOYED_TO_ONLINE = {
-      metadata: { name: 'fraud-classifier-prod', creationTimestamp: { seconds: 1700000000 } },
+      metadata: { name: 'fraud-classifier-prod', creationTimestamp: '2023-11-14T22:13:20Z' },
       spec: {
         definition: { type: 'TARGET_TYPE_INFERENCE_SERVER' },
-        target: { case: 'inferenceServer', value: { name: 'ma-endpoint-fraud' } },
+        inferenceServer: { name: 'ma-endpoint-fraud' },
         owner: { name: 'adoe' },
       },
       status: {
-        // DEPLOYMENT_STAGE_ROLLOUT_COMPLETE = 4, DEPLOYMENT_STATE_HEALTHY = 2
-        stage: 4,
-        state: 2,
+        stage: DEPLOYMENT_STAGE.ROLLOUT_COMPLETE,
+        state: DEPLOYMENT_STATE.HEALTHY,
         currentRevision: { name: 'fraud-classifier' },
       },
     };
@@ -82,7 +80,7 @@ describe('Model detail page', () => {
           model: {
             metadata: {
               name: 'fraud-classifier',
-              creationTimestamp: { seconds: 1700000000 },
+              creationTimestamp: '2023-11-14T22:13:20Z',
             },
             spec: {
               owner: { name: 'jsmith' },

@@ -1,9 +1,9 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-import { InterpolatableActionsPopover } from '#core/components/actions/interpolatable-actions-popover';
+import { DetailViewHeader } from '#core/components/views/detail-view/components/detail-view-header/detail-view-header';
 import { TRIGGER_ENTITY_CONFIG } from '#core/config/entities/trigger/trigger';
-import { TriggerRunAction, TriggerRunState } from '#core/config/entities/trigger/types';
+import { TriggerRunAction } from '#core/config/entities/trigger/types';
 import { TRAIN_PHASE } from '#core/config/phases/train';
 import { PhaseListRoute } from '#core/router/phase-list-route';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
@@ -21,11 +21,12 @@ import { getUserProviderWrapper } from '#core/test/wrappers/get-user-provider-wr
 
 import type { ActionConfigSchema, Data } from '#core/components/actions/types';
 import type { TriggerRun } from '#core/config/entities/trigger/types';
+import type { ServiceContextType } from '#core/providers/service-provider/types';
 
 // PhaseEntityConfig.actions is ActionConfigSchema<T>[] where T is the entity's
-// generic parameter; InterpolatableActionsPopover expects Data (Record<string, unknown>).
+// generic parameter; DetailViewHeader expects ActionConfigSchema<object>[] (Data).
 // TriggerRun is structurally compatible at runtime; cast to unify.
-const KILL_ACTIONS = TRIGGER_ENTITY_CONFIG.actions as ActionConfigSchema<Data>[];
+const TRIGGER_ACTIONS = TRIGGER_ENTITY_CONFIG.actions as ActionConfigSchema<Data>[];
 
 function buildRunningTriggerRun(overrides: Partial<TriggerRun> = {}): TriggerRun {
   return {
@@ -40,19 +41,38 @@ function buildRunningTriggerRun(overrides: Partial<TriggerRun> = {}): TriggerRun
       kill: false,
       action: TriggerRunAction.NO_ACTION,
     },
-    status: { state: TriggerRunState.RUNNING },
+    status: { state: 'TRIGGER_RUN_STATE_RUNNING' },
     ...overrides,
   };
 }
 
 describe('TRIGGER_ENTITY_CONFIG: kill action', () => {
+  it('renders Kill as a top-level header button', async () => {
+    const record = buildRunningTriggerRun();
+
+    render(
+      <DetailViewHeader title="my-trigger" actions={TRIGGER_ACTIONS} record={record} />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getErrorProviderWrapper(),
+        getIconProviderWrapper(),
+        getInterpolationProviderWrapper(),
+        getRouterWrapper({ location: '/test-ns/triggers' }),
+        getServiceProviderWrapper({ request: vi.fn() }),
+        getSnackbarProviderWrapper(),
+      ])
+    );
+
+    expect(await screen.findByRole('button', { name: 'Kill' })).toBeInTheDocument();
+  });
+
   it('opens a confirm dialog naming the run and pipeline, fires UpdateTriggerRun with spec.action=KILL', async () => {
     const user = userEvent.setup();
     const record = buildRunningTriggerRun();
     const mockRequest = createQueryMockRouter({ UpdateTriggerRun: { triggerRun: record } });
 
     render(
-      <InterpolatableActionsPopover actions={KILL_ACTIONS} record={record} />,
+      <DetailViewHeader title="my-trigger" actions={TRIGGER_ACTIONS} record={record} />,
       buildWrapper([
         getBaseProviderWrapper(),
         getErrorProviderWrapper(),
@@ -64,8 +84,7 @@ describe('TRIGGER_ENTITY_CONFIG: kill action', () => {
       ])
     );
 
-    await user.click(screen.getByRole('button', { name: 'Actions' }));
-    await user.click(await screen.findByRole('option', { name: 'Kill' }));
+    await user.click(await screen.findByRole('button', { name: 'Kill' }));
 
     const dialog = await screen.findByRole('dialog', { name: 'Kill Trigger Run' });
     expect(within(dialog).getByText(/Kill run/)).toHaveTextContent(
@@ -87,12 +106,11 @@ describe('TRIGGER_ENTITY_CONFIG: kill action', () => {
     });
   });
 
-  it('disables the action with a tooltip when the run is not killable', async () => {
-    const user = userEvent.setup();
-    const record = buildRunningTriggerRun({ status: { state: TriggerRunState.SUCCEEDED } });
+  it('is enabled when the run is running', async () => {
+    const record = buildRunningTriggerRun({ status: { state: 'TRIGGER_RUN_STATE_RUNNING' } });
 
     render(
-      <InterpolatableActionsPopover actions={KILL_ACTIONS} record={record} />,
+      <DetailViewHeader title="my-trigger" actions={TRIGGER_ACTIONS} record={record} />,
       buildWrapper([
         getBaseProviderWrapper(),
         getErrorProviderWrapper(),
@@ -104,8 +122,30 @@ describe('TRIGGER_ENTITY_CONFIG: kill action', () => {
       ])
     );
 
-    await user.click(screen.getByRole('button', { name: 'Actions' }));
-    await user.hover(await screen.findByRole('option', { name: 'Kill' }));
+    expect(await screen.findByRole('button', { name: 'Kill' })).toBeEnabled();
+  });
+
+  it('disables the action with a tooltip when the run is not killable', async () => {
+    const user = userEvent.setup();
+    const record = buildRunningTriggerRun({ status: { state: 'TRIGGER_RUN_STATE_SUCCEEDED' } });
+
+    render(
+      <DetailViewHeader title="my-trigger" actions={TRIGGER_ACTIONS} record={record} />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getErrorProviderWrapper(),
+        getIconProviderWrapper(),
+        getInterpolationProviderWrapper(),
+        getRouterWrapper({ location: '/test-ns/triggers' }),
+        getServiceProviderWrapper({ request: vi.fn() }),
+        getSnackbarProviderWrapper(),
+      ])
+    );
+
+    const killButton = await screen.findByRole('button', { name: 'Kill' });
+    expect(killButton).toBeDisabled();
+
+    await user.hover(killButton);
     expect(
       await screen.findByText('Only running or paused trigger runs can be killed')
     ).toBeInTheDocument();
@@ -117,7 +157,7 @@ describe('TRIGGER_ENTITY_CONFIG: kill action', () => {
     const mockRequest = createQueryMockRouter({ UpdateTriggerRun: new Error('Kill failed') });
 
     render(
-      <InterpolatableActionsPopover actions={KILL_ACTIONS} record={record} />,
+      <DetailViewHeader title="my-trigger" actions={TRIGGER_ACTIONS} record={record} />,
       buildWrapper([
         getBaseProviderWrapper(),
         getErrorProviderWrapper(),
@@ -129,13 +169,189 @@ describe('TRIGGER_ENTITY_CONFIG: kill action', () => {
       ])
     );
 
-    await user.click(screen.getByRole('button', { name: 'Actions' }));
-    await user.click(await screen.findByRole('option', { name: 'Kill' }));
+    await user.click(await screen.findByRole('button', { name: 'Kill' }));
     const dialog = await screen.findByRole('dialog', { name: 'Kill Trigger Run' });
     await user.click(within(dialog).getByRole('button', { name: 'Kill' }));
 
     await within(dialog).findByText(/Test error/);
     expect(screen.getByRole('dialog', { name: 'Kill Trigger Run' })).toBeInTheDocument();
+  });
+});
+
+describe('TRIGGER_ENTITY_CONFIG: rerun action', () => {
+  function buildTerminalTriggerRun(overrides: Partial<TriggerRun> = {}): TriggerRun {
+    return buildRunningTriggerRun({
+      status: { state: 'TRIGGER_RUN_STATE_FAILED' },
+      spec: {
+        pipeline: { name: 'my-pipeline', namespace: 'test-ns' },
+        revision: { name: 'rev-1', namespace: 'test-ns' },
+        actor: { name: 'me' },
+        trigger: { cronSchedule: { cron: '0 * * * *' } },
+        sourceTriggerName: 'nightly',
+        autoFlip: false,
+        notifications: [],
+        kill: false,
+        action: TriggerRunAction.NO_ACTION,
+      },
+      ...overrides,
+    });
+  }
+
+  function buildRerunWrappers(request: ServiceContextType['request']) {
+    return [
+      getBaseProviderWrapper(),
+      getErrorProviderWrapper(),
+      getIconProviderWrapper(),
+      getInterpolationProviderWrapper(),
+      getRouterWrapper({ location: '/test-ns/triggers' }),
+      getSnackbarProviderWrapper(),
+      getServiceProviderWrapper({ request }),
+    ];
+  }
+
+  it('renders Kill and Rerun as separate, always-visible header buttons with no overflow menu', async () => {
+    const record = buildTerminalTriggerRun();
+
+    render(
+      <DetailViewHeader title="my-trigger" actions={TRIGGER_ACTIONS} record={record} />,
+      buildWrapper(buildRerunWrappers(vi.fn()))
+    );
+
+    expect(await screen.findByRole('button', { name: 'Kill' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Rerun' })).toBeInTheDocument();
+  });
+
+  it("has Kill and Rerun's enabled state respond independently to the run's own status", async () => {
+    const runningRecord = buildTerminalTriggerRun({
+      status: { state: 'TRIGGER_RUN_STATE_RUNNING' },
+    });
+
+    const { unmount } = render(
+      <DetailViewHeader title="my-trigger" actions={TRIGGER_ACTIONS} record={runningRecord} />,
+      buildWrapper(buildRerunWrappers(vi.fn()))
+    );
+
+    // Running: killable, not yet terminated, so Kill is enabled and Rerun is disabled.
+    expect(await screen.findByRole('button', { name: 'Kill' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Rerun' })).toBeDisabled();
+    unmount();
+
+    const failedRecord = buildTerminalTriggerRun({ status: { state: 'TRIGGER_RUN_STATE_FAILED' } });
+
+    render(
+      <DetailViewHeader title="my-trigger" actions={TRIGGER_ACTIONS} record={failedRecord} />,
+      buildWrapper(buildRerunWrappers(vi.fn()))
+    );
+
+    // Failed: no longer killable, but terminated, so Kill is disabled and Rerun is enabled.
+    expect(await screen.findByRole('button', { name: 'Kill' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Rerun' })).toBeEnabled();
+  });
+
+  it('disables Rerun with a tooltip when the trigger run has not terminated', async () => {
+    const user = userEvent.setup();
+    const record = buildTerminalTriggerRun({ status: { state: 'TRIGGER_RUN_STATE_RUNNING' } });
+
+    render(
+      <DetailViewHeader title="my-trigger" actions={TRIGGER_ACTIONS} record={record} />,
+      buildWrapper(buildRerunWrappers(vi.fn()))
+    );
+
+    const rerunButton = await screen.findByRole('button', { name: 'Rerun' });
+    expect(rerunButton).toBeDisabled();
+
+    await user.hover(rerunButton);
+    expect(
+      await screen.findByText(
+        'Only terminated trigger runs (failed, killed, or succeeded) can be rerun'
+      )
+    ).toBeInTheDocument();
+  });
+
+  it.each([
+    'TRIGGER_RUN_STATE_FAILED',
+    'TRIGGER_RUN_STATE_KILLED',
+    'TRIGGER_RUN_STATE_SUCCEEDED',
+  ] as const)('enables Rerun when the trigger run state is terminal (%s)', async (state) => {
+    const record = buildTerminalTriggerRun({ status: { state } });
+
+    render(
+      <DetailViewHeader title="my-trigger" actions={TRIGGER_ACTIONS} record={record} />,
+      buildWrapper(buildRerunWrappers(vi.fn()))
+    );
+
+    expect(await screen.findByRole('button', { name: 'Rerun' })).toBeEnabled();
+  });
+
+  it('creates a new TriggerRun copying pipeline/revision/schedule and clearing kill state', async () => {
+    const user = userEvent.setup();
+    // resourceVersion/uid/generation mirror what a real fetched TriggerRun's metadata carries
+    // on the wire (the local TriggerRun type only declares the subset other code paths use);
+    // the API rejects a create request that still has them set (see the assertion below).
+    const record = buildTerminalTriggerRun({
+      metadata: {
+        name: 'nightly',
+        namespace: 'test-ns',
+        resourceVersion: '42',
+        uid: 'source-uid',
+        generation: 3,
+      } as TriggerRun['metadata'],
+    });
+    const mockRequest = createQueryMockRouter({ CreateTriggerRun: { triggerRun: record } });
+
+    render(
+      <DetailViewHeader title="my-trigger" actions={TRIGGER_ACTIONS} record={record} />,
+      buildWrapper(buildRerunWrappers(mockRequest))
+    );
+
+    await user.click(await screen.findByRole('button', { name: 'Rerun' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Rerun Trigger' });
+    await user.click(within(dialog).getByRole('button', { name: 'Rerun' }));
+
+    await waitFor(() => {
+      expect(mockRequest).toHaveBeenCalledWith('CreateTriggerRun', expect.anything(), {});
+    });
+
+    const call = mockRequest.getCall('CreateTriggerRun');
+    const payload = call?.args as TriggerRun;
+
+    // A cron trigger with no batch/backfill markers is named with the "cron-" prefix,
+    // followed by the source trigger's own name for traceability back to its definition.
+    expect(payload.metadata.name).toMatch(/^cron-nightly-/);
+    expect(payload.metadata.namespace).toBe('test-ns');
+    // Pipeline, revision, and the trigger's own schedule carry over unchanged.
+    expect(payload.spec.pipeline).toEqual({ name: 'my-pipeline', namespace: 'test-ns' });
+    expect(payload.spec.revision).toEqual({ name: 'rev-1', namespace: 'test-ns' });
+    expect(payload.spec.trigger).toEqual({
+      cronSchedule: { cron: '0 * * * *' },
+    });
+    // The new run must not spawn already killed, even though the source (being FAILED) is terminal.
+    expect(payload.spec.action).toBe(TriggerRunAction.NO_ACTION);
+    expect(payload.spec.kill).toBe(false);
+    // Server-owned fields from the source run must not carry over onto the new one.
+    expect(payload.spec.actor).toBeUndefined();
+    expect(payload.status).toBeUndefined();
+    // The API rejects a create request carrying a source object's resourceVersion/uid/
+    // generation, so the new run's metadata must be rebuilt with only name and namespace.
+    expect(payload.metadata).toEqual({ name: payload.metadata.name, namespace: 'test-ns' });
+  });
+
+  it('keeps the dialog open and shows the error when the mutation fails', async () => {
+    const user = userEvent.setup();
+    const record = buildTerminalTriggerRun();
+    const mockRequest = createQueryMockRouter({ CreateTriggerRun: new Error('Rerun failed') });
+
+    render(
+      <DetailViewHeader title="my-trigger" actions={TRIGGER_ACTIONS} record={record} />,
+      buildWrapper(buildRerunWrappers(mockRequest))
+    );
+
+    await user.click(await screen.findByRole('button', { name: 'Rerun' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Rerun Trigger' });
+    await user.click(within(dialog).getByRole('button', { name: 'Rerun' }));
+
+    await within(dialog).findByText(/Test error/);
+    expect(screen.getByRole('dialog', { name: 'Rerun Trigger' })).toBeInTheDocument();
   });
 });
 
@@ -182,38 +398,35 @@ describe('Trigger list page', () => {
                 {
                   metadata: {
                     name: 'cron-trigger',
-                    creationTimestamp: { seconds: 1660000000 },
+                    creationTimestamp: '2022-08-08T23:06:40Z',
                     labels: { 'michelangelo/environment': 'production' },
                   },
                   spec: {
                     pipeline: { name: 'my-pipeline' },
                     revision: { name: 'rev-1' },
                     trigger: {
-                      triggerType: { case: 'cronSchedule', value: { cron: '0 2 * * *' } },
+                      cronSchedule: { cron: '0 2 * * *' },
                     },
                     actor: { name: 'jsmith' },
                     autoFlip: true,
                   },
-                  status: { state: 1 },
+                  status: { state: 'TRIGGER_RUN_STATE_RUNNING' },
                 },
                 {
                   metadata: {
                     name: 'interval-trigger',
-                    creationTimestamp: { seconds: 1650000000 },
+                    creationTimestamp: '2022-04-15T05:20:00Z',
                   },
                   spec: {
                     pipeline: { name: 'my-pipeline' },
                     revision: { name: 'rev-2' },
                     trigger: {
-                      triggerType: {
-                        case: 'intervalSchedule',
-                        value: { interval: { seconds: 3600 } },
-                      },
+                      intervalSchedule: { interval: '3600s' },
                     },
                     actor: { name: 'jsmith' },
                     autoFlip: false,
                   },
-                  status: { state: 1 },
+                  status: { state: 'TRIGGER_RUN_STATE_RUNNING' },
                 },
               ],
             },

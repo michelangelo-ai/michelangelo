@@ -52,6 +52,7 @@ _infra_ports = [
     "3000:30012",  # Grafana
     "9092:30015",  # Prometheus
     "5001:30013",  # MLflow Tracking Server
+    "3001:30016",  # Ray History Server
 ]
 
 # Infra ports owned by optionally-excluded services. When the user passes
@@ -909,7 +910,7 @@ def _deploy_services(ns: argparse.Namespace):
         (
             "MinIO Console",
             "http://localhost:9090",
-            "[Username: minioadmin; Password: minioadmin]",
+            "[Username: michelangeloadmin; Password: michelangeloadmin]",
         )
     )
 
@@ -1119,7 +1120,7 @@ def _create_kuberay_operator(helm_existing_repos):
         "kuberay-operator",
         "kuberay/kuberay-operator",
         "--version",
-        "1.4.2",
+        "1.7.1",
         "--namespace",
         "ray-system",
         "--create-namespace",
@@ -1132,13 +1133,13 @@ def _create_kuberay_operator(helm_existing_repos):
 
 
 _KUBERAY_IMAGES = [
-    "ghcr.io/michelangelo-ai/kuberay-collector:main",
-    "ghcr.io/michelangelo-ai/kuberay-historyserver:main",
+    "quay.io/kuberay/collector:v1.7.1",
+    "quay.io/kuberay/historyserver:v1.7.1",
 ]
 
 
 def _import_kuberay_images():
-    """Pull kuberay images from GHCR and import them into k3d.
+    """Pull the official kuberay images from quay.io and import them into k3d.
 
     Non-fatal: prints a warning on failure since the collector sidecar and
     history server are optional for basic sandbox usage.
@@ -1501,7 +1502,7 @@ def _ensure_credentials_secret():
     This is deliberately create-only: a sandbox VM that was pre-configured
     with non-default credentials (e.g. the GCP CI runner) keeps its own
     values across every ``ma sandbox sync`` run.  Local dev gets the
-    default minioadmin credentials from the YAML files on first create.
+    default michelangeloadmin credentials from the YAML files on first create.
     """
     for secret_name, yaml_file in [
         ("object-storage-credentials", "object-storage-credentials.yaml"),
@@ -1529,7 +1530,7 @@ def _sync_config_from_secret():
     """Patch michelangelo-config ConfigMap credentials from object-storage-credentials.
 
     Ray pods consume the michelangelo-config ConfigMap via envFrom. After the
-    ConfigMap is (re)applied from the YAML file (which contains minioadmin
+    ConfigMap is (re)applied from the YAML file (which contains michelangeloadmin
     defaults), this function overwrites the credential fields with whatever
     is actually in the object-storage-credentials Secret, so all consumers see
     the same credentials.
@@ -1896,7 +1897,7 @@ def _create_compute_cluster(cluster_name: str):
         "kuberay-operator",
         "kuberay/kuberay-operator",
         "--version",
-        "1.4.2",
+        "1.7.1",
         "--namespace",
         "ray-system",
         "--create-namespace",

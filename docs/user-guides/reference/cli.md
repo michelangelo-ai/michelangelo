@@ -451,8 +451,8 @@ address = "127.0.0.1:15566"
 use_tls = false
 
 [minio]
-access_key_id = "minioadmin"
-secret_access_key = "minioadmin"
+access_key_id = "michelangeloadmin"
+secret_access_key = "michelangeloadmin"
 endpoint_url = "http://localhost:9091"
 
 [metadata]
@@ -477,8 +477,8 @@ API server configuration is placed under the `[ma]` section.
 
 MinIO credentials for object storage are placed under the `[minio]` section.
 
-- `access_key_id` - MinIO user name (example: `minioadmin`)
-- `secret_access_key` - MinIO password (example: `minioadmin`)
+- `access_key_id` - MinIO user name (example: `michelangeloadmin`)
+- `secret_access_key` - MinIO password (example: `michelangeloadmin`)
 - `endpoint_url` - MinIO endpoint URL (example: `http://localhost:9091`)
 
 #### Custom gRPC metadata

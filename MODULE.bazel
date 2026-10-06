@@ -30,14 +30,19 @@ go_sdk.nogo(
 oci = use_extension("@rules_oci//oci:extensions.bzl", "oci")
 oci.pull(
     name = "distroless_base",
-    digest = "sha256:ccaef5ee2f1850270d453fdf700a5392534f8d1a8ca2acda391fbb6a06b81c86",
-    image = "gcr.io/distroless/base",
+    # -nossl: kept in sync with docker/service.Dockerfile's base-image swap
+    # (CVE-2026-84782 / libssl3, unfixed on Debian 12/bookworm -- see that
+    # Dockerfile's comment for the full rationale). These oci_image Bazel
+    # targets aren't part of any CI-built/pushed image today, but are kept
+    # aligned with the real build path to avoid base-image drift.
+    digest = "sha256:af5cb8dd589b8520b8c06bebb9efb73d7e16406cab58e85c51761fff49d370a0",
+    image = "gcr.io/distroless/base-nossl",
     platforms = [
         "linux/amd64",
-        "linux/arm64",
+        "linux/arm64/v8",
     ],
 )
-use_repo(oci, "distroless_base", "distroless_base_linux_amd64", "distroless_base_linux_arm64")
+use_repo(oci, "distroless_base", "distroless_base_linux_amd64", "distroless_base_linux_arm64_v8")
 
 go_deps = use_extension("@bazel_gazelle//:extensions.bzl", "go_deps")
 go_deps.from_file(go_mod = "//go:go.mod")

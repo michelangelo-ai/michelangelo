@@ -115,6 +115,9 @@ data:
             credentialsSecret: {{ .credentialsSecret | default (include "michelangelo.objectStorageSecretName" $) | quote }}
             collectorImage: {{ $.Values.images.kuberayCollector | quote }}
             s3DisableSSL: {{ .s3DisableSSL }}
+            {{- with .exposableEventTypes }}
+            exposableEventTypes: {{ . | quote }}
+            {{- end }}
             {{- with .logURLFormat }}
             logURLFormat: {{ . | quote }}
             {{- end }}
