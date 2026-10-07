@@ -92,11 +92,13 @@ cluster ID as a suffix (`RollingRolloutComplete-compute-1`).
 ### Health Gates and Rollback
 
 While a rollout is in progress the controller evaluates a health gate on every
-reconcile. The gate fails when the inference server is unhealthy in any target cluster,
-or when a configured Prometheus metric gate is breached for the candidate model (by
-default, Triton's inference failure ratio over the last five minutes). The reason for the
-last failed gate is recorded on the Deployment in the
-`deployment.michelangelo.ai/health-gate-reason` annotation.
+reconcile. The gate fails when a model this Deployment is serving (a `serving` entry in
+the model config) is not loaded on every replica in any target cluster, or when a
+configured Prometheus metric gate is breached for the candidate model (by default, Triton's
+inference failure ratio over the last five minutes). Only the Deployment's own models are
+judged, so another Deployment's model that is still loading on the same inference server
+does not roll this Deployment back. The reason for the last failed gate is recorded on the
+Deployment in the `deployment.michelangelo.ai/health-gate-reason` annotation.
 
 A rollback starts when the gate fails, when the desired model changes mid-rollout, or when
 the rollout itself fails (a replica cannot load the model, or a load or canary exceeds its

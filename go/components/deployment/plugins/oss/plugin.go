@@ -307,11 +307,16 @@ func (p *Plugin) GetState(ctx context.Context, observability plugins.Observabili
 	return deployment.Status, nil
 }
 
-// HealthCheckGate decides whether an in-progress rollout may continue. It requires the
-// inference server to be healthy in every cluster the rollout placed the deployment in,
-// then evaluates the metric gate against the candidate. A false result makes the controller
-// roll the candidate back; the reason is recorded on the deployment so operators can see
-// which cluster or metric tripped it.
+// HealthCheckGate decides whether an in-progress rollout may continue. In every cluster the
+// rollout placed the deployment in, each model this deployment currently serves must be
+// loaded on every replica; then the metric gate is evaluated against the candidate. A false
+// result makes the controller roll the candidate back; the reason is recorded on the
+// deployment so operators can see which cluster, model or metric tripped it.
+//
+// The gate judges only this deployment's own serving models. The inference server's pod
+// readiness covers every model of every deployment on the server, so using it would roll
+// this deployment back whenever another deployment's model is still loading, for example
+// after the server restarts.
 func (p *Plugin) HealthCheckGate(ctx context.Context, observability plugins.ObservabilityContext, deployment *v2pb.Deployment) (bool, error) {
 	inferenceServer := deployment.Spec.GetInferenceServer()
 	// Check if the inference server is specified
@@ -333,21 +338,32 @@ func (p *Plugin) HealthCheckGate(ctx context.Context, observability plugins.Obse
 		if err != nil {
 			return false, fmt.Errorf("get client for cluster %s: %w", clusterID, err)
 		}
-		healthy, err := serverBackend.IsHealthy(ctx, p.logger, kubeClient, inferenceServer.GetName(), deployment.Namespace)
+		entries, err := p.modelConfigProvider.GetModelsFromConfig(ctx, p.logger, kubeClient, inferenceServer.GetName(), deployment.Namespace)
 		if err != nil {
-			p.logger.Error("failed to check health of inference server",
-				zap.Error(err),
-				zap.String("operation", "health_check_gate"),
-				zap.String("namespace", deployment.Namespace),
-				zap.String("deployment", deployment.Name),
-				zap.String("inference_server", inferenceServer.GetName()),
-				zap.String("cluster", clusterID))
-			return false, fmt.Errorf("check health of inference server %s for deployment %s/%s in cluster %s: %w",
-				inferenceServer.GetName(), deployment.Namespace, deployment.Name, clusterID, err)
+			return false, fmt.Errorf("read model config of inference server %s in cluster %s for deployment %s/%s: %w",
+				inferenceServer.GetName(), clusterID, deployment.Namespace, deployment.Name, err)
 		}
-		if !healthy {
-			p.recordGateReason(deployment, fmt.Sprintf("inference server %s is not healthy in cluster %s", inferenceServer.GetName(), clusterID))
-			return false, nil
+		for _, entry := range entries {
+			if entry.DeploymentName != deployment.Name || entry.CurrentPhase() != modelconfig.ModelPhaseServing {
+				continue
+			}
+			status, err := common.GetModelStatusInCluster(ctx, p.logger, p.clientFactory, serverBackend, target, deployment.Namespace, inferenceServer.GetName(), entry.Name)
+			if err != nil {
+				p.logger.Error("failed to check model status for health gate",
+					zap.Error(err),
+					zap.String("operation", "health_check_gate"),
+					zap.String("namespace", deployment.Namespace),
+					zap.String("deployment", deployment.Name),
+					zap.String("inference_server", inferenceServer.GetName()),
+					zap.String("model", entry.Name),
+					zap.String("cluster", clusterID))
+				return false, fmt.Errorf("check model %s of deployment %s/%s in cluster %s: %w",
+					entry.Name, deployment.Namespace, deployment.Name, clusterID, err)
+			}
+			if !status.Ready() {
+				p.recordGateReason(deployment, fmt.Sprintf("model %s is not ready in cluster %s: %s", entry.Name, clusterID, status.Summary()))
+				return false, nil
+			}
 		}
 	}
 
