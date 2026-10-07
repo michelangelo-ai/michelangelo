@@ -41,7 +41,7 @@ func (d ClusterActorDeps) now() time.Time {
 
 // modelStatus returns the model's per-replica load status in the target cluster.
 func (d ClusterActorDeps) modelStatus(ctx context.Context, target *v2pb.ClusterTarget, deployment *v2pb.Deployment, modelName string) (*backends.ModelStatus, *osscommon.ProbeFailure) {
-	return osscommon.ProbeModelStatus(ctx, d.Logger, d.ClientFactory, d.BackendRegistry, target,
+	return osscommon.ProbeModelStatus(ctx, d.Logger, d.ClientFactory, d.BackendRegistry, osscommon.BackendTypeOf(deployment), target,
 		deployment.Namespace, deployment.Spec.GetInferenceServer().GetName(), modelName)
 }
 

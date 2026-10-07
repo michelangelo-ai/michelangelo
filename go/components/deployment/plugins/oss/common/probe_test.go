@@ -64,7 +64,7 @@ func TestProbeModelStatus(t *testing.T) {
 				registry.Register(v2pb.BACKEND_TYPE_TRITON, backend)
 			}
 
-			got, failure := ProbeModelStatus(context.Background(), zap.NewNop(), factory, registry, target, "ns", "is", "model")
+			got, failure := ProbeModelStatus(context.Background(), zap.NewNop(), factory, registry, v2pb.BACKEND_TYPE_TRITON, target, "ns", "is", "model")
 
 			if tt.wantReason == "" {
 				require.Nil(t, failure)

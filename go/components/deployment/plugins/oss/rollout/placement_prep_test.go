@@ -45,6 +45,7 @@ func newPlacementFixture(t *testing.T, is *v2pb.InferenceServer) (*PlacementPrep
 func inferenceServer(specClusters []string, serving []string) *v2pb.InferenceServer {
 	is := &v2pb.InferenceServer{
 		ObjectMeta: metav1.ObjectMeta{Name: testISName, Namespace: testNamespace},
+		Spec:       v2pb.InferenceServerSpec{BackendType: v2pb.BACKEND_TYPE_DYNAMO},
 	}
 	for _, id := range specClusters {
 		is.Spec.ClusterTargets = append(is.Spec.ClusterTargets, &v2pb.ClusterTarget{ClusterId: id})
@@ -211,6 +212,8 @@ func TestPlacementPrepActor_Run(t *testing.T) {
 			}
 			if tt.expectedAnnotation {
 				assert.Contains(t, deployment.Annotations, common.TargetClustersAnnotation)
+				assert.Equal(t, v2pb.BACKEND_TYPE_DYNAMO, common.BackendTypeOf(deployment),
+					"the inference server's backend is snapshotted next to the cluster set")
 			}
 		})
 	}

@@ -247,7 +247,7 @@ func (a *ClusterRollbackActor) restorePrevious(
 		}
 	}
 
-	status, failure := osscommon.ProbeModelStatus(ctx, a.logger, a.clientFactory, a.backendRegistry, a.target, deployment.Namespace, isName, current)
+	status, failure := osscommon.ProbeModelStatus(ctx, a.logger, a.clientFactory, a.backendRegistry, osscommon.BackendTypeOf(deployment), a.target, deployment.Namespace, isName, current)
 	if failure != nil {
 		return conditionsutil.GenerateFalseCondition(condition, failure.Reason, failure.Message)
 	}

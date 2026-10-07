@@ -247,7 +247,7 @@ func (p *Plugin) GetState(ctx context.Context, observability plugins.Observabili
 		return deployment.Status, nil
 	}
 	serverName := inferenceServer.GetName()
-	serverBackend, err := p.backendRegistry.GetBackend(v2pb.BACKEND_TYPE_TRITON)
+	serverBackend, err := p.backendRegistry.GetBackend(common.BackendTypeOf(deployment))
 	if err != nil {
 		return deployment.Status, fmt.Errorf("get backend for inference server %s: %w", serverName, err)
 	}
@@ -323,7 +323,7 @@ func (p *Plugin) HealthCheckGate(ctx context.Context, observability plugins.Obse
 	if inferenceServer == nil {
 		return false, nil
 	}
-	serverBackend, err := p.backendRegistry.GetBackend(v2pb.BACKEND_TYPE_TRITON)
+	serverBackend, err := p.backendRegistry.GetBackend(common.BackendTypeOf(deployment))
 	if err != nil {
 		return false, fmt.Errorf("get backend for inference server %s: %w", inferenceServer.GetName(), err)
 	}

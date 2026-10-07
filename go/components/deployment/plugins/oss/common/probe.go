@@ -26,19 +26,20 @@ type ProbeFailure struct {
 	Message string
 }
 
-// ProbeModelStatus resolves the Triton backend and the cluster's clients, then returns the
-// model's per-replica load status in that cluster.
+// ProbeModelStatus resolves the inference server's backend and the cluster's clients, then
+// returns the model's per-replica load status in that cluster.
 func ProbeModelStatus(
 	ctx context.Context,
 	logger *zap.Logger,
 	clientFactory clientfactory.ClientFactory,
 	backendRegistry *backends.Registry,
+	backendType v2pb.BackendType,
 	target *v2pb.ClusterTarget,
 	namespace string,
 	inferenceServerName string,
 	modelName string,
 ) (*backends.ModelStatus, *ProbeFailure) {
-	backend, err := backendRegistry.GetBackend(v2pb.BACKEND_TYPE_TRITON)
+	backend, err := backendRegistry.GetBackend(backendType)
 	if err != nil {
 		return nil, &ProbeFailure{Reason: ReasonBackendUnavailable, Message: err.Error()}
 	}

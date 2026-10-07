@@ -16,6 +16,9 @@ const (
 	// TargetClustersAnnotation is written by PlacementPrepActor and read by all downstream actors.
 	// The value is a JSON-encoded list of cluster targets from the InferenceServer.
 	TargetClustersAnnotation = "deployment.michelangelo.ai/target-clusters"
+	// BackendTypeAnnotation records the InferenceServer's backend type, snapshotted by
+	// PlacementPrepActor next to the cluster set so every later actor talks to the same backend.
+	BackendTypeAnnotation = "deployment.michelangelo.ai/backend-type"
 )
 
 // clusterTargetAnnotation is the wire representation stored in the annotation.
@@ -38,6 +41,25 @@ func FetchInferenceServer(ctx context.Context, kubeClient client.Client, deploym
 		return nil, fmt.Errorf("get inference server %s/%s: %w", deployment.Namespace, isRef.GetName(), err)
 	}
 	return inferenceServer, nil
+}
+
+// WriteBackendTypeAnnotation records the InferenceServer's backend type on the Deployment.
+// The caller is responsible for issuing the Update.
+func WriteBackendTypeAnnotation(deployment *v2pb.Deployment, backendType v2pb.BackendType) {
+	if deployment.Annotations == nil {
+		deployment.Annotations = make(map[string]string)
+	}
+	deployment.Annotations[BackendTypeAnnotation] = backendType.String()
+}
+
+// BackendTypeOf returns the backend type snapshotted on the Deployment. Deployments placed
+// before the snapshot existed, or whose annotation is unreadable, are served by Triton, the
+// only backend they could have been rolled out on.
+func BackendTypeOf(deployment *v2pb.Deployment) v2pb.BackendType {
+	if value, ok := v2pb.BackendType_value[deployment.GetAnnotations()[BackendTypeAnnotation]]; ok && value != int32(v2pb.BACKEND_TYPE_INVALID) {
+		return v2pb.BackendType(value)
+	}
+	return v2pb.BACKEND_TYPE_TRITON
 }
 
 // ReadTargetClustersAnnotation deserializes the cluster snapshot from the Deployment annotation.
