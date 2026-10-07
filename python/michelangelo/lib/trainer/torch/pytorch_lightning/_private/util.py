@@ -10,10 +10,11 @@ from __future__ import annotations
 import hashlib
 import inspect
 import logging
+import numbers
 import os
 import re
 from tempfile import TemporaryDirectory
-from typing import TYPE_CHECKING, Any, Union
+from typing import TYPE_CHECKING, Any, Literal, Union
 
 import pytorch_lightning as pl
 import ray
@@ -627,7 +628,7 @@ def _apply_batch_limit(
     limit: int | float | None,
     batch_size: int,
     num_workers: int,
-    split: str,
+    split: Literal["train", "val"],
 ) -> tuple[ray.data.Dataset, int | float | None]:
     """Bound a split's Ray Dataset to the rows a Lightning batch limit can consume.
 
@@ -640,21 +641,38 @@ def _apply_batch_limit(
 
     A fractional limit in ``(0, 1)`` cannot be honored by Lightning here because
     the loaders returned by ``iter_torch_batches`` have no ``__len__``. It is
-    resolved to an integer batch count from the dataset's row count (which may
-    execute the dataset's lazy transformations) and then capped like an integer
-    limit. ``None``, ``0`` and ``1.0`` leave the dataset untouched.
+    resolved to an integer batch count from the dataset's row count and then
+    capped like an integer limit. Resolving a fraction calls ``Dataset.count()``,
+    which is cheap for Parquet-backed datasets but executes the dataset's lazy
+    plan once for other lineages; an integer limit never needs the count. ``None``,
+    ``0`` and ``1.0`` leave the dataset untouched.
+
+    Note:
+        The cap is ``Dataset.limit``: the split keeps the first rows its plan
+        yields, and Lightning then draws every epoch from those rows. For a
+        dataset with a stable output order (for example one read from files) that
+        is the same subset every epoch, and the loader's local shuffle buffer only
+        reorders rows inside it. Before this cap, Lightning stopped after ``N``
+        batches of the live stream, so an upstream shuffle could vary which rows
+        were seen. Rows are not guaranteed to be the dataset's leading rows unless
+        Ray Data's ``preserve_order`` execution option is set, and a shuffle that
+        is part of the plan (for example ``random_shuffle``) is re-executed, so it
+        can still change the subset between epochs. A batch limit is intended for
+        smoke tests and debugging, not for sampling a training set.
 
     Args:
         dataset: The split's Ray Dataset.
-        limit: The ``limit_*_batches`` value: ``None``, an int number of batches,
-            or a float fraction in ``[0.0, 1.0]``.
+        limit: The ``limit_*_batches`` value: ``None``, an int number of batches
+            (any ``numbers.Integral``, such as a NumPy integer), or a float
+            fraction in ``[0.0, 1.0]``.
         batch_size: Per-worker batch size.
         num_workers: Number of Ray Train workers the dataset is split across.
-        split: Split name used in error messages (e.g. ``"train"``).
+        split: The split being limited, used in log and error messages.
 
     Returns:
         A tuple of the (possibly limited) dataset and the limit to hand to
-        Lightning (an int whenever a fraction in ``(0, 1)`` was resolved).
+        Lightning, normalized to a builtin ``int`` or ``float`` (an int whenever
+        a fraction in ``(0, 1)`` was resolved).
 
     Raises:
         UserInputError: If ``limit`` is not a non-negative int or a float in
@@ -663,11 +681,18 @@ def _apply_batch_limit(
     if limit is None:
         return dataset, None
     # bool is an int subclass; reject it explicitly.
-    if isinstance(limit, bool) or not isinstance(limit, (int, float)):
+    if isinstance(limit, bool) or not isinstance(limit, numbers.Real):
         raise UserInputError(
             f"limit_{split}_batches must be an int or a float, got {limit!r}."
         )
-    if isinstance(limit, float):
+    if isinstance(limit, numbers.Integral):
+        limit = int(limit)
+        if limit < 0:
+            raise UserInputError(
+                f"limit_{split}_batches must be non-negative, got {limit!r}."
+            )
+    else:
+        limit = float(limit)
         if not 0.0 <= limit <= 1.0:
             raise UserInputError(
                 f"limit_{split}_batches as a float must be in [0.0, 1.0], got "
@@ -675,6 +700,12 @@ def _apply_batch_limit(
             )
         if limit in (0.0, 1.0):
             return dataset, limit
+        _logger.info(
+            "Resolving limit_%s_batches=%r to a batch count; this counts the "
+            "dataset's rows and may execute its lazy plan once.",
+            split,
+            limit,
+        )
         rows_per_worker = dataset.count() // num_workers
         batches_per_worker = -(-rows_per_worker // batch_size)
         limit_batches = int(batches_per_worker * limit)
@@ -685,10 +716,7 @@ def _apply_batch_limit(
                 f"batches of {batch_size}). Use a larger fraction or an int."
             )
         limit = limit_batches
-    elif limit < 0:
-        raise UserInputError(
-            f"limit_{split}_batches must be non-negative, got {limit!r}."
-        )
+    # Reachable only for an int 0: 0.0 returned above and fractions resolve to >= 1.
     if limit == 0:
         return dataset, limit
     return dataset.limit(limit * batch_size * num_workers), limit
