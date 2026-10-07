@@ -5,6 +5,7 @@ go_library(
     srcs = [
         "condition_plugin.go",
         "rollback.go",
+        "rollback_completion.go",
     ],
     importpath = "github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/rollback",
     visibility = ["//visibility:public"],

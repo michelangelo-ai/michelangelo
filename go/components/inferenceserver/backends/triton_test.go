@@ -325,6 +325,35 @@ func TestTritonReadinessProbeModes(t *testing.T) {
 	}
 }
 
+func TestTritonProbeTimingOverrides(t *testing.T) {
+	defaults := NewTritonBackend("")
+	assert.Equal(t, int32(60), defaults.tritonStartupProbe().FailureThreshold)
+	assert.Equal(t, int32(6), defaults.tritonLivenessProbe().FailureThreshold)
+	assert.Equal(t, int32(8), defaults.tritonReadinessProbe().TimeoutSeconds)
+
+	tuned := NewTritonBackend("", WithProbeTimings(ProbeTimings{
+		Startup:   ProbeTiming{PeriodSeconds: 2, FailureThreshold: 300},
+		Liveness:  ProbeTiming{TimeoutSeconds: 9},
+		Readiness: ProbeTiming{PeriodSeconds: 20, TimeoutSeconds: 15, FailureThreshold: 5},
+	}))
+	startup := tuned.tritonStartupProbe()
+	assert.Equal(t, int32(2), startup.PeriodSeconds)
+	assert.Equal(t, int32(300), startup.FailureThreshold)
+	assert.Equal(t, int32(3), startup.TimeoutSeconds, "unset fields keep the built-in value")
+	liveness := tuned.tritonLivenessProbe()
+	assert.Equal(t, int32(9), liveness.TimeoutSeconds)
+	assert.Equal(t, int32(10), liveness.PeriodSeconds)
+	readiness := tuned.tritonReadinessProbe()
+	assert.Equal(t, int32(20), readiness.PeriodSeconds)
+	assert.Equal(t, int32(15), readiness.TimeoutSeconds)
+	assert.Equal(t, int32(5), readiness.FailureThreshold)
+
+	// Timing overrides never create a probe the mode disabled.
+	none := NewTritonBackend("", WithReadinessProbe(TritonReadinessNone),
+		WithProbeTimings(ProbeTimings{Readiness: ProbeTiming{PeriodSeconds: 20}}))
+	assert.Nil(t, none.tritonReadinessProbe())
+}
+
 func TestTritonSpecHashIsStable(t *testing.T) {
 	template := corev1.PodTemplateSpec{
 		ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "triton-x"}},

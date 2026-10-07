@@ -219,6 +219,26 @@ type TritonConfig struct {
 	// default, a replica is ready only when every serving model in its model config is
 	// loaded), "server" (Triton's /v2/health/ready only) or "none".
 	ReadinessProbe string `yaml:"readinessProbe"`
+	// Probes overrides the timing of the Triton pod probes. Fields left at zero keep the
+	// built-in values, so an empty block changes nothing.
+	Probes TritonProbesConfig `yaml:"probes"`
+}
+
+// TritonProbesConfig holds the timing overrides for each Triton pod probe.
+type TritonProbesConfig struct {
+	// Startup waits for Triton's HTTP server to come up before liveness applies.
+	Startup ProbeTimingConfig `yaml:"startup"`
+	// Liveness restarts a container whose HTTP server has stopped answering.
+	Liveness ProbeTimingConfig `yaml:"liveness"`
+	// Readiness gates a replica's membership in the inference Service.
+	Readiness ProbeTimingConfig `yaml:"readiness"`
+}
+
+// ProbeTimingConfig overrides one probe's timing. Zero keeps the probe's built-in value.
+type ProbeTimingConfig struct {
+	PeriodSeconds    int32 `yaml:"periodSeconds"`
+	TimeoutSeconds   int32 `yaml:"timeoutSeconds"`
+	FailureThreshold int32 `yaml:"failureThreshold"`
 }
 
 // GatewayConfig describes the k8s Gateway resource and its Istio-generated

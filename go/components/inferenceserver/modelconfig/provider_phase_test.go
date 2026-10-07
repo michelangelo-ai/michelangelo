@@ -51,10 +51,10 @@ func TestAddModelToConfigRefreshesPhase(t *testing.T) {
 	assert.ElementsMatch(t, []ModelConfigEntry{serving, other}, readEntries(t, fakeClient))
 }
 
-func TestEffectivePhase(t *testing.T) {
-	assert.Equal(t, ModelPhaseServing, ModelConfigEntry{}.EffectivePhase(), "legacy entries without a phase are serving")
-	assert.Equal(t, ModelPhaseCanary, ModelConfigEntry{Phase: ModelPhaseCanary}.EffectivePhase())
-	assert.Equal(t, ModelPhaseStaged, ModelConfigEntry{Phase: ModelPhaseStaged}.EffectivePhase())
+func TestCurrentPhase(t *testing.T) {
+	assert.Equal(t, ModelPhaseServing, ModelConfigEntry{}.CurrentPhase(), "legacy entries without a phase are serving")
+	assert.Equal(t, ModelPhaseCanary, ModelConfigEntry{Phase: ModelPhaseCanary}.CurrentPhase())
+	assert.Equal(t, ModelPhaseStaged, ModelConfigEntry{Phase: ModelPhaseStaged}.CurrentPhase())
 }
 
 func TestFindEntry(t *testing.T) {

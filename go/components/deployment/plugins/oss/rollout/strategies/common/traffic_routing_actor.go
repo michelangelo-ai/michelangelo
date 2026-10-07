@@ -83,7 +83,7 @@ func (a *TrafficRoutingActor) Retrieve(ctx context.Context, deployment *v2pb.Dep
 		return conditionsutil.GenerateFalseCondition(condition, ReasonModelConfigReadFailed, err.Error()), nil
 	}
 	entry, ok := modelconfig.FindEntry(entries, deployment.Name, modelName)
-	if !ok || entry.EffectivePhase() != modelconfig.ModelPhaseServing {
+	if !ok || entry.CurrentPhase() != modelconfig.ModelPhaseServing {
 		return conditionsutil.GenerateFalseCondition(condition, ReasonModelNotPromoted, fmt.Sprintf("model %s is not in the serving phase in cluster %s", modelName, clusterID)), nil
 	}
 	return conditionsutil.GenerateTrueCondition(condition), nil
@@ -119,7 +119,7 @@ func (a *TrafficRoutingActor) Run(ctx context.Context, deployment *v2pb.Deployme
 	if !ok {
 		return conditionsutil.GenerateFalseCondition(condition, ReasonModelEntryMissing, fmt.Sprintf("model %s has no entry in the model config of cluster %s; it must be loaded before traffic is routed to it", modelName, clusterID)), nil
 	}
-	if entry.EffectivePhase() != modelconfig.ModelPhaseServing {
+	if entry.CurrentPhase() != modelconfig.ModelPhaseServing {
 		entry.Phase = modelconfig.ModelPhaseServing
 		entry.CanaryPod = ""
 		if err := a.deps.ModelConfigProvider.AddModelToConfig(ctx, a.deps.Logger, kubeClient, isName, deployment.Namespace, entry); err != nil {

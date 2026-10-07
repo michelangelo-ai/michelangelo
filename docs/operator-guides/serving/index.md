@@ -117,13 +117,14 @@ The knobs live in the controller manager config (`go/cmd/controllermgr/config/ba
 | Key | Default | Purpose |
 | ----- | ----- | ----- |
 | `deployment.rollout.skipCanary` | `false` | Skip the single-replica canary step |
-| `deployment.rollout.modelLoadTimeout` | `30m` | Budget for a cluster to load the model on every replica |
+| `deployment.rollout.modelLoadTimeout` | `15m` | Budget for a cluster to load the model on every replica |
 | `deployment.rollout.soakPeriod` | `0` | Time a cluster serves the new model before the next cluster starts. A `Zonal` strategy's `rolloutPeriodInSeconds` overrides it |
 | `deployment.rollback.modelLoadTimeout` | `15m` | Budget for the previous model to be `READY` again during a rollback |
 | `deployment.metricGate.prometheusURL` | unset | Enables the metric gate when set |
 | `deployment.metricGate.queries` | Triton failure ratio > 5% | PromQL templates (`{{.Model}}`, `{{.Deployment}}`, `{{.Namespace}}`, `{{.InferenceServer}}`) with a threshold and comparison |
 | `deployment.metricGate.failClosed` | `false` | Treat an unanswerable query as a breach |
 | `inferenceServer.triton.readinessProbe` | `model-aware` | `model-aware` requires every `serving` model to be loaded before a replica is ready; `server` uses Triton's server readiness; `none` disables the probe |
+| `inferenceServer.triton.probes.{startup,liveness,readiness}.{periodSeconds,timeoutSeconds,failureThreshold}` | built-in per probe | Overrides the Triton pod probe timing; zero keeps the built-in value. Changing a value restarts running Triton pods once |
 
 The `Blast` strategy skips the canary and the soak; use it only for emergency rollouts.
 

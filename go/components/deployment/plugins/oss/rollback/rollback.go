@@ -38,10 +38,7 @@ const (
 	ReasonModelConfigReadFailed       = "ModelConfigReadFailed"
 )
 
-var (
-	_ conditionInterfaces.ConditionActor[*v2pb.Deployment] = &ClusterRollbackActor{}
-	_ conditionInterfaces.ConditionActor[*v2pb.Deployment] = &RollbackCompletionActor{}
-)
+var _ conditionInterfaces.ConditionActor[*v2pb.Deployment] = &ClusterRollbackActor{}
 
 // ClusterRollbackActor undoes a rollout in one cluster. It makes sure the previous revision
 // is in the cluster's model config in the serving phase, waits until every replica reports
@@ -135,7 +132,7 @@ func (a *ClusterRollbackActor) Retrieve(ctx context.Context, deployment *v2pb.De
 	}
 
 	entry, ok := modelconfig.FindEntry(entries, deployment.Name, current)
-	if !ok || entry.EffectivePhase() != modelconfig.ModelPhaseServing {
+	if !ok || entry.CurrentPhase() != modelconfig.ModelPhaseServing {
 		return conditionsutil.GenerateFalseCondition(condition, ReasonPreviousModelNotServing,
 			fmt.Sprintf("previous model %s is not in the serving phase in cluster %s", current, clusterID)), nil
 	}
@@ -240,7 +237,7 @@ func (a *ClusterRollbackActor) restorePrevious(
 		}
 		entry = modelconfig.ModelConfigEntry{Name: current, StoragePath: storagePath, DeploymentName: deployment.GetName()}
 	}
-	if !found || entry.EffectivePhase() != modelconfig.ModelPhaseServing || entry.CanaryPod != "" {
+	if !found || entry.CurrentPhase() != modelconfig.ModelPhaseServing || entry.CanaryPod != "" {
 		entry.Phase = modelconfig.ModelPhaseServing
 		entry.CanaryPod = ""
 		a.logger.Info("Restoring previous model in model config",
@@ -289,62 +286,6 @@ func (a *ClusterRollbackActor) resolveStoragePath(ctx context.Context, deploymen
 	previous := deployment.DeepCopy()
 	previous.Spec.DesiredRevision = deployment.Status.GetCurrentRevision()
 	return plugincommon.ResolveDeploymentModelStoragePath(ctx, a.apiHandler, previous)
-}
-
-// RollbackCompletionActor finishes a rollback. When no previous revision exists the
-// deployment no longer serves anything, so the deployment's rule on the control-plane
-// discovery route is removed. Its condition type is the terminal rollback marker the plugin's
-// ParseStage maps to ROLLBACK_COMPLETE, so it must stay last in the actor chain.
-type RollbackCompletionActor struct {
-	dynamicClient dynamic.Interface
-	routeManager  routing.Manager
-	logger        *zap.Logger
-}
-
-// NewRollbackCompletionActor creates the terminal rollback actor.
-func NewRollbackCompletionActor(p Params) *RollbackCompletionActor {
-	logger := p.Logger
-	if logger == nil {
-		logger = zap.NewNop()
-	}
-	return &RollbackCompletionActor{dynamicClient: p.DynamicClient, routeManager: p.RouteManager, logger: logger}
-}
-
-// GetType returns the terminal rollback condition type.
-func (a *RollbackCompletionActor) GetType() string {
-	return osscommon.ActorTypeRollback
-}
-
-// Retrieve reports TRUE when a previous revision keeps serving the deployment, or when the
-// discovery rule is gone for a deployment with nothing left to serve.
-func (a *RollbackCompletionActor) Retrieve(ctx context.Context, deployment *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
-	if deployment.Status.GetCurrentRevision() != nil {
-		return conditionsutil.GenerateTrueCondition(condition), nil
-	}
-	isName := deployment.Spec.GetInferenceServer().GetName()
-	exists, err := a.routeManager.RuleExists(ctx, a.dynamicClient, routenames.DiscoveryRouteName(isName), deployment.Namespace,
-		routing.Rule{MatchPath: routenames.DiscoveryMatchPath(isName, deployment.Name)})
-	if err != nil {
-		return conditionsutil.GenerateFalseCondition(condition, "DiscoveryRouteStatusCheckFailed", err.Error()), nil
-	}
-	if exists {
-		return conditionsutil.GenerateFalseCondition(condition, ReasonDiscoveryRouteStillPresent,
-			fmt.Sprintf("discovery route for deployment %s still exists although there is no model to serve", deployment.Name)), nil
-	}
-	return conditionsutil.GenerateTrueCondition(condition), nil
-}
-
-// Run removes the deployment's discovery rule.
-func (a *RollbackCompletionActor) Run(ctx context.Context, deployment *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
-	if deployment.Status.GetCurrentRevision() != nil {
-		return conditionsutil.GenerateTrueCondition(condition), nil
-	}
-	isName := deployment.Spec.GetInferenceServer().GetName()
-	a.logger.Info("Removing discovery route; there is no previous model to serve", zap.String("deployment", deployment.Name))
-	if err := a.routeManager.RemoveRules(ctx, a.dynamicClient, routenames.DiscoveryRouteName(isName), deployment.Namespace, routenames.DiscoveryMatchPath(isName, deployment.Name)); err != nil {
-		return conditionsutil.GenerateFalseCondition(condition, "DiscoveryRouteRemovalFailed", err.Error()), nil
-	}
-	return conditionsutil.GenerateTrueCondition(condition), nil
 }
 
 // revisionNames returns the candidate and current revision names, empty when unset.

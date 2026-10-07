@@ -101,6 +101,14 @@ inferenceServer:
     # "server" uses Triton's /v2/health/ready only; "none" adds no probe.
     # model-aware needs python3 in the serving image (the py3 Triton images).
     readinessProbe: model-aware
+    # probes overrides the timing of the Triton pod probes. Zero or omitted fields
+    # keep the built-in values (startup 5s period / 3s timeout / 60 failures, liveness
+    # 10s / 5s / 6, readiness 10s / 8s for model-aware or 5s for server / 3). Changing
+    # a value changes the pod template, so running Triton pods restart once.
+    probes:
+      startup: {}
+      liveness: {}
+      readiness: {}
 
 # Deployment controller (OSS plugin) rollout safety settings.
 deployment:
@@ -111,7 +119,7 @@ deployment:
     # modelLoadTimeout bounds how long a cluster may take to load the new model on
     # every replica (canary and full load each get this budget). Exceeding it fails
     # the rollout, which rolls the candidate back.
-    modelLoadTimeout: 30m
+    modelLoadTimeout: 15m
     # soakPeriod is how long to keep serving from a cluster, with the health and
     # metric gates active, before moving on to the next cluster. A Zonal strategy's
     # rolloutPeriodInSeconds overrides it; Blast skips soaking. 0s disables it.

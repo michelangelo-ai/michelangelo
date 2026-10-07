@@ -19,7 +19,21 @@ func NewBackendRegistry(isConfig maconfig.InferenceServerConfig) *Registry {
 	registry.Register(v2pb.BACKEND_TYPE_TRITON, NewTritonBackend(
 		isConfig.Triton.DefaultImage,
 		WithReadinessProbe(isConfig.Triton.ReadinessProbe),
+		WithProbeTimings(ProbeTimings{
+			Startup:   probeTiming(isConfig.Triton.Probes.Startup),
+			Liveness:  probeTiming(isConfig.Triton.Probes.Liveness),
+			Readiness: probeTiming(isConfig.Triton.Probes.Readiness),
+		}),
 	))
 
 	return registry
+}
+
+// probeTiming converts a probe timing override from configuration.
+func probeTiming(cfg maconfig.ProbeTimingConfig) ProbeTiming {
+	return ProbeTiming{
+		PeriodSeconds:    cfg.PeriodSeconds,
+		TimeoutSeconds:   cfg.TimeoutSeconds,
+		FailureThreshold: cfg.FailureThreshold,
+	}
 }

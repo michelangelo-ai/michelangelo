@@ -4,6 +4,7 @@ go_library(
     name = "go_default_library",
     srcs = [
         "interface.go",
+        "model_status.go",
         "module.go",
         "registry.go",
         "triton.go",

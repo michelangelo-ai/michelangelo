@@ -40,8 +40,8 @@ type ModelConfigEntry struct {
 	CanaryPod string `json:"canary_pod,omitempty"`
 }
 
-// EffectivePhase returns the entry's phase, defaulting to ModelPhaseServing.
-func (e ModelConfigEntry) EffectivePhase() ModelPhase {
+// CurrentPhase returns the entry's phase, defaulting to ModelPhaseServing.
+func (e ModelConfigEntry) CurrentPhase() ModelPhase {
 	if e.Phase == "" {
 		return ModelPhaseServing
 	}

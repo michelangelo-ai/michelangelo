@@ -9,7 +9,7 @@ import (
 
 const (
 	// DefaultModelLoadTimeout bounds a cluster's model load when the config sets no budget.
-	DefaultModelLoadTimeout = 30 * time.Minute
+	DefaultModelLoadTimeout = 15 * time.Minute
 	// DefaultRollbackTimeout bounds a rollback's wait for the previous model when the config
 	// sets no budget.
 	DefaultRollbackTimeout = 15 * time.Minute

@@ -128,12 +128,53 @@ func WithReadinessProbe(mode string) TritonOption {
 	}
 }
 
+// ProbeTiming overrides one probe's timing. Zero keeps the probe's built-in value.
+type ProbeTiming struct {
+	PeriodSeconds    int32
+	TimeoutSeconds   int32
+	FailureThreshold int32
+}
+
+// apply returns probe with the non-zero timing fields overridden. A nil probe stays nil.
+func (t ProbeTiming) apply(probe *corev1.Probe) *corev1.Probe {
+	if probe == nil {
+		return nil
+	}
+	if t.PeriodSeconds > 0 {
+		probe.PeriodSeconds = t.PeriodSeconds
+	}
+	if t.TimeoutSeconds > 0 {
+		probe.TimeoutSeconds = t.TimeoutSeconds
+	}
+	if t.FailureThreshold > 0 {
+		probe.FailureThreshold = t.FailureThreshold
+	}
+	return probe
+}
+
+// ProbeTimings holds the timing overrides for each Triton pod probe.
+type ProbeTimings struct {
+	Startup   ProbeTiming
+	Liveness  ProbeTiming
+	Readiness ProbeTiming
+}
+
+// WithProbeTimings overrides the timing of the Triton pod probes. Zero fields keep the
+// built-in values.
+func WithProbeTimings(timings ProbeTimings) TritonOption {
+	return func(b *tritonBackend) {
+		b.probeTimings = timings
+	}
+}
+
 // Triton Server Management
 type tritonBackend struct {
 	// defaultImage is the operator-configured image. Empty means defaultTritonImage.
 	defaultImage string
 	// readinessProbe is the readiness probe mode. Empty means TritonReadinessModelAware.
 	readinessProbe string
+	// probeTimings overrides the built-in probe timings.
+	probeTimings ProbeTimings
 }
 
 func NewTritonBackend(defaultImage string, opts ...TritonOption) *tritonBackend {
@@ -525,8 +566,8 @@ func (b *tritonBackend) desiredTritonDeployment(inferenceServer *v2pb.InferenceS
 						"--log-warning=true",
 						"--log-verbose=0",
 					},
-					StartupProbe:   tritonStartupProbe(),
-					LivenessProbe:  tritonLivenessProbe(),
+					StartupProbe:   b.tritonStartupProbe(),
+					LivenessProbe:  b.tritonLivenessProbe(),
 					ReadinessProbe: b.tritonReadinessProbe(),
 					VolumeMounts: []corev1.VolumeMount{
 						{
@@ -605,31 +646,38 @@ func tritonSpecHash(replicas int32, template corev1.PodTemplateSpec) string {
 
 // tritonStartupProbe waits for Triton's HTTP server to come up before liveness applies,
 // which gives large images and GPU initialization time to start.
-func tritonStartupProbe() *corev1.Probe {
-	return &corev1.Probe{
+func (b *tritonBackend) tritonStartupProbe() *corev1.Probe {
+	return b.probeTimings.Startup.apply(&corev1.Probe{
 		ProbeHandler: corev1.ProbeHandler{
 			HTTPGet: &corev1.HTTPGetAction{Path: "/v2/health/live", Port: intstr.FromInt(tritonHTTPPort)},
 		},
 		PeriodSeconds:    5,
 		TimeoutSeconds:   3,
 		FailureThreshold: 60,
-	}
+	})
 }
 
 // tritonLivenessProbe restarts a Triton container whose HTTP server has stopped answering.
-func tritonLivenessProbe() *corev1.Probe {
-	return &corev1.Probe{
+func (b *tritonBackend) tritonLivenessProbe() *corev1.Probe {
+	return b.probeTimings.Liveness.apply(&corev1.Probe{
 		ProbeHandler: corev1.ProbeHandler{
 			HTTPGet: &corev1.HTTPGetAction{Path: "/v2/health/live", Port: intstr.FromInt(tritonHTTPPort)},
 		},
 		PeriodSeconds:    10,
 		TimeoutSeconds:   5,
 		FailureThreshold: 6,
-	}
+	})
 }
 
-// tritonReadinessProbe returns the readiness probe for the configured mode.
+// tritonReadinessProbe returns the readiness probe for the configured mode, with any
+// configured timing overrides applied.
 func (b *tritonBackend) tritonReadinessProbe() *corev1.Probe {
+	return b.probeTimings.Readiness.apply(b.defaultReadinessProbe())
+}
+
+// defaultReadinessProbe returns the readiness probe for the configured mode with its
+// built-in timing.
+func (b *tritonBackend) defaultReadinessProbe() *corev1.Probe {
 	switch b.readinessProbe {
 	case TritonReadinessNone:
 		return nil
