@@ -1,3 +1,5 @@
+"""Public Uniflow core API."""
+
 from michelangelo.uniflow.core.context import create_context
 from michelangelo.uniflow.core.decorator import (
     star_plugin,
