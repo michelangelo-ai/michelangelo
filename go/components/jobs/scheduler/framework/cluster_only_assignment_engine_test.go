@@ -84,12 +84,30 @@ func TestClusterOnlyEngine_Select(t *testing.T) {
 			wantCluster: "c2",
 		},
 		{
-			name:        "affinity cluster not found, falls back to default",
+			// Not the affinity key the engine looks for, so the job counts as
+			// unlabelled and still takes the default.
+			name:        "unrecognized selector label falls back to default",
 			cache:       newFakeClusterCache(makeCluster("c1"), makeCluster("c2")),
 			job:         makeJob(map[string]string{"resourcepool.michelangelo/cluster": "unknown"}),
 			wantFound:   true,
 			wantReason:  "cluster_default_selected",
 			wantCluster: "c1",
+		},
+		{
+			name:       "affinity cluster not registered leaves job unassigned",
+			cache:      newFakeClusterCache(makeCluster("c1"), makeCluster("c2")),
+			job:        makeJob(map[string]string{constants.ClusterAffinityLabelKey: "unknown"}),
+			wantFound:  false,
+			wantReason: "affinity_cluster_not_found",
+		},
+		{
+			// An affinity miss is reported as such even when the cache is empty:
+			// the job named a cluster, so that is the actionable reason.
+			name:       "affinity miss with no registered clusters reports affinity miss",
+			cache:      newFakeClusterCache(),
+			job:        makeJob(map[string]string{constants.ClusterAffinityLabelKey: "unknown"}),
+			wantFound:  false,
+			wantReason: "affinity_cluster_not_found",
 		},
 		{
 			name:        "no affinity selects first available",
@@ -115,12 +133,11 @@ func TestClusterOnlyEngine_Select(t *testing.T) {
 			wantCluster: "c2",
 		},
 		{
-			name:        "ray cluster label for unknown cluster falls back to default",
-			cache:       newFakeClusterCache(makeCluster("c1")),
-			job:         makeRayClusterJob("unknown"),
-			wantFound:   true,
-			wantReason:  "cluster_default_selected",
-			wantCluster: "c1",
+			name:       "ray cluster label for unknown cluster leaves job unassigned",
+			cache:      newFakeClusterCache(makeCluster("c1")),
+			job:        makeRayClusterJob("unknown"),
+			wantFound:  false,
+			wantReason: "affinity_cluster_not_found",
 		},
 		{
 			name:        "ray cluster without label selects first available",
@@ -163,4 +180,43 @@ func TestClusterOnlyEngine_Select(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestClusterOnlyEngine_DefaultSelectionIsDeterministic asserts that the default
+// cluster does not depend on the order GetClusters happens to return. The real
+// cache ranges over a sync.Map, whose order is unspecified between calls.
+func TestClusterOnlyEngine_DefaultSelectionIsDeterministic(t *testing.T) {
+	makeCluster := func(name string) *v2pb.Cluster {
+		return &v2pb.Cluster{ObjectMeta: metav1.ObjectMeta{Name: name}}
+	}
+	job := BatchSparkJob{SparkJob: &v2pb.SparkJob{ObjectMeta: metav1.ObjectMeta{Name: "job", Namespace: "ns"}}}
+
+	orderings := [][]*v2pb.Cluster{
+		{makeCluster("zeta"), makeCluster("alpha"), makeCluster("mu")},
+		{makeCluster("alpha"), makeCluster("mu"), makeCluster("zeta")},
+		{makeCluster("mu"), makeCluster("zeta"), makeCluster("alpha")},
+	}
+
+	for _, clusters := range orderings {
+		engine := newTestClusterOnlyStrategy(newFakeClusterCache(clusters...))
+
+		assign, found, reason, err := engine.Select(context.Background(), job)
+		if err != nil {
+			t.Fatalf("Select returned error: %v", err)
+		}
+		if !found {
+			t.Fatalf("expected a default assignment, got found = false (reason %q)", reason)
+		}
+		if got := assign.GetCluster(); got != "alpha" {
+			t.Fatalf("assignment.Cluster = %q, want %q (input order %q)", got, "alpha", clusterNames(clusters))
+		}
+	}
+}
+
+func clusterNames(clusters []*v2pb.Cluster) []string {
+	names := make([]string, 0, len(clusters))
+	for _, c := range clusters {
+		names = append(names, c.GetName())
+	}
+	return names
 }

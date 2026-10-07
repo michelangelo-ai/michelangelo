@@ -351,11 +351,19 @@ func (c *Scheduler) assignJob(ctx context.Context, job framework.BatchJob) error
 	}
 
 	if err := utils.UpdateStatusWithRetries(ctx, c, job.GetObject(),
-		func(job client.Object) {
-			rayCluster := job.(*v2pb.RayCluster)
-			cond := utils.GetCondition(&rayCluster.Status.StatusConditions, constants.ScheduledCondition, rayCluster.GetGeneration())
-			*cond = *scheduledCondition
-			cond.ObservedGeneration = rayCluster.Generation
+		func(obj client.Object) {
+			// Mirror the matched path above: a bare *v2pb.RayCluster assertion
+			// here panics on a SparkJob and takes the whole scheduler loop down.
+			switch j := obj.(type) {
+			case *v2pb.RayCluster:
+				cond := utils.GetCondition(&j.Status.StatusConditions, constants.ScheduledCondition, j.GetGeneration())
+				*cond = *scheduledCondition
+				cond.ObservedGeneration = j.GetGeneration()
+			case *v2pb.SparkJob:
+				cond := utils.GetCondition(&j.Status.StatusConditions, constants.ScheduledCondition, j.GetGeneration())
+				*cond = *scheduledCondition
+				cond.ObservedGeneration = j.GetGeneration()
+			}
 		}, &metav1.UpdateOptions{
 			FieldManager: "assignJobNoMatch",
 		}); err != nil {

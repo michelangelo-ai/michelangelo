@@ -309,6 +309,7 @@ const (
 	AssignmentReasonClusterMatchedByAffinity string = "cluster_matched_by_affinity"
 	AssignmentReasonClusterDefaultSelected   string = "cluster_default_selected"
 	AssignmentReasonNoClustersFound          string = "no_clusters_found"
+	AssignmentReasonAffinityClusterNotFound  string = "affinity_cluster_not_found"
 )
 
 // RayCluster String to CRD State Mapping

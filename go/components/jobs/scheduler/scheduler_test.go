@@ -251,6 +251,70 @@ func TestRayClusterAssignment(t *testing.T) {
 	}
 }
 
+// TestAssignJob_SparkJobUnassigned covers the status update taken when a job
+// cannot be assigned. The callback used to assert *v2pb.RayCluster
+// unconditionally, so an unassignable SparkJob panicked and took down the
+// scheduler loop. Affinity misses now reach this path routinely.
+func TestAssignJob_SparkJobUnassigned(t *testing.T) {
+	tests := []struct {
+		name       string
+		found      bool
+		reason     string
+		wantReason string
+	}{
+		{
+			name:       "affinity cluster not registered",
+			found:      false,
+			reason:     constants.AssignmentReasonAffinityClusterNotFound,
+			wantReason: "NoClustersFoundForAssignment",
+		},
+		{
+			name:       "no clusters registered",
+			found:      false,
+			reason:     constants.AssignmentReasonNoClustersFound,
+			wantReason: "NoClustersFoundForAssignment",
+		},
+		{
+			name:       "no cluster matched requirements",
+			found:      true,
+			reason:     "",
+			wantReason: "NoClusterMatchedRequirements",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := gomock.NewController(t)
+			defer g.Finish()
+
+			batchJob := framework.BatchSparkJob{SparkJob: &v2pb.SparkJob{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-spark-job",
+					Namespace: "test-namespace",
+				},
+			}}
+
+			mockEngine := frameworkmocks.NewMockAssignmentEngine(g)
+			mockEngine.EXPECT().Select(gomock.Any(), gomock.Any()).Return(nil, tt.found, tt.reason, nil)
+
+			scheduler := setupTestScheduler(t, batchJob, mockEngine)
+
+			// Must not panic.
+			require.NoError(t, scheduler.assignJob(context.Background(), batchJob))
+
+			var sparkJob v2pb.SparkJob
+			require.NoError(t, scheduler.Get(context.Background(),
+				batchJob.GetNamespace(), batchJob.GetName(), &metav1.GetOptions{}, &sparkJob))
+
+			cond := utils.GetCondition(&sparkJob.Status.StatusConditions, constants.ScheduledCondition, sparkJob.Generation)
+			require.NotNil(t, cond)
+			assert.Equal(t, apipb.CONDITION_STATUS_FALSE, cond.Status)
+			assert.Equal(t, tt.wantReason, cond.Reason)
+			assert.Nil(t, sparkJob.Status.Assignment)
+		})
+	}
+}
+
 func TestFetchLatestRayCluster(t *testing.T) {
 	tests := []struct {
 		name      string
