@@ -622,6 +622,78 @@ def _resolve_callbacks(
     return resolved_callbacks, has_model_checkpoint
 
 
+def _apply_batch_limit(
+    dataset: ray.data.Dataset,
+    limit: int | float | None,
+    batch_size: int,
+    num_workers: int,
+    split: str,
+) -> tuple[ray.data.Dataset, int | float | None]:
+    """Bound a split's Ray Dataset to the rows a Lightning batch limit can consume.
+
+    Lightning's ``limit_{train,val}_batches`` only stops its own loop; without
+    this, the Ray Dataset behind the loader is still read in full. An integer
+    limit ``N`` therefore caps the dataset at ``N * batch_size * num_workers`` rows
+    (Ray Train splits the rows evenly, so each worker sees ``N * batch_size``).
+    ``accumulate_grad_batches`` does not enter the math: Lightning counts
+    dataloader batches, not optimizer steps.
+
+    A fractional limit in ``(0, 1)`` cannot be honored by Lightning here because
+    the loaders returned by ``iter_torch_batches`` have no ``__len__``. It is
+    resolved to an integer batch count from the dataset's row count (which may
+    execute the dataset's lazy transformations) and then capped like an integer
+    limit. ``None``, ``0`` and ``1.0`` leave the dataset untouched.
+
+    Args:
+        dataset: The split's Ray Dataset.
+        limit: The ``limit_*_batches`` value: ``None``, an int number of batches,
+            or a float fraction in ``[0.0, 1.0]``.
+        batch_size: Per-worker batch size.
+        num_workers: Number of Ray Train workers the dataset is split across.
+        split: Split name used in error messages (e.g. ``"train"``).
+
+    Returns:
+        A tuple of the (possibly limited) dataset and the limit to hand to
+        Lightning (an int whenever a fraction in ``(0, 1)`` was resolved).
+
+    Raises:
+        UserInputError: If ``limit`` is not a non-negative int or a float in
+            ``[0.0, 1.0]``, or if a fraction resolves to zero batches.
+    """
+    if limit is None:
+        return dataset, None
+    # bool is an int subclass; reject it explicitly.
+    if isinstance(limit, bool) or not isinstance(limit, (int, float)):
+        raise UserInputError(
+            f"limit_{split}_batches must be an int or a float, got {limit!r}."
+        )
+    if isinstance(limit, float):
+        if not 0.0 <= limit <= 1.0:
+            raise UserInputError(
+                f"limit_{split}_batches as a float must be in [0.0, 1.0], got "
+                f"{limit!r}. Use an int to request a number of batches."
+            )
+        if limit in (0.0, 1.0):
+            return dataset, limit
+        rows_per_worker = dataset.count() // num_workers
+        batches_per_worker = -(-rows_per_worker // batch_size)
+        limit_batches = int(batches_per_worker * limit)
+        if limit_batches == 0:
+            raise UserInputError(
+                f"limit_{split}_batches={limit!r} resolves to 0 batches: each "
+                f"worker has {rows_per_worker} rows ({batches_per_worker} "
+                f"batches of {batch_size}). Use a larger fraction or an int."
+            )
+        limit = limit_batches
+    elif limit < 0:
+        raise UserInputError(
+            f"limit_{split}_batches must be non-negative, got {limit!r}."
+        )
+    if limit == 0:
+        return dataset, limit
+    return dataset.limit(limit * batch_size * num_workers), limit
+
+
 def _maybe_track_experiment(train_loop_config: dict, rank: int) -> None:
     """Record this run's experiment directory via the configured ExperimentStore.
 

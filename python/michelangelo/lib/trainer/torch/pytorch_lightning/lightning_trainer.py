@@ -45,6 +45,7 @@ from pytorch_lightning.utilities.deepspeed import (
 from ray.train.torch import TorchTrainer
 
 from michelangelo.lib.trainer.torch.pytorch_lightning._private.util import (
+    _apply_batch_limit,
     _is_deepspeed_strategy,
     _is_model_parallel_strategy,
     _train_loop_per_worker,
@@ -190,6 +191,31 @@ class LightningTrainer(TorchTrainer):
         # Pop out train and val data since we have to pass them into datasets parameter of TorchTrainer.
         train_data = train_loop_config.pop("train_data")
         val_data = train_loop_config.pop("val_data")
+
+        # Bound each split's dataset by its Lightning batch limit so the data
+        # pipeline stops reading at the cap (and fractional limits become ints
+        # Lightning accepts for loaders without __len__). The worker count comes
+        # from the construction-time scaling_config; an override passed to
+        # train() does not resize an already-capped dataset.
+        num_workers = scaling_config.num_workers if scaling_config is not None else 1
+        trainer_kwargs = train_loop_config.get("lightning_trainer_kwargs") or {}
+        train_data, train_limit = _apply_batch_limit(
+            train_data,
+            trainer_kwargs.get("limit_train_batches"),
+            trainer_param.batch_size,
+            num_workers,
+            "train",
+        )
+        val_data, val_limit = _apply_batch_limit(
+            val_data,
+            trainer_kwargs.get("limit_val_batches"),
+            trainer_param.batch_size,
+            num_workers,
+            "val",
+        )
+        for split, limit in (("train", train_limit), ("val", val_limit)):
+            if limit is not None:
+                trainer_kwargs[f"limit_{split}_batches"] = limit
 
         # A configured profiler needs an estimate of steps-per-epoch to derive
         # (or validate) its sampling schedule, which needs the training row
