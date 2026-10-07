@@ -120,3 +120,41 @@ class EmbeddingMetricSamplingTest(unittest.TestCase):
         """Non matrix input raises."""
         with self.assertRaises(ValueError):
             EmbeddingNorm().update(torch.tensor([1.0, 2.0]))
+
+    def test_sample_weighs_updates_by_their_row_count(self) -> None:
+        """Sample weighs updates by their row count."""
+        # 9,000 rows of norm 1 then 1,000 of norm 9: the true mean norm is 1.8.
+        # Capping each update separately would weigh both equally (mean 5).
+        metric = EmbeddingNorm(max_samples=500)
+        metric.update(torch.tensor([[1.0, 0.0]]).repeat(9_000, 1))
+        metric.update(torch.tensor([[9.0, 0.0]]).repeat(1_000, 1))
+        self.assertAlmostEqual(metric.compute().item(), 1.8, delta=0.4)
+
+    def test_state_stays_bounded_across_updates(self) -> None:
+        """State stays bounded across updates."""
+        for step in ("update", "forward"):
+            with self.subTest(step=step):
+                metric = EmbeddingNorm(max_samples=100)
+                for _ in range(50):
+                    getattr(metric, step)(torch.randn(80, 4))
+                self.assertEqual(sum(t.numel() for t in metric.samples), 100 * 4)
+
+    def test_compute_after_distributed_sync(self) -> None:
+        """Compute after distributed sync."""
+        # Stand-ins for all_gather across two ranks: one whose peer saw the same
+        # rows, and one whose peer saw none. A sync leaves the list states as
+        # concatenated tensors.
+        peers = {
+            "same rows": lambda t, group=None: [t, t],
+            "no rows": lambda t, group=None: [
+                t,
+                t if t.dim() == 0 else t[:0],
+            ],
+        }
+        x = torch.tensor([[3.0, 4.0], [0.0, 1.0]])
+        for name, gather in peers.items():
+            with self.subTest(peer=name):
+                metric = EmbeddingNorm(
+                    dist_sync_fn=gather, distributed_available_fn=lambda: True
+                )
+                self.assertAlmostEqual(_score(metric, x), 3.0, places=5)

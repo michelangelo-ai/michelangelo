@@ -7,25 +7,27 @@ column into one) and returns a single scalar.
 
 They are tagged ``_metric_type = "aggregation"``, so the evaluator calls
 ``update(preds)`` without a target. ``columns.target_col`` is still required
-by the config schema; point it at any existing column, it is never read:
+by the config schema. The metric never reads it, but the evaluator still loads
+it from the dataset (without a ``data_preprocessor`` it is part of the parquet
+column projection), so point it at a cheap, narrow column such as a small ID
+or label column, not a wide one like another embedding:
 
     - name: user_emb_cosine_mean
       metric: michelangelo.lib.evaluator.embedding_metrics.EmbeddingCosineSimilarity
       params: {stat: mean}
       columns:
         prediction_col: user_embedding
-        target_col: user_id   # required by schema; not read
+        target_col: user_id   # required by schema; loaded but not read
 
 Every metric works on a seeded random sample of at most ``max_samples`` rows,
 which bounds memory and keeps the pairwise metrics at ``max_samples**2`` work
 regardless of dataset size, while staying reproducible across runs.
 """
 
-from typing import Any
+from typing import Any, Union
 
 import torch
 from torchmetrics import Metric
-from torchmetrics.utilities import dim_zero_cat
 
 __all__ = [
     "EmbeddingCosineSimilarity",
@@ -43,11 +45,36 @@ def _check_stat(stat: str) -> str:
     return stat
 
 
+def _rank() -> int:
+    """This process's rank, so each one draws its own keys; 0 outside a group."""
+    if torch.distributed.is_available() and torch.distributed.is_initialized():
+        return torch.distributed.get_rank()
+    return 0
+
+
+def _cat(state: Union[list[torch.Tensor], torch.Tensor]) -> torch.Tensor:
+    """A list state as one tensor; a distributed sync has already concatenated it."""
+    if isinstance(state, torch.Tensor):
+        return state
+    return torch.cat(state) if state else torch.empty(0)
+
+
 class _EmbeddingMetric(Metric):
-    """Collects a bounded, seeded sample of embedding rows; subclasses score it."""
+    """Collects a bounded, seeded sample of embedding rows; subclasses score it.
+
+    The sample is bottom-k: every row draws a random key and the
+    ``max_samples`` rows with the smallest keys are kept. That is a uniform
+    sample of every row seen, however the rows were split into updates, and
+    two kept sets merge by concatenating them and keeping the smallest keys
+    again -- which is what lets the states cat-reduce across processes. Rows
+    are stored flattened so every state is 1-D, which a process that saw no
+    rows can still sync.
+    """
 
     higher_is_better = None
-    full_state_update = False
+    # forward() then updates the global state directly instead of appending
+    # each batch's kept set to it, so the state stays bounded there too.
+    full_state_update = True
     _metric_type = "aggregation"
 
     def __init__(self, max_samples: int = 5_000, seed: int = 0, **kwargs: Any) -> None:
@@ -64,6 +91,10 @@ class _EmbeddingMetric(Metric):
         self.max_samples = max_samples
         self.seed = seed
         self.add_state("samples", default=[], dist_reduce_fx="cat")
+        self.add_state("keys", default=[], dist_reduce_fx="cat")
+        # Rows this process has seen; seeds each update's keys, so a run is
+        # reproducible and no two updates draw the same keys.
+        self.add_state("rows_seen", default=torch.tensor(0), dist_reduce_fx="sum")
 
     def update(self, preds: torch.Tensor) -> None:
         """Add a batch of ``[N, D]`` embedding rows to the sample."""
@@ -75,20 +106,33 @@ class _EmbeddingMetric(Metric):
             raise ValueError(
                 f"expected [N, D] embeddings, got shape {tuple(preds.shape)}"
             )
-        self.samples.append(self._sample(preds.float()))
+        n, d = preds.shape
+        generator = torch.Generator().manual_seed(
+            hash((self.seed, _rank(), int(self.rows_seen)))
+        )
+        keys = torch.rand(n, generator=generator).to(preds.device)
+        rows = torch.cat([*self.samples, preds.float().flatten()]).view(-1, d)
+        rows, keys = self._smallest_keys(rows, torch.cat([*self.keys, keys]))
+        self.samples = [rows.flatten()]
+        self.keys = [keys]
+        self.rows_seen += n
 
     def compute(self) -> torch.Tensor:
         """Score the collected sample; nan when no rows were seen."""
-        if not self.samples:
+        # A distributed sync hands the list states over already concatenated.
+        keys = _cat(self.keys)
+        if keys.numel() == 0:
             return torch.tensor(float("nan"))
-        return self._score(self._sample(dim_zero_cat(self.samples)))
+        rows = _cat(self.samples).view(keys.numel(), -1)
+        return self._score(self._smallest_keys(rows, keys)[0])
 
-    def _sample(self, x: torch.Tensor) -> torch.Tensor:
-        if x.shape[0] <= self.max_samples:
-            return x
-        generator = torch.Generator().manual_seed(self.seed)
-        idx = torch.randperm(x.shape[0], generator=generator)[: self.max_samples]
-        return x[idx.to(x.device)]
+    def _smallest_keys(
+        self, rows: torch.Tensor, keys: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        if keys.numel() <= self.max_samples:
+            return rows, keys
+        idx = torch.topk(keys, self.max_samples, largest=False).indices
+        return rows[idx], keys[idx]
 
     def _score(self, x: torch.Tensor) -> torch.Tensor:
         raise NotImplementedError
