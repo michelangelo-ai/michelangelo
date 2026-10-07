@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 
 	"go.uber.org/zap"
@@ -167,6 +168,45 @@ func WithProbeTimings(timings ProbeTimings) TritonOption {
 	}
 }
 
+const (
+	// defaultDrainPreStopSeconds is how long a terminating pod keeps running after it left the
+	// Service endpoints, so the gateway stops sending it new requests before Triton gets SIGTERM.
+	defaultDrainPreStopSeconds int32 = 10
+	// defaultDrainExitTimeoutSeconds is how long Triton waits for in-flight inference requests
+	// to finish after SIGTERM before it exits (Triton's --exit-timeout-secs).
+	defaultDrainExitTimeoutSeconds int32 = 30
+	// drainGraceMarginSeconds is added to the drain budget when sizing the pod's termination
+	// grace period, so the kubelet never SIGKILLs a pod that is still draining inside its budget.
+	drainGraceMarginSeconds int32 = 5
+)
+
+// Drain tunes how a Triton pod shuts down when it is replaced, for example when a pod
+// template change rolls the Deployment. Zero fields keep the built-in values.
+type Drain struct {
+	// PreStopSeconds delays SIGTERM so endpoint removal propagates first.
+	PreStopSeconds int32
+	// ExitTimeoutSeconds bounds how long Triton waits for in-flight requests after SIGTERM.
+	ExitTimeoutSeconds int32
+}
+
+// WithDrain overrides the pod shutdown drain. Zero fields keep the built-in values.
+func WithDrain(drain Drain) TritonOption {
+	return func(b *tritonBackend) {
+		b.drain = drain
+	}
+}
+
+// resolved returns the drain with built-in values filled in for zero fields.
+func (d Drain) resolved() Drain {
+	if d.PreStopSeconds <= 0 {
+		d.PreStopSeconds = defaultDrainPreStopSeconds
+	}
+	if d.ExitTimeoutSeconds <= 0 {
+		d.ExitTimeoutSeconds = defaultDrainExitTimeoutSeconds
+	}
+	return d
+}
+
 // Triton Server Management
 type tritonBackend struct {
 	// defaultImage is the operator-configured image. Empty means defaultTritonImage.
@@ -175,6 +215,8 @@ type tritonBackend struct {
 	readinessProbe string
 	// probeTimings overrides the built-in probe timings.
 	probeTimings ProbeTimings
+	// drain tunes pod shutdown so replacing a pod does not drop in-flight requests.
+	drain Drain
 }
 
 func NewTritonBackend(defaultImage string, opts ...TritonOption) *tritonBackend {
@@ -526,6 +568,9 @@ func (b *tritonBackend) desiredTritonDeployment(inferenceServer *v2pb.InferenceS
 	hostPathType := corev1.HostPathDirectoryOrCreate
 	modelConfigOptional := true
 
+	drain := b.drain.resolved()
+	terminationGracePeriod := int64(drain.PreStopSeconds + drain.ExitTimeoutSeconds + drainGraceMarginSeconds)
+
 	template := corev1.PodTemplateSpec{
 		ObjectMeta: metav1.ObjectMeta{
 			Labels: map[string]string{
@@ -533,7 +578,8 @@ func (b *tritonBackend) desiredTritonDeployment(inferenceServer *v2pb.InferenceS
 			},
 		},
 		Spec: corev1.PodSpec{
-			ImagePullSecrets: tritonImagePullSecrets(servingImage),
+			TerminationGracePeriodSeconds: &terminationGracePeriod,
+			ImagePullSecrets:              tritonImagePullSecrets(servingImage),
 			Containers: []corev1.Container{
 				{
 					Name:            "triton",
@@ -562,9 +608,18 @@ func (b *tritonBackend) desiredTritonDeployment(inferenceServer *v2pb.InferenceS
 						// the sync daemon and other server-level callers.
 						"--strict-readiness=false",
 						"--exit-on-error=true",
+						// On SIGTERM wait for in-flight requests instead of Triton's default.
+						fmt.Sprintf("--exit-timeout-secs=%d", drain.ExitTimeoutSeconds),
 						"--log-error=true",
 						"--log-warning=true",
 						"--log-verbose=0",
+					},
+					// Hold SIGTERM until the pod has left the Service endpoints, so the
+					// gateway stops routing to it before Triton starts shutting down.
+					Lifecycle: &corev1.Lifecycle{
+						PreStop: &corev1.LifecycleHandler{
+							Exec: &corev1.ExecAction{Command: []string{"sleep", strconv.Itoa(int(drain.PreStopSeconds))}},
+						},
 					},
 					StartupProbe:   b.tritonStartupProbe(),
 					LivenessProbe:  b.tritonLivenessProbe(),

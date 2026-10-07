@@ -127,6 +127,7 @@ The knobs live in the controller manager config (`go/cmd/controllermgr/config/ba
 | `deployment.metricGate.failClosed` | `false` | Treat an unanswerable query as a breach |
 | `inferenceServer.triton.readinessProbe` | `model-aware` | `model-aware` requires every `serving` model to be loaded before a replica is ready; `server` uses Triton's server readiness; `none` disables the probe |
 | `inferenceServer.triton.probes.{startup,liveness,readiness}.{periodSeconds,timeoutSeconds,failureThreshold}` | built-in per probe | Overrides the Triton pod probe timing; zero keeps the built-in value. Changing a value restarts running Triton pods once |
+| `inferenceServer.triton.drain.{preStopSeconds,exitTimeoutSeconds}` | `10` / `30` | How a replaced Triton pod shuts down: `preStopSeconds` delays SIGTERM until the pod has left the Service endpoints, `exitTimeoutSeconds` is how long Triton waits for in-flight requests after SIGTERM. The pod's termination grace period is their sum plus 5s |
 
 The `Blast` strategy skips the canary and the soak; use it only for emergency rollouts.
 
@@ -137,8 +138,13 @@ Operational notes:
 * Reading load state per replica uses the Kubernetes API server's pod proxy, so the
   controller's service account needs `pods` (get/list/watch) and `pods/proxy`
   (get/create) in every target cluster.
-* Upgrading to this version changes the Triton pod template (readiness probe and a spec
-  hash annotation), which restarts existing Triton pods once.
+* Upgrading to this version changes the Triton pod template (readiness probe, drain
+  settings and a spec hash annotation), which restarts existing Triton pods once. Pods
+  replaced by a template change now drain: they stay in the pool for `preStopSeconds` after
+  leaving the Service endpoints and Triton finishes in-flight requests before exiting, so a
+  rolling restart does not drop requests.
+* The drain `preStop` hook runs `sleep` in the Triton container; images without it should
+  set `drain.preStopSeconds` to a value their shell supports or use an image that has it.
 
 ## **Core Concepts**
 

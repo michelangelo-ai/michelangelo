@@ -366,3 +366,33 @@ func TestTritonSpecHashIsStable(t *testing.T) {
 	changed.Spec.Containers[0].Image = "img:2"
 	assert.NotEqual(t, tritonSpecHash(2, template), tritonSpecHash(2, *changed))
 }
+
+func TestTritonDrain(t *testing.T) {
+	podOf := func(backend *tritonBackend) corev1.PodSpec {
+		return backend.desiredTritonDeployment(tritonInferenceServer("registry/triton:1", 1)).Spec.Template.Spec
+	}
+	drained := func(pod corev1.PodSpec, preStop string, exitTimeout string, grace int64) {
+		t.Helper()
+		container := pod.Containers[0]
+		require.NotNil(t, container.Lifecycle)
+		require.NotNil(t, container.Lifecycle.PreStop)
+		assert.Equal(t, []string{"sleep", preStop}, container.Lifecycle.PreStop.Exec.Command)
+		assert.Contains(t, container.Args, "--exit-timeout-secs="+exitTimeout)
+		require.NotNil(t, pod.TerminationGracePeriodSeconds)
+		assert.Equal(t, grace, *pod.TerminationGracePeriodSeconds)
+	}
+
+	// Built-in values: 10s preStop + 30s exit timeout + 5s margin.
+	drained(podOf(NewTritonBackend("")), "10", "30", 45)
+
+	// Overrides replace the built-ins and the grace period follows them.
+	drained(podOf(NewTritonBackend("", WithDrain(Drain{PreStopSeconds: 3, ExitTimeoutSeconds: 120}))), "3", "120", 128)
+
+	// A partial override keeps the other built-in value.
+	drained(podOf(NewTritonBackend("", WithDrain(Drain{ExitTimeoutSeconds: 60}))), "10", "60", 75)
+
+	// Changing the drain changes the pod template, so the Deployment is rolled once.
+	defaults := NewTritonBackend("").desiredTritonDeployment(tritonInferenceServer("registry/triton:1", 1))
+	tuned := NewTritonBackend("", WithDrain(Drain{PreStopSeconds: 3})).desiredTritonDeployment(tritonInferenceServer("registry/triton:1", 1))
+	assert.NotEqual(t, defaults.Annotations[tritonSpecHashAnnotation], tuned.Annotations[tritonSpecHashAnnotation])
+}

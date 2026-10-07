@@ -222,6 +222,17 @@ type TritonConfig struct {
 	// Probes overrides the timing of the Triton pod probes. Fields left at zero keep the
 	// built-in values, so an empty block changes nothing.
 	Probes TritonProbesConfig `yaml:"probes"`
+	// Drain tunes how a Triton pod shuts down when it is replaced. Zero fields keep the
+	// built-in values.
+	Drain TritonDrainConfig `yaml:"drain"`
+}
+
+// TritonDrainConfig tunes the shutdown of a replaced Triton pod so in-flight requests finish.
+type TritonDrainConfig struct {
+	// PreStopSeconds delays SIGTERM so the pod leaves the Service endpoints first.
+	PreStopSeconds int32 `yaml:"preStopSeconds"`
+	// ExitTimeoutSeconds bounds how long Triton waits for in-flight requests after SIGTERM.
+	ExitTimeoutSeconds int32 `yaml:"exitTimeoutSeconds"`
 }
 
 // TritonProbesConfig holds the timing overrides for each Triton pod probe.

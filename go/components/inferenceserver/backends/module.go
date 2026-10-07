@@ -19,6 +19,10 @@ func NewBackendRegistry(isConfig maconfig.InferenceServerConfig) *Registry {
 	registry.Register(v2pb.BACKEND_TYPE_TRITON, NewTritonBackend(
 		isConfig.Triton.DefaultImage,
 		WithReadinessProbe(isConfig.Triton.ReadinessProbe),
+		WithDrain(Drain{
+			PreStopSeconds:     isConfig.Triton.Drain.PreStopSeconds,
+			ExitTimeoutSeconds: isConfig.Triton.Drain.ExitTimeoutSeconds,
+		}),
 		WithProbeTimings(ProbeTimings{
 			Startup:   probeTiming(isConfig.Triton.Probes.Startup),
 			Liveness:  probeTiming(isConfig.Triton.Probes.Liveness),

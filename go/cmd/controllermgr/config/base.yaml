@@ -109,6 +109,13 @@ inferenceServer:
       startup: {}
       liveness: {}
       readiness: {}
+    # drain controls how a replaced Triton pod shuts down so in-flight requests finish:
+    # preStopSeconds (default 10) delays SIGTERM until the pod left the Service endpoints,
+    # exitTimeoutSeconds (default 30) is how long Triton waits for in-flight requests after
+    # SIGTERM. The pod's terminationGracePeriodSeconds is their sum plus 5s.
+    drain:
+      preStopSeconds: 10
+      exitTimeoutSeconds: 30
 
 # Deployment controller (OSS plugin) rollout safety settings.
 deployment:
