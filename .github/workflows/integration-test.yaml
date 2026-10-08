@@ -176,11 +176,18 @@ jobs:
       - name: Install browser test dependencies
         run: |
           npm ci
-          npx playwright install --with-deps chromium
+          sudo install -m 0755 -d /etc/apt/keyrings
+          curl -fsSL https://dl.google.com/linux/linux_signing_key.pub \
+            | sudo gpg --dearmor -o /etc/apt/keyrings/google-chrome.gpg
+          echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/google-chrome.gpg] \
+            http://dl.google.com/linux/chrome/deb/ stable main" \
+            | sudo tee /etc/apt/sources.list.d/google-chrome.list
+          sudo apt-get update
+          sudo apt-get install -y google-chrome-stable
         working-directory: ${{ github.workspace }}/integration-test/browser
 
       - name: Run browser tests
-        run: npm test
+        run: npx playwright test --project=chrome-stable
         working-directory: ${{ github.workspace }}/integration-test/browser
         env:
           MA_UI_URL: http://localhost:8090
