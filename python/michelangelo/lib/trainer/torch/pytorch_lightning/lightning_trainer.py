@@ -97,19 +97,9 @@ class LightningTrainerParam:
             output.
         lightning_trainer_kwargs: Extra keyword arguments forwarded to
             ``pytorch_lightning.Trainer(...)``. ``limit_train_batches`` and
-            ``limit_val_batches`` are also applied to the matching Ray Dataset
-            (``limit * batch_size * num_workers`` rows, with ``num_workers`` taken
-            from the ``scaling_config`` given to :class:`LightningTrainer`), so the
-            split is truncated to its first rows rather than only stopping
-            Lightning's loop. Every epoch then draws from that same truncated
-            split, which makes these limits suited to smoke tests and debugging,
-            not to sampling a training set. A float fraction in ``(0, 1)`` is
-            resolved to an int batch count from ``Dataset.count()`` (one
-            execution of the dataset's plan unless it is Parquet-backed); an int
-            limit does not count. Invalid values raise
-            :class:`~michelangelo.lib._internal.errors.UserInputError`. See
-            :func:`~_private.util._apply_batch_limit` for the row math and the
-            subset caveats.
+            ``limit_val_batches`` are also applied to the matching Ray Dataset, and
+            a float fraction is resolved to an int batch count. See
+            :func:`~_private.util._apply_batch_limit` for the row math and caveats.
         transfer_learning_spec: Optional warm-start spec describing layer freezing
             patterns.
         incremental_training_spec: Optional spec for continuing from an existing

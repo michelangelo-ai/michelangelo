@@ -10,9 +10,11 @@ from __future__ import annotations
 import hashlib
 import inspect
 import logging
+import math
 import numbers
 import os
 import re
+import time
 from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING, Any, Literal, Union
 
@@ -706,8 +708,16 @@ def _apply_batch_limit(
             split,
             limit,
         )
-        rows_per_worker = dataset.count() // num_workers
-        batches_per_worker = -(-rows_per_worker // batch_size)
+        count_start = time.perf_counter()
+        total_rows = dataset.count()
+        _logger.info(
+            "Counted %d rows for limit_%s_batches in %.2fs.",
+            total_rows,
+            split,
+            time.perf_counter() - count_start,
+        )
+        rows_per_worker = total_rows // num_workers
+        batches_per_worker = math.ceil(rows_per_worker / batch_size)
         limit_batches = int(batches_per_worker * limit)
         if limit_batches == 0:
             raise UserInputError(

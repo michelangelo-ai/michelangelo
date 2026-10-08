@@ -8,6 +8,7 @@ wiring that feeds the limited datasets and resolved limits to Ray Train.
 from __future__ import annotations
 
 import logging
+import re
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -131,6 +132,30 @@ class TestApplyBatchLimitFraction:
             _apply_batch_limit(ds, 0.5, 4, 2, "train")
         assert "limit_train_batches" in caplog.text
         assert "may execute its lazy plan" in caplog.text
+
+    def test_resolving_a_fraction_logs_how_long_the_count_took(self, caplog):
+        """The elapsed time and row count of ``count()`` are logged."""
+        ds = ray.data.range(80)
+        with caplog.at_level(logging.INFO):
+            _apply_batch_limit(ds, 0.5, 4, 2, "train")
+        assert re.search(
+            r"Counted 80 rows for limit_train_batches in \d+\.\d{2}s\.", caplog.text
+        )
+
+    def test_int_limit_does_not_log_a_count_timing(self, caplog):
+        """No count happens for an int limit, so no timing line is emitted."""
+        ds = ray.data.range(80)
+        with caplog.at_level(logging.INFO):
+            _apply_batch_limit(ds, 3, 4, 2, "train")
+        assert "Counted" not in caplog.text
+
+    def test_fraction_rounds_a_non_divisible_per_worker_count_up(self):
+        """Rows per worker that do not divide the batch size round up to a batch."""
+        ds = ray.data.range(26)
+        # 26 // 2 = 13 rows per worker, ceil(13 / 4) = 4 batches, int(4 * 0.75) = 3
+        out, limit = _apply_batch_limit(ds, 0.75, 4, 2, "train")
+        assert limit == 3
+        assert out.count() == 24
 
     def test_int_limit_does_not_count_the_dataset(self):
         """An int limit never needs the row count."""
