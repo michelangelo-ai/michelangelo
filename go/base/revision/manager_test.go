@@ -164,3 +164,35 @@ func TestUpsertRevision_MutableThenImmutable(t *testing.T) {
 	rev := getRevision(t, h, "test-ns", "pipeline-my-pipeline-abc123456789")
 	assert.True(t, apiutils.IsImmutable(rev))
 }
+
+func TestUpsertRevision_UpdatePreservesExistingAnnotations(t *testing.T) {
+	mgr, h := newTestManager(t)
+	ctx := context.Background()
+
+	_, err := mgr.UpsertRevision(ctx, testRevision(t), UpsertOpts{})
+	require.NoError(t, err)
+
+	// A client stamps its own metadata onto the snapshotted revision.
+	stamped := getRevision(t, h, "test-ns", "pipeline-my-pipeline-abc123456789")
+	stamped.Annotations = map[string]string{"client.example.com/commit-message": "feat: x", "shared": "client"}
+	require.NoError(t, h.Update(ctx, stamped, &metav1.UpdateOptions{}))
+
+	// A re-snapshot must keep the client's annotations; its own keys still win.
+	resnapshot := testRevision(t)
+	resnapshot.Annotations = map[string]string{"shared": "controller"}
+	updated, err := mgr.UpsertRevision(ctx, resnapshot, UpsertOpts{})
+	require.NoError(t, err)
+	assert.True(t, updated)
+
+	rev := getRevision(t, h, "test-ns", "pipeline-my-pipeline-abc123456789")
+	assert.Equal(t, "feat: x", rev.Annotations["client.example.com/commit-message"])
+	assert.Equal(t, "controller", rev.Annotations["shared"])
+}
+
+func TestMergeAnnotations(t *testing.T) {
+	assert.Nil(t, mergeAnnotations(nil, nil))
+	assert.Equal(t, map[string]string{"a": "1"}, mergeAnnotations(nil, map[string]string{"a": "1"}))
+	assert.Equal(t, map[string]string{"a": "1"}, mergeAnnotations(map[string]string{"a": "1"}, nil))
+	assert.Equal(t, map[string]string{"a": "1", "b": "new"},
+		mergeAnnotations(map[string]string{"a": "1", "b": "old"}, map[string]string{"b": "new"}))
+}
