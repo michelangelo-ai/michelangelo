@@ -140,6 +140,42 @@ func TestBeforeCreate_RunAnnotationsWinOverSnapshot(t *testing.T) {
 	assert.Equal(t, "run-image", request.PipelineRun.Annotations["michelangelo.ai/uniflow-image-id"])
 }
 
+// A revision-pinned run must NOT inherit Michelangelo-managed annotations from the
+// snapshotted Pipeline. MetadataStoragePrimaryKeyAnnotation is the one that corrupts the
+// metadata store: copying it onto the run makes every revision-pinned run of a
+// Pipeline inherit the Pipeline's MySQL primary key, so they all upsert onto the single
+// row keyed by the Pipeline's uid and overwrite each other's blobs. Ordinary client
+// annotations must still be carried over.
+func TestBeforeCreate_StripsPlatformAnnotationsFromSnapshot(t *testing.T) {
+	snapshotted := &v2.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pipeline",
+			Namespace: testNamespace,
+			Annotations: map[string]string{
+				api.MetadataStoragePrimaryKeyAnnotation: "pipeline-uid-123",
+				api.ImmutableAnnotation:                 "true",
+				api.DeletingAnnotation:                  "true",
+				api.DeletePropagationAnnotation:         "Foreground",
+				"michelangelo.ai/uniflow-image-id":      "image-x",
+			},
+		},
+		Spec: v2.PipelineSpec{Description: "revision X"},
+	}
+	hook := setUpHook(t, snapshotRevision(t, "rev-x", snapshotted))
+
+	request := newCreateRequest("rev-x")
+	require.NoError(t, hook.BeforeCreate(context.Background(), request))
+
+	annotations := request.PipelineRun.Annotations
+	assert.NotContains(t, annotations, api.MetadataStoragePrimaryKeyAnnotation,
+		"primary-key annotation must never be copied from the snapshot")
+	assert.NotContains(t, annotations, api.ImmutableAnnotation)
+	assert.NotContains(t, annotations, api.DeletingAnnotation)
+	assert.NotContains(t, annotations, api.DeletePropagationAnnotation)
+	assert.Equal(t, "image-x", annotations["michelangelo.ai/uniflow-image-id"],
+		"client annotations must still be copied from the snapshot")
+}
+
 // Revisions snapshot several resource kinds; a non-Pipeline revision must be
 // rejected loudly rather than falling back to the live Pipeline.
 func TestBeforeCreate_RejectsNonPipelineRevision(t *testing.T) {

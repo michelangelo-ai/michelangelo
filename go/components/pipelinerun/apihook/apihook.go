@@ -23,6 +23,23 @@ import (
 // not valid targets for a PipelineRun.
 const pipelineKind = "Pipeline"
 
+// platformManagedAnnotations are annotation keys Michelangelo owns and manages
+// itself. They must never be copied from a Revision's snapshotted Pipeline onto
+// a PipelineRun.
+//
+// MetadataStoragePrimaryKeyAnnotation is the dangerous one: it is the stable key
+// the ingester uses to address a row in MySQL. Copying it from the Pipeline makes
+// every revision-pinned run of that Pipeline inherit the Pipeline's primary key,
+// so all of them upsert onto the single row keyed by the Pipeline's uid and
+// silently overwrite each other's blobs. The rest are lifecycle markers that only
+// make sense on the object that actually owns them.
+var platformManagedAnnotations = map[string]struct{}{
+	api.MetadataStoragePrimaryKeyAnnotation: {},
+	api.ImmutableAnnotation:                 {},
+	api.DeletingAnnotation:                  {},
+	api.DeletePropagationAnnotation:         {},
+}
+
 // RegisterPipelineRunAPIHook registers the API hook that stamps the owning
 // Pipeline as the controller ownerReference on PipelineRuns at creation, and
 // stamps the owning Pipeline's type as the michelangelo/SourcePipelineType
@@ -281,6 +298,12 @@ func (a apiHook) resolveRevision(ctx context.Context, request *v2.CreatePipeline
 	request.PipelineRun.Spec.PipelineSpec = &pipeline.Spec
 
 	for k, v := range pipeline.GetAnnotations() {
+		// Platform-managed annotations are never inherited from the snapshot; see
+		// platformManagedAnnotations for why the primary-key annotation in particular
+		// would corrupt the metadata store.
+		if _, managed := platformManagedAnnotations[k]; managed {
+			continue
+		}
 		if request.PipelineRun.Annotations == nil {
 			request.PipelineRun.Annotations = map[string]string{}
 		}
