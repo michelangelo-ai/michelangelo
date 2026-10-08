@@ -13,7 +13,10 @@ All resource types support `get`, `apply`, and `delete` (see [supported resource
 | `ma pipeline delete` | Delete a pipeline (cascades to child runs by default) |
 | `ma pipeline_run kill` | Terminate a running pipeline run |
 | `ma trigger_run kill` | Terminate a running trigger |
+| `ma trigger_run create` | Start a trigger run from a trigger defined on a pipeline |
 | `ma sandbox create` | Set up a local development environment |
+| `ma sandbox sync` | Redeploy services into an existing local environment |
+| `ma sandbox snapshot create` / `restore` | Save or restore the local environment's Michelangelo AI resources |
 | `ma sandbox delete` | Tear down the local environment |
 
 ### Supported resource types
@@ -23,7 +26,7 @@ All resource types support `get`, `apply`, and `delete` (see [supported resource
 | Project | `project` | Namespace and team ownership for ML resources | get, apply, delete |
 | Pipeline | `pipeline` | Registered workflow with configuration and scheduling | get, apply, delete, run, dev-run |
 | PipelineRun | `pipeline_run` | Single execution instance of a pipeline | get, apply, delete, kill |
-| TriggerRun | `trigger_run` | Scheduled or on-demand pipeline execution trigger | get, apply, delete, kill |
+| TriggerRun | `trigger_run` | Scheduled or on-demand pipeline execution trigger | get, apply, delete, kill, create |
 | Model | `model` | Trained model artifact with versioning | get, apply, delete |
 | ModelFamily | `model_family` | Group of related model versions | get, apply, delete |
 | Deployment | `deployment` | Model serving deployment configuration | get, apply, delete |
@@ -79,14 +82,17 @@ We will abstract this part like `ma <RESOURCE_TYPE> <COMMAND>` in below.
 
 ### GET - Retrieve resource
 
-Retrieve information about an existing resource by project and name. If you don't specify the `--name` field, it lists all resources under the specified project.
+Retrieve information about an existing resource by project and name. Pass the name either as a positional argument or with `--name`. If you omit the name, `get` lists all resources in the specified project.
 
 Syntax:
 
 ```bash
-ma <RESOURCE_TYPE> get --namespace="<namespace>" [--name="<name>"]
-# Short form: -n for --namespace
-ma <RESOURCE_TYPE> get -n "<namespace>" [--name="<name>"]
+ma <RESOURCE_TYPE> get [<name>] --namespace="<namespace>" [--output=<table|yaml|json>]
+ma <RESOURCE_TYPE> get --namespace="<namespace>" [--name="<name>"] [--limit=<n>] [--output=<table|yaml|json>]
+ma <RESOURCE_TYPE> get --all-namespaces [--limit=<n>] [--output=<table|yaml|json>]
+# Short form: -n for --namespace, -A for --all-namespaces, -o for --output
+ma <RESOURCE_TYPE> get "<name>" -n "<namespace>" [-o <table|yaml|json>]
+ma <RESOURCE_TYPE> get -A [-o <table|yaml|json>]
 ```
 
 Examples:
@@ -106,24 +112,37 @@ ma project get --namespace="my-project" --name="my-project"
 
 # Get a pipeline run
 ma pipeline_run get --namespace="my-project" --name="run-001"
+
+# Get a pipeline, passing the name positionally
+ma pipeline get bert-cola-test -n "my-project"
+
+# List pipelines across every project
+ma pipeline get --all-namespaces
+
+# Print a pipeline as YAML instead of a table
+ma pipeline get --namespace="my-project" --name="bert-cola-test" --output=yaml
 ```
 
 #### Arguments
 
-The following argument is available for list operations (get command without `--name`):
+- `<name>` / `--name` — name of the resource to get. If you pass both, the positional name wins. Omit both to list.
+- `--namespace` / `-n` — project to read from. Required unless you pass `--all-namespaces`.
+- `--all-namespaces` / `-A` — list the resource type across all projects. `--namespace` is ignored, and you can't combine it with a name.
+- `--output` / `-o` — output format: `table`, `yaml`, or `json` (default: `table`). Applies to single resources and lists.
+- `--limit` — maximum number of results to return when listing (default: 100)
 
-- `--limit [n]` - maximum number of results to return (default: 100)
+Lists come back newest first, ordered by `metadata.creation_timestamp`. Some resource types add their own list filters; see [Type-specific commands](#type-specific-commands). Those filters apply only when listing, not when you get a single resource by name.
 
 ### APPLY - Create or update a resource from YAML
 
-Apply (create or update) a resource from a YAML configuration file. The `apply` command works as an upsert: it creates the resource if it doesn't exist, or updates it if it does. The resource type is automatically detected from the `apiVersion` and `kind` fields in the YAML.
+Apply (create or update) a resource from a YAML configuration file. The `apply` command works as an upsert: it creates the resource if it doesn't exist, or updates it if it does. The resource type comes from `<RESOURCE_TYPE>` on the command line; the YAML's `apiVersion` and `kind` must still be present. With `-R`, files whose `kind` doesn't match `<RESOURCE_TYPE>` are skipped.
 
 Syntax:
 
 ```bash
-ma <RESOURCE_TYPE> apply --file="<YAML_FILE_PATH>"
-# Short form: -f for --file
-ma <RESOURCE_TYPE> apply -f "<YAML_FILE_PATH>"
+ma <RESOURCE_TYPE> apply --file="<YAML_FILE_PATH>" [--root="<ROOT_DIR>"] [--recursive] [--dry-run]
+# Short form: -f for --file, -r for --root, -R for --recursive
+ma <RESOURCE_TYPE> apply -f "<YAML_FILE_PATH>" [-r "<ROOT_DIR>"] [-R] [--dry-run]
 ```
 
 Examples:
@@ -134,7 +153,20 @@ ma pipeline apply --file="./examples/bert_cola/pipeline.yaml"
 
 # Apply a project configuration
 ma project apply --file="./project.yaml"
+
+# Apply every Pipeline YAML under a directory, recursively
+ma pipeline apply --file="./pipelines/" --recursive
+
+# Validate a change on the server without saving it
+ma pipeline apply --file="./examples/bert_cola/pipeline.yaml" --dry-run
 ```
+
+#### Arguments
+
+- `--file` / `-f` — path to the YAML file, or to a directory when used with `--recursive` (required)
+- `--root` / `-r` — external workspace root. When set, it is prepended to `--file`.
+- `--recursive` / `-R` — when `--file` is a directory, walk it recursively and apply every `.yaml` file whose `kind` matches `<RESOURCE_TYPE>`. Other files are skipped with a message, and an error in one file doesn't stop the walk. If any file fails, the command reports the failed files at the end and exits with an error.
+- `--dry-run` — server-side dry run: the server validates the request and rolls it back, so nothing is saved
 
 ### DELETE - Remove a resource
 
@@ -187,6 +219,29 @@ Some resource types support additional commands beyond GET, APPLY, and DELETE.
 
 ### Pipeline
 
+#### GET filters - Narrow a pipeline list
+
+When listing pipelines, you can filter by owner and type. Pipeline lists also show `OWNER` and `TYPE` columns.
+
+Syntax:
+
+```bash
+ma pipeline get --namespace="<namespace>" [--owner="<user>"] [--type=<PIPELINE_TYPE>]
+```
+
+Examples:
+
+```bash
+# List the training pipelines a user owns
+ma pipeline get --namespace="my-project" --owner="alice" --type=TRAIN
+
+# List evaluation pipelines across all projects
+ma pipeline get --all-namespaces --type=EVAL
+```
+
+- `--owner` — list only pipelines owned by this user
+- `--type` — list only pipelines of this type, e.g. `TRAIN`, `EVAL`, or `PREDICTION`. Case-insensitive, and the full enum name (`PIPELINE_TYPE_TRAIN`) also works. An unknown type fails with the list of valid values.
+
 #### RUN - Execute a pipeline
 
 The RUN command is specifically available for pipelines to create and execute pipeline runs. To run a pipeline, you need to register your pipeline first using `ma pipeline apply -f <pipeline_conf.yaml>`.
@@ -194,9 +249,9 @@ The RUN command is specifically available for pipelines to create and execute pi
 Syntax:
 
 ```bash
-ma pipeline run --namespace="<namespace>" --name="<pipeline_name>"
+ma pipeline run --namespace="<namespace>" --name="<pipeline_name>" [--dry-run]
 # Short form: -n for --namespace
-ma pipeline run -n "<namespace>" --name="<pipeline_name>"
+ma pipeline run -n "<namespace>" --name="<pipeline_name>" [--dry-run]
 ```
 
 Example:
@@ -204,11 +259,15 @@ Example:
 ```bash
 # Run a registered pipeline
 ma pipeline run --namespace="my-project" --name="bert-cola-test"
+
+# Check that the run would be accepted, without launching it
+ma pipeline run --namespace="my-project" --name="bert-cola-test" --dry-run
 ```
 
 ##### Arguments
 
 - `--resume_from` - create resumed pipeline run from specified pipeline run (specifying resume_from step is optional)
+- `--dry-run` — the server validates the pipeline and parameters, then rolls back. No run is launched.
 
 ##### Resume_From Argument
 
@@ -319,6 +378,29 @@ Adding `--file-sync` to the `pipeline dev-run` command enables testing of uncomm
 
 ### Pipeline_run
 
+#### GET filters - Narrow a pipeline run list
+
+When listing pipeline runs, you can filter by who launched the run and by revision. Pipeline run lists also show `REVISION`, `USER`, `ENVIRONMENT`, and `STATE` columns.
+
+Syntax:
+
+```bash
+ma pipeline_run get --namespace=<NAMESPACE> [--actor=<USER>] [--revision=<PATTERN>]
+```
+
+Examples:
+
+```bash
+# List runs launched by a user
+ma pipeline_run get --namespace=my-project --actor=alice
+
+# List runs whose revision name contains "bert-cola"
+ma pipeline_run get --namespace=my-project --revision="%bert-cola%"
+```
+
+- `--actor` — list only runs launched by this user
+- `--revision` — list only runs whose revision name matches this pattern. The server matches it with SQL `LIKE`, so use `%` as a wildcard.
+
 #### Kill - Terminate a pipeline run
 
 The KILL command is used to cleanly terminate a running pipeline. It sets the PipelineRun status to "killed" and aborts the pipeline execution in Cadence/Temporal. The command will prompt for confirmation unless the `--yes` flag is provided.
@@ -326,7 +408,7 @@ The KILL command is used to cleanly terminate a running pipeline. It sets the Pi
 Syntax:
 
 ```bash
-ma pipeline_run kill --namespace=<NAMESPACE> --name=<NAME> [--yes]
+ma pipeline_run kill --namespace=<NAMESPACE> --name=<NAME> [--yes] [--dry-run]
 ```
 
 Parameters:
@@ -334,6 +416,7 @@ Parameters:
 - `--namespace`: Kubernetes namespace where the pipeline run exists
 - `--name`: Name of the pipeline run to kill
 - `--yes`: (Optional) Skip confirmation prompt and kill immediately
+- `--dry-run`: (Optional) The server checks that you're allowed to kill the run, then rolls back. `spec.kill` is not set and the run keeps going. The confirmation prompt still appears unless you pass `--yes`.
 
 Example:
 
@@ -343,7 +426,38 @@ ma pipeline_run kill --namespace=my-project --name=pipeline-run-20251118-194500-
 
 # Kill a pipeline run without confirmation prompt
 ma pipeline_run kill --namespace=my-project --name=pipeline-run-20251118-194500-8cdb1538 --yes
+
+# Check permission to kill a run without killing it
+ma pipeline_run kill --namespace=my-project --name=pipeline-run-20251118-194500-8cdb1538 --dry-run --yes
 ```
+
+### Revision
+
+#### GET filters - Narrow a revision list
+
+When listing revisions, you can filter by the kind of resource a revision belongs to (pipeline, model, or deployment) and by owner. Revision lists also show `TYPE`, `USER`, and `BASE_RESOURCE` columns.
+
+Syntax:
+
+```bash
+ma revision get --namespace=<NAMESPACE> [--pipeline=<PATTERN> | --model=<PATTERN> | --deployment=<PATTERN>] [--owner=<USER>]
+```
+
+Examples:
+
+```bash
+# List all pipeline revisions in a project
+ma revision get --namespace=my-project --pipeline=""
+
+# List revisions of models whose name starts with "bert"
+ma revision get --namespace=my-project --model="bert%"
+
+# List a user's deployment revisions
+ma revision get --namespace=my-project --deployment="" --owner=alice
+```
+
+- `--pipeline`, `--model`, `--deployment` — list only revisions of that resource kind. The value is matched against the resource's name with SQL `LIKE` (`%` is a wildcard). Pass an empty value (`--pipeline=""`) to match every revision of that kind; the flag always needs a value. These three flags are mutually exclusive.
+- `--owner` — list only revisions owned by this user. Combines with any of the flags above.
 
 ### Trigger_run
 
@@ -354,8 +468,15 @@ The KILL command is used to cleanly terminate a running trigger_run resource. Th
 Syntax:
 
 ```bash
-ma trigger_run kill --namespace=<NAMESPACE> --name=<NAME> [--yes]
+ma trigger_run kill --namespace=<NAMESPACE> --name=<NAME> [--yes] [--dry-run]
 ```
+
+Parameters:
+
+- `--namespace`: Project where the trigger run exists
+- `--name`: Name of the trigger run to kill
+- `--yes`: (Optional) Skip confirmation prompt and kill immediately
+- `--dry-run`: (Optional) The server checks that you're allowed to kill the trigger run, then rolls back. `spec.kill` is not set and the trigger keeps running. The confirmation prompt still appears unless you pass `--yes`.
 
 Example:
 
@@ -365,6 +486,38 @@ ma trigger_run kill --namespace=my-project --name=training-pipeline-cron-trigger
 
 # Kill a trigger run without confirmation prompt
 ma trigger_run kill --namespace=my-project --name=training-pipeline-cron-trigger --yes
+
+# Check permission to kill a trigger run without killing it
+ma trigger_run kill --namespace=my-project --name=training-pipeline-cron-trigger --dry-run --yes
+```
+
+#### Create - Start a trigger run from a pipeline's trigger
+
+Create a TriggerRun from a pipeline's trigger configuration. The command looks up `<TRIGGER_NAME>` in the registered pipeline's `triggerMap` and creates a TriggerRun named `<TRIGGER_NAME>-<random suffix>`, with you as the actor. Use it to start a trigger that's already defined on the pipeline; use `ma trigger_run apply -f` instead when you want to create a TriggerRun from your own YAML.
+
+Syntax:
+
+```bash
+ma trigger_run create --namespace=<NAMESPACE> --pipeline=<PIPELINE_NAME> --trigger-name=<TRIGGER_NAME> [--dry-run]
+# Short form: -n for --namespace, -p for --pipeline, -t for --trigger-name
+ma trigger_run create -n <NAMESPACE> -p <PIPELINE_NAME> -t <TRIGGER_NAME> [--dry-run]
+```
+
+Parameters:
+
+- `--namespace` / `-n`: Project of the pipeline. The trigger run is created in the same project. (Required)
+- `--pipeline` / `-p`: Name of the registered pipeline (Required)
+- `--trigger-name` / `-t`: Key of the trigger in the pipeline's `triggerMap` (Required). If the pipeline has no triggers, or the name isn't found, the command fails and lists the available triggers.
+- `--dry-run`: (Optional) The server validates the trigger configuration and rolls back without creating a TriggerRun.
+
+Example:
+
+```bash
+# Start the pipeline's "daily" trigger
+ma trigger_run create --namespace=my-project --pipeline=training-pipeline --trigger-name=daily
+
+# Validate it first without creating anything
+ma trigger_run create -n my-project -p training-pipeline -t daily --dry-run
 ```
 
 ## Sandbox commands
@@ -377,11 +530,21 @@ The `ma sandbox` commands manage a local K3d development environment. For prereq
 | `ma sandbox create --workflow temporal` | Create with Temporal instead of Cadence |
 | `ma sandbox create --exclude ui` | Create without specific services |
 | `ma sandbox create --create-compute-cluster` | Create with a Ray compute cluster |
+| `ma sandbox create --compute-cluster-name <name>` | Name the compute cluster created by `--create-compute-cluster` (default: `michelangelo-compute-0`) |
+| `ma sandbox create --wait-timeout <seconds>` | Seconds to wait for pods to become ready (default: 600) |
+| `ma sandbox create --include-experimental <service>` | Also deploy experimental services (currently `mlflow`) |
+| `ma sandbox create --set KEY=VALUE` | Pass a value through to `helm upgrade`/`helm install`. Repeatable. |
+| `ma sandbox sync` | Redeploy services into an existing cluster, skipping cluster creation and image import. Falls back to a full `create` if the cluster doesn't exist. Accepts `--exclude`, `--workflow`, `--wait-timeout`, `--include-experimental`, and `--set`. |
 | `ma sandbox delete` | Tear down the cluster and all resources |
+| `ma sandbox delete --compute-cluster-name <name>` | Name of the compute cluster to delete along with the sandbox, if it exists (default: `michelangelo-compute-0`). Use it when you passed a custom name to `create --compute-cluster-name`. |
 | `ma sandbox start` | Start a stopped cluster |
 | `ma sandbox stop` | Stop the cluster (preserves state) |
 | `ma sandbox demo pipeline` | Create demo pipeline resources |
 | `ma sandbox demo inference` | Create demo inference server resources |
+| `ma sandbox demo inference-multicluster` | Create a multi-cluster inference server demo |
+| `ma sandbox demo kueue [--compute-cluster-name <name>]` | Install Kueue on a registered compute cluster, create the demo ClusterQueue and LocalQueue, and set the cluster's `scheduler_type`. Defaults to the sandbox cluster itself (`michelangelo-sandbox`). See the [Kueue scheduler backend guide](../../operator-guides/jobs/kueue-scheduler-backend.md). |
+| `ma sandbox snapshot create` | Save all Michelangelo AI resources (CRDs) in the cluster to disk |
+| `ma sandbox snapshot restore <timestamp>` | Restore a snapshot into the cluster. `<timestamp>` is required: the bare timestamp (e.g. `20260807-170000`) or the full path printed by `snapshot create`. |
 
 ## YAML Resource Examples
 
@@ -462,6 +625,7 @@ rpc-encoding = "proto"
 
 [plugin]
 dirs = []  # Add custom plugin directories here
+packages = []  # Add importable plugin packages here
 ```
 
 ### Configurable fields
@@ -531,7 +695,25 @@ my-plugins/
 
 > **Note**: Always include `*args, **kwargs` in your plugin function signatures. This ensures your plugin remains compatible with future mactl versions that may pass additional context. If it's not used, you may use `*_, **__` as a convention to indicate unused parameters.
 
-**Note**: Support for per-module plugin configuration via `plugin.modules` is coming soon.
+**Plugin packages**: Instead of a directory path, you can list importable Python package names. Each package must contain `entity/{entity_type}/main.py`, in the same layout as a plugin directory:
+
+```toml
+[plugin]
+packages = [
+    "my_company_plugins",
+]
+```
+
+Prefer `packages` over `dirs` for plugins shipped inside a wheel or PEX. They're loaded through the import system, so they work under zipimport and relative imports inside the plugin work.
+
+**Module overrides**: `[plugin.modules]` replaces individual functions anywhere in the CLI. Each key is the function to replace and each value is the replacement, both as dotted `module.function` paths:
+
+```toml
+[plugin.modules]
+"michelangelo.cli.mactl.some_module.some_func" = "my_pkg.overrides.some_func"
+```
+
+Overrides are applied before plugin discovery, so they have the highest priority and plugins pick up the replaced functions. An override that fails to import is logged as an error and skipped; it doesn't stop the CLI.
 
 ### Environment variables
 
@@ -567,3 +749,5 @@ export LOG_LEVEL=DEBUG
 ```
 
 This will provide detailed information about gRPC calls and internal operations.
+
+`ma -vv` appears in `ma -h` but currently has no effect; use `LOG_LEVEL=DEBUG`.
