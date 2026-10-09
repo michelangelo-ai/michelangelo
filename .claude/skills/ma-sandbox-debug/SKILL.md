@@ -2,6 +2,13 @@
 name: ma-sandbox-debug
 description: Tail logs, inspect pods, and diagnose unhealthy services in a running Michelangelo sandbox. Use when a service is crashlooping, returning errors, or not responding as expected. Triggers on "check logs", "why is X failing", "debug sandbox", "kubectl logs".
 user-invocable: true
+allowed-tools:
+  - Bash(bash .claude/skills/ma-sandbox-scripts/start.sh)
+  - Bash(bash .claude/skills/ma-sandbox-scripts/set_log_level.sh *)
+  - Bash(bash .claude/skills/ma-sandbox-scripts/capture_service_logs.sh *)
+  - Bash(kubectl get *)
+  - Bash(kubectl logs *)
+  - Bash(kubectl describe *)
 ---
 
 # Sandbox Debug

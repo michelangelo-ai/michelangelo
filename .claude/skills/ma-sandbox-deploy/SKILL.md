@@ -2,6 +2,16 @@
 name: ma-sandbox-deploy
 description: Build a Go service binary, package it into a Docker image, import into k3d, and deploy via helm sync. Use when iterating on apiserver (or another Go service) and wanting to test changes in a running sandbox without waiting for CI.
 user-invocable: true
+allowed-tools:
+  - Bash(bash .claude/skills/ma-sandbox-scripts/deploy-local.sh *)
+  - Bash(bash .claude/skills/ma-sandbox-scripts/start.sh)
+  - Bash(bash .claude/skills/ma-sandbox-scripts/python-env.sh *)
+  - Bash(bash .claude/skills/ma-sandbox-scripts/check-backend.sh)
+  - Bash(kubectl get *)
+  - Bash(kubectl logs *)
+  - Bash(kubectl rollout status *)
+  - Bash(docker image inspect *)
+  - Edit(.claude/skills/ma-sandbox-scripts/**)
 ---
 
 # Sandbox Local Image Dev Loop
