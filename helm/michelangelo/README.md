@@ -250,6 +250,10 @@ Top-level keys. See [`values.yaml`](./values.yaml) for the full annotated schema
 | `objectStorage.accessKeyId` | string | `""` | conditional | Required unless `objectStorage.existingSecret` is set. |
 | `objectStorage.secretAccessKey` | string | `""` | conditional | Required unless `objectStorage.existingSecret` is set. |
 | `objectStorage.existingSecret` | string | `""` | no | Name of a pre-existing Secret with `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` keys. Takes precedence over the inline keys. |
+| `gcsStorage.enabled` | bool | `false` | no | Render native GCS (`gs://`) client configuration for the worker and controller manager. With workload identity no other keys are needed. |
+| `gcsStorage.existingSecret` | string | `""` | no | Name of a pre-existing Secret with a `credentials.json` key (GCP service account JSON), mounted read-only at `/etc/gcs/credentials.json`. Leave empty for Application Default Credentials. |
+| `gcsStorage.endpoint` | string | `""` | no | Custom storage endpoint (private Google access or an emulator). |
+| `gcsStorage.anonymous` | bool | `false` | no | Disable authentication. Public buckets and emulators only. |
 | `workflow.engine` | string | `cadence` | yes | `cadence` or `temporal`. Mutually exclusive — selects which worker config block renders. |
 | `workflow.endpoint` | string | `""` | **yes** | Workflow engine address (e.g. `cadence-frontend:7833`, `temporal-frontend:7233`). |
 | `workflow.domain` | string | `default` | no | Cadence domain or Temporal namespace. |
