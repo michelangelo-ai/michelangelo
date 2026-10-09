@@ -67,19 +67,33 @@ jobs:
       - name: Export base API
         working-directory: base/go
         run: |
+          # apidiff has no "-export" flag; export data for one package is
+          # written with `apidiff -w FILE IMPORT_PATH`, one file per package
+          # (must run from the directory holding that package's go.mod, per
+          # apidiff's own -w docs, hence working-directory: base/go).
+          mkdir -p /tmp/apidiff-base
           go list ./... 2>/dev/null | while read -r pkg; do
-            apidiff -incompatible -export "$pkg" 2>/dev/null || true
-          done > /tmp/base-api.txt || true
+            safe_name=$(echo "$pkg" | tr '/' '_')
+            apidiff -w "/tmp/apidiff-base/${safe_name}.export" "$pkg" 2>/dev/null || true
+          done
 
       - name: Run apidiff against PR head
         id: apidiff
         working-directory: head/go
         run: |
+          # `apidiff OLD NEW` takes exactly two args -- either import paths or
+          # export-data files, and the two can be mixed. Compare each
+          # package's base export-data file (OLD) against its live head
+          # import path (NEW); a package with no base export file is new in
+          # this PR, so there's nothing to diff it against.
           output=""
           breaking=false
           pkgs=$(go list ./... 2>/dev/null || true)
           for pkg in $pkgs; do
-            result=$(apidiff -incompatible "github.com/michelangelo-ai/michelangelo/go${pkg#github.com/michelangelo-ai/michelangelo/go}" 2>/dev/null || true)
+            safe_name=$(echo "$pkg" | tr '/' '_')
+            base_export="/tmp/apidiff-base/${safe_name}.export"
+            [ -f "$base_export" ] || continue
+            result=$(apidiff -incompatible "$base_export" "$pkg" 2>/dev/null || true)
             if [ -n "$result" ]; then
               output="${output}\n**${pkg}**\n\`\`\`\n${result}\n\`\`\`\n"
               breaking=true
