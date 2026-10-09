@@ -1,3 +1,5 @@
+"""Uniflow core API: task and workflow decorators, context and I/O."""
+
 from michelangelo.uniflow.core.context import create_context
 from michelangelo.uniflow.core.decorator import (
     star_plugin,
@@ -15,7 +17,7 @@ __all__ = [
     "PipelineMetadata",
     "create_context",
     "star_plugin",
-    "task_context",
     "task",
+    "task_context",
     "workflow",
 ]
