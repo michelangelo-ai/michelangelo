@@ -45,6 +45,7 @@ from pytorch_lightning.utilities.deepspeed import (
 from ray.train.torch import TorchTrainer
 
 from michelangelo.lib.trainer.torch.pytorch_lightning._private.util import (
+    _apply_batch_limit,
     _is_deepspeed_strategy,
     _is_model_parallel_strategy,
     _train_loop_per_worker,
@@ -94,8 +95,11 @@ class LightningTrainerParam:
         data_collate_fn: Optional custom collate function passed to
             ``Dataset.iter_torch_batches``; defaults to Ray Data's column-tensor
             output.
-        lightning_trainer_kwargs: Extra keyword arguments forwarded verbatim to
-            ``pytorch_lightning.Trainer(...)``.
+        lightning_trainer_kwargs: Extra keyword arguments forwarded to
+            ``pytorch_lightning.Trainer(...)``. ``limit_train_batches`` and
+            ``limit_val_batches`` are also applied to the matching Ray Dataset, and
+            a float fraction is resolved to an int batch count. See
+            :func:`~_private.util._apply_batch_limit` for the row math and caveats.
         transfer_learning_spec: Optional warm-start spec describing layer freezing
             patterns.
         incremental_training_spec: Optional spec for continuing from an existing
@@ -191,6 +195,38 @@ class LightningTrainer(TorchTrainer):
         train_data = train_loop_config.pop("train_data")
         val_data = train_loop_config.pop("val_data")
 
+        # Bound each split's dataset by its Lightning batch limit so the data
+        # pipeline stops reading at the cap (and fractional limits become ints
+        # Lightning accepts for loaders without __len__). The worker count comes
+        # from the construction-time scaling_config; an override passed to
+        # train() does not resize an already-capped dataset.
+        num_workers = scaling_config.num_workers if scaling_config is not None else 1
+        trainer_kwargs = train_loop_config.get("lightning_trainer_kwargs") or {}
+        unlimited_train_data, unlimited_val_data = train_data, val_data
+        train_data, train_limit = _apply_batch_limit(
+            train_data,
+            trainer_kwargs.get("limit_train_batches"),
+            trainer_param.batch_size,
+            num_workers,
+            "train",
+        )
+        val_data, val_limit = _apply_batch_limit(
+            val_data,
+            trainer_kwargs.get("limit_val_batches"),
+            trainer_param.batch_size,
+            num_workers,
+            "val",
+        )
+        for split, limit in (("train", train_limit), ("val", val_limit)):
+            if limit is not None:
+                trainer_kwargs[f"limit_{split}_batches"] = limit
+        self._batch_limit_num_workers: int | None = (
+            num_workers
+            if train_data is not unlimited_train_data
+            or val_data is not unlimited_val_data
+            else None
+        )
+
         # A configured profiler needs an estimate of steps-per-epoch to derive
         # (or validate) its sampling schedule, which needs the training row
         # count. Only pay for it when a profiler is actually requested: count()
@@ -283,6 +319,18 @@ class LightningTrainer(TorchTrainer):
                     "constructor to control resumption."
                 )
             self.run_config = run_config
+
+        capped_for = self._batch_limit_num_workers
+        if capped_for is not None and self.scaling_config.num_workers != capped_for:
+            _logger.warning(
+                "limit_*_batches capped the datasets for %s worker(s) at "
+                "construction, but train() runs with %s. Each worker will see "
+                "fewer rows than its limit allows, so Lightning may stop short "
+                "of the configured number of batches. Pass the scaling_config "
+                "to the LightningTrainer constructor instead.",
+                capped_for,
+                self.scaling_config.num_workers,
+            )
 
         result = self.fit()
         if result.error:
