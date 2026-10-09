@@ -192,11 +192,13 @@ func nonNilRayStartParams(params map[string]string) map[string]string {
 }
 
 func getHeadGroupSpec(head *v2pb.RayHeadSpec) rayv1.HeadGroupSpec {
-	return rayv1.HeadGroupSpec{
+	spec := rayv1.HeadGroupSpec{
 		ServiceType:    corev1.ServiceType(head.GetServiceType()),
 		RayStartParams: nonNilRayStartParams(head.GetRayStartParams()),
 		Template:       k8sptr.Deref(head.GetPod(), corev1.PodTemplateSpec{}),
 	}
+	tolerateNVIDIAGPUTaint(&spec.Template)
+	return spec
 }
 
 func getWorkerGroupSpecs(clusterName string, workers []*v2pb.RayWorkerSpec) []rayv1.WorkerGroupSpec {
@@ -210,6 +212,7 @@ func getWorkerGroupSpecs(clusterName string, workers []*v2pb.RayWorkerSpec) []ra
 			RayStartParams: nonNilRayStartParams(workerGroup.GetRayStartParams()),
 			Template:       k8sptr.Deref(workerGroup.Pod, corev1.PodTemplateSpec{}),
 		}
+		tolerateNVIDIAGPUTaint(&wg.Template)
 		workerGroupSpecsJSON[i] = wg
 	}
 	return workerGroupSpecsJSON

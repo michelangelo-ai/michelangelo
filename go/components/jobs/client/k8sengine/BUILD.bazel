@@ -6,6 +6,7 @@ go_library(
         "constants.go",
         "mapper.go",
         "module.go",
+        "nvidia_gpu.go",
         "ray.go",
     ],
     importpath = "github.com/michelangelo-ai/michelangelo/go/components/jobs/client/k8sengine",
@@ -31,6 +32,7 @@ go_test(
     name = "go_default_test",
     srcs = [
         "mapper_test.go",
+        "nvidia_gpu_test.go",
         "ray_collector_test.go",
     ],
     embed = [":go_default_library"],
