@@ -247,14 +247,6 @@ func (c revisionServiceHandler) GetRevision(
 		logging.APIProcedureTag: "GetRevision",
 	})
 
-	getOptions := &metav1.GetOptions{}
-	if request.GetOptions != nil {
-		getOptions = request.GetOptions
-	}
-
-	result := &Revision{}
-	err = c.apiHandler.Get(ctx, request.Namespace, request.Name, getOptions, result)
-
 	defer c.auditLogEmitter.Emit(ctx, c.buildRevisionAuditLogEventForGet(
 		ctx,
 		request,
@@ -262,6 +254,32 @@ func (c revisionServiceHandler) GetRevision(
 		err,
 	),
 	)
+
+	// Authentication
+	userAuthenticated, err := c.auth.UserAuthenticated(ctx)
+	if !userAuthenticated {
+		logger.Error(err, "User is not authenticated")
+		metric.Counter("unauthenticated").Inc(1)
+		return nil, err
+	}
+
+	// Authorization
+	projectName := request.Namespace
+	userAuthorized, err := c.auth.UserAuthorized(ctx, projectName, authapi.Get, "Revision")
+
+	if !userAuthorized {
+		logger.Error(err, "User is not authorized")
+		metric.Counter("unauthorized").Inc(1)
+		return nil, err
+	}
+
+	getOptions := &metav1.GetOptions{}
+	if request.GetOptions != nil {
+		getOptions = request.GetOptions
+	}
+
+	result := &Revision{}
+	err = c.apiHandler.Get(ctx, request.Namespace, request.Name, getOptions, result)
 
 	if err != nil {
 		logger.Error(err, "Cannot get Revision request info from k8s/ETCD", "error", err, "api_msg_tag", "GetRevision")
@@ -513,6 +531,32 @@ func (c revisionServiceHandler) ListRevision(
 		logging.APIProcedureTag: "ListRevision",
 	})
 
+	defer c.auditLogEmitter.Emit(ctx, c.buildRevisionAuditLogEventForList(
+		ctx,
+		request,
+		resp,
+		err,
+	),
+	)
+
+	// Authentication
+	userAuthenticated, err := c.auth.UserAuthenticated(ctx)
+	if !userAuthenticated {
+		logger.Error(err, "User is not authenticated")
+		metric.Counter("unauthenticated").Inc(1)
+		return nil, err
+	}
+
+	// Authorization
+	projectName := request.Namespace
+	userAuthorized, err := c.auth.UserAuthorized(ctx, projectName, authapi.List, "Revision")
+
+	if !userAuthorized {
+		logger.Error(err, "User is not authorized")
+		metric.Counter("unauthorized").Inc(1)
+		return nil, err
+	}
+
 	result := &RevisionList{}
 	listOptions := &metav1.ListOptions{}
 	if request.ListOptions != nil {
@@ -523,14 +567,6 @@ func (c revisionServiceHandler) ListRevision(
 		listOptionsExt = request.ListOptionsExt
 	}
 	err = c.apiHandler.List(ctx, request.Namespace, listOptions, listOptionsExt, result)
-
-	defer c.auditLogEmitter.Emit(ctx, c.buildRevisionAuditLogEventForList(
-		ctx,
-		request,
-		resp,
-		err,
-	),
-	)
 
 	if err != nil {
 		logger.Error(err, "API Handler failed to List Revision", "error", err, "api_msg_tag", "ListRevision")
