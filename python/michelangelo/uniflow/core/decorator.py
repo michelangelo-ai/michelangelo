@@ -34,14 +34,21 @@ import json
 import logging
 import sys
 import threading
+from collections.abc import Mapping, Sequence
 from functools import update_wrapper, wraps
-from typing import Callable, Generic, Optional, TypeVar
+from typing import Any, Callable, Generic, Optional, TypeVar
 
 import fsspec
 
 from michelangelo.uniflow.core.codec import encoder
 from michelangelo.uniflow.core.image_spec import ImageSpec
 from michelangelo.uniflow.core.io_registry import IORegistry, default_io
+from michelangelo.uniflow.core.pipeline_metadata import (
+    METADATA_ATTR,
+    PipelineMetadata,
+    PipelineMetadataError,
+    describe_function,
+)
 from michelangelo.uniflow.core.ref import Ref, ref, unref
 from michelangelo.uniflow.core.task_config import Dependencies, TaskConfig
 from michelangelo.uniflow.core.utils import dot_path
@@ -430,15 +437,54 @@ def task(
     return decorator
 
 
-def workflow():
+def workflow(
+    *,
+    name: Optional[str] = None,
+    namespace: Optional[str] = None,
+    owner: Optional[str] = None,
+    description: Optional[str] = None,
+    type: Optional[str] = None,
+    image: Optional[str] = None,
+    git_ref: Optional[str] = None,
+    branch: Optional[str] = None,
+    labels: Optional[Mapping[str, str]] = None,
+    annotations: Optional[Mapping[str, str]] = None,
+    triggers: Optional[Mapping[str, Mapping[str, Any]]] = None,
+    notifications: Optional[Sequence[Mapping[str, Any]]] = None,
+):
     """Decorator for defining a Uniflow workflow.
 
     Marks a function as a workflow entry point. Workflows orchestrate multiple
     tasks together and define the overall execution flow. Unlike tasks, workflows
     are always executed locally and serve as the coordination layer.
 
+    The optional keyword arguments declare the workflow's Pipeline CR metadata
+    inline, as an alternative to a separate pipeline YAML (``pipeline.yaml``).
+    They are validated when the module is imported and read by registration
+    tooling (see ``michelangelo.uniflow.registration.pipeline_spec``); they
+    affect neither execution nor the transpiled Starlark.
+
+    Args:
+        name: ``metadata.name``; a DNS-1123 subdomain.
+        namespace: ``metadata.namespace``; a DNS-1123 label.
+        owner: ``spec.owner.name``.
+        description: ``spec.description``.
+        type: ``spec.type``; e.g. ``"TRAIN"``. Defaults to ``TRAIN``.
+        image: The ``michelangelo/uniflow-image`` annotation.
+        git_ref: ``spec.commit.gitRef``. Defaults to the current git commit.
+        branch: ``spec.commit.branch``. Defaults to the current git branch.
+        labels: ``metadata.labels``; Kubernetes label keys and values.
+        annotations: ``metadata.annotations``, besides ``image``.
+        triggers: ``spec.manifest.triggerMap``: trigger name to a ``Trigger``,
+            written as in a pipeline YAML (camelCase field names).
+        notifications: ``spec.notifications``: a list of ``Notification``
+            values, written as in a pipeline YAML.
+
     Returns:
         A decorator that marks a function as a workflow.
+
+    Raises:
+        PipelineMetadataError: At import time, if a metadata value is invalid.
 
     Example:
         Simple workflow::
@@ -471,7 +517,51 @@ def workflow():
                 metrics = evaluate_model_task(model, clean_data)
 
                 return {"model": model, "metrics": metrics}
+
+        Workflow with pipeline metadata::
+
+            @workflow(
+                name="training-pipeline",
+                namespace="my-team",
+                owner="jane.doe",
+                description="Trains the model.",
+                type="TRAIN",
+                labels={"team": "ml"},
+                triggers={
+                    "daily": {
+                        "cronSchedule": {"cron": "0 8 * * *"},
+                        "maxConcurrency": 1,
+                        "parametersMap": {
+                            "default": {"kwArgs": {"dataset_path": "s3://bucket/data"}}
+                        },
+                    },
+                },
+                notifications=[
+                    {
+                        "notificationType": "NOTIFICATION_TYPE_EMAIL",
+                        "resourceType": "RESOURCE_TYPE_PIPELINE_RUN",
+                        "eventTypes": ["EVENT_TYPE_PIPELINE_RUN_STATE_FAILED"],
+                        "emails": ["ml-team@example.com"],
+                    }
+                ],
+            )
+            def training_pipeline(dataset_path: str):
+                ...
     """
+    metadata = PipelineMetadata(
+        name=name,
+        namespace=namespace,
+        owner=owner,
+        description=description,
+        type=type,
+        image=image,
+        git_ref=git_ref,
+        branch=branch,
+        labels=labels,
+        annotations=annotations,
+        triggers=triggers,
+        notifications=notifications,
+    )
 
     def decorator(fn: Callable[P, R]) -> Callable[P, R]:
         """Mark function as a workflow.
@@ -483,6 +573,14 @@ def workflow():
             The original function with workflow marker.
         """
         log.debug("init-decorator: %s", dot_path(fn))
+        pipeline = None
+        if metadata != PipelineMetadata():
+            errors = metadata.validate()
+            if errors:
+                raise PipelineMetadataError(
+                    f"{describe_function(fn)}: " + "; ".join(errors)
+                )
+            pipeline = metadata.normalized()
 
         @wraps(fn)
         def wrapper(*args, **kwargs) -> R:
@@ -498,6 +596,9 @@ def workflow():
             return fn(*args, **kwargs)
 
         fn._uf_workflow = True
+        if pipeline is not None:
+            setattr(fn, METADATA_ATTR, pipeline)
+            setattr(wrapper, METADATA_ATTR, pipeline)
         return wrapper
 
     return decorator
