@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import ClassVar
 from unittest import TestCase
 
 from michelangelo.workflow.schema.exceptions import ConfigurationError
@@ -20,6 +21,8 @@ from michelangelo.workflow.schema.tabular_trainer import (
     ScalingConfig,
     TabularTrainerConfig,
     TrackerConfig,
+    column_names,
+    normalize_columns,
 )
 
 # ---------------------------------------------------------------------------
@@ -626,3 +629,274 @@ class TestTabularTrainerConfig(TestCase):
             TabularTrainerConfig()
         self.assertIn("lightning", str(ctx.exception))
         self.assertIn("custom", str(ctx.exception))
+
+
+# ---------------------------------------------------------------------------
+# Column specs: list form, dict form, ordering, validation
+# ---------------------------------------------------------------------------
+
+
+def _cols(*names: str) -> list[ColumnConfig]:
+    """Build a list-form column spec with the given names."""
+    return [ColumnConfig("torch.float32", [1], name=n) for n in names]
+
+
+def _lightning(**overrides) -> LightningTrainerConfig:
+    """Build a minimal LightningTrainerConfig with optional overrides."""
+    base = {
+        "model_class": "m",
+        "input_columns": _cols("a"),
+        "output_columns": _cols("y"),
+        "labels": _cols("l"),
+        "metadata_columns": [],
+    }
+    return LightningTrainerConfig(**{**base, **overrides})
+
+
+class TestColumnConfigName(TestCase):
+    """Tests for ``ColumnConfig.name``."""
+
+    def test_name_defaults_to_none(self):
+        """``name`` is optional and defaults to ``None``."""
+        self.assertIsNone(ColumnConfig("torch.float32").name)
+
+    def test_positional_construction_unchanged(self):
+        """``name`` is last, so ``ColumnConfig(dtype, shape)`` still works."""
+        cfg = ColumnConfig("torch.float32", [4])
+        self.assertEqual(
+            (cfg.data_type, cfg.shape, cfg.name), ("torch.float32", [4], None)
+        )
+
+
+class TestNormalizeColumns(TestCase):
+    """Tests for ``normalize_columns`` and ``column_names``."""
+
+    def test_list_form_preserves_order(self):
+        """List form keeps its order."""
+        names = ["zeta", "alpha", "mid", "beta"]
+        self.assertEqual(column_names(_cols(*names)), names)
+
+    def test_dict_form_uses_keys_in_insertion_order(self):
+        """Dict form copies each key into ``name`` in insertion order."""
+        spec = {n: ColumnConfig("torch.long", [2]) for n in ["z", "a", "m"]}
+        out = normalize_columns(spec)
+        self.assertEqual([c.name for c in out], ["z", "a", "m"])
+        self.assertEqual(out[0], ColumnConfig("torch.long", [2], "z"))
+
+    def test_dict_form_does_not_mutate_input(self):
+        """Normalizing a dict does not set ``name`` on the caller's entries."""
+        entry = ColumnConfig("torch.long")
+        normalize_columns({"a": entry})
+        self.assertIsNone(entry.name)
+
+    def test_dict_name_matching_key_allowed(self):
+        """A dict entry whose ``name`` equals its key is accepted."""
+        out = normalize_columns({"a": ColumnConfig("torch.long", name="a")})
+        self.assertEqual(out[0].name, "a")
+
+    def test_dict_name_conflicting_with_key_rejected(self):
+        """A dict entry whose ``name`` differs from its key is ambiguous."""
+        with self.assertRaisesRegex(ConfigurationError, "conflicting name"):
+            normalize_columns({"a": ColumnConfig("torch.long", name="b")}, "labels")
+
+    def test_mapping_entries_are_coerced(self):
+        """Plain-dict entries (e.g. from YAML or Struct) are accepted."""
+        out = normalize_columns(
+            [{"data_type": "torch.long", "shape": [1], "name": "a"}]
+        )
+        self.assertEqual(out, [ColumnConfig("torch.long", [1], "a")])
+
+    def test_mapping_entry_with_unknown_key_rejected(self):
+        """Mapping entries with unknown keys raise a clear error."""
+        with self.assertRaisesRegex(ConfigurationError, r"input_columns\[0\]"):
+            normalize_columns([{"data_type": "x", "bogus": 1}], "input_columns")
+
+    def test_non_column_entry_rejected(self):
+        """Entries that are neither ColumnConfig nor mapping are rejected."""
+        with self.assertRaisesRegex(ConfigurationError, "must be a ColumnConfig"):
+            normalize_columns(["a"], "labels")
+
+    def test_non_dict_non_list_rejected(self):
+        """A spec that is neither dict nor list is rejected."""
+        with self.assertRaisesRegex(ConfigurationError, "dict or a list"):
+            normalize_columns("a", "labels")  # type: ignore[arg-type]
+
+    def test_tuple_accepted(self):
+        """Tuples are treated like lists."""
+        self.assertEqual(column_names(tuple(_cols("a", "b"))), ["a", "b"])
+
+    def test_missing_name_in_list_rejected(self):
+        """List entries must have a name."""
+        with self.assertRaisesRegex(ConfigurationError, r"input_columns\[0\].*name"):
+            normalize_columns([ColumnConfig("torch.long")], "input_columns")
+
+    def test_empty_name_rejected(self):
+        """Empty or whitespace-only names are rejected."""
+        for bad in ("", "  "):
+            with (
+                self.subTest(name=bad),
+                self.assertRaisesRegex(ConfigurationError, "non-empty"),
+            ):
+                normalize_columns(_cols(bad))
+
+    def test_empty_dict_key_rejected(self):
+        """Empty dict keys are rejected."""
+        with self.assertRaisesRegex(ConfigurationError, "non-empty"):
+            normalize_columns({"": ColumnConfig("torch.long")})
+
+    def test_surrounding_whitespace_rejected(self):
+        """Names that differ only by surrounding whitespace are not accepted."""
+        with self.assertRaisesRegex(ConfigurationError, "leading or trailing"):
+            normalize_columns(_cols("a", " a"))
+        with self.assertRaisesRegex(ConfigurationError, "leading or trailing"):
+            normalize_columns({"a ": ColumnConfig("torch.long")})
+
+    def test_duplicate_name_rejected(self):
+        """Duplicate names in list form are rejected."""
+        with self.assertRaisesRegex(ConfigurationError, "duplicate column name 'a'"):
+            normalize_columns(_cols("a", "b", "a"), "output_columns")
+
+    def test_empty_spec_is_valid(self):
+        """An empty spec normalizes to an empty list."""
+        self.assertEqual(normalize_columns([]), [])
+        self.assertEqual(normalize_columns({}), [])
+
+
+class TestLightningTrainerConfigColumns(TestCase):
+    """Tests for column validation in ``LightningTrainerConfig``."""
+
+    def test_list_form_accepted_for_each_field(self):
+        """Each of the three fields accepts the list form."""
+        cfg = _lightning(
+            input_columns=_cols("b", "a"),
+            output_columns=_cols("q", "p"),
+            labels=_cols("y", "x"),
+        )
+        self.assertEqual(column_names(cfg.input_columns), ["b", "a"])
+        self.assertEqual(column_names(cfg.output_columns), ["q", "p"])
+        self.assertEqual(column_names(cfg.labels), ["y", "x"])
+
+    def test_dict_form_still_accepted(self):
+        """Dict form remains valid for backward compatibility."""
+        cfg = _lightning(input_columns={"a": ColumnConfig("torch.float32", [1])})
+        self.assertEqual(column_names(cfg.input_columns), ["a"])
+
+    def test_invalid_columns_rejected_per_field(self):
+        """Duplicate names are rejected for every column field."""
+        for field_name in ("input_columns", "output_columns", "labels"):
+            with (
+                self.subTest(field=field_name),
+                self.assertRaisesRegex(
+                    ConfigurationError, f"{field_name} contains duplicate"
+                ),
+            ):
+                _lightning(**{field_name: _cols("a", "a")})
+
+    def test_empty_name_rejected_at_construction(self):
+        """Empty names fail at construction, not mid-training."""
+        with self.assertRaisesRegex(ConfigurationError, "non-empty"):
+            _lightning(labels=_cols(""))
+
+
+class TestColumnOrderSerialization(TestCase):
+    """Order through protobuf ``Struct`` and the UniFlow codec."""
+
+    NAMES: ClassVar[list[str]] = ["zeta", "alpha", "mid", "beta"]
+
+    @staticmethod
+    def _struct_roundtrip(value):
+        from google.protobuf import json_format, struct_pb2
+
+        struct = struct_pb2.Struct()
+        json_format.ParseDict({"v": value}, struct)
+        return json_format.MessageToDict(struct)["v"]
+
+    def test_dict_form_loses_order_through_struct(self):
+        """Regression: documents why a dict cannot carry column order."""
+        spec = {n: {"data_type": "torch.float32"} for n in self.NAMES}
+        recovered = list(self._struct_roundtrip(spec))
+        self.assertNotEqual(recovered, self.NAMES)
+
+    def test_list_form_preserves_order_through_struct(self):
+        """List form keeps order through a ``Struct`` round-trip."""
+        import dataclasses
+
+        spec = [dataclasses.asdict(c) for c in _cols(*self.NAMES)]
+        recovered = self._struct_roundtrip(spec)
+        self.assertEqual(column_names(recovered), self.NAMES)
+
+    def test_codec_roundtrip_preserves_order(self):
+        """``LightningTrainerConfig`` list columns round-trip via the codec."""
+        from michelangelo.uniflow.core.codec import DataclassCodec
+
+        codec = DataclassCodec()
+        cfg = _lightning(
+            input_columns=_cols(*self.NAMES),
+            output_columns=_cols("q", "p"),
+            labels=_cols("y", "x"),
+        )
+        decoded = codec.decode(codec.encode(cfg))
+        for field_name in ("input_columns", "output_columns", "labels"):
+            self.assertEqual(
+                normalize_columns(getattr(decoded, field_name)),
+                normalize_columns(getattr(cfg, field_name)),
+            )
+        self.assertEqual(column_names(decoded.input_columns), self.NAMES)
+
+    def test_codec_roundtrip_dict_form(self):
+        """Dict form still round-trips via the codec."""
+        from michelangelo.uniflow.core.codec import DataclassCodec
+
+        codec = DataclassCodec()
+        cfg = _lightning(input_columns={"a": ColumnConfig("torch.long", [3])})
+        decoded = codec.decode(codec.encode(cfg))
+        self.assertEqual(
+            normalize_columns(decoded.input_columns),
+            [ColumnConfig("torch.long", [3], "a")],
+        )
+
+    def test_real_codec_and_struct_path_preserves_list_order(self):
+        """Encoder -> protobuf Struct -> decoder keeps list-form column order."""
+        import json
+
+        from google.protobuf import json_format, struct_pb2
+
+        from michelangelo.uniflow.core.codec import decoder, encoder
+
+        def via_struct(cfg):
+            struct = struct_pb2.Struct()
+            json_format.ParseDict(json.loads(encoder.encode(cfg)), struct)
+            return decoder.decode(json.dumps(json_format.MessageToDict(struct)))
+
+        listed = via_struct(_lightning(input_columns=_cols(*self.NAMES)))
+        self.assertEqual(column_names(listed.input_columns), self.NAMES)
+
+        as_dict = via_struct(
+            _lightning(
+                input_columns={
+                    n: ColumnConfig("torch.float32", [1]) for n in self.NAMES
+                }
+            )
+        )
+        self.assertEqual(set(column_names(as_dict.input_columns)), set(self.NAMES))
+
+    def test_encoded_payload_always_carries_name(self):
+        """Documents version skew: ``name`` is encoded even when ``None``."""
+        import json
+
+        from michelangelo.uniflow.core.codec import encoder
+
+        payload = json.loads(encoder.encode(ColumnConfig("torch.long")))
+        self.assertIn("name", payload)
+        self.assertIsNone(payload["name"])
+
+    def test_old_shape_payload_decodes(self):
+        """A payload from an SDK without ``name`` still decodes."""
+        from michelangelo.uniflow.core.codec import decoder
+
+        payload = (
+            '{"data_type":"torch.long","shape":[1],'
+            '"__class__":"michelangelo.workflow.schema.tabular_trainer.ColumnConfig",'
+            '"__codec__":"dataclass"}'
+        )
+        self.assertEqual(decoder.decode(payload), ColumnConfig("torch.long", [1]))

@@ -23,6 +23,10 @@ from michelangelo.lib.model_manager.schema.data_type import DataType
 from michelangelo.lib.model_manager.schema.model_schema import ModelSchema
 from michelangelo.lib.model_manager.schema.model_schema_item import ModelSchemaItem
 from michelangelo.lib.trainer.torch.data_collate_functions import pad_ragged_lists
+from michelangelo.workflow.schema.tabular_trainer import (
+    column_names,
+    normalize_columns,
+)
 
 if TYPE_CHECKING:
     from michelangelo.workflow.schema.tabular_trainer import (
@@ -105,16 +109,21 @@ def _map_torch_dtype_to_datatype(torch_dtype_str: str) -> DataType:
 
 
 def get_model_schema(
-    input_columns: dict[str, ColumnConfig],
-    output_columns: dict[str, ColumnConfig],
+    input_columns: dict[str, ColumnConfig] | list[ColumnConfig],
+    output_columns: dict[str, ColumnConfig] | list[ColumnConfig],
 ) -> ModelSchema:
-    """Build a ``ModelSchema`` from column config dicts.
+    """Build a ``ModelSchema`` from column configs.
+
+    Schema item order follows column order (list order, or dict insertion
+    order for the dict form).
 
     Args:
-        input_columns: Mapping of feature name → ``ColumnConfig`` for model
-            inputs.
-        output_columns: Mapping of output name → ``ColumnConfig`` for model
-            outputs.
+        input_columns: Feature columns for model inputs, as a list of named
+            ``ColumnConfig`` or a ``name -> ColumnConfig`` mapping.
+        output_columns: Output columns for model outputs, in the same forms.
+
+    Raises:
+        ConfigurationError: If a column spec has an empty or duplicate name.
 
     Returns:
         ``ModelSchema`` with ``input_schema`` and ``output_schema`` populated.
@@ -131,19 +140,19 @@ def get_model_schema(
     _logger.info("Generating model schema")
     input_schema: list[ModelSchemaItem] = [
         ModelSchemaItem(
-            name=name,
+            name=cfg.name,
             data_type=_map_torch_dtype_to_datatype(cfg.data_type),
             shape=cfg.shape,
         )
-        for name, cfg in input_columns.items()
+        for cfg in normalize_columns(input_columns, "input_columns")
     ]
     output_schema: list[ModelSchemaItem] = [
         ModelSchemaItem(
-            name=name,
+            name=cfg.name,
             data_type=_map_torch_dtype_to_datatype(cfg.data_type),
             shape=cfg.shape,
         )
-        for name, cfg in output_columns.items()
+        for cfg in normalize_columns(output_columns, "output_columns")
     ]
     return ModelSchema(input_schema=input_schema, output_schema=output_schema)
 
@@ -272,7 +281,7 @@ def collate_sample_row(
 
 def get_sample_data(
     sample_data_dict: dict[str, np.ndarray],
-    input_columns: dict[str, ColumnConfig],
+    input_columns: dict[str, ColumnConfig] | list[ColumnConfig],
 ) -> list[dict[str, np.ndarray]]:
     """Extract and type-cast sample data for model inference testing.
 
@@ -282,7 +291,8 @@ def get_sample_data(
 
     Args:
         sample_data_dict: Normalised sample dict from :func:`collate_sample_row`.
-        input_columns: Mapping of feature name → ``ColumnConfig``.
+        input_columns: Feature columns, as a list of named ``ColumnConfig``
+            or a ``name -> ColumnConfig`` mapping.
 
     Returns:
         A single-element list containing a dict of feature name → numpy array,
@@ -304,7 +314,8 @@ def get_sample_data(
     _logger.info("Generating sample data")
     filtered: dict[str, np.ndarray] = {}
 
-    for feature_name, cfg in input_columns.items():
+    for cfg in normalize_columns(input_columns, "input_columns"):
+        feature_name = cfg.name
         if feature_name not in sample_data_dict:
             _logger.warning(
                 "Feature '%s' not found in sample data, skipping.", feature_name
@@ -425,19 +436,46 @@ def _raise_trainer_config_deprecation_warnings(
             )
 
 
+def _raise_dict_columns_warnings(
+    lightning_trainer_config: LightningTrainerConfig,
+) -> None:
+    """Warn when a multi-column field uses the order-unsafe dict form.
+
+    A dict loses its key order when it passes through a protobuf ``Struct``,
+    and column order defines the model input/output schema order. Single-column
+    dicts have nothing to reorder and do not warn.
+
+    Args:
+        lightning_trainer_config: The ``LightningTrainerConfig`` to inspect.
+    """
+    for field_name in ("input_columns", "output_columns", "labels"):
+        columns = getattr(lightning_trainer_config, field_name)
+        if isinstance(columns, dict) and len(columns) > 1:
+            warnings.warn(
+                f"'{field_name}' is a dict with {len(columns)} columns; dict "
+                "order is not guaranteed to survive serialization, which can "
+                "silently reorder the model schema. Use a list of "
+                "ColumnConfig(name=...) instead.",
+                UserWarning,
+                stacklevel=3,
+            )
+
+
 def raise_lightning_trainer_config_deprecation_warnings(
     lightning_trainer_config: LightningTrainerConfig,
 ) -> None:
     """Run all deprecation-warning checks for a ``LightningTrainerConfig``.
 
-    Combines :func:`_raise_hyperparameter_deprecation_warnings` and
-    :func:`_raise_trainer_config_deprecation_warnings`.
+    Combines :func:`_raise_hyperparameter_deprecation_warnings`,
+    :func:`_raise_trainer_config_deprecation_warnings` and
+    :func:`_raise_dict_columns_warnings`.
 
     Args:
         lightning_trainer_config: The ``LightningTrainerConfig`` to inspect.
     """
     _raise_hyperparameter_deprecation_warnings(lightning_trainer_config)
     _raise_trainer_config_deprecation_warnings(lightning_trainer_config)
+    _raise_dict_columns_warnings(lightning_trainer_config)
 
 
 # ---------------------------------------------------------------------------
@@ -500,7 +538,9 @@ def construct_read_kwargs(config: LightningTrainerConfig) -> dict:
     # Column projection: inputs | labels | metadata (output_columns excluded).
     metadata = list(config.metadata_columns) if config.metadata_columns else []
     columns = sorted(
-        set(config.input_columns.keys()) | set(config.labels.keys()) | set(metadata)
+        set(column_names(config.input_columns, "input_columns"))
+        | set(column_names(config.labels, "labels"))
+        | set(metadata)
     )
     if columns:
         read_kwargs["columns"] = columns
