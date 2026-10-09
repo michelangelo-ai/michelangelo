@@ -88,6 +88,10 @@ class ColumnConfig:
         name: Column name. Required when the column is an entry of a list-form
             column spec (``input_columns``, ``output_columns``, ``labels``);
             optional and ignored (the dict key is the name) in dict form.
+            The codec always encodes this field (as ``None`` when unset), so a
+            config encoded by an SDK with this field cannot be decoded by a
+            worker image whose ``ColumnConfig`` predates it; keep the SDK and
+            the worker image on the same version.
 
     Example:
         >>> ColumnConfig(data_type="torch.float32", shape=[128])
@@ -151,9 +155,9 @@ def normalize_columns(
         A new list of ``ColumnConfig`` with ``name`` set on every entry.
 
     Raises:
-        ConfigurationError: If a name is empty or not a string, a name is
-            duplicated, a dict key disagrees with its entry's ``name``, or an
-            entry is not a ``ColumnConfig``.
+        ConfigurationError: If a name is empty, not a string or has leading or
+            trailing whitespace, a name is duplicated, a dict key disagrees
+            with its entry's ``name``, or an entry is not a ``ColumnConfig``.
 
     Example:
         >>> normalize_columns({"age": ColumnConfig("torch.float32")}, "input_columns")
@@ -186,6 +190,11 @@ def normalize_columns(
             raise ConfigurationError(
                 f"{field_name}[{i}] must have a non-empty string 'name', "
                 f"got {cfg.name!r}."
+            )
+        if cfg.name != cfg.name.strip():
+            raise ConfigurationError(
+                f"{field_name}[{i}] name {cfg.name!r} has leading or trailing "
+                "whitespace; remove it."
             )
         if cfg.name in seen:
             raise ConfigurationError(
@@ -677,8 +686,10 @@ class LightningTrainerConfig:
 
     ``input_columns``, ``output_columns`` and ``labels`` accept either a list
     of ``ColumnConfig`` (each with ``name`` set) or a dict of
-    ``name -> ColumnConfig``. Column order defines the model input/output
-    schema order. Use the list form: a dict loses its key order when it passes
+    ``name -> ColumnConfig``. The order of ``input_columns`` and
+    ``output_columns`` defines the model input/output schema order (``labels``
+    order is not used by the model schema; list form is accepted for
+    consistency). Use the list form: a dict loses its key order when it passes
     through a protobuf ``Struct``, so a multi-column dict can silently reorder
     model inputs and outputs. Dict form is kept for backward compatibility.
     ``metadata_columns`` names columns read from Parquet for logging and

@@ -744,6 +744,13 @@ class TestNormalizeColumns(TestCase):
         with self.assertRaisesRegex(ConfigurationError, "non-empty"):
             normalize_columns({"": ColumnConfig("torch.long")})
 
+    def test_surrounding_whitespace_rejected(self):
+        """Names that differ only by surrounding whitespace are not accepted."""
+        with self.assertRaisesRegex(ConfigurationError, "leading or trailing"):
+            normalize_columns(_cols("a", " a"))
+        with self.assertRaisesRegex(ConfigurationError, "leading or trailing"):
+            normalize_columns({"a ": ColumnConfig("torch.long")})
+
     def test_duplicate_name_rejected(self):
         """Duplicate names in list form are rejected."""
         with self.assertRaisesRegex(ConfigurationError, "duplicate column name 'a'"):
@@ -847,3 +854,49 @@ class TestColumnOrderSerialization(TestCase):
             normalize_columns(decoded.input_columns),
             [ColumnConfig("torch.long", [3], "a")],
         )
+
+    def test_real_codec_and_struct_path_preserves_list_order(self):
+        """Encoder -> protobuf Struct -> decoder keeps list-form column order."""
+        import json
+
+        from google.protobuf import json_format, struct_pb2
+
+        from michelangelo.uniflow.core.codec import decoder, encoder
+
+        def via_struct(cfg):
+            struct = struct_pb2.Struct()
+            json_format.ParseDict(json.loads(encoder.encode(cfg)), struct)
+            return decoder.decode(json.dumps(json_format.MessageToDict(struct)))
+
+        listed = via_struct(_lightning(input_columns=_cols(*self.NAMES)))
+        self.assertEqual(column_names(listed.input_columns), self.NAMES)
+
+        as_dict = via_struct(
+            _lightning(
+                input_columns={
+                    n: ColumnConfig("torch.float32", [1]) for n in self.NAMES
+                }
+            )
+        )
+        self.assertEqual(set(column_names(as_dict.input_columns)), set(self.NAMES))
+
+    def test_encoded_payload_always_carries_name(self):
+        """Documents version skew: ``name`` is encoded even when ``None``."""
+        import json
+
+        from michelangelo.uniflow.core.codec import encoder
+
+        payload = json.loads(encoder.encode(ColumnConfig("torch.long")))
+        self.assertIn("name", payload)
+        self.assertIsNone(payload["name"])
+
+    def test_old_shape_payload_decodes(self):
+        """A payload from an SDK without ``name`` still decodes."""
+        from michelangelo.uniflow.core.codec import decoder
+
+        payload = (
+            '{"data_type":"torch.long","shape":[1],'
+            '"__class__":"michelangelo.workflow.schema.tabular_trainer.ColumnConfig",'
+            '"__codec__":"dataclass"}'
+        )
+        self.assertEqual(decoder.decode(payload), ColumnConfig("torch.long", [1]))
