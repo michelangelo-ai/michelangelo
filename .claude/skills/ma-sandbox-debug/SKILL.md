@@ -85,7 +85,8 @@ The **Events** section and **Last State** (exit code, reason) in `describe` outp
 | Pod stuck `Pending` | `describe pod` Events | No node resources or PVC mount failure |
 | `ImagePullBackOff` | `describe pod` Events | Image not imported — run `k3d image import` |
 | Feature broken after deploy | apiserver logs | Business logic bug in the deployed binary |
-| `create` failed partway / "cluster already exists" | — | Run `ma sandbox sync` to finish — don't delete+recreate |
+| Cluster unreachable, containers exited | `docker ps -a` | Stopped, not broken — resume it with `bash .claude/skills/ma-sandbox-scripts/start.sh`, don't reset |
+| `create` failed partway / "cluster already exists" | — | Run `ma sandbox sync` to finish — don't delete+recreate. **`sync` drops and recreates the sandbox MySQL `michelangelo` database**, so metadata-storage-only data is lost |
 
 ## Filter logs for errors
 
@@ -109,4 +110,4 @@ kubectl rollout status deployment/michelangelo-apiserver --timeout=60s
 
 ## Still stuck?
 
-If the cluster state is unrecoverable, do a full reset: `/ma-sandbox-reset`.
+If the cluster state is unrecoverable, do a full reset: `/ma-sandbox-reset`. A reset, like `ma sandbox sync`, wipes the sandbox MySQL database; get the user's agreement first.

@@ -69,7 +69,7 @@ This creates the `ma-dev-test` project with training, eval, and trigger pipeline
 ### 5. Verify
 
 ```bash
-poetry run ma sandbox health
+python/.venv/bin/ma sandbox health
 ```
 
 All checks should pass. Then open **http://localhost:8090** — navigate to the `ma-dev-test` project.
@@ -79,10 +79,10 @@ All checks should pass. Then open **http://localhost:8090** — navigate to the 
 | Command                     | What it does                                                    |
 | --------------------------- | --------------------------------------------------------------- |
 | `ma sandbox create`         | Create cluster + deploy all services                            |
-| `ma sandbox sync`           | Restart app services in an existing cluster (fast, skips infra) |
+| `ma sandbox sync`           | Restart app services in an existing cluster (fast, skips infra). **Drops and recreates the MySQL `michelangelo` database** |
 | `ma sandbox health`         | Run health checks: cluster, pods, API resources, envoy, UI      |
 | `ma sandbox stop`           | Stop the cluster (preserves state)                              |
-| `ma sandbox start`          | Resume a stopped cluster                                        |
+| `ma sandbox start`          | Resume a stopped cluster (or `start.sh`, which also waits for nodes to be ready) |
 | `ma sandbox delete`         | Tear down cluster entirely                                      |
 | `ma sandbox demo pipeline`  | Deploy pipeline demo resources                                  |
 | `ma sandbox demo inference` | Deploy inference server demo resources                          |
