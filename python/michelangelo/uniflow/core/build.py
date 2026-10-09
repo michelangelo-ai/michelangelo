@@ -49,6 +49,7 @@ from michelangelo.uniflow.core.decorator import (
     is_star_plugin,
     is_workflow,
 )
+from michelangelo.uniflow.core.failure import FailureLowering
 from michelangelo.uniflow.core.task_config import Dependencies, TaskConfig
 from michelangelo.uniflow.core.utils import (
     LOGGING_FORMAT,
@@ -314,6 +315,7 @@ class TranspilerCallback:
 def build(
     fn: Callable,
     transpiler_callback: Optional[TranspilerCallback] = None,
+    failure_lowering: Optional[FailureLowering] = None,
 ) -> Package:
     """Build a workflow package from a Python function.
 
@@ -324,6 +326,7 @@ def build(
     Args:
         fn: The workflow function to build. Must be decorated with @workflow.
         transpiler_callback: Optional callback to observe transpilation events.
+        failure_lowering: Backend for workflows with an on_failure handler.
 
     Returns:
         A Package containing the transpiled workflow and all dependencies.
@@ -336,8 +339,19 @@ def build(
         >>> package = build(my_workflow)
         >>> tarball = package.to_tarball_bytes()
     """
+    on_failure = getattr(fn, "_uf_on_failure", None)
+    if on_failure is not None:
+        failure_lowering = failure_lowering or getattr(fn, "_uf_failure_lowering", None)
+        if failure_lowering is None:
+            raise RuntimeError(
+                "on_failure requires a remote error-handling backend to build"
+            )
+
     files = {}
     fn_path = _transpile_function(fn, files, transpiler_callback)
+    handler_path = None
+    if on_failure is not None:
+        handler_path = _transpile_function(on_failure, files, transpiler_callback)
 
     package_files: dict[str, bytes] = {}
 
@@ -356,6 +370,18 @@ def build(
 
     main_file = fn_path.as_posix()
     main_function = fn.__name__
+
+    if handler_path is not None:
+        entrypoint = failure_lowering(
+            main_file, main_function, handler_path.as_posix(), on_failure.__name__
+        )
+        if entrypoint.main_file in package_files or entrypoint.main_file == "meta.json":
+            raise ValueError(
+                f"failure entrypoint conflicts with {entrypoint.main_file}"
+            )
+        main_file = entrypoint.main_file
+        main_function = entrypoint.main_function
+        package_files[main_file] = entrypoint.source.encode("utf-8")
 
     assert main_file in package_files
 
@@ -416,6 +442,7 @@ def _transpile_function(
 
     # Remove annotations and decorators
     tree.decorator_list = []
+    tree.returns = None
     for arg in tree.args.args:
         arg.annotation = None
 
