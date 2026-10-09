@@ -16,12 +16,21 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 
 	testpb "github.com/michelangelo-ai/michelangelo/proto-go/test/kubeproto"
+	revisionederrorspb "github.com/michelangelo-ai/michelangelo/proto-go/test/kubeproto/revisioned_errors"
+
+	"github.com/michelangelo-ai/michelangelo/go/kubeproto/pboptions"
+	"github.com/michelangelo-ai/michelangelo/go/kubeproto/util"
 
 	"github.com/dave/dst"
 	"github.com/dave/dst/decorator"
 	plugin_go "github.com/gogo/protobuf/protoc-gen-gogo/plugin"
 	"github.com/gogo/protobuf/types"
 	"github.com/stretchr/testify/assert"
+	"google.golang.org/protobuf/compiler/protogen"
+	golangproto "google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoregistry"
+	"google.golang.org/protobuf/types/descriptorpb"
+	"google.golang.org/protobuf/types/pluginpb"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -627,4 +636,174 @@ func TestInlineEmbedding(t *testing.T) {
 
 	assert.Equal(t, "extra-value", jsonMap["additional_field"])
 	assert.NotNil(t, jsonMap["debugging_info"])
+}
+
+// loadAllProtoMsgs replicates the subset of generate()'s setup that
+// resolveWrapperKind depends on: a golang protoc-gen-go plugin view of the
+// request, its extension registry, and the map of every CRD message loaded
+// from files being generated (including nested messages).
+func loadAllProtoMsgs(t *testing.T, reqData []byte) (map[string]*protogen.Message, *protoregistry.Types) {
+	t.Helper()
+
+	var req pluginpb.CodeGeneratorRequest
+	err := golangproto.Unmarshal(reqData, &req)
+	assert.NoError(t, err)
+	util.ReplaceImportPath(&req)
+
+	gen, err := protogen.Options{}.New(&req)
+	assert.NoError(t, err)
+
+	extTypes := pboptions.LoadPBExtensions(gen.Files)
+
+	allProtoMsgs := make(map[string]*protogen.Message)
+	for _, f := range gen.Files {
+		if !f.Generate {
+			continue
+		}
+		loadProtoMsgs(f.Messages, &allProtoMsgs)
+	}
+
+	return allProtoMsgs, extTypes
+}
+
+// wrapperKindOf extracts the sole revisioned_in kind string declared on the
+// fixture message named baseCrdName, asserting the fixture is well-formed.
+func wrapperKindOf(t *testing.T, allProtoMsgs map[string]*protogen.Message, extTypes *protoregistry.Types, baseCrdName string) string {
+	t.Helper()
+
+	msg, ok := allProtoMsgs[baseCrdName]
+	assert.True(t, ok, "fixture message %v not found", baseCrdName)
+
+	options, err := pboptions.ReadOptions(extTypes, msg.Desc.Options().(*descriptorpb.MessageOptions))
+	assert.NoError(t, err)
+	assert.True(t, options.Bool("has_resource"), "fixture %v must be a CRD resource", baseCrdName)
+	assert.Equal(t, int64(1), options.Int64("resource.len(revisioned_in)"),
+		"fixture %v should declare exactly one revisioned_in kind", baseCrdName)
+
+	return options.String("resource.revisioned_in[0]")
+}
+
+// TestResolveWrapperKind_UnresolvedKind verifies that a revisioned_in kind
+// which resolves to no message in the compile unit fails codegen.
+func TestResolveWrapperKind_UnresolvedKind(t *testing.T) {
+	const baseCrdName = "UnresolvedWrapperBase"
+	allProtoMsgs, extTypes := loadAllProtoMsgs(t, revisionederrorspb.GetProtocReqData())
+	kind := wrapperKindOf(t, allProtoMsgs, extTypes, baseCrdName)
+
+	assertPanic(t, `Invalid revisioned_in annotation on UnresolvedWrapperBase: kind "nonexistent_wrapper" does not resolve to any message named "NonexistentWrapper" in this compile unit`,
+		func() {
+			resolveWrapperKind(baseCrdName, kind, allProtoMsgs, extTypes)
+		})
+}
+
+// TestResolveWrapperKind_NotACrdResource verifies that a revisioned_in kind
+// resolving to a message without michelangelo.api.resource fails codegen.
+func TestResolveWrapperKind_NotACrdResource(t *testing.T) {
+	const baseCrdName = "NotAResourceBase"
+	allProtoMsgs, extTypes := loadAllProtoMsgs(t, revisionederrorspb.GetProtocReqData())
+	kind := wrapperKindOf(t, allProtoMsgs, extTypes, baseCrdName)
+
+	assertPanic(t, `Invalid revisioned_in annotation on NotAResourceBase: kind "not_a_resource_wrapper" resolves to message NotAResourceWrapper, which is not `+
+		`a CRD resource (missing michelangelo.api.resource)`,
+		func() {
+			resolveWrapperKind(baseCrdName, kind, allProtoMsgs, extTypes)
+		})
+}
+
+// TestResolveWrapperKind_MissingSpecField verifies that a wrapper CRD with no
+// "spec" field at all fails codegen before even reaching "content".
+func TestResolveWrapperKind_MissingSpecField(t *testing.T) {
+	const baseCrdName = "NoSpecBase"
+	allProtoMsgs, extTypes := loadAllProtoMsgs(t, revisionederrorspb.GetProtocReqData())
+	kind := wrapperKindOf(t, allProtoMsgs, extTypes, baseCrdName)
+
+	assertPanic(t, `Invalid revisioned_in annotation on NoSpecBase: kind "no_spec_wrapper" resolves to message NoSpecWrapper, which has no field "spec" at path "spec.content"`,
+		func() {
+			resolveWrapperKind(baseCrdName, kind, allProtoMsgs, extTypes)
+		})
+}
+
+// TestResolveWrapperKind_MissingContentField verifies that a wrapper CRD
+// whose spec has no "content" field fails codegen. This is the check that
+// guarantees, at build time, that wrapperContentPath ("spec.content")
+// actually exists on every wrapper a revisioned base type opts into.
+func TestResolveWrapperKind_MissingContentField(t *testing.T) {
+	const baseCrdName = "MissingContentBase"
+	allProtoMsgs, extTypes := loadAllProtoMsgs(t, revisionederrorspb.GetProtocReqData())
+	kind := wrapperKindOf(t, allProtoMsgs, extTypes, baseCrdName)
+
+	assertPanic(t, `Invalid revisioned_in annotation on MissingContentBase: kind "missing_content_wrapper" resolves to message MissingContentWrapper, `+
+		`which has no field "content" at path "spec.content"`,
+		func() {
+			resolveWrapperKind(baseCrdName, kind, allProtoMsgs, extTypes)
+		})
+}
+
+// TestResolveWrapperKind_ContentFieldWrongType verifies that a wrapper CRD
+// whose spec.content exists but is not a google.protobuf.Any fails codegen.
+func TestResolveWrapperKind_ContentFieldWrongType(t *testing.T) {
+	const baseCrdName = "WrongTypeContentBase"
+	allProtoMsgs, extTypes := loadAllProtoMsgs(t, revisionederrorspb.GetProtocReqData())
+	kind := wrapperKindOf(t, allProtoMsgs, extTypes, baseCrdName)
+
+	assertPanic(t, `Invalid revisioned_in annotation on WrongTypeContentBase: kind "wrong_type_content_wrapper" resolves to message WrongTypeContentWrapper, `+
+		`whose field at path "spec.content" is not a google.protobuf.Any`,
+		func() {
+			resolveWrapperKind(baseCrdName, kind, allProtoMsgs, extTypes)
+		})
+}
+
+// TestResolveWrapperKind_ContentFieldRepeated verifies that a wrapper CRD
+// whose spec.content is a repeated google.protobuf.Any (a list, not a
+// singular value) fails codegen, since the storage layer reflects into a
+// single Any at that path.
+func TestResolveWrapperKind_ContentFieldRepeated(t *testing.T) {
+	const baseCrdName = "RepeatedContentBase"
+	allProtoMsgs, extTypes := loadAllProtoMsgs(t, revisionederrorspb.GetProtocReqData())
+	kind := wrapperKindOf(t, allProtoMsgs, extTypes, baseCrdName)
+
+	assertPanic(t, `Invalid revisioned_in annotation on RepeatedContentBase: kind "repeated_content_wrapper" resolves to message RepeatedContentWrapper, `+
+		`whose field "content" at path "spec.content" is repeated but a singular field is required`,
+		func() {
+			resolveWrapperKind(baseCrdName, kind, allProtoMsgs, extTypes)
+		})
+}
+
+// TestResolveWrapperKind_SpecFieldRepeated verifies that a wrapper CRD whose
+// "spec" field itself is repeated (a list of RepeatedSpecWrapperSpec, not a
+// single one) fails codegen.
+func TestResolveWrapperKind_SpecFieldRepeated(t *testing.T) {
+	const baseCrdName = "RepeatedSpecBase"
+	allProtoMsgs, extTypes := loadAllProtoMsgs(t, revisionederrorspb.GetProtocReqData())
+	kind := wrapperKindOf(t, allProtoMsgs, extTypes, baseCrdName)
+
+	assertPanic(t, `Invalid revisioned_in annotation on RepeatedSpecBase: kind "repeated_spec_wrapper" resolves to message RepeatedSpecWrapper, `+
+		`whose field "spec" at path "spec.content" is repeated but a singular field is required`,
+		func() {
+			resolveWrapperKind(baseCrdName, kind, allProtoMsgs, extTypes)
+		})
+}
+
+// TestGenerate_RevisionedIn_Panics is an end-to-end regression test that
+// drives the real generate() entry point directly on the revisioned_errors
+// fixture bytes. The fixture file declares several broken base/wrapper pairs;
+// generate() processes messages in declaration order and panics on the first
+// one it reaches (UnresolvedWrapperBase), so that's the panic asserted here.
+// The other branches are covered precisely, in isolation, by the
+// TestResolveWrapperKind_* tests above.
+func TestGenerate_RevisionedIn_Panics(t *testing.T) {
+	assertPanic(t, `Invalid revisioned_in annotation on UnresolvedWrapperBase: kind "nonexistent_wrapper" does not resolve to any message named "NonexistentWrapper" in this compile unit`,
+		func() {
+			generate(revisionederrorspb.GetProtocReqData())
+		})
+}
+
+func assertPanic(t *testing.T, expected interface{}, f func()) {
+	t.Helper()
+	defer func() {
+		r := recover()
+		assert.NotNil(t, r, "expected panic but got none")
+		assert.Equal(t, expected, r, "unexpected panic message")
+	}()
+	f()
 }

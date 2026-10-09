@@ -2,17 +2,17 @@ syntax = "proto3";
 
 package michelangelo.test.kubeproto;
 
+import "google/protobuf/any.proto";
 import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
 import "michelangelo/api/options.proto";
 
 option go_package = "kubeproto";
 
-// TestWrapperSpec is the spec of a content wrapper. Real wrappers store the
-// content as a google.protobuf.Any at spec.content; a plain field stands in here
-// since sidecar generation is driven by the base type's revisioned_in, not the
-// wrapper.
+// TestWrapperSpec is the spec of a content wrapper, mirroring how real
+// wrappers (e.g. Revision) store their wrapped base resource as a
+// google.protobuf.Any at spec.content.
 message TestWrapperSpec {
-  string content = 1;
+  google.protobuf.Any content = 1;
 }
 
 // TestWrapperStatus is the status of a content wrapper.
