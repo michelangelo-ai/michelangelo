@@ -18,12 +18,14 @@ var _ blobstore.BlobStoreClient = (*gcsBlobClient)(nil)
 
 // gcsBlobClient is a client for Google Cloud Storage.
 //
-// The underlying storage.Client is created lazily on the first Get call
-// rather than at construction time: storage.NewClient resolves credentials
-// (Application Default Credentials unless configured otherwise) eagerly, so
-// eager construction would fail application startup on deployments that
-// have no GCP credentials and never read gs:// URIs. Lazy construction
-// keeps the gs scheme registered everywhere at no cost to non-GCS users.
+// By default the underlying storage.Client is created lazily on the first
+// Get call rather than at construction time: storage.NewClient resolves
+// credentials (Application Default Credentials unless configured otherwise)
+// eagerly, so eager construction would fail application startup on
+// deployments that have no GCP credentials and never read gs:// URIs. Lazy
+// construction keeps the gs scheme registered everywhere at no cost to
+// non-GCS users. Deployments that declare a gcs config section opt in to
+// eager construction at startup instead (see newClient in module.go).
 type gcsBlobClient struct {
 	config Config
 	scheme string
