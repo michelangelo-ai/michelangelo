@@ -250,6 +250,8 @@ Top-level keys. See [`values.yaml`](./values.yaml) for the full annotated schema
 | `objectStorage.accessKeyId` | string | `""` | conditional | Required unless `objectStorage.existingSecret` is set. |
 | `objectStorage.secretAccessKey` | string | `""` | conditional | Required unless `objectStorage.existingSecret` is set. |
 | `objectStorage.existingSecret` | string | `""` | no | Name of a pre-existing Secret with `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` keys. Takes precedence over the inline keys. |
+| `secretsProvider.type` | string | `sample` | no | Secret provider for remote-cluster credentials: `sample` (control-plane Secrets, sandbox/testing) or `eso` (Secrets synced by the External Secrets Operator, installed separately). |
+| `secretsProvider.esoNamespace` | string | `""` | no | Namespace where operator-synced credential Secrets live (`type=eso` only). Defaults to `default`. |
 | `workflow.engine` | string | `cadence` | yes | `cadence` or `temporal`. Mutually exclusive — selects which worker config block renders. |
 | `workflow.endpoint` | string | `""` | **yes** | Workflow engine address (e.g. `cadence-frontend:7833`, `temporal-frontend:7233`). |
 | `workflow.domain` | string | `default` | no | Cadence domain or Temporal namespace. |
