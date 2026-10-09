@@ -16,131 +16,75 @@ allowed-tools:
 
 # Sandbox Local Image Dev Loop
 
-For iterating on Go services (primarily `apiserver` and `controllermgr`) inside a running sandbox. Requires a sandbox already running — if not, run `ma sandbox create` first (see `/ma-sandbox-setup`).
+For iterating on Go services (`apiserver`, `controllermgr`, `worker`) inside a running sandbox. Requires an existing sandbox cluster; if none exists, run `ma sandbox create` first (see `/ma-sandbox-setup`).
 
-```bash
-REPO_ROOT=$(git rev-parse --show-toplevel)
-```
+## How to run commands in this skill
 
-Run this once at the start of your shell session, or prefix paths below with the result.
+Auto mode honors this skill's `allowed-tools` only **after the skill has been invoked**, so invoke it before calling any script; a script call made earlier goes to the classifier like any other command and can be blocked.
 
-## Full build + deploy sequence
+Then call each script in the exact literal form `allowed-tools` lists, from the repo root: `bash .claude/skills/ma-sandbox-scripts/<name>.sh <args>`. Any change to the command text falls outside the pattern and loses the pre-approval, so don't add a `$(git rev-parse ...)` path prefix, wrap the call in `VAR=$(...)`, or chain it with `&&`, `;`, `cd`, `source` or `rm -rf`. The scripts find the repo, the Python venv and their `/tmp` build directories themselves, so none of that is needed.
 
-The steps below use `apiserver` as the example. See [Adapting for controllermgr](#adapting-for-controllermgr) for the controllermgr-specific substitutions.
+## Deploy
 
-```bash
-# 1. Build statically-linked linux/arm64 binary (CGO_ENABLED=0 required — Distroless base has no libc)
-cd "$REPO_ROOT/go"
-CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o /tmp/apiserver-local ./cmd/apiserver/
+1. If the cluster is stopped (kubectl can't reach it), resume it. Don't reset it:
 
-# 2. Copy config (only needed once, or when config files change)
-cp -r "$REPO_ROOT/go/cmd/apiserver/config" /tmp/apiserver-config
+   ```bash
+   bash .claude/skills/ma-sandbox-scripts/start.sh
+   ```
 
-# 3. Prepare a clean build context and build Docker image
-mkdir -p /tmp/apiserver-build
-cp /tmp/apiserver-local /tmp/apiserver-build/apiserver-local
-cp -r /tmp/apiserver-config /tmp/apiserver-build/apiserver-config
-docker build \
-  -f "$REPO_ROOT/docker/service.Dockerfile" \
-  --build-arg BINARY_PATH=apiserver-local \
-  --build-arg CONFIG_PATH=apiserver-config \
-  --platform linux/arm64 \
-  --label git.branch="$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD)" \
-  --label git.sha="$(git -C "$REPO_ROOT" rev-parse --short HEAD)" \
-  --label git.dirty="$(git -C "$REPO_ROOT" diff --quiet || echo true)" \
-  -t michelangelo-apiserver:local \
-  /tmp/apiserver-build/
+2. Build and deploy one service. This is the whole loop, for the first deploy and every iteration after it:
 
-# 4. Import image into k3d cluster
-k3d image import michelangelo-apiserver:local -c michelangelo-sandbox
+   ```bash
+   bash .claude/skills/ma-sandbox-scripts/deploy-local.sh apiserver
+   bash .claude/skills/ma-sandbox-scripts/deploy-local.sh controllermgr
+   bash .claude/skills/ma-sandbox-scripts/deploy-local.sh worker --repo /path/to/other/checkout
+   ```
 
-# 5. Sync sandbox with local image override
-# IMPORTANT: pass --set images.apiserver=... on EVERY sync call — helm's --reuse-values
-# silently reverts to the default ghcr.io image if you omit it
-source "$REPO_ROOT/python/.venv/bin/activate"
-ma sandbox sync \
-  --set images.apiserver=michelangelo-apiserver:local \
-  --set images.pullPolicy=IfNotPresent \
-  --set ui.enabled=true \
-  --set envoy.enabled=true \
-  --set controllermgr.enabled=true \
-  --set worker.enabled=true
-```
+   `--repo` builds from another checkout (a worktree, for example) and treats it as read-only. Without it the script builds the repo it lives in.
 
-## Hot-swap (subsequent iterations)
+   The build takes a few minutes; use a long Bash timeout (up to 600000 ms) or `run_in_background`, then read the output.
 
-Check whether config files changed since the last sync:
+> **`ma sandbox sync`, which the script runs, drops and recreates the sandbox MySQL `michelangelo` database.** Data that exists only in metadata storage (for example PipelineRuns already pruned from etcd) is lost. Confirm the user accepts that before deploying to a sandbox that holds data they care about.
 
-```bash
-git diff --name-only HEAD | grep 'cmd/apiserver/config/'
-```
+The script exits 0 only when all three verify signals pass, 1 on any failure, 2 on bad usage.
 
-**IF** that command returns no output — config is unchanged. Skip steps 2–3 (config copy) and run only the binary rebuild + import:
+### What the script does
 
-```bash
-# Rebuild binary, re-import, rollout restart
-CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o /tmp/apiserver-local "$REPO_ROOT/go/cmd/apiserver/"
-cp /tmp/apiserver-local /tmp/apiserver-build/apiserver-local
-docker build \
-  -f "$REPO_ROOT/docker/service.Dockerfile" \
-  --build-arg BINARY_PATH=apiserver-local \
-  --build-arg CONFIG_PATH=apiserver-config \
-  --platform linux/arm64 \
-  --label git.branch="$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD)" \
-  --label git.sha="$(git -C "$REPO_ROOT" rev-parse --short HEAD)" \
-  --label git.dirty="$(git -C "$REPO_ROOT" diff --quiet || echo true)" \
-  -t michelangelo-apiserver:local \
-  /tmp/apiserver-build/
-k3d image import michelangelo-apiserver:local -c michelangelo-sandbox
-kubectl rollout restart deployment/michelangelo-apiserver
-kubectl rollout status deployment/michelangelo-apiserver --timeout=60s
-```
+It builds a static `linux/arm64` binary (`CGO_ENABLED=0`, because the Distroless base has no libc) and the Docker image under `/tmp/ma-sandbox-deploy/<service>/`, labels the image with the git branch, short SHA and dirty flag, imports it into the `michelangelo-sandbox` k3d cluster, runs `ma sandbox sync`, restarts the deployment and waits for the rollout. Nothing is written to the working directory, and `go build` is never run in the repo root, where it would drop a stray binary.
 
-## Adapting for controllermgr
+### Image overrides
 
-Substitute these values in every step above:
+The chart takes the image as a map: `images.<service>.repository` and `images.<service>.tag`, for example `--set images.apiserver.repository=michelangelo-apiserver --set images.apiserver.tag=local`. The older `--set images.apiserver=michelangelo-apiserver:local` form puts a string where the chart expects a map and doesn't select the local image.
 
-| apiserver | controllermgr |
-|-----------|--------------|
-| `./cmd/apiserver/` | `./cmd/controllermgr/` |
-| `/tmp/apiserver-local` | `/tmp/controllermgr-local` |
-| `/tmp/apiserver-config` | `/tmp/controllermgr-config` |
-| `/tmp/apiserver-build/` | `/tmp/controllermgr-build/` |
-| `michelangelo-apiserver:local` | `michelangelo-controllermgr:local` |
-| `--set images.apiserver=...` | `--set images.controllermgr=...` |
-| `deployment/michelangelo-apiserver` | `deployment/michelangelo-controllermgr` |
-| `app.kubernetes.io/component=apiserver` | `app.kubernetes.io/component=controllermgr` |
-
-Check whether `cmd/controllermgr/` has a `config/` directory — if not, omit steps 2 and the `CONFIG_PATH` build arg.
+`ma sandbox sync` runs helm with `--reuse-values`, but an override has to be passed again on every call or helm falls back to the default `ghcr.io` image. The script handles this: it passes the override for the service being deployed and keeps any other service that is already running a `michelangelo-<service>:*` image. Only reach for manual `--set` flags if you run `ma sandbox sync` yourself, and then pass every override each time.
 
 ## Verify what's deployed
 
-The `:local` tag carries no inherent identity — verify across three signals.
+The script prints these three signals and checks them. The `:local` tag carries no identity of its own, so check all three when you verify by hand:
 
-**1. It's your local build, not the released image:**
+1. **It's the local build, not the released image.** The pod image should be `michelangelo-apiserver:local`, not `ghcr.io/michelangelo-ai/apiserver:main`.
 
-```bash
-kubectl get pod -l app.kubernetes.io/component=apiserver \
-  -o jsonpath='{.items[0].spec.containers[0].image}'
-```
+   ```bash
+   kubectl get pod -l app.kubernetes.io/component=apiserver -o jsonpath='{.items[0].spec.containers[0].image}'
+   ```
 
-Should return `michelangelo-apiserver:local`, not `ghcr.io/michelangelo-ai/apiserver:main`.
+2. **Which branch and commit it was built from.** The labels are baked into the image, so they survive `k3d image import`.
 
-**2. Which branch/commit it was built from** (requires the `--label` flags above):
+   ```bash
+   docker image inspect michelangelo-apiserver:local --format '{{json .Config.Labels}}'
+   ```
 
-```bash
-docker image inspect michelangelo-apiserver:local --format '{{json .Config.Labels}}'
-# {"git.branch":"craig.marker/fix-...","git.sha":"d1046e10","git.dirty":"true"}
-```
+3. **It's the latest build, not a stale pod.** A pod that started before the image was built missed the rollout.
 
-The labels are baked into the image, so they survive `k3d image import` — inspecting the
-local image tells you what the imported (and running) image is.
+   ```bash
+   docker image inspect michelangelo-apiserver:local --format 'built: {{.Created}}'
+   kubectl get pod -l app.kubernetes.io/component=apiserver -o jsonpath='started: {.items[0].status.startTime}'
+   ```
 
-**3. It's your *latest* build, not a stale pod** — compare image build time to pod start
-time. If the pod started *before* your last build, you forgot to `rollout restart`:
+## When the deploy fails
 
-```bash
-docker image inspect michelangelo-apiserver:local --format 'built: {{.Created}}'
-kubectl get pod -l app.kubernetes.io/component=apiserver \
-  -o jsonpath='started: {.items[0].status.startTime}{"\n"}'
-```
+Report the failing step and its output. Don't re-run `deploy-local.sh` or `ma sandbox sync` repeatedly, and don't patch cluster objects by hand to get past it.
+
+- **Helm "Apply failed with N conflict" naming `kubectl-set` or `kubectl-client-side-apply`.** Helm applies server-side, and someone changed chart-owned objects with `kubectl set image` or `kubectl apply`, which gave those fields to a different field manager. Look at `helm status michelangelo` and `kubectl get <object> -o yaml --show-managed-fields`. Deploy images with `deploy-local.sh` instead of `kubectl set image`, so the chart keeps ownership.
+- **`helm status michelangelo` reports `failed`.** A `sync` against a release that isn't `deployed` can uninstall and reinstall the whole release rather than upgrade it. Confirm with the user before re-running it.
+- **Anything else wrong with the cluster.** `/ma-sandbox-debug` for diagnosis; `/ma-sandbox-reset` only as a last resort.
