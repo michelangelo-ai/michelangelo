@@ -11,11 +11,14 @@ import numpy as np
 
 from michelangelo.lib.model_manager.schema.data_type import DataType
 from michelangelo.lib.model_manager.schema.model_schema import ModelSchema
+from michelangelo.workflow.schema.exceptions import ConfigurationError
 from michelangelo.workflow.schema.tabular_trainer import (
     ColumnConfig,
     LightningTrainerConfig,
 )
 from michelangelo.workflow.tasks.tabular_trainer._private.dataset import (
+    _TORCH_DTYPE_TO_DATATYPE,
+    _TORCH_DTYPE_TO_NUMPY,
     _map_torch_dtype_to_datatype,
     _map_torch_dtype_to_numpy,
     _pad_row,
@@ -100,9 +103,28 @@ class TestMapTorchDtypeToNumpy(TestCase):
         """Maps torch.bool to np.bool_."""
         self.assertIs(_map_torch_dtype_to_numpy("torch.bool"), np.bool_)
 
-    def test_unknown_falls_back_to_float32(self):
-        """Falls back to np.float32 for unknown dtype strings."""
-        self.assertIs(_map_torch_dtype_to_numpy("torch.bfloat16"), np.float32)
+    def test_string_maps_to_object(self):
+        """Maps "string" to np.object_."""
+        self.assertIs(_map_torch_dtype_to_numpy("string"), np.object_)
+
+    def test_reduced_precision_floats_stay_float32(self):
+        """Reduced-precision floats keep their previous float32 widening."""
+        for name in ("torch.float16", "torch.half", "torch.bfloat16"):
+            self.assertIs(_map_torch_dtype_to_numpy(name), np.float32, name)
+
+    def test_unknown_raises_listing_supported_values(self):
+        """Raises ConfigurationError that lists every supported dtype string."""
+        with self.assertRaises(ConfigurationError) as ctx:
+            _map_torch_dtype_to_numpy("torch.strng")
+        msg = str(ctx.exception)
+        self.assertIn("'torch.strng'", msg)
+        for name in _TORCH_DTYPE_TO_NUMPY:
+            self.assertIn(repr(name), msg)
+
+    def test_unmapped_torch_dtype_raises(self):
+        """A real but unsupported torch dtype is rejected, not widened."""
+        with self.assertRaises(ConfigurationError):
+            _map_torch_dtype_to_numpy("torch.double")
 
 
 # ---------------------------------------------------------------------------
@@ -164,6 +186,17 @@ class TestMapTorchDtypeToDatatype(TestCase):
     def test_unknown_falls_back_to_float(self):
         """Falls back to DataType.FLOAT for unknown dtype strings."""
         self.assertEqual(_map_torch_dtype_to_datatype("torch.bfloat16"), DataType.FLOAT)
+
+    def test_string_maps_to_string(self):
+        """Maps "string" to DataType.STRING."""
+        self.assertEqual(_map_torch_dtype_to_datatype("string"), DataType.STRING)
+
+    def test_unknown_raises_listing_supported_values(self):
+        """Raises ConfigurationError that lists every supported dtype string."""
+        with self.assertRaises(ConfigurationError) as ctx:
+            _map_torch_dtype_to_datatype("torch.strng")
+        for name in _TORCH_DTYPE_TO_DATATYPE:
+            self.assertIn(repr(name), str(ctx.exception))
 
 
 # ---------------------------------------------------------------------------
@@ -694,3 +727,109 @@ class TestDictColumnsWarning(TestCase):
         with warnings.catch_warnings():
             warnings.simplefilter("error")
             raise_lightning_trainer_config_deprecation_warnings(cfg)
+
+
+# ---------------------------------------------------------------------------
+# Dtype table + string columns (regression for unmapped / unknown dtypes)
+# ---------------------------------------------------------------------------
+
+_EXPECTED_DTYPES = {
+    "torch.float32": (np.float32, DataType.FLOAT),
+    "torch.float64": (np.float64, DataType.DOUBLE),
+    "torch.float": (np.float32, DataType.FLOAT),
+    "torch.int32": (np.int32, DataType.INT),
+    "torch.int64": (np.int64, DataType.LONG),
+    "torch.int": (np.int32, DataType.INT),
+    "torch.long": (np.int64, DataType.LONG),
+    "torch.int16": (np.int16, DataType.SHORT),
+    "torch.short": (np.int16, DataType.SHORT),
+    "torch.int8": (np.int8, DataType.BYTE),
+    "torch.uint8": (np.uint8, DataType.BYTE),
+    "torch.bool": (np.bool_, DataType.BOOLEAN),
+    "torch.float16": (np.float32, DataType.FLOAT),
+    "torch.half": (np.float32, DataType.FLOAT),
+    "torch.bfloat16": (np.float32, DataType.FLOAT),
+    "string": (np.object_, DataType.STRING),
+}
+
+
+class TestDtypeTable(TestCase):
+    """Pins every supported dtype string and both maps' key sets."""
+
+    def test_every_mapping(self):
+        """Each supported string maps to its numpy dtype and DataType."""
+        for name, (np_dtype, data_type) in _EXPECTED_DTYPES.items():
+            with self.subTest(name):
+                self.assertIs(_map_torch_dtype_to_numpy(name), np_dtype)
+                self.assertEqual(_map_torch_dtype_to_datatype(name), data_type)
+
+    def test_maps_have_same_keys(self):
+        """Both maps accept exactly the pinned set, so neither drifts."""
+        self.assertEqual(set(_TORCH_DTYPE_TO_NUMPY), set(_EXPECTED_DTYPES))
+        self.assertEqual(set(_TORCH_DTYPE_TO_DATATYPE), set(_EXPECTED_DTYPES))
+
+
+class TestStringColumns(TestCase):
+    """String and bytes columns are kept as-is; typos are rejected."""
+
+    def test_schema_uses_string_data_type(self):
+        """get_model_schema reports DataType.STRING, not FLOAT, for "string"."""
+        schema = get_model_schema(
+            {"name": ColumnConfig("string", [1])},
+            {"y": ColumnConfig("torch.float32", [1])},
+        )
+        self.assertEqual(schema.input_schema[0].data_type, DataType.STRING)
+
+    def test_schema_rejects_typo(self):
+        """get_model_schema raises on a mistyped dtype instead of using FLOAT."""
+        with self.assertRaises(ConfigurationError):
+            get_model_schema(
+                {"x": ColumnConfig("torch.strng", [1])},
+                {"y": ColumnConfig("torch.float32", [1])},
+            )
+
+    def test_get_sample_data_keeps_string_text(self):
+        """A string cell is not cast to float32 (previously ValueError)."""
+        out = get_sample_data(
+            collate_sample_row({"name": "n0"}), {"name": ColumnConfig("string", [1])}
+        )
+        self.assertEqual(out[0]["name"].dtype, np.object_)
+        self.assertEqual(out[0]["name"].tolist(), ["n0"])
+
+    def test_get_sample_data_does_not_parse_list_like_text(self):
+        """List-looking text in a string column is kept literally."""
+        out = get_sample_data({"t": "[1, 2]"}, {"t": ColumnConfig("string", [])})
+        self.assertEqual(out[0]["t"].item(), "[1, 2]")
+
+    def test_get_sample_data_rejects_unknown_dtype(self):
+        """get_sample_data raises on an unknown dtype."""
+        with self.assertRaises(ConfigurationError):
+            get_sample_data({"x": np.array([1.0])}, {"x": ColumnConfig("torch.strng")})
+
+    def test_ray_dataset_with_string_and_bytes_columns(self):
+        """End to end: a real Ray dataset with str and bytes columns."""
+        import ray
+
+        ray.init(num_cpus=1, include_dashboard=False, ignore_reinit_error=True)
+        self.addCleanup(ray.shutdown)
+        ds = ray.data.from_items(
+            [
+                {"x": [1.0, 2.0], "img": b"\x89PNG\x00", "name": "n0"},
+                {"x": [3.0, 4.0], "img": b"\x89PNG\x01", "name": "n1"},
+            ]
+        )
+        inputs = {
+            "x": ColumnConfig("torch.float32", [2]),
+            "img": ColumnConfig("string", [1]),
+            "name": ColumnConfig("string", [1]),
+        }
+        sample = get_sample_data(collate_sample_row(ds.take(1)[0]), inputs)[0]
+        self.assertEqual(sample["x"].dtype, np.float32)
+        self.assertEqual(sample["img"].dtype, np.object_)
+        self.assertEqual(sample["img"].tolist(), [b"\x89PNG\x00"])
+        self.assertEqual(sample["name"].tolist(), ["n0"])
+        schema = get_model_schema(inputs, {"y": ColumnConfig("torch.float32", [1])})
+        self.assertEqual(
+            [i.data_type for i in schema.input_schema],
+            [DataType.FLOAT, DataType.STRING, DataType.STRING],
+        )
