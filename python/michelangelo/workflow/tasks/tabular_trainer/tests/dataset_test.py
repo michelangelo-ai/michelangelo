@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import warnings
+from typing import ClassVar
 from unittest import TestCase
 from unittest.mock import patch
 
@@ -613,3 +614,83 @@ class TestConstructReadKwargs(TestCase):
         # columns should be inputs | labels only
         expected = sorted(list(cfg.input_columns.keys()) + list(cfg.labels.keys()))
         self.assertEqual(result["columns"], expected)
+
+
+# ---------------------------------------------------------------------------
+# Column order (list form) and dict-form warning
+# ---------------------------------------------------------------------------
+
+
+def _named(*names: str) -> list[ColumnConfig]:
+    """Build a list-form column spec."""
+    return [ColumnConfig("torch.float32", [1], name=n) for n in names]
+
+
+class TestColumnOrder(TestCase):
+    """Order of list-form columns reaches the schema and sample data."""
+
+    NAMES: ClassVar[list[str]] = ["zeta", "alpha", "mid", "beta"]
+
+    def test_model_schema_follows_list_order(self):
+        """Input and output schema items follow list order."""
+        schema = get_model_schema(_named(*self.NAMES), _named("q", "p"))
+        self.assertEqual([i.name for i in schema.input_schema], self.NAMES)
+        self.assertEqual([i.name for i in schema.output_schema], ["q", "p"])
+
+    def test_model_schema_dict_form_unchanged(self):
+        """Dict form still yields schema items in insertion order."""
+        spec = {n: ColumnConfig("torch.float32", [1]) for n in self.NAMES}
+        schema = get_model_schema(spec, {})
+        self.assertEqual([i.name for i in schema.input_schema], self.NAMES)
+
+    def test_model_schema_rejects_duplicates(self):
+        """Duplicate names raise ConfigurationError."""
+        from michelangelo.workflow.schema.exceptions import ConfigurationError
+
+        with self.assertRaises(ConfigurationError):
+            get_model_schema(_named("a", "a"), [])
+
+    def test_sample_data_follows_list_order(self):
+        """Sample data keys follow list order, skipping absent features."""
+        sample = {n: np.array([1.0]) for n in self.NAMES}
+        out = get_sample_data(sample, _named("beta", "missing", "zeta"))
+        self.assertEqual(list(out[0]), ["beta", "zeta"])
+
+    def test_read_kwargs_columns_from_list_form(self):
+        """Column projection works with list-form inputs and labels."""
+        cfg = _lightning_cfg(
+            input_columns=_named("b", "a"),
+            labels=_named("y"),
+            metadata_columns=["m"],
+        )
+        self.assertEqual(construct_read_kwargs(cfg)["columns"], ["a", "b", "m", "y"])
+
+
+class TestDictColumnsWarning(TestCase):
+    """The order-unsafe multi-column dict form warns."""
+
+    def _multi(self):
+        return {n: ColumnConfig("torch.float32", [1]) for n in ("a", "b")}
+
+    def test_multi_column_dict_warns_per_field(self):
+        """Each multi-column dict field emits a UserWarning naming it."""
+        for field_name in ("input_columns", "output_columns", "labels"):
+            cfg = _lightning_cfg(**{field_name: self._multi()})
+            with (
+                self.subTest(field=field_name),
+                self.assertWarnsRegex(UserWarning, field_name),
+            ):
+                raise_lightning_trainer_config_deprecation_warnings(cfg)
+
+    def test_single_column_dict_does_not_warn(self):
+        """A single-column dict has nothing to reorder."""
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            raise_lightning_trainer_config_deprecation_warnings(_lightning_cfg())
+
+    def test_list_form_does_not_warn(self):
+        """List form never warns."""
+        cfg = _lightning_cfg(input_columns=_named("a", "b"), labels=_named("x", "y"))
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            raise_lightning_trainer_config_deprecation_warnings(cfg)
