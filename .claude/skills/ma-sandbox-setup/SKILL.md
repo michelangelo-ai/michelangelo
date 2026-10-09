@@ -2,6 +2,9 @@
 name: ma-sandbox-setup
 description: Canonical setup sequence for the Michelangelo local sandbox. Use when setting up a new dev machine, diagnosing sandbox issues, or helping someone get unstuck during sandbox creation. Also applies when checking prereqs or explaining what each step does.
 user-invocable: true
+allowed-tools:
+  - Bash(bash .claude/skills/ma-sandbox-scripts/start.sh)
+  - Bash(bash .claude/skills/ma-sandbox-scripts/python-env.sh *)
 ---
 
 # Michelangelo Sandbox Setup Reference

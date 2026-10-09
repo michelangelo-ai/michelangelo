@@ -5,6 +5,13 @@ description: >-
   Use when the user asks to verify a change or generate evidence that a feature works.
 argument-hint: <description of what changed>
 user-invocable: true
+allowed-tools:
+  - Bash(bash .claude/skills/ma-sandbox-scripts/check-backend.sh)
+  - Bash(bash .claude/skills/ma-sandbox-scripts/find-vite-port.sh)
+  - Bash(bash .claude/skills/ma-sandbox-scripts/set_log_level.sh *)
+  - Bash(bash .claude/skills/ma-sandbox-scripts/capture_service_logs.sh *)
+  - Bash(kubectl get *)
+  - Bash(kubectl logs *)
 ---
 
 A pipeline that gates on failure at every stage. The output of each stage IS the evidence —
