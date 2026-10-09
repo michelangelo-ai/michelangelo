@@ -11,10 +11,12 @@ go_library(
         "model_config.go",
         "probe.go",
         "settings.go",
+        "transient.go",
     ],
     importpath = "github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common",
     visibility = ["//visibility:public"],
     deps = [
+        "//go/base/conditions/utils:go_default_library",
         "//go/base/config:go_default_library",
         "//go/components/inferenceserver/backends:go_default_library",
         "//go/components/inferenceserver/clientfactory:go_default_library",
@@ -36,6 +38,7 @@ go_test(
         "model_config_test.go",
         "probe_test.go",
         "settings_test.go",
+        "transient_test.go",
     ],
     embed = [":go_default_library"],
     deps = [

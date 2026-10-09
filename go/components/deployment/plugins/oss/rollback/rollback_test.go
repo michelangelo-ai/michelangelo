@@ -458,7 +458,23 @@ func TestClusterRollbackActor_Run(t *testing.T) {
 				expectRestoreRoute(m)
 				expectRemoveCandidate(m, errors.New("removal failed"))
 			},
+			expectedStatus:    apipb.CONDITION_STATUS_UNKNOWN,
+			expectedMessage:   "RemoveCandidateModelFailed",
+			expectedReasonSub: "removal failed",
+			expectStarted:     true,
+		},
+		{
+			name:       "RemoveModelFromConfig errors fail once the rollback budget is spent",
+			deployment: rollbackDeployment(testPrevious),
+			condition:  conditionWithProgress(t, startedAgo(testSettings.RollbackTimeout+time.Second)),
+			setupMocks: func(m *rollbackMocks) {
+				m.expectEntries(previousEntry(modelconfig.ModelPhaseServing), candidateEntry())
+				m.expectModelStatus(testPrevious, statusOf(1, readyReplica("pod-a")), nil)
+				expectRestoreRoute(m)
+				expectRemoveCandidate(m, errors.New("removal failed"))
+			},
 			expectedStatus:    apipb.CONDITION_STATUS_FALSE,
+			expectedMessage:   ReasonRollbackTimeout,
 			expectedReasonSub: "removal failed",
 		},
 		{
@@ -469,7 +485,8 @@ func TestClusterRollbackActor_Run(t *testing.T) {
 				m.expectModelStatus(testPrevious, statusOf(1, readyReplica("pod-a")), nil)
 				m.routeManager.EXPECT().AddRules(gomock.Any(), gomock.Any(), trafficRoute, testNamespace, gomock.Any()).Return(errors.New("update failed"))
 			},
-			expectedStatus:    apipb.CONDITION_STATUS_FALSE,
+			expectedStatus:    apipb.CONDITION_STATUS_UNKNOWN,
+			expectedMessage:   "TrafficRouteRestoreFailed",
 			expectedReasonSub: "update failed",
 		},
 	}
@@ -572,7 +589,21 @@ func TestRollbackCompletionActor(t *testing.T) {
 
 		got, err := actor.Run(context.Background(), rollbackDeployment(""), &apipb.Condition{})
 		require.NoError(t, err)
+		assert.Equal(t, apipb.CONDITION_STATUS_UNKNOWN, got.Status)
+		assert.Equal(t, "DiscoveryRouteRemovalFailed", got.Message)
+		assert.Contains(t, got.Reason, "update failed")
+	})
+
+	t.Run("RemoveRules errors fail once the rollback budget is spent", func(t *testing.T) {
+		mocks, _ := newRollbackFixture(t, clientErrors{})
+		mocks.routeManager.EXPECT().RemoveRules(gomock.Any(), gomock.Any(), discoveryRoute, testNamespace, discoveryMatch).Return(errors.New("update failed"))
+		actor := NewRollbackCompletionActor(mocks.params())
+
+		condition := conditionWithProgress(t, startedAgo(testSettings.RollbackTimeout+time.Second))
+		got, err := actor.Run(context.Background(), rollbackDeployment(""), condition)
+		require.NoError(t, err)
 		assert.Equal(t, apipb.CONDITION_STATUS_FALSE, got.Status)
+		assert.Equal(t, ReasonRollbackTimeout, got.Message)
 		assert.Contains(t, got.Reason, "update failed")
 	})
 

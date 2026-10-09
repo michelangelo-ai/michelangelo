@@ -23,6 +23,9 @@ const (
 	ReasonModelConfigReadFailed  = "ModelConfigReadFailed"
 	ReasonPromoteModelFailed     = "PromoteModelFailed"
 	ReasonTrafficRouteUpsertFail = "TrafficRouteUpsertFailed"
+	// ReasonTrafficRoutingTimeout is reported when errors a retry would normally clear have
+	// kept the traffic switch from completing within the model load budget.
+	ReasonTrafficRoutingTimeout = "TrafficRoutingTimeout"
 )
 
 var _ conditionInterfaces.ConditionActor[*v2pb.Deployment] = &TrafficRoutingActor{}
@@ -93,18 +96,32 @@ func (a *TrafficRoutingActor) Retrieve(ctx context.Context, deployment *v2pb.Dep
 // then adds or updates the deployment's rule on the cluster's traffic HTTPRoute. If a
 // replica is not serving the model (for example it restarted since the load completed), the
 // rule is left on the previous model and the actor waits.
+//
+// Errors a retry may clear (an unreachable cluster, a failed ConfigMap or HTTPRoute update,
+// a failed probe) report UNKNOWN until the model load budget, counted from the first call,
+// is spent, and the terminal FALSE after. A failed model load, a missing model entry and a
+// denied pod proxy fail at once.
 func (a *TrafficRoutingActor) Run(ctx context.Context, deployment *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
-	if osscommon.IsTerminalFailure(condition, ReasonModelLoadFailed) {
+	if osscommon.IsTerminalFailure(condition, ReasonModelLoadFailed, ReasonTrafficRoutingTimeout) {
 		return condition, nil
+	}
+
+	progress, err := osscommon.ReadRolloutProgress(condition)
+	if err != nil {
+		return conditionsutil.GenerateFalseCondition(condition, "MetadataReadFailed", err.Error()), nil
+	}
+	progress = osscommon.StartClock(progress, a.deps.now())
+	retry := func(reason, message string) *apipb.Condition {
+		return osscommon.ReportTransient(condition, progress, a.deps.now(), a.deps.Settings.ModelLoadTimeout, ReasonTrafficRoutingTimeout, reason, message)
 	}
 
 	kubeClient, err := a.deps.ClientFactory.GetClient(ctx, a.target)
 	if err != nil {
-		return conditionsutil.GenerateFalseCondition(condition, osscommon.ReasonClientUnavailable, err.Error()), nil
+		return retry(osscommon.ReasonClientUnavailable, err.Error()), nil
 	}
 	dynamicClient, err := a.deps.ClientFactory.GetDynamicClient(ctx, a.target)
 	if err != nil {
-		return conditionsutil.GenerateFalseCondition(condition, "DynamicClientUnavailable", err.Error()), nil
+		return retry("DynamicClientUnavailable", err.Error()), nil
 	}
 
 	isName := deployment.Spec.GetInferenceServer().GetName()
@@ -113,7 +130,7 @@ func (a *TrafficRoutingActor) Run(ctx context.Context, deployment *v2pb.Deployme
 
 	entries, err := a.deps.ModelConfigProvider.GetModelsFromConfig(ctx, a.deps.Logger, kubeClient, isName, deployment.Namespace)
 	if err != nil {
-		return conditionsutil.GenerateFalseCondition(condition, ReasonModelConfigReadFailed, err.Error()), nil
+		return retry(ReasonModelConfigReadFailed, err.Error()), nil
 	}
 	entry, ok := modelconfig.FindEntry(entries, deployment.Name, modelName)
 	if !ok {
@@ -123,12 +140,15 @@ func (a *TrafficRoutingActor) Run(ctx context.Context, deployment *v2pb.Deployme
 		entry.Phase = modelconfig.ModelPhaseServing
 		entry.CanaryPod = ""
 		if err := a.deps.ModelConfigProvider.AddModelToConfig(ctx, a.deps.Logger, kubeClient, isName, deployment.Namespace, entry); err != nil {
-			return conditionsutil.GenerateFalseCondition(condition, ReasonPromoteModelFailed, err.Error()), nil
+			return retry(ReasonPromoteModelFailed, err.Error()), nil
 		}
 	}
 
 	status, failure := a.deps.modelStatus(ctx, a.target, deployment, modelName)
 	if failure != nil {
+		if failure.Transient() {
+			return retry(failure.Reason, failure.Message), nil
+		}
 		return conditionsutil.GenerateFalseCondition(condition, failure.Reason, failure.Message), nil
 	}
 	if failed := status.Failed(); len(failed) > 0 {
@@ -136,6 +156,10 @@ func (a *TrafficRoutingActor) Run(ctx context.Context, deployment *v2pb.Deployme
 			fmt.Sprintf("model %s failed to load in cluster %s on %s", modelName, clusterID, describeFailedReplicas(failed))), nil
 	}
 	if !status.Ready() {
+		// Keep the clock so a later transient error does not restart the budget.
+		if err := osscommon.WriteRolloutProgress(condition, progress); err != nil {
+			return conditionsutil.GenerateFalseCondition(condition, osscommon.ReasonMetadataWriteFailed, err.Error()), nil
+		}
 		return conditionsutil.GenerateUnknownCondition(condition, ReasonWaitingForReplicas,
 			fmt.Sprintf("not routing traffic to model %s in cluster %s until every replica serves it: %s", modelName, clusterID, status.Summary())), nil
 	}
@@ -148,7 +172,7 @@ func (a *TrafficRoutingActor) Run(ctx context.Context, deployment *v2pb.Deployme
 		BackendName: isName + "-inference-service",
 	}
 	if err := a.deps.RouteManager.AddRules(ctx, dynamicClient, routenames.TrafficRouteName(isName), deployment.Namespace, rule); err != nil {
-		return conditionsutil.GenerateFalseCondition(condition, ReasonTrafficRouteUpsertFail, err.Error()), nil
+		return retry(ReasonTrafficRouteUpsertFail, err.Error()), nil
 	}
 	return conditionsutil.GenerateTrueCondition(condition), nil
 }

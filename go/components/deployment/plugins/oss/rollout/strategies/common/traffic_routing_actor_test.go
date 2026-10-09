@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -162,10 +163,20 @@ func TestTrafficRoutingActor_Run(t *testing.T) {
 			expectedMessage: ReasonModelLoadFailed,
 		},
 		{
-			name:              "GetDynamicClient errors",
+			name:              "GetDynamicClient errors retry",
 			clientErrs:        clientErrors{getDynamicClient: errors.New("dial timeout")},
 			setupMocks:        func(*rolloutMocks) {},
+			expectedStatus:    apipb.CONDITION_STATUS_UNKNOWN,
+			expectedMessage:   "DynamicClientUnavailable",
+			expectedReasonSub: "dial timeout",
+		},
+		{
+			name:              "GetDynamicClient errors fail once the budget is spent",
+			clientErrs:        clientErrors{getDynamicClient: errors.New("dial timeout")},
+			condition:         conditionWithProgress(t, startedAgo(11*time.Minute, "")),
+			setupMocks:        func(*rolloutMocks) {},
 			expectedStatus:    apipb.CONDITION_STATUS_FALSE,
+			expectedMessage:   ReasonTrafficRoutingTimeout,
 			expectedReasonSub: "dial timeout",
 		},
 		{
@@ -207,8 +218,21 @@ func TestTrafficRoutingActor_Run(t *testing.T) {
 				m.routeManager.EXPECT().AddRules(gomock.Any(), gomock.Any(), routeName, testNamespace, gomock.Any()).
 					Return(errors.New("update failed"))
 			},
-			expectedStatus:    apipb.CONDITION_STATUS_FALSE,
+			expectedStatus:    apipb.CONDITION_STATUS_UNKNOWN,
 			expectedMessage:   ReasonTrafficRouteUpsertFail,
+			expectedReasonSub: "update failed",
+		},
+		{
+			name:      "AddRules errors fail once the budget is spent",
+			condition: conditionWithProgress(t, startedAgo(11*time.Minute, "")),
+			setupMocks: func(m *rolloutMocks) {
+				expectEntries(m, servingEntry())
+				m.expectModelStatus(testModelName, statusOf(2, readyReplica("pod-a"), readyReplica("pod-b")), nil)
+				m.routeManager.EXPECT().AddRules(gomock.Any(), gomock.Any(), routeName, testNamespace, gomock.Any()).
+					Return(errors.New("update failed"))
+			},
+			expectedStatus:    apipb.CONDITION_STATUS_FALSE,
+			expectedMessage:   ReasonTrafficRoutingTimeout,
 			expectedReasonSub: "update failed",
 		},
 		{

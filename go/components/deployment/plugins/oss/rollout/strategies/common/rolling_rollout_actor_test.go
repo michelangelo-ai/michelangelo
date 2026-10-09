@@ -387,19 +387,51 @@ func TestRollingRolloutActor_Run(t *testing.T) {
 			expectedMessage: ReasonModelLoadFailed,
 		},
 		{
-			name:              "GetClient errors",
+			name:              "GetClient errors retry and start the clock",
 			clientErrs:        clientErrors{getClient: errors.New("auth refused")},
 			setupMocks:        func(*rolloutMocks) {},
+			expectedStatus:    apipb.CONDITION_STATUS_UNKNOWN,
+			expectedMessage:   osscommon.ReasonClientUnavailable,
+			expectedReasonSub: "auth refused",
+			expectedStartedAt: testNow.Unix(),
+		},
+		{
+			name:              "GetClient errors keep counting from the first failure",
+			clientErrs:        clientErrors{getClient: errors.New("auth refused")},
+			condition:         conditionWithProgress(t, startedAgo(2*time.Minute, "")),
+			setupMocks:        func(*rolloutMocks) {},
+			expectedStatus:    apipb.CONDITION_STATUS_UNKNOWN,
+			expectedStartedAt: testNow.Add(-2 * time.Minute).Unix(),
+		},
+		{
+			name:              "GetClient errors fail once the load budget is spent",
+			clientErrs:        clientErrors{getClient: errors.New("auth refused")},
+			condition:         conditionWithProgress(t, startedAgo(11*time.Minute, "")),
+			setupMocks:        func(*rolloutMocks) {},
 			expectedStatus:    apipb.CONDITION_STATUS_FALSE,
+			expectedMessage:   ReasonModelLoadTimeout,
 			expectedReasonSub: "auth refused",
 		},
 		{
-			name: "AddModelToConfig errors",
+			name: "AddModelToConfig errors retry",
+			setupMocks: func(m *rolloutMocks) {
+				m.modelConfigProvider.EXPECT().AddModelToConfig(gomock.Any(), gomock.Any(), gomock.Any(),
+					testISName, testNamespace, gomock.Any()).Return(errors.New("apply failed"))
+			},
+			expectedStatus:    apipb.CONDITION_STATUS_UNKNOWN,
+			expectedMessage:   "AddModelToConfigFailed",
+			expectedReasonSub: "apply failed",
+			expectedStartedAt: testNow.Unix(),
+		},
+		{
+			name:      "AddModelToConfig errors fail once the load budget is spent",
+			condition: conditionWithProgress(t, startedAgo(11*time.Minute, "")),
 			setupMocks: func(m *rolloutMocks) {
 				m.modelConfigProvider.EXPECT().AddModelToConfig(gomock.Any(), gomock.Any(), gomock.Any(),
 					testISName, testNamespace, gomock.Any()).Return(errors.New("apply failed"))
 			},
 			expectedStatus:    apipb.CONDITION_STATUS_FALSE,
+			expectedMessage:   ReasonModelLoadTimeout,
 			expectedReasonSub: "apply failed",
 		},
 		{
@@ -423,11 +455,13 @@ func TestRollingRolloutActor_Run(t *testing.T) {
 			expectedReasonSub: "want DEPLOYABLE_MODEL_PACKAGE_TYPE_TRITON",
 		},
 		{
-			name:              "model read fails outright",
+			name:              "model read fails outright is retried, not a verdict on the model",
 			setupMocks:        func(*rolloutMocks) {}, // AddModelToConfig must not be reached
 			controlPlane:      newUnreachableControlPlane(t),
-			expectedStatus:    apipb.CONDITION_STATUS_FALSE,
+			expectedStatus:    apipb.CONDITION_STATUS_UNKNOWN,
+			expectedMessage:   "ModelResolutionFailed",
 			expectedReasonSub: "metadata storage unreachable",
+			expectedStartedAt: testNow.Unix(),
 		},
 		{
 			name: "happy path stages the model with the storage path from the Model CR",

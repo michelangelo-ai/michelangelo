@@ -107,6 +107,12 @@ func (a *CanaryRolloutActor) Retrieve(ctx context.Context, deployment *v2pb.Depl
 // Run picks the canary replica and registers the model in the cluster's model config in
 // the canary phase, so only that replica loads it. Returns UNKNOWN so the engine keeps
 // polling via Retrieve.
+//
+// The load budget starts on the first call, before any cluster access, so an unreachable
+// cluster cannot keep the actor retrying forever. Errors a retry may clear (an unreachable
+// cluster, a failed ConfigMap update, a failed probe) report UNKNOWN until the budget is
+// spent and the terminal FALSE after; model-resolution errors and a denied pod proxy fail
+// at once.
 func (a *CanaryRolloutActor) Run(ctx context.Context, deployment *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
 	if osscommon.IsTerminalFailure(condition, ReasonCanaryLoadFailed, ReasonCanaryLoadTimeout) {
 		return condition, nil
@@ -116,6 +122,10 @@ func (a *CanaryRolloutActor) Run(ctx context.Context, deployment *v2pb.Deploymen
 	if err != nil {
 		return conditionsutil.GenerateFalseCondition(condition, "MetadataReadFailed", err.Error()), nil
 	}
+	progress = osscommon.StartClock(progress, a.deps.now())
+	retry := func(reason, message string) *apipb.Condition {
+		return osscommon.ReportTransient(condition, progress, a.deps.now(), a.deps.Settings.ModelLoadTimeout, ReasonCanaryLoadTimeout, reason, message)
+	}
 
 	modelName := deployment.Spec.GetDesiredRevision().GetName()
 	inferenceServerName := deployment.Spec.GetInferenceServer().GetName()
@@ -123,7 +133,7 @@ func (a *CanaryRolloutActor) Run(ctx context.Context, deployment *v2pb.Deploymen
 
 	kubeClient, err := a.deps.ClientFactory.GetClient(ctx, a.target)
 	if err != nil {
-		return conditionsutil.GenerateFalseCondition(condition, osscommon.ReasonClientUnavailable, err.Error()), nil
+		return retry(osscommon.ReasonClientUnavailable, err.Error()), nil
 	}
 
 	storagePath, err := plugincommon.ResolveDeploymentModelStoragePath(ctx, a.deps.APIHandler, deployment)
@@ -132,17 +142,18 @@ func (a *CanaryRolloutActor) Run(ctx context.Context, deployment *v2pb.Deploymen
 		if errors.As(err, &resolutionErr) {
 			return conditionsutil.GenerateFalseCondition(condition, resolutionErr.Reason, resolutionErr.Message), nil
 		}
-		return conditionsutil.GenerateFalseCondition(condition, "ModelResolutionFailed", err.Error()), nil
+		// Not a verdict on the model (that is the resolution error above), so retry.
+		return retry("ModelResolutionFailed", err.Error()), nil
 	}
 
 	status, failure := a.deps.modelStatus(ctx, a.target, deployment, modelName)
 	if failure != nil {
+		if failure.Transient() {
+			return retry(failure.Reason, failure.Message), nil
+		}
 		return conditionsutil.GenerateFalseCondition(condition, failure.Reason, failure.Message), nil
 	}
 
-	if !progress.Started() {
-		progress.StartedAt = a.deps.now().Unix()
-	}
 	canary := pickCanaryReplica(status, progress.Replica)
 	if canary == "" {
 		if err := osscommon.WriteRolloutProgress(condition, progress); err != nil {
@@ -160,7 +171,7 @@ func (a *CanaryRolloutActor) Run(ctx context.Context, deployment *v2pb.Deploymen
 		Phase:          modelconfig.ModelPhaseCanary,
 		CanaryPod:      canary,
 	}); err != nil {
-		return conditionsutil.GenerateFalseCondition(condition, "AddModelToConfigFailed", err.Error()), nil
+		return retry("AddModelToConfigFailed", err.Error()), nil
 	}
 
 	if err := osscommon.WriteRolloutProgress(condition, progress); err != nil {

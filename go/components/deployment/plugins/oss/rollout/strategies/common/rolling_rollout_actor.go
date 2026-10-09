@@ -94,6 +94,10 @@ func (a *RollingRolloutActor) Retrieve(ctx context.Context, deployment *v2pb.Dep
 // Run registers the desired model in the cluster's inference server ConfigMap in the staged
 // phase, triggering every replica to load it, and starts the load budget. Returns UNKNOWN
 // so the engine continues polling via Retrieve.
+//
+// The budget starts on the first call, before any cluster access. Errors a retry may clear
+// report UNKNOWN until it is spent and the terminal FALSE after; model-resolution errors fail
+// at once.
 func (a *RollingRolloutActor) Run(ctx context.Context, deployment *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
 	if osscommon.IsTerminalFailure(condition, ReasonModelLoadFailed, ReasonModelLoadTimeout) {
 		return condition, nil
@@ -104,9 +108,14 @@ func (a *RollingRolloutActor) Run(ctx context.Context, deployment *v2pb.Deployme
 		return conditionsutil.GenerateFalseCondition(condition, "MetadataReadFailed", err.Error()), nil
 	}
 
+	progress = osscommon.StartClock(progress, a.deps.now())
+	retry := func(reason, message string) *apipb.Condition {
+		return osscommon.ReportTransient(condition, progress, a.deps.now(), a.deps.Settings.ModelLoadTimeout, ReasonModelLoadTimeout, reason, message)
+	}
+
 	kubeClient, err := a.deps.ClientFactory.GetClient(ctx, a.target)
 	if err != nil {
-		return conditionsutil.GenerateFalseCondition(condition, osscommon.ReasonClientUnavailable, err.Error()), nil
+		return retry(osscommon.ReasonClientUnavailable, err.Error()), nil
 	}
 
 	inferenceServerName := deployment.Spec.GetInferenceServer().GetName()
@@ -118,7 +127,7 @@ func (a *RollingRolloutActor) Run(ctx context.Context, deployment *v2pb.Deployme
 		if errors.As(err, &resolutionErr) {
 			return conditionsutil.GenerateFalseCondition(condition, resolutionErr.Reason, resolutionErr.Message), nil
 		}
-		return conditionsutil.GenerateFalseCondition(condition, "ModelResolutionFailed", err.Error()), nil
+		return retry("ModelResolutionFailed", err.Error()), nil
 	}
 
 	if err := a.deps.ModelConfigProvider.AddModelToConfig(ctx, a.deps.Logger, kubeClient, inferenceServerName, deployment.Namespace, modelconfig.ModelConfigEntry{
@@ -127,12 +136,9 @@ func (a *RollingRolloutActor) Run(ctx context.Context, deployment *v2pb.Deployme
 		DeploymentName: deployment.GetName(),
 		Phase:          modelconfig.ModelPhaseStaged,
 	}); err != nil {
-		return conditionsutil.GenerateFalseCondition(condition, "AddModelToConfigFailed", err.Error()), nil
+		return retry("AddModelToConfigFailed", err.Error()), nil
 	}
 
-	if !progress.Started() {
-		progress.StartedAt = a.deps.now().Unix()
-	}
 	if err := osscommon.WriteRolloutProgress(condition, progress); err != nil {
 		return conditionsutil.GenerateFalseCondition(condition, "MetadataWriteFailed", err.Error()), nil
 	}

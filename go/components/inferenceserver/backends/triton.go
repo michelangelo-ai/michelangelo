@@ -70,10 +70,10 @@ const (
 	TritonReadinessNone = "none"
 )
 
-// errProxyDenied marks an API-server proxy request that was rejected for lack of
+// ErrProxyDenied marks an API-server proxy request that was rejected for lack of
 // permission. It is a deployment problem (missing pods/proxy RBAC), not a model state,
 // so callers surface it as an error instead of waiting for the model.
-var errProxyDenied = errors.New("api server refused the pod proxy request")
+var ErrProxyDenied = errors.New("api server refused the pod proxy request")
 
 // tritonReadinessScript is the model-aware readiness probe. It compares the serving
 // entries of the mounted model config with Triton's repository index and fails while any
@@ -423,7 +423,7 @@ func (b *tritonBackend) replicaModelStatus(ctx context.Context, httpClient *http
 
 	entries, err := b.repositoryIndex(ctx, httpClient, apiServerURL, pod.Namespace, pod.Name)
 	if err != nil {
-		if errors.Is(err, errProxyDenied) {
+		if errors.Is(err, ErrProxyDenied) {
 			return replica, fmt.Errorf("model status probe for pod %s/%s: %w", pod.Namespace, pod.Name, err)
 		}
 		replica.Reason = err.Error()
@@ -462,7 +462,7 @@ func (b *tritonBackend) repositoryIndex(ctx context.Context, httpClient *http.Cl
 		}
 		return entries, nil
 	case http.StatusUnauthorized, http.StatusForbidden:
-		return nil, fmt.Errorf("%w: %s", errProxyDenied, resp.Status)
+		return nil, fmt.Errorf("%w: %s", ErrProxyDenied, resp.Status)
 	default:
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
 		return nil, fmt.Errorf("repository index returned %s: %s", resp.Status, strings.TrimSpace(string(body)))

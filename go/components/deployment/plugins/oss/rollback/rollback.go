@@ -153,6 +153,12 @@ func (a *ClusterRollbackActor) Retrieve(ctx context.Context, deployment *v2pb.De
 // Run restores the previous revision in the cluster and removes the candidate. It returns
 // UNKNOWN while the previous revision is being loaded again, and a terminal FALSE if that
 // load fails or exceeds the rollback budget.
+//
+// Errors a retry may clear (an unreachable cluster, a failed ConfigMap or HTTPRoute update,
+// a failed probe) also report UNKNOWN, so a network blip does not strand the rollback at
+// ROLLBACK_FAILED; they become the terminal FALSE only once the rollback budget, counted from
+// the first call, is spent. Model-resolution errors, a failed reload of the previous model
+// and a denied pod proxy fail at once.
 func (a *ClusterRollbackActor) Run(ctx context.Context, deployment *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
 	if osscommon.IsTerminalFailure(condition, ReasonPreviousModelLoadFailed, ReasonRollbackTimeout) {
 		return condition, nil
@@ -168,10 +174,13 @@ func (a *ClusterRollbackActor) Run(ctx context.Context, deployment *v2pb.Deploym
 		return conditionsutil.GenerateFalseCondition(condition, "MetadataReadFailed", err.Error()), nil
 	}
 	if !progress.Started() {
-		progress.StartedAt = a.now().Unix()
+		progress = osscommon.StartClock(progress, a.now())
 		if err := osscommon.WriteRolloutProgress(condition, progress); err != nil {
 			return conditionsutil.GenerateFalseCondition(condition, "MetadataWriteFailed", err.Error()), nil
 		}
+	}
+	retry := func(reason, message string) *apipb.Condition {
+		return osscommon.ReportTransient(condition, progress, a.now(), a.settings.RollbackTimeout, ReasonRollbackTimeout, reason, message)
 	}
 
 	isName := deployment.Spec.GetInferenceServer().GetName()
@@ -179,41 +188,43 @@ func (a *ClusterRollbackActor) Run(ctx context.Context, deployment *v2pb.Deploym
 
 	kubeClient, err := a.clientFactory.GetClient(ctx, a.target)
 	if err != nil {
-		return conditionsutil.GenerateFalseCondition(condition, osscommon.ReasonClientUnavailable, err.Error()), nil
+		return retry(osscommon.ReasonClientUnavailable, err.Error()), nil
 	}
 	dynamicClient, err := a.clientFactory.GetDynamicClient(ctx, a.target)
 	if err != nil {
-		return conditionsutil.GenerateFalseCondition(condition, "DynamicClientUnavailable", err.Error()), nil
+		return retry("DynamicClientUnavailable", err.Error()), nil
 	}
 
 	if current != "" {
-		if blocked := a.restorePrevious(ctx, deployment, condition, progress, kubeClient, dynamicClient, current); blocked != nil {
+		if blocked := a.restorePrevious(ctx, deployment, condition, progress, retry, kubeClient, dynamicClient, current); blocked != nil {
 			return blocked, nil
 		}
 	} else {
 		a.logger.Info("Removing traffic route; there is no previous model to restore",
 			zap.String("deployment", deployment.Name), zap.String("cluster", clusterID))
 		if err := a.routeManager.RemoveRules(ctx, dynamicClient, routenames.TrafficRouteName(isName), deployment.Namespace, routenames.TrafficMatchPath(isName, deployment.Name)); err != nil {
-			return conditionsutil.GenerateFalseCondition(condition, "TrafficRouteRemovalFailed", err.Error()), nil
+			return retry("TrafficRouteRemovalFailed", err.Error()), nil
 		}
 	}
 
 	a.logger.Info("Removing candidate model from model config",
 		zap.String("deployment", deployment.Name), zap.String("model", candidate), zap.String("cluster", clusterID))
 	if err := a.modelConfigProvider.RemoveModelFromConfig(ctx, a.logger, kubeClient, isName, deployment.Namespace, deployment.GetName(), candidate); err != nil {
-		return conditionsutil.GenerateFalseCondition(condition, "RemoveCandidateModelFailed", err.Error()), nil
+		return retry("RemoveCandidateModelFailed", err.Error()), nil
 	}
 	return conditionsutil.GenerateTrueCondition(condition), nil
 }
 
 // restorePrevious puts the previous revision back in the serving phase, waits for every
 // replica to have it loaded, and points the traffic rule at it. It returns nil when traffic
-// is restored, or the condition to report while it is not.
+// is restored, or the condition to report while it is not. retry reports an error a retry
+// may clear.
 func (a *ClusterRollbackActor) restorePrevious(
 	ctx context.Context,
 	deployment *v2pb.Deployment,
 	condition *apipb.Condition,
 	progress osscommon.RolloutProgress,
+	retry func(reason, message string) *apipb.Condition,
 	kubeClient client.Client,
 	dynamicClient dynamic.Interface,
 	current string,
@@ -223,7 +234,7 @@ func (a *ClusterRollbackActor) restorePrevious(
 
 	entries, err := a.modelConfigProvider.GetModelsFromConfig(ctx, a.logger, kubeClient, isName, deployment.Namespace)
 	if err != nil {
-		return conditionsutil.GenerateFalseCondition(condition, ReasonModelConfigReadFailed, err.Error())
+		return retry(ReasonModelConfigReadFailed, err.Error())
 	}
 	entry, found := modelconfig.FindEntry(entries, deployment.Name, current)
 	if !found {
@@ -233,7 +244,7 @@ func (a *ClusterRollbackActor) restorePrevious(
 			if errors.As(err, &resolutionErr) {
 				return conditionsutil.GenerateFalseCondition(condition, resolutionErr.Reason, resolutionErr.Message)
 			}
-			return conditionsutil.GenerateFalseCondition(condition, "ModelResolutionFailed", err.Error())
+			return retry("ModelResolutionFailed", err.Error())
 		}
 		entry = modelconfig.ModelConfigEntry{Name: current, StoragePath: storagePath, DeploymentName: deployment.GetName()}
 	}
@@ -243,12 +254,15 @@ func (a *ClusterRollbackActor) restorePrevious(
 		a.logger.Info("Restoring previous model in model config",
 			zap.String("deployment", deployment.Name), zap.String("model", current), zap.String("cluster", clusterID))
 		if err := a.modelConfigProvider.AddModelToConfig(ctx, a.logger, kubeClient, isName, deployment.Namespace, entry); err != nil {
-			return conditionsutil.GenerateFalseCondition(condition, "RestorePreviousModelFailed", err.Error())
+			return retry("RestorePreviousModelFailed", err.Error())
 		}
 	}
 
 	status, failure := osscommon.ProbeModelStatus(ctx, a.logger, a.clientFactory, a.backendRegistry, osscommon.BackendTypeOf(deployment), a.target, deployment.Namespace, isName, current)
 	if failure != nil {
+		if failure.Transient() {
+			return retry(failure.Reason, failure.Message)
+		}
 		return conditionsutil.GenerateFalseCondition(condition, failure.Reason, failure.Message)
 	}
 	if failed := status.Failed(); len(failed) > 0 {
@@ -274,7 +288,7 @@ func (a *ClusterRollbackActor) restorePrevious(
 	a.logger.Info("Restoring traffic route to previous model",
 		zap.String("deployment", deployment.Name), zap.String("model", current), zap.String("cluster", clusterID))
 	if err := a.routeManager.AddRules(ctx, dynamicClient, routenames.TrafficRouteName(isName), deployment.Namespace, rule); err != nil {
-		return conditionsutil.GenerateFalseCondition(condition, "TrafficRouteRestoreFailed", err.Error())
+		return retry("TrafficRouteRestoreFailed", err.Error())
 	}
 	return nil
 }

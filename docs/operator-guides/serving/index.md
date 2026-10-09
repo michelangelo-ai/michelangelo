@@ -131,6 +131,13 @@ The knobs live in the controller manager config (`go/cmd/controllermgr/config/ba
 
 The `Blast` strategy skips the canary and the soak; use it only for emergency rollouts.
 
+Errors a retry can clear (an unreachable cluster, a failed ConfigMap or HTTPRoute update, a
+failed pod-proxy call) do not fail the rollout straight away. The step reports *in progress*
+and is retried until its budget, counted from the step's first attempt, is spent:
+`deployment.rollout.modelLoadTimeout` for the canary, rolling load and traffic switch, and
+`deployment.rollback.modelLoadTimeout` for a rollback. Only then does it fail. A replica that
+reports a failed load, a model that cannot be resolved and a denied pod proxy fail at once.
+
 Operational notes:
 
 * The model-aware readiness probe runs `python3` inside the Triton container. Images

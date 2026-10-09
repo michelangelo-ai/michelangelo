@@ -159,7 +159,7 @@ func TestTritonGetModelStatus_ProxyDeniedIsAnError(t *testing.T) {
 		server.Client(), server.URL, tritonTestServer, tritonTestNamespace, tritonTestModel)
 
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, errProxyDenied), "a refused proxy is a misconfiguration, not a pending load: %v", err)
+	assert.True(t, errors.Is(err, ErrProxyDenied), "a refused proxy is a misconfiguration, not a pending load: %v", err)
 }
 
 func TestTritonGetModelStatus_TritonNotListeningYetIsLoading(t *testing.T) {

@@ -2,6 +2,7 @@ package common
 
 import (
 	"context"
+	"errors"
 
 	"go.uber.org/zap"
 
@@ -24,6 +25,15 @@ const (
 type ProbeFailure struct {
 	Reason  string
 	Message string
+	// Permanent marks a failure a retry cannot clear: a backend that is not registered, or an
+	// API server that refuses the pod proxy (an RBAC fix is needed). Every other failure is
+	// transient, for example an unreachable cluster, and is worth retrying.
+	Permanent bool
+}
+
+// Transient reports whether retrying the probe may succeed.
+func (f *ProbeFailure) Transient() bool {
+	return f != nil && !f.Permanent
 }
 
 // ProbeModelStatus resolves the inference server's backend and the cluster's clients, then
@@ -41,7 +51,7 @@ func ProbeModelStatus(
 ) (*backends.ModelStatus, *ProbeFailure) {
 	backend, err := backendRegistry.GetBackend(backendType)
 	if err != nil {
-		return nil, &ProbeFailure{Reason: ReasonBackendUnavailable, Message: err.Error()}
+		return nil, &ProbeFailure{Reason: ReasonBackendUnavailable, Message: err.Error(), Permanent: true}
 	}
 	kubeClient, err := clientFactory.GetClient(ctx, target)
 	if err != nil {
@@ -53,7 +63,7 @@ func ProbeModelStatus(
 	}
 	status, err := backend.GetModelStatus(ctx, logger, kubeClient, httpClient, APIServerURLFromTarget(target), inferenceServerName, namespace, modelName)
 	if err != nil {
-		return nil, &ProbeFailure{Reason: ReasonModelStatusCheckFailed, Message: err.Error()}
+		return nil, &ProbeFailure{Reason: ReasonModelStatusCheckFailed, Message: err.Error(), Permanent: errors.Is(err, backends.ErrProxyDenied)}
 	}
 	return status, nil
 }

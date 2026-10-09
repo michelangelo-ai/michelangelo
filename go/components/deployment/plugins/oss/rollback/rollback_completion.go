@@ -3,6 +3,7 @@ package rollback
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"go.uber.org/zap"
 	"k8s.io/client-go/dynamic"
@@ -26,6 +27,8 @@ type RollbackCompletionActor struct {
 	dynamicClient dynamic.Interface
 	routeManager  routing.Manager
 	logger        *zap.Logger
+	settings      osscommon.RolloutSettings
+	now           func() time.Time
 }
 
 // NewRollbackCompletionActor creates the terminal rollback actor.
@@ -34,7 +37,11 @@ func NewRollbackCompletionActor(p Params) *RollbackCompletionActor {
 	if logger == nil {
 		logger = zap.NewNop()
 	}
-	return &RollbackCompletionActor{dynamicClient: p.DynamicClient, routeManager: p.RouteManager, logger: logger}
+	now := p.Now
+	if now == nil {
+		now = time.Now
+	}
+	return &RollbackCompletionActor{dynamicClient: p.DynamicClient, routeManager: p.RouteManager, logger: logger, settings: p.Settings, now: now}
 }
 
 // GetType returns the terminal rollback condition type.
@@ -61,15 +68,24 @@ func (a *RollbackCompletionActor) Retrieve(ctx context.Context, deployment *v2pb
 	return conditionsutil.GenerateTrueCondition(condition), nil
 }
 
-// Run removes the deployment's discovery rule.
+// Run removes the deployment's discovery rule. A failed removal reports UNKNOWN and is
+// retried until the rollback budget, counted from the first call, is spent.
 func (a *RollbackCompletionActor) Run(ctx context.Context, deployment *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
 	if deployment.Status.GetCurrentRevision() != nil {
 		return conditionsutil.GenerateTrueCondition(condition), nil
 	}
+	if osscommon.IsTerminalFailure(condition, ReasonRollbackTimeout) {
+		return condition, nil
+	}
+	progress, err := osscommon.ReadRolloutProgress(condition)
+	if err != nil {
+		return conditionsutil.GenerateFalseCondition(condition, "MetadataReadFailed", err.Error()), nil
+	}
+	progress = osscommon.StartClock(progress, a.now())
 	isName := deployment.Spec.GetInferenceServer().GetName()
 	a.logger.Info("Removing discovery route; there is no previous model to serve", zap.String("deployment", deployment.Name))
 	if err := a.routeManager.RemoveRules(ctx, a.dynamicClient, routenames.DiscoveryRouteName(isName), deployment.Namespace, routenames.DiscoveryMatchPath(isName, deployment.Name)); err != nil {
-		return conditionsutil.GenerateFalseCondition(condition, "DiscoveryRouteRemovalFailed", err.Error()), nil
+		return osscommon.ReportTransient(condition, progress, a.now(), a.settings.RollbackTimeout, ReasonRollbackTimeout, "DiscoveryRouteRemovalFailed", err.Error()), nil
 	}
 	return conditionsutil.GenerateTrueCondition(condition), nil
 }

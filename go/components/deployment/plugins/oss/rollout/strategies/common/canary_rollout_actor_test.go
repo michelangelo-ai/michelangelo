@@ -3,6 +3,7 @@ package common
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	osscommon "github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 )
@@ -182,11 +184,56 @@ func TestCanaryRolloutActor_Run(t *testing.T) {
 			expectedMessage: ReasonCanaryLoadFailed,
 		},
 		{
-			name:              "GetClient errors",
+			name:              "GetClient errors retry and start the clock",
 			clientErrs:        clientErrors{getClient: errors.New("auth refused")},
 			setupMocks:        func(*rolloutMocks) {},
-			expectedStatus:    apipb.CONDITION_STATUS_FALSE,
+			expectedStatus:    apipb.CONDITION_STATUS_UNKNOWN,
+			expectedMessage:   osscommon.ReasonClientUnavailable,
 			expectedReasonSub: "auth refused",
+			expectedStartedAt: testNow.Unix(),
+		},
+		{
+			name:              "GetClient errors keep counting from the first failure",
+			clientErrs:        clientErrors{getClient: errors.New("auth refused")},
+			condition:         conditionWithProgress(t, startedAgo(2*time.Minute, "")),
+			setupMocks:        func(*rolloutMocks) {},
+			expectedStatus:    apipb.CONDITION_STATUS_UNKNOWN,
+			expectedStartedAt: testNow.Add(-2 * time.Minute).Unix(),
+		},
+		{
+			name:              "GetClient errors fail once the load budget is spent",
+			clientErrs:        clientErrors{getClient: errors.New("auth refused")},
+			condition:         conditionWithProgress(t, startedAgo(11*time.Minute, "")),
+			setupMocks:        func(*rolloutMocks) {},
+			expectedStatus:    apipb.CONDITION_STATUS_FALSE,
+			expectedMessage:   ReasonCanaryLoadTimeout,
+			expectedReasonSub: "auth refused",
+		},
+		{
+			name: "a transient probe failure retries",
+			setupMocks: func(m *rolloutMocks) {
+				m.expectModelStatus(testModelName, nil, errors.New("connection reset"))
+			},
+			expectedStatus:    apipb.CONDITION_STATUS_UNKNOWN,
+			expectedMessage:   osscommon.ReasonModelStatusCheckFailed,
+			expectedStartedAt: testNow.Unix(),
+		},
+		{
+			name:      "a transient probe failure fails once the load budget is spent",
+			condition: conditionWithProgress(t, startedAgo(11*time.Minute, "")),
+			setupMocks: func(m *rolloutMocks) {
+				m.expectModelStatus(testModelName, nil, errors.New("connection reset"))
+			},
+			expectedStatus:  apipb.CONDITION_STATUS_FALSE,
+			expectedMessage: ReasonCanaryLoadTimeout,
+		},
+		{
+			name: "a denied pod proxy fails at once",
+			setupMocks: func(m *rolloutMocks) {
+				m.expectModelStatus(testModelName, nil, fmt.Errorf("probe: %w", backends.ErrProxyDenied))
+			},
+			expectedStatus:  apipb.CONDITION_STATUS_FALSE,
+			expectedMessage: osscommon.ReasonModelStatusCheckFailed,
 		},
 		{
 			name: "picks the first running replica by name",
@@ -232,13 +279,27 @@ func TestCanaryRolloutActor_Run(t *testing.T) {
 			expectedStartedAt: testNow.Unix(),
 		},
 		{
-			name: "AddModelToConfig errors",
+			name: "AddModelToConfig errors retry",
+			setupMocks: func(m *rolloutMocks) {
+				m.expectModelStatus(testModelName, statusOf(1, loadingReplica("pod-a")), nil)
+				m.modelConfigProvider.EXPECT().AddModelToConfig(gomock.Any(), gomock.Any(), gomock.Any(), testISName, testNamespace, gomock.Any()).
+					Return(errors.New("apply failed"))
+			},
+			expectedStatus:    apipb.CONDITION_STATUS_UNKNOWN,
+			expectedMessage:   "AddModelToConfigFailed",
+			expectedReasonSub: "apply failed",
+			expectedStartedAt: testNow.Unix(),
+		},
+		{
+			name:      "AddModelToConfig errors fail once the load budget is spent",
+			condition: conditionWithProgress(t, startedAgo(11*time.Minute, "")),
 			setupMocks: func(m *rolloutMocks) {
 				m.expectModelStatus(testModelName, statusOf(1, loadingReplica("pod-a")), nil)
 				m.modelConfigProvider.EXPECT().AddModelToConfig(gomock.Any(), gomock.Any(), gomock.Any(), testISName, testNamespace, gomock.Any()).
 					Return(errors.New("apply failed"))
 			},
 			expectedStatus:    apipb.CONDITION_STATUS_FALSE,
+			expectedMessage:   ReasonCanaryLoadTimeout,
 			expectedReasonSub: "apply failed",
 		},
 	}
