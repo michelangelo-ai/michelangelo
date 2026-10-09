@@ -25,6 +25,22 @@ func createTestRegistry(mockBackend *backendsmocks.MockBackend) *backends.Regist
 	return registry
 }
 
+// readyOnAllReplicas is a model status where every desired replica serves the model.
+func readyOnAllReplicas() *backends.ModelStatus {
+	return &backends.ModelStatus{Desired: 2, Replicas: []backends.ReplicaModelStatus{
+		{Replica: "pod-a", Running: true, State: backends.ModelLoadStateReady},
+		{Replica: "pod-b", Running: true, State: backends.ModelLoadStateReady},
+	}}
+}
+
+// loadingOnOneReplica is a model status where one desired replica still lacks the model.
+func loadingOnOneReplica() *backends.ModelStatus {
+	return &backends.ModelStatus{Desired: 2, Replicas: []backends.ReplicaModelStatus{
+		{Replica: "pod-a", Running: true, State: backends.ModelLoadStateReady},
+		{Replica: "pod-b", Running: true, State: backends.ModelLoadStateLoading, Reason: "model not yet loaded"},
+	}}
+}
+
 // withSingleClusterAnnotation adds a target-clusters snapshot annotation to the deployment
 // so GetState's CheckModelStatusAllClusters helper has a cluster to iterate.
 func withSingleClusterAnnotation(t *testing.T, deployment *v2pb.Deployment, clusterID string) *v2pb.Deployment {
@@ -283,6 +299,75 @@ func TestParseStage(t *testing.T) {
 			},
 			expectedStage: v2pb.DEPLOYMENT_STAGE_PLACEMENT,
 		},
+		{
+			name: "per-cluster rollback still running",
+			deployment: &v2pb.Deployment{
+				Spec: v2pb.DeploymentSpec{
+					DesiredRevision: &api.ResourceIdentifier{Name: "model-v2"},
+				},
+				Status: v2pb.DeploymentStatus{
+					CandidateRevision: &api.ResourceIdentifier{Name: "model-v2"},
+					Stage:             v2pb.DEPLOYMENT_STAGE_ROLLBACK_IN_PROGRESS,
+					Conditions: []*api.Condition{
+						{Type: common.ActorTypeRollback + "-c1", Status: api.CONDITION_STATUS_TRUE},
+						{Type: common.ActorTypeRollback + "-c2", Status: api.CONDITION_STATUS_UNKNOWN},
+						{Type: common.ActorTypeRollback, Status: api.CONDITION_STATUS_FALSE},
+					},
+				},
+			},
+			expectedStage: v2pb.DEPLOYMENT_STAGE_ROLLBACK_IN_PROGRESS,
+		},
+		{
+			name: "per-cluster rollback failed in the first cluster",
+			deployment: &v2pb.Deployment{
+				Spec: v2pb.DeploymentSpec{
+					DesiredRevision: &api.ResourceIdentifier{Name: "model-v2"},
+				},
+				Status: v2pb.DeploymentStatus{
+					CandidateRevision: &api.ResourceIdentifier{Name: "model-v2"},
+					Stage:             v2pb.DEPLOYMENT_STAGE_ROLLBACK_IN_PROGRESS,
+					Conditions: []*api.Condition{
+						{Type: common.ActorTypeRollback + "-c1", Status: api.CONDITION_STATUS_FALSE},
+					},
+				},
+			},
+			expectedStage: v2pb.DEPLOYMENT_STAGE_ROLLBACK_IN_PROGRESS,
+		},
+		{
+			// Only the completion marker ends the rollback; a cluster finishing on its own
+			// does not.
+			name: "per-cluster rollback done but completion pending keeps the stage",
+			deployment: &v2pb.Deployment{
+				Spec: v2pb.DeploymentSpec{
+					DesiredRevision: &api.ResourceIdentifier{Name: "model-v2"},
+				},
+				Status: v2pb.DeploymentStatus{
+					CandidateRevision: &api.ResourceIdentifier{Name: "model-v2"},
+					Stage:             v2pb.DEPLOYMENT_STAGE_ROLLBACK_IN_PROGRESS,
+					Conditions: []*api.Condition{
+						{Type: common.ActorTypeRollback + "-c1", Status: api.CONDITION_STATUS_TRUE},
+					},
+				},
+			},
+			expectedStage: v2pb.DEPLOYMENT_STAGE_ROLLBACK_IN_PROGRESS,
+		},
+		{
+			name: "rollback complete once every cluster and the completion marker are true",
+			deployment: &v2pb.Deployment{
+				Spec: v2pb.DeploymentSpec{
+					DesiredRevision: &api.ResourceIdentifier{Name: "model-v2"},
+				},
+				Status: v2pb.DeploymentStatus{
+					CandidateRevision: &api.ResourceIdentifier{Name: "model-v2"},
+					Stage:             v2pb.DEPLOYMENT_STAGE_ROLLBACK_IN_PROGRESS,
+					Conditions: []*api.Condition{
+						{Type: common.ActorTypeRollback + "-c1", Status: api.CONDITION_STATUS_TRUE},
+						{Type: common.ActorTypeRollback, Status: api.CONDITION_STATUS_TRUE},
+					},
+				},
+			},
+			expectedStage: v2pb.DEPLOYMENT_STAGE_ROLLBACK_COMPLETE,
+		},
 	}
 
 	for _, tt := range tests {
@@ -383,7 +468,8 @@ func TestGetState(t *testing.T) {
 				},
 			}, "test-cluster"),
 			setupMocks: func(mb *backendsmocks.MockBackend) {
-				mb.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default", "model-v1").Return(true, nil)
+				mb.EXPECT().GetModelStatus(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default", "model-v1").
+					Return(readyOnAllReplicas(), nil)
 			},
 			expectedState: v2pb.DEPLOYMENT_STATE_HEALTHY,
 			expectError:   false,
@@ -403,7 +489,8 @@ func TestGetState(t *testing.T) {
 				},
 			}, "test-cluster"),
 			setupMocks: func(mb *backendsmocks.MockBackend) {
-				mb.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default", "model-v1").Return(false, nil)
+				mb.EXPECT().GetModelStatus(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default", "model-v1").
+					Return(loadingOnOneReplica(), nil)
 			},
 			expectedState: v2pb.DEPLOYMENT_STATE_UNHEALTHY,
 			expectError:   false,
@@ -423,10 +510,37 @@ func TestGetState(t *testing.T) {
 				},
 			}, "test-cluster"),
 			setupMocks: func(mb *backendsmocks.MockBackend) {
-				mb.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default", "model-v1").Return(false, errors.New("connection error"))
+				mb.EXPECT().GetModelStatus(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default", "model-v1").
+					Return(nil, errors.New("connection error"))
 			},
 			expectedState: v2pb.DEPLOYMENT_STATE_INVALID,
 			expectError:   true,
+		},
+		{
+			// At the end of a rollout the old model is being unloaded while the new one
+			// already serves traffic; the deployment must not flip to UNHEALTHY in between.
+			name: "returns healthy when the candidate is ready even if the current revision is gone",
+			deployment: withSingleClusterAnnotation(t, &v2pb.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
+				Spec: v2pb.DeploymentSpec{
+					DesiredRevision: &api.ResourceIdentifier{Name: "model-v2"},
+					Target: &v2pb.DeploymentSpec_InferenceServer{
+						InferenceServer: &api.ResourceIdentifier{Name: "test-server"},
+					},
+				},
+				Status: v2pb.DeploymentStatus{
+					CurrentRevision:   &api.ResourceIdentifier{Name: "model-v1"},
+					CandidateRevision: &api.ResourceIdentifier{Name: "model-v2"},
+				},
+			}, "test-cluster"),
+			setupMocks: func(mb *backendsmocks.MockBackend) {
+				mb.EXPECT().GetModelStatus(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default", "model-v1").
+					Return(loadingOnOneReplica(), nil)
+				mb.EXPECT().GetModelStatus(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default", "model-v2").
+					Return(readyOnAllReplicas(), nil)
+			},
+			expectedState: v2pb.DEPLOYMENT_STATE_HEALTHY,
+			expectError:   false,
 		},
 	}
 

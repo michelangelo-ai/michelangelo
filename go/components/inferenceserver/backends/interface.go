@@ -23,6 +23,8 @@ type ServerStatus struct {
 // All methods must be idempotent.
 type Backend interface {
 	// CreateServer provisions infrastructure for an inference server and returns the current state.
+	// Calling it for an existing server reconciles the server's pod template with what the
+	// backend would create today, so probe and argument changes reach running servers.
 	CreateServer(ctx context.Context, logger *zap.Logger, kubeClient client.Client, inferenceServer *v2pb.InferenceServer) (*ServerStatus, error)
 	// GetServerStatus returns the current state of an inference server.
 	GetServerStatus(ctx context.Context, logger *zap.Logger, kubeClient client.Client, inferenceServerName string, namespace string) (*ServerStatus, error)
@@ -30,6 +32,8 @@ type Backend interface {
 	DeleteServer(ctx context.Context, logger *zap.Logger, kubeClient client.Client, inferenceServerName string, namespace string) error
 	// IsHealthy reports whether the inference server can accept requests.
 	IsHealthy(ctx context.Context, logger *zap.Logger, kubeClient client.Client, inferenceServerName string, namespace string) (bool, error)
-	// CheckModelStatus reports whether a model is loaded and ready for inference.
-	CheckModelStatus(ctx context.Context, logger *zap.Logger, kubeClient client.Client, httpClient *http.Client, apiServerURL string, inferenceServerName string, namespace string, modelName string) (bool, error)
+	// GetModelStatus reports, replica by replica, whether a model is loaded and ready for
+	// inference. The probe goes through the cluster's API server so it works for remote
+	// clusters the controller has no network path into.
+	GetModelStatus(ctx context.Context, logger *zap.Logger, kubeClient client.Client, httpClient *http.Client, apiServerURL string, inferenceServerName string, namespace string, modelName string) (*ModelStatus, error)
 }

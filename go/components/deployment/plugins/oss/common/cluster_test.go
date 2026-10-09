@@ -274,3 +274,28 @@ func TestAnnotationRoundTrip(t *testing.T) {
 		assert.Equal(t, want.GetKubernetes().GetCaDataTag(), got[i].GetKubernetes().GetCaDataTag())
 	}
 }
+
+func TestBackendTypeOf(t *testing.T) {
+	annotated := func(value string) *v2pb.Deployment {
+		return &v2pb.Deployment{ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{BackendTypeAnnotation: value}}}
+	}
+	tests := []struct {
+		name       string
+		deployment *v2pb.Deployment
+		want       v2pb.BackendType
+	}{
+		{name: "no annotations defaults to triton", deployment: &v2pb.Deployment{}, want: v2pb.BACKEND_TYPE_TRITON},
+		{name: "snapshotted backend wins", deployment: annotated("BACKEND_TYPE_DYNAMO"), want: v2pb.BACKEND_TYPE_DYNAMO},
+		{name: "unknown value defaults to triton", deployment: annotated("nonsense"), want: v2pb.BACKEND_TYPE_TRITON},
+		{name: "invalid value defaults to triton", deployment: annotated("BACKEND_TYPE_INVALID"), want: v2pb.BACKEND_TYPE_TRITON},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, BackendTypeOf(tt.deployment))
+		})
+	}
+
+	d := &v2pb.Deployment{}
+	WriteBackendTypeAnnotation(d, v2pb.BACKEND_TYPE_LLM_D)
+	assert.Equal(t, v2pb.BACKEND_TYPE_LLM_D, BackendTypeOf(d))
+}

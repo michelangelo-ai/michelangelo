@@ -1581,13 +1581,19 @@ def _kube_apply(path: Path, context: Optional[str] = None):
     _exec(*args)
 
 
-def _apply_model_sync(is_name: str, context: Optional[str] = None):
+def _apply_model_sync(
+    is_name: str, namespace: str = "default", context: Optional[str] = None
+):
     """Apply the model-sync ConfigMap (Python script) and DaemonSet for one IS.
 
     Two-step apply:
     - (1) idempotently load resources/sync-models.py into the
     `model-sync-script` ConfigMap,
-    - (2) render IS_NAME into model-sync.yaml.tmpl and apply the resulting DaemonSet.
+    - (2) render IS_NAME/NAMESPACE into model-sync.yaml.tmpl and apply the resulting
+    DaemonSet, in the same namespace as the InferenceServer/Triton pods it
+    reconciles, so its ConfigMap volume mounts (${IS_NAME}-model-config) resolve
+    correctly and (via the POD_NAMESPACE Downward API env var) so it looks up the
+    Triton Service's endpoints in the right namespace.
     Waits for the resulting DaemonSet to roll out.
     """
     script_path = _dir / "resources" / "sync-models.py"
@@ -1606,6 +1612,8 @@ def _apply_model_sync(is_name: str, context: Optional[str] = None):
             "configmap",
             "model-sync-script",
             f"--from-file=sync-models.py={script_path}",
+            "-n",
+            namespace,
             "--dry-run=client",
             "-o",
             "yaml",
@@ -1622,7 +1630,7 @@ def _apply_model_sync(is_name: str, context: Optional[str] = None):
     )
 
     rendered = string.Template(template_path.read_text()).safe_substitute(
-        IS_NAME=is_name
+        IS_NAME=is_name, NAMESPACE=namespace
     )
     subprocess.run(
         [*base_kubectl, "apply", "-f", "-"],
@@ -1638,7 +1646,7 @@ def _apply_model_sync(is_name: str, context: Optional[str] = None):
             "status",
             "daemonset/model-sync",
             "-n",
-            "default",
+            namespace,
             "--timeout=120s",
             raise_error=True,
         )
@@ -1646,26 +1654,41 @@ def _apply_model_sync(is_name: str, context: Optional[str] = None):
         _err_exit(
             "Model-sync DaemonSet failed to become ready.\n"
             f"Check logs: kubectl {' '.join(base_kubectl[1:])} "
-            "logs daemonset/model-sync -n default"
+            f"logs daemonset/model-sync -n {namespace}"
         )
 
 
 def _deploy_model_sync_for_inference_server(is_yaml_path: Path, is_name: str):
     """Deploy model-sync to every cluster listed in the IS spec's clusterTargets.
 
-    For non-local clusters, also creates the prerequisite michelangelo-config
-    ConfigMap and aws-credentials Secret. The local sandbox cluster has these
-    from earlier sandbox setup.
+    Deploys into the same namespace as the InferenceServer CR itself (not always
+    "default" — e.g. pipeline-created inference servers like "bert-cola-is" live in
+    their own project namespace), since the DaemonSet's ConfigMap volume mount for
+    ${IS_NAME}-model-config only resolves within its own namespace.
+
+    Also creates the prerequisite michelangelo-config ConfigMap and aws-credentials
+    Secret in that namespace: for non-local clusters this is always required, and
+    for the local sandbox cluster it's only skippable when the target namespace is
+    "default", which already has these from earlier sandbox setup.
 
     Falls back to the local context if clusterTargets is missing or empty.
     """
     with open(is_yaml_path) as f:
         is_yaml = yaml.safe_load(f)
     cluster_targets = is_yaml.get("spec", {}).get("clusterTargets") or []
+    namespace = is_yaml.get("metadata", {}).get("namespace", "default")
 
     if not cluster_targets:
         print("⚠ No clusterTargets in IS spec, deploying model-sync to local cluster")
-        _apply_model_sync(is_name)
+        if namespace != "default":
+            _ensure_namespace_exists(namespace)
+            _create_config_in_compute_cluster(
+                _michelangelo_sandbox_kube_cluster_name, namespace=namespace
+            )
+            _create_aws_credentials_in_cluster(
+                _michelangelo_sandbox_kube_cluster_name, namespace=namespace
+            )
+        _apply_model_sync(is_name, namespace=namespace)
         return
 
     for target in cluster_targets:
@@ -1673,10 +1696,12 @@ def _deploy_model_sync_for_inference_server(is_yaml_path: Path, is_name: str):
         is_local = cluster_id == _michelangelo_sandbox_kube_cluster_name
         ctx = f"k3d-{cluster_id}"
         print(f"✅ Deploying model-sync to cluster '{cluster_id}'...")
-        if not is_local:
-            _create_config_in_compute_cluster(cluster_id)
-            _create_aws_credentials_in_cluster(cluster_id)
-        _apply_model_sync(is_name, context=ctx)
+        if not is_local or namespace != "default":
+            if namespace != "default":
+                _ensure_namespace_exists(namespace, context=ctx)
+            _create_config_in_compute_cluster(cluster_id, namespace=namespace)
+            _create_aws_credentials_in_cluster(cluster_id, namespace=namespace)
+        _apply_model_sync(is_name, namespace=namespace, context=ctx)
 
 
 def _kube_wait(pods: bool = True, jobs: bool = True, timeout: int = 600):
@@ -1895,12 +1920,14 @@ def _create_compute_cluster(cluster_name: str):
     )
 
 
-def _create_config_in_compute_cluster(cluster_name: str):
+def _create_config_in_compute_cluster(cluster_name: str, namespace: str = "default"):
     """Create michelangelo-config ConfigMap in compute cluster."""
     config_path = _dir / "resources" / "michelangelo-config.yaml"
 
     with open(config_path) as f:
         config_data = yaml.safe_load(f)
+
+    config_data.setdefault("metadata", {})["namespace"] = namespace
 
     # Update MinIO endpoint to point to the control plane's MinIO within the shared
     # network k3d-michelangelo-sandbox-agent-0 is the hostname of the control plane's
@@ -1923,31 +1950,48 @@ def _create_config_in_compute_cluster(cluster_name: str):
             temp_config.name,
         )
 
-    print(f"Created michelangelo-config ConfigMap in cluster '{cluster_name}'")
-
-
-def _create_aws_credentials_in_cluster(cluster_name: str):
-    """Create aws-credentials Secret in compute cluster."""
-    _exec(
-        "kubectl",
-        "--context",
-        f"k3d-{cluster_name}",
-        "apply",
-        "-f",
-        str(_dir / "resources" / "aws-credentials.yaml"),
+    print(
+        f"Created michelangelo-config ConfigMap in cluster '{cluster_name}' "
+        f"namespace '{namespace}'"
     )
-    print(f"Created aws-credentials Secret in cluster '{cluster_name}'")
 
 
-def _ensure_namespace_exists(namespace: str):
-    """Ensure the namespace exists in the sandbox cluster."""
+def _create_aws_credentials_in_cluster(cluster_name: str, namespace: str = "default"):
+    """Create aws-credentials Secret in compute cluster."""
+    creds_path = _dir / "resources" / "aws-credentials.yaml"
+    with open(creds_path) as f:
+        creds_data = yaml.safe_load(f)
+    creds_data.setdefault("metadata", {})["namespace"] = namespace
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as temp_creds:
+        yaml.dump(creds_data, temp_creds)
+        temp_creds.flush()
+
+        _exec(
+            "kubectl",
+            "--context",
+            f"k3d-{cluster_name}",
+            "apply",
+            "-f",
+            temp_creds.name,
+        )
+
+    print(
+        f"Created aws-credentials Secret in cluster '{cluster_name}' "
+        f"namespace '{namespace}'"
+    )
+
+
+def _ensure_namespace_exists(namespace: str, context: Optional[str] = None):
+    """Ensure the namespace exists in the given cluster (sandbox cluster by default)."""
+    ctx = context or f"k3d-{_michelangelo_sandbox_kube_cluster_name}"
     try:
         # Check if namespace already exists
         subprocess.check_output(
             [
                 "kubectl",
                 "--context",
-                f"k3d-{_michelangelo_sandbox_kube_cluster_name}",
+                ctx,
                 "get",
                 "namespace",
                 namespace,
@@ -1960,12 +2004,12 @@ def _ensure_namespace_exists(namespace: str):
         _exec(
             "kubectl",
             "--context",
-            f"k3d-{_michelangelo_sandbox_kube_cluster_name}",
+            ctx,
             "create",
             "namespace",
             namespace,
         )
-        print(f"Created namespace '{namespace}' in the sandbox cluster.")
+        print(f"Created namespace '{namespace}' in cluster '{ctx}'.")
 
 
 # Given a cluster name, create a Cluster CRD in the sandbox cluster

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"flag"
 	"text/template"
+	"time"
 
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	"go.uber.org/config"
@@ -26,6 +27,7 @@ const (
 	_mysqlConfigKey           = "mysql"
 	_ingesterConfigKey        = "ingester"
 	_inferenceServerConfigKey = "inferenceServer"
+	_deploymentConfigKey      = "deployment"
 	_schedulerConfigKey       = "jobs.scheduler"
 )
 
@@ -213,6 +215,41 @@ type InferenceServerConfig struct {
 // spec.initSpec.servingSpec.image. Empty means the backend's built-in image.
 type TritonConfig struct {
 	DefaultImage string `yaml:"defaultImage"`
+	// ReadinessProbe selects how Triton replicas report readiness: "model-aware" (the
+	// default, a replica is ready only when every serving model in its model config is
+	// loaded), "server" (Triton's /v2/health/ready only) or "none".
+	ReadinessProbe string `yaml:"readinessProbe"`
+	// Probes overrides the timing of the Triton pod probes. Fields left at zero keep the
+	// built-in values, so an empty block changes nothing.
+	Probes TritonProbesConfig `yaml:"probes"`
+	// Drain tunes how a Triton pod shuts down when it is replaced. Zero fields keep the
+	// built-in values.
+	Drain TritonDrainConfig `yaml:"drain"`
+}
+
+// TritonDrainConfig tunes the shutdown of a replaced Triton pod so in-flight requests finish.
+type TritonDrainConfig struct {
+	// PreStopSeconds delays SIGTERM so the pod leaves the Service endpoints first.
+	PreStopSeconds int32 `yaml:"preStopSeconds"`
+	// ExitTimeoutSeconds bounds how long Triton waits for in-flight requests after SIGTERM.
+	ExitTimeoutSeconds int32 `yaml:"exitTimeoutSeconds"`
+}
+
+// TritonProbesConfig holds the timing overrides for each Triton pod probe.
+type TritonProbesConfig struct {
+	// Startup waits for Triton's HTTP server to come up before liveness applies.
+	Startup ProbeTimingConfig `yaml:"startup"`
+	// Liveness restarts a container whose HTTP server has stopped answering.
+	Liveness ProbeTimingConfig `yaml:"liveness"`
+	// Readiness gates a replica's membership in the inference Service.
+	Readiness ProbeTimingConfig `yaml:"readiness"`
+}
+
+// ProbeTimingConfig overrides one probe's timing. Zero keeps the probe's built-in value.
+type ProbeTimingConfig struct {
+	PeriodSeconds    int32 `yaml:"periodSeconds"`
+	TimeoutSeconds   int32 `yaml:"timeoutSeconds"`
+	FailureThreshold int32 `yaml:"failureThreshold"`
 }
 
 // GatewayConfig describes the k8s Gateway resource and its Istio-generated
@@ -233,4 +270,71 @@ func GetInferenceServerConfig(provider config.Provider) (InferenceServerConfig, 
 	inferenceServerConfig := InferenceServerConfig{}
 	err := provider.Get(_inferenceServerConfigKey).Populate(&inferenceServerConfig)
 	return inferenceServerConfig, err
+}
+
+// DeploymentConfig is the controller-side configuration for the deployment controller's
+// rollout safety: canary, load timeouts, soaks and the metric gate.
+type DeploymentConfig struct {
+	Rollout    RolloutConfig    `yaml:"rollout"`
+	Rollback   RollbackConfig   `yaml:"rollback"`
+	MetricGate MetricGateConfig `yaml:"metricGate"`
+}
+
+// RolloutConfig tunes how a new model is rolled out across a cluster's replicas.
+type RolloutConfig struct {
+	// SkipCanary disables loading and validating the model on one replica per cluster
+	// before the rest of the cluster loads it.
+	SkipCanary bool `yaml:"skipCanary"`
+	// ModelLoadTimeout bounds how long a cluster may take to load the model on every
+	// replica. Zero uses the plugin default.
+	ModelLoadTimeout time.Duration `yaml:"modelLoadTimeout"`
+	// SoakPeriod is how long a cluster serves the new model, with the health and metric
+	// gates active, before the rollout moves to the next cluster. A Zonal strategy's
+	// rollout period overrides it. Zero skips soaking.
+	SoakPeriod time.Duration `yaml:"soakPeriod"`
+}
+
+// RollbackConfig tunes how a rollback restores the previous model.
+type RollbackConfig struct {
+	// ModelLoadTimeout bounds how long a rollback waits for the previous model to be
+	// loaded again on every replica before restoring traffic to it. Zero uses the
+	// plugin default.
+	ModelLoadTimeout time.Duration `yaml:"modelLoadTimeout"`
+}
+
+// MetricGateConfig configures the Prometheus-backed rollout gate. The gate is evaluated on
+// every reconcile while a rollout or soak is in progress; a breach rolls the candidate back.
+type MetricGateConfig struct {
+	// PrometheusURL is the base URL of the Prometheus HTTP API. Empty disables the gate.
+	PrometheusURL string `yaml:"prometheusURL"`
+	// Timeout bounds each query. Zero uses the gate default.
+	Timeout time.Duration `yaml:"timeout"`
+	// FailClosed treats an unreachable Prometheus as a breach. Off by default, so an
+	// observability outage stalls nothing and is logged instead.
+	FailClosed bool `yaml:"failClosed"`
+	// Queries are evaluated in order. Empty uses the gate's built-in Triton failure-ratio
+	// query.
+	Queries []MetricGateQuery `yaml:"queries"`
+}
+
+// MetricGateQuery is one PromQL expression with the threshold that marks a breach.
+type MetricGateQuery struct {
+	// Name identifies the query in logs and rollback reasons.
+	Name string `yaml:"name"`
+	// Expr is a Go template rendering a PromQL instant query. It may reference
+	// {{.Model}}, {{.Deployment}}, {{.Namespace}} and {{.InferenceServer}}.
+	Expr string `yaml:"expr"`
+	// Threshold is compared against every sample the query returns.
+	Threshold float64 `yaml:"threshold"`
+	// Comparison is "gt" (default: a sample above the threshold breaches) or "lt".
+	Comparison string `yaml:"comparison"`
+}
+
+// GetDeploymentConfig parses the configuration file and returns the deployment controller
+// configuration. An absent section yields the zero value, which the plugin fills with its
+// defaults.
+func GetDeploymentConfig(provider config.Provider) (DeploymentConfig, error) {
+	deploymentConfig := DeploymentConfig{}
+	err := provider.Get(_deploymentConfigKey).Populate(&deploymentConfig)
+	return deploymentConfig, err
 }

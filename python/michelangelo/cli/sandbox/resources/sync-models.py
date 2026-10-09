@@ -8,6 +8,16 @@ landing on whichever pod the Service round-robins to.
 Runs as a DaemonSet. Each instance owns the model repository on its own node and
 reconciles only the Triton pods scheduled there, so every replica is served by the
 daemon sharing its hostPath.
+
+Each model-list entry carries a rollout phase written by the deployment controller:
+
+  canary   load on the single replica named by ``canary_pod`` only
+  staged   load on every replica; readiness does not depend on it yet
+  serving  load on every replica; the readiness probe requires it (default)
+
+The daemon only decides *where* a model is loaded. Whether the load succeeded is read
+back per replica by the controller through Triton's repository index, so a failed
+load is reported rather than retried in a tight loop here.
 """
 
 import json
@@ -29,6 +39,18 @@ SYNC_INTERVAL_SECONDS = 60
 HTTP_TIMEOUT_SECONDS = 10
 VERSION_DIR_REGEX = re.compile(r"^[0-9]+$")
 
+# A model that dropped out of the desired set keeps serving for this long before it is
+# unloaded. Traffic is moved off a model before the controller removes its entry, so the
+# grace only has to cover a transient bad read of the ConfigMap, not a route switch.
+UNLOAD_GRACE_SECONDS = 150
+# A load Triton rejected is retried no more often than this, so the controller sees a
+# stable FAILED state instead of a model flapping between LOADING and UNAVAILABLE.
+LOAD_RETRY_SECONDS = 300
+
+PHASE_CANARY = "canary"
+PHASE_STAGED = "staged"
+PHASE_SERVING = "serving"
+
 # Triton container port. The Service maps :80 -> :8000, but pod-direct calls
 # bypass the Service so we hit the container port directly.
 TRITON_HTTP_PORT = 8000
@@ -37,7 +59,33 @@ TRITON_HTTP_PORT = 8000
 KUBE_API = "https://kubernetes.default.svc"
 SA_TOKEN_PATH = "/var/run/secrets/kubernetes.io/serviceaccount/token"
 SA_CA_PATH = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
-POD_NAMESPACE = "default"
+# The inference Service lives in the same namespace as the Triton pods this daemon
+# reconciles, which is not always "default" (e.g. per-pipeline namespaces like
+# "bert-cola"). Set via the Downward API in model-sync.yaml.tmpl.
+POD_NAMESPACE = os.environ.get("POD_NAMESPACE", "default")
+
+
+class PodStates:
+    """Per-(pod, model) timers that survive across reconcile passes.
+
+    ``undesired_since`` records when a loaded model first went missing from the desired
+    set; ``failed_load_at`` records the last load attempt Triton rejected.
+    """
+
+    def __init__(self) -> None:
+        """Initialize the unload-grace and failed-load backoff timers."""
+        self.undesired_since: dict[tuple[str, str], float] = {}
+        self.failed_load_at: dict[tuple[str, str], float] = {}
+
+    def forget_pods(self, live_pods: set[str]) -> None:
+        """Drop timers for pods that no longer back the Service."""
+        for timers in (self.undesired_since, self.failed_load_at):
+            for key in [k for k in timers if k[0] not in live_pods]:
+                del timers[key]
+
+
+# One state holder per inference server, keyed by server name.
+_POD_STATES: dict[str, PodStates] = {}
 
 
 def run(cmd: list[str], check: bool = True) -> subprocess.CompletedProcess:
@@ -60,8 +108,12 @@ def http_post_json(url: str, payload: dict) -> tuple[int, str]:
         return e.code, e.read().decode("utf-8", errors="replace")
 
 
-def list_pod_addresses(service: str, node_name: str | None = None) -> list[str]:
-    """Return pod IPs backing the given Service via its Endpoints object.
+def list_pods(service: str, node_name: str | None = None) -> list[tuple[str, str]]:
+    """Return (pod IP, pod name) pairs backing the given Service's Endpoints.
+
+    Not-ready addresses are included on purpose: with the model-aware readiness probe a
+    fresh replica stays not-ready until this daemon has loaded its serving models, so
+    reading only the ready addresses would never let a new pod become ready.
 
     When node_name is given, only pods scheduled on that node are returned.
     """
@@ -80,19 +132,31 @@ def list_pod_addresses(service: str, node_name: str | None = None) -> list[str]:
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as e:
         print(f"  failed to list endpoints for {service}: {e}")
         return []
-    return [
-        addr["ip"]
-        for subset in data.get("subsets") or []
-        for addr in subset.get("addresses") or []
-        if node_name is None or addr.get("nodeName") == node_name
-    ]
+    pods: list[tuple[str, str]] = []
+    for subset in data.get("subsets") or []:
+        for addr in (subset.get("addresses") or []) + (
+            subset.get("notReadyAddresses") or []
+        ):
+            if node_name is not None and addr.get("nodeName") != node_name:
+                continue
+            ip = addr.get("ip")
+            if not ip:
+                continue
+            name = (addr.get("targetRef") or {}).get("name") or ip
+            pods.append((ip, name))
+    return pods
 
 
-def triton_ready(host: str) -> bool:
-    """Return True if Triton's /v2/health/ready endpoint responds 200."""
+def triton_live(host: str) -> bool:
+    """Return True if Triton's HTTP server answers /v2/health/live.
+
+    Liveness rather than readiness: readiness is now tied to the serving model set, so a
+    replica that is waiting for this daemon to load its models is unready but must still
+    be talked to.
+    """
     try:
         with urllib.request.urlopen(
-            f"http://{host}:{TRITON_HTTP_PORT}/v2/health/ready",
+            f"http://{host}:{TRITON_HTTP_PORT}/v2/health/live",
             timeout=HTTP_TIMEOUT_SECONDS,
         ) as resp:
             return resp.status == 200
@@ -100,29 +164,38 @@ def triton_ready(host: str) -> bool:
         return False
 
 
-def loaded_models(host: str) -> set[str]:
-    """Return the set of model names currently loaded and ready on Triton."""
+def repository_index(host: str) -> dict[str, dict]:
+    """Return Triton's repository index keyed by model name.
+
+    Every model in the repository is listed. Loaded models carry ``state`` READY,
+    LOADING or UNLOADING; a model whose last load failed is UNAVAILABLE with the load
+    error in ``reason``; a model that was never loaded has no state at all.
+    """
     status, body = http_post_json(
-        f"http://{host}:{TRITON_HTTP_PORT}/v2/repository/index",
-        {"ready": True},
+        f"http://{host}:{TRITON_HTTP_PORT}/v2/repository/index", {}
     )
     if status != 200:
-        return set()
+        return {}
     try:
-        return {entry["name"] for entry in json.loads(body) if entry.get("name")}
+        return {
+            entry["name"]: entry
+            for entry in json.loads(body)
+            if isinstance(entry, dict) and entry.get("name")
+        }
     except (json.JSONDecodeError, TypeError):
-        return set()
+        return {}
 
 
-def load_model(host: str, name: str) -> None:
-    """Ask Triton to load a model from its model repository."""
+def load_model(host: str, name: str) -> bool:
+    """Ask Triton to load a model from its model repository; True on success."""
     status, body = http_post_json(
         f"http://{host}:{TRITON_HTTP_PORT}/v2/repository/models/{name}/load", {}
     )
     if status == 200:
         print(f"    {host}: loaded {name}")
-    else:
-        print(f"    {host}: failed to load {name} (HTTP {status}): {body}")
+        return True
+    print(f"    {host}: failed to load {name} (HTTP {status}): {body}")
+    return False
 
 
 def unload_model(host: str, name: str) -> None:
@@ -167,7 +240,7 @@ def safe_extractall(tar: tarfile.TarFile, dest: str) -> None:
         if not member.name:
             continue
         member_path = os.path.realpath(os.path.join(dest, member.name))
-        if not member_path.startswith(real_dest + os.sep):
+        if member_path != real_dest and not member_path.startswith(real_dest + os.sep):
             raise ValueError(
                 f"refusing to extract '{member.name}': path escapes '{dest}'"
             )
@@ -236,17 +309,27 @@ def read_servers(path: str) -> list[str]:
     return out
 
 
-def read_model_list(server: str) -> list[dict]:
-    """Read the per-server model list ConfigMap; return [] if missing or malformed."""
+def read_model_list(server: str) -> list[dict] | None:
+    """Read the per-server model list ConfigMap.
+
+    Returns [] when the ConfigMap has no list yet and None when it exists but cannot be
+    read, so a transient bad read is not mistaken for "unload everything".
+    """
     path = f"/config/{server}/model-list.json"
     if not os.path.isfile(path):
         return []
     try:
         with open(path) as f:
-            return json.load(f)
+            entries = json.load(f)
     except (json.JSONDecodeError, OSError) as e:
         print(f"  failed to read {path}: {e}")
-        return []
+        return None
+    return entries if isinstance(entries, list) else None
+
+
+def entry_phase(entry: dict) -> str:
+    """Return the entry's rollout phase; entries without a phase are serving."""
+    return entry.get("phase") or PHASE_SERVING
 
 
 def build_desired(config: list[dict]) -> dict[str, dict]:
@@ -254,7 +337,8 @@ def build_desired(config: list[dict]) -> dict[str, dict]:
 
     The list holds one entry per (deployment, model). Triton keys its repository by
     model name, so entries sharing a name describe a single model that stays loaded
-    until the last deployment referencing it goes away.
+    until the last deployment referencing it goes away. Every phase counts: a canary
+    model has to be on disk before its one replica can load it.
     """
     desired: dict[str, dict] = {}
     for entry in config:
@@ -264,13 +348,40 @@ def build_desired(config: list[dict]) -> dict[str, dict]:
     return desired
 
 
+def desired_for_pod(config: list[dict], pod_name: str) -> set[str]:
+    """Return the model names this replica should have loaded.
+
+    Staged and serving entries apply to every replica. A canary entry applies only to
+    the replica it names, which is how the controller validates a new model on one pod
+    before the rest of the cluster loads it.
+    """
+    wanted: set[str] = set()
+    for entry in config:
+        name = entry.get("name")
+        if not name:
+            continue
+        if entry_phase(entry) == PHASE_CANARY:
+            if entry.get("canary_pod") == pod_name:
+                wanted.add(name)
+        else:
+            wanted.add(name)
+    return wanted
+
+
 def format_claims(config: list[dict]) -> str:
     """Render each desired model with the deployments claiming it, for the sync log."""
     claims: dict[str, set[str]] = {}
     for entry in config:
         name = entry.get("name")
-        if name:
-            claims.setdefault(name, set()).add(entry.get("deployment_name") or "?")
+        if not name:
+            continue
+        owner = entry.get("deployment_name") or "?"
+        phase = entry_phase(entry)
+        if phase == PHASE_CANARY:
+            owner = f"{owner}:canary@{entry.get('canary_pod') or '?'}"
+        elif phase != PHASE_SERVING:
+            owner = f"{owner}:{phase}"
+        claims.setdefault(name, set()).add(owner)
     return (
         ", ".join(
             f"{name}[{','.join(sorted(owners))}]"
@@ -280,16 +391,62 @@ def format_claims(config: list[dict]) -> str:
     )
 
 
-def reconcile_pod(pod_ip: str, desired: dict) -> None:
+def reconcile_pod(
+    pod_ip: str, pod_name: str, wanted: set[str], state: PodStates, now: float
+) -> None:
     """Reconcile load/unload state on a single Triton pod."""
-    if not triton_ready(pod_ip):
-        print(f"  {pod_ip}: not ready, skipping")
+    if not triton_live(pod_ip):
+        print(f"  {pod_name} ({pod_ip}): triton not up yet, skipping")
         return
-    currently_loaded = loaded_models(pod_ip)
-    print(f"  {pod_ip}: loaded {sorted(currently_loaded)}")
-    for name in currently_loaded - desired.keys():
+    index = repository_index(pod_ip)
+    loaded = {
+        name
+        for name, entry in index.items()
+        if entry.get("state") in ("READY", "LOADING")
+    }
+    failed = {
+        name: entry.get("reason")
+        for name, entry in index.items()
+        if entry.get("state") == "UNAVAILABLE"
+        and entry.get("reason")
+        and entry.get("reason") != "unloaded"
+    }
+    print(f"  {pod_name} ({pod_ip}): loaded {sorted(loaded)}, wanted {sorted(wanted)}")
+
+    for name in wanted:
+        state.undesired_since.pop((pod_name, name), None)
+    for name in sorted(loaded - wanted):
+        since = state.undesired_since.setdefault((pod_name, name), now)
+        remaining = UNLOAD_GRACE_SECONDS - (now - since)
+        if remaining > 0:
+            print(
+                f"    {pod_name}: {name} no longer desired, "
+                f"unloading in {int(remaining)}s"
+            )
+            continue
         unload_model(pod_ip, name)
-    for name in desired.keys() - loaded_models(pod_ip):
+        state.undesired_since.pop((pod_name, name), None)
+
+    for name in sorted(wanted - loaded):
+        key = (pod_name, name)
+        if name not in failed:
+            # Never attempted, or unloaded: (re)issue the load, forget old failures.
+            state.failed_load_at.pop(key, None)
+            if not load_model(pod_ip, name):
+                state.failed_load_at[key] = now
+            continue
+        last_attempt = state.failed_load_at.get(key)
+        if last_attempt is not None and now - last_attempt < LOAD_RETRY_SECONDS:
+            wait = int(LOAD_RETRY_SECONDS - (now - last_attempt))
+            print(
+                f"    {pod_name}: {name} failed to load ({failed[name]}); "
+                f"retry in {wait}s"
+            )
+            continue
+        # Triton accepted the previous load request but the load itself failed. Record
+        # the attempt regardless of the HTTP outcome so the model does not flap between
+        # LOADING and UNAVAILABLE faster than the controller can observe the failure.
+        state.failed_load_at[key] = now
         load_model(pod_ip, name)
 
 
@@ -302,13 +459,18 @@ def reconcile_server(server: str, endpoint_url: str, node_name: str) -> None:
     nothing will read.
     """
     print(f"--- {server} ---")
-    pod_ips = list_pod_addresses(f"{server}-inference-service", node_name)
-    if not pod_ips:
+    pods = list_pods(f"{server}-inference-service", node_name)
+    state = _POD_STATES.setdefault(server, PodStates())
+    state.forget_pods({name for _, name in pods})
+    if not pods:
         print(f"  no Triton pods on node {node_name}, nothing to do")
         return
-    print(f"  pods on this node: {pod_ips}")
+    print(f"  pods on this node: {[name for _, name in pods]}")
 
     config = read_model_list(server)
+    if config is None:
+        print("  model list unreadable, leaving loaded models untouched this pass")
+        return
     desired = build_desired(config)
     print(f"  desired: {format_claims(config)}")
 
@@ -320,8 +482,9 @@ def reconcile_server(server: str, endpoint_url: str, node_name: str) -> None:
         if not has_valid_model_structure(model_dir):
             sync_model(storage_path, model_dir, endpoint_url)
 
-    for pod_ip in pod_ips:
-        reconcile_pod(pod_ip, desired)
+    now = time.monotonic()
+    for pod_ip, pod_name in pods:
+        reconcile_pod(pod_ip, pod_name, desired_for_pod(config, pod_name), state, now)
 
 
 def configure_aws() -> None:

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"go.uber.org/fx"
 	"go.uber.org/zap"
@@ -13,11 +14,13 @@ import (
 	goapi "github.com/michelangelo-ai/michelangelo/go/api"
 	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
+	maconfig "github.com/michelangelo-ai/michelangelo/go/base/config"
 	"github.com/michelangelo-ai/michelangelo/go/base/pluginmanager"
 	"github.com/michelangelo-ai/michelangelo/go/components/common/routing"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/cleanup"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
+	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/metricgate"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/rollback"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/rollout"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/steadystate"
@@ -48,9 +51,10 @@ type Plugin struct {
 	modelConfigProvider modelconfig.ModelConfigProvider
 	blobstore           *blobstore.BlobStore
 	logger              *zap.Logger
+	config              maconfig.DeploymentConfig
+	metricGate          *metricgate.Gate
 
 	rolloutPlugin     conditionInterfaces.Plugin[*v2pb.Deployment]
-	rollbackPlugin    conditionInterfaces.Plugin[*v2pb.Deployment]
 	cleanupPlugin     conditionInterfaces.Plugin[*v2pb.Deployment]
 	steadyStatePlugin conditionInterfaces.Plugin[*v2pb.Deployment]
 }
@@ -70,6 +74,7 @@ type Params struct {
 	BlobStore           *blobstore.BlobStore
 	Logger              *zap.Logger
 	ModelConfigProvider modelconfig.ModelConfigProvider
+	Config              maconfig.DeploymentConfig
 }
 
 // NewPlugin creates an OSS deployment plugin with rollback, cleanup, and steady state workflows.
@@ -85,11 +90,8 @@ func NewPlugin(params Params) *Plugin {
 		modelConfigProvider: params.ModelConfigProvider,
 		blobstore:           params.BlobStore,
 		logger:              params.Logger,
-		rollbackPlugin: rollback.NewRollbackPlugin(rollback.Params{
-			Client:              params.Client,
-			ModelConfigProvider: params.ModelConfigProvider,
-			Logger:              params.Logger,
-		}),
+		config:              params.Config,
+		metricGate:          metricgate.New(params.Config.MetricGate, params.Logger),
 		cleanupPlugin: cleanup.NewCleanupPlugin(cleanup.Params{
 			Client:              params.Client,
 			DynamicClient:       params.DynamicClient,
@@ -116,6 +118,7 @@ func (p *Plugin) GetRolloutPlugin(ctx context.Context, deployment *v2pb.Deployme
 		BackendRegistry:     p.backendRegistry,
 		ModelConfigProvider: p.modelConfigProvider,
 		Logger:              p.logger,
+		Settings:            common.ResolveRolloutSettings(p.config, deployment),
 	}, deployment)
 	if err != nil {
 		p.logger.Error("failed to create rollout plugin",
@@ -130,9 +133,29 @@ func (p *Plugin) GetRolloutPlugin(ctx context.Context, deployment *v2pb.Deployme
 	return rolloutPlugin, nil
 }
 
-// GetRollbackPlugin returns the plugin for reverting to previous stable revision.
-func (p *Plugin) GetRollbackPlugin() conditionInterfaces.Plugin[*v2pb.Deployment] {
-	return p.rollbackPlugin
+// GetRollbackPlugin creates a deployment-specific plugin that reverts every cluster the
+// rollout reached to the previous stable revision.
+func (p *Plugin) GetRollbackPlugin(ctx context.Context, deployment *v2pb.Deployment) (conditionInterfaces.Plugin[*v2pb.Deployment], error) {
+	rollbackPlugin, err := rollback.NewRollbackPlugin(ctx, rollback.Params{
+		ClientFactory:       p.clientFactory,
+		APIHandler:          p.apiHandler,
+		BackendRegistry:     p.backendRegistry,
+		ModelConfigProvider: p.modelConfigProvider,
+		RouteManager:        p.routeManager,
+		DynamicClient:       p.dynamicClient,
+		Logger:              p.logger,
+		Settings:            common.ResolveRolloutSettings(p.config, deployment),
+	}, deployment)
+	if err != nil {
+		p.logger.Error("failed to create rollback plugin",
+			zap.Error(err),
+			zap.String("operation", "get_rollback_plugin"),
+			zap.String("namespace", deployment.Namespace),
+			zap.String("deployment", deployment.Name))
+		return nil, fmt.Errorf("create rollback plugin for deployment %s/%s: %w",
+			deployment.Namespace, deployment.Name, err)
+	}
+	return rollbackPlugin, nil
 }
 
 // GetCleanupPlugin returns the plugin for removing deployment resources.
@@ -168,20 +191,24 @@ func (p *Plugin) ParseStage(deployment *v2pb.Deployment) v2pb.DeploymentStage {
 		}
 
 		// otherwise return the stage based on the first actor with false status
-		switch cond.Type {
-		case common.ActorTypeValidation:
-			fallthrough
-		case common.ActorTypeAssetPreparation:
+		switch {
+		case cond.Type == common.ActorTypeValidation, cond.Type == common.ActorTypeAssetPreparation:
 			return v2pb.DEPLOYMENT_STAGE_VALIDATION
-		case common.ActorTypeCleanup:
+		case cond.Type == common.ActorTypeCleanup:
 			return v2pb.DEPLOYMENT_STAGE_CLEAN_UP_IN_PROGRESS
-		case common.ActorTypeRollback:
+		case isRollbackCondition(cond.Type):
 			return v2pb.DEPLOYMENT_STAGE_ROLLBACK_IN_PROGRESS
 		default:
 			return v2pb.DEPLOYMENT_STAGE_PLACEMENT
 		}
 	}
 	return stage
+}
+
+// isRollbackCondition matches the terminal rollback condition and the per-cluster ones,
+// whose types carry a "-<cluster>" suffix.
+func isRollbackCondition(conditionType string) bool {
+	return conditionType == common.ActorTypeRollback || strings.HasPrefix(conditionType, common.ActorTypeRollback+"-")
 }
 
 // isFromSteadyState checks if the condition comes from a steady state plugin actor
@@ -220,27 +247,47 @@ func (p *Plugin) GetState(ctx context.Context, observability plugins.Observabili
 		return deployment.Status, nil
 	}
 	serverName := inferenceServer.GetName()
-	serverBackend, err := p.backendRegistry.GetBackend(v2pb.BACKEND_TYPE_TRITON)
+	serverBackend, err := p.backendRegistry.GetBackend(common.BackendTypeOf(deployment))
 	if err != nil {
 		return deployment.Status, fmt.Errorf("get backend for inference server %s: %w", serverName, err)
 	}
-	healthy, summary, err := common.CheckModelStatusAllClusters(ctx, p.logger, deployment, p.clientFactory, serverBackend, serverName, deployment.Spec.DesiredRevision.Name)
-	if err != nil {
-		p.logger.Error("failed to check model status",
-			zap.Error(err),
-			zap.String("operation", "check_model_status"),
-			zap.String("namespace", deployment.Namespace),
-			zap.String("deployment", deployment.Name),
-			zap.String("model", deployment.Spec.DesiredRevision.Name))
-		return deployment.Status, fmt.Errorf("check model status %s for deployment %s/%s: %w",
-			deployment.Spec.DesiredRevision.Name, deployment.Namespace, deployment.Name, err)
+
+	// The deployment is healthy when the revision it serves is loaded on every replica in
+	// every cluster. That is the current revision, except that during a rollout the clusters
+	// that already flipped serve the candidate, and at the very end of a rollout the current
+	// revision is unloaded just before the candidate graduates. So either revision being
+	// fully loaded counts as healthy.
+	models := []string{currentRevision.GetName()}
+	if candidate := deployment.Status.GetCandidateRevision().GetName(); candidate != "" && candidate != currentRevision.GetName() {
+		models = append(models, candidate)
 	}
+	healthy := false
+	var summaries []string
+	for _, model := range models {
+		ok, summary, err := common.CheckModelStatusAllClusters(ctx, p.logger, deployment, p.clientFactory, serverBackend, serverName, model)
+		if err != nil {
+			p.logger.Error("failed to check model status",
+				zap.Error(err),
+				zap.String("operation", "check_model_status"),
+				zap.String("namespace", deployment.Namespace),
+				zap.String("deployment", deployment.Name),
+				zap.String("model", model))
+			return deployment.Status, fmt.Errorf("check model status %s for deployment %s/%s: %w",
+				model, deployment.Namespace, deployment.Name, err)
+		}
+		if ok {
+			healthy = true
+			break
+		}
+		summaries = append(summaries, summary)
+	}
+
 	if healthy {
 		if deployment.Status.GetState() != v2pb.DEPLOYMENT_STATE_HEALTHY {
 			p.logger.Info("deployment status changed to healthy",
 				zap.String("deployment", deployment.Name),
 				zap.String("namespace", deployment.Namespace),
-				zap.String("model", deployment.Spec.DesiredRevision.Name),
+				zap.Strings("models", models),
 				zap.String("previous_state", deployment.Status.GetState().String()),
 				zap.String("new_state", v2pb.DEPLOYMENT_STATE_HEALTHY.String()))
 			deployment.Status.State = v2pb.DEPLOYMENT_STATE_HEALTHY
@@ -250,39 +297,99 @@ func (p *Plugin) GetState(ctx context.Context, observability plugins.Observabili
 			p.logger.Info("deployment status changed to unhealthy",
 				zap.String("deployment", deployment.Name),
 				zap.String("namespace", deployment.Namespace),
-				zap.String("model", deployment.Spec.DesiredRevision.Name),
+				zap.Strings("models", models),
 				zap.String("previous_state", deployment.Status.GetState().String()),
 				zap.String("new_state", v2pb.DEPLOYMENT_STATE_UNHEALTHY.String()),
-				zap.String("summary", summary))
+				zap.String("summary", strings.Join(summaries, "; ")))
 			deployment.Status.State = v2pb.DEPLOYMENT_STATE_UNHEALTHY
 		}
 	}
 	return deployment.Status, nil
 }
 
-// HealthCheckGate verifies the inference server is healthy before allowing rollout to proceed.
+// HealthCheckGate decides whether an in-progress rollout may continue. In every cluster the
+// rollout placed the deployment in, each model this deployment currently serves must be
+// loaded on every replica; then the metric gate is evaluated against the candidate. A false
+// result makes the controller roll the candidate back; the reason is recorded on the
+// deployment so operators can see which cluster, model or metric tripped it.
+//
+// The gate judges only this deployment's own serving models. The inference server's pod
+// readiness covers every model of every deployment on the server, so using it would roll
+// this deployment back whenever another deployment's model is still loading, for example
+// after the server restarts.
 func (p *Plugin) HealthCheckGate(ctx context.Context, observability plugins.ObservabilityContext, deployment *v2pb.Deployment) (bool, error) {
+	inferenceServer := deployment.Spec.GetInferenceServer()
 	// Check if the inference server is specified
-	if deployment.Spec.GetInferenceServer() == nil {
+	if inferenceServer == nil {
 		return false, nil
 	}
-	// Check if the inference server is healthy
-	serverBackend, err := p.backendRegistry.GetBackend(v2pb.BACKEND_TYPE_TRITON)
+	serverBackend, err := p.backendRegistry.GetBackend(common.BackendTypeOf(deployment))
 	if err != nil {
-		return false, fmt.Errorf("get backend for inference server %s: %w", deployment.Spec.GetInferenceServer().Name, err)
+		return false, fmt.Errorf("get backend for inference server %s: %w", inferenceServer.GetName(), err)
 	}
-	healthy, err := serverBackend.IsHealthy(ctx, p.logger, p.client, deployment.Spec.GetInferenceServer().Name, deployment.Namespace)
+
+	targets, err := common.ReadTargetClustersAnnotation(deployment)
 	if err != nil {
-		p.logger.Error("failed to check health of inference server",
-			zap.Error(err),
-			zap.String("operation", "health_check_gate"),
-			zap.String("namespace", deployment.Namespace),
-			zap.String("deployment", deployment.Name),
-			zap.String("inference_server", deployment.Spec.GetInferenceServer().Name))
-		return false, fmt.Errorf("check health of inference server %s for deployment %s/%s: %w",
-			deployment.Spec.GetInferenceServer().Name, deployment.Namespace, deployment.Name, err)
+		return false, fmt.Errorf("read target clusters for deployment %s/%s: %w", deployment.Namespace, deployment.Name, err)
 	}
-	return healthy, nil
+	for _, target := range targets {
+		clusterID := target.GetClusterId()
+		kubeClient, err := p.clientFactory.GetClient(ctx, target)
+		if err != nil {
+			return false, fmt.Errorf("get client for cluster %s: %w", clusterID, err)
+		}
+		entries, err := p.modelConfigProvider.GetModelsFromConfig(ctx, p.logger, kubeClient, inferenceServer.GetName(), deployment.Namespace)
+		if err != nil {
+			return false, fmt.Errorf("read model config of inference server %s in cluster %s for deployment %s/%s: %w",
+				inferenceServer.GetName(), clusterID, deployment.Namespace, deployment.Name, err)
+		}
+		for _, entry := range entries {
+			if entry.DeploymentName != deployment.Name || entry.CurrentPhase() != modelconfig.ModelPhaseServing {
+				continue
+			}
+			status, err := common.GetModelStatusInCluster(ctx, p.logger, p.clientFactory, serverBackend, target, deployment.Namespace, inferenceServer.GetName(), entry.Name)
+			if err != nil {
+				p.logger.Error("failed to check model status for health gate",
+					zap.Error(err),
+					zap.String("operation", "health_check_gate"),
+					zap.String("namespace", deployment.Namespace),
+					zap.String("deployment", deployment.Name),
+					zap.String("inference_server", inferenceServer.GetName()),
+					zap.String("model", entry.Name),
+					zap.String("cluster", clusterID))
+				return false, fmt.Errorf("check model %s of deployment %s/%s in cluster %s: %w",
+					entry.Name, deployment.Namespace, deployment.Name, clusterID, err)
+			}
+			if !status.Ready() {
+				p.recordGateReason(deployment, fmt.Sprintf("model %s is not ready in cluster %s: %s", entry.Name, clusterID, status.Summary()))
+				return false, nil
+			}
+		}
+	}
+
+	healthy, reason, err := p.metricGate.Evaluate(ctx, deployment)
+	if err != nil {
+		return false, fmt.Errorf("evaluate metric gate for deployment %s/%s: %w", deployment.Namespace, deployment.Name, err)
+	}
+	if !healthy {
+		p.recordGateReason(deployment, reason)
+		return false, nil
+	}
+	delete(deployment.Annotations, common.HealthGateReasonAnnotation)
+	return true, nil
+}
+
+// recordGateReason logs a failed gate and stores the reason on the deployment.
+func (p *Plugin) recordGateReason(deployment *v2pb.Deployment, reason string) {
+	p.logger.Warn("health check gate failed",
+		zap.String("namespace", deployment.Namespace),
+		zap.String("deployment", deployment.Name),
+		zap.String("candidate", deployment.Status.GetCandidateRevision().GetName()),
+		zap.String("reason", reason))
+	if deployment.Annotations == nil {
+		deployment.Annotations = make(map[string]string)
+	}
+	deployment.Annotations[common.HealthGateReasonAnnotation] = reason
 }
 
 // PopulateDeploymentLogs adds error logs to deployment status (no-op for OSS).
