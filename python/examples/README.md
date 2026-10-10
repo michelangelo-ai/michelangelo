@@ -14,7 +14,6 @@ There are two environments that are provided for examples. Choose the one that s
     * Supports most machines with mixed CPU and GPU configurations
     * Supports the following examples:
         * `bert_cola`
-        * `nomic_ai`
         * `hf_prediction`
 2. `vllm`
      * Only supports machines with an AMD64 CPU with CUDA-compatible GPU
@@ -36,7 +35,6 @@ Workflows run locally as an ordinary Python program. Just use relevant `py_binar
 
 ```
 $ PYTHONPATH="." poetry run python ./examples/bert_cola/bert_cola.py
-$ PYTHONPATH="." poetry run python ./examples/nomic_ai/nomic_ai.py
 $ PYTHONPATH="." poetry run python ./examples/llm_prediction/vllm_prediction.py
 $ PYTHONPATH="." poetry run python ./examples/llm_prediction/hf_prediction.py
 ```
@@ -108,8 +106,6 @@ Use `.remote_run` Bazel target to run a workflow in the remote mode. Ex:
 
     $ PYTHONPATH="." poetry run python ./examples/bert_cola/bert_cola.py remote-run --image docker.io/library/examples:latest --storage-url s3://default --yes
 
-    $ PYTHONPATH="." poetry run python ./examples/nomic_ai/nomic_ai.py remote-run --image docker.io/library/examples:latest --storage-url s3://default --yes
-
     $ PYTHONPATH="." poetry run python ./examples/llm_prediction/vllm_prediction.py remote-run --image docker.io/library/vllm:latest --storage-url s3://default --yes
 
     $ PYTHONPATH="." poetry run python ./examples/llm_prediction/hf_prediction.py remote-run --image docker.io/library/examples:latest --storage-url s3://default --yes
@@ -119,8 +115,6 @@ Use `.remote_run` Bazel target to run a workflow in the remote mode. Ex:
 User `--workflow temporal` to run the workflow in Temporal mode.
 
     $ PYTHONPATH="." poetry run python ./examples/bert_cola/bert_cola.py remote-run --image docker.io/library/examples:latest --storage-url s3://default --yes --workflow temporal
-
-    $ PYTHONPATH="." poetry run python ./examples/nomic_ai/nomic_ai.py remote-run --image docker.io/library/examples:latest --storage-url s3://default --yes --workflow temporal
 
     $ PYTHONPATH="." poetry run python ./examples/llm_prediction/vllm_prediction.py remote-run --image docker.io/library/vllm:latest --storage-url s3://default --yes --workflow temporal
 

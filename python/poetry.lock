@@ -2409,7 +2409,7 @@ description = "A new flavour of deep learning operations"
 optional = true
 python-versions = ">=3.8"
 groups = ["main"]
-markers = "(python_version < \"3.12\" or extra == \"example\" or extra == \"vllm\") and (extra == \"vllm\" or extra == \"example\")"
+markers = "python_version <= \"3.12\" and extra == \"vllm\""
 files = [
     {file = "einops-0.8.0-py3-none-any.whl", hash = "sha256:9572fb63046264a862693b0a87088af3bdc8c068fde03de63453cbbde245465f"},
     {file = "einops-0.8.0.tar.gz", hash = "sha256:63486517fed345712a8385c100cb279108d9d47e6ae59099b07657e983deae85"},
@@ -14144,7 +14144,7 @@ type = ["pytest-mypy (>=1.0.1) ; platform_python_implementation != \"PyPy\""]
 [extras]
 dev = ["coverage", "docker", "jinja2", "numpy", "pandas", "polars", "pre-commit", "pyarrow", "pytest", "pytest-cov", "pytorch_lightning", "ray", "ray", "ruff", "scikit-learn", "torch", "torchmetrics", "transformers", "xgboost"]
 evaluator = ["numpy", "pandas", "pyarrow", "ray", "ray", "scikit-learn", "torch", "torchmetrics"]
-example = ["accelerate", "boto3", "chronon-ai", "datasets", "einops", "kaggle", "minio", "mlflow", "numpy", "pandas", "pyarrow", "pyspark", "pytorch_lightning", "ray", "ray", "ray", "ray", "s3fs", "scikit-learn", "sqlglot", "thrift", "torch", "transformers"]
+example = ["accelerate", "boto3", "chronon-ai", "datasets", "kaggle", "minio", "mlflow", "numpy", "pandas", "pyarrow", "pyspark", "pytorch_lightning", "ray", "ray", "ray", "ray", "s3fs", "scikit-learn", "sqlglot", "thrift", "torch", "transformers"]
 mactl = []
 minio = ["minio"]
 plugin = ["pyspark", "ray", "ray"]
@@ -14154,9 +14154,9 @@ trainer-comet = ["comet_ml"]
 trainer-deepspeed = ["deepspeed"]
 trainer-mlflow = ["mlflow"]
 trainer-xgboost = ["numpy", "pandas", "ray", "ray", "xgboost"]
-vllm = ["accelerate", "datasets", "einops", "numpy", "pandas", "pyarrow", "pytorch_lightning", "ray", "ray", "s3fs", "setuptools", "torch", "transformers", "vllm"]
+vllm = ["accelerate", "datasets", "numpy", "pandas", "pyarrow", "pytorch_lightning", "ray", "ray", "s3fs", "setuptools", "torch", "transformers", "vllm"]
 
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.9.0"
-content-hash = "a0d3eb3b7765791990693fe56394da9b18b06aefcbd7922be1c3ebb65316f361"
+content-hash = "3ecef6c85cf158225b183b86703fe8ddf338f9d1c629ca212d2f72e858786daa"

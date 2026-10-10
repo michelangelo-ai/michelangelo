@@ -344,5 +344,5 @@ The sink is skipped when no profiler is configured or when the profiler config s
 
 - [**Model Registry**](./model-registry-guide.md) — version and store the trained model
 - [**Deploy a Model**](./deploy-a-model.md) — serve it for inference
-- [**Examples**](../examples/index.md) — working distributed runs, including GPT fine-tuning with LoRA and Nomic embedding training
+- [**Examples**](../examples/index.md) — working distributed runs, including GPT fine-tuning with LoRA and [Nomic embedding training](https://github.com/michelangelo-ai/michelangelo-examples/tree/main/src/michelangelo_examples/nomic_ai/pipelines/train)
 - [**Python SDK Reference**](../../api-reference/python-sdk/index.md) — generated signatures for the wider SDK surface (tasks, workflows, plugins); `LightningTrainer` itself isn't in the generated reference yet
