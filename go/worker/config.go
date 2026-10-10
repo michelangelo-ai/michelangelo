@@ -7,6 +7,7 @@ import (
 	"go.uber.org/config"
 	"go.uber.org/fx"
 	"go.uber.org/yarpc"
+	"go.uber.org/yarpc/api/middleware"
 	"go.uber.org/yarpc/api/transport"
 	"go.uber.org/yarpc/peer"
 	"go.uber.org/yarpc/peer/hostport"
@@ -30,6 +31,11 @@ type Params struct {
 	fx.In
 
 	Config Config
+	// OutboundMiddleware is an optional unary outbound middleware applied to
+	// the Michelangelo API client (e.g. to attach auth headers, see
+	// auth.NewBearerOutboundMiddleware). It is injected by deployment-specific
+	// modules; when absent, calls go out with no additional middleware.
+	OutboundMiddleware middleware.UnaryOutbound `optional:"true"`
 }
 
 // ClientParams provides dependencies for creating YARPC clients.
@@ -75,10 +81,17 @@ func NewYARPCDispatcher(p Params) (*yarpc.Dispatcher, error) {
 		tran = grpc.NewTransport().NewSingleOutbound(p.Config.Address)
 	}
 
-	dispatcher := yarpc.NewDispatcher(yarpc.Config{
+	yarpcCfg := yarpc.Config{
 		Name:      p.Config.MaAPIServiceName,
 		Outbounds: yarpc.Outbounds{p.Config.MaAPIServiceName: {Unary: tran}},
-	})
+	}
+
+	// Apply the optional injected outbound middleware (e.g. auth).
+	if p.OutboundMiddleware != nil {
+		yarpcCfg.OutboundMiddleware = yarpc.OutboundMiddleware{Unary: p.OutboundMiddleware}
+	}
+
+	dispatcher := yarpc.NewDispatcher(yarpcCfg)
 
 	if err := dispatcher.Start(); err != nil {
 		return nil, err

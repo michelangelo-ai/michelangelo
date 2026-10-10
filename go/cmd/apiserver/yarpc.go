@@ -7,6 +7,7 @@ import (
 
 	"go.uber.org/fx"
 	"go.uber.org/yarpc"
+	"go.uber.org/yarpc/api/middleware"
 	"go.uber.org/yarpc/api/transport"
 	"go.uber.org/yarpc/encoding/protobuf/reflection"
 	"go.uber.org/yarpc/transport/grpc"
@@ -28,9 +29,22 @@ type RegisterParams struct {
 	ProtoReflectionMetas []reflection.ServerMeta `group:"yarpcfx"`
 }
 
+// DispatcherParams defines the dependencies for creating the YARPC dispatcher.
+type DispatcherParams struct {
+	fx.In
+
+	Config YARPCConfig
+	Logger *zap.Logger
+	// InboundMiddleware is an optional unary inbound middleware applied to
+	// every request (e.g. authentication, see auth.NewInboundMiddleware). It is
+	// injected by deployment-specific modules; when absent, requests are
+	// handled with no additional middleware.
+	InboundMiddleware middleware.UnaryInbound `optional:"true"`
+}
+
 // provideDispatcher creates and configures a YARPC dispatcher.
-func provideDispatcher(conf YARPCConfig, zapLogger *zap.Logger) (*yarpc.Dispatcher, error) {
-	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", conf.Host, conf.Port))
+func provideDispatcher(p DispatcherParams) (*yarpc.Dispatcher, error) {
+	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", p.Config.Host, p.Config.Port))
 	if err != nil {
 		return nil, err
 	}
@@ -39,16 +53,20 @@ func provideDispatcher(conf YARPCConfig, zapLogger *zap.Logger) (*yarpc.Dispatch
 		listener,
 	)
 
-	dispatcher := yarpc.NewDispatcher(yarpc.Config{
+	yarpcCfg := yarpc.Config{
 		Name: serverName,
 		Inbounds: yarpc.Inbounds{
 			inbound,
 		},
 		Logging: yarpc.LoggingConfig{
-			Zap: zapLogger,
+			Zap: p.Logger,
 		},
-	})
-	return dispatcher, nil
+	}
+	if p.InboundMiddleware != nil {
+		yarpcCfg.InboundMiddleware = yarpc.InboundMiddleware{Unary: p.InboundMiddleware}
+	}
+
+	return yarpc.NewDispatcher(yarpcCfg), nil
 }
 
 // registerProcedures registers procedures with a dispatcher.
