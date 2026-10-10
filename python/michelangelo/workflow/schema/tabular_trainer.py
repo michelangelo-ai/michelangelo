@@ -81,7 +81,11 @@ class ColumnConfig:
     """Schema descriptor for a single model input, output, or label column.
 
     Attributes:
-        data_type: PyTorch dtype string, e.g. ``"torch.float32"``.
+        data_type: PyTorch dtype string, e.g. ``"torch.float32"``, or
+            ``"string"`` for text and bytes columns, which are kept as-is and
+            not cast to a number. An unsupported value is rejected when the
+            model schema or sample data is built, with an error that lists the
+            supported values.
         shape: Tensor shape *excluding* the batch dimension, e.g. ``[128]``
             for a 128-element embedding. Defaults to ``[]``, i.e. a scalar
             column -- the common tabular case.

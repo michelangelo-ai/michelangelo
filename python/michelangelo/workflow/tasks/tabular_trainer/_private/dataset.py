@@ -23,6 +23,7 @@ from michelangelo.lib.model_manager.schema.data_type import DataType
 from michelangelo.lib.model_manager.schema.model_schema import ModelSchema
 from michelangelo.lib.model_manager.schema.model_schema_item import ModelSchemaItem
 from michelangelo.lib.trainer.torch.data_collate_functions import pad_ragged_lists
+from michelangelo.workflow.schema.exceptions import ConfigurationError
 from michelangelo.workflow.schema.tabular_trainer import (
     column_names,
     normalize_columns,
@@ -53,6 +54,14 @@ _TORCH_DTYPE_TO_NUMPY: dict[str, type] = {
     "torch.int8": np.int8,
     "torch.uint8": np.uint8,
     "torch.bool": np.bool_,
+    # Reduced-precision floats have no NumPy equivalent that downstream
+    # tooling accepts (NumPy has no bfloat16), so they stay widened to float32.
+    "torch.float16": np.float32,
+    "torch.half": np.float32,
+    "torch.bfloat16": np.float32,
+    # Non-numeric column (for example parquet string or byte columns). Values
+    # are kept as Python objects instead of being cast to a number.
+    "string": np.object_,
 }
 
 _TORCH_DTYPE_TO_DATATYPE: dict[str, DataType] = {
@@ -68,7 +77,27 @@ _TORCH_DTYPE_TO_DATATYPE: dict[str, DataType] = {
     "torch.int8": DataType.BYTE,
     "torch.uint8": DataType.BYTE,
     "torch.bool": DataType.BOOLEAN,
+    "torch.float16": DataType.FLOAT,
+    "torch.half": DataType.FLOAT,
+    "torch.bfloat16": DataType.FLOAT,
+    "string": DataType.STRING,
 }
+
+
+def _unsupported_dtype_error(torch_dtype_str: str) -> ConfigurationError:
+    """Build the error raised for a ``ColumnConfig.data_type`` we cannot map.
+
+    Args:
+        torch_dtype_str: The unrecognised dtype string.
+
+    Returns:
+        A ``ConfigurationError`` listing every supported dtype string.
+    """
+    supported = ", ".join(repr(name) for name in sorted(_TORCH_DTYPE_TO_NUMPY))
+    return ConfigurationError(
+        f"Unsupported ColumnConfig.data_type {torch_dtype_str!r}. "
+        f"Supported values: {supported}."
+    )
 
 
 def _map_torch_dtype_to_numpy(torch_dtype_str: str) -> type:
@@ -78,13 +107,20 @@ def _map_torch_dtype_to_numpy(torch_dtype_str: str) -> type:
         torch_dtype_str: PyTorch dtype string, e.g. ``"torch.float32"``.
 
     Returns:
-        NumPy dtype class. Falls back to ``np.float32`` for unknown strings.
+        NumPy dtype class. ``"string"`` maps to ``np.object_``.
+
+    Raises:
+        ConfigurationError: If *torch_dtype_str* is not a supported dtype
+            string. The message lists the supported values.
 
     Example:
         >>> _map_torch_dtype_to_numpy("torch.long")
         <class 'numpy.int64'>
     """
-    return _TORCH_DTYPE_TO_NUMPY.get(torch_dtype_str, np.float32)
+    try:
+        return _TORCH_DTYPE_TO_NUMPY[torch_dtype_str]
+    except KeyError:
+        raise _unsupported_dtype_error(torch_dtype_str) from None
 
 
 def _map_torch_dtype_to_datatype(torch_dtype_str: str) -> DataType:
@@ -94,13 +130,20 @@ def _map_torch_dtype_to_datatype(torch_dtype_str: str) -> DataType:
         torch_dtype_str: PyTorch dtype string, e.g. ``"torch.float32"``.
 
     Returns:
-        ``DataType`` enum member. Falls back to ``DataType.FLOAT`` for unknowns.
+        ``DataType`` enum member. ``"string"`` maps to ``DataType.STRING``.
+
+    Raises:
+        ConfigurationError: If *torch_dtype_str* is not a supported dtype
+            string. The message lists the supported values.
 
     Example:
         >>> _map_torch_dtype_to_datatype("torch.int64")
         <DataType.LONG: 19>
     """
-    return _TORCH_DTYPE_TO_DATATYPE.get(torch_dtype_str, DataType.FLOAT)
+    try:
+        return _TORCH_DTYPE_TO_DATATYPE[torch_dtype_str]
+    except KeyError:
+        raise _unsupported_dtype_error(torch_dtype_str) from None
 
 
 # ---------------------------------------------------------------------------
@@ -123,7 +166,8 @@ def get_model_schema(
         output_columns: Output columns for model outputs, in the same forms.
 
     Raises:
-        ConfigurationError: If a column spec has an empty or duplicate name.
+        ConfigurationError: If a column spec has an empty or duplicate name, or
+            a ``data_type`` that is not a supported dtype string.
 
     Returns:
         ``ModelSchema`` with ``input_schema`` and ``output_schema`` populated.
@@ -173,6 +217,7 @@ def _pad_row(row: dict) -> dict[str, np.ndarray]:
       ``ast.literal_eval`` then padded via :func:`pad_ragged_lists`.
     - Plain ``np.ndarray``: returned unchanged.
     - Scalar ``str``: parsed with ``ast.literal_eval`` if possible.
+    - Scalar ``bytes``: wrapped in a 1-element object array (exact bytes kept).
     - All other scalars: wrapped in a 0-D ``np.ndarray`` (use ``np.atleast_1d``
       downstream if a 1-D array is required).
 
@@ -202,6 +247,9 @@ def _pad_row(row: dict) -> dict[str, np.ndarray]:
                 result[key] = np.asarray(parsed_val, dtype=np.float32)
             except (ValueError, SyntaxError):
                 result[key] = np.array([value], dtype=object)
+        elif isinstance(value, bytes):
+            # A fixed-width ``S`` array would silently drop trailing NUL bytes.
+            result[key] = np.array([value], dtype=object)
         else:
             result[key] = np.array(value)
     return result
@@ -254,7 +302,7 @@ def collate_sample_row(
         for k, v in sample_row.items():
             if isinstance(v, np.ndarray):
                 batch[k] = np.expand_dims(v, axis=0)
-            elif isinstance(v, str):
+            elif isinstance(v, (str, bytes)):
                 batch[k] = np.array([v], dtype=object)
             else:
                 batch[k] = np.array([v])
@@ -301,6 +349,12 @@ def get_sample_data(
         If a feature is absent from *sample_data_dict* it is skipped (warning
         logged). If the data shape does not match ``ColumnConfig.shape`` and
         cannot be reshaped, the data is passed through as-is (warning logged).
+        Columns configured as ``"string"`` are kept as object arrays and are not
+        parsed or cast to a number.
+
+    Raises:
+        ConfigurationError: If a feature's ``data_type`` is not a supported
+            dtype string.
 
     Example:
         >>> import numpy as np
@@ -324,8 +378,11 @@ def get_sample_data(
 
         raw = sample_data_dict[feature_name]
 
-        # Parse stringified arrays produced by object-dtype Ray columns.
-        if isinstance(raw, str) and raw.startswith("[") and raw.endswith("]"):
+        # Parse stringified arrays produced by object-dtype Ray columns. String
+        # columns are literal text, so they are never parsed.
+        if cfg.data_type == "string":
+            pass
+        elif isinstance(raw, str) and raw.startswith("[") and raw.endswith("]"):
             with contextlib.suppress(ValueError, SyntaxError):
                 raw = ast.literal_eval(raw)
         elif (
