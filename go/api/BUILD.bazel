@@ -4,6 +4,7 @@ go_library(
     name = "go_default_library",
     srcs = [
         "api.go",
+        "environment.go",
         "interface.go",
     ],
     importpath = "github.com/michelangelo-ai/michelangelo/go/api",
@@ -25,6 +26,7 @@ go_test(
     srcs = [
         "api_label_test.go",
         "api_test.go",
+        "environment_test.go",
     ],
     embed = [":go_default_library"],
     deps = [
