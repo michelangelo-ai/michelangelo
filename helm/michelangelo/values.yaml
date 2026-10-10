@@ -169,18 +169,17 @@ apiserver:
     # (the default) means no restriction at all: every environment may run
     # from any branch, matching pre-existing behavior — upgrading to a
     # release with this field does not change anything until you opt in.
-    # Example: restrict "production" to the main/master branches only —
+    # Example: restrict "production" to the main branch only —
     #   restrictedBranches:
-    #     production: [main, master]
+    #     production: [main]
     restrictedBranches: {}
 
     # Ordered list of environment names offered as radio-button options in
     # the UI's Run Trigger / Run Pipeline dialogs. Display-only — no
     # validation/enforcement semantics; does not constrain what environment
-    # values are legal to set anywhere. Unset/empty (the default) falls back
-    # to today's hardcoded two options (development, production).
-    # Example: [development, staging, production]
-    environmentLabels: []
+    # values are legal to set anywhere. Defaults to today's two options;
+    # an operator can reorder, rename, or add more (e.g. staging) here.
+    environmentLabels: [development, production]
 
   # Resource requests and limits. Override per-service if you need different
   # allocations than the global `resources` block below.
