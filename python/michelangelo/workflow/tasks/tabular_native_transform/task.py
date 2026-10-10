@@ -420,8 +420,8 @@ def _write_config_to_kwargs(write_config: WriteConfig | None) -> dict:
             )
         write_kwargs["min_rows_per_file"] = write_config.min_rows_per_file
 
-    # ``concurrency`` is accepted by ``Dataset.write_parquet`` across every Ray
-    # version this package supports, so it needs no version gate.
+    # ``Dataset.write_parquet`` accepts ``concurrency`` in the Ray releases this
+    # package has been checked against (2.41-2.48 and 2.51), so no version gate.
     if write_config.concurrency is not None:
         write_kwargs["concurrency"] = write_config.concurrency
 
