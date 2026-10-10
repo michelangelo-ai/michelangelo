@@ -71,6 +71,25 @@ class TestParquetReadConfig(TestCase):
                 with self.assertRaises(ConfigurationError):
                     ParquetReadConfig(override_num_blocks_per_dataset={"train": bad})
 
+    def test_invalid_per_dataset_shapes_rejected(self):
+        """Non-dict, empty and non-str-keyed per-dataset values are rejected."""
+        for bad in ([("train", 4)], {}, {1: 4}, "train"):
+            with self.subTest(bad=bad), self.assertRaises(ConfigurationError):
+                ParquetReadConfig(override_num_blocks_per_dataset=bad)
+
+    def test_codec_roundtrip_new_fields(self):
+        """The new fields round-trip through the UniFlow DataclassCodec."""
+        from michelangelo.uniflow.core.codec import DataclassCodec
+
+        codec = DataclassCodec()
+        for cfg in (
+            ParquetReadConfig(override_num_blocks_per_dataset={"train": 3, "val": 1}),
+            WriteConfig(max_rows_per_file=10, concurrency=4),
+            RayDataContextConfig(max_blocks_in_streaming_gen_buffer=1),
+        ):
+            with self.subTest(cfg=type(cfg).__name__):
+                self.assertEqual(codec.decode(codec.encode(cfg)), cfg)
+
     def test_per_dataset_asdict_roundtrip(self):
         """dataclasses.asdict()/cls(**dct) round-trips the per-dataset field."""
         cfg = ParquetReadConfig(override_num_blocks_per_dataset={"train": 3})

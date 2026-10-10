@@ -11,6 +11,10 @@ import numpy as np
 
 from michelangelo.lib.model_manager.schema.data_type import DataType
 from michelangelo.lib.model_manager.schema.model_schema import ModelSchema
+from michelangelo.workflow.schema.ray_data_io import (
+    DataloadingConfig,
+    ParquetReadConfig,
+)
 from michelangelo.workflow.schema.tabular_trainer import (
     ColumnConfig,
     LightningTrainerConfig,
@@ -519,6 +523,35 @@ class TestDeprecationWarnings(TestCase):
 
 class TestConstructReadKwargs(TestCase):
     """Tests for construct_read_kwargs."""
+
+    def test_per_dataset_block_override_warns_and_is_not_applied(self):
+        """The per-dataset override is not applied on the trainer path; it warns."""
+        cfg = _lightning_cfg(
+            dataloading_config=DataloadingConfig(
+                parquet_read_config=ParquetReadConfig(
+                    override_num_blocks_per_dataset={"train": 4}
+                )
+            )
+        )
+        logger_name = "michelangelo.workflow.tasks.tabular_trainer._private.dataset"
+        with self.assertLogs(logger_name, level="WARNING") as logs:
+            result = construct_read_kwargs(cfg)
+        self.assertNotIn("override_num_blocks_per_dataset", result)
+        self.assertNotIn("override_num_blocks", result)
+        self.assertIn("override_num_blocks_per_dataset", logs.output[0])
+
+    def test_global_block_override_is_applied_without_warning(self):
+        """override_num_blocks still flows through and does not warn."""
+        cfg = _lightning_cfg(
+            dataloading_config=DataloadingConfig(
+                parquet_read_config=ParquetReadConfig(override_num_blocks=4)
+            )
+        )
+        logger_path = "michelangelo.workflow.tasks.tabular_trainer._private.dataset"
+        with patch(f"{logger_path}._logger") as mock_logger:
+            result = construct_read_kwargs(cfg)
+        mock_logger.warning.assert_not_called()
+        self.assertEqual(result["override_num_blocks"], 4)
 
     def test_columns_include_inputs_labels_metadata(self):
         """Columns = sorted(inputs | labels | metadata)."""

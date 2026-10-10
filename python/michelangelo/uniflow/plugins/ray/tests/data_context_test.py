@@ -109,8 +109,9 @@ class SetRayDataContextTest(TestCase):
             ".get_current"
         )
         logger_name = "michelangelo.uniflow.plugins.ray.data_context"
+        stub = _ContextWithoutAttr()
         with (
-            patch(target, return_value=_ContextWithoutAttr()),
+            patch(target, return_value=stub),
             self.assertLogs(logger_name, level="WARNING") as logs,
         ):
             set_ray_data_context(
@@ -118,7 +119,8 @@ class SetRayDataContextTest(TestCase):
             )
         self.assertIn("max_blocks_in_streaming_gen_buffer", logs.output[0])
         self.assertFalse(
-            hasattr(_ContextWithoutAttr, "_max_num_blocks_in_streaming_gen_buffer")
+            hasattr(stub, "_max_num_blocks_in_streaming_gen_buffer"),
+            "the setting must be skipped, not set on a context that lacks it",
         )
 
     def test_repeated_calls_do_not_duplicate_retried_io_errors(self):

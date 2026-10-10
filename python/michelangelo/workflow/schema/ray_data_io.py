@@ -65,11 +65,19 @@ class ParquetReadConfig:
             this when datasets have different file counts so that a value
             tuned for one dataset is not applied to the others. A dataset
             with no entry uses Ray's default. Mutually exclusive with
-            ``override_num_blocks``.
+            ``override_num_blocks``. Applied by the tabular native-transform
+            task only; the tabular trainer does not apply it (a warning is
+            logged if it is set there).
         shuffle: Set to ``"files"`` to randomly shuffle input file order.
         tensor_column_schema: Column name → ``{"dtype": ..., "shape": ...}``
             for serialised tensor columns.
         arrow_parquet_args: Additional kwargs forwarded to PyArrow's reader.
+
+    Raises:
+        ConfigurationError: If both ``override_num_blocks`` and
+            ``override_num_blocks_per_dataset`` are set, if
+            ``override_num_blocks_per_dataset`` is not a non-empty ``dict`` with
+            ``str`` keys, or if any block count is not a positive integer.
 
     Example:
         ``ParquetReadConfig(num_cpus=2, shuffle="files")`` reserves 2 CPUs
@@ -77,11 +85,6 @@ class ParquetReadConfig:
         ``ParquetReadConfig(override_num_blocks_per_dataset={"train": 64,
         "validation": 8})`` uses 64 read blocks for ``train`` and 8 for
         ``validation``.
-
-    Raises:
-        ConfigurationError: If both ``override_num_blocks`` and
-            ``override_num_blocks_per_dataset`` are set, or if any block count
-            is not a positive integer.
     """
 
     num_cpus: float | None = None
@@ -106,8 +109,19 @@ class ParquetReadConfig:
             )
         if self.override_num_blocks is not None:
             _require_positive_int("override_num_blocks", self.override_num_blocks)
-        if self.override_num_blocks_per_dataset is not None:
-            for name, value in self.override_num_blocks_per_dataset.items():
+        per_dataset = self.override_num_blocks_per_dataset
+        if per_dataset is not None:
+            if not isinstance(per_dataset, dict) or not per_dataset:
+                raise ConfigurationError(
+                    "override_num_blocks_per_dataset must be a non-empty dict "
+                    f"mapping dataset name to block count, got {per_dataset!r}."
+                )
+            for name, value in per_dataset.items():
+                if not isinstance(name, str):
+                    raise ConfigurationError(
+                        "override_num_blocks_per_dataset keys must be dataset "
+                        f"names (str), got {name!r}."
+                    )
                 _require_positive_int(
                     f"override_num_blocks_per_dataset[{name!r}]", value
                 )
@@ -188,14 +202,14 @@ class RayDataContextConfig:
             attribute: if the installed Ray does not expose it, the setting
             is ignored and a warning is logged. ``None`` keeps Ray's default.
 
+    Raises:
+        ConfigurationError: If ``max_blocks_in_streaming_gen_buffer`` is set
+            to something other than a positive integer.
+
     Example:
         ``RayDataContextConfig(min_block_size=32 * 1024 * 1024)`` sets a
         32 MiB target minimum block size, leaving every other setting at
         Ray's default.
-
-    Raises:
-        ConfigurationError: If ``max_blocks_in_streaming_gen_buffer`` is set
-            to something other than a positive integer.
     """
 
     min_block_size: int | None = None
@@ -238,13 +252,13 @@ class WriteConfig:
             not from the number of available CPUs. ``None`` leaves the write
             stage uncapped.
 
-    Example:
-        >>> WriteConfig(max_rows_per_file=1_000_000, concurrency=4)
-        WriteConfig(max_rows_per_file=1000000, min_rows_per_file=None, concurrency=4)
-
     Raises:
         ConfigurationError: If ``concurrency`` is set to something other than
             a positive integer.
+
+    Example:
+        >>> WriteConfig(max_rows_per_file=1_000_000, concurrency=4)
+        WriteConfig(max_rows_per_file=1000000, min_rows_per_file=None, concurrency=4)
     """
 
     max_rows_per_file: int | None = None

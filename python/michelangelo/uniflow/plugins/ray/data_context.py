@@ -153,6 +153,8 @@ def set_ray_data_context(
         else "ray-default",
         object_store_memory_limit,
         wait_for_min_actors_s,
-        max_blocks_in_streaming_gen_buffer,
+        getattr(ctx, _STREAMING_GEN_BUFFER_ATTR, "unsupported")
+        if max_blocks_in_streaming_gen_buffer is not None
+        else None,
         ctx.retried_io_errors,
     )
