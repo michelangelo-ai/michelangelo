@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from michelangelo.workflow.schema.exceptions import ConfigurationError
+
 __all__ = [
     "BatchIterConfig",
     "DataloadingConfig",
@@ -70,15 +72,39 @@ class BatchIterConfig:
         collate_fn: Dotted import path to a collate function. When set,
             the function is resolved at training time via ``get_module_attr``
             and passed as ``collate_fn`` to ``iter_torch_batches``.
+        prefetch_batches: Number of batches Ray Data fetches, formats and
+            collates ahead of the training step on a background thread pool,
+            overlapping data preparation and host-to-device transfer with
+            compute. Forwarded as ``prefetch_batches`` to
+            ``iter_torch_batches`` for both the training and validation
+            iterators. Must be ``>= 0``; ``0`` disables prefetching. Defaults
+            to ``1``, which is the Ray Data default.
+
+    Raises:
+        ConfigurationError: If ``prefetch_batches`` is not an integer or is
+            negative.
 
     Example:
-        >>> BatchIterConfig(batch_size=64, num_shuffle_batches=4)
-        BatchIterConfig(batch_size=64, num_shuffle_batches=4, collate_fn=None)
+        >>> BatchIterConfig(batch_size=64, prefetch_batches=4)
+        BatchIterConfig(batch_size=64, num_shuffle_batches=0, ...)
     """
 
     batch_size: int
     num_shuffle_batches: int = 0
     collate_fn: str | None = None
+    prefetch_batches: int = 1
+
+    def __post_init__(self) -> None:
+        """Validate that ``prefetch_batches`` is a non-negative integer."""
+        if (
+            isinstance(self.prefetch_batches, bool)
+            or not isinstance(self.prefetch_batches, int)
+            or self.prefetch_batches < 0
+        ):
+            raise ConfigurationError(
+                f"prefetch_batches must be an integer >= 0, got "
+                f"{self.prefetch_batches!r}. Use 0 to disable prefetching."
+            )
 
 
 @dataclass

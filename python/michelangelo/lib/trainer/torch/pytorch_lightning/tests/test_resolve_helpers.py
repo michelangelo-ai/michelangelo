@@ -141,7 +141,7 @@ class TestResolveStrategy:
         )
         with (
             patch.dict("sys.modules", {mp_module: None}),
-            pytest.raises(ValueError, match="requires pytorch-lightning >= 2.3"),
+            pytest.raises(ValueError, match=r"requires pytorch-lightning >= 2\.3"),
         ):
             _resolve_strategy("fsdp2")
 
@@ -703,6 +703,38 @@ class TestResolveCallbacks:
         _, mock_per_node = patched_ray_report_callbacks
         callbacks, _ = _resolve_callbacks(None, per_node_callback_kwargs={})
         assert callbacks[-1] is mock_per_node.return_value
+
+    def test_upload_async_forwarded_to_default_callback(
+        self, patched_ray_report_callbacks
+    ):
+        """``upload_async`` is handed to the data-parallel report callback."""
+        mock_default, _ = patched_ray_report_callbacks
+        _resolve_callbacks(None, upload_async=True)
+        assert mock_default.call_args.kwargs["upload_async"] is True
+
+    def test_upload_async_defaults_false(self, patched_ray_report_callbacks):
+        """Without opt-in the report callback is built with ``upload_async=False``."""
+        mock_default, _ = patched_ray_report_callbacks
+        _resolve_callbacks(None)
+        assert mock_default.call_args.kwargs["upload_async"] is False
+
+    def test_upload_async_ignored_with_warning_for_per_node(
+        self, patched_ray_report_callbacks
+    ):
+        """The per-node callback ignores ``upload_async`` and a warning is logged."""
+        _, mock_per_node = patched_ray_report_callbacks
+        with patch(f"{_UTIL_MODULE}._logger") as mock_logger:
+            _resolve_callbacks(None, per_node_callback_kwargs={}, upload_async=True)
+        mock_logger.warning.assert_called_once()
+        assert "upload_async" not in mock_per_node.call_args.kwargs
+
+    def test_no_warning_for_per_node_without_upload_async(
+        self, patched_ray_report_callbacks
+    ):
+        """No warning is logged for per-node reporting when async is not requested."""
+        with patch(f"{_UTIL_MODULE}._logger") as mock_logger:
+            _resolve_callbacks(None, per_node_callback_kwargs={})
+        mock_logger.warning.assert_not_called()
 
     def test_invalid_top_level_type_raises(self):
         """A non-str/Callback/list input raises ``TypeError``."""

@@ -459,7 +459,9 @@ class CheckpointConfig:
     for future mid-epoch checkpointing (``save_every_n_steps``,
     ``random_seed``). Both additions are gated in the dispatcher — setting
     ``save_every_n_steps`` raises ``NotImplementedError`` at runtime until
-    the mid-epoch checkpoint planner is ported.
+    the mid-epoch checkpoint planner is ported. A further field,
+    ``upload_async``, opts in to overlapping the epoch-end checkpoint upload
+    with training.
 
     Attributes:
         num_to_keep: Maximum number of checkpoints to retain. ``None`` keeps
@@ -473,11 +475,23 @@ class CheckpointConfig:
             ``NotImplementedError`` in the dispatcher.
         random_seed: Optional shuffle seed for chunk-based mid-epoch reads.
             Currently gated with ``save_every_n_steps``.
+        upload_async: When ``True``, upload the epoch-end checkpoint on a
+            background thread managed by Ray Train instead of blocking
+            training until the upload finishes. Ray removes the local
+            checkpoint directory once the upload completes and flushes
+            pending uploads before training finishes; an upload failure is
+            raised by Ray Train rather than swallowed. The upload destination
+            is the run's ``storage_path``, so any filesystem supported by
+            Ray Train works. Requires a Ray version that provides
+            ``ray.train.CheckpointUploadMode``; on older Ray a warning is
+            logged and the default synchronous upload is used. Applies to the
+            data-parallel epoch-end checkpoint only. Defaults to ``False``.
 
     Raises:
         ConfigurationError: If ``save_every_n_steps`` is set to a value
             less than 1. Set it to ``None`` (the default) to disable
-            mid-epoch checkpointing.
+            mid-epoch checkpointing. Also raised if ``upload_async`` is not
+            a bool.
 
     Example:
         >>> CheckpointConfig(num_to_keep=3, checkpoint_score_attribute="val_loss",
@@ -490,13 +504,18 @@ class CheckpointConfig:
     checkpoint_score_order: CheckpointScoreOrder = CheckpointScoreOrder.MAX
     save_every_n_steps: int | None = None
     random_seed: int | None = None
+    upload_async: bool = False
 
     def __post_init__(self) -> None:
-        """Validate save_every_n_steps is a positive integer when set."""
+        """Validate save_every_n_steps and upload_async."""
         if self.save_every_n_steps is not None and self.save_every_n_steps < 1:
             raise ConfigurationError(
                 f"save_every_n_steps must be >= 1, got {self.save_every_n_steps}."
                 " Set it to None to disable mid-epoch checkpointing."
+            )
+        if not isinstance(self.upload_async, bool):
+            raise ConfigurationError(
+                f"upload_async must be a bool, got {self.upload_async!r}."
             )
 
 

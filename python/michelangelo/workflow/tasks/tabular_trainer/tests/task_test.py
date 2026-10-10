@@ -375,6 +375,46 @@ class TestTrainTabularLightning(TestCase):
                 )
         self.assertEqual(mp.call_args.kwargs.get("batch_size"), 16)
 
+    def _run_and_get_param_kwargs(self, config) -> dict:
+        """Run ``train_tabular`` with mocked trainer plumbing; return param kwargs."""
+        with (
+            patch(
+                f"{_TRAINER_TASK}.get_module_attr",
+                return_value=lambda **kw: Mock(),
+            ),
+            patch(f"{_TRAINER_TASK}.ModelVariable"),
+            patch(f"{_TRAINER_TASK}.LightningTrainerParam") as mp,
+            patch(f"{_TRAINER_TASK}.LightningTrainerWithStateDict") as mt,
+        ):
+            mt.return_value.train.return_value = None
+            mt.return_value.update_model_state_dict.return_value = None
+            train_tabular(config, mock_train_dataset(), mock_validation_dataset())
+        return mp.call_args.kwargs
+
+    def test_prefetch_and_upload_async_defaults_preserve_behavior(self):
+        """Without opt-in, prefetch_batches=1 and upload_async=False are passed."""
+        kwargs = self._run_and_get_param_kwargs(make_tabular_config())
+        self.assertEqual(kwargs["prefetch_batches"], 1)
+        self.assertFalse(kwargs["upload_async"])
+
+    def test_batch_iter_config_prefetch_batches_forwarded(self):
+        """BatchIterConfig.prefetch_batches reaches LightningTrainerParam."""
+        config = make_tabular_config(
+            dataloading_config=DataloadingConfig(
+                batch_iter_config=BatchIterConfig(batch_size=16, prefetch_batches=8)
+            ),
+        )
+        kwargs = self._run_and_get_param_kwargs(config)
+        self.assertEqual(kwargs["prefetch_batches"], 8)
+
+    def test_checkpoint_upload_async_forwarded(self):
+        """CheckpointConfig.upload_async reaches LightningTrainerParam."""
+        config = make_tabular_config(
+            checkpoint_config=CheckpointConfig(upload_async=True)
+        )
+        kwargs = self._run_and_get_param_kwargs(config)
+        self.assertTrue(kwargs["upload_async"])
+
     def test_comet_tracker_sets_logger_kwargs(self):
         """CometConfig resolves to the build_comet_logger dotted path + kwargs."""
         config = make_tabular_config(

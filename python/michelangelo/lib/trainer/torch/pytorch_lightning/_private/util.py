@@ -546,10 +546,33 @@ def _resolve_callbacks(
     per_node_callback_kwargs: dict[str, Any] | None = None,
     strategy: Strategy | None = None,
     training_observer: TrainingObserver | None = None,
+    upload_async: bool = False,
 ) -> tuple[list[Callback], bool]:
     """Build callback list for the Lightning Trainer.
 
     A RayTrainReportCallback or RayTrainReportPerNodeCallback is always appended to the list.
+
+    Args:
+        callbacks: User callbacks as an import path, a single callback, a list of
+            callbacks, or ``None``.
+        callback_kwargs: Keyword arguments used when ``callbacks`` is an import path.
+        per_node_callback_kwargs: Keyword arguments for the per-node reporting
+            callback; setting it selects that callback.
+        strategy: The resolved Lightning strategy; model-parallel strategies select
+            the per-node reporting callback.
+        training_observer: Optional observer notified on checkpoint saves.
+        upload_async: Whether the data-parallel reporting callback should upload
+            epoch-end checkpoints asynchronously. Ignored (with a warning) when the
+            per-node reporting callback is used.
+
+    Returns:
+        A tuple of the resolved callback list and whether the user supplied a
+        ``ModelCheckpoint`` callback.
+
+    Raises:
+        TypeError: If ``callbacks``, ``callback_kwargs`` or
+            ``per_node_callback_kwargs`` have an unsupported type, or a resolved
+            callback is not a Lightning ``Callback``.
     """
     if callbacks is not None and not isinstance(
         callbacks, (str, Callback, list, tuple)
@@ -611,6 +634,11 @@ def _resolve_callbacks(
         or _is_model_parallel_strategy(strategy)
     )
     if _use_per_node:
+        if upload_async:
+            _logger.warning(
+                "upload_async=True is ignored with per-node (model-parallel) "
+                "checkpoint reporting; checkpoints are uploaded synchronously."
+            )
         per_node_callback_kwargs = per_node_callback_kwargs or {}
         resolved_callbacks.append(
             RayTrainReportPerNodeCallback(
@@ -619,7 +647,9 @@ def _resolve_callbacks(
         )
     else:
         resolved_callbacks.append(
-            RayTrainReportCallback(training_observer=training_observer)
+            RayTrainReportCallback(
+                training_observer=training_observer, upload_async=upload_async
+            )
         )
 
     return resolved_callbacks, has_model_checkpoint
@@ -814,6 +844,7 @@ def _train_loop_per_worker(train_loop_config):
     # setting lightning_trainer_kwargs["max_epochs"]; we apply this as a default below.
     num_epochs = train_loop_config["num_epochs"]
     num_shuffle_batches = train_loop_config["num_shuffle_batches"]
+    prefetch_batches = train_loop_config.get("prefetch_batches", 1)
 
     create_model_fn = train_loop_config["create_model_fn"]
     create_model_fn_kwargs = train_loop_config["create_model_fn_kwargs"]
@@ -830,6 +861,7 @@ def _train_loop_per_worker(train_loop_config):
     train_dataloader = train_dataset_shard.iter_torch_batches(
         batch_size=batch_size,
         collate_fn=collate_fn_to_torch,
+        prefetch_batches=prefetch_batches,
         local_shuffle_buffer_size=None
         if num_shuffle_batches == 0
         else num_shuffle_batches * batch_size,
@@ -837,6 +869,7 @@ def _train_loop_per_worker(train_loop_config):
     val_dataloader = val_dataset_shard.iter_torch_batches(
         batch_size=batch_size,
         collate_fn=collate_fn_to_torch,
+        prefetch_batches=prefetch_batches,
     )
 
     model = create_model_fn(**create_model_fn_kwargs)
@@ -907,6 +940,7 @@ def _train_loop_per_worker(train_loop_config):
         trainer_kwargs.pop(CALLBACK_REPORT_PER_NODE, None),
         strategy,
         training_observer=train_loop_config.get("training_observer"),
+        upload_async=bool(train_loop_config.get("upload_async", False)),
     )
     profiler, profiler_logs_path, upload_profiler_results = _resolve_profiler(
         trainer_kwargs.pop("profiler", None),
