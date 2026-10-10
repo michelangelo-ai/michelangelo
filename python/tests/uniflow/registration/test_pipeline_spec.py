@@ -2,6 +2,8 @@
 
 import importlib
 import os
+import sys
+import types
 import unittest
 
 import yaml
@@ -11,12 +13,16 @@ from michelangelo.uniflow.core.pipeline_metadata import (
     PipelineMetadataError,
 )
 from michelangelo.uniflow.registration.pipeline_spec import (
+    LocalFileSystem,
     WorkflowImportError,
+    _module_source,
     apply_defaults,
     build_pipeline_cr,
     check_required,
     ctx_run_targets,
     find_workflow_function,
+    load_pipeline_yaml,
+    load_sibling_yaml,
     merge,
     parse_pipeline_yaml,
     resolve,
@@ -734,3 +740,61 @@ class ResolveTest(unittest.TestCase):
             resolve()
         with self.assertRaises(ValueError):
             resolve(module="a", config_file="b")
+
+
+class EdgeCaseTest(unittest.TestCase):
+    """Tests for error paths and less common inputs."""
+
+    def test_parse_ignores_malformed_structured_fields(self):
+        """Mapping and list fields of the wrong shape are left out, not crashed on."""
+        raw = yaml.safe_load(_OSS_YAML)
+        raw["metadata"]["labels"] = ["team"]
+        raw["spec"]["notifications"] = {"emails": ["a@example.com"]}
+        parsed = parse_pipeline_yaml("pipeline.yaml", raw)
+        self.assertIsNone(parsed.metadata.labels)
+        self.assertIsNone(parsed.metadata.notifications)
+        self.assertEqual("california-housing-xgb", parsed.metadata.name)
+
+    def test_unreadable_yaml(self):
+        """A missing or malformed YAML is reported as invalid metadata."""
+        with pipeline_root({"bad.yaml": "metadata: [unclosed\n"}) as root:
+            for name in ("missing.yaml", "bad.yaml"):
+                with (
+                    self.subTest(name=name),
+                    self.assertRaisesRegex(PipelineMetadataError, "cannot read"),
+                ):
+                    load_pipeline_yaml(os.path.join(root, name), LocalFileSystem())
+
+    def test_no_sibling_yaml_without_a_module_file(self):
+        """Modules without a file (e.g. built-ins) have no sibling YAML."""
+        self.assertIsNone(load_sibling_yaml(None, LocalFileSystem()))
+
+    def test_defaults_fill_only_the_missing_commit_field(self):
+        """A set git_ref or branch is kept; only the other comes from git."""
+        git = FakeGit("abc", "main")
+        only_ref = apply_defaults(PipelineMetadata(git_ref="r"), git, "/root")
+        self.assertEqual(("r", "main"), (only_ref.git_ref, only_ref.branch))
+        only_branch = apply_defaults(PipelineMetadata(branch="b"), git, "/root")
+        self.assertEqual(("abc", "b"), (only_branch.git_ref, only_branch.branch))
+
+    def test_resolve_puts_the_root_on_sys_path(self):
+        """The pipeline root is added to sys.path when it isn't there yet."""
+        source = _decorated(name="demo", namespace="ns")
+        with pipeline_root({"pkg/wf.py": source}) as root:
+            sys.path.remove(root)
+            resolved = resolve(module="pkg.wf", root=root, git=FakeGit())
+            self.assertIn(root, sys.path)
+        self.assertEqual("demo", resolved.metadata.name)
+
+    def test_module_without_source(self):
+        """A module whose source can't be read yields no ctx.run targets."""
+        self.assertIsNone(_module_source(types.ModuleType("no_source")))
+
+    def test_merge_with_an_invalid_yaml_type_warns(self):
+        """An invalid YAML type can't be equal to the inline one, so it conflicts."""
+        parsed = parse_pipeline_yaml(
+            "pipeline.yaml", yaml.safe_load(_yaml(**{"spec.type": "BOGUS"}))
+        )
+        merged, warnings = merge(PipelineMetadata(type="TRAIN"), parsed)
+        self.assertEqual("TRAIN", merged.type)
+        self.assertIn('@uniflow.workflow(type="TRAIN") overrides', warnings[0])

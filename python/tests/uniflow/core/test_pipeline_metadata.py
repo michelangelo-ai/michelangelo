@@ -270,3 +270,59 @@ class StructuredFieldsTest(unittest.TestCase):
         labels["team"] = "changed"
         self.assertEqual({"team": "ml"}, meta.labels)
         self.assertEqual([{"emails": ["a@example.com"]}], meta.notifications)
+
+
+class EdgeCaseTest(unittest.TestCase):
+    """Tests for less common shapes and helpers."""
+
+    def test_as_dict(self):
+        """as_dict returns every field, None when unset."""
+        data = PipelineMetadata(name="demo", labels={"team": "ml"}).as_dict()
+        self.assertEqual("demo", data["name"])
+        self.assertEqual({"team": "ml"}, data["labels"])
+        self.assertIsNone(data["notifications"])
+
+    def test_triggers_must_be_a_mapping(self):
+        """A list of triggers is rejected before any proto check."""
+        self.assertEqual(
+            ["triggers must be a mapping, got list"],
+            PipelineMetadata(triggers=["daily"]).validate(),
+        )
+
+    def test_label_key_prefix_must_be_a_dns_subdomain(self):
+        """The prefix before '/' in a label key must be a DNS-1123 subdomain."""
+        errors = PipelineMetadata(labels={"Bad_Prefix/team": "ml"}).validate()
+        self.assertEqual(1, len(errors))
+        self.assertIn('labels key "Bad_Prefix/team"', errors[0])
+
+    def test_nested_non_mapping_is_left_to_the_proto_parser(self):
+        """A scalar where a message is expected fails in the proto parser."""
+        errors = PipelineMetadata(
+            triggers={"daily": {"cronSchedule": "0 8 * * *"}}
+        ).validate()
+        self.assertEqual(1, len(errors))
+        self.assertTrue(errors[0].startswith('triggers["daily"]: '))
+        self.assertNotIn("instead of", errors[0])
+
+    def test_repeated_messages_are_checked(self):
+        """Repeated message fields are walked item by item."""
+        rerun = {"pipelineRuns": [{"namespace": "ns", "name": "run-1"}]}
+        self.assertEqual(
+            [], PipelineMetadata(triggers={"rerun": {"batchRerun": rerun}}).validate()
+        )
+        rerun_snake = dict(rerun, resume_from="step")
+        self.assertIn(
+            'use "resumeFrom" instead of "resume_from" at batchRerun.resume_from',
+            PipelineMetadata(
+                triggers={"rerun": {"batchRerun": rerun_snake}}
+            ).validate()[0],
+        )
+
+    def test_is_repeated_falls_back_to_label(self):
+        """Before protobuf 7, repeated fields are detected through their label."""
+        from types import SimpleNamespace
+
+        from michelangelo.uniflow.core.pipeline_metadata import _is_repeated
+
+        self.assertTrue(_is_repeated(SimpleNamespace(label=3, LABEL_REPEATED=3)))
+        self.assertFalse(_is_repeated(SimpleNamespace(label=1, LABEL_REPEATED=3)))
