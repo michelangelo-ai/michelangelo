@@ -1,2 +1,9 @@
 build --disk_cache=~/.cache/bazel/disk_cache
 build --test_output errors
+
+# Kubernetes 1.35 transition: k8s.io/api v0.35.x gates gogo-protobuf
+# ProtoMessage() on core types behind this build tag.  Without it,
+# CRD types that embed k8s core types (e.g. v1.PodTemplateSpec) fail
+# proto-JSON marshaling at runtime.  The tag is removed in k8s 1.36,
+# at which point gogo-protobuf usage on k8s types must be migrated.
+build --@io_bazel_rules_go//go/config:tags=kubernetes_protomessage_one_more_release
