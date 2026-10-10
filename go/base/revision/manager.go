@@ -60,9 +60,12 @@ func (m *revisionManager) UpsertRevision(ctx context.Context, rev client.Object,
 	// out-of-band. A plain Update would silently wipe the ingester's own finalizer (added
 	// at Create time) — the finalizer is what lets a GC-driven cascade delete soft-delete
 	// this revision's row instead of just vanishing it. Losing it here means cascade
-	// delete stops working from the very next reconcile after creation.
+	// delete stops working from the very next reconcile after creation. The same goes for
+	// annotations other writers set (client metadata, the ingester's
+	// MetadataStoragePrimaryKey), so they are merged rather than replaced.
 	rev.SetResourceVersion(existing.GetResourceVersion())
 	rev.SetFinalizers(existing.GetFinalizers())
+	rev.SetAnnotations(mergeAnnotations(existing.GetAnnotations(), rev.GetAnnotations()))
 	if opts.Immutable {
 		apiutils.MarkImmutable(rev)
 	}
@@ -71,4 +74,20 @@ func (m *revisionManager) UpsertRevision(ctx context.Context, rev client.Object,
 	}
 	logger.Info("updated revision")
 	return true, nil
+}
+
+// mergeAnnotations keeps annotations other writers set on the existing revision
+// (e.g. client metadata) so a re-snapshot does not wipe them; keys in desired win.
+func mergeAnnotations(existing, desired map[string]string) map[string]string {
+	if len(existing) == 0 {
+		return desired
+	}
+	merged := make(map[string]string, len(existing)+len(desired))
+	for k, v := range existing {
+		merged[k] = v
+	}
+	for k, v := range desired {
+		merged[k] = v
+	}
+	return merged
 }
