@@ -422,8 +422,8 @@ def _snake_case_key(value: Any, descriptor: Any, path: str = "") -> Optional[str
             snake = descriptor.fields_by_name.get(key)
             if snake is not None:
                 return f'use "{snake.json_name}" instead of "{key}" at {where}'
-            continue  # unknown names are reported by ParseDict
-        message = _user_message_type(field)
+        # Unknown names have no message to walk; ParseDict reports them.
+        message = _user_message_type(field) if field is not None else None
         if message is None:
             continue
         if message.GetOptions().map_entry:
