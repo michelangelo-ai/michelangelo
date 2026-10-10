@@ -135,6 +135,8 @@ def train(train_dv: DatasetVariable, val_dv: DatasetVariable):
 | --- | --- | --- |
 | `batch_size` | `8` | Per-worker training batch size |
 | `num_shuffle_batches` | `10` | Batches held in the Ray Data local shuffle buffer. `0` disables shuffling |
+| `prefetch_batches` | `1` | Batches Ray Data fetches, formats and collates ahead of the training step (train and validation). Raise it for input-bound training; `0` disables prefetching |
+| `upload_async` | `False` | Upload the epoch-end checkpoint in the background via Ray Train's native async upload instead of blocking training. Needs a Ray version with `ray.train.CheckpointUploadMode`; otherwise a warning is logged and the upload stays synchronous. Ignored with per-node (model-parallel) checkpointing |
 | `num_epochs` | `1` | Deprecated — use `lightning_trainer_kwargs={"max_epochs": N}` instead; see warning below |
 | `data_collate_fn` | `None` | Custom collate function; defaults to Ray Data's column-tensor output |
 | `lightning_trainer_kwargs` | `{}` | Forwarded to `pytorch_lightning.Trainer(...)` — see below |

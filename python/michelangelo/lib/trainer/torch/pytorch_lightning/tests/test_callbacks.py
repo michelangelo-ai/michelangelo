@@ -217,6 +217,167 @@ class TestRayTrainReportCallbackOnTrainEpochEnd:
         patched_io["rmtree"].assert_not_called()
 
 
+def _new_async_callback(local_rank=0, world_rank=0, training_observer=None):
+    """Build a default callback with native async upload enabled."""
+    cb = _new_default_callback(
+        local_rank=local_rank,
+        world_rank=world_rank,
+        training_observer=training_observer,
+    )
+    cb._use_native_async = True
+    return cb
+
+
+class TestRayTrainReportCallbackAsyncUpload:
+    """Epoch-end reporting when native async upload is enabled."""
+
+    def test_sync_is_default_for_uninitialised_callback(self, patched_io):
+        """Without ``upload_async`` the report carries no upload-mode kwargs."""
+        cb = _new_default_callback()
+        cb.on_train_epoch_end(_make_trainer(), MagicMock())
+        _, kwargs = patched_io["ray"].train.report.call_args
+        assert "checkpoint_upload_mode" not in kwargs
+        assert "delete_local_checkpoint_after_upload" not in kwargs
+
+    def test_async_report_passes_upload_mode(self, patched_io):
+        """Async mode reports with ASYNC and delegates local cleanup to Ray."""
+        cb = _new_async_callback()
+        with patch(f"{_CALLBACKS_MODULE}.CheckpointUploadMode") as mode:
+            cb.on_train_epoch_end(_make_trainer(), MagicMock())
+        _, kwargs = patched_io["ray"].train.report.call_args
+        assert kwargs["checkpoint_upload_mode"] is mode.ASYNC
+        assert kwargs["delete_local_checkpoint_after_upload"] is True
+
+    def test_async_rank0_attaches_checkpoint(self, patched_io):
+        """World rank 0 attaches the checkpoint to the async report."""
+        cb = _new_async_callback(world_rank=0)
+        ckpt_obj = patched_io["Checkpoint"].from_directory.return_value
+        with patch(f"{_CALLBACKS_MODULE}.CheckpointUploadMode"):
+            cb.on_train_epoch_end(_make_trainer(), MagicMock())
+        _, kwargs = patched_io["ray"].train.report.call_args
+        assert kwargs["checkpoint"] is ckpt_obj
+
+    def test_async_non_rank0_reports_without_checkpoint(self, patched_io):
+        """Non-zero ranks report metrics only, so the upload is not duplicated."""
+        cb = _new_async_callback(local_rank=1, world_rank=1)
+        with patch(f"{_CALLBACKS_MODULE}.CheckpointUploadMode"):
+            cb.on_train_epoch_end(_make_trainer(), MagicMock())
+        _, kwargs = patched_io["ray"].train.report.call_args
+        assert kwargs["checkpoint"] is None
+
+    def test_async_skips_barrier_and_local_cleanup_on_rank0(self, patched_io):
+        """Rank 0 neither blocks on a barrier nor removes the dir Ray still uploads."""
+        cb = _new_async_callback(local_rank=0, world_rank=0)
+        trainer = _make_trainer()
+        with patch(f"{_CALLBACKS_MODULE}.CheckpointUploadMode"):
+            cb.on_train_epoch_end(trainer, MagicMock())
+        trainer.strategy.barrier.assert_not_called()
+        patched_io["rmtree"].assert_not_called()
+
+    def test_async_removes_empty_dir_on_other_nodes(self, patched_io):
+        """A node-local rank 0 that is not world rank 0 drops its empty dir."""
+        cb = _new_async_callback(local_rank=0, world_rank=4)
+        with patch(f"{_CALLBACKS_MODULE}.CheckpointUploadMode"):
+            cb.on_train_epoch_end(_make_trainer(), MagicMock())
+        patched_io["rmtree"].assert_called_once()
+
+    def test_async_non_local_rank0_keeps_dir(self, patched_io):
+        """Workers that are neither world nor local rank 0 do not clean up."""
+        cb = _new_async_callback(local_rank=2, world_rank=2)
+        with patch(f"{_CALLBACKS_MODULE}.CheckpointUploadMode"):
+            cb.on_train_epoch_end(_make_trainer(), MagicMock())
+        patched_io["rmtree"].assert_not_called()
+
+    def test_async_still_notifies_observer(self, patched_io):
+        """The training observer is notified on the async path too."""
+        observer = MagicMock()
+        cb = _new_async_callback(training_observer=observer)
+        with patch(f"{_CALLBACKS_MODULE}.CheckpointUploadMode"):
+            cb.on_train_epoch_end(_make_trainer(current_epoch=3), MagicMock())
+        observer.on_checkpoint_saved.assert_called_once()
+        assert observer.on_checkpoint_saved.call_args.kwargs["epoch"] == 3
+
+
+class TestRayTrainReportCallbackUploadAsyncInit:
+    """``upload_async`` gating in the real ``__init__``."""
+
+    def _build(self, upload_async, available):
+        with (
+            patch.object(
+                RayTrainReportCallback.__bases__[0], "__init__", return_value=None
+            ),
+            patch(f"{_CALLBACKS_MODULE}.ray"),
+            patch(f"{_CALLBACKS_MODULE}._NATIVE_ASYNC_UPLOAD_AVAILABLE", available),
+            patch(f"{_CALLBACKS_MODULE}._logger") as mock_logger,
+        ):
+            cb = RayTrainReportCallback(upload_async=upload_async)
+        return cb, mock_logger
+
+    def test_default_is_synchronous(self):
+        """The default constructor keeps synchronous uploads and logs nothing."""
+        cb, mock_logger = self._build(upload_async=False, available=True)
+        assert cb._use_native_async is False
+        mock_logger.warning.assert_not_called()
+
+    def test_enabled_when_supported(self):
+        """``upload_async=True`` enables native async when Ray supports it."""
+        cb, mock_logger = self._build(upload_async=True, available=True)
+        assert cb._use_native_async is True
+        mock_logger.warning.assert_not_called()
+
+    def test_falls_back_with_warning_when_unsupported(self):
+        """On Ray without ``CheckpointUploadMode`` it warns and stays synchronous."""
+        cb, mock_logger = self._build(upload_async=True, available=False)
+        assert cb._use_native_async is False
+        mock_logger.warning.assert_called_once()
+
+    def test_per_node_callback_stays_synchronous(self):
+        """The per-node callback is unchanged and never uses native async."""
+        with (
+            patch.object(
+                RayTrainReportCallback.__bases__[0], "__init__", return_value=None
+            ),
+            patch(f"{_CALLBACKS_MODULE}.ray"),
+        ):
+            cb = RayTrainReportPerNodeCallback()
+        assert cb._use_native_async is False
+
+
+class TestNativeAsyncAvailabilityProbe:
+    """Import-time detection of ``ray.train.CheckpointUploadMode``."""
+
+    def test_flag_matches_installed_ray(self):
+        """The availability flag reflects whether the installed Ray exports the enum."""
+        import ray.train
+
+        from michelangelo.lib.trainer.torch.pytorch_lightning._private import (
+            callbacks,
+        )
+
+        assert callbacks._NATIVE_ASYNC_UPLOAD_AVAILABLE is hasattr(
+            ray.train, "CheckpointUploadMode"
+        )
+
+    def test_import_succeeds_without_checkpoint_upload_mode(self):
+        """On Ray without the enum the module still imports and reports unavailable."""
+        import subprocess
+        import sys
+
+        code = (
+            "import ray.train\n"
+            "if hasattr(ray.train, 'CheckpointUploadMode'):\n"
+            "    del ray.train.CheckpointUploadMode\n"
+            "from michelangelo.lib.trainer.torch.pytorch_lightning._private "
+            "import callbacks\n"
+            "assert callbacks._NATIVE_ASYNC_UPLOAD_AVAILABLE is False\n"
+            "assert callbacks.CheckpointUploadMode is None\n"
+        )
+        result = subprocess.run(
+            [sys.executable, "-c", code], capture_output=True, text=True, timeout=300
+        )
+        assert result.returncode == 0, result.stderr
+
+
 # -----------------------------------------------------------------------------
 # RayTrainReportPerNodeCallback.__init__
 # -----------------------------------------------------------------------------

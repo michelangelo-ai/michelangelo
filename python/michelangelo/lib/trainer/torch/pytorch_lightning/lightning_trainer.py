@@ -95,6 +95,16 @@ class LightningTrainerParam:
         batch_size: Per-worker training batch size.
         num_shuffle_batches: Number of batches kept in the Ray Data local shuffle
             buffer. ``0`` disables shuffling.
+        prefetch_batches: Number of batches Ray Data fetches, formats and
+            collates ahead of the training step in ``iter_torch_batches``
+            (applied to both the training and validation iterators). ``0``
+            disables prefetching; the default ``1`` is the Ray Data default.
+        upload_async: When ``True``, the data-parallel epoch-end checkpoint is
+            uploaded in the background by Ray Train rather than blocking
+            training. Requires a Ray version that provides
+            ``ray.train.CheckpointUploadMode``; on older Ray a warning is
+            logged and the synchronous default is used. Ignored by the
+            per-node (model-parallel) reporting callback. Defaults to ``False``.
         num_epochs: Deprecated; prefer ``lightning_trainer_kwargs={"max_epochs": N}``.
         data_collate_fn: Optional custom collate function passed to
             ``Dataset.iter_torch_batches``; defaults to Ray Data's column-tensor
@@ -160,6 +170,7 @@ class LightningTrainerParam:
     num_shuffle_batches: int = (
         10  # By default we reserve 10 batches in ray data shuffle buffer.
     )
+    upload_async: bool = False
     num_epochs: int | None = field(default=_UNSET)  # type: ignore[assignment]  # sentinel replaced in __post_init__
     data_collate_fn: Callable | None = None
     lightning_trainer_kwargs: dict = field(default_factory=dict)
@@ -171,6 +182,8 @@ class LightningTrainerParam:
     experiment_store: ExperimentStore | None = None
     profiler_sink: Callable | None = None
     custom_dataloader: CustomDataloaderParam | None = None
+    # Appended last so positional construction is unaffected.
+    prefetch_batches: int = 1  # Ray Data default; 0 disables prefetching.
 
     def __post_init__(self):
         """Apply default ``num_epochs``, warn on deprecated fields, validate data."""

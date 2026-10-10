@@ -55,6 +55,25 @@ class TestLightningTrainerParam:
         assert param.incremental_training_spec is None
         assert param.initial_weights_path is None
 
+    def test_prefetch_and_upload_async_defaults(self):
+        """New options default to Ray Data's prefetch and synchronous upload."""
+        param = _make_param()
+        assert param.prefetch_batches == 1
+        assert param.upload_async is False
+
+    def test_prefetch_and_upload_async_reach_loop_config(self):
+        """The new options are forwarded to workers via ``train_loop_config``."""
+        param = _make_param(prefetch_batches=6, upload_async=True)
+        with patch(
+            "michelangelo.lib.trainer.torch.pytorch_lightning."
+            "lightning_trainer.TorchTrainer.__init__",
+            return_value=None,
+        ) as mock_super:
+            LightningTrainer(trainer_param=param)
+        loop_cfg = mock_super.call_args.kwargs["train_loop_config"]
+        assert loop_cfg["prefetch_batches"] == 6
+        assert loop_cfg["upload_async"] is True
+
     def test_training_observer_defaults_to_none(self):
         """``training_observer`` defaults to ``None`` when omitted."""
         param = _make_param()

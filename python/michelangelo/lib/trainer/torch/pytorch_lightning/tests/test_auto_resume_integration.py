@@ -128,8 +128,11 @@ def ray_cluster():
         ray.shutdown()
 
 
-def _train(storage_path, name, epochs, store):
-    """Run one training job and return its result dict."""
+def _train(storage_path, name, epochs, store, **param_overrides):
+    """Run one training job and return its result dict.
+
+    Extra ``param_overrides`` are forwarded to ``LightningTrainerParam``.
+    """
     dataset = ray.data.from_items(
         [{"x": [float(i), float(i + 1)], "y": float(i)} for i in range(8)]
     )
@@ -144,6 +147,7 @@ def _train(storage_path, name, epochs, store):
             "callbacks": [ModelCheckpoint(save_top_k=2, monitor="val_loss")],
         },
         experiment_store=store,
+        **param_overrides,
     )
     trainer = LightningTrainer(
         trainer_param=param,
@@ -151,6 +155,35 @@ def _train(storage_path, name, epochs, store):
         scaling_config=ray.train.ScalingConfig(num_workers=1, use_gpu=False),
     )
     return trainer.train()
+
+
+class TestPrefetchAndAsyncUploadIntegration:
+    """End-to-end prefetch and async checkpoint upload against a real Ray cluster."""
+
+    def test_async_upload_and_prefetch_complete_with_checkpoints(
+        self, ray_cluster, tmp_path
+    ):
+        """Training with both options finishes and every epoch checkpoint lands."""
+        if not hasattr(ray.train, "CheckpointUploadMode"):
+            pytest.skip("installed Ray has no native async checkpoint upload")
+        result = _train(
+            tmp_path,
+            "async_run",
+            epochs=2,
+            store=None,
+            prefetch_batches=3,
+            upload_async=True,
+        )
+        assert result["metrics"]["epoch"] == 1
+        ckpt_files = list((tmp_path / "async_run").rglob("checkpoint.ckpt"))
+        assert len(ckpt_files) >= 1
+
+    def test_prefetch_zero_disables_prefetching_and_trains(self, ray_cluster, tmp_path):
+        """``prefetch_batches=0`` is accepted by Ray Data and training completes."""
+        result = _train(
+            tmp_path, "no_prefetch_run", epochs=1, store=None, prefetch_batches=0
+        )
+        assert result["metrics"]["epoch"] == 0
 
 
 class TestAutoResumeIntegration:
