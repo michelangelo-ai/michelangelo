@@ -19,6 +19,8 @@ _logger = logging.getLogger(__name__)
 __all__ = ["RETRIED_IO_ERRORS", "set_ray_data_context"]
 
 
+_STREAMING_GEN_BUFFER_ATTR = "_max_num_blocks_in_streaming_gen_buffer"
+
 RETRIED_IO_ERRORS = [
     "OSError: Could not open Parquet input source",
     "Failed to get file info for",
@@ -38,6 +40,7 @@ def set_ray_data_context(
     retried_io_errors: list[str] | None = None,
     object_store_memory_limit: int | None = None,
     wait_for_min_actors_s: int | None = None,
+    max_blocks_in_streaming_gen_buffer: int | None = None,
 ) -> None:
     """Configure Ray ``DataContext`` with block sizes and retried I/O error patterns.
 
@@ -73,6 +76,17 @@ def set_ray_data_context(
             peaks never overlap and OOM the node. ``None`` keeps Ray's
             default (no wait; actors provision asynchronously while reads
             run, which lets readers race the warmup).
+        max_blocks_in_streaming_gen_buffer: Sets Ray's
+            ``DataContext._max_num_blocks_in_streaming_gen_buffer`` (Ray's
+            default is 2). Ray's resource allocator charges each running
+            task a worst-case reservation of this many average-sized output
+            blocks against its operator's object-store budget, so lowering it
+            (e.g. to ``1``) admits more tasks within the same
+            ``object_store_memory_limit``. It also caps how many output
+            blocks a task may hold un-consumed, so a task blocks sooner.
+            This is a private Ray attribute: if the installed Ray does not
+            expose it, a warning is logged and the setting is ignored.
+            ``None`` keeps Ray's default.
     """
     ctx = ray.data.DataContext.get_current()
     # Only override block sizes when explicitly provided; otherwise keep Ray's
@@ -111,10 +125,26 @@ def set_ray_data_context(
     if wait_for_min_actors_s is not None:
         ctx.wait_for_min_actors_s = wait_for_min_actors_s
 
+    # Private Ray attribute with no public equivalent, so it may be renamed or
+    # removed between Ray versions. Skip with a warning rather than raising
+    # AttributeError: it is a scheduling hint, not a correctness setting.
+    if max_blocks_in_streaming_gen_buffer is not None:
+        if hasattr(ctx, _STREAMING_GEN_BUFFER_ATTR):
+            setattr(ctx, _STREAMING_GEN_BUFFER_ATTR, max_blocks_in_streaming_gen_buffer)
+        else:
+            _logger.warning(
+                "max_blocks_in_streaming_gen_buffer=%s requested but Ray %s does "
+                "not expose DataContext.%s; ignoring.",
+                max_blocks_in_streaming_gen_buffer,
+                ray.__version__,
+                _STREAMING_GEN_BUFFER_ATTR,
+            )
+
     _logger.info(
         "Ray data context set: target_min_block_size=%s MB, "
         "target_max_block_size=%s MB, object_store_memory_limit=%s, "
-        "wait_for_min_actors_s=%s, retried_io_errors=%s",
+        "wait_for_min_actors_s=%s, max_blocks_in_streaming_gen_buffer=%s, "
+        "retried_io_errors=%s",
         f"{ctx.target_min_block_size / (1024 * 1024):.0f}"
         if ctx.target_min_block_size
         else "ray-default",
@@ -123,5 +153,6 @@ def set_ray_data_context(
         else "ray-default",
         object_store_memory_limit,
         wait_for_min_actors_s,
+        max_blocks_in_streaming_gen_buffer,
         ctx.retried_io_errors,
     )
