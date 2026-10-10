@@ -166,11 +166,11 @@ apiserver:
     # Per-environment allow-lists of git branch names, keyed by the
     # michelangelo/environment label value the restriction applies to. An
     # environment name absent from this map is unrestricted. By default,
-    # "production" is restricted to the main branch only -- set this to {}
-    # to disable all branch restrictions, or add/replace keys to customize
-    # per environment.
+    # "production" is restricted to the main/master branches only -- set
+    # this to {} to disable all branch restrictions, or add/replace keys
+    # to customize per environment.
     restrictedBranches:
-      production: [main]
+      production: [main, master]
 
     # Ordered list of environment names offered as radio-button options in
     # the UI's Run Trigger / Run Pipeline dialogs. Display-only — no
