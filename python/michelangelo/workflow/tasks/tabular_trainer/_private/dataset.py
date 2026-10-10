@@ -534,6 +534,12 @@ def construct_read_kwargs(config: LightningTrainerConfig) -> dict:
             val = getattr(prc, attr, None)
             if val is not None:
                 read_kwargs[attr] = val
+        if getattr(prc, "override_num_blocks_per_dataset", None) is not None:
+            _logger.warning(
+                "ParquetReadConfig.override_num_blocks_per_dataset is not applied "
+                "by the tabular trainer; use override_num_blocks to set the "
+                "read block count for training datasets."
+            )
 
     # Column projection: inputs | labels | metadata (output_columns excluded).
     metadata = list(config.metadata_columns) if config.metadata_columns else []

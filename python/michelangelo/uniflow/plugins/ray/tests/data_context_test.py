@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from typing import ClassVar
 from unittest import TestCase
+from unittest.mock import patch
 
 import ray
 
@@ -78,6 +80,48 @@ class SetRayDataContextTest(TestCase):
         set_ray_data_context(wait_for_min_actors_s=30)
         ctx = ray.data.DataContext.get_current()
         self.assertEqual(ctx.wait_for_min_actors_s, 30)
+
+    def test_max_blocks_in_streaming_gen_buffer_is_applied(self):
+        """An explicit buffer size is applied to the context."""
+        set_ray_data_context(max_blocks_in_streaming_gen_buffer=1)
+        ctx = ray.data.DataContext.get_current()
+        self.assertEqual(ctx._max_num_blocks_in_streaming_gen_buffer, 1)
+
+    def test_max_blocks_in_streaming_gen_buffer_default_untouched(self):
+        """Leaving the argument unset keeps Ray's default buffer size."""
+        ctx = ray.data.DataContext.get_current()
+        default = ctx._max_num_blocks_in_streaming_gen_buffer
+        set_ray_data_context()
+        self.assertEqual(ctx._max_num_blocks_in_streaming_gen_buffer, default)
+
+    def test_max_blocks_in_streaming_gen_buffer_warns_when_unsupported(self):
+        """A Ray without the private attribute logs a warning and skips it."""
+
+        class _ContextWithoutAttr:
+            """Stand-in DataContext lacking the private buffer attribute."""
+
+            target_min_block_size = 0
+            target_max_block_size = 0
+            retried_io_errors: ClassVar[list] = []
+
+        target = (
+            "michelangelo.uniflow.plugins.ray.data_context.ray.data.DataContext"
+            ".get_current"
+        )
+        logger_name = "michelangelo.uniflow.plugins.ray.data_context"
+        stub = _ContextWithoutAttr()
+        with (
+            patch(target, return_value=stub),
+            self.assertLogs(logger_name, level="WARNING") as logs,
+        ):
+            set_ray_data_context(
+                retried_io_errors=[], max_blocks_in_streaming_gen_buffer=1
+            )
+        self.assertIn("max_blocks_in_streaming_gen_buffer", logs.output[0])
+        self.assertFalse(
+            hasattr(stub, "_max_num_blocks_in_streaming_gen_buffer"),
+            "the setting must be skipped, not set on a context that lacks it",
+        )
 
     def test_repeated_calls_do_not_duplicate_retried_io_errors(self):
         """Calling twice with overlapping patterns does not grow the list unboundedly.
