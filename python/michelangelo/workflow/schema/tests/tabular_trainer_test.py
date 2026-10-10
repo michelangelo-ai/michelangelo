@@ -811,11 +811,18 @@ class TestColumnOrderSerialization(TestCase):
         json_format.ParseDict({"v": value}, struct)
         return json_format.MessageToDict(struct)["v"]
 
-    def test_dict_form_loses_order_through_struct(self):
-        """Regression: documents why a dict cannot carry column order."""
+    def test_dict_form_order_not_guaranteed_through_struct(self):
+        """A dict keeps its columns through a ``Struct`` but not their order.
+
+        ``Struct.fields`` is a protobuf map, whose iteration order is
+        implementation-defined (and randomized per process by some backends), so
+        the order may or may not survive. Only the key set is asserted; the list
+        form below is what carries a guaranteed order.
+        """
         spec = {n: {"data_type": "torch.float32"} for n in self.NAMES}
-        recovered = list(self._struct_roundtrip(spec))
-        self.assertNotEqual(recovered, self.NAMES)
+        recovered = self._struct_roundtrip(spec)
+        self.assertEqual(set(recovered), set(self.NAMES))
+        self.assertEqual(len(recovered), len(self.NAMES))
 
     def test_list_form_preserves_order_through_struct(self):
         """List form keeps order through a ``Struct`` round-trip."""
