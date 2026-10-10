@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from michelangelo.workflow.schema.exceptions import ConfigurationError
+
 __all__ = [
     "BatchIterConfig",
     "DataloadingConfig",
@@ -16,6 +18,23 @@ __all__ = [
     "RayDataContextConfig",
     "WriteConfig",
 ]
+
+
+def _require_positive_int(field_name: str, value: object) -> None:
+    """Raise ``ConfigurationError`` unless ``value`` is a positive integer.
+
+    Args:
+        field_name: Name used in the error message.
+        value: Value to check. ``bool`` is rejected even though it subclasses
+            ``int``.
+
+    Raises:
+        ConfigurationError: If ``value`` is not an ``int`` greater than zero.
+    """
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        raise ConfigurationError(
+            f"{field_name} must be a positive integer, got {value!r}."
+        )
 
 
 @dataclass
@@ -38,7 +57,15 @@ class ParquetReadConfig:
         num_gpus: GPUs to reserve per parallel read worker.
         memory: Heap memory in bytes per read worker.
         concurrency: Maximum number of concurrent Ray read tasks.
-        override_num_blocks: Override the number of output blocks.
+        override_num_blocks: Override the number of output blocks. Applied to
+            every dataset read with this config. Mutually exclusive with
+            ``override_num_blocks_per_dataset``.
+        override_num_blocks_per_dataset: Per-dataset ``override_num_blocks``,
+            keyed by dataset name (e.g. ``"train"``, ``"validation"``). Use
+            this when datasets have different file counts so that a value
+            tuned for one dataset is not applied to the others. A dataset
+            with no entry uses Ray's default. Mutually exclusive with
+            ``override_num_blocks``.
         shuffle: Set to ``"files"`` to randomly shuffle input file order.
         tensor_column_schema: Column name → ``{"dtype": ..., "shape": ...}``
             for serialised tensor columns.
@@ -47,6 +74,14 @@ class ParquetReadConfig:
     Example:
         ``ParquetReadConfig(num_cpus=2, shuffle="files")`` reserves 2 CPUs
         per read worker and shuffles input file order.
+        ``ParquetReadConfig(override_num_blocks_per_dataset={"train": 64,
+        "validation": 8})`` uses 64 read blocks for ``train`` and 8 for
+        ``validation``.
+
+    Raises:
+        ConfigurationError: If both ``override_num_blocks`` and
+            ``override_num_blocks_per_dataset`` are set, or if any block count
+            is not a positive integer.
     """
 
     num_cpus: float | None = None
@@ -54,9 +89,28 @@ class ParquetReadConfig:
     memory: int | None = None
     concurrency: int | None = None
     override_num_blocks: int | None = None
+    override_num_blocks_per_dataset: dict[str, int] | None = None
     shuffle: str | None = None
     tensor_column_schema: dict | None = None
     arrow_parquet_args: dict | None = None
+
+    def __post_init__(self) -> None:
+        """Validate the block-count overrides."""
+        if (
+            self.override_num_blocks is not None
+            and self.override_num_blocks_per_dataset is not None
+        ):
+            raise ConfigurationError(
+                "Set at most one of 'override_num_blocks' and "
+                "'override_num_blocks_per_dataset'."
+            )
+        if self.override_num_blocks is not None:
+            _require_positive_int("override_num_blocks", self.override_num_blocks)
+        if self.override_num_blocks_per_dataset is not None:
+            for name, value in self.override_num_blocks_per_dataset.items():
+                _require_positive_int(
+                    f"override_num_blocks_per_dataset[{name!r}]", value
+                )
 
 
 @dataclass
@@ -122,11 +176,26 @@ class RayDataContextConfig:
             operator's actors to finish provisioning before it begins
             scheduling upstream read tasks. ``None`` keeps Ray's default (no
             wait).
+        max_blocks_in_streaming_gen_buffer: Maps to Ray's
+            ``DataContext._max_num_blocks_in_streaming_gen_buffer`` (Ray's
+            default is 2). Ray's resource allocator reserves, per running
+            task, this many average-sized output blocks against the
+            operator's object-store budget, so with large blocks an operator
+            can exhaust its budget well below its configured concurrency.
+            Lowering it (e.g. to ``1``) reduces that reservation and admits
+            more tasks, at the cost of a task blocking sooner once its
+            un-consumed output blocks reach the limit. This is a private Ray
+            attribute: if the installed Ray does not expose it, the setting
+            is ignored and a warning is logged. ``None`` keeps Ray's default.
 
     Example:
         ``RayDataContextConfig(min_block_size=32 * 1024 * 1024)`` sets a
         32 MiB target minimum block size, leaving every other setting at
         Ray's default.
+
+    Raises:
+        ConfigurationError: If ``max_blocks_in_streaming_gen_buffer`` is set
+            to something other than a positive integer.
     """
 
     min_block_size: int | None = None
@@ -134,6 +203,15 @@ class RayDataContextConfig:
     retried_io_errors: list[str] | None = None
     object_store_memory_limit: int | None = None
     wait_for_min_actors_s: int | None = None
+    max_blocks_in_streaming_gen_buffer: int | None = None
+
+    def __post_init__(self) -> None:
+        """Validate ``max_blocks_in_streaming_gen_buffer``."""
+        if self.max_blocks_in_streaming_gen_buffer is not None:
+            _require_positive_int(
+                "max_blocks_in_streaming_gen_buffer",
+                self.max_blocks_in_streaming_gen_buffer,
+            )
 
 
 @dataclass
@@ -150,11 +228,30 @@ class WriteConfig:
         min_rows_per_file: Min rows per output file. Buffers small blocks
             into fewer, larger files, reducing write task overhead and
             storage metadata calls. ``None`` uses Ray's default.
+        concurrency: Maximum number of write tasks Ray runs concurrently.
+            Ray leaves this uncapped by default, so the write stage can claim
+            any CPU the scheduler grants it even though write tasks are often
+            short and mostly waiting on input. Ray bills one CPU per running
+            task, so the surplus can starve upstream operators such as the
+            reader. Size it from the rate at which blocks arrive and the
+            per-task execution time (both reported by ``Dataset.stats()``),
+            not from the number of available CPUs. ``None`` leaves the write
+            stage uncapped.
 
     Example:
-        >>> WriteConfig(max_rows_per_file=1_000_000)
-        WriteConfig(max_rows_per_file=1000000, min_rows_per_file=None)
+        >>> WriteConfig(max_rows_per_file=1_000_000, concurrency=4)
+        WriteConfig(max_rows_per_file=1000000, min_rows_per_file=None, concurrency=4)
+
+    Raises:
+        ConfigurationError: If ``concurrency`` is set to something other than
+            a positive integer.
     """
 
     max_rows_per_file: int | None = None
     min_rows_per_file: int | None = None
+    concurrency: int | None = None
+
+    def __post_init__(self) -> None:
+        """Validate ``concurrency``."""
+        if self.concurrency is not None:
+            _require_positive_int("concurrency", self.concurrency)

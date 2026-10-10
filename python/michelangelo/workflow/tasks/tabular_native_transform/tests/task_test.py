@@ -100,6 +100,7 @@ class TabularNativeTransformTaskTest(TestCase):
             retried_io_errors=None,
             object_store_memory_limit=None,
             wait_for_min_actors_s=None,
+            max_blocks_in_streaming_gen_buffer=None,
         )
 
     @patch(f"{_TASK}.set_ray_data_context")
@@ -114,6 +115,7 @@ class TabularNativeTransformTaskTest(TestCase):
                 retried_io_errors=["oops"],
                 object_store_memory_limit=4096,
                 wait_for_min_actors_s=30,
+                max_blocks_in_streaming_gen_buffer=1,
             ),
         )
         tabular_native_transform(config, {"train": train})
@@ -123,6 +125,7 @@ class TabularNativeTransformTaskTest(TestCase):
             retried_io_errors=["oops"],
             object_store_memory_limit=4096,
             wait_for_min_actors_s=30,
+            max_blocks_in_streaming_gen_buffer=1,
         )
 
     # -- early return ----------------------------------------------------
@@ -444,6 +447,36 @@ class TabularNativeTransformTaskTest(TestCase):
         )
         tabular_native_transform(config, {"train": train})
         mock_save.assert_called_once_with(max_rows_per_file=100, min_rows_per_file=10)
+
+    @patch.object(DatasetVariable, "save_ray_dataset")
+    @patch(f"{_TASK}.native_transform")
+    def test_write_concurrency_forwarded_to_save_datasets(
+        self, mock_transform, mock_save
+    ):
+        """write_config.concurrency reaches save_ray_dataset; unset is omitted."""
+        train = DatasetVariable.create(_ray_dataset(self.rows))
+        mock_transform.return_value = (
+            _ray_dataset(self.rows),
+            _load_transform_spec(
+                TabularNativeTransformConfig(transform_spec=dict(_SIMPLE_SPEC))
+            ),
+            {},
+        )
+        from michelangelo.workflow.schema.ray_data_io import WriteConfig
+
+        config = TabularNativeTransformConfig(
+            transform_spec=dict(_SIMPLE_SPEC),
+            write_config=WriteConfig(concurrency=8),
+        )
+        tabular_native_transform(config, {"train": train})
+        mock_save.assert_called_once_with(concurrency=8)
+
+        mock_save.reset_mock()
+        config = TabularNativeTransformConfig(
+            transform_spec=dict(_SIMPLE_SPEC), write_config=WriteConfig()
+        )
+        tabular_native_transform(config, {"train": train})
+        mock_save.assert_called_once_with()
 
     @patch(f"{_TASK}.ray")
     @patch.object(DatasetVariable, "save_ray_dataset")
