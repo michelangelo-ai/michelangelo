@@ -1,5 +1,7 @@
 import { useField } from 'react-final-form';
 
+import { useRepeatedLayoutContext } from '#core/providers/repeated-layout-provider/use-repeated-layout-context';
+import { buildIndexedFieldId } from './build-indexed-field-id';
 import { evaluateCondition } from './evaluate-condition';
 
 import type { ReactNode } from 'react';
@@ -7,6 +9,11 @@ import type { ConditionLayoutConfig } from './types';
 
 /**
  * Renders `children` when `layout` evaluates to true against the current form state.
+ *
+ * `layout.when` is an entity-relative field path (e.g. `items.name`), not a literal
+ * field id. Inside a `RepeatedLayoutProvider`, it's resolved through
+ * `buildIndexedFieldId` against the current item's index before subscribing, so the
+ * same config can be reused across every item in a repeated layout.
  */
 export function FormCondition({
   layout,
@@ -15,7 +22,18 @@ export function FormCondition({
   layout: ConditionLayoutConfig;
   children: ReactNode;
 }) {
-  const { input } = useField(layout.when, { subscription: { value: true } });
+  const repeatedContext = useRepeatedLayoutContext();
+
+  let fieldId = layout.when;
+  if (repeatedContext) {
+    fieldId = buildIndexedFieldId({
+      rootFieldPath: repeatedContext.rootFieldPath,
+      entityId: layout.when,
+      index: repeatedContext.index,
+    });
+  }
+
+  const { input } = useField(fieldId, { subscription: { value: true } });
 
   return evaluateCondition(layout, input.value) ? <>{children}</> : null;
 }
