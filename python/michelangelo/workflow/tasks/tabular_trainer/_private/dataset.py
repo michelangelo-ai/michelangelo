@@ -15,7 +15,7 @@ import ast
 import contextlib
 import logging
 import warnings
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 import numpy as np
 
@@ -23,12 +23,15 @@ from michelangelo.lib.model_manager.schema.data_type import DataType
 from michelangelo.lib.model_manager.schema.model_schema import ModelSchema
 from michelangelo.lib.model_manager.schema.model_schema_item import ModelSchemaItem
 from michelangelo.lib.trainer.torch.data_collate_functions import pad_ragged_lists
+from michelangelo.workflow.schema.exceptions import ConfigurationError
 from michelangelo.workflow.schema.tabular_trainer import (
     column_names,
     normalize_columns,
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from michelangelo.workflow.schema.tabular_trainer import (
         ColumnConfig,
         LightningTrainerConfig,
@@ -362,6 +365,70 @@ def get_sample_data(
         filtered[feature_name] = data
 
     return [filtered]
+
+
+def get_sample_data_from_dataloader(
+    train_dataloader: Iterable[Any],
+    input_columns: dict[str, ColumnConfig] | list[ColumnConfig],
+) -> list[dict[str, np.ndarray]]:
+    """Build model sample data from the first batch of a custom train dataloader.
+
+    Takes the first row of the first batch for every configured input column
+    and passes it through :func:`get_sample_data` for dtype and shape casting.
+    Columns in the batch that are not input columns are ignored.
+
+    Args:
+        train_dataloader: The custom training dataloader. Each batch must be a
+            ``dict`` mapping column names to batched ``torch.Tensor`` values.
+        input_columns: Feature columns, as a list of named ``ColumnConfig``
+            or a ``name -> ColumnConfig`` mapping.
+
+    Returns:
+        A single-element list containing a dict of feature name -> numpy array,
+        as returned by :func:`get_sample_data`.
+
+    Raises:
+        ConfigurationError: If the dataloader yields no batches, a batch is not
+            a dict, an input column is not a batched tensor, or the batch has
+            none of the configured input columns.
+    """
+    import torch
+
+    names = column_names(input_columns)
+    try:
+        batch = next(iter(train_dataloader))
+    except StopIteration as e:
+        raise ConfigurationError(
+            "The custom training dataloader has no batches; at least one batch "
+            "is required to build model sample_data metadata."
+        ) from e
+    if not isinstance(batch, dict):
+        raise ConfigurationError(
+            "The custom training dataloader must yield a dict mapping column "
+            f"names to batched tensors, got {type(batch).__name__}."
+        )
+
+    sample: dict[str, np.ndarray] = {}
+    for name, value in batch.items():
+        if name not in names:
+            continue
+        if not isinstance(value, torch.Tensor):
+            raise ConfigurationError(
+                f"Input column {name!r} must be a batched tensor, got "
+                f"{type(value).__name__}."
+            )
+        if value.ndim == 0:
+            raise ConfigurationError(
+                f"Input column {name!r} must have a leading batch dimension, "
+                "got a 0-dim tensor."
+            )
+        sample[name] = value[0].detach().cpu().numpy()
+    if not sample:
+        raise ConfigurationError(
+            "The custom training dataloader batch has no tensor values for the "
+            f"configured input columns {sorted(names)}."
+        )
+    return get_sample_data(sample, input_columns)
 
 
 # ---------------------------------------------------------------------------

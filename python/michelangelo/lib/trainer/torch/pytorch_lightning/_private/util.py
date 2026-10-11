@@ -46,7 +46,10 @@ from michelangelo.lib.trainer.torch.pytorch_lightning._private.callbacks import 
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from michelangelo.lib.trainer.torch.pytorch_lightning.schema import (
+        CustomDataloaderParam,
         TrainingObserver,
     )
 
@@ -785,6 +788,50 @@ def _maybe_track_experiment(train_loop_config: dict, rank: int) -> None:
         _logger.warning("experiment_store.track failed", exc_info=True)
 
 
+def _build_custom_dataloaders(
+    custom_dataloader: CustomDataloaderParam,
+) -> tuple[Iterable[Any], Iterable[Any]]:
+    """Build the train and validation dataloaders from a custom factory.
+
+    The factory is called once per stage. In Ray-backed mode each call also gets
+    the worker's Ray Data shard for that stage as ``ds``; in file-backed mode
+    ``ds`` is omitted and no dataset shard is looked up.
+
+    Args:
+        custom_dataloader: The custom dataloader settings from the train loop
+            config.
+
+    Returns:
+        A ``(train_dataloader, val_dataloader)`` tuple.
+
+    Raises:
+        UserInputError: If the factory returns ``None`` for a stage.
+    """
+    stages = (
+        ("train", "train", custom_dataloader.train_dataset_path),
+        ("validation", "val", custom_dataloader.validation_dataset_path),
+    )
+    loaders = []
+    for stage, shard_key, dataset_path in stages:
+        stage_kwargs: dict[str, Any] = {}
+        if not custom_dataloader.file_backed:
+            stage_kwargs["ds"] = ray.train.get_dataset_shard(shard_key)
+        loader = custom_dataloader.factory(
+            stage=stage,
+            dataset_path=dataset_path,
+            read_kwargs=custom_dataloader.read_kwargs,
+            **stage_kwargs,
+            **custom_dataloader.factory_kwargs,
+        )
+        if loader is None:
+            raise UserInputError(
+                f"The custom dataloader factory returned None for stage {stage!r}; "
+                "it must return an iterable of batches."
+            )
+        loaders.append(loader)
+    return loaders[0], loaders[1]
+
+
 # Training loop.
 def _train_loop_per_worker(train_loop_config):
     """Execute one Lightning training run on a single Ray Train worker.
@@ -821,23 +868,27 @@ def _train_loop_per_worker(train_loop_config):
     # https://docs.ray.io/en/latest/data/api/doc/ray.data.DataIterator.iter_torch_batches.html#ray.data.DataIterator.iter_torch_batches
     collate_fn_to_torch = train_loop_config["data_collate_fn"]
 
-    # Fetch dataset.
-    train_dataset_shard = ray.train.get_dataset_shard("train")
-    val_dataset_shard = ray.train.get_dataset_shard("val")
+    custom_dataloader = train_loop_config.get("custom_dataloader")
+    if custom_dataloader is not None:
+        train_dataloader, val_dataloader = _build_custom_dataloaders(custom_dataloader)
+    else:
+        # Fetch dataset.
+        train_dataset_shard = ray.train.get_dataset_shard("train")
+        val_dataset_shard = ray.train.get_dataset_shard("val")
 
-    # Create data loader.
-    # We need to adjust 'local_shuffle_buffer_size' in Ray Data.
-    train_dataloader = train_dataset_shard.iter_torch_batches(
-        batch_size=batch_size,
-        collate_fn=collate_fn_to_torch,
-        local_shuffle_buffer_size=None
-        if num_shuffle_batches == 0
-        else num_shuffle_batches * batch_size,
-    )
-    val_dataloader = val_dataset_shard.iter_torch_batches(
-        batch_size=batch_size,
-        collate_fn=collate_fn_to_torch,
-    )
+        # Create data loader.
+        # We need to adjust 'local_shuffle_buffer_size' in Ray Data.
+        train_dataloader = train_dataset_shard.iter_torch_batches(
+            batch_size=batch_size,
+            collate_fn=collate_fn_to_torch,
+            local_shuffle_buffer_size=None
+            if num_shuffle_batches == 0
+            else num_shuffle_batches * batch_size,
+        )
+        val_dataloader = val_dataset_shard.iter_torch_batches(
+            batch_size=batch_size,
+            collate_fn=collate_fn_to_torch,
+        )
 
     model = create_model_fn(**create_model_fn_kwargs)
 
