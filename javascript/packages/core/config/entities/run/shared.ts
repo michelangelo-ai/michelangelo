@@ -2,7 +2,12 @@ import { CellType } from '#core/components/cell/constants';
 import { interpolate } from '#core/interpolation/interpolate';
 import { getCrdExecutionTimestampSeconds, getCrdLastUpdatedSeconds } from '#core/utils/crd-utils';
 import { readEnvironmentLabel } from '#core/utils/environment-utils';
-import { PipelineRunState, PipelineRunStepState, TERMINAL_RUN_STATES } from './types';
+import {
+  KILLING_RUN_STATE,
+  PipelineRunState,
+  PipelineRunStepState,
+  TERMINAL_RUN_STATES,
+} from './types';
 
 import type { Cell } from '#core/components/cell/types';
 import type { TagColor } from '#core/components/tag/types';
@@ -41,7 +46,7 @@ export const STEP_STATE_COLOR_MAP: Record<PipelineRunStepState, TagColor> = {
  * Distinct from {@link STEP_STATE_TEXT_MAP} — a run reads "Succeeded" where a step
  * reads "Success", and state 0 is a queued run but a pending step.
  */
-export const RUN_STATE_TEXT_MAP: Record<PipelineRunState | 'KILLING', string> = {
+export const RUN_STATE_TEXT_MAP: Record<PipelineRunState | typeof KILLING_RUN_STATE, string> = {
   [PipelineRunState.QUEUED]: 'Queued',
   [PipelineRunState.PENDING]: 'Pending',
   [PipelineRunState.RUNNING]: 'Running',
@@ -49,11 +54,11 @@ export const RUN_STATE_TEXT_MAP: Record<PipelineRunState | 'KILLING', string> = 
   [PipelineRunState.KILLED]: 'Killed',
   [PipelineRunState.FAILED]: 'Failed',
   [PipelineRunState.SKIPPED]: 'Skipped',
-  KILLING: 'Killing',
+  [KILLING_RUN_STATE]: 'Killing',
 };
 
 /** Colors matching {@link RUN_STATE_TEXT_MAP}, keyed by the proto enum value. */
-export const RUN_STATE_COLOR_MAP: Record<PipelineRunState | 'KILLING', TagColor> = {
+export const RUN_STATE_COLOR_MAP: Record<PipelineRunState | typeof KILLING_RUN_STATE, TagColor> = {
   [PipelineRunState.QUEUED]: 'gray',
   [PipelineRunState.PENDING]: 'blue',
   [PipelineRunState.RUNNING]: 'blue',
@@ -63,7 +68,7 @@ export const RUN_STATE_COLOR_MAP: Record<PipelineRunState | 'KILLING', TagColor>
   [PipelineRunState.SKIPPED]: 'gray',
   // Matches the existing precedent for an in-progress/transitional state: `trigger/shared.ts`'s
   // TRIGGER_STATE_CELL_CONFIG uses 'yellow' for its analogous "Pending Kill" state.
-  KILLING: 'yellow',
+  [KILLING_RUN_STATE]: 'yellow',
 };
 
 /** Created-date cell, shared between the run list and detail pages. */
@@ -114,7 +119,7 @@ export const RUN_STATE_COLUMN: Cell = {
     // access
     const run = data as { spec?: { kill?: boolean }; status?: { state?: PipelineRunState } };
     if (run.spec?.kill && !(run.status?.state && TERMINAL_RUN_STATES.has(run.status.state))) {
-      return 'KILLING';
+      return KILLING_RUN_STATE;
     }
     return run.status?.state;
   },

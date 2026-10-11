@@ -136,6 +136,13 @@ export enum PipelineRunState {
   SKIPPED = 'PIPELINE_RUN_STATE_SKIPPED',
 }
 
+/**
+ * Synthetic run state for a run that has a kill requested (`spec.kill`) but has not reached a
+ * terminal state yet. It is not a real proto value, so it lives beside `PipelineRunState`
+ * rather than as a member of it.
+ */
+export const KILLING_RUN_STATE = 'KILLING' as const;
+
 /** Mirrors proto PipelineRunStepState enum (pipeline_run.proto). */
 export enum PipelineRunStepState {
   INVALID = 'PIPELINE_RUN_STEP_STATE_INVALID',
