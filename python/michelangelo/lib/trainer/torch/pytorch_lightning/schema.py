@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 
 @runtime_checkable
@@ -308,3 +311,89 @@ class TransferLearningSpec:
     layer_names_to_freeze: list[str] = field(default_factory=list)
     layer_names_to_freeze_regex: list[str] = field(default_factory=list)
     fused_model_submodule: str | None = None
+
+
+@runtime_checkable
+class DataLoaderFactory(Protocol):
+    """Protocol for a user-supplied per-stage dataloader factory.
+
+    The trainer calls the factory once per stage on every Ray Train worker and
+    uses the returned iterable as the Lightning dataloader for that stage.
+    Each batch should be whatever the ``LightningModule`` step methods expect,
+    typically a ``dict`` mapping column names to batched tensors.
+
+    In Ray-backed mode the factory is called with a ``ds`` keyword argument: the
+    per-worker Ray Data shard, which exposes ``iter_torch_batches()``. In
+    file-backed mode ``ds`` is not passed at all, so the factory reads
+    ``dataset_path`` itself and must shard it across workers (for example with
+    ``ray.train.get_context().get_world_rank()``). Declare ``ds`` as an
+    optional parameter, or accept ``**kwargs``, to support both modes.
+
+    Example::
+
+        def build_loader(stage, *, dataset_path, read_kwargs, batch_size=32, ds=None):
+            if ds is not None:
+                return ds.iter_torch_batches(batch_size=batch_size)
+            return MyFileDataLoader(dataset_path, columns=read_kwargs.get("columns"))
+    """
+
+    def __call__(
+        self,
+        stage: str,
+        *,
+        dataset_path: str,
+        read_kwargs: dict[str, Any],
+        **kwargs: Any,
+    ) -> Iterable[Any]:
+        """Build the dataloader for one stage.
+
+        Args:
+            stage: ``"train"`` or ``"validation"``.
+            dataset_path: Storage path or URI of the stage's dataset. Any
+                fsspec URI is acceptable; the filesystem is resolved by the
+                factory, so backends plug in through fsspec registration.
+            read_kwargs: Read settings used for the driver-side datasets, such
+                as the ``columns`` projection.
+            **kwargs: The configured factory kwargs, plus ``ds`` (the Ray Data
+                source) in Ray-backed mode.
+
+        Returns:
+            An iterable of batches for the stage.
+        """
+        ...
+
+
+@dataclass
+class CustomDataloaderParam:
+    """Custom dataloader settings for :class:`LightningTrainerParam`.
+
+    When set, the trainer builds the train and validation dataloaders by calling
+    ``factory`` instead of iterating the Ray Data shards with
+    ``iter_torch_batches``. Settings that only configure that default path
+    (``batch_size``, ``num_shuffle_batches``, ``data_collate_fn``, and
+    ``limit_*_batches`` capping of the Ray Datasets) are not applied to custom
+    loaders; the factory owns batching. Integer ``limit_*_batches`` values are
+    still honored by Lightning itself.
+
+    Attributes:
+        factory: The per-stage :class:`DataLoaderFactory`. Resolved on the
+            driver, so it must be picklable.
+        train_dataset_path: Path or URI passed to the factory for ``"train"``.
+        validation_dataset_path: Path or URI passed to the factory for
+            ``"validation"``.
+        factory_kwargs: Extra keyword arguments forwarded to the factory.
+        read_kwargs: Read settings (for example ``{"columns": [...]}``)
+            forwarded to the factory.
+        file_backed: When ``True`` the factory reads files itself: no Ray
+            Dataset is shipped to the workers and ``ds`` is not passed to the
+            factory, so ``LightningTrainerParam.train_data`` and ``val_data``
+            may be ``None``. When ``False`` the factory also receives the
+            per-worker Ray Data shard as ``ds``.
+    """
+
+    factory: DataLoaderFactory
+    train_dataset_path: str
+    validation_dataset_path: str
+    factory_kwargs: dict[str, Any] = field(default_factory=dict)
+    read_kwargs: dict[str, Any] = field(default_factory=dict)
+    file_backed: bool = False
