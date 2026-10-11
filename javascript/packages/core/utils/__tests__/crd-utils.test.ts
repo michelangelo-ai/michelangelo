@@ -32,7 +32,7 @@ describe('getCrdExecutionTimestampSeconds', () => {
       getCrdExecutionTimestampSeconds({
         metadata: {
           labels: { 'pipelinerun.michelangelo/execution-timestamp': '1700000000' },
-          creationTimestamp: { seconds: 1650000000 },
+          creationTimestamp: '2022-04-15T05:20:00Z',
         },
       })
     ).toEqual(1700000000);
@@ -41,7 +41,7 @@ describe('getCrdExecutionTimestampSeconds', () => {
   test('falls back to creationTimestamp when the label is absent', () => {
     expect(
       getCrdExecutionTimestampSeconds({
-        metadata: { creationTimestamp: { seconds: 1650000000 } },
+        metadata: { creationTimestamp: '2022-04-15T05:20:00Z' },
       })
     ).toEqual(1650000000);
   });

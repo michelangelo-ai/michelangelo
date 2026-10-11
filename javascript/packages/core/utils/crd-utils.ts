@@ -96,13 +96,14 @@ export function getCrdLastUpdatedSeconds(data: {
  * }) // 1700000000
  *
  * getCrdExecutionTimestampSeconds({
- *   metadata: { creationTimestamp: { seconds: 1650000000 } },
+ *   metadata: { creationTimestamp: '2022-04-15T05:20:00Z' },
  * }) // 1650000000 (label absent, falls back to creation time)
  */
 export function getCrdExecutionTimestampSeconds(data: {
-  metadata?: { labels?: Record<string, string>; creationTimestamp?: { seconds: number } };
+  metadata?: { labels?: Record<string, string>; creationTimestamp?: string };
 }): number | undefined {
   const label = data.metadata?.labels?.[EXECUTION_TIMESTAMP_LABEL_KEY];
   if (label) return Number(label);
-  return data.metadata?.creationTimestamp?.seconds;
+  const created = data.metadata?.creationTimestamp;
+  return created === undefined ? undefined : toEpochSeconds(created);
 }

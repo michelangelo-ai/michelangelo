@@ -111,7 +111,7 @@ describe('Trigger detail "Triggered Runs"', () => {
       triggerRun: {
         metadata: { name: 'nightly-trigger', namespace: 'myproject' },
         spec: { pipeline: { name: 'my-pipeline', namespace: 'myproject' } },
-        status: { state: 1 },
+        status: { state: TriggerRunState.RUNNING },
       },
     },
     [`ListPipelineRun:{"listOptions":{"labelSelector":"${SELECTOR}"},"namespace":"myproject"}`]: {
@@ -127,7 +127,9 @@ describe('Trigger detail "Triggered Runs"', () => {
         getRouterWrapper({ location: '/myproject/retrain/triggers/nightly-trigger/runs' }),
         getServiceProviderWrapper({
           request: createQueryMockRouter(
-            buildRunsListMocks([{ metadata: { name: 'run-1' }, status: { state: 3 } }])
+            buildRunsListMocks([
+              { metadata: { name: 'run-1' }, status: { state: PipelineRunState.SUCCEEDED } },
+            ])
           ),
         }),
       ])
@@ -161,7 +163,9 @@ describe('Trigger detail "Triggered Runs"', () => {
         getRouterWrapper({ location: '/myproject/retrain/triggers/nightly-trigger/runs' }),
         getServiceProviderWrapper({
           request: createQueryMockRouter(
-            buildRunsListMocks([{ metadata: { name: 'run-1' }, status: { state: 3 } }])
+            buildRunsListMocks([
+              { metadata: { name: 'run-1' }, status: { state: PipelineRunState.SUCCEEDED } },
+            ])
           ),
         }),
       ])
@@ -185,14 +189,14 @@ describe('Trigger detail "Triggered Runs"', () => {
                   name: 'run-with-label',
                   labels: { 'michelangelo/UpdateTimestamp': '1700000000000000' },
                 },
-                status: { state: 3 },
+                status: { state: PipelineRunState.SUCCEEDED },
               },
               {
                 metadata: {
                   name: 'run-without-label',
-                  creationTimestamp: { seconds: 1650000000 },
+                  creationTimestamp: '2022-04-15T05:20:00Z',
                 },
-                status: { state: 3 },
+                status: { state: PipelineRunState.SUCCEEDED },
               },
             ])
           ),
@@ -226,9 +230,12 @@ describe('Trigger detail "Triggered Runs"', () => {
                   name: 'run-with-param',
                   labels: { 'pipelinerun.michelangelo/parameter-id': 'param-42' },
                 },
-                status: { state: 3 },
+                status: { state: PipelineRunState.SUCCEEDED },
               },
-              { metadata: { name: 'run-without-param' }, status: { state: 3 } },
+              {
+                metadata: { name: 'run-without-param' },
+                status: { state: PipelineRunState.SUCCEEDED },
+              },
             ])
           ),
         }),
@@ -256,14 +263,14 @@ describe('Trigger detail "Triggered Runs"', () => {
                   name: 'run-with-exec-ts',
                   labels: { 'pipelinerun.michelangelo/execution-timestamp': '1700000000' },
                 },
-                status: { state: 3 },
+                status: { state: PipelineRunState.SUCCEEDED },
               },
               {
                 metadata: {
                   name: 'run-without-exec-ts',
-                  creationTimestamp: { seconds: 1650000000 },
+                  creationTimestamp: '2022-04-15T05:20:00Z',
                 },
-                status: { state: 3 },
+                status: { state: PipelineRunState.SUCCEEDED },
               },
             ])
           ),
@@ -295,9 +302,9 @@ describe('Trigger detail "Triggered Runs"', () => {
                   name: 'run-in-prod',
                   labels: { 'michelangelo/environment': 'production' },
                 },
-                status: { state: 3 },
+                status: { state: PipelineRunState.SUCCEEDED },
               },
-              { metadata: { name: 'run-no-env' }, status: { state: 3 } },
+              { metadata: { name: 'run-no-env' }, status: { state: PipelineRunState.SUCCEEDED } },
             ])
           ),
         }),
@@ -323,9 +330,9 @@ describe('Trigger detail "Triggered Runs"', () => {
               {
                 metadata: { name: 'run-resumed' },
                 spec: { resume: { pipelineRun: { name: 'run-original' } } },
-                status: { state: 3 },
+                status: { state: PipelineRunState.SUCCEEDED },
               },
-              { metadata: { name: 'run-fresh' }, status: { state: 3 } },
+              { metadata: { name: 'run-fresh' }, status: { state: PipelineRunState.SUCCEEDED } },
             ])
           ),
         }),
@@ -351,7 +358,7 @@ describe('Trigger detail "Triggered Runs"', () => {
               {
                 metadata: { name: 'run-1' },
                 spec: { actor: { name: 'owner-name' } },
-                status: { state: 3 },
+                status: { state: PipelineRunState.SUCCEEDED },
               },
             ])
           ),
@@ -375,21 +382,21 @@ describe('Trigger detail "Triggered Runs"', () => {
               {
                 metadata: { name: 'run-killing' },
                 spec: { kill: true },
-                status: { state: 2 }, // RUNNING, kill requested but not yet applied
+                status: { state: PipelineRunState.RUNNING }, // RUNNING, kill requested but not yet applied
               },
               {
                 metadata: { name: 'run-not-killed' },
-                status: { state: 2 }, // RUNNING, no kill requested
+                status: { state: PipelineRunState.RUNNING }, // RUNNING, no kill requested
               },
               {
                 metadata: { name: 'run-already-killed' },
                 spec: { kill: true },
-                status: { state: 4 }, // KILLED — must not show "Killing" once state catches up
+                status: { state: PipelineRunState.KILLED }, // KILLED — must not show "Killing" once state catches up
               },
               {
                 metadata: { name: 'run-succeeded-with-kill' },
                 spec: { kill: true },
-                status: { state: 3 }, // SUCCEEDED before the kill took effect — must stay "Succeeded"
+                status: { state: PipelineRunState.SUCCEEDED }, // SUCCEEDED before the kill took effect — must stay "Succeeded"
               },
             ])
           ),

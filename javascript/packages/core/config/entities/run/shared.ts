@@ -112,9 +112,8 @@ export const RUN_STATE_COLUMN: Cell = {
   accessor: (data: unknown) => {
     // cast: accessor receives unknown data; narrowing to expected proto shape for property
     // access
-    const run = data as { spec?: { kill?: boolean }; status?: { state?: number } };
-    // cast: status.state is typed as a bare number but always holds a PipelineRunState value
-    if (run.spec?.kill && !TERMINAL_RUN_STATES.has(run.status?.state as PipelineRunState)) {
+    const run = data as { spec?: { kill?: boolean }; status?: { state?: PipelineRunState } };
+    if (run.spec?.kill && !(run.status?.state && TERMINAL_RUN_STATES.has(run.status.state))) {
       return 'KILLING';
     }
     return run.status?.state;
@@ -170,7 +169,7 @@ export const RUN_UPDATED_COLUMN: Cell = {
     // cast: accessor receives unknown data; narrowing to expected proto shape for property
     // access
     const row = data as {
-      metadata?: { labels?: Record<string, string>; creationTimestamp?: { seconds: number } };
+      metadata?: { labels?: Record<string, string>; creationTimestamp?: string };
     };
     return getCrdLastUpdatedSeconds(row);
   },
@@ -192,7 +191,7 @@ export const RUN_EXECUTION_TIMESTAMP_COLUMN: Cell = {
     // cast: accessor receives unknown data; narrowing to expected proto shape for property
     // access
     const row = data as {
-      metadata?: { labels?: Record<string, string>; creationTimestamp?: { seconds: number } };
+      metadata?: { labels?: Record<string, string>; creationTimestamp?: string };
     };
     return getCrdExecutionTimestampSeconds(row);
   },
