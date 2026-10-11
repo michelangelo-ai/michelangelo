@@ -44,6 +44,7 @@ from pytorch_lightning.utilities.deepspeed import (
 )
 from ray.train.torch import TorchTrainer
 
+from michelangelo.lib._internal.errors import UserInputError
 from michelangelo.lib.trainer.torch.pytorch_lightning._private.util import (
     _apply_batch_limit,
     _is_deepspeed_strategy,
@@ -53,6 +54,7 @@ from michelangelo.lib.trainer.torch.pytorch_lightning._private.util import (
 
 if TYPE_CHECKING:
     from michelangelo.lib.trainer.torch.pytorch_lightning.schema import (
+        CustomDataloaderParam,
         ExperimentStore,
         IncrementalTrainingSpec,
         TrainingObserver,
@@ -86,8 +88,10 @@ class LightningTrainerParam:
         create_model_fn: Factory returning a ``pytorch_lightning.LightningModule``.
             Invoked on each worker with ``**create_model_fn_kwargs``.
         create_model_fn_kwargs: Keyword arguments passed to ``create_model_fn``.
-        train_data: Training Ray Dataset.
-        val_data: Validation Ray Dataset.
+        train_data: Training Ray Dataset. May be ``None`` only when
+            ``custom_dataloader`` is file-backed.
+        val_data: Validation Ray Dataset. May be ``None`` only when
+            ``custom_dataloader`` is file-backed.
         batch_size: Per-worker training batch size.
         num_shuffle_batches: Number of batches kept in the Ray Data local shuffle
             buffer. ``0`` disables shuffling.
@@ -135,12 +139,23 @@ class LightningTrainerParam:
             Ignored when no profiler is configured or when the profiler config
             sets ``upload_profiler_results: False``. Exceptions raised by the sink are
             logged and swallowed. Must be picklable (serialized to workers).
+        custom_dataloader: Optional :class:`~schema.CustomDataloaderParam`
+            replacing the default Ray Data dataloaders with a user factory.
+            ``batch_size``, ``num_shuffle_batches``, ``data_collate_fn`` and the
+            Ray Dataset capping done for ``limit_*_batches`` are not applied to
+            custom loaders. The profiler's row-count validation is skipped
+            because the dataset size is unknown. Defaults to ``None`` (use the
+            Ray Data shards).
+
+    Raises:
+        UserInputError: At construction, if ``train_data`` or ``val_data`` is
+            ``None`` without a file-backed ``custom_dataloader``.
     """
 
     create_model_fn: Callable
     create_model_fn_kwargs: dict
-    train_data: ray.data.Dataset
-    val_data: ray.data.Dataset
+    train_data: ray.data.Dataset | None
+    val_data: ray.data.Dataset | None
     batch_size: int = 8
     num_shuffle_batches: int = (
         10  # By default we reserve 10 batches in ray data shuffle buffer.
@@ -155,9 +170,18 @@ class LightningTrainerParam:
     training_observer: TrainingObserver | None = None
     experiment_store: ExperimentStore | None = None
     profiler_sink: Callable | None = None
+    custom_dataloader: CustomDataloaderParam | None = None
 
     def __post_init__(self):
-        """Apply default ``num_epochs`` and warn on the deprecated field usage."""
+        """Apply default ``num_epochs``, warn on deprecated fields, validate data."""
+        file_backed = (
+            self.custom_dataloader is not None and self.custom_dataloader.file_backed
+        )
+        if not file_backed and (self.train_data is None or self.val_data is None):
+            raise UserInputError(
+                "train_data and val_data are required unless custom_dataloader "
+                "is file-backed (CustomDataloaderParam(file_backed=True))."
+            )
         if self.num_epochs is _UNSET:
             self.num_epochs = 1
         else:
@@ -203,16 +227,19 @@ class LightningTrainer(TorchTrainer):
         num_workers = scaling_config.num_workers if scaling_config is not None else 1
         trainer_kwargs = train_loop_config.get("lightning_trainer_kwargs") or {}
         unlimited_train_data, unlimited_val_data = train_data, val_data
+        # Custom loaders own their data pipeline, so there is no Ray Dataset to cap.
+        custom_dataloader = trainer_param.custom_dataloader
+        cap_datasets = custom_dataloader is None
         train_data, train_limit = _apply_batch_limit(
             train_data,
-            trainer_kwargs.get("limit_train_batches"),
+            trainer_kwargs.get("limit_train_batches") if cap_datasets else None,
             trainer_param.batch_size,
             num_workers,
             "train",
         )
         val_data, val_limit = _apply_batch_limit(
             val_data,
-            trainer_kwargs.get("limit_val_batches"),
+            trainer_kwargs.get("limit_val_batches") if cap_datasets else None,
             trainer_param.batch_size,
             num_workers,
             "val",
@@ -237,7 +264,12 @@ class LightningTrainer(TorchTrainer):
         profiler_config = (train_loop_config.get("lightning_trainer_kwargs") or {}).get(
             "profiler"
         )
-        if profiler_config is not None:
+        if profiler_config is not None and custom_dataloader is not None:
+            _logger.info(
+                "Skipping profiler row-count validation: the dataset size is "
+                "unknown with a custom dataloader."
+            )
+        elif profiler_config is not None:
             try:
                 train_loop_config["train_dataset_num_rows"] = (
                     trainer_param.train_data.count()
@@ -280,12 +312,22 @@ class LightningTrainer(TorchTrainer):
         if resume_checkpoint_path is not None:
             train_loop_config["resume_checkpoint_path"] = resume_checkpoint_path
 
+        # Pop custom_dataloader for the same asdict()-recursion reason; the
+        # factory is re-injected so it reaches the workers via Ray serialization.
+        train_loop_config.pop("custom_dataloader", None)
+        datasets = {"train": train_data, "val": val_data}
+        if custom_dataloader is not None:
+            train_loop_config["custom_dataloader"] = custom_dataloader
+            if custom_dataloader.file_backed:
+                # Nothing for Ray Train to shard; the factory reads files directly.
+                datasets = {}
+
         super().__init__(
             train_loop_per_worker=_train_loop_per_worker,
             train_loop_config=train_loop_config,
             scaling_config=scaling_config,
             run_config=run_config,
-            datasets={"train": train_data, "val": val_data},
+            datasets=datasets,
         )
 
     def train(
