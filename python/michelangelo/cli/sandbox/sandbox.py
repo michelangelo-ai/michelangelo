@@ -372,6 +372,26 @@ def _create(ns: argparse.Namespace):
     _deploy_services(ns)
 
 
+def _helm_release_upgradable() -> bool:
+    """Whether the michelangelo release can be upgraded in place.
+
+    A release is upgradable when it is `deployed`, or when an earlier upgrade
+    left it `failed` (revision > 1). A failed first install has nothing to
+    preserve, and a missing release has nothing to upgrade; both are
+    reinstalled from scratch.
+    """
+    result = subprocess.run(
+        ["helm", "status", "michelangelo", "-o", "json"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return False
+    release = json.loads(result.stdout)
+    status = release["info"]["status"]
+    return status == "deployed" or (status == "failed" and release["version"] > 1)
+
+
 def _sync(ns: argparse.Namespace):
     """Restart only Michelangelo app services in an existing cluster.
 
@@ -430,22 +450,7 @@ def _sync(ns: argparse.Namespace):
     _helm_ensure_repos()
     helm_args = _build_helm_set_args(ns)
 
-    # A release we can upgrade in place: deployed, or left `failed` by an earlier
-    # upgrade (revision > 1). A failed first install has nothing to preserve and
-    # is reinstalled from scratch below.
-    status_result = subprocess.run(
-        ["helm", "status", "michelangelo", "-o", "json"],
-        capture_output=True,
-        text=True,
-    )
-    release_healthy = False
-    if status_result.returncode == 0:
-        release = json.loads(status_result.stdout)
-        release_healthy = release["info"]["status"] == "deployed" or (
-            release["info"]["status"] == "failed" and release["version"] > 1
-        )
-
-    if release_healthy:
+    if _helm_release_upgradable():
         # Healthy release: upgrade in-place, keeping infra running.
         _exec(
             "helm",
