@@ -9,6 +9,10 @@ allowed-tools:
 
 # Michelangelo Sandbox Setup Reference
 
+## How to run commands
+
+Invoke this skill before running its scripts, and use the literal `bash .claude/skills/ma-sandbox-scripts/<script>.sh <args>` form from the repo root, one command per call. See `.claude/skills/ma-sandbox-references/running-commands.md`.
+
 ## Prereqs
 
 Install the required tools if they are not already on your PATH:
