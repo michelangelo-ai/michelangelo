@@ -27,6 +27,8 @@ which k3d helm kubectl docker poetry
 
 IF any command prints "not found" or returns no output: **STOP**. Report which tools are missing and do not proceed to the next step.
 
+Before committing Python changes, run `bash .claude/skills/ma-sandbox-scripts/check-dev-prereqs.sh`. IF it exits non-zero, run the command its message names and re-run it.
+
 **Docker resource limits:** Ensure your Docker runtime (Docker Desktop or Colima) has at least 4 CPUs, 8 GB memory, and 60 GB disk allocated, or pods will crash or fail to schedule.
 
 ## Full ordered setup sequence
