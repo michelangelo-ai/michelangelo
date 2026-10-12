@@ -1,17 +1,3 @@
-// Copyright (c) 2023 Uber Technologies, Inc.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 package auth
 
 import (
@@ -80,8 +66,9 @@ func PrincipalFromContext(ctx context.Context) (*Principal, bool) {
 // InboundConfig configures the inbound authentication middleware.
 type InboundConfig struct {
 	// AllowedServices restricts which service principals (Principal.Name) may
-	// call the API. Empty means any successfully authenticated caller is
-	// accepted (authenticate-only).
+	// call the API. Matching is exact and case-sensitive, so the Authenticator
+	// is responsible for returning consistently-cased names. Empty means any
+	// successfully authenticated caller is accepted (authenticate-only).
 	AllowedServices []string
 }
 
@@ -125,7 +112,12 @@ func (m *inboundMiddleware) authenticate(ctx context.Context, req *transport.Req
 	principal, err := m.authenticator.Authenticate(ctx, token)
 	if err != nil {
 		m.logger.Warn("token verification failed", zap.Error(err), zap.String("procedure", req.Procedure))
-		return nil, yarpcerrors.UnauthenticatedErrorf("invalid token: %v", err)
+		return nil, yarpcerrors.UnauthenticatedErrorf("token verification failed")
+	}
+
+	if principal == nil {
+		m.logger.Error("authenticator returned no identity and no error", zap.String("procedure", req.Procedure))
+		return nil, yarpcerrors.UnauthenticatedErrorf("authentication failed")
 	}
 
 	if !m.serviceAllowed(principal) {

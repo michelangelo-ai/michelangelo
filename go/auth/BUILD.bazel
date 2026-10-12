@@ -5,6 +5,7 @@ go_library(
     srcs = [
         "auth.go",
         "authn.go",
+        "doc.go",
     ],
     importpath = "github.com/michelangelo-ai/michelangelo/go/auth",
     visibility = ["//visibility:public"],
