@@ -2,6 +2,7 @@
 
 import argparse
 import base64
+import json
 import shutil
 import string
 import subprocess
@@ -429,15 +430,20 @@ def _sync(ns: argparse.Namespace):
     _helm_ensure_repos()
     helm_args = _build_helm_set_args(ns)
 
-    # Check if there is a healthy deployed release we can upgrade.
+    # A release we can upgrade in place: deployed, or left `failed` by an earlier
+    # upgrade (revision > 1). A failed first install has nothing to preserve and
+    # is reinstalled from scratch below.
     status_result = subprocess.run(
         ["helm", "status", "michelangelo", "-o", "json"],
         capture_output=True,
         text=True,
     )
-    release_healthy = (
-        status_result.returncode == 0 and '"status":"deployed"' in status_result.stdout
-    )
+    release_healthy = False
+    if status_result.returncode == 0:
+        release = json.loads(status_result.stdout)
+        release_healthy = release["info"]["status"] == "deployed" or (
+            release["info"]["status"] == "failed" and release["version"] > 1
+        )
 
     if release_healthy:
         # Healthy release: upgrade in-place, keeping infra running.
@@ -450,6 +456,10 @@ def _sync(ns: argparse.Namespace):
             str(_chart_dir / "values-k3d.yaml"),
             "--dependency-update",
             "--reuse-values",
+            # Helm applies server-side; fields last written by `kubectl set image`
+            # or `kubectl apply` belong to other managers and make the upgrade
+            # fail with a conflict. The chart is the source of truth in a sandbox.
+            "--force-conflicts",
             *helm_args,
         )
         # Force-restart app deployments so they always pick up the latest
