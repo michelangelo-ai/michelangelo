@@ -85,12 +85,9 @@ It prints one line per affected service: a service is affected when a changed fi
 
 **JavaScript UI:**
 ```bash
-VITE_INFO=$(bash $(git rev-parse --show-toplevel)/.claude/skills/ma-sandbox-scripts/find-vite-port.sh)
-VITE_PORT=$(echo "$VITE_INFO" | awk '{print $1}')
-VITE_PID=$(echo "$VITE_INFO" | awk '{print $2}')
-VITE_MODE=$(echo "$VITE_INFO" | awk '{print $3}')  # "existing" or "started"
+bash .claude/skills/ma-sandbox-scripts/find-vite-port.sh
 ```
-- Exit 0 → use `$VITE_PORT` in place of `5173` in all URLs below. Record `$VITE_MODE`/`$VITE_PID` for cleanup.
+- Exit 0 → stdout is `<port> <pid> <started|existing>`. Use the port in place of `5173` in all URLs below, and keep the pid and mode (`started` or `existing`) for cleanup.
 - Non-zero exit → **stop immediately and report the failure.** Do not fall back to guessing a port via curl/lsof — a successful response doesn't confirm which branch is being served.
 - If the Go backend is *also* deployed (Stage 3 said `deployed <service>`), use the full sandbox at `http://localhost:8090` instead of Vite, and skip straight to Stage 4.
 
