@@ -54,6 +54,6 @@ func TestStartClock(t *testing.T) {
 
 func TestProbeFailureTransient(t *testing.T) {
 	assert.True(t, (&ProbeFailure{Reason: ReasonClientUnavailable}).Transient())
-	assert.False(t, (&ProbeFailure{Reason: ReasonBackendUnavailable, Permanent: true}).Transient())
+	assert.False(t, (&ProbeFailure{Reason: ReasonBackendUnavailable, Terminal: true}).Transient())
 	assert.False(t, (*ProbeFailure)(nil).Transient())
 }
