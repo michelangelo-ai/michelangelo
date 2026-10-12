@@ -34,34 +34,35 @@ IF any command prints "not found" or returns no output: **STOP**. Report which t
 ### 1. Install Python dependencies
 
 ```bash
-cd <repo-root>/python
-poetry install
+bash .claude/skills/ma-sandbox-scripts/python-env.sh
 ```
 
-This must be done before any `ma` CLI commands. If skipped, `ma` will fail with an import error because its Python dependencies aren't installed.
+This must be done before any `ma` CLI commands. If skipped, `ma` will fail with an import error because its Python dependencies aren't installed. The script creates `python/.venv` and runs `poetry install`. It pins a Python 3.10–3.12 interpreter, because `poetry install` fails on Python 3.13 (`onnxruntime` 1.19.2 has no 3.13 wheel), and it rebuilds a venv that was created on an unsupported version. The last line of its output is the path to the `ma` executable (`python/.venv/bin/ma`).
 
 ### 2. Install the plugin extra (Ray + Spark — optional)
 
 Skip this if you're only doing UI or apiserver work. Required if you'll run or develop pipelines that use Ray or Spark compute:
 
 ```bash
-poetry install --extras plugin
+bash .claude/skills/ma-sandbox-scripts/python-env.sh --extras plugin
 ```
 
-### 3. Activate the venv and create the sandbox
+### 3. Create the sandbox
 
 ```bash
-REPO_ROOT=$(git rev-parse --show-toplevel)
-source "$REPO_ROOT/python/.venv/bin/activate"     # or prefix every command with: poetry run
+python/.venv/bin/ma sandbox create
+```
 
-ma sandbox create
+If the cluster already exists but is stopped (for example after a reboot), resume it instead of creating or resetting it; resuming keeps all state:
+
+```bash
+bash .claude/skills/ma-sandbox-scripts/start.sh
 ```
 
 ### 4. Seed demo data
 
 ```bash
-cd "$REPO_ROOT/python"
-poetry run ma sandbox demo pipeline
+python/.venv/bin/ma sandbox demo pipeline
 ```
 
 This creates the `ma-dev-test` project with training, eval, and trigger pipelines. Without this step the UI will load but show no data.
