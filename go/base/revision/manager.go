@@ -63,6 +63,10 @@ func (m *revisionManager) UpsertRevision(ctx context.Context, rev client.Object,
 	// delete stops working from the very next reconcile after creation. The same goes for
 	// annotations other writers set (client metadata, the ingester's
 	// MetadataStoragePrimaryKey), so they are merged rather than replaced.
+	//
+	// Labels and owner references are deliberately not carried over: the snapshot owns
+	// its labels, and nothing sets owner references on a Revision out-of-band. If such a
+	// writer ever appears, apply the same carry-over here.
 	rev.SetResourceVersion(existing.GetResourceVersion())
 	rev.SetFinalizers(existing.GetFinalizers())
 	rev.SetAnnotations(mergeAnnotations(existing.GetAnnotations(), rev.GetAnnotations()))

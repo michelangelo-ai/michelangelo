@@ -189,6 +189,32 @@ func TestUpsertRevision_UpdatePreservesExistingAnnotations(t *testing.T) {
 	assert.Equal(t, "controller", rev.Annotations["shared"])
 }
 
+// Control-plane annotations set on the stored revision must survive a re-snapshot that
+// does not set them: dropping Deleting would lose a pending delete, and dropping the
+// primary key makes the ingester re-key the revision's metadata-store row.
+func TestUpsertRevision_UpdatePreservesControlPlaneAnnotations(t *testing.T) {
+	mgr, h := newTestManager(t)
+	ctx := context.Background()
+
+	_, err := mgr.UpsertRevision(ctx, testRevision(t), UpsertOpts{})
+	require.NoError(t, err)
+
+	stamped := getRevision(t, h, "test-ns", "pipeline-my-pipeline-abc123456789")
+	stamped.Annotations = map[string]string{
+		api.DeletingAnnotation:                  "true",
+		api.MetadataStoragePrimaryKeyAnnotation: "original-uid",
+	}
+	require.NoError(t, h.Update(ctx, stamped, &metav1.UpdateOptions{}))
+
+	updated, err := mgr.UpsertRevision(ctx, testRevision(t), UpsertOpts{})
+	require.NoError(t, err)
+	assert.True(t, updated)
+
+	rev := getRevision(t, h, "test-ns", "pipeline-my-pipeline-abc123456789")
+	assert.Equal(t, "true", rev.Annotations[api.DeletingAnnotation])
+	assert.Equal(t, "original-uid", rev.Annotations[api.MetadataStoragePrimaryKeyAnnotation])
+}
+
 func TestMergeAnnotations(t *testing.T) {
 	assert.Nil(t, mergeAnnotations(nil, nil))
 	assert.Equal(t, map[string]string{"a": "1"}, mergeAnnotations(nil, map[string]string{"a": "1"}))
