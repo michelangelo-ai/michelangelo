@@ -17,6 +17,10 @@ allowed-tools:
 A pipeline that gates on failure at every stage. The output of each stage IS the evidence —
 don't summarize it away. See `.claude/skills/ma-sandbox-references/evidence-quality.md` for what makes evidence good vs. hollow.
 
+## How to run commands
+
+Invoke this skill before running its scripts, and use the literal `bash .claude/skills/ma-sandbox-scripts/<script>.sh <args>` form from the repo root, one command per call. See `.claude/skills/ma-sandbox-references/running-commands.md`.
+
 ## Prerequisites
 
 Stage 4's JavaScript scenarios need a Playwright MCP server connected in this session. This repo

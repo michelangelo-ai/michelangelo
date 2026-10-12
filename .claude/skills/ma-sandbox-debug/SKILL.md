@@ -15,6 +15,10 @@ allowed-tools:
 
 Diagnosing service failures in a running sandbox. Start with health overview, then drill into specific services.
 
+## How to run commands
+
+Invoke this skill before running its scripts, and use the literal `bash .claude/skills/ma-sandbox-scripts/<script>.sh <args>` form from the repo root, one command per call. See `.claude/skills/ma-sandbox-references/running-commands.md`.
+
 ## Step 1: Health overview
 
 ```bash
@@ -54,10 +58,10 @@ Useful flags: `--tail=100` to limit output; `--previous` to see logs from the la
 Go services default to `info` level. Enable debug logging for deeper investigation:
 
 ```bash
-bash $(git rev-parse --show-toplevel)/.claude/skills/ma-sandbox-scripts/set_log_level.sh controllermgr debug
+bash .claude/skills/ma-sandbox-scripts/set_log_level.sh controllermgr debug
 ```
 
-Revert when done: replace `debug` with `info`. Pair with `$(git rev-parse --show-toplevel)/.claude/skills/ma-sandbox-scripts/capture_service_logs.sh` to filter the resulting output down to signal.
+Revert when done: replace `debug` with `info`. Pair with `bash .claude/skills/ma-sandbox-scripts/capture_service_logs.sh controllermgr` to filter the resulting output down to signal.
 
 ## Step 3: Inspect a crashing pod
 
