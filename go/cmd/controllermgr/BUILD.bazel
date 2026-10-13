@@ -86,12 +86,19 @@ oci_image(
 
 go_test(
     name = "go_default_test",
-    srcs = ["cascade_retain_test.go"],
+    srcs = [
+        "cascade_retain_test.go",
+        "scheme_test.go",
+    ],
     embed = [":go_default_library"],
     deps = [
+        "//go/api/utils:go_default_library",
         "//go/cascadedelete:go_default_library",
         "//proto/api/v2:go_default_library",
         "@com_github_stretchr_testify//assert:go_default_library",
         "@com_github_stretchr_testify//require:go_default_library",
+        "@io_k8s_apimachinery//pkg/runtime:go_default_library",
+        "@io_k8s_client_go//kubernetes/scheme:go_default_library",
+        "@io_k8s_sigs_controller_runtime//pkg/client/apiutil:go_default_library",
     ],
 )

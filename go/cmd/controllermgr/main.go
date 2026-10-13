@@ -65,6 +65,13 @@ func scheme() (*runtime.Scheme, error) {
 	if err := v2pb.AddToScheme(scheme); err != nil {
 		return nil, err
 	}
+	// api.Handler resolves object and list kinds through client-go's global scheme
+	// (e.g. the metadata-storage List path), as the apiserver does, so the CRD types
+	// must be registered there too or controller List calls fail with "no kind is
+	// registered".
+	if err := v2pb.AddToScheme(kubescheme.Scheme); err != nil {
+		return nil, err
+	}
 	return scheme, nil
 }
 
