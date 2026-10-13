@@ -57,7 +57,9 @@ func activeChildListOptionsExt(triggerRun *v2pb.TriggerRun) (*apipb.ListOptionsE
 					MatchValue: triggerValue,
 				},
 				{
-					FieldName:  "pipeline_run.status.state",
+					// Production metadata storage only strips the CRD prefix, so this must be
+					// the indexed column name ("state"), not the object path "status.state".
+					FieldName:  "pipeline_run.state",
 					Operator:   apipb.CRITERION_OPERATOR_IN,
 					MatchValue: stateValue,
 				},

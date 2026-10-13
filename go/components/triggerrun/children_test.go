@@ -225,7 +225,7 @@ func TestActiveChildListOptionsExt(t *testing.T) {
 	}
 	assert.Equal(t, "tr", values["pipeline_run.metadata.labels."+TriggeredByLabel])
 	assert.Equal(t, "PIPELINE_RUN_STATE_INVALID,PIPELINE_RUN_STATE_PENDING,PIPELINE_RUN_STATE_RUNNING",
-		values["pipeline_run.status.state"])
+		values["pipeline_run.state"])
 }
 
 // TestReconcile_DeleteTimeoutNotBlockedByChildProbeError: a persistent failure
