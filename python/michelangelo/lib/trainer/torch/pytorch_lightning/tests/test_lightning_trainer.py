@@ -48,6 +48,7 @@ class TestLightningTrainerParam:
         param = _make_param()
         assert param.batch_size == 8
         assert param.num_shuffle_batches == 10
+        assert param.val_batch_size is None
         assert param.num_epochs == 1  # _UNSET → 1 in __post_init__
         assert param.data_collate_fn is None
         assert param.lightning_trainer_kwargs == {}
@@ -83,7 +84,12 @@ class TestLightningTrainerParam:
         import dataclasses
 
         names = [f.name for f in dataclasses.fields(LightningTrainerParam)]
-        assert names[-3:] == ["prefetch_batches", "upload_async", "drop_last"]
+        assert names[-4:] == [
+            "prefetch_batches",
+            "upload_async",
+            "drop_last",
+            "val_batch_size",
+        ]
 
     def test_prefetch_and_upload_async_reach_loop_config(self):
         """The new options are forwarded to workers via ``train_loop_config``."""
@@ -97,6 +103,16 @@ class TestLightningTrainerParam:
         loop_cfg = mock_super.call_args.kwargs["train_loop_config"]
         assert loop_cfg["prefetch_batches"] == 6
         assert loop_cfg["upload_async"] is True
+
+    def test_val_batch_size_accepted(self):
+        """A positive integer ``val_batch_size`` is stored."""
+        assert _make_param(val_batch_size=64).val_batch_size == 64
+
+    @pytest.mark.parametrize("bad", [0, -1, True, 1.5, "8"])
+    def test_invalid_val_batch_size_raises(self, bad):
+        """Zero, negative, bool and non-integer values are rejected."""
+        with pytest.raises(ValueError, match="val_batch_size"):
+            _make_param(val_batch_size=bad)
 
     def test_training_observer_defaults_to_none(self):
         """``training_observer`` defaults to ``None`` when omitted."""

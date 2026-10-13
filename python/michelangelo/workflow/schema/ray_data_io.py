@@ -158,10 +158,16 @@ class BatchIterConfig:
             applied to excludes the dropped partial batch; integer limits are
             unaffected. Has no effect when a custom dataloader is configured.
             Defaults to ``False`` (keep the partial batch).
+        val_batch_size: Number of samples per validation batch, forwarded as
+            ``batch_size`` to the validation ``iter_torch_batches``. Must be
+            an integer ``>= 1``. ``None`` (the default) uses ``batch_size``
+            for validation as well. Larger values are useful because
+            validation needs no gradient or optimizer memory.
 
     Raises:
         ConfigurationError: If ``prefetch_batches`` is not an integer or is
-            negative, or if ``drop_last`` is not a bool.
+            negative, if ``drop_last`` is not a bool, or if ``val_batch_size``
+            is neither ``None`` nor an integer ``>= 1``.
 
     Example:
         >>> config = BatchIterConfig(batch_size=64, prefetch_batches=4)
@@ -169,6 +175,8 @@ class BatchIterConfig:
         4
         >>> BatchIterConfig(batch_size=64, drop_last=True).drop_last
         True
+        >>> BatchIterConfig(batch_size=64, val_batch_size=256).val_batch_size
+        256
     """
 
     batch_size: int
@@ -177,9 +185,16 @@ class BatchIterConfig:
     # Appended last so positional construction is unaffected.
     prefetch_batches: int = 1
     drop_last: bool = False
+    val_batch_size: int | None = None
 
     def __post_init__(self) -> None:
-        """Validate ``prefetch_batches`` (int >= 0) and ``drop_last`` (bool)."""
+        """Validate ``prefetch_batches``, ``drop_last`` and ``val_batch_size``.
+
+        Raises:
+            ConfigurationError: If ``prefetch_batches`` is not an integer
+                ``>= 0``, ``drop_last`` is not a bool, or ``val_batch_size`` is
+                neither ``None`` nor an integer ``>= 1``.
+        """
         if (
             isinstance(self.prefetch_batches, bool)
             or not isinstance(self.prefetch_batches, int)
@@ -192,6 +207,16 @@ class BatchIterConfig:
         if not isinstance(self.drop_last, bool):
             raise ConfigurationError(
                 f"BatchIterConfig.drop_last must be a bool, got {self.drop_last!r}."
+            )
+        if self.val_batch_size is not None and (
+            isinstance(self.val_batch_size, bool)
+            or not isinstance(self.val_batch_size, int)
+            or self.val_batch_size < 1
+        ):
+            raise ConfigurationError(
+                f"val_batch_size must be an integer >= 1 or None, got "
+                f"{self.val_batch_size!r}. Use None to reuse batch_size for "
+                "validation."
             )
 
 
