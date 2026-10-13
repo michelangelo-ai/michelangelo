@@ -368,14 +368,15 @@ def _resolve_strategy(
     Args:
         strategy: One of "ddp", "fsdp", "fsdp2", "deepspeed", "single_device", or
             an existing Strategy instance.  None auto-selects based on world size.
-        strategy_kwargs: Keyword arguments forwarded to the strategy constructor. Ignored
-            when strategy is already a Strategy instance.
+        strategy_kwargs: Keyword arguments forwarded to the strategy constructor. Only
+            valid when strategy is a string.
 
     Returns:
         A Strategy instance ready to pass to the Lightning Trainer.
 
     Raises:
-        TypeError: If strategy or strategy_kwargs have an unexpected type.
+        TypeError: If strategy or strategy_kwargs have an unexpected type, or if
+            strategy_kwargs is provided together with a non-string strategy.
         ValueError: If strategy is a string that is not one of the supported values.
     """
     if strategy is not None and not isinstance(strategy, (str, Strategy)):
@@ -386,6 +387,8 @@ def _resolve_strategy(
         raise TypeError(
             f"strategy_kwargs must be a dict or None, got {type(strategy_kwargs)!r}"
         )
+    if strategy_kwargs is not None and not isinstance(strategy, str):
+        raise TypeError("strategy_kwargs can only be used when strategy is a str")
 
     if isinstance(strategy, Strategy):
         return strategy
@@ -550,6 +553,27 @@ def _resolve_callbacks(
     """Build callback list for the Lightning Trainer.
 
     A RayTrainReportCallback or RayTrainReportPerNodeCallback is always appended to the list.
+
+    Args:
+        callbacks: A dotted import path to a Callback class or factory, a Callback
+            instance, a list of Callback instances, or None.
+        callback_kwargs: Keyword arguments forwarded to the callable named by
+            callbacks. Only valid when callbacks is a string import path.
+        per_node_callback_kwargs: Keyword arguments for RayTrainReportPerNodeCallback.
+            Providing this selects per-node reporting.
+        strategy: The resolved strategy; DeepSpeed, FSDP and FSDP2 strategies select
+            per-node reporting.
+        training_observer: Optional observer passed to the Ray report callback.
+
+    Returns:
+        A tuple of the resolved callback list and whether it contains a
+        ModelCheckpoint.
+
+    Raises:
+        TypeError: If callbacks, callback_kwargs or per_node_callback_kwargs have an
+            unexpected type, if callback_kwargs is provided together with a
+            non-string callbacks, or if an imported callable returns something other
+            than Callback instances.
     """
     if callbacks is not None and not isinstance(
         callbacks, (str, Callback, list, tuple)
@@ -560,6 +584,10 @@ def _resolve_callbacks(
     if callback_kwargs is not None and not isinstance(callback_kwargs, dict):
         raise TypeError(
             f"callback_kwargs must be a dict or None, got {type(callback_kwargs)!r}"
+        )
+    if callback_kwargs is not None and not isinstance(callbacks, str):
+        raise TypeError(
+            "callback_kwargs can only be used when callbacks is a str import path"
         )
     if per_node_callback_kwargs is not None and not isinstance(
         per_node_callback_kwargs, dict

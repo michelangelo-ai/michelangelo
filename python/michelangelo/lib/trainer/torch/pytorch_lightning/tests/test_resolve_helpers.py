@@ -145,15 +145,22 @@ class TestResolveStrategy:
         ):
             _resolve_strategy("fsdp2")
 
-    def test_none_forwards_strategy_kwargs(self):
-        """``strategy_kwargs`` are forwarded when ``None`` auto-selects."""
-        ctx = MagicMock()
-        ctx.get_world_size.return_value = 1
-        with (
-            patch("ray.train.get_context", return_value=ctx),
-            patch(f"{_UTIL_MODULE}.RaySingleDeviceStrategy") as mock_cls,
-        ):
+    def test_none_with_strategy_kwargs_raises(self):
+        """``strategy_kwargs`` without a string ``strategy`` is rejected."""
+        with pytest.raises(TypeError, match="strategy_kwargs can only be used"):
             _resolve_strategy(None, strategy_kwargs={"process_group_backend": "gloo"})
+
+    def test_instance_with_strategy_kwargs_raises(self):
+        """``strategy_kwargs`` alongside a ``Strategy`` instance is rejected."""
+        with pytest.raises(TypeError, match="strategy_kwargs can only be used"):
+            _resolve_strategy(
+                RayDDPStrategy(), strategy_kwargs={"process_group_backend": "gloo"}
+            )
+
+    def test_string_forwards_strategy_kwargs(self):
+        """``strategy_kwargs`` are forwarded to a string-selected strategy."""
+        with patch(f"{_UTIL_MODULE}.RayDDPStrategy") as mock_cls:
+            _resolve_strategy("ddp", strategy_kwargs={"process_group_backend": "gloo"})
         mock_cls.assert_called_once_with(process_group_backend="gloo")
 
     def test_invalid_strategy_kwargs_type_raises(self):
@@ -712,7 +719,18 @@ class TestResolveCallbacks:
     def test_invalid_callback_kwargs_raises(self):
         """``callback_kwargs`` must be a dict."""
         with pytest.raises(TypeError, match="callback_kwargs must be"):
-            _resolve_callbacks(None, callback_kwargs=["not", "a", "dict"])
+            _resolve_callbacks("some.Callback", callback_kwargs=["not", "a", "dict"])
+
+    def test_callback_kwargs_without_callbacks_raises(self):
+        """``callback_kwargs`` with ``callbacks=None`` is rejected."""
+        with pytest.raises(TypeError, match="callback_kwargs can only be used"):
+            _resolve_callbacks(None, callback_kwargs={"x": 1})
+
+    @pytest.mark.parametrize("make", [lambda: Callback(), lambda: [Callback()]])
+    def test_callback_kwargs_with_non_str_callbacks_raises(self, make):
+        """``callback_kwargs`` with a Callback instance or list is rejected."""
+        with pytest.raises(TypeError, match="callback_kwargs can only be used"):
+            _resolve_callbacks(make(), callback_kwargs={"x": 1})
 
     def test_invalid_per_node_callback_kwargs_raises(self):
         """``per_node_callback_kwargs`` must be a dict."""
