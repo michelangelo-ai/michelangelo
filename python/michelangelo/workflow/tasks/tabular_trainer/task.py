@@ -20,6 +20,13 @@ from michelangelo.lib.trainer.torch.pytorch_lightning.lightning_trainer import (
     LightningTrainerParam,
     LightningTrainerWithStateDict,
 )
+from michelangelo.lib.trainer.torch.pytorch_lightning.schema import (
+    CustomDataloaderParam,
+)
+from michelangelo.workflow.schema.custom_dataloader import (
+    CustomDataloaderConfig,
+    CustomDataloaderKind,
+)
 from michelangelo.workflow.schema.exceptions import ConfigurationError
 from michelangelo.workflow.schema.tabular_trainer import (
     IncrementalTrainingModeConfig,
@@ -31,6 +38,7 @@ from michelangelo.workflow.tasks.tabular_trainer._private.dataset import (
     construct_read_kwargs,
     get_model_schema,
     get_sample_data,
+    get_sample_data_from_dataloader,
     raise_lightning_trainer_config_deprecation_warnings,
 )
 from michelangelo.workflow.tasks.tabular_trainer._private.tracker import (
@@ -194,6 +202,75 @@ def train_tabular(
     )
 
 
+def _derive_custom_sample_data(
+    custom: CustomDataloaderParam,
+    sample_data_fn: Callable | None,
+    sample_data_fn_kwargs: dict,
+    train_data: ray.data.Dataset | None,
+    input_columns: dict | list,
+) -> list[dict]:
+    """Build model ``sample_data`` for a custom-dataloader run on the driver.
+
+    With a ``sample_data_fn`` the function owns sample construction and the
+    train loader is never built on the driver. Otherwise the train loader is
+    built once and the sample is taken from its first batch.
+
+    Args:
+        custom: The custom dataloader settings handed to the trainer.
+        sample_data_fn: Optional user function called with ``dataset_path`` and
+            ``read_kwargs`` (plus ``ds`` in Ray-backed mode) and
+            ``sample_data_fn_kwargs``.
+        sample_data_fn_kwargs: Extra keyword arguments for ``sample_data_fn``.
+        train_data: The full training Ray Dataset, or ``None`` in file-backed
+            mode.
+        input_columns: Feature columns of the model schema.
+
+    Returns:
+        The sample data list, in the shape :func:`get_sample_data` returns.
+    """
+    source_kwargs: dict = {}
+    if not custom.file_backed:
+        source_kwargs["ds"] = train_data
+    source_kwargs["dataset_path"] = custom.train_dataset_path
+    source_kwargs["read_kwargs"] = custom.read_kwargs
+
+    if sample_data_fn is not None:
+        return sample_data_fn(**source_kwargs, **sample_data_fn_kwargs)
+
+    sample_loader = custom.factory(
+        stage="train", **source_kwargs, **custom.factory_kwargs
+    )
+    return get_sample_data_from_dataloader(sample_loader, input_columns)
+
+
+def _build_custom_dataloader_param(
+    custom_config: CustomDataloaderConfig,
+    train_dataset: DatasetVariable,
+    validation_dataset: DatasetVariable,
+    read_kwargs: dict,
+) -> CustomDataloaderParam:
+    """Resolve a ``CustomDataloaderConfig`` into the trainer's runtime settings.
+
+    Args:
+        custom_config: The schema-level custom dataloader config.
+        train_dataset: Training dataset; its ``path`` is passed to the factory.
+        validation_dataset: Validation dataset; its ``path`` is passed to the
+            factory.
+        read_kwargs: Read settings (column projection) passed to the factory.
+
+    Returns:
+        The ``CustomDataloaderParam`` for ``LightningTrainerParam``.
+    """
+    return CustomDataloaderParam(
+        factory=get_module_attr(custom_config.build_dataloader_fn),
+        train_dataset_path=train_dataset.path,
+        validation_dataset_path=validation_dataset.path,
+        factory_kwargs=dict(custom_config.build_dataloader_kwargs),
+        read_kwargs=read_kwargs,
+        file_backed=custom_config.kind == CustomDataloaderKind.FILE_BACKED,
+    )
+
+
 def _train_lightning(
     config: LightningTrainerConfig,
     train_dataset: DatasetVariable,
@@ -214,19 +291,32 @@ def _train_lightning(
 
     raise_lightning_trainer_config_deprecation_warnings(config)
 
-    # Load datasets — load_ray_dataset() takes no kwargs in OSS; apply column
-    # projection post-load via select_columns.
-    train_dataset.load_ray_dataset()
-    validation_dataset.load_ray_dataset()
+    custom_config = (
+        config.dataloading_config.custom_dataloader_config
+        if config.dataloading_config
+        else None
+    )
     read_kwargs = construct_read_kwargs(config)
     columns = read_kwargs.get("columns")
 
-    train_data = train_dataset.value
-    validation_data = validation_dataset.value
+    train_data = None
+    validation_data = None
+    if custom_config is not None and custom_config.kind == (
+        CustomDataloaderKind.FILE_BACKED
+    ):
+        _logger.info("Skipping Ray Dataset registration for file-backed dataloaders.")
+    else:
+        # Load datasets — load_ray_dataset() takes no kwargs in OSS; apply column
+        # projection post-load via select_columns.
+        train_dataset.load_ray_dataset()
+        validation_dataset.load_ray_dataset()
 
-    if columns:
-        train_data = train_data.select_columns(columns)
-        validation_data = validation_data.select_columns(columns)
+        train_data = train_dataset.value
+        validation_data = validation_dataset.value
+
+        if columns:
+            train_data = train_data.select_columns(columns)
+            validation_data = validation_data.select_columns(columns)
 
     # Model class + kwargs
     create_model_fn = get_module_attr(config.model_class)
@@ -346,6 +436,23 @@ def _train_lightning(
         initial_weights_path = initial_model.path
         _logger.info("Using initial weights from: %s", initial_weights_path)
 
+    custom_dataloader = None
+    custom_sample_data = None
+    if custom_config is not None:
+        custom_dataloader = _build_custom_dataloader_param(
+            custom_config, train_dataset, validation_dataset, read_kwargs
+        )
+        # Derived before training so a bad loader or sample function fails fast.
+        custom_sample_data = _derive_custom_sample_data(
+            custom_dataloader,
+            get_module_attr(custom_config.sample_data_fn)
+            if custom_config.sample_data_fn
+            else None,
+            custom_config.sample_data_fn_kwargs,
+            train_data,
+            config.input_columns,
+        )
+
     # Build and run trainer
     trainer_param = LightningTrainerParam(
         create_model_fn=create_model_fn,
@@ -358,6 +465,7 @@ def _train_lightning(
         lightning_trainer_kwargs=lightning_trainer_kwargs,
         transfer_learning_spec=None,
         initial_weights_path=initial_weights_path,
+        custom_dataloader=custom_dataloader,
     )
     trainer = LightningTrainerWithStateDict(
         trainer_param, run_config=run_config, scaling_config=scaling_config
@@ -371,16 +479,19 @@ def _train_lightning(
 
     # Schema + sample data
     schema = get_model_schema(config.input_columns, config.output_columns)
-    sample_rows = train_data.take(1)
-    if not sample_rows:
-        raise ConfigurationError(
-            "Training dataset produced 0 rows. "
-            "At least one row is required to build model sample_data metadata."
+    if custom_sample_data is not None:
+        sample_data = custom_sample_data
+    else:
+        sample_rows = train_data.take(1)
+        if not sample_rows:
+            raise ConfigurationError(
+                "Training dataset produced 0 rows. "
+                "At least one row is required to build model sample_data metadata."
+            )
+        sample_dict = collate_sample_row(
+            sample_rows[0], data_collate_fn, config.metadata_columns
         )
-    sample_dict = collate_sample_row(
-        sample_rows[0], data_collate_fn, config.metadata_columns
-    )
-    sample_data = get_sample_data(sample_dict, config.input_columns)
+        sample_data = get_sample_data(sample_dict, config.input_columns)
 
     # Build metadata
     metadata = ModelMetadata(

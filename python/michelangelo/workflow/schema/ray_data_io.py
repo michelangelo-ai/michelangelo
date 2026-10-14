@@ -9,8 +9,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from michelangelo.workflow.schema.custom_dataloader import (
+    CustomDataloaderConfig,
+    CustomDataloaderKind,
+)
+from michelangelo.workflow.schema.exceptions import ConfigurationError
+
 __all__ = [
     "BatchIterConfig",
+    "CustomDataloaderConfig",
+    "CustomDataloaderKind",
     "DataloadingConfig",
     "ParquetReadConfig",
     "RayDataContextConfig",
@@ -88,6 +96,13 @@ class DataloadingConfig:
     Attributes:
         parquet_read_config: kwargs forwarded to ``ray.data.read_parquet``.
         batch_iter_config: Batch size, shuffle, and collate settings.
+        custom_dataloader_config: A user-owned dataloader factory that replaces
+            the default Ray Data batch iteration. Mutually exclusive with
+            ``parquet_read_config`` and ``batch_iter_config``.
+
+    Raises:
+        ConfigurationError: If ``custom_dataloader_config`` is combined with
+            ``parquet_read_config`` or ``batch_iter_config``.
 
     Example:
         >>> DataloadingConfig(batch_iter_config=BatchIterConfig(batch_size=32))
@@ -96,6 +111,23 @@ class DataloadingConfig:
 
     parquet_read_config: ParquetReadConfig | None = None
     batch_iter_config: BatchIterConfig | None = None
+    custom_dataloader_config: CustomDataloaderConfig | None = None
+
+    def __post_init__(self) -> None:
+        """Reject combinations that a custom dataloader would silently ignore.
+
+        Raises:
+            ConfigurationError: If ``custom_dataloader_config`` is set together
+                with ``parquet_read_config`` or ``batch_iter_config``.
+        """
+        if self.custom_dataloader_config is not None and (
+            self.parquet_read_config is not None or self.batch_iter_config is not None
+        ):
+            raise ConfigurationError(
+                "dataloading_config.custom_dataloader_config cannot be combined "
+                "with parquet_read_config or batch_iter_config; the custom "
+                "dataloader owns reading and batching."
+            )
 
 
 @dataclass

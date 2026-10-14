@@ -1,5 +1,9 @@
 """Tabular Lightning trainer workflow task."""
 
+from michelangelo.workflow.schema.custom_dataloader import (
+    CustomDataloaderConfig,
+    CustomDataloaderKind,
+)
 from michelangelo.workflow.schema.exceptions import ConfigurationError
 from michelangelo.workflow.schema.tabular_trainer import (
     BatchIterConfig,
@@ -32,6 +36,8 @@ __all__ = [
     "ColumnConfig",
     "CometConfig",
     "ConfigurationError",
+    "CustomDataloaderConfig",
+    "CustomDataloaderKind",
     "CustomTrainerConfig",
     "DataloadingConfig",
     "ExperimentTrackerConfig",
