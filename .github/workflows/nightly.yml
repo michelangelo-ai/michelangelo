@@ -277,6 +277,11 @@ jobs:
           cache: 'yarn'
           cache-dependency-path: javascript/yarn.lock
           registry-url: 'https://registry.npmjs.org'
+        env:
+          # setup-node@v7's yarn-cache step resolves the ${NODE_AUTH_TOKEN}
+          # placeholder it writes for registry-url, so it must be set here too,
+          # not only on the publish steps. Same fix as npm-publish.yml.
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Set up buf CLI
         uses: bufbuild/buf-setup-action@v1

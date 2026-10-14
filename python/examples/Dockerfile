@@ -109,6 +109,12 @@ RUN ls -alF ./
 RUN poetry config virtualenvs.create false
 RUN poetry install -E example
 
+# `poetry install -E example` leaves out importlib-resources (a Python < 3.10 requirement of
+# matplotlib, pinned in poetry.lock) even though the lock lists it, so `import matplotlib.pyplot`
+# fails in the Ray tasks with "No module named 'importlib_resources'". Install the locked
+# version explicitly, then fail the build if any other requirement is unmet.
+RUN python -m pip install --no-deps "importlib-resources==6.5.2" && python -m pip check
+
 # Activate Poetry's virtual environment by default
 ENV PATH="/app/.venv/bin:$PATH"
 

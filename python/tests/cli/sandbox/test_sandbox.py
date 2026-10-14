@@ -560,3 +560,72 @@ class ImportLogPersistenceImagesTest(TestCase):
         mock_run.return_value = Mock(returncode=1)
         sandbox._import_log_persistence_images()
         mock_import.assert_not_called()
+
+
+class TestEnsurePodRunning:
+    """_ensure_pod_running recreates a bare infra pod that is dead or stale."""
+
+    WANTED = "mysql:8.0"
+
+    def _run(self, stdout):
+        """Run the helper with kubectl reporting `stdout`; return (calls, apply)."""
+        from michelangelo.cli.sandbox.sandbox import _ensure_pod_running
+
+        with (
+            patch("michelangelo.cli.sandbox.sandbox._kube_apply") as apply,
+            patch(
+                "michelangelo.cli.sandbox.sandbox._manifest_pod_image",
+                return_value=self.WANTED,
+            ),
+            patch("michelangelo.cli.sandbox.sandbox.subprocess.run") as run,
+        ):
+            run.return_value = Mock(stdout=stdout)
+            _ensure_pod_running("mysql", "mysql.yaml")
+        return [call.args[0] for call in run.call_args_list], apply
+
+    def test_running_pod_with_current_image_is_left_alone(self):
+        """A Running pod on the manifest's image is not touched."""
+        commands, apply = self._run(f"Running|{self.WANTED}\n")
+
+        assert len(commands) == 1
+        apply.assert_not_called()
+
+    def test_failed_pod_is_recreated(self):
+        """A Failed (evicted) pod is deleted, re-applied and waited on."""
+        commands, apply = self._run(f"Failed|{self.WANTED}\n")
+
+        assert any(cmd[:4] == ["kubectl", "delete", "pod", "mysql"] for cmd in commands)
+        assert any(
+            cmd[:3] == ["kubectl", "wait", "--for=condition=ready"] for cmd in commands
+        )
+        apply.assert_called_once()
+
+    def test_missing_pod_is_created(self):
+        """A missing pod is created from the manifest."""
+        _, apply = self._run("")
+
+        apply.assert_called_once()
+
+    def test_running_pod_with_stale_image_is_recreated(self):
+        """A crash-looping pod still reports Running; a changed image replaces it."""
+        _, apply = self._run("Running|ghcr.io/old/mysql:arm64-only\n")
+
+        apply.assert_called_once()
+
+
+class TestManifestPodImage:
+    """_manifest_pod_image reads the Pod's image out of the resources manifest."""
+
+    def test_reads_the_pod_image(self):
+        """The helper finds the minio Pod's image in minio.yaml."""
+        from michelangelo.cli.sandbox.sandbox import _manifest_pod_image
+
+        assert _manifest_pod_image("minio.yaml", "minio").endswith(
+            "minio:RELEASE.2025-05-24T17-08-30Z"
+        )
+
+    def test_unknown_pod_returns_empty(self):
+        """A pod name that is not in the manifest yields no image."""
+        from michelangelo.cli.sandbox.sandbox import _manifest_pod_image
+
+        assert _manifest_pod_image("mysql.yaml", "nope") == ""

@@ -432,6 +432,8 @@ def _sync(ns: argparse.Namespace):
     # Upgrade or install the control plane via Helm.
     # Infrastructure (mysql, cadence, minio, grafana, prometheus) is left running.
 
+    _ensure_mysql_running()
+    _ensure_minio_running()
     _refresh_mysql_schema()
 
     _ensure_credentials_secret()
@@ -520,6 +522,71 @@ def _sync(ns: argparse.Namespace):
         )
 
     _helm_wait(ns)
+
+
+def _manifest_pod_image(manifest: str, name: str) -> str:
+    """Return the first container image of the named Pod in a resources manifest."""
+    with open(_dir / "resources" / manifest) as f:
+        for doc in yaml.safe_load_all(f):
+            if doc and doc.get("kind") == "Pod" and doc["metadata"]["name"] == name:
+                return doc["spec"]["containers"][0]["image"]
+    return ""
+
+
+def _ensure_pod_running(name: str, manifest: str):
+    """Recreate a bare infrastructure pod that is dead or out of date.
+
+    mysql and minio are bare Pods, so nothing replaces them. A pod that was
+    evicted (phase Failed) or finished (Succeeded) stays dead, and a pod whose
+    manifest image changed keeps running the old image, even a crash-looping one
+    (which still reports phase Running). Later steps then fail in confusing ways:
+    `kubectl exec mysql` errors with "cannot exec into a container in a completed
+    pod", and uploads to MinIO's NodePort hang because the Service has no
+    backend. Their data lives on hostPath volumes, so recreating the pod keeps it.
+    """
+    result = subprocess.run(
+        [
+            "kubectl",
+            "get",
+            "pod",
+            name,
+            "-o",
+            "jsonpath={.status.phase}|{.spec.containers[0].image}",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    phase, _, image = result.stdout.strip().partition("|")
+    wanted = _manifest_pod_image(manifest, name)
+    if phase in ("Pending", "Running") and (not wanted or image == wanted):
+        return
+    if not phase:
+        reason = "missing"
+    elif phase not in ("Pending", "Running"):
+        reason = f"phase {phase}"
+    else:
+        reason = f"image {image} != {wanted}"
+    print(f"{name} pod needs recreating ({reason})...")
+    subprocess.run(
+        ["kubectl", "delete", "pod", name, "--ignore-not-found=true", "--wait=true"],
+        check=True,
+    )
+    _kube_apply(_dir / "resources" / manifest)
+    subprocess.run(
+        ["kubectl", "wait", "--for=condition=ready", f"pod/{name}", "--timeout=300s"],
+        check=True,
+    )
+
+
+def _ensure_mysql_running():
+    """Make sure the mysql pod is up before the schema refresh execs into it."""
+    _ensure_pod_running("mysql", "mysql.yaml")
+
+
+def _ensure_minio_running():
+    """Make sure the minio pod is up; pipeline registration uploads to it."""
+    _ensure_pod_running("minio", "minio.yaml")
 
 
 def _refresh_mysql_schema():
