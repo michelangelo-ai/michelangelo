@@ -212,7 +212,7 @@ To stop receiving notifications, remove the `notifications` block entirely and r
 
 **I configured notifications but I'm not receiving them.**
 
-- Double-check that your `notificationType`, `resourceType`, and `eventTypes` are valid values from the tables above. Typos in enum values will be silently ignored.
+- Double-check that your `eventTypes` include the events you expect. An unrecognized enum value or misspelled field name makes `ma pipeline_run apply` / `ma trigger_run apply` fail with a parse error, so if the apply succeeded, the values are valid; the usual cause is an event type you didn't list.
 - For email, verify the addresses in `emails` are correct.
 - For Slack, confirm the channel name in `slackDestinations` exists and is accessible by the platform.
 - Notification delivery depends on operator-level implementation. If everything looks correct in your spec but notifications still aren't arriving, check with your platform administrator — see [Enabling Notification Delivery](#enabling-notification-delivery) below.

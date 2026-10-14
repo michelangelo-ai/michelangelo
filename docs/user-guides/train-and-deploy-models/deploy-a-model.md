@@ -153,7 +153,7 @@ A healthy deployment progresses through these stages:
 
 `Validation → Placement → Resource Acquisition → Rollout Complete`
 
-The [Deployment Lifecycle section in the serving overview](../../operator-guides/serving/index.md#deployment-lifecycle) explains each stage.
+These are the `status.stage` values the Deployment controller reports. The [Deployment Lifecycle section in the serving overview](../../operator-guides/serving/index.md#deployment-lifecycle) walks through the rollout steps behind them in more detail, including asset preparation, the per-cluster canary, the traffic switch, and the soak period.
 
 ## Step 4: Send a Prediction Request
 

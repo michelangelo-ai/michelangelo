@@ -184,7 +184,7 @@ from michelangelo.lib.model_manager.schema import DataType, ModelSchema, ModelSc
 | DataType | Python/NumPy Type | Description |
 |----------|------------------|-------------|
 | `BOOLEAN` | `bool` | Boolean values |
-| `STRING` | `str` / `bytes` | Text data (passed as byte strings in NumPy arrays) |
+| `STRING` | `str` / `bytes` | Text data. NumPy string, bytes, or object arrays are accepted; maps to Triton `BYTES` |
 | `BYTE` | `int8` | 8-bit signed integer |
 | `CHAR` | `uint8` | 8-bit unsigned integer |
 | `SHORT` | `int16` | 16-bit signed integer |
@@ -439,8 +439,8 @@ Ensure your sample data matches the schema exactly:
 * Array shapes must match the schema's `shape` field
 * Array dtypes must be compatible with the schema's `data_type`
 
-:::warning
-When using `DataType.STRING`, pass byte strings in your NumPy arrays (e.g., `np.array([b"hello"])`), not regular Python strings.
+:::note
+For `DataType.STRING`, sample data can use NumPy string (`np.array(["hello"])`), bytes (`np.array([b"hello"])`), or object arrays. Numeric or boolean arrays are rejected.
 :::
 
 ### `NotImplementedError: The loader for ... model is not supported yet`

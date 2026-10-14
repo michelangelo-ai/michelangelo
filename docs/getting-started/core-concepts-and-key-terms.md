@@ -1,6 +1,5 @@
 ---
 sidebar_position: 2
-last_verified: 2026-10-14
 ---
 
 # Core Concepts and Key Terms
@@ -161,10 +160,8 @@ A pipeline is a recipe that runs multiple jobs and creates desired output artifa
 ### Model & Revision
 
 As a widely used term, a machine learning model refers to output from a training job over a set of data, providing it an algorithm that it can use to reason over, learn from, and make predictions about that data.
-
-     **model name:**  identifier of a model, it also means a list of models (like a chain) in the incremental training case.
-
-     **revision id:** Revision of the model, for normal model, it will always be revision 0. But for incremental training, the revision id will keep increasing for each iteration of the model training job.
+     **model name:** identifier of a model within its project.
+     **revision id:** the Model's `spec.revisionId`. The API defines it as starting at 0 and increasing with each update or retrain, but in the open-source release nothing increments it automatically: it holds whatever the client that writes the Model sets, and defaults to 0.
 
 ### Evaluation Report
 
@@ -371,11 +368,7 @@ def training_pipeline(dataset_id: str):
 
 ### Incremental Training an Existing Model
 
-1. **Reference existing Model** by name from your Project
-2. **Update Dataset** with new data (or create new dataset version)
-3. **Run Workflow** with incremental training enabled
-4. **New Revision** created automatically (e.g., revision 0 → revision 1)
-5. **Update Deployment** to new revision (instant rollback available if needed)
+Incremental training isn't implemented in the open-source release yet. To start a run from an existing model's weights today, see [Warm starts](../user-guides/train-and-deploy-models/distributed-training.md#warm-starts).
 
 ### Deploying for A/B Testing
 
