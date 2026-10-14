@@ -30,18 +30,19 @@ function FilterOption({ onClick }: Props) {
 <FilterOption onClick={handleFilterChange} />;
 ```
 
-**Test files** — this rule does not apply to test files. Mocks are often named after the prop they stand in for (`const onToggle = vi.fn()`) to make the connection to the component interface explicit.
+**Test files** — this rule does not apply to test files (it is not enabled for `__tests__` or `__fixtures__` in `eslint.config.js`). Mocks are often named after the prop they stand in for (`const onToggle = vi.fn()`) to make the connection to the component interface explicit.
 
 ## Fixing violations
 
 **Rename at the source.** If a locally defined function is being passed as a handler, give it a `handle*` name where it is defined — in the function declaration, or in the hook that returns it. A local alias (`const handleSave = save`) adds indirection without information.
 
-**Use member expressions for render-prop callbacks.** The rule does not check member expressions. When a handler comes from a data object or render prop, reference it directly rather than assigning it to a local variable:
+**Use member expressions for render-prop callbacks.** The rule only checks bare identifiers, not member expressions. When a handler comes from a data object or render prop, reference it directly rather than assigning it to a local variable:
 
 ```tsx
-// ✗ Creates a needless alias the rule flags
-const handleSortChange = column.onToggleSort;
-<Cell onClick={handleSortChange} />;
+// ✗ Flagged when `column` is not a function parameter (e.g. it comes from a hook):
+// the alias doesn't start with `handle`
+const toggleSort = column.onToggleSort;
+<Cell onClick={toggleSort} />;
 
 // ✓ Reference directly — rule doesn't check member expressions
 <Cell onClick={column.onToggleSort} />;

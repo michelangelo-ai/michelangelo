@@ -4,6 +4,8 @@
 
 Every `as` type assertion must carry a `// cast: <reason>` comment. `as const` and `as unknown` are exempt, since neither narrows a type in a way that can be wrong.
 
+The comment must be a `//` line comment in the unbroken block of `//` lines directly above the line where the `as` expression starts, and the `cast:` marker must be at the start of one of those lines. A blank line or any non-comment line breaks the block; trailing same-line comments and `/* */` comments do not count.
+
 ```ts
 // ✗ Bad — no justification, can't tell if this is safe or a bug waiting to happen
 const value = response as UserRecord;
@@ -17,7 +19,7 @@ const value = response as UserRecord;
 
 This isn't about eliminating every `as` — sometimes the fully type-safe version of some code is harder to follow. It's about understanding: an unexplained cast reads the same whether it's a real workaround or a bug, and that's exactly the context that erodes as the surrounding code changes.
 
-## If this just failed your push
+## If this just failed your commit or CI
 
 Work through these before writing `// cast:`:
 

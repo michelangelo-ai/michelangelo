@@ -11,8 +11,8 @@ The goal is to **avoid hand-written converters** and ensure mappings are
 - **Go code generation**:
   - Generate go functions to convert between Kubernetes CRD versions.
   - The generated code is compatible with [controller-runtime](https://github.com/kubernetes-sigs/controller-runtime) library, and can be used with the controller-runtime's version conversion webhook server.
-  - Compatible with Bazel `go_proto_compiler` / `go_proto_library` rules.
-  - Generates one `*.convert.pb.go` file per `.proto` file in the current package.
+  - Compatible with Bazel `go_proto_compiler` / `go_proto_library` rules (see `//bazel/rules/proto:go_kubeconversion`).
+  - Generates one `*.conversion.pb.go` file per `.proto` file in the current package. A hub version only gets a file for `.proto` files that contain messages marked `resource.conversion = true`.
   - The conversion logic can be customized with protobuf options below.
   - Developers can write custom conversion logic by implementing the generated convertor interfaces.
 
@@ -78,10 +78,11 @@ Hub versions emit no registration at all.
 
   - Fields with the same name and compatible type are auto-mapped.
   - Renamed or moved fields can be mapped via Protobuf options.
-  - Unmapped fields must be explicitly ignored; otherwise a build error is raised.
+  - Every field of the hub message must be mapped from a spoke field (same name, or `field_rename_to`), or listed in the spoke message's `ignore_unmapped_hub_fields`; otherwise generation fails. Spoke fields with no matching hub field are skipped (mark them `ignore_unmapped` to make that explicit).
+  - Incompatible field types (for example a scalar vs. a message, or different enum type names) also make generation fail.
   - Scalar fields are directly assigned.
   - Enum fields are converted by the numeric values (the enum string values do not need to match in different versions).
-  - For message fields: if the type is in the same proto package, values are converted via the generated conversion functions; if the type is from a different package, values are deep‑copied.
+  - For message fields: if the type is in the same proto package, values are converted via the generated conversion functions; if the type is from a different package, it must be the same message type in both versions and the value is deep‑copied (`proto.Clone`); otherwise generation fails.
   - For repeated/map fields: elements/values are converted in the same way as scalar/enum/message fields.
   - Conversion functions are only generated for the CRD messages that are explicitly marked (michelangelo.api.resource.conversion=true) or are referenced (directly or transitively) by the marked messages. Other messages are ignored.
 
@@ -97,7 +98,7 @@ Hub versions emit no registration at all.
 
 ```proto
 ...
-// make sure the hub version is imported in the spoke versions' groupversion_info.proto files, as protoc-gen-convert needs the hub version
+// make sure the hub version is imported in the spoke versions' groupversion_info.proto files, as protoc-gen-kubeconversion needs the hub version
 // schema to generate conversion functions
 import "michelangelo/api/v2/groupversion_info.proto";
 
@@ -136,6 +137,7 @@ message A {
 
 
 - **ignore_unmapped_hub_fields**
+
   By default, protoc-gen-kubeconversion returns a build error if any field in the hub version message is not mapped to a field in the spoke version message (same name, or specified with the `field_rename_to` option). This option specifies a list of field names in the hub version message to ignore.
 
 
@@ -156,13 +158,14 @@ int32 a = 3 [(michelangelo.api.field_rename_to) = "b"];
 
 ### Enum-level
 
-- **rename_to**
+- **enum_rename_to**
   Specifies the new name of this enum type in the hub version.
 
+  > Known issue: the option is declared as `enum_rename_to` in `proto/api/options.proto`, but the generator currently reads an option named `rename_to` from enum options (which is only declared for messages), so enum-level renames are not honored yet. Until that is fixed, keep enum type names identical across versions.
 
 ```proto
 enum State {
-  option (michelangelo.api.rename_to) = "ServerState";
+  option (michelangelo.api.enum_rename_to) = "ServerState";
 
   UNKNOWN = 0;
   RUNNING = 1;
@@ -194,7 +197,7 @@ type CustomProjectConvertor interface {
 }
 ```
 
-> Note: The exact method signatures depend on the generated Go package paths and message types.
+> Note: The exact method signatures depend on the generated Go package paths and message types. The interface and setter are generated only for CRD types (messages with the `resource` option), and each convertor can be set only once — calling `SetCustom{TypeName}Convertor` a second time panics.
 
 ### Registering a custom convertor
 

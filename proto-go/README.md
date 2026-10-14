@@ -13,15 +13,25 @@ From the repo root:
 tools/gen-proto-go.sh
 ```
 
-This script builds `//proto/...` with Bazel and copies the generated `.go`
-files into `proto-go/`.
-It also syncs dependency versions from `go/go.mod` into `proto-go/go.mod`
-and runs `go mod tidy`.
+This script:
+
+1. Builds `//proto/...` with Bazel (`--output_groups=go_generated_srcs`).
+2. Deletes the existing `.go` files under `proto-go/` and copies the generated
+   `.go` files in.
+3. Regenerates an alias `BUILD.bazel` file in each package directory
+   (pointing at the matching `//proto/...:go_default_library` target).
+4. Sets the `go` directive in `proto-go/go.mod` to the Go SDK version pinned
+   by `go_sdk.download(version = ...)` in `MODULE.bazel`.
+5. Runs `go mod tidy` in `proto-go/`.
+
+The script also contains a step meant to sync dependency versions from
+`go/go.mod` into `proto-go/go.mod`, but that step currently matches nothing
+(tracked in #2066), so dependency versions are not actually synced yet.
 Keeping versions aligned avoids mismatched dependency graphs between the
 /go Go module and the generated /proto-go module, which can otherwise
-cause build failures or subtle type conflicts. Developers should update
-dependency versions only in `go/go.mod`, then run this script to sync
-`proto-go/go.mod` and keep the two modules consistent.
+cause build failures or subtle type conflicts. Until #2066 is addressed,
+check that dependency versions in `proto-go/go.mod` match `go/go.mod`
+after running the script.
 
 ## Note for Bazel users
 

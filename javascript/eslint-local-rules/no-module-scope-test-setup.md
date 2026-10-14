@@ -1,4 +1,4 @@
-Flags shared variable declarations at module scope in test files — object/array literals, `buildWrapper()` calls, and wrapper helper functions.
+Flags shared variable declarations at module scope in test files — object/array literals, JSX, `buildWrapper()` calls, and wrapper helper functions. It also flags fixture factories that are really constants in disguise (see [Factories that are really constants](#factories-that-are-really-constants)). The rule is enabled for `packages/**/__tests__/**`.
 
 ## Why this rule exists
 
@@ -16,7 +16,16 @@ The fix is straightforward: each test declares exactly what it needs. Duplicatio
 
 The outermost `describe()` in a test file is structural — it's just how files are organized. Variables declared there are shared across all tests, same as module scope.
 
-**Nested describes are different.** A `describe('disabled state')` is a semantic group — tests inside it share a precondition by design. The rule allows shared state in nested describes.
+**Nested describes are different.** A `describe('disabled state')` is a semantic group — tests inside it share a precondition by design. The rule allows shared object/array/JSX/`buildWrapper()` state in nested describes. The factory checks below still apply at any describe depth.
+
+## Factories that are really constants
+
+Inside any `describe` (or at module scope), a function that returns fixture-like data (an object/array/JSX literal, or a `build*`/`create*` call given an object/array literal) is flagged when:
+
+- it takes no parameters and is called somewhere in scope — it is a constant written as a function (`noZeroArgFixture`). Inline the literal or move it to `beforeEach`.
+- its only parameter is `overrides = {}` but no call site in scope ever passes an argument (`noUnusedOverridesFixture`). Drop the parameter or pass real overrides.
+
+A function that is never called (for example a React component only used as JSX) is not flagged.
 
 ## How to fix violations
 
