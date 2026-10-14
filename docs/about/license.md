@@ -1,3 +1,7 @@
+---
+last_verified: 2026-10-14
+---
+
 # License
 
 ## Source Code

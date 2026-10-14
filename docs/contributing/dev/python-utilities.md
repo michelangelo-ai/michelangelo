@@ -1,13 +1,14 @@
 ---
 sidebar_position: 3
 sidebar_label: "Python Utilities"
+last_verified: 2026-10-14
 ---
 
 # Python Utilities and Scripts
 
 ## Overview
 
-This page covers Python code in the repo that supports development workflows — tooling, linting, testing infrastructure. For the user-facing Uniflow SDK and `ma` CLI, see [Python Coding Guidelines](python/mactl/coding_guidelines.md).
+This page covers Python code in the repo that supports development workflows — tooling, linting, testing infrastructure. For coding guidelines for the `ma` CLI (mactl), see [Mactl Coding Guidelines](python/mactl/coding_guidelines.md).
 
 ## Package Manager
 
@@ -28,7 +29,7 @@ poetry install -E dev
 
 ## Pre-commit Hooks
 
-Pre-commit hooks are configured in `.pre-commit-config.yaml`. Three hooks run automatically on `git commit`: `ruff-lint` (Python linting), `ruff-format` (Python formatting), and `prettier` (formatting for JS/TS/JSON/CSS/YAML/Markdown). To run hooks manually before committing:
+Pre-commit hooks are configured in `.pre-commit-config.yaml`. Six hooks run automatically on `git commit`: `ruff-lint` (Python linting), `ruff-format` (Python formatting), `prettier` and `eslint` (formatting and linting for files under `javascript/`), `gofmt` (Go formatting), and `go-vet` (Go vet checks via Bazel nogo). To run hooks manually before committing:
 
 ```bash
 cd python && poetry run pre-commit run --all-files
@@ -71,7 +72,7 @@ Check in both `pyproject.toml` and `poetry.lock` together.
 
 ## Related
 
-- [Python Coding Guidelines](python/mactl/coding_guidelines.md)
+- [Mactl Coding Guidelines](python/mactl/coding_guidelines.md)
 - [Uniflow Plugin Guide](../uniflow-plugin-guide.md)
 - [Testing Strategy](../testing.md)
 - [YAML Configuration](yaml-configuration.md)

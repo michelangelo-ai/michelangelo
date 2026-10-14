@@ -1,3 +1,7 @@
+---
+last_verified: 2026-10-14
+---
+
 # Table Configuration Reference
 
 Table configuration controls table-level behavior (pagination, sorting, search, filters) and is shared across:
@@ -17,6 +21,8 @@ Table configuration controls table-level behavior (pagination, sorting, search, 
 | `disableFilters`    | `boolean`          | Disable column filtering functionality                                         | `false`                                                |
 | `pageSizes`         | `PageSizeOption[]` | Available page size options in dropdown                                        | `[{ id: 15, label: '15' }, { id: 25, label: '25' }, { id: 50, label: '50' }]`                                         |
 | `enableStickySides` | `boolean`          | Keep first and last columns visible during horizontal scroll                   | `true`                                                 |
+| `maxHeight`         | `string`           | Cap the scrollable table area's height (any CSS length); header stays pinned   | `undefined` (no cap)                                   |
+| `actions`           | `ActionConfigSchema[]` | Row actions rendered in the last column of each row                        | `undefined`                                            |
 
 ## Property Details
 
@@ -73,7 +79,17 @@ Controls what displays when the table has no data.
 
 - Dropdown options for rows per page
 - Format: `[{ id: 15, label: '15' }, { id: 25, label: '25' }]`
-- First option is default page size
+- The smallest page size is the default
+
+### `maxHeight`
+
+- Any CSS length, e.g. `'420px'`
+- Rows beyond the cap scroll vertically while the header stays pinned
+- Use for embedded tables whose row count is unbounded
+
+### `actions`
+
+- Array of action configurations rendered as an actions popover in the last column of each row
 
 ### `enableStickySides`
 
