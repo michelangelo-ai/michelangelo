@@ -1,3 +1,7 @@
+---
+last_verified: 2026-10-14
+---
+
 # Comet ML
 
 [Comet](https://www.comet.com/) is an experiment tracking platform. It logs metrics, hyperparameters, datasets, artifacts, and system/GPU usage during training, so teams can compare runs, visualize curves, and reproduce experiments. It can be hosted at `comet.com` or self-hosted — the deployment model only affects credential/network setup, not your code.
@@ -50,15 +54,14 @@ poetry run python pipeline.py remote-run --image <img> --storage-url <url> \
   --environ COMET_URL_OVERRIDE=https://comet.internal/clientlib/   # self-hosted only
 ```
 
-**Cluster-wide default (operator)** — prefer a Secret for the key:
+**Cluster-wide default (operator)** — task pods read environment variables only from the `michelangelo-config` ConfigMap (mounted via `envFrom`); a separate Secret is not mounted into task pods automatically. Add the Comet settings to that ConfigMap:
 
 ```bash
-kubectl create secret generic comet-credentials -n <compute-namespace> \
-  --from-literal=COMET_API_KEY=<key>
-
 kubectl patch configmap michelangelo-config -n <compute-namespace> --type merge \
-  -p '{"data":{"COMET_WORKSPACE":"<workspace>","COMET_URL_OVERRIDE":"https://comet.internal/clientlib/"}}'
+  -p '{"data":{"COMET_API_KEY":"<key>","COMET_WORKSPACE":"<workspace>","COMET_URL_OVERRIDE":"https://comet.internal/clientlib/"}}'
 ```
+
+ConfigMap values are stored in plaintext (the same ConfigMap holds the storage credentials). If that is not acceptable, pass the key per run with `--environ` instead, or use workload identity where your Comet deployment supports it. See the [Experiment Tracking operator guide](../experiment-tracking.md#step-3-handle-credentials-if-required) for details.
 
 `pipeline.yaml` (the deploy manifest used with `ma pipeline apply`/`run`) holds no Comet config of its own — credentials come from the environment as above, and the task image it references must include `comet_ml` plus your framework's extras.
 

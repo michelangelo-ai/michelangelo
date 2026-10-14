@@ -1,3 +1,7 @@
+---
+last_verified: 2026-10-14
+---
+
 # Third-Party Integrations
 
 This section covers connecting third-party tools to Michelangelo AI. If you are looking for documentation on Michelangelo AI's own components — the model registry, experiment tracking setup, serving infrastructure, or job scheduler — see the [Operator Guides index](../index.md).

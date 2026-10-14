@@ -1,10 +1,11 @@
 ---
+last_verified: 2026-10-14
 sidebar_position: 3
 ---
 
 # Troubleshooting
 
-This guide is for platform operators diagnosing issues with a Michelangelo AI deployment. All `kubectl` commands assume access to the control plane cluster.
+This guide is for platform operators diagnosing issues with a Michelangelo AI deployment. All `kubectl` commands assume access to the control plane cluster. Commands use `<release-namespace>` for the namespace the Helm chart is installed in and resource names for a Helm release named `michelangelo` (workload names are `<release>-<component>`). Cluster resources are stored in the `ma-system` namespace.
 
 ---
 
@@ -15,7 +16,7 @@ This guide is for platform operators diagnosing issues with a Michelangelo AI de
 **Diagnostics**:
 ```bash
 # Check for scheduler errors in the controller manager
-kubectl -n ma-system logs deployment/michelangelo-controllermgr | grep -i "scheduler\|assign\|enqueue"
+kubectl -n <release-namespace> logs deployment/michelangelo-controllermgr | grep -i "scheduler\|assign\|enqueue"
 
 # List registered compute clusters and their status
 kubectl -n ma-system get clusters
@@ -50,7 +51,7 @@ kubectl -n default get secret cluster-<cluster-name>-client-token \
   -o jsonpath='{.data.token}' | wc -c
 
 # Test network connectivity from the control plane to the compute API server
-kubectl -n ma-system run connectivity-test --rm -it --restart=Never \
+kubectl -n <release-namespace> run connectivity-test --rm -it --restart=Never \
   --image=curlimages/curl -- curl -k https://<compute-host>:<port>/healthz
 ```
 
@@ -96,18 +97,18 @@ kubectl --context <compute-context> get secret aws-credentials
 **Diagnostics**:
 ```bash
 # Check recent worker logs
-kubectl -n ma-system logs deployment/michelangelo-worker --tail=100
+kubectl -n <release-namespace> logs deployment/michelangelo-worker --tail=100
 
 # Verify the worker's configured API server address
-kubectl -n ma-system get configmap michelangelo-worker-config -o yaml | grep -A3 "worker:"
+kubectl -n <release-namespace> get configmap michelangelo-worker-config -o yaml | grep -A3 "worker:"
 
 # Confirm the API server deployment is running
-kubectl -n ma-system get deployment michelangelo-apiserver
-kubectl -n ma-system get pods -l app=michelangelo-apiserver
+kubectl -n <release-namespace> get deployment michelangelo-apiserver
+kubectl -n <release-namespace> get pods -l app.kubernetes.io/component=apiserver
 ```
 
 **Likely causes**:
-- `worker.address` in the worker ConfigMap points to the wrong hostname or port — it must resolve to the API server from within the `ma-system` namespace
+- `worker.address` in the worker ConfigMap (rendered from the API server Service name and `apiserver.port`) points to the wrong hostname or port — it must resolve to the API server from within the release namespace
 - `worker.useTLS: true` is set but the API server's certificate is not trusted — ensure the CA bundle is mounted into the worker pod
 - The API server is not yet ready (check its pod status and readiness probe)
 
@@ -120,21 +121,21 @@ kubectl -n ma-system get pods -l app=michelangelo-apiserver
 **Diagnostics**:
 ```bash
 # Check worker logs for workflow engine errors
-kubectl -n ma-system logs deployment/michelangelo-worker | grep -i "temporal\|cadence\|workflow"
+kubectl -n <release-namespace> logs deployment/michelangelo-worker | grep -i "temporal\|cadence\|workflow"
 
 # Inspect the configured workflow engine endpoint
-kubectl -n ma-system get configmap michelangelo-worker-config -o yaml \
+kubectl -n <release-namespace> get configmap michelangelo-worker-config -o yaml \
   | grep -A8 "workflow-engine:"
 
 # Test TCP connectivity to Temporal from a worker pod
-kubectl -n ma-system exec deployment/michelangelo-worker -- \
+kubectl -n <release-namespace> exec deployment/michelangelo-worker -- \
   nc -zv temporal.your-domain.com 7233
 ```
 
 **Likely causes**:
 - `workflow-engine.host` has the wrong hostname or port (Temporal default is `7233`)
 - The Temporal domain (`uniflow`, `default`) has not been created — create it with the Temporal CLI or admin tools
-- Network policy in `ma-system` is blocking egress to the Temporal endpoint
+- Network policy in the release namespace is blocking egress to the Temporal endpoint
 
 ---
 
@@ -149,24 +150,24 @@ kubectl get inferenceservers
 kubectl describe inferenceserver <name>
 
 # Check the underlying Kubernetes Deployment
-kubectl get deployment -l app=<inferenceserver-name>
-kubectl describe deployment <inferenceserver-deployment>
+kubectl get deployment triton-<inferenceserver-name>   # Triton backend
+kubectl describe deployment triton-<inferenceserver-name>
 
-# Check model-sync sidecar logs
-kubectl logs <inferenceserver-pod-name> -c model-sync
+# Check the model-sync logs (in the sandbox, model-sync runs as a DaemonSet)
+kubectl logs -l app=model-sync
 ```
 
 **Likely causes**:
-- The backend type is not registered in the controller manager — check controller manager logs for `unknown backend type`
+- The backend type is not supported — the `Validation` condition reports `InvalidBackendType` ("unsupported backend type"); check the InferenceServer conditions and controller manager logs
 - The inference server container image cannot be pulled
-- The model-sync sidecar cannot connect to S3 to download models (see [S3 errors](#s3--object-store-errors) below)
+- The model-sync component cannot connect to S3 to download models (see [S3 errors](#s3--object-store-errors) below)
 - Insufficient GPU resources on the node — check `kubectl describe node` for allocatable GPU count
 
 ---
 
-## Model not loading (Deployment stuck in Asset Preparation)
+## Model not loading (Deployment stuck in asset preparation)
 
-**Symptoms**: A Deployment resource is created but remains in the `AssetPreparation` or `ResourceAcquisition` stage indefinitely.
+**Symptoms**: A Deployment resource is created but its `AssetsPrepared` condition stays false, or it remains in the `DEPLOYMENT_STAGE_RESOURCE_ACQUISITION` stage indefinitely.
 
 **Diagnostics**:
 ```bash
@@ -174,15 +175,15 @@ kubectl logs <inferenceserver-pod-name> -c model-sync
 kubectl get deployments.michelangelo.api
 kubectl describe deployment.michelangelo.api <name>
 
-# Check model-sync sidecar for download errors
-kubectl logs <inferenceserver-pod> -c model-sync
+# Check model-sync for download errors (in the sandbox, a DaemonSet)
+kubectl logs -l app=model-sync
 
 # Verify the model config ConfigMap was created
-kubectl get configmap <inferenceserver-name>-model-config -o yaml
+kubectl get configmap <inferenceserver-name>-model-config -o yaml   # in the InferenceServer's namespace
 ```
 
 **Likely causes**:
-- The model artifact is not at the expected S3 path — verify the registered model's `artifactUri` matches what is actually in S3
+- The model artifact is not at the expected S3 path — verify the registered model's `spec.deployableArtifactUri` matches what is actually in S3
 - S3 credentials in the inference pod do not have `s3:GetObject` permission on the model bucket
 - The inference server has reached its maximum number of loaded models — check the serving framework's capacity limits
 
@@ -190,25 +191,25 @@ kubectl get configmap <inferenceserver-name>-model-config -o yaml
 
 ## S3 / object store errors
 
-**Symptoms**: Jobs fail with access denied or endpoint unreachable errors. Model downloads fail in the model-sync sidecar.
+**Symptoms**: Jobs fail with access denied or endpoint unreachable errors. Model downloads fail in model-sync.
 
 **Diagnostics**:
 ```bash
 # Check controller manager storage config
-kubectl -n ma-system get configmap michelangelo-controllermgr-config -o yaml \
-  | grep -A5 "minio:"
+kubectl -n <release-namespace> get configmap michelangelo-controllermgr-config -o yaml \
+  | grep -A6 "minio:"
 
 # Test S3 access from a worker pod
-kubectl -n ma-system exec deployment/michelangelo-worker -- \
+kubectl -n <release-namespace> exec deployment/michelangelo-worker -- \
   aws s3 ls s3://your-bucket/ --endpoint-url http://your-minio-endpoint
 
 # Check for IAM role annotation on the relevant ServiceAccount
-kubectl -n ma-system get serviceaccount michelangelo-controllermgr -o yaml \
+kubectl -n <release-namespace> get serviceaccount michelangelo -o yaml \
   | grep -i iam
 ```
 
 **Likely causes**:
-- `useIam: true` is set but the pod's ServiceAccount does not have an IAM role annotation, so no credentials are injected
+- The object storage credentials are missing or wrong — the chart injects `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` from the object-storage Secret (`objectStorage.existingSecret`), so check that the Secret exists and holds both keys. If you rely on IAM roles instead, check that the pod's ServiceAccount (`serviceAccount.annotations`) carries the role annotation
 - `awsEndpointUrl` is missing the URL scheme (`http://` or `https://`) or has the wrong port
 - The S3 bucket does not exist or is in a different region than `awsRegion` specifies
 - Pod-level network policy is blocking outbound traffic to the S3 endpoint
@@ -222,17 +223,18 @@ kubectl -n ma-system get serviceaccount michelangelo-controllermgr -o yaml \
 **Diagnostics**:
 ```bash
 # Check Envoy and UI pod status
-kubectl get pods | grep -E "envoy|ui|apiserver"
-kubectl logs deployment/michelangelo-ui
+kubectl -n <release-namespace> get pods | grep -E "envoy|ui|apiserver"
+kubectl -n <release-namespace> logs deployment/michelangelo-ui
+kubectl -n <release-namespace> logs deployment/michelangelo-envoy
 
 # Check Envoy configuration
-kubectl get configmap envoy-config -o yaml
+kubectl -n <release-namespace> get configmap michelangelo-envoy-config -o yaml
 ```
 
 **Likely causes**:
-- `apiBaseUrl` in the UI's `config.json` does not match the actual Envoy ingress hostname — they must match exactly
+- `apiBaseUrl` in the UI's `config.json` (`ui.apiBaseUrl`) does not match the actual Envoy ingress hostname — they must match exactly
 - The Envoy cluster's `socket_address.address` for `michelangelo-apiserver` is wrong — it must be the Kubernetes service name for the API server within the cluster
-- CORS allowed origins in the Envoy config do not include the origin from which users are accessing the UI
+- `envoy.corsOrigins` (a regular expression) does not match the origin from which users are accessing the UI
 - The Ingress resource for the UI or API server is misconfigured (wrong hostname, missing TLS secret)
 
 ## What's Next
@@ -259,7 +261,7 @@ kubectl get pipelineruns -n <namespace> -o json | \
   jq '.items[] | select(.metadata.ownerReferences[]?.uid == "<pipeline-uid>") | {name: .metadata.name, deletionTimestamp: .metadata.deletionTimestamp, finalizers: .metadata.finalizers}'
 
 # Check controller manager logs for cascade-related messages
-kubectl -n ma-system logs deployment/michelangelo-controllermgr | grep -i "cascade\|drain\|force"
+kubectl -n <release-namespace> logs deployment/michelangelo-controllermgr | grep -i "cascade\|drain\|force"
 ```
 
 The safety timeout is **per child**, keyed off each child's own `deletionTimestamp` (above) — there is no Pipeline-level cascade annotation or clock. Watch the per-kind drain metrics to see which kind is wedged: `cascade_child_drain_active{kind="pipeline_run"|"trigger_run"}` (currently draining) and `cascade_child_drain_timeout_total{kind=...}` (drains that blew past the 24h backstop).

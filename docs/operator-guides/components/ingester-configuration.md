@@ -1,3 +1,7 @@
+---
+last_verified: 2026-10-14
+---
+
 # Ingester Controller: Configuration and Operations
 
 The **Ingester** is a Kubernetes controller that syncs all Michelangelo AI CRDs into MySQL, decoupling metadata storage from etcd. This guide covers deploying, configuring, and operating the ingester on production clusters.
@@ -17,7 +21,7 @@ The ingester maintains consistency between Kubernetes and MySQL:
                  └────────┬────────┘
                           │ SQL
                  ┌────────▼────────┐
-                 │     MySQL       │ 13 tables + labels + annotations
+                 │     MySQL       │ 15 tables + labels + annotations
                  └─────────────────┘
 ```
 
@@ -29,7 +33,7 @@ For schema terminology, table naming, indexed fields, and common query patterns,
 
 ### Schema Layout
 
-For each of the 13 CRDs, the ingester creates 3 MySQL tables:
+For each of the 15 CRDs, the ingester creates 3 MySQL tables:
 
 | Table Type | Purpose |
 |-----------|---------|
@@ -37,62 +41,92 @@ For each of the 13 CRDs, the ingester creates 3 MySQL tables:
 | Labels (e.g., `model_labels`) | Key-value label pairs per object |
 | Annotations (e.g., `model_annotations`) | Key-value annotation pairs per object |
 
-**Total: 39 tables** (13 CRDs × 3 table types)
+**Total: 45 tables** (15 CRDs × 3 table types)
 
-Supported CRDs: Project, ModelFamily, Model, Pipeline, PipelineRun, InferenceServer, Revision, Cluster, RayCluster, RayJob, TriggerRun, Deployment, SparkJob
+Supported CRDs: Project, ModelFamily, Model, Pipeline, PipelineRun, InferenceServer, Revision, Cluster, RayCluster, RayJob, TriggerRun, Deployment, SparkJob, CachedOutput, EvaluationReport
+
+Table names are the snake_case kind names (for example `model_family`, `pipeline_run`, `inference_server`).
 
 ### Main Table Schema Example
 
 ```sql
-CREATE TABLE model (
-    uid           VARCHAR(64)  NOT NULL,   -- K8s UID (primary key)
-    group_ver     VARCHAR(128),            -- APIVersion string
-    namespace     VARCHAR(256),
-    name          VARCHAR(256),
-    res_version   BIGINT,                  -- K8s ResourceVersion
-    create_time   DATETIME(6),
-    update_time   DATETIME(6),
-    delete_time   DATETIME(6),             -- NULL = active, non-NULL = soft-deleted
-    proto         LONGBLOB,               -- serialized protobuf
-    json          JSON,                   -- full object as JSON
-    -- CRD-specific indexed fields, e.g.:
-    algorithm     VARCHAR(128),           -- for Model
-    PRIMARY KEY (uid),
-    INDEX idx_namespace_name (namespace, name),
-    INDEX idx_delete_time (delete_time)
-);
+-- helm/michelangelo/files/schema/mysql-init-schema.sql (abridged)
+CREATE TABLE IF NOT EXISTS `model` (
+    `uid` VARCHAR(255) NOT NULL,           -- K8s UID (primary key)
+    `group_ver` VARCHAR(255) NOT NULL,     -- APIVersion string
+    `namespace` VARCHAR(255) NOT NULL,
+    `name` VARCHAR(255) NOT NULL,
+    `res_version` BIGINT UNSIGNED NOT NULL,-- K8s ResourceVersion
+    `create_time` DATETIME NOT NULL,
+    `update_time` DATETIME,
+    `delete_time` DATETIME,                -- NULL = active, non-NULL = soft-deleted
+    `proto` MEDIUMBLOB,                    -- serialized protobuf
+    `json` JSON,                           -- full object as JSON
+    -- CRD-specific extracted fields, e.g. for Model:
+    `algorithm` VARCHAR(255),
+    -- ...
+    PRIMARY KEY (`uid`),
+    KEY `model_namespace_name` (`namespace`, `name`),
+    KEY `model_create_time` (`create_time`),
+    KEY `model_algorithm` (`algorithm`),
+    KEY `model_owner` (`owner`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
 
 All deletions are soft-deletes: `DELETE` sets `delete_time` rather than removing the row. Live object queries use `WHERE delete_time IS NULL`.
 
 ## Configuration
 
-:::danger SparkJob incompatibility
-Do not enable the ingester if your deployment uses SparkJob. A pre-existing nil pointer panic in `go/components/spark/job/client/client.go:185` causes the controller manager to crash when syncing SparkJob objects, which prevents ALL MySQL sync. This blocks other CRD kinds too, not just SparkJob. See [Known Limitations](#known-limitations-and-issues) for details. This requires an upstream code fix before enabling.
+:::caution SparkJob pod specs without a resource
+`SparkClient.toSparkPodSpec` in `go/components/spark/job/client/client.go` dereferences `pod.Resource` (for example `&(pod.Resource.Cpu)`) without a nil check, so a SparkJob whose driver or executor pod spec has no `resource` can panic the SparkJob controller. This is independent of the ingester, but a panic that takes down the controller manager also stops MySQL sync for every kind. Make sure every SparkJob you create sets `resource` on its driver and executor. See [Known Limitations](#known-limitations-and-issues).
 :::
 
 ### Prerequisites
 
 - Kubernetes cluster with Michelangelo AI API Server
 - MySQL 5.7+ accessible from the controllermgr pod
-- Schema init Job (provides 39 MySQL tables)
+- The 45-table schema applied to MySQL (the Helm chart's API server applies it automatically through its `schema-init` init container)
 
 ### Enabling the Ingester
 
-The ingester activates through two configuration gates in the controllermgr ConfigMap:
+The ingester activates through two configuration requirements in the controllermgr ConfigMap:
 
 **Gate 1:** `metadataStorage.enableMetadataStorage` must be `true`
-**Gate 2:** MySQL connection details must be provided
+**Gate 2:** MySQL connection details must be provided (at least one of `mysql.enabled`, `host`, `database`, or `user`)
 
-Both gates are required. If either is missing or disabled, the ingester silently stays disabled with zero impact on the rest of the controllermgr.
+If `enableMetadataStorage` is `false` (the default), the ingester stays disabled with zero impact on the rest of the controllermgr. If it is `true` but the `mysql` stanza is empty, the controller manager fails at startup with `metadata storage is enabled but mysql config is empty`.
+
+### Helm Values
+
+With the Helm chart you do not edit the ConfigMap by hand. The chart renders the `metadataStorage`, `mysql`, and `ingester` stanzas from these values:
+
+```yaml
+metadataStorage:            # shared MySQL connection (also used by the API server)
+  host: mysql.example.internal
+  port: 3306
+  database: michelangelo
+  user: root
+  existingSecret: michelangelo-metadata-storage   # Secret with a `password` key
+
+controllermgr:
+  metadataStorage:
+    enable: true                       # Gate 1 (default: false)
+    deletionDelay: 10s
+    enableResourceVersionCache: false
+  ingester:
+    concurrentReconciles: 2
+    requeuePeriod: 30s
+    concurrentReconcilesMap:           # per-kind overrides
+      PipelineRun: 10
+```
+
+The chart does not render `maxOpenConns`, `maxIdleConns`, or `connMaxLifetime`; the controller manager falls back to the defaults below. Also set `apiserver.metadataStorage.enable: true` if you want the API server to read from MySQL.
 
 ### ConfigMap Configuration
 
-Edit the controllermgr ConfigMap to add or update these stanzas:
+The rendered controllermgr ConfigMap (`michelangelo-controllermgr-config`) contains these stanzas, which you can also write by hand for non-Helm deployments:
 
 ```yaml
-# michelangelo-controllermgr-config
-
 # Gate 1: Enable metadata storage
 metadataStorage:
   enableMetadataStorage: true
@@ -104,7 +138,7 @@ mysql:
   host: mysql
   port: 3306
   user: root
-  password: root
+  password: ${MYSQL_PASSWORD}
   database: michelangelo
   maxOpenConns: 25
   maxIdleConns: 5
@@ -122,18 +156,18 @@ ingester:
 | `deletionDelay` | Grace period for soft-deletes | `10s` |
 | `enableResourceVersionCache` | Cache K8s resource versions (experimental) | `false` |
 | `host` | MySQL hostname or IP | (required) |
-| `port` | MySQL port | `3306` |
-| `user` | MySQL user account | (required) |
-| `password` | MySQL password | (required) |
-| `database` | MySQL database name | (required) |
-| `maxOpenConns` | Max concurrent connections | `25` |
+| `port` | MySQL port | `3306` (chart default) |
+| `user` | MySQL user account | `root` (chart default) |
+| `password` | MySQL password | (required; the chart injects it from the metadata-storage Secret) |
+| `database` | MySQL database name | `michelangelo` (chart default) |
+| `maxOpenConns` | Max concurrent connections | `25` (applied when unset or 0) |
 | `maxIdleConns` | Max idle connections to keep | `5` |
 | `connMaxLifetime` | Max connection lifetime | `5m` |
 | `concurrentReconciles` | Parallel reconcilers per CRD | `2` |
 | `requeuePeriod` | Retry interval on failure | `30s` |
 
 :::info
-With 13 CRDs and `concurrentReconciles: 2`, you get 13 independent work queues, each with 2 parallel workers.
+With 15 CRDs and `concurrentReconciles: 2`, you get 15 independent work queues, each with 2 parallel workers. Use `ingester.concurrentReconcilesMap` and `requeuePeriodMap` to override per kind.
 :::
 
 ## Migration: Enabling on a Running Cluster
@@ -144,12 +178,22 @@ The ingester is designed to be enabled without downtime. Existing objects in Kub
 
 #### 1. Create MySQL Schema
 
-Apply the schema init Job to create the 39 tables:
+**Helm installs:** the API server's `schema-init` init container applies `helm/michelangelo/files/schema/mysql-init-schema.sql` (all 45 tables, idempotent) every time an API server pod starts, so no separate step is needed. Confirm with:
 
 ```bash
-kubectl apply -f scripts/ingester/ingester-schema-init-job.yaml
+kubectl logs deployment/michelangelo-apiserver -c schema-init
+```
+
+**Non-Helm installs:** create a ConfigMap from `scripts/ingester/ingester_schema.sql` and run the schema Job:
+
+```bash
+kubectl create configmap ingester-schema-sql \
+  --from-file=ingester_schema.sql=scripts/ingester/ingester_schema.sql
+kubectl apply -f scripts/ingester/ingester_schema_job.yaml
 kubectl wait --for=condition=complete job/ingester-schema-init --timeout=120s
 ```
+
+The Job in `scripts/ingester/ingester_schema_job.yaml` connects to host `mysql` as `root`/`root`; edit it for your environment. (Its log messages still say "13 CRDs (39 total tables)", but it applies the full `ingester_schema.sql`.) Do not use `ingester-schema-init-job.yaml` or `ingester-schema-init-job-complete.yaml`; they embed older, incomplete schemas.
 
 If the Job fails:
 
@@ -161,13 +205,13 @@ kubectl logs job/ingester-schema-init
 # Common causes: MySQL unreachable, wrong credentials, insufficient privileges
 # After fixing the root cause, delete the failed Job and reapply:
 kubectl delete job ingester-schema-init
-kubectl apply -f scripts/ingester/ingester-schema-init-job.yaml
+kubectl apply -f scripts/ingester/ingester_schema_job.yaml
 kubectl wait --for=condition=complete job/ingester-schema-init --timeout=120s
 ```
 
-#### 2. Update the Controllermgr ConfigMap
+#### 2. Update the Controllermgr Configuration
 
-Add both required stanzas (`metadataStorage` and `mysql`):
+With Helm, set `controllermgr.metadataStorage.enable: true` and the `metadataStorage.*` connection values (see [Helm Values](#helm-values)) and run `helm upgrade`. Without Helm, edit the ConfigMap and add both required stanzas (`metadataStorage` and `mysql`):
 
 ```bash
 kubectl edit configmap michelangelo-controllermgr-config
@@ -177,7 +221,7 @@ Add the configuration shown in the [ConfigMap Configuration](#configmap-configur
 
 #### 3. Restart the Controllermgr
 
-Restart the controller manager to pick up the new configuration:
+Restart the controller manager to pick up the new configuration (`helm upgrade` does this automatically when the ConfigMap changes the pod template; otherwise restart manually):
 
 ```bash
 # If controllermgr is a Deployment:
@@ -189,28 +233,29 @@ kubectl delete pod michelangelo-controllermgr
 
 #### 4. Verify Controllers Registered
 
-Check that all 13 controllers registered successfully:
+Check that all 15 controllers registered successfully:
 
 ```bash
-kubectl logs -l app=michelangelo-controllermgr | grep "Ingester controller registered"
+kubectl logs -l app.kubernetes.io/component=controllermgr | grep "Ingester controller registered"
 ```
 
-You should see 13 log lines (one per CRD kind).
+You should see 15 log lines (one per CRD kind).
 
 #### 5. Verify Backfill
 
 All existing objects will be reconciled once on startup. Verify MySQL was populated:
 
 ```bash
-for table in project modelfamily model pipeline pipelinerun inferenceserver \
-             revision cluster raycluster rayjob triggerrun deployment sparkjob; do
+for table in project model_family model pipeline pipeline_run inference_server \
+             revision cluster ray_cluster ray_job trigger_run deployment spark_job \
+             cached_output evaluation_report; do
   COUNT=$(kubectl exec pod/mysql -- mysql -uroot -proot michelangelo -sN \
     -e "SELECT COUNT(*) FROM ${table} WHERE delete_time IS NULL;" 2>/dev/null)
   echo "${table}: ${COUNT}"
 done
 ```
 
-All counts should be non-zero (assuming you have existing objects).
+Counts should be non-zero for every kind that has existing objects.
 
 ## Operational Guidance
 
@@ -266,10 +311,12 @@ The schema init Job is create-only (`CREATE TABLE IF NOT EXISTS`). It does not a
 
 To disable the ingester without data loss:
 
-1. Remove the `mysql:` stanza from the controllermgr ConfigMap
+1. Set `metadataStorage.enableMetadataStorage` to `false` (Helm: `controllermgr.metadataStorage.enable: false`)
 2. Restart the controllermgr
-3. The ingester module will detect missing MySQL config and skip setup
+3. The ingester module sees no metadata storage and skips setup
 4. MySQL data is preserved; you can re-enable the ingester later
+
+Do not just remove the `mysql:` stanza while `enableMetadataStorage` is still `true`: the controller manager would fail at startup.
 
 The controllermgr will continue operating normally with the ingester disabled.
 
@@ -280,13 +327,10 @@ The controllermgr will continue operating normally with the ingester disabled.
 Check controller logs for startup messages:
 
 ```bash
-kubectl logs -l app=michelangelo-controllermgr | grep -i ingester
+kubectl logs -l app.kubernetes.io/component=controllermgr | grep -i ingester
 ```
 
-You should see messages like:
-- `"Ingester controller registered for <Kind>"`
-- `"Metadata storage enabled"`
-- `"MySQL connection established"`
+You should see one `Ingester controller registered successfully` message per CRD kind (the `kind` field identifies each). If metadata storage is enabled but the MySQL config is empty, the controller manager exits at startup with `metadata storage is enabled but mysql config is empty`.
 
 ### Check MySQL Connectivity
 
@@ -316,7 +360,7 @@ kubectl exec pod/mysql -- mysql -uroot -proot michelangelo -sN \
 If objects are not syncing, check for requeue errors in logs:
 
 ```bash
-kubectl logs -l app=michelangelo-controllermgr | grep -i "requeue\|error" | tail -20
+kubectl logs -l app.kubernetes.io/component=controllermgr | grep -i "requeue\|error" | tail -20
 ```
 
 Requeue errors typically indicate:
@@ -328,21 +372,20 @@ Requeue errors typically indicate:
 
 | Issue | Severity | Impact |
 |-------|----------|--------|
-| **SparkJob double-panic crash** | High | Controllermgr may crash when syncing SparkJob, preventing ALL MySQL sync. Requires fix in SparkJob controller code. |
+| **SparkJob nil `resource` panic** | High | A SparkJob pod spec without `resource` can panic the SparkJob controller (independent of the ingester); if that takes down the controller manager, ALL MySQL sync stops. |
 | Pre-existing objects lack finalizer | Medium | Objects created before ingester enable won't be intercepted during `kubectl delete`. Mitigation: use API Server for all deletes. |
 | `DeleteCollection` not implemented | Medium | Namespace-scoped bulk deletes return error. Use individual object deletes. |
 | No schema migration support | Medium | New indexed columns require manual `ALTER TABLE` and backfill. |
-| Label selector in `List` not implemented | Low | SQL label filtering not yet wired. Use JSON extraction in queries. |
 
-### SparkJob Double-Panic Issue
+### SparkJob nil resource panic
 
-**Status:** Pre-existing bug in `go/components/spark/job/client/client.go:185`
+**Status:** Open in `go/components/spark/job/client/client.go` (`toSparkPodSpec`)
 
-**Symptom:** Controllermgr crashes with panic when processing SparkJob objects
+**Symptom:** A panic in the SparkJob controller when a driver or executor `PodSpec` has no `resource`
 
-**Mitigation:** Do not enable the ingester until SparkJob controller is fixed, or disable SparkJob reconciliation in your controllermgr config
+**Mitigation:** Always set `resource` (cpu, memory) on SparkJob driver and executor pod specs
 
-**Fix required:** Upstream fix to SparkJob controller error handling
+**Fix required:** Nil-check `pod.Resource` in `toSparkPodSpec`
 
 ---
 
@@ -350,20 +393,19 @@ Requeue errors typically indicate:
 
 When the ingester is correctly enabled:
 
-1. **All 13 controllers register** at startup (one per CRD kind)
+1. **All 15 controllers register** at startup (one per CRD kind)
 2. **Immediate sync on creation** — objects appear in MySQL within milliseconds
 3. **Immediate sync on update** — `res_version` and `update_time` advance in MySQL after every change
 4. **Full JSON stored** — complete object JSON in the `json` column
-5. **Indexed fields stored** — `algorithm`, `ray_version`, `entrypoint`, etc. in dedicated indexed columns
+5. **Extracted fields stored** — `algorithm`, `owner`, `state`, etc. in dedicated columns (see [SQL Key Concepts](../sql-key-concepts-and-terms.md#extracted-columns-and-sql-indexes))
 6. **Labels synced** — label changes reflected in `*_labels` companion tables
-7. **Opt-in disabled by default** — ingester only runs when MySQL config is present in `michelangelo-controllermgr-config`
-8. **SparkJob blocked** — pre-existing nil pointer panic in the SparkJob business controller prevents sync (unrelated to ingester)
+7. **Opt-in disabled by default** — ingester only runs when `metadataStorage.enableMetadataStorage` is `true` and MySQL config is present in `michelangelo-controllermgr-config`
 
 ---
 
 ## Next Steps
 
-Once the ingester is running, verify steady-state behavior: all 13 CRD kinds appear in MySQL, object counts match etcd, and `update_time` advances on changes. Then:
+Once the ingester is running, verify steady-state behavior: all 15 CRD kinds appear in MySQL, object counts match etcd, and `update_time` advances on changes. Then:
 
 - **Monitor**: Set up alerting on requeue errors — elevated `workqueue_retries_total` for ingester controllers indicates MySQL connectivity issues. See [Monitoring](../operations/monitoring.md).
 - **Restrict deletes**: Enforce all CRD deletes through the Michelangelo AI API Server (not raw `kubectl delete`) to prevent orphan rows from pre-existing objects.

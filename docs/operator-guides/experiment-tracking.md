@@ -1,3 +1,7 @@
+---
+last_verified: 2026-10-14
+---
+
 # Experiment Tracking Setup
 
 Michelangelo AI does not bundle an experiment tracking server — it connects to one you already run. This guide shows platform operators how to expose that server to task pods running inside Michelangelo AI's compute clusters.
@@ -223,5 +227,5 @@ def check_tracking_config():
 ## Next Steps
 
 - [Register a Compute Cluster](setup/register-a-compute-cluster-to-michelangelo-control-plane.md) — register the compute namespace where this tracking config will be injected.
-- [Worker Configuration](setup/platform-setup.md#worker-configuration) — review environment variable injection and pod configuration options.
+- [Worker Configuration](setup/platform-setup.md#worker-configuration) — review the worker and workflow-engine configuration the chart renders.
 - [Model Registry](components/model-registry.md) — store and serve models produced by tracked runs.
