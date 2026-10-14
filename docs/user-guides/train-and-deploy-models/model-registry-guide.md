@@ -1,5 +1,6 @@
 ---
 sidebar_position: 2
+last_verified: 2026-10-14
 ---
 
 # Model Registry Guide
@@ -225,6 +226,9 @@ from michelangelo.lib.model_manager.packager.custom_triton import CustomTritonPa
 | `model_revision` | No | `None` | Revision number for versioning |
 | `model_path_source_type` | No | `StorageType.LOCAL` | Storage backend type |
 | `include_import_prefixes` | No | `None` (all imports) | List of module prefixes to bundle |
+| `additional_import_prefixes` | No | `None` | Extra module prefixes whose source files are bundled, for dynamic imports that static analysis misses |
+| `triton_parameters` | No | `None` | Key-value strings written as `parameters` blocks in `config.pbtxt` |
+| `sample_data` | No | `None` | Sample inputs written to `metadata/sample_data.json` for reference |
 
 **`create_raw_model_package()` parameters:**
 
@@ -238,6 +242,7 @@ from michelangelo.lib.model_manager.packager.custom_triton import CustomTritonPa
 | `model_path_source_type` | No | `StorageType.LOCAL` | Storage backend type |
 | `requirements` | No | `None` | Dependencies as a list or path to `requirements.txt` |
 | `include_import_prefixes` | No | `None` (all imports) | List of module prefixes to bundle |
+| `additional_import_prefixes` | No | `None` | Extra module prefixes whose source files are bundled, for dynamic imports that static analysis misses |
 
 ### load_raw_model
 
@@ -250,7 +255,7 @@ model = load_raw_model("/path/to/raw/package")
 Returns an instance of your `Model` subclass, fully loaded and ready for inference.
 
 :::note
-`load_raw_model` currently supports Custom Python models (`RawModelType.CUSTOM_PYTHON`). Support for additional model types (HuggingFace, PyTorch) is planned for future releases.
+`load_raw_model` supports Custom Python models (`RawModelType.CUSTOM_PYTHON`) and PyTorch/Lightning raw packages (`RawModelType.TORCH`, `RawModelType.LIGHTNING`). Other types, such as HuggingFace, raise `NotImplementedError`.
 :::
 
 ## Advanced Topics
@@ -339,8 +344,11 @@ model_name/
 │   ├── model.py                    # Triton Python backend entry point
 │   ├── user_model.py               # Your model implementation
 │   ├── model_class.txt             # Fully qualified Python class path
-│   ├── download.yaml               # Metadata for raw model files
+│   ├── model/                      # Model binaries (your saved artifacts)
 │   └── myproject/models/...        # Auto-packaged runtime dependencies
+├── metadata/
+│   ├── schema.yaml                 # Input/output schema
+│   └── sample_data.json            # Only when sample_data is passed
 └── config.pbtxt                    # Triton configuration (I/O schema, batching)
 ```
 
@@ -349,22 +357,24 @@ model_name/
 | `model.py` | Triton Python backend entry point |
 | `user_model.py` | Your model's forward pass and inference logic |
 | `model_class.txt` | Fully qualified Python class path |
-| `download.yaml` | Metadata describing how raw model files were produced |
+| `model/` | Your saved model artifacts |
+| `metadata/schema.yaml` | The model schema |
 | `config.pbtxt` | Triton configuration (I/O schema, batching, instances) |
 
 #### Raw Format (Developer-Facing)
 
 ```
-model_name/
-└── 0/
-    ├── metadata/
-    │   ├── type.yaml               # Model type (custom-python, torch, etc.)
-    │   ├── schema.yaml             # Input/output schema
-    │   └── sample_data.yaml        # Sample data for testing
-    ├── model/                      # Model binaries (your saved artifacts)
-    └── defs/
-        ├── model_class.txt         # Fully qualified class path
-        └── myproject/models/...    # Runtime code dependencies
+raw_package/
+├── metadata/
+│   ├── type.yaml                   # Model type (custom-python)
+│   ├── schema.yaml                 # Input/output schema
+│   └── sample_data.json            # Sample data for testing
+├── model/                          # Model binaries (your saved artifacts)
+├── defs/
+│   ├── model_class.txt             # Fully qualified class path
+│   └── myproject/models/...        # Runtime code dependencies
+└── dependencies/
+    └── requirements.txt            # Only when requirements are passed
 ```
 
 ## Integration with Uniflow Workflows
@@ -419,13 +429,13 @@ The `model_class` parameter must be a non-empty string containing the fully qual
 
 ### `ValueError: model_schema is required`
 
-A `ModelSchema` with at least one input and one output `ModelSchemaItem` must be provided.
+A non-empty `model_schema` argument must be provided (passing `None` raises this error).
 
 ### Schema validation errors
 
 Ensure your sample data matches the schema exactly:
 
-* Each required input feature must be present in every sample
+* Each sample must contain exactly the input features named in `input_schema` -- missing or extra keys are rejected
 * Array shapes must match the schema's `shape` field
 * Array dtypes must be compatible with the schema's `data_type`
 
@@ -435,7 +445,7 @@ When using `DataType.STRING`, pass byte strings in your NumPy arrays (e.g., `np.
 
 ### `NotImplementedError: The loader for ... model is not supported yet`
 
-`load_raw_model` currently only supports Custom Python models. HuggingFace and PyTorch loaders are planned for future releases.
+`load_raw_model` does not yet have a loader for the model type recorded in the package's `metadata/type.yaml` (for example, HuggingFace). Custom Python, PyTorch, and Lightning raw packages are supported.
 
 ### Model class validation fails
 

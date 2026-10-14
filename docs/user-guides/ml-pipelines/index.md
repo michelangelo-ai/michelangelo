@@ -1,3 +1,7 @@
+---
+last_verified: 2026-10-14
+---
+
 # ML Pipelines
 
 ML Pipelines on Michelangelo AI let you build, run, and manage end-to-end machine learning workflows -- from data preparation to model training and evaluation. Pipelines are built with **Uniflow**, a Python-first framework that lets you define workflows using standard Python functions and run them locally or at production scale.
