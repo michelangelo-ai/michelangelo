@@ -35,12 +35,18 @@ Use descriptive, kebab-case branch names with a short prefix indicating the type
 
 ## PR Description
 
-A good PR description lets reviewers understand the change without asking questions. Include:
+A good PR description lets reviewers understand the change without asking questions. GitHub pre-fills the description from the [pull request template](https://github.com/michelangelo-ai/michelangelo/blob/main/.github/pull_request_template.md); fill in every section:
 
-1. **What** — what does this change do?
-2. **Why** — motivation, or link to the GitHub issue (e.g., `Closes #123`)
-3. **How to test** — steps to verify the change works
-4. **Breaking changes** — any migration steps required (API changes, config field renames, etc.)
+1. **Type** — check the applicable PR types (refactor, feature, bug fix, optimization, documentation)
+2. **What changed?** — what does this change do?
+3. **Why?** — motivation, or link to the GitHub issue (e.g., `Closes #123`)
+4. **How did you test it?** — steps you took to verify the change works
+5. **Potential risks** — what could break when this is deployed
+6. **Breaking changes** — check every category that applies (API, proto, Helm, config/deployment), or "No breaking changes"
+7. **Migration guide** — required if any breaking-change box is checked: step-by-step upgrade instructions with before/after examples
+8. **Release notes** and **Documentation changes** — anything notable for the release, and any docs you updated
+
+If you check a breaking-change box, the commit message must also carry a `BREAKING CHANGE:` footer or a `!` suffix (e.g., `feat!:`). See [Commit Messages](https://github.com/michelangelo-ai/michelangelo/blob/main/CONTRIBUTING.md#commit-messages).
 
 ## Checks That Must Pass
 
