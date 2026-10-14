@@ -11,10 +11,10 @@ This section provides instructions for contributors to set up the development en
 Run the Sandbox without the worker component (you will start the worker separately in the next step):
 
 ```sh
-sandbox create --exclude worker
+ma sandbox create --exclude worker
 ```
 
-Refer to the [sandbox README]() for more details.
+Refer to the [sandbox README](../../../python/michelangelo/cli/sandbox/README.md) for more details.
 
 ### 2. Run the Worker
 

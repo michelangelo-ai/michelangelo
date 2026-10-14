@@ -54,9 +54,9 @@ michelangelo/
 ├── docs/           # Documentation files go here
 │   ├── intro.md
 │   ├── getting-started/
-│   │   ├── installation.md
-│   │   └── quickstart.md
-│   └── guides/
+│   │   ├── sandbox-setup.md
+│   │   └── ...
+│   └── user-guides/
 │       └── ...
 └── website/        # Docusaurus site config (you are here)
 ```
@@ -91,12 +91,12 @@ Your content here...
 
 The sidebar is **auto-generated** from the folder structure. To organize:
 
-- Create folders for categories (e.g., `docs/guides/`)
+- Create folders for categories (e.g., `docs/user-guides/`)
 - Add a `_category_.json` file to customize the category:
 
 ```json
 {
-  "label": "Guides",
+  "label": "User Guides",
   "position": 2
 }
 ```
@@ -106,7 +106,7 @@ The sidebar is **auto-generated** from the folder structure. To organize:
 Use relative paths to link to other docs:
 
 ```md
-See the [installation guide](./getting-started/installation.md) for more details.
+See the [sandbox setup guide](./getting-started/sandbox-setup.md) for more details.
 ```
 
 ### Adding images

@@ -6,7 +6,7 @@ To run the Controller Manager locally, ensure your Kubernetes configuration is c
 
 1. **Create a sandbox cluster:**
 ```bash
-sandbox.sh create
+ma sandbox create
 ```
 
 2. **Start the Controller Manager:**
@@ -15,26 +15,27 @@ bazel run //go/cmd/controllermgr
 ```
 
 ## Build and Run in a Container
-To build the `:image`  target, use the following command with the specified platform flag for Linux containers:
 
+The release images are built from [`docker/service.Dockerfile`](../../../docker/service.Dockerfile), which copies a prebuilt static binary and the service config directory into a distroless base image.
+
+1. **Build the static Linux binary** (from the repository root; the binary is written to the repo root):
 ```bash
-bazel build //go/cmd/controllermgr:image.tar --platforms=@io_bazel_rules_go//go/toolchain:linux_amd64
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o controllermgr ./go/cmd/controllermgr
+```
+Adjust `GOARCH` to `arm64` on Apple Silicon.
+
+2. **Build the image** (from the repository root):
+```bash
+docker build -f docker/service.Dockerfile \
+  --build-arg BINARY_PATH=controllermgr \
+  --build-arg CONFIG_PATH=go/cmd/controllermgr/config \
+  -t michelangelo-controllermgr:local .
 ```
 
-Load the Image into Docker
-1. **Load the generated image into your local Docker registry:**
-```bash
-docker load -i $WORKSPACE_ROOT/bazel-bin/go/cmd/controllermgr/image.tar
-```
-
-Run the Controller Manager in a Container
-
-2. **Load the generated image into your local Docker registry:**
+3. **Run the Controller Manager in a container:**
 ```bash
 docker run --rm --network=host \
-  -e CONFIG_DIR=./go/cmd/controllermgr/config \
+  -e CONFIG_DIR=/config \
   -v $HOME/.kube:/root/.kube \
-  bazel/go/cmd/controllermgr:image
+  michelangelo-controllermgr:local
 ```
-
-By following these instructions, you can effectively run, build, and deploy the Kubernetes Controller Manager locally or in a containerized environment.

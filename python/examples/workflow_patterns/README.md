@@ -35,17 +35,13 @@ poetry install --extras "example"
 python -m examples.workflow_patterns.workflow_patterns
 ```
 
-To run with a larger dataset:
-
-```bash
-python -m examples.workflow_patterns.workflow_patterns --input '{"large_dataset": true}'
-```
+To run with a larger dataset, pass the workflow argument in the entry point (local runs accept only `--environ`, not workflow inputs), e.g. change the last line of `workflow_patterns.py` to `ctx.run(pipeline, large_dataset=True)`.
 
 For remote execution on a Michelangelo AI cluster:
 
 ```bash
 python -m examples.workflow_patterns.workflow_patterns remote-run \
-    --project ma-examples \
+    --storage-url s3://<bucket>/<prefix> \
     --image ghcr.io/michelangelo-ai/examples:main
 ```
 

@@ -1,8 +1,10 @@
 # Pipeline Plugin for Python/Uniflow
 
-This module provides Python functions for running child pipelines from within Uniflow workflows, matching the functionality of the Go/Starlark pipeline plugin.
+This module provides a Python function (`run_pipeline`) for running child pipelines from within Uniflow workflows, matching the functionality of the Go/Starlark pipeline plugin.
 
 ## Functions
+
+The package exports a single public function, `run_pipeline`. Polling is handled internally by `run_pipeline`.
 
 ### `run_pipeline`
 
@@ -52,38 +54,14 @@ def run_pipeline(
 **Raises:**
 - `ValueError`: If input_data is provided together with environ/args/kwargs, or if required parameters are missing
 - `RuntimeError`: If the pipeline run fails or is killed
-
-### `sensor`
-
-Monitors a pipeline run until it reaches a terminal state.
-
-**Signature:**
-```python
-def sensor(
-    namespace: str,
-    name: str,
-    timeout_seconds: int = 0,
-    poll_seconds: int = 10,
-) -> Dict[str, Any]
-```
-
-**Parameters:**
-- `namespace`: Namespace of the pipeline run
-- `name`: Name of the pipeline run to monitor
-- `timeout_seconds`: Maximum time in seconds to wait for completion (default: 0 = uses default timeout of 10 years)
-- `poll_seconds`: Polling interval in seconds (default: 10)
-
-**Returns:**
-Same format as `run_pipeline`.
-
-**Raises:**
-- `RuntimeError`: If the pipeline run fails or is killed, or if timeout is exceeded
+- `TimeoutError`: If the pipeline run does not reach a terminal state within `timeout_seconds`
 
 ## Examples
 
 ### Running a Uniflow pipeline with kwargs
 
 ```python
+import michelangelo.uniflow.core as uniflow
 from michelangelo.uniflow.plugins.pipeline import run_pipeline
 
 @uniflow.workflow()
@@ -142,33 +120,6 @@ result = run_pipeline(
         "output_path": "/path/to/output"
     }
 )
-```
-
-### Using sensor separately
-
-```python
-from michelangelo.uniflow.plugins.pipeline import run_pipeline, sensor
-
-@uniflow.workflow()
-def my_workflow():
-    # Create pipeline run
-    result = run_pipeline(
-        namespace="my-project",
-        pipeline_name="training-pipeline",
-        kwargs={"param": "value"}
-    )
-    
-    # Do something else...
-    
-    # Monitor the same run again
-    sensor_result = sensor(
-        namespace=result["metadata"]["namespace"],
-        name=result["metadata"]["name"],
-        timeout_seconds=3600,
-        poll_seconds=10
-    )
-    
-    return sensor_result
 ```
 
 ## Notes
