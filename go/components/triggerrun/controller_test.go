@@ -209,7 +209,7 @@ func TestReconcile(t *testing.T) {
 			},
 			expectErr:      false,
 			expectedErrStr: "",
-			expectedStatus: v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_KILLED},
+			expectedStatus: v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_PENDING_KILL},
 			expectRequeue:  true,
 		},
 		{

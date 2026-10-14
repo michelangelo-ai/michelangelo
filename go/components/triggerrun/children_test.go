@@ -109,6 +109,112 @@ func TestReconcile_KilledTriggerCancelsChildren(t *testing.T) {
 	assert.Equal(t, v2pb.TRIGGER_RUN_STATE_KILLED, got.Status.State, "trigger stays visible as KILLED")
 }
 
+// TestReconcile_KillWaitsInPendingKill: a kill stops the workflow and holds the
+// trigger in PENDING_KILL, cancelling its children, until they are all terminal;
+// only then does it become KILLED and immutable.
+func TestReconcile_KillWaitsInPendingKill(t *testing.T) {
+	for _, state := range []v2pb.TriggerRunState{v2pb.TRIGGER_RUN_STATE_RUNNING, v2pb.TRIGGER_RUN_STATE_PAUSED} {
+		t.Run(state.String(), func(t *testing.T) {
+			scheme := cascadeScheme(t)
+			trigger := &v2pb.TriggerRun{
+				ObjectMeta: metav1.ObjectMeta{Name: "tr", Namespace: "ns"},
+				Spec:       v2pb.TriggerRunSpec{Action: v2pb.TRIGGER_RUN_ACTION_KILL},
+				Status:     v2pb.TriggerRunStatus{State: state},
+			}
+			child := childRun("running", "tr", v2pb.PIPELINE_RUN_STATE_RUNNING, false)
+			c := fake.NewClientBuilder().WithScheme(scheme).
+				WithObjects(trigger, child).WithStatusSubresource(trigger, child).Build()
+
+			mockRunner := &MockRunner{}
+			mockRunner.On("Update", mock.Anything, mock.Anything, mock.Anything).
+				Return(v2pb.TriggerRunStatus{State: state}, false, nil).Once()
+			mockRunner.On("Kill", mock.Anything, mock.Anything).
+				Return(v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_KILLED}, nil).Once()
+			r := &Reconciler{Handler: apiHandler.NewFakeAPIHandler(c), scheme: scheme, log: logr.Discard(), cronTrigger: mockRunner}
+
+			// Workflow killed: the trigger waits in PENDING_KILL.
+			_, err := r.reconcile(context.Background(), logr.Discard(), getTrigger(t, c, "tr"))
+			require.NoError(t, err)
+			got := getTrigger(t, c, "tr")
+			assert.Equal(t, v2pb.TRIGGER_RUN_STATE_PENDING_KILL, got.Status.State)
+			assert.Equal(t, v2pb.TRIGGER_RUN_ACTION_NO_ACTION, got.Spec.Action, "kill action consumed")
+
+			// Child flagged for kill but still running: stay PENDING_KILL and requeue.
+			res, err := r.reconcile(context.Background(), logr.Discard(), getTrigger(t, c, "tr"))
+			require.NoError(t, err)
+			assert.Equal(t, drainRequeueInterval, res.RequeueAfter)
+			assert.True(t, getChild(t, c, "running").Spec.Kill)
+			assert.Equal(t, v2pb.TRIGGER_RUN_STATE_PENDING_KILL, getTrigger(t, c, "tr").Status.State)
+
+			// Child stopped: the trigger becomes KILLED, then immutable.
+			killed := getChild(t, c, "running")
+			killed.Status.State = v2pb.PIPELINE_RUN_STATE_KILLED
+			require.NoError(t, c.Status().Update(context.Background(), killed))
+			_, err = r.reconcile(context.Background(), logr.Discard(), getTrigger(t, c, "tr"))
+			require.NoError(t, err)
+			assert.Equal(t, v2pb.TRIGGER_RUN_STATE_KILLED, getTrigger(t, c, "tr").Status.State)
+			_, err = r.reconcile(context.Background(), logr.Discard(), getTrigger(t, c, "tr"))
+			require.NoError(t, err)
+			assert.True(t, apiutils.IsImmutable(getTrigger(t, c, "tr")))
+			mockRunner.AssertExpectations(t)
+		})
+	}
+}
+
+// TestReconcile_PendingKillRetriesFailedCancel: a failed child cancel is returned for
+// retry and leaves the trigger in PENDING_KILL rather than reporting KILLED.
+func TestReconcile_PendingKillRetriesFailedCancel(t *testing.T) {
+	scheme := cascadeScheme(t)
+	trigger := &v2pb.TriggerRun{
+		ObjectMeta: metav1.ObjectMeta{Name: "tr", Namespace: "ns"},
+		Status:     v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_PENDING_KILL},
+	}
+	c := fake.NewClientBuilder().WithScheme(scheme).
+		WithObjects(trigger).WithStatusSubresource(trigger).
+		WithInterceptorFuncs(interceptor.Funcs{
+			List: func(ctx context.Context, cl client.WithWatch, list client.ObjectList, opts ...client.ListOption) error {
+				if _, ok := list.(*v2pb.PipelineRunList); ok {
+					return assert.AnError
+				}
+				return cl.List(ctx, list, opts...)
+			},
+		}).Build()
+	r := &Reconciler{Handler: apiHandler.NewFakeAPIHandler(c), scheme: scheme, log: logr.Discard(), cronTrigger: &MockRunner{}}
+
+	_, err := r.reconcile(context.Background(), logr.Discard(), getTrigger(t, c, "tr"))
+	require.Error(t, err)
+	got := getTrigger(t, c, "tr")
+	assert.Equal(t, v2pb.TRIGGER_RUN_STATE_PENDING_KILL, got.Status.State)
+	assert.False(t, apiutils.IsImmutable(got))
+}
+
+// TestReconcile_DeletePendingKillTrigger: deleting a trigger in PENDING_KILL does not
+// re-kill its stopped workflow; it moves to KILLED and the drain waits on children.
+func TestReconcile_DeletePendingKillTrigger(t *testing.T) {
+	scheme := cascadeScheme(t)
+	now := metav1.Now()
+	trigger := &v2pb.TriggerRun{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "tr", Namespace: "ns", UID: types.UID("t1"),
+			Finalizers: []string{drainFinalizer}, DeletionTimestamp: &now,
+		},
+		Status: v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_PENDING_KILL},
+	}
+	c := fake.NewClientBuilder().WithScheme(scheme).
+		WithObjects(trigger, childRun("running", "tr", v2pb.PIPELINE_RUN_STATE_RUNNING, true)).
+		WithStatusSubresource(trigger).Build()
+
+	mockRunner := &MockRunner{}
+	r := &Reconciler{Handler: apiHandler.NewFakeAPIHandler(c), scheme: scheme, log: logr.Discard(), cronTrigger: mockRunner}
+
+	_, err := r.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{Name: "tr", Namespace: "ns"}})
+	require.NoError(t, err)
+	got := getTrigger(t, c, "tr")
+	assert.Equal(t, v2pb.TRIGGER_RUN_STATE_KILLED, got.Status.State)
+	assert.True(t, ctrlutil.ContainsFinalizer(got, drainFinalizer), "finalizer kept while a child is still active")
+	mockRunner.AssertNotCalled(t, "Kill", mock.Anything, mock.Anything)
+}
+
 // TestReconcile_FailedTriggerLeavesChildren: only KILLED cascades; a trigger that
 // finished on its own does not cancel children still running.
 func TestReconcile_FailedTriggerLeavesChildren(t *testing.T) {
