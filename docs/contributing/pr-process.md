@@ -1,3 +1,7 @@
+---
+last_verified: 2026-10-14
+---
+
 # PR Process
 
 Contributing to Michelangelo AI follows a standard fork-and-PR workflow. This guide covers everything from branch creation to merge.
@@ -49,7 +53,7 @@ bazel test //go/...
 
 # Python: lint and pre-commit hooks
 cd python
-poetry run pre-commit
+poetry run pre-commit run --all-files
 poetry run ruff check .
 poetry run ruff format --check .
 poetry run pytest
@@ -72,12 +76,9 @@ Reviewers will check for:
 
 ## Merging
 
-Maintainers merge approved PRs. Preferred strategies:
+Maintainers merge approved PRs. The repository only allows **squash merges**, which keep `main` history clean with one commit per logical change. The PR title and description become the commit message, so write them accordingly.
 
-- **Squash merge** for feature and fix branches — keeps `main` history clean with one commit per logical change
-- **Merge commit** for branches with meaningful commit history that should be preserved
-
-After merge, delete your branch.
+Merged branches are deleted automatically.
 
 ## Stacked PRs
 

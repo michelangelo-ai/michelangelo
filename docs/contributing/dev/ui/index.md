@@ -1,4 +1,5 @@
 ---
+last_verified: 2026-10-14
 sidebar_position: 1
 ---
 
@@ -19,7 +20,7 @@ Internal architecture reference for contributors to the Michelangelo AI UI codeb
 | [React Final Form](https://final-form.org/react) | 6.5.9 | Form state management |
 | [Vite](https://vite.dev/) | 6.2.0 | Build tooling and dev server |
 | [Vitest](https://vitest.dev/) | 3.x | Testing framework |
-| [Connect RPC](https://connectrpc.com/) | 2.0.x | gRPC-Web communication |
+| [Protobuf-ES](https://github.com/bufbuild/protobuf-es) | 2.x | Generated message schemas used to convert proto3 JSON |
 
 ## Package Structure
 
@@ -31,7 +32,7 @@ javascript/
 │   └── package.json        # @michelangelo/app
 ├── packages/
 │   ├── core/               # Core UI components and utilities
-│   │   └── package.json    # @uber/michelangelo-core
+│   │   └── package.json    # @michelangelo-ai/core
 │   └── rpc/                # RPC client and error handling
 │       └── package.json    # @michelangelo-ai/rpc
 └── package.json            # Workspace root
@@ -44,7 +45,7 @@ javascript/
 - Feature-specific views and pages
 - Application-level configuration
 
-**@uber/michelangelo-core**: Shared UI components and utilities. Contains:
+**@michelangelo-ai/core**: Shared UI components and utilities. Contains:
 - React components (table, cell, form, views)
 - React hooks (routing, queries, mutations)
 - Provider components (service, error, interpolation)
@@ -52,8 +53,9 @@ javascript/
 - Test utilities
 
 **@michelangelo-ai/rpc**: RPC client and error handling. Contains:
-- Connect RPC client configuration
-- Error normalization for Connect errors
+- A fetch-based transport that exchanges proto3 JSON with the Envoy gRPC-JSON transcoder
+- Generated protobuf-es schemas, used to convert request and response messages
+- Error normalization for transcoder errors (`normalizeTranscoderError`)
 
 ## Build and Bundling
 
@@ -79,7 +81,7 @@ yarn build
 
 Build order:
 1. Generate gRPC client code (`yarn generate`)
-2. Build `@uber/michelangelo-core`
+2. Build `@michelangelo-ai/core`
 3. Build `@michelangelo-ai/rpc`
 4. Build `@michelangelo/app`
 
@@ -101,12 +103,12 @@ Build order:
 The codebase uses TypeScript path aliases:
 
 ```typescript
-// In @uber/michelangelo-core
+// In @michelangelo-ai/core
 import { useStudioQuery } from '#core/hooks/use-studio-query';
 import { Phase } from '#core/types/common/studio-types';
 
 // In @michelangelo-ai/rpc
-import { normalizeConnectError } from '#rpc/normalize-connect-error';
+import { normalizeTranscoderError } from '#rpc/normalize-transcoder-error';
 ```
 
 ## Related Documentation

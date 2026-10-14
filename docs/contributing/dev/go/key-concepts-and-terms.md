@@ -1,4 +1,5 @@
 ---
+last_verified: 2026-10-14
 sidebar_position: 1
 sidebar_label: "Key Concepts and Terms"
 ---
@@ -11,7 +12,7 @@ This page is the entry point for contributors working on the Go backend. It maps
 
 ## Codebase Role
 
-Go is the primary backend language — approximately 299K lines of the codebase. It implements the three main server-side services: API server, controller manager, and worker. The Python SDK and CLI are thin clients; all persistent state and compute orchestration runs in Go.
+Go is the primary backend language — approximately 104K lines under `go/`. It implements the three main server-side services: API server, controller manager, and worker. The Python SDK and CLI are thin clients; all persistent state and compute orchestration runs in Go.
 
 ---
 
@@ -25,7 +26,7 @@ go/
 │   └── worker/               # Cadence workflow and activity workers
 ├── components/               # Reusable packages with business logic
 │   ├── inferenceserver/      # InferenceServer reconciliation, backends, endpoints
-│   │   └── backends/         # Backend interface + registry + implementations (Triton, vLLM)
+│   │   └── backends/         # Backend interface + registry + implementations (currently Triton)
 │   ├── jobs/                 # Ray and Spark job client logic
 │   │   └── scheduler/        # Job scheduling abstraction and AssignmentStrategy framework
 │   ├── pipelinerun/          # PipelineRun actors and workflow execution

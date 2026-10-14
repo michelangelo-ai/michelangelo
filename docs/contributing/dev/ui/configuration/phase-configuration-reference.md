@@ -1,3 +1,7 @@
+---
+last_verified: 2026-10-14
+---
+
 # Phase Configuration Reference
 
 Phases group entities by ML lifecycle stage, providing structure to the Michelangelo AI UI workflow. Each phase represents a step in the machine learning operations lifecycle (e.g., data preparation, training, deployment, monitoring).
@@ -19,6 +23,7 @@ Phases group entities by ML lifecycle stage, providing structure to the Michelan
 | `entities` | `PhaseEntityConfig[]` | List of entities that belong to this phase | ✅ Yes |
 | `description` | `string` | Optional descriptive text explaining what this phase does | No |
 | `docUrl` | `string` | Optional URL to external documentation for this phase | No |
+| `pipelineTypes` | `string[]` | Optional pipeline type values (e.g., `['PIPELINE_TYPE_TRAIN']`) that restrict the phase's pipeline-derived entities (pipelines, runs, triggers) | No |
 
 ## Phase States
 
@@ -53,6 +58,11 @@ The `state` property controls overall phase behavior and appearance:
 
 ### `docUrl`
 - Optional link to external documentation
+
+### `pipelineTypes`
+- Optional list of pipeline type values, e.g. `['PIPELINE_TYPE_TRAIN', 'PIPELINE_TYPE_EVAL']`
+- Restricts the phase's pipeline-derived entities (pipelines, runs, triggers) to those types
+- Omit to show all pipeline types
 
 ### `entities`
 - Array of entity configurations (see [Entity Configuration Reference](./entity-configuration-reference.md))

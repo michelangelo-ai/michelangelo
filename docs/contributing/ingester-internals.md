@@ -1,10 +1,14 @@
+---
+last_verified: 2026-10-14
+---
+
 # Ingester Controller: Architecture and Implementation
 
 This guide explains the internal design of the Ingester controller for developers who need to understand, extend, or modify the ingester code.
 
 ## Overview
 
-The Ingester is a generic Kubernetes controller that watches all 13 Michelangelo AI CRDs and durably syncs them into MySQL. Its purpose is to decouple metadata storage from etcd: Michelangelo AI's API Server and query layer can read from MySQL (faster, richer query capabilities) rather than depending solely on etcd. One `Reconciler` instance runs per CRD kind, watching only objects of that type and upserting them into a dedicated MySQL table on every create, update, or delete event.
+The Ingester is a generic Kubernetes controller that watches all 15 Michelangelo AI CRDs and durably syncs them into MySQL. Its purpose is to decouple metadata storage from etcd: Michelangelo AI's API Server and query layer can read from MySQL (faster, richer query capabilities) rather than depending solely on etcd. One `Reconciler` instance runs per CRD kind, watching only objects of that type and upserting them into a dedicated MySQL table on every create, update, or delete event.
 
 ## Finalizer Implementation
 
@@ -23,10 +27,10 @@ Kubernetes guarantees that objects are not removed from the API server until all
 
 ### Finalizer Injection (API Server)
 
-The API Server injects the finalizer during object creation, before writing to etcd:
+When metadata storage is enabled, the API Server injects the finalizer during object creation, before writing to etcd:
 
 ```go
-// go/api/handler/handler.go:546-547
+// go/api/handler/handler.go (handleMetadataStorageForCreate)
 ctrlRTUtil.AddFinalizer(objMeta.(ctrlRTClient.Object), api.IngesterFinalizer)
 ```
 
@@ -37,7 +41,7 @@ ctrlRTUtil.AddFinalizer(objMeta.(ctrlRTClient.Object), api.IngesterFinalizer)
 The ingester removes the finalizer only after MySQL has been successfully updated:
 
 ```go
-// go/components/ingester/controller.go:134-138
+// go/components/ingester/controller.go (handleDeletion)
 ctrlutil.RemoveFinalizer(object, api.IngesterFinalizer)
 if err := r.Update(ctx, object); err != nil {
     log.Error(err, "Failed to remove finalizer")
@@ -45,7 +49,7 @@ if err := r.Update(ctx, object); err != nil {
 }
 ```
 
-If MySQL is unreachable or the delete fails, the finalizer remains in place and the object stays in etcd. The controller retries every `requeuPeriod` (default: 30 seconds) until the operation succeeds.
+If MySQL is unreachable or the delete fails, the finalizer remains in place and the object stays in etcd. The controller retries after the configured requeue period (`RequeuePeriod`, default: 30 seconds) until the operation succeeds.
 
 ### Annotation-Based Deletion
 
@@ -59,21 +63,23 @@ DeletingAnnotation = "michelangelo/Deleting"
 When the API Server receives a delete request and metadata storage is enabled:
 
 ```go
-// go/api/handler/handler.go:253,293
+// go/api/handler/handler.go (Delete handler)
 annotation[api.DeletingAnnotation] = "true"
 ```
 
-The ingester detects this annotation and handles the deletion asynchronously:
+If the caller supplied a delete propagation policy (for example Foreground for cascade deletion), the API Server also records it in the `michelangelo/DeletePropagation` annotation so the ingester can honor it on the real Kubernetes delete.
+
+The ingester detects the `Deleting` annotation and handles the deletion asynchronously:
 
 ```
-annotation set → ingester detects → MySQL soft-delete → remove finalizer → K8s delete
+annotation set → ingester detects → MySQL soft-delete → K8s delete (finalizer still present, so K8s sets DeletionTimestamp) → next reconcile removes finalizer → object gone
 ```
 
 This path ensures the API Server's delete request completes instantly from the caller's perspective while the ingester handles the MySQL cleanup asynchronously.
 
 ### Immutable Objects
 
-The `michelangelo/Immutable` annotation marks objects whose spec will never change again (e.g., completed PipelineRuns, archived Models). The ingester:
+The `michelangelo/Immutable` annotation marks objects whose spec will never change again (e.g., completed PipelineRuns, archived Models). Kinds that report `IsImmutableKind()` are treated the same way without the annotation. The ingester:
 
 1. Upserts the object to MySQL one final time.
 2. Removes the finalizer.
@@ -89,17 +95,24 @@ ImmutableAnnotation = "michelangelo/Immutable"
 ### Reconcile Decision Tree
 
 ```
-Reconcile(object)
+Reconcile(object)            (30s context timeout)
     │
     ├── object not found in K8s ──→ no-op (already gone)
     │
     ├── DeletionTimestamp set ──→ handleDeletion()
-    │       └── MySQL.Delete() → RemoveFinalizer → done
+    │       ├── ingester finalizer absent ──→ no-op
+    │       ├── no michelangelo/Deleting annotation (kubectl / GC delete) ──→ handleCascadeDeletion()
+    │       │       ├── kind not in RetainPolicy ──→ MySQL.Delete() (soft-delete)
+    │       │       └── kind in RetainPolicy ──→ upsert final state; wait while a drain finalizer is present
+    │       └── RemoveFinalizer → done
     │
     ├── annotation michelangelo/Deleting = "true" ──→ handleDeletionAnnotation()
-    │       └── MySQL.Delete() → RemoveFinalizer → K8s.Delete() → done
+    │       └── MySQL.Delete() → K8s.Delete() (finalizer kept) → next reconcile hits handleDeletion()
     │
-    ├── annotation michelangelo/Immutable = "true" ──→ handleImmutableObject()
+    ├── michelangelo/MetadataStoragePrimaryKey annotation missing ──→ set it to the UID, Update, return
+    │       (the Update triggers a new reconcile that continues below)
+    │
+    ├── annotation michelangelo/Immutable = "true" or IsImmutableKind() ──→ handleImmutableObject()
     │       └── MySQL.Upsert() → RemoveFinalizer → K8s.Delete() → done
     │
     └── (normal) ──→ handleSync()
@@ -110,53 +123,57 @@ Reconcile(object)
 
 ### Schema Layout
 
-For each of the 13 CRDs, there are 3 MySQL tables:
+For each of the 15 CRDs, there are 3 MySQL tables:
 
 | Table Type | Naming | Purpose |
 |-----------|--------|---------|
-| Main | `<kind>` | Core object data (uid, name, namespace, JSON, proto, indexed fields) |
-| Labels | `<kind>_labels` | Key-value label pairs per object UID |
-| Annotations | `<kind>_annotations` | Key-value annotation pairs per object UID |
+| Main | `<kind_snake_case>` | Core object data (uid, name, namespace, JSON, proto, indexed fields) |
+| Labels | `<kind_snake_case>_labels` | Key-value label pairs per object UID |
+| Annotations | `<kind_snake_case>_annotations` | Key-value annotation pairs per object UID |
 
-The 13 CRDs and their table names (derived by `strings.ToLower(kind)`):
+The 15 CRDs and their table names (the kind converted to snake_case by `utils.ToSnakeCase`):
 
 | CRD Kind | Table Name |
 |----------|-----------|
 | Project | `project` |
-| ModelFamily | `modelfamily` |
+| ModelFamily | `model_family` |
 | Model | `model` |
 | Pipeline | `pipeline` |
-| PipelineRun | `pipelinerun` |
-| InferenceServer | `inferenceserver` |
+| PipelineRun | `pipeline_run` |
+| InferenceServer | `inference_server` |
 | Revision | `revision` |
 | Cluster | `cluster` |
-| RayCluster | `raycluster` |
-| RayJob | `rayjob` |
-| TriggerRun | `triggerrun` |
+| RayCluster | `ray_cluster` |
+| RayJob | `ray_job` |
+| TriggerRun | `trigger_run` |
 | Deployment | `deployment` |
-| SparkJob | `sparkjob` |
+| SparkJob | `spark_job` |
+| CachedOutput | `cached_output` |
+| EvaluationReport | `evaluation_report` |
 
-**Total: 39 tables** (13 × 3)
+**Total: 45 tables** (15 × 3). The DDL lives in `scripts/ingester/ingester_schema.sql` (the same schema ships in `helm/michelangelo/files/schema/mysql-init-schema.sql` and the sandbox's `mysql-ingester.yaml`).
 
 ### Main Table Schema
 
 ```sql
-CREATE TABLE model (
-    uid           VARCHAR(64)  NOT NULL,   -- K8s UID (primary key)
-    group_ver     VARCHAR(128),            -- APIVersion string
-    namespace     VARCHAR(256),
-    name          VARCHAR(256),
-    res_version   BIGINT,                  -- K8s ResourceVersion
-    create_time   DATETIME(6),
-    update_time   DATETIME(6),
-    delete_time   DATETIME(6),             -- NULL = active, non-NULL = soft-deleted
-    proto         LONGBLOB,               -- serialized protobuf
-    json          JSON,                   -- full object as JSON
+CREATE TABLE IF NOT EXISTS `model` (
+    `uid`         VARCHAR(255) NOT NULL,    -- primary key: michelangelo/MetadataStoragePrimaryKey annotation, else K8s UID
+    `group_ver`   VARCHAR(255) NOT NULL,    -- APIVersion string
+    `namespace`   VARCHAR(255) NOT NULL,
+    `name`        VARCHAR(255) NOT NULL,
+    `res_version` BIGINT UNSIGNED NOT NULL, -- K8s ResourceVersion
+    `create_time` DATETIME NOT NULL,
+    `update_time` DATETIME,
+    `delete_time` DATETIME,                 -- NULL = active, non-NULL = soft-deleted
+    `proto`       MEDIUMBLOB,               -- serialized protobuf
+    `json`        JSON,                     -- full object as JSON
     -- CRD-specific indexed fields, e.g.:
-    algorithm     VARCHAR(128),           -- for Model
-    PRIMARY KEY (uid),
-    INDEX idx_namespace_name (namespace, name),
-    INDEX idx_delete_time (delete_time)
+    `algorithm`   VARCHAR(255),             -- for Model
+    PRIMARY KEY (`uid`),
+    KEY `model_namespace_name` (`namespace`, `name`),
+    KEY `model_create_time` (`create_time`),
+    KEY `model_algorithm` (`algorithm`)
+    -- (abbreviated: the real table has more indexed columns and keys)
 );
 ```
 
@@ -178,18 +195,19 @@ ON DUPLICATE KEY UPDATE
     algorithm    = VALUES(algorithm);
 ```
 
-Labels and annotations are replaced fully on every upsert (delete all existing rows for the UID, re-insert from current state).
+Labels and annotations are replaced fully on every upsert (delete all existing rows for the object's primary key, re-insert from current state), inside the same transaction as the main row.
 
 ### Indexed Fields
 
-CRDs that implement `storage.IndexedObject` expose `GetIndexedKeyValuePairs()` to return fields that are stored in dedicated indexed columns. This allows MySQL queries without JSON extraction.
+CRDs that implement `storage.IndexedObject` expose `GetIndexedKeyValuePairs()` to return fields that are stored in dedicated indexed columns. This allows MySQL queries without JSON extraction. The method is generated into `proto-go/api/v2/*.pb.go` from the proto field annotations.
 
-Example for `Model`:
+Example for `Model` (abbreviated; the generated method returns more fields):
 
 ```go
 func (m *Model) GetIndexedKeyValuePairs() []storage.IndexedField {
     return []storage.IndexedField{
         {Key: "algorithm", Value: m.Spec.Algorithm},
+        // ... src_pipeline_run_namespace, src_pipeline_run_name, and other indexed columns
     }
 }
 ```
@@ -200,10 +218,12 @@ func (m *Model) GetIndexedKeyValuePairs() []storage.IndexedField {
 
 ```go
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-    log := r.Log.WithValues("namespace", req.Namespace, "name", req.Name)
-    log.Info("Reconciling object")
+    ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+    defer cancel()
 
-    object := r.TargetKind.DeepCopyObject().(client.Object)
+    log := r.log.WithValues("namespace", req.Namespace, "name", req.Name)
+
+    object := r.targetKind.DeepCopyObject().(client.Object)
 
     if err := r.Get(ctx, req.NamespacedName, object); err != nil {
         if client.IgnoreNotFound(err) == nil {
@@ -218,7 +238,15 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
     if isDeletingAnnotationSet(object) {
         return r.handleDeletionAnnotation(ctx, log, object)  // API Server delete
     }
-    if isImmutable(object) {
+
+    // Pin the MySQL primary key to the UID once; return early after the write.
+    if updated, err := r.ensureMetadataStoragePrimaryKey(ctx, object); err != nil {
+        return ctrl.Result{RequeueAfter: r.getRequeuePeriod()}, err
+    } else if updated {
+        return ctrl.Result{}, nil
+    }
+
+    if isImmutable(object) || isImmutableKind(object) {
         return r.handleImmutableObject(ctx, log, object)     // evict from etcd
     }
     return r.handleSync(ctx, log, object)                     // normal upsert
@@ -249,11 +277,17 @@ func (r *Reconciler) handleDeletion(ctx context.Context, log logr.Logger, object
         return ctrl.Result{}, nil  // finalizer already gone
     }
 
-    gvk := object.GetObjectKind().GroupVersionKind()
-    typeMeta := &metav1.TypeMeta{Kind: gvk.Kind, APIVersion: gvk.GroupVersion().String()}
-
-    if err := r.MetadataStorage.Delete(ctx, typeMeta, object.GetNamespace(), object.GetName()); err != nil {
-        return ctrl.Result{RequeueAfter: r.getRequeuePeriod()}, err
+    // Non-apiserver delete (kubectl, GitOps, cascade GC): there is no Deleting
+    // annotation, so MySQL has not been updated yet. Retain or soft-delete first.
+    if !isDeletingAnnotationSet(object) {
+        wait, err := r.handleCascadeDeletion(ctx, log, object)
+        if err != nil {
+            return ctrl.Result{RequeueAfter: r.getRequeuePeriod()}, err
+        }
+        if wait {
+            // Drain in flight: keep the ingester finalizer and requeue.
+            return ctrl.Result{RequeueAfter: r.getRequeuePeriod()}, nil
+        }
     }
 
     ctrlutil.RemoveFinalizer(object, api.IngesterFinalizer)
@@ -263,6 +297,8 @@ func (r *Reconciler) handleDeletion(ctx context.Context, log logr.Logger, object
     return ctrl.Result{}, nil
 }
 ```
+
+For an API Server delete (annotation present), `handleDeletionAnnotation` has already soft-deleted the MySQL row before issuing the Kubernetes delete, so `handleDeletion` only removes the finalizer.
 
 ### API Server Finalizer Injection
 
@@ -276,14 +312,12 @@ ctrlRTUtil.AddFinalizer(objMeta.(ctrlRTClient.Object), api.IngesterFinalizer)
 
 ```go
 // handler.go (Delete handler)
-if metadataStorageEnabled {
-    annotations := obj.GetAnnotations()
-    if annotations == nil {
-        annotations = make(map[string]string)
-    }
-    annotations[api.DeletingAnnotation] = "true"
-    obj.SetAnnotations(annotations)
-    return r.Update(ctx, obj)  // triggers ingester reconcile
+if metadata storage is enabled {
+    // fetch the live object; immutable objects follow a separate path
+    annotation := tmpObj.GetAnnotations()
+    annotation[api.DeletingAnnotation] = "true"
+    // also records api.DeletePropagationAnnotation when the caller set a propagation policy
+    return handler.k8sHandler.Update(ctx, tmpObj, &metav1.UpdateOptions{})  // triggers ingester reconcile
 }
 // else: normal K8s delete
 ```
@@ -292,7 +326,7 @@ if metadataStorageEnabled {
 
 ### Unit Tests
 
-The controller is tested using `controller-runtime`'s fake client and `testify/mock`. All 4 reconcile flows have dedicated tests in `go/components/ingester/controller_test.go`.
+The controller is tested using `controller-runtime`'s fake client and a `testify/mock`-based `MockMetadataStorage`. All reconcile flows have dedicated tests in `go/components/ingester/controller_test.go`.
 
 **Test pattern**:
 
@@ -316,14 +350,11 @@ func TestReconciler_HandleDeletion(t *testing.T) {
 
     fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(model).Build()
 
+    // Model is not in the cascade RetainPolicy, so a plain delete soft-deletes the row.
     mockStorage := new(MockMetadataStorage)
     mockStorage.On("Delete", mock.Anything, mock.Anything, "default", "test-model").Return(nil)
 
-    reconciler := &Reconciler{
-        Client:          fakeClient,
-        MetadataStorage: mockStorage,
-        // ...
-    }
+    reconciler := NewReconciler(fakeClient, logr.Discard(), scheme, &v2.Model{}, mockStorage)
 
     result, err := reconciler.Reconcile(context.Background(), req)
     require.NoError(t, err)
@@ -336,27 +367,31 @@ func TestReconciler_HandleDeletion(t *testing.T) {
 | Test | Scenario | Assertions |
 |------|----------|-----------|
 | `TestReconciler_HandleSync` | Normal object, no special annotations | `Upsert` called once |
-| `TestReconciler_HandleDeletion` | `DeletionTimestamp` set, grace period expired | `Delete` called, finalizer removed |
+| `TestReconciler_HandleDeletion` | `DeletionTimestamp` set, no `Deleting` annotation, kind not retained | `Delete` called, finalizer removed |
+| `TestHandleDeletion_OnlyRemovesFinalizer` | `DeletionTimestamp` set with `Deleting` annotation | No second `Delete`; finalizer removed |
 | `TestReconciler_HandleDeletionAnnotation` | `michelangelo/Deleting = "true"` annotation | `Delete` called, K8s object gone |
 | `TestReconciler_HandleImmutableObject` | `michelangelo/Immutable = "true"` annotation | `Upsert` called, K8s object gone |
+| `TestReconciler_HandleImmutableKind` | Kind reports `IsImmutableKind()` | `Upsert` called, K8s object gone |
+| `TestReconciler_SetsMetadataStoragePrimaryKey_WhenAbsent` | Primary-key annotation missing | Annotation set to the UID, no `Upsert` yet |
 | `TestReconciler_ObjectNotFound` | Object deleted before reconcile runs | No storage calls |
 | `TestHelperFunctions` | `isDeletingAnnotationSet`, `isImmutable`, `getRequeuePeriod` | Return correct values |
+| `TestDeleteOptionsFromAnnotations` | `michelangelo/DeletePropagation` annotation | Propagation policy delete option is built |
 
 ### Running Unit Tests
 
 ```bash
 bazel test //go/components/ingester/...
 # or
-go test ./go/components/ingester/... -v
+(cd go && go test ./components/ingester/... -v)
 ```
 
 ### Integration / E2E Testing
 
-The integration test suite uses test CRs from `scripts/ingester-test-crs/`. The steps are fully reproducible:
+The integration test suite uses test CRs from `scripts/ingester/ingester-test-crs/`. The steps are fully reproducible:
 
 ```bash
 # 1. Recreate sandbox
-python3 python/michelangelo/cli/sandbox/sandbox.py create
+cd python && poetry run ma sandbox create && cd ..
 
 # 2. Verify schema
 kubectl exec pod/mysql -- mysql -uroot -proot michelangelo -e "SHOW TABLES;"
@@ -365,8 +400,8 @@ kubectl exec pod/mysql -- mysql -uroot -proot michelangelo -e "SHOW TABLES;"
 kubectl apply -f scripts/ingester/ingester-test-crs/
 
 # 4. Verify MySQL rows
-for table in project modelfamily model pipeline pipelinerun inferenceserver \
-             revision cluster raycluster rayjob triggerrun deployment; do
+for table in project model_family model pipeline pipeline_run inference_server \
+             revision cluster ray_cluster ray_job spark_job trigger_run deployment; do
   COUNT=$(kubectl exec pod/mysql -- mysql -uroot -proot michelangelo -sN \
     -e "SELECT COUNT(*) FROM ${table} WHERE namespace='ingester-test';" 2>/dev/null)
   echo "${table}: ${COUNT}"
@@ -388,7 +423,7 @@ kubectl exec pod/mysql -- mysql -uroot -proot michelangelo -sN \
 2. Verify finalizer present: `kubectl get model test -o jsonpath='{.metadata.finalizers}'`
 3. Issue delete via `kubectl delete model test`.
 4. Observe: object enters `Terminating` state (DeletionTimestamp set, finalizer blocking).
-5. Observe ingester logs: `"Object is being deleted"` → `"Grace period expired, deleting from metadata storage"`.
+5. Observe ingester logs: `"Object is being deleted"` → `"Successfully removed finalizer"`. (A plain `kubectl delete` has no `Deleting` annotation, so `handleDeletion` soft-deletes the row via `handleCascadeDeletion` first for kinds outside the `RetainPolicy`.)
 6. Observe MySQL: `delete_time` populated.
 7. Observe: finalizer removed, object disappears from K8s.
 
@@ -404,7 +439,7 @@ kubectl exec pod/mysql -- mysql -uroot -proot michelangelo -sN \
 
 1. Scale down MySQL (or block network access).
 2. Delete a CR.
-3. Observe: ingester logs error `"Failed to delete from metadata storage"` with requeue.
+3. Observe: ingester logs an error (`"Failed to delete object from metadata storage"` for `kubectl delete`, `"Failed to delete from metadata storage"` for an API Server delete) with requeue.
 4. Object remains in `Terminating` state.
 5. Restore MySQL → ingester retries → MySQL updated → finalizer removed → object gone.
 
@@ -428,7 +463,7 @@ func provideMetadataStorage(
     if !mysqlConfigEnabled(mysqlConfig) {
         return nil, fmt.Errorf("metadata storage is enabled but mysql config is empty")
     }
-    return mysqlstorage.NewMetadataStorage(mysqlConfig.ToMySQLConfig(), scheme)
+    return mysqlstorage.NewMetadataStorage(mysqlConfig.ToMySQLConfig(), scheme, nil)
 }
 
 func mysqlConfigEnabled(config baseconfig.MySQLConfig) bool {
@@ -445,10 +480,10 @@ When `provideMetadataStorage` returns `nil`, the ingester module detects it and 
 // go/components/ingester/module.go
 func register(p registerParams) error {
     if p.MetadataStorage == nil {
-        p.Logger.Info("Metadata storage not configured, skipping ingester setup")
+        p.Logger.Info("Metadata storage not configured, skipping ingester controller setup")
         return nil
     }
-    // register one Reconciler per CRD
+    // register one Reconciler per CRD in v2pb.CrdObjects
 }
 ```
 
@@ -456,11 +491,11 @@ No other code changes are required to enable or disable the ingester.
 
 ### Controller Setup
 
-One `Reconciler` is registered per CRD kind, watching only that specific type:
+One `Reconciler` is registered per CRD kind (every entry in `v2pb.CrdObjects`), watching only that specific type:
 
 ```go
 ctrl.NewControllerManagedBy(mgr).
-    For(r.TargetKind).                         // watch only this CRD type
+    For(r.targetKind).                         // watch only this CRD type
     Named(fmt.Sprintf("ingester_%s", kind)).   // unique controller name
     WithOptions(controller.Options{
         MaxConcurrentReconciles: concurrentReconciles,
@@ -468,7 +503,7 @@ ctrl.NewControllerManagedBy(mgr).
     Complete(r)
 ```
 
-With 13 CRDs and `concurrentReconciles: 1`, there are 13 independent work queues, each processing one object at a time.
+With 15 CRDs and `concurrentReconciles: 1`, there are 15 independent work queues, each processing one object at a time.
 
 ## Architecture Summary
 
@@ -477,18 +512,18 @@ With 13 CRDs and `concurrentReconciles: 1`, there are 13 independent work queues
 │                        controllermgr                             │
 │                                                                  │
 │  fx.Options(                                                     │
-│    ingester.Module,          ← registers all 13 reconcilers      │
+│    ingester.Module,          ← registers all 15 reconcilers      │
 │    provideMetadataStorage,   ← MySQL connection (optional)       │
 │    provideIngesterConfig,    ← concurrency + requeue config      │
 │  )                                                               │
 │                                                                  │
 │  ┌────────────────────────────────────────────────────────────┐  │
-│  │  ingester.Reconciler (×13, one per CRD kind)              │  │
+│  │  ingester.Reconciler (×15, one per CRD kind)              │  │
 │  │                                                            │  │
 │  │  Watches: Model, ModelFamily, Pipeline, PipelineRun,       │  │
 │  │           Deployment, InferenceServer, Project, Revision,  │  │
 │  │           Cluster, RayCluster, RayJob, SparkJob,           │  │
-│  │           TriggerRun                                        │  │
+│  │           TriggerRun, CachedOutput, EvaluationReport        │  │
 │  │                                                            │  │
 │  │  On event → Reconcile() → handleSync / handleDeletion /    │  │
 │  │             handleDeletionAnnotation / handleImmutable      │  │
@@ -498,7 +533,7 @@ With 13 CRDs and `concurrentReconciles: 1`, there are 13 independent work queues
               storage.MetadataStorage interface
                             │
               ┌─────────────▼────────────┐
-              │   mysql.mysqlMetadataStorage │
+              │   mysqlMetadataStorage   │
               │                          │
               │   Upsert()  → INSERT ON  │
               │              DUPLICATE   │
@@ -510,16 +545,16 @@ With 13 CRDs and `concurrentReconciles: 1`, there are 13 independent work queues
                             │
               ┌─────────────▼────────────┐
               │         MySQL            │
-              │   39 tables              │
-              │   (13 main +             │
-              │    13 _labels +          │
-              │    13 _annotations)      │
+              │   45 tables              │
+              │   (15 main +             │
+              │    15 _labels +          │
+              │    15 _annotations)      │
               └──────────────────────────┘
 ```
 
 **Key design properties**:
 - **Opt-in**: No MySQL config = ingester silently disabled. Zero impact on existing deployments.
-- **Generic**: One controller implementation handles all 13 CRDs.
+- **Generic**: One controller implementation handles all 15 CRDs.
 - **Safe deletions**: Finalizer guarantees MySQL is updated before etcd record is removed.
 - **Resilient**: Failed MySQL operations trigger requeue with backoff. Object stays in K8s until MySQL confirms.
 - **Idempotent**: Upsert is safe to call multiple times with the same object.
@@ -528,14 +563,11 @@ With 13 CRDs and `concurrentReconciles: 1`, there are 13 independent work queues
 
 | Issue | Severity | Notes |
 |-------|----------|-------|
-| SparkJob double-panic in business controller | High | Pre-existing bug in `go/components/spark/job/client/client.go:185`. Crashes controllermgr, preventing SparkJob MySQL sync. Fix required in SparkJob controller. |
 | Pre-existing objects lack finalizer | Medium | Objects created before ingester was enabled won't get deletion events via finalizer. Soft-delete orphan cleanup not yet implemented. |
-| `DeleteCollection` not implemented | Medium | Returns error. Required for namespace-scoped bulk deletes. |
+| `DeleteCollection` not implemented | Medium | Returns `Unimplemented`. Required for namespace-scoped bulk deletes. |
 | `QueryByTemplateID` not implemented | Low | Placeholder for template-based queries. |
-| `Backfill` not implemented | Low | Placeholder for historical data migration. |
-| Label selector in `List` not implemented | Low | SQL label filter not yet wired up. |
-| `directUpdate` not implemented | Low | Optimistic concurrency update path placeholder. |
-| No schema migration support | Medium | Schema init Job is create-only. `ALTER TABLE` for new columns requires manual intervention. |
+| `Backfill` not implemented | Low | Returns `Unimplemented`; placeholder for historical data migration. |
+| No schema migration support | Medium | Schema init Job is create-only (`CREATE TABLE IF NOT EXISTS`). `ALTER TABLE` for new columns requires manual intervention. |
 
 ## Cascade Delete: Retain Strategy
 
@@ -555,7 +587,7 @@ The ingester's `handleCascadeDeletion` path runs only for kinds the injected `Re
 - **While a non-ingester finalizer (the drain finalizer) is present**: the ingester keeps its own finalizer in place and refreshes MySQL with the CR's current state on every reconcile. This ensures MySQL reflects the latest status (e.g., transitioning from `RUNNING` to `KILLED`) as the drain progresses.
 - **Once the drain finalizer is removed**: the workflow has been cleanly terminated. The ingester upserts the final CR state into MySQL, removes its own finalizer, and the CR is deleted from etcd.
 
-For kinds the `RetainPolicy` does **not** opt in, `handleCascadeDeletion` is a no-op and the ingester simply removes its finalizer as before.
+For kinds the `RetainPolicy` does **not** opt in, `handleCascadeDeletion` soft-deletes the MySQL row (so a recreated object with the same name does not leave an orphaned row behind) and the ingester then removes its finalizer.
 
 ### No independent timeout
 
@@ -570,13 +602,13 @@ The cascade machinery lives in the `go/cascadedelete` package and is consumed by
 3. **Register the API hook** to stamp the Pipeline ownerReference at creation (via `cascadedelete.StampOwnerRefOnCreate`) — the canonical, permanent path. As a transitional migration for objects predating the hook, also stamp the ownerReference in the controller during reconciliation. Install the drain finalizer **before** the ownerRef stamp.
 4. **Add the kind to the `RetainPolicy` provider** in `go/cmd/controllermgr/main.go` — extend `cascadedelete.NewStaticRetainPolicy("PipelineRun", "TriggerRun", …)` so the ingester retains the new kind's final state in MySQL on cascade. Kind names live only at this composition root, never in `go/cascadedelete` or the ingester.
 
-Keep `go/cascadedelete` free of concrete kind names and of the strings `pipeline`/`trigger` (enforced by a CI grep gate); per-kind specifics belong in the consumers, and the *set* of retain kinds belongs in the controller-manager composition root.
+Keep `go/cascadedelete` free of concrete kind names and of the strings `pipeline`/`trigger` in non-test code; per-kind specifics belong in the consumers, and the *set* of retain kinds belongs in the controller-manager composition root (`cascadeRetainKinds` in `go/cmd/controllermgr/main.go`; `TestRetainPolicyDriftGuard` pins the expected set).
 
 ---
 
 ## Next Steps
 
 - Review [Ingester Configuration and Operations](../operator-guides/components/ingester-configuration.md) for operational documentation
-- Reference test CRs in `scripts/ingester-test-crs/` for integration testing examples
+- Reference test CRs in `scripts/ingester/ingester-test-crs/` for integration testing examples
 - See the code at `go/components/ingester/` for the full implementation
 - [Go Key Concepts and Terms](dev/go/key-concepts-and-terms.md) — package map, key types, and patterns for the broader Go backend

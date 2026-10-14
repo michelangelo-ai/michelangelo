@@ -1,3 +1,7 @@
+---
+last_verified: 2026-10-14
+---
+
 # Cell Type Reference
 
 Cells are the fundamental building blocks for displaying data in Michelangelo AI UI. They define how individual fields are rendered across all view types: list views (table columns), detail views (metadata headers), and forms.
@@ -22,13 +26,14 @@ All cell types are defined in `CellType` enum. Here are the standard types you c
 ### DATE
 ```typescript
 {
-  id: 'metadata.creationTimestamp.seconds',
+  id: 'metadata.creationTimestamp',
   label: 'Created',
   type: CellType.DATE
 }
 ```
 **Description:** Formatted timestamp  
 **Example output:** `2024/01/09 17:53:49`  
+**Value format:** RFC 3339 string, as the API emits it in proto3 JSON (e.g., `2024-01-09T17:53:49Z`)  
 **Use for:** Any timestamp
 
 ### STATE
@@ -38,22 +43,21 @@ All cell types are defined in `CellType` enum. Here are the standard types you c
   label: 'State',
   type: CellType.STATE,
   stateTextMap: {
-    0: 'Queued',
-    2: 'Running',
-    3: 'Succeeded',
-    5: 'Failed',
+    PIPELINE_RUN_STATE_RUNNING: 'Running',
+    PIPELINE_RUN_STATE_SUCCEEDED: 'Succeeded',
+    PIPELINE_RUN_STATE_FAILED: 'Failed',
   },
   stateColorMap: {
-    0: 'gray',
-    2: 'blue',
-    3: 'green',
-    5: 'red',
+    PIPELINE_RUN_STATE_RUNNING: 'blue',
+    PIPELINE_RUN_STATE_SUCCEEDED: 'green',
+    PIPELINE_RUN_STATE_FAILED: 'red',
   },
 }
 ```
+**Note:** The API returns enum values as their proto names (strings), so the map keys are the enum names, not numbers.  
 **Description:** Colored tag with state-specific styling (green for success, red for error, etc.)  
 **Use for:** Any status field  
-**Required config:** `stateTextMap`, `stateColorMap`
+**Optional config:** `stateTextMap` and `stateColorMap`; without them, text and color are derived from the enum name (for example, a `_ERROR` suffix renders red)
 
 ### TYPE
 ```typescript
@@ -62,15 +66,15 @@ All cell types are defined in `CellType` enum. Here are the standard types you c
   label: 'Type',
   type: CellType.TYPE,
   typeTextMap: {
-    1: 'Train',
-    2: 'Evaluation',
-    3: 'Performance Evaluation',
+    PIPELINE_TYPE_TRAIN: 'Train',
+    PIPELINE_TYPE_EVAL: 'Evaluation',
+    PIPELINE_TYPE_PERF_EVAL: 'Performance Evaluation',
   },
 }
 ```
 **Description:** Badge with formatted text (sentence case, stripped prefixes/suffixes)  
 **Use for:** Entity types, enum values  
-**Required config:** `typeTextMap`
+**Optional config:** `typeTextMap`; without it, the enum value is sentence-cased with its type prefix stripped
 
 ### LINK
 ```typescript
@@ -133,6 +137,8 @@ All cell types are defined in `CellType` enum. Here are the standard types you c
 **Use for:** Composite fields showing multiple related values  
 **Required config:** `items` array
 
+The `CellType` enum also includes `MAP`, `REPEATED_ITEMS`, `TIER`, `RETRY`, and `SWITCH_TYPE_META`; see `components/cell/constants.ts` for what each renders.
+
 ## Shared Cell Properties
 
 All cell types support these common properties (from `SharedCell` interface):
@@ -169,8 +175,9 @@ More flexible control over cell value extraction:
   id: 'duration',
   label: 'Duration',
   accessor: (record) => {
-    const start = parseInt(record.startTime.seconds) * 1000;
-    const end = parseInt(record.endTime.seconds) * 1000;
+    // Timestamps are RFC 3339 strings in proto3 JSON
+    const start = Date.parse(record.startTime);
+    const end = Date.parse(record.endTime);
     return `${Math.round((end - start) / 1000)}s`;
   },
 }
@@ -219,7 +226,7 @@ Interactive tooltips with optional actions.
 ```typescript
 // Metadata tooltip (detail view)
 {
-  id: 'metadata.creationTimestamp.seconds',
+  id: 'metadata.creationTimestamp',
   label: 'Created',
   type: CellType.DATE,
   tooltip: {
@@ -252,7 +259,7 @@ Custom styling per cell:
 For `CellType.STATE`, you can configure state text and color mappings:
 
 ```typescript
-export type StateCellConfig = SharedCell<string> & {
+export type StateCellConfig<TRecord = unknown> = SharedCell<TRecord, string> & {
   stateTextMap?: Record<string, string>;
   stateColorMap?: Record<string, TagColor>;
 };
@@ -265,34 +272,36 @@ export type StateCellConfig = SharedCell<string> & {
   label: 'State',
   type: CellType.STATE,
   stateTextMap: {
-    0: 'Queued',
-    1: 'Pending',
-    2: 'Running',
-    3: 'Succeeded',
-    4: 'Killed',
-    5: 'Failed',
-    6: 'Skipped',
+    PIPELINE_RUN_STATE_INVALID: 'Queued',
+    PIPELINE_RUN_STATE_PENDING: 'Pending',
+    PIPELINE_RUN_STATE_RUNNING: 'Running',
+    PIPELINE_RUN_STATE_SUCCEEDED: 'Succeeded',
+    PIPELINE_RUN_STATE_KILLED: 'Killed',
+    PIPELINE_RUN_STATE_FAILED: 'Failed',
+    PIPELINE_RUN_STATE_SKIPPED: 'Skipped',
   },
   stateColorMap: {
-    0: 'gray',
-    1: 'blue',
-    2: 'blue',
-    3: 'green',
-    4: 'red',
-    5: 'red',
-    6: 'gray',
+    PIPELINE_RUN_STATE_INVALID: 'gray',
+    PIPELINE_RUN_STATE_PENDING: 'blue',
+    PIPELINE_RUN_STATE_RUNNING: 'blue',
+    PIPELINE_RUN_STATE_SUCCEEDED: 'green',
+    PIPELINE_RUN_STATE_KILLED: 'red',
+    PIPELINE_RUN_STATE_FAILED: 'red',
+    PIPELINE_RUN_STATE_SKIPPED: 'gray',
   },
 }
 ```
 
-See [`config/entities/run/shared.ts`](https://github.com/michelangelo-ai/michelangelo/blob/47abf4b9e99f29ffc97f769d21103190a1486194/javascript/packages/core/config/entities/run/shared.ts#L30-L51) for complete example.
+The keys are proto enum names because the API returns enums as strings. In the codebase they are written with the `PipelineRunState` enum (for example `[PipelineRunState.SUCCEEDED]: 'Succeeded'`).
+
+See [`config/entities/run/shared.ts`](https://github.com/michelangelo-ai/michelangelo/blob/main/javascript/packages/core/config/entities/run/shared.ts) for the complete example.
 
 ### TypeCellConfig
 
 For `CellType.TYPE`, you can configure type text mappings:
 
 ```typescript
-export type TypeCellConfig = SharedCell<string> & {
+export type TypeCellConfig<TRecord = unknown> = SharedCell<TRecord, string> & {
   typeTextMap?: Record<string, string>;
 };
 ```
@@ -304,17 +313,17 @@ export type TypeCellConfig = SharedCell<string> & {
   label: 'Type',
   type: CellType.TYPE,
   typeTextMap: {
-    1: 'Train',
-    2: 'Evaluation',
-    3: 'Performance Evaluation',
-    4: 'Experiment',
-    5: 'Retrain',
-    6: 'Prediction',
+    PIPELINE_TYPE_TRAIN: 'Train',
+    PIPELINE_TYPE_EVAL: 'Evaluation',
+    PIPELINE_TYPE_PERF_EVAL: 'Performance Evaluation',
+    PIPELINE_TYPE_EXPERIMENT: 'Experiment',
+    PIPELINE_TYPE_RETRAIN: 'Retrain',
+    PIPELINE_TYPE_PREDICTION: 'Prediction',
   },
 }
 ```
 
-See [`config/entities/pipeline/list.ts`](https://github.com/michelangelo-ai/michelangelo/blob/47abf4b9e99f29ffc97f769d21103190a1486194/javascript/packages/core/config/entities/pipeline/list.ts#L17-L39) for complete example.
+See `PIPELINE_TYPE_CELL` in [`config/entities/pipeline/shared.ts`](https://github.com/michelangelo-ai/michelangelo/blob/main/javascript/packages/core/config/entities/pipeline/shared.ts) for the complete example.
 
 ## Custom Cell Renderers
 
@@ -362,7 +371,7 @@ export const PIPELINE_LIST_CONFIG: ListViewConfig = {
 export const RUN_DETAIL_CONFIG: DetailViewConfig = {
   type: 'detail',
   metadata: [
-    { id: 'metadata.creationTimestamp.seconds', label: 'Created', type: CellType.DATE },
+    { id: 'metadata.creationTimestamp', label: 'Created', type: CellType.DATE },
     { id: 'status.state', label: 'State', type: CellType.STATE, ... },
   ],
   pages: [...],

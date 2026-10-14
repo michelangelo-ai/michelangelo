@@ -1,3 +1,7 @@
+---
+last_verified: 2026-10-14
+---
+
 # Documentation Guide
 
 This guide explains how to contribute to Michelangelo AI's documentation site.
@@ -45,16 +49,21 @@ bun run serve
 docs/
 ├── intro.md                    # Landing page (/)
 ├── images/                     # Shared images
-├── about/                      # License
+├── about/                      # History, changelog, license
+├── api-reference/              # gRPC and Python SDK reference
 ├── contributing/               # Developer guides
 │   └── dev/                    # Development docs
-│       └── go/                 # Go development
+│       ├── go/                 # Go development
+│       ├── python/             # Python (mactl) development
+│       └── ui/                 # UI development
+│           └── configuration/  # UI config reference
 ├── getting-started/            # Overview and setup
 ├── operator-guides/            # Platform operator docs
 │   ├── jobs/                   # Job system docs
-│   └── ui/                     # UI docs
-│       └── configuration/      # UI config reference
+│   ├── serving/                # Model serving docs
+│   └── ui/                     # UI deployment and setup
 └── user-guides/                # End-user tutorials
+    ├── getting-started/        # First pipeline and data prep
     └── ml-pipelines/           # ML pipeline guides
 ```
 
@@ -248,14 +257,15 @@ This catches:
 
 ## Deployment
 
-Documentation deploys automatically when changes to `docs/` or `website/` are pushed to `main`.
+Documentation deploys automatically when changes to `docs/`, `website/`, or `CHANGELOG.md` are pushed to `main`.
 
 ### Automatic Deployment
 
 The GitHub Actions workflow (`.github/workflows/deploy-docs.yml`):
 1. Installs Bun and dependencies
-2. Builds the static site
-3. Deploys to GitHub Pages
+2. Syncs the changelog page from `CHANGELOG.md`
+3. Builds the static site
+4. Deploys to GitHub Pages
 
 ### Manual Deployment
 
