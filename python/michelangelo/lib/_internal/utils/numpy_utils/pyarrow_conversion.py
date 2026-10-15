@@ -240,21 +240,24 @@ def assemble_output_table(
         columns_to_keep: Optional subset of columns to retain in the result.
         extra_columns: Optional pre-built Arrow columns to append.
         raise_on_collision: When True, raise if a prediction or extra column
-            name already exists in ``input_table`` instead of overwriting it.
+            name already exists in ``input_table``, or if a prediction and an
+            extra column share a name, instead of overwriting.
 
     Returns:
         A PyArrow ``Table`` of passthrough, prediction, and extra columns.
 
     Raises:
         ValueError: If ``raise_on_collision`` is True and a prediction or extra
-            column name collides with an existing input column.
+            column name collides with an input column or with each other.
     """
     extra_columns = extra_columns or {}
 
     if raise_on_collision:
-        collisions = set(input_table.column_names) & (
-            set(predictions) | set(extra_columns)
-        )
+        # A prediction named like a metadata column would silently overwrite it,
+        # so predictions and extra columns are also checked against each other.
+        collisions = (
+            set(input_table.column_names) & (set(predictions) | set(extra_columns))
+        ) | (set(predictions) & set(extra_columns))
         if collisions:
             raise ValueError(
                 f"The output columns {collisions} already exist in the input "

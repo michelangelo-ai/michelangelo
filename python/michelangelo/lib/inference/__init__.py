@@ -23,13 +23,21 @@ from michelangelo.lib.inference.backend import (
     default_device,
     resolve_backend,
 )
+from michelangelo.lib.inference.batch_inference import (
+    ModelSource,
+    batch_model_inference,
+)
+from michelangelo.lib.inference.predictor import Predictor
 from michelangelo.lib.inference.raw_backend import RawModelBackend, create_raw_backend
 
 __all__ = [
     "BackendContext",
     "BackendFactory",
     "ModelBackend",
+    "ModelSource",
+    "Predictor",
     "RawModelBackend",
+    "batch_model_inference",
     "build_backend",
     "create_raw_backend",
     "default_device",

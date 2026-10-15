@@ -105,3 +105,24 @@ def bad_factory(context):
 
 
 not_callable = 5
+
+
+class EchoBackend:
+    """Backend that returns chosen input columns under chosen names."""
+
+    def __init__(self, mapping, input_names=None):
+        """Map output name to input name."""
+        self._mapping = mapping
+        self.input_names = input_names
+        self.output_names = list(mapping)
+        self.seen = None
+
+    def predict(self, inputs):
+        """Echo inputs and remember what was received."""
+        self.seen = inputs
+        return {out: inputs[src] for out, src in self._mapping.items()}
+
+
+def echo_factory(context):
+    """Factory for a backend that copies ``a`` to ``y``."""
+    return EchoBackend({"y": "a"}, input_names=["a"])
