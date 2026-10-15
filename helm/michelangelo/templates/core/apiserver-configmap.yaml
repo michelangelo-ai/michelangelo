@@ -19,6 +19,13 @@ data:
         enableCRDUpdate: {{ .Values.apiserver.crdSync.enableUpdate }}
       pipelineRunDefaults:
         environment: {{ .Values.apiserver.pipelineRunDefaults.environment | default "" | quote }}
+        restrictedBranches:
+        {{- range $env, $branches := .Values.apiserver.pipelineRunDefaults.restrictedBranches }}
+          {{ $env }}:
+          {{- range $branches }}
+          - {{ . | quote }}
+          {{- end }}
+        {{- end }}
     metadataStorage:
       enableMetadataStorage: {{ .Values.apiserver.metadataStorage.enable }}
     mysql:
