@@ -110,3 +110,13 @@ class TestPadBatch:
         """A zero-row object column is not touched."""
         arr = np.array([], dtype=object)
         assert pad_batch({"s": arr})["s"] is arr
+
+    def test_unpaddable_dtype_error_names_the_column(self):
+        """int8 has no default sentinel, so the error says which column to fix."""
+        arr = np.array(
+            [np.array([1, 2], dtype=np.int8), np.array([3], dtype=np.int8)],
+            dtype=object,
+        )
+        with pytest.raises(ValueError, match=r"column_padding_values\['small'\]"):
+            pad_batch({"small": arr})
+        assert pad_batch({"small": arr}, {"small": 0})["small"].shape == (2, 2)

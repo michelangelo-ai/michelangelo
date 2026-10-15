@@ -315,16 +315,17 @@ def test_unsupported_model_type_is_rejected():
         tabular_inference(_config(), {"train": None}, model="nope")
 
 
-def test_remote_assembled_package_is_downloaded(ray_session, tmp_path, out_dir):
-    """A raw package recorded as a storage URI is downloaded before scoring."""
+def test_remote_assembled_package_is_downloaded_by_the_workers(
+    ray_session, tmp_path, out_dir
+):
+    """A raw package recorded as a storage URI is fetched on the worker."""
     import shutil
 
     package = _raw_package(tmp_path / "pkg")
-    downloads = []
 
     class FakeRemote(LocalStorageBackend):
         def download(self, uri, local_path):
-            downloads.append(uri)
+            assert uri == "fake://bucket/raw"
             shutil.copytree(package, local_path, dirs_exist_ok=True)
 
     assembled = AssembledModel(raw_model=ModelArtifact(path="fake://bucket/raw"))
@@ -335,8 +336,56 @@ def test_remote_assembled_package_is_downloaded(ray_session, tmp_path, out_dir):
         storage_backend=FakeRemote(base_dir=str(tmp_path)),
     )
 
-    assert downloads == ["fake://bucket/raw"]
     _assert_scored(result["train"])
+
+
+def test_remote_sources_are_not_downloaded_on_the_driver(tmp_path):
+    """Resolving a remote model records the URI and downloads nothing."""
+    from michelangelo.workflow.tasks.tabular_inference._private.model_source import (
+        resolve_model_source,
+    )
+
+    class Spy(LocalStorageBackend):
+        def download(self, uri, local_path):
+            raise AssertionError("downloaded on the driver")
+
+    storage = Spy(base_dir=str(tmp_path))
+    registry = InMemoryRegistryClient()
+    registry.register_model("m", artifact_uri="s3://bucket/m")
+
+    from_registry = resolve_model_source(
+        OfflineInferenceConfig(model=ModelReference(name="m")),
+        None,
+        0,
+        storage_backend=storage,
+        registry_client=registry,
+    )
+    from_assembled = resolve_model_source(
+        OfflineInferenceConfig(),
+        AssembledModel(raw_model=ModelArtifact(path="s3://bucket/raw")),
+        0,
+        storage_backend=storage,
+        registry_client=None,
+    )
+
+    assert (from_registry.uri, from_registry.name, from_registry.version) == (
+        "s3://bucket/m",
+        "m",
+        "1",
+    )
+    assert from_registry.storage_backend is storage
+    assert from_assembled.uri == "s3://bucket/raw"
+    assert from_assembled.model_path is None
+
+
+def test_dataset_already_loaded_as_pandas_is_rejected_clearly(tmp_path):
+    """A non-Ray dataset variable names the dataset and the problem."""
+    import pandas as pd
+
+    var = DatasetVariable.create(pd.DataFrame({"a": [1.0]}), path=str(tmp_path / "x"))
+    model = ModelVariable.create(DictModel())
+    with pytest.raises(TypeError, match=r"datasets\['train'\].*DataFrame"):
+        tabular_inference(_config(), {"train": var}, model=model)
 
 
 def test_remote_assembled_package_needs_storage_backend():

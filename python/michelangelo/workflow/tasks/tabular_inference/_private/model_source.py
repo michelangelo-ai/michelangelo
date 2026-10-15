@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import tempfile
 from typing import TYPE_CHECKING, Any
 
 from michelangelo.lib.inference import ModelSource
@@ -34,7 +33,7 @@ def resolve_model_source(
         config: The per-model configuration.
         model: The model passed to the task, if any.
         index: Position of ``config`` in ``local_models``, for error messages.
-        storage_backend: Downloads registry artifacts.
+        storage_backend: Downloads packages that are not local directories.
         registry_client: Looks up ``config.model``.
 
     Returns:
@@ -94,10 +93,13 @@ def _from_registry(
             f"Registry model {registered.name!r} version {registered.version!r} "
             "has no artifact_uri."
         )
-    local_path = tempfile.mkdtemp(prefix="tabular_inference_model_")
-    storage_backend.download(registered.artifact_uri, local_path)
+    # Each worker downloads the package itself, so it exists on whichever node
+    # runs the worker.
     return ModelSource(
-        model_path=local_path, name=registered.name, version=registered.version
+        uri=registered.artifact_uri,
+        storage_backend=storage_backend,
+        name=registered.name,
+        version=registered.version,
     )
 
 
@@ -107,7 +109,8 @@ def _from_assembled(
     """Use an assembled model's raw package, never its deployable.
 
     The assembler records the raw package as a storage URI. A path that is
-    already a local directory is used as it is; anything else is downloaded.
+    already a local directory is used as it is; anything else is downloaded by
+    each worker.
     """
     raw = model.raw_model
     if not raw.path:
@@ -119,14 +122,14 @@ def _from_assembled(
             )
         raise ValueError(f"The model for {where} has no raw package path.")
 
-    local_path = raw.path
-    if not os.path.isdir(local_path):
-        if storage_backend is None:
-            raise ValueError(
-                f"The raw package of the model for {where} is at {raw.path!r}, "
-                "which is not a local directory, so pass storage_backend to "
-                "download it."
-            )
-        local_path = tempfile.mkdtemp(prefix="tabular_inference_model_")
-        storage_backend.download(raw.path, local_path)
-    return ModelSource(model_path=local_path, schema=raw.metadata.schema)
+    if os.path.isdir(raw.path):
+        return ModelSource(model_path=raw.path, schema=raw.metadata.schema)
+    if storage_backend is None:
+        raise ValueError(
+            f"The raw package of the model for {where} is at {raw.path!r}, "
+            "which is not a local directory, so pass storage_backend to "
+            "download it."
+        )
+    return ModelSource(
+        uri=raw.path, storage_backend=storage_backend, schema=raw.metadata.schema
+    )

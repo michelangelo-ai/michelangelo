@@ -68,8 +68,9 @@ def test_unset_actor_options_never_reach_ray():
     call, pool = _call(OfflineInferenceConfig())
     for key in ("max_concurrency", "max_restarts", "max_task_retries"):
         assert key not in call.kwargs
-    assert call.kwargs["compute"] is None
-    pool.assert_not_called()
+    # An explicit pool is always passed; with nothing set it carries no options.
+    pool.assert_called_once_with()
+    assert call.kwargs["compute"] is pool.return_value
 
 
 def test_zero_is_forwarded_not_treated_as_unset():
@@ -93,6 +94,8 @@ def test_constructor_kwargs_carry_model_and_config():
     kwargs = ds.map_batches.call_args.kwargs["fn_constructor_kwargs"]
     assert kwargs["input_columns"] == ["a"]
     assert kwargs["model_path"] == "/m"
+    assert kwargs["model_uri"] is None
+    assert kwargs["storage_backend"] is None
     assert kwargs["model"] is None
     assert kwargs["model_name"] == "housing"
     assert kwargs["model_version"] == "2"
@@ -203,3 +206,58 @@ def test_end_to_end_on_a_real_ray_dataset(ray_session):
     assert [r["y"] for r in rows] == [10.0 + 2 * i for i in range(6)]
     assert set(rows[0]) == {"label", "y", "model_name", "model_version"}
     assert rows[0]["model_name"] == "m"
+
+
+def test_remote_source_forwards_uri_and_backend_to_the_worker():
+    """A URI source is downloaded by the worker, never on the driver."""
+    ds = _dataset()
+    backend = object()
+    batch_model_inference(
+        {"train": ds},
+        [
+            (
+                OfflineInferenceConfig(),
+                ModelSource(uri="s3://bucket/model", storage_backend=backend),
+            )
+        ],
+    )
+    kwargs = ds.map_batches.call_args.kwargs["fn_constructor_kwargs"]
+    assert kwargs["model_uri"] == "s3://bucket/model"
+    assert kwargs["storage_backend"] is backend
+    assert kwargs["model_path"] is None
+
+
+def test_shared_in_memory_model_is_put_once_across_datasets_and_configs():
+    """One model object costs one object-store copy, not one per pair."""
+    datasets = {"train": _dataset(), "validation": _dataset(), "test": _dataset()}
+    source = ModelSource(model="MODEL")
+    with patch("ray.put", return_value="REF") as put:
+        batch_model_inference(
+            datasets,
+            [(OfflineInferenceConfig(), source), (OfflineInferenceConfig(), source)],
+        )
+    put.assert_called_once_with("MODEL")
+    for ds in datasets.values():
+        for call in ds.map_batches.call_args_list:
+            assert call.kwargs["fn_constructor_kwargs"]["model"] == "REF"
+
+
+def test_output_column_order_does_not_matter_when_combining_models():
+    """The same output columns in a different order can still be combined."""
+    first = ModelSchema(
+        output_schema=[
+            ModelSchemaItem("p", DataType.FLOAT, [1]),
+            ModelSchemaItem("q", DataType.FLOAT, [1]),
+        ]
+    )
+    second = ModelSchema(
+        output_schema=[
+            ModelSchemaItem("q", DataType.FLOAT, [1]),
+            ModelSchemaItem("p", DataType.FLOAT, [1]),
+        ]
+    )
+    models = [
+        (OfflineInferenceConfig(), ModelSource(model_path="/a", schema=first)),
+        (OfflineInferenceConfig(), ModelSource(model_path="/b", schema=second)),
+    ]
+    batch_model_inference({"train": _dataset()}, models)

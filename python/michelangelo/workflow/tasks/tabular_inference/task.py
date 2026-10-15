@@ -70,7 +70,8 @@ def tabular_inference(
             output columns.
         ConfigurationError: If ``config.write_config`` asks for an option the
             installed Ray cannot do.
-        TypeError: If ``model`` is not a supported type.
+        TypeError: If ``model`` is not a supported type, or a dataset is already
+            loaded as something other than a Ray Dataset.
     """
     if not config.local_models:
         _logger.warning("No local_models configured; returning datasets unchanged.")
@@ -98,6 +99,14 @@ def tabular_inference(
                 **parquet_read_config_to_kwargs(
                     config.parquet_read_config, dataset_name=name
                 )
+            )
+
+    for name, dataset_var in datasets.items():
+        if dataset_var is not None and not hasattr(dataset_var.value, "map_batches"):
+            raise TypeError(
+                f"datasets[{name!r}] holds a {type(dataset_var.value).__name__}, not a "
+                "Ray Dataset. Pass a DatasetVariable that has not been loaded "
+                "as another type."
             )
 
     sources = [

@@ -11,6 +11,7 @@ from michelangelo.lib.inference.predictor import Predictor
 if TYPE_CHECKING:
     import ray.data
 
+    from michelangelo.lib.artifact_manager.storage_backend import StorageBackend
     from michelangelo.lib.model_manager.schema import ModelSchema
     from michelangelo.workflow.schema.inference import (
         BatchOptions,
@@ -26,9 +27,15 @@ _logger = logging.getLogger(__name__)
 class ModelSource:
     """Where to get a model and how to label its output rows.
 
+    Exactly one of ``model_path``, ``uri`` and ``model`` is required.
+
     Attributes:
-        model_path: Local directory of the model package. Exactly one of
-            ``model_path`` and ``model`` is required.
+        model_path: Local directory of the model package. Every worker reads it,
+            so on a multi-node cluster it must be on storage shared by all
+            nodes. Prefer ``uri`` there.
+        uri: URI of the model package in ``storage_backend``. Each worker
+            downloads it, so it works on any node.
+        storage_backend: Downloads ``uri``. Required with ``uri``.
         model: An already loaded model, scored with the raw backend. It is
             placed in the Ray object store once and shared by every worker.
         schema: The model schema. Defaults to the one stored in the package.
@@ -37,6 +44,8 @@ class ModelSource:
     """
 
     model_path: str | None = None
+    uri: str | None = None
+    storage_backend: StorageBackend | None = None
     model: Any = None
     schema: ModelSchema | None = None
     name: str | None = None
@@ -53,13 +62,14 @@ def batch_model_inference(
         datasets: Dataset name to dataset. ``None`` and empty datasets are
             returned as they are.
         models: One ``(config, source)`` pair per model. With several models,
-            each dataset's result is the union of every model's rows, told apart
-            by the ``model_name`` column.
+            each dataset's result is the union of every model's rows. Set
+            ``ModelSource.name`` to tell them apart by the ``model_name`` column.
 
     Returns:
-        A dict with the same keys as ``datasets``. Datasets are lazy: nothing is
-        scored until the result is consumed or written. An empty ``models`` list
-        returns ``datasets`` unchanged.
+        A dict with the same keys as ``datasets``. Scoring is lazy: nothing runs
+        until the result is consumed or written. Whether a dataset is empty is
+        checked eagerly, which reads the first row of its upstream plan. An empty
+        ``models`` list returns ``datasets`` unchanged.
 
     Raises:
         ValueError: If models name different output columns, which could not be
@@ -71,13 +81,22 @@ def batch_model_inference(
 
     _check_outputs_match(models)
 
+    # One object-store copy per distinct in-memory model, shared by every dataset.
+    refs: dict[int, Any] = {}
+    if any(source.model is not None for _, source in models):
+        import ray
+
+        for _, source in models:
+            if source.model is not None and id(source.model) not in refs:
+                refs[id(source.model)] = ray.put(source.model)
+
     results: dict[str, ray.data.Dataset | None] = {}
     for name, dataset in datasets.items():
         if dataset is None or not dataset.limit(1).take(1):
             _logger.warning("Dataset %s is empty; skipping inference.", name)
             results[name] = dataset
             continue
-        scored = [_score(dataset, config, source) for config, source in models]
+        scored = [_score(dataset, config, source, refs) for config, source in models]
         results[name] = scored[0].union(*scored[1:]) if len(scored) > 1 else scored[0]
     return results
 
@@ -85,30 +104,33 @@ def batch_model_inference(
 def _check_outputs_match(models: list[tuple[OfflineInferenceConfig, ModelSource]]):
     """Reject models whose known output column names differ."""
     known = {
-        tuple(item.name for item in source.schema.output_schema)
+        frozenset(item.name for item in source.schema.output_schema)
         for _, source in models
         if source.schema is not None and source.schema.output_schema
     }
     if len(known) > 1:
         raise ValueError(
             "All models must produce the same output columns to be combined, "
-            f"but the schemas name {sorted(known)}."
+            f"but the schemas name {[sorted(k) for k in known]}."
         )
 
 
 def _score(
-    dataset: ray.data.Dataset, config: OfflineInferenceConfig, source: ModelSource
+    dataset: ray.data.Dataset,
+    config: OfflineInferenceConfig,
+    source: ModelSource,
+    refs: dict[int, Any],
 ) -> ray.data.Dataset:
     """Add one model's predictions to a dataset."""
-    import ray
-
     options = config.batch_options
-    model = ray.put(source.model) if source.model is not None else None
+    model = refs.get(id(source.model))
     return dataset.map_batches(
         Predictor,
         fn_constructor_kwargs={
             "input_columns": config.input_columns,
             "model_path": source.model_path,
+            "model_uri": source.uri,
+            "storage_backend": source.storage_backend,
             "model": model,
             "schema": source.schema,
             "model_name": source.name,
@@ -128,15 +150,14 @@ def _score(
     )
 
 
-def _compute_strategy(options: BatchOptions) -> ray.data.ActorPoolStrategy | None:
+def _compute_strategy(options: BatchOptions) -> ray.data.ActorPoolStrategy:
     """Build the actor pool.
 
-    ``compute`` is used instead of ``concurrency`` because newer Ray versions
-    deprecate ``concurrency`` and ignore it when ``compute`` is set; one
-    strategy behaves the same on every supported version.
+    ``compute`` is always set, and ``concurrency`` is never used, because newer
+    Ray versions deprecate ``concurrency`` and ignore it when ``compute`` is set,
+    and older ones need an explicit strategy for a callable class. One strategy
+    behaves the same on every supported version.
     """
-    if options.concurrency is None and options.max_tasks_in_flight_per_actor is None:
-        return None
     import ray.data
 
     kwargs: dict[str, int] = {}

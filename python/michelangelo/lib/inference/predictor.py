@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import tempfile
+import weakref
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any
 
@@ -23,6 +25,7 @@ from michelangelo.lib.inference.backend import (
 from michelangelo.lib.inference.raw_backend import RawModelBackend
 
 if TYPE_CHECKING:
+    from michelangelo.lib.artifact_manager.storage_backend import StorageBackend
     from michelangelo.lib.model_manager.schema import ModelSchema
 
 __all__ = ["MODEL_NAME_COLUMN", "MODEL_VERSION_COLUMN", "Predictor"]
@@ -46,8 +49,12 @@ class Predictor:
     Args:
         input_columns: Columns fed to the model. ``None`` uses the backend's
             input names, or every column when it has none.
-        model_path: Local directory of the model package. Exactly one of
-            ``model_path`` and ``model`` is required.
+        model_path: Local directory of the model package. It must be readable
+            from the node this actor runs on. Exactly one of ``model_path``,
+            ``model_uri`` and ``model`` is required.
+        model_uri: URI of the model package in ``storage_backend``. It is
+            downloaded by the actor itself, so it works on any node.
+        storage_backend: Downloads ``model_uri``. Required with ``model_uri``.
         model: An already loaded model, or a ``ray.ObjectRef`` to one, scored
             with :class:`RawModelBackend`.
         schema: The model schema. Defaults to the one stored in the package.
@@ -64,9 +71,11 @@ class Predictor:
         device: Device for the model. Defaults to ``"cuda"`` when available.
 
     Raises:
-        ValueError: If neither or both of ``model_path`` and ``model`` are given,
-            if ``backend`` is combined with ``model``, or if the backend cannot
-            be built.
+        ValueError: If not exactly one model source is given, if
+            ``model_uri`` has no ``storage_backend``, if ``backend`` is combined
+            with ``model``, or if the backend cannot be built.
+        FileNotFoundError: If the model package is missing files.
+        TypeError: If ``model`` is not a custom ``Model`` or a PyTorch module.
     """
 
     def __init__(
@@ -74,6 +83,8 @@ class Predictor:
         *,
         input_columns: list[str] | None = None,
         model_path: str | None = None,
+        model_uri: str | None = None,
+        storage_backend: StorageBackend | None = None,
         model: Any = None,
         schema: ModelSchema | None = None,
         model_name: str | None = None,
@@ -85,12 +96,21 @@ class Predictor:
         device: str | None = None,
     ) -> None:
         """Load the model and prepare the batch pipeline."""
-        if (model_path is None) == (model is None):
-            raise ValueError("Pass exactly one of model_path and model.")
+        sources = [x for x in (model_path, model_uri, model) if x is not None]
+        if len(sources) != 1:
+            raise ValueError("Pass exactly one of model_path, model_uri and model.")
+        if model_uri is not None and storage_backend is None:
+            raise ValueError("model_uri needs a storage_backend to download it.")
         if backend is not None and model is not None:
-            raise ValueError("A custom backend needs model_path, not model.")
+            raise ValueError("A custom backend needs a model package, not model.")
 
         device = device or default_device()
+        if model_uri is not None:
+            # Downloaded here, not on the driver, so the package exists on the
+            # node that runs this actor. Removed when the actor is collected.
+            self._package_dir = tempfile.TemporaryDirectory(prefix="inference_model_")
+            storage_backend.download(model_uri, self._package_dir.name)
+            model_path = self._package_dir.name
         if model_path is not None:
             from michelangelo.lib.model_manager.serde.model import load_model_schema
 
@@ -117,6 +137,8 @@ class Predictor:
             if num_cpus and num_cpus > 1
             else None
         )
+        if self._executor is not None:
+            weakref.finalize(self, self._executor.shutdown, wait=False)
 
     def __call__(self, batch: pa.Table) -> pa.Table:
         """Score one batch.
@@ -129,9 +151,9 @@ class Predictor:
             input columns, predictions, model columns.
 
         Raises:
-            ValueError: If a prediction or model column has the same name as an
-                input column, or a prediction has the same name as a model
-                column.
+            ValueError: If the model reads a column the batch does not have, if a
+                prediction or model column has the same name as an input column,
+                or a prediction has the same name as a model column.
         """
         if batch.num_rows == 0:
             return batch
@@ -139,6 +161,13 @@ class Predictor:
         columns = (
             self._input_columns or self._backend.input_names or list(batch.column_names)
         )
+        missing = [c for c in columns if c not in batch.column_names]
+        if missing:
+            raise ValueError(
+                f"The dataset has no column(s) {missing}, which the model reads. "
+                f"Available columns: {batch.column_names}. Set input_columns or "
+                "fix the model's input schema."
+            )
         inputs = self._to_numpy(batch, columns)
         inputs = pad_batch(inputs, self._column_padding_values)
         inputs = {k: _encode(v) for k, v in inputs.items()}
@@ -179,12 +208,12 @@ class Predictor:
         """Constant columns identifying the model."""
         columns: dict[str, pa.Array] = {}
         if self._model_name:
-            columns[MODEL_NAME_COLUMN] = pa.array(
-                [self._model_name] * num_rows, type=pa.string()
+            columns[MODEL_NAME_COLUMN] = pa.repeat(
+                pa.scalar(self._model_name, pa.string()), num_rows
             )
         if self._model_version:
-            columns[MODEL_VERSION_COLUMN] = pa.array(
-                [self._model_version] * num_rows, type=pa.string()
+            columns[MODEL_VERSION_COLUMN] = pa.repeat(
+                pa.scalar(self._model_version, pa.string()), num_rows
             )
         return columns
 
@@ -200,15 +229,22 @@ def _scalar_output_names(schema: ModelSchema | None) -> set[str]:
     }
 
 
-def _map_objects(arr: np.ndarray, fn: Any) -> np.ndarray:
-    """Apply ``fn`` to every element of an object array of any rank.
+def _convert_strings(arr: np.ndarray, source: type, fn: Any) -> np.ndarray:
+    """Apply ``fn`` to the ``source``-typed elements of an object array.
 
-    The result keeps the input's shape. ``numpy`` infers the dtype, so a column
-    of only strings becomes a regular string array while one that also holds
-    ``None`` stays an object array.
+    The array is returned untouched when it holds no ``source`` elements, so
+    object arrays of vectors pass through. Otherwise the result stays an object
+    array of the same shape: letting numpy infer a fixed-width string dtype would
+    strip trailing NUL bytes from binary values, widen every element to the
+    longest one, and turn non-string elements into text.
     """
-    flat = [fn(x) for x in arr.ravel()]
-    return np.array(flat).reshape(arr.shape) if flat else arr
+    flat = arr.ravel()
+    if not any(isinstance(x, source) for x in flat):
+        return arr
+    out = np.empty(len(flat), dtype=object)
+    for i, x in enumerate(flat):
+        out[i] = fn(x) if isinstance(x, source) else x
+    return out.reshape(arr.shape)
 
 
 def _encode(arr: np.ndarray) -> np.ndarray:
@@ -216,9 +252,7 @@ def _encode(arr: np.ndarray) -> np.ndarray:
     if arr.dtype.kind == "U":
         return np.char.encode(arr, "utf-8")
     if arr.dtype.kind == "O":
-        return _map_objects(
-            arr, lambda x: x.encode("utf-8") if isinstance(x, str) else x
-        )
+        return _convert_strings(arr, str, lambda x: x.encode("utf-8"))
     return arr
 
 
@@ -227,9 +261,7 @@ def _decode(arr: np.ndarray) -> np.ndarray:
     if arr.dtype.kind == "S":
         return np.char.decode(arr, "utf-8")
     if arr.dtype.kind == "O":
-        return _map_objects(
-            arr, lambda x: x.decode("utf-8") if isinstance(x, bytes) else x
-        )
+        return _convert_strings(arr, bytes, lambda x: x.decode("utf-8"))
     return arr
 
 

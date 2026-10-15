@@ -69,7 +69,9 @@ class ModelBackend(Protocol):
         """Score one batch.
 
         Args:
-            inputs: Column name to array, each with the batch on axis 0.
+            inputs: Column name to array, each with the batch on axis 0. The
+                arrays may be read-only views of Arrow memory, so copy before
+                modifying one in place.
 
         Returns:
             Output column name to array, each with the batch on axis 0.
@@ -93,6 +95,7 @@ class BackendContext:
     device: str = "cpu"
 
 
+#: Builds a backend from a :class:`BackendContext`. Runs inside the worker.
 BackendFactory = Callable[[BackendContext], ModelBackend]
 
 

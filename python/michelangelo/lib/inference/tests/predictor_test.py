@@ -50,7 +50,7 @@ def test_requires_exactly_one_model_source():
 
 def test_custom_backend_requires_model_path():
     """A backend factory cannot be combined with an in-memory model."""
-    with pytest.raises(ValueError, match="model_path"):
+    with pytest.raises(ValueError, match="model package"):
         Predictor(model=DictModel(), backend=f"{_FIX}.echo_factory")
 
 
@@ -250,3 +250,106 @@ def test_custom_backend_from_dotted_path(tmp_path):
     """A dotted-path factory replaces the built-in backend."""
     p = Predictor(model_path=str(tmp_path), backend=f"{_FIX}.echo_factory")
     assert p(_table(a=[1.0, 2.0]))["y"].to_pylist() == [[1.0], [2.0]]
+
+
+def test_model_uri_needs_a_storage_backend():
+    """A URI without a backend to fetch it is rejected up front."""
+    with pytest.raises(ValueError, match="storage_backend"):
+        Predictor(model_uri="s3://bucket/model")
+
+
+def test_model_uri_is_downloaded_by_the_predictor_itself(tmp_path):
+    """The worker downloads the package, so no driver-local path is involved."""
+    import shutil
+
+    from michelangelo.lib.artifact_manager.storage_backend import LocalStorageBackend
+
+    pkg = tmp_path / "pkg"
+    for d in ("model", "defs", "metadata"):
+        (pkg / d).mkdir(parents=True)
+    import torch
+
+    torch.save(DictModel().state_dict(), pkg / "model" / "model.pt")
+    (pkg / "defs" / "model_class.txt").write_text(f"{_FIX}.DictModel")
+    (pkg / "metadata" / "type.yaml").write_text("type: torch\n")
+    downloads = []
+
+    class Remote(LocalStorageBackend):
+        def download(self, uri, local_path):
+            downloads.append((uri, local_path))
+            shutil.copytree(pkg, local_path, dirs_exist_ok=True)
+
+    p = Predictor(
+        model_uri="remote://models/m",
+        storage_backend=Remote(str(tmp_path)),
+        input_columns=["a", "b"],
+        device="cpu",
+    )
+
+    assert downloads[0][0] == "remote://models/m"
+    out = p(_table(a=[1.0], b=[1.0]))
+    assert out["prediction"].to_pylist() == [[3.0]]
+
+
+def test_missing_input_column_is_reported_by_name():
+    """A column the model needs but the dataset lacks is a clear error."""
+    p = _predictor(EchoBackend({"y": "a"}), input_columns=["a", "gone"])
+    with pytest.raises(ValueError) as err:
+        p(_table(a=[1.0]))
+    assert "gone" in str(err.value)
+    assert "Available columns" in str(err.value)
+
+
+def test_object_array_of_vectors_passes_through_untouched():
+    """Vector-valued object columns are neither encoded nor decoded."""
+    from michelangelo.lib.inference.predictor import _decode, _encode
+
+    vectors = np.empty(2, dtype=object)
+    vectors[0], vectors[1] = np.array([1.0, 2.0]), np.array([3.0, 4.0])
+    assert _decode(vectors) is vectors
+    assert _encode(vectors) is vectors
+    ragged = np.empty(2, dtype=object)
+    ragged[0], ragged[1] = np.array([1.0]), np.array([3.0, 4.0])
+    assert _decode(ragged) is ragged
+
+
+def test_binary_values_keep_trailing_nul_bytes():
+    """Fixed-width string inference must not strip trailing NULs from binary."""
+    from michelangelo.lib.inference.predictor import _decode, _encode
+
+    raw = np.array([b"ab\x00", b"\x00\x00", b"c"], dtype=object)
+    assert _encode(raw) is raw
+    assert [x.encode() for x in _decode(np.array(["ab\x00"], dtype=object))] == [
+        b"ab\x00"
+    ]
+    encoded = _encode(np.array(["ab\x00", "é"], dtype=object))
+    assert list(encoded) == [b"ab\x00", "é".encode()]
+
+
+def test_mixed_type_object_column_is_not_coerced_to_text():
+    """Only strings are encoded; other values keep their type."""
+    from michelangelo.lib.inference.predictor import _encode
+
+    encoded = _encode(np.array(["a", 1, None], dtype=object))
+    assert list(encoded) == [b"a", 1, None]
+    assert encoded.dtype == object
+
+
+def test_one_long_string_does_not_widen_every_element():
+    """Encoding keeps an object array, so memory tracks the data size."""
+    from michelangelo.lib.inference.predictor import _encode
+
+    column = np.array(["x" * 100_000] + ["y"] * 50, dtype=object)
+    assert _encode(column).dtype == object
+
+
+def test_thread_pool_is_released_when_the_predictor_is_collected():
+    """The conversion pool does not outlive its predictor."""
+    import gc
+
+    p = Predictor(model=DictModel(), num_cpus=2)
+    executor = p._executor
+    del p
+    gc.collect()
+    with pytest.raises(RuntimeError):
+        executor.submit(lambda: 1)

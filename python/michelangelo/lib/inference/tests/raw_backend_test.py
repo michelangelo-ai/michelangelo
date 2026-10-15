@@ -248,3 +248,18 @@ def test_load_model_schema_rejects_non_mapping(tmp_path):
     (tmp_path / "metadata" / "schema.yaml").write_text("- just\n- a list\n")
     with pytest.raises(ValueError, match="mapping"):
         load_model_schema(str(tmp_path))
+
+
+def test_read_only_inputs_are_scored_without_modifying_or_warning():
+    """Read-only (Arrow-backed) arrays are copied for torch, not shared."""
+    import warnings
+
+    batch = _batch()
+    for arr in batch.values():
+        arr.setflags(write=False)
+    backend = RawModelBackend(DictModel(), schema=_schema())
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        out = backend.predict(batch)
+    np.testing.assert_allclose(out["y"], [12.0, 24.0])
+    assert not batch["a"].flags.writeable

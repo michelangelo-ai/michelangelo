@@ -88,8 +88,13 @@ class RawModelBackend:
 
         import torch
 
+        # Arrow zero-copy batches are read-only, which torch warns about and
+        # cannot safely share, so copy only those.
         tensors = {
-            k: torch.as_tensor(v, device=self._device) for k, v in inputs.items()
+            k: torch.as_tensor(
+                v if v.flags.writeable else v.copy(), device=self._device
+            )
+            for k, v in inputs.items()
         }
         with torch.inference_mode():
             output = self._model(tensors)
