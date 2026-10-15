@@ -59,6 +59,27 @@ describe('scroll-to-task', () => {
       });
     });
 
+    it('should fall back to the closest rendered ancestor', () => {
+      const grandparent = createTask({ name: 'Grandparent' });
+      const parent = createTask({ name: 'Parent' });
+      const task = createTask({ name: 'Child' });
+      const mockElement = { getBoundingClientRect: mockGetBoundingClientRect };
+
+      mockGetElementById.mockImplementation((id: string) =>
+        id === 'task-Grandparent' ? mockElement : null
+      );
+      mockGetBoundingClientRect.mockReturnValue({ top: 200 });
+
+      handleScrollToTask(task, [grandparent, parent]);
+
+      expect(mockGetElementById.mock.calls.map(([id]: [string]) => id)).toEqual([
+        'task-Child',
+        'task-Parent',
+        'task-Grandparent',
+      ]);
+      expect(mockScrollTo).toHaveBeenCalledWith({ top: 100 + 200 - 16, behavior: 'smooth' });
+    });
+
     it('should handle missing element gracefully', () => {
       const task = createTask({ name: 'Missing Task' });
 
