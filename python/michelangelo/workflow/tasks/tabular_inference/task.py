@@ -52,8 +52,10 @@ def tabular_inference(
         model: The model to score with, used by every ``local_models`` entry that
             has no ``model`` reference: a ``ModelVariable`` (scored in-process) or
             an ``AssembledModel`` (scored from its raw package).
-        storage_backend: Downloads registry artifacts. Required only when a
-            ``local_models`` entry has a ``model`` reference.
+        storage_backend: Downloads model packages that are not local
+            directories: registry artifacts, and the raw package of an
+            ``AssembledModel`` stored remotely. Not needed for an in-process
+            ``ModelVariable`` or a local package directory.
         registry_client: Looks up ``local_models[i].model``. Required only when
             a ``local_models`` entry has a ``model`` reference.
 

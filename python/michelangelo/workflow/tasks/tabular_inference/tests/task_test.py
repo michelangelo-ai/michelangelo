@@ -313,3 +313,34 @@ def test_unsupported_model_type_is_rejected():
     """Anything else passed as the model is a TypeError."""
     with pytest.raises(TypeError, match="ModelVariable or AssembledModel"):
         tabular_inference(_config(), {"train": None}, model="nope")
+
+
+def test_remote_assembled_package_is_downloaded(ray_session, tmp_path, out_dir):
+    """A raw package recorded as a storage URI is downloaded before scoring."""
+    import shutil
+
+    package = _raw_package(tmp_path / "pkg")
+    downloads = []
+
+    class FakeRemote(LocalStorageBackend):
+        def download(self, uri, local_path):
+            downloads.append(uri)
+            shutil.copytree(package, local_path, dirs_exist_ok=True)
+
+    assembled = AssembledModel(raw_model=ModelArtifact(path="fake://bucket/raw"))
+    result = tabular_inference(
+        _config(),
+        {"train": _dataset_var(tmp_path)},
+        model=assembled,
+        storage_backend=FakeRemote(base_dir=str(tmp_path)),
+    )
+
+    assert downloads == ["fake://bucket/raw"]
+    _assert_scored(result["train"])
+
+
+def test_remote_assembled_package_needs_storage_backend():
+    """A URI that is not a local directory names the missing argument."""
+    assembled = AssembledModel(raw_model=ModelArtifact(path="s3://bucket/raw"))
+    with pytest.raises(ValueError, match="storage_backend"):
+        tabular_inference(_config(), {"train": None}, model=assembled)

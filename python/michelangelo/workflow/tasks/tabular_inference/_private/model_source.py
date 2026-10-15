@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import tempfile
 from typing import TYPE_CHECKING, Any
 
@@ -54,7 +55,7 @@ def resolve_model_source(
             registry_client=registry_client,
         )
     if isinstance(model, AssembledModel):
-        return _from_assembled(model, where)
+        return _from_assembled(model, where, storage_backend)
     if isinstance(model, ModelVariable):
         return ModelSource(model=model.value, schema=model.metadata.schema)
     if model is None:
@@ -100,8 +101,14 @@ def _from_registry(
     )
 
 
-def _from_assembled(model: AssembledModel, where: str) -> ModelSource:
-    """Use an assembled model's raw package, never its deployable."""
+def _from_assembled(
+    model: AssembledModel, where: str, storage_backend: StorageBackend | None
+) -> ModelSource:
+    """Use an assembled model's raw package, never its deployable.
+
+    The assembler records the raw package as a storage URI. A path that is
+    already a local directory is used as it is; anything else is downloaded.
+    """
     raw = model.raw_model
     if not raw.path:
         deployable = model.deployable_model
@@ -111,4 +118,15 @@ def _from_assembled(model: AssembledModel, where: str) -> ModelSource:
                 "tabular_inference cannot score. Pass a model with a raw package."
             )
         raise ValueError(f"The model for {where} has no raw package path.")
-    return ModelSource(model_path=raw.path, schema=raw.metadata.schema)
+
+    local_path = raw.path
+    if not os.path.isdir(local_path):
+        if storage_backend is None:
+            raise ValueError(
+                f"The raw package of the model for {where} is at {raw.path!r}, "
+                "which is not a local directory, so pass storage_backend to "
+                "download it."
+            )
+        local_path = tempfile.mkdtemp(prefix="tabular_inference_model_")
+        storage_backend.download(raw.path, local_path)
+    return ModelSource(model_path=local_path, schema=raw.metadata.schema)
