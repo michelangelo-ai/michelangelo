@@ -24,9 +24,17 @@ func ProvidePluginRegistry() map[string]service.IPlugin {
 	return registry
 }
 
+// RunnerTokenModule opts a deployment in to per-project runner tokens
+// (worker.runnerToken.*): it provides the outbound middleware that attaches a
+// short-lived michelangelo-runner ServiceAccount token to the worker's API
+// calls. It occupies the same optional middleware.UnaryOutbound slot that
+// deployment-specific modules inject into, so a deployment that supplies its
+// own outbound middleware must not include it. The stock worker does.
+var RunnerTokenModule = fx.Provide(NewRunnerTokenOutboundMiddleware)
+
 // Module provides HTTP client instances for all HTTP-based activities.
 var Module = fx.Options(
-	fx.Provide(NewConfig, NewYARPCDispatcher, NewRunnerTokenOutboundMiddleware),
+	fx.Provide(NewConfig, NewYARPCDispatcher),
 	fx.Provide(
 		NewRayClusterServiceClient,
 		NewRayJobServiceClient,

@@ -15,6 +15,7 @@
 package worker
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -61,6 +62,13 @@ worker:
 // the feature fails closed (an error, not a silent no-op or a panic) when
 // enabled outside a cluster with no kubeconfig to build a client from.
 func TestNewRunnerTokenOutboundMiddlewareEnabledNeedsAKubernetesClient(t *testing.T) {
+	// Hermetic: without these, the test only passes on a machine or CI job
+	// where no kubeconfig is discoverable (KUBECONFIG, in-cluster env, or
+	// $HOME/.kube/config).
+	t.Setenv("KUBECONFIG", filepath.Join(t.TempDir(), "absent"))
+	t.Setenv("KUBERNETES_SERVICE_HOST", "")
+	t.Setenv("HOME", t.TempDir())
+
 	_, err := NewRunnerTokenOutboundMiddleware(RunnerTokenMiddlewareParams{
 		Provider: newTestProvider(t, `
 worker:
