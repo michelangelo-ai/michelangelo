@@ -63,6 +63,12 @@ jobs:
       github.event.workflow_run.conclusion == 'success'
     runs-on: [self-hosted, linux, gcp]
     timeout-minutes: 90
+    # The runner's k3d cluster and the fixed ma-dev-test namespace are shared
+    # state, so two runs (nightly + manual dispatch) must never overlap. Queue
+    # instead of cancelling: a half-finished run leaves the cluster dirty.
+    concurrency:
+      group: integration-test-sandbox
+      cancel-in-progress: false
     permissions:
       contents: read
     defaults:
