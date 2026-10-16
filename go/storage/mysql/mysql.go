@@ -164,6 +164,17 @@ func (m *mysqlMetadataStorage) Upsert(ctx context.Context, object runtime.Object
 	// object row and its label/annotation child rows are all keyed consistently.
 	primaryKey := metadataStoragePrimaryKey(metaObj)
 
+	// Skip the write when the row already holds this exact object version. An informer
+	// relist (controller restart or resync) replays every unchanged object; rewriting it
+	// would only bump update_time and make long-finished objects look recently updated.
+	unchanged, err := m.isStoredVersionUnchanged(ctx, tx, tableName, primaryKey, object, metaObj)
+	if err != nil {
+		return err
+	}
+	if unchanged {
+		return tx.Commit()
+	}
+
 	err = m.fullUpsert(ctx, tx, tableName, groupVer, metaObj, protoBytes, jsonBytes, indexedFields)
 	if err != nil {
 		return err
@@ -1162,6 +1173,55 @@ func metadataStoragePrimaryKey(metaObj metav1.Object) string {
 		}
 	}
 	return string(metaObj.GetUID())
+}
+
+// isStoredVersionUnchanged reports whether the live row keyed by primaryKey already holds
+// this exact object version: the same K8s UID and resourceVersion. resourceVersion alone is
+// not enough because it is only meaningful within one etcd; after a cluster migration (same
+// primaryKey via MetadataStoragePrimaryKeyAnnotation, new UID) the RVs may collide. The row
+// is locked FOR UPDATE so a concurrent upsert cannot slip in between the check and the
+// write. An empty resourceVersion, a missing row, or a soft-deleted row reports false so
+// the caller falls through to a full upsert.
+func (m *mysqlMetadataStorage) isStoredVersionUnchanged(ctx context.Context, tx *sql.Tx, tableName string, primaryKey string, object runtime.Object, metaObj metav1.Object) (bool, error) {
+	if metaObj.GetResourceVersion() == "" {
+		return false, nil
+	}
+	query := fmt.Sprintf(`
+		SELECT res_version, proto
+		FROM %s
+		WHERE uid = ? AND delete_time IS NULL
+		FOR UPDATE
+	`, tableName)
+	var (
+		storedRV    string
+		storedProto []byte
+	)
+	err := tx.QueryRowContext(ctx, query, primaryKey).Scan(&storedRV, &storedProto)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, status.Errorf(codes.Internal, "failed to read stored version: %v", err)
+	}
+	if storedRV != metaObj.GetResourceVersion() || len(storedProto) == 0 {
+		return false, nil
+	}
+
+	storedObject := object.DeepCopyObject()
+	storedMsg, ok := storedObject.(proto.Message)
+	if !ok {
+		return false, status.Errorf(codes.InvalidArgument, "object does not implement proto.Message")
+	}
+	storedMsg.Reset()
+	if err := proto.Unmarshal(storedProto, storedMsg); err != nil {
+		// An unreadable stored row is rewritten rather than trusted.
+		return false, nil
+	}
+	storedMeta, err := getObjectMeta(storedObject)
+	if err != nil {
+		return false, err
+	}
+	return storedMeta.GetUID() == metaObj.GetUID(), nil
 }
 
 func (m *mysqlMetadataStorage) fullUpsert(ctx context.Context, tx *sql.Tx, tableName string, groupVer string, metaObj metav1.Object, protoBytes, jsonBytes []byte, indexedFields []storage.IndexedField) error {
