@@ -32,6 +32,10 @@ func options() fx.Option {
 		fx.Invoke(RegisterNotificationActivities),
 
 		workermod.Module,
+		// Opt in to per-project runner tokens (worker.runnerToken.*); off
+		// unless the config enables it. Custom mains that inject their own
+		// outbound middleware leave this out.
+		workermod.RunnerTokenModule,
 		env.Module,
 		config.Module,
 		zapfx.Module,

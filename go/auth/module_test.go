@@ -20,9 +20,61 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/config"
+	"go.uber.org/fx"
+	"go.uber.org/yarpc/api/middleware"
 	"go.uber.org/zap"
 	"k8s.io/client-go/rest"
 )
+
+// defaultModuleDeps is what a consumer of AuthModule asks the graph for: the
+// Auth implementation and, optionally, the inbound middleware.
+type defaultModuleDeps struct {
+	fx.In
+
+	Auth    Auth
+	Inbound middleware.UnaryInbound `optional:"true"`
+}
+
+// TestAuthModuleDefaultsToDummyWithoutAKubernetesConfig composes AuthModule
+// in a real fx graph the way a deployment would, with no apiserver.auth key
+// and a nil *rest.Config, and proves the "unchanged unless enabled"
+// guarantee: allow-all Auth, no inbound middleware (no token required), and
+// no Kubernetes client built.
+func TestAuthModuleDefaultsToDummyWithoutAKubernetesConfig(t *testing.T) {
+	provider := newTestProvider(t, "unrelated:\n  key: value\n")
+	var deps defaultModuleDeps
+	app := fx.New(
+		fx.NopLogger,
+		AuthModule,
+		fx.Provide(
+			func() config.Provider { return provider },
+			func() *rest.Config { return nil },
+			zap.NewNop,
+		),
+		fx.Invoke(func(d defaultModuleDeps) { deps = d }),
+	)
+	require.NoError(t, app.Err())
+	requireAllowAll(t, AuthResult{Auth: deps.Auth, InboundMiddleware: deps.Inbound})
+}
+
+// TestNewAuthResultRejectsUnknownKeysUnderAuth pins the strict parse of
+// apiserver.auth: a mistyped key is a startup error, never a silent fall
+// back to dummy, so a typo in "mode" cannot read as allow-all. An unknown
+// key next to an explicit dummy mode is rejected too; relaxing that is a
+// deliberate decision, not something to change by accident.
+func TestNewAuthResultRejectsUnknownKeysUnderAuth(t *testing.T) {
+	tests := map[string]string{
+		"mistyped mode key":      "apiserver:\n  auth:\n    mod: k8s-rbac\n",
+		"unknown key with dummy": "apiserver:\n  auth:\n    mode: dummy\n    rbacEnabled: true\n",
+	}
+	for name, yamlConfStr := range tests {
+		t.Run(name, func(t *testing.T) {
+			_, err := NewAuthResult(newAuthResultParams(t, yamlConfStr))
+			assert.ErrorContains(t, err, "cannot parse apiserver.auth configuration")
+		})
+	}
+}
 
 func newAuthResultParams(t *testing.T, yamlConfStr string) AuthResultParams {
 	t.Helper()
