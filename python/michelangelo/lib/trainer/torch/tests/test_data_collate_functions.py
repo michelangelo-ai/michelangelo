@@ -13,6 +13,7 @@ import numpy as np
 import pytest
 import torch
 
+from michelangelo._internal.utils.reflection_utils.module_attr import get_module_attr
 from michelangelo.lib.constants.sentinel import (
     FLOAT_SENTINEL,
     INT32_SENTINEL,
@@ -319,11 +320,43 @@ class TestPinnedLiteralEvalDataCollateFunction:
         with pytest.raises(RuntimeError, match="out of pinned memory"):
             pinned_literal_eval_data_collate_function({"x": [1.0]})
 
+    def test_pin_memory_called_once_per_tensor(self, monkeypatch):
+        """With CUDA, pin_memory is called exactly once for each collated tensor."""
+        monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+        pinned_shapes = []
+
+        def _record_pin(self):
+            pinned_shapes.append(tuple(self.shape))
+            return self
+
+        monkeypatch.setattr(torch.Tensor, "pin_memory", _record_pin)
+
+        out = pinned_literal_eval_data_collate_function(
+            {"a": [1.0, 2.0], "b": [3.0, 4.0], "c": [5.0, 6.0]}
+        )
+
+        assert set(out) == {"a", "b", "c"}
+        assert pinned_shapes == [(2, 1)] * 3
+
+    def test_resolves_by_dotted_import_path(self):
+        """The function can be referenced from BatchIterConfig.collate_fn by dotted import path."""
+        path = "michelangelo.lib.trainer.torch.data_collate_functions.pinned_literal_eval_data_collate_function"
+        assert get_module_attr(path) is pinned_literal_eval_data_collate_function
+
     @pytest.mark.skipif(not torch.cuda.is_available(), reason="requires CUDA")
     def test_real_pinning_on_cuda(self):
-        """On a CUDA host the returned tensors are really pinned."""
-        out = pinned_literal_eval_data_collate_function({"x": [1.0, 2.0]})
-        assert out["x"].is_pinned()
+        """On a CUDA host the tensors are pinned and equal to the default collate output."""
+        batch = {"x": [1.0, 2.0], "y": "[[1.0, 2.0], [3.0, 4.0]]"}
+
+        out = pinned_literal_eval_data_collate_function(batch)
+
+        expected = literal_eval_data_collate_function(batch)
+        assert set(out) == set(expected)
+        for name, tensor in out.items():
+            assert tensor.is_pinned()
+            assert tensor.dtype == expected[name].dtype
+            assert tensor.shape == expected[name].shape
+            assert torch.equal(tensor, expected[name])
 
 
 # -----------------------------------------------------------------------------
