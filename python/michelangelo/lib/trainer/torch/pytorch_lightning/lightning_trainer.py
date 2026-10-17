@@ -98,7 +98,9 @@ class LightningTrainerParam:
         num_epochs: Deprecated; prefer ``lightning_trainer_kwargs={"max_epochs": N}``.
         data_collate_fn: Optional custom collate function passed to
             ``Dataset.iter_torch_batches``; defaults to Ray Data's column-tensor
-            output.
+            output. See ``pinned_literal_eval_data_collate_function`` in
+            ``michelangelo.lib.trainer.torch.data_collate_functions`` for a variant
+            that returns tensors in pinned memory.
         lightning_trainer_kwargs: Extra keyword arguments forwarded to
             ``pytorch_lightning.Trainer(...)``. ``limit_train_batches`` and
             ``limit_val_batches`` are also applied to the matching Ray Dataset, and

@@ -26,6 +26,7 @@ from michelangelo.lib.trainer.torch.data_collate_functions import (
     collate_value_to_float32_tensor,
     literal_eval_data_collate_function,
     pad_ragged_lists,
+    pinned_literal_eval_data_collate_function,
     row_is_list_of_nested_cells,
 )
 
@@ -266,6 +267,63 @@ class TestLiteralEvalDataCollateFunction:
         out = literal_eval_data_collate_function(batch)
         assert out["x"].dtype == torch.float32
         assert out["x"].shape == (3, 1)
+
+
+# -----------------------------------------------------------------------------
+# pinned_literal_eval_data_collate_function
+# -----------------------------------------------------------------------------
+
+
+class TestPinnedLiteralEvalDataCollateFunction:
+    """Pinned-memory variant of the default collate."""
+
+    def test_pins_every_tensor_when_cuda_is_available(self, monkeypatch):
+        """With CUDA, each collated tensor is replaced by its pinned copy."""
+        monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+        monkeypatch.setattr(
+            torch.Tensor, "pin_memory", lambda self: ("pinned", self.shape)
+        )
+
+        out = pinned_literal_eval_data_collate_function(
+            {"a": [1.0, 2.0], "b": "[[1.0, 2.0], [3.0, 4.0]]"}
+        )
+
+        assert out == {"a": ("pinned", (2, 1)), "b": ("pinned", (2, 2))}
+
+    def test_skips_pinning_without_cuda(self, monkeypatch):
+        """Without CUDA, the default collate output is returned unpinned and pin_memory is never called."""
+        monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+        monkeypatch.setattr(
+            torch.Tensor,
+            "pin_memory",
+            lambda _: pytest.fail("pin_memory called without CUDA"),
+        )
+        batch = {"x": np.array([1.0, 2.0, 3.0])}
+
+        out = pinned_literal_eval_data_collate_function(batch)
+
+        expected = literal_eval_data_collate_function(batch)
+        assert out["x"].dtype == torch.float32
+        assert torch.equal(out["x"], expected["x"])
+        assert not out["x"].is_pinned()
+
+    def test_pin_failure_propagates(self, monkeypatch):
+        """A pinned-memory allocation failure is raised, not swallowed."""
+        monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+
+        def _fail(_self):
+            raise RuntimeError("out of pinned memory")
+
+        monkeypatch.setattr(torch.Tensor, "pin_memory", _fail)
+
+        with pytest.raises(RuntimeError, match="out of pinned memory"):
+            pinned_literal_eval_data_collate_function({"x": [1.0]})
+
+    @pytest.mark.skipif(not torch.cuda.is_available(), reason="requires CUDA")
+    def test_real_pinning_on_cuda(self):
+        """On a CUDA host the returned tensors are really pinned."""
+        out = pinned_literal_eval_data_collate_function({"x": [1.0, 2.0]})
+        assert out["x"].is_pinned()
 
 
 # -----------------------------------------------------------------------------
