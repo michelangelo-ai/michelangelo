@@ -1,0 +1,45 @@
+{{- /*
+The worker's grant for runner tokens: create on the serviceaccounts/token
+subresource, restricted by resourceNames to the michelangelo-runner
+ServiceAccount -- and, unlike a cluster-wide grant, scoped to exactly the
+project namespaces listed in apiserver.auth.runnerProjects via a
+Role/RoleBinding per namespace. A ClusterRole with the same resourceNames
+restriction would still match any "michelangelo-runner" ServiceAccount in
+any namespace by name alone; binding per-namespace instead means the
+worker cannot mint a token for a namespace the chart didn't declare, even
+if something else in the cluster happens to create a ServiceAccount with
+that same name.
+*/ -}}
+{{- if and .Values.worker.runnerToken.enabled .Values.serviceAccount.create }}
+{{- range $ns := .Values.apiserver.auth.runnerProjects }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "michelangelo.fullname" $ }}-runner-token-minter
+  namespace: {{ $ns }}
+  labels:
+    {{- include "michelangelo.labels" $ | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["serviceaccounts/token"]
+    resourceNames: ["michelangelo-runner"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "michelangelo.fullname" $ }}-runner-token-minter
+  namespace: {{ $ns }}
+  labels:
+    {{- include "michelangelo.labels" $ | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "michelangelo.fullname" $ }}-runner-token-minter
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "michelangelo.serviceAccountName" $ }}
+    namespace: {{ $.Release.Namespace }}
+{{- end }}
+{{- end }}
