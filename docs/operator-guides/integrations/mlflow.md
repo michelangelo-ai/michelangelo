@@ -232,6 +232,20 @@ MLflow includes its own model registry. Michelangelo AI also has a built-in mode
 
 **Using both:** Log experiments and register models to MLflow for lineage and governance, and separately register the deployable artifact to Michelangelo AI for serving. Both calls can live in the same task function.
 
+**Bridging the two from the pusher:** `michelangelo.workflow.tasks.pusher.implementations.MLflowRegistryClient` implements Michelangelo AI's `ModelRegistryClient` interface against MLflow's registry, so a single `push()` call can register a pushed artifact directly into MLflow's registry — no separate MLflow client call needed:
+
+```python
+from michelangelo.workflow.tasks.pusher import push, MLflowRegistryClient
+
+result = push(
+    config=pusher_config,
+    artifacts=artifacts,
+    registry_client=MLflowRegistryClient(tracking_uri="http://mlflow.example.com:5000"),
+)
+```
+
+Requires the `pusher-mlflow` extra (`pip install 'michelangelo[pusher-mlflow]'`).
+
 ---
 
 ## Verification
