@@ -1032,3 +1032,132 @@ func TestIntegration_FullUpsert_WritesSameVersionFromMigratedCluster(t *testing.
 	assert.Equal(t, "second", readBack.Spec.Description)
 	assert.Equal(t, types.UID(newUID), readBack.GetUID())
 }
+
+// backdateModelUpdateTime sets update_time to the epoch so a later rewrite is detectable
+// regardless of column precision, and returns that sentinel.
+func backdateModelUpdateTime(t *testing.T, db *sql.DB, uid string) time.Time {
+	t.Helper()
+	epoch := time.Unix(0, 0).UTC()
+	_, err := db.Exec("UPDATE model SET update_time = ? WHERE uid = ?", epoch, uid)
+	require.NoError(t, err)
+	return epoch
+}
+
+// storedModelDescription reads spec.description straight from the row's proto, including
+// soft-deleted rows (which GetByName filters out).
+func storedModelDescription(t *testing.T, db *sql.DB, uid string) string {
+	t.Helper()
+	var protoBytes []byte
+	require.NoError(t, db.QueryRow("SELECT proto FROM model WHERE uid = ?", uid).Scan(&protoBytes))
+	stored := &v2pb.Model{}
+	require.NoError(t, stored.Unmarshal(protoBytes))
+	return stored.Spec.Description
+}
+
+// TestIntegration_FullUpsert_SoftDeletedRowIsWritten: the skip only considers live rows,
+// so a soft-deleted row with the same UID and resourceVersion still gets a full write.
+// (The existing ON DUPLICATE KEY UPDATE does not clear delete_time, so the row stays
+// soft-deleted; that is pre-existing behavior and not asserted here.)
+func TestIntegration_FullUpsert_SoftDeletedRowIsWritten(t *testing.T) {
+	db := openIntegrationDB(t)
+	store := newIntegrationStorage(t, db)
+	ctx := context.Background()
+
+	const (
+		namespace = "integration-test-ns"
+		name      = "upsert-soft-deleted-model"
+		uid       = "upsert-soft-deleted-uid"
+	)
+	t.Cleanup(func() { cleanupModelRow(t, db, namespace, name, uid) })
+
+	require.NoError(t, store.Upsert(ctx, newUpsertSkipModel(namespace, name, uid, "7", "first", nil), false, nil))
+	typeMeta := &metav1.TypeMeta{APIVersion: "michelangelo.uber.com/v2", Kind: "Model"}
+	require.NoError(t, store.Delete(ctx, typeMeta, namespace, name))
+	epoch := backdateModelUpdateTime(t, db, uid)
+
+	require.NoError(t, store.Upsert(ctx, newUpsertSkipModel(namespace, name, uid, "7", "second", nil), false, nil))
+
+	var updateTime time.Time
+	require.NoError(t, db.QueryRow("SELECT update_time FROM model WHERE uid = ?", uid).Scan(&updateTime))
+	assert.NotEqual(t, epoch, updateTime.UTC(), "a soft-deleted row must not be treated as unchanged")
+	assert.Equal(t, "second", storedModelDescription(t, db, uid))
+}
+
+// TestIntegration_FullUpsert_BadStoredProtoIsRewritten: a matching UID/RV must not be
+// trusted when the stored proto is empty or cannot be unmarshalled; the row is rewritten.
+func TestIntegration_FullUpsert_BadStoredProtoIsRewritten(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		proto string // SQL expression assigned to the proto column
+	}{
+		{name: "empty", proto: "X''"},
+		{name: "corrupt", proto: "X'00'"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db := openIntegrationDB(t)
+			store := newIntegrationStorage(t, db)
+			ctx := context.Background()
+
+			namespace := "integration-test-ns"
+			name := "upsert-bad-proto-model-" + tc.name
+			uid := "upsert-bad-proto-uid-" + tc.name
+			t.Cleanup(func() { cleanupModelRow(t, db, namespace, name, uid) })
+
+			require.NoError(t, store.Upsert(ctx, newUpsertSkipModel(namespace, name, uid, "7", "first", nil), false, nil))
+			_, err := db.Exec("UPDATE model SET proto = "+tc.proto+" WHERE uid = ?", uid)
+			require.NoError(t, err)
+
+			require.NoError(t, store.Upsert(ctx, newUpsertSkipModel(namespace, name, uid, "7", "second", nil), false, nil))
+			assert.Equal(t, "second", storedModelDescription(t, db, uid), "a bad stored proto must be replaced")
+		})
+	}
+}
+
+// TestIntegration_FullUpsert_EmptyResourceVersionIsNotSkipped: without a resourceVersion
+// there is nothing to compare, so the skip must never apply and the call must reach the
+// write. A skip would commit silently and return nil; instead the write runs and, as on
+// main, MySQL strict mode rejects an empty string for the BIGINT res_version column.
+func TestIntegration_FullUpsert_EmptyResourceVersionIsNotSkipped(t *testing.T) {
+	db := openIntegrationDB(t)
+	store := newIntegrationStorage(t, db)
+	ctx := context.Background()
+
+	const (
+		namespace = "integration-test-ns"
+		name      = "upsert-empty-rv-model"
+		uid       = "upsert-empty-rv-uid"
+	)
+	t.Cleanup(func() { cleanupModelRow(t, db, namespace, name, uid) })
+
+	require.NoError(t, store.Upsert(ctx, newUpsertSkipModel(namespace, name, uid, "7", "first", nil), false, nil))
+
+	err := store.Upsert(ctx, newUpsertSkipModel(namespace, name, uid, "", "second", nil), false, nil)
+	require.Error(t, err, "an empty resourceVersion must reach the write, not be skipped")
+	assert.Contains(t, err.Error(), "failed to upsert object")
+	assert.Equal(t, "first", storedModelDescription(t, db, uid), "the failed write must be rolled back")
+}
+
+// TestIntegration_FullUpsert_AfterDirectUpdateWritesNewVersion: a direct update leaves a
+// storage-side res_version (storedRV+1); a later full upsert at a different etcd RV must
+// still be written.
+func TestIntegration_FullUpsert_AfterDirectUpdateWritesNewVersion(t *testing.T) {
+	db := openIntegrationDB(t)
+	store := newIntegrationStorage(t, db)
+	ctx := context.Background()
+
+	const (
+		namespace = "integration-test-ns"
+		name      = "upsert-after-direct-model"
+		uid       = "upsert-after-direct-uid"
+	)
+	t.Cleanup(func() { cleanupModelRow(t, db, namespace, name, uid) })
+
+	require.NoError(t, store.Upsert(ctx, newUpsertSkipModel(namespace, name, uid, "7", "first", nil), false, nil))
+	direct := newUpsertSkipModel(namespace, name, "", "7", "first", nil)
+	require.NoError(t, store.Upsert(ctx, direct, true, nil))
+	require.Equal(t, uint64(8), storedResVersionIn(t, db, "model", namespace, name))
+
+	require.NoError(t, store.Upsert(ctx, newUpsertSkipModel(namespace, name, uid, "9", "second", nil), false, nil))
+	assert.Equal(t, "second", storedModelDescription(t, db, uid))
+	assert.Equal(t, uint64(9), storedResVersionIn(t, db, "model", namespace, name))
+}

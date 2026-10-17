@@ -167,6 +167,11 @@ func (m *mysqlMetadataStorage) Upsert(ctx context.Context, object runtime.Object
 	// Skip the write when the row already holds this exact object version. An informer
 	// relist (controller restart or resync) replays every unchanged object; rewriting it
 	// would only bump update_time and make long-finished objects look recently updated.
+	//
+	// Consequence: a relist no longer rewrites unchanged rows as a side effect, so it does
+	// not backfill newly added indexed columns or repair label/annotation child rows that
+	// were modified directly in MySQL. Such rows are only rewritten on the object's next
+	// resourceVersion bump; backfills need an explicit tool or an RV bump.
 	unchanged, err := m.isStoredVersionUnchanged(ctx, tx, tableName, primaryKey, object, metaObj)
 	if err != nil {
 		return err
@@ -1180,14 +1185,22 @@ func metadataStoragePrimaryKey(metaObj metav1.Object) string {
 // not enough because it is only meaningful within one etcd; after a cluster migration (same
 // primaryKey via MetadataStoragePrimaryKeyAnnotation, new UID) the RVs may collide. The row
 // is locked FOR UPDATE so a concurrent upsert cannot slip in between the check and the
-// write. An empty resourceVersion, a missing row, or a soft-deleted row reports false so
-// the caller falls through to a full upsert.
+// write. An empty resourceVersion, a missing row, a soft-deleted row, or an empty or
+// unreadable stored proto reports false so the caller falls through to a full upsert.
+//
+// The direct path (directUpdate) writes a storage-side res_version (storedRV+1) that is
+// not an etcd revision. That cannot collide with an etcd replay here: the direct path is
+// only taken once the object is NotFound in etcd, and an object evicted from etcd cannot
+// be written there again under the same UID (a recreate gets a new UID).
 func (m *mysqlMetadataStorage) isStoredVersionUnchanged(ctx context.Context, tx *sql.Tx, tableName string, primaryKey string, object runtime.Object, metaObj metav1.Object) (bool, error) {
 	if metaObj.GetResourceVersion() == "" {
 		return false, nil
 	}
+	// Only fetch the proto blob when res_version matches. On a real update (the common
+	// steady-state case) the RV differs and the blob would be read only to be discarded.
+	// res_version is compared as a string so a non-numeric RV is never coerced to 0.
 	query := fmt.Sprintf(`
-		SELECT res_version, proto
+		SELECT res_version, IF(CAST(res_version AS CHAR) = ?, proto, NULL)
 		FROM %s
 		WHERE uid = ? AND delete_time IS NULL
 		FOR UPDATE
@@ -1196,7 +1209,7 @@ func (m *mysqlMetadataStorage) isStoredVersionUnchanged(ctx context.Context, tx 
 		storedRV    string
 		storedProto []byte
 	)
-	err := tx.QueryRowContext(ctx, query, primaryKey).Scan(&storedRV, &storedProto)
+	err := tx.QueryRowContext(ctx, query, metaObj.GetResourceVersion(), primaryKey).Scan(&storedRV, &storedProto)
 	if err == sql.ErrNoRows {
 		return false, nil
 	}
@@ -1214,7 +1227,8 @@ func (m *mysqlMetadataStorage) isStoredVersionUnchanged(ctx context.Context, tx 
 	}
 	storedMsg.Reset()
 	if err := proto.Unmarshal(storedProto, storedMsg); err != nil {
-		// An unreadable stored row is rewritten rather than trusted.
+		// An unreadable stored row is rewritten rather than trusted; the full upsert
+		// replaces it with a good copy, so there is nothing for the caller to handle.
 		return false, nil
 	}
 	storedMeta, err := getObjectMeta(storedObject)
