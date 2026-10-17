@@ -18,12 +18,21 @@ var Module = fx.Options(
 	fx.Provide(newClient),
 )
 
-// newClient creates the Google Cloud Storage blob store client. The
-// underlying storage client is constructed lazily on first use (see
-// gcsBlobClient), so providing this module never fails startup for
-// deployments that do not use GCS.
-func newClient(config Config) BlobStoreClientOut {
-	return BlobStoreClientOut{
-		BlobStoreClient: newGcsBlobClient(config),
+// newClient creates the Google Cloud Storage blob store client.
+//
+// When the application config contains a gcs section, the underlying
+// storage client is constructed immediately so that misconfiguration
+// (for example an unreadable credentials file) fails at startup rather
+// than on the first gs:// read. Without a gcs section the storage
+// client is constructed lazily on first use (see gcsBlobClient), so
+// providing this module never fails startup for deployments that do
+// not use GCS.
+func newClient(config Config) (BlobStoreClientOut, error) {
+	client := newGcsBlobClient(config)
+	if config.configured {
+		if _, err := client.ensureClient(); err != nil {
+			return BlobStoreClientOut{}, err
+		}
 	}
+	return BlobStoreClientOut{BlobStoreClient: client}, nil
 }
