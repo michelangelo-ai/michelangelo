@@ -6,6 +6,7 @@ import (
 	"go.uber.org/fx"
 
 	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
+	"github.com/michelangelo-ai/michelangelo/go/base/blobstore/azure"
 	"github.com/michelangelo-ai/michelangelo/go/base/blobstore/gcs"
 	"github.com/michelangelo-ai/michelangelo/go/base/blobstore/minio"
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities"
@@ -44,4 +45,5 @@ var Module = fx.Options(
 	blobstore.Module,
 	minio.Module,
 	gcs.Module,
+	azure.Module,
 )
