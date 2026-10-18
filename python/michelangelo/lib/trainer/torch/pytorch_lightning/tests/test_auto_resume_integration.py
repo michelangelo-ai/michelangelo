@@ -128,7 +128,53 @@ def ray_cluster():
         ray.shutdown()
 
 
-def _train(storage_path, name, epochs, store, **param_overrides):
+class _ReportSpy(pl.Callback):
+    """Record the kwargs of every ``ray.train.report`` call made in the worker.
+
+    Installed in ``on_train_start`` so it wraps the report function before the
+    Ray report callback runs; each call appends one JSON line to ``log_path``.
+    """
+
+    def __init__(self, log_path):
+        self.log_path = str(log_path)
+
+    def on_train_start(self, trainer, pl_module):
+        import json
+
+        import ray.train as ray_train
+
+        original = ray_train.report
+        log_path = self.log_path
+
+        def spy(*args, **kwargs):
+            mode = kwargs.get("checkpoint_upload_mode")
+            with open(log_path, "a") as f:
+                f.write(
+                    json.dumps(
+                        {
+                            "mode": getattr(mode, "name", None),
+                            "delete_local": kwargs.get(
+                                "delete_local_checkpoint_after_upload"
+                            ),
+                            "has_checkpoint": kwargs.get("checkpoint") is not None,
+                        }
+                    )
+                    + "\n"
+                )
+            return original(*args, **kwargs)
+
+        ray_train.report = spy
+
+
+def _read_reports(log_path):
+    """Return the parsed JSON records written by ``_ReportSpy``."""
+    import json
+
+    with open(log_path) as f:
+        return [json.loads(line) for line in f if line.strip()]
+
+
+def _train(storage_path, name, epochs, store, extra_callbacks=(), **param_overrides):
     """Run one training job and return its result dict.
 
     Extra ``param_overrides`` are forwarded to ``LightningTrainerParam``.
@@ -144,7 +190,10 @@ def _train(storage_path, name, epochs, store, **param_overrides):
         batch_size=4,
         lightning_trainer_kwargs={
             "max_epochs": epochs,
-            "callbacks": [ModelCheckpoint(save_top_k=2, monitor="val_loss")],
+            "callbacks": [
+                ModelCheckpoint(save_top_k=2, monitor="val_loss"),
+                *extra_callbacks,
+            ],
         },
         experiment_store=store,
         **param_overrides,
@@ -166,17 +215,51 @@ class TestPrefetchAndAsyncUploadIntegration:
         """Training with both options finishes and every epoch checkpoint lands."""
         if not hasattr(ray.train, "CheckpointUploadMode"):
             pytest.skip("installed Ray has no native async checkpoint upload")
+        spy_log = tmp_path / "async_reports.jsonl"
         result = _train(
             tmp_path,
             "async_run",
             epochs=2,
             store=None,
+            extra_callbacks=[_ReportSpy(spy_log)],
             prefetch_batches=3,
             upload_async=True,
         )
         assert result["metrics"]["epoch"] == 1
+        # One checkpoint per epoch, uploaded to the run's storage path.
         ckpt_files = list((tmp_path / "async_run").rglob("checkpoint.ckpt"))
-        assert len(ckpt_files) >= 1
+        assert len(ckpt_files) == 2
+        # Every report used Ray's native ASYNC upload mode.
+        reports = _read_reports(spy_log)
+        assert len(reports) == 2
+        assert all(r["mode"] == "ASYNC" for r in reports)
+        assert all(r["delete_local"] is True for r in reports)
+
+    def test_sync_upload_does_not_request_async_mode(self, ray_cluster, tmp_path):
+        """Without ``upload_async`` no upload-mode kwargs reach ``ray.train.report``."""
+        spy_log = tmp_path / "sync_reports.jsonl"
+        result = _train(
+            tmp_path,
+            "sync_run",
+            epochs=2,
+            store=None,
+            extra_callbacks=[_ReportSpy(spy_log)],
+        )
+        assert result["metrics"]["epoch"] == 1
+        assert len(list((tmp_path / "sync_run").rglob("checkpoint.ckpt"))) == 2
+        reports = _read_reports(spy_log)
+        assert len(reports) == 2
+        assert all(r["mode"] is None for r in reports)
+
+    def test_same_identity_rerun_resumes_with_async_upload(self, ray_cluster, tmp_path):
+        """A same-identity re-run with ``upload_async=True`` resumes past epoch 0."""
+        if not hasattr(ray.train, "CheckpointUploadMode"):
+            pytest.skip("installed Ray has no native async checkpoint upload")
+        store = FsspecExperimentStore()
+        first = _train(tmp_path, "async_resume", 1, store, upload_async=True)
+        assert first["metrics"]["epoch"] == 0
+        second = _train(tmp_path, "async_resume", 3, store, upload_async=True)
+        assert second["metrics"]["epoch"] == 2
 
     def test_prefetch_zero_disables_prefetching_and_trains(self, ray_cluster, tmp_path):
         """``prefetch_batches=0`` is accepted by Ray Data and training completes."""

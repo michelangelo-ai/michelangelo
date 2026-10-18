@@ -346,36 +346,24 @@ class TestRayTrainReportCallbackUploadAsyncInit:
 class TestNativeAsyncAvailabilityProbe:
     """Import-time detection of ``ray.train.CheckpointUploadMode``."""
 
-    def test_flag_matches_installed_ray(self):
-        """The availability flag reflects whether the installed Ray exports the enum."""
+    def test_import_succeeds_without_checkpoint_upload_mode(self, monkeypatch):
+        """On Ray without the enum the module still imports and reports unavailable."""
+        import importlib
+
         import ray.train
 
         from michelangelo.lib.trainer.torch.pytorch_lightning._private import (
             callbacks,
         )
 
-        assert callbacks._NATIVE_ASYNC_UPLOAD_AVAILABLE is hasattr(
-            ray.train, "CheckpointUploadMode"
-        )
-
-    def test_import_succeeds_without_checkpoint_upload_mode(self):
-        """On Ray without the enum the module still imports and reports unavailable."""
-        import subprocess
-        import sys
-
-        code = (
-            "import ray.train\n"
-            "if hasattr(ray.train, 'CheckpointUploadMode'):\n"
-            "    del ray.train.CheckpointUploadMode\n"
-            "from michelangelo.lib.trainer.torch.pytorch_lightning._private "
-            "import callbacks\n"
-            "assert callbacks._NATIVE_ASYNC_UPLOAD_AVAILABLE is False\n"
-            "assert callbacks.CheckpointUploadMode is None\n"
-        )
-        result = subprocess.run(
-            [sys.executable, "-c", code], capture_output=True, text=True, timeout=300
-        )
-        assert result.returncode == 0, result.stderr
+        monkeypatch.delattr(ray.train, "CheckpointUploadMode", raising=False)
+        try:
+            importlib.reload(callbacks)
+            assert callbacks._NATIVE_ASYNC_UPLOAD_AVAILABLE is False
+            assert callbacks.CheckpointUploadMode is None
+        finally:
+            monkeypatch.undo()
+            importlib.reload(callbacks)
 
 
 # -----------------------------------------------------------------------------

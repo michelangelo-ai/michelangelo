@@ -91,6 +91,24 @@ class TestTrainLoopPrefetch:
             assert call.kwargs["prefetch_batches"] == 0
 
 
+class TestTrainLoopCustomDataloader:
+    """A custom dataloader bypasses the Ray Data iterators entirely."""
+
+    def test_prefetch_not_applied_with_custom_dataloader(self):
+        """``iter_torch_batches`` is never called when ``custom_dataloader`` is set."""
+        with patch(
+            f"{_UTIL_MODULE}._build_custom_dataloaders",
+            return_value=(MagicMock(), MagicMock()),
+        ) as mock_build:
+            mock_ray, _ = _run_loop(
+                _loop_config(prefetch_batches=5, custom_dataloader=MagicMock())
+            )
+        mock_build.assert_called_once()
+        shard = mock_ray.train.get_dataset_shard.return_value
+        shard.iter_torch_batches.assert_not_called()
+        mock_ray.train.get_dataset_shard.assert_not_called()
+
+
 class TestTrainLoopUploadAsync:
     """``upload_async`` is forwarded to the callback resolver."""
 

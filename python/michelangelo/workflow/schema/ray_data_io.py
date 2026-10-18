@@ -157,8 +157,9 @@ class BatchIterConfig:
             negative.
 
     Example:
-        >>> BatchIterConfig(batch_size=64, prefetch_batches=4)
-        BatchIterConfig(batch_size=64, num_shuffle_batches=0, ...)
+        >>> config = BatchIterConfig(batch_size=64, prefetch_batches=4)
+        >>> config.prefetch_batches
+        4
     """
 
     batch_size: int
