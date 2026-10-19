@@ -10,20 +10,22 @@ This guide is for platform operators and cluster administrators configuring auth
 
 ## What ships by default
 
-The stock Michelangelo AI API server (`go/cmd/apiserver`) does **not** authenticate or authorize callers out of the box. It wires `auth.DummyAuthModule`, which allows every request, and it installs no authentication middleware unless a deployment supplies one. There is no `apiserver.auth.*` Helm value, ConfigMap key, or `rbacEnabled` / `sessionTokenExpiry` setting in the chart.
+The stock Michelangelo AI API server (`go/cmd/apiserver`) wires `auth.AuthModule`, which reads the `apiserver.auth` config key and picks an implementation by `mode`. The default (`mode` unset or `dummy`) allows every request and installs no authentication middleware, so out of the box the API server does **not** authenticate or authorize callers. Setting `apiserver.auth.mode: k8s-rbac` turns on bearer-token authentication and Kubernetes RBAC authorization; see [Enabling Kubernetes RBAC mode](#enabling-kubernetes-rbac-mode). `auth.DummyAuthModule` still exists in `go/auth`, but the stock server no longer uses it.
 
-Until you wire in authentication, protect the API surface at the network layer: keep the API server, Envoy, and UI off the public internet, restrict access with Ingress and NetworkPolicy rules (see [Network & Ingress](./network.md)), and put an authenticating proxy or ingress in front of the UI if you expose it.
+The Helm chart renders no `auth` block: there is no `apiserver.auth.*` Helm value, and no `rbacEnabled` / `sessionTokenExpiry` setting. To enable authentication you supply the API server's configuration yourself.
+
+Until you enable authentication, protect the API surface at the network layer: keep the API server, Envoy, and UI off the public internet, restrict access with Ingress and NetworkPolicy rules (see [Network & Ingress](./network.md)), and put an authenticating proxy or ingress in front of the UI if you expose it.
 
 Authentication in Michelangelo AI is built from two independent, pluggable layers in the `go/auth` package:
 
 1. **Transport authentication** (`go/auth/authn.go`). `auth.NewInboundMiddleware` is a YARPC inbound middleware that requires an `authorization: Bearer <token>` header, verifies it with a deployment-specific `Authenticator`, optionally restricts callers to an allowlist of service names (`AllowedServices`), and stores the verified `Principal` on the request context. It is installed only when an `Authenticator` is provided. For outbound calls, `auth.NewBearerOutboundMiddleware` attaches a token from a `TokenSource`.
 2. **Handler authorization**. The generated API handlers call the `auth.Auth` interface (`UserAuthenticated`, `UserAuthorized`). `DummyAuth` allows everything and is the default. `auth.NewK8sRBACAuth` adapts a `k8s.io/apiserver` authorizer to this interface so decisions can be made with Kubernetes RBAC.
 
-Both the API server (`DispatcherParams.InboundMiddleware`) and the worker (`Params.OutboundMiddleware`) accept these middlewares as optional `fx` dependencies, so enabling them means building a custom API server and worker binary (or image) that provides them, in the same way as described in [Notification Delivery Setup](../notifications.md#step-2-implement-delivery).
+The built-in path needs **configuration only, no rebuild**: in `k8s-rbac` mode the stock API server assembles both layers itself (OIDC and/or ServiceAccount token authentication, RBAC authorization), and the stock worker attaches per-project tokens when `worker.runnerToken` is enabled (see [Service Authentication](#service-authentication-internal)). A custom binary (or image) is needed only for a different `Authenticator` or `TokenSource`. The API server (`DispatcherParams.InboundMiddleware`) and the worker (`Params.OutboundMiddleware`) take these middlewares as optional `fx` dependencies, wired in the same way as described in [Notification Delivery Setup](../notifications.md#step-2-implement-delivery). Because `auth.AuthModule` and the worker module now provide those slots themselves, a custom middleware must replace that provider rather than add a second one; `fx` rejects two providers of the same type.
 
 ## OIDC token verification
 
-`go/auth/oidc` provides an OIDC ID-token verifier (`oidc.New`) that returns a `k8s.io/apiserver` token authenticator. `auth.FromTokenAuthenticator` adapts it for `NewInboundMiddleware`. The verifier takes this configuration (YAML keys shown; you load and pass the config from your own wiring):
+`go/auth/oidc` provides an OIDC ID-token verifier (`oidc.New`) that returns a `k8s.io/apiserver` token authenticator. `auth.FromTokenAuthenticator` adapts it for `NewInboundMiddleware`. The verifier takes this configuration. In `k8s-rbac` mode, set these keys under `apiserver.auth.oidc` (see [Enabling Kubernetes RBAC mode](#enabling-kubernetes-rbac-mode)); a custom wiring can also load them and call `oidc.New` directly:
 
 | Key | Default | Meaning |
 |-----|---------|---------|
@@ -48,13 +50,93 @@ groupsClaim: groups
 
 Token lifetime and refresh are governed by your identity provider, not by Michelangelo AI.
 
+## Enabling Kubernetes RBAC mode
+
+Set `apiserver.auth` in the API server's configuration:
+
+```yaml
+apiserver:
+  auth:
+    mode: k8s-rbac
+    oidc:                      # human callers; keys as in OIDC token verification above
+      issuerUrl: https://accounts.your-idp.com
+      audiences:
+        - michelangelo
+    serviceAccounts:           # in-cluster callers, verified with TokenReview
+      enabled: true
+      audiences:               # optional; passed to TokenReview
+        - michelangelo-apiserver
+    sarCache:                  # SubjectAccessReview decision cache
+      allowTTL: 10s
+      denyTTL: 10s
+```
+
+| `mode` | Behavior |
+|--------|----------|
+| unset or `dummy` | Every request is allowed and no authentication middleware is installed. This is the default |
+| `k8s-rbac` | Every call must carry an `authorization: Bearer <token>` header. The token is verified as an OIDC ID token and/or a Kubernetes ServiceAccount token (TokenReview). Each call is then authorized with a SubjectAccessReview against the `michelangelo.api` API group |
+| anything else | The API server fails to start with `unknown auth mode`. There is no silent fallback to allow-all |
+
+In `k8s-rbac` mode:
+
+- At least one of `oidc.issuerUrl` and `serviceAccounts.enabled: true` must be set, or the API server fails to start.
+- OIDC discovery runs at startup with a 30-second timeout, so an unreachable or misconfigured issuer fails startup instead of denying every request later.
+- Verified tokens are cached for 10 seconds. This isn't configurable.
+- SubjectAccessReview decisions are cached separately for allows (`sarCache.allowTTL`) and denies (`sarCache.denyTTL`). Each defaults to 10 seconds; an explicit `0` disables that cache.
+- Because authorization uses the `michelangelo.api` API group, the Roles in [Granting Access with RBAC](#granting-access-with-rbac) apply as written. ServiceAccount callers authenticate as `system:serviceaccount:<namespace>:<name>`.
+
+### Prerequisites the chart doesn't provide
+
+The Helm chart does not set any of this up for you:
+
+1. **No Helm values.** The API server ConfigMap (`templates/core/apiserver-configmap.yaml`) renders no `auth` block, and the worker ConfigMap renders no `runnerToken`. There are no `values.yaml` keys for either. Supply your own configuration, for example a ConfigMap of your own or an overriding `base.yaml`.
+2. **Missing RBAC rules.** The API server and worker run as one shared ServiceAccount (the chart's `serviceAccount`, named after the release by default). The chart's ClusterRole (`templates/rbac/clusterrole.yaml`) grants it none of the following, so add them yourself:
+
+   | Rule | Needed by |
+   |------|-----------|
+   | `create` on `subjectaccessreviews` (`authorization.k8s.io`) | API server, `mode: k8s-rbac` |
+   | `create` on `tokenreviews` (`authentication.k8s.io`) | API server, `serviceAccounts.enabled: true` |
+   | `create` on `serviceaccounts/token` (core) | Worker, `worker.runnerToken.enabled: true` |
+
+   ```yaml
+   apiVersion: rbac.authorization.k8s.io/v1
+   kind: ClusterRole
+   metadata:
+     name: michelangelo-auth
+   rules:
+     - apiGroups: ["authorization.k8s.io"]
+       resources: ["subjectaccessreviews"]
+       verbs: ["create"]
+     - apiGroups: ["authentication.k8s.io"]
+       resources: ["tokenreviews"]
+       verbs: ["create"]
+     - apiGroups: [""]
+       resources: ["serviceaccounts/token"]
+       verbs: ["create"]
+   ---
+   apiVersion: rbac.authorization.k8s.io/v1
+   kind: ClusterRoleBinding
+   metadata:
+     name: michelangelo-auth
+   subjects:
+     - kind: ServiceAccount
+       name: <michelangelo-service-account>   # kubectl get sa -n <release-namespace>
+       namespace: <release-namespace>
+   roleRef:
+     kind: ClusterRole
+     name: michelangelo-auth
+     apiGroup: rbac.authorization.k8s.io
+   ```
+
+3. **No `michelangelo-runner` ServiceAccount.** If you enable `worker.runnerToken`, neither the chart nor the project API hook creates the per-project ServiceAccount it mints tokens for. See [Service Authentication](#service-authentication-internal).
+
 ## Multi-Factor Authentication
 
 MFA is enforced at the IdP level, not within Michelangelo AI. Configure MFA policies in your identity provider's admin console; tokens that reach Michelangelo AI have already completed the IdP flow.
 
 ## Granting Access with RBAC
 
-When authorization is backed by Kubernetes RBAC (`auth.NewK8sRBACAuth`), or when users access Michelangelo AI resources directly with `kubectl`, users need a `RoleBinding` or `ClusterRoleBinding` on the `michelangelo.api` resources. Define the Roles yourself, for example (see also [Model Registry](../components/model-registry.md#step-3-configure-rbac)):
+When authorization is backed by Kubernetes RBAC (`apiserver.auth.mode: k8s-rbac`, or a custom wiring of `auth.NewK8sRBACAuth`), or when users access Michelangelo AI resources directly with `kubectl`, users need a `RoleBinding` or `ClusterRoleBinding` on the `michelangelo.api` resources. Define the Roles yourself, for example (see also [Model Registry](../components/model-registry.md#step-3-configure-rbac)):
 
 ```yaml
 apiVersion: rbac.authorization.k8s.io/v1
@@ -121,7 +203,47 @@ worker:
   useTLS: true   # only if the API server is reachable over TLS at this address
 ```
 
-To attach a bearer token to the worker's calls, inject an `auth.NewBearerOutboundMiddleware` built from your own `TokenSource` into the worker.
+**Per-project worker identity**: With `apiserver.auth.mode: k8s-rbac`, the worker's calls need a bearer token too. Enable `worker.runnerToken` in the worker's configuration and pair it with `serviceAccounts.enabled: true` on the API server:
+
+```yaml
+worker:
+  runnerToken:
+    enabled: true     # default false: worker traffic is unchanged
+    audiences:        # optional; the API server's serviceAccounts.audiences must accept one
+      - michelangelo-apiserver
+    ttl: 1h           # optional; 0 uses the cluster default; Kubernetes enforces a 10m minimum
+```
+
+When enabled, the worker mints a short-lived token for the `michelangelo-runner` ServiceAccount in **each project's namespace** (TokenRequest API), caches it until one minute before it expires, and attaches it to the calls it makes for that project. The API server then authorizes each call against that namespace's RoleBindings instead of a platform-wide worker identity. A call that carries no project namespace fails rather than going out unauthenticated.
+
+Before you enable it:
+
+- Grant the chart's ServiceAccount `create` on `serviceaccounts/token` (see [Prerequisites the chart doesn't provide](#prerequisites-the-chart-doesnt-provide)).
+- Create the `michelangelo-runner` ServiceAccount in **every** project namespace, plus a RoleBinding granting it what pipeline runs need on the `michelangelo.api` resources. Neither the chart nor the project API hook creates it:
+
+  ```yaml
+  apiVersion: v1
+  kind: ServiceAccount
+  metadata:
+    name: michelangelo-runner
+    namespace: ml-team-project
+  ---
+  apiVersion: rbac.authorization.k8s.io/v1
+  kind: RoleBinding
+  metadata:
+    name: michelangelo-runner
+    namespace: ml-team-project
+  subjects:
+    - kind: ServiceAccount
+      name: michelangelo-runner
+      namespace: ml-team-project
+  roleRef:
+    kind: Role
+    name: <role-for-pipeline-runs>   # a Role you define on michelangelo.api
+    apiGroup: rbac.authorization.k8s.io
+  ```
+
+A custom `TokenSource` is still possible: build an `auth.NewBearerOutboundMiddleware` from it and use it in place of the worker module's runner-token middleware.
 
 **Controller manager to compute cluster**: Uses the `ray-manager` service account token stored as a Secret in the control plane namespace. See [Register a Compute Cluster](register-a-compute-cluster-to-michelangelo-control-plane.md) for the full setup including token rotation guidance.
 

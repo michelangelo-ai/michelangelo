@@ -9,7 +9,12 @@ Deleting a Pipeline cascades to all of its child resources — PipelineRuns, Tri
 
 It is built on Kubernetes [foreground garbage collection](https://kubernetes.io/docs/concepts/architecture/garbage-collection/#foreground-deletion): the Pipeline is not removed until all children have been drained and deleted.
 
-There is exactly one cascade relationship: `Pipeline → {PipelineRun, TriggerRun, Revision}`. Deleting any other entity (Model, Deployment, …) does not cascade.
+There is one **delete** cascade relationship: `Pipeline → {PipelineRun, TriggerRun, Revision}`. Deleting any other entity (Model, Deployment, …) does not cascade.
+
+TriggerRuns also have a **cancel** cascade. Killing or deleting a TriggerRun cancels its in-flight child PipelineRuns: the controller sets `spec.kill=true` on each one. It doesn't delete them, so they stay in the run history as `KILLED`. Child runs carry no ownerReference to their trigger; they are found by the `pipelinerun.michelangelo/triggered-by=<trigger name>` label. Runs that are pending, running, or still `INVALID` are cancelled (`INVALID` covers a run the trigger just created, so it doesn't start after the kill).
+
+- **Kill:** the TriggerRun stays in `PENDING_KILL` until its child runs are terminal, then ends `KILLED` and stays visible.
+- **Delete:** the TriggerRun's drain finalizer (see [Drain finalizers](#drain-finalizers)) is held until its child runs are terminal, bounded by the same 24-hour [safety timeout](#safety-timeout).
 
 :::warning
 Cascade is on by default and **irreversible** — deleting a Pipeline terminates and removes all of its child runs, and soft-deletes its Revisions. To keep the children, delete with the `orphan` propagation policy (see [Controlling cascade behavior](#controlling-cascade-behavior)).
@@ -48,7 +53,7 @@ The `ma pipeline delete` CLI always uses `foreground`. To opt out of cascade for
 | Finalizer | Applied to | Purpose |
 |-----------|-----------|---------|
 | `pipelineruns.michelangelo.uber.com/drain` | PipelineRun | Cancels the pipeline workflow before GC deletes the CR |
-| `triggerruns.michelangelo.uber.com/drain` | TriggerRun | Deletes the cron schedule and terminates any open workflow run |
+| `triggerruns.michelangelo.uber.com/drain` | TriggerRun | Deletes the cron schedule, terminates any open workflow run, and waits for the trigger's in-flight child PipelineRuns to reach a terminal state |
 
 Revision has no drain finalizer — it carries no in-flight work, so there is nothing to cancel before GC removes it.
 
@@ -60,7 +65,7 @@ PipelineRun and TriggerRun are **retain** kinds: the ingester preserves their fi
 
 ## Safety timeout
 
-The drain safety timeout is **per child**. Each child's drain finalizer enforces its own **24-hour** timeout, keyed off **that child's** `deletionTimestamp`: if a drain has not completed within 24 hours of when the child was stamped for deletion, the child performs a best-effort engine teardown, force-removes its drain finalizer regardless of workflow state, and lets GC proceed. The timeout is hard-coded (24h) and not configurable. There is no Pipeline-level timeout — each run drains and times out independently.
+The drain safety timeout is **per child**. Each child's drain finalizer enforces its own **24-hour** timeout, keyed off **that child's** `deletionTimestamp`: if a drain has not completed within 24 hours of when the child was stamped for deletion, the child performs a best-effort engine teardown, force-removes its drain finalizer regardless of workflow state, and lets GC proceed. The timeout is hard-coded (24h) and not configurable. There is no Pipeline-level timeout — each run drains and times out independently. The same per-object 24-hour bound applies to a TriggerRun waiting for its child PipelineRuns to stop.
 
 :::warning
 The 24-hour safety timeout is a last resort — it removes the drain finalizer even if the workflow is still running. Under normal operation, drains complete in minutes. If the timeout fires, investigate why the drain was wedged via the controller manager logs and the `cascade_child_drain_timeout_total` metric.

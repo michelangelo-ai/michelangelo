@@ -107,7 +107,8 @@ Here are the commands for managing your trigger runs:
 
 A few things to keep in mind:
 
-- **`kill` vs `delete`:** Use `kill` to stop a running trigger (it sets a kill flag and cleanly terminates the workflow). Use `delete` to remove the trigger resource entirely.
+- **`kill` vs `delete`:** Use `kill` to stop a running trigger (it sets a kill flag and cleanly terminates the workflow); the trigger stays visible as `KILLED`. Use `delete` to remove the trigger resource entirely; it is removed once its pipeline runs have stopped.
+- **Both cancel in-flight runs:** `kill` and `delete` also cancel the pipeline runs the trigger started that are still pending or running. Those runs are killed, not deleted, and stay in the run history as `KILLED`. See [Cascade Delete](../../operator-guides/cascade-delete.md).
 - **`kill` will ask for confirmation** before proceeding. Add `--yes` to skip the prompt (useful in scripts).
 
 For the full list of CLI options and flags, see the [CLI reference guide](../reference/cli.md).
@@ -339,7 +340,7 @@ As your trigger runs, it moves through different states. Understanding these sta
 | **FAILED** | Something went wrong and the trigger couldn't complete. Check the trigger details for error information. |
 | **PAUSED** | The trigger's workflow has been paused and is not creating new pipeline runs until it is resumed. |
 | **KILLED** | The trigger was manually stopped using `ma trigger_run kill`. |
-| **PENDING_KILL** | A kill request has been sent but the trigger hasn't fully stopped yet. It will transition to KILLED shortly. |
+| **PENDING_KILL** | A kill request has been sent but the trigger hasn't fully stopped yet. It transitions to KILLED once the pipeline runs it started have stopped. |
 | **INVALID** | The initial, unset state of a newly created trigger run, before the controller has started its workflow. It normally moves to RUNNING within moments; if it moves to FAILED instead, check the trigger details for the error. |
 
 ### How States Transition
