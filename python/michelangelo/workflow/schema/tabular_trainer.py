@@ -536,7 +536,9 @@ class LightningTrainerKwargs:
         limit_train_batches: Fraction of training batches to use each epoch.
         limit_train_batches_count: Exact number of training batches per epoch.
         limit_val_batches: Fraction of validation batches.
-        limit_val_batches_count: Exact number of validation batches.
+        limit_val_batches_count: Exact number of validation batches. Both
+            validation limits are sized by ``BatchIterConfig.val_batch_size``,
+            falling back to ``batch_size`` when it is unset.
         limit_test_batches: Fraction of test batches.
         limit_test_batches_count: Exact number of test batches.
         limit_predict_batches: Fraction of prediction batches.
@@ -803,6 +805,7 @@ class TabularTrainerConfig:
         ...             batch_iter_config=BatchIterConfig(
         ...                 batch_size=256,
         ...                 num_shuffle_batches=4,
+        ...                 val_batch_size=512,
         ...             ),
         ...         ),
         ...         checkpoint_config=CheckpointConfig(

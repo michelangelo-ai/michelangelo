@@ -48,12 +48,23 @@ class TestLightningTrainerParam:
         param = _make_param()
         assert param.batch_size == 8
         assert param.num_shuffle_batches == 10
+        assert param.val_batch_size is None
         assert param.num_epochs == 1  # _UNSET → 1 in __post_init__
         assert param.data_collate_fn is None
         assert param.lightning_trainer_kwargs == {}
         assert param.transfer_learning_spec is None
         assert param.incremental_training_spec is None
         assert param.initial_weights_path is None
+
+    def test_val_batch_size_accepted(self):
+        """A positive integer ``val_batch_size`` is stored."""
+        assert _make_param(val_batch_size=64).val_batch_size == 64
+
+    @pytest.mark.parametrize("bad", [0, -1, True, 1.5, "8"])
+    def test_invalid_val_batch_size_raises(self, bad):
+        """Zero, negative, bool and non-integer values are rejected."""
+        with pytest.raises(ValueError, match="val_batch_size"):
+            _make_param(val_batch_size=bad)
 
     def test_training_observer_defaults_to_none(self):
         """``training_observer`` defaults to ``None`` when omitted."""

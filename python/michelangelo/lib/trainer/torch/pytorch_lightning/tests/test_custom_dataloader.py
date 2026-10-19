@@ -297,3 +297,33 @@ class TestTrainLoopDispatch:
         """No dataset shard is requested in file-backed mode."""
         _, get_shard = self._run({"custom_dataloader": _custom(file_backed=True)})
         get_shard.assert_not_called()
+
+    def test_custom_loader_does_not_receive_val_batch_size(self):
+        """``val_batch_size`` stays out of the factory calls and shard iterators."""
+        calls: list = []
+        _, get_shard = self._run(
+            {
+                "val_batch_size": 16,
+                "custom_dataloader": _custom(
+                    _recording_factory(calls), file_backed=True
+                ),
+            }
+        )
+        assert [c["stage"] for c in calls] == ["train", "validation"]
+        for call in calls:
+            assert "val_batch_size" not in call["kwargs"]
+            assert "batch_size" not in call["kwargs"]
+        get_shard.assert_not_called()
+
+    def test_ray_backed_custom_loader_never_iterates_shards_with_val_batch_size(self):
+        """A Ray-backed custom loader gets ``ds`` only; no ``iter_torch_batches``."""
+        calls: list = []
+        _, get_shard = self._run(
+            {
+                "val_batch_size": 16,
+                "custom_dataloader": _custom(_recording_factory(calls)),
+            }
+        )
+        for call in calls:
+            assert "val_batch_size" not in call["kwargs"]
+        get_shard.return_value.iter_torch_batches.assert_not_called()

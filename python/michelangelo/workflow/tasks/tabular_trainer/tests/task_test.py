@@ -375,6 +375,49 @@ class TestTrainTabularLightning(TestCase):
                 )
         self.assertEqual(mp.call_args.kwargs.get("batch_size"), 16)
 
+    def _run_with_dataloading(self, dataloading_config):
+        """Run train_tabular and return the kwargs given to LightningTrainerParam."""
+        config = make_tabular_config(dataloading_config=dataloading_config)
+        with (
+            patch(
+                f"{_TRAINER_TASK}.get_module_attr",
+                return_value=lambda **kw: Mock(),
+            ),
+            patch(f"{_TRAINER_TASK}.ModelVariable"),
+            patch(f"{_TRAINER_TASK}.LightningTrainerParam") as mp,
+            patch(f"{_TRAINER_TASK}.LightningTrainerWithStateDict") as mt,
+        ):
+            mt.return_value.train.return_value = None
+            mt.return_value.update_model_state_dict.return_value = None
+            train_tabular(
+                config,
+                mock_train_dataset(),
+                mock_validation_dataset(),
+            )
+        return mp.call_args.kwargs
+
+    def test_val_batch_size_forwarded_from_batch_iter_config(self):
+        """BatchIterConfig.val_batch_size reaches LightningTrainerParam."""
+        kwargs = self._run_with_dataloading(
+            DataloadingConfig(
+                batch_iter_config=BatchIterConfig(batch_size=16, val_batch_size=64)
+            )
+        )
+        self.assertEqual(kwargs["batch_size"], 16)
+        self.assertEqual(kwargs["val_batch_size"], 64)
+
+    def test_val_batch_size_none_without_batch_iter_config(self):
+        """Without a BatchIterConfig, validation reuses the training batch size."""
+        kwargs = self._run_with_dataloading(None)
+        self.assertIsNone(kwargs["val_batch_size"])
+
+    def test_val_batch_size_none_when_unset_in_batch_iter_config(self):
+        """An unset BatchIterConfig.val_batch_size is forwarded as None."""
+        kwargs = self._run_with_dataloading(
+            DataloadingConfig(batch_iter_config=BatchIterConfig(batch_size=16))
+        )
+        self.assertIsNone(kwargs["val_batch_size"])
+
     def test_comet_tracker_sets_logger_kwargs(self):
         """CometConfig resolves to the build_comet_logger dotted path + kwargs."""
         config = make_tabular_config(

@@ -144,15 +144,47 @@ class BatchIterConfig:
         collate_fn: Dotted import path to a collate function. When set,
             the function is resolved at training time via ``get_module_attr``
             and passed as ``collate_fn`` to ``iter_torch_batches``.
+        val_batch_size: Number of samples per validation batch, forwarded as
+            ``batch_size`` to the validation ``iter_torch_batches``. Must be
+            an integer ``>= 1``. ``None`` (the default) uses ``batch_size``
+            for validation as well. Larger values are useful because
+            validation needs no gradient or optimizer memory.
+
+    Raises:
+        ConfigurationError: If ``val_batch_size`` is neither ``None`` nor an
+            integer ``>= 1``.
 
     Example:
         >>> BatchIterConfig(batch_size=64, num_shuffle_batches=4)
-        BatchIterConfig(batch_size=64, num_shuffle_batches=4, collate_fn=None)
+        BatchIterConfig(batch_size=64, num_shuffle_batches=4, collate_fn=None,
+        val_batch_size=None)
+        >>> BatchIterConfig(batch_size=64, val_batch_size=256).val_batch_size
+        256
     """
 
     batch_size: int
     num_shuffle_batches: int = 0
     collate_fn: str | None = None
+    # Appended last so positional construction is unaffected.
+    val_batch_size: int | None = None
+
+    def __post_init__(self) -> None:
+        """Validate that ``val_batch_size`` is ``None`` or a positive integer.
+
+        Raises:
+            ConfigurationError: If ``val_batch_size`` is neither ``None`` nor an
+                integer ``>= 1``.
+        """
+        if self.val_batch_size is not None and (
+            isinstance(self.val_batch_size, bool)
+            or not isinstance(self.val_batch_size, int)
+            or self.val_batch_size < 1
+        ):
+            raise ConfigurationError(
+                f"val_batch_size must be an integer >= 1 or None, got "
+                f"{self.val_batch_size!r}. Use None to reuse batch_size for "
+                "validation."
+            )
 
 
 @dataclass

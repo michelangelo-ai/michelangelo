@@ -246,6 +246,21 @@ class TestLightningTrainerAppliesLimits:
         assert cfg["limit_train_batches"] == 3
         assert cfg["limit_val_batches"] == 2
 
+    def test_val_limit_uses_val_batch_size(self):
+        """The validation cap is sized by ``val_batch_size``, the train cap by ``batch_size``."""
+        kwargs = self._init(
+            self._param(
+                val_batch_size=10,
+                lightning_trainer_kwargs={
+                    "limit_train_batches": 3,
+                    "limit_val_batches": 2,
+                },
+            )
+        )
+        assert kwargs["datasets"]["train"].count() == 3 * 4
+        assert kwargs["datasets"]["val"].count() == 2 * 10
+        assert kwargs["train_loop_config"]["val_batch_size"] == 10
+
     def test_defaults_to_one_worker_without_scaling_config(self):
         """No ``scaling_config`` means a single worker."""
         kwargs = self._init(

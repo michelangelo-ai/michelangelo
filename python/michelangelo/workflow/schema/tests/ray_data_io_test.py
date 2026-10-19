@@ -155,6 +155,7 @@ class TestBatchIterConfig(TestCase):
         self.assertEqual(cfg.batch_size, 64)
         self.assertEqual(cfg.num_shuffle_batches, 0)
         self.assertIsNone(cfg.collate_fn)
+        self.assertIsNone(cfg.val_batch_size)
 
     def test_all_fields(self):
         """It stores all fields."""
@@ -165,6 +166,30 @@ class TestBatchIterConfig(TestCase):
         )
         self.assertEqual(cfg.num_shuffle_batches, 4)
         self.assertEqual(cfg.collate_fn, "myproject.collate.fn")
+
+    def test_val_batch_size_stored(self):
+        """It stores a valid val_batch_size."""
+        cfg = BatchIterConfig(batch_size=32, val_batch_size=128)
+        self.assertEqual(cfg.val_batch_size, 128)
+
+    def test_val_batch_size_minimum_accepted(self):
+        """val_batch_size=1 is the smallest valid value."""
+        self.assertEqual(
+            BatchIterConfig(batch_size=32, val_batch_size=1).val_batch_size, 1
+        )
+
+    def test_invalid_val_batch_size_raises(self):
+        """Zero, negative, bool and non-integer values raise ConfigurationError."""
+        for bad in (0, -4, True, 2.5, "64"):
+            with self.subTest(val_batch_size=bad):
+                with self.assertRaises(ConfigurationError) as ctx:
+                    BatchIterConfig(batch_size=32, val_batch_size=bad)
+                self.assertIn("val_batch_size", str(ctx.exception))
+
+    def test_val_batch_size_round_trips_as_plain_field(self):
+        """It is a plain dataclass field, so asdict/re-construction round-trips."""
+        cfg = BatchIterConfig(batch_size=32, val_batch_size=128)
+        self.assertEqual(BatchIterConfig(**dataclasses.asdict(cfg)), cfg)
 
 
 # ---------------------------------------------------------------------------
