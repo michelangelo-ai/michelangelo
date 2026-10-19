@@ -375,6 +375,41 @@ class TestTrainTabularLightning(TestCase):
                 )
         self.assertEqual(mp.call_args.kwargs.get("batch_size"), 16)
 
+    def _drop_last_forwarded(self, config):
+        """Run the task and return the ``drop_last`` given to the trainer param."""
+        with (
+            patch(
+                f"{_TRAINER_TASK}.get_module_attr",
+                return_value=lambda **kw: Mock(),
+            ),
+            patch(f"{_TRAINER_TASK}.ModelVariable"),
+            patch(f"{_TRAINER_TASK}.LightningTrainerParam") as mp,
+            patch(f"{_TRAINER_TASK}.LightningTrainerWithStateDict") as mt,
+        ):
+            mt.return_value.train.return_value = None
+            mt.return_value.update_model_state_dict.return_value = None
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                train_tabular(
+                    config,
+                    mock_train_dataset(),
+                    mock_validation_dataset(),
+                )
+        return mp.call_args.kwargs.get("drop_last")
+
+    def test_drop_last_defaults_to_false_without_batch_iter_config(self):
+        """Without a BatchIterConfig the partial batch is kept."""
+        self.assertIs(self._drop_last_forwarded(make_tabular_config()), False)
+
+    def test_batch_iter_config_drop_last_is_forwarded(self):
+        """BatchIterConfig.drop_last reaches LightningTrainerParam."""
+        config = make_tabular_config(
+            dataloading_config=DataloadingConfig(
+                batch_iter_config=BatchIterConfig(batch_size=16, drop_last=True)
+            ),
+        )
+        self.assertIs(self._drop_last_forwarded(config), True)
+
     def test_comet_tracker_sets_logger_kwargs(self):
         """CometConfig resolves to the build_comet_logger dotted path + kwargs."""
         config = make_tabular_config(

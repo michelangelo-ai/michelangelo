@@ -662,6 +662,7 @@ def _apply_batch_limit(
     batch_size: int,
     num_workers: int,
     split: Literal["train", "val"],
+    drop_last: bool = False,
 ) -> tuple[ray.data.Dataset, int | float | None]:
     """Bound a split's Ray Dataset to the rows a Lightning batch limit can consume.
 
@@ -679,6 +680,14 @@ def _apply_batch_limit(
     which is cheap for Parquet-backed datasets but executes the dataset's lazy
     plan once for other lineages; an integer limit never needs the count. ``None``,
     ``0`` and ``1.0`` leave the dataset untouched.
+
+    ``drop_last`` (the training loader's setting; pass ``False`` for the
+    validation split) changes only how a fraction is resolved. An integer limit ``N``
+    keeps ``N * batch_size`` rows per worker, which is exactly ``N`` full batches,
+    so the cap is the same with or without ``drop_last``. A fraction is applied to
+    the number of batches a worker yields, which excludes a trailing partial batch
+    when ``drop_last`` is set (``floor`` instead of ``ceil`` of rows over
+    ``batch_size``).
 
     Note:
         The cap is ``Dataset.limit``: the split keeps the first rows its plan
@@ -701,6 +710,8 @@ def _apply_batch_limit(
         batch_size: Per-worker batch size.
         num_workers: Number of Ray Train workers the dataset is split across.
         split: The split being limited, used in log and error messages.
+        drop_last: Whether the loader drops the last incomplete batch, which
+            excludes it from the batch count a fraction is applied to.
 
     Returns:
         A tuple of the (possibly limited) dataset and the limit to hand to
@@ -748,7 +759,10 @@ def _apply_batch_limit(
             time.perf_counter() - count_start,
         )
         rows_per_worker = total_rows // num_workers
-        batches_per_worker = math.ceil(rows_per_worker / batch_size)
+        if drop_last:
+            batches_per_worker = rows_per_worker // batch_size
+        else:
+            batches_per_worker = math.ceil(rows_per_worker / batch_size)
         limit_batches = int(batches_per_worker * limit)
         if limit_batches == 0:
             raise UserInputError(
@@ -889,6 +903,7 @@ def _train_loop_per_worker(train_loop_config):
     # setting lightning_trainer_kwargs["max_epochs"]; we apply this as a default below.
     num_epochs = train_loop_config["num_epochs"]
     num_shuffle_batches = train_loop_config["num_shuffle_batches"]
+    drop_last = train_loop_config.get("drop_last", False)
 
     create_model_fn = train_loop_config["create_model_fn"]
     create_model_fn_kwargs = train_loop_config["create_model_fn_kwargs"]
@@ -905,10 +920,12 @@ def _train_loop_per_worker(train_loop_config):
         val_dataset_shard = ray.train.get_dataset_shard("val")
 
         # Create data loader.
-        # We need to adjust 'local_shuffle_buffer_size' in Ray Data.
+        # We need to adjust 'local_shuffle_buffer_size' in Ray Data. drop_last
+        # applies to the training loader only; validation keeps every row.
         train_dataloader = train_dataset_shard.iter_torch_batches(
             batch_size=batch_size,
             collate_fn=collate_fn_to_torch,
+            drop_last=drop_last,
             local_shuffle_buffer_size=None
             if num_shuffle_batches == 0
             else num_shuffle_batches * batch_size,

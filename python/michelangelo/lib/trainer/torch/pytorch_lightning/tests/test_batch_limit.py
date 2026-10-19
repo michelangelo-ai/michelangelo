@@ -164,6 +164,53 @@ class TestApplyBatchLimitFraction:
         ds.count.assert_not_called()
         ds.limit.assert_called_once_with(24)
 
+    def test_drop_last_excludes_the_partial_batch_from_the_fraction_base(self):
+        """With ``drop_last`` a trailing partial batch is not counted."""
+        ds = ray.data.range(10)
+        # floor(10 / 4) = 2 full batches, int(2 * 0.75) = 1
+        out, limit = _apply_batch_limit(ds, 0.75, 4, 1, "train", drop_last=True)
+        assert limit == 1
+        assert out.count() == 4
+
+    def test_drop_last_changes_the_resolved_count_versus_default(self):
+        """The same inputs resolve to fewer batches when the partial one is dropped."""
+        ds = ray.data.range(38)
+        # 38 rows, batch 4: ceil -> 10 batches, floor -> 9 batches
+        _, keep = _apply_batch_limit(ds, 0.99, 4, 1, "train")
+        _, drop = _apply_batch_limit(ds, 0.99, 4, 1, "train", drop_last=True)
+        assert keep == 9  # int(10 * 0.99)
+        assert drop == 8  # int(9 * 0.99)
+
+    def test_drop_last_fraction_never_exceeds_the_full_batches_available(self):
+        """A resolved count with ``drop_last`` yields exactly that many full batches."""
+        ds = ray.data.range(38)
+        out, limit = _apply_batch_limit(ds, 0.99, 4, 1, "train", drop_last=True)
+        batches = list(out.iter_batches(batch_size=4, drop_last=True))
+        assert limit == 8
+        assert len(batches) == limit
+        assert all(len(b["id"]) == 4 for b in batches)
+
+    def test_drop_last_with_fraction_below_one_batch_per_worker_raises(self):
+        """Fewer rows per worker than one batch leaves nothing once dropped."""
+        ds = ray.data.range(3)
+        with pytest.raises(UserInputError, match="resolves to 0 batches"):
+            _apply_batch_limit(ds, 0.5, 4, 1, "train", drop_last=True)
+
+    def test_drop_last_does_not_change_an_int_limit(self, dataset):
+        """``N * batch_size`` rows per worker is already ``N`` full batches."""
+        out_keep, limit_keep = _apply_batch_limit(dataset, 3, 4, 2, "train")
+        out_drop, limit_drop = _apply_batch_limit(
+            dataset, 3, 4, 2, "train", drop_last=True
+        )
+        assert limit_keep == limit_drop == 3
+        assert out_keep.count() == out_drop.count() == 24
+
+    def test_drop_last_int_limit_above_dataset_drops_the_partial_batch(self):
+        """An int cap larger than the data still ends on full batches only."""
+        out, _ = _apply_batch_limit(ray.data.range(10), 100, 4, 1, "train", True)
+        batches = list(out.iter_batches(batch_size=4, drop_last=True))
+        assert [len(b["id"]) for b in batches] == [4, 4]
+
     @pytest.mark.parametrize("fraction", [0.0, 1.0])
     def test_bounds_are_passed_through(self, dataset, fraction):
         """``0.0`` and ``1.0`` need no resolution and leave the dataset alone."""
@@ -245,6 +292,28 @@ class TestLightningTrainerAppliesLimits:
         cfg = kwargs["train_loop_config"]["lightning_trainer_kwargs"]
         assert cfg["limit_train_batches"] == 3
         assert cfg["limit_val_batches"] == 2
+
+    def test_drop_last_applies_to_the_train_limit_only(self):
+        """``drop_last`` resolves the train fraction against full batches.
+
+        The val limit keeps the ceil-based base, since the val loader keeps its
+        partial batch.
+        """
+        param = self._param(
+            train_data=ray.data.range(38),
+            val_data=ray.data.range(38),
+            drop_last=True,
+            lightning_trainer_kwargs={
+                "limit_train_batches": 0.99,
+                "limit_val_batches": 0.99,
+            },
+        )
+        kwargs = self._init(param)
+        cfg = kwargs["train_loop_config"]["lightning_trainer_kwargs"]
+        # 38 rows, batch 4: train floor -> 9 batches, val ceil -> 10 batches
+        assert cfg["limit_train_batches"] == 8  # int(9 * 0.99)
+        assert cfg["limit_val_batches"] == 9  # int(10 * 0.99)
+        assert kwargs["train_loop_config"]["drop_last"] is True
 
     def test_defaults_to_one_worker_without_scaling_config(self):
         """No ``scaling_config`` means a single worker."""

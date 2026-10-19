@@ -144,6 +144,7 @@ def train(train_dv: DatasetVariable, val_dv: DatasetVariable):
 | `training_observer` | `None` | Callbacks for training events — see [Observing a run](#observing-a-run) |
 | `experiment_store` | `None` | Enables opt-in auto-resume — see [Auto-resume](#auto-resume-across-runs) |
 | `profiler_sink` | `None` | Ships profiler output to an experiment tracker |
+| `drop_last` | `False` | Drop the last incomplete training batch of each epoch (validation unaffected). With a fractional `limit_train_batches`, the fraction is applied to the count of full batches |
 
 :::warning
 `num_epochs` is deprecated and logs a warning when set. Use `lightning_trainer_kwargs={"max_epochs": N}` instead.

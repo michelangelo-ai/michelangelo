@@ -166,6 +166,25 @@ class TestBatchIterConfig(TestCase):
         self.assertEqual(cfg.num_shuffle_batches, 4)
         self.assertEqual(cfg.collate_fn, "myproject.collate.fn")
 
+    def test_drop_last_defaults_to_false(self):
+        """drop_last keeps the partial batch unless opted in."""
+        self.assertFalse(BatchIterConfig(batch_size=8).drop_last)
+
+    def test_drop_last_stored(self):
+        """It stores an explicit drop_last."""
+        self.assertTrue(BatchIterConfig(batch_size=8, drop_last=True).drop_last)
+
+    def test_drop_last_must_be_bool(self):
+        """Non-bool drop_last values raise ConfigurationError."""
+        for bad in (1, 0, "true", None):
+            with (
+                self.subTest(bad=bad),
+                self.assertRaisesRegex(
+                    ConfigurationError, r"BatchIterConfig\.drop_last must be a bool"
+                ),
+            ):
+                BatchIterConfig(batch_size=8, drop_last=bad)
+
 
 # ---------------------------------------------------------------------------
 # DataloadingConfig

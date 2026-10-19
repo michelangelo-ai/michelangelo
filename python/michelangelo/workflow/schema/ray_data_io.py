@@ -144,15 +144,35 @@ class BatchIterConfig:
         collate_fn: Dotted import path to a collate function. When set,
             the function is resolved at training time via ``get_module_attr``
             and passed as ``collate_fn`` to ``iter_torch_batches``.
+        drop_last: Whether to drop the last incomplete batch of each epoch.
+            Forwarded as ``drop_last`` to the training ``iter_torch_batches``
+            iterator only; the validation iterator is unaffected. When a
+            fractional ``limit_train_batches`` is used, the batch count it is
+            applied to excludes the dropped partial batch; integer limits are
+            unaffected. Has no effect when a custom dataloader is configured.
+            Defaults to ``False`` (keep the partial batch).
+
+    Raises:
+        ConfigurationError: If ``drop_last`` is not a bool.
 
     Example:
-        >>> BatchIterConfig(batch_size=64, num_shuffle_batches=4)
-        BatchIterConfig(batch_size=64, num_shuffle_batches=4, collate_fn=None)
+        >>> BatchIterConfig(  # doctest: +NORMALIZE_WHITESPACE
+        ...     batch_size=64, drop_last=True)
+        BatchIterConfig(batch_size=64, num_shuffle_batches=0, collate_fn=None,
+                        drop_last=True)
     """
 
     batch_size: int
     num_shuffle_batches: int = 0
     collate_fn: str | None = None
+    drop_last: bool = False
+
+    def __post_init__(self) -> None:
+        """Validate that ``drop_last`` is a bool."""
+        if not isinstance(self.drop_last, bool):
+            raise ConfigurationError(
+                f"BatchIterConfig.drop_last must be a bool, got {self.drop_last!r}."
+            )
 
 
 @dataclass

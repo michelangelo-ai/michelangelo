@@ -145,7 +145,7 @@ class TestLightningTrainerInitCustomLoader:
         with patch(
             "michelangelo.lib.trainer.torch.pytorch_lightning."
             "lightning_trainer._apply_batch_limit",
-            side_effect=lambda ds, limit, *_: (ds, limit),
+            side_effect=lambda ds, limit, *_, **__: (ds, limit),
         ) as apply_limit:
             _, kwargs = self._init(param)
         assert apply_limit.call_args_list[0].args[1] is None
