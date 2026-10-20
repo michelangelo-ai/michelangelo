@@ -378,6 +378,13 @@ func (r *Reconciler) setClusterSuccessConditionIfRequired(
 	if err := jobsutils.UpdateStatusWithRetries(ctx, r, cluster,
 		func(obj client.Object) {
 			cluster := obj.(*v2pb.RayCluster)
+			// The check above was made on Reconcile's read. A watcher handler can
+			// have decided the outcome since -- KubeRay reported the cluster
+			// failed, or its object was deleted and the cluster frozen -- and
+			// that outcome stands.
+			if isFrozenOrDeleting(cluster) || conditionStatus(cluster, SucceededCondition) != apipb.CONDITION_STATUS_UNKNOWN {
+				return
+			}
 			succeededCond := jobsutils.GetCondition(&cluster.Status.StatusConditions, SucceededCondition, cluster.Generation)
 			jobsutils.UpdateCondition(succeededCond, jobsutils.ConditionUpdateParams{
 				Status:     status,
@@ -413,6 +420,12 @@ func (r *Reconciler) setClusterKillIfRequired(
 	if err := jobsutils.UpdateStatusWithRetries(ctx, r, cluster,
 		func(obj client.Object) {
 			cluster := obj.(*v2pb.RayCluster)
+			// Repeated on the object being written: the KubeRay delete handler can
+			// have recorded the kill and frozen the cluster since Reconcile read
+			// it, and that record must not be put back into Killing.
+			if isFrozenOrDeleting(cluster) || conditionStatus(cluster, KilledCondition) == apipb.CONDITION_STATUS_TRUE {
+				return
+			}
 			killing := jobsutils.GetCondition(&cluster.Status.StatusConditions, KillingCondition, cluster.Generation)
 			jobsutils.UpdateCondition(killing, jobsutils.ConditionUpdateParams{
 				Status:     apipb.CONDITION_STATUS_TRUE,
@@ -746,19 +759,26 @@ func (r *Reconciler) markImmutableIfTerminal(ctx context.Context, cluster *v2pb.
 // Killing=FALSE directly means cleanupCluster will never issue a pointless
 // DeleteJobCluster against it. That same condition set is what isClusterFullyTerminal
 // looks for; the caller is responsible for calling finalizeIfTerminal afterwards to act
-// on it. An outcome that was already decided is kept, with its reason: the resource
-// vanishing does not change why the cluster ended. So a cluster that had already
-// succeeded ends TERMINATED, as a normal termination would, rather than FAILED.
+// on it. The caller found the cluster neither terminating nor frozen, but a watcher
+// handler can have got there since -- the KubeRay delete handler records the same
+// vanished object and freezes it -- so a cluster that is frozen or terminating by the
+// time of the write is left alone: its outcome is recorded, or the termination branch
+// owns it.
 func (r *Reconciler) markClusterFailed(
 	ctx context.Context,
 	cluster *v2pb.RayCluster,
 	reason string,
 	message string,
 ) error {
+	markFailed := markFailedUpdate(reason, message)
 	// Persist the terminal status via the status subresource.
 	if err := jobsutils.UpdateStatusWithRetries(
 		ctx, r, cluster,
-		markFailedUpdate(reason, message),
+		func(obj client.Object) {
+			if cluster := obj.(*v2pb.RayCluster); !isFrozenOrDeleting(cluster) && !isClusterTerminating(cluster) {
+				markFailed(cluster)
+			}
+		},
 		&metav1.UpdateOptions{FieldManager: "markClusterFailed"},
 	); err != nil {
 		return fmt.Errorf("failed to persist terminal status: %w", err)
@@ -768,7 +788,11 @@ func (r *Reconciler) markClusterFailed(
 }
 
 // markFailedUpdate is the status change markClusterFailed persists. The KubeRay
-// delete handler writes it directly, under the handlers' own retry policy.
+// delete handler writes it directly, under the handlers' own retry policy, and
+// also onto a cluster whose outcome is already decided. That outcome is kept, with
+// its reason: the resource vanishing does not change why the cluster ended. So a
+// cluster that had already succeeded ends TERMINATED, as a normal termination
+// would, rather than FAILED.
 func markFailedUpdate(reason, message string) func(obj client.Object) {
 	return func(obj client.Object) {
 		c := obj.(*v2pb.RayCluster)

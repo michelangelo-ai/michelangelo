@@ -29,6 +29,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	"sigs.k8s.io/controller-runtime/pkg/config"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
@@ -39,6 +40,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/components/controllerutil"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/client/clientmocks"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/cluster"
+	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/constants"
 	matypes "github.com/michelangelo-ai/michelangelo/go/components/jobs/common/types"
 )
 
@@ -1316,6 +1318,97 @@ func TestSafetyNetBoundsTheRemoteCall(t *testing.T) {
 	assert.Equal(t, v2pb.RAY_CLUSTER_STATE_PROVISIONING, updated.Status.State,
 		"a compute cluster that did not answer in time says nothing about the cluster")
 	assert.Nil(t, findCondition(updated.Status.StatusConditions, SucceededCondition))
+}
+
+// TestReconcileLeavesAClusterFrozenSinceItsRead: Reconcile decides on its read
+// of the cluster, but the KubeRay delete handler can record an external delete,
+// and freeze the cluster, between that read and Reconcile's write. A frozen
+// record is final. Neither the termination branch, with the outcome from the
+// Termination spec and Killing=TRUE, nor the safety net, with its own record of
+// the vanished object, may write over it.
+func TestReconcileLeavesAClusterFrozenSinceItsRead(t *testing.T) {
+	readyCluster := func() *v2pb.RayCluster {
+		cluster := provisioningCluster()
+		cluster.Status.State = v2pb.RAY_CLUSTER_STATE_READY
+		return cluster
+	}
+	// deleteExternally runs the KubeRay delete handler for a delete nobody
+	// asked for, and returns the status it froze the cluster with.
+	deleteExternally := func(t *testing.T, r *Reconciler, store client.Client) v2pb.RayClusterStatus {
+		r.rayClusterDeleteEventHandler(newKubeRayCluster(rayClusterName, rayv1.Ready))
+		var frozen v2pb.RayCluster
+		require.NoError(t, store.Get(context.Background(),
+			types.NamespacedName{Name: rayClusterName, Namespace: testNamespace}, &frozen))
+		require.True(t, utils.IsImmutable(&frozen), "the delete handler should have frozen the cluster")
+		return frozen.Status
+	}
+	assertFrozenAs := func(t *testing.T, store client.Client, frozen v2pb.RayClusterStatus) {
+		var updated v2pb.RayCluster
+		require.NoError(t, store.Get(context.Background(),
+			types.NamespacedName{Name: rayClusterName, Namespace: testNamespace}, &updated))
+		assert.Equal(t, frozen, updated.Status, "nothing may be written over a frozen cluster")
+		killingCond := findCondition(updated.Status.StatusConditions, KillingCondition)
+		require.NotNil(t, killingCond)
+		assert.Equal(t, apipb.CONDITION_STATUS_FALSE, killingCond.Status, "a frozen cluster must not be put back into Killing")
+		for _, condType := range []string{SucceededCondition, KilledCondition} {
+			cond := findCondition(updated.Status.StatusConditions, condType)
+			require.NotNil(t, cond)
+			assert.Equal(t, constants.ClusterKilled, cond.Reason, "the delete handler's %s must stand", condType)
+		}
+	}
+
+	t.Run("termination", func(t *testing.T) {
+		cluster := readyCluster()
+		cluster.Spec.Termination = &v2pb.TerminationSpec{Type: v2pb.TERMINATION_TYPE_SUCCEEDED, Reason: "completed"}
+		scheme := runtime.NewScheme()
+		require.NoError(t, kubescheme.AddToScheme(scheme))
+		require.NoError(t, v2pb.AddToScheme(scheme))
+		var (
+			r      *Reconciler
+			frozen v2pb.RayClusterStatus
+			gets   int
+		)
+		store := fake.NewClientBuilder().WithScheme(scheme).WithObjects(cluster).WithStatusSubresource(cluster).
+			WithInterceptorFuncs(interceptor.Funcs{
+				Get: func(ctx context.Context, c client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+					gets++
+					if gets == 2 {
+						// Reconcile has read the cluster and is about to write
+						// its first termination step.
+						frozen = deleteExternally(t, r, c)
+					}
+					return c.Get(ctx, key, obj, opts...)
+				},
+			}).
+			Build()
+		r = &Reconciler{
+			Handler:      &mockAPIHandler{Client: store},
+			logger:       logr.Discard(),
+			mapper:       newTestMapper(),
+			metricsScope: tally.NoopScope,
+		}
+		// No expectations: nothing is left on the compute cluster to delete.
+		withSafetyNet(t, r)
+
+		reconcile(t, r)
+
+		assertFrozenAs(t, store, frozen)
+	})
+
+	t.Run("cluster gone from the compute cluster", func(t *testing.T) {
+		r := setupWatcherTest(t, readyCluster())
+		store := r.Handler.(*mockAPIHandler).Client
+		var frozen v2pb.RayClusterStatus
+		withSafetyNet(t, r).EXPECT().GetJobClusterStatus(gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(context.Context, runtime.Object, *v2pb.Cluster) (*matypes.JobClusterStatus, error) {
+				frozen = deleteExternally(t, r, store)
+				return nil, apiErrors.NewNotFound(schema.GroupResource{Group: "ray.io", Resource: "rayclusters"}, rayClusterName)
+			})
+
+		reconcile(t, r)
+
+		assertFrozenAs(t, store, frozen)
+	})
 }
 
 // capturingManager is a manager that is never started; it records the runnables
