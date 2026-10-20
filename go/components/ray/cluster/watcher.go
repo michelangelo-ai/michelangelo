@@ -863,9 +863,14 @@ func reasonOr(reason, fallback string) string {
 // cache re-syncs fire every _reSyncPeriod, and a wedged pod is re-reported on
 // every status change — update in place rather than growing the list. That
 // also keeps the mutation idempotent under the status write, which re-runs
-// its closure on conflict. The list is bounded by two errors per expected pod;
-// at the bound, existing entries can still be refreshed but new ones are
-// dropped. It reports whether the list changed.
+// its closure on conflict. The list is bounded by two errors per expected pod.
+// At the bound, existing entries can still be refreshed, and a new entry with
+// a terminal reason takes the place of the first one without: entries for
+// deleted pods are never pruned -- KubeRay names pods with a random suffix, so
+// theirs never comes back -- and a cluster that has lost a few pods to a node
+// going away would otherwise have no room left for the error that says why it
+// cannot come up. Any other new entry is dropped. It reports whether the list
+// changed.
 func mergePodErrors(cluster *v2pb.RayCluster, podErrors []*v2pb.PodErrors) bool {
 	if len(podErrors) == 0 {
 		return false
@@ -895,13 +900,31 @@ func mergePodErrors(cluster *v2pb.RayCluster, podErrors []*v2pb.PodErrors) bool 
 			continue
 		}
 		if len(cluster.Status.PodErrors) >= maxPodErrorLength {
-			return changed
+			if !isTerminalPodError(podError) {
+				continue
+			}
+			i := slices.IndexFunc(cluster.Status.PodErrors, func(recorded *v2pb.PodErrors) bool {
+				return !isTerminalPodError(recorded)
+			})
+			if i < 0 {
+				continue
+			}
+			delete(indexByName, cluster.Status.PodErrors[i].GetName())
+			indexByName[podError.GetName()] = i
+			cluster.Status.PodErrors[i] = podError
+			changed = true
+			continue
 		}
 		indexByName[podError.GetName()] = len(cluster.Status.PodErrors)
 		cluster.Status.PodErrors = append(cluster.Status.PodErrors, podError)
 		changed = true
 	}
 	return changed
+}
+
+// isTerminalPodError reports whether podError's reason is a terminal one.
+func isTerminalPodError(podError *v2pb.PodErrors) bool {
+	return jobsutils.HasTerminalPodErrors([]*v2pb.PodErrors{podError})
 }
 
 // conditionPodErrorNames are the names the mapper gives the pod errors it

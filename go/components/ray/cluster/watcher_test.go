@@ -745,6 +745,26 @@ func TestMergePodErrors(t *testing.T) {
 		assert.Len(t, cluster.Status.PodErrors, 2, "the cap should hold")
 	})
 
+	t.Run("a terminal error takes the place of the first one that is not", func(t *testing.T) {
+		// No workers configured, so the cap is 2 * (1 + 0).
+		cluster := &v2pb.RayCluster{
+			Status: v2pb.RayClusterStatus{
+				PodErrors: []*v2pb.PodErrors{
+					{Name: "pod-a", Reason: "OOMKilled"},
+					{Name: "pod-b", Reason: "ContainerStatusUnknown"},
+				},
+			},
+		}
+
+		assert.True(t, mergePodErrors(cluster, []*v2pb.PodErrors{
+			{Name: "ReplicaFailure", Reason: "FailedCreateWorkerPod"},
+		}))
+
+		require.Len(t, cluster.Status.PodErrors, 2, "the cap should hold")
+		assert.Equal(t, "OOMKilled", cluster.Status.PodErrors[0].Reason, "a terminal entry keeps its place")
+		assert.Equal(t, "FailedCreateWorkerPod", cluster.Status.PodErrors[1].Reason)
+	})
+
 	t.Run("known entries are still refreshed at the cap", func(t *testing.T) {
 		// A wedged pod is re-reported on every status change. Once the cap is
 		// reached its message must still be allowed to move forward, otherwise
@@ -846,6 +866,89 @@ func TestHandlePodEvent_RecordsUnschedulablePod(t *testing.T) {
 	assert.Equal(t, "0/1 nodes are available: 1 Insufficient cpu.", updated.Status.PodErrors[0].Message)
 	assert.False(t, jobsutils.HasTerminalPodErrors(updated.Status.PodErrors),
 		"an unschedulable pod may still be admitted, so it must not fail the cluster")
+}
+
+// TestTerminalPodErrorGetsInAtTheCap: entries for deleted pods stay -- KubeRay
+// names pods with a random suffix, so theirs never comes back to clear them --
+// and a one-worker cluster that has lost a few pods to a node going away can
+// fill its cap of four with them. The error that says why the cluster cannot
+// come up must still get in, in place of one that says less. Anything else new
+// is still dropped at the cap.
+func TestTerminalPodErrorGetsInAtTheCap(t *testing.T) {
+	globalCluster := provisioningCluster()
+	require.Equal(t, 1, jobsutils.NumRayWorkers(globalCluster), "the cap should be 2 * (1 + 1)")
+	globalCluster.Status.PodErrors = []*v2pb.PodErrors{
+		{Name: "worker-a", ContainerName: headContainerName, ExitCode: 137, Reason: "Error"},
+		{Name: "worker-b", ContainerName: headContainerName, ExitCode: 137, Reason: "ContainerStatusUnknown"},
+		{Name: "worker-c", ContainerName: headContainerName, ExitCode: 137, Reason: "Error"},
+		{Name: "worker-d", ContainerName: headContainerName, ExitCode: 137, Reason: "ContainerStatusUnknown"},
+	}
+	r := setupWatcherTest(t, globalCluster)
+
+	headPod := newHeadPod("head-pod", rayClusterName, corev1.PodRunning)
+	headPod.Status.ContainerStatuses = []corev1.ContainerStatus{{
+		Name: headContainerName,
+		State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{
+			Reason: "CrashLoopBackOff", Message: "back-off 5m0s restarting failed container",
+		}},
+	}}
+	r.handlePodEvent(headPod)
+
+	updated := getUpdatedCluster(t, r)
+	require.Len(t, updated.Status.PodErrors, 4, "the cap should hold")
+	assert.Equal(t, "head-pod", updated.Status.PodErrors[0].Name,
+		"the terminal error should take the place of the first entry without one")
+	assert.Equal(t, "CrashLoopBackOff", updated.Status.PodErrors[0].Reason)
+
+	lostPod := newHeadPod("worker-e", rayClusterName, corev1.PodFailed)
+	lostPod.Labels[constants.RayNodeTypeLabelKey] = constants.RayWorkerNodeType
+	lostPod.Status.ContainerStatuses = []corev1.ContainerStatus{{
+		Name:  headContainerName,
+		State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 137, Reason: "Error"}},
+	}}
+	r.podDeleteEventHandler(lostPod)
+
+	updated = getUpdatedCluster(t, r)
+	require.Len(t, updated.Status.PodErrors, 4)
+	assert.False(t, slices.ContainsFunc(updated.Status.PodErrors, func(podError *v2pb.PodErrors) bool {
+		return podError.GetName() == "worker-e"
+	}), "an error that is not terminal is still dropped at the cap")
+}
+
+// TestTerminalConditionErrorGetsInAtTheCap is the same for the errors read off
+// KubeRay's conditions, which are merged together, in the order KubeRay lists
+// its conditions. A head pod KubeRay cannot create reads as HeadPodNotFound and
+// then FailedCreateHeadPod: the first does not fit, and must not keep the second
+// out.
+func TestTerminalConditionErrorGetsInAtTheCap(t *testing.T) {
+	globalCluster := provisioningCluster()
+	globalCluster.Status.PodErrors = []*v2pb.PodErrors{
+		{Name: "worker-a", ContainerName: headContainerName, ExitCode: 137, Reason: "Error"},
+		{Name: "worker-b", ContainerName: headContainerName, ExitCode: 137, Reason: "ContainerStatusUnknown"},
+		{Name: "worker-c", ContainerName: headContainerName, ExitCode: 137, Reason: "Error"},
+		{Name: "worker-d", ContainerName: headContainerName, ExitCode: 137, Reason: "ContainerStatusUnknown"},
+	}
+	r := setupWatcherTest(t, globalCluster)
+
+	r.rayClusterEventHandler(withConditions(
+		newKubeRayCluster(rayClusterName, ""),
+		metav1.Condition{
+			Type:    string(rayv1.HeadPodReady),
+			Status:  metav1.ConditionFalse,
+			Reason:  "HeadPodNotFound",
+			Message: "Head Pod not found",
+		},
+		replicaFailure("FailedCreateHeadPod", "Error creating: pods is forbidden"),
+	))
+
+	updated := getUpdatedCluster(t, r)
+	require.Len(t, updated.Status.PodErrors, 4, "the cap should hold")
+	assert.True(t, slices.ContainsFunc(updated.Status.PodErrors, func(podError *v2pb.PodErrors) bool {
+		return podError.GetReason() == "FailedCreateHeadPod"
+	}), "an error that does not fit must not keep out the terminal one after it")
+	assert.False(t, slices.ContainsFunc(updated.Status.PodErrors, func(podError *v2pb.PodErrors) bool {
+		return podError.GetReason() == "HeadPodNotFound"
+	}), "an error that is not terminal is still dropped at the cap")
 }
 
 // TestHandlePodEvent_ContainerErrorWinsOverScheduling pins the precedence. Once a
