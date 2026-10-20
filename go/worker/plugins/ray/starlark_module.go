@@ -87,6 +87,15 @@ func (r *module) createCluster(t *starlark.Thread, _ *starlark.Builtin, args sta
 	}
 	cluster = *response.RayCluster
 
+	version, err := utils.GetVersion(ctx, provisioningBudgetChangeID, utils.DefaultVersion, provisioningBudgetVersion)
+	if err != nil {
+		logger.Error("builtin-error", ext.ZapError(err)...)
+		return nil, err
+	}
+	if version == provisioningBudgetVersion {
+		return awaitProvisioning(t, ctx, cluster, activityID, time.Second*time.Duration(timeout))
+	}
+
 	srp := utils.DefaultSensorRetryPolicy
 	srp.ExpirationInterval = time.Second * time.Duration(timeout)
 	srp.InitialInterval = time.Second * time.Duration(poll)
