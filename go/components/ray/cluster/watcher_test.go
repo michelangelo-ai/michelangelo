@@ -1489,6 +1489,28 @@ func TestPodEventHandler_MissingPortAnnotationsAreNotErrors(t *testing.T) {
 	assert.Equal(t, int32(0), updated.Status.HeadNode.JupyterNotebookPort)
 }
 
+// TestPodEventHandler_UnchangedHeadPodIsQuiet asserts that a head pod event that
+// changes nothing -- every cache re-sync delivers one -- neither writes nor logs
+// at info level.
+func TestPodEventHandler_UnchangedHeadPodIsQuiet(t *testing.T) {
+	globalCluster := &v2pb.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
+		Status:     v2pb.RayClusterStatus{State: v2pb.RAY_CLUSTER_STATE_PROVISIONING},
+	}
+	r, writes, logs := setupWatcherTestObserved(t, globalCluster)
+	pod := newHeadPod("head-pod", rayClusterName, corev1.PodRunning)
+	r.podAddEventHandler(pod)
+	require.Equal(t, 1, *writes)
+
+	*writes = 0
+	logs.TakeAll()
+	r.podUpdateEventHandler(pod, pod)
+
+	assert.Zero(t, *writes, "an unchanged head pod should not be written")
+	assert.Empty(t, logs.FilterLevelExact(zapcore.InfoLevel).All(),
+		"an unchanged head pod should not be logged at info level")
+}
+
 func TestPodAddEventHandler_IgnoresNonHeadPod(t *testing.T) {
 	globalCluster := &v2pb.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},

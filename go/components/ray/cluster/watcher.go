@@ -341,11 +341,6 @@ func (r *Reconciler) podEventHandler(pod *corev1.Pod) {
 		log.V(1).Info("no jupyter notebook port published for the head pod", "reason", err.Error())
 	}
 
-	log.Info("Retrieved head pod info",
-		"ray_head_ip", pod.Status.PodIP,
-		"ray_head_client_port", clientPort,
-		"ray_head_jupyter_notebook_port", jupyterNotebookPort)
-
 	namespace, err := jobsutils.GetProjectNameFromLabels(pod.Labels)
 	if err != nil {
 		log.Error(err, "unable to determine namespace of ray cluster")
@@ -378,6 +373,11 @@ func (r *Reconciler) podEventHandler(pod *corev1.Pod) {
 		rayCluster.Status.HeadNode.JupyterNotebookPort == jupyterNotebookPort {
 		return
 	}
+
+	log.V(1).Info("Retrieved head pod info",
+		"ray_head_ip", pod.Status.PodIP,
+		"ray_head_client_port", clientPort,
+		"ray_head_jupyter_notebook_port", jupyterNotebookPort)
 
 	if err = r.updateStatusFromHandler(ctx, &rayCluster,
 		func(obj client.Object) {
