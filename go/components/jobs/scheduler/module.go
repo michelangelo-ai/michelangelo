@@ -48,9 +48,11 @@ type ProvideIn struct {
 }
 
 // provide returns the JobQueue selected by jobs.scheduler.backend. The Kueue
-// backend wraps the default scheduler rather than replacing it: it validates
-// LocalQueue placement for jobs headed to Kueue-managed clusters, then
-// delegates, so non-Kueue clusters behave exactly as before.
+// backend replaces the default scheduler's decision path: it makes and
+// persists each job's single placement decision at enqueue, validating
+// LocalQueue placement first for jobs headed to Kueue-managed clusters, so no
+// cluster is selected again after validation. The default backend is
+// unchanged.
 func provide(in ProvideIn) (JobQueue, error) {
 	switch in.Config.Backend {
 	case "", _backendDefault:
@@ -61,7 +63,6 @@ func provide(in ProvideIn) (JobQueue, error) {
 			return nil, fmt.Errorf("kueue scheduler backend: %w", err)
 		}
 		return kueue.NewKueueJobQueue(kueue.Params{
-			Delegate:           in.Scheduler,
 			Handler:            handler,
 			AssignmentStrategy: in.AssignmentStrategy,
 			ClusterCache:       in.ClusterCache,
