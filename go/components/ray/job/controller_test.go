@@ -10,6 +10,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/uber-go/tally"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest"
@@ -1771,7 +1772,7 @@ func setupJobWatcherTest(t *testing.T, objs ...client.Object) (*Reconciler, *int
 		Build()
 
 	zapLogger, logs := newObservedLogger(t)
-	return &Reconciler{Client: fakeClient, logger: zapr.NewLogger(zapLogger)}, &writes, logs
+	return &Reconciler{Client: fakeClient, logger: zapr.NewLogger(zapLogger), metricsScope: tally.NoopScope}, &writes, logs
 }
 
 // newObservedLogger tees the test logger into an observer so the assertions can
@@ -1899,7 +1900,7 @@ func setupJobWatcherTestWithConcurrentUpdate(t *testing.T, global *v2pb.RayJob, 
 		Build()
 
 	zapLogger, logs := newObservedLogger(t)
-	return &Reconciler{Client: fakeClient, logger: zapr.NewLogger(zapLogger)}, &statusWrites, logs
+	return &Reconciler{Client: fakeClient, logger: zapr.NewLogger(zapLogger), metricsScope: tally.NoopScope}, &statusWrites, logs
 }
 
 // TestJobWatcherHandlersRecheckGuardsAfterConflict asserts that both handlers
@@ -2163,6 +2164,97 @@ func TestJobWatcherHandlersRetryTransientErrors(t *testing.T) {
 	}
 }
 
+// TestHandlerWriteDropIsCounted covers a handler status write that fails for
+// good. A handler has no requeue, so the event is lost -- until the next
+// re-sync for an update, until the safety net for a delete -- and only a log
+// line would say so. Count it against the handler, so it can be alerted on.
+func TestHandlerWriteDropIsCounted(t *testing.T) {
+	newGlobal := func(conditions ...*apipb.Condition) *v2pb.RayJob {
+		return &v2pb.RayJob{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:       rayJobName,
+				Namespace:  testNamespace,
+				Generation: 1,
+			},
+			Status: v2pb.RayJobStatus{
+				State: v2pb.RAY_JOB_STATE_RUNNING,
+				StatusConditions: append([]*apipb.Condition{
+					{
+						Type:   constants.LaunchedCondition,
+						Status: apipb.CONDITION_STATUS_TRUE,
+					},
+				}, conditions...),
+			},
+		}
+	}
+	newLocal := func() *rayv1.RayJob {
+		return &rayv1.RayJob{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   rayJobName,
+				Labels: map[string]string{constants.ProjectNameLabelKey: testNamespace},
+			},
+			Status: rayv1.RayJobStatus{
+				JobStatus:           rayv1.JobStatusSucceeded,
+				JobDeploymentStatus: rayv1.JobDeploymentStatusComplete,
+			},
+		}
+	}
+
+	tests := []struct {
+		name    string
+		global  *v2pb.RayJob
+		event   func(r *Reconciler)
+		handler string
+	}{
+		{
+			name:    "status update",
+			global:  newGlobal(),
+			event:   func(r *Reconciler) { r.rayJobEventHandler(newLocal()) },
+			handler: "rayJobEventHandler",
+		},
+		{
+			name:    "external deletion",
+			global:  newGlobal(),
+			event:   func(r *Reconciler) { r.rayJobDeleteEventHandler(newLocal()) },
+			handler: "rayJobDeleteEventHandler",
+		},
+		{
+			name: "controller-initiated deletion",
+			global: newGlobal(&apipb.Condition{
+				Type:   constants.KillingCondition,
+				Status: apipb.CONDITION_STATUS_TRUE,
+			}),
+			event:   func(r *Reconciler) { r.rayJobDeleteEventHandler(newLocal()) },
+			handler: "rayJobDeleteEventHandler",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fakeClient := fake.NewClientBuilder().
+				WithScheme(newTestScheme()).
+				WithObjects(tt.global).
+				WithStatusSubresource(tt.global).
+				WithInterceptorFuncs(interceptor.Funcs{
+					SubResourceUpdate: func(context.Context, client.Client, string, client.Object, ...client.SubResourceUpdateOption) error {
+						return fmt.Errorf("admission webhook denied the request")
+					},
+				}).
+				Build()
+			scope := tally.NewTestScope("test", nil)
+			zapLogger, logs := newObservedLogger(t)
+			r := &Reconciler{Client: fakeClient, logger: zapr.NewLogger(zapLogger), metricsScope: scope}
+
+			tt.event(r)
+
+			assert.Len(t, errorLogs(logs), 1, "the failed write should be logged as an error")
+			counter, ok := scope.Snapshot().Counters()["test.rayjob.handler_write_dropped+handler="+tt.handler]
+			require.True(t, ok, "the failed write should be counted against its handler")
+			assert.Equal(t, int64(1), counter.Value())
+		})
+	}
+}
+
 // TestIsRetriableWriteError pins which failed handler writes are retried. A
 // handler has no requeue, so a transient failure it gives up on loses its
 // event: until the next re-sync for an update, until the safety net for a
@@ -2276,6 +2368,7 @@ func TestRayJobConvergesAfterDeleteHandlerExhaustsRetries(t *testing.T) {
 		logger:          zapr.NewLogger(zaptest.NewLogger(t)),
 		federatedClient: mockFedClient,
 		clusterCache:    mockCache,
+		metricsScope:    tally.NoopScope,
 	}
 
 	r.rayJobDeleteEventHandler(&rayv1.RayJob{

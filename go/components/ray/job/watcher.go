@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/uber-go/tally"
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -25,6 +26,8 @@ import (
 
 const (
 	_eventHandlerTimeout = 10 * time.Second
+	// Counts handler status writes that gave up, tagged by handler.
+	_handlerWriteDroppedMetricName = "handler_write_dropped"
 	// _jobStatusUnknown is the JobStatus of a job whose KubeRay RayJob is gone
 	// from the compute cluster. It is not a status KubeRay reports.
 	_jobStatusUnknown = "Unknown"
@@ -79,8 +82,21 @@ func (r *Reconciler) getFederatedWatcher() watch.FederatedWatcher {
 				ObjType:   &rayv1.RayJob{},
 			},
 		},
-		Scope: r.metricsScope.SubScope("rayjob"),
+		Scope: r.watcherScope(),
 	})
+}
+
+// watcherScope namespaces the watcher's metrics; the RayCluster controller
+// shares the root scope and watches its own resources.
+func (r *Reconciler) watcherScope() tally.Scope {
+	return r.metricsScope.SubScope("rayjob")
+}
+
+// countDroppedWrite counts a handler status write that gave up. A handler has
+// no requeue, so its event is lost -- until the next re-sync for an update,
+// until the safety net for a delete -- and only a log line would say so.
+func (r *Reconciler) countDroppedWrite(handler string) {
+	r.watcherScope().Tagged(map[string]string{"handler": handler}).Counter(_handlerWriteDroppedMetricName).Inc(1)
 }
 
 // KubeRay RayJob event handlers — own RayJob.Status execution fields.
@@ -200,6 +216,7 @@ func (r *Reconciler) rayJobEventHandler(obj interface{}) {
 		return r.Status().Update(ctx, &current)
 	}); err != nil {
 		log.Error(err, "could not update the global ray job status")
+		r.countDroppedWrite("rayJobEventHandler")
 	}
 }
 
@@ -297,6 +314,7 @@ func (r *Reconciler) rayJobDeleteEventHandler(obj interface{}) {
 			return r.Status().Update(ctx, &current)
 		}); err != nil {
 			log.Error(err, "failed to update status on external delete")
+			r.countDroppedWrite("rayJobDeleteEventHandler")
 			return
 		}
 		if !wrote {
@@ -341,6 +359,7 @@ func (r *Reconciler) rayJobDeleteEventHandler(obj interface{}) {
 		return r.Status().Update(ctx, &current)
 	}); err != nil {
 		log.Error(err, "failed to update status on expected delete")
+		r.countDroppedWrite("rayJobDeleteEventHandler")
 		return
 	}
 	if !wrote {
