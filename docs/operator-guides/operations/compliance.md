@@ -207,7 +207,7 @@ These practices improve your security posture across all three frameworks.
 - Use Kubernetes Network Policies to restrict pod-to-pod communication to only required paths
 - Apply Pod Security Standards (restricted profile) to Michelangelo AI workloads
 - Regularly patch Kubernetes nodes and Michelangelo AI component images
-- Store credentials in Kubernetes Secrets or an external secrets manager (HashiCorp Vault, AWS Secrets Manager) rather than in ConfigMaps (note that the `michelangelo-config` ConfigMap in compute namespaces carries storage credentials in plaintext; scope who can read it)
+- Store credentials in Kubernetes Secrets or an external secrets manager (HashiCorp Vault, AWS Secrets Manager) rather than in ConfigMaps (the `michelangelo-compute` chart keeps storage credentials out of the `michelangelo-config` ConfigMap, but a ConfigMap built by hand on an older compute cluster may still carry them in plaintext; scope who can read it)
 
 ### Monitoring and Alerting
 

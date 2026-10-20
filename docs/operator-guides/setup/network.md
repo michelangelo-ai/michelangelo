@@ -248,6 +248,7 @@ Control Plane Cluster                    Compute Cluster
 | Outbound from control plane | Controller Manager | Compute cluster K8s API | 443 | Dispatching RayCluster / SparkApplication CRDs |
 | Outbound from compute | Task pods | Michelangelo AI API server | 15566 (or 443 through the API server Ingress) | Model registration and other API calls (`REGISTRY_ENDPOINT` in `michelangelo-config`) |
 | Outbound from compute | Task pods | S3 / object store | 443 | Artifact reads and writes |
+| Outbound from compute | Ray log collector sidecar | `logPersistence.storageEndpoint` (controllermgr) | 443 (or the endpoint's port) | Ray log persistence. controllermgr has a single storage endpoint, which every compute cluster must reach |
 
 ### NetworkPolicy for Control Plane → Compute Cluster
 
@@ -295,6 +296,12 @@ kubectl exec -it <task-pod> -n <compute-namespace> -- \
   env | grep REGISTRY_ENDPOINT
 ```
 
+On a compute cluster installed with the `michelangelo-compute` chart, `helm test` checks from namespace `default` that `AWS_ENDPOINT_URL` and `REGISTRY_ENDPOINT` are reachable and that the object-storage credentials Secret exists (see [Verify with helm test](install-compute-cluster-charts.md#verify-with-helm-test)):
+
+```bash
+helm test michelangelo-compute --kube-context <compute-context> --namespace michelangelo-compute --logs
+```
+
 ---
 
 ## Checklist
@@ -316,5 +323,6 @@ Use this checklist when deploying Michelangelo AI to a new environment:
 
 - [Platform Setup — Environment Overrides](platform-setup.md#environment-overrides--domain-settings)
 - [Authentication](authentication.md)
+- [Install the Compute Cluster Chart](install-compute-cluster-charts.md)
 - [Register a Compute Cluster](register-a-compute-cluster-to-michelangelo-control-plane.md)
 - [Troubleshooting](../operations/troubleshooting.md)

@@ -329,6 +329,8 @@ The `michelangelo` chart owns the **control plane only**. Three tiers, with clea
   - `michelangelo-controllermgr` — Kubernetes controller manager
 - **Observability tier** — optional. Bring your own Prometheus and Grafana; if you run the Prometheus Operator and/or Grafana Operator, `monitoring.enabled=true` installs a ServiceMonitor, starter alert rules, and two dashboards (see [Monitoring & Observability](operations/monitoring.md)).
 
+Compute clusters get their operators, the `ray-manager` identity and the runtime objects from the separate `michelangelo-compute` chart; see [Install the Compute Cluster Chart](setup/install-compute-cluster-charts.md). Its runtime contract expects, in each compute cluster's `default` namespace, the object-storage credentials Secret named by `controllermgr.jobs.k8sengine.mapper.logPersistence.credentialsSecret`.
+
 ### Chart layout
 
 ```
@@ -405,5 +407,6 @@ When enabled via `controllermgr.jobs.k8sengine.mapper.logPersistence`, controlle
 - [Platform Setup](setup/platform-setup.md) — configure the components installed by this chart through their ConfigMaps
 - [Network & Ingress](setup/network.md) — TLS and multi-cluster connectivity
 - [Authentication](setup/authentication.md) — connect an identity provider and configure RBAC
+- [Install the Compute Cluster Chart](setup/install-compute-cluster-charts.md) — set up a compute cluster with the `michelangelo-compute` chart
 - [Register a Compute Cluster](setup/register-a-compute-cluster-to-michelangelo-control-plane.md) — connect a cluster for Ray and Spark job dispatch
 - [Monitoring & Observability](operations/monitoring.md) — scrape metrics and configure dashboards

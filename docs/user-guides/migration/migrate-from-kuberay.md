@@ -15,17 +15,12 @@ This page maps **resources and manifests**. For concept-level mapping across MLf
 
 ## What does not change
 
-- **You still install and run KubeRay yourself.** The chart's README lists KubeRay as an optional cluster operator to install separately from its upstream chart, required only if your pipelines use Ray tasks. It is not a chart dependency — the local sandbox installs it as its own Helm release into a `ray-system` namespace:
-
-  ```bash
-  helm repo add kuberay https://ray-project.github.io/kuberay-helm
-  helm install kuberay-operator kuberay/kuberay-operator --namespace ray-system --create-namespace
-  ```
+- **KubeRay still reconciles your Ray resources.** On each compute cluster, the `michelangelo-compute` chart installs the KubeRay operator at a pinned version, chart `kuberay-operator` 1.7.1, together with the identity and runtime objects the control plane relies on; see [Install the Compute Cluster Chart](../../operator-guides/setup/install-compute-cluster-charts.md). A cluster that already runs KubeRay can keep its standalone release (`kuberay-operator.enabled=false`) or replace it with the chart's, as described in [Migrating existing clusters](../../operator-guides/setup/install-compute-cluster-charts.md#migrating-existing-clusters).
 - **The resources KubeRay reconciles are still `ray.io/v1`.** Michelangelo AI builds them using the upstream KubeRay Go types, so what lands in your compute cluster is an ordinary `RayCluster` or `RayJob`.
 - **Ray itself is unchanged.** Ray Data and Ray Train are used directly — `ray.data.Dataset` is a first-class type in the pipeline IO system, and the bundled Lightning trainer subclasses Ray Train's `TorchTrainer`.
 
 :::warning
-There is no documented minimum KubeRay version. The control plane currently compiles against the KubeRay operator's Go types at `v1.5.0`, while the local sandbox installs operator `v1.7.1`. Both are in the `ray.io/v1` API, so an existing install in that range is very likely fine, but no version floor is stated anywhere, so confirm against your own operator version before migrating anything you care about.
+The `michelangelo-compute` chart pins KubeRay operator `v1.7.1`, which the local sandbox also runs. The control plane compiles against the KubeRay operator's Go types at `v1.5.0`; both are in the `ray.io/v1` API. If you keep a standalone operator (`kuberay-operator.enabled=false`), the pin no longer applies, so confirm your operator version against `v1.7.1` before migrating anything you care about.
 :::
 
 ## What changes
