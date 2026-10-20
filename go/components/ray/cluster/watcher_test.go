@@ -1361,7 +1361,9 @@ func TestRayClusterDeleteEventHandler_SkipsImmutable(t *testing.T) {
 // outcome before it starts a kill (setClusterSuccessConditionIfRequired runs
 // before setClusterKillIfRequired), so a delete that lands while Killing=TRUE
 // finds Succeeded already set. It completes the kill and must keep that outcome
-// rather than record the delete as an external one.
+// rather than record the delete as an external one. The delete can beat
+// cleanupCluster's own write, and the freeze that follows archives whatever it
+// finds, so it has to record the kill completely -- TERMINATED included.
 func TestRayClusterDeleteEventHandler_ExpectedDeletion(t *testing.T) {
 	globalCluster := &v2pb.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
@@ -1382,6 +1384,8 @@ func TestRayClusterDeleteEventHandler_ExpectedDeletion(t *testing.T) {
 	r.rayClusterDeleteEventHandler(newKubeRayCluster(rayClusterName, rayv1.Ready))
 
 	updated := getUpdatedCluster(t, r)
+	assert.Equal(t, v2pb.RAY_CLUSTER_STATE_TERMINATED, updated.Status.State,
+		"a completed kill must not be frozen with the state from before it")
 	killedCond := findCondition(updated.Status.StatusConditions, KilledCondition)
 	require.NotNil(t, killedCond, "KilledCondition should exist")
 	assert.Equal(t, apipb.CONDITION_STATUS_TRUE, killedCond.Status)

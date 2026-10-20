@@ -611,21 +611,11 @@ func (r *Reconciler) rayClusterDeleteEventHandler(obj interface{}) {
 		return
 	}
 
-	// Expected deletion — killing was in progress.
-	if err := r.updateStatusFromHandler(ctx, &globalCluster,
-		func(obj client.Object) {
-			cluster := obj.(*v2pb.RayCluster)
-			killingCond := jobsutils.GetCondition(&cluster.Status.StatusConditions, KillingCondition, cluster.Generation)
-			jobsutils.UpdateCondition(killingCond, jobsutils.ConditionUpdateParams{
-				Status:     apipb.CONDITION_STATUS_FALSE,
-				Generation: cluster.Generation,
-			})
-			killedCond := jobsutils.GetCondition(&cluster.Status.StatusConditions, KilledCondition, cluster.Generation)
-			jobsutils.UpdateCondition(killedCond, jobsutils.ConditionUpdateParams{
-				Status:     apipb.CONDITION_STATUS_TRUE,
-				Generation: cluster.Generation,
-			})
-		}, "rayClusterDeleteEventHandler"); err != nil {
+	// Expected deletion — killing was in progress, and this event got here before
+	// cleanupCluster recorded the kill. Record it exactly as cleanupCluster does,
+	// TERMINATED included: the freeze below archives whatever it finds.
+	if err := r.updateStatusFromHandler(ctx, &globalCluster, markKilledUpdate,
+		"rayClusterDeleteEventHandler"); err != nil {
 		log.Error(err, "failed to update status on expected delete")
 		return
 	}

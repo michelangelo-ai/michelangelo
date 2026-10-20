@@ -482,23 +482,11 @@ func (r *Reconciler) cleanupCluster(
 		}
 	}
 
-	// Record the kill now that the delete is issued: Killing ends and Killed is
-	// set alongside TERMINATED. The KubeRay delete event that follows finds
-	// Killed=TRUE and only freezes the cluster (see rayClusterDeleteEventHandler).
-	if err := jobsutils.UpdateStatusWithRetries(ctx, r, cluster,
-		func(obj client.Object) {
-			cluster := obj.(*v2pb.RayCluster)
-			killingCond := jobsutils.GetCondition(&cluster.Status.StatusConditions, KillingCondition, cluster.Generation)
-			jobsutils.UpdateCondition(killingCond, jobsutils.ConditionUpdateParams{
-				Status: apipb.CONDITION_STATUS_FALSE,
-			})
-			killedCond := jobsutils.GetCondition(&cluster.Status.StatusConditions, KilledCondition, cluster.Generation)
-			jobsutils.UpdateCondition(killedCond, jobsutils.ConditionUpdateParams{
-				Status:     apipb.CONDITION_STATUS_TRUE,
-				Generation: cluster.Generation,
-			})
-			cluster.Status.State = v2pb.RAY_CLUSTER_STATE_TERMINATED
-		}, &metav1.UpdateOptions{
+	// Record the kill now that the delete is issued. The KubeRay delete event
+	// that follows finds Killed=TRUE and only freezes the cluster; one that gets
+	// there first records the same kill (see rayClusterDeleteEventHandler).
+	if err := jobsutils.UpdateStatusWithRetries(ctx, r, cluster, markKilledUpdate,
+		&metav1.UpdateOptions{
 			FieldManager: "cleanupClusterDeleted",
 		}); err != nil {
 		log.Error(err, "could not update the cluster status")
@@ -507,6 +495,25 @@ func (r *Reconciler) cleanupCluster(
 
 	log.Info("cluster cleaned up successfully")
 	return nil
+}
+
+// markKilledUpdate is the status change that completes the kill of a launched
+// cluster: Killing ends and Killed is set alongside TERMINATED. cleanupCluster
+// writes it once it has deleted the KubeRay object, and the KubeRay delete
+// handler writes it when the delete event arrives before that write does.
+func markKilledUpdate(obj client.Object) {
+	cluster := obj.(*v2pb.RayCluster)
+	killingCond := jobsutils.GetCondition(&cluster.Status.StatusConditions, KillingCondition, cluster.Generation)
+	jobsutils.UpdateCondition(killingCond, jobsutils.ConditionUpdateParams{
+		Status:     apipb.CONDITION_STATUS_FALSE,
+		Generation: cluster.Generation,
+	})
+	killedCond := jobsutils.GetCondition(&cluster.Status.StatusConditions, KilledCondition, cluster.Generation)
+	jobsutils.UpdateCondition(killedCond, jobsutils.ConditionUpdateParams{
+		Status:     apipb.CONDITION_STATUS_TRUE,
+		Generation: cluster.Generation,
+	})
+	cluster.Status.State = v2pb.RAY_CLUSTER_STATE_TERMINATED
 }
 
 // enqueueIfRequired enqueues the cluster to the scheduler queue if not already enqueued
