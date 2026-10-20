@@ -92,6 +92,11 @@ type KueueConfig struct {
 	// Kueue on compute clusters. Defaults to "v1beta2" (Kueue v0.15+); set
 	// "v1beta1" for older Kueue installations.
 	APIVersion string `yaml:"apiVersion"`
+	// TrustProjectLabel makes queue resolution honor the ma/project-name
+	// label ahead of the job's namespace. Defaults to false: callers can set
+	// the label, so it is only trustworthy in deployments whose admission
+	// path stamps it and overwrites any client-supplied value.
+	TrustProjectLabel bool `yaml:"trustProjectLabel"`
 }
 
 // SchedulerConfig selects and configures the job scheduler backend.

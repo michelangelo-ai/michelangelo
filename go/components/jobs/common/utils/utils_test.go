@@ -162,46 +162,73 @@ func TestHasTerminalPodErrors(t *testing.T) {
 
 func TestProjectNameForJob(t *testing.T) {
 	tests := []struct {
-		name      string
-		labels    map[string]string
-		namespace string
-		expected  string
+		name       string
+		labels     map[string]string
+		namespace  string
+		trustLabel bool
+		expected   string
 	}{
 		{
-			name:      "label wins over namespace",
-			labels:    map[string]string{"ma/project-name": "proj1"},
-			namespace: "other-ns",
-			expected:  "proj1",
+			name:       "label set, trusted: label wins over namespace",
+			labels:     map[string]string{"ma/project-name": "proj1"},
+			namespace:  "other-ns",
+			trustLabel: true,
+			expected:   "proj1",
 		},
 		{
-			name:      "no label falls back to namespace",
-			labels:    map[string]string{"unrelated": "x"},
-			namespace: "proj-ns",
-			expected:  "proj-ns",
+			name:       "label set, untrusted: namespace wins",
+			labels:     map[string]string{"ma/project-name": "proj1"},
+			namespace:  "other-ns",
+			trustLabel: false,
+			expected:   "other-ns",
 		},
 		{
-			name:      "empty label value falls back to namespace",
-			labels:    map[string]string{"ma/project-name": ""},
-			namespace: "proj-ns",
-			expected:  "proj-ns",
+			name:       "label unset, trusted: falls back to namespace",
+			labels:     map[string]string{"unrelated": "x"},
+			namespace:  "proj-ns",
+			trustLabel: true,
+			expected:   "proj-ns",
 		},
 		{
-			name:      "nil labels fall back to namespace",
-			labels:    nil,
-			namespace: "proj-ns",
-			expected:  "proj-ns",
+			name:       "label unset, untrusted: namespace",
+			labels:     map[string]string{"unrelated": "x"},
+			namespace:  "proj-ns",
+			trustLabel: false,
+			expected:   "proj-ns",
 		},
 		{
-			name:      "no identity at all",
-			labels:    nil,
-			namespace: "",
-			expected:  "",
+			name:       "empty label value, trusted: falls back to namespace",
+			labels:     map[string]string{"ma/project-name": ""},
+			namespace:  "proj-ns",
+			trustLabel: true,
+			expected:   "proj-ns",
+		},
+		{
+			name:       "nil labels, trusted: falls back to namespace",
+			labels:     nil,
+			namespace:  "proj-ns",
+			trustLabel: true,
+			expected:   "proj-ns",
+		},
+		{
+			name:       "label set, untrusted, no namespace: no identity",
+			labels:     map[string]string{"ma/project-name": "proj1"},
+			namespace:  "",
+			trustLabel: false,
+			expected:   "",
+		},
+		{
+			name:       "no identity at all, trusted",
+			labels:     nil,
+			namespace:  "",
+			trustLabel: true,
+			expected:   "",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expected, ProjectNameForJob(tt.labels, tt.namespace))
+			assert.Equal(t, tt.expected, ProjectNameForJob(tt.labels, tt.namespace, tt.trustLabel))
 		})
 	}
 }

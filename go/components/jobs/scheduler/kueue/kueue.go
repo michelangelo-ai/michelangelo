@@ -121,13 +121,13 @@ func (q *KueueJobQueue) Enqueue(ctx context.Context, job matypes.SchedulableJob)
 
 	log := q.log.WithValues(constants.Job, latest.GetNamespace()+"/"+latest.GetName(), "cluster", target.GetName())
 
-	project := utils.ProjectNameForJob(latest.GetLabels(), latest.GetNamespace())
+	project := utils.ProjectNameForJob(latest.GetLabels(), latest.GetNamespace(), q.cfg.Kueue.TrustProjectLabel)
 	if project == "" {
 		// A job with no project identity cannot be mapped to a LocalQueue;
 		// fail visibly rather than dispatching into a black hole.
 		q.metrics.MetricsScope.Counter(_queueNotFoundCount).Inc(1)
 		if uerr := q.setEnqueuedCondition(vctx, latest, constants.KueueQueueNotFound,
-			fmt.Sprintf("cannot resolve a LocalQueue on Kueue-managed cluster %q: job has neither a %s label nor a namespace",
+			fmt.Sprintf("cannot resolve a LocalQueue on Kueue-managed cluster %q: job has no project identity (a namespace, or a trusted %s label)",
 				target.GetName(), constants.ProjectNameLabelKey)); uerr != nil {
 			log.Error(uerr, "Failed to update Enqueued condition")
 		}

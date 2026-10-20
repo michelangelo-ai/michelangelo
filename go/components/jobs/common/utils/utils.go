@@ -40,13 +40,17 @@ func GetProjectNameFromLabels(labels map[string]string) (string, error) {
 }
 
 // ProjectNameForJob returns a job's project identity for control-plane
-// decisions: the ma/project-name label when set, otherwise the job's
-// namespace — Michelangelo jobs run in their project's namespace, and unlike
-// labels the namespace is bound by authorization, so it cannot be forged by
-// the job author. Returns "" only when neither is available.
-func ProjectNameForJob(labels map[string]string, namespace string) string {
-	if name, err := GetProjectNameFromLabels(labels); err == nil && name != "" {
-		return name
+// decisions: the job's namespace — Michelangelo jobs run in their project's
+// namespace, and unlike labels the namespace is bound by authorization, so it
+// cannot be forged by the job author. The ma/project-name label wins only when
+// trustLabel is set (jobs.scheduler.kueue.trustProjectLabel), for deployments
+// whose admission path stamps the label and overwrites any client-supplied
+// value. Returns "" only when no identity is available.
+func ProjectNameForJob(labels map[string]string, namespace string, trustLabel bool) string {
+	if trustLabel {
+		if name, err := GetProjectNameFromLabels(labels); err == nil && name != "" {
+			return name
+		}
 	}
 	return namespace
 }
