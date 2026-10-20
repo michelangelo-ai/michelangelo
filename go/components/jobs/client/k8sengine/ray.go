@@ -689,13 +689,33 @@ func mapV1RayJobStatusToMAState(status rayv1.JobStatus, deploymentStatus rayv1.J
 		return v2pb.RAY_JOB_STATE_FAILED
 	case rayv1.JobStatusStopped:
 		return v2pb.RAY_JOB_STATE_KILLED
+	}
+
+	// KubeRay can also end a job through JobDeploymentStatus alone and never
+	// update JobStatus again: a failed submitter, an exceeded
+	// activeDeadlineSeconds, or a spec that failed validation. Failed is terminal
+	// because MA never sets Spec.BackoffLimit, so KubeRay never moves it to
+	// Retrying.
+	switch deploymentStatus {
+	case rayv1.JobDeploymentStatusFailed, rayv1.JobDeploymentStatusValidationFailed:
+		return v2pb.RAY_JOB_STATE_FAILED
+	}
+
+	switch status {
 	case rayv1.JobStatusRunning:
 		return v2pb.RAY_JOB_STATE_RUNNING
+	case rayv1.JobStatusPending:
+		return v2pb.RAY_JOB_STATE_INITIALIZING
 	}
 
 	switch deploymentStatus {
 	case rayv1.JobDeploymentStatusInitializing, rayv1.JobDeploymentStatusWaiting:
 		return v2pb.RAY_JOB_STATE_INITIALIZING
+	case rayv1.JobDeploymentStatusNew, rayv1.JobDeploymentStatusRunning:
+		// A fresh object, or a deployment whose job is not submitted yet.
+		if status == rayv1.JobStatusNew {
+			return v2pb.RAY_JOB_STATE_INITIALIZING
+		}
 	}
 
 	return v2pb.RAY_JOB_STATE_INVALID
