@@ -6,9 +6,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-logr/logr"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/uber-go/tally"
 
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
@@ -21,11 +23,18 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	kubescheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/config"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 
+	"github.com/michelangelo-ai/michelangelo/go/api/handler/handlermocks"
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
+	"github.com/michelangelo-ai/michelangelo/go/base/env"
+	"github.com/michelangelo-ai/michelangelo/go/components/controllerutil"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/client/clientmocks"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/cluster"
 	matypes "github.com/michelangelo-ai/michelangelo/go/components/jobs/common/types"
@@ -1242,4 +1251,68 @@ func TestReconcilerReconcile_KillConvergesToImmutable(t *testing.T) {
 	assert.Equal(t, v2pb.RAY_CLUSTER_STATE_TERMINATED, afterSecond.Status.State)
 	assert.True(t, utils.IsImmutable(&afterSecond),
 		"cluster should be marked immutable once fully terminated")
+}
+
+// capturingManager is a manager that is never started; it records the runnables
+// added to it instead of running them.
+type capturingManager struct {
+	ctrl.Manager
+	runnables []manager.Runnable
+}
+
+func (m *capturingManager) Add(runnable manager.Runnable) error {
+	m.runnables = append(m.runnables, runnable)
+	return nil
+}
+
+func newCapturingManager(t *testing.T) *capturingManager {
+	t.Helper()
+	scheme := runtime.NewScheme()
+	require.NoError(t, v2pb.AddToScheme(scheme))
+	mgr, err := ctrl.NewManager(&rest.Config{}, ctrl.Options{
+		Scheme: scheme,
+		Logger: logr.Discard(),
+		// Every Register in this test binary names its controller "raycluster".
+		Controller: config.Controller{SkipNameValidation: ptr.To(true)},
+	})
+	require.NoError(t, err)
+	return &capturingManager{Manager: mgr}
+}
+
+// TestRegisterRunsWatcherOnLeader checks that the federated watcher is run by the
+// manager as a leader-only runnable -- started on the leader once the caches have
+// synced -- and that it stops with the manager instead of outliving it.
+func TestRegisterRunsWatcherOnLeader(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	factory := handlermocks.NewMockFactory(mockCtrl)
+	factory.EXPECT().GetAPIHandler(gomock.Any()).Return(&mockAPIHandler{}, nil)
+	r := NewReconciler(logr.Discard(), factory, env.Context{}, &mockSchedulerQueue{},
+		clientmocks.NewMockFederatedClient(mockCtrl), newMockClusterCache(), newTestMapper(), tally.NoopScope)
+	mgr := newCapturingManager(t)
+
+	require.NoError(t, r.Register(mgr))
+
+	var runWatcher controllerutil.LeaderOnlyRunnable
+	for _, runnable := range mgr.runnables {
+		if fn, ok := runnable.(controllerutil.LeaderOnlyRunnable); ok {
+			runWatcher = fn
+		}
+	}
+	require.NotNil(t, runWatcher, "the watcher should be added to the manager as a leader-only runnable")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	stopped := make(chan error, 1)
+	go func() { stopped <- runWatcher.Start(ctx) }()
+	select {
+	case <-stopped:
+		t.Fatal("the watcher should run until the manager stops")
+	case <-time.After(50 * time.Millisecond):
+	}
+	cancel()
+	select {
+	case err := <-stopped:
+		assert.NoError(t, err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("the watcher should stop when the manager cancels its context")
+	}
 }

@@ -20,6 +20,7 @@ import (
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
+	"github.com/michelangelo-ai/michelangelo/go/components/controllerutil"
 	jobsclient "github.com/michelangelo-ai/michelangelo/go/components/jobs/client"
 	jobscluster "github.com/michelangelo-ai/michelangelo/go/components/jobs/cluster"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/constants"
@@ -268,11 +269,16 @@ func (r *Reconciler) Register(mgr ctrl.Manager) error {
 	}
 	r.Handler = handler
 
+	// The watcher writes status, so only the leader runs it. The manager starts
+	// it once its caches have synced and cancels ctx when it stops, which ends
+	// Start.
 	federatedWatcher := r.getFederatedWatcher()
-	go func() {
-		<-mgr.Elected()
-		federatedWatcher.Start(context.TODO())
-	}()
+	if err := mgr.Add(controllerutil.LeaderOnlyRunnable(func(ctx context.Context) error {
+		federatedWatcher.Start(ctx)
+		return nil
+	})); err != nil {
+		return fmt.Errorf("add the federated watcher to the manager: %w", err)
+	}
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v2pb.RayCluster{}). // Watch for changes in RayCluster custom resources
