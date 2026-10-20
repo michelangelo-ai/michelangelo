@@ -33,6 +33,12 @@ const (
 	// _safetyNetPeriod is how often a launched job's KubeRay RayJob is polled as
 	// a fallback for events the watcher misses.
 	_safetyNetPeriod = 5 * time.Minute
+
+	// _remoteCallTimeout bounds each safety-net call to a compute cluster. The
+	// federated client sets no request timeout and the controller runs a single
+	// worker, so an unresponsive compute cluster would otherwise stall the
+	// reconciliation of every RayJob.
+	_remoteCallTimeout = 30 * time.Second
 )
 
 // Reconciler reconciles a Ray Job object
@@ -301,8 +307,12 @@ func (r *Reconciler) updateJobStatusIfLaunched(ctx context.Context, logger logr.
 		return
 	}
 
-	jobStatus, err := r.federatedClient.GetJobStatus(ctx, rayJob, assignedCluster)
+	remoteCtx, cancel := context.WithTimeout(ctx, _remoteCallTimeout)
+	defer cancel()
+	jobStatus, err := r.federatedClient.GetJobStatus(remoteCtx, rayJob, assignedCluster)
 	if err != nil {
+		// Running out of time is like any other remote error: try again next
+		// period.
 		logger.Error(err, "error to get ray job status")
 		res.RequeueAfter = _safetyNetPeriod
 		return

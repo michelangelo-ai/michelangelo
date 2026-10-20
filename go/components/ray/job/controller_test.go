@@ -1309,6 +1309,93 @@ func TestReconcile_StatusWriteConflictIsRequeuedQuietly(t *testing.T) {
 	}
 }
 
+// TestSafetyNetBoundsTheRemoteCall covers the safety net's call to the compute
+// cluster. The federated client sets no request timeout and the controller runs
+// a single worker, so an unresponsive compute cluster must not hold the
+// reconcile, and every RayJob queued behind it, indefinitely. A call that runs
+// out of time is an ordinary remote error, retried on the next period.
+func TestSafetyNetBoundsTheRemoteCall(t *testing.T) {
+	ctx := context.Background()
+
+	rayJob := &v2pb.RayJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       rayJobName,
+			Namespace:  testNamespace,
+			Generation: 1,
+		},
+		Spec: v2pb.RayJobSpec{
+			Cluster: &apipb.ResourceIdentifier{
+				Name:      testClusterName,
+				Namespace: testNamespace,
+			},
+			Entrypoint: "echo Hello World",
+		},
+		Status: v2pb.RayJobStatus{
+			State:     v2pb.RAY_JOB_STATE_RUNNING,
+			JobStatus: string(rayv1.JobStatusRunning),
+			StatusConditions: []*apipb.Condition{
+				{
+					Type:   constants.LaunchedCondition,
+					Status: apipb.CONDITION_STATUS_TRUE,
+				},
+			},
+		},
+	}
+	cluster := &v2pb.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       testClusterName,
+			Namespace:  testNamespace,
+			Generation: 1,
+		},
+		Status: v2pb.RayClusterStatus{
+			State: v2pb.RAY_CLUSTER_STATE_READY,
+			Assignment: &v2pb.AssignmentInfo{
+				Cluster: assignedCluster,
+			},
+		},
+	}
+	fakeClient := fake.NewClientBuilder().
+		WithScheme(newTestScheme()).
+		WithObjects(rayJob, cluster).
+		WithStatusSubresource(rayJob, cluster).
+		Build()
+
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+	mockFedClient := clientmocks.NewMockFederatedClient(mockCtrl)
+	var hasDeadline bool
+	var remaining time.Duration
+	mockFedClient.EXPECT().GetJobStatus(gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(ctx context.Context, _ runtime.Object, _ *v2pb.Cluster) (*jobtypes.JobStatus, error) {
+			var deadline time.Time
+			deadline, hasDeadline = ctx.Deadline()
+			remaining = time.Until(deadline)
+			return nil, context.DeadlineExceeded
+		})
+	mockCache := newMockClusterCache()
+	mockCache.addCluster(assignedCluster, &v2pb.Cluster{
+		ObjectMeta: metav1.ObjectMeta{Name: assignedCluster},
+	})
+	r := &Reconciler{
+		Client:          fakeClient,
+		logger:          zapr.NewLogger(zaptest.NewLogger(t)),
+		federatedClient: mockFedClient,
+		clusterCache:    mockCache,
+	}
+
+	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: rayJobName}}
+	res, err := r.Reconcile(ctx, request)
+	require.NoError(t, err)
+
+	require.True(t, hasDeadline, "the call to the compute cluster must have a deadline")
+	assert.Positive(t, remaining)
+	assert.LessOrEqual(t, remaining, 30*time.Second)
+	assert.Equal(t, _safetyNetPeriod, res.RequeueAfter)
+	var stored v2pb.RayJob
+	require.NoError(t, r.Get(ctx, request.NamespacedName, &stored))
+	assert.Equal(t, v2pb.RAY_JOB_STATE_RUNNING, stored.Status.State, "a failed call must not change the job")
+}
+
 // TestRayJobEventHandler verifies KubeRay RayJob execution status is mapped onto
 // the global RayJob.
 func TestRayJobEventHandler(t *testing.T) {
