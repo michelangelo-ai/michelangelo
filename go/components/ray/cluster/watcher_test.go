@@ -1894,6 +1894,36 @@ func TestPodEventHandler_UnchangedHeadPodIsQuiet(t *testing.T) {
 		"an unchanged head pod should not be logged at info level")
 }
 
+// TestPodEventHandler_SkipsTerminatingCluster: once termination has begun the
+// watcher only merges pod errors and the log URL into the cluster. The head pod
+// keeps running while the kill goes through, and its events must not write its
+// endpoints, whether the termination shows on the handler's read or only on the
+// object being written.
+func TestPodEventHandler_SkipsTerminatingCluster(t *testing.T) {
+	t.Run("terminating when read", func(t *testing.T) {
+		r, writes, _ := setupWatcherTestObserved(t, terminatedCluster())
+
+		r.handlePodEvent(newHeadPod("head-pod", rayClusterName, corev1.PodRunning))
+
+		assert.Zero(t, *writes, "a terminating cluster must not be written to")
+		assert.Nil(t, getUpdatedCluster(t, r).Status.HeadNode)
+	})
+
+	t.Run("terminating by the time of the write", func(t *testing.T) {
+		stale := terminatedCluster()
+		stale.Status.State = v2pb.RAY_CLUSTER_STATE_READY
+		stale.Status.StatusConditions = []*apipb.Condition{
+			{Type: LaunchedCondition, Status: apipb.CONDITION_STATUS_TRUE},
+		}
+		r, gets := setupWatcherTestWithStaleRead(t, terminatedCluster(), stale)
+
+		r.podEventHandler(newHeadPod("head-pod", rayClusterName, corev1.PodRunning))
+
+		require.Greater(t, *gets, 1, "the handler should have re-fetched the cluster to write it")
+		assert.Nil(t, getUpdatedCluster(t, r).Status.HeadNode)
+	})
+}
+
 func TestPodAddEventHandler_IgnoresNonHeadPod(t *testing.T) {
 	globalCluster := &v2pb.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},

@@ -360,8 +360,10 @@ func (r *Reconciler) podEventHandler(pod *corev1.Pod) {
 		log.Error(err, "could not fetch the ray cluster for the pod")
 		return
 	}
-	if isFrozenOrDeleting(&rayCluster) {
-		log.V(1).Info("ray cluster is frozen or being deleted, ignoring pod event")
+	// A terminating cluster takes only pod errors and the log URL from the
+	// watcher; its head pod is going away with the rest of it.
+	if isFrozenOrDeleting(&rayCluster) || isClusterTerminating(&rayCluster) {
+		log.V(1).Info("ray cluster is terminating, frozen or being deleted, ignoring head pod event")
 		return
 	}
 
@@ -382,7 +384,7 @@ func (r *Reconciler) podEventHandler(pod *corev1.Pod) {
 	if err = r.updateStatusFromHandler(ctx, &rayCluster,
 		func(obj client.Object) {
 			cluster := obj.(*v2pb.RayCluster)
-			if isFrozenOrDeleting(cluster) {
+			if isFrozenOrDeleting(cluster) || isClusterTerminating(cluster) {
 				return
 			}
 			cluster.Status.HeadNode = &v2pb.RayHeadNodeInfo{
