@@ -159,8 +159,7 @@ func (r *Reconciler) podErrorEventHandler(pod *corev1.Pod) {
 	if podError == nil {
 		// A pod that has come good -- its image pulled on a retry, its container
 		// restarted after an OOM kill -- must not keep the error it reported on
-		// the way: the entry would linger on a healthy cluster and still count
-		// towards failing it.
+		// the way, or a healthy cluster would go on reporting it as failing.
 		if isPodRunningAndReady(pod) {
 			r.clearPodError(pod)
 		}
@@ -792,12 +791,16 @@ func applyClusterObservation(cluster *v2pb.RayCluster, observed *matypes.JobClus
 			changed = true
 		}
 	case v2pb.RAY_CLUSTER_STATE_UNKNOWN:
-		// If the cluster is in an unknown state but its pods report terminal
-		// errors, treat it as failed to trigger termination. Only current
-		// observations count: this observation's condition errors (the recorded
-		// ones were just replaced with them), and the pod-derived entries, which
-		// podErrorEventHandler drops once their pod recovers.
-		if jobsutils.HasTerminalPodErrors(observed.Ray.PodErrors) || jobsutils.HasTerminalPodErrors(cluster.Status.PodErrors) {
+		// A cluster that is not up yet but cannot come up is failed, to trigger
+		// termination. KubeRay's conditions decide that, as they always have:
+		// they describe the cluster as it is now, and HeadPodReady carries the
+		// head container's waiting reason, such as ErrImagePull. The pod
+		// watcher's entries only count when no retry can fix them. Any other can
+		// still clear on the kubelet's next try -- one worker's rate-limited
+		// image pull must not tear down the whole cluster -- and a cluster that
+		// never comes up is bounded by the workflow's cluster-readiness timeout,
+		// as with HeadPodNotFound.
+		if jobsutils.HasTerminalPodErrors(observed.Ray.PodErrors) || jobsutils.HasDeterministicPodErrors(cluster.Status.PodErrors) {
 			cluster.Status.State = v2pb.RAY_CLUSTER_STATE_FAILED
 			if setCondition(cluster, SucceededCondition, jobsutils.ConditionUpdateParams{
 				Status:     apipb.CONDITION_STATUS_FALSE,

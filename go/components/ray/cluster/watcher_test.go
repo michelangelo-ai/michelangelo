@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	kubescheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/cache"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
@@ -890,32 +891,171 @@ func newRecoveredWorkerPod(podName string) *corev1.Pod {
 	return pod
 }
 
-// TestPodRecoveryDoesNotFailProvisioningCluster covers a transient pod error
-// during provisioning. The kubelet retries an image pull on its own, so an
-// ErrImagePull can clear without any intervention; once the pod is running and
-// ready its entry must go, otherwise the next KubeRay update -- which, while
-// KubeRay's state is still empty, maps to UNKNOWN -- would read the leftover as
-// a terminal error and tear down a cluster that is coming up fine.
-func TestPodRecoveryDoesNotFailProvisioningCluster(t *testing.T) {
-	globalCluster := &v2pb.RayCluster{
+// provisioningCluster is a launched cluster that is still coming up: its
+// KubeRay object exists but is not ready yet.
+func provisioningCluster() *v2pb.RayCluster {
+	return &v2pb.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
+		Spec:       createRayClusterSpec(),
 		Status: v2pb.RayClusterStatus{
-			State: v2pb.RAY_CLUSTER_STATE_UNKNOWN,
-			PodErrors: []*v2pb.PodErrors{
-				{Name: "worker-1", ContainerName: headContainerName, Reason: "ErrImagePull"},
+			State: v2pb.RAY_CLUSTER_STATE_PROVISIONING,
+			StatusConditions: []*apipb.Condition{
+				{Type: EnqueuedCondition, Status: apipb.CONDITION_STATUS_TRUE},
+				{Type: ScheduledCondition, Status: apipb.CONDITION_STATUS_TRUE},
+				{Type: LaunchedCondition, Status: apipb.CONDITION_STATUS_TRUE, Reason: "ClusterCreated"},
+			},
+			Assignment: &v2pb.AssignmentInfo{Cluster: assignedCluster},
+		},
+	}
+}
+
+// withSafetyNet gives r what Reconcile needs to reach its safety net for the
+// test cluster -- the compute cluster it is assigned to -- and returns the
+// federated client the safety net asks, for the test to set up.
+func withSafetyNet(t *testing.T, r *Reconciler) *clientmocks.MockFederatedClient {
+	t.Helper()
+	federatedClient := clientmocks.NewMockFederatedClient(gomock.NewController(t))
+	clusterCache := newMockClusterCache()
+	clusterCache.addCluster(assignedCluster, &v2pb.Cluster{ObjectMeta: metav1.ObjectMeta{Name: assignedCluster}})
+	r.federatedClient, r.clusterCache, r.schedulerQueue = federatedClient, clusterCache, &mockSchedulerQueue{}
+	return federatedClient
+}
+
+// observedAs maps local, a KubeRay object, the way GetJobClusterStatus does.
+func observedAs(t *testing.T, r *Reconciler, local *rayv1.RayCluster) *matypes.JobClusterStatus {
+	t.Helper()
+	observed, err := r.mapper.MapLocalClusterStatusToGlobal(local)
+	require.NoError(t, err)
+	return observed
+}
+
+// reconcile runs one Reconcile pass over the test cluster, the pass every
+// status write enqueues.
+func reconcile(t *testing.T, r *Reconciler) ctrl.Result {
+	t.Helper()
+	res, err := r.Reconcile(context.Background(), ctrl.Request{
+		NamespacedName: types.NamespacedName{Name: rayClusterName, Namespace: testNamespace},
+	})
+	require.NoError(t, err)
+	return res
+}
+
+// TestPodRecoveryDoesNotFailProvisioningCluster covers a transient pod error
+// during provisioning, run the way the pieces meet. Recording the error is a
+// status write, the write enqueues the cluster, and Reconcile's safety net then
+// observes it while KubeRay's state is still empty, which maps to UNKNOWN --
+// all before the kubelet retries. That pass must not read the error as the end
+// of the cluster, and once the retry brings the pod up its entry has to go.
+func TestPodRecoveryDoesNotFailProvisioningCluster(t *testing.T) {
+	r := setupWatcherTest(t, provisioningCluster())
+	withSafetyNet(t, r).EXPECT().GetJobClusterStatus(gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(observedAs(t, r, newKubeRayCluster(rayClusterName, "")), nil).AnyTimes()
+
+	// The kubelet's first pull of a worker image hits the registry's rate limit.
+	pod := newHeadPod("worker-1", rayClusterName, corev1.PodPending)
+	pod.Labels[constants.RayNodeTypeLabelKey] = constants.RayWorkerNodeType
+	pod.Status.ContainerStatuses = []corev1.ContainerStatus{{
+		Name: headContainerName,
+		State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{
+			Reason: "ErrImagePull", Message: "429 Too Many Requests",
+		}},
+	}}
+	r.handlePodEvent(pod)
+	require.Len(t, getUpdatedCluster(t, r).Status.PodErrors, 1, "the error should have been recorded")
+
+	reconcile(t, r)
+
+	updated := getUpdatedCluster(t, r)
+	assert.Equal(t, v2pb.RAY_CLUSTER_STATE_UNKNOWN, updated.Status.State)
+	assert.Nil(t, findCondition(updated.Status.StatusConditions, SucceededCondition),
+		"an error the kubelet may yet retry past is not a failure")
+
+	// The kubelet's retry pulls the image and the pod comes up.
+	r.handlePodEvent(newRecoveredWorkerPod("worker-1"))
+
+	updated = getUpdatedCluster(t, r)
+	assert.Empty(t, updated.Status.PodErrors, "a recovered pod's error must be dropped")
+	assert.Equal(t, v2pb.RAY_CLUSTER_STATE_UNKNOWN, updated.Status.State)
+	assert.Nil(t, findCondition(updated.Status.StatusConditions, SucceededCondition))
+}
+
+// TestProvisioningClusterFailsOnlyOnLastingErrors is the other side: a cluster
+// that cannot come up still fails fast. KubeRay's HeadPodReady condition
+// carries the head container's waiting reason, and a pod error no retry can
+// fix decides on its own. Anything else the pod watcher records, even about a
+// pod that is gone, is there to be read, not to decide.
+func TestProvisioningClusterFailsOnlyOnLastingErrors(t *testing.T) {
+	workerPod := func(phase corev1.PodPhase, state corev1.ContainerState) *corev1.Pod {
+		pod := newHeadPod("worker-1", rayClusterName, phase)
+		pod.Labels[constants.RayNodeTypeLabelKey] = constants.RayWorkerNodeType
+		pod.Status.ContainerStatuses = []corev1.ContainerStatus{{Name: headContainerName, State: state}}
+		return pod
+	}
+	tests := []struct {
+		name string
+		// local is the KubeRay object GetJobClusterStatus reports.
+		local *rayv1.RayCluster
+		// podEvent, if set, is what the pod watcher saw before Reconcile.
+		podEvent   func(r *Reconciler)
+		wantReason string // the Succeeded=FALSE reason, or "" for a cluster that must not fail
+	}{
+		{
+			name: "head pod cannot pull its image",
+			local: withConditions(newKubeRayCluster(rayClusterName, ""), metav1.Condition{
+				Type:    string(rayv1.HeadPodReady),
+				Status:  metav1.ConditionFalse,
+				Reason:  "ErrImagePull",
+				Message: `failed to pull image "nope:latest"`,
+			}),
+			wantReason: "ErrImagePull",
+		},
+		{
+			name:  "pod with an invalid image name",
+			local: newKubeRayCluster(rayClusterName, ""),
+			podEvent: func(r *Reconciler) {
+				r.handlePodEvent(workerPod(corev1.PodPending, corev1.ContainerState{
+					Waiting: &corev1.ContainerStateWaiting{Reason: "InvalidImageName", Message: "couldn't parse image name"},
+				}))
+			},
+			wantReason: "ClusterFailedWithPodErrors",
+		},
+		{
+			name:  "pod deleted after an OOM kill",
+			local: newKubeRayCluster(rayClusterName, ""),
+			podEvent: func(r *Reconciler) {
+				r.podDeleteEventHandler(workerPod(corev1.PodFailed, corev1.ContainerState{
+					Terminated: &corev1.ContainerStateTerminated{ExitCode: 137, Reason: "OOMKilled"},
+				}))
 			},
 		},
 	}
-	r := setupWatcherTest(t, globalCluster)
 
-	r.handlePodEvent(newRecoveredWorkerPod("worker-1"))
-	r.rayClusterEventHandler(newKubeRayCluster(rayClusterName, ""))
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := setupWatcherTest(t, provisioningCluster())
+			withSafetyNet(t, r).EXPECT().GetJobClusterStatus(gomock.Any(), gomock.Any(), gomock.Any()).
+				Return(observedAs(t, r, tt.local), nil)
+			if tt.podEvent != nil {
+				tt.podEvent(r)
+				require.Len(t, getUpdatedCluster(t, r).Status.PodErrors, 1, "the pod error should have been recorded")
+			}
 
-	updated := getUpdatedCluster(t, r)
-	assert.Empty(t, updated.Status.PodErrors, "a recovered pod's error must be dropped")
-	assert.Equal(t, v2pb.RAY_CLUSTER_STATE_UNKNOWN, updated.Status.State)
-	assert.Nil(t, findCondition(updated.Status.StatusConditions, SucceededCondition),
-		"a pod that recovered on its own is not a failure")
+			reconcile(t, r)
+
+			updated := getUpdatedCluster(t, r)
+			succeededCond := findCondition(updated.Status.StatusConditions, SucceededCondition)
+			if tt.wantReason == "" {
+				assert.Equal(t, v2pb.RAY_CLUSTER_STATE_UNKNOWN, updated.Status.State)
+				assert.Nil(t, succeededCond, "an error a retry could clear must not fail the cluster")
+				assert.Len(t, updated.Status.PodErrors, 1, "the error should still be there to read")
+				return
+			}
+			assert.Equal(t, v2pb.RAY_CLUSTER_STATE_FAILED, updated.Status.State)
+			require.NotNil(t, succeededCond, "a cluster that cannot come up should fail")
+			assert.Equal(t, apipb.CONDITION_STATUS_FALSE, succeededCond.Status)
+			assert.Equal(t, tt.wantReason, succeededCond.Reason)
+		})
+	}
 }
 
 // TestStaleConditionPodErrorDoesNotFailProvisioningCluster is the same race on
@@ -1127,12 +1267,13 @@ func TestRayClusterEventHandler_UnknownWithTerminalPodErrors(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
 		Status: v2pb.RayClusterStatus{
 			State:     v2pb.RAY_CLUSTER_STATE_PROVISIONING,
-			PodErrors: []*v2pb.PodErrors{{Reason: "CrashLoopBackOff"}},
+			PodErrors: []*v2pb.PodErrors{{Name: "worker-1", Reason: "InvalidImageName"}},
 		},
 	}
 	r := setupWatcherTest(t, globalCluster)
 
-	// Empty KubeRay state maps to UNKNOWN; terminal pod errors force FAILED.
+	// Empty KubeRay state maps to UNKNOWN; a recorded pod error that no retry
+	// can fix forces FAILED.
 	r.rayClusterEventHandler(newKubeRayCluster(rayClusterName, ""))
 
 	updated := getUpdatedCluster(t, r)
@@ -1154,7 +1295,7 @@ func TestRayClusterEventHandler_Suspended(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
 		Status: v2pb.RayClusterStatus{
 			State:     v2pb.RAY_CLUSTER_STATE_PROVISIONING,
-			PodErrors: []*v2pb.PodErrors{{Reason: "CrashLoopBackOff"}},
+			PodErrors: []*v2pb.PodErrors{{Reason: "InvalidImageName"}},
 		},
 	}
 	r := setupWatcherTest(t, globalCluster)
@@ -1181,7 +1322,7 @@ func TestRayClusterEventHandler_SuspendedViaSpec(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
 		Status: v2pb.RayClusterStatus{
 			State:     v2pb.RAY_CLUSTER_STATE_PROVISIONING,
-			PodErrors: []*v2pb.PodErrors{{Reason: "CrashLoopBackOff"}},
+			PodErrors: []*v2pb.PodErrors{{Reason: "InvalidImageName"}},
 		},
 	}
 	r := setupWatcherTest(t, globalCluster)
@@ -1684,7 +1825,8 @@ func TestHandlePodEvent_SkipsNonRunningPod(t *testing.T) {
 // TestHandlePodEvent_RecordsErrorOnLivePod covers the gap this watcher closes.
 // A container stuck in ImagePullBackOff keeps its pod alive forever, so
 // podDeleteEventHandler never fires; without the live path the failure would
-// never reach the CR and the cluster would sit in UNKNOWN indefinitely.
+// never reach the CR, and nothing on it would say why the cluster is not
+// coming up.
 func TestHandlePodEvent_RecordsErrorOnLivePod(t *testing.T) {
 	globalCluster := &v2pb.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},

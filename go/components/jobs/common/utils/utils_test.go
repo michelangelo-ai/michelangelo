@@ -632,15 +632,34 @@ func TestIsPostMortemPodError(t *testing.T) {
 }
 
 // TestWaitingStateErrorReasonsAreTerminal holds waitingStateErrorReasons to its
-// promise: a container that cannot start for one of these reasons never will,
-// so the cluster has to be able to converge on FAILED instead of sitting in
-// UNKNOWN until the workflow times out.
+// promise: KubeRay reports a head container stuck for one of these reasons in
+// its HeadPodReady condition, and the cluster has to converge on FAILED on that
+// instead of sitting in UNKNOWN until the workflow times out.
 func TestWaitingStateErrorReasonsAreTerminal(t *testing.T) {
 	for reason := range waitingStateErrorReasons {
 		t.Run(reason, func(t *testing.T) {
 			assert.True(t, HasTerminalPodErrors([]*v2pb.PodErrors{{Reason: reason}}),
 				"%s is recorded as a container failure, so it must be terminal", reason)
 		})
+	}
+}
+
+// TestHasDeterministicPodErrors pins how narrow the reasons are that fail a
+// cluster on a pod's word alone: one no retry can fix, and none a retry might
+// -- a pull that hit a registry's rate limit, a container that crashed once.
+func TestHasDeterministicPodErrors(t *testing.T) {
+	assert.True(t, HasDeterministicPodErrors([]*v2pb.PodErrors{
+		{Reason: "ErrImagePull"},
+		{Reason: "InvalidImageName", Message: "couldn't parse image name"},
+	}))
+	for _, reason := range []string{"ErrImagePull", "ImagePullBackOff", "CrashLoopBackOff", "OOMKilled", "CreateContainerConfigError"} {
+		assert.False(t, HasDeterministicPodErrors([]*v2pb.PodErrors{{Reason: reason}}),
+			"%s can clear on the kubelet's next retry", reason)
+	}
+	assert.False(t, HasDeterministicPodErrors(nil))
+	for reason := range deterministicPodErrorReasons {
+		assert.True(t, HasTerminalPodErrors([]*v2pb.PodErrors{{Reason: reason}}),
+			"%s fails a cluster, so it must be terminal", reason)
 	}
 }
 

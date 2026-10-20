@@ -131,8 +131,10 @@ func GetContainerErrorFromPodStatus(pod *corev1.Pod, containerFilter func(contai
 // waitingStateErrorReasons are container Waiting reasons that mean the
 // container failed to start, as opposed to the ordinary startup reasons
 // (ContainerCreating, PodInitializing) a healthy pod passes through. Each is
-// also listed in terminalPodErrorReasons, which is what lets a cluster whose
-// image cannot be pulled converge on FAILED instead of sitting in UNKNOWN.
+// also listed in terminalPodErrorReasons: KubeRay reports a head container
+// stuck for one of these reasons in its HeadPodReady condition, which is what
+// lets a cluster whose head cannot start converge on FAILED instead of sitting
+// in UNKNOWN.
 var waitingStateErrorReasons = map[string]bool{
 	"ImagePullBackOff":           true,
 	"ErrImagePull":               true,
@@ -303,7 +305,11 @@ var terminalPodErrorReasons = map[string]bool{
 	// surface as FailedCreateHeadPod / FailedCreateWorkerPod below.
 	"FailedCreateHeadPod":   true,
 	"FailedCreateWorkerPod": true,
-	// Kubernetes container-level reasons (if KubeRay exposes them in future versions)
+	// Kubernetes container-level reasons. KubeRay (v1.7.1) reports the head
+	// container's waiting reason as the reason of its HeadPodReady condition,
+	// so a head pod that cannot start fails the cluster through the errors read
+	// off the conditions. The pod watcher records the same reasons for every
+	// pod, but its entries only decide when HasDeterministicPodErrors does.
 	"ImagePullBackOff":           true,
 	"CrashLoopBackOff":           true,
 	"OOMKilled":                  true,
@@ -328,9 +334,33 @@ func IsPostMortemPodError(podError *v2pb.PodErrors) bool {
 	return postMortemPodErrorReasons[podError.GetReason()]
 }
 
+// HasTerminalPodErrors reports whether any of podErrors has a reason that means
+// the cluster cannot come up as it is. That holds for the errors read off
+// KubeRay's conditions, which describe the cluster as it is now. A pod's own
+// error can still clear on the kubelet's next retry, so for those the test is
+// HasDeterministicPodErrors.
 func HasTerminalPodErrors(podErrors []*v2pb.PodErrors) bool {
 	for _, pe := range podErrors {
 		if terminalPodErrorReasons[pe.Reason] {
+			return true
+		}
+	}
+	return false
+}
+
+// deterministicPodErrorReasons are the terminal reasons no kubelet retry can
+// fix: the pod spec itself is wrong, so every retry fails the same way.
+var deterministicPodErrorReasons = map[string]bool{
+	"InvalidImageName": true,
+}
+
+// HasDeterministicPodErrors reports whether any of podErrors has a reason no
+// kubelet retry can fix, so waiting for it to clear is waiting for nothing.
+// Unlike the other terminal reasons, such an error fails a cluster even when
+// only a pod reported it.
+func HasDeterministicPodErrors(podErrors []*v2pb.PodErrors) bool {
+	for _, pe := range podErrors {
+		if deterministicPodErrorReasons[pe.GetReason()] {
 			return true
 		}
 	}
