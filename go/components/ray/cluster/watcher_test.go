@@ -446,6 +446,158 @@ func TestRayClusterEventHandler_ReadyDoesNotAddQueued(t *testing.T) {
 	assert.Nil(t, findCondition(updated.Status.StatusConditions, QueuedCondition))
 }
 
+// terminatedCluster is a cluster cleanupCluster has finished with: the kill is
+// recorded and only the freeze is still to come.
+func terminatedCluster() *v2pb.RayCluster {
+	return &v2pb.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
+		Status: v2pb.RayClusterStatus{
+			State: v2pb.RAY_CLUSTER_STATE_TERMINATED,
+			StatusConditions: []*apipb.Condition{
+				{Type: LaunchedCondition, Status: apipb.CONDITION_STATUS_TRUE},
+				{Type: SucceededCondition, Status: apipb.CONDITION_STATUS_TRUE, Reason: "completed"},
+				{Type: KillingCondition, Status: apipb.CONDITION_STATUS_FALSE},
+				{Type: KilledCondition, Status: apipb.CONDITION_STATUS_TRUE},
+			},
+		},
+	}
+}
+
+// TestRayClusterEventHandler_TerminatingKeepsStateAndOutcome: once termination
+// has begun Reconcile owns State and the conditions. The informer handles events
+// one at a time, so a KubeRay update from before the teardown can be handled
+// after cleanupCluster's write. It must not turn TERMINATED back into READY or
+// FAILED, nor flip a decided Succeeded -- the freeze archives whatever it finds.
+func TestRayClusterEventHandler_TerminatingKeepsStateAndOutcome(t *testing.T) {
+	tests := []struct {
+		name  string
+		local *rayv1.RayCluster
+	}{
+		{name: "ready", local: newKubeRayCluster(rayClusterName, rayv1.Ready)},
+		{
+			name: "unknown with a terminal pod error",
+			local: withConditions(
+				newKubeRayCluster(rayClusterName, ""),
+				replicaFailure("FailedCreateWorkerPod", "pods \"worker-0\" is forbidden: exceeded quota"),
+			),
+		},
+		{name: "failed", local: newKubeRayCluster(rayClusterName, rayv1.Failed)},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := setupWatcherTest(t, terminatedCluster())
+
+			r.rayClusterEventHandler(tt.local)
+
+			updated := getUpdatedCluster(t, r)
+			assert.Equal(t, v2pb.RAY_CLUSTER_STATE_TERMINATED, updated.Status.State)
+			succeededCond := findCondition(updated.Status.StatusConditions, SucceededCondition)
+			require.NotNil(t, succeededCond)
+			assert.Equal(t, apipb.CONDITION_STATUS_TRUE, succeededCond.Status)
+			assert.Equal(t, "completed", succeededCond.Reason)
+		})
+	}
+}
+
+// TestRayClusterEventHandler_TerminatingStillRecordsPodErrors is the other half:
+// what KubeRay reports while a failed cluster is torn down is still worth
+// keeping for the user, so pod errors are merged -- but the recorded outcome is
+// not rewritten with the newer reason.
+func TestRayClusterEventHandler_TerminatingStillRecordsPodErrors(t *testing.T) {
+	globalCluster := &v2pb.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
+		Status: v2pb.RayClusterStatus{
+			State: v2pb.RAY_CLUSTER_STATE_FAILED,
+			StatusConditions: []*apipb.Condition{
+				{Type: LaunchedCondition, Status: apipb.CONDITION_STATUS_TRUE},
+				{Type: SucceededCondition, Status: apipb.CONDITION_STATUS_FALSE, Reason: "FailedCreateHeadPod"},
+				{Type: KillingCondition, Status: apipb.CONDITION_STATUS_TRUE},
+			},
+		},
+	}
+	r := setupWatcherTest(t, globalCluster)
+
+	r.rayClusterEventHandler(withConditions(
+		newKubeRayCluster(rayClusterName, rayv1.Failed),
+		replicaFailure("FailedCreateWorkerPod", "pods \"worker-0\" is forbidden: exceeded quota"),
+	))
+
+	updated := getUpdatedCluster(t, r)
+	require.Len(t, updated.Status.PodErrors, 1)
+	assert.Equal(t, "FailedCreateWorkerPod", updated.Status.PodErrors[0].Reason)
+	succeededCond := findCondition(updated.Status.StatusConditions, SucceededCondition)
+	require.NotNil(t, succeededCond)
+	assert.Equal(t, "FailedCreateHeadPod", succeededCond.Reason,
+		"the reason the cluster was failed for must not be overwritten")
+}
+
+// setupWatcherTestWithStaleRead is setupWatcherTest whose first Get returns
+// stale instead of what the store holds, the way a handler's read through the
+// manager's cache can lag a write the reconciler just made. Every later Get --
+// the re-fetch inside UpdateStatusWithRetries -- sees the stored object.
+func setupWatcherTestWithStaleRead(t *testing.T, stored, stale *v2pb.RayCluster) (*Reconciler, *int) {
+	t.Helper()
+
+	scheme := runtime.NewScheme()
+	kubescheme.AddToScheme(scheme)
+	v2pb.AddToScheme(scheme)
+
+	gets := 0
+	fakeClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithRuntimeObjects(stored).
+		WithStatusSubresource(&v2pb.RayCluster{}).
+		WithInterceptorFuncs(interceptor.Funcs{
+			Get: func(ctx context.Context, c client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+				gets++
+				if gets == 1 {
+					if err := c.Get(ctx, key, obj, opts...); err != nil {
+						return err
+					}
+					// Keep the live resourceVersion so only the content is stale.
+					rv := obj.GetResourceVersion()
+					stale.DeepCopyInto(obj.(*v2pb.RayCluster))
+					obj.SetResourceVersion(rv)
+					return nil
+				}
+				return c.Get(ctx, key, obj, opts...)
+			},
+		}).
+		Build()
+
+	return &Reconciler{
+		Handler: &mockAPIHandler{Client: fakeClient},
+		logger:  zapr.NewLogger(zaptest.NewLogger(t)),
+		mapper:  newTestMapper(),
+	}, &gets
+}
+
+// TestRayClusterEventHandler_TerminatingCheckedOnTheWrittenObject: the handler's
+// first read can predate cleanupCluster's write, so the termination check has
+// to be repeated on the object the update actually lands on, not just made on
+// the one that was read first.
+func TestRayClusterEventHandler_TerminatingCheckedOnTheWrittenObject(t *testing.T) {
+	stale := terminatedCluster()
+	stale.Status.State = v2pb.RAY_CLUSTER_STATE_READY
+	stale.Status.StatusConditions = []*apipb.Condition{
+		{Type: LaunchedCondition, Status: apipb.CONDITION_STATUS_TRUE},
+	}
+	r, gets := setupWatcherTestWithStaleRead(t, terminatedCluster(), stale)
+
+	r.rayClusterEventHandler(withConditions(
+		newKubeRayCluster(rayClusterName, ""),
+		replicaFailure("FailedCreateWorkerPod", "pods \"worker-0\" is forbidden: exceeded quota"),
+	))
+
+	require.Greater(t, *gets, 1, "the handler should have re-fetched the cluster to write it")
+	updated := getUpdatedCluster(t, r)
+	assert.Equal(t, v2pb.RAY_CLUSTER_STATE_TERMINATED, updated.Status.State)
+	succeededCond := findCondition(updated.Status.StatusConditions, SucceededCondition)
+	require.NotNil(t, succeededCond)
+	assert.Equal(t, apipb.CONDITION_STATUS_TRUE, succeededCond.Status)
+}
+
 // TestApplyClusterObservation_ReportsChanges pins the contract both callers rely
 // on. Reconcile's safety net applies an observation to a copy and writes only if
 // that reports a change, so a re-applied observation has to come back unchanged;

@@ -511,6 +511,15 @@ func (r *Reconciler) rayClusterEventHandler(obj interface{}) {
 	}
 	newState := globalStatus.Ray.State
 
+	// A terminating cluster only takes pod errors and the log URL from here on
+	// (applyClusterObservation enforces that on the object it writes, since
+	// termination can begin after this read). Skip the write when the event
+	// brings neither.
+	if isClusterTerminating(&globalCluster) && !applyClusterObservation(globalCluster.DeepCopy(), globalStatus) {
+		log.V(1).Info("skipping status update for terminating cluster")
+		return
+	}
+
 	// Cache re-sync gives Update events even when the local cluster did not
 	// change. Exit early if global already reflects the local state to avoid
 	// unnecessary CRD writes.
@@ -559,6 +568,15 @@ func applyClusterObservation(cluster *v2pb.RayCluster, observed *matypes.JobClus
 	}
 	if mergePodErrors(cluster, observed.Ray.PodErrors) {
 		changed = true
+	}
+
+	// Once termination has begun Reconcile owns State and the conditions. An
+	// event read off the informer's backlog after cleanupCluster's write would
+	// otherwise turn a TERMINATED cluster READY again or flip a decided
+	// Succeeded, and the freeze archives whatever it finds. The diagnostics
+	// above are still worth keeping.
+	if isClusterTerminating(cluster) {
+		return changed
 	}
 
 	reason := observed.Reason
