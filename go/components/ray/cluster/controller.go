@@ -240,7 +240,11 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 	clusterStatus, err := r.getClusterStatus(ctx, logger, assignedCluster, &rayCluster)
 	if err != nil {
-		if utils.IsNotFoundError(err) {
+		// Only the compute cluster's API server can say the RayCluster is gone. A
+		// 404 from something in front of it, such as a proxy answering in plain
+		// text, reads as NotFound too, but client-go marks it as an unexpected
+		// server response.
+		if utils.IsNotFoundError(err) && !apiErrors.IsUnexpectedServerError(err) {
 			// The RayCluster no longer exists on the remote compute cluster. This is a
 			// terminal, non-recoverable condition: there is nothing left to monitor or
 			// clean up. Mark it failed so we stop reconciling instead of requeuing forever.
@@ -254,9 +258,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			}
 			return r.finalizeIfTerminal(ctx, &rayCluster, logger)
 		}
-		// An unreachable compute cluster, or one that does not answer in time,
-		// says nothing about the RayCluster on it; leave the status to the
-		// watcher and look again next period.
+		// An unreachable compute cluster, one that does not answer in time, or a
+		// 404 from in front of it says nothing about the RayCluster on it; leave
+		// the status to the watcher and look again next period.
 		logger.Error(err, "failed to get cluster status")
 		return ctrl.Result{RequeueAfter: _safetyNetPeriod}, nil
 	}

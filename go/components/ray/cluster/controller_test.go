@@ -767,6 +767,69 @@ func TestReconcilerReconcile(t *testing.T) {
 			},
 		},
 		{
+			// A 404 from something in front of the compute cluster's API server --
+			// a proxy or an ingress answering in plain text -- reads as NotFound,
+			// but says nothing about the RayCluster. Recording the cluster as gone
+			// is final, so this must be treated as any other remote error.
+			name: "A 404 that is not the API server's leaves the cluster alone",
+			setup: func() []client.Object {
+				objects := make([]client.Object, 0)
+				cluster := &v2pb.RayCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       rayClusterName,
+						Namespace:  testNamespace,
+						Generation: 1,
+					},
+					Spec: createRayClusterSpec(),
+					Status: v2pb.RayClusterStatus{
+						State: v2pb.RAY_CLUSTER_STATE_READY,
+						StatusConditions: []*apipb.Condition{
+							{
+								Type:   EnqueuedCondition,
+								Status: apipb.CONDITION_STATUS_TRUE,
+							},
+							{
+								Type:   ScheduledCondition,
+								Status: apipb.CONDITION_STATUS_TRUE,
+							},
+							{
+								Type:   LaunchedCondition,
+								Status: apipb.CONDITION_STATUS_TRUE,
+							},
+						},
+						Assignment: &v2pb.AssignmentInfo{
+							Cluster: assignedCluster,
+						},
+					},
+				}
+				objects = append(objects, cluster)
+				return objects
+			},
+			setupMocks: func(mfc *clientmocks.MockFederatedClient, mcc *mockClusterCache, msq *mockSchedulerQueue) {
+				mcc.addCluster(assignedCluster, &v2pb.Cluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: assignedCluster,
+					},
+				})
+				mfc.EXPECT().GetJobClusterStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(
+					nil, apiErrors.NewGenericServerResponse(404, "get",
+						schema.GroupResource{Group: "ray.io", Resource: "rayclusters"}, rayClusterName, "page not found", 0, true))
+			},
+			expectedState:   v2pb.RAY_CLUSTER_STATE_READY,
+			expectedMessage: "",
+			errorAssertion:  require.NoError,
+			postCheck: func(res ctrl.Result) {
+				assert.Equal(t, _safetyNetPeriod, res.RequeueAfter)
+			},
+			verifyConditions: func(t *testing.T, cluster *v2pb.RayCluster) {
+				for _, cond := range cluster.Status.StatusConditions {
+					assert.NotEqual(t, SucceededCondition, cond.Type,
+						"a 404 that is not the API server's must not fail the cluster")
+				}
+				assert.False(t, utils.IsImmutable(cluster))
+			},
+		},
+		{
 			name: "Cluster termination - succeeded type",
 			setup: func() []client.Object {
 				objects := make([]client.Object, 0)
