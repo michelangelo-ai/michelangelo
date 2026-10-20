@@ -89,6 +89,18 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{}, nil
 	}
 
+	// A terminal state is final; all that is left is to freeze it. The watcher
+	// records the terminal state and this pass freezes it, so return before the
+	// cluster checks below: by now Uniflow may be tearing the cluster down, and
+	// re-deriving the state from it would overwrite the recorded outcome.
+	if isTerminalRayJobState(rayJob.Status.State) {
+		if err := r.markImmutableIfTerminal(ctx, &rayJob); err != nil {
+			logger.Error(err, "failed to persist immutable annotation")
+			return ctrl.Result{RequeueAfter: requeueAfter}, err
+		}
+		return ctrl.Result{}, nil
+	}
+
 	// original copy of ray job to determine if we need to update the status
 	originalRayJob := rayJob.DeepCopy()
 	// Initialize status conditions, as they will be nil for new jobs
@@ -114,11 +126,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		}
 	}
 
-	// Mark terminal jobs immutable so the ingester can move them to metadata
-	// storage and delete the CR. Kept outside the status dirty-check above and
-	// attempted on every reconcile while terminal-but-mutable: a terminal job's
-	// status stops changing, so a marker nested in that check would fire at most
-	// once, and a single dropped write would strand the job forever.
+	// Mark jobs that turned terminal in this pass immutable so the ingester can
+	// move them to metadata storage and delete the CR. A dropped write is retried
+	// by the terminal check at the top of the next pass, so it cannot strand the
+	// job.
 	if isTerminalRayJobState(rayJob.Status.State) && !utils.IsImmutable(&rayJob) {
 		if err := r.markImmutableIfTerminal(ctx, &rayJob); err != nil {
 			// The status write above already committed; requeue to retry the
@@ -156,16 +167,18 @@ func (r *Reconciler) reconcileRayJobWithCluster(ctx context.Context, logger logr
 		return // Error already handled in fetchRayCluster
 	}
 
+	// Cluster readiness gates only the launch. After launch the watcher owns
+	// State and Message, so a cluster leaving READY must not rewrite them.
+	launched := jobsutils.GetCondition(&rayJob.Status.StatusConditions, constants.LaunchedCondition, rayJob.Generation)
+	if launched.Status == apipb.CONDITION_STATUS_TRUE {
+		r.updateJobStatusIfLaunched(ctx, logger, rayJob, rayCluster, res)
+		return
+	}
+
 	if !r.ensureClusterReady(ctx, logger, rayJob, rayCluster, res) {
 		return // Cluster not ready, will requeue
 	}
-
-	launched := jobsutils.GetCondition(&rayJob.Status.StatusConditions, constants.LaunchedCondition, rayJob.Generation)
-	if launched.Status != apipb.CONDITION_STATUS_TRUE {
-		r.createRayJobIfNotLaunched(ctx, logger, rayJob, rayCluster, res)
-	} else {
-		r.updateJobStatusIfLaunched(ctx, logger, rayJob, rayCluster, res)
-	}
+	r.createRayJobIfNotLaunched(ctx, logger, rayJob, rayCluster, res)
 }
 
 // fetchRayCluster retrieves the RayCluster resource referenced by the RayJob.
