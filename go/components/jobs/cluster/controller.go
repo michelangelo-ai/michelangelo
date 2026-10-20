@@ -2,17 +2,20 @@ package cluster
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/go-logr/logr"
+	gogoproto "github.com/gogo/protobuf/proto"
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	apiutils "github.com/michelangelo-ai/michelangelo/go/api/utils"
 	"github.com/michelangelo-ai/michelangelo/go/components/controllerutil"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/client"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/constants"
+	"github.com/michelangelo-ai/michelangelo/go/components/jobs/compute"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/metrics"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"github.com/uber-go/tally"
@@ -26,6 +29,7 @@ import (
 const (
 	_clusterDeleteFinalizer  = "clusters.michelangelo.uber.com/finalizer"
 	_clusterMonitoringPeriod = 30 * time.Second
+	_clusterHealthTimeout    = 30 * time.Second
 )
 
 // Reconciler reconciles a Cluster object.
@@ -37,6 +41,9 @@ type Reconciler struct {
 
 	clusterClient client.FederatedClient
 
+	// computeFactory caches the clients that clusterClient uses.
+	computeFactory compute.Factory
+
 	// clusterDataMap is a mapping of ClusterName and the cluster specific details.
 	clusterDataMap *clusterMap
 }
@@ -45,6 +52,7 @@ type Reconciler struct {
 type Params struct {
 	fx.In
 	ClusterClient     client.FederatedClient
+	ComputeFactory    compute.Factory
 	Scope             tally.Scope
 	APIHandlerFactory apiHandler.Factory
 }
@@ -64,6 +72,7 @@ func NewReconciler(p Params) Result {
 	reconciler := &Reconciler{
 		apiHandlerFactory: p.APIHandlerFactory,
 		clusterClient:     p.ClusterClient,
+		computeFactory:    p.ComputeFactory,
 		clusterDataMap:    &clusterMap{},
 		metrics:           metrics.NewControllerMetrics(p.Scope, _controllerName),
 	}
@@ -80,7 +89,7 @@ var _ RegisteredClustersCache = (*Reconciler)(nil)
 func (r *Reconciler) GetCluster(name string) *v2pb.Cluster {
 	data := r.clusterDataMap.get(name)
 	if data != nil {
-		return data.cachedObj
+		return data.getCachedObj()
 	}
 	return nil
 }
@@ -180,32 +189,40 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		log.Info("Cluster controller observed a new cluster")
 		r.addCluster(&cluster, log)
 		log.Info("Cluster added")
+		r.probeCluster(cluster.Name, log)
 
 		reconcileSuccess = true
 		return ctrl.Result{}, nil
 	}
 
-	if r.isClusterSpecSame(data.cachedObj, &cluster) {
+	cachedObj := data.getCachedObj()
+	if r.isClusterSpecSame(cachedObj, &cluster) {
 		reconcileSuccess = true
 		return ctrl.Result{}, nil
 	}
 
-	log.Info("Cluster controller observed an update", "cached_object", data.cachedObj, "new_object", &cluster)
-	// re-add
-	r.delCluster(&cluster)
-	r.addCluster(&cluster, log)
+	log.Info("Cluster controller observed an update", "cached_object", cachedObj, "new_object", &cluster)
+	r.refreshCluster(data, &cluster, log)
 
 	reconcileSuccess = true
 	return ctrl.Result{}, nil
 }
 
 func (r *Reconciler) isClusterSpecSame(cachedObj *v2pb.Cluster, newObj *v2pb.Cluster) bool {
-	return cachedObj.Spec.GetKubernetes().GetRest().GetHost() == newObj.Spec.GetKubernetes().GetRest().GetHost() &&
-		cachedObj.Spec.GetKubernetes().GetRest().GetPort() == newObj.Spec.GetKubernetes().GetRest().GetPort() &&
-		cachedObj.Spec.GetRegion() == newObj.Spec.GetRegion() &&
-		cachedObj.Spec.GetZone() == newObj.Spec.GetZone() &&
-		cachedObj.Spec.GetDc() == newObj.Spec.GetDc() &&
-		cachedObj.Spec.GetSla() == newObj.Spec.GetSla()
+	return gogoproto.Equal(&cachedObj.Spec, &newObj.Spec)
+}
+
+// refreshCluster swaps the updated object into the cache in place, so the
+// cluster keeps its readiness and GetCluster never returns nil, drops the
+// cluster's client if it was built from the old connection settings, and probes
+// the updated cluster.
+func (r *Reconciler) refreshCluster(data *Data, obj *v2pb.Cluster, log logr.Logger) {
+	oldObj := data.refreshSpec(obj)
+	if clientNeedsRebuild(&oldObj.Spec, &obj.Spec) {
+		// the client is cached by the old spec's host:port
+		r.computeFactory.Invalidate(&oldObj.Spec)
+	}
+	r.probeCluster(obj.Name, log)
 }
 
 func (r *Reconciler) delCluster(obj *v2pb.Cluster) {
@@ -272,35 +289,65 @@ func (r *Reconciler) updateIndividualClusterInfo(
 	log.V(1).Info("Updating cluster status")
 
 	// this should only happen on the leader node
-	if err := r.updateClusterHealth(cluster); err != nil {
+	if err := r.updateClusterHealth(cluster.GetName()); err != nil {
 		log.Error(err, "Failed to update the health for cluster")
 		return
 	}
 }
 
+// probeCluster checks the health of an added or refreshed cluster right away,
+// rather than on the next monitoring cycle.
+func (r *Reconciler) probeCluster(name string, log logr.Logger) {
+	if err := r.updateClusterHealth(name); err != nil {
+		log.Error(err, "Failed to update the health for cluster")
+	}
+}
+
 // Update status by getting the health state from "/healthz".
-func (r *Reconciler) updateClusterHealth(cluster *v2pb.Cluster) error {
-	clusterData := r.clusterDataMap.get(cluster.Name)
+func (r *Reconciler) updateClusterHealth(name string) error {
+	clusterData := r.clusterDataMap.get(name)
 	if clusterData == nil {
 		return fmt.Errorf("failed to retrieve stored data for cluster")
 	}
+	cluster, specVersion := clusterData.snapshot()
+	if cluster == nil {
+		return fmt.Errorf("failed to retrieve stored data for cluster")
+	}
 
-	r.log.V(1).Info("Updating individual cluster health status", "cluster", cluster.GetName())
+	r.log.V(1).Info("Updating individual cluster health status", "cluster", name)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	probeCtx, cancelProbe := context.WithTimeout(context.Background(), _clusterHealthTimeout)
+	currentClusterStatus, probeErr := r.clusterClient.GetClusterStatus(probeCtx, cluster)
+	cancelProbe()
+	if probeErr != nil {
+		// A rejected token or certificate means the credentials were rotated in
+		// place: the next call rebuilds the client from the current Secrets.
+		if shouldInvalidateClient(probeErr) {
+			r.computeFactory.Invalidate(&cluster.Spec)
+		}
+		// Store a not-Ready status, so the cluster gets no new jobs until a probe succeeds.
+		currentClusterStatus = failedProbeStatus(currentClusterStatus, probeErr, metav1.Now())
+		probeErr = fmt.Errorf("failed to probe the health of cluster err:%w", probeErr)
+	}
+
+	// Re-read the cluster by name: drop the result if the cluster was deleted
+	// during the probe or its spec was refreshed (the refresh probes the new spec).
+	if r.clusterDataMap.get(name) != clusterData {
+		return probeErr
+	}
+	updatedObj, stored := clusterData.storeProbeResult(specVersion, currentClusterStatus)
+	if !stored {
+		return probeErr
+	}
+
+	// The write has its own deadline, so a probe that timed out still records the
+	// cluster as not Ready.
+	ctx, cancel := context.WithTimeout(context.Background(), _clusterHealthTimeout)
 	defer cancel()
-
-	currentClusterStatus, err := r.clusterClient.GetClusterStatus(ctx, cluster)
-	if err != nil {
-		return err
+	if err := r.UpdateStatus(ctx, updatedObj, &metav1.UpdateOptions{}); err != nil {
+		return errors.Join(probeErr, fmt.Errorf("failed to update the status of cluster err:%v", err))
 	}
+	clusterData.setResourceVersion(specVersion, updatedObj.ResourceVersion)
 
-	// Use thread-safe method to update both internal status and cached cluster object status
-	clusterData.UpdateClusterAndStatus(currentClusterStatus)
-
-	if err = r.UpdateStatus(ctx, cluster, &metav1.UpdateOptions{}); err != nil {
-		return fmt.Errorf("failed to update the status of cluster err:%v", err)
-	}
-
-	return nil
+	return probeErr
 }

@@ -37,8 +37,13 @@ type Data struct {
 	// clusterStatus is the cluster status as of last sampling.
 	clusterStatus *v2pb.ClusterStatus
 
-	// cachedObj holds the last observer object from apiserver
+	// cachedObj holds the last observer object from apiserver. It is replaced,
+	// never modified in place, so a reader can keep using the pointer it got.
 	cachedObj *v2pb.Cluster
+
+	// specVersion counts the in-place spec refreshes, so the result of a probe
+	// started before a refresh is not stored for the refreshed spec.
+	specVersion uint64
 }
 
 // SetClusterStatus sets the cluster status in a thread-safe manner.
@@ -59,14 +64,83 @@ func (d *Data) GetClusterStatus() *v2pb.ClusterStatus {
 func (d *Data) UpdateClusterAndStatus(status *v2pb.ClusterStatus) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	d.setStatusLocked(status)
+}
+
+func (d *Data) setStatusLocked(status *v2pb.ClusterStatus) {
 	d.clusterStatus = status
 	if d.cachedObj != nil {
+		obj := d.cachedObj.DeepCopy()
 		if status != nil {
-			d.cachedObj.Status = *status
+			obj.Status = *status
 		} else {
-			d.cachedObj.Status = v2pb.ClusterStatus{}
+			obj.Status = v2pb.ClusterStatus{}
 		}
+		d.cachedObj = obj
 	}
+}
+
+// getCachedObj returns the cached cluster object.
+func (d *Data) getCachedObj() *v2pb.Cluster {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	return d.cachedObj
+}
+
+// get returns the cached cluster object together with its status.
+func (d *Data) get() (*v2pb.Cluster, *v2pb.ClusterStatus) {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	return d.cachedObj, d.clusterStatus
+}
+
+// snapshot returns the cached cluster object and the spec version it belongs to.
+func (d *Data) snapshot() (*v2pb.Cluster, uint64) {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	return d.cachedObj, d.specVersion
+}
+
+// refreshSpec swaps obj into the cache in place of the cached object, which it
+// returns. The probed status and so the cluster's readiness carry over until
+// the refreshed spec is probed.
+func (d *Data) refreshSpec(obj *v2pb.Cluster) *v2pb.Cluster {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	old := d.cachedObj
+	refreshed := obj.DeepCopy()
+	if old != nil {
+		refreshed.Status = old.Status
+	}
+	d.cachedObj = refreshed
+	d.specVersion++
+	return old
+}
+
+// storeProbeResult stores the status found by a probe of the given spec version
+// and returns a copy of the updated object for the status write. It stores
+// nothing and returns false if the spec was refreshed during the probe.
+func (d *Data) storeProbeResult(specVersion uint64, status *v2pb.ClusterStatus) (*v2pb.Cluster, bool) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if specVersion != d.specVersion {
+		return nil, false
+	}
+	d.setStatusLocked(status)
+	return d.cachedObj.DeepCopy(), true
+}
+
+// setResourceVersion records the resource version returned by a status write,
+// unless the spec was refreshed since, so the next write does not conflict.
+func (d *Data) setResourceVersion(specVersion uint64, resourceVersion string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if specVersion != d.specVersion || d.cachedObj == nil || d.cachedObj.ResourceVersion == resourceVersion {
+		return
+	}
+	obj := d.cachedObj.DeepCopy()
+	obj.ResourceVersion = resourceVersion
+	d.cachedObj = obj
 }
 
 // isClusterReady returns true if the cluster is Ready.
@@ -118,8 +192,8 @@ func (c *clusterMap) getClustersByFilter(filter FilterType) []*v2pb.Cluster {
 			if !ok {
 				return true
 			}
-			if isClusterReady(d.GetClusterStatus()) {
-				result = append(result, d.cachedObj)
+			if obj, status := d.get(); isClusterReady(status) {
+				result = append(result, obj)
 			}
 			return true
 		})
@@ -129,8 +203,8 @@ func (c *clusterMap) getClustersByFilter(filter FilterType) []*v2pb.Cluster {
 			if !ok {
 				return true
 			}
-			if !isClusterReady(d.GetClusterStatus()) {
-				result = append(result, d.cachedObj)
+			if obj, status := d.get(); !isClusterReady(status) {
+				result = append(result, obj)
 			}
 			return true
 		})
@@ -140,7 +214,7 @@ func (c *clusterMap) getClustersByFilter(filter FilterType) []*v2pb.Cluster {
 			if !ok {
 				return true
 			}
-			result = append(result, d.cachedObj)
+			result = append(result, d.getCachedObj())
 			return true
 		})
 	}

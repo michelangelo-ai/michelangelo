@@ -107,8 +107,9 @@ func setupReconciler(t *testing.T, params testParams) (*Reconciler, *apimocks.Mo
 	logger := zaptest.NewLogger(t)
 
 	r := NewReconciler(Params{
-		Scope:         testScope,
-		ClusterClient: createTestClient(t, params.factory, params.helper, logger),
+		Scope:          testScope,
+		ClusterClient:  createTestClient(t, params.factory, params.helper, logger),
+		ComputeFactory: params.factory,
 	}).Reconciler
 
 	r.log = zapr.NewLogger(zaptest.NewLogger(t))
@@ -153,13 +154,18 @@ func TestReconcile(t *testing.T) {
 					})
 				apiHandler.EXPECT().Update(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 
+				// the new cluster is probed right away, not on the next monitoring cycle
+				factory.EXPECT().GetClientSetForCluster(gomock.Any()).Return(&compute.ClientSet{}, nil)
+				helper.EXPECT().GetClusterHealth(gomock.Any(), gomock.Any()).Return(newReadyStatus(), nil)
+				apiHandler.EXPECT().UpdateStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+
 				return r, r.metrics.MetricsScope.(tally.TestScope)
 			},
 			req: defaultReq,
 			assertClusterData: func(d *clusterMap) bool {
-				// map should include the cluster
+				// map should include the cluster, already Ready
 				clusterData := d.get(_testClusterName)
-				return clusterData != nil
+				return clusterData != nil && isClusterReady(clusterData.GetClusterStatus())
 			},
 		},
 		{
@@ -269,13 +275,19 @@ func TestReconcile(t *testing.T) {
 						return nil
 					})
 
+				// the refreshed cluster is probed right away; an SLA change keeps its client
+				factory.EXPECT().GetClientSetForCluster(gomock.Any()).Return(&compute.ClientSet{}, nil)
+				helper.EXPECT().GetClusterHealth(gomock.Any(), gomock.Any()).Return(newReadyStatus(), nil)
+				apiHandler.EXPECT().UpdateStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+
 				return r, r.metrics.MetricsScope.(tally.TestScope)
 			},
 			req: defaultReq,
 			assertClusterData: func(d *clusterMap) bool {
 				// map should have the cluster with new SLA
 				clusterData := d.get(_testClusterName)
-				return clusterData != nil && clusterData.cachedObj.Spec.GetSla() == v2pb.SLA_TYPE_PRODUCTION
+				return clusterData != nil && clusterData.cachedObj.Spec.GetSla() == v2pb.SLA_TYPE_PRODUCTION &&
+					isClusterReady(clusterData.GetClusterStatus())
 			},
 		},
 		{
@@ -540,6 +552,11 @@ func TestReconciler_GetClusters(t *testing.T) {
 
 func TestIsClusterSpecSame(t *testing.T) {
 	reconciler := &Reconciler{}
+	updated := func(update func(*v2pb.Cluster)) *v2pb.Cluster {
+		c := _testCluster.DeepCopy()
+		update(c)
+		return c
+	}
 
 	tests := []struct {
 		name                     string
@@ -820,6 +837,47 @@ func TestIsClusterSpecSame(t *testing.T) {
 				},
 			},
 			expectedNewClusterIsSame: false,
+		},
+		{
+			name:      "scheduler type changed",
+			cachedObj: _testCluster.DeepCopy(),
+			newObj: updated(func(c *v2pb.Cluster) {
+				c.Spec.SchedulerType = v2pb.SCHEDULER_TYPE_KUEUE
+			}),
+			expectedNewClusterIsSame: false,
+		},
+		{
+			name:      "token tag changed",
+			cachedObj: _testCluster.DeepCopy(),
+			newObj: updated(func(c *v2pb.Cluster) {
+				c.Spec.GetKubernetes().Rest.TokenTag = "rotated-token"
+			}),
+			expectedNewClusterIsSame: false,
+		},
+		{
+			name:      "CA data tag changed",
+			cachedObj: _testCluster.DeepCopy(),
+			newObj: updated(func(c *v2pb.Cluster) {
+				c.Spec.GetKubernetes().Rest.CaDataTag = "rotated-ca"
+			}),
+			expectedNewClusterIsSame: false,
+		},
+		{
+			name:      "skus changed",
+			cachedObj: _testCluster.DeepCopy(),
+			newObj: updated(func(c *v2pb.Cluster) {
+				c.Spec.GetKubernetes().Skus = []*v2pb.SkuConfig{{}}
+			}),
+			expectedNewClusterIsSame: false,
+		},
+		{
+			name:      "metadata changed",
+			cachedObj: _testCluster.DeepCopy(),
+			newObj: updated(func(c *v2pb.Cluster) {
+				c.Labels = map[string]string{"sla": "production"}
+				c.ResourceVersion = "2"
+			}),
+			expectedNewClusterIsSame: true,
 		},
 	}
 

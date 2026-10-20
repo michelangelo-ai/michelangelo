@@ -23,6 +23,11 @@ const _serviceName = "michelangelo-controllermgr"
 // utils with REST interface for their usage.
 type Factory interface {
 	GetClientSetForCluster(*v2pb.Cluster) (*ClientSet, error)
+	// Invalidate drops the client set cached for a cluster spec, so the next
+	// GetClientSetForCluster rebuilds it from the current credentials. Pass the
+	// spec the client was built from: after a spec change, the old one, since the
+	// cache key comes from the spec's host and port.
+	Invalidate(spec *v2pb.ClusterSpec)
 }
 
 // ClientSet keeps rest clients
@@ -107,8 +112,22 @@ func (f *factory) getClientCfg(c *v2pb.Cluster, key string) (*rest.Config, error
 	return cfg, nil
 }
 
+func (f *factory) Invalidate(spec *v2pb.ClusterSpec) {
+	key := clusterKey(spec)
+
+	// take the lock so a client being built from the old credentials is not
+	// stored after it was dropped
+	f.m.Lock()
+	defer f.m.Unlock()
+	f.clients.Delete(key)
+}
+
 func (f *factory) getClusterKey(c *v2pb.Cluster) (string, error) {
-	key := fmt.Sprintf(
-		"%s:%s", c.Spec.GetKubernetes().GetRest().GetHost(), c.Spec.GetKubernetes().GetRest().GetPort())
-	return key, nil
+	return clusterKey(&c.Spec), nil
+}
+
+// clusterKey is the client cache key of a cluster spec: its API server's host:port.
+func clusterKey(spec *v2pb.ClusterSpec) string {
+	return fmt.Sprintf(
+		"%s:%s", spec.GetKubernetes().GetRest().GetHost(), spec.GetKubernetes().GetRest().GetPort())
 }
