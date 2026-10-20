@@ -1,0 +1,9 @@
+dependencies:
+- name: kuberay-operator
+  repository: https://ray-project.github.io/kuberay-helm/
+  version: 1.7.1
+- name: spark-operator
+  repository: https://kubeflow.github.io/spark-operator
+  version: 2.5.2
+digest: sha256:3c92c56d2388b9161064ae21afc1248a5258dbe6538ff5899ead1c1ba11c74a6
+generated: "2026-10-20T11:46:59.151467-07:00"

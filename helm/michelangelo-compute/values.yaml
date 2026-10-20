@@ -1,0 +1,53 @@
+# -----------------------------------------------------------------------------
+# Michelangelo compute chart values
+#
+# Install one release per cluster, named michelangelo-compute, in namespace
+# michelangelo-compute. The operators run in the release namespace; the control
+# plane creates RayClusters and SparkApplications in namespace default.
+#
+# values.schema.json rejects unknown top-level keys, and
+# templates/validations.yaml fails rendering when a setting the control plane
+# relies on changes.
+# -----------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------
+# KubeRay operator — upstream chart kuberay-operator 1.7.1.
+# Values under kuberay-operator are passed to the pinned upstream chart.
+# -----------------------------------------------------------------------------
+kuberay-operator:
+  # Install the KubeRay operator.
+  enabled: true
+  metrics:
+    serviceMonitor:
+      # Requires the Prometheus Operator CRDs (monitoring.coreos.com/v1).
+      enabled: false
+
+# -----------------------------------------------------------------------------
+# Spark Operator — upstream chart spark-operator 2.5.2 (Kubeflow).
+# Values under spark-operator are passed to the pinned upstream chart. The two
+# spark settings below are enforced while the subchart is enabled.
+# -----------------------------------------------------------------------------
+spark-operator:
+  # Install the Spark Operator. When false, its enforced settings no longer apply.
+  enabled: true
+  spark:
+    # Must contain default: the control plane creates every SparkApplication
+    # there, and the operator ignores SparkApplications in unlisted namespaces.
+    # The driver ServiceAccount and Role are rendered only in listed namespaces.
+    jobNamespaces:
+      - default
+    serviceAccount:
+      # Must be spark-operator-spark: the control plane sets this driver
+      # ServiceAccount on every SparkApplication, and upstream would otherwise
+      # derive it from the release name.
+      name: spark-operator-spark
+  webhook:
+    # The webhook fails closed, so keep two replicas and a disruption budget.
+    replicas: 2
+    podDisruptionBudget:
+      enable: true
+      minAvailable: 1
+  prometheus:
+    podMonitor:
+      # Requires the Prometheus Operator CRDs (monitoring.coreos.com/v1).
+      create: false

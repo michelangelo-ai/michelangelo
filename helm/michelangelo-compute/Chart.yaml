@@ -1,0 +1,39 @@
+apiVersion: v2
+name: michelangelo-compute
+description: Sets up a Kubernetes cluster to run Michelangelo compute jobs
+type: application
+version: 0.12.0
+appVersion: "0.12.0"
+kubeVersion: ">=1.29.0-0"
+
+dependencies:
+  - name: kuberay-operator
+    version: "1.7.1"
+    repository: https://ray-project.github.io/kuberay-helm/
+    condition: kuberay-operator.enabled
+  - name: spark-operator
+    version: "2.5.2"
+    repository: https://kubeflow.github.io/spark-operator
+    condition: spark-operator.enabled
+
+home: https://github.com/michelangelo-ai/michelangelo
+icon: https://raw.githubusercontent.com/michelangelo-ai/michelangelo/main/website/static/img/michelangelo-logo-color.svg
+sources:
+  - https://github.com/michelangelo-ai/michelangelo
+  - https://github.com/michelangelo-ai/michelangelo/tree/main/helm/michelangelo-compute
+  - https://github.com/ray-project/kuberay
+  - https://github.com/kubeflow/spark-operator
+keywords:
+  - compute
+  - ray
+  - spark
+  - michelangelo
+maintainers:
+  - name: Michelangelo Maintainers
+    email: maintainers@michelangelo-ai.org
+    url: https://github.com/michelangelo-ai/michelangelo
+annotations:
+  artifacthub.io/category: machine-learning
+  artifacthub.io/license: Apache-2.0
+  artifacthub.io/prerelease: "true"
+  org.opencontainers.image.source: https://github.com/michelangelo-ai/michelangelo
