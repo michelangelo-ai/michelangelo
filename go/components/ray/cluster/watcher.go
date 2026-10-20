@@ -671,7 +671,8 @@ func (r *Reconciler) rayClusterEventHandler(obj interface{}) {
 	// (including a suspension that spec/conditions show before status.state
 	// catches up), and how to read a reason and pod errors out of KubeRay's
 	// conditions — so surfacing what it returns keeps the event-driven path
-	// reporting exactly what the polling path used to.
+	// reporting exactly what Reconcile's safety net reads through
+	// GetJobClusterStatus.
 	globalStatus, err := r.mapper.MapLocalClusterStatusToGlobal(local)
 	if err != nil || globalStatus == nil || globalStatus.Ray == nil {
 		log.Error(err, "could not map the local ray cluster status")

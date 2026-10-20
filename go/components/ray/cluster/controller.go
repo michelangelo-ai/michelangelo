@@ -635,12 +635,13 @@ func isClusterTerminating(cluster *v2pb.RayCluster) bool {
 // outcome: Succeeded is decided (TRUE or FALSE) and any kill/cleanup processing it
 // triggers has completed (Killing back to FALSE with Killed TRUE).
 //
-// cleanupCluster and markClusterFailed are the only two places that produce this
-// combination, and both set Killing=FALSE/Killed=TRUE atomically alongside their last
-// piece of cleanup work (or, for markClusterFailed, with no cleanup needed at all since
-// the remote resource is already confirmed gone). So checking it on a freshly-fetched
-// object is race-free: there is no window where it reads true before cleanup has
-// actually finished.
+// Every write that produces this combination sets Killing=FALSE/Killed=TRUE atomically
+// alongside its last piece of cleanup work. For cleanupCluster that is the delete it
+// issues (or nothing, for a cluster that was never launched); for markFailedUpdate and
+// the KubeRay delete handler's expected-deletion write there is none left, since the
+// remote resource is already confirmed gone. So checking it on a freshly-fetched object
+// is race-free: there is no window where it reads true before cleanup has actually
+// finished.
 func isClusterFullyTerminal(cluster *v2pb.RayCluster) bool {
 	succeeded := jobsutils.GetCondition(&cluster.Status.StatusConditions, SucceededCondition, cluster.Generation)
 	if succeeded.Status == apipb.CONDITION_STATUS_UNKNOWN {
@@ -651,11 +652,12 @@ func isClusterFullyTerminal(cluster *v2pb.RayCluster) bool {
 	return killing.Status == apipb.CONDITION_STATUS_FALSE && killed.Status == apipb.CONDITION_STATUS_TRUE
 }
 
-// finalizeIfTerminal is the single call site for freezing a RayCluster. Every path that
-// can drive a cluster to a fully terminal outcome — the normal kill/cleanup convergence
-// in Reconcile's termination branch, and markClusterFailed's NotFound-on-remote write —
-// calls this right after its own status write completes, instead of each calling
-// markImmutableIfTerminal separately.
+// finalizeIfTerminal is Reconcile's call site for freezing a RayCluster. Every path in
+// Reconcile that can drive a cluster to a fully terminal outcome — the normal
+// kill/cleanup convergence in the termination branch, and markClusterFailed's
+// NotFound-on-remote write — calls this right after its own status write completes,
+// instead of each calling markImmutableIfTerminal separately. The KubeRay delete
+// handler has no result to return and calls markImmutableIfTerminal itself.
 func (r *Reconciler) finalizeIfTerminal(ctx context.Context, cluster *v2pb.RayCluster, log logr.Logger) (ctrl.Result, error) {
 	if err := r.markImmutableIfTerminal(ctx, cluster); err != nil {
 		log.Error(err, "failed to mark cluster immutable after termination")
