@@ -613,14 +613,20 @@ func TestReconciler_Reconcile(t *testing.T) {
 					},
 				}, nil)
 			},
+			// Recorded as the delete handler records a delete it sees.
 			expectedState:   v2pb.RAY_JOB_STATE_FAILED,
-			expectedMessage: "Resource not found in compute cluster",
+			expectedMessage: "ray job was deleted from the compute cluster",
 			errorAssertion:  require.NoError,
 			postCheck: func(res ctrl.Result) {
 				assert.Equal(t, time.Duration(0), res.RequeueAfter)
 			},
 			verifyConditions: func(t *testing.T, job *v2pb.RayJob) {
 				assert.Equal(t, "Unknown", job.Status.JobStatus)
+				succeeded := jobsutils.GetCondition(&job.Status.StatusConditions, constants.SucceededCondition, job.Generation)
+				assert.Equal(t, apipb.CONDITION_STATUS_FALSE, succeeded.Status)
+				assert.Equal(t, constants.ClusterKilled, succeeded.Reason)
+				killed := jobsutils.GetCondition(&job.Status.StatusConditions, constants.KilledCondition, job.Generation)
+				assert.Equal(t, apipb.CONDITION_STATUS_TRUE, killed.Status)
 				assert.True(t, utils.IsImmutable(job), "terminal job should be marked immutable by reconciler")
 			},
 		},
@@ -2269,7 +2275,7 @@ func TestRayJobConvergesAfterDeleteHandlerExhaustsRetries(t *testing.T) {
 
 	require.NoError(t, r.Get(ctx, request.NamespacedName, &stored))
 	assert.Equal(t, v2pb.RAY_JOB_STATE_FAILED, stored.Status.State)
-	assert.Equal(t, "Resource not found in compute cluster", stored.Status.Message)
+	assert.Equal(t, "ray job was deleted from the compute cluster", stored.Status.Message)
 	assert.True(t, utils.IsImmutable(&stored), "a terminal job must be frozen so the ingester can archive it")
 }
 
@@ -2584,4 +2590,128 @@ func TestRayJobLaunchIsNotLostToAnEarlyKubeRayEvent(t *testing.T) {
 	assert.Equal(t, apipb.CONDITION_STATUS_TRUE, launched.Status, "the launch must be recorded")
 	assert.Equal(t, v2pb.RAY_JOB_STATE_RUNNING, stored.Status.State)
 	assert.NotContains(t, writtenStates, v2pb.RAY_JOB_STATE_FAILED, "a job that launched must never be recorded as failed")
+}
+
+// TestMissingRayJobIsRecordedTheSameOnEveryPath covers a KubeRay RayJob gone
+// from the compute cluster. The delete handler sees it go; the safety net finds
+// it missing when the handler never saw the delete -- the controller was down,
+// or the handler's write was dropped. It is the same event either way, so it
+// must leave the same record.
+func TestMissingRayJobIsRecordedTheSameOnEveryPath(t *testing.T) {
+	ctx := context.Background()
+	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: rayJobName}}
+
+	// record runs observe against a launched, running job and returns the job
+	// it leaves behind.
+	record := func(t *testing.T, observe func(r *Reconciler)) v2pb.RayJob {
+		rayJob := &v2pb.RayJob{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:       rayJobName,
+				Namespace:  testNamespace,
+				Generation: 1,
+			},
+			Spec: v2pb.RayJobSpec{
+				Cluster: &apipb.ResourceIdentifier{
+					Name:      testClusterName,
+					Namespace: testNamespace,
+				},
+				Entrypoint: "echo Hello World",
+			},
+			Status: v2pb.RayJobStatus{
+				State:               v2pb.RAY_JOB_STATE_RUNNING,
+				JobStatus:           string(rayv1.JobStatusRunning),
+				JobDeploymentStatus: string(rayv1.JobDeploymentStatusRunning),
+				Message:             "job is running",
+				StatusConditions: []*apipb.Condition{
+					{
+						Type:   constants.LaunchedCondition,
+						Status: apipb.CONDITION_STATUS_TRUE,
+					},
+				},
+			},
+		}
+		cluster := &v2pb.RayCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:       testClusterName,
+				Namespace:  testNamespace,
+				Generation: 1,
+			},
+			Status: v2pb.RayClusterStatus{
+				State: v2pb.RAY_CLUSTER_STATE_READY,
+				Assignment: &v2pb.AssignmentInfo{
+					Cluster: assignedCluster,
+				},
+			},
+		}
+		fakeClient := fake.NewClientBuilder().
+			WithScheme(newTestScheme()).
+			WithObjects(rayJob, cluster).
+			WithStatusSubresource(rayJob, cluster).
+			Build()
+
+		mockCtrl := gomock.NewController(t)
+		mockFedClient := clientmocks.NewMockFederatedClient(mockCtrl)
+		// What GetJobStatus reports for a KubeRay RayJob missing from the
+		// compute cluster.
+		mockFedClient.EXPECT().GetJobStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(&jobtypes.JobStatus{
+			Ray: &v2pb.RayJobStatus{
+				JobStatus: "Unknown",
+				State:     v2pb.RAY_JOB_STATE_FAILED,
+				Message:   "Resource not found in compute cluster",
+			},
+		}, nil).AnyTimes()
+		mockCache := newMockClusterCache()
+		mockCache.addCluster(assignedCluster, &v2pb.Cluster{
+			ObjectMeta: metav1.ObjectMeta{Name: assignedCluster},
+		})
+		r := &Reconciler{
+			Client:          fakeClient,
+			logger:          zapr.NewLogger(zaptest.NewLogger(t)),
+			federatedClient: mockFedClient,
+			clusterCache:    mockCache,
+		}
+
+		observe(r)
+
+		var stored v2pb.RayJob
+		require.NoError(t, r.Get(ctx, request.NamespacedName, &stored))
+		return stored
+	}
+	// conditions leaves out the update timestamps, which differ between runs.
+	type condition struct {
+		Type, Reason, Message string
+		Status                apipb.ConditionStatus
+	}
+	conditions := func(job v2pb.RayJob) []condition {
+		var out []condition
+		for _, c := range job.Status.StatusConditions {
+			out = append(out, condition{Type: c.Type, Reason: c.Reason, Message: c.Message, Status: c.Status})
+		}
+		return out
+	}
+
+	deleted := record(t, func(r *Reconciler) {
+		r.rayJobDeleteEventHandler(&rayv1.RayJob{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   rayJobName,
+				Labels: map[string]string{constants.ProjectNameLabelKey: testNamespace},
+			},
+			Status: rayv1.RayJobStatus{
+				JobStatus:           rayv1.JobStatusRunning,
+				JobDeploymentStatus: rayv1.JobDeploymentStatusRunning,
+			},
+		})
+	})
+	polled := record(t, func(r *Reconciler) {
+		_, err := r.Reconcile(ctx, request)
+		require.NoError(t, err)
+	})
+
+	require.Equal(t, v2pb.RAY_JOB_STATE_FAILED, deleted.Status.State)
+	assert.Equal(t, deleted.Status.State, polled.Status.State)
+	assert.Equal(t, deleted.Status.JobStatus, polled.Status.JobStatus)
+	assert.Equal(t, deleted.Status.JobDeploymentStatus, polled.Status.JobDeploymentStatus)
+	assert.Equal(t, deleted.Status.Message, polled.Status.Message)
+	assert.Equal(t, conditions(deleted), conditions(polled))
+	assert.True(t, utils.IsImmutable(&polled), "a terminal job must be frozen so the ingester can archive it")
 }

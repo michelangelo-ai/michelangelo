@@ -297,8 +297,8 @@ func (r *Reconciler) createRayJobIfNotLaunched(ctx context.Context, logger logr.
 // the job still finishes when the watcher misses the event: a delete while the
 // controller was down or the compute cluster was out of the ready set, a dropped
 // status write, or a KubeRay RayJob created before the watcher's labels existed.
-// GetJobStatus reports a KubeRay RayJob missing from the compute cluster as
-// FAILED. Non-terminal results are left to the watcher.
+// A KubeRay RayJob missing from the compute cluster is recorded as the delete
+// handler records a delete. Non-terminal results are left to the watcher.
 func (r *Reconciler) updateJobStatusIfLaunched(ctx context.Context, logger logr.Logger, rayJob *v2pb.RayJob, rayCluster *v2pb.RayCluster, res *ctrl.Result) {
 	assignedCluster := r.getAssignedCluster(logger, rayCluster)
 	if assignedCluster == nil {
@@ -321,11 +321,23 @@ func (r *Reconciler) updateJobStatusIfLaunched(ctx context.Context, logger logr.
 		res.RequeueAfter = _safetyNetPeriod
 		return
 	}
+	if isRayJobMissing(jobStatus.Ray) {
+		// The delete the watcher never saw: record it as the delete handler would.
+		markRayJobGone(rayJob, rayJob.Status.JobStatus)
+		return
+	}
 
 	rayJob.Status.State = jobStatus.Ray.State
 	rayJob.Status.JobStatus = jobStatus.Ray.JobStatus
 	rayJob.Status.JobDeploymentStatus = jobStatus.Ray.JobDeploymentStatus
 	rayJob.Status.Message = jobStatus.Ray.Message
+}
+
+// isRayJobMissing reports whether a GetJobStatus result stands for a KubeRay
+// RayJob missing from the compute cluster. GetJobStatus returns that as a
+// FAILED status rather than an error, with a JobStatus KubeRay never reports.
+func isRayJobMissing(status *v2pb.RayJobStatus) bool {
+	return status.State == v2pb.RAY_JOB_STATE_FAILED && status.JobStatus == _jobStatusUnknown
 }
 
 // markImmutableIfTerminal persists the michelangelo/Immutable annotation on a

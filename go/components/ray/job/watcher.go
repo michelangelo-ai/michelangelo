@@ -23,7 +23,12 @@ import (
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
-const _eventHandlerTimeout = 10 * time.Second
+const (
+	_eventHandlerTimeout = 10 * time.Second
+	// _jobStatusUnknown is the JobStatus of a job whose KubeRay RayJob is gone
+	// from the compute cluster. It is not a status KubeRay reports.
+	_jobStatusUnknown = "Unknown"
+)
 
 // isRetriableWriteError reports whether a handler's status write is worth
 // retrying: a conflict with a concurrent writer, or a transient API server
@@ -281,29 +286,7 @@ func (r *Reconciler) rayJobDeleteEventHandler(obj interface{}) {
 			if utils.IsImmutable(&current) || isTerminalRayJobState(current.Status.State) {
 				return nil
 			}
-			succeeded := jobsutils.GetCondition(&current.Status.StatusConditions, constants.SucceededCondition, current.Generation)
-			jobsutils.UpdateCondition(succeeded, jobsutils.ConditionUpdateParams{
-				Status:     apipb.CONDITION_STATUS_FALSE,
-				Reason:     constants.ClusterKilled,
-				Generation: current.Generation,
-				Message:    fmt.Sprintf("ray job was deleted externally, status: %+v", local.Status.JobStatus),
-			})
-			killed := jobsutils.GetCondition(&current.Status.StatusConditions, constants.KilledCondition, current.Generation)
-			jobsutils.UpdateCondition(killed, jobsutils.ConditionUpdateParams{
-				Status:     apipb.CONDITION_STATUS_TRUE,
-				Generation: current.Generation,
-			})
-			// The backing object is confirmed gone, so the job is terminal. Recording
-			// the state alongside the conditions is what lets markImmutableIfTerminal
-			// freeze the job: without it the CR keeps a non-terminal state forever,
-			// is never archived by the ingester, and re-reconciles on every requeue.
-			// FAILED rather than KILLED: the usual cause is the KubeRay RayCluster
-			// being deleted, which takes its RayJobs with it, and Uniflow retries a
-			// FAILED job but not a KILLED one. The safety net reports a missing
-			// object the same way.
-			current.Status.State = v2pb.RAY_JOB_STATE_FAILED
-			current.Status.JobStatus = "Unknown"
-			current.Status.Message = "ray job was deleted from the compute cluster"
+			markRayJobGone(&current, string(local.Status.JobStatus))
 			wrote = true
 			return r.Status().Update(ctx, &current)
 		}); err != nil {
@@ -363,4 +346,33 @@ func (r *Reconciler) rayJobDeleteEventHandler(obj interface{}) {
 		return
 	}
 	log.Info("job killed successfully")
+}
+
+// markRayJobGone records that a launched job's KubeRay RayJob is gone from the
+// compute cluster. The delete handler records it when it sees the delete, and
+// the safety net when it finds the object missing, so both leave the same
+// record. lastJobStatus is the job's last known KubeRay job status.
+//
+// The backing object is gone, so the job is terminal. Recording the state
+// alongside the conditions is what lets markImmutableIfTerminal freeze the job:
+// without it the CR keeps a non-terminal state forever, is never archived by
+// the ingester, and re-reconciles on every requeue. FAILED rather than KILLED:
+// the usual cause is the KubeRay RayCluster being deleted, which takes its
+// RayJobs with it, and Uniflow retries a FAILED job but not a KILLED one.
+func markRayJobGone(job *v2pb.RayJob, lastJobStatus string) {
+	succeeded := jobsutils.GetCondition(&job.Status.StatusConditions, constants.SucceededCondition, job.Generation)
+	jobsutils.UpdateCondition(succeeded, jobsutils.ConditionUpdateParams{
+		Status:     apipb.CONDITION_STATUS_FALSE,
+		Reason:     constants.ClusterKilled,
+		Generation: job.Generation,
+		Message:    fmt.Sprintf("ray job was deleted externally, status: %s", lastJobStatus),
+	})
+	killed := jobsutils.GetCondition(&job.Status.StatusConditions, constants.KilledCondition, job.Generation)
+	jobsutils.UpdateCondition(killed, jobsutils.ConditionUpdateParams{
+		Status:     apipb.CONDITION_STATUS_TRUE,
+		Generation: job.Generation,
+	})
+	job.Status.State = v2pb.RAY_JOB_STATE_FAILED
+	job.Status.JobStatus = _jobStatusUnknown
+	job.Status.Message = "ray job was deleted from the compute cluster"
 }
