@@ -35,8 +35,9 @@ const (
 	// Defines the delay before retrying the reconciliation process
 	requeueAfter            = time.Second * 10
 	_updateStatusCtxTimeout = time.Second * 10
-	// How often a launched cluster is re-checked on its compute cluster, as a
-	// fallback for events the federated watcher missed (see Reconcile).
+	// The longest a launched cluster goes without being re-checked on its compute
+	// cluster, as a fallback for events the federated watcher missed (see
+	// Reconcile).
 	_safetyNetPeriod = 5 * time.Minute
 	// How long that re-check waits for the compute cluster to answer. The
 	// federated client sets no request timeout and the controller runs a single
@@ -227,9 +228,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	// (restart, failover, compute cluster leaving the ready set) is never
 	// replayed, a failed handler write for a deleted object is never retried, and
 	// KubeRay objects created before their ma/* labels existed are not watched at
-	// all. So re-read the KubeRay object every _safetyNetPeriod and apply it the
-	// way the KubeRay handler does. Once termination has begun the termination
-	// branch above owns the cluster, so there is nothing left to observe.
+	// all. So every reconcile of a launched, non-terminating cluster re-reads the
+	// KubeRay object and applies it the way the KubeRay handler does. Every status
+	// write enqueues a reconcile, the handlers' included, so that happens often,
+	// and RequeueAfter makes it at least every _safetyNetPeriod. Once termination
+	// has begun the termination branch above owns the cluster, so there is
+	// nothing left to observe.
 	if isClusterTerminating(&rayCluster) {
 		logger.Info("Reconcile finished")
 		return res, nil

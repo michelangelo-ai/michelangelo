@@ -36,7 +36,8 @@ const (
 // getFederatedWatcher creates a federated watcher for the RayCluster controller.
 //
 // It watches two resources on every ready compute cluster:
-//   - the head Pod, to populate RayCluster.Status.HeadNode and PodErrors, and
+//   - every Ray node Pod, head and workers, to populate RayCluster.Status.PodErrors
+//     and, from the head Pod, Status.HeadNode, and
 //   - the KubeRay RayCluster, to propagate cluster State/conditions.
 //
 // This mirrors the internal ray/controller.go watcher, retargeted onto the OSS
