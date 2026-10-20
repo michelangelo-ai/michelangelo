@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"reflect"
 	"time"
 
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 
 	"github.com/go-logr/logr"
+	"github.com/uber-go/tally"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -20,6 +20,7 @@ import (
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
+	"github.com/michelangelo-ai/michelangelo/go/components/controllerutil"
 	jobsclient "github.com/michelangelo-ai/michelangelo/go/components/jobs/client"
 	jobscluster "github.com/michelangelo-ai/michelangelo/go/components/jobs/cluster"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/constants"
@@ -34,6 +35,15 @@ const (
 	// Defines the delay before retrying the reconciliation process
 	requeueAfter            = time.Second * 10
 	_updateStatusCtxTimeout = time.Second * 10
+	// The longest a launched cluster goes without being re-checked on its compute
+	// cluster, as a fallback for events the federated watcher missed (see
+	// Reconcile).
+	_safetyNetPeriod = 5 * time.Minute
+	// How long that re-check waits for the compute cluster to answer. The
+	// federated client sets no request timeout and the controller runs a single
+	// worker, so a member cluster that stops answering would otherwise hang
+	// every reconcile behind it.
+	_remoteCallTimeout = 30 * time.Second
 )
 
 // Condition constants for tracking RayCluster lifecycle
@@ -57,12 +67,15 @@ type Reconciler struct {
 	schedulerQueue    scheduler.JobQueue                  // Queue for enqueuing jobs to scheduler
 	federatedClient   jobsclient.FederatedClient          // Client for creating clusters on remote K8s
 	clusterCache      jobscluster.RegisteredClustersCache // Cache for looking up assigned clusters
+	mapper            matypes.Mapper                      // Maps compute-cluster objects to global status
+	metricsScope      tally.Scope                         // Metrics scope for telemetry
 }
 
 // NewReconciler constructs a Reconciler with required dependencies.
 //
 // This provides a stable construction API for downstream users so they do not
-// need to rely on reflection to set unexported fields.
+// need to rely on reflection to set unexported fields. A nil metricsScope
+// disables metrics; a nil mapper is rejected by Register.
 func NewReconciler(
 	logger logr.Logger,
 	apiHandlerFactory apiHandler.Factory,
@@ -70,7 +83,12 @@ func NewReconciler(
 	schedulerQueue scheduler.JobQueue,
 	federatedClient jobsclient.FederatedClient,
 	clusterCache jobscluster.RegisteredClustersCache,
+	mapper matypes.Mapper,
+	metricsScope tally.Scope,
 ) *Reconciler {
+	if metricsScope == nil {
+		metricsScope = tally.NoopScope
+	}
 	return &Reconciler{
 		logger:            logger,
 		apiHandlerFactory: apiHandlerFactory,
@@ -78,6 +96,8 @@ func NewReconciler(
 		schedulerQueue:    schedulerQueue,
 		federatedClient:   federatedClient,
 		clusterCache:      clusterCache,
+		mapper:            mapper,
+		metricsScope:      metricsScope,
 	}
 }
 
@@ -112,8 +132,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{}, nil
 	}
 
-	// Create a copy of the original RayCluster for comparison
-	originalRayCluster := rayCluster.DeepCopy()
+	// The condition lookups below add the conditions they do not find to
+	// rayCluster as they go. The safety net writes onto the cluster as read, so
+	// keep a copy of that.
+	asRead := rayCluster.DeepCopy()
 
 	// Check for termination
 	if r.shouldTerminateCluster(&rayCluster) {
@@ -201,11 +223,28 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{RequeueAfter: requeueAfter}, nil
 	}
 
-	// Monitor state till RayCluster is ready
-	// TODO(#605): Remove after introducing Federated Watcher for watching RayCluster
+	// The federated watcher keeps a launched cluster's status current, but it is
+	// edge-triggered: an event that arrives while an informer is being rebuilt
+	// (restart, failover, compute cluster leaving the ready set) is never
+	// replayed, a failed handler write for a deleted object is never retried, and
+	// KubeRay objects created before their ma/* labels existed are not watched at
+	// all. So every reconcile of a launched, non-terminating cluster re-reads the
+	// KubeRay object and applies it the way the KubeRay handler does. Every status
+	// write enqueues a reconcile, the handlers' included, so that happens often,
+	// and RequeueAfter makes it at least every _safetyNetPeriod. Once termination
+	// has begun the termination branch above owns the cluster, so there is
+	// nothing left to observe.
+	if isClusterTerminating(&rayCluster) {
+		logger.Info("Reconcile finished")
+		return res, nil
+	}
 	clusterStatus, err := r.getClusterStatus(ctx, logger, assignedCluster, &rayCluster)
 	if err != nil {
-		if utils.IsNotFoundError(err) {
+		// Only the compute cluster's API server can say the RayCluster is gone. A
+		// 404 from something in front of it, such as a proxy answering in plain
+		// text, reads as NotFound too, but client-go marks it as an unexpected
+		// server response.
+		if utils.IsNotFoundError(err) && !apiErrors.IsUnexpectedServerError(err) {
 			// The RayCluster no longer exists on the remote compute cluster. This is a
 			// terminal, non-recoverable condition: there is nothing left to monitor or
 			// clean up. Mark it failed so we stop reconciling instead of requeuing forever.
@@ -219,42 +258,64 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			}
 			return r.finalizeIfTerminal(ctx, &rayCluster, logger)
 		}
+		// An unreachable compute cluster, one that does not answer in time, or a
+		// 404 from in front of it says nothing about the RayCluster on it; leave
+		// the status to the watcher and look again next period.
 		logger.Error(err, "failed to get cluster status")
-		return ctrl.Result{RequeueAfter: requeueAfter}, err
+		return ctrl.Result{RequeueAfter: _safetyNetPeriod}, nil
 	}
 
-	if err := r.applyRayClusterStatus(&rayCluster, clusterStatus, logger, &res); err != nil {
-		logger.Error(err, "failed to apply cluster status")
-		return ctrl.Result{RequeueAfter: requeueAfter}, err
-	}
-
-	// Update the RayCluster status if any changes occurred
-	if !reflect.DeepEqual(originalRayCluster.Status, rayCluster.Status) {
-		if err := jobsutils.UpdateStatusWithRetries(
-			ctx, r, &rayCluster,
-			func(obj client.Object) {
-				cluster := obj.(*v2pb.RayCluster)
-				cluster.Status = rayCluster.Status
-			},
-			&metav1.UpdateOptions{},
-		); err != nil {
+	// The observation was made after the cluster was read, so a watcher handler
+	// can have written a newer one in between: KubeRay reported the cluster
+	// ready, say, while GetJobClusterStatus's answer from just before still says
+	// it is coming up. Applied to a fresh read, that answer would take the
+	// cluster back to where it found it. So it is written once, onto the cluster
+	// as read. A conflict means the cluster has moved on, and the write that
+	// moved it has enqueued another pass, which observes afresh.
+	if applyClusterObservation(asRead, clusterStatus) {
+		if err := r.UpdateStatus(ctx, asRead,
+			&metav1.UpdateOptions{FieldManager: "reconcileClusterStatus"}); err != nil {
+			// Only a conflict means a newer write. Anything else, such as etcd
+			// timing out, goes back to controller-runtime to be retried with backoff.
+			if jobsutils.IsConflictError(err) {
+				logger.V(1).Info("ray cluster changed since it was read, not writing the older observation",
+					"error", err.Error())
+				return ctrl.Result{RequeueAfter: _safetyNetPeriod}, nil
+			}
 			logger.Error(err, "failed to update ray cluster status")
 			return res, fmt.Errorf("update ray cluster status for %q: %w", req.NamespacedName, err)
 		}
 	}
 
+	res.RequeueAfter = _safetyNetPeriod
 	logger.Info("Reconcile finished", "requeueAfter", res.RequeueAfter)
 	return res, nil
 }
 
 // Register adds the Reconciler to the controller manager
 func (r *Reconciler) Register(mgr ctrl.Manager) error {
+	// The watcher maps every KubeRay event through the mapper. Without one each
+	// event would panic in an informer goroutine, so refuse to start instead.
+	if r.mapper == nil {
+		return errors.New("ray cluster controller: a mapper is required")
+	}
 	r.logger = mgr.GetLogger().WithName("raycluster")
 	handler, err := r.apiHandlerFactory.GetAPIHandler(mgr.GetClient())
 	if err != nil {
 		return err
 	}
 	r.Handler = handler
+
+	// The watcher writes status, so only the leader runs it. The manager starts
+	// it once its caches have synced and cancels ctx when it stops, which ends
+	// Start.
+	federatedWatcher := r.getFederatedWatcher()
+	if err := mgr.Add(controllerutil.LeaderOnlyRunnable(func(ctx context.Context) error {
+		federatedWatcher.Start(ctx)
+		return nil
+	})); err != nil {
+		return fmt.Errorf("add the federated watcher to the manager: %w", err)
+	}
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v2pb.RayCluster{}). // Watch for changes in RayCluster custom resources
@@ -324,6 +385,13 @@ func (r *Reconciler) setClusterSuccessConditionIfRequired(
 	if err := jobsutils.UpdateStatusWithRetries(ctx, r, cluster,
 		func(obj client.Object) {
 			cluster := obj.(*v2pb.RayCluster)
+			// The check above was made on Reconcile's read. A watcher handler can
+			// have decided the outcome since -- KubeRay reported the cluster
+			// failed, or its object was deleted and the cluster frozen -- and
+			// that outcome stands.
+			if isFrozenOrDeleting(cluster) || conditionStatus(cluster, SucceededCondition) != apipb.CONDITION_STATUS_UNKNOWN {
+				return
+			}
 			succeededCond := jobsutils.GetCondition(&cluster.Status.StatusConditions, SucceededCondition, cluster.Generation)
 			jobsutils.UpdateCondition(succeededCond, jobsutils.ConditionUpdateParams{
 				Status:     status,
@@ -359,6 +427,12 @@ func (r *Reconciler) setClusterKillIfRequired(
 	if err := jobsutils.UpdateStatusWithRetries(ctx, r, cluster,
 		func(obj client.Object) {
 			cluster := obj.(*v2pb.RayCluster)
+			// Repeated on the object being written: the KubeRay delete handler can
+			// have recorded the kill and frozen the cluster since Reconcile read
+			// it, and that record must not be put back into Killing.
+			if isFrozenOrDeleting(cluster) || conditionStatus(cluster, KilledCondition) == apipb.CONDITION_STATUS_TRUE {
+				return
+			}
 			killing := jobsutils.GetCondition(&cluster.Status.StatusConditions, KillingCondition, cluster.Generation)
 			jobsutils.UpdateCondition(killing, jobsutils.ConditionUpdateParams{
 				Status:     apipb.CONDITION_STATUS_TRUE,
@@ -449,22 +523,11 @@ func (r *Reconciler) cleanupCluster(
 		}
 	}
 
-	// Update status to terminated
-	// TODO(#605): Mark the cluster as killing and once federated watcher is introduced, the watcher will mark the cluster as killed after RayCluster is terminated in the compute cluster.
-	if err := jobsutils.UpdateStatusWithRetries(ctx, r, cluster,
-		func(obj client.Object) {
-			cluster := obj.(*v2pb.RayCluster)
-			killingCond := jobsutils.GetCondition(&cluster.Status.StatusConditions, KillingCondition, cluster.Generation)
-			jobsutils.UpdateCondition(killingCond, jobsutils.ConditionUpdateParams{
-				Status: apipb.CONDITION_STATUS_FALSE,
-			})
-			killedCond := jobsutils.GetCondition(&cluster.Status.StatusConditions, KilledCondition, cluster.Generation)
-			jobsutils.UpdateCondition(killedCond, jobsutils.ConditionUpdateParams{
-				Status:     apipb.CONDITION_STATUS_TRUE,
-				Generation: cluster.Generation,
-			})
-			cluster.Status.State = v2pb.RAY_CLUSTER_STATE_TERMINATED
-		}, &metav1.UpdateOptions{
+	// Record the kill now that the delete is issued. The KubeRay delete event
+	// that follows finds Killed=TRUE and only freezes the cluster; one that gets
+	// there first records the same kill (see rayClusterDeleteEventHandler).
+	if err := jobsutils.UpdateStatusWithRetries(ctx, r, cluster, markKilledUpdate,
+		&metav1.UpdateOptions{
 			FieldManager: "cleanupClusterDeleted",
 		}); err != nil {
 		log.Error(err, "could not update the cluster status")
@@ -473,6 +536,25 @@ func (r *Reconciler) cleanupCluster(
 
 	log.Info("cluster cleaned up successfully")
 	return nil
+}
+
+// markKilledUpdate is the status change that completes the kill of a launched
+// cluster: Killing ends and Killed is set alongside TERMINATED. cleanupCluster
+// writes it once it has deleted the KubeRay object, and the KubeRay delete
+// handler writes it when the delete event arrives before that write does.
+func markKilledUpdate(obj client.Object) {
+	cluster := obj.(*v2pb.RayCluster)
+	killingCond := jobsutils.GetCondition(&cluster.Status.StatusConditions, KillingCondition, cluster.Generation)
+	jobsutils.UpdateCondition(killingCond, jobsutils.ConditionUpdateParams{
+		Status:     apipb.CONDITION_STATUS_FALSE,
+		Generation: cluster.Generation,
+	})
+	killedCond := jobsutils.GetCondition(&cluster.Status.StatusConditions, KilledCondition, cluster.Generation)
+	jobsutils.UpdateCondition(killedCond, jobsutils.ConditionUpdateParams{
+		Status:     apipb.CONDITION_STATUS_TRUE,
+		Generation: cluster.Generation,
+	})
+	cluster.Status.State = v2pb.RAY_CLUSTER_STATE_TERMINATED
 }
 
 // enqueueIfRequired enqueues the cluster to the scheduler queue if not already enqueued
@@ -560,8 +642,12 @@ func (r *Reconciler) getClusterIfScheduled(cluster *v2pb.RayCluster) *v2pb.Clust
 	return assignedCluster
 }
 
-// getClusterStatus retrieves the current status of a RayCluster resource from the federated cluster
+// getClusterStatus retrieves the current status of a RayCluster resource from the federated cluster,
+// giving up after _remoteCallTimeout.
 func (r *Reconciler) getClusterStatus(ctx context.Context, log logr.Logger, assignedKubeCluster *v2pb.Cluster, rayCluster *v2pb.RayCluster) (*matypes.JobClusterStatus, error) {
+	ctx, cancel := context.WithTimeout(ctx, _remoteCallTimeout)
+	defer cancel()
+
 	// Use the federated client to get the status from the remote cluster
 	clusterStatus, err := r.federatedClient.GetJobClusterStatus(ctx, rayCluster, assignedKubeCluster)
 	if err != nil {
@@ -571,21 +657,43 @@ func (r *Reconciler) getClusterStatus(ctx context.Context, log logr.Logger, assi
 	log.V(1).Info("retrieved cluster status",
 		"cluster", rayCluster.GetName(),
 		"namespace", rayCluster.GetNamespace(),
-		"state", clusterStatus.Ray.State)
+		"state", clusterStatus.Ray.GetState())
 
 	return clusterStatus, nil
+}
+
+// conditionStatus returns the status of the condType condition on cluster, or
+// UNKNOWN if it has none. Unlike jobsutils.GetCondition it does not append a
+// missing condition, so it is safe on an object that is about to be written.
+func conditionStatus(cluster *v2pb.RayCluster, condType string) apipb.ConditionStatus {
+	for _, cond := range cluster.Status.StatusConditions {
+		if cond.GetType() == condType {
+			return cond.GetStatus()
+		}
+	}
+	return apipb.CONDITION_STATUS_UNKNOWN
+}
+
+// isClusterTerminating reports whether cluster has entered termination: its
+// outcome is decided, or a kill is under way or done. From then on Reconcile's
+// termination branch owns State and the conditions.
+func isClusterTerminating(cluster *v2pb.RayCluster) bool {
+	return conditionStatus(cluster, SucceededCondition) != apipb.CONDITION_STATUS_UNKNOWN ||
+		conditionStatus(cluster, KillingCondition) == apipb.CONDITION_STATUS_TRUE ||
+		conditionStatus(cluster, KilledCondition) == apipb.CONDITION_STATUS_TRUE
 }
 
 // isClusterFullyTerminal reports whether cluster has fully converged to a terminal
 // outcome: Succeeded is decided (TRUE or FALSE) and any kill/cleanup processing it
 // triggers has completed (Killing back to FALSE with Killed TRUE).
 //
-// cleanupCluster and markClusterFailed are the only two places that produce this
-// combination, and both set Killing=FALSE/Killed=TRUE atomically alongside their last
-// piece of cleanup work (or, for markClusterFailed, with no cleanup needed at all since
-// the remote resource is already confirmed gone). So checking it on a freshly-fetched
-// object is race-free: there is no window where it reads true before cleanup has
-// actually finished.
+// Every write that produces this combination sets Killing=FALSE/Killed=TRUE atomically
+// alongside its last piece of cleanup work. For cleanupCluster that is the delete it
+// issues (or nothing, for a cluster that was never launched); for markFailedUpdate and
+// the KubeRay delete handler's expected-deletion write there is none left, since the
+// remote resource is already confirmed gone. So checking it on a freshly-fetched object
+// is race-free: there is no window where it reads true before cleanup has actually
+// finished.
 func isClusterFullyTerminal(cluster *v2pb.RayCluster) bool {
 	succeeded := jobsutils.GetCondition(&cluster.Status.StatusConditions, SucceededCondition, cluster.Generation)
 	if succeeded.Status == apipb.CONDITION_STATUS_UNKNOWN {
@@ -596,11 +704,12 @@ func isClusterFullyTerminal(cluster *v2pb.RayCluster) bool {
 	return killing.Status == apipb.CONDITION_STATUS_FALSE && killed.Status == apipb.CONDITION_STATUS_TRUE
 }
 
-// finalizeIfTerminal is the single call site for freezing a RayCluster. Every path that
-// can drive a cluster to a fully terminal outcome — the normal kill/cleanup convergence
-// in Reconcile's termination branch, and markClusterFailed's NotFound-on-remote write —
-// calls this right after its own status write completes, instead of each calling
-// markImmutableIfTerminal separately.
+// finalizeIfTerminal is Reconcile's call site for freezing a RayCluster. Every path in
+// Reconcile that can drive a cluster to a fully terminal outcome — the normal
+// kill/cleanup convergence in the termination branch, and markClusterFailed's
+// NotFound-on-remote write — calls this right after its own status write completes,
+// instead of each calling markImmutableIfTerminal separately. The KubeRay delete
+// handler has no result to return and calls markImmutableIfTerminal itself.
 func (r *Reconciler) finalizeIfTerminal(ctx context.Context, cluster *v2pb.RayCluster, log logr.Logger) (ctrl.Result, error) {
 	if err := r.markImmutableIfTerminal(ctx, cluster); err != nil {
 		log.Error(err, "failed to mark cluster immutable after termination")
@@ -621,7 +730,17 @@ func (r *Reconciler) finalizeIfTerminal(ctx context.Context, cluster *v2pb.RayCl
 // re-fetch also avoids a resourceVersion conflict with that preceding update, and the
 // whole operation retries on conflict for the same reason.
 func (r *Reconciler) markImmutableIfTerminal(ctx context.Context, cluster *v2pb.RayCluster) error {
-	if err := retry.OnError(retry.DefaultRetry, jobsutils.IsRetriableError, func() error {
+	// A conflict here means a concurrent writer -- the reconcile loop and the
+	// watcher both reach this path -- won the race. The closure re-fetches, so a
+	// retry simply observes their write and no-ops; without this the caller would
+	// surface a spurious error for an outcome that is already correct. The API
+	// handler reports a conflict as gRPC FailedPrecondition, which
+	// IsRetriableError matches; IsConflict covers an api.Handler that returns
+	// Kubernetes errors as they are.
+	isRetriable := func(err error) bool {
+		return apiErrors.IsConflict(err) || jobsutils.IsRetriableError(err)
+	}
+	if err := retry.OnError(retry.DefaultRetry, isRetriable, func() error {
 		latest := &v2pb.RayCluster{}
 		if err := r.Get(ctx, cluster.Namespace, cluster.Name, &metav1.GetOptions{}, latest); err != nil {
 			return err
@@ -647,38 +766,25 @@ func (r *Reconciler) markImmutableIfTerminal(ctx context.Context, cluster *v2pb.
 // Killing=FALSE directly means cleanupCluster will never issue a pointless
 // DeleteJobCluster against it. That same condition set is what isClusterFullyTerminal
 // looks for; the caller is responsible for calling finalizeIfTerminal afterwards to act
-// on it.
+// on it. The caller found the cluster neither terminating nor frozen, but a watcher
+// handler can have got there since -- the KubeRay delete handler records the same
+// vanished object and freezes it -- so a cluster that is frozen or terminating by the
+// time of the write is left alone: its outcome is recorded, or the termination branch
+// owns it.
 func (r *Reconciler) markClusterFailed(
 	ctx context.Context,
 	cluster *v2pb.RayCluster,
 	reason string,
 	message string,
 ) error {
+	markFailed := markFailedUpdate(reason, message)
 	// Persist the terminal status via the status subresource.
 	if err := jobsutils.UpdateStatusWithRetries(
 		ctx, r, cluster,
 		func(obj client.Object) {
-			c := obj.(*v2pb.RayCluster)
-			c.Status.State = v2pb.RAY_CLUSTER_STATE_FAILED
-
-			succeededCond := jobsutils.GetCondition(&c.Status.StatusConditions, SucceededCondition, c.Generation)
-			jobsutils.UpdateCondition(succeededCond, jobsutils.ConditionUpdateParams{
-				Status:     apipb.CONDITION_STATUS_FALSE,
-				Generation: c.Generation,
-				Reason:     reason,
-				Message:    message,
-			})
-			killingCond := jobsutils.GetCondition(&c.Status.StatusConditions, KillingCondition, c.Generation)
-			jobsutils.UpdateCondition(killingCond, jobsutils.ConditionUpdateParams{
-				Status:     apipb.CONDITION_STATUS_FALSE,
-				Generation: c.Generation,
-			})
-			killedCond := jobsutils.GetCondition(&c.Status.StatusConditions, KilledCondition, c.Generation)
-			jobsutils.UpdateCondition(killedCond, jobsutils.ConditionUpdateParams{
-				Status:     apipb.CONDITION_STATUS_TRUE,
-				Generation: c.Generation,
-				Reason:     reason,
-			})
+			if cluster := obj.(*v2pb.RayCluster); !isFrozenOrDeleting(cluster) && !isClusterTerminating(cluster) {
+				markFailed(cluster)
+			}
 		},
 		&metav1.UpdateOptions{FieldManager: "markClusterFailed"},
 	); err != nil {
@@ -688,142 +794,41 @@ func (r *Reconciler) markClusterFailed(
 	return nil
 }
 
-// applyRayClusterStatus updates the RayCluster status and conditions based on the cluster state from KubeRay.
-func (r *Reconciler) applyRayClusterStatus(
-	rayCluster *v2pb.RayCluster,
-	clusterStatus *matypes.JobClusterStatus,
-	logger logr.Logger,
-	res *ctrl.Result,
-) error {
-	if clusterStatus == nil || clusterStatus.Ray == nil {
-		return fmt.Errorf("received nil cluster status")
-	}
+// markFailedUpdate is the status change markClusterFailed persists. The KubeRay
+// delete handler writes it directly, under the handlers' own retry policy, and
+// also onto a cluster whose outcome is already decided. That outcome is kept, with
+// its reason: the resource vanishing does not change why the cluster ended. So a
+// cluster that had already succeeded ends TERMINATED, as a normal termination
+// would, rather than FAILED.
+func markFailedUpdate(reason, message string) func(obj client.Object) {
+	return func(obj client.Object) {
+		c := obj.(*v2pb.RayCluster)
+		c.Status.State = v2pb.RAY_CLUSTER_STATE_FAILED
 
-	// Extract state from the typed status
-	newState := clusterStatus.Ray.State
-
-	// Update cluster state
-	rayCluster.Status.State = newState
-	res.RequeueAfter = requeueAfter
-
-	// Copy log_url through from the mapper. The mapper owns its computation
-	// (it knows the LogPersistenceConfig, the local cluster name, and the
-	// compute-cluster Ray namespace); the controller just surfaces the value
-	// onto the v2 RayClusterStatus so callers see it.
-	if clusterStatus.Ray.LogUrl != "" {
-		rayCluster.Status.LogUrl = clusterStatus.Ray.LogUrl
-	}
-
-	if len(clusterStatus.Ray.PodErrors) > 0 {
-		rayCluster.Status.PodErrors = clusterStatus.Ray.PodErrors
-	}
-
-	// Extract reason for condition updates
-	reasonStr := clusterStatus.Reason
-	// Handle state-specific logic and condition updates
-	succeededCond := jobsutils.GetCondition(&rayCluster.Status.StatusConditions, SucceededCondition, rayCluster.Generation)
-	launchedCond := jobsutils.GetCondition(&rayCluster.Status.StatusConditions, LaunchedCondition, rayCluster.Generation)
-
-	switch newState {
-	case v2pb.RAY_CLUSTER_STATE_READY:
-		logger.Info("cluster is ready", "state", newState, "reason", reasonStr)
-		jobsutils.UpdateCondition(launchedCond, jobsutils.ConditionUpdateParams{
-			Status:     apipb.CONDITION_STATUS_TRUE,
-			Generation: rayCluster.Generation,
-			Reason:     "ClusterReady",
-		})
-		// A cluster that was waiting for admission is admitted now. Only flip
-		// an existing Queued condition: clusters that were never suspended
-		// should not grow one.
-		for _, cond := range rayCluster.Status.StatusConditions {
-			if cond.GetType() == QueuedCondition && cond.GetStatus() == apipb.CONDITION_STATUS_TRUE {
-				jobsutils.UpdateCondition(cond, jobsutils.ConditionUpdateParams{
-					Status:     apipb.CONDITION_STATUS_FALSE,
-					Generation: rayCluster.Generation,
-					Reason:     "ClusterAdmitted",
-				})
-			}
-		}
-		res.RequeueAfter = time.Duration(0)
-
-	case v2pb.RAY_CLUSTER_STATE_FAILED:
-		logger.Error(nil, "cluster has failed, marking for termination",
-			"state", newState,
-			"reason", reasonStr,
-		)
-
-		// Mark succeeded condition as false to trigger termination
-		if reasonStr == "" {
-			reasonStr = "ClusterFailed"
-		}
-		jobsutils.UpdateCondition(succeededCond, jobsutils.ConditionUpdateParams{
-			Status:     apipb.CONDITION_STATUS_FALSE,
-			Generation: rayCluster.Generation,
-			Reason:     reasonStr,
-		})
-
-	case v2pb.RAY_CLUSTER_STATE_UNHEALTHY:
-		logger.Info("cluster is unhealthy, marking for termination",
-			"state", newState,
-			"reason", reasonStr,
-		)
-		// Mark succeeded condition as false to trigger termination
-		if reasonStr == "" {
-			reasonStr = "ClusterUnhealthy"
-		}
-		jobsutils.UpdateCondition(succeededCond, jobsutils.ConditionUpdateParams{
-			Status:     apipb.CONDITION_STATUS_FALSE,
-			Generation: rayCluster.Generation,
-			Reason:     reasonStr,
-		})
-
-	case v2pb.RAY_CLUSTER_STATE_UNKNOWN:
-		if jobsutils.HasTerminalPodErrors(clusterStatus.Ray.PodErrors) {
-			logger.Error(nil, "cluster state is unknown with terminal pod errors, marking as failed",
-				"state", newState,
-				"reason", reasonStr,
-				"podErrors", clusterStatus.Ray.PodErrors,
-			)
-			rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_FAILED
-			if reasonStr == "" {
-				reasonStr = "ClusterFailedWithPodErrors"
-			}
+		switch conditionStatus(c, SucceededCondition) {
+		case apipb.CONDITION_STATUS_UNKNOWN:
+			succeededCond := jobsutils.GetCondition(&c.Status.StatusConditions, SucceededCondition, c.Generation)
 			jobsutils.UpdateCondition(succeededCond, jobsutils.ConditionUpdateParams{
 				Status:     apipb.CONDITION_STATUS_FALSE,
-				Generation: rayCluster.Generation,
-				Reason:     reasonStr,
+				Generation: c.Generation,
+				Reason:     reason,
+				Message:    message,
 			})
-		} else {
-			logger.Info("cluster state is unknown, will continue monitoring",
-				"state", newState,
-				"reason", reasonStr,
-				"podErrors", clusterStatus.Ray.PodErrors)
+		case apipb.CONDITION_STATUS_TRUE:
+			// Nothing failed: the cluster had already succeeded when the
+			// resource went, so it ends the way a normal termination does.
+			c.Status.State = v2pb.RAY_CLUSTER_STATE_TERMINATED
 		}
-
-	case v2pb.RAY_CLUSTER_STATE_SUSPENDED:
-		// Suspension (RayCluster.spec.suspend, e.g. Kueue admission gating) is
-		// non-terminal: pods are intentionally absent until the cluster is
-		// unsuspended, so keep monitoring without touching the Succeeded
-		// condition. Deliberately no terminal-pod-error check here — while
-		// suspended, pod-level signals carry no meaning.
-		// Surface the wait as a Queued condition so callers can tell "held
-		// for admission" apart from "launching".
-		queuedCond := jobsutils.GetCondition(&rayCluster.Status.StatusConditions, QueuedCondition, rayCluster.Generation)
-		jobsutils.UpdateCondition(queuedCond, jobsutils.ConditionUpdateParams{
-			Status:     apipb.CONDITION_STATUS_TRUE,
-			Generation: rayCluster.Generation,
-			Reason:     "AwaitingAdmission",
-			Message:    reasonStr,
+		killingCond := jobsutils.GetCondition(&c.Status.StatusConditions, KillingCondition, c.Generation)
+		jobsutils.UpdateCondition(killingCond, jobsutils.ConditionUpdateParams{
+			Status:     apipb.CONDITION_STATUS_FALSE,
+			Generation: c.Generation,
 		})
-		logger.Info("cluster is suspended (queued for admission), continuing to monitor",
-			"state", newState,
-			"reason", reasonStr)
-
-	default:
-		logger.Info("cluster in transitional state, continuing to monitor",
-			"state", newState.String(),
-			"reason", reasonStr)
+		killedCond := jobsutils.GetCondition(&c.Status.StatusConditions, KilledCondition, c.Generation)
+		jobsutils.UpdateCondition(killedCond, jobsutils.ConditionUpdateParams{
+			Status:     apipb.CONDITION_STATUS_TRUE,
+			Generation: c.Generation,
+			Reason:     reason,
+		})
 	}
-
-	return nil
 }
