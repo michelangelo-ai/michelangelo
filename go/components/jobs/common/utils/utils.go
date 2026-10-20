@@ -301,6 +301,7 @@ var terminalPodErrorReasons = map[string]bool{
 	"CreateContainerError":       true,
 	"ErrImagePull":               true,
 	"RunContainerError":          true,
+	"InvalidImageName":           true,
 }
 
 // postMortemPodErrorReasons are reasons the kubelet reports about a pod that

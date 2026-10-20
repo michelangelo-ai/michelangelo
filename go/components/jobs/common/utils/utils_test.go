@@ -618,3 +618,16 @@ func TestIsPostMortemPodError(t *testing.T) {
 	assert.False(t, IsPostMortemPodError(&v2pb.PodErrors{Reason: "ImagePullBackOff"}))
 	assert.False(t, IsPostMortemPodError(&v2pb.PodErrors{}))
 }
+
+// TestWaitingStateErrorReasonsAreTerminal holds waitingStateErrorReasons to its
+// promise: a container that cannot start for one of these reasons never will,
+// so the cluster has to be able to converge on FAILED instead of sitting in
+// UNKNOWN until the workflow times out.
+func TestWaitingStateErrorReasonsAreTerminal(t *testing.T) {
+	for reason := range waitingStateErrorReasons {
+		t.Run(reason, func(t *testing.T) {
+			assert.True(t, HasTerminalPodErrors([]*v2pb.PodErrors{{Reason: reason}}),
+				"%s is recorded as a container failure, so it must be terminal", reason)
+		})
+	}
+}
