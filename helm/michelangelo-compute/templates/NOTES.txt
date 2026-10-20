@@ -11,3 +11,22 @@ Operators:
 {{- else }}
   - Spark Operator: not installed (spark-operator.enabled=false)
 {{- end }}
+
+Control-plane identity:
+{{- if .Values.rayManager.create }}
+{{- $name := .Values.rayManager.name }}
+  - ServiceAccount {{ $name }} in namespace default, bound to Role {{ $name }}
+{{- if .Values.rayManager.grants.kueueRead }}
+    and ClusterRole {{ $name }}-clusterqueues
+{{- end }}
+{{- if .Values.rayManager.tokenSecret }}
+  - Registration reads its token from Secret {{ $name }}-token in namespace default:
+      kubectl --namespace default get secret {{ $name }}-token --output jsonpath='{.data.token}' | base64 --decode
+  - The token does not expire. To rotate it, delete that Secret and run helm upgrade again;
+    the old token stops working at once.
+{{- else }}
+  - No token Secret rendered (rayManager.tokenSecret=false)
+{{- end }}
+{{- else }}
+  - not rendered (rayManager.create=false)
+{{- end }}

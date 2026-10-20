@@ -201,6 +201,92 @@ assert_contains "$webhook_output" $'spec:\n  replicas: 2\n'
 webhook_pdb_output="$(template --show-only charts/spark-operator/templates/webhook/poddisruptionbudget.yaml)"
 assert_contains "$webhook_pdb_output" $'\n  minAvailable: 1'
 
+# Control-plane identity. Helm prints a Role before its RoleBinding and a
+# ClusterRole before its ClusterRoleBinding, so a rules block followed by ---
+# is that object's complete rule list.
+ray_rule='  - apiGroups:
+      - ray.io
+    resources:
+      - rayclusters
+      - rayjobs
+    verbs:
+      - create
+      - get
+      - list
+      - watch
+      - update
+      - patch
+      - delete'
+spark_rule='  - apiGroups:
+      - sparkoperator.k8s.io
+    resources:
+      - sparkapplications
+    verbs:
+      - create
+      - get
+      - list
+      - watch
+      - update
+      - patch
+      - delete'
+localqueues_rule='  - apiGroups:
+      - kueue.x-k8s.io
+    resources:
+      - localqueues
+    verbs:
+      - get
+      - list
+      - watch'
+clusterqueues_rule='  - apiGroups:
+      - kueue.x-k8s.io
+    resources:
+      - clusterqueues
+    verbs:
+      - get
+      - list
+      - watch'
+
+# Asserts that every identity object and reference is named after name.
+assert_identity() {
+  local output="$1"
+  local name="$2"
+  local identity_objects
+
+  identity_objects="$(objects "$output")"
+  assert_object "$identity_objects" "ServiceAccount default $name"
+  assert_object "$identity_objects" "Secret default $name-token"
+  assert_object "$identity_objects" "Role default $name"
+  assert_object "$identity_objects" "RoleBinding default $name"
+  assert_object "$identity_objects" "ClusterRole - $name-clusterqueues"
+  assert_object "$identity_objects" "ClusterRoleBinding - $name-clusterqueues"
+  assert_contains "$output" $'  annotations:\n    kubernetes.io/service-account.name: '"$name"$'\ntype: kubernetes.io/service-account-token'
+  assert_contains "$output" $'  kind: Role\n  name: '"$name"$'\nsubjects:\n  - kind: ServiceAccount\n    name: '"$name"$'\n    namespace: default'
+  assert_contains "$output" $'  kind: ClusterRole\n  name: '"$name"$'-clusterqueues\nsubjects:\n  - kind: ServiceAccount\n    name: '"$name"$'\n    namespace: default'
+}
+
+identity_output="$(template --show-only templates/rbac/ray-manager.yaml)"
+assert_identity "$identity_output" ray-manager
+assert_contains "$identity_output" $'rules:\n'"$ray_rule"$'\n'"$localqueues_rule"$'\n---'
+assert_contains "$identity_output" $'rules:\n'"$clusterqueues_rule"$'\n---'
+
+spark_grant_output="$(template --show-only templates/rbac/ray-manager.yaml --set rayManager.grants.spark=true)"
+assert_contains "$spark_grant_output" $'rules:\n'"$ray_rule"$'\n'"$spark_rule"$'\n'"$localqueues_rule"$'\n---'
+
+no_kueue_output="$(template --show-only templates/rbac/ray-manager.yaml --set rayManager.grants.kueueRead=false)"
+assert_contains "$no_kueue_output" $'rules:\n'"$ray_rule"$'\n---'
+assert_not_contains "$no_kueue_output" clusterqueues
+
+no_token_objects="$(objects "$(template --show-only templates/rbac/ray-manager.yaml --set rayManager.tokenSecret=false)")"
+assert_object "$no_token_objects" 'ServiceAccount default ray-manager'
+assert_object_count "$no_token_objects" Secret 0
+
+no_identity_objects="$(objects "$(template --set rayManager.create=false)")"
+assert_not_contains "$no_identity_objects" ray-manager
+
+custom_name_output="$(template --show-only templates/rbac/ray-manager.yaml --set rayManager.name=michelangelo-control-plane)"
+assert_identity "$custom_name_output" michelangelo-control-plane
+assert_not_contains "$(objects "$custom_name_output")" ray-manager
+
 # The Spark invariants no longer apply once the subchart is disabled.
 spark_disabled_values=(
   --set spark-operator.enabled=false
@@ -247,6 +333,8 @@ expect_failure "Spark job namespaces set to all namespaces" \
   --set-json 'spark-operator.spark.jobNamespaces=[""]'
 expect_failure "unknown top-level value" "unknownComputeValue" \
   --set unknownComputeValue=true
+expect_failure "unknown rayManager value" "unknownIdentityValue" \
+  --set rayManager.unknownIdentityValue=true
 expect_failure "non-boolean subchart toggle" "spark-operator.enabled" \
   --set-string spark-operator.enabled=false
 expect_failure "Kubernetes older than the chart's kubeVersion" ">=1.29.0-0" \
