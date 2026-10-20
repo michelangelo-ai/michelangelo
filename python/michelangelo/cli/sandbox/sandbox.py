@@ -2,6 +2,8 @@
 
 import argparse
 import base64
+import json
+import re
 import shutil
 import string
 import subprocess
@@ -42,6 +44,38 @@ _chart_dir = Path(__file__).parent.parent.parent.parent.parent / "helm" / "miche
 
 # Path to values-k3d.yaml — used to read Helm-managed NodePorts dynamically
 _values_k3d_path = _chart_dir / "values-k3d.yaml"
+
+# Path to the michelangelo-compute Helm chart, installed on the control plane and
+# on every compute cluster: KubeRay, the Spark Operator, the ray-manager identity
+# the control plane authenticates as, and the runtime contract jobs read.
+_compute_chart_dir = _chart_dir.parent / "michelangelo-compute"
+_compute_release = "michelangelo-compute"
+_compute_namespace = "michelangelo-compute"
+
+# Object-storage Secret the chart's runtime contract names on every cluster.
+# _ensure_credentials_secret creates it on the control plane; the chart renders
+# a copy on each compute cluster.
+_compute_credentials_secret = "minio-credentials"
+
+# Oldest Kubernetes version the chart supports (kubeVersion in its Chart.yaml).
+_compute_min_kube_version = (1, 29)
+
+# Helm repos of the chart's pinned dependencies.
+_compute_helm_repos = {
+    "kuberay": "https://ray-project.github.io/kuberay-helm",
+    "spark-operator": "https://kubeflow.github.io/spark-operator",
+}
+
+# --exclude value → (subchart it disables, API group of that operator's CRDs).
+_compute_operators = {
+    "ray": ("kuberay-operator", "ray.io"),
+    "spark": ("spark-operator", "sparkoperator.k8s.io"),
+}
+
+# Targets of _compute_values. A compute cluster reaches the control plane's
+# object store and apiserver through NodePorts on the control plane's agent node.
+_compute_target_control_plane = "control-plane"
+_compute_target_compute_cluster = "compute-cluster"
 
 # Hardcoded infra ports — services NOT installed by the michelangelo Helm chart.
 # These are raw YAML resources deployed by _deploy_services() directly.
@@ -654,22 +688,23 @@ def _refresh_mysql_schema():
     )
 
 
-def _helm_ensure_repos():
-    """Add cadence and temporal helm repos if not already present."""
+def _helm_ensure_repos(repos: Optional[dict[str, str]] = None):
+    """Add helm repos (name → URL) if not already present.
+
+    Defaults to the cadence and temporal repos of the control plane chart.
+    """
+    if repos is None:
+        repos = {
+            "cadence-workflow": "https://cadence-workflow.github.io/cadence-charts",
+            "temporal": "https://go.temporal.io/helm-charts",
+        }
     try:
         helm_existing_repos = subprocess.check_output(["helm", "repo", "list"]).decode()
     except subprocess.CalledProcessError:
         helm_existing_repos = ""
-    if "cadence-workflow" not in helm_existing_repos:
-        _exec(
-            "helm",
-            "repo",
-            "add",
-            "cadence-workflow",
-            "https://cadence-workflow.github.io/cadence-charts",
-        )
-    if "temporal" not in helm_existing_repos:
-        _exec("helm", "repo", "add", "temporal", "https://go.temporal.io/helm-charts")
+    for name, url in repos.items():
+        if name not in helm_existing_repos:
+            _exec("helm", "repo", "add", name, url)
 
 
 def _helm_delete_services(helm_args: list[str]):
@@ -936,6 +971,16 @@ def _build_helm_set_args(ns: argparse.Namespace) -> list[str]:
     if "ui" in getattr(ns, "exclude", []):
         args += ["--set", "envoy.enabled=false"]
 
+    # Ray log collectors on a compute cluster cannot resolve objectstore:9091.
+    # The control plane's agent node serves the object store on NodePort 30007,
+    # resolvable from both clusters on the k3d network.
+    if getattr(ns, "create_compute_cluster", False):
+        args += [
+            "--set",
+            "controllermgr.jobs.k8sengine.mapper.logPersistence.storageEndpoint="
+            f"k3d-{_michelangelo_sandbox_kube_cluster_name}-agent-0:30007",
+        ]
+
     # Arbitrary --set passthrough from the caller (e.g. CI workflow)
     for kv in getattr(ns, "helm_set", []):
         args += ["--set", kv]
@@ -949,7 +994,6 @@ def _deploy_services(ns: argparse.Namespace):
         "boot.yaml",
         "mysql.yaml",  # MySQL database
         "mysql-ingester.yaml",  # Auto-generated ingester schema from protobuf
-        "michelangelo-config.yaml",
     ]
     links = []
 
@@ -1082,30 +1126,22 @@ def _deploy_services(ns: argparse.Namespace):
 
     # Create credentials secrets only if they don't already exist.
     _ensure_credentials_secret()
-    # Patch michelangelo-config to match the live secret values.
-    _sync_config_from_secret()
 
     _assert_command(
         "helm", "Helm not found, please install it: https://helm.sh/docs/intro/install/"
     )
 
-    # Handle the case when helm repo list returns non-zero exit status (no repositories)
-    try:
-        helm_existing_repos = subprocess.check_output(["helm", "repo", "list"]).decode()
-    except subprocess.CalledProcessError:
-        # helm repo list returns non-zero exit status when no repositories
-        # are configured
-        helm_existing_repos = ""
-
     # The History Server above is deployed even with --exclude ray, so its
     # images are imported outside the KubeRay operator step.
     _import_log_persistence_images()
 
-    if "ray" not in ns.exclude:
-        _create_kuberay_operator(helm_existing_repos)
-
-    if "spark" not in ns.exclude:
-        _create_spark_operator(helm_existing_repos)
+    # KubeRay and the Spark Operator (each skipped by --exclude), the
+    # ray-manager identity, and the michelangelo-config ConfigMap that Ray and
+    # Spark jobs read.
+    control_plane_context = f"k3d-{_michelangelo_sandbox_kube_cluster_name}"
+    _install_compute_chart(
+        control_plane_context, _compute_target_control_plane, ns.exclude
+    )
 
     _kube_wait(timeout=getattr(ns, "wait_timeout", 600))
 
@@ -1114,6 +1150,9 @@ def _deploy_services(ns: argparse.Namespace):
     # Must happen BEFORE domain registration — Cadence frontend only exists
     # after helm install.
     _deploy_app_services(ns)
+
+    # The chart tests reach the apiserver, which only now exists.
+    _test_compute_chart(control_plane_context, ns.exclude)
 
     if ns.workflow == "cadence":
         _create_cadence_domain(links)
@@ -1124,15 +1163,13 @@ def _deploy_services(ns: argparse.Namespace):
         ns, "compute_cluster_name", _default_compute_kube_cluster_name
     )
     if create_compute_cluster:
-        _create_compute_cluster(compute_cluster_name)
+        _create_compute_cluster(compute_cluster_name, ns.exclude)
         _create_compute_cluster_crd(compute_cluster_name)
-        _apply_compute_cluster_rbac(compute_cluster_name)
         _create_compute_cluster_secrets(compute_cluster_name)
     else:
         # Use the control plane cluster as the default compute cluster if a
         # dedicated compute cluster is not requested
         _create_compute_cluster_crd(_michelangelo_sandbox_kube_cluster_name)
-        _apply_compute_cluster_rbac(_michelangelo_sandbox_kube_cluster_name)
         _create_compute_cluster_secrets(_michelangelo_sandbox_kube_cluster_name)
 
     _kube_wait()
@@ -1173,66 +1210,6 @@ def _create_bucket_setup(bucket_names):
         _exec("kubectl", "apply", "-f", temp_file.name)
 
     print(f"📦 Created bucket setup job with buckets: {bucket_names_str}")
-
-
-def _create_spark_operator(helm_existing_repos):
-    if "spark-operator" not in helm_existing_repos:
-        _exec(
-            "helm",
-            "repo",
-            "add",
-            "spark-operator",
-            "https://kubeflow.github.io/spark-operator",
-        )
-        _exec("helm", "repo", "update")
-
-    _exec(
-        "helm",
-        "upgrade",
-        "--install",
-        "spark-operator",
-        "spark-operator/spark-operator",
-        "--namespace",
-        "spark-operator",
-        "--create-namespace",
-        "--wait",
-        "--timeout",
-        "20m",
-    )
-
-
-def _create_kuberay_operator(helm_existing_repos):
-    """Create the KubeRay operator using Helm.
-
-    Reference:
-    https://docs.ray.io/en/releases-2.49.1/cluster/kubernetes/getting-started/
-    kuberay-operator-installation.html#method-1-helm-recommended.
-    """
-    if "kuberay" not in helm_existing_repos:
-        _exec(
-            "helm",
-            "repo",
-            "add",
-            "kuberay",
-            "https://ray-project.github.io/kuberay-helm",
-        )
-        _exec("helm", "repo", "update")
-
-    _exec(
-        "helm",
-        "upgrade",
-        "--install",
-        "kuberay-operator",
-        "kuberay/kuberay-operator",
-        "--version",
-        "1.7.1",
-        "--namespace",
-        "ray-system",
-        "--create-namespace",
-        "--wait",
-        "--timeout",
-        "20m",
-    )
 
 
 _LOG_PERSISTENCE_IMAGES = [
@@ -1669,53 +1646,6 @@ def _ensure_credentials_secret():
             )
 
 
-def _sync_config_from_secret():
-    """Patch michelangelo-config ConfigMap credentials from object-storage-credentials.
-
-    Ray pods consume the michelangelo-config ConfigMap via envFrom. After the
-    ConfigMap is (re)applied from the YAML file (which contains michelangeloadmin
-    defaults), this function overwrites the credential fields with whatever
-    is actually in the object-storage-credentials Secret, so all consumers see
-    the same credentials.
-    """
-    result = subprocess.run(
-        [
-            "kubectl",
-            "get",
-            "secret",
-            "object-storage-credentials",
-            "-o",
-            "jsonpath={.data.AWS_ACCESS_KEY_ID} {.data.AWS_SECRET_ACCESS_KEY}",
-        ],
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode != 0:
-        # Secret will be created by _ensure_credentials_secret
-        return
-
-    import base64
-
-    parts = result.stdout.strip().split()
-    if len(parts) != 2:
-        return
-    access_key = base64.b64decode(parts[0]).decode()
-    secret_key = base64.b64decode(parts[1]).decode()
-
-    subprocess.run(
-        [
-            "kubectl",
-            "patch",
-            "configmap",
-            "michelangelo-config",
-            "--patch",
-            f'{{"data":{{"AWS_ACCESS_KEY_ID":"{access_key}","AWS_SECRET_ACCESS_KEY":"{secret_key}"}}}}',
-        ],
-        check=False,
-        capture_output=True,
-    )
-
-
 def _kube_apply(path: Path, context: Optional[str] = None):
     args = ["kubectl"]
     if context:
@@ -1869,24 +1799,6 @@ def _kube_wait(pods: bool = True, jobs: bool = True, timeout: int = 600):
         )
 
 
-def _apply_compute_cluster_rbac(cluster_name: str):
-    """Apply RBAC for Ray management in the compute cluster.
-
-    This creates the ServiceAccount `ray-manager`, a namespaced Role with permissions on
-    Ray resources, and a RoleBinding to bind them, in the `default` namespace of the
-    jobs cluster.
-    """
-    rbac_path = _dir / "resources" / "rbac-ray.yaml"
-    _exec(
-        "kubectl",
-        "--context",
-        f"k3d-{cluster_name}",
-        "apply",
-        "-f",
-        str(rbac_path),
-    )
-
-
 def _kube_run(
     image: str,
     command: list[str],
@@ -1923,6 +1835,7 @@ def _exec(
     retry_attempts: int = 0,
     retry_delay_seconds: int = 5,
     raise_error: bool = False,
+    capture_output: bool = False,
 ):
     """Execute a shell command with optional retries.
 
@@ -1940,9 +1853,12 @@ def _exec(
             If True, the function will raise a subprocess.CalledProcessError.
             If False, the function will terminate the program with the exit
             code of the failed command. Defaults to False.
+        capture_output: If True, return the command's stdout instead of
+            printing it. Defaults to False.
 
     Returns:
-        None.
+        The command's stdout as a string if capture_output is True,
+        otherwise None.
 
     Raises:
         subprocess.CalledProcessError: If the command fails after all retries
@@ -1961,6 +1877,8 @@ def _exec(
     for i in range(retry_attempts + 1):
         try:
             print("[+]", " ".join(args))
+            if capture_output:
+                return subprocess.check_output(args, text=True)
             subprocess.check_call(args)
             return
         except subprocess.CalledProcessError as e:
@@ -1987,7 +1905,206 @@ def _err_exit(err_message: str, code: int = 1):
     sys.exit(code)
 
 
-def _create_compute_cluster(cluster_name: str):
+def _check_kube_version(context: str):
+    """Exit with an actionable error if the cluster is older than the chart allows."""
+    output = _exec(
+        "kubectl", "--context", context, "version", "-o", "json", capture_output=True
+    )
+    server = json.loads(output).get("serverVersion", {})
+    try:
+        # Managed providers report minor versions such as "29+".
+        version = (int(server["major"]), int(server["minor"].rstrip("+")))
+    except (KeyError, ValueError):
+        version = (0, 0)
+    if version < _compute_min_kube_version:
+        minimum = ".".join(str(v) for v in _compute_min_kube_version)
+        _err_exit(
+            f"{context} runs Kubernetes {server.get('gitVersion', 'unknown')}, "
+            f"but the michelangelo-compute chart requires {minimum} or newer. "
+            "Upgrade k3d (its default k3s image sets the Kubernetes version), "
+            "then recreate the sandbox: ma sandbox delete && ma sandbox create"
+        )
+
+
+def _build_compute_chart():
+    """Download the pinned operator charts into the michelangelo-compute chart."""
+    _helm_ensure_repos(_compute_helm_repos)
+    _exec("helm", "dependency", "build", str(_compute_chart_dir))
+
+
+def _apply_compute_crds(context: str, exclude: list[str]):
+    """Server-side apply the CRDs of the operators the chart installs.
+
+    helm upgrade never updates CRDs, so they are applied first to match the
+    pinned operator versions. helm show crds lists the CRDs of every subchart,
+    enabled or not, so they are filtered by API group.
+    """
+    groups = {
+        group for svc, (_, group) in _compute_operators.items() if svc not in exclude
+    }
+    if not groups:
+        return
+    output = _exec("helm", "show", "crds", str(_compute_chart_dir), capture_output=True)
+    # The KubeRay CRDs are large: parse them with libyaml when available
+    # and apply the documents as written.
+    loader = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
+    crds = [
+        doc
+        for doc in re.split(r"^---[ \t]*$", output, flags=re.MULTILINE)
+        if (yaml.load(doc, Loader=loader) or {}).get("spec", {}).get("group") in groups
+    ]
+    if not crds:
+        return
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as crds_file:
+        crds_file.write("".join(f"---{doc}" for doc in crds))
+        crds_file.flush()
+        _exec(
+            "kubectl",
+            "--context",
+            context,
+            "apply",
+            "--server-side",
+            "--force-conflicts",
+            "-f",
+            crds_file.name,
+        )
+
+
+def _read_object_storage_credentials() -> tuple[str, str]:
+    """Return the keys in the control plane's object-storage Secret.
+
+    Returns:
+        The access key ID and the secret access key.
+    """
+    output = _exec(
+        "kubectl",
+        "--context",
+        f"k3d-{_michelangelo_sandbox_kube_cluster_name}",
+        "-n",
+        "default",
+        "get",
+        "secret",
+        _compute_credentials_secret,
+        "-o",
+        "jsonpath={.data.AWS_ACCESS_KEY_ID} {.data.AWS_SECRET_ACCESS_KEY}",
+        capture_output=True,
+    )
+    keys = [base64.b64decode(k).decode() for k in output.split()]
+    if len(keys) != 2:
+        _err_exit(
+            f"Secret {_compute_credentials_secret} on the control plane must hold "
+            "AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY"
+        )
+    return keys[0], keys[1]
+
+
+def _compute_values(target: str, exclude: list[str]) -> dict:
+    """Return michelangelo-compute values for the control plane or a compute cluster.
+
+    Compute clusters get their own copy of the control plane's object-storage
+    keys. The operators keep the chart defaults unless --exclude disables them.
+    """
+    assert target in (_compute_target_control_plane, _compute_target_compute_cluster)
+    if target == _compute_target_control_plane:
+        storage_endpoint = "http://objectstore:9091"
+        registry_endpoint = "michelangelo-apiserver:15566"
+        credentials = {"name": _compute_credentials_secret, "create": False}
+    else:
+        agent = f"k3d-{_michelangelo_sandbox_kube_cluster_name}-agent-0"
+        storage_endpoint = f"http://{agent}:30007"  # object-store API NodePort
+        registry_endpoint = f"{agent}:30009"  # apiserver NodePort
+        access_key_id, secret_access_key = _read_object_storage_credentials()
+        credentials = {
+            "name": _compute_credentials_secret,
+            "create": True,
+            "accessKeyId": access_key_id,
+            "secretAccessKey": secret_access_key,
+        }
+    values = {
+        "runtime": {
+            "config": {
+                "MA_FILE_SYSTEM": "s3://default",
+                "MA_FILE_SYSTEM_S3_SCHEME": "http",
+                "AWS_ENDPOINT_URL": storage_endpoint,
+                "REGISTRY_ENDPOINT": registry_endpoint,
+            },
+            "objectStorageCredentials": credentials,
+        },
+    }
+    for svc, (subchart, _) in _compute_operators.items():
+        if svc in exclude:
+            values[subchart] = {"enabled": False}
+    return values
+
+
+def _install_compute_chart(context: str, target: str, exclude: list[str]):
+    """Install or upgrade the michelangelo-compute chart on a cluster.
+
+    The chart tests check the runtime contract's endpoints, so a compute
+    cluster is tested right after install, while the control plane is tested
+    by the caller once its apiserver is up.
+    """
+    _check_kube_version(context)
+    _build_compute_chart()
+    _apply_compute_crds(context, exclude)
+    # mkstemp creates the file readable by its owner only: it can hold the
+    # object-storage keys. It is removed when the block exits.
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as values_file:
+        yaml.safe_dump(_compute_values(target, exclude), values_file)
+        values_file.flush()
+        _exec(
+            "helm",
+            "upgrade",
+            "--install",
+            _compute_release,
+            str(_compute_chart_dir),
+            "--kube-context",
+            context,
+            "-n",
+            _compute_namespace,
+            "--create-namespace",
+            "-f",
+            values_file.name,
+            "--wait",
+            "--timeout",
+            "20m",
+        )
+    # The chart's namespaced Role replaces the cluster-wide grant that earlier
+    # sandboxes applied from rbac-ray.yaml.
+    _exec(
+        "kubectl",
+        "--context",
+        context,
+        "delete",
+        "clusterrolebinding/ray-manager-binding",
+        "clusterrole/ray-manager",
+        "--ignore-not-found",
+    )
+    if target == _compute_target_compute_cluster:
+        _test_compute_chart(context, exclude)
+
+
+def _test_compute_chart(context: str, exclude: list[str]):
+    """Run the michelangelo-compute chart tests on a cluster."""
+    if "apiserver" in exclude:
+        print(
+            "Skipping the michelangelo-compute chart tests: they check "
+            "REGISTRY_ENDPOINT, and --exclude apiserver leaves it unserved."
+        )
+        return
+    _exec(
+        "helm",
+        "test",
+        _compute_release,
+        "--kube-context",
+        context,
+        "-n",
+        _compute_namespace,
+        "--logs",
+    )
+
+
+def _create_compute_cluster(cluster_name: str, exclude: Optional[list[str]] = None):
     """Create a dedicated compute cluster for running Ray jobs.
 
     This function sets up a separate Kubernetes cluster specifically for executing
@@ -1995,22 +2112,21 @@ def _create_compute_cluster(cluster_name: str):
 
     Infrastructure Components:
     - k3d cluster with 1 server and 2 agent nodes
-    - KubeRay operator for managing Ray clusters
-    - RBAC permissions for ray-manager service account
+    - michelangelo-compute chart: KubeRay and the Spark Operator (each skipped
+      by --exclude) and the ray-manager service account the control plane
+      authenticates as
 
     Storage Configuration (required for Ray jobs):
-    - michelangelo-config ConfigMap (S3 endpoint and credentials)
-    - aws-credentials Secret (for AWS CLI access)
+    - michelangelo-config ConfigMap and minio-credentials Secret, rendered by
+      the chart, pointing at the control plane's object store and apiserver
 
     Network Configuration:
     - Ray client port: 10001
     - Ray dashboard: 8265
 
-    Note: Ray pods reference the michelangelo-config ConfigMap via envFrom,
-    which is why storage must be set up in the compute cluster.
-
     Args:
         cluster_name: Name of the k3d cluster to create
+        exclude: Excluded sandbox services; ray and spark skip that operator.
     """
     args = [
         "k3d",
@@ -2033,29 +2149,9 @@ def _create_compute_cluster(cluster_name: str):
 
     _exec(*args)
 
-    # Add kuberay operator to the jobs cluster
-    _exec(
-        "helm",
-        "install",
-        "--kube-context",
-        f"k3d-{cluster_name}",
-        "kuberay-operator",
-        "kuberay/kuberay-operator",
-        "--version",
-        "1.7.1",
-        "--namespace",
-        "ray-system",
-        "--create-namespace",
-        "--wait",
-        "--timeout",
-        "20m",
+    _install_compute_chart(
+        f"k3d-{cluster_name}", _compute_target_compute_cluster, exclude or []
     )
-
-    # Create michelangelo-config ConfigMap pointing to control plane's MinIO
-    _create_config_in_compute_cluster(cluster_name)
-
-    # Create aws-credentials Secret
-    _create_aws_credentials_in_cluster(cluster_name)
 
     print(
         f"\nJobs cluster '{cluster_name}' created successfully "
@@ -2174,8 +2270,6 @@ def _create_compute_cluster_crd(cluster_name: str, scheduler_type: str = ""):
 
     # Extract host and port from server URL
     # Example: "https://host.docker.internal:52910"
-    import re
-
     match = re.search(r"(https://[^:]+):(\d+)", server_url)
     if not match:
         raise ValueError(
@@ -2224,6 +2318,35 @@ def _create_compute_cluster_crd(cluster_name: str, scheduler_type: str = ""):
         print(f"Server URL: {server_url}")
 
 
+def _read_ray_manager_token(cluster_name: str, timeout_seconds: int = 60) -> str:
+    """Return the token in the chart's ray-manager-token Secret.
+
+    Kubernetes fills in the token after helm creates the Secret, so poll for it.
+    """
+    for _ in range(timeout_seconds // 2):
+        token = _exec(
+            "kubectl",
+            "--context",
+            f"k3d-{cluster_name}",
+            "-n",
+            "default",
+            "get",
+            "secret",
+            "ray-manager-token",
+            "-o",
+            "jsonpath={.data.token}",
+            capture_output=True,
+        )
+        if token:
+            return base64.b64decode(token).decode()
+        time.sleep(2)
+    _err_exit(
+        f"Secret ray-manager-token on k3d-{cluster_name} has no token after "
+        f"{timeout_seconds}s. Check the release: helm status {_compute_release} "
+        f"--kube-context k3d-{cluster_name} -n {_compute_namespace}"
+    )
+
+
 def _create_compute_cluster_secrets(cluster_name: str):
     """Create Kubernetes secrets for the kubeconfig of the given cluster name."""
     # Get kubeconfig for the cluster
@@ -2265,26 +2388,9 @@ def _create_compute_cluster_secrets(cluster_name: str):
             ca_file.name,
         )
 
-    # Create a new token for the ray-manager service account in the jobs cluster
-    token_decoded = (
-        subprocess.check_output(
-            [
-                "kubectl",
-                "--context",
-                f"k3d-{cluster_name}",
-                "-n",
-                "default",
-                "create",
-                "token",
-                "ray-manager",
-                # Required to override kubectl's 1h default token TTL;
-                # set ~10y to prevent frequent sandbox expirations
-                "--duration=87600h",
-            ]
-        )
-        .decode()
-        .strip()
-    )
+    # Read the non-expiring token of the ray-manager service account in the
+    # jobs cluster
+    token_decoded = _read_ray_manager_token(cluster_name)
 
     # Create a secret for the user token
     token_secret = {
