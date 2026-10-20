@@ -1223,7 +1223,12 @@ func TestRayJobEventHandler(t *testing.T) {
 				Generation: 1,
 			},
 			Status: v2pb.RayJobStatus{
-				StatusConditions: make([]*apipb.Condition, 0),
+				StatusConditions: []*apipb.Condition{
+					{
+						Type:   constants.LaunchedCondition,
+						Status: apipb.CONDITION_STATUS_TRUE,
+					},
+				},
 			},
 		}
 	}
@@ -1666,6 +1671,15 @@ func TestJobWatcherHandlersIgnoreMissingGlobalJob(t *testing.T) {
 // logs they emit.
 func setupJobWatcherTestWithConcurrentWriter(t *testing.T, global *v2pb.RayJob, concurrentState v2pb.RayJobState) (*Reconciler, *int, *observer.ObservedLogs) {
 	t.Helper()
+	return setupJobWatcherTestWithConcurrentUpdate(t, global, func(stored *v2pb.RayJob) {
+		stored.Status.State = concurrentState
+	})
+}
+
+// setupJobWatcherTestWithConcurrentUpdate is setupJobWatcherTestWithConcurrentWriter
+// for a concurrent writer that applies concurrentUpdate to the stored job.
+func setupJobWatcherTestWithConcurrentUpdate(t *testing.T, global *v2pb.RayJob, concurrentUpdate func(stored *v2pb.RayJob)) (*Reconciler, *int, *observer.ObservedLogs) {
+	t.Helper()
 
 	statusWrites := 0
 	fakeClient := fake.NewClientBuilder().
@@ -1682,7 +1696,7 @@ func setupJobWatcherTestWithConcurrentWriter(t *testing.T, global *v2pb.RayJob, 
 				if err := c.Get(ctx, client.ObjectKeyFromObject(obj), &stored); err != nil {
 					return err
 				}
-				stored.Status.State = concurrentState
+				concurrentUpdate(&stored)
 				if err := c.SubResource(subResource).Update(ctx, &stored); err != nil {
 					return err
 				}
@@ -1763,6 +1777,48 @@ func TestJobWatcherHandlersRecheckGuardsAfterConflict(t *testing.T) {
 				"a job that already finished must not be reported as killed")
 		})
 	}
+}
+
+// TestRayJobEventHandlerRechecksLaunchAfterConflict covers a status write that
+// conflicts because the job was replaced by an unlaunched one of the same name.
+// The retry must leave the new job alone, as an event that found it so would.
+func TestRayJobEventHandlerRechecksLaunchAfterConflict(t *testing.T) {
+	global := &v2pb.RayJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       rayJobName,
+			Namespace:  testNamespace,
+			Generation: 1,
+		},
+		Status: v2pb.RayJobStatus{
+			State: v2pb.RAY_JOB_STATE_INITIALIZING,
+			StatusConditions: []*apipb.Condition{
+				{
+					Type:   constants.LaunchedCondition,
+					Status: apipb.CONDITION_STATUS_TRUE,
+				},
+			},
+		},
+	}
+	r, statusWrites, _ := setupJobWatcherTestWithConcurrentUpdate(t, global, func(stored *v2pb.RayJob) {
+		stored.Status = v2pb.RayJobStatus{}
+	})
+
+	r.rayJobEventHandler(&rayv1.RayJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   rayJobName,
+			Labels: map[string]string{constants.ProjectNameLabelKey: testNamespace},
+		},
+		Status: rayv1.RayJobStatus{
+			JobStatus:           rayv1.JobStatusRunning,
+			JobDeploymentStatus: rayv1.JobDeploymentStatusRunning,
+		},
+	})
+
+	var updated v2pb.RayJob
+	require.NoError(t, r.Get(context.Background(),
+		types.NamespacedName{Namespace: testNamespace, Name: rayJobName}, &updated))
+	assert.Equal(t, 1, *statusWrites, "the retry must not write to a job that has not launched")
+	assert.Equal(t, v2pb.RAY_JOB_STATE_INVALID, updated.Status.State)
 }
 
 // TestRayJobDeleteEventHandlerLogsConcurrentSkip covers a delete whose status
@@ -2077,6 +2133,23 @@ func TestJobWatcherHandlersSkipWithoutWriting(t *testing.T) {
 		}
 	}
 
+	// Reconcile owns a job until it records the launch: a write before then
+	// would race the launch write.
+	notLaunched := func() *v2pb.RayJob {
+		global := newGlobal()
+		global.Status = v2pb.RayJobStatus{
+			State:   v2pb.RAY_JOB_STATE_INITIALIZING,
+			Message: "cluster default/test-cluster is not ready",
+			StatusConditions: []*apipb.Condition{
+				{
+					Type:   constants.LaunchedCondition,
+					Status: apipb.CONDITION_STATUS_UNKNOWN,
+				},
+			},
+		}
+		return global
+	}
+
 	tests := []struct {
 		name   string
 		global func() *v2pb.RayJob
@@ -2088,6 +2161,16 @@ func TestJobWatcherHandlersSkipWithoutWriting(t *testing.T) {
 			name:   "status update with nothing changed",
 			global: newGlobal,
 			event:  func(r *Reconciler) { r.rayJobEventHandler(newLocal(rayv1.JobStatusRunning)) },
+		},
+		{
+			name:   "add event for a job not launched yet",
+			global: notLaunched,
+			event:  func(r *Reconciler) { r.rayJobAddEventHandler(newLocal(rayv1.JobStatusRunning)) },
+		},
+		{
+			name:   "update event for a job not launched yet",
+			global: notLaunched,
+			event:  func(r *Reconciler) { r.rayJobUpdateEventHandler(nil, newLocal(rayv1.JobStatusRunning)) },
 		},
 		{
 			name: "status update for a job being deleted",
@@ -2205,4 +2288,112 @@ func TestRayJobStoppedIsKilledAndFrozen(t *testing.T) {
 	assert.Equal(t, string(rayv1.JobStatusStopped), stored.Status.JobStatus)
 	assert.Equal(t, "Job was stopped", stored.Status.Message)
 	assert.True(t, utils.IsImmutable(&stored), "a terminal job must be frozen so the ingester can archive it")
+}
+
+// TestRayJobLaunchIsNotLostToAnEarlyKubeRayEvent covers KubeRay's first status
+// update for a new RayJob arriving between CreateJob and Reconcile's launch
+// write. Were the watcher to write it, the launch write would conflict and lose
+// Launched=TRUE, and the next pass would call CreateJob again -- where a
+// transient error fetching the remote RayCluster records FAILED while the
+// KubeRay RayJob runs on. The watcher leaves the job alone until the launch is
+// recorded and takes the status from the next KubeRay update.
+func TestRayJobLaunchIsNotLostToAnEarlyKubeRayEvent(t *testing.T) {
+	ctx := context.Background()
+
+	rayJob := &v2pb.RayJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       rayJobName,
+			Namespace:  testNamespace,
+			Generation: 1,
+		},
+		Spec: v2pb.RayJobSpec{
+			Cluster: &apipb.ResourceIdentifier{
+				Name:      testClusterName,
+				Namespace: testNamespace,
+			},
+			Entrypoint: "echo Hello World",
+		},
+	}
+	cluster := &v2pb.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       testClusterName,
+			Namespace:  testNamespace,
+			Generation: 1,
+		},
+		Status: v2pb.RayClusterStatus{
+			State: v2pb.RAY_CLUSTER_STATE_READY,
+			Assignment: &v2pb.AssignmentInfo{
+				Cluster: assignedCluster,
+			},
+		},
+	}
+	var writtenStates []v2pb.RayJobState
+	fakeClient := fake.NewClientBuilder().
+		WithScheme(newTestScheme()).
+		WithObjects(rayJob, cluster).
+		WithStatusSubresource(rayJob, cluster).
+		WithInterceptorFuncs(interceptor.Funcs{
+			SubResourceUpdate: func(ctx context.Context, c client.Client, subResource string, obj client.Object, opts ...client.SubResourceUpdateOption) error {
+				if job, ok := obj.(*v2pb.RayJob); ok {
+					writtenStates = append(writtenStates, job.Status.State)
+				}
+				return c.SubResource(subResource).Update(ctx, obj, opts...)
+			},
+		}).
+		Build()
+
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+	mockFedClient := clientmocks.NewMockFederatedClient(mockCtrl)
+	mockCache := newMockClusterCache()
+	mockCache.addCluster(assignedCluster, &v2pb.Cluster{
+		ObjectMeta: metav1.ObjectMeta{Name: assignedCluster},
+	})
+	r := &Reconciler{
+		Client:          fakeClient,
+		logger:          zapr.NewLogger(zaptest.NewLogger(t)),
+		federatedClient: mockFedClient,
+		clusterCache:    mockCache,
+	}
+
+	newLocal := func(jobStatus rayv1.JobStatus, deploymentStatus rayv1.JobDeploymentStatus) *rayv1.RayJob {
+		return &rayv1.RayJob{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   rayJobName,
+				Labels: map[string]string{constants.ProjectNameLabelKey: testNamespace},
+			},
+			Status: rayv1.RayJobStatus{
+				JobStatus:           jobStatus,
+				JobDeploymentStatus: deploymentStatus,
+			},
+		}
+	}
+	// KubeRay reports the RayJob it just created before CreateJob returns.
+	mockFedClient.EXPECT().CreateJob(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(context.Context, runtime.Object, runtime.Object, *v2pb.Cluster) error {
+			r.rayJobAddEventHandler(newLocal(rayv1.JobStatusNew, rayv1.JobDeploymentStatusInitializing))
+			return nil
+		}).
+		Times(1)
+	mockFedClient.EXPECT().GetJobStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(&jobtypes.JobStatus{
+		Ray: &v2pb.RayJobStatus{
+			JobStatus: string(rayv1.JobStatusRunning),
+			State:     v2pb.RAY_JOB_STATE_RUNNING,
+		},
+	}, nil).AnyTimes()
+
+	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: rayJobName}}
+	_, err := r.Reconcile(ctx, request)
+	require.NoError(t, err)
+	// The launch write enqueues the job again.
+	_, err = r.Reconcile(ctx, request)
+	require.NoError(t, err)
+	r.rayJobUpdateEventHandler(nil, newLocal(rayv1.JobStatusRunning, rayv1.JobDeploymentStatusRunning))
+
+	var stored v2pb.RayJob
+	require.NoError(t, r.Get(ctx, request.NamespacedName, &stored))
+	launched := jobsutils.GetCondition(&stored.Status.StatusConditions, constants.LaunchedCondition, stored.Generation)
+	assert.Equal(t, apipb.CONDITION_STATUS_TRUE, launched.Status, "the launch must be recorded")
+	assert.Equal(t, v2pb.RAY_JOB_STATE_RUNNING, stored.Status.State)
+	assert.NotContains(t, writtenStates, v2pb.RAY_JOB_STATE_FAILED, "a job that launched must never be recorded as failed")
 }

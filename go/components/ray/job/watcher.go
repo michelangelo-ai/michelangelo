@@ -135,6 +135,20 @@ func (r *Reconciler) rayJobEventHandler(obj interface{}) {
 		return
 	}
 
+	// Reconcile owns a job's status until it records the launch, as in the
+	// delete handler. A write before then races the launch write: KubeRay's
+	// first status update for the RayJob CreateJob just created lands first, the
+	// launch write conflicts and Launched=TRUE is lost, and the next pass calls
+	// CreateJob again -- where a transient error fetching the remote RayCluster
+	// records FAILED while the KubeRay RayJob runs on. Skipping also keeps a
+	// leftover KubeRay RayJob of an earlier job with the same name off a job
+	// that has not launched its own. The next KubeRay update, or the informer's
+	// re-sync, delivers the status once the launch is recorded.
+	if !isLaunched(&rayJob) {
+		log.V(1).Info("skipping status update for job that is not launched yet")
+		return
+	}
+
 	jobStatus, err := k8sengine.Mapper{}.MapLocalJobStatusToGlobal(local)
 	if err != nil || jobStatus == nil || jobStatus.Ray == nil {
 		log.Error(err, "could not map local ray job status")
@@ -162,8 +176,10 @@ func (r *Reconciler) rayJobEventHandler(obj interface{}) {
 			return getErr
 		}
 		// Re-check on the fresh copy: a conflict means another writer got in
-		// first and may have frozen, deleted or finished the job.
-		if utils.IsImmutable(&current) || current.GetDeletionTimestamp() != nil || isTerminalRayJobState(current.Status.State) {
+		// first and may have frozen, deleted or finished the job, or replaced it
+		// with an unlaunched one of the same name.
+		if utils.IsImmutable(&current) || current.GetDeletionTimestamp() != nil ||
+			isTerminalRayJobState(current.Status.State) || !isLaunched(&current) {
 			return nil
 		}
 		current.Status.State = mapped.State
@@ -174,6 +190,12 @@ func (r *Reconciler) rayJobEventHandler(obj interface{}) {
 	}); err != nil {
 		log.Error(err, "could not update the global ray job status")
 	}
+}
+
+// isLaunched reports whether Reconcile has recorded the job's launch.
+func isLaunched(job *v2pb.RayJob) bool {
+	launched := jobsutils.GetCondition(&job.Status.StatusConditions, constants.LaunchedCondition, job.Generation)
+	return launched.Status == apipb.CONDITION_STATUS_TRUE
 }
 
 // rayJobDeleteEventHandler handles delete events for KubeRay RayJob resources.
