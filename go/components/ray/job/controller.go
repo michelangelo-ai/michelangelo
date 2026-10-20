@@ -127,6 +127,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	if !reflect.DeepEqual(originalRayJob.Status, rayJob.Status) {
 		// update the resource in ETCD
 		err := r.Status().Update(ctx, &rayJob)
+		if apiErrors.IsConflict(err) {
+			// Another writer updated the job after this pass read it. That is
+			// routine, and its write triggers a fresh pass on the current object.
+			logger.V(1).Info("status update conflicted with a concurrent write, requeueing")
+			return ctrl.Result{Requeue: true}, nil
+		}
 		if err != nil {
 			logger.Error(err, "failed to update status")
 			res.RequeueAfter = requeueAfter

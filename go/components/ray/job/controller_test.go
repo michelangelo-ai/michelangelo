@@ -1210,6 +1210,105 @@ func TestReconciler_Reconcile_RetriesImmutableAnnotationWhenStatusUnchanged(t *t
 	assert.True(t, utils.IsImmutable(&after), "already-terminal RayJob must still be marked immutable even when this pass made no status change")
 }
 
+// TestReconcile_StatusWriteConflictIsRequeuedQuietly covers Reconcile's status
+// write losing a race with another writer. That is routine -- the other write
+// triggers a fresh pass, which works from the current object -- so it is
+// requeued without an error or an error log. Any other failed write is still
+// reported.
+func TestReconcile_StatusWriteConflictIsRequeuedQuietly(t *testing.T) {
+	tests := []struct {
+		name          string
+		writeErr      error
+		wantResult    ctrl.Result
+		wantErr       bool
+		wantErrorLogs []string
+	}{
+		{
+			name: "conflict",
+			writeErr: apiErrors.NewConflict(schema.GroupResource{Group: "michelangelo.api", Resource: "rayjobs"},
+				rayJobName, fmt.Errorf("the object has been modified")),
+			wantResult: ctrl.Result{Requeue: true},
+		},
+		{
+			name:          "other error",
+			writeErr:      apiErrors.NewInternalError(fmt.Errorf("etcdserver: leader changed")),
+			wantResult:    ctrl.Result{RequeueAfter: requeueAfter},
+			wantErr:       true,
+			wantErrorLogs: []string{"failed to update status"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rayJob := &v2pb.RayJob{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       rayJobName,
+					Namespace:  testNamespace,
+					Generation: 1,
+				},
+				Spec: v2pb.RayJobSpec{
+					Cluster: &apipb.ResourceIdentifier{
+						Name:      testClusterName,
+						Namespace: testNamespace,
+					},
+					Entrypoint: "echo Hello World",
+				},
+			}
+			cluster := &v2pb.RayCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       testClusterName,
+					Namespace:  testNamespace,
+					Generation: 1,
+				},
+				Status: v2pb.RayClusterStatus{
+					State: v2pb.RAY_CLUSTER_STATE_READY,
+					Assignment: &v2pb.AssignmentInfo{
+						Cluster: assignedCluster,
+					},
+				},
+			}
+			fakeClient := fake.NewClientBuilder().
+				WithScheme(newTestScheme()).
+				WithObjects(rayJob, cluster).
+				WithStatusSubresource(rayJob, cluster).
+				WithInterceptorFuncs(interceptor.Funcs{
+					SubResourceUpdate: func(context.Context, client.Client, string, client.Object, ...client.SubResourceUpdateOption) error {
+						return tt.writeErr
+					},
+				}).
+				Build()
+
+			mockCtrl := gomock.NewController(t)
+			defer mockCtrl.Finish()
+			mockFedClient := clientmocks.NewMockFederatedClient(mockCtrl)
+			mockFedClient.EXPECT().CreateJob(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+			mockCache := newMockClusterCache()
+			mockCache.addCluster(assignedCluster, &v2pb.Cluster{
+				ObjectMeta: metav1.ObjectMeta{Name: assignedCluster},
+			})
+			zapLogger, logs := newObservedLogger(t)
+			r := &Reconciler{
+				Client:          fakeClient,
+				logger:          zapr.NewLogger(zapLogger),
+				federatedClient: mockFedClient,
+				clusterCache:    mockCache,
+			}
+
+			res, err := r.Reconcile(context.Background(), ctrl.Request{
+				NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: rayJobName},
+			})
+
+			if tt.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+			assert.Equal(t, tt.wantResult, res)
+			assert.Equal(t, tt.wantErrorLogs, errorLogs(logs))
+		})
+	}
+}
+
 // TestRayJobEventHandler verifies KubeRay RayJob execution status is mapped onto
 // the global RayJob.
 func TestRayJobEventHandler(t *testing.T) {
@@ -2069,15 +2168,17 @@ func TestRayJobConvergesAfterDeleteHandlerExhaustsRetries(t *testing.T) {
 	require.NoError(t, r.Get(ctx, request.NamespacedName, &stored))
 	require.Equal(t, v2pb.RAY_JOB_STATE_RUNNING, stored.Status.State, "the handler should have given up")
 
-	// The workqueue retries a reconcile that returns an error; model that by
-	// reconciling until one pass succeeds.
+	// The workqueue runs a reconcile again when it returns an error or asks for
+	// a requeue; model that by reconciling until one pass does neither.
+	var res ctrl.Result
 	var err error
 	for i := 0; i < conflicts; i++ {
-		if _, err = r.Reconcile(ctx, request); err == nil {
+		if res, err = r.Reconcile(ctx, request); err == nil && !res.Requeue {
 			break
 		}
 	}
 	require.NoError(t, err)
+	require.False(t, res.Requeue, "the conflicts should have run out")
 
 	require.NoError(t, r.Get(ctx, request.NamespacedName, &stored))
 	assert.Equal(t, v2pb.RAY_JOB_STATE_FAILED, stored.Status.State)
