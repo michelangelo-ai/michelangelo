@@ -124,7 +124,7 @@ Instead of passing credentials through `--set`, point the chart at Secrets you m
 metadataStorage:
   existingSecret: my-mysql-secret    # must contain key: rootPassword
 objectStorage:
-  existingSecret: my-s3-secret       # must contain keys: accessKeyId, secretAccessKey
+  existingSecret: my-s3-secret       # must contain keys: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
 ```
 
 ### Enable monitoring resources
@@ -302,7 +302,7 @@ Most commonly set values. See `helm/michelangelo/values.yaml` for the complete l
 | `objectStorage.endpoint` | yes | — | S3-compatible endpoint |
 | `objectStorage.accessKeyId` | yes¹ | — | S3 access key ID |
 | `objectStorage.secretAccessKey` | yes¹ | — | S3 secret access key |
-| `objectStorage.existingSecret` | no | — | Secret containing `accessKeyId`/`secretAccessKey` |
+| `objectStorage.existingSecret` | no | — | Secret containing `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` |
 | `workflow.engine` | no | `cadence` | `cadence` or `temporal` |
 | `workflow.endpoint` | yes | — | `host:port` of workflow frontend |
 | `apiserver.tls.enabled` | no | `false` | Enable TLS on the apiserver gRPC port |
