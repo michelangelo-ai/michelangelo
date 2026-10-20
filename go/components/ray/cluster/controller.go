@@ -38,6 +38,11 @@ const (
 	// How often a launched cluster is re-checked on its compute cluster, as a
 	// fallback for events the federated watcher missed (see Reconcile).
 	_safetyNetPeriod = 5 * time.Minute
+	// How long that re-check waits for the compute cluster to answer. The
+	// federated client sets no request timeout and the controller runs a single
+	// worker, so a member cluster that stops answering would otherwise hang
+	// every reconcile behind it.
+	_remoteCallTimeout = 30 * time.Second
 )
 
 // Condition constants for tracking RayCluster lifecycle
@@ -245,8 +250,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			}
 			return r.finalizeIfTerminal(ctx, &rayCluster, logger)
 		}
-		// An unreachable compute cluster says nothing about the RayCluster on it;
-		// leave the status to the watcher and look again next period.
+		// An unreachable compute cluster, or one that does not answer in time,
+		// says nothing about the RayCluster on it; leave the status to the
+		// watcher and look again next period.
 		logger.Error(err, "failed to get cluster status")
 		return ctrl.Result{RequeueAfter: _safetyNetPeriod}, nil
 	}
@@ -616,8 +622,12 @@ func (r *Reconciler) getClusterIfScheduled(cluster *v2pb.RayCluster) *v2pb.Clust
 	return assignedCluster
 }
 
-// getClusterStatus retrieves the current status of a RayCluster resource from the federated cluster
+// getClusterStatus retrieves the current status of a RayCluster resource from the federated cluster,
+// giving up after _remoteCallTimeout.
 func (r *Reconciler) getClusterStatus(ctx context.Context, log logr.Logger, assignedKubeCluster *v2pb.Cluster, rayCluster *v2pb.RayCluster) (*matypes.JobClusterStatus, error) {
+	ctx, cancel := context.WithTimeout(ctx, _remoteCallTimeout)
+	defer cancel()
+
 	// Use the federated client to get the status from the remote cluster
 	clusterStatus, err := r.federatedClient.GetJobClusterStatus(ctx, rayCluster, assignedKubeCluster)
 	if err != nil {

@@ -1294,6 +1294,30 @@ func TestSafetyNetDoesNotRewindANewerWrite(t *testing.T) {
 	}
 }
 
+// TestSafetyNetBoundsTheRemoteCall: the federated client sets no request
+// timeout and the controller runs a single worker, so the safety net's call to
+// a compute cluster that has stopped answering must not hold up Reconcile, and
+// every cluster queued behind it, for good. Running out of time is an ordinary
+// remote error.
+func TestSafetyNetBoundsTheRemoteCall(t *testing.T) {
+	r := setupWatcherTest(t, provisioningCluster())
+	withSafetyNet(t, r).EXPECT().GetJobClusterStatus(gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(ctx context.Context, _ runtime.Object, _ *v2pb.Cluster) (*matypes.JobClusterStatus, error) {
+			deadline, ok := ctx.Deadline()
+			require.True(t, ok, "the call to the compute cluster should have a deadline")
+			assert.LessOrEqual(t, time.Until(deadline), 30*time.Second)
+			return nil, fmt.Errorf("get ray cluster: %w", context.DeadlineExceeded)
+		})
+
+	res := reconcile(t, r)
+
+	assert.Equal(t, _safetyNetPeriod, res.RequeueAfter)
+	updated := getUpdatedCluster(t, r)
+	assert.Equal(t, v2pb.RAY_CLUSTER_STATE_PROVISIONING, updated.Status.State,
+		"a compute cluster that did not answer in time says nothing about the cluster")
+	assert.Nil(t, findCondition(updated.Status.StatusConditions, SucceededCondition))
+}
+
 // capturingManager is a manager that is never started; it records the runnables
 // added to it instead of running them.
 type capturingManager struct {
