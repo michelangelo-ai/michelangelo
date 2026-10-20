@@ -142,6 +142,14 @@ func (m Mapper) mapRayCluster(rayCluster *v2pb.RayCluster, cluster *v2pb.Cluster
 	workerGroupSpecs := getWorkerGroupSpecs(rayCluster.GetName(), rayCluster.GetSpec().Workers)
 	headGroupSpec := getHeadGroupSpec(rayCluster.GetSpec().Head)
 
+	// Task containers get the credentials Secret whether or not log persistence
+	// is on. Attaching it before the collector goes in keeps the sidecar on its
+	// own secretKeyRefs.
+	attachCredentialsSecret(&headGroupSpec.Template, m.LogPersistence.CredentialsSecret)
+	for i := range workerGroupSpecs {
+		attachCredentialsSecret(&workerGroupSpecs[i].Template, m.LogPersistence.CredentialsSecret)
+	}
+
 	if m.LogPersistence.Enabled {
 		injectCollectorSidecar(&headGroupSpec.Template, m.LogPersistence, "Head")
 		for i := range workerGroupSpecs {
