@@ -32,6 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
+	"github.com/michelangelo-ai/michelangelo/go/api"
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	maconfig "github.com/michelangelo-ai/michelangelo/go/base/config"
@@ -1356,12 +1357,22 @@ func TestRayClusterDeleteEventHandler_SkipsImmutable(t *testing.T) {
 		"immutable cluster should not be mutated by the delete handler")
 }
 
+// TestRayClusterDeleteEventHandler_ExpectedDeletion: the reconciler decides the
+// outcome before it starts a kill (setClusterSuccessConditionIfRequired runs
+// before setClusterKillIfRequired), so a delete that lands while Killing=TRUE
+// finds Succeeded already set. It completes the kill and must keep that outcome
+// rather than record the delete as an external one.
 func TestRayClusterDeleteEventHandler_ExpectedDeletion(t *testing.T) {
 	globalCluster := &v2pb.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
+		Spec: v2pb.RayClusterSpec{
+			Termination: &v2pb.TerminationSpec{Type: v2pb.TERMINATION_TYPE_FAILED, Reason: "user requested"},
+		},
 		Status: v2pb.RayClusterStatus{
 			State: v2pb.RAY_CLUSTER_STATE_READY,
 			StatusConditions: []*apipb.Condition{
+				{Type: LaunchedCondition, Status: apipb.CONDITION_STATUS_TRUE},
+				{Type: SucceededCondition, Status: apipb.CONDITION_STATUS_FALSE, Reason: "user requested"},
 				{Type: KillingCondition, Status: apipb.CONDITION_STATUS_TRUE},
 			},
 		},
@@ -1377,11 +1388,11 @@ func TestRayClusterDeleteEventHandler_ExpectedDeletion(t *testing.T) {
 	killingCond := findCondition(updated.Status.StatusConditions, KillingCondition)
 	require.NotNil(t, killingCond, "KillingCondition should exist")
 	assert.Equal(t, apipb.CONDITION_STATUS_FALSE, killingCond.Status)
-	// Succeeded is still UNKNOWN here, so the cluster is not fully terminal yet and
-	// must NOT be frozen — Reconcile's termination branch settles Succeeded and
-	// freezes it on a later pass.
-	assert.False(t, utils.IsImmutable(&updated),
-		"cluster with unsettled Succeeded should not be frozen yet")
+	succeededCond := findCondition(updated.Status.StatusConditions, SucceededCondition)
+	require.NotNil(t, succeededCond)
+	assert.Equal(t, "user requested", succeededCond.Reason,
+		"the outcome the reconciler decided must survive the delete")
+	assert.True(t, utils.IsImmutable(&updated), "the kill is complete, so the cluster should be frozen")
 }
 
 func TestRayClusterDeleteEventHandler_ExpectedDeletionFreezesWhenTerminal(t *testing.T) {
@@ -1411,6 +1422,63 @@ func TestRayClusterDeleteEventHandler_Tombstone(t *testing.T) {
 	// Should handle tombstone events with an unusable payload gracefully.
 	tombstone := cache.DeletedFinalStateUnknown{Key: "default/test-cluster", Obj: nil}
 	r.rayClusterDeleteEventHandler(tombstone)
+}
+
+// TestRayClusterDeleteEventHandler_TombstoneWithObject: when the informer missed
+// the delete itself, the last-known object arrives inside a tombstone, and the
+// handler has to act on it exactly as on a direct delete.
+func TestRayClusterDeleteEventHandler_TombstoneWithObject(t *testing.T) {
+	globalCluster := &v2pb.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
+		Status: v2pb.RayClusterStatus{
+			State: v2pb.RAY_CLUSTER_STATE_READY,
+			StatusConditions: []*apipb.Condition{
+				{Type: LaunchedCondition, Status: apipb.CONDITION_STATUS_TRUE},
+			},
+		},
+	}
+	r := setupWatcherTest(t, globalCluster)
+
+	r.rayClusterDeleteEventHandler(cache.DeletedFinalStateUnknown{
+		Key: "default/" + rayClusterName,
+		Obj: newKubeRayCluster(rayClusterName, rayv1.Ready),
+	})
+
+	updated := getUpdatedCluster(t, r)
+	assert.Equal(t, v2pb.RAY_CLUSTER_STATE_FAILED, updated.Status.State)
+	succeededCond := findCondition(updated.Status.StatusConditions, SucceededCondition)
+	require.NotNil(t, succeededCond)
+	assert.Equal(t, constants.ClusterKilled, succeededCond.Reason)
+	killedCond := findCondition(updated.Status.StatusConditions, KilledCondition)
+	require.NotNil(t, killedCond)
+	assert.Equal(t, apipb.CONDITION_STATUS_TRUE, killedCond.Status)
+	assert.True(t, utils.IsImmutable(&updated))
+}
+
+// TestRayClusterDeleteEventHandler_ReadBeforeCleanupLands: the handler's read
+// comes from the manager's cache, which can still show the kill under way when
+// cleanupCluster has already recorded it. The cluster must still end up frozen
+// with the outcome cleanupCluster recorded.
+func TestRayClusterDeleteEventHandler_ReadBeforeCleanupLands(t *testing.T) {
+	stored := terminatedCluster()
+	stale := stored.DeepCopy()
+	stale.Status.State = v2pb.RAY_CLUSTER_STATE_READY
+	stale.Status.StatusConditions = []*apipb.Condition{
+		{Type: LaunchedCondition, Status: apipb.CONDITION_STATUS_TRUE},
+		{Type: SucceededCondition, Status: apipb.CONDITION_STATUS_TRUE, Reason: "completed"},
+		{Type: KillingCondition, Status: apipb.CONDITION_STATUS_TRUE},
+	}
+	r, _ := setupWatcherTestWithStaleRead(t, stored, stale)
+
+	r.rayClusterDeleteEventHandler(newKubeRayCluster(rayClusterName, rayv1.Ready))
+
+	updated := getUpdatedCluster(t, r)
+	assert.Equal(t, v2pb.RAY_CLUSTER_STATE_TERMINATED, updated.Status.State)
+	succeededCond := findCondition(updated.Status.StatusConditions, SucceededCondition)
+	require.NotNil(t, succeededCond)
+	assert.Equal(t, apipb.CONDITION_STATUS_TRUE, succeededCond.Status)
+	assert.Equal(t, "completed", succeededCond.Reason)
+	assert.True(t, utils.IsImmutable(&updated))
 }
 
 // TestRayClusterDeleteEventHandler_KillBegunAfterReadOwnsOutcome: an external
@@ -1943,6 +2011,97 @@ func TestPodDeleteEventHandler_Tombstone(t *testing.T) {
 	r.podDeleteEventHandler(cache.DeletedFinalStateUnknown{Key: "default/head-pod", Obj: nil})
 }
 
+// TestPodDeleteEventHandler_TombstoneWithObject: a pod whose delete the informer
+// missed arrives as a tombstone carrying its last-known state, and its failure
+// still has to be recorded.
+func TestPodDeleteEventHandler_TombstoneWithObject(t *testing.T) {
+	globalCluster := &v2pb.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
+		Status:     v2pb.RayClusterStatus{State: v2pb.RAY_CLUSTER_STATE_PROVISIONING},
+	}
+	r := setupWatcherTest(t, globalCluster)
+
+	r.podDeleteEventHandler(cache.DeletedFinalStateUnknown{Key: "default/head-pod", Obj: crashedPod(corev1.PodFailed)})
+
+	updated := getUpdatedCluster(t, r)
+	require.Len(t, updated.Status.PodErrors, 1)
+	assert.Equal(t, "head-pod", updated.Status.PodErrors[0].Name)
+	assert.Equal(t, "Error", updated.Status.PodErrors[0].Reason)
+	assert.Equal(t, "boom", updated.Status.PodErrors[0].Message)
+}
+
+// failingStatusHandler is an API handler whose status writes fail with an error
+// that is not worth retrying.
+type failingStatusHandler struct {
+	api.Handler
+}
+
+func (failingStatusHandler) UpdateStatus(context.Context, client.Object, *metav1.UpdateOptions) error {
+	return errors.New("admission webhook denied the request")
+}
+
+// TestHandlerWriteFailureIsReported: a handler whose status write fails has no
+// requeue to fall back on, so the failure must at least be visible -- logged as
+// an error and counted against the handler -- and nothing that depends on the
+// write, such as the freeze after an external delete, may follow it.
+func TestHandlerWriteFailureIsReported(t *testing.T) {
+	launched := func() *v2pb.RayCluster {
+		return &v2pb.RayCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
+			Status: v2pb.RayClusterStatus{
+				State: v2pb.RAY_CLUSTER_STATE_PROVISIONING,
+				StatusConditions: []*apipb.Condition{
+					{Type: LaunchedCondition, Status: apipb.CONDITION_STATUS_TRUE},
+				},
+			},
+		}
+	}
+	cases := []struct {
+		handler string
+		event   func(r *Reconciler)
+	}{
+		{handler: "rayClusterEventHandler", event: func(r *Reconciler) {
+			r.rayClusterEventHandler(newKubeRayCluster(rayClusterName, rayv1.Ready))
+		}},
+		{handler: "rayClusterDeleteEventHandler", event: func(r *Reconciler) {
+			r.rayClusterDeleteEventHandler(newKubeRayCluster(rayClusterName, rayv1.Ready))
+		}},
+		{handler: "podEventHandler", event: func(r *Reconciler) {
+			r.podEventHandler(newHeadPod("head-pod", rayClusterName, corev1.PodRunning))
+		}},
+		{handler: "podErrorEventHandler", event: func(r *Reconciler) {
+			r.podErrorEventHandler(crashedPod(corev1.PodRunning))
+		}},
+		{handler: "podDeleteEventHandler", event: func(r *Reconciler) {
+			r.podDeleteEventHandler(crashedPod(corev1.PodFailed))
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.handler, func(t *testing.T) {
+			r, writes, logs := setupWatcherTestObserved(t, launched())
+			store := r.Handler
+			r.Handler = failingStatusHandler{Handler: store}
+			scope := tally.NewTestScope("test", nil)
+			r.metricsScope = scope
+
+			tc.event(r)
+
+			assert.Len(t, errorLogs(logs), 1, "the failed write should be logged as an error")
+			counter, ok := scope.Snapshot().Counters()["test.raycluster.handler_write_dropped+handler="+tc.handler]
+			require.True(t, ok, "the failed write should be counted against its handler")
+			assert.Equal(t, int64(1), counter.Value())
+			assert.Zero(t, *writes, "nothing should be written after a failed status write")
+			r.Handler = store
+			updated := getUpdatedCluster(t, r)
+			assert.Equal(t, v2pb.RAY_CLUSTER_STATE_PROVISIONING, updated.Status.State)
+			assert.Nil(t, updated.Status.HeadNode)
+			assert.Empty(t, updated.Status.PodErrors)
+			assert.Nil(t, findCondition(updated.Status.StatusConditions, KilledCondition))
+			assert.False(t, utils.IsImmutable(&updated))
+		})
+	}
+}
+
 // setupWatcherTestWithLaggingCache builds a Reconciler on the production API
 // handler, so a write fails the way it does in production -- a Kubernetes
 // conflict surfaces as a gRPC FailedPrecondition -- and makes every status
@@ -2221,4 +2380,43 @@ func TestFederatedWatcherMetricsAreNamespaced(t *testing.T) {
 	assert.True(t, slices.ContainsFunc(names, func(name string) bool {
 		return strings.HasPrefix(name, "test.raycluster.watcher.")
 	}), "the watcher's metrics should be under the raycluster scope, got %v", names)
+}
+
+// TestFederatedWatcherParams pins what the federated watcher asks each compute
+// cluster for. The label selectors are applied server-side and are what keeps
+// another control plane's pods and KubeRay objects -- or anyone else's -- away
+// from these handlers.
+func TestFederatedWatcherParams(t *testing.T) {
+	r := &Reconciler{
+		logger:       logr.Discard(),
+		env:          env.Context{RuntimeEnvironment: "staging"},
+		metricsScope: tally.NoopScope,
+	}
+
+	byResource := map[string]*jobsclient.WatcherParams{}
+	for _, params := range watchesRequestedBy(t, r) {
+		byResource[params.ResourceName] = params
+	}
+	require.Len(t, byResource, 2)
+
+	pods := byResource[corev1.ResourcePods.String()]
+	require.NotNil(t, pods, "the watcher should watch pods")
+	assert.Equal(t, k8sengine.RayLocalNamespace, pods.Namespace)
+	assert.IsType(t, &corev1.Pod{}, pods.ObjType)
+	assert.Equal(t, &metav1.LabelSelector{MatchLabels: map[string]string{
+		constants.RayNodeLabelKey:       constants.IsRayNodeValue,
+		constants.OwnerServiceLabelKey:  constants.MAOwnerServiceLabelValue,
+		constants.JobControlPlaneEnvKey: "staging",
+	}}, pods.LabelSelector)
+	assert.NotNil(t, pods.ResourceEventHandler)
+
+	rayClusters := byResource[constants.KubeRayResource]
+	require.NotNil(t, rayClusters, "the watcher should watch KubeRay clusters")
+	assert.Equal(t, k8sengine.RayLocalNamespace, rayClusters.Namespace)
+	assert.IsType(t, &rayv1.RayCluster{}, rayClusters.ObjType)
+	assert.Equal(t, &metav1.LabelSelector{MatchLabels: map[string]string{
+		constants.OwnerServiceLabelKey:  constants.MAOwnerServiceLabelValue,
+		constants.JobControlPlaneEnvKey: "staging",
+	}}, rayClusters.LabelSelector)
+	assert.NotNil(t, rayClusters.ResourceEventHandler)
 }
