@@ -1544,10 +1544,18 @@ func TestRayJobDeleteEventHandler(t *testing.T) {
 // job, since the fake client happily creates an object on write.
 func setupJobWatcherTestWithoutGlobal(t *testing.T) (*Reconciler, *int, *observer.ObservedLogs) {
 	t.Helper()
+	return setupJobWatcherTest(t)
+}
+
+// setupJobWatcherTest builds a Reconciler whose store holds objs, and returns a
+// counter of every write the handlers attempt along with the logs they emit.
+func setupJobWatcherTest(t *testing.T, objs ...client.Object) (*Reconciler, *int, *observer.ObservedLogs) {
+	t.Helper()
 
 	writes := 0
 	fakeClient := fake.NewClientBuilder().
 		WithScheme(newTestScheme()).
+		WithObjects(objs...).
 		WithStatusSubresource(&v2pb.RayJob{}).
 		WithInterceptorFuncs(interceptor.Funcs{
 			Update: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
@@ -1956,4 +1964,172 @@ func TestNewReconciler_NilMetricsScope(t *testing.T) {
 
 	require.NotNil(t, r.metricsScope)
 	assert.NotPanics(t, func() { r.getFederatedWatcher() })
+}
+
+// TestJobWatcherHandlersSkipWithoutWriting asserts the events the handlers must
+// drop without writing to the global RayJob.
+func TestJobWatcherHandlersSkipWithoutWriting(t *testing.T) {
+	newGlobal := func() *v2pb.RayJob {
+		return &v2pb.RayJob{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:       rayJobName,
+				Namespace:  testNamespace,
+				Generation: 1,
+			},
+			Status: v2pb.RayJobStatus{
+				State:               v2pb.RAY_JOB_STATE_RUNNING,
+				JobStatus:           string(rayv1.JobStatusRunning),
+				JobDeploymentStatus: string(rayv1.JobDeploymentStatusRunning),
+				Message:             "job is running",
+				StatusConditions: []*apipb.Condition{
+					{
+						Type:   constants.LaunchedCondition,
+						Status: apipb.CONDITION_STATUS_TRUE,
+					},
+				},
+			},
+		}
+	}
+	newLocal := func(jobStatus rayv1.JobStatus) *rayv1.RayJob {
+		return &rayv1.RayJob{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   rayJobName,
+				Labels: map[string]string{constants.ProjectNameLabelKey: testNamespace},
+			},
+			Status: rayv1.RayJobStatus{
+				JobStatus:           jobStatus,
+				JobDeploymentStatus: rayv1.JobDeploymentStatusRunning,
+				Message:             "job is running",
+			},
+		}
+	}
+
+	tests := []struct {
+		name   string
+		global func() *v2pb.RayJob
+		event  func(r *Reconciler)
+	}{
+		{
+			// The informer re-delivers every object on each resync, so an unchanged
+			// status must not turn into a write.
+			name:   "status update with nothing changed",
+			global: newGlobal,
+			event:  func(r *Reconciler) { r.rayJobEventHandler(newLocal(rayv1.JobStatusRunning)) },
+		},
+		{
+			name: "status update for a job being deleted",
+			global: func() *v2pb.RayJob {
+				global := newGlobal()
+				global.DeletionTimestamp = &metav1.Time{Time: time.Now()}
+				global.Finalizers = []string{"test-finalizer"}
+				return global
+			},
+			event: func(r *Reconciler) { r.rayJobEventHandler(newLocal(rayv1.JobStatusSucceeded)) },
+		},
+		{
+			name:   "status update without a project label",
+			global: newGlobal,
+			event: func(r *Reconciler) {
+				local := newLocal(rayv1.JobStatusSucceeded)
+				local.Labels = nil
+				r.rayJobEventHandler(local)
+			},
+		},
+		{
+			name:   "delete without a project label",
+			global: newGlobal,
+			event: func(r *Reconciler) {
+				local := newLocal(rayv1.JobStatusRunning)
+				local.Labels = nil
+				r.rayJobDeleteEventHandler(local)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r, writes, _ := setupJobWatcherTest(t, tt.global())
+
+			tt.event(r)
+
+			assert.Zero(t, *writes, "the event must not be written to the global job")
+		})
+	}
+}
+
+// TestRayJobStoppedIsKilledAndFrozen follows a stopped KubeRay RayJob through
+// the watcher and the reconcile its status write triggers: the watcher records
+// KILLED, and Reconcile freezes it. The job's RayCluster is already gone, so a
+// reconcile that looked at the cluster would record FAILED instead.
+func TestRayJobStoppedIsKilledAndFrozen(t *testing.T) {
+	ctx := context.Background()
+
+	rayJob := &v2pb.RayJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       rayJobName,
+			Namespace:  testNamespace,
+			Generation: 1,
+		},
+		Spec: v2pb.RayJobSpec{
+			Cluster: &apipb.ResourceIdentifier{
+				Name:      testClusterName,
+				Namespace: testNamespace,
+			},
+			Entrypoint: "echo Hello World",
+		},
+		Status: v2pb.RayJobStatus{
+			State:     v2pb.RAY_JOB_STATE_RUNNING,
+			JobStatus: string(rayv1.JobStatusRunning),
+			StatusConditions: []*apipb.Condition{
+				{
+					Type:   constants.LaunchedCondition,
+					Status: apipb.CONDITION_STATUS_TRUE,
+				},
+			},
+		},
+	}
+	fakeClient := fake.NewClientBuilder().
+		WithScheme(newTestScheme()).
+		WithObjects(rayJob).
+		WithStatusSubresource(rayJob).
+		Build()
+
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+	// No federated call is expected: a terminal job is frozen before the safety
+	// net runs.
+	r := &Reconciler{
+		Client:          fakeClient,
+		logger:          zapr.NewLogger(zaptest.NewLogger(t)),
+		federatedClient: clientmocks.NewMockFederatedClient(mockCtrl),
+		clusterCache:    newMockClusterCache(),
+	}
+
+	r.rayJobEventHandler(&rayv1.RayJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   rayJobName,
+			Labels: map[string]string{constants.ProjectNameLabelKey: testNamespace},
+		},
+		Status: rayv1.RayJobStatus{
+			JobStatus:           rayv1.JobStatusStopped,
+			JobDeploymentStatus: rayv1.JobDeploymentStatusComplete,
+			Message:             "Job was stopped",
+		},
+	})
+
+	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: rayJobName}}
+	var stored v2pb.RayJob
+	require.NoError(t, r.Get(ctx, request.NamespacedName, &stored))
+	require.Equal(t, v2pb.RAY_JOB_STATE_KILLED, stored.Status.State)
+	require.False(t, utils.IsImmutable(&stored), "the watcher records the state; the reconciler freezes it")
+
+	res, err := r.Reconcile(ctx, request)
+	require.NoError(t, err)
+	assert.Equal(t, time.Duration(0), res.RequeueAfter)
+
+	require.NoError(t, r.Get(ctx, request.NamespacedName, &stored))
+	assert.Equal(t, v2pb.RAY_JOB_STATE_KILLED, stored.Status.State)
+	assert.Equal(t, string(rayv1.JobStatusStopped), stored.Status.JobStatus)
+	assert.Equal(t, "Job was stopped", stored.Status.Message)
+	assert.True(t, utils.IsImmutable(&stored), "a terminal job must be frozen so the ingester can archive it")
 }

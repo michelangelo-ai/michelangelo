@@ -389,6 +389,11 @@ func TestWatcher(t *testing.T) {
 			want:          []*ResourceWatcher{{}, {}, {}},
 			watcherParams: []*WatcherParams{{ResourceName: constants.KubeRayResource}, {ResourceName: constants.KubeRayResource}, {ResourceName: "pods"}},
 		},
+		{
+			msg:           "test kuberay job watcher params",
+			want:          []*ResourceWatcher{{}},
+			watcherParams: []*WatcherParams{{ResourceName: constants.KubeRayJobResource}},
+		},
 	}
 
 	for _, test := range tests {
@@ -426,6 +431,35 @@ func TestWatcher(t *testing.T) {
 				require.Equal(t, len(test.want), len(res))
 			}
 		})
+	}
+}
+
+// TestWatcher_KubeRayResourcesUseRayClient asserts that both KubeRay resources
+// are listed and watched through the cluster's Ray client, the one that decodes
+// with the kuberay scheme.
+func TestWatcher_KubeRayResourcesUseRayClient(t *testing.T) {
+	g := gomock.NewController(t)
+	f := computemocks.NewMockFactory(g)
+
+	rayClient, coreClient := &fake.RESTClient{}, &fake.RESTClient{}
+	cluster := &v2pb.Cluster{ObjectMeta: metav1.ObjectMeta{Name: "testCluster"}}
+	f.EXPECT().GetClientSetForCluster(cluster).Return(&compute.ClientSet{Ray: rayClient, CoreV1: coreClient}, nil)
+
+	k8sc := NewClient(Params{
+		Factory: f,
+		Helper:  NewHelper(),
+		Logger:  zaptest.NewLogger(t),
+	})
+
+	params := []*WatcherParams{
+		{ResourceName: constants.KubeRayResource},
+		{ResourceName: constants.KubeRayJobResource},
+	}
+	res, err := k8sc.Watcher(params, cluster)
+	require.NoError(t, err)
+	require.Len(t, res, len(params))
+	for _, p := range params {
+		assert.Same(t, rayClient, p.Client, p.ResourceName)
 	}
 }
 
