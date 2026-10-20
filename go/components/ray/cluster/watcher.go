@@ -329,8 +329,8 @@ func (r *Reconciler) podEventHandler(pod *corev1.Pod) {
 
 	// The dynamic port annotations are optional -- a cluster that publishes neither
 	// is a valid configuration, not a fault. getPort reports the absence as an error
-	// and yields -1, which is recorded verbatim below, so keep this at debug level
-	// instead of logging two errors for every head pod event.
+	// and leaves the port unset, so keep this at debug level instead of logging two
+	// errors for every head pod event.
 	clientPort, err := getClientPort(pod)
 	if err != nil {
 		log.V(1).Info("no client port published for the head pod", "reason", err.Error())
@@ -937,15 +937,18 @@ func getClusterName(pod *corev1.Pod) (string, error) {
 	return "", fmt.Errorf("could not find out the cluster name from pod labels: %v", pod.Labels)
 }
 
+// getPort returns the port the scheduler published on the pod for portName. A
+// pod without a usable one -- nothing in OSS publishes these annotations -- gets
+// 0, which leaves the port unset on the HeadNode.
 func getPort(portName string, pod *corev1.Pod) (int32, error) {
 	portAnnotation, ok := pod.Annotations[fmt.Sprintf("%s%s", constants.DynamicPortAnnotationKeyPrefix, portName)]
 	if !ok {
-		return -1, fmt.Errorf("port not found in annotations: %s", portName)
+		return 0, fmt.Errorf("port not found in annotations: %s", portName)
 	}
 
 	port, err := strconv.Atoi(portAnnotation)
 	if err != nil {
-		return -1, fmt.Errorf("port is not an integer: %s", portAnnotation)
+		return 0, fmt.Errorf("port is not an integer: %s", portAnnotation)
 	}
 
 	return int32(port), nil

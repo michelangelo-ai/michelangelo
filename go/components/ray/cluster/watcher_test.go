@@ -1460,8 +1460,8 @@ func TestPodEventHandler_UpdatesHeadNode(t *testing.T) {
 }
 
 // TestPodEventHandler_MissingPortAnnotationsAreNotErrors asserts that a head pod
-// without the optional dynamic port annotations is still published, with -1 for
-// the ports it does not expose, and that nothing is logged as an error.
+// without the optional dynamic port annotations is still published, with the
+// ports it does not expose left unset, and that nothing is logged as an error.
 //
 // getPort reports an absent annotation as an error, but a cluster that publishes
 // neither port is a valid configuration. Treating that as an error logged two
@@ -1485,8 +1485,8 @@ func TestPodEventHandler_MissingPortAnnotationsAreNotErrors(t *testing.T) {
 	updated := getUpdatedCluster(t, r)
 	require.NotNil(t, updated.Status.HeadNode, "the head node must still be published")
 	assert.Equal(t, "10.0.0.1", updated.Status.HeadNode.Ip)
-	assert.Equal(t, int32(-1), updated.Status.HeadNode.ClientPort)
-	assert.Equal(t, int32(-1), updated.Status.HeadNode.JupyterNotebookPort)
+	assert.Equal(t, int32(0), updated.Status.HeadNode.ClientPort)
+	assert.Equal(t, int32(0), updated.Status.HeadNode.JupyterNotebookPort)
 }
 
 func TestPodAddEventHandler_IgnoresNonHeadPod(t *testing.T) {
