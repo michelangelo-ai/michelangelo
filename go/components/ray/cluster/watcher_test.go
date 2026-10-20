@@ -1687,6 +1687,187 @@ func TestPodDeleteEventHandler_RecordsPodError(t *testing.T) {
 	assert.Equal(t, headContainerName, updated.Status.PodErrors[0].ContainerName)
 }
 
+// frozenCluster is a cluster the ingester has yet to archive: fully terminal and
+// marked immutable.
+func frozenCluster() *v2pb.RayCluster {
+	cluster := terminatedCluster()
+	utils.MarkImmutable(cluster)
+	return cluster
+}
+
+// deletingCluster is a cluster whose CR is being deleted. The fake client only
+// accepts a deletion timestamp on an object that still has a finalizer.
+func deletingCluster() *v2pb.RayCluster {
+	now := metav1.Now()
+	return &v2pb.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: rayClusterName, Namespace: testNamespace, Generation: 1,
+			DeletionTimestamp: &now,
+			Finalizers:        []string{"michelangelo/test"},
+		},
+		Status: v2pb.RayClusterStatus{State: v2pb.RAY_CLUSTER_STATE_READY},
+	}
+}
+
+// crashedPod is a pod whose ray container died, which every pod path reports.
+func crashedPod(phase corev1.PodPhase) *corev1.Pod {
+	pod := newHeadPod("head-pod", rayClusterName, phase)
+	pod.Status.ContainerStatuses = []corev1.ContainerStatus{{
+		Name: headContainerName,
+		State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{
+			ExitCode: 1, Reason: "Error", Message: "boom",
+		}},
+	}}
+	return pod
+}
+
+// TestPodHandlersSkipFrozenAndDeletingClusters: the CR is frozen within one
+// reconcile of DeleteJobCluster, but the pods it deleted take seconds to go, and
+// their trailing events must not write into an object that is waiting to be
+// archived (or, with metadata storage on, is already gone from etcd).
+func TestPodHandlersSkipFrozenAndDeletingClusters(t *testing.T) {
+	events := []struct {
+		name  string
+		event func(r *Reconciler)
+	}{
+		{name: "pod delete", event: func(r *Reconciler) { r.podDeleteEventHandler(crashedPod(corev1.PodFailed)) }},
+		{name: "container error on a live pod", event: func(r *Reconciler) { r.handlePodEvent(crashedPod(corev1.PodRunning)) }},
+		{
+			name: "running head pod",
+			event: func(r *Reconciler) {
+				r.handlePodEvent(newHeadPod("head-pod", rayClusterName, corev1.PodRunning))
+			},
+		},
+	}
+	clusters := []struct {
+		name    string
+		cluster func() *v2pb.RayCluster
+	}{
+		{name: "frozen", cluster: frozenCluster},
+		{name: "being deleted", cluster: deletingCluster},
+	}
+
+	for _, c := range clusters {
+		for _, e := range events {
+			t.Run(c.name+"/"+e.name, func(t *testing.T) {
+				r, writes, logs := setupWatcherTestObserved(t, c.cluster())
+
+				e.event(r)
+
+				assert.Zero(t, *writes, "a %s cluster must not be written to", c.name)
+				assert.Empty(t, errorLogs(logs))
+			})
+		}
+	}
+}
+
+// TestPodErrorNotRecordedOnClusterFrozenAfterRead: the freeze can land between
+// the handler's read and its write, so the check is repeated on the object the
+// write would change.
+func TestPodErrorNotRecordedOnClusterFrozenAfterRead(t *testing.T) {
+	stale := frozenCluster()
+	stale.Annotations = nil
+	r, gets := setupWatcherTestWithStaleRead(t, frozenCluster(), stale)
+
+	r.podDeleteEventHandler(crashedPod(corev1.PodFailed))
+
+	require.Greater(t, *gets, 1, "the handler should have re-fetched the cluster to write it")
+	updated := getUpdatedCluster(t, r)
+	assert.Empty(t, updated.Status.PodErrors, "a frozen cluster must not gain pod errors")
+}
+
+// TestPodDeleteEventHandler_NormalDeletionIsNotAnError: every deleted pod ends
+// with ContainersReady=False -- reason ContainersNotReady or PodCompleted -- on a
+// teardown, a Ray autoscaler scale-down, or when KubeRay replaces a pod. Read as
+// errors, those would pile up on a healthy autoscaling cluster until the cap and
+// crowd out the errors that matter.
+func TestPodDeleteEventHandler_NormalDeletionIsNotAnError(t *testing.T) {
+	tests := []struct {
+		name       string
+		containers []corev1.ContainerStatus
+		reason     string
+	}{
+		{
+			name: "clean exit",
+			containers: []corev1.ContainerStatus{{
+				Name:  headContainerName,
+				State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 0, Reason: "Completed"}},
+			}},
+			reason: "ContainersNotReady",
+		},
+		{
+			// SIGTERM on shutdown is filtered as not the root cause, so the
+			// conditions fallback is reached, and has nothing to add.
+			name: "terminated on shutdown",
+			containers: []corev1.ContainerStatus{{
+				Name:  headContainerName,
+				State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 143, Reason: "Error"}},
+			}},
+			reason: "PodCompleted",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			globalCluster := &v2pb.RayCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
+				Status:     v2pb.RayClusterStatus{State: v2pb.RAY_CLUSTER_STATE_READY},
+			}
+			r := setupWatcherTest(t, globalCluster)
+
+			pod := newHeadPod("worker-pod", rayClusterName, corev1.PodSucceeded)
+			pod.Labels[constants.RayNodeTypeLabelKey] = constants.RayWorkerNodeType
+			pod.Status.ContainerStatuses = tt.containers
+			pod.Status.Conditions = []corev1.PodCondition{{
+				Type: corev1.ContainersReady, Status: corev1.ConditionFalse, Reason: tt.reason,
+			}}
+			r.podDeleteEventHandler(pod)
+
+			updated := getUpdatedCluster(t, r)
+			assert.Empty(t, updated.Status.PodErrors, "a normal pod deletion is not an error")
+		})
+	}
+}
+
+// TestPodDeleteEventHandler_ConditionsFallback pins what the fallback is still
+// for -- why a pod went away when no container can say, here a preemption -- and
+// that it is skipped once the cluster is terminating, when every pod goes away
+// for the same, known reason.
+func TestPodDeleteEventHandler_ConditionsFallback(t *testing.T) {
+	preemptedPod := func() *corev1.Pod {
+		pod := newHeadPod("worker-pod", rayClusterName, corev1.PodFailed)
+		pod.Labels[constants.RayNodeTypeLabelKey] = constants.RayWorkerNodeType
+		pod.Status.Conditions = []corev1.PodCondition{{
+			Type: "ResourcesPreempted", Status: corev1.ConditionTrue, Reason: "Preempted", Message: "preempted by a higher priority job",
+		}}
+		return pod
+	}
+
+	t.Run("live cluster", func(t *testing.T) {
+		globalCluster := &v2pb.RayCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
+			Status:     v2pb.RayClusterStatus{State: v2pb.RAY_CLUSTER_STATE_READY},
+		}
+		r := setupWatcherTest(t, globalCluster)
+
+		r.podDeleteEventHandler(preemptedPod())
+
+		updated := getUpdatedCluster(t, r)
+		require.Len(t, updated.Status.PodErrors, 1)
+		assert.Equal(t, "Preempted", updated.Status.PodErrors[0].Reason)
+	})
+
+	t.Run("terminating cluster", func(t *testing.T) {
+		r, writes, _ := setupWatcherTestObserved(t, terminatedCluster())
+
+		r.podDeleteEventHandler(preemptedPod())
+
+		assert.Zero(t, *writes)
+		updated := getUpdatedCluster(t, r)
+		assert.Empty(t, updated.Status.PodErrors)
+	})
+}
+
 func TestPodDeleteEventHandler_Tombstone(t *testing.T) {
 	r := newTestLogger(t)
 	// Unusable tombstone payload should be handled gracefully.

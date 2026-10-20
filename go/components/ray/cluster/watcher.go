@@ -138,7 +138,7 @@ func (r *Reconciler) podErrorEventHandler(pod *corev1.Pod) {
 		}
 		return
 	}
-	r.recordPodError(pod, podError, "podErrorEventHandler")
+	r.recordPodError(pod, podError, "podErrorEventHandler", false)
 }
 
 // clearPodError drops the entry a recovered pod left on the owning RayCluster.
@@ -193,7 +193,7 @@ func (r *Reconciler) clearPodError(pod *corev1.Pod) {
 // termination has begun: by then the recorded errors are the reason the
 // cluster ended.
 func removeRecoveredPodError(cluster *v2pb.RayCluster, podName string) bool {
-	if isClusterTerminating(cluster) {
+	if isFrozenOrDeleting(cluster) || isClusterTerminating(cluster) {
 		return false
 	}
 	for i, podError := range cluster.Status.PodErrors {
@@ -219,6 +219,12 @@ func isPodRunningAndReady(pod *corev1.Pod) bool {
 	return false
 }
 
+// isFrozenOrDeleting reports whether the watcher must leave cluster alone: it is
+// frozen awaiting the ingester, or its CR is being deleted.
+func isFrozenOrDeleting(cluster *v2pb.RayCluster) bool {
+	return utils.IsImmutable(cluster) || cluster.GetDeletionTimestamp() != nil
+}
+
 // isRayContainer matches the containers whose failures belong to the cluster.
 //
 // The ray containers are named by the job author, so there is no fixed name to
@@ -235,8 +241,9 @@ func isRayContainer(containerStatus corev1.ContainerStatus) bool {
 // double-count the same pod, and so the mutation is idempotent:
 // UpdateStatusWithRetries re-runs its closure on conflict, which an append
 // would turn into duplicate entries. The cap on the number of recorded errors
-// is enforced by mergePodErrors.
-func (r *Reconciler) recordPodError(pod *corev1.Pod, podError *v2pb.PodErrors, fieldManager string) {
+// is enforced by mergePodErrors. skipIfTerminating drops an error that only
+// means something while the cluster is meant to be running.
+func (r *Reconciler) recordPodError(pod *corev1.Pod, podError *v2pb.PodErrors, fieldManager string, skipIfTerminating bool) {
 	log := r.logger.WithValues("pod_name", pod.Name, "reason", podError.GetReason())
 
 	namespace, err := jobsutils.GetProjectNameFromLabels(pod.Labels)
@@ -265,10 +272,20 @@ func (r *Reconciler) recordPodError(pod *corev1.Pod, podError *v2pb.PodErrors, f
 		log.Error(err, "could not fetch the ray cluster for the pod - not recording the pod error")
 		return
 	}
+	acceptsPodError := func(cluster *v2pb.RayCluster) bool {
+		return !isFrozenOrDeleting(cluster) && !(skipIfTerminating && isClusterTerminating(cluster))
+	}
+	if !acceptsPodError(&rayCluster) {
+		log.V(1).Info("ray cluster no longer takes this pod error, not recording it")
+		return
+	}
 
 	if err = jobsutils.UpdateStatusWithRetries(ctx, r, &rayCluster,
 		func(obj client.Object) {
-			mergePodErrors(obj.(*v2pb.RayCluster), []*v2pb.PodErrors{podError})
+			// The cluster may have moved on since the read above.
+			if cluster := obj.(*v2pb.RayCluster); acceptsPodError(cluster) {
+				mergePodErrors(cluster, []*v2pb.PodErrors{podError})
+			}
 		}, &metav1.UpdateOptions{
 			FieldManager: fieldManager,
 		}); err != nil {
@@ -324,6 +341,10 @@ func (r *Reconciler) podEventHandler(pod *corev1.Pod) {
 		log.Error(err, "could not fetch the ray cluster for the pod")
 		return
 	}
+	if isFrozenOrDeleting(&rayCluster) {
+		log.V(1).Info("ray cluster is frozen or being deleted, ignoring pod event")
+		return
+	}
 
 	// Cache re-sync gives Update events even when the head pod did not change.
 	// Pre-check to avoid unnecessary CRD object updates.
@@ -337,6 +358,9 @@ func (r *Reconciler) podEventHandler(pod *corev1.Pod) {
 	if err = jobsutils.UpdateStatusWithRetries(ctx, r, &rayCluster,
 		func(obj client.Object) {
 			cluster := obj.(*v2pb.RayCluster)
+			if isFrozenOrDeleting(cluster) {
+				return
+			}
 			cluster.Status.HeadNode = &v2pb.RayHeadNodeInfo{
 				Name:                pod.Name,
 				Namespace:           pod.Namespace,
@@ -391,14 +415,51 @@ func (r *Reconciler) podDeleteEventHandler(obj interface{}) {
 			"container_statuses", pod.Status.ContainerStatuses, "init_container_statuses", pod.Status.InitContainerStatuses)
 	}
 
-	// On delete the pod conditions are worth consulting as well: the pod is
-	// gone, so ContainersReady=False is a final verdict rather than progress.
-	podError := jobsutils.GetErrorFromPodStatus(pod, isRayContainer)
-	// If no container errors are found we do not need to update the status.
+	podError := jobsutils.GetContainerErrorFromPodStatus(pod, isRayContainer)
+	fromConditions := false
+	if podError == nil && !rayContainersExitedCleanly(pod) {
+		// With no container to blame, the pod conditions can still say why the
+		// pod went away -- it was preempted, or never placed. A pod whose ray
+		// containers all exited 0 had nothing go wrong, though, and neither did
+		// one whose only complaint is the ContainersReady=False every deleted
+		// pod ends with. Once the cluster is terminating, every pod is going
+		// away for the same, known reason, so recordPodError skips these.
+		podError = jobsutils.GetErrorFromPodStatus(pod, isRayContainer)
+		if podError != nil && normalPodDeletionReasons[podError.GetReason()] {
+			podError = nil
+		}
+		fromConditions = true
+	}
+	// If no errors are found we do not need to update the status.
 	if podError == nil {
 		return
 	}
-	r.recordPodError(pod, podError, "podDeleteEventHandler")
+	r.recordPodError(pod, podError, "podDeleteEventHandler", fromConditions)
+}
+
+// normalPodDeletionReasons are the ContainersReady=False reasons the kubelet
+// gives every pod it stops, whether on a teardown, a Ray autoscaler scale-down,
+// or KubeRay replacing a pod. Recorded as errors they would pile up on a healthy
+// cluster until the cap, crowding out the ones that matter.
+var normalPodDeletionReasons = map[string]bool{
+	"ContainersNotReady": true,
+	"PodCompleted":       true,
+}
+
+// rayContainersExitedCleanly reports whether pod ran its ray containers to a
+// clean exit, i.e. it has some and every one of them terminated with code 0.
+func rayContainersExitedCleanly(pod *corev1.Pod) bool {
+	exited := false
+	for _, containerStatus := range pod.Status.ContainerStatuses {
+		if !isRayContainer(containerStatus) {
+			continue
+		}
+		if terminated := containerStatus.State.Terminated; terminated == nil || terminated.ExitCode != 0 {
+			return false
+		}
+		exited = true
+	}
+	return exited
 }
 
 // KubeRay RayCluster event handlers — own RayCluster.Status.State and conditions.
@@ -631,7 +692,7 @@ func (r *Reconciler) rayClusterEventHandler(obj interface{}) {
 // and the safety net applies it to a copy first to skip writes that would change
 // nothing.
 func applyClusterObservation(cluster *v2pb.RayCluster, observed *matypes.JobClusterStatus) bool {
-	if observed == nil || observed.Ray == nil {
+	if observed == nil || observed.Ray == nil || isFrozenOrDeleting(cluster) {
 		return false
 	}
 	changed := false
