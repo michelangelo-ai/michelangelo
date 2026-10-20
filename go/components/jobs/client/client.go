@@ -337,7 +337,12 @@ func (c *Client) GetJobStatus(
 			rayV1Job,
 		)
 		if err != nil {
-			if apierrors.IsNotFound(err) {
+			// Only the API server's own NotFound means the RayJob is gone. A proxy
+			// or ingress in front of the compute cluster can answer 404 itself,
+			// which client-go also reports as NotFound but flags as an unexpected
+			// server response; reporting that as missing would fail a job that
+			// may still be running.
+			if apierrors.IsNotFound(err) && !apierrors.IsUnexpectedServerError(err) {
 				return &matypes.JobStatus{
 					Ray: &v2pb.RayJobStatus{
 						JobStatus: "Unknown",

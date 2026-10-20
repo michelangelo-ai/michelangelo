@@ -27,8 +27,10 @@ import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"go.uber.org/zap/zaptest"
 	v1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/rest/fake"
@@ -645,18 +647,60 @@ func TestCreateSecret(t *testing.T) {
 	}
 }
 
+// getResourceHelper is a Helper whose GetResource fails with err.
+type getResourceHelper struct {
+	Helper
+	err error
+}
+
+func (h getResourceHelper) GetResource(context.Context, restclient.Interface, string, string, string, runtime.Object) error {
+	return h.err
+}
+
 // TestGetJobStatus tests the GetJobStatus method
 func TestGetJobStatus(t *testing.T) {
 	mkRayV2 := func(name string) *v2pb.RayJob { return &v2pb.RayJob{ObjectMeta: metav1.ObjectMeta{Name: name}} }
+	rayJobs := schema.GroupResource{Group: "ray.io", Resource: "rayjobs"}
+	clientSet := func(f *computemocks.MockFactory) {
+		f.EXPECT().GetClientSetForCluster(gomock.Any()).Return(&compute.ClientSet{}, nil)
+	}
 
 	tests := []struct {
 		name         string
 		jobObject    runtime.Object
 		setupFactory func(f *computemocks.MockFactory)
+		getErr       error
 		expectErr    string
+		expectState  v2pb.RayJobState
 		expectStatus string
 		expectMsg    string
 	}{
+		{
+			name:         "KubeRay RayJob not found",
+			jobObject:    mkRayV2("job-a"),
+			setupFactory: clientSet,
+			getErr:       apierrors.NewNotFound(rayJobs, "job-a"),
+			expectState:  v2pb.RAY_JOB_STATE_FAILED,
+			expectStatus: "Unknown",
+			expectMsg:    "Resource not found in compute cluster",
+		},
+		{
+			// A proxy or ingress in front of the compute cluster answering 404
+			// itself. client-go reports that as NotFound too, flagged as an
+			// unexpected server response, but it says nothing about the RayJob.
+			name:         "404 that did not come from the API server",
+			jobObject:    mkRayV2("job-a"),
+			setupFactory: clientSet,
+			getErr:       apierrors.NewGenericServerResponse(http.StatusNotFound, "get", rayJobs, "job-a", "page not found", 0, true),
+			expectErr:    "get ray job",
+		},
+		{
+			name:         "GetResource error",
+			jobObject:    mkRayV2("job-a"),
+			setupFactory: clientSet,
+			getErr:       apierrors.NewServiceUnavailable("compute cluster unavailable"),
+			expectErr:    "get ray job",
+		},
 		{
 			name:      "GetClientSetForCluster error",
 			jobObject: mkRayV2("job-a"),
@@ -679,6 +723,9 @@ func TestGetJobStatus(t *testing.T) {
 			defer gctrl.Finish()
 			f := computemocks.NewMockFactory(gctrl)
 			cl := &Client{factory: f, helper: NewHelper(), mapper: permissiveMapper(t), logger: zaptest.NewLogger(t)}
+			if tt.getErr != nil {
+				cl.helper = getResourceHelper{Helper: cl.helper, err: tt.getErr}
+			}
 			if tt.setupFactory != nil {
 				tt.setupFactory(f)
 			}
@@ -687,14 +734,18 @@ func TestGetJobStatus(t *testing.T) {
 			if tt.expectErr != "" {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tt.expectErr)
+				assert.Nil(t, js, "a failed call must not report a status")
 				return
 			}
 			require.NoError(t, err)
+			var gotState v2pb.RayJobState
 			var gotStatus, gotMsg string
 			if js != nil && js.Ray != nil {
+				gotState = js.Ray.State
 				gotStatus = js.Ray.JobStatus
 				gotMsg = js.Ray.Message
 			}
+			assert.Equal(t, tt.expectState, gotState)
 			assert.Equal(t, tt.expectStatus, gotStatus)
 			assert.Equal(t, tt.expectMsg, gotMsg)
 		})
