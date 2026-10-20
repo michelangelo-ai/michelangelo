@@ -20,6 +20,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/client/clientmocks"
 	jobscluster "github.com/michelangelo-ai/michelangelo/go/components/jobs/cluster"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/constants"
+	jobtypes "github.com/michelangelo-ai/michelangelo/go/components/jobs/common/types"
 	jobsutils "github.com/michelangelo-ai/michelangelo/go/components/jobs/common/utils"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
@@ -488,7 +489,9 @@ func TestReconciler_Reconcile(t *testing.T) {
 			},
 		},
 		{
-			name: "job already launched - requeues for watcher updates",
+			// The watcher owns non-terminal states; the safety net only polls for a
+			// terminal one it may have missed.
+			name: "job already launched - safety net ignores a non-terminal status",
 			setup: func() []client.Object {
 				return []client.Object{
 					&v2pb.RayJob{
@@ -533,12 +536,215 @@ func TestReconciler_Reconcile(t *testing.T) {
 				mcc.addCluster(assignedCluster, &v2pb.Cluster{
 					ObjectMeta: metav1.ObjectMeta{Name: assignedCluster},
 				})
+				mfc.EXPECT().GetJobStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(&jobtypes.JobStatus{
+					Ray: &v2pb.RayJobStatus{
+						JobStatus: string(rayv1.JobStatusRunning),
+						State:     v2pb.RAY_JOB_STATE_RUNNING,
+						Message:   "job is running",
+					},
+				}, nil)
 			},
 			expectedState:   v2pb.RAY_JOB_STATE_INITIALIZING,
 			expectedMessage: "",
 			errorAssertion:  require.NoError,
 			postCheck: func(res ctrl.Result) {
-				assert.Equal(t, requeueAfter, res.RequeueAfter)
+				assert.Equal(t, _safetyNetPeriod, res.RequeueAfter)
+			},
+			verifyConditions: func(t *testing.T, job *v2pb.RayJob) {
+				assert.Empty(t, job.Status.JobStatus, "a non-terminal status is the watcher's to write")
+			},
+		},
+		{
+			// GetJobStatus maps a KubeRay RayJob missing from the compute cluster to
+			// FAILED, e.g. a delete the watcher never saw because the controller
+			// was down.
+			name: "job already launched - safety net records a missing KubeRay RayJob as failed",
+			setup: func() []client.Object {
+				return []client.Object{
+					&v2pb.RayJob{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:       rayJobName,
+							Namespace:  testNamespace,
+							Generation: 1,
+						},
+						Spec: v2pb.RayJobSpec{
+							Cluster: &apipb.ResourceIdentifier{
+								Name:      "existing-cluster",
+								Namespace: testNamespace,
+							},
+							Entrypoint: "echo Hello World",
+						},
+						Status: v2pb.RayJobStatus{
+							State:     v2pb.RAY_JOB_STATE_RUNNING,
+							JobStatus: string(rayv1.JobStatusRunning),
+							StatusConditions: []*apipb.Condition{
+								{
+									Type:   "Launched",
+									Status: apipb.CONDITION_STATUS_TRUE,
+								},
+							},
+						},
+					},
+					&v2pb.RayCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:       "existing-cluster",
+							Namespace:  testNamespace,
+							Generation: 1,
+						},
+						Status: v2pb.RayClusterStatus{
+							State: v2pb.RAY_CLUSTER_STATE_READY,
+							Assignment: &v2pb.AssignmentInfo{
+								Cluster: assignedCluster,
+							},
+						},
+					},
+				}
+			},
+			setupMocks: func(ctrl *gomock.Controller, mfc *clientmocks.MockFederatedClient, mcc *mockClusterCache) {
+				mcc.addCluster(assignedCluster, &v2pb.Cluster{
+					ObjectMeta: metav1.ObjectMeta{Name: assignedCluster},
+				})
+				mfc.EXPECT().GetJobStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(&jobtypes.JobStatus{
+					Ray: &v2pb.RayJobStatus{
+						JobStatus: "Unknown",
+						State:     v2pb.RAY_JOB_STATE_FAILED,
+						Message:   "Resource not found in compute cluster",
+					},
+				}, nil)
+			},
+			expectedState:   v2pb.RAY_JOB_STATE_FAILED,
+			expectedMessage: "Resource not found in compute cluster",
+			errorAssertion:  require.NoError,
+			postCheck: func(res ctrl.Result) {
+				assert.Equal(t, time.Duration(0), res.RequeueAfter)
+			},
+			verifyConditions: func(t *testing.T, job *v2pb.RayJob) {
+				assert.Equal(t, "Unknown", job.Status.JobStatus)
+				assert.True(t, utils.IsImmutable(job), "terminal job should be marked immutable by reconciler")
+			},
+		},
+		{
+			name: "job already launched - safety net applies a terminal status",
+			setup: func() []client.Object {
+				return []client.Object{
+					&v2pb.RayJob{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:       rayJobName,
+							Namespace:  testNamespace,
+							Generation: 1,
+						},
+						Spec: v2pb.RayJobSpec{
+							Cluster: &apipb.ResourceIdentifier{
+								Name:      "existing-cluster",
+								Namespace: testNamespace,
+							},
+							Entrypoint: "echo Hello World",
+						},
+						Status: v2pb.RayJobStatus{
+							State:     v2pb.RAY_JOB_STATE_RUNNING,
+							JobStatus: string(rayv1.JobStatusRunning),
+							StatusConditions: []*apipb.Condition{
+								{
+									Type:   "Launched",
+									Status: apipb.CONDITION_STATUS_TRUE,
+								},
+							},
+						},
+					},
+					&v2pb.RayCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:       "existing-cluster",
+							Namespace:  testNamespace,
+							Generation: 1,
+						},
+						Status: v2pb.RayClusterStatus{
+							State: v2pb.RAY_CLUSTER_STATE_READY,
+							Assignment: &v2pb.AssignmentInfo{
+								Cluster: assignedCluster,
+							},
+						},
+					},
+				}
+			},
+			setupMocks: func(ctrl *gomock.Controller, mfc *clientmocks.MockFederatedClient, mcc *mockClusterCache) {
+				mcc.addCluster(assignedCluster, &v2pb.Cluster{
+					ObjectMeta: metav1.ObjectMeta{Name: assignedCluster},
+				})
+				mfc.EXPECT().GetJobStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(&jobtypes.JobStatus{
+					Ray: &v2pb.RayJobStatus{
+						JobStatus:           string(rayv1.JobStatusSucceeded),
+						JobDeploymentStatus: string(rayv1.JobDeploymentStatusComplete),
+						State:               v2pb.RAY_JOB_STATE_SUCCEEDED,
+						Message:             "Job finished successfully.",
+					},
+				}, nil)
+			},
+			expectedState:   v2pb.RAY_JOB_STATE_SUCCEEDED,
+			expectedMessage: "Job finished successfully.",
+			errorAssertion:  require.NoError,
+			postCheck: func(res ctrl.Result) {
+				assert.Equal(t, time.Duration(0), res.RequeueAfter)
+			},
+			verifyConditions: func(t *testing.T, job *v2pb.RayJob) {
+				assert.Equal(t, string(rayv1.JobStatusSucceeded), job.Status.JobStatus)
+				assert.Equal(t, string(rayv1.JobDeploymentStatusComplete), job.Status.JobDeploymentStatus)
+				assert.True(t, utils.IsImmutable(job), "terminal job should be marked immutable by reconciler")
+			},
+		},
+		{
+			name: "job already launched - safety net retries later when the status check fails",
+			setup: func() []client.Object {
+				return []client.Object{
+					&v2pb.RayJob{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:       rayJobName,
+							Namespace:  testNamespace,
+							Generation: 1,
+						},
+						Spec: v2pb.RayJobSpec{
+							Cluster: &apipb.ResourceIdentifier{
+								Name:      "existing-cluster",
+								Namespace: testNamespace,
+							},
+							Entrypoint: "echo Hello World",
+						},
+						Status: v2pb.RayJobStatus{
+							State:   v2pb.RAY_JOB_STATE_RUNNING,
+							Message: "job is running",
+							StatusConditions: []*apipb.Condition{
+								{
+									Type:   "Launched",
+									Status: apipb.CONDITION_STATUS_TRUE,
+								},
+							},
+						},
+					},
+					&v2pb.RayCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:       "existing-cluster",
+							Namespace:  testNamespace,
+							Generation: 1,
+						},
+						Status: v2pb.RayClusterStatus{
+							State: v2pb.RAY_CLUSTER_STATE_READY,
+							Assignment: &v2pb.AssignmentInfo{
+								Cluster: assignedCluster,
+							},
+						},
+					},
+				}
+			},
+			setupMocks: func(ctrl *gomock.Controller, mfc *clientmocks.MockFederatedClient, mcc *mockClusterCache) {
+				mcc.addCluster(assignedCluster, &v2pb.Cluster{
+					ObjectMeta: metav1.ObjectMeta{Name: assignedCluster},
+				})
+				mfc.EXPECT().GetJobStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, fmt.Errorf("backend down"))
+			},
+			expectedState:   v2pb.RAY_JOB_STATE_RUNNING,
+			expectedMessage: "job is running",
+			errorAssertion:  require.NoError,
+			postCheck: func(res ctrl.Result) {
+				assert.Equal(t, _safetyNetPeriod, res.RequeueAfter)
 			},
 			verifyConditions: func(t *testing.T, job *v2pb.RayJob) {},
 		},
@@ -750,12 +956,19 @@ func TestReconciler_Reconcile(t *testing.T) {
 				mcc.addCluster(assignedCluster, &v2pb.Cluster{
 					ObjectMeta: metav1.ObjectMeta{Name: assignedCluster},
 				})
+				mfc.EXPECT().GetJobStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(&jobtypes.JobStatus{
+					Ray: &v2pb.RayJobStatus{
+						JobStatus: string(rayv1.JobStatusRunning),
+						State:     v2pb.RAY_JOB_STATE_RUNNING,
+						Message:   "job is running",
+					},
+				}, nil)
 			},
 			expectedState:   v2pb.RAY_JOB_STATE_RUNNING,
 			expectedMessage: "job is running",
 			errorAssertion:  require.NoError,
 			postCheck: func(res ctrl.Result) {
-				assert.Equal(t, requeueAfter, res.RequeueAfter)
+				assert.Equal(t, _safetyNetPeriod, res.RequeueAfter)
 			},
 			verifyConditions: func(t *testing.T, job *v2pb.RayJob) {},
 		},
@@ -869,9 +1082,15 @@ func TestReconciler_Reconcile_NoOpSkipsStatusWrite(t *testing.T) {
 			Name: assignedCluster,
 		},
 	})
-	// Status now arrives from the federated watcher rather than from a poll
-	// inside Reconcile, so the stored status is already current and this pass has
-	// nothing to persist. No federated call is expected at all.
+	// Status arrives from the federated watcher, so the stored status is already
+	// current and this pass has nothing to persist. The safety net still polls,
+	// but ignores the non-terminal result.
+	mockFedClient.EXPECT().GetJobStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(&jobtypes.JobStatus{
+		Ray: &v2pb.RayJobStatus{
+			JobStatus: string(rayv1.JobStatusRunning),
+			State:     v2pb.RAY_JOB_STATE_RUNNING,
+		},
+	}, nil)
 
 	r := &Reconciler{
 		Client:          fakeClient,

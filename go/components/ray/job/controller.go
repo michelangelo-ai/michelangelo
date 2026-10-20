@@ -28,6 +28,10 @@ import (
 const (
 	requeueAfter = time.Second * 10
 	apiVersion   = "ray.io/v1"
+
+	// _safetyNetPeriod is how often a launched job's KubeRay RayJob is polled as
+	// a fallback for events the watcher misses.
+	_safetyNetPeriod = 5 * time.Minute
 )
 
 // Reconciler reconciles a Ray Job object
@@ -267,13 +271,37 @@ func (r *Reconciler) createRayJobIfNotLaunched(ctx context.Context, logger logr.
 	res.RequeueAfter = requeueAfter
 }
 
-// updateJobStatusIfLaunched handles job status after launch.
-// Job status is now updated by the federated watcher event handlers
-// rather than polling via GetJobStatus.
+// updateJobStatusIfLaunched is the level-triggered safety net behind the
+// federated watcher, which owns a launched job's status. Every _safetyNetPeriod
+// it polls the KubeRay RayJob and applies the result only if it is terminal, so
+// the job still finishes when the watcher misses the event: a delete while the
+// controller was down or the compute cluster was out of the ready set, a dropped
+// status write, or a KubeRay RayJob created before the watcher's labels existed.
+// GetJobStatus reports a KubeRay RayJob missing from the compute cluster as
+// FAILED. Non-terminal results are left to the watcher.
 func (r *Reconciler) updateJobStatusIfLaunched(ctx context.Context, logger logr.Logger, rayJob *v2pb.RayJob, rayCluster *v2pb.RayCluster, res *ctrl.Result) {
-	if !isTerminalRayJobState(rayJob.Status.State) {
-		res.RequeueAfter = requeueAfter
+	assignedCluster := r.getAssignedCluster(logger, rayCluster)
+	if assignedCluster == nil {
+		logger.Info("assigned cluster not found, skipping ray job status check")
+		res.RequeueAfter = _safetyNetPeriod
+		return
 	}
+
+	jobStatus, err := r.federatedClient.GetJobStatus(ctx, rayJob, assignedCluster)
+	if err != nil {
+		logger.Error(err, "error to get ray job status")
+		res.RequeueAfter = _safetyNetPeriod
+		return
+	}
+	if jobStatus == nil || jobStatus.Ray == nil || !isTerminalRayJobState(jobStatus.Ray.State) {
+		res.RequeueAfter = _safetyNetPeriod
+		return
+	}
+
+	rayJob.Status.State = jobStatus.Ray.State
+	rayJob.Status.JobStatus = jobStatus.Ray.JobStatus
+	rayJob.Status.JobDeploymentStatus = jobStatus.Ray.JobDeploymentStatus
+	rayJob.Status.Message = jobStatus.Ray.Message
 }
 
 // markImmutableIfTerminal persists the michelangelo/Immutable annotation on a
