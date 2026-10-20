@@ -2,6 +2,7 @@ package job
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"time"
@@ -19,6 +20,7 @@ import (
 	jobsclient "github.com/michelangelo-ai/michelangelo/go/components/jobs/client"
 	jobscluster "github.com/michelangelo-ai/michelangelo/go/components/jobs/cluster"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/constants"
+	matypes "github.com/michelangelo-ai/michelangelo/go/components/jobs/common/types"
 	jobsutils "github.com/michelangelo-ai/michelangelo/go/components/jobs/common/utils"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/watch"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
@@ -49,6 +51,7 @@ type Reconciler struct {
 	clusterCache     jobscluster.RegisteredClustersCache
 	env              env.Context
 	federatedWatcher watch.FederatedWatcher
+	mapper           matypes.Mapper
 	metricsScope     tally.Scope
 }
 
@@ -62,6 +65,7 @@ func NewReconciler(
 	env env.Context,
 	federatedClient jobsclient.FederatedClient,
 	clusterCache jobscluster.RegisteredClustersCache,
+	mapper matypes.Mapper,
 	metricsScope tally.Scope,
 ) *Reconciler {
 	if metricsScope == nil {
@@ -73,6 +77,7 @@ func NewReconciler(
 		federatedClient: federatedClient,
 		clusterCache:    clusterCache,
 		env:             env,
+		mapper:          mapper,
 		metricsScope:    metricsScope,
 	}
 }
@@ -166,6 +171,11 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 }
 
 func (r *Reconciler) Register(mgr ctrl.Manager) error {
+	// The watcher maps every KubeRay event through the mapper. Without one each
+	// event would panic in an informer goroutine, so refuse to start instead.
+	if r.mapper == nil {
+		return errors.New("ray job controller: a mapper is required")
+	}
 	r.logger = mgr.GetLogger().WithName("rayjob")
 
 	r.federatedWatcher = r.getFederatedWatcher()

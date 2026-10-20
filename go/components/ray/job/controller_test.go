@@ -22,6 +22,7 @@ import (
 
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
+	maconfig "github.com/michelangelo-ai/michelangelo/go/base/config"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	"github.com/michelangelo-ai/michelangelo/go/components/controllerutil"
 	jobsclient "github.com/michelangelo-ai/michelangelo/go/components/jobs/client"
@@ -30,6 +31,7 @@ import (
 	jobscluster "github.com/michelangelo-ai/michelangelo/go/components/jobs/cluster"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/constants"
 	jobtypes "github.com/michelangelo-ai/michelangelo/go/components/jobs/common/types"
+	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/types/typesmocks"
 	jobsutils "github.com/michelangelo-ai/michelangelo/go/components/jobs/common/utils"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
@@ -91,6 +93,11 @@ func newTestScheme() *runtime.Scheme {
 	kubescheme.AddToScheme(scheme)
 	v2pb.AddToScheme(scheme)
 	return scheme
+}
+
+// newTestMapper returns a mapper built the way production builds it.
+func newTestMapper() jobtypes.Mapper {
+	return k8sengine.NewMapper(k8sengine.LogPersistenceConfig{}, maconfig.SchedulerConfig{}, env.Context{}).Mapper
 }
 
 func TestReconciler_Reconcile(t *testing.T) {
@@ -1459,7 +1466,7 @@ func TestRayJobEventHandler(t *testing.T) {
 			WithObjects(global).
 			WithStatusSubresource(global).
 			Build()
-		return &Reconciler{Client: fakeClient, logger: ctrl.Log.WithName("test")}
+		return &Reconciler{Client: fakeClient, logger: ctrl.Log.WithName("test"), mapper: newTestMapper()}
 	}
 
 	getUpdated := func(t *testing.T, r *Reconciler) v2pb.RayJob {
@@ -1783,7 +1790,12 @@ func setupJobWatcherTest(t *testing.T, objs ...client.Object) (*Reconciler, *int
 		Build()
 
 	zapLogger, logs := newObservedLogger(t)
-	return &Reconciler{Client: fakeClient, logger: zapr.NewLogger(zapLogger), metricsScope: tally.NoopScope}, &writes, logs
+	return &Reconciler{
+		Client:       fakeClient,
+		logger:       zapr.NewLogger(zapLogger),
+		mapper:       newTestMapper(),
+		metricsScope: tally.NoopScope,
+	}, &writes, logs
 }
 
 // newObservedLogger tees the test logger into an observer so the assertions can
@@ -1911,7 +1923,12 @@ func setupJobWatcherTestWithConcurrentUpdate(t *testing.T, global *v2pb.RayJob, 
 		Build()
 
 	zapLogger, logs := newObservedLogger(t)
-	return &Reconciler{Client: fakeClient, logger: zapr.NewLogger(zapLogger), metricsScope: tally.NoopScope}, &statusWrites, logs
+	return &Reconciler{
+		Client:       fakeClient,
+		logger:       zapr.NewLogger(zapLogger),
+		mapper:       newTestMapper(),
+		metricsScope: tally.NoopScope,
+	}, &statusWrites, logs
 }
 
 // TestJobWatcherHandlersRecheckGuardsAfterConflict asserts that both handlers
@@ -2162,7 +2179,7 @@ func TestJobWatcherHandlersRetryTransientErrors(t *testing.T) {
 					},
 				}).
 				Build()
-			r := &Reconciler{Client: fakeClient, logger: zapr.NewLogger(zaptest.NewLogger(t))}
+			r := &Reconciler{Client: fakeClient, logger: zapr.NewLogger(zaptest.NewLogger(t)), mapper: newTestMapper()}
 
 			tt.event(r)
 
@@ -2254,7 +2271,7 @@ func TestHandlerWriteDropIsCounted(t *testing.T) {
 				Build()
 			scope := tally.NewTestScope("test", nil)
 			zapLogger, logs := newObservedLogger(t)
-			r := &Reconciler{Client: fakeClient, logger: zapr.NewLogger(zapLogger), metricsScope: scope}
+			r := &Reconciler{Client: fakeClient, logger: zapr.NewLogger(zapLogger), mapper: newTestMapper(), metricsScope: scope}
 
 			tt.event(r)
 
@@ -2416,7 +2433,7 @@ func TestRayJobConvergesAfterDeleteHandlerExhaustsRetries(t *testing.T) {
 // metrics scope can still build its watcher, which derives its own scope from
 // the reconciler's.
 func TestNewReconciler_NilMetricsScope(t *testing.T) {
-	r := NewReconciler(zapr.NewLogger(zap.NewNop()), nil, env.Context{}, nil, newMockClusterCache(), nil)
+	r := NewReconciler(zapr.NewLogger(zap.NewNop()), nil, env.Context{}, nil, newMockClusterCache(), newTestMapper(), nil)
 
 	require.NotNil(t, r.metricsScope)
 	assert.NotPanics(t, func() { r.getFederatedWatcher() })
@@ -2586,6 +2603,7 @@ func TestRayJobStoppedIsKilledAndFrozen(t *testing.T) {
 		logger:          zapr.NewLogger(zaptest.NewLogger(t)),
 		federatedClient: clientmocks.NewMockFederatedClient(mockCtrl),
 		clusterCache:    newMockClusterCache(),
+		mapper:          newTestMapper(),
 	}
 
 	r.rayJobEventHandler(&rayv1.RayJob{
@@ -2681,6 +2699,7 @@ func TestRayJobLaunchIsNotLostToAnEarlyKubeRayEvent(t *testing.T) {
 		logger:          zapr.NewLogger(zaptest.NewLogger(t)),
 		federatedClient: mockFedClient,
 		clusterCache:    mockCache,
+		mapper:          newTestMapper(),
 	}
 
 	newLocal := func(jobStatus rayv1.JobStatus, deploymentStatus rayv1.JobDeploymentStatus) *rayv1.RayJob {
@@ -2881,7 +2900,7 @@ func newCapturingManager(t *testing.T) *capturingManager {
 func TestRegisterRunsWatcherOnLeader(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	r := NewReconciler(logr.Discard(), nil, env.Context{}, clientmocks.NewMockFederatedClient(mockCtrl),
-		newMockClusterCache(), tally.NoopScope)
+		newMockClusterCache(), newTestMapper(), tally.NoopScope)
 	mgr := newCapturingManager(t)
 
 	require.NoError(t, r.Register(mgr))
@@ -2910,6 +2929,66 @@ func TestRegisterRunsWatcherOnLeader(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("the watcher should stop when the manager cancels its context")
 	}
+}
+
+// TestRegisterRequiresMapper checks that a Reconciler without a mapper fails at
+// startup rather than on the first KubeRay event.
+func TestRegisterRequiresMapper(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	r := NewReconciler(logr.Discard(), nil, env.Context{}, clientmocks.NewMockFederatedClient(mockCtrl),
+		newMockClusterCache(), nil, tally.NoopScope)
+	mgr := newCapturingManager(t)
+
+	assert.Error(t, r.Register(mgr))
+	assert.Empty(t, mgr.runnables, "nothing should be started for a reconciler that cannot run")
+}
+
+// TestRayJobEventHandlerUsesTheInjectedMapper checks that the watcher maps
+// KubeRay status with the mapper the controller is given -- the one the
+// federated client maps with -- not a zero-value mapper of its own.
+func TestRayJobEventHandlerUsesTheInjectedMapper(t *testing.T) {
+	r, _, _ := setupJobWatcherTest(t, &v2pb.RayJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       rayJobName,
+			Namespace:  testNamespace,
+			Generation: 1,
+		},
+		Status: v2pb.RayJobStatus{
+			State: v2pb.RAY_JOB_STATE_INITIALIZING,
+			StatusConditions: []*apipb.Condition{
+				{
+					Type:   constants.LaunchedCondition,
+					Status: apipb.CONDITION_STATUS_TRUE,
+				},
+			},
+		},
+	})
+	local := &rayv1.RayJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   rayJobName,
+			Labels: map[string]string{constants.ProjectNameLabelKey: testNamespace},
+		},
+		Status: rayv1.RayJobStatus{
+			JobStatus:           rayv1.JobStatusRunning,
+			JobDeploymentStatus: rayv1.JobDeploymentStatusRunning,
+		},
+	}
+	mapper := typesmocks.NewMockMapper(gomock.NewController(t))
+	mapper.EXPECT().MapLocalJobStatusToGlobal(local).Return(&jobtypes.JobStatus{
+		Ray: &v2pb.RayJobStatus{
+			State:     v2pb.RAY_JOB_STATE_RUNNING,
+			JobStatus: string(rayv1.JobStatusRunning),
+			Message:   "mapped by the injected mapper",
+		},
+	}, nil)
+	r.mapper = mapper
+
+	r.rayJobEventHandler(local)
+
+	var updated v2pb.RayJob
+	require.NoError(t, r.Get(context.Background(),
+		types.NamespacedName{Namespace: testNamespace, Name: rayJobName}, &updated))
+	assert.Equal(t, "mapped by the injected mapper", updated.Status.Message)
 }
 
 // watchesRequestedBy runs r's federated watcher against one ready compute

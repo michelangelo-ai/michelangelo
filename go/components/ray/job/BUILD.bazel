@@ -17,6 +17,7 @@ go_library(
         "//go/components/jobs/client/k8sengine:go_default_library",
         "//go/components/jobs/cluster:go_default_library",
         "//go/components/jobs/common/constants:go_default_library",
+        "//go/components/jobs/common/types:go_default_library",
         "//go/components/jobs/common/utils:go_default_library",
         "//go/components/jobs/common/watch:go_default_library",
         "//go/components/ray/cluster:go_default_library",
@@ -44,6 +45,7 @@ go_test(
     deps = [
         "//go/api:go_default_library",
         "//go/api/utils:go_default_library",
+        "//go/base/config:go_default_library",
         "//go/base/env:go_default_library",
         "//go/components/controllerutil:go_default_library",
         "//go/components/jobs/client:go_default_library",
@@ -52,6 +54,7 @@ go_test(
         "//go/components/jobs/cluster:go_default_library",
         "//go/components/jobs/common/constants:go_default_library",
         "//go/components/jobs/common/types:go_default_library",
+        "//go/components/jobs/common/types/typesmocks:go_default_library",
         "//go/components/jobs/common/utils:go_default_library",
         "//proto/api:go_default_library",
         "//proto/api/v2:go_default_library",

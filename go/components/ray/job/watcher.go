@@ -176,7 +176,7 @@ func (r *Reconciler) rayJobEventHandler(obj interface{}) {
 		return
 	}
 
-	jobStatus, err := k8sengine.Mapper{}.MapLocalJobStatusToGlobal(local)
+	jobStatus, err := r.mapper.MapLocalJobStatusToGlobal(local)
 	if err != nil || jobStatus == nil || jobStatus.Ray == nil {
 		log.Error(err, "could not map local ray job status")
 		return
