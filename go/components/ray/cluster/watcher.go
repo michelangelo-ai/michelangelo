@@ -379,16 +379,36 @@ func (r *Reconciler) rayClusterDeleteEventHandler(obj interface{}) {
 		return
 	}
 
-	killing := jobsutils.GetCondition(&globalCluster.Status.StatusConditions, KillingCondition, globalCluster.Generation)
+	// Killed=TRUE means the kill is already recorded -- cleanupCluster does that
+	// right after it deletes the KubeRay object -- so this delete is its echo.
+	// Deciding anything here would race that write: a cleanup that is visible
+	// before its freeze would read as an external delete and turn a TERMINATED
+	// cluster FAILED. All that can be outstanding is the freeze.
+	if conditionStatus(&globalCluster, KilledCondition) == apipb.CONDITION_STATUS_TRUE {
+		if err := r.markImmutableIfTerminal(ctx, &globalCluster); err != nil {
+			log.Error(err, "failed to mark cluster immutable after kill")
+			return
+		}
+		log.V(1).Info("ray cluster deleted after its kill was recorded")
+		return
+	}
 
-	if killing.Status != apipb.CONDITION_STATUS_TRUE {
+	if conditionStatus(&globalCluster, KillingCondition) != apipb.CONDITION_STATUS_TRUE {
+		// Only a launched cluster has a KubeRay object of its own. A delete for an
+		// unlaunched one belongs to something else, such as a same-named
+		// predecessor's object that is only now going away.
+		if conditionStatus(&globalCluster, LaunchedCondition) != apipb.CONDITION_STATUS_TRUE {
+			log.Info("ignoring delete event for a ray cluster that was never launched")
+			return
+		}
 		// Cluster was deleted externally without going through the controller. The
 		// backing resource is already confirmed gone, so record the complete terminal
-		// condition set in a single write (State=FAILED, Succeeded=FALSE,
-		// Killing=FALSE, Killed=TRUE) — the same set the polling path wrote when it
-		// found the cluster missing on the remote compute cluster. Killing=FALSE
-		// matters beyond bookkeeping: isClusterFullyTerminal requires it, and
-		// cleanupCluster would otherwise issue a pointless DeleteJobCluster.
+		// condition set in a single write (State=FAILED, Succeeded=FALSE unless an
+		// outcome was already decided, Killing=FALSE, Killed=TRUE) — the same set
+		// the safety net writes when it finds the cluster missing on the remote
+		// compute cluster. Killing=FALSE matters beyond bookkeeping:
+		// isClusterFullyTerminal requires it, and cleanupCluster would otherwise
+		// issue a pointless DeleteJobCluster.
 		if err := r.markClusterFailed(ctx, &globalCluster,
 			constants.ClusterKilled,
 			fmt.Sprintf("ray cluster was deleted externally, state: %+v", local.Status.State),

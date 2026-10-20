@@ -467,9 +467,9 @@ func (r *Reconciler) cleanupCluster(
 		}
 	}
 
-	// Update status to terminated.
-	// The federated watcher will handle the killing->killed transition
-	// when the RayCluster is actually deleted from the compute cluster.
+	// Record the kill now that the delete is issued: Killing ends and Killed is
+	// set alongside TERMINATED. The KubeRay delete event that follows finds
+	// Killed=TRUE and only freezes the cluster (see rayClusterDeleteEventHandler).
 	if err := jobsutils.UpdateStatusWithRetries(ctx, r, cluster,
 		func(obj client.Object) {
 			cluster := obj.(*v2pb.RayCluster)
@@ -694,7 +694,8 @@ func (r *Reconciler) markImmutableIfTerminal(ctx context.Context, cluster *v2pb.
 // Killing=FALSE directly means cleanupCluster will never issue a pointless
 // DeleteJobCluster against it. That same condition set is what isClusterFullyTerminal
 // looks for; the caller is responsible for calling finalizeIfTerminal afterwards to act
-// on it.
+// on it. An outcome that was already decided is kept, with its reason: the resource
+// vanishing does not change why the cluster ended.
 func (r *Reconciler) markClusterFailed(
 	ctx context.Context,
 	cluster *v2pb.RayCluster,
@@ -708,13 +709,15 @@ func (r *Reconciler) markClusterFailed(
 			c := obj.(*v2pb.RayCluster)
 			c.Status.State = v2pb.RAY_CLUSTER_STATE_FAILED
 
-			succeededCond := jobsutils.GetCondition(&c.Status.StatusConditions, SucceededCondition, c.Generation)
-			jobsutils.UpdateCondition(succeededCond, jobsutils.ConditionUpdateParams{
-				Status:     apipb.CONDITION_STATUS_FALSE,
-				Generation: c.Generation,
-				Reason:     reason,
-				Message:    message,
-			})
+			if conditionStatus(c, SucceededCondition) == apipb.CONDITION_STATUS_UNKNOWN {
+				succeededCond := jobsutils.GetCondition(&c.Status.StatusConditions, SucceededCondition, c.Generation)
+				jobsutils.UpdateCondition(succeededCond, jobsutils.ConditionUpdateParams{
+					Status:     apipb.CONDITION_STATUS_FALSE,
+					Generation: c.Generation,
+					Reason:     reason,
+					Message:    message,
+				})
+			}
 			killingCond := jobsutils.GetCondition(&c.Status.StatusConditions, KillingCondition, c.Generation)
 			jobsutils.UpdateCondition(killingCond, jobsutils.ConditionUpdateParams{
 				Status:     apipb.CONDITION_STATUS_FALSE,

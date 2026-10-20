@@ -863,6 +863,98 @@ func TestRayClusterDeleteEventHandler_ExternalDeletion(t *testing.T) {
 	assert.True(t, utils.IsImmutable(&updated), "externally deleted cluster should be frozen")
 }
 
+// TestRayClusterDeleteEventHandler_AfterCleanupKeepsOutcome covers the normal
+// teardown. cleanupCluster deletes the KubeRay object and records the kill
+// itself (Killing=FALSE, Killed=TRUE, TERMINATED); the freeze only lands on a
+// later reconcile. The delete event can be handled in between, and it must not
+// read the teardown as an external delete: that would rewrite a TERMINATED
+// cluster as FAILED/ClusterKilled and freeze that, even after a successful
+// termination.
+func TestRayClusterDeleteEventHandler_AfterCleanupKeepsOutcome(t *testing.T) {
+	globalCluster := &v2pb.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
+		Status: v2pb.RayClusterStatus{
+			State: v2pb.RAY_CLUSTER_STATE_TERMINATED,
+			StatusConditions: []*apipb.Condition{
+				{Type: LaunchedCondition, Status: apipb.CONDITION_STATUS_TRUE},
+				{Type: SucceededCondition, Status: apipb.CONDITION_STATUS_TRUE, Reason: "completed"},
+				{Type: KillingCondition, Status: apipb.CONDITION_STATUS_FALSE},
+				{Type: KilledCondition, Status: apipb.CONDITION_STATUS_TRUE},
+			},
+		},
+	}
+	r := setupWatcherTest(t, globalCluster)
+
+	r.rayClusterDeleteEventHandler(newKubeRayCluster(rayClusterName, rayv1.Ready))
+
+	updated := getUpdatedCluster(t, r)
+	assert.Equal(t, v2pb.RAY_CLUSTER_STATE_TERMINATED, updated.Status.State)
+	succeededCond := findCondition(updated.Status.StatusConditions, SucceededCondition)
+	require.NotNil(t, succeededCond)
+	assert.Equal(t, apipb.CONDITION_STATUS_TRUE, succeededCond.Status,
+		"a successful termination must not be recorded as a failure")
+	assert.Equal(t, "completed", succeededCond.Reason)
+	assert.True(t, utils.IsImmutable(&updated),
+		"the kill is already recorded, so all the delete has left to do is freeze")
+}
+
+// TestRayClusterDeleteEventHandler_ExternalDeletionKeepsDecidedOutcome covers an
+// external delete that lands after the outcome was decided but before the kill
+// started: the cluster failed and its teardown had not begun. The delete
+// finishes the teardown, but the recorded failure and its reason must stay the
+// ones that were decided rather than become "deleted externally".
+func TestRayClusterDeleteEventHandler_ExternalDeletionKeepsDecidedOutcome(t *testing.T) {
+	globalCluster := &v2pb.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
+		Status: v2pb.RayClusterStatus{
+			State: v2pb.RAY_CLUSTER_STATE_FAILED,
+			StatusConditions: []*apipb.Condition{
+				{Type: LaunchedCondition, Status: apipb.CONDITION_STATUS_TRUE},
+				{Type: SucceededCondition, Status: apipb.CONDITION_STATUS_FALSE, Reason: "FailedCreateWorkerPod"},
+			},
+		},
+	}
+	r := setupWatcherTest(t, globalCluster)
+
+	r.rayClusterDeleteEventHandler(newKubeRayCluster(rayClusterName, rayv1.Failed))
+
+	updated := getUpdatedCluster(t, r)
+	succeededCond := findCondition(updated.Status.StatusConditions, SucceededCondition)
+	require.NotNil(t, succeededCond)
+	assert.Equal(t, apipb.CONDITION_STATUS_FALSE, succeededCond.Status)
+	assert.Equal(t, "FailedCreateWorkerPod", succeededCond.Reason,
+		"the decided failure reason must survive the delete")
+	killedCond := findCondition(updated.Status.StatusConditions, KilledCondition)
+	require.NotNil(t, killedCond)
+	assert.Equal(t, apipb.CONDITION_STATUS_TRUE, killedCond.Status)
+	assert.True(t, utils.IsImmutable(&updated), "the cluster is fully terminal and should be frozen")
+}
+
+// TestRayClusterDeleteEventHandler_IgnoresUnlaunchedCluster: a CR that never
+// launched has no KubeRay object of its own, so a delete for its name belongs to
+// something else -- typically a same-named predecessor whose object is only now
+// going away -- and must not fail the new CR.
+func TestRayClusterDeleteEventHandler_IgnoresUnlaunchedCluster(t *testing.T) {
+	globalCluster := &v2pb.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
+		Status: v2pb.RayClusterStatus{
+			StatusConditions: []*apipb.Condition{
+				{Type: EnqueuedCondition, Status: apipb.CONDITION_STATUS_TRUE},
+				{Type: ScheduledCondition, Status: apipb.CONDITION_STATUS_TRUE},
+			},
+		},
+	}
+	r, writes, logs := setupWatcherTestObserved(t, globalCluster)
+
+	r.rayClusterDeleteEventHandler(newKubeRayCluster(rayClusterName, rayv1.Ready))
+
+	assert.Zero(t, *writes, "an unlaunched cluster must not be written to")
+	assert.Empty(t, errorLogs(logs))
+	updated := getUpdatedCluster(t, r)
+	assert.Nil(t, findCondition(updated.Status.StatusConditions, SucceededCondition))
+	assert.Nil(t, findCondition(updated.Status.StatusConditions, KilledCondition))
+}
+
 func TestRayClusterDeleteEventHandler_SkipsImmutable(t *testing.T) {
 	globalCluster := &v2pb.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
