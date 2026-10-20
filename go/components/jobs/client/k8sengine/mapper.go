@@ -3,6 +3,7 @@ package k8sengine
 import (
 	"bytes"
 	"fmt"
+	"strings"
 	"text/template"
 
 	maconfig "github.com/michelangelo-ai/michelangelo/go/base/config"
@@ -15,6 +16,7 @@ import (
 	"go.uber.org/config"
 	"go.uber.org/fx"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/validation"
 )
 
 // Mapper helps to map global to local crds and vice versa
@@ -48,11 +50,18 @@ func NewLogPersistenceConfig(provider config.Provider) (LogPersistenceConfig, er
 }
 
 // NewMapper constructs the Mapper. Panics if LogURLFormat is set but does not
-// parse as a valid Go text/template — config errors should fail at startup.
+// parse as a valid Go text/template, or if the runtime environment is not a
+// valid label value — config errors should fail at startup.
 func NewMapper(logPersistence LogPersistenceConfig, scheduler maconfig.SchedulerConfig, environment env.Context) MapperResult {
 	var tmpl *template.Template
 	if logPersistence.Enabled && logPersistence.LogURLFormat != "" {
 		tmpl = template.Must(template.New("logURL").Parse(logPersistence.LogURLFormat))
+	}
+	// The runtime environment is the ma/control-plane-env label value; see
+	// controlPlaneLabels.
+	if errs := validation.IsValidLabelValue(environment.RuntimeEnvironment); len(errs) > 0 {
+		panic(fmt.Errorf("runtime environment %q is not a valid %s label value: %s",
+			environment.RuntimeEnvironment, constants.JobControlPlaneEnvKey, strings.Join(errs, "; ")))
 	}
 	return MapperResult{
 		Mapper: Mapper{
@@ -64,13 +73,17 @@ func NewMapper(logPersistence LogPersistenceConfig, scheduler maconfig.Scheduler
 	}
 }
 
-// controlPlaneLabels are the labels Michelangelo stamps on every object it
-// creates on a compute cluster, and the only channel the federated watchers
-// have for attributing a compute-cluster event back to a control-plane CR:
+// controlPlaneLabels are the labels Michelangelo stamps on the Ray objects it
+// creates on a compute cluster and on their head and worker pod templates, and
+// the only channel the federated watchers have for attributing a
+// compute-cluster event back to a control-plane CR:
 //
 //   - ma/owner-service and ma/control-plane-env scope each watch to the objects
 //     this control plane owns, so one compute cluster can be shared by several
-//     Michelangelo environments without their watchers crossing over.
+//     Michelangelo environments without their watchers crossing over. That
+//     requires a distinct, non-empty RUNTIME_ENVIRONMENT for each control plane
+//     sharing the compute cluster: left unset, they all stamp and select an
+//     empty ma/control-plane-env and see each other's objects.
 //   - ma/project-name carries the namespace the CR lives in, which is how an
 //     event is routed back to it.
 //

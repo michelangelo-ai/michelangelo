@@ -201,11 +201,13 @@ func nonNilRayStartParams(params map[string]string) map[string]string {
 	return params
 }
 
-// addPodTemplateLabels merges labels into a pod template, keeping any the
-// caller already set. It always assigns a fresh map rather than writing through
-// the existing one: the template here is a shallow copy of the pod spec held by
-// the Michelangelo CR, so mutating its label map in place would stamp
-// control-plane labels onto the caller's own object.
+// addPodTemplateLabels merges the control-plane labels into a pod template.
+// They override any template label with the same key, so a job author cannot
+// forge them; the template's other labels are kept. It always assigns a fresh
+// map rather than writing through the existing one: the template here is a
+// shallow copy of the pod spec held by the Michelangelo CR, so mutating its
+// label map in place would stamp control-plane labels onto the caller's own
+// object.
 func addPodTemplateLabels(template *corev1.PodTemplateSpec, labels map[string]string) {
 	merged := make(map[string]string, len(template.Labels)+len(labels))
 	for key, value := range template.Labels {
