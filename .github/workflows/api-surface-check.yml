@@ -213,7 +213,7 @@ jobs:
             });
 
   # ---------------------------------------------------------------------------
-  # Helm values — detect removed or renamed top-level keys
+  # Helm values — detect removed or renamed keys
   # ---------------------------------------------------------------------------
   helm-values-check:
     name: Helm Values Key Diff (advisory)
@@ -241,12 +241,25 @@ jobs:
             https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
           chmod +x /usr/local/bin/yq
 
-      - name: Diff top-level Helm values keys
+      - name: Diff Helm values keys
         id: helm-diff
         run: |
-          base_keys=$(yq 'keys | .[]' base/helm/michelangelo/values.yaml 2>/dev/null | sort || true)
-          head_keys=$(yq 'keys | .[]' head/helm/michelangelo/values.yaml 2>/dev/null | sort || true)
-          removed=$(comm -23 <(echo "$base_keys") <(echo "$head_keys") || true)
+          # helm/michelangelo is checked on its top-level keys. The compute
+          # chart is also checked on every key path under its own blocks
+          # (sequence indices dropped) and on its dependency toggles.
+          surface() {
+            local filter='keys | .[]'
+            if [ "$1" = helm/michelangelo-compute ]; then
+              filter='.. | path | map(select(tag != "!!int")) | join(".")
+                | select(test("^(rayManager|runtime|tests)([.]|$)|^(kuberay-operator|spark-operator|kueue)[.]enabled$|^[^.]+$"))'
+            fi
+            yq "$filter" "$2/$1/values.yaml" 2>/dev/null | sort -u || true
+          }
+          removed=$(
+            for chart in helm/michelangelo helm/michelangelo-compute; do
+              comm -23 <(surface "$chart" base) <(surface "$chart" head) | sed "s|^|$chart: |"
+            done
+          )
           echo "HAS_REMOVED=$([ -n "$removed" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
           {
             echo "REMOVED_KEYS<<HELM_EOF"
@@ -281,13 +294,13 @@ jobs:
             const body = [
               '### Helm Values Key Diff (advisory)',
               '',
-              'The following top-level keys were removed or renamed in `helm/michelangelo/values.yaml`:',
+              'The following keys were removed or renamed in Helm chart `values.yaml` files (`<chart>: <key>`):',
               '',
               '```',
               removed,
               '```',
               '',
-              'Removing or renaming top-level Helm values is a breaking change for existing installations.',
+              'Removing or renaming Helm values is a breaking change for existing installations.',
               ackNote,
               '',
               '_This check is advisory and does not block merge._',

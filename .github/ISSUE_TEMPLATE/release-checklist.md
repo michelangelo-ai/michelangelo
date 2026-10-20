@@ -16,6 +16,7 @@ assignees: ''
   - [ ] `website/package.json`
   - [ ] `helm/michelangelo/Chart.yaml` (both `version` and `appVersion`)
   - [ ] `helm/michelangelo-llm-gateway/Chart.yaml` (`version`; `appVersion` tracks LiteLLM)
+  - [ ] `helm/michelangelo-compute/Chart.yaml` (both `version` and `appVersion`)
 - [ ] `CHANGELOG.md` updated via `git cliff`
 - [ ] Release notes drafted (follows three-layer template: summary, categorized changes, compatibility matrix)
 - [ ] Breaking changes reviewed and documented:
