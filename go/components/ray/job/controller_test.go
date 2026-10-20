@@ -1747,3 +1747,201 @@ func TestJobWatcherHandlersRecheckGuardsAfterConflict(t *testing.T) {
 		})
 	}
 }
+
+// TestJobWatcherHandlersRetryTransientErrors asserts that a status write which
+// fails with a transient API server error is retried, not dropped. The delete
+// path in particular gets a single event: the object is gone from the store, so
+// nothing re-delivers it.
+func TestJobWatcherHandlersRetryTransientErrors(t *testing.T) {
+	newGlobal := func() *v2pb.RayJob {
+		return &v2pb.RayJob{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:       rayJobName,
+				Namespace:  testNamespace,
+				Generation: 1,
+			},
+			Status: v2pb.RayJobStatus{
+				State: v2pb.RAY_JOB_STATE_INITIALIZING,
+				StatusConditions: []*apipb.Condition{
+					{
+						Type:   constants.LaunchedCondition,
+						Status: apipb.CONDITION_STATUS_TRUE,
+					},
+				},
+			},
+		}
+	}
+	newLocal := func() *rayv1.RayJob {
+		return &rayv1.RayJob{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   rayJobName,
+				Labels: map[string]string{constants.ProjectNameLabelKey: testNamespace},
+			},
+			Status: rayv1.RayJobStatus{
+				JobStatus:           rayv1.JobStatusRunning,
+				JobDeploymentStatus: rayv1.JobDeploymentStatusRunning,
+			},
+		}
+	}
+
+	tests := []struct {
+		name      string
+		event     func(r *Reconciler)
+		wantState v2pb.RayJobState
+	}{
+		{
+			name:      "status update",
+			event:     func(r *Reconciler) { r.rayJobEventHandler(newLocal()) },
+			wantState: v2pb.RAY_JOB_STATE_RUNNING,
+		},
+		{
+			name:      "delete",
+			event:     func(r *Reconciler) { r.rayJobDeleteEventHandler(newLocal()) },
+			wantState: v2pb.RAY_JOB_STATE_FAILED,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			global := newGlobal()
+			statusWrites := 0
+			fakeClient := fake.NewClientBuilder().
+				WithScheme(newTestScheme()).
+				WithObjects(global).
+				WithStatusSubresource(global).
+				WithInterceptorFuncs(interceptor.Funcs{
+					SubResourceUpdate: func(ctx context.Context, c client.Client, subResource string, obj client.Object, opts ...client.SubResourceUpdateOption) error {
+						statusWrites++
+						if statusWrites == 1 {
+							return apiErrors.NewInternalError(fmt.Errorf("etcdserver: request timed out"))
+						}
+						return c.SubResource(subResource).Update(ctx, obj, opts...)
+					},
+				}).
+				Build()
+			r := &Reconciler{Client: fakeClient, logger: zapr.NewLogger(zaptest.NewLogger(t))}
+
+			tt.event(r)
+
+			var updated v2pb.RayJob
+			require.NoError(t, r.Get(context.Background(),
+				types.NamespacedName{Namespace: testNamespace, Name: rayJobName}, &updated))
+			assert.Equal(t, 2, statusWrites, "the failed write must be retried once")
+			assert.Equal(t, tt.wantState, updated.Status.State)
+		})
+	}
+}
+
+// TestRayJobConvergesAfterDeleteHandlerExhaustsRetries covers a delete whose
+// status write keeps conflicting -- e.g. against a stale cache -- until the
+// handler gives up. The handler gets no second event, so the job must still
+// reach a terminal state through Reconcile's safety net, which reports the
+// missing KubeRay RayJob as FAILED.
+func TestRayJobConvergesAfterDeleteHandlerExhaustsRetries(t *testing.T) {
+	ctx := context.Background()
+
+	rayJob := &v2pb.RayJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       rayJobName,
+			Namespace:  testNamespace,
+			Generation: 1,
+		},
+		Spec: v2pb.RayJobSpec{
+			Cluster: &apipb.ResourceIdentifier{
+				Name:      testClusterName,
+				Namespace: testNamespace,
+			},
+			Entrypoint: "echo Hello World",
+		},
+		Status: v2pb.RayJobStatus{
+			State:     v2pb.RAY_JOB_STATE_RUNNING,
+			JobStatus: string(rayv1.JobStatusRunning),
+			StatusConditions: []*apipb.Condition{
+				{
+					Type:   constants.LaunchedCondition,
+					Status: apipb.CONDITION_STATUS_TRUE,
+				},
+			},
+		},
+	}
+	cluster := &v2pb.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       testClusterName,
+			Namespace:  testNamespace,
+			Generation: 1,
+		},
+		Status: v2pb.RayClusterStatus{
+			State: v2pb.RAY_CLUSTER_STATE_TERMINATED,
+			Assignment: &v2pb.AssignmentInfo{
+				Cluster: assignedCluster,
+			},
+		},
+	}
+
+	const conflicts = 6
+	statusWrites := 0
+	fakeClient := fake.NewClientBuilder().
+		WithScheme(newTestScheme()).
+		WithObjects(rayJob, cluster).
+		WithStatusSubresource(rayJob, cluster).
+		WithInterceptorFuncs(interceptor.Funcs{
+			SubResourceUpdate: func(ctx context.Context, c client.Client, subResource string, obj client.Object, opts ...client.SubResourceUpdateOption) error {
+				statusWrites++
+				if statusWrites <= conflicts {
+					return apiErrors.NewConflict(schema.GroupResource{Group: "michelangelo.api", Resource: "rayjobs"},
+						obj.GetName(), fmt.Errorf("the object has been modified"))
+				}
+				return c.SubResource(subResource).Update(ctx, obj, opts...)
+			},
+		}).
+		Build()
+
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+	mockFedClient := clientmocks.NewMockFederatedClient(mockCtrl)
+	mockFedClient.EXPECT().GetJobStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(&jobtypes.JobStatus{
+		Ray: &v2pb.RayJobStatus{
+			JobStatus: "Unknown",
+			State:     v2pb.RAY_JOB_STATE_FAILED,
+			Message:   "Resource not found in compute cluster",
+		},
+	}, nil).AnyTimes()
+	mockCache := newMockClusterCache()
+	mockCache.addCluster(assignedCluster, &v2pb.Cluster{
+		ObjectMeta: metav1.ObjectMeta{Name: assignedCluster},
+	})
+
+	r := &Reconciler{
+		Client:          fakeClient,
+		logger:          zapr.NewLogger(zaptest.NewLogger(t)),
+		federatedClient: mockFedClient,
+		clusterCache:    mockCache,
+	}
+
+	r.rayJobDeleteEventHandler(&rayv1.RayJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   rayJobName,
+			Labels: map[string]string{constants.ProjectNameLabelKey: testNamespace},
+		},
+	})
+
+	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: rayJobName}}
+	var stored v2pb.RayJob
+	require.NoError(t, r.Get(ctx, request.NamespacedName, &stored))
+	require.Equal(t, v2pb.RAY_JOB_STATE_RUNNING, stored.Status.State, "the handler should have given up")
+
+	// The workqueue retries a reconcile that returns an error; model that by
+	// reconciling until one pass succeeds.
+	var err error
+	for i := 0; i < conflicts; i++ {
+		if _, err = r.Reconcile(ctx, request); err == nil {
+			break
+		}
+	}
+	require.NoError(t, err)
+
+	require.NoError(t, r.Get(ctx, request.NamespacedName, &stored))
+	assert.Equal(t, v2pb.RAY_JOB_STATE_FAILED, stored.Status.State)
+	assert.Equal(t, "Resource not found in compute cluster", stored.Status.Message)
+	assert.True(t, utils.IsImmutable(&stored), "a terminal job must be frozen so the ingester can archive it")
+}

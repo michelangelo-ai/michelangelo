@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/cache"
@@ -23,6 +24,14 @@ import (
 )
 
 const _eventHandlerTimeout = 10 * time.Second
+
+// isRetriableWriteError reports whether a handler's status write is worth
+// retrying: a conflict with a concurrent writer, or a transient API server
+// error. The delete path in particular gets a single event, so a dropped write
+// is left to the reconciler's slow safety net.
+func isRetriableWriteError(err error) bool {
+	return apiErrors.IsConflict(err) || jobsutils.IsRetriableError(err)
+}
 
 // getFederatedWatcher creates a federated watcher for the RayJob controller.
 //
@@ -146,7 +155,7 @@ func (r *Reconciler) rayJobEventHandler(obj interface{}) {
 		"kuberay_deployment_status", mapped.JobDeploymentStatus,
 		"mapped_state", mapped.State)
 
-	if err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+	if err = retry.OnError(retry.DefaultBackoff, isRetriableWriteError, func() error {
 		var current v2pb.RayJob
 		if getErr := r.Get(ctx, types.NamespacedName{Namespace: projectName, Name: local.Name}, &current); getErr != nil {
 			return getErr
@@ -234,7 +243,7 @@ func (r *Reconciler) rayJobDeleteEventHandler(obj interface{}) {
 		}
 
 		// Job was deleted externally without going through the controller.
-		if err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		if err = retry.OnError(retry.DefaultBackoff, isRetriableWriteError, func() error {
 			var current v2pb.RayJob
 			if getErr := r.Get(ctx, types.NamespacedName{Namespace: projectName, Name: local.Name}, &current); getErr != nil {
 				return getErr
@@ -280,7 +289,7 @@ func (r *Reconciler) rayJobDeleteEventHandler(obj interface{}) {
 	}
 
 	// Expected deletion — killing was in progress.
-	if err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+	if err = retry.OnError(retry.DefaultBackoff, isRetriableWriteError, func() error {
 		var current v2pb.RayJob
 		if getErr := r.Get(ctx, types.NamespacedName{Namespace: projectName, Name: local.Name}, &current); getErr != nil {
 			return getErr
