@@ -3,12 +3,14 @@ package watch
 import (
 	"context"
 	"fmt"
+	"runtime/debug"
 	"sync"
 	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/uber-go/tally"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/tools/cache"
 
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/client"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/cluster"
@@ -27,14 +29,16 @@ var (
 
 // FederatedWatcher setups watches across all the registered clusters.
 //
-// Whenever a new cluster is registered with JC, an informer is
+// Whenever a new cluster is registered with JC and ready, an informer is
 // created for it based on the watcher params. Informers are stopped
-// when a cluster is either put offline of deleted.
+// when a cluster is deleted; a cluster that is only temporarily not
+// ready keeps its informers.
 //
 // The cluster controller
 // keeps an eye on the clusters and thus the clusters in ETCD are up-to-date.
 type FederatedWatcher interface {
-	// Start starts the eager syncing of watches.
+	// Start starts the eager syncing of watches. It returns once ctx is
+	// done, after stopping every watch it started.
 	Start(ctx context.Context)
 }
 
@@ -62,7 +66,30 @@ type watcher struct {
 
 type watchInfo struct {
 	resourceWatchers []*client.ResourceWatcher
-	cluster          *v2pb.Cluster
+	// exited has a channel per resource watcher, closed if its controller
+	// stops while its StopCh is still open.
+	exited  []<-chan struct{}
+	cluster *v2pb.Cluster
+}
+
+// stop closes the StopCh of each of the cluster's resource watchers.
+func (wi *watchInfo) stop() {
+	for _, rw := range wi.resourceWatchers {
+		close(rw.StopCh)
+	}
+}
+
+// hasExited reports whether any of the cluster's watch controllers stopped
+// on its own, leaving its resource unwatched.
+func (wi *watchInfo) hasExited() bool {
+	for _, exited := range wi.exited {
+		select {
+		case <-exited:
+			return true
+		default:
+		}
+	}
+	return false
 }
 
 // NewFederatedWatcher returns a new federated watcher.
@@ -78,7 +105,8 @@ func NewFederatedWatcher(p FederatedWatcherParams) FederatedWatcher {
 	}
 }
 
-// Start starts the eager syncing of watches.
+// Start starts the eager syncing of watches. It returns once ctx is done,
+// after stopping every watch it started.
 func (r *watcher) Start(ctx context.Context) {
 	r.startOnce.Do(func() {
 		r.start(ctx)
@@ -93,15 +121,35 @@ func (r *watcher) start(ctx context.Context) {
 
 	}, r.period, ctx.Done())
 
+	// the sync loop has stopped, so nothing can add a watch after this
+	r.stopAll()
+
 	r.log.Info("exiting watcher")
+}
+
+// stopAll stops the watches of every cluster and forgets the clusters.
+func (r *watcher) stopAll() {
+	r.clusterInfoMap.Range(func(key, value interface{}) bool {
+		value.(*watchInfo).stop()
+		r.clusterInfoMap.Delete(key)
+		return true
+	})
 }
 
 // sync sets up watches based on the watcher params across all clusters.
 func (r *watcher) sync() {
-	// only sync ready clusters
+	// only set up watches for ready clusters
 	clusters := r.clusterCache.GetClusters(cluster.ReadyClusters)
 
+	// but only remove the watch of a cluster that is no longer registered. A
+	// cluster can be briefly not ready (the cluster controller re-adds it
+	// without a status after a spec edit), and a rebuilt informer starts
+	// empty, so objects deleted in that gap would never reach OnDelete.
 	clusterNames := make(map[string]struct{})
+	for _, registered := range r.clusterCache.GetClusters(cluster.AllClusters) {
+		clusterNames[registered.Name] = struct{}{}
+	}
+
 	for _, cluster := range clusters {
 		clusterNames[cluster.Name] = struct{}{}
 
@@ -109,7 +157,7 @@ func (r *watcher) sync() {
 		clusterInfo, ok := r.clusterInfoMap.Load(cluster.Name)
 		if !ok {
 			r.log.Info("setting up watch for new cluster", "name", cluster.Name)
-			err := r.addNewClusterToCache(r.watches, cluster)
+			err := r.addNewClusterToCache(cluster)
 			if err != nil {
 				// continue to the next cluster if there is an error
 				r.log.Error(err, "failed to add watch for new cluster", "name", cluster.Name)
@@ -119,11 +167,14 @@ func (r *watcher) sync() {
 			continue
 		}
 
-		// check if the cluster has been updated
-		wi := clusterInfo.(watchInfo)
-		if shouldClusterBeUpdatedInWatcherCache(wi.cluster, cluster) {
-			r.log.Info("updating watch for existing cluster", "name", cluster.Name)
-			err := r.updateClusterInCache(wi, r.watches, cluster)
+		// check if the cluster has been updated or one of its watches died
+		wi := clusterInfo.(*watchInfo)
+		endpointChanged := shouldClusterBeUpdatedInWatcherCache(wi.cluster, cluster)
+		watchExited := wi.hasExited()
+		if endpointChanged || watchExited {
+			r.log.Info("updating watch for existing cluster", "name", cluster.Name,
+				"endpointChanged", endpointChanged, "watchExited", watchExited)
+			err := r.updateClusterInCache(wi, cluster)
 			if err != nil {
 				// continue to the next cluster if there is an error
 				r.log.Error(err, "failed to add watch for updated cluster", "name", cluster.Name)
@@ -133,16 +184,14 @@ func (r *watcher) sync() {
 		}
 	}
 
-	// remove watch for any cluster no longer in use
+	// remove watch for any cluster no longer registered
 	r.clusterInfoMap.Range(func(key, value interface{}) bool {
 		name := key.(string)
-		info := value.(watchInfo)
+		info := value.(*watchInfo)
 
 		if _, ok := clusterNames[name]; !ok {
 			r.log.Info("Removing watch for cluster", "name", name)
-			for _, rw := range info.resourceWatchers {
-				close(rw.StopCh)
-			}
+			info.stop()
 
 			r.clusterInfoMap.Delete(name)
 		}
@@ -151,94 +200,120 @@ func (r *watcher) sync() {
 }
 
 func (r *watcher) updateClusterInCache(
-	info watchInfo,
-	watcherParams []*client.WatcherParams,
+	info *watchInfo,
 	cluster *v2pb.Cluster) error {
-	for _, rw := range info.resourceWatchers {
-		close(rw.StopCh)
-	}
+	info.stop()
 	r.clusterInfoMap.Delete(cluster.Name)
 
 	timer := r.metrics.MetricsScope.Timer(constants.WatcherLatency).Start()
-	resourceWatchers, err := r.federatedClient.Watcher(watcherParams, cluster)
+	resourceWatchers, err := r.federatedClient.Watcher(r.watcherParams(cluster.Name), cluster)
 	timer.Stop()
 
 	if err != nil {
 		return err
 	}
 
-	for _, rw := range resourceWatchers {
-		r.startWatchController(rw, cluster.Name)
-	}
-
-	r.clusterInfoMap.Store(cluster.Name, watchInfo{
+	newInfo := &watchInfo{
 		resourceWatchers: resourceWatchers,
 		cluster:          cluster,
-	})
+	}
+	for _, rw := range resourceWatchers {
+		newInfo.exited = append(newInfo.exited, r.startWatchController(rw, cluster.Name))
+	}
+
+	r.clusterInfoMap.Store(cluster.Name, newInfo)
 
 	r.log.Info("Updated cluster in the watch list", "clusterName", cluster.Name)
 	return nil
 }
 
 func (r *watcher) addNewClusterToCache(
-	watcherParams []*client.WatcherParams,
 	cluster *v2pb.Cluster) error {
 	timer := r.metrics.MetricsScope.Timer(constants.WatcherLatency).Start()
-	resourceWatchers, err := r.federatedClient.Watcher(watcherParams, cluster)
+	resourceWatchers, err := r.federatedClient.Watcher(r.watcherParams(cluster.Name), cluster)
 	timer.Stop()
 
 	if err != nil {
 		return err
 	}
 
-	for _, rw := range resourceWatchers {
-		r.startWatchController(rw, cluster.Name)
-	}
-	r.clusterInfoMap.Store(cluster.Name, watchInfo{
+	info := &watchInfo{
 		resourceWatchers: resourceWatchers,
 		cluster:          cluster,
-	})
+	}
+	for _, rw := range resourceWatchers {
+		info.exited = append(info.exited, r.startWatchController(rw, cluster.Name))
+	}
+	r.clusterInfoMap.Store(cluster.Name, info)
 
 	r.log.Info("Added cluster to the watch list", "clusterName", cluster.Name)
 	return nil
 }
 
-func (r *watcher) startWatchController(watchInfo *client.ResourceWatcher, clusterName string) {
+// watcherParams returns a fresh copy of the watcher params for one cluster's
+// watches. client.Watcher sets each param's Client to that cluster's client,
+// so the shared params must never be handed to it. Each copy's handler is
+// wrapped so that a panic in it cannot take the watch down.
+func (r *watcher) watcherParams(clusterName string) []*client.WatcherParams {
+	params := make([]*client.WatcherParams, 0, len(r.watches))
+	for _, wp := range r.watches {
+		p := *wp
+		p.ResourceEventHandler = &recoveringHandler{
+			handler: wp.ResourceEventHandler,
+			log:     r.log.WithValues("clusterName", clusterName, "resource", wp.ResourceName),
+			metrics: r.metrics,
+		}
+		params = append(params, &p)
+	}
+	return params
+}
+
+// startWatchController starts the controller of a resource watcher. The
+// returned channel is closed if the controller stops on its own.
+func (r *watcher) startWatchController(watchInfo *client.ResourceWatcher, clusterName string) <-chan struct{} {
 	// Make sure to initialize the channel outside of the goroutine. We do this because there could be a
 	// race between starting the controller and an update in the cluster cache. In the update case, we will
 	// try to close the channel. And closing a nil channel will panic.
 	stopCh := make(chan struct{})
 	watchInfo.StopCh = stopCh
+	exited := make(chan struct{})
 	// start the controller in a goroutine with a recoverer to handle any panics from the controller.
 	// passing stopCh as a parameter to prevent a data race
 	// between startWatchController() writing to watchInfo.StopCh and startWatchGoRoutine() reading it
-	go r.startWatchGoRoutine(watchInfo, stopCh, clusterName)
+	go r.startWatchGoRoutine(watchInfo, stopCh, exited, clusterName)
+	return exited
 }
 
 // DO NOT call directly. Only caller should be startWatchController.
 // This is separated into a method to enable unit testing.
-func (r *watcher) startWatchGoRoutine(watchInfo *client.ResourceWatcher, stopCh chan struct{}, clusterName string) {
+func (r *watcher) startWatchGoRoutine(
+	watchInfo *client.ResourceWatcher, stopCh, exited chan struct{}, clusterName string) {
 	defer func() {
-		if rvr := recover(); rvr != nil {
+		rvr := recover()
+		if rvr != nil {
 			// watch controller run panicked
 			// log the error
 			r.log.Error(fmt.Errorf("%+v", rvr), "Watch controller exited with panic", "clusterName", clusterName)
 			// emit a metrics that can be alerted on
 			r.metrics.MetricsScope.Counter(_failureWatchPanicMetricName).Inc(1)
-			return
 		}
-
-		// watch controller exited without panic
-		r.log.Info("Watch controller exited without panic", "clusterName", clusterName)
-		// emit a metric that can be alerted on
-		r.metrics.MetricsScope.Counter(_failureWatchExitWithoutPanicMetricName).Inc(1)
 
 		// check if the channel is closed
 		select {
 		case <-stopCh:
+			// sync stopped the watch: its cluster was removed or the watch replaced
 			r.log.Info("Stop channel is closed", "clusterName", clusterName)
 		default:
+			// Run only returns on its own if the controller died, which leaves
+			// the resource unwatched
 			r.log.Info("Stop channel is not closed", "clusterName", clusterName)
+			if rvr == nil {
+				r.log.Info("Watch controller exited without panic", "clusterName", clusterName)
+				// emit a metric that can be alerted on
+				r.metrics.MetricsScope.Counter(_failureWatchExitWithoutPanicMetricName).Inc(1)
+			}
+			// have the next sync rebuild the cluster's watches
+			close(exited)
 		}
 	}()
 
@@ -246,8 +321,46 @@ func (r *watcher) startWatchGoRoutine(watchInfo *client.ResourceWatcher, stopCh 
 	watchInfo.Controller.Run(stopCh)
 }
 
+// recoveringHandler recovers a panic in a watch's event handler. Left alone,
+// the panic would unwind the informer's processing loop while its reflector
+// keeps listing into a queue that nothing drains. Recovered, only that event
+// is lost; the informer's periodic resync re-delivers any object it still has.
+type recoveringHandler struct {
+	handler cache.ResourceEventHandler
+	log     logr.Logger
+	metrics *metrics.ControllerMetrics
+}
+
+func (h *recoveringHandler) OnAdd(obj interface{}, isInInitialList bool) {
+	defer h.recoverPanic()
+	h.handler.OnAdd(obj, isInInitialList)
+}
+
+func (h *recoveringHandler) OnUpdate(oldObj, newObj interface{}) {
+	defer h.recoverPanic()
+	h.handler.OnUpdate(oldObj, newObj)
+}
+
+func (h *recoveringHandler) OnDelete(obj interface{}) {
+	defer h.recoverPanic()
+	h.handler.OnDelete(obj)
+}
+
+func (h *recoveringHandler) recoverPanic() {
+	if rvr := recover(); rvr != nil {
+		h.log.Error(fmt.Errorf("%+v", rvr), "Watch event handler panicked", "stack", string(debug.Stack()))
+		// emit a metrics that can be alerted on
+		h.metrics.MetricsScope.Counter(_failureWatchPanicMetricName).Inc(1)
+	}
+}
+
 func shouldClusterBeUpdatedInWatcherCache(
 	stored *v2pb.Cluster, latest *v2pb.Cluster) bool {
-	return stored.Spec.GetKubernetes().Rest.Host != latest.Spec.GetKubernetes().Rest.Host ||
-		stored.Spec.GetKubernetes().Rest.Port != latest.Spec.GetKubernetes().Rest.Port
+	storedRest := stored.Spec.GetKubernetes().GetRest()
+	latestRest := latest.Spec.GetKubernetes().GetRest()
+	if storedRest == nil || latestRest == nil {
+		return storedRest != latestRest
+	}
+	return storedRest.Host != latestRest.Host ||
+		storedRest.Port != latestRest.Port
 }
