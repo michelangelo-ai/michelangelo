@@ -246,7 +246,11 @@ func (r *Reconciler) rayJobDeleteEventHandler(obj interface{}) {
 		}
 
 		// Job was deleted externally without going through the controller.
+		// wrote records whether the last attempt wrote the status: a retry after
+		// a conflict may instead find the job already terminal.
+		wrote := false
 		if err = retry.OnError(retry.DefaultBackoff, isRetriableWriteError, func() error {
+			wrote = false
 			var current v2pb.RayJob
 			if getErr := r.Get(ctx, types.NamespacedName{Namespace: projectName, Name: local.Name}, &current); getErr != nil {
 				return getErr
@@ -278,9 +282,16 @@ func (r *Reconciler) rayJobDeleteEventHandler(obj interface{}) {
 			current.Status.State = v2pb.RAY_JOB_STATE_FAILED
 			current.Status.JobStatus = "Unknown"
 			current.Status.Message = "ray job was deleted from the compute cluster"
+			wrote = true
 			return r.Status().Update(ctx, &current)
 		}); err != nil {
 			log.Error(err, "failed to update status on external delete")
+			return
+		}
+		if !wrote {
+			// Another writer recorded the terminal state first. It stands, and the
+			// reconcile that its write triggers freezes it.
+			log.V(1).Info("skipping: ray job reached a terminal state concurrently")
 			return
 		}
 		if err = r.markImmutableIfTerminal(ctx, &rayJob); err != nil {
@@ -293,7 +304,9 @@ func (r *Reconciler) rayJobDeleteEventHandler(obj interface{}) {
 
 	// Expected deletion — killing was in progress. Nothing sets KillingCondition
 	// on a RayJob yet; this is reserved for a future RayJob kill path.
+	wrote := false
 	if err = retry.OnError(retry.DefaultBackoff, isRetriableWriteError, func() error {
+		wrote = false
 		var current v2pb.RayJob
 		if getErr := r.Get(ctx, types.NamespacedName{Namespace: projectName, Name: local.Name}, &current); getErr != nil {
 			return getErr
@@ -313,9 +326,14 @@ func (r *Reconciler) rayJobDeleteEventHandler(obj interface{}) {
 			Generation: current.Generation,
 		})
 		current.Status.State = v2pb.RAY_JOB_STATE_KILLED
+		wrote = true
 		return r.Status().Update(ctx, &current)
 	}); err != nil {
 		log.Error(err, "failed to update status on expected delete")
+		return
+	}
+	if !wrote {
+		log.V(1).Info("skipping: ray job reached a terminal state concurrently")
 		return
 	}
 	if err = r.markImmutableIfTerminal(ctx, &rayJob); err != nil {

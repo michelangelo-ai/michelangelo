@@ -1573,15 +1573,20 @@ func setupJobWatcherTest(t *testing.T, objs ...client.Object) (*Reconciler, *int
 		}).
 		Build()
 
-	// Tee the test logger into an observer so the assertions can inspect the
-	// severity the handlers logged at, not just whether they wrote.
+	zapLogger, logs := newObservedLogger(t)
+	return &Reconciler{Client: fakeClient, logger: zapr.NewLogger(zapLogger)}, &writes, logs
+}
+
+// newObservedLogger tees the test logger into an observer so the assertions can
+// inspect what the handlers logged and at which severity, not just whether they
+// wrote. V(1) entries are captured at debug level.
+func newObservedLogger(t *testing.T) (*zap.Logger, *observer.ObservedLogs) {
 	observed, logs := observer.New(zapcore.DebugLevel)
 	zapLogger := zaptest.NewLogger(t).WithOptions(
 		zap.WrapCore(func(core zapcore.Core) zapcore.Core {
 			return zapcore.NewTee(core, observed)
 		}))
-
-	return &Reconciler{Client: fakeClient, logger: zapr.NewLogger(zapLogger)}, &writes, logs
+	return zapLogger, logs
 }
 
 // errorLogs returns the message of every error-level entry captured, so a
@@ -1657,8 +1662,9 @@ func TestJobWatcherHandlersIgnoreMissingGlobalJob(t *testing.T) {
 // setupJobWatcherTestWithConcurrentWriter builds a Reconciler whose first
 // status write loses a race: before failing it with a conflict, the fake client
 // records concurrentState on the stored job, as a concurrent writer would. It
-// returns a counter of every status write the handlers attempt.
-func setupJobWatcherTestWithConcurrentWriter(t *testing.T, global *v2pb.RayJob, concurrentState v2pb.RayJobState) (*Reconciler, *int) {
+// returns a counter of every status write the handlers attempt along with the
+// logs they emit.
+func setupJobWatcherTestWithConcurrentWriter(t *testing.T, global *v2pb.RayJob, concurrentState v2pb.RayJobState) (*Reconciler, *int, *observer.ObservedLogs) {
 	t.Helper()
 
 	statusWrites := 0
@@ -1686,7 +1692,8 @@ func setupJobWatcherTestWithConcurrentWriter(t *testing.T, global *v2pb.RayJob, 
 		}).
 		Build()
 
-	return &Reconciler{Client: fakeClient, logger: zapr.NewLogger(zaptest.NewLogger(t))}, &statusWrites
+	zapLogger, logs := newObservedLogger(t)
+	return &Reconciler{Client: fakeClient, logger: zapr.NewLogger(zapLogger)}, &statusWrites, logs
 }
 
 // TestJobWatcherHandlersRecheckGuardsAfterConflict asserts that both handlers
@@ -1741,7 +1748,7 @@ func TestJobWatcherHandlersRecheckGuardsAfterConflict(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r, statusWrites := setupJobWatcherTestWithConcurrentWriter(t, newGlobal(), v2pb.RAY_JOB_STATE_SUCCEEDED)
+			r, statusWrites, _ := setupJobWatcherTestWithConcurrentWriter(t, newGlobal(), v2pb.RAY_JOB_STATE_SUCCEEDED)
 
 			tt.event(r)
 
@@ -1754,6 +1761,72 @@ func TestJobWatcherHandlersRecheckGuardsAfterConflict(t *testing.T) {
 			killed := jobsutils.GetCondition(&updated.Status.StatusConditions, constants.KilledCondition, updated.Generation)
 			assert.NotEqual(t, apipb.CONDITION_STATUS_TRUE, killed.Status,
 				"a job that already finished must not be reported as killed")
+		})
+	}
+}
+
+// TestRayJobDeleteEventHandlerLogsConcurrentSkip covers a delete whose status
+// write loses the race to another writer that finishes the job first. The
+// retry then writes nothing, so the handler must say it skipped rather than
+// report the job as failed or killed.
+func TestRayJobDeleteEventHandlerLogsConcurrentSkip(t *testing.T) {
+	newGlobal := func(conditions ...*apipb.Condition) *v2pb.RayJob {
+		return &v2pb.RayJob{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:       rayJobName,
+				Namespace:  testNamespace,
+				Generation: 1,
+			},
+			Status: v2pb.RayJobStatus{
+				State: v2pb.RAY_JOB_STATE_RUNNING,
+				StatusConditions: append([]*apipb.Condition{
+					{
+						Type:   constants.LaunchedCondition,
+						Status: apipb.CONDITION_STATUS_TRUE,
+					},
+				}, conditions...),
+			},
+		}
+	}
+
+	tests := []struct {
+		name       string
+		global     *v2pb.RayJob
+		successLog string
+	}{
+		{
+			name:       "external deletion",
+			global:     newGlobal(),
+			successLog: "job externally deleted, marked as failed",
+		},
+		{
+			name: "controller-initiated deletion",
+			global: newGlobal(&apipb.Condition{
+				Type:   constants.KillingCondition,
+				Status: apipb.CONDITION_STATUS_TRUE,
+			}),
+			successLog: "job killed successfully",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r, statusWrites, logs := setupJobWatcherTestWithConcurrentWriter(t, tt.global, v2pb.RAY_JOB_STATE_SUCCEEDED)
+
+			r.rayJobDeleteEventHandler(&rayv1.RayJob{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   rayJobName,
+					Labels: map[string]string{constants.ProjectNameLabelKey: testNamespace},
+				},
+			})
+
+			require.Equal(t, 1, *statusWrites, "the retry must not write over a job that turned terminal")
+			skipped := logs.FilterMessage("skipping: ray job reached a terminal state concurrently").All()
+			require.Len(t, skipped, 1, "the handler must report that it skipped")
+			assert.Equal(t, zapcore.DebugLevel, skipped[0].Level, "a lost race is routine and logged at V(1)")
+			assert.Zero(t, logs.FilterMessage(tt.successLog).Len(),
+				"the handler must not report an outcome it did not record")
+			assert.Empty(t, errorLogs(logs))
 		})
 	}
 }
