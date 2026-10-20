@@ -13,6 +13,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -241,7 +242,16 @@ func IsRetriableError(err error) bool {
 func UpdateStatusWithRetries(ctx context.Context, handler api.Handler, job client.Object,
 	applyUpdates func(job client.Object), opts *metav1.UpdateOptions,
 ) error {
-	if err := retry.OnError(retry.DefaultRetry, IsRetriableError, func() error {
+	return UpdateStatusWithBackoff(ctx, handler, job, applyUpdates, opts, retry.DefaultRetry)
+}
+
+// UpdateStatusWithBackoff is UpdateStatusWithRetries with the retry schedule
+// chosen by the caller, for writers with no requeue to fall back on that have to
+// keep retrying for longer.
+func UpdateStatusWithBackoff(ctx context.Context, handler api.Handler, job client.Object,
+	applyUpdates func(job client.Object), opts *metav1.UpdateOptions, backoff wait.Backoff,
+) error {
+	if err := retry.OnError(backoff, IsRetriableError, func() error {
 		var latestJob client.Object
 
 		// Find out the job type and assign latestJob to an object of that type. This is

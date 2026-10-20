@@ -7,9 +7,11 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/uber-go/tally"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -25,7 +27,11 @@ import (
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
-const _eventHandlerTimeout = 10 * time.Second
+const (
+	_eventHandlerTimeout = 10 * time.Second
+	// Counts handler status writes that gave up, tagged by handler.
+	_handlerWriteDroppedMetricName = "handler_write_dropped"
+)
 
 // getFederatedWatcher creates a federated watcher for the RayCluster controller.
 //
@@ -79,6 +85,28 @@ func (r *Reconciler) getFederatedWatcher() watch.FederatedWatcher {
 		},
 		Scope: r.metricsScope,
 	})
+}
+
+// watcherScope namespaces the watcher's metrics; the RayJob controller shares
+// the root scope and watches its own resources.
+func (r *Reconciler) watcherScope() tally.Scope {
+	return r.metricsScope.SubScope("raycluster")
+}
+
+// updateStatusFromHandler writes a status change from a watcher handler. A
+// handler has no requeue: a write that gives up loses its event until the next
+// re-sync, and for a delete for good. So it retries for longer than the
+// reconciler does -- long enough for the cache it reads from to catch up with
+// another writer's update -- and a write it drops anyway is counted.
+func (r *Reconciler) updateStatusFromHandler(ctx context.Context, cluster *v2pb.RayCluster,
+	applyUpdates func(obj client.Object), handler string,
+) error {
+	err := jobsutils.UpdateStatusWithBackoff(ctx, r, cluster, applyUpdates,
+		&metav1.UpdateOptions{FieldManager: handler}, retry.DefaultBackoff)
+	if err != nil {
+		r.watcherScope().Tagged(map[string]string{"handler": handler}).Counter(_handlerWriteDroppedMetricName).Inc(1)
+	}
+	return err
 }
 
 // Pod event handlers — own RayCluster.Status.HeadNode and PodErrors.
@@ -175,12 +203,10 @@ func (r *Reconciler) clearPodError(pod *corev1.Pod) {
 		return
 	}
 
-	if err = jobsutils.UpdateStatusWithRetries(ctx, r, &rayCluster,
+	if err = r.updateStatusFromHandler(ctx, &rayCluster,
 		func(obj client.Object) {
 			removeRecoveredPodError(obj.(*v2pb.RayCluster), pod.Name)
-		}, &metav1.UpdateOptions{
-			FieldManager: "podErrorEventHandler",
-		}); err != nil {
+		}, "podErrorEventHandler"); err != nil {
 		log.Error(err, "could not clear the recovered pod's error from the ray cluster")
 		return
 	}
@@ -238,11 +264,11 @@ func isRayContainer(containerStatus corev1.ContainerStatus) bool {
 // recordPodError merges a pod-level failure onto the owning RayCluster CR.
 //
 // Both the live path and the delete path funnel through here so the two cannot
-// double-count the same pod, and so the mutation is idempotent:
-// UpdateStatusWithRetries re-runs its closure on conflict, which an append
-// would turn into duplicate entries. The cap on the number of recorded errors
-// is enforced by mergePodErrors. skipIfTerminating drops an error that only
-// means something while the cluster is meant to be running.
+// double-count the same pod, and so the mutation is idempotent: the status
+// write re-runs its closure on conflict, which an append would turn into
+// duplicate entries. The cap on the number of recorded errors is enforced by
+// mergePodErrors. skipIfTerminating drops an error that only means something
+// while the cluster is meant to be running.
 func (r *Reconciler) recordPodError(pod *corev1.Pod, podError *v2pb.PodErrors, fieldManager string, skipIfTerminating bool) {
 	log := r.logger.WithValues("pod_name", pod.Name, "reason", podError.GetReason())
 
@@ -280,15 +306,13 @@ func (r *Reconciler) recordPodError(pod *corev1.Pod, podError *v2pb.PodErrors, f
 		return
 	}
 
-	if err = jobsutils.UpdateStatusWithRetries(ctx, r, &rayCluster,
+	if err = r.updateStatusFromHandler(ctx, &rayCluster,
 		func(obj client.Object) {
 			// The cluster may have moved on since the read above.
 			if cluster := obj.(*v2pb.RayCluster); acceptsPodError(cluster) {
 				mergePodErrors(cluster, []*v2pb.PodErrors{podError})
 			}
-		}, &metav1.UpdateOptions{
-			FieldManager: fieldManager,
-		}); err != nil {
+		}, fieldManager); err != nil {
 		log.Error(err, "could not update the ray cluster with the pod error")
 	}
 }
@@ -355,7 +379,7 @@ func (r *Reconciler) podEventHandler(pod *corev1.Pod) {
 		return
 	}
 
-	if err = jobsutils.UpdateStatusWithRetries(ctx, r, &rayCluster,
+	if err = r.updateStatusFromHandler(ctx, &rayCluster,
 		func(obj client.Object) {
 			cluster := obj.(*v2pb.RayCluster)
 			if isFrozenOrDeleting(cluster) {
@@ -368,9 +392,7 @@ func (r *Reconciler) podEventHandler(pod *corev1.Pod) {
 				ClientPort:          clientPort,
 				JupyterNotebookPort: jupyterNotebookPort,
 			}
-		}, &metav1.UpdateOptions{
-			FieldManager: "podEventHandler",
-		}); err != nil {
+		}, "podEventHandler"); err != nil {
 		log.Error(err, "could not update head node info for the ray cluster")
 	}
 }
@@ -556,9 +578,10 @@ func (r *Reconciler) rayClusterDeleteEventHandler(obj interface{}) {
 		// compute cluster. Killing=FALSE matters beyond bookkeeping:
 		// isClusterFullyTerminal requires it, and cleanupCluster would otherwise
 		// issue a pointless DeleteJobCluster.
-		if err := r.markClusterFailed(ctx, &globalCluster,
-			constants.ClusterKilled,
-			fmt.Sprintf("ray cluster was deleted externally, state: %+v", local.Status.State),
+		if err := r.updateStatusFromHandler(ctx, &globalCluster,
+			markFailedUpdate(constants.ClusterKilled,
+				fmt.Sprintf("ray cluster was deleted externally, state: %+v", local.Status.State)),
+			"rayClusterDeleteEventHandler",
 		); err != nil {
 			log.Error(err, "failed to update status on external delete")
 			return
@@ -572,7 +595,7 @@ func (r *Reconciler) rayClusterDeleteEventHandler(obj interface{}) {
 	}
 
 	// Expected deletion — killing was in progress.
-	if err := jobsutils.UpdateStatusWithRetries(ctx, r, &globalCluster,
+	if err := r.updateStatusFromHandler(ctx, &globalCluster,
 		func(obj client.Object) {
 			cluster := obj.(*v2pb.RayCluster)
 			killingCond := jobsutils.GetCondition(&cluster.Status.StatusConditions, KillingCondition, cluster.Generation)
@@ -585,9 +608,7 @@ func (r *Reconciler) rayClusterDeleteEventHandler(obj interface{}) {
 				Status:     apipb.CONDITION_STATUS_TRUE,
 				Generation: cluster.Generation,
 			})
-		}, &metav1.UpdateOptions{
-			FieldManager: "rayClusterDeleteEventHandler",
-		}); err != nil {
+		}, "rayClusterDeleteEventHandler"); err != nil {
 		log.Error(err, "failed to update status on expected delete")
 		return
 	}
@@ -670,12 +691,10 @@ func (r *Reconciler) rayClusterEventHandler(obj interface{}) {
 
 	log.Info("ray cluster event", "kuberay_state", local.Status.State, "mapped_state", newState)
 
-	if err := jobsutils.UpdateStatusWithRetries(ctx, r, &globalCluster,
+	if err := r.updateStatusFromHandler(ctx, &globalCluster,
 		func(obj client.Object) {
 			applyClusterObservation(obj.(*v2pb.RayCluster), globalStatus)
-		}, &metav1.UpdateOptions{
-			FieldManager: "rayClusterEventHandler",
-		}); err != nil {
+		}, "rayClusterEventHandler"); err != nil {
 		log.Error(err, "failed to update global ray cluster status")
 	}
 }
@@ -688,7 +707,7 @@ func (r *Reconciler) rayClusterEventHandler(obj interface{}) {
 // rayClusterEventHandler applies every KubeRay event through it, and Reconcile's
 // safety net applies what GetJobClusterStatus returns, so the event path and the
 // level-triggered path cannot disagree. It has to stay pure and idempotent:
-// UpdateStatusWithRetries re-runs it on a re-fetched object after a conflict,
+// the status write re-runs it on a re-fetched object after a conflict,
 // and the safety net applies it to a copy first to skip writes that would change
 // nothing.
 func applyClusterObservation(cluster *v2pb.RayCluster, observed *matypes.JobClusterStatus) bool {
@@ -833,10 +852,10 @@ func reasonOr(reason, fallback string) string {
 // derived from a Pod. The two therefore never collide, and repeated events —
 // cache re-syncs fire every _reSyncPeriod, and a wedged pod is re-reported on
 // every status change — update in place rather than growing the list. That
-// also keeps the mutation idempotent under UpdateStatusWithRetries, which
-// re-runs its closure on conflict. The list is bounded by two errors per
-// expected pod; at the bound, existing entries can still be refreshed but new
-// ones are dropped. It reports whether the list changed.
+// also keeps the mutation idempotent under the status write, which re-runs
+// its closure on conflict. The list is bounded by two errors per expected pod;
+// at the bound, existing entries can still be refreshed but new ones are
+// dropped. It reports whether the list changed.
 func mergePodErrors(cluster *v2pb.RayCluster, podErrors []*v2pb.PodErrors) bool {
 	if len(podErrors) == 0 {
 		return false

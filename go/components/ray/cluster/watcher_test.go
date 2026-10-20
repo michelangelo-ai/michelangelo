@@ -2,11 +2,14 @@ package cluster
 
 import (
 	"context"
+	"errors"
 	"testing"
+	"time"
 
 	"github.com/go-logr/zapr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/uber-go/tally"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest"
@@ -14,8 +17,10 @@ import (
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	corev1 "k8s.io/api/core/v1"
+	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	kubescheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/cache"
@@ -23,6 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
+	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	maconfig "github.com/michelangelo-ai/michelangelo/go/base/config"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
@@ -81,8 +87,9 @@ func newTestLogger(t *testing.T) *Reconciler {
 	v2pb.AddToScheme(scheme)
 
 	return &Reconciler{
-		logger: logger,
-		mapper: newTestMapper(),
+		logger:       logger,
+		mapper:       newTestMapper(),
+		metricsScope: tally.NoopScope,
 	}
 }
 
@@ -151,9 +158,10 @@ func setupWatcherTest(t *testing.T, globalCluster *v2pb.RayCluster) *Reconciler 
 	apiHandler := &mockAPIHandler{Client: fakeClient}
 
 	return &Reconciler{
-		Handler: apiHandler,
-		logger:  logger,
-		mapper:  newTestMapper(),
+		Handler:      apiHandler,
+		logger:       logger,
+		mapper:       newTestMapper(),
+		metricsScope: tally.NoopScope,
 	}
 }
 
@@ -567,9 +575,10 @@ func setupWatcherTestWithStaleRead(t *testing.T, stored, stale *v2pb.RayCluster)
 		Build()
 
 	return &Reconciler{
-		Handler: &mockAPIHandler{Client: fakeClient},
-		logger:  zapr.NewLogger(zaptest.NewLogger(t)),
-		mapper:  newTestMapper(),
+		Handler:      &mockAPIHandler{Client: fakeClient},
+		logger:       zapr.NewLogger(zaptest.NewLogger(t)),
+		mapper:       newTestMapper(),
+		metricsScope: tally.NoopScope,
 	}, &gets
 }
 
@@ -1874,6 +1883,83 @@ func TestPodDeleteEventHandler_Tombstone(t *testing.T) {
 	r.podDeleteEventHandler(cache.DeletedFinalStateUnknown{Key: "default/head-pod", Obj: nil})
 }
 
+// setupWatcherTestWithLaggingCache builds a Reconciler on the production API
+// handler, so a write fails the way it does in production -- a Kubernetes
+// conflict surfaces as a gRPC FailedPrecondition -- and makes every status
+// update conflict for staleFor after the first attempt. That is how a handler
+// whose reads come from a cache that has not caught up with another writer's
+// update fares: each retry re-reads the same stale object and conflicts again
+// until the cache catches up.
+func setupWatcherTestWithLaggingCache(t *testing.T, globalCluster *v2pb.RayCluster, staleFor time.Duration) (*Reconciler, tally.TestScope) {
+	t.Helper()
+
+	scheme := runtime.NewScheme()
+	kubescheme.AddToScheme(scheme)
+	v2pb.AddToScheme(scheme)
+
+	var firstAttempt time.Time
+	fakeClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithRuntimeObjects(globalCluster).
+		WithStatusSubresource(&v2pb.RayCluster{}).
+		WithInterceptorFuncs(interceptor.Funcs{
+			SubResourceUpdate: func(ctx context.Context, c client.Client, subResource string, obj client.Object, opts ...client.SubResourceUpdateOption) error {
+				if firstAttempt.IsZero() {
+					firstAttempt = time.Now()
+				}
+				if time.Since(firstAttempt) < staleFor {
+					return apiErrors.NewConflict(schema.GroupResource{Resource: "rayclusters"}, obj.GetName(),
+						errors.New("the object has been modified; please apply your changes to the latest version"))
+				}
+				return c.SubResource(subResource).Update(ctx, obj, opts...)
+			},
+		}).
+		Build()
+
+	scope := tally.NewTestScope("test", nil)
+	return &Reconciler{
+		Handler:      apiHandler.NewFakeAPIHandler(fakeClient),
+		logger:       zapr.NewLogger(zaptest.NewLogger(t)),
+		mapper:       newTestMapper(),
+		metricsScope: scope,
+	}, scope
+}
+
+// TestHandlerWriteOutlastsLaggingCache: a handler has no requeue, so a write
+// that gives up loses the event until the next re-sync -- for a delete, for
+// good. Its retries therefore have to outlast the window in which the reconciler
+// or another handler has just written the same CR, not just a few milliseconds.
+func TestHandlerWriteOutlastsLaggingCache(t *testing.T) {
+	globalCluster := &v2pb.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
+		Status:     v2pb.RayClusterStatus{State: v2pb.RAY_CLUSTER_STATE_PROVISIONING},
+	}
+	r, _ := setupWatcherTestWithLaggingCache(t, globalCluster, 150*time.Millisecond)
+
+	r.rayClusterEventHandler(newKubeRayCluster(rayClusterName, rayv1.Ready))
+
+	var updated v2pb.RayCluster
+	require.NoError(t, r.Get(context.Background(), testNamespace, rayClusterName, &metav1.GetOptions{}, &updated))
+	assert.Equal(t, v2pb.RAY_CLUSTER_STATE_READY, updated.Status.State,
+		"the handler should have retried past the conflicts")
+}
+
+// TestDroppedHandlerWriteIsCounted: when a handler does give up, the event is
+// gone and only a log line says so. Count it, so it can be alerted on.
+func TestDroppedHandlerWriteIsCounted(t *testing.T) {
+	globalCluster := &v2pb.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
+		Status:     v2pb.RayClusterStatus{State: v2pb.RAY_CLUSTER_STATE_PROVISIONING},
+	}
+	r, scope := setupWatcherTestWithLaggingCache(t, globalCluster, time.Hour)
+
+	r.rayClusterEventHandler(newKubeRayCluster(rayClusterName, rayv1.Ready))
+
+	counter, ok := scope.Snapshot().Counters()["test.raycluster.handler_write_dropped+handler=rayClusterEventHandler"]
+	require.True(t, ok, "a dropped handler write should be counted, tagged by handler")
+	assert.Equal(t, int64(1), counter.Value())
+}
+
 // setupWatcherTestWithoutGlobal builds a Reconciler whose store holds no global
 // RayCluster, and returns a counter of every write the handlers attempt.
 //
@@ -1930,9 +2016,10 @@ func setupWatcherTestObserved(t *testing.T, globalCluster *v2pb.RayCluster) (*Re
 		}))
 
 	return &Reconciler{
-		Handler: &mockAPIHandler{Client: fakeClient},
-		logger:  zapr.NewLogger(zapLogger),
-		mapper:  newTestMapper(),
+		Handler:      &mockAPIHandler{Client: fakeClient},
+		logger:       zapr.NewLogger(zapLogger),
+		mapper:       newTestMapper(),
+		metricsScope: tally.NoopScope,
 	}, &writes, logs
 }
 

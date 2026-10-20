@@ -51,6 +51,7 @@ go_test(
     embed = [":go_default_library"],
     deps = [
         "//go/api:go_default_library",
+        "//go/api/handler:go_default_library",
         "//go/api/utils:go_default_library",
         "//go/base/config:go_default_library",
         "//go/base/env:go_default_library",
@@ -67,6 +68,7 @@ go_test(
         "@com_github_ray_project_kuberay_ray_operator//apis/ray/v1:go_default_library",
         "@com_github_stretchr_testify//assert:go_default_library",
         "@com_github_stretchr_testify//require:go_default_library",
+        "@com_github_uber_go_tally//:go_default_library",
         "@io_k8s_api//core/v1:go_default_library",
         "@io_k8s_apimachinery//pkg/api/errors:go_default_library",
         "@io_k8s_apimachinery//pkg/api/resource:go_default_library",

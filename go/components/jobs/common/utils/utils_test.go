@@ -1,14 +1,26 @@
 package utils
 
 import (
+	"context"
+	"errors"
 	"testing"
+	"time"
 
+	"github.com/michelangelo-ai/michelangelo/go/api"
+	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	maconfig "github.com/michelangelo-ai/michelangelo/go/base/config"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 )
 
 func TestGetObjectNamespace(t *testing.T) {
@@ -630,4 +642,53 @@ func TestWaitingStateErrorReasonsAreTerminal(t *testing.T) {
 				"%s is recorded as a container failure, so it must be terminal", reason)
 		})
 	}
+}
+
+// TestUpdateStatusWithBackoff pins the two halves of the contract: the caller's
+// schedule decides how many attempts a conflicting write gets, and a write that
+// runs out of them is reported as ErrStatusUpdate, as UpdateStatusWithRetries
+// always has.
+func TestUpdateStatusWithBackoff(t *testing.T) {
+	job := &v2pb.RayCluster{ObjectMeta: metav1.ObjectMeta{Name: "cluster", Namespace: "project"}}
+	// newConflictingHandler returns the production API handler over a store in
+	// which the first conflicts status updates fail with a Kubernetes conflict,
+	// and a count of the attempts.
+	newConflictingHandler := func(conflicts int) (api.Handler, *int) {
+		scheme := runtime.NewScheme()
+		require.NoError(t, v2pb.AddToScheme(scheme))
+		attempts := 0
+		fakeClient := fake.NewClientBuilder().
+			WithScheme(scheme).
+			WithRuntimeObjects(job.DeepCopy()).
+			WithStatusSubresource(&v2pb.RayCluster{}).
+			WithInterceptorFuncs(interceptor.Funcs{
+				SubResourceUpdate: func(ctx context.Context, c client.Client, subResource string, obj client.Object, opts ...client.SubResourceUpdateOption) error {
+					attempts++
+					if attempts <= conflicts {
+						return apiErrors.NewConflict(schema.GroupResource{Resource: "rayclusters"}, obj.GetName(),
+							errors.New("the object has been modified"))
+					}
+					return c.SubResource(subResource).Update(ctx, obj, opts...)
+				},
+			}).
+			Build()
+		return apiHandler.NewFakeAPIHandler(fakeClient), &attempts
+	}
+	setReady := func(obj client.Object) {
+		obj.(*v2pb.RayCluster).Status.State = v2pb.RAY_CLUSTER_STATE_READY
+	}
+	backoff := wait.Backoff{Steps: 6, Duration: time.Millisecond, Factor: 1}
+
+	t.Run("retries until the write lands", func(t *testing.T) {
+		handler, attempts := newConflictingHandler(5)
+		require.NoError(t, UpdateStatusWithBackoff(context.Background(), handler, job, setReady, &metav1.UpdateOptions{}, backoff))
+		assert.Equal(t, 6, *attempts)
+	})
+
+	t.Run("gives up after the last step", func(t *testing.T) {
+		handler, attempts := newConflictingHandler(6)
+		err := UpdateStatusWithBackoff(context.Background(), handler, job, setReady, &metav1.UpdateOptions{}, backoff)
+		assert.ErrorIs(t, err, ErrStatusUpdate)
+		assert.Equal(t, 6, *attempts)
+	})
 }

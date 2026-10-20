@@ -664,7 +664,10 @@ func (r *Reconciler) markImmutableIfTerminal(ctx context.Context, cluster *v2pb.
 	// A conflict here means a concurrent writer -- the reconcile loop and the
 	// watcher both reach this path -- won the race. The closure re-fetches, so a
 	// retry simply observes their write and no-ops; without this the caller would
-	// surface a spurious error for an outcome that is already correct.
+	// surface a spurious error for an outcome that is already correct. The API
+	// handler reports a conflict as gRPC FailedPrecondition, which
+	// IsRetriableError matches; IsConflict covers an api.Handler that returns
+	// Kubernetes errors as they are.
 	isRetriable := func(err error) bool {
 		return apiErrors.IsConflict(err) || jobsutils.IsRetriableError(err)
 	}
@@ -705,35 +708,41 @@ func (r *Reconciler) markClusterFailed(
 	// Persist the terminal status via the status subresource.
 	if err := jobsutils.UpdateStatusWithRetries(
 		ctx, r, cluster,
-		func(obj client.Object) {
-			c := obj.(*v2pb.RayCluster)
-			c.Status.State = v2pb.RAY_CLUSTER_STATE_FAILED
-
-			if conditionStatus(c, SucceededCondition) == apipb.CONDITION_STATUS_UNKNOWN {
-				succeededCond := jobsutils.GetCondition(&c.Status.StatusConditions, SucceededCondition, c.Generation)
-				jobsutils.UpdateCondition(succeededCond, jobsutils.ConditionUpdateParams{
-					Status:     apipb.CONDITION_STATUS_FALSE,
-					Generation: c.Generation,
-					Reason:     reason,
-					Message:    message,
-				})
-			}
-			killingCond := jobsutils.GetCondition(&c.Status.StatusConditions, KillingCondition, c.Generation)
-			jobsutils.UpdateCondition(killingCond, jobsutils.ConditionUpdateParams{
-				Status:     apipb.CONDITION_STATUS_FALSE,
-				Generation: c.Generation,
-			})
-			killedCond := jobsutils.GetCondition(&c.Status.StatusConditions, KilledCondition, c.Generation)
-			jobsutils.UpdateCondition(killedCond, jobsutils.ConditionUpdateParams{
-				Status:     apipb.CONDITION_STATUS_TRUE,
-				Generation: c.Generation,
-				Reason:     reason,
-			})
-		},
+		markFailedUpdate(reason, message),
 		&metav1.UpdateOptions{FieldManager: "markClusterFailed"},
 	); err != nil {
 		return fmt.Errorf("failed to persist terminal status: %w", err)
 	}
 
 	return nil
+}
+
+// markFailedUpdate is the status change markClusterFailed persists. The KubeRay
+// delete handler writes it directly, under the handlers' own retry policy.
+func markFailedUpdate(reason, message string) func(obj client.Object) {
+	return func(obj client.Object) {
+		c := obj.(*v2pb.RayCluster)
+		c.Status.State = v2pb.RAY_CLUSTER_STATE_FAILED
+
+		if conditionStatus(c, SucceededCondition) == apipb.CONDITION_STATUS_UNKNOWN {
+			succeededCond := jobsutils.GetCondition(&c.Status.StatusConditions, SucceededCondition, c.Generation)
+			jobsutils.UpdateCondition(succeededCond, jobsutils.ConditionUpdateParams{
+				Status:     apipb.CONDITION_STATUS_FALSE,
+				Generation: c.Generation,
+				Reason:     reason,
+				Message:    message,
+			})
+		}
+		killingCond := jobsutils.GetCondition(&c.Status.StatusConditions, KillingCondition, c.Generation)
+		jobsutils.UpdateCondition(killingCond, jobsutils.ConditionUpdateParams{
+			Status:     apipb.CONDITION_STATUS_FALSE,
+			Generation: c.Generation,
+		})
+		killedCond := jobsutils.GetCondition(&c.Status.StatusConditions, KilledCondition, c.Generation)
+		jobsutils.UpdateCondition(killedCond, jobsutils.ConditionUpdateParams{
+			Status:     apipb.CONDITION_STATUS_TRUE,
+			Generation: c.Generation,
+			Reason:     reason,
+		})
+	}
 }
