@@ -3,6 +3,7 @@ package cluster
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strconv"
 	"time"
 
@@ -128,9 +129,94 @@ func (r *Reconciler) podErrorEventHandler(pod *corev1.Pod) {
 		podError = jobsutils.GetSchedulingErrorFromPodStatus(pod)
 	}
 	if podError == nil {
+		// A pod that has come good -- its image pulled on a retry, its container
+		// restarted after an OOM kill -- must not keep the error it reported on
+		// the way: the entry would linger on a healthy cluster and still count
+		// towards failing it.
+		if isPodRunningAndReady(pod) {
+			r.clearPodError(pod)
+		}
 		return
 	}
 	r.recordPodError(pod, podError, "podErrorEventHandler")
+}
+
+// clearPodError drops the entry a recovered pod left on the owning RayCluster.
+// It writes only when there is such an entry, since every healthy pod comes
+// through here on each re-sync.
+func (r *Reconciler) clearPodError(pod *corev1.Pod) {
+	log := r.logger.WithValues("pod_name", pod.Name)
+
+	namespace, err := jobsutils.GetProjectNameFromLabels(pod.Labels)
+	if err != nil {
+		log.Error(err, "unable to determine namespace of ray cluster - not clearing the pod error")
+		return
+	}
+	clusterName, err := getClusterName(pod)
+	if err != nil {
+		log.Error(err, "unable to get cluster name - not clearing the pod error")
+		return
+	}
+	log = log.WithValues("namespace", namespace, "ray_cluster", clusterName)
+
+	ctx, cancel := context.WithTimeout(context.Background(), _eventHandlerTimeout)
+	defer cancel()
+
+	var rayCluster v2pb.RayCluster
+	if err = r.Get(ctx, namespace, clusterName, &metav1.GetOptions{}, &rayCluster); err != nil {
+		if utils.IsNotFoundError(err) {
+			log.V(1).Info("global ray cluster no longer exists, nothing to clear")
+			return
+		}
+		log.Error(err, "could not fetch the ray cluster for the pod - not clearing the pod error")
+		return
+	}
+	if !removeRecoveredPodError(rayCluster.DeepCopy(), pod.Name) {
+		return
+	}
+
+	if err = jobsutils.UpdateStatusWithRetries(ctx, r, &rayCluster,
+		func(obj client.Object) {
+			removeRecoveredPodError(obj.(*v2pb.RayCluster), pod.Name)
+		}, &metav1.UpdateOptions{
+			FieldManager: "podErrorEventHandler",
+		}); err != nil {
+		log.Error(err, "could not clear the recovered pod's error from the ray cluster")
+		return
+	}
+	log.Info("cleared the error of a recovered pod")
+}
+
+// removeRecoveredPodError removes podName's entry from cluster and reports
+// whether there was one. Post-mortem entries describe a pod that is gone, so a
+// live pod of the same name has not cleared them. Nothing is removed once
+// termination has begun: by then the recorded errors are the reason the
+// cluster ended.
+func removeRecoveredPodError(cluster *v2pb.RayCluster, podName string) bool {
+	if isClusterTerminating(cluster) {
+		return false
+	}
+	for i, podError := range cluster.Status.PodErrors {
+		if podError.GetName() == podName && !jobsutils.IsPostMortemPodError(podError) {
+			cluster.Status.PodErrors = slices.Delete(cluster.Status.PodErrors, i, i+1)
+			return true
+		}
+	}
+	return false
+}
+
+// isPodRunningAndReady reports whether pod is running and passing its
+// readiness checks.
+func isPodRunningAndReady(pod *corev1.Pod) bool {
+	if pod.Status.Phase != corev1.PodRunning {
+		return false
+	}
+	for _, cond := range pod.Status.Conditions {
+		if cond.Type == corev1.PodReady {
+			return cond.Status == corev1.ConditionTrue
+		}
+	}
+	return false
 }
 
 // isRayContainer matches the containers whose failures belong to the cluster.
@@ -511,27 +597,14 @@ func (r *Reconciler) rayClusterEventHandler(obj interface{}) {
 	}
 	newState := globalStatus.Ray.State
 
-	// A terminating cluster only takes pod errors and the log URL from here on
-	// (applyClusterObservation enforces that on the object it writes, since
-	// termination can begin after this read). Skip the write when the event
-	// brings neither.
-	if isClusterTerminating(&globalCluster) && !applyClusterObservation(globalCluster.DeepCopy(), globalStatus) {
-		log.V(1).Info("skipping status update for terminating cluster")
-		return
-	}
-
 	// Cache re-sync gives Update events even when the local cluster did not
-	// change. Exit early if global already reflects the local state to avoid
-	// unnecessary CRD writes.
-	// The log URL clause keeps a cluster that went ready under an older build
-	// (or before log persistence was configured) from being skipped forever.
-	if globalCluster.Status.State == newState && newState == v2pb.RAY_CLUSTER_STATE_READY &&
-		(globalStatus.Ray.LogUrl == "" || globalCluster.Status.LogUrl != "") {
-		launchedCond := jobsutils.GetCondition(&globalCluster.Status.StatusConditions, LaunchedCondition, globalCluster.Generation)
-		if launchedCond.GetStatus() == apipb.CONDITION_STATUS_TRUE {
-			log.V(1).Info("ray cluster already ready, skipping update")
-			return
-		}
+	// change, and a terminating cluster only takes pod errors and the log URL
+	// from here on. Apply the observation to a copy first and skip the write when
+	// it changes nothing. applyClusterObservation runs again on the object being
+	// written, since that can differ from this read.
+	if !applyClusterObservation(globalCluster.DeepCopy(), globalStatus) {
+		log.V(1).Info("global ray cluster already reflects the ray cluster, skipping update")
+		return
 	}
 
 	log.Info("ray cluster event", "kuberay_state", local.Status.State, "mapped_state", newState)
@@ -566,17 +639,24 @@ func applyClusterObservation(cluster *v2pb.RayCluster, observed *matypes.JobClus
 		cluster.Status.LogUrl = logURL
 		changed = true
 	}
-	if mergePodErrors(cluster, observed.Ray.PodErrors) {
-		changed = true
-	}
 
 	// Once termination has begun Reconcile owns State and the conditions. An
 	// event read off the informer's backlog after cleanupCluster's write would
 	// otherwise turn a TERMINATED cluster READY again or flip a decided
-	// Succeeded, and the freeze archives whatever it finds. The diagnostics
-	// above are still worth keeping.
+	// Succeeded, and the freeze archives whatever it finds. Pod errors are still
+	// worth keeping, but only merged: the recorded ones are now the reason the
+	// cluster ended.
 	if isClusterTerminating(cluster) {
-		return changed
+		return mergePodErrors(cluster, observed.Ray.PodErrors) || changed
+	}
+
+	// KubeRay's conditions describe the cluster as it is now, so the entries
+	// read from them are replaced rather than merged: one KubeRay has since
+	// cleared -- a ReplicaFailure it retried past, a HeadPodReady=False from
+	// before the head pod came up -- must not linger, let alone count towards
+	// failing the cluster.
+	if replaceConditionPodErrors(cluster, observed.Ray.PodErrors) {
+		changed = true
 	}
 
 	reason := observed.Reason
@@ -625,9 +705,12 @@ func applyClusterObservation(cluster *v2pb.RayCluster, observed *matypes.JobClus
 			changed = true
 		}
 	case v2pb.RAY_CLUSTER_STATE_UNKNOWN:
-		// If the cluster is in an unknown state but we have already recorded
-		// terminal pod errors, treat it as failed to trigger termination.
-		if jobsutils.HasTerminalPodErrors(cluster.Status.PodErrors) {
+		// If the cluster is in an unknown state but its pods report terminal
+		// errors, treat it as failed to trigger termination. Only current
+		// observations count: this observation's condition errors (the recorded
+		// ones were just replaced with them), and the pod-derived entries, which
+		// podErrorEventHandler drops once their pod recovers.
+		if jobsutils.HasTerminalPodErrors(observed.Ray.PodErrors) || jobsutils.HasTerminalPodErrors(cluster.Status.PodErrors) {
 			cluster.Status.State = v2pb.RAY_CLUSTER_STATE_FAILED
 			if setCondition(cluster, SucceededCondition, jobsutils.ConditionUpdateParams{
 				Status:     apipb.CONDITION_STATUS_FALSE,
@@ -729,6 +812,38 @@ func mergePodErrors(cluster *v2pb.RayCluster, podErrors []*v2pb.PodErrors) bool 
 		changed = true
 	}
 	return changed
+}
+
+// conditionPodErrorNames are the names the mapper gives the pod errors it
+// reads out of KubeRay's conditions: the condition type, for the two types
+// k8sengine's isFailureCondition reports. Pod-derived entries are named after
+// their pod, and pod names are lower case, so the two never collide.
+var conditionPodErrorNames = map[string]bool{
+	string(rayv1.HeadPodReady):             true,
+	string(rayv1.RayClusterReplicaFailure): true,
+}
+
+// replaceConditionPodErrors makes the condition-derived entries on cluster
+// exactly fresh, leaves the pod-derived ones alone, and reports whether that
+// changed the list.
+func replaceConditionPodErrors(cluster *v2pb.RayCluster, fresh []*v2pb.PodErrors) bool {
+	current := make(map[string]bool, len(fresh))
+	for _, podError := range fresh {
+		current[podError.GetName()] = true
+	}
+	removed := false
+	kept := make([]*v2pb.PodErrors, 0, len(cluster.Status.PodErrors))
+	for _, podError := range cluster.Status.PodErrors {
+		if conditionPodErrorNames[podError.GetName()] && !current[podError.GetName()] {
+			removed = true
+			continue
+		}
+		kept = append(kept, podError)
+	}
+	if removed {
+		cluster.Status.PodErrors = kept
+	}
+	return mergePodErrors(cluster, fresh) || removed
 }
 
 // Helper functions for extracting head pod information.

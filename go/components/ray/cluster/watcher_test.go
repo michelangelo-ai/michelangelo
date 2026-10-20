@@ -859,6 +859,218 @@ func TestHandlePodEvent_ContainerErrorWinsOverScheduling(t *testing.T) {
 	assert.Equal(t, "CrashLoopBackOff", updated.Status.PodErrors[0].Reason)
 }
 
+// newRecoveredWorkerPod is a worker pod that has come good: running, ready, and
+// with nothing left to report. podName is what it was recorded under while it
+// was failing.
+func newRecoveredWorkerPod(podName string) *corev1.Pod {
+	pod := newHeadPod(podName, rayClusterName, corev1.PodRunning)
+	pod.Labels[constants.RayNodeTypeLabelKey] = constants.RayWorkerNodeType
+	pod.Status.Conditions = []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}}
+	pod.Status.ContainerStatuses = []corev1.ContainerStatus{{
+		Name:  headContainerName,
+		Ready: true,
+		State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}},
+	}}
+	return pod
+}
+
+// TestPodRecoveryDoesNotFailProvisioningCluster covers a transient pod error
+// during provisioning. The kubelet retries an image pull on its own, so an
+// ErrImagePull can clear without any intervention; once the pod is running and
+// ready its entry must go, otherwise the next KubeRay update -- which, while
+// KubeRay's state is still empty, maps to UNKNOWN -- would read the leftover as
+// a terminal error and tear down a cluster that is coming up fine.
+func TestPodRecoveryDoesNotFailProvisioningCluster(t *testing.T) {
+	globalCluster := &v2pb.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
+		Status: v2pb.RayClusterStatus{
+			State: v2pb.RAY_CLUSTER_STATE_UNKNOWN,
+			PodErrors: []*v2pb.PodErrors{
+				{Name: "worker-1", ContainerName: headContainerName, Reason: "ErrImagePull"},
+			},
+		},
+	}
+	r := setupWatcherTest(t, globalCluster)
+
+	r.handlePodEvent(newRecoveredWorkerPod("worker-1"))
+	r.rayClusterEventHandler(newKubeRayCluster(rayClusterName, ""))
+
+	updated := getUpdatedCluster(t, r)
+	assert.Empty(t, updated.Status.PodErrors, "a recovered pod's error must be dropped")
+	assert.Equal(t, v2pb.RAY_CLUSTER_STATE_UNKNOWN, updated.Status.State)
+	assert.Nil(t, findCondition(updated.Status.StatusConditions, SucceededCondition),
+		"a pod that recovered on its own is not a failure")
+}
+
+// TestStaleConditionPodErrorDoesNotFailProvisioningCluster is the same race on
+// the KubeRay side: a ReplicaFailure that KubeRay has since retried past is not
+// in the latest observation, so it must neither linger nor count.
+func TestStaleConditionPodErrorDoesNotFailProvisioningCluster(t *testing.T) {
+	globalCluster := &v2pb.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
+		Status: v2pb.RayClusterStatus{
+			State: v2pb.RAY_CLUSTER_STATE_UNKNOWN,
+			PodErrors: []*v2pb.PodErrors{
+				{Name: string(rayv1.RayClusterReplicaFailure), Reason: "FailedCreateWorkerPod"},
+			},
+		},
+	}
+	r := setupWatcherTest(t, globalCluster)
+
+	r.rayClusterEventHandler(newKubeRayCluster(rayClusterName, ""))
+
+	updated := getUpdatedCluster(t, r)
+	assert.Empty(t, updated.Status.PodErrors, "a condition KubeRay has cleared must not linger")
+	assert.Equal(t, v2pb.RAY_CLUSTER_STATE_UNKNOWN, updated.Status.State)
+	assert.Nil(t, findCondition(updated.Status.StatusConditions, SucceededCondition))
+}
+
+// TestRayClusterEventHandler_ReadyDropsStaleConditionPodError: a HeadPodReady
+// error recorded while the head pod was coming up has to go once KubeRay reports
+// the head pod ready, or every healthy cluster carries a stale error for good.
+func TestRayClusterEventHandler_ReadyDropsStaleConditionPodError(t *testing.T) {
+	globalCluster := &v2pb.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
+		Status: v2pb.RayClusterStatus{
+			State:  v2pb.RAY_CLUSTER_STATE_READY,
+			LogUrl: testLogURL,
+			StatusConditions: []*apipb.Condition{
+				{Type: LaunchedCondition, Status: apipb.CONDITION_STATUS_TRUE},
+			},
+			PodErrors: []*v2pb.PodErrors{
+				{Name: string(rayv1.HeadPodReady), Reason: "ContainersNotReady"},
+				{Name: "worker-1", Reason: "OOMKilled"},
+			},
+		},
+	}
+	r := setupWatcherTest(t, globalCluster)
+
+	r.rayClusterEventHandler(withConditions(
+		newKubeRayCluster(rayClusterName, rayv1.Ready),
+		metav1.Condition{
+			Type:   string(rayv1.HeadPodReady),
+			Status: metav1.ConditionTrue,
+			Reason: rayv1.HeadPodRunningAndReady,
+		},
+	))
+
+	updated := getUpdatedCluster(t, r)
+	require.Len(t, updated.Status.PodErrors, 1, "only the cleared condition's entry should go")
+	assert.Equal(t, "worker-1", updated.Status.PodErrors[0].Name,
+		"pod-derived entries are not KubeRay's to clear")
+}
+
+// TestRayClusterEventHandler_ReadyRefreshesLogURL: the de-dup of repeated READY
+// events must still let a changed log URL through, or clusters keep the old URL
+// after the log-URL format is reconfigured.
+func TestRayClusterEventHandler_ReadyRefreshesLogURL(t *testing.T) {
+	globalCluster := &v2pb.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
+		Status: v2pb.RayClusterStatus{
+			State:  v2pb.RAY_CLUSTER_STATE_READY,
+			LogUrl: "http://logs.old/" + rayClusterName,
+			StatusConditions: []*apipb.Condition{
+				{Type: LaunchedCondition, Status: apipb.CONDITION_STATUS_TRUE},
+			},
+		},
+	}
+	r := setupWatcherTest(t, globalCluster)
+
+	r.rayClusterEventHandler(newKubeRayCluster(rayClusterName, rayv1.Ready))
+
+	updated := getUpdatedCluster(t, r)
+	assert.Equal(t, testLogURL, updated.Status.LogUrl)
+}
+
+// TestConditionPodErrorNamesMatchMapper ties conditionPodErrorNames to what the
+// real mapper emits. The prune recognises condition-derived entries by name, so
+// a mapper that named them differently would leave every one of them stale.
+func TestConditionPodErrorNamesMatchMapper(t *testing.T) {
+	local := withConditions(
+		newKubeRayCluster(rayClusterName, ""),
+		replicaFailure("FailedCreateWorkerPod", "exceeded quota"),
+		metav1.Condition{
+			Type:   string(rayv1.HeadPodReady),
+			Status: metav1.ConditionFalse,
+			Reason: "HeadPodNotFound",
+		},
+	)
+
+	observed, err := newTestMapper().MapLocalClusterStatusToGlobal(local)
+	require.NoError(t, err)
+	require.Len(t, observed.Ray.PodErrors, 2)
+	for _, podError := range observed.Ray.PodErrors {
+		assert.True(t, conditionPodErrorNames[podError.GetName()],
+			"%q is not recognised as a condition-derived pod error", podError.GetName())
+	}
+}
+
+// TestPodRecoveryKeepsTerminatingClusterEvidence: once the outcome is decided
+// the recorded errors are the reason for it, so a pod that recovers during the
+// teardown must not erase them.
+func TestPodRecoveryKeepsTerminatingClusterEvidence(t *testing.T) {
+	globalCluster := &v2pb.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
+		Status: v2pb.RayClusterStatus{
+			State: v2pb.RAY_CLUSTER_STATE_FAILED,
+			StatusConditions: []*apipb.Condition{
+				{Type: SucceededCondition, Status: apipb.CONDITION_STATUS_FALSE, Reason: "ClusterFailedWithPodErrors"},
+				{Type: KillingCondition, Status: apipb.CONDITION_STATUS_TRUE},
+			},
+			PodErrors: []*v2pb.PodErrors{
+				{Name: "worker-1", Reason: "ErrImagePull"},
+			},
+		},
+	}
+	r, writes, _ := setupWatcherTestObserved(t, globalCluster)
+
+	r.handlePodEvent(newRecoveredWorkerPod("worker-1"))
+
+	assert.Zero(t, *writes)
+	updated := getUpdatedCluster(t, r)
+	require.Len(t, updated.Status.PodErrors, 1)
+	assert.Equal(t, "ErrImagePull", updated.Status.PodErrors[0].Reason)
+}
+
+// TestPodRecoveryKeepsPostMortemEntry: an entry describing a teardown is about a
+// pod that is gone, so a live pod of that name cannot have cleared it.
+func TestPodRecoveryKeepsPostMortemEntry(t *testing.T) {
+	globalCluster := &v2pb.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
+		Status: v2pb.RayClusterStatus{
+			State: v2pb.RAY_CLUSTER_STATE_UNKNOWN,
+			PodErrors: []*v2pb.PodErrors{
+				{Name: "worker-1", Reason: "ContainerStatusUnknown"},
+			},
+		},
+	}
+	r := setupWatcherTest(t, globalCluster)
+
+	r.handlePodEvent(newRecoveredWorkerPod("worker-1"))
+
+	updated := getUpdatedCluster(t, r)
+	require.Len(t, updated.Status.PodErrors, 1)
+	assert.Equal(t, "ContainerStatusUnknown", updated.Status.PodErrors[0].Reason)
+}
+
+// TestHealthyPodWithNothingToClearDoesNotWrite: re-syncs deliver every healthy
+// pod every _reSyncPeriod, and checking for a stale entry must not turn each of
+// those into a write.
+func TestHealthyPodWithNothingToClearDoesNotWrite(t *testing.T) {
+	globalCluster := &v2pb.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
+		Status: v2pb.RayClusterStatus{
+			State:     v2pb.RAY_CLUSTER_STATE_READY,
+			PodErrors: []*v2pb.PodErrors{{Name: "worker-2", Reason: "OOMKilled"}},
+		},
+	}
+	r, writes, _ := setupWatcherTestObserved(t, globalCluster)
+
+	r.handlePodEvent(newRecoveredWorkerPod("worker-1"))
+
+	assert.Zero(t, *writes)
+}
+
 func TestRayClusterEventHandler_Failed(t *testing.T) {
 	globalCluster := &v2pb.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
