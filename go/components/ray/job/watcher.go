@@ -110,13 +110,18 @@ func (r *Reconciler) rayJobEventHandler(obj interface{}) {
 		return
 	}
 
-	// Skip updates if the global RayJob is immutable or being deleted.
+	// Skip updates if the global RayJob is immutable, being deleted, or already
+	// terminal: a terminal state is final, even before the job is frozen.
 	if utils.IsImmutable(&rayJob) {
 		log.V(1).Info("skipping status update for immutable job")
 		return
 	}
 	if rayJob.GetDeletionTimestamp() != nil {
 		log.V(1).Info("skipping status update for job being deleted")
+		return
+	}
+	if isTerminalRayJobState(rayJob.Status.State) {
+		log.V(1).Info("skipping status update for job that already reached a terminal state", "state", rayJob.Status.State)
 		return
 	}
 
@@ -145,6 +150,11 @@ func (r *Reconciler) rayJobEventHandler(obj interface{}) {
 		var current v2pb.RayJob
 		if getErr := r.Get(ctx, types.NamespacedName{Namespace: projectName, Name: local.Name}, &current); getErr != nil {
 			return getErr
+		}
+		// Re-check on the fresh copy: a conflict means another writer got in
+		// first and may have frozen, deleted or finished the job.
+		if utils.IsImmutable(&current) || current.GetDeletionTimestamp() != nil || isTerminalRayJobState(current.Status.State) {
+			return nil
 		}
 		current.Status.State = mapped.State
 		current.Status.JobStatus = mapped.JobStatus
@@ -229,6 +239,10 @@ func (r *Reconciler) rayJobDeleteEventHandler(obj interface{}) {
 			if getErr := r.Get(ctx, types.NamespacedName{Namespace: projectName, Name: local.Name}, &current); getErr != nil {
 				return getErr
 			}
+			// Re-check on the fresh copy: another writer may have finished the job.
+			if utils.IsImmutable(&current) || isTerminalRayJobState(current.Status.State) {
+				return nil
+			}
 			succeeded := jobsutils.GetCondition(&current.Status.StatusConditions, constants.SucceededCondition, current.Generation)
 			jobsutils.UpdateCondition(succeeded, jobsutils.ConditionUpdateParams{
 				Status:     apipb.CONDITION_STATUS_FALSE,
@@ -270,6 +284,10 @@ func (r *Reconciler) rayJobDeleteEventHandler(obj interface{}) {
 		var current v2pb.RayJob
 		if getErr := r.Get(ctx, types.NamespacedName{Namespace: projectName, Name: local.Name}, &current); getErr != nil {
 			return getErr
+		}
+		// Re-check on the fresh copy: another writer may have finished the job.
+		if utils.IsImmutable(&current) || isTerminalRayJobState(current.Status.State) {
+			return nil
 		}
 		killingCond := jobsutils.GetCondition(&current.Status.StatusConditions, constants.KillingCondition, current.Generation)
 		jobsutils.UpdateCondition(killingCond, jobsutils.ConditionUpdateParams{
