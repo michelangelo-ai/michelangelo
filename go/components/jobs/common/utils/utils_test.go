@@ -3,6 +3,7 @@ package utils
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -12,6 +13,8 @@ import (
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	corev1 "k8s.io/api/core/v1"
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -660,6 +663,35 @@ func TestHasDeterministicPodErrors(t *testing.T) {
 	for reason := range deterministicPodErrorReasons {
 		assert.True(t, HasTerminalPodErrors([]*v2pb.PodErrors{{Reason: reason}}),
 			"%s fails a cluster, so it must be terminal", reason)
+	}
+}
+
+// TestIsConflictError: a conflict is matched in both shapes it reaches a
+// controller in, as a Kubernetes error and as the MA API server's gRPC error. A
+// timeout or a connection error, retriable as it is, is not a conflict.
+func TestIsConflictError(t *testing.T) {
+	rayClusters := schema.GroupResource{Group: "michelangelo.api", Resource: "rayclusters"}
+	conflict := apiErrors.NewConflict(rayClusters, "cluster", errors.New("the object has been modified"))
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{name: "kubernetes conflict", err: conflict, want: true},
+		{name: "wrapped kubernetes conflict", err: fmt.Errorf("update status: %w", conflict), want: true},
+		{name: "conflict from the MA API server", err: api.K8sError2GrpcError(conflict, "failed to updateStatus API object"), want: true},
+		{name: "etcd timeout", err: status.Error(codes.Unavailable, "etcdserver: request timed out"), want: false},
+		{name: "proxy connection error", err: status.Error(codes.Unavailable, "code:unavailable message:proxy forward failed"), want: false},
+		{
+			name: "server timeout from the MA API server",
+			err:  api.K8sError2GrpcError(apiErrors.NewServerTimeout(rayClusters, "update", 1), "failed to updateStatus API object"),
+			want: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, IsConflictError(tt.err))
+		})
 	}
 }
 

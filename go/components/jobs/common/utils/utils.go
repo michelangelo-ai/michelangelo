@@ -11,6 +11,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/constants"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	corev1 "k8s.io/api/core/v1"
+	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -237,6 +238,14 @@ func IsRetriableError(err error) bool {
 	return strings.Contains(err.Error(), _statusUpdateConflictCode) ||
 		strings.Contains(err.Error(), _etcdRequestTimedOut) ||
 		strings.Contains(err.Error(), _connectionError)
+}
+
+// IsConflictError reports whether err is the API server's 409 Conflict, as a
+// Kubernetes client returns it, or as the MA API server reports it: gRPC
+// FailedPrecondition, the code it gives a Conflict and nothing else. Unlike
+// IsRetriableError it does not match timeouts or connection errors.
+func IsConflictError(err error) bool {
+	return apiErrors.IsConflict(err) || strings.Contains(err.Error(), _statusUpdateConflictCode)
 }
 
 // UpdateStatusWithRetries updates the status of the job with conflict handling

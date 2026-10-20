@@ -275,10 +275,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	if applyClusterObservation(asRead, clusterStatus) {
 		if err := r.UpdateStatus(ctx, asRead,
 			&metav1.UpdateOptions{FieldManager: "reconcileClusterStatus"}); err != nil {
-			// The API handler reports a conflict as gRPC FailedPrecondition, which
-			// IsRetriableError matches; IsConflict covers an api.Handler that
-			// returns Kubernetes errors as they are.
-			if apiErrors.IsConflict(err) || jobsutils.IsRetriableError(err) {
+			// Only a conflict means a newer write. Anything else, such as etcd
+			// timing out, goes back to controller-runtime to be retried with backoff.
+			if jobsutils.IsConflictError(err) {
 				logger.V(1).Info("ray cluster changed since it was read, not writing the older observation",
 					"error", err.Error())
 				return ctrl.Result{RequeueAfter: _safetyNetPeriod}, nil

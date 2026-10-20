@@ -7,11 +7,17 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/go-logr/zapr"
 	"github.com/golang/mock/gomock"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/uber-go/tally"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
@@ -31,6 +37,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	"sigs.k8s.io/controller-runtime/pkg/config"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
@@ -1355,6 +1362,46 @@ func TestSafetyNetDoesNotRewindANewerWrite(t *testing.T) {
 				types.NamespacedName{Name: rayClusterName, Namespace: testNamespace}, &updated))
 			assert.Equal(t, v2pb.RAY_CLUSTER_STATE_READY, updated.Status.State,
 				"an observation older than the cluster's last write must not be written over it")
+		})
+	}
+}
+
+// TestSafetyNetRetriesAFailedWrite: only a conflict means a handler has written
+// a newer observation since the safety net read the cluster. A write that fails
+// for any other reason -- etcd timing out, a proxy that could not reach the API
+// server -- says nothing of the sort, so it is logged as an error and goes back
+// to controller-runtime to be retried with backoff, not left unseen until the
+// next period.
+func TestSafetyNetRetriesAFailedWrite(t *testing.T) {
+	tests := []struct {
+		name     string
+		writeErr error
+	}{
+		{name: "etcd timed out", writeErr: status.Error(codes.Unavailable, "etcdserver: request timed out")},
+		{name: "proxy could not reach the API server", writeErr: status.Error(codes.Unavailable, "code:unavailable message:proxy forward failed")},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := setupWatcherTest(t, provisioningCluster())
+			store := r.Handler.(*mockAPIHandler).Client.(client.WithWatch)
+			r.Handler = &mockAPIHandler{Client: interceptor.NewClient(store, interceptor.Funcs{
+				SubResourceUpdate: func(context.Context, client.Client, string, client.Object, ...client.SubResourceUpdateOption) error {
+					return tt.writeErr
+				},
+			})}
+			withSafetyNet(t, r).EXPECT().GetJobClusterStatus(gomock.Any(), gomock.Any(), gomock.Any()).
+				Return(observedAs(t, r, newKubeRayCluster(rayClusterName, rayv1.Ready)), nil)
+			observed, logs := observer.New(zapcore.DebugLevel)
+			ctx := log.IntoContext(context.Background(), zapr.NewLogger(zap.New(observed)))
+
+			_, err := r.Reconcile(ctx, ctrl.Request{
+				NamespacedName: types.NamespacedName{Name: rayClusterName, Namespace: testNamespace},
+			})
+
+			require.Error(t, err, "a write that failed should go back to controller-runtime to be retried")
+			assert.ErrorIs(t, err, tt.writeErr)
+			assert.Equal(t, 1, logs.FilterMessage("failed to update ray cluster status").
+				FilterLevelExact(zapcore.ErrorLevel).Len(), "a write that failed should be logged as an error")
 		})
 	}
 }
