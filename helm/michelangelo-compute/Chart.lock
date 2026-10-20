@@ -5,5 +5,8 @@ dependencies:
 - name: spark-operator
   repository: https://kubeflow.github.io/spark-operator
   version: 2.5.2
-digest: sha256:3c92c56d2388b9161064ae21afc1248a5258dbe6538ff5899ead1c1ba11c74a6
-generated: "2026-10-20T11:46:59.151467-07:00"
+- name: kueue
+  repository: oci://registry.k8s.io/kueue/charts
+  version: 0.19.9
+digest: sha256:e4afa1f062adc59b9287b5bc28e4654802f7a447ac72bc03bdb10d6d1a119630
+generated: "2026-10-20T16:16:51.939775-07:00"

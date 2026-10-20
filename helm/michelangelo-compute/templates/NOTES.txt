@@ -11,6 +11,11 @@ Operators:
 {{- else }}
   - Spark Operator: not installed (spark-operator.enabled=false)
 {{- end }}
+{{- if .Values.kueue.enabled }}
+  - Kueue: installed
+{{- else }}
+  - Kueue: not installed (kueue.enabled=false)
+{{- end }}
 
 Control-plane identity:
 {{- if .Values.rayManager.create }}

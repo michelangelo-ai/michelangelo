@@ -107,3 +107,115 @@ spark-operator:
     podMonitor:
       # Requires the Prometheus Operator CRDs (monitoring.coreos.com/v1).
       create: false
+
+# -----------------------------------------------------------------------------
+# Kueue — upstream chart kueue 0.19.9.
+# Values under kueue are passed to the pinned upstream chart. The four
+# Configuration deltas below are enforced while the subchart is enabled.
+# -----------------------------------------------------------------------------
+kueue:
+  # Install Kueue. Opt in per cluster, together with scheduler_type on its
+  # Cluster CR. When false, its enforced settings no longer apply.
+  enabled: false
+  # Requires the Prometheus Operator CRDs (monitoring.coreos.com/v1).
+  enablePrometheus: false
+  controllerManager:
+    # Every replica serves Kueue's webhooks, which fail closed, so keep two
+    # replicas and a disruption budget.
+    replicas: 2
+    podDisruptionBudget:
+      enabled: true
+      minAvailable: 1
+    # Add {name: SparkApplicationIntegration, enabled: true} before listing
+    # sparkoperator.k8s.io/sparkapplication in integrations.frameworks: Kueue
+    # does not start with that framework listed and its gate off.
+    featureGates: []
+  managerConfig:
+    # Kueue's default Configuration from the pinned chart, which the subchart
+    # replaces wholesale, plus four deltas marked "michelangelo-compute:"
+    # (managedJobsNamespaceSelector, integrations.frameworks, waitForPodsReady
+    # and resources.excludeResourcePrefixes). Rendering fails if a delta
+    # changes, and CI fails if anything else differs from upstream's default.
+    controllerManagerConfigYaml: |-
+      apiVersion: config.kueue.x-k8s.io/v1beta2
+      kind: Configuration
+      health:
+        healthProbeBindAddress: :8081
+      metrics:
+        bindAddress: :8443
+      # enableClusterQueueResources: true
+      webhook:
+        port: 9443
+      leaderElection:
+        leaderElect: true
+        resourceName: c1f6bfd2.kueue.x-k8s.io
+      controller:
+        groupKindConcurrency:
+          Job.batch: 5
+          Pod: 5
+          Workload.kueue.x-k8s.io: 10
+          LocalQueue.kueue.x-k8s.io: 5
+          Cohort.kueue.x-k8s.io: 1
+          ClusterQueue.kueue.x-k8s.io: 5
+          ResourceFlavor.kueue.x-k8s.io: 1
+      clientConnection:
+        qps: 300
+        burst: 500
+      #pprofBindAddress: :8083
+      # michelangelo-compute: a backstop above the control plane's provisioning
+      # budget, no eviction of a running cluster that lost a pod, at most two
+      # requeues before Kueue deactivates the workload.
+      waitForPodsReady:
+        timeout: 1h
+        recoveryTimeout: 0s
+      #  blockAdmission: false
+        requeuingStrategy:
+      #    timestamp: Eviction
+          backoffLimitCount: 2
+      #    backoffBaseSeconds: 60
+      #    backoffMaxSeconds: 3600
+      #manageJobsWithoutQueueName: true
+      # See "Opt-in Namespace Management" for guidance on namespace management:
+      # https://kueue.sigs.k8s.io/docs/tasks/manage/enforce_job_management/opt_in_namespace_management/
+      # michelangelo-compute: only the dispatch namespace. Every job webhook's
+      # namespaceSelector derives from this field.
+      managedJobsNamespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: default
+      #internalCertManagement:
+      #  enable: false
+      #  webhookServiceName: ""
+      #  webhookSecretName: ""
+      # michelangelo-compute: only the kinds the control plane labels. With pod,
+      # deployment and statefulset off, their webhooks are Ignore.
+      integrations:
+        frameworks:
+        - "ray.io/raycluster"
+      #  - "sparkoperator.k8s.io/sparkapplication" # needs SparkApplicationIntegration
+      #  externalFrameworks:
+      #  - "Foo.v1.example.com"
+      #fairSharing:
+      #  preemptionStrategies: [LessThanOrEqualToFinalShare, LessThanInitialShare]
+      #admissionFairSharing:
+      #  usageHalfLifeTime: "168h" # 7 days
+      #  usageSamplingInterval: "5m"
+      #  resourceWeights: # optional, defaults to 1 for all resources if not specified
+      #    cpu: 0    # if you want to completely ignore cpu usage
+      #    memory: 0 # ignore completely memory usage
+      #    example.com/gpu: 100 # and you care only about GPUs usage
+      # michelangelo-compute: ClusterQueues do not ration node-local disk. Every
+      # other undeclared resource still blocks admission.
+      resources:
+        excludeResourcePrefixes:
+        - "ephemeral-storage"
+      #  quotaCheckStrategy: "BlockUndeclared"
+      # transformations:
+      # - input: nvidia.com/mig-4g.5gb
+      #   strategy: Replace | Retain
+      #   outputs:
+      #     example.com/accelerator-memory: 5Gi
+      #     example.com/accelerator-gpc: 4
+      #objectRetentionPolicies:
+      #  workloads:
+      #    afterFinished: null # null indicates infinite retention, 0s means no retention at all
+      #    afterDeactivatedByKueue: null # null indicates infinite retention, 0s means no retention at all

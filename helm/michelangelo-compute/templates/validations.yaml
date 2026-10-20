@@ -15,6 +15,44 @@ that subchart is enabled. This file renders to empty YAML when all checks pass.
 {{- end -}}
 {{- end -}}
 
+{{- /* Kueue: the four Configuration deltas keep its webhooks out of every create path the control plane does not use and align its timers with the control plane's. Values compare as JSON, so a number never matches a string. */ -}}
+{{- $kueue := .Values.kueue -}}
+{{- if $kueue.enabled -}}
+{{- $kueueConfig := fromYaml $kueue.managerConfig.controllerManagerConfigYaml -}}
+{{- if ne (toJson (dig "managedJobsNamespaceSelector" (dict) $kueueConfig)) (toJson (dict "matchLabels" (dict "kubernetes.io/metadata.name" "default"))) -}}
+{{- fail "kueue.managerConfig.controllerManagerConfigYaml must set managedJobsNamespaceSelector to matchLabels kubernetes.io/metadata.name: default because it confines Kueue's job webhooks to the namespace the control plane dispatches to" -}}
+{{- end -}}
+{{- $frameworks := toJson (dig "integrations" "frameworks" (list) $kueueConfig) -}}
+{{- $sparkFrameworks := toJson (list "ray.io/raycluster" "sparkoperator.k8s.io/sparkapplication") -}}
+{{- if and (ne $frameworks (toJson (list "ray.io/raycluster"))) (ne $frameworks $sparkFrameworks) -}}
+{{- fail "kueue.managerConfig.controllerManagerConfigYaml must set integrations.frameworks to [ray.io/raycluster], optionally followed by sparkoperator.k8s.io/sparkapplication, because Kueue must gate only the kinds the control plane labels" -}}
+{{- end -}}
+{{- if ne (toJson (dig "waitForPodsReady" "timeout" "" $kueueConfig)) (toJson "1h") -}}
+{{- fail "kueue.managerConfig.controllerManagerConfigYaml must set waitForPodsReady.timeout to 1h because it must exceed the control plane's provisioning budget" -}}
+{{- end -}}
+{{- if ne (toJson (dig "waitForPodsReady" "recoveryTimeout" "" $kueueConfig)) (toJson "0s") -}}
+{{- fail "kueue.managerConfig.controllerManagerConfigYaml must set waitForPodsReady.recoveryTimeout to 0s because evicting a running RayCluster that lost a pod kills its job" -}}
+{{- end -}}
+{{- if ne (toJson (dig "waitForPodsReady" "requeuingStrategy" "backoffLimitCount" "" $kueueConfig)) (toJson 2) -}}
+{{- fail "kueue.managerConfig.controllerManagerConfigYaml must set waitForPodsReady.requeuingStrategy.backoffLimitCount to 2 because Kueue otherwise requeues a workload that never starts forever" -}}
+{{- end -}}
+{{- if ne (toJson (dig "resources" "excludeResourcePrefixes" (list) $kueueConfig)) (toJson (list "ephemeral-storage")) -}}
+{{- fail "kueue.managerConfig.controllerManagerConfigYaml must set resources.excludeResourcePrefixes to [ephemeral-storage] because ClusterQueues do not ration the node-local disk Ray pods request" -}}
+{{- end -}}
+{{- if eq $frameworks $sparkFrameworks -}}
+{{- /* The subchart joins the gates into one --feature-gates flag, where the last entry for a gate wins. */ -}}
+{{- $sparkGate := false -}}
+{{- range $kueue.controllerManager.featureGates -}}
+{{- if eq (toString .name) "SparkApplicationIntegration" -}}
+{{- $sparkGate = eq (toJson .enabled) "true" -}}
+{{- end -}}
+{{- end -}}
+{{- if not $sparkGate -}}
+{{- fail "kueue.controllerManager.featureGates must enable SparkApplicationIntegration while kueue.managerConfig.controllerManagerConfigYaml lists sparkoperator.k8s.io/sparkapplication because Kueue does not start otherwise" -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
 {{- /* Runtime contract: every pod the control plane creates in default reads michelangelo-config and the credentials Secret. */ -}}
 {{- $config := .Values.runtime.config -}}
 {{- range $key := list "MA_FILE_SYSTEM" "AWS_ENDPOINT_URL" "REGISTRY_ENDPOINT" -}}
