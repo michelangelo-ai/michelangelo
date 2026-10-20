@@ -725,9 +725,8 @@ func (r *Reconciler) rayClusterEventHandler(obj interface{}) {
 // rayClusterEventHandler applies every KubeRay event through it, and Reconcile's
 // safety net applies what GetJobClusterStatus returns, so the event path and the
 // level-triggered path cannot disagree. It has to stay pure and idempotent:
-// the status write re-runs it on a re-fetched object after a conflict,
-// and the safety net applies it to a copy first to skip writes that would change
-// nothing.
+// the status write re-runs it on a re-fetched object after a conflict, and both
+// callers apply it to a copy first to skip writes that would change nothing.
 func applyClusterObservation(cluster *v2pb.RayCluster, observed *matypes.JobClusterStatus) bool {
 	if observed == nil || observed.Ray == nil || isFrozenOrDeleting(cluster) {
 		return false
