@@ -7,7 +7,7 @@ Register an existing compute Kubernetes cluster with the Michelangelo AI control
 - KubeRay operator installed in the compute cluster (`ray-system` namespace)
 - Michelangelo AI control plane running
 - Access to object storage (S3/MinIO) used by the control plane
-- RBAC manifest for service account with permissions to run Ray Jobs / Ray Clusters. 
+- RBAC manifest for service account with permissions to run Ray Jobs / Ray Clusters and to read their pods.
 - Network connectivity between control plane and compute cluster (control plane must be able to reach compute cluster API server)
 
 ### What gets configured
@@ -57,7 +57,11 @@ kubectl --context "${COMPUTE_CONTEXT}" create secret generic aws-credentials \
 
 Apply the manifest from the Appendix below using your preferred method (e.g., `kubectl --context "${COMPUTE_CONTEXT}" apply -f -` with the manifest piped from a heredoc, or save it to a file first).
 
-This creates `ServiceAccount ray-manager` and grants permissions on `rayclusters` and `rayjobs`.
+This creates `ServiceAccount ray-manager`, grants permissions on `rayclusters` and `rayjobs`, and grants read-only access (`get`, `list`, `watch`) to `pods`. The control plane watches the compute cluster with this ServiceAccount's token, and the pod watch is what surfaces per-pod failures (`ImagePullBackOff`, `CrashLoopBackOff`, unschedulable pods) into the Michelangelo RayCluster status. Michelangelo never creates or deletes pods directly; KubeRay owns them.
+
+**Upgrading an existing installation**: re-apply this manifest on every registered compute cluster before upgrading the control plane's controllermgr. Earlier versions of the manifest did not grant access to `pods`; without it the pod watch is denied and retried silently, with no error reported, and per-pod failures never reach the RayCluster status.
+
+**Sharing a compute cluster between control planes**: each control plane labels the Ray objects it creates with `ma/control-plane-env`, taken from the `RUNTIME_ENVIRONMENT` environment variable of its controllermgr, and only watches objects that carry its own value. If more than one control plane (for example staging and production) uses this compute cluster, set a distinct, non-empty `RUNTIME_ENVIRONMENT` on each one's controllermgr. Left unset, they all use the empty value, see each other's objects, and can write status onto each other's RayClusters and RayJobs that have the same project and name. The value must be a valid Kubernetes label value (at most 63 characters: letters, digits, `-`, `_` and `.`, starting and ending with a letter or digit), or controllermgr fails at startup.
 
 ### 3) Create a token Secret for the `ray-manager` ServiceAccount
 
@@ -159,6 +163,7 @@ EOF
 ### Verification
 - RBAC present:
   - `kubectl --context ${COMPUTE_CONTEXT} -n default get sa ray-manager`
+  - `kubectl --context ${COMPUTE_CONTEXT} auth can-i watch pods --as=system:serviceaccount:default:ray-manager` (should print `yes`)
 - Token Secret present and populated:
   - `kubectl --context ${COMPUTE_CONTEXT} -n default get secret ray-manager-token`
   - Verify the Secret has a `token` key: `kubectl --context ${COMPUTE_CONTEXT} -n default get secret ray-manager-token -o jsonpath='{.data.token}' | wc -c` (should be > 0)
@@ -198,6 +203,14 @@ rules:
 - apiGroups: ["ray.io"]
   resources: ["rayclusters", "rayjobs"]
   verbs: ["create","get","list","watch","update","patch","delete"]
+# The federated watchers run against this cluster with this ServiceAccount's
+# token. The RayCluster watch covers ray.io above; the pod watch is what surfaces
+# per-pod failures (ImagePullBackOff, CrashLoopBackOff, unschedulable) into the
+# Michelangelo RayCluster CR, and it needs read access to core pods. Read-only:
+# Michelangelo never creates or deletes pods directly — KubeRay owns them.
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get","list","watch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
