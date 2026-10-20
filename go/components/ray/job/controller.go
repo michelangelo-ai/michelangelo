@@ -140,9 +140,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		err := r.Status().Update(ctx, &rayJob)
 		if apiErrors.IsConflict(err) {
 			// Another writer updated the job after this pass read it. That is
-			// routine, and its write triggers a fresh pass on the current object.
+			// routine: its write already enqueues a fresh pass on the current
+			// object, so this requeue is only a backstop.
 			logger.V(1).Info("status update conflicted with a concurrent write, requeueing")
-			return ctrl.Result{Requeue: true}, nil
+			return ctrl.Result{RequeueAfter: requeueAfter}, nil
 		}
 		if err != nil {
 			logger.Error(err, "failed to update status")

@@ -1252,7 +1252,7 @@ func TestReconcile_StatusWriteConflictIsRequeuedQuietly(t *testing.T) {
 			name: "conflict",
 			writeErr: apiErrors.NewConflict(schema.GroupResource{Group: "michelangelo.api", Resource: "rayjobs"},
 				rayJobName, fmt.Errorf("the object has been modified")),
-			wantResult: ctrl.Result{Requeue: true},
+			wantResult: ctrl.Result{RequeueAfter: requeueAfter},
 		},
 		{
 			name:          "other error",
@@ -2416,12 +2416,12 @@ func TestRayJobConvergesAfterDeleteHandlerExhaustsRetries(t *testing.T) {
 	var res ctrl.Result
 	var err error
 	for i := 0; i < conflicts; i++ {
-		if res, err = r.Reconcile(ctx, request); err == nil && !res.Requeue {
+		if res, err = r.Reconcile(ctx, request); err == nil && res.RequeueAfter == 0 {
 			break
 		}
 	}
 	require.NoError(t, err)
-	require.False(t, res.Requeue, "the conflicts should have run out")
+	require.Zero(t, res.RequeueAfter, "the conflicts should have run out")
 
 	require.NoError(t, r.Get(ctx, request.NamespacedName, &stored))
 	assert.Equal(t, v2pb.RAY_JOB_STATE_FAILED, stored.Status.State)
