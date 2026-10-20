@@ -2,10 +2,14 @@ package job
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/go-logr/logr"
 	"github.com/go-logr/zapr"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -19,7 +23,10 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
+	"github.com/michelangelo-ai/michelangelo/go/components/controllerutil"
+	jobsclient "github.com/michelangelo-ai/michelangelo/go/components/jobs/client"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/client/clientmocks"
+	"github.com/michelangelo-ai/michelangelo/go/components/jobs/client/k8sengine"
 	jobscluster "github.com/michelangelo-ai/michelangelo/go/components/jobs/cluster"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/constants"
 	jobtypes "github.com/michelangelo-ai/michelangelo/go/components/jobs/common/types"
@@ -34,11 +41,15 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	kubescheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
+	"sigs.k8s.io/controller-runtime/pkg/config"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
 
 const (
@@ -2836,4 +2847,153 @@ func TestMissingRayJobIsRecordedTheSameOnEveryPath(t *testing.T) {
 	assert.Equal(t, deleted.Status.Message, polled.Status.Message)
 	assert.Equal(t, conditions(deleted), conditions(polled))
 	assert.True(t, utils.IsImmutable(&polled), "a terminal job must be frozen so the ingester can archive it")
+}
+
+// capturingManager is a manager that is never started; it records the runnables
+// added to it instead of running them.
+type capturingManager struct {
+	ctrl.Manager
+	runnables []manager.Runnable
+}
+
+func (m *capturingManager) Add(runnable manager.Runnable) error {
+	m.runnables = append(m.runnables, runnable)
+	return nil
+}
+
+func newCapturingManager(t *testing.T) *capturingManager {
+	t.Helper()
+	scheme := runtime.NewScheme()
+	require.NoError(t, v2pb.AddToScheme(scheme))
+	mgr, err := ctrl.NewManager(&rest.Config{}, ctrl.Options{
+		Scheme: scheme,
+		Logger: logr.Discard(),
+		// Every Register in this test binary names its controller "rayjob".
+		Controller: config.Controller{SkipNameValidation: ptr.To(true)},
+	})
+	require.NoError(t, err)
+	return &capturingManager{Manager: mgr}
+}
+
+// TestRegisterRunsWatcherOnLeader checks that the federated watcher is run by the
+// manager as a leader-only runnable -- started on the leader once the caches have
+// synced -- and that it stops with the manager instead of outliving it.
+func TestRegisterRunsWatcherOnLeader(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	r := NewReconciler(logr.Discard(), nil, env.Context{}, clientmocks.NewMockFederatedClient(mockCtrl),
+		newMockClusterCache(), tally.NoopScope)
+	mgr := newCapturingManager(t)
+
+	require.NoError(t, r.Register(mgr))
+
+	var runWatcher controllerutil.LeaderOnlyRunnable
+	for _, runnable := range mgr.runnables {
+		if fn, ok := runnable.(controllerutil.LeaderOnlyRunnable); ok {
+			runWatcher = fn
+		}
+	}
+	require.NotNil(t, runWatcher, "the watcher should be added to the manager as a leader-only runnable")
+	assert.True(t, runWatcher.NeedLeaderElection())
+
+	ctx, cancel := context.WithCancel(context.Background())
+	stopped := make(chan error, 1)
+	go func() { stopped <- runWatcher.Start(ctx) }()
+	select {
+	case <-stopped:
+		t.Fatal("the watcher should run until the manager stops")
+	case <-time.After(50 * time.Millisecond):
+	}
+	cancel()
+	select {
+	case err := <-stopped:
+		assert.NoError(t, err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("the watcher should stop when the manager cancels its context")
+	}
+}
+
+// watchesRequestedBy runs r's federated watcher against one ready compute
+// cluster until it asks that cluster for its watches, and returns what it
+// asked for. The request is refused, so no informer is started, and the
+// watcher has stopped by the time this returns.
+func watchesRequestedBy(t *testing.T, r *Reconciler) []*jobsclient.WatcherParams {
+	t.Helper()
+	federatedClient := clientmocks.NewMockFederatedClient(gomock.NewController(t))
+	clusterCache := newMockClusterCache()
+	clusterCache.addCluster(assignedCluster, &v2pb.Cluster{ObjectMeta: metav1.ObjectMeta{Name: assignedCluster}})
+	r.federatedClient, r.clusterCache = federatedClient, clusterCache
+
+	requested := make(chan []*jobsclient.WatcherParams, 1)
+	federatedClient.EXPECT().Watcher(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(params []*jobsclient.WatcherParams, _ *v2pb.Cluster) ([]*jobsclient.ResourceWatcher, error) {
+			select {
+			case requested <- params:
+			default: // a later sync asking again
+			}
+			return nil, errors.New("compute cluster unreachable")
+		}).
+		AnyTimes()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	stopped := make(chan struct{})
+	go func() {
+		defer close(stopped)
+		r.getFederatedWatcher().Start(ctx)
+	}()
+	defer func() {
+		cancel()
+		<-stopped
+	}()
+
+	select {
+	case params := <-requested:
+		return params
+	case <-time.After(5 * time.Second):
+		t.Fatal("the watcher should ask the ready compute cluster for its watches")
+		return nil
+	}
+}
+
+// TestFederatedWatcherMetricsAreNamespaced checks that the federated watcher
+// reports under the controller's rayjob scope, so its metrics stay apart from
+// the RayCluster controller's watcher.
+func TestFederatedWatcherMetricsAreNamespaced(t *testing.T) {
+	scope := tally.NewTestScope("test", nil)
+	watchesRequestedBy(t, &Reconciler{logger: logr.Discard(), metricsScope: scope})
+
+	snapshot := scope.Snapshot()
+	var names []string
+	for name := range snapshot.Counters() {
+		names = append(names, name)
+	}
+	for name := range snapshot.Timers() {
+		names = append(names, name)
+	}
+	assert.True(t, slices.ContainsFunc(names, func(name string) bool {
+		return strings.HasPrefix(name, "test.rayjob.watcher.")
+	}), "the watcher's metrics should be under the rayjob scope, got %v", names)
+}
+
+// TestFederatedWatcherParams checks what the federated watcher asks each
+// compute cluster to watch: the KubeRay RayJobs in the Ray namespace that this
+// control plane environment created.
+func TestFederatedWatcherParams(t *testing.T) {
+	r := &Reconciler{
+		logger:       logr.Discard(),
+		env:          env.Context{RuntimeEnvironment: "staging"},
+		metricsScope: tally.NoopScope,
+	}
+
+	params := watchesRequestedBy(t, r)
+	require.Len(t, params, 1)
+
+	rayJobs := params[0]
+	assert.Equal(t, constants.KubeRayJobResource, rayJobs.ResourceName)
+	assert.Equal(t, k8sengine.RayLocalNamespace, rayJobs.Namespace)
+	assert.IsType(t, &rayv1.RayJob{}, rayJobs.ObjType)
+	assert.Equal(t, &metav1.LabelSelector{MatchLabels: map[string]string{
+		constants.OwnerServiceLabelKey:  constants.MAOwnerServiceLabelValue,
+		constants.JobControlPlaneEnvKey: "staging",
+	}}, rayJobs.LabelSelector)
+	assert.NotNil(t, rayJobs.ResourceEventHandler)
 }
