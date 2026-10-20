@@ -172,15 +172,11 @@ func (c projectServiceHandler) CreateProject(
 	ctx context.Context, request *CreateProjectRequest) (resp *CreateProjectResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
 
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Project.ObjectMeta.Namespace, "name", request.Project.ObjectMeta.Name)
 	logger.Info("CreateProject Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "CreateProject",
-		logging.NamespaceTag:    request.Project.ObjectMeta.Namespace,
-		logging.EntityNameTag:   request.Project.ObjectMeta.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildProjectAuditLogEventForCreate(
@@ -244,15 +240,11 @@ func (c projectServiceHandler) CreateProject(
 func (c projectServiceHandler) GetProject(
 	ctx context.Context, request *GetProjectRequest) (resp *GetProjectResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace, "name", request.Name)
 	logger.Info("GetProject Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "GetProject",
-		logging.NamespaceTag:    request.Namespace,
-		logging.EntityNameTag:   request.Name,
 	})
 
 	getOptions := &metav1.GetOptions{}
@@ -303,15 +295,11 @@ func (c projectServiceHandler) GetProject(
 func (c projectServiceHandler) UpdateProject(
 	ctx context.Context, request *UpdateProjectRequest) (resp *UpdateProjectResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Project.ObjectMeta.Namespace, "name", request.Project.ObjectMeta.Name)
 	logger.Info("UpdateProject Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "UpdateProject",
-		logging.NamespaceTag:    request.Project.ObjectMeta.Namespace,
-		logging.EntityNameTag:   request.Project.ObjectMeta.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildProjectAuditLogEventForUpdate(
@@ -375,15 +363,11 @@ func (c projectServiceHandler) UpdateProject(
 func (c projectServiceHandler) DeleteProject(
 	ctx context.Context, request *DeleteProjectRequest) (resp *DeleteProjectResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace, "name", request.Name)
 	logger.Info("DeleteProject Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "DeleteProject",
-		logging.NamespaceTag:    request.Namespace,
-		logging.EntityNameTag:   request.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildProjectAuditLogEventForDelete(
@@ -449,14 +433,11 @@ func (c projectServiceHandler) DeleteProject(
 func (c projectServiceHandler) DeleteProjectCollection(
 	ctx context.Context, request *DeleteProjectCollectionRequest) (resp *DeleteProjectCollectionResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace)
 	logger.Info("DeleteProjectCollection Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "DeleteProjectCollection",
-		logging.NamespaceTag:    request.Namespace,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildProjectAuditLogEventForDeleteCollection(
@@ -525,14 +506,11 @@ func (c projectServiceHandler) ListProject(
 	ctx context.Context, request *ListProjectRequest) (resp *ListProjectResponse, err error) {
 
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace)
 	logger.Info("ListProject Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "ListProject",
-		logging.NamespaceTag:    request.Namespace,
 	})
 
 	result := &ProjectList{}

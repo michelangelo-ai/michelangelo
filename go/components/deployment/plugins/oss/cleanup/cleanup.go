@@ -119,7 +119,7 @@ func (a *CleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, condi
 			return conditionUtils.GenerateFalseCondition(condition, "ModelUnloadingFailed", fmt.Sprintf("Failed to get client for cluster %s: %v", clusterID, err)), nil
 		}
 		if err := a.ModelConfigProvider.RemoveModelFromConfig(ctx, a.Logger, kubeClient, isName, resource.Namespace, resource.GetName(), currentModel); err != nil {
-			a.Logger.Error("Failed to initiate unloading of old model", zap.Error(err), zap.String("operation", "unload_model"), zap.String("model", currentModel), zap.String("inferenceServerName", isName), zap.String("namespace", resource.Namespace), zap.String("cluster", clusterID), zap.String("backendType", v2pb.BACKEND_TYPE_TRITON.String()))
+			a.Logger.Error("Failed to initiate unloading of old model", zap.Error(err), zap.String("operation", "unload_model"), zap.String("model", currentModel), zap.String("inferenceServerName", isName), zap.String("namespace", resource.Namespace), zap.String("cluster", clusterID), zap.String("backendType", common.BackendTypeOf(resource).String()))
 			return conditionUtils.GenerateFalseCondition(condition, "ModelUnloadingFailed", fmt.Sprintf("Failed to unload old model %s from inference server in cluster %s: %v", currentModel, clusterID, err)), nil
 		}
 

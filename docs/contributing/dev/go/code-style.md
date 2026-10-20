@@ -1,4 +1,5 @@
 ---
+last_verified: 2026-10-14
 sidebar_position: 2
 ---
 
@@ -28,13 +29,13 @@ go/
 └── components/             # Reusable packages
     ├── inferenceserver/
     │   └── backends/       # Interface + registry + implementations
-    ├── scheduler/
     └── jobs/
+        └── scheduler/      # Job scheduler, framework/ and kueue/ subpackages
 ```
 
 - `cmd/` packages should be thin: they wire dependencies and call into `components/`.
 - Business logic belongs in `components/`, not in `cmd/`.
-- Generated code lives in `go/gen/` — never edit files there.
+- Generated protobuf Go code lives in `proto-go/` (produced by `tools/gen-proto-go.sh`) — never edit files there.
 
 ---
 
@@ -46,20 +47,18 @@ The codebase uses interfaces at subsystem boundaries to make components testable
 
 ```go
 // ✅ Good: interface defined in the consumer package
-// go/components/scheduler/scheduler.go
+// go/components/jobs/scheduler/scheduler.go
 package scheduler
 
-// JobQueue is the interface the scheduler depends on.
-// Implementations live elsewhere (e.g., kueue/, volcano/).
+// JobQueue is the job queue for the scheduler.
 type JobQueue interface {
-    Enqueue(ctx context.Context, job *Job) error
-    Dequeue(ctx context.Context) (*Job, error)
+    Enqueue(ctx context.Context, job matypes.SchedulableJob) error
 }
 ```
 
 ```go
 // ❌ Bad: defining the interface in the implementation package
-// go/components/kueue/interface.go
+// go/components/jobs/scheduler/kueue/interface.go
 package kueue
 
 type KueueJobQueue interface { ... }  // Consumer imports kueue — wrong direction
@@ -72,14 +71,14 @@ Prefer small, focused interfaces over large ones. A type that satisfies a small 
 ```go
 // ✅ Good: single responsibility
 type ModelConfigProvider interface {
-    GetModelConfig(ctx context.Context, name, namespace string) (*ModelConfig, error)
-    UpdateModelConfig(ctx context.Context, config *ModelConfig) error
+    CreateModelConfig(ctx context.Context, logger *zap.Logger, kubeclient client.Client, inferenceServerName string, namespace string, labels map[string]string, annotations map[string]string) error
+    DeleteModelConfig(ctx context.Context, logger *zap.Logger, kubeclient client.Client, inferenceServerName string, namespace string) error
 }
 
 // ❌ Bad: unrelated concerns bundled
 type ModelManager interface {
-    GetModelConfig(ctx context.Context, ...) (*ModelConfig, error)
-    UpdateModelConfig(ctx context.Context, ...) error
+    CreateModelConfig(ctx context.Context, ...) error
+    DeleteModelConfig(ctx context.Context, ...) error
     DeleteServer(ctx context.Context, ...) error      // unrelated
     IsHealthy(ctx context.Context, ...) (bool, error) // unrelated
 }
@@ -119,11 +118,10 @@ func (r *Registry) Register(backendType v2pb.BackendType, backend Backend) {
 func (r *Registry) GetBackend(backendType v2pb.BackendType) (Backend, error) {
     r.mu.RLock()
     defer r.mu.RUnlock()
-    b, ok := r.backends[backendType]
-    if !ok {
-        return nil, fmt.Errorf("backend %q not registered", backendType)
+    if backend, exists := r.backends[backendType]; exists {
+        return backend, nil
     }
-    return b, nil
+    return nil, fmt.Errorf("backend not found for type: %v", backendType)
 }
 ```
 
@@ -196,19 +194,19 @@ See [Error Handling](error-handling.md#pr-review-checklist) for the required log
 | `Error` | Actionable failures: operation failed and needs investigation |
 | `Debug` | High-frequency detail useful only during active debugging — off by default |
 
-Do not use `Warn`. Use `Info` for expected transient conditions (rate limits, retries) and `Error` for unexpected failures.
+Avoid `Warn` in new code. Use `Info` for expected transient conditions (rate limits, retries) and `Error` for unexpected failures.
 
 ---
 
 ## TODO Comments
 
-All `TODO` comments must reference a GitHub issue. The CI `TODO` check enforces this:
+All `TODO` comments must reference a GitHub issue. The "Check for unlinked TODOs" step in the Go Lint workflow (`.github/workflows/go-lint.yml`) flags any `TODO` that is not followed by `(#` or `(https://`:
 
 ```go
 // ✅ Passes CI
 // TODO(#456): switch to batch API once available
 
-// ❌ Fails CI — golangci-lint godox check
+// ❌ Flagged by the unlinked-TODO check
 // TODO: switch to batch API
 // TODO - handle this edge case
 ```

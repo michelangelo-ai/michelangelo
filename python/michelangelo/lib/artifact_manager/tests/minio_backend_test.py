@@ -40,8 +40,8 @@ def _make_mock_minio(bucket_exists: bool = True) -> tuple[MagicMock, MagicMock]:
 _DEFAULT_KWARGS = {
     "endpoint": "localhost:9000",
     "bucket": "test-bucket",
-    "access_key": "minioadmin",
-    "secret_key": "minioadmin",
+    "access_key": "michelangeloadmin",
+    "secret_key": "michelangeloadmin",
     "secure": False,
 }
 

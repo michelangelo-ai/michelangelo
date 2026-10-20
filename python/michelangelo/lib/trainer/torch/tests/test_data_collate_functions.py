@@ -13,6 +13,7 @@ import numpy as np
 import pytest
 import torch
 
+from michelangelo._internal.utils.reflection_utils.module_attr import get_module_attr
 from michelangelo.lib.constants.sentinel import (
     FLOAT_SENTINEL,
     INT32_SENTINEL,
@@ -26,6 +27,7 @@ from michelangelo.lib.trainer.torch.data_collate_functions import (
     collate_value_to_float32_tensor,
     literal_eval_data_collate_function,
     pad_ragged_lists,
+    pinned_literal_eval_data_collate_function,
     row_is_list_of_nested_cells,
 )
 
@@ -266,6 +268,95 @@ class TestLiteralEvalDataCollateFunction:
         out = literal_eval_data_collate_function(batch)
         assert out["x"].dtype == torch.float32
         assert out["x"].shape == (3, 1)
+
+
+# -----------------------------------------------------------------------------
+# pinned_literal_eval_data_collate_function
+# -----------------------------------------------------------------------------
+
+
+class TestPinnedLiteralEvalDataCollateFunction:
+    """Pinned-memory variant of the default collate."""
+
+    def test_pins_every_tensor_when_cuda_is_available(self, monkeypatch):
+        """With CUDA, each collated tensor is replaced by its pinned copy."""
+        monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+        monkeypatch.setattr(
+            torch.Tensor, "pin_memory", lambda self: ("pinned", self.shape)
+        )
+
+        out = pinned_literal_eval_data_collate_function(
+            {"a": [1.0, 2.0], "b": "[[1.0, 2.0], [3.0, 4.0]]"}
+        )
+
+        assert out == {"a": ("pinned", (2, 1)), "b": ("pinned", (2, 2))}
+
+    def test_skips_pinning_without_cuda(self, monkeypatch):
+        """Without CUDA, the default collate output is returned unpinned and pin_memory is never called."""
+        monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+        monkeypatch.setattr(
+            torch.Tensor,
+            "pin_memory",
+            lambda _: pytest.fail("pin_memory called without CUDA"),
+        )
+        batch = {"x": np.array([1.0, 2.0, 3.0])}
+
+        out = pinned_literal_eval_data_collate_function(batch)
+
+        expected = literal_eval_data_collate_function(batch)
+        assert out["x"].dtype == torch.float32
+        assert torch.equal(out["x"], expected["x"])
+        assert not out["x"].is_pinned()
+
+    def test_pin_failure_propagates(self, monkeypatch):
+        """A pinned-memory allocation failure is raised, not swallowed."""
+        monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+
+        def _fail(_self):
+            raise RuntimeError("out of pinned memory")
+
+        monkeypatch.setattr(torch.Tensor, "pin_memory", _fail)
+
+        with pytest.raises(RuntimeError, match="out of pinned memory"):
+            pinned_literal_eval_data_collate_function({"x": [1.0]})
+
+    def test_pin_memory_called_once_per_tensor(self, monkeypatch):
+        """With CUDA, pin_memory is called exactly once for each collated tensor."""
+        monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+        pinned_shapes = []
+
+        def _record_pin(self):
+            pinned_shapes.append(tuple(self.shape))
+            return self
+
+        monkeypatch.setattr(torch.Tensor, "pin_memory", _record_pin)
+
+        out = pinned_literal_eval_data_collate_function(
+            {"a": [1.0, 2.0], "b": [3.0, 4.0], "c": [5.0, 6.0]}
+        )
+
+        assert set(out) == {"a", "b", "c"}
+        assert pinned_shapes == [(2, 1)] * 3
+
+    def test_resolves_by_dotted_import_path(self):
+        """The function can be referenced from BatchIterConfig.collate_fn by dotted import path."""
+        path = "michelangelo.lib.trainer.torch.data_collate_functions.pinned_literal_eval_data_collate_function"
+        assert get_module_attr(path) is pinned_literal_eval_data_collate_function
+
+    @pytest.mark.skipif(not torch.cuda.is_available(), reason="requires CUDA")
+    def test_real_pinning_on_cuda(self):
+        """On a CUDA host the tensors are pinned and equal to the default collate output."""
+        batch = {"x": [1.0, 2.0], "y": "[[1.0, 2.0], [3.0, 4.0]]"}
+
+        out = pinned_literal_eval_data_collate_function(batch)
+
+        expected = literal_eval_data_collate_function(batch)
+        assert set(out) == set(expected)
+        for name, tensor in out.items():
+            assert tensor.is_pinned()
+            assert tensor.dtype == expected[name].dtype
+            assert tensor.shape == expected[name].shape
+            assert torch.equal(tensor, expected[name])
 
 
 # -----------------------------------------------------------------------------

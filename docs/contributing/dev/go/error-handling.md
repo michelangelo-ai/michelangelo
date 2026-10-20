@@ -1,5 +1,6 @@
 ---
 sidebar_position: 3
+last_verified: 2026-10-14
 ---
 
 # Golang Error Handling Code Review Checklist
@@ -56,6 +57,8 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 }
 
 // ✅ Transport Layer - always log with full context
+// (illustrative: the Michelangelo AI API server's transport is YARPC/gRPC, not net/http;
+// `middleware.GetRequestID` and the logrus-style `log.WithFields` are placeholders)
 func (h *HTTPHandler) UpdateResource(w http.ResponseWriter, r *http.Request) {
     requestID := middleware.GetRequestID(r.Context())
     logger := log.WithFields(log.Fields{"request_id": requestID})
@@ -100,6 +103,8 @@ Classify errors to determine if operations should be retried automatically:
 - [Go Blog: Error Handling and Go](https://blog.golang.org/error-handling-and-go)
 - [Kubernetes API Conventions - Errors](https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#success-codes)
 - [gRPC Error Handling Guide](https://grpc.io/docs/guides/error/)
+
+In the codebase, `ErrRetryable` in `go/components/jobs/client/client.go` is a sentinel for this purpose; callers check it with `errors.Is(err, ErrRetryable)`. The type below is an illustrative alternative for errors that carry a retry delay (it does not exist in the repo):
 
 ```go
 type RetryableError struct {
@@ -167,15 +172,30 @@ return fmt.Errorf("failed to process email %q", email)  // PII
 - **Critical paths**: Where error loss would impact system reliability
 
 **Consistent Log-and-Return Pattern** (REQUIRED for PR reviews):
+With a `*zap.Logger` (for example `go/components/pipeline/controller.go`), pass typed zap fields:
+
 ```go
 // ✅ REQUIRED Pattern - Use this exact structure
 if err := operation(ctx, resource); err != nil {
-    logger.Error("failed to [operation]", 
-        [zap.Error(err) OR err], // Use zap.Error(err) for zap, just err for logr
-        "[logger_type]", "[operation_name]",
+    logger.Error("failed to [operation]",
+        zap.Error(err),
+        zap.String("operation", "[operation_name]"),
+        zap.String("namespace", resource.Namespace),
+        zap.String("name", resource.Name))
+    return result, fmt.Errorf("[operation] [resource_type] %s/%s: %w",
+        resource.Namespace, resource.Name, err)
+}
+```
+
+With a `logr.Logger` (controller-runtime, for example `go/components/ray/job/controller.go`), the error is the first argument, followed by key/value pairs:
+
+```go
+if err := operation(ctx, resource); err != nil {
+    logger.Error(err, "failed to [operation]",
+        "operation", "[operation_name]",
         "namespace", resource.Namespace,
         "name", resource.Name)
-    return result, fmt.Errorf("[operation] [resource_type] %s/%s: %w", 
+    return result, fmt.Errorf("[operation] [resource_type] %s/%s: %w",
         resource.Namespace, resource.Name, err)
 }
 ```
@@ -187,7 +207,7 @@ if err := r.createResource(ctx, resource); err != nil {
         "operation", "create_resource",
         "namespace", req.Namespace,
         "name", req.Name)
-    return res, fmt.Errorf("create resource %q: %w", req.NamespacedName, err)
+    return res, fmt.Errorf("create resource %s/%s: %w", req.Namespace, req.Name, err)
 }
 ```
 
@@ -280,10 +300,11 @@ func (rsc *ReplicaSetController) processNextWorkItem(ctx context.Context) bool {
 **✅ Wrap Errors** (for operational context):
 ```go
 // Controllers - always wrap with resource context
-func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) error {
+func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
     if err := r.createResource(ctx, resource); err != nil {
-        return fmt.Errorf("reconcile %s %s: %w", resource.Kind, req.NamespacedName, err)
+        return ctrl.Result{}, fmt.Errorf("reconcile %s %s: %w", resource.Kind, req.NamespacedName, err)
     }
+    return ctrl.Result{}, nil
 }
 
 // Services - wrap with business context  
@@ -372,32 +393,33 @@ result, _ := someOperation()  // Error information lost
 return err  // No operation context, resource identifiers
 
 // ❌ Bad - inconsistent logging (some errors logged, some not)
-func (r *Controller) Reconcile(ctx context.Context, req ctrl.Request) error {
+func (r *Controller) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
     if err := r.Get(ctx, req.NamespacedName, &obj); err != nil {
-        return err  // Not logged - might be lost
+        return ctrl.Result{}, err  // Not logged - might be lost
     }
     
     if err := r.Update(ctx, obj); err != nil {
-        logger.Error("update failed", err)  // This one is logged
-        return err
+        logger.Error(err, "update failed")  // This one is logged
+        return ctrl.Result{}, err
     }
+    return ctrl.Result{}, nil
 }
 
 // ✅ Good - consistent operational logging
-func (r *Controller) Reconcile(ctx context.Context, req ctrl.Request) error {
+func (r *Controller) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
     logger := log.FromContext(ctx).WithValues("resource", req.NamespacedName)
     
     if err := r.Get(ctx, req.NamespacedName, &obj); err != nil {
         logger.Error(err, "failed to get resource", "operation", "get")
-        return fmt.Errorf("get resource %q: %w", req.NamespacedName, err)
+        return ctrl.Result{}, fmt.Errorf("get resource %q: %w", req.NamespacedName, err)
     }
     
     if err := r.Update(ctx, obj); err != nil {
         logger.Error(err, "failed to update resource", "operation", "update")
-        return fmt.Errorf("update resource %q: %w", req.NamespacedName, err)
+        return ctrl.Result{}, fmt.Errorf("update resource %q: %w", req.NamespacedName, err)
     }
     
-    return nil
+    return ctrl.Result{}, nil
 }
 ```
 

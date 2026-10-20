@@ -15,7 +15,7 @@ import ast
 import contextlib
 import logging
 import warnings
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 import numpy as np
 
@@ -23,8 +23,15 @@ from michelangelo.lib.model_manager.schema.data_type import DataType
 from michelangelo.lib.model_manager.schema.model_schema import ModelSchema
 from michelangelo.lib.model_manager.schema.model_schema_item import ModelSchemaItem
 from michelangelo.lib.trainer.torch.data_collate_functions import pad_ragged_lists
+from michelangelo.workflow.schema.exceptions import ConfigurationError
+from michelangelo.workflow.schema.tabular_trainer import (
+    column_names,
+    normalize_columns,
+)
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from michelangelo.workflow.schema.tabular_trainer import (
         ColumnConfig,
         LightningTrainerConfig,
@@ -49,6 +56,14 @@ _TORCH_DTYPE_TO_NUMPY: dict[str, type] = {
     "torch.int8": np.int8,
     "torch.uint8": np.uint8,
     "torch.bool": np.bool_,
+    # Reduced-precision floats have no NumPy equivalent that downstream
+    # tooling accepts (NumPy has no bfloat16), so they stay widened to float32.
+    "torch.float16": np.float32,
+    "torch.half": np.float32,
+    "torch.bfloat16": np.float32,
+    # Non-numeric column (for example parquet string or byte columns). Values
+    # are kept as Python objects instead of being cast to a number.
+    "string": np.object_,
 }
 
 _TORCH_DTYPE_TO_DATATYPE: dict[str, DataType] = {
@@ -64,7 +79,27 @@ _TORCH_DTYPE_TO_DATATYPE: dict[str, DataType] = {
     "torch.int8": DataType.BYTE,
     "torch.uint8": DataType.BYTE,
     "torch.bool": DataType.BOOLEAN,
+    "torch.float16": DataType.FLOAT,
+    "torch.half": DataType.FLOAT,
+    "torch.bfloat16": DataType.FLOAT,
+    "string": DataType.STRING,
 }
+
+
+def _unsupported_dtype_error(torch_dtype_str: str) -> ConfigurationError:
+    """Build the error raised for a ``ColumnConfig.data_type`` we cannot map.
+
+    Args:
+        torch_dtype_str: The unrecognised dtype string.
+
+    Returns:
+        A ``ConfigurationError`` listing every supported dtype string.
+    """
+    supported = ", ".join(repr(name) for name in sorted(_TORCH_DTYPE_TO_NUMPY))
+    return ConfigurationError(
+        f"Unsupported ColumnConfig.data_type {torch_dtype_str!r}. "
+        f"Supported values: {supported}."
+    )
 
 
 def _map_torch_dtype_to_numpy(torch_dtype_str: str) -> type:
@@ -74,13 +109,20 @@ def _map_torch_dtype_to_numpy(torch_dtype_str: str) -> type:
         torch_dtype_str: PyTorch dtype string, e.g. ``"torch.float32"``.
 
     Returns:
-        NumPy dtype class. Falls back to ``np.float32`` for unknown strings.
+        NumPy dtype class. ``"string"`` maps to ``np.object_``.
+
+    Raises:
+        ConfigurationError: If *torch_dtype_str* is not a supported dtype
+            string. The message lists the supported values.
 
     Example:
         >>> _map_torch_dtype_to_numpy("torch.long")
         <class 'numpy.int64'>
     """
-    return _TORCH_DTYPE_TO_NUMPY.get(torch_dtype_str, np.float32)
+    try:
+        return _TORCH_DTYPE_TO_NUMPY[torch_dtype_str]
+    except KeyError:
+        raise _unsupported_dtype_error(torch_dtype_str) from None
 
 
 def _map_torch_dtype_to_datatype(torch_dtype_str: str) -> DataType:
@@ -90,13 +132,20 @@ def _map_torch_dtype_to_datatype(torch_dtype_str: str) -> DataType:
         torch_dtype_str: PyTorch dtype string, e.g. ``"torch.float32"``.
 
     Returns:
-        ``DataType`` enum member. Falls back to ``DataType.FLOAT`` for unknowns.
+        ``DataType`` enum member. ``"string"`` maps to ``DataType.STRING``.
+
+    Raises:
+        ConfigurationError: If *torch_dtype_str* is not a supported dtype
+            string. The message lists the supported values.
 
     Example:
         >>> _map_torch_dtype_to_datatype("torch.int64")
         <DataType.LONG: 19>
     """
-    return _TORCH_DTYPE_TO_DATATYPE.get(torch_dtype_str, DataType.FLOAT)
+    try:
+        return _TORCH_DTYPE_TO_DATATYPE[torch_dtype_str]
+    except KeyError:
+        raise _unsupported_dtype_error(torch_dtype_str) from None
 
 
 # ---------------------------------------------------------------------------
@@ -105,16 +154,22 @@ def _map_torch_dtype_to_datatype(torch_dtype_str: str) -> DataType:
 
 
 def get_model_schema(
-    input_columns: dict[str, ColumnConfig],
-    output_columns: dict[str, ColumnConfig],
+    input_columns: dict[str, ColumnConfig] | list[ColumnConfig],
+    output_columns: dict[str, ColumnConfig] | list[ColumnConfig],
 ) -> ModelSchema:
-    """Build a ``ModelSchema`` from column config dicts.
+    """Build a ``ModelSchema`` from column configs.
+
+    Schema item order follows column order (list order, or dict insertion
+    order for the dict form).
 
     Args:
-        input_columns: Mapping of feature name → ``ColumnConfig`` for model
-            inputs.
-        output_columns: Mapping of output name → ``ColumnConfig`` for model
-            outputs.
+        input_columns: Feature columns for model inputs, as a list of named
+            ``ColumnConfig`` or a ``name -> ColumnConfig`` mapping.
+        output_columns: Output columns for model outputs, in the same forms.
+
+    Raises:
+        ConfigurationError: If a column spec has an empty or duplicate name, or
+            a ``data_type`` that is not a supported dtype string.
 
     Returns:
         ``ModelSchema`` with ``input_schema`` and ``output_schema`` populated.
@@ -131,19 +186,19 @@ def get_model_schema(
     _logger.info("Generating model schema")
     input_schema: list[ModelSchemaItem] = [
         ModelSchemaItem(
-            name=name,
+            name=cfg.name,
             data_type=_map_torch_dtype_to_datatype(cfg.data_type),
             shape=cfg.shape,
         )
-        for name, cfg in input_columns.items()
+        for cfg in normalize_columns(input_columns, "input_columns")
     ]
     output_schema: list[ModelSchemaItem] = [
         ModelSchemaItem(
-            name=name,
+            name=cfg.name,
             data_type=_map_torch_dtype_to_datatype(cfg.data_type),
             shape=cfg.shape,
         )
-        for name, cfg in output_columns.items()
+        for cfg in normalize_columns(output_columns, "output_columns")
     ]
     return ModelSchema(input_schema=input_schema, output_schema=output_schema)
 
@@ -164,6 +219,7 @@ def _pad_row(row: dict) -> dict[str, np.ndarray]:
       ``ast.literal_eval`` then padded via :func:`pad_ragged_lists`.
     - Plain ``np.ndarray``: returned unchanged.
     - Scalar ``str``: parsed with ``ast.literal_eval`` if possible.
+    - Scalar ``bytes``: wrapped in a 1-element object array (exact bytes kept).
     - All other scalars: wrapped in a 0-D ``np.ndarray`` (use ``np.atleast_1d``
       downstream if a 1-D array is required).
 
@@ -193,6 +249,9 @@ def _pad_row(row: dict) -> dict[str, np.ndarray]:
                 result[key] = np.asarray(parsed_val, dtype=np.float32)
             except (ValueError, SyntaxError):
                 result[key] = np.array([value], dtype=object)
+        elif isinstance(value, bytes):
+            # A fixed-width ``S`` array would silently drop trailing NUL bytes.
+            result[key] = np.array([value], dtype=object)
         else:
             result[key] = np.array(value)
     return result
@@ -245,7 +304,7 @@ def collate_sample_row(
         for k, v in sample_row.items():
             if isinstance(v, np.ndarray):
                 batch[k] = np.expand_dims(v, axis=0)
-            elif isinstance(v, str):
+            elif isinstance(v, (str, bytes)):
                 batch[k] = np.array([v], dtype=object)
             else:
                 batch[k] = np.array([v])
@@ -272,7 +331,7 @@ def collate_sample_row(
 
 def get_sample_data(
     sample_data_dict: dict[str, np.ndarray],
-    input_columns: dict[str, ColumnConfig],
+    input_columns: dict[str, ColumnConfig] | list[ColumnConfig],
 ) -> list[dict[str, np.ndarray]]:
     """Extract and type-cast sample data for model inference testing.
 
@@ -282,7 +341,8 @@ def get_sample_data(
 
     Args:
         sample_data_dict: Normalised sample dict from :func:`collate_sample_row`.
-        input_columns: Mapping of feature name → ``ColumnConfig``.
+        input_columns: Feature columns, as a list of named ``ColumnConfig``
+            or a ``name -> ColumnConfig`` mapping.
 
     Returns:
         A single-element list containing a dict of feature name → numpy array,
@@ -291,6 +351,12 @@ def get_sample_data(
         If a feature is absent from *sample_data_dict* it is skipped (warning
         logged). If the data shape does not match ``ColumnConfig.shape`` and
         cannot be reshaped, the data is passed through as-is (warning logged).
+        Columns configured as ``"string"`` are kept as object arrays and are not
+        parsed or cast to a number.
+
+    Raises:
+        ConfigurationError: If a feature's ``data_type`` is not a supported
+            dtype string.
 
     Example:
         >>> import numpy as np
@@ -304,7 +370,8 @@ def get_sample_data(
     _logger.info("Generating sample data")
     filtered: dict[str, np.ndarray] = {}
 
-    for feature_name, cfg in input_columns.items():
+    for cfg in normalize_columns(input_columns, "input_columns"):
+        feature_name = cfg.name
         if feature_name not in sample_data_dict:
             _logger.warning(
                 "Feature '%s' not found in sample data, skipping.", feature_name
@@ -313,8 +380,11 @@ def get_sample_data(
 
         raw = sample_data_dict[feature_name]
 
-        # Parse stringified arrays produced by object-dtype Ray columns.
-        if isinstance(raw, str) and raw.startswith("[") and raw.endswith("]"):
+        # Parse stringified arrays produced by object-dtype Ray columns. String
+        # columns are literal text, so they are never parsed.
+        if cfg.data_type == "string":
+            pass
+        elif isinstance(raw, str) and raw.startswith("[") and raw.endswith("]"):
             with contextlib.suppress(ValueError, SyntaxError):
                 raw = ast.literal_eval(raw)
         elif (
@@ -351,6 +421,70 @@ def get_sample_data(
         filtered[feature_name] = data
 
     return [filtered]
+
+
+def get_sample_data_from_dataloader(
+    train_dataloader: Iterable[Any],
+    input_columns: dict[str, ColumnConfig] | list[ColumnConfig],
+) -> list[dict[str, np.ndarray]]:
+    """Build model sample data from the first batch of a custom train dataloader.
+
+    Takes the first row of the first batch for every configured input column
+    and passes it through :func:`get_sample_data` for dtype and shape casting.
+    Columns in the batch that are not input columns are ignored.
+
+    Args:
+        train_dataloader: The custom training dataloader. Each batch must be a
+            ``dict`` mapping column names to batched ``torch.Tensor`` values.
+        input_columns: Feature columns, as a list of named ``ColumnConfig``
+            or a ``name -> ColumnConfig`` mapping.
+
+    Returns:
+        A single-element list containing a dict of feature name -> numpy array,
+        as returned by :func:`get_sample_data`.
+
+    Raises:
+        ConfigurationError: If the dataloader yields no batches, a batch is not
+            a dict, an input column is not a batched tensor, or the batch has
+            none of the configured input columns.
+    """
+    import torch
+
+    names = column_names(input_columns)
+    try:
+        batch = next(iter(train_dataloader))
+    except StopIteration as e:
+        raise ConfigurationError(
+            "The custom training dataloader has no batches; at least one batch "
+            "is required to build model sample_data metadata."
+        ) from e
+    if not isinstance(batch, dict):
+        raise ConfigurationError(
+            "The custom training dataloader must yield a dict mapping column "
+            f"names to batched tensors, got {type(batch).__name__}."
+        )
+
+    sample: dict[str, np.ndarray] = {}
+    for name, value in batch.items():
+        if name not in names:
+            continue
+        if not isinstance(value, torch.Tensor):
+            raise ConfigurationError(
+                f"Input column {name!r} must be a batched tensor, got "
+                f"{type(value).__name__}."
+            )
+        if value.ndim == 0:
+            raise ConfigurationError(
+                f"Input column {name!r} must have a leading batch dimension, "
+                "got a 0-dim tensor."
+            )
+        sample[name] = value[0].detach().cpu().numpy()
+    if not sample:
+        raise ConfigurationError(
+            "The custom training dataloader batch has no tensor values for the "
+            f"configured input columns {sorted(names)}."
+        )
+    return get_sample_data(sample, input_columns)
 
 
 # ---------------------------------------------------------------------------
@@ -425,19 +559,46 @@ def _raise_trainer_config_deprecation_warnings(
             )
 
 
+def _raise_dict_columns_warnings(
+    lightning_trainer_config: LightningTrainerConfig,
+) -> None:
+    """Warn when a multi-column field uses the order-unsafe dict form.
+
+    A dict loses its key order when it passes through a protobuf ``Struct``,
+    and column order defines the model input/output schema order. Single-column
+    dicts have nothing to reorder and do not warn.
+
+    Args:
+        lightning_trainer_config: The ``LightningTrainerConfig`` to inspect.
+    """
+    for field_name in ("input_columns", "output_columns", "labels"):
+        columns = getattr(lightning_trainer_config, field_name)
+        if isinstance(columns, dict) and len(columns) > 1:
+            warnings.warn(
+                f"'{field_name}' is a dict with {len(columns)} columns; dict "
+                "order is not guaranteed to survive serialization, which can "
+                "silently reorder the model schema. Use a list of "
+                "ColumnConfig(name=...) instead.",
+                UserWarning,
+                stacklevel=3,
+            )
+
+
 def raise_lightning_trainer_config_deprecation_warnings(
     lightning_trainer_config: LightningTrainerConfig,
 ) -> None:
     """Run all deprecation-warning checks for a ``LightningTrainerConfig``.
 
-    Combines :func:`_raise_hyperparameter_deprecation_warnings` and
-    :func:`_raise_trainer_config_deprecation_warnings`.
+    Combines :func:`_raise_hyperparameter_deprecation_warnings`,
+    :func:`_raise_trainer_config_deprecation_warnings` and
+    :func:`_raise_dict_columns_warnings`.
 
     Args:
         lightning_trainer_config: The ``LightningTrainerConfig`` to inspect.
     """
     _raise_hyperparameter_deprecation_warnings(lightning_trainer_config)
     _raise_trainer_config_deprecation_warnings(lightning_trainer_config)
+    _raise_dict_columns_warnings(lightning_trainer_config)
 
 
 # ---------------------------------------------------------------------------
@@ -496,11 +657,19 @@ def construct_read_kwargs(config: LightningTrainerConfig) -> dict:
             val = getattr(prc, attr, None)
             if val is not None:
                 read_kwargs[attr] = val
+        if getattr(prc, "override_num_blocks_per_dataset", None) is not None:
+            _logger.warning(
+                "ParquetReadConfig.override_num_blocks_per_dataset is not applied "
+                "by the tabular trainer; use override_num_blocks to set the "
+                "read block count for training datasets."
+            )
 
     # Column projection: inputs | labels | metadata (output_columns excluded).
     metadata = list(config.metadata_columns) if config.metadata_columns else []
     columns = sorted(
-        set(config.input_columns.keys()) | set(config.labels.keys()) | set(metadata)
+        set(column_names(config.input_columns, "input_columns"))
+        | set(column_names(config.labels, "labels"))
+        | set(metadata)
     )
     if columns:
         read_kwargs["columns"] = columns

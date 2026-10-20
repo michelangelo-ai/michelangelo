@@ -2,7 +2,7 @@
 
 ![Go Report Card](https://goreportcard.com/report/github.com/GoogleCloudPlatform/spark-on-k8s-operator)
 
-The Spark Operator Custom Resource Definitions (CRDs) have been copied directly into Michelangelo AI's codebase under `go/components/spark/job/client`. This approach avoids potential conflicts arising from managing different versions of the Go modules for the Spark Operator.
+The Spark Operator Custom Resource Definitions (CRDs) have been copied directly into Michelangelo AI's codebase under `go/thirdparty/k8s-crds/apis/sparkoperator.k8s.io` (consumed by the Spark job client in `go/components/spark/job/client`). This approach avoids potential conflicts arising from managing different versions of the Go modules for the Spark Operator.
 
 In typical production deployments, the control plane managing Spark jobs often resides in a separate cluster, distinct from the Michelangelo AI control plane environment. This separation of concerns typically results in differing versions of libraries and dependencies across environments.
 

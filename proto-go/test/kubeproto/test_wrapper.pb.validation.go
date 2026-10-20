@@ -36,6 +36,25 @@ var testWrapperSpecValidateExt func(*TestWrapperSpec, string) error
 
 func (this *TestWrapperSpec) Validate(prefix string) error {
 
+	{
+		v := this.GetContent()
+		n := `content`
+		var i interface{}
+		if reflect.ValueOf(v).Kind() == reflect.Ptr {
+			i = reflect.ValueOf(v).Interface()
+			if reflect.ValueOf(v).IsNil() {
+				i = nil
+			}
+		} else {
+			i = reflect.ValueOf(&v).Interface()
+		}
+		validate, hasValidate := i.(interface{ Validate(string) error })
+		if hasValidate {
+			if err := validate.Validate(prefix + n + "."); err != nil {
+				return err
+			}
+		}
+	}
 	// Call extension validation if registered
 	if testWrapperSpecValidateExt != nil {
 		if err := testWrapperSpecValidateExt(this, prefix); err != nil {

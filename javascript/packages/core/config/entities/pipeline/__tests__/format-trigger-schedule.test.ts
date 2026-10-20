@@ -2,38 +2,21 @@ import { formatTriggerSchedule } from '#core/config/entities/pipeline/format-tri
 
 describe('formatTriggerSchedule', () => {
   it('renders a cron expression', () => {
-    expect(
-      formatTriggerSchedule({ triggerType: { case: 'cronSchedule', value: { cron: '0 2 * * *' } } })
-    ).toBe('cron 0 2 * * *');
+    expect(formatTriggerSchedule({ cronSchedule: { cron: '0 2 * * *' } })).toBe('cron 0 2 * * *');
   });
 
   it.each([
-    [86400, 'every day'],
-    [3600, 'every hour'],
-    [7200, 'every 2 hours'],
-    [900, 'every 15 minutes'],
-    [90, 'every 90 seconds'],
-  ])('renders an interval of %i seconds as "%s"', (seconds, expected) => {
-    expect(
-      formatTriggerSchedule({
-        triggerType: { case: 'intervalSchedule', value: { interval: { seconds } } },
-      })
-    ).toBe(expected);
-  });
-
-  // Durations decode to protobuf-es Duration messages, whose `seconds` is a bigint.
-  it('renders an interval given as a bigint', () => {
-    expect(
-      formatTriggerSchedule({
-        triggerType: { case: 'intervalSchedule', value: { interval: { seconds: 3600n } } },
-      })
-    ).toBe('every hour');
+    ['86400s', 'every day'],
+    ['3600s', 'every hour'],
+    ['7200s', 'every 2 hours'],
+    ['900s', 'every 15 minutes'],
+    ['90s', 'every 90 seconds'],
+  ])('renders an interval of %s as "%s"', (interval, expected) => {
+    expect(formatTriggerSchedule({ intervalSchedule: { interval } })).toBe(expected);
   });
 
   it('names a batch rerun rather than describing a schedule', () => {
-    expect(formatTriggerSchedule({ triggerType: { case: 'batchRerun', value: {} } })).toBe(
-      'batch rerun'
-    );
+    expect(formatTriggerSchedule({ batchRerun: {} })).toBe('batch rerun');
   });
 
   it('returns an empty string for an undefined trigger', () => {
@@ -45,6 +28,6 @@ describe('formatTriggerSchedule', () => {
   });
 
   it('returns an empty string for a cron trigger with an empty expression', () => {
-    expect(formatTriggerSchedule({ triggerType: { case: 'cronSchedule', value: {} } })).toBe('');
+    expect(formatTriggerSchedule({ cronSchedule: {} })).toBe('');
   });
 });

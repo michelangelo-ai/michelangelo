@@ -36,6 +36,25 @@ var testDraftSpecValidateExt func(*TestDraftSpec, string) error
 
 func (this *TestDraftSpec) Validate(prefix string) error {
 
+	{
+		v := this.GetContent()
+		n := `content`
+		var i interface{}
+		if reflect.ValueOf(v).Kind() == reflect.Ptr {
+			i = reflect.ValueOf(v).Interface()
+			if reflect.ValueOf(v).IsNil() {
+				i = nil
+			}
+		} else {
+			i = reflect.ValueOf(&v).Interface()
+		}
+		validate, hasValidate := i.(interface{ Validate(string) error })
+		if hasValidate {
+			if err := validate.Validate(prefix + n + "."); err != nil {
+				return err
+			}
+		}
+	}
 	// Call extension validation if registered
 	if testDraftSpecValidateExt != nil {
 		if err := testDraftSpecValidateExt(this, prefix); err != nil {

@@ -1,4 +1,5 @@
 ---
+last_verified: 2026-10-14
 sidebar_position: 4
 ---
 
@@ -12,7 +13,7 @@ The table system is built on [TanStack React Table](https://tanstack.com/table) 
 
 ### TableConfig
 
-Tables are configured through [`TableConfig`](https://github.com/michelangelo-ai/michelangelo/blob/main/javascript/packages/core/components/views/types.ts#L38):
+Tables are configured through [`TableConfig`](https://github.com/michelangelo-ai/michelangelo/blob/main/javascript/packages/core/components/views/types.ts):
 
 ```typescript
 export interface TableConfig<T extends TableData = TableData> {
@@ -24,20 +25,22 @@ export interface TableConfig<T extends TableData = TableData> {
   disableFilters?: boolean;
   pageSizes?: PageSizeOption[];
   enableStickySides?: boolean;
-  actions?: React.ComponentType<{ record: T }>;
+  maxHeight?: string;          // Caps the scrollable area; rows scroll under a pinned header
+  actions?: ActionConfigSchema<T>[];
 }
 ```
 
 ### ColumnConfig
 
-[`ColumnConfig`](https://github.com/michelangelo-ai/michelangelo/blob/main/javascript/packages/core/components/table/types/column-types.ts#L16) defines how data is displayed and interacted with:
+[`ColumnConfig`](https://github.com/michelangelo-ai/michelangelo/blob/main/javascript/packages/core/components/table/types/column-types.ts) defines how data is displayed and interacted with:
 
 ```typescript
-export type ColumnConfig<TData = TableData> = Cell<TData> & {
+export type ColumnConfig<TData = TableData> = DistributiveOmit<Cell<TData>, 'tooltip'> & {
   filterMode?: FilterMode;     // 'NONE' | 'CLIENT' | 'SERVER'
   enableSorting?: boolean;     // default: true
   enableGrouping?: boolean;    // default: false
   aggregationFn?: AggregationFnOption<TData>;
+  aggregatedCell?: ComponentType<CellRendererProps<TData, ColumnConfig<TData>>>;
   sortingFn?: SortingFnOption<TData>;
   tooltip?: ColumnTooltip<TData>;
 };
@@ -45,7 +48,7 @@ export type ColumnConfig<TData = TableData> = Cell<TData> & {
 
 ### Table State
 
-[`TableState`](https://github.com/michelangelo-ai/michelangelo/blob/main/javascript/packages/core/components/table/types/table-types.ts#L275) supports both controlled and uncontrolled state:
+[`TableState`](https://github.com/michelangelo-ai/michelangelo/blob/main/javascript/packages/core/components/table/types/table-types.ts) supports both controlled and uncontrolled state:
 
 ```typescript
 export type TableState = {
@@ -80,18 +83,18 @@ Cells define how individual data values are rendered in tables and detail views.
 
 ### SharedCell Interface
 
-[`SharedCell`](https://github.com/michelangelo-ai/michelangelo/blob/main/javascript/packages/core/components/cell/types.ts#L24) is the base interface for all cell types:
+[`SharedCell`](https://github.com/michelangelo-ai/michelangelo/blob/main/javascript/packages/core/components/cell/types.ts) is the base interface for all cell types:
 
 ```typescript
-export interface SharedCell<T = unknown> {
+export interface SharedCell<TRecord = unknown, TValue = unknown> {
   id: string;              // Unique identifier, also used as accessor
-  accessor?: Accessor;     // Custom data access path or function
+  accessor?: Accessor<TRecord, TValue>;  // Custom data access path or function
   label?: string;          // Header label
-  type?: string;           // Filter type hint (e.g., 'date')
+  type?: string;           // Cell renderer type (a CellType value, e.g., 'DATE')
   icon?: string;           // Icon before value
   tooltip?: CellTooltip;   // Hover tooltip
   endEnhancer?: { content: ReactNode; type: 'tooltip' };
-  Cell?: CellRenderer<T>;  // Custom renderer
+  Cell?: CellRenderer<TValue>;  // Custom renderer
   style?: StyleObject | CellStyleFunction;
 }
 ```
@@ -101,12 +104,12 @@ export interface SharedCell<T = unknown> {
 The `Cell` type is a union of all cell configurations:
 
 ```typescript
-export type Cell<T = unknown> = SharedCell<T> & (
-  | DescriptionCellConfig  // Name with description
-  | LinkCellConfig         // Clickable link
-  | MultiCellConfig        // Multiple values
-  | StateCellConfig        // Status indicator
-  | TypeCellConfig         // Type badge
+export type Cell<TRecord = unknown, TValue = unknown> = SharedCell<TRecord, TValue> & (
+  | DescriptionCellConfig<TRecord>  // Name with description
+  | LinkCellConfig<TRecord>         // Clickable link
+  | MultiCellConfig                 // Multiple values
+  | StateCellConfig<TRecord>        // Status indicator
+  | TypeCellConfig<TRecord>         // Type badge
 );
 ```
 
@@ -115,7 +118,7 @@ export type Cell<T = unknown> = SharedCell<T> & (
 Custom cell renderers receive standardized props:
 
 ```typescript
-export interface CellRendererProps<T = unknown> {
+export interface CellRendererProps<T = unknown, CellConfig = SharedCell<unknown, T>> {
   column: CellConfig;      // Column configuration
   record: object;          // Full row data
   value: T | undefined;    // Resolved cell value
@@ -138,13 +141,18 @@ export interface CellRendererProps<T = unknown> {
 
 // State cell with color mapping
 {
-  id: 'status.phase',
+  id: 'status.state',
   label: 'Status',
-  type: 'state',
-  states: {
-    Running: 'positive',
-    Failed: 'negative',
-    Pending: 'warning',
+  type: CellType.STATE,
+  stateTextMap: {
+    PIPELINE_RUN_STATE_RUNNING: 'Running',
+    PIPELINE_RUN_STATE_FAILED: 'Failed',
+    PIPELINE_RUN_STATE_PENDING: 'Pending',
+  },
+  stateColorMap: {
+    PIPELINE_RUN_STATE_RUNNING: 'blue',
+    PIPELINE_RUN_STATE_FAILED: 'red',
+    PIPELINE_RUN_STATE_PENDING: 'blue',
   },
 }
 
@@ -152,8 +160,7 @@ export interface CellRendererProps<T = unknown> {
 {
   id: 'metadata.name',
   label: 'Pipeline',
-  type: 'link',
-  href: '/projects/${projectId}/pipelines/${row.metadata.name}',
+  url: '/${studio.projectId}/${studio.phase}/pipelines/${data.metadata.name}',
 }
 ```
 
@@ -163,7 +170,7 @@ Forms are built on [React Final Form](https://final-form.org/react).
 
 ### Form Component
 
-[`FormProps`](https://github.com/michelangelo-ai/michelangelo/blob/main/javascript/packages/core/components/form/types.ts#L5) is the base form component interface:
+[`FormProps`](https://github.com/michelangelo-ai/michelangelo/blob/main/javascript/packages/core/components/form/types/form-types.ts) is the base form component interface:
 
 ```typescript
 export interface FormProps<FieldValues extends FormData = FormData> {
@@ -171,6 +178,7 @@ export interface FormProps<FieldValues extends FormData = FormData> {
   initialValues?: DeepPartial<FieldValues>;
   id?: string;           // For external submit buttons
   children: React.ReactNode;
+  focusOnError?: boolean; // Focus first invalid field on failed submit (default: true)
   render?: (formElement: React.ReactNode) => React.ReactNode;
 }
 ```
@@ -180,8 +188,9 @@ export interface FormProps<FieldValues extends FormData = FormData> {
 ```typescript
 export interface FormState<FieldValues extends FormData = FormData> {
   submitting: boolean;
-  submitError?: string;
+  submitError?: string | Error;
   values?: FieldValues;
+  // plus submitFailed, hasValidationErrors, errors, submitErrors, touched
 }
 
 export interface FieldState {
@@ -189,11 +198,12 @@ export interface FieldState {
   touched: boolean;
 }
 
-export interface FieldInput<T = unknown> {
-  value: T;
+export interface FieldInput<T = unknown, InputValue = T> {
+  value: InputValue;
   name: string;
-  onChange: (value: T) => void;
+  onChange: (value: InputValue) => void;
   onBlur: () => void;
+  onFocus: () => void;
 }
 ```
 
@@ -207,6 +217,12 @@ Available field components:
 | BooleanField | Checkbox/toggle |
 | SelectField | Dropdown selection |
 | RadioField | Radio button group |
+| TextareaField | Multi-line text input |
+| UrlField | URL input |
+| NumberField | Numeric input |
+| CheckboxField | Checkbox |
+| DateField | Date input |
+| MarkdownField | Markdown editor |
 
 ### Form Hooks
 
@@ -291,16 +307,16 @@ describe('MyComponent', () => {
 
 ### Test Wrappers
 
-Use [`buildWrapper`](https://github.com/michelangelo-ai/michelangelo/blob/main/javascript/packages/core/test/wrappers/build-wrapper.tsx#L20) to compose provider wrappers:
+Use [`buildWrapper`](https://github.com/michelangelo-ai/michelangelo/blob/main/javascript/packages/core/test/wrappers/build-wrapper.tsx) to compose provider wrappers:
 
 ```typescript
-import { buildWrapper } from '@test/utils/wrappers/build-wrapper';
-import { getRouterWrapper } from '@test/utils/wrappers/get-router-wrapper';
-import { getServiceProviderWrapper } from '@test/utils/wrappers/get-service-provider-wrapper';
+import { buildWrapper } from '#core/test/wrappers/build-wrapper';
+import { getRouterWrapper } from '#core/test/wrappers/get-router-wrapper';
+import { getServiceProviderWrapper } from '#core/test/wrappers/get-service-provider-wrapper';
 
 const wrapper = buildWrapper([
   getRouterWrapper(),
-  getServiceProviderWrapper({ mockResponses }),
+  getServiceProviderWrapper({ request: mockRequest }),
 ]);
 
 render(<MyComponent />, wrapper);
@@ -319,6 +335,8 @@ Available wrapper functions:
 | `getFormProviderWrapper` | Form context |
 | `getCellProviderWrapper` | Cell rendering context |
 | `getUserProviderWrapper` | User context |
+| `getRepeatedLayoutProviderWrapper` | Repeated layout state |
+| `getSnackbarProviderWrapper` | Snackbar notifications |
 
 ### Testing Guidelines
 

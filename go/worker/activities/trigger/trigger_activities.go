@@ -8,6 +8,7 @@ import (
 	"github.com/cadence-workflow/starlark-worker/workflow"
 	"github.com/michelangelo-ai/michelangelo/go/components/triggerrun"
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/trigger/parameter"
+	"github.com/michelangelo-ai/michelangelo/go/worker/runnertoken"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"go.uber.org/zap"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -38,6 +39,7 @@ func (r *activities) CreatePipelineRun(ctx context.Context, request *v2pb.Create
 		zap.String("pipeline", request.PipelineRun.Spec.Pipeline.Name),
 		zap.String("namespace", request.PipelineRun.Namespace))
 
+	ctx = runnertoken.WithNamespace(ctx, request.PipelineRun.Namespace)
 	response, err := r.pipelineRunService.CreatePipelineRun(ctx, request)
 	if err != nil || response == nil || response.PipelineRun == nil {
 		logger.Error("failed to create pipeline run",
@@ -148,6 +150,7 @@ func (r *activities) PipelineRunSensor(ctx context.Context, request *v2pb.GetPip
 		zap.String("pipeline_run", request.Name),
 		zap.String("namespace", request.Namespace))
 
+	ctx = runnertoken.WithNamespace(ctx, request.Namespace)
 	response, err := r.pipelineRunService.GetPipelineRun(ctx, request)
 	if err != nil {
 		logger.Error("failed to get pipeline run status",

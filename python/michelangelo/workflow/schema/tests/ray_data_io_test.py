@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import dataclasses
 from unittest import TestCase
 
+from michelangelo.workflow.schema.exceptions import ConfigurationError
 from michelangelo.workflow.schema.ray_data_io import (
     BatchIterConfig,
     DataloadingConfig,
     ParquetReadConfig,
+    RayDataContextConfig,
+    WriteConfig,
 )
 
 # ---------------------------------------------------------------------------
@@ -27,6 +31,7 @@ class TestParquetReadConfig(TestCase):
             "memory",
             "concurrency",
             "override_num_blocks",
+            "override_num_blocks_per_dataset",
             "shuffle",
             "tensor_column_schema",
             "arrow_parquet_args",
@@ -39,6 +44,101 @@ class TestParquetReadConfig(TestCase):
         self.assertEqual(cfg.num_cpus, 2.0)
         self.assertEqual(cfg.shuffle, "files")
         self.assertEqual(cfg.concurrency, 4)
+
+    def test_override_num_blocks_per_dataset_stored(self):
+        """It stores a per-dataset block-count mapping."""
+        cfg = ParquetReadConfig(
+            override_num_blocks_per_dataset={"train": 64, "validation": 8}
+        )
+        self.assertEqual(
+            cfg.override_num_blocks_per_dataset, {"train": 64, "validation": 8}
+        )
+        self.assertIsNone(cfg.override_num_blocks)
+
+    def test_override_num_blocks_and_per_dataset_are_exclusive(self):
+        """Setting both the global and per-dataset override is rejected."""
+        with self.assertRaises(ConfigurationError):
+            ParquetReadConfig(
+                override_num_blocks=4, override_num_blocks_per_dataset={"train": 8}
+            )
+
+    def test_invalid_block_counts_rejected(self):
+        """Non-positive or non-integer block counts are rejected."""
+        for bad in (0, -1, True, 1.5, "8"):
+            with self.subTest(bad=bad):
+                with self.assertRaises(ConfigurationError):
+                    ParquetReadConfig(override_num_blocks=bad)
+                with self.assertRaises(ConfigurationError):
+                    ParquetReadConfig(override_num_blocks_per_dataset={"train": bad})
+
+    def test_invalid_per_dataset_shapes_rejected(self):
+        """Non-dict, empty and non-str-keyed per-dataset values are rejected."""
+        for bad in ([("train", 4)], {}, {1: 4}, "train"):
+            with self.subTest(bad=bad), self.assertRaises(ConfigurationError):
+                ParquetReadConfig(override_num_blocks_per_dataset=bad)
+
+    def test_codec_roundtrip_new_fields(self):
+        """The new fields round-trip through the UniFlow DataclassCodec."""
+        from michelangelo.uniflow.core.codec import DataclassCodec
+
+        codec = DataclassCodec()
+        for cfg in (
+            ParquetReadConfig(override_num_blocks_per_dataset={"train": 3, "val": 1}),
+            WriteConfig(max_rows_per_file=10, concurrency=4),
+            RayDataContextConfig(max_blocks_in_streaming_gen_buffer=1),
+        ):
+            with self.subTest(cfg=type(cfg).__name__):
+                self.assertEqual(codec.decode(codec.encode(cfg)), cfg)
+
+    def test_per_dataset_asdict_roundtrip(self):
+        """dataclasses.asdict()/cls(**dct) round-trips the per-dataset field."""
+        cfg = ParquetReadConfig(override_num_blocks_per_dataset={"train": 3})
+        self.assertEqual(ParquetReadConfig(**dataclasses.asdict(cfg)), cfg)
+
+
+# ---------------------------------------------------------------------------
+# WriteConfig / RayDataContextConfig
+# ---------------------------------------------------------------------------
+
+
+class TestWriteConfig(TestCase):
+    """Tests for the WriteConfig dataclass."""
+
+    def test_concurrency_defaults_to_none(self):
+        """Concurrency is unset by default, leaving writes uncapped."""
+        self.assertIsNone(WriteConfig().concurrency)
+
+    def test_concurrency_stored_and_roundtrips(self):
+        """It stores concurrency and round-trips through asdict."""
+        cfg = WriteConfig(max_rows_per_file=10, concurrency=4)
+        self.assertEqual(cfg.concurrency, 4)
+        self.assertEqual(WriteConfig(**dataclasses.asdict(cfg)), cfg)
+
+    def test_invalid_concurrency_rejected(self):
+        """Non-positive or non-integer concurrency is rejected."""
+        for bad in (0, -2, True, 2.5):
+            with self.subTest(bad=bad), self.assertRaises(ConfigurationError):
+                WriteConfig(concurrency=bad)
+
+
+class TestRayDataContextConfig(TestCase):
+    """Tests for the RayDataContextConfig dataclass."""
+
+    def test_buffer_setting_defaults_to_none(self):
+        """The streaming buffer setting is unset by default."""
+        self.assertIsNone(RayDataContextConfig().max_blocks_in_streaming_gen_buffer)
+
+    def test_buffer_setting_stored_and_roundtrips(self):
+        """It stores the buffer setting and round-trips through asdict."""
+        cfg = RayDataContextConfig(max_blocks_in_streaming_gen_buffer=1)
+        self.assertEqual(cfg.max_blocks_in_streaming_gen_buffer, 1)
+        self.assertEqual(RayDataContextConfig(**dataclasses.asdict(cfg)), cfg)
+
+    def test_invalid_buffer_setting_rejected(self):
+        """Non-positive or non-integer values are rejected."""
+        for bad in (0, -1, False, 1.0):
+            with self.subTest(bad=bad), self.assertRaises(ConfigurationError):
+                RayDataContextConfig(max_blocks_in_streaming_gen_buffer=bad)
 
 
 # ---------------------------------------------------------------------------

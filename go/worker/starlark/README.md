@@ -22,18 +22,18 @@ If running on Temporal:
 ma sandbox create --workflow=temporal
 ```
 
-More information to run sandbox can be found [here](https://github.com/michelangelo-ai/michelangelo/wiki/Getting-Started#running-michelangelos-api-sandbox-environment).
+More information to run sandbox can be found [here](https://michelangelo-ai.org/docs/getting-started/sandbox-setup/).
 
 If running on Cadence, use the following command:
 ```bash
 cd $WORKSPACE_ROOT
-./tools/starlark.py run ./testdata/ping.star
+./tools/starlark.py run ./go/worker/starlark/testdata/ping.star
 ```
 
 If running on Temporal, use the following instead:
 ```bash
 cd $WORKSPACE_ROOT
-./tools/starlark.py run ./testdata/ping.star --workflow=temporal
+./tools/starlark.py run ./go/worker/starlark/testdata/ping.star --workflow=temporal
 ```
 
 
@@ -44,11 +44,11 @@ To test local changes, such as when developing a new plugin, first follow the st
 Then, run the Starlark Worker using the following command for Cadence:
 ```bash
 cd $WORKSPACE_ROOT
-./tools/starlark.py run ./testdata/ping.star
+./tools/starlark.py run ./go/worker/starlark/testdata/ping.star
 ```
 
 Or the following for Temporal:
 ```bash
 cd $WORKSPACE_ROOT
-./tools/starlark.py run ./testdata/ping.star --workflow=temporal
+./tools/starlark.py run ./go/worker/starlark/testdata/ping.star --workflow=temporal
 ```

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import inspect
 import os
+from enum import Enum
 from typing import Any
 
 import torch
@@ -19,6 +20,17 @@ from michelangelo.lib.model_manager.schema import DataType, ModelSchema
 from michelangelo.lib.model_manager.utils.torch.data_type import (
     data_type_to_torch_dtype,
 )
+from michelangelo.lib.native_transform.torch.base_transform_module import (
+    TorchTransformModule,
+)
+from michelangelo.lib.native_transform.torch.constants import (
+    TORCH_TYPE_TO_TORCH_DTYPE_CLASS_NAME_MAP,
+)
+from michelangelo.lib.native_transform.torch.transform_spec import (
+    TORCH_TRANSFORM_LAYERS_DICT,
+    TransformSpec,
+)
+from michelangelo.lib.native_transform.torch.utils import generate_layer_name
 from michelangelo.uniflow.core.utils import import_attribute
 
 from ..fuse_schema import fuse_input_schema
@@ -94,7 +106,8 @@ def _build_fused_sample_input(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     sample: dict[str, torch.Tensor] = {}
     for item in input_items:
-        feature_shape = list(item.shape) if item.shape else [1]
+        # shape=[] is a true scalar (no feature dim); only an unset shape gets [1].
+        feature_shape = [1] if item.shape is None else list(item.shape)
         data_type = item.data_type if item.data_type is not None else DataType.UNKNOWN
         shape = [batch_size] + [max(1, int(s)) for s in feature_shape]
         dtype = data_type_to_torch_dtype(data_type)
@@ -270,26 +283,50 @@ def _build_fused_model_and_sample(
 
 
 def _build_tx_hydra_spec(tx_hyperparameters: dict[str, Any]) -> dict[str, Any]:
-    """Build a Hydra reconstruction spec for a fused native-transform layer stack.
+    """Build a Hydra spec for TorchTransformModule from transform_spec.to_dict() output.
 
-    Not yet implemented in OSS michelangelo: reconstructing a native-transform
-    module/layer stack from a stored transform specification dict requires
-    the native-transform package, which has not been migrated. This blocks
-    only the Python-backend *raw* package for a native-transform-fused model
-    (:func:`~michelangelo.lib.shared.utils.model_fuser.fuse.fuse_models_to_python`);
-    the plain (no native-transform) path and the TorchScript/ONNX fused
-    deployable paths do not call this function.
-
-    Args:
-        tx_hyperparameters: The transform model's serialized hyperparameters
-            dict (the shape a future native-transform package's own
-            ``to_dict()`` would produce).
-
-    Raises:
-        NotImplementedError: Always, until native-transform support lands.
+    Reconstructs a TransformSpec from the stored dict and iterates layers
+    grouped by topological level (0, 1, 2, ...) -- the same order that
+    ``get_transform_module`` uses when building the ``nn.ModuleList``.
+    This ensures the Hydra spec layer indices match the state dict keys.
     """
-    raise NotImplementedError(
-        "Building a Hydra reconstruction spec for a fused native-transform "
-        "model requires the native-transform package, which is not yet "
-        "available in OSS michelangelo."
-    )
+    spec = TransformSpec.__new__(TransformSpec)
+    spec.load_from_dict(tx_hyperparameters)
+
+    all_input_cols: set[str] = set()
+    all_output_cols: set[str] = set()
+    layers = []
+    for level in range(spec.get_max_transform_level() + 1):
+        for layer_spec in spec.transform_specs.values():
+            if spec.transform_levels[layer_spec.name] != level:
+                continue
+            all_input_cols.update(layer_spec.input_cols)
+            all_output_cols.update(layer_spec.output_cols or [])
+            layer_name = layer_spec.__class__.__name__.replace("LayerSpec", "")
+            layer_class = TORCH_TRANSFORM_LAYERS_DICT[layer_name]
+            args = {
+                k: (
+                    TORCH_TYPE_TO_TORCH_DTYPE_CLASS_NAME_MAP[v]
+                    if isinstance(v, torch.dtype)
+                    else v.value
+                    if isinstance(v, Enum)
+                    else v
+                )
+                for k, v in layer_spec.model_dump().items()
+            }
+            layers.append(
+                {
+                    "_target_": f"{layer_class.__module__}.{layer_class.__qualname__}",
+                    **args,
+                }
+            )
+
+    return {
+        "_target_": (
+            f"{TorchTransformModule.__module__}.{TorchTransformModule.__qualname__}"
+        ),
+        "name": generate_layer_name(TorchTransformModule.__name__.lower()),
+        "input_cols": sorted(all_input_cols - all_output_cols),
+        "output_cols": sorted(all_output_cols),
+        "layers": {"_target_": "torch.nn.ModuleList", "modules": layers},
+    }

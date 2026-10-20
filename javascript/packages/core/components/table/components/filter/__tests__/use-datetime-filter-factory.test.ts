@@ -179,6 +179,27 @@ describe('Datetime Filter', () => {
       expect(filterFn(invalidRow, 'createdAt', filterValue)).toBe(false);
     });
 
+    it('filters rows based on date range (RFC 3339 strings)', () => {
+      const { result } = renderHook(() => useDatetimeFilterFactory<{ createdAt: string }>());
+      // @ts-expect-error (#977) column.id falls back to columnId param in getCellValueForColumn
+      const filterHook = result.current({});
+      const filterFn = filterHook.buildTableFilterFn();
+
+      const validRow = createMockRow({ createdAt: '2023-06-01T12:00:00Z' });
+      const invalidRow = createMockRow({ createdAt: '2022-06-01T12:00:00.5Z' });
+
+      const filterValue: DatetimeFilterValue = {
+        operation: 'RANGE_DATETIME',
+        range: [new Date('2023-01-01'), new Date('2023-12-31')],
+        selection: [],
+        description: 'Year 2023',
+        exclude: false,
+      };
+
+      expect(filterFn(validRow, 'createdAt', filterValue)).toBe(true);
+      expect(filterFn(invalidRow, 'createdAt', filterValue)).toBe(false);
+    });
+
     it('should not filter rows with null/undefined cell values', () => {
       const { result } = renderHook(() => useDatetimeFilterFactory());
       // @ts-expect-error (#977) column.id falls back to columnId param in getCellValueForColumn

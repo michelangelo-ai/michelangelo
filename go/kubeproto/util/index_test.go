@@ -261,6 +261,36 @@ func TestParseIndexedFieldsErrors(t *testing.T) {
 	assert.Equal(t, len(tests), tested)
 }
 
+func TestParseRevisionedIndexReservedNameKeyPanics(t *testing.T) {
+	gen, extTypes := readInput(t, testerrpb.GetProtocReqData())
+
+	tested := 0
+	for _, f := range gen.Files {
+		if !f.Generate {
+			continue
+		}
+
+		for _, msg := range f.Messages {
+			if msg.GoIdent.GoName != "TestIndexingReservedNameKey" {
+				continue
+			}
+
+			pbOptions := msg.Desc.Options().(*descriptorpb.MessageOptions)
+			options, err := pboptions.ReadOptions(extTypes, pbOptions)
+			assert.Nil(t, err)
+
+			assertPanic(t, "Invalid index annotation on TestIndexingReservedNameKey. key \"name\" "+
+				"is reserved for the synthesized metadata.name column mirrored onto revisioned "+
+				"sidecar tables", func() {
+				util.ParseRevisionedIndex(msg, options)
+			})
+			tested++
+		}
+	}
+
+	assert.Equal(t, 1, tested)
+}
+
 // TestGeneratedRevisionedIndexKeyValuePairs exercises the generated revisioned-index
 // extractor (GetRevisionedIndexKeyValuePairs) on the real generated TestBase type.
 // TestBase opts into "test_wrapper" only, and under mirror-all its sidecar
@@ -280,6 +310,7 @@ func TestGeneratedRevisionedIndexKeyValuePairs(t *testing.T) {
 			Count: 7,
 		},
 	}
+	mb.Name = "base1"
 
 	result := mb.GetRevisionedIndexKeyValuePairs()
 
@@ -293,15 +324,17 @@ func TestGeneratedRevisionedIndexKeyValuePairs(t *testing.T) {
 	for _, f := range fields {
 		cols[f.Key] = f.Value
 	}
+	assert.Equal(t, "base1", cols["name"])            // synthesized metadata.name
 	assert.Equal(t, "m1", cols["test_name"])          // primitive
 	assert.Equal(t, "ns", cols["test_ref_namespace"]) // composite subfield
 	assert.Equal(t, "r1", cols["test_ref_name"])      // composite subfield
 	// Mirror-all: status.count is a base index that no curated content subset
 	// declared, yet it is materialized into the sidecar.
 	assert.Equal(t, int32(7), cols["test_count"])
-	// The sidecar mirrors exactly the full base index set and nothing else:
-	// test_name, test_ref_{namespace,name}, test_count.
-	assert.Len(t, cols, 4)
+	// The sidecar mirrors exactly the full base index set plus the always-on
+	// synthesized "name" column: name, test_name, test_ref_{namespace,name},
+	// test_count.
+	assert.Len(t, cols, 5)
 }
 
 func assertPanic(t *testing.T, expected interface{}, f func()) {

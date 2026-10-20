@@ -172,15 +172,11 @@ func (c pipelineServiceHandler) CreatePipeline(
 	ctx context.Context, request *CreatePipelineRequest) (resp *CreatePipelineResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
 
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Pipeline.ObjectMeta.Namespace, "name", request.Pipeline.ObjectMeta.Name)
 	logger.Info("CreatePipeline Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "CreatePipeline",
-		logging.NamespaceTag:    request.Pipeline.ObjectMeta.Namespace,
-		logging.EntityNameTag:   request.Pipeline.ObjectMeta.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildPipelineAuditLogEventForCreate(
@@ -244,15 +240,11 @@ func (c pipelineServiceHandler) CreatePipeline(
 func (c pipelineServiceHandler) GetPipeline(
 	ctx context.Context, request *GetPipelineRequest) (resp *GetPipelineResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace, "name", request.Name)
 	logger.Info("GetPipeline Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "GetPipeline",
-		logging.NamespaceTag:    request.Namespace,
-		logging.EntityNameTag:   request.Name,
 	})
 
 	getOptions := &metav1.GetOptions{}
@@ -303,15 +295,11 @@ func (c pipelineServiceHandler) GetPipeline(
 func (c pipelineServiceHandler) UpdatePipeline(
 	ctx context.Context, request *UpdatePipelineRequest) (resp *UpdatePipelineResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Pipeline.ObjectMeta.Namespace, "name", request.Pipeline.ObjectMeta.Name)
 	logger.Info("UpdatePipeline Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "UpdatePipeline",
-		logging.NamespaceTag:    request.Pipeline.ObjectMeta.Namespace,
-		logging.EntityNameTag:   request.Pipeline.ObjectMeta.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildPipelineAuditLogEventForUpdate(
@@ -375,15 +363,11 @@ func (c pipelineServiceHandler) UpdatePipeline(
 func (c pipelineServiceHandler) DeletePipeline(
 	ctx context.Context, request *DeletePipelineRequest) (resp *DeletePipelineResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace, "name", request.Name)
 	logger.Info("DeletePipeline Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "DeletePipeline",
-		logging.NamespaceTag:    request.Namespace,
-		logging.EntityNameTag:   request.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildPipelineAuditLogEventForDelete(
@@ -449,14 +433,11 @@ func (c pipelineServiceHandler) DeletePipeline(
 func (c pipelineServiceHandler) DeletePipelineCollection(
 	ctx context.Context, request *DeletePipelineCollectionRequest) (resp *DeletePipelineCollectionResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace)
 	logger.Info("DeletePipelineCollection Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "DeletePipelineCollection",
-		logging.NamespaceTag:    request.Namespace,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildPipelineAuditLogEventForDeleteCollection(
@@ -525,14 +506,11 @@ func (c pipelineServiceHandler) ListPipeline(
 	ctx context.Context, request *ListPipelineRequest) (resp *ListPipelineResponse, err error) {
 
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace)
 	logger.Info("ListPipeline Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "ListPipeline",
-		logging.NamespaceTag:    request.Namespace,
 	})
 
 	result := &PipelineList{}

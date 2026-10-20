@@ -135,7 +135,7 @@ def initialize_dtype(
 ) -> torch.dtype | str | None:
     """Resolve a layer's dtype argument, falling back to a default.
 
-    String inputs are resolved through :func:`resolve_torch_dtype`, so the two
+    String inputs are resolved through ``resolve_torch_dtype``, so the two
     functions agree on every string: both the ``"torch."``-prefixed class names
     (e.g. ``"torch.float32"``) and the bare aliases (e.g. ``"float32"``) are
     recognized, and an unrecognized string raises ``ValueError`` rather than
@@ -184,7 +184,7 @@ def format_outputs(
 ) -> dict[str, torch.Tensor]:
     """Split a stacked output tensor into a column-keyed dictionary.
 
-    Inverse of :func:`format_inputs`: unbinds ``outputs`` along its leading
+    Inverse of ``format_inputs``: unbinds ``outputs`` along its leading
     dimension and maps each slice to the corresponding output column name.
 
     Args:

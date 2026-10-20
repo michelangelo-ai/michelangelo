@@ -1,3 +1,7 @@
+---
+last_verified: 2026-10-14
+---
+
 # Michelangelo AI API Framework
 
 The Michelangelo AI API Framework abstracts Kubernetes CRDs through a gRPC API server. It is the control plane component that the `ma` CLI, UI, worker, and SDK all talk to. This guide covers the architecture of that component and how its parts fit together for operators deploying or maintaining Michelangelo AI.
@@ -10,11 +14,12 @@ The Michelangelo AI API Framework abstracts Kubernetes CRDs through a gRPC API s
 
 Michelangelo AI defines the APIs using Protobuf as the IDL and the
 clients like UI, CLI and SDK can access the API via gRPC or
-HTTP/JSON. Michelangelo AI will support three SDK bindings by default
-including Python, Golang and Java. Any other language bindings
+HTTP/JSON (the UI reaches the API server through an Envoy proxy that
+transcodes proto3 JSON to gRPC). Michelangelo AI provides Python and
+Golang bindings in this repository. Any other language bindings
 supported by gRPC should work as well.
 
-For detailed Michelangelo AI API definition, see the protobuf definitions in `proto/`.
+For detailed Michelangelo AI API definition, see the protobuf definitions in `proto/api/`.
 
 Figure below shows the high-level architecture of Michelangelo AI API
 framework that consists of the following components:
@@ -34,12 +39,14 @@ Michelangelo AI CLI(ma) to use Michelangelo AI APIs.
 **Michelangelo AI API Server:** A gRPC server. For standard declarative
 API resources, Michelangelo AI API server is a gRPC to REST proxy. The
 APIs that do not fit into the declarative design are implemented in
-the Michelangelo AI API server such as Search APIs.
+the Michelangelo AI API server itself, through its API handlers and
+hooks (for example the metadata-storage and blob-storage handlers in
+`go/api/handler/`).
 
-Kubernetes API server and MA API server will be packaged in the same
-docker container. Both k8s API server and MA API server are
-stateless. There can be multiple instances for high availability or
-scalability.
+The Kubernetes API server is your cluster's own control plane
+component. The Michelangelo AI API server is deployed separately as
+the chart's `apiserver` Deployment and is stateless, so you can run
+multiple replicas for high availability or scalability.
 
 
 ### ETCD
@@ -60,8 +67,9 @@ object.
 Currently, all the Michelangelo AI controllers are in a single process,
 i.e. Michelangelo AI Controller Manager. There will be multiple
 controller manager instances deployed into different availability
-zones for high availability. But at any time there is only one
-instance acting as the leader and others will be the followers.
+zones for high availability. When leader election is enabled
+(`controllermgr.leaderElection` in the Helm chart, off by default), only one
+instance acts as the leader at any time and the others are followers.
 
 Controller Manager uses ETCD to do the leader election (through
 Kubernetes API server). Controller Manager is based on the Kubernetes open-source

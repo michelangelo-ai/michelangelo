@@ -18,9 +18,9 @@ Most examples live in [`python/examples/`](https://github.com/michelangelo-ai/mi
 | [California Housing (XGBoost)](https://github.com/michelangelo-ai/michelangelo-examples/tree/main/src/michelangelo_examples/california_housing/pipelines/xgb_train) | Full pipeline — feature prep, Spark preprocessing, distributed XGBoost training, and pusher step that exports model + eval report to storage and registry. Lives in [michelangelo-examples](https://github.com/michelangelo-ai/michelangelo-examples). | Ray + Spark | Beginner |
 | [California Housing (PyTorch Lightning)](https://github.com/michelangelo-ai/michelangelo-examples/tree/main/src/michelangelo_examples/california_housing/pipelines/pytorch_train) | Same California Housing use case as the XGBoost variant, using `tabular_trainer`'s `train_tabular()` for distributed Ray Train instead. Also has a local-only runner for a quick, sandbox-free trial. Lives in [michelangelo-examples](https://github.com/michelangelo-ai/michelangelo-examples). | Ray + Spark | Beginner |
 | [BERT Text Classification](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/bert_cola) | Fine-tune BERT for linguistic acceptability classification on the CoLA benchmark (GLUE). Uses HuggingFace Transformers with distributed Ray training. | Ray | Intermediate |
-| [GPT Fine-tuning with LoRA](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/gpt_oss_20b_finetune) | Parameter-efficient fine-tuning using LoRA (1.29% trainable params) on the Stanford Alpaca instruction-following dataset. Includes perplexity and generation quality evaluation. | Ray | Advanced |
-| [Nomic AI Embedding Training](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/nomic_ai) | Train a long-context Nomic BERT model (2048 tokens) on WikiText using PyTorch Lightning with distributed Ray execution. | Ray | Intermediate |
-| [MovieLens Collaborative Filtering](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/movielens) | Neural Collaborative Filtering on MovieLens-100k. Minimal smoke test for the `LightningTrainer` SDK — trains on CPU with a single Ray Train worker. | Ray | Beginner |
+| [GPT Fine-tuning with LoRA](https://github.com/michelangelo-ai/michelangelo-examples/tree/main/src/michelangelo_examples/gpt_oss_20b_finetune/pipelines/train) | Parameter-efficient fine-tuning using LoRA (1.29% trainable params) on the Stanford Alpaca instruction-following dataset. Includes perplexity and generation quality evaluation. Lives in [michelangelo-examples](https://github.com/michelangelo-ai/michelangelo-examples). | Ray | Advanced |
+| [Nomic AI Embedding Training](https://github.com/michelangelo-ai/michelangelo-examples/tree/main/src/michelangelo_examples/nomic_ai/pipelines/train) | Train a long-context Nomic BERT model (2048 tokens) on WikiText using PyTorch Lightning with distributed Ray execution. Lives in [michelangelo-examples](https://github.com/michelangelo-ai/michelangelo-examples). | Ray | Intermediate |
+| [MovieLens Collaborative Filtering](https://github.com/michelangelo-ai/michelangelo-examples/tree/main/src/michelangelo_examples/movielens/pipelines/train) | Neural Collaborative Filtering on MovieLens-100k. Minimal smoke test for the `LightningTrainer` SDK — trains on CPU with a single Ray Train worker. Lives in [michelangelo-examples](https://github.com/michelangelo-ai/michelangelo-examples). | Ray | Beginner |
 
 ### Recommendation Systems
 
@@ -61,8 +61,8 @@ python -m michelangelo_examples.california_housing.pipelines.xgb_train.pipeline 
   --image ghcr.io/michelangelo-ai/michelangelo-examples:california-housing \
   --storage-url s3://michelangelo/workflows \
   --environ AWS_ENDPOINT_URL=http://minio:9091 \
-  --environ AWS_ACCESS_KEY_ID=minioadmin \
-  --environ AWS_SECRET_ACCESS_KEY=minioadmin \
+  --environ AWS_ACCESS_KEY_ID=michelangeloadmin \
+  --environ AWS_SECRET_ACCESS_KEY=michelangeloadmin \
   --environ REGISTRY_ENDPOINT=michelangelo-apiserver:15566 \
   --yes
 ```

@@ -36,8 +36,8 @@ func (p *NoOpPlugin) GetRolloutPlugin(ctx context.Context, resource *v2pb.Deploy
 }
 
 // GetRollbackPlugin returns a no-op conditions plugin
-func (p *NoOpPlugin) GetRollbackPlugin() conditionInterfaces.Plugin[*v2pb.Deployment] {
-	return &NoOpConditionsPlugin{}
+func (p *NoOpPlugin) GetRollbackPlugin(ctx context.Context, resource *v2pb.Deployment) (conditionInterfaces.Plugin[*v2pb.Deployment], error) {
+	return &NoOpConditionsPlugin{}, nil
 }
 
 // GetCleanupPlugin returns a no-op conditions plugin

@@ -44,7 +44,9 @@ const serverName = "ma-controllermgr"
 // when removed by a non-apiserver delete (cascade GC, kubectl, GitOps). These are the
 // Pipeline's children; the scope is deliberately Pipeline-only. It is injected as a
 // cascadedelete.RetainPolicy. Keep this in sync with the kinds that implement the cascade
-// DrainTarget adapter (see go/components/{pipelinerun,triggerrun}).
+// DrainTarget adapter (see go/components/{pipelinerun,triggerrun}). Revision is also a
+// Pipeline-owned child but is intentionally absent: cascade-deleted Revisions are
+// soft-deleted, not retained.
 var cascadeRetainKinds = []string{"PipelineRun", "TriggerRun"}
 
 // scheme provides a Kubernetes runtime.Scheme object.
@@ -61,6 +63,13 @@ func scheme() (*runtime.Scheme, error) {
 		return nil, err
 	}
 	if err := v2pb.AddToScheme(scheme); err != nil {
+		return nil, err
+	}
+	// api.Handler resolves object and list kinds through client-go's global scheme
+	// (e.g. the metadata-storage List path), as the apiserver does, so the CRD types
+	// must be registered there too or controller List calls fail with "no kind is
+	// registered".
+	if err := v2pb.AddToScheme(kubescheme.Scheme); err != nil {
 		return nil, err
 	}
 	return scheme, nil

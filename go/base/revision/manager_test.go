@@ -121,6 +121,35 @@ func TestUpsertRevision_UpdateMutable(t *testing.T) {
 	assert.True(t, updated)
 }
 
+// UpsertRevision builds a brand-new object on every call (see
+// pipeline.snapshotRevision), which historically clobbered Finalizers added
+// out-of-band by the ingester on the Update path. A GC-driven cascade delete relies
+// on the ingester's finalizer surviving repeated re-snapshots, so this must not
+// regress.
+func TestUpsertRevision_UpdatePreservesFinalizers(t *testing.T) {
+	mgr, h := newTestManager(t)
+	ctx := context.Background()
+
+	_, err := mgr.UpsertRevision(ctx, testRevision(t), UpsertOpts{})
+	require.NoError(t, err)
+
+	// Simulate what the API handler stamps onto the object out-of-band, independent of
+	// the caller's UpsertRevision input.
+	rev := getRevision(t, h, "test-ns", "pipeline-my-pipeline-abc123456789")
+	rev.SetFinalizers([]string{"michelangelo.uber.com/ingester"})
+	require.NoError(t, h.Update(ctx, rev, &metav1.UpdateOptions{}))
+
+	// A second snapshot of the same revision (e.g. the next Pipeline reconcile) passes a
+	// fresh object with no Finalizers set.
+	updated, err := mgr.UpsertRevision(ctx, testRevision(t), UpsertOpts{})
+	require.NoError(t, err)
+	assert.True(t, updated)
+
+	got := getRevision(t, h, "test-ns", "pipeline-my-pipeline-abc123456789")
+	assert.Equal(t, []string{"michelangelo.uber.com/ingester"}, got.GetFinalizers(),
+		"ingester finalizer must survive a re-snapshot, or GC-driven cascade delete can never soft-delete this revision")
+}
+
 func TestUpsertRevision_MutableThenImmutable(t *testing.T) {
 	mgr, h := newTestManager(t)
 	ctx := context.Background()
@@ -134,4 +163,62 @@ func TestUpsertRevision_MutableThenImmutable(t *testing.T) {
 
 	rev := getRevision(t, h, "test-ns", "pipeline-my-pipeline-abc123456789")
 	assert.True(t, apiutils.IsImmutable(rev))
+}
+
+func TestUpsertRevision_UpdatePreservesExistingAnnotations(t *testing.T) {
+	mgr, h := newTestManager(t)
+	ctx := context.Background()
+
+	_, err := mgr.UpsertRevision(ctx, testRevision(t), UpsertOpts{})
+	require.NoError(t, err)
+
+	// A client stamps its own metadata onto the snapshotted revision.
+	stamped := getRevision(t, h, "test-ns", "pipeline-my-pipeline-abc123456789")
+	stamped.Annotations = map[string]string{"client.example.com/commit-message": "feat: x", "shared": "client"}
+	require.NoError(t, h.Update(ctx, stamped, &metav1.UpdateOptions{}))
+
+	// A re-snapshot must keep the client's annotations; its own keys still win.
+	resnapshot := testRevision(t)
+	resnapshot.Annotations = map[string]string{"shared": "controller"}
+	updated, err := mgr.UpsertRevision(ctx, resnapshot, UpsertOpts{})
+	require.NoError(t, err)
+	assert.True(t, updated)
+
+	rev := getRevision(t, h, "test-ns", "pipeline-my-pipeline-abc123456789")
+	assert.Equal(t, "feat: x", rev.Annotations["client.example.com/commit-message"])
+	assert.Equal(t, "controller", rev.Annotations["shared"])
+}
+
+// Control-plane annotations set on the stored revision must survive a re-snapshot that
+// does not set them: dropping Deleting would lose a pending delete, and dropping the
+// primary key makes the ingester re-key the revision's metadata-store row.
+func TestUpsertRevision_UpdatePreservesControlPlaneAnnotations(t *testing.T) {
+	mgr, h := newTestManager(t)
+	ctx := context.Background()
+
+	_, err := mgr.UpsertRevision(ctx, testRevision(t), UpsertOpts{})
+	require.NoError(t, err)
+
+	stamped := getRevision(t, h, "test-ns", "pipeline-my-pipeline-abc123456789")
+	stamped.Annotations = map[string]string{
+		api.DeletingAnnotation:                  "true",
+		api.MetadataStoragePrimaryKeyAnnotation: "original-uid",
+	}
+	require.NoError(t, h.Update(ctx, stamped, &metav1.UpdateOptions{}))
+
+	updated, err := mgr.UpsertRevision(ctx, testRevision(t), UpsertOpts{})
+	require.NoError(t, err)
+	assert.True(t, updated)
+
+	rev := getRevision(t, h, "test-ns", "pipeline-my-pipeline-abc123456789")
+	assert.Equal(t, "true", rev.Annotations[api.DeletingAnnotation])
+	assert.Equal(t, "original-uid", rev.Annotations[api.MetadataStoragePrimaryKeyAnnotation])
+}
+
+func TestMergeAnnotations(t *testing.T) {
+	assert.Nil(t, mergeAnnotations(nil, nil))
+	assert.Equal(t, map[string]string{"a": "1"}, mergeAnnotations(nil, map[string]string{"a": "1"}))
+	assert.Equal(t, map[string]string{"a": "1"}, mergeAnnotations(map[string]string{"a": "1"}, nil))
+	assert.Equal(t, map[string]string{"a": "1", "b": "new"},
+		mergeAnnotations(map[string]string{"a": "1", "b": "old"}, map[string]string{"b": "new"}))
 }

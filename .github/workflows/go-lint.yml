@@ -25,12 +25,12 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version: '1.24.3'
+          go-version-file: go/go.mod
           cache-dependency-path: go/go.sum
 
       - name: Install golangci-lint
         run: |
-          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/v1.64.8/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.64.8
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/v2.14.0/install.sh | sh -s -- -b $(go env GOPATH)/bin v2.14.0
           echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
 
       - name: Run golangci-lint
@@ -38,9 +38,14 @@ jobs:
         working-directory: ./go
         continue-on-error: true
         run: |
-          golangci-lint run --out-format=github-actions ./... 2>&1 | tee ../lint-output.txt
+          golangci-lint run --new-from-rev=${{ github.event.pull_request.base.sha }} --output.text.colors=false ./... 2>&1 | tee ../lint-output.txt
           exit_code=${PIPESTATUS[0]}
           echo "exit_code=$exit_code" >> $GITHUB_OUTPUT
+          if [ "$exit_code" != "0" ] && [ "$exit_code" != "1" ]; then
+            echo "tooling_failure=true" >> $GITHUB_OUTPUT
+          else
+            echo "tooling_failure=false" >> $GITHUB_OUTPUT
+          fi
           exit 0
 
       - name: Check for unlinked TODOs
@@ -88,6 +93,7 @@ jobs:
             const unlinkedTodos = process.env.UNLINKED_TODOS || '';
             const hasUnlinkedTodos = '${{ steps.check-todos.outputs.found }}' === 'true';
             const lintExitCode = '${{ steps.golangci-lint.outputs.exit_code }}';
+            const lintToolingFailure = '${{ steps.golangci-lint.outputs.tooling_failure }}' === 'true';
             const pr_number = context.payload.pull_request.number;
 
             let body = "### 🔍 Go Lint & TODO Tracking Results\n\n";
@@ -95,6 +101,11 @@ jobs:
             // Lint results
             if (lintExitCode === '0') {
               body += "#### ✅ golangci-lint: No issues found\n\n";
+            } else if (lintToolingFailure) {
+              body += "#### 🛑 golangci-lint: failed to run (exit code " + lintExitCode + ") — this is a tooling/config error, not real lint findings\n";
+              if (lintOutput) {
+                body += "```\n" + lintOutput.substring(0, 4000) + "\n```\n\n";
+              }
             } else {
               body += "#### ⚠️ golangci-lint: Issues detected\n";
               if (lintOutput) {
@@ -123,6 +134,12 @@ jobs:
               repo: context.repo.repo,
               body: body
             });
+
+      - name: Fail if golangci-lint itself failed to run
+        if: steps.golangci-lint.outputs.tooling_failure == 'true'
+        run: |
+          echo "❌ golangci-lint failed to run (exit code ${{ steps.golangci-lint.outputs.exit_code }}) — see the 'Run golangci-lint' step log or the PR comment for details."
+          exit 1
 
       - name: Fail if unlinked TODOs found
         if: steps.check-todos.outputs.found == 'true'

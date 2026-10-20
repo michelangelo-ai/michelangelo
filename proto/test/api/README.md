@@ -35,6 +35,7 @@ import (
     // ... existing imports ...
     v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
     v2alpha1pb "github.com/michelangelo-ai/michelangelo/proto-go/test/api/v2alpha1"  // Add this
+    "github.com/michelangelo-ai/michelangelo/go/api/webhook"                          // Add this
 )
 ```
 
@@ -61,6 +62,12 @@ crd.SyncCRDs(v2pb.GroupVersion.Group,
     []string{},
     v2pb.YamlSchemas,
     v2alpha1pb.YamlSchemas),  // Add this
+```
+
+Register the conversion webhook server module in the same `opts()` function (it is not wired into the apiserver by default):
+
+```go
+webhook.Module,  // Add this, alongside crd.Module
 ```
 
 **Note:** After updating `main.go`, run `./tools/gazelle` to automatically update `BUILD.bazel` dependencies.
@@ -106,7 +113,7 @@ webhook:
 
 ## Step 5: Start the API Server
 
-The webhook server will be started automatically via dependency injection when you start the API server.
+Once `webhook.Module` is registered (Step 2), the webhook server is started automatically via dependency injection when you start the API server.
 
 ```bash
 bazel run //go/cmd/apiserver:apiserver

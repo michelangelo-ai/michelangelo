@@ -1,3 +1,7 @@
+---
+last_verified: 2026-10-14
+---
+
 # Pipeline Notifications
 
 Stay informed about your ML pipeline outcomes without constantly checking the dashboard. Michelangelo AI can send you **email or Slack notifications** whenever a pipeline run succeeds, fails, gets stopped, or hits any other terminal state.
@@ -36,7 +40,7 @@ notifications:
       - "you@example.com"
 ```
 
-That's it! When you apply this spec with `ma apply -f your-spec.yaml`, Michelangelo AI will send you an email each time the run reaches one of those states.
+That's it! When you apply this spec with `ma pipeline_run apply -f your-spec.yaml`, Michelangelo AI will send you an email each time the run reaches one of those states.
 
 ### CLI Shorthand
 
@@ -129,25 +133,25 @@ Both email and Slack notifications include the same core information, formatted 
 **Slack message example:**
 
 ```
-Pipeline Run (my-training-run) has completed with state FAILED:
+Pipeline Run (my-training-run) state: FAILED:
 - Name: my-training-run
 - Project: my-project
 - State: FAILED
 - Pipeline Type: TRAIN
-- <https://michelangelo-studio.example.com/ma/my-project/train/runs/my-training-run|Michelangelo Studio URL>
+- <https://michelangelo-studio.example.com/ma/my-project/train/runs/my-training-run|Studio URL>
 ```
 
 **Email example:**
 
-- **Subject:** `Pipeline Run (my-training-run) has completed with state FAILED`
+- **Subject:** `Pipeline Run (my-training-run) state: FAILED`
 - **Body:**
   ```
-  Your Michelangelo Studio Pipeline Run Has Status Update:
+  Pipeline Run Status Update:
   - Name: my-training-run
   - Project: my-project
   - State: FAILED
   - Pipeline Type: TRAIN
-  - Michelangelo Studio URL: https://michelangelo-studio.example.com/ma/my-project/train/runs/my-training-run
+  - Studio URL: https://michelangelo-studio.example.com/ma/my-project/train/runs/my-training-run
   ```
 
 ## Full Example
@@ -168,8 +172,8 @@ spec:
     cronSchedule:
       cron: "0 8 * * *"
     maxConcurrency: 3
-  startTimestamp: 2025-10-01T00:00:00Z
-  endTimestamp: 2025-10-08T00:00:00Z
+  startTimestamp: "2025-10-01T00:00:00Z"
+  endTimestamp: "2025-10-08T00:00:00Z"
   notifications:
     - notificationType: NOTIFICATION_TYPE_EMAIL
       resourceType: RESOURCE_TYPE_PIPELINE_RUN
@@ -191,15 +195,15 @@ spec:
 Apply it with the CLI:
 
 ```bash
-ma apply -f trigger.yaml
+ma trigger_run apply -f trigger.yaml
 ```
 
 ## Updating or Removing Notifications
 
-To change your notification settings, update the `notifications` block in your spec and re-apply:
+To change your notification settings, update the `notifications` block in your spec and re-apply with the `apply` command for that resource type (for example, `ma pipeline_run apply`, `ma trigger_run apply`, or `ma pipeline apply`):
 
 ```bash
-ma apply -f your-spec.yaml
+ma pipeline_run apply -f your-spec.yaml
 ```
 
 To stop receiving notifications, remove the `notifications` block entirely and re-apply the spec.
@@ -208,7 +212,7 @@ To stop receiving notifications, remove the `notifications` block entirely and r
 
 **I configured notifications but I'm not receiving them.**
 
-- Double-check that your `notificationType`, `resourceType`, and `eventTypes` are valid values from the tables above. Typos in enum values will be silently ignored.
+- Double-check that your `eventTypes` include the events you expect. An unrecognized enum value or misspelled field name makes `ma pipeline_run apply` / `ma trigger_run apply` fail with a parse error, so if the apply succeeded, the values are valid; the usual cause is an event type you didn't list.
 - For email, verify the addresses in `emails` are correct.
 - For Slack, confirm the channel name in `slackDestinations` exists and is accessible by the platform.
 - Notification delivery depends on operator-level implementation. If everything looks correct in your spec but notifications still aren't arriving, check with your platform administrator — see [Enabling Notification Delivery](#enabling-notification-delivery) below.

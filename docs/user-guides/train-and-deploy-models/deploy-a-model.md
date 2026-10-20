@@ -1,5 +1,6 @@
 ---
 sidebar_position: 3
+last_verified: 2026-10-14
 ---
 
 # Deploy a Model
@@ -51,7 +52,7 @@ ma sandbox create
 ma sandbox demo inference
 ```
 
-`ma sandbox demo inference` provisions an `InferenceServer` named `inference-server-example` in the `default` namespace, plus the model config and gateway routes needed to serve predictions. The port-forward to `localhost:8080` is active for the lifetime of that terminal session. If you used `--workflow temporal` when creating the sandbox, that port may collide with the Temporal Web UI — use a separate terminal for inference testing.
+`ma sandbox demo inference` provisions an `InferenceServer` named `inference-server-example` in the `default` namespace, plus the model config and gateway routes needed to serve predictions. The gateway port-forward to `localhost:8880` is started in the background by the demo command.
 
 From there you can apply your own `Deployment` against the provisioned server and start sending inference requests.
 
@@ -129,7 +130,7 @@ Key fields:
 - **`strategy`** — required. Controls how the rollout proceeds across server instances. `blast: {}` loads the new model on all instances simultaneously (simplest option). Other strategies — `zonal`, `rolling`, and `red_black` — let you stage rollouts progressively. See the [`Deployment` reference in the operator serving guide](../../operator-guides/serving/index.md) for strategy details.
 
 :::tip
-`ma apply` sends resources to the Michelangelo AI API server, which manages the deployment lifecycle. This is different from `kubectl apply`, which writes directly to Kubernetes.
+`ma <resource_type> apply` (for example, `ma deployment apply`) sends resources to the Michelangelo AI API server, which manages the deployment lifecycle. This is different from `kubectl apply`, which writes directly to Kubernetes.
 :::
 
 ## Step 3: Apply Both Resources
@@ -152,7 +153,7 @@ A healthy deployment progresses through these stages:
 
 `Validation → Placement → Resource Acquisition → Rollout Complete`
 
-The [Deployment Lifecycle section in the serving overview](../../operator-guides/serving/index.md#deployment-lifecycle) explains each stage.
+These are the `status.stage` values the Deployment controller reports. The [Deployment Lifecycle section in the serving overview](../../operator-guides/serving/index.md#deployment-lifecycle) walks through the rollout steps behind them in more detail, including asset preparation, the per-cluster canary, the traffic switch, and the soak period.
 
 ## Step 4: Send a Prediction Request
 
@@ -162,10 +163,10 @@ Once the deployment reaches `Rollout Complete`, the model is reachable through t
 http://<gateway-host>/<inference-server-name>/<deployment-name>/infer
 ```
 
-On the sandbox, `ma sandbox demo inference` port-forwards the gateway to `localhost:8080` for the lifetime of the terminal session. Send a request with the input shape your model expects:
+On the sandbox, `ma sandbox demo inference` port-forwards the gateway to `localhost:8880`. Send a request with the input shape your model expects:
 
 ```bash
-curl -X POST http://localhost:8080/my-inference-server/my-model-deployment/infer \
+curl -X POST http://localhost:8880/my-inference-server/my-model-deployment/infer \
   -H "Content-Type: application/json" \
   -d '{
     "inputs": [

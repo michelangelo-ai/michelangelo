@@ -13,16 +13,20 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
-// RegisterTriggerRunAPIHook registers the API hook that stamps the owning
-// Pipeline as the controller ownerReference on TriggerRuns at creation, and
-// stamps the owning Pipeline's type as the michelangelo/SourcePipelineType
-// label. Both are best-effort: if the owning Pipeline can't be resolved,
-// creation proceeds without them.
-func RegisterTriggerRunAPIHook(logger *zap.Logger, apiHandler api.Handler, scheme *runtime.Scheme) {
+// RegisterTriggerRunAPIHook registers the API hook that defaults the
+// environment label on TriggerRun creation, stamps the owning Pipeline as
+// the controller ownerReference, and stamps the owning Pipeline's type as
+// the michelangelo/SourcePipelineType label. The Pipeline-related stamps
+// are best-effort: if the owning Pipeline can't be resolved, creation
+// proceeds without them. defaultEnv is the operator-configured default
+// (api.UnspecifiedEnvironment is used instead when the operator has
+// configured none), mirroring RegisterPipelineRunAPIHook.
+func RegisterTriggerRunAPIHook(logger *zap.Logger, apiHandler api.Handler, scheme *runtime.Scheme, defaultEnv string) {
 	v2.RegisterTriggerRunAPIHook(apiHook{
 		logger:     logger,
 		apiHandler: apiHandler,
 		scheme:     scheme,
+		defaultEnv: defaultEnv,
 	})
 }
 
@@ -31,9 +35,16 @@ type apiHook struct {
 	logger     *zap.Logger
 	apiHandler api.Handler
 	scheme     *runtime.Scheme
+	defaultEnv string
 }
 
 func (a apiHook) BeforeCreate(ctx context.Context, request *v2.CreateTriggerRunRequest) error {
+	setIfAbsent(request.TriggerRun, api.EnvironmentLabel, a.defaultEnvironment())
+
+	// TODO(https://github.com/michelangelo-ai/michelangelo/issues/2155): a
+	// production-environment / branch-protection restriction on TriggerRun
+	// create is still being designed and is not implemented here.
+
 	pipelineRef := request.TriggerRun.Spec.GetPipeline()
 	if pipelineRef == nil || pipelineRef.GetName() == "" {
 		return nil
@@ -58,4 +69,23 @@ func (a apiHook) BeforeCreate(ctx context.Context, request *v2.CreateTriggerRunR
 	}
 
 	return cascadedelete.StampOwnerRefOnCreate(ctx, a.logger, a.scheme, request.TriggerRun, pipeline)
+}
+
+// defaultEnvironment returns the configured default, or
+// api.UnspecifiedEnvironment when the operator has configured none —
+// mirrors pipelinerun/apihook.go's identically-named method.
+func (a apiHook) defaultEnvironment() string {
+	if a.defaultEnv == "" {
+		return api.UnspecifiedEnvironment
+	}
+	return a.defaultEnv
+}
+
+func setIfAbsent(run *v2.TriggerRun, key, value string) {
+	if run.ObjectMeta.Labels == nil {
+		run.ObjectMeta.Labels = map[string]string{}
+	}
+	if _, ok := run.ObjectMeta.Labels[key]; !ok {
+		run.ObjectMeta.Labels[key] = value
+	}
 }

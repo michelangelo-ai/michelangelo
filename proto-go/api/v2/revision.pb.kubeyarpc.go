@@ -172,15 +172,11 @@ func (c revisionServiceHandler) CreateRevision(
 	ctx context.Context, request *CreateRevisionRequest) (resp *CreateRevisionResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
 
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Revision.ObjectMeta.Namespace, "name", request.Revision.ObjectMeta.Name)
 	logger.Info("CreateRevision Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "CreateRevision",
-		logging.NamespaceTag:    request.Revision.ObjectMeta.Namespace,
-		logging.EntityNameTag:   request.Revision.ObjectMeta.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildRevisionAuditLogEventForCreate(
@@ -244,15 +240,11 @@ func (c revisionServiceHandler) CreateRevision(
 func (c revisionServiceHandler) GetRevision(
 	ctx context.Context, request *GetRevisionRequest) (resp *GetRevisionResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace, "name", request.Name)
 	logger.Info("GetRevision Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "GetRevision",
-		logging.NamespaceTag:    request.Namespace,
-		logging.EntityNameTag:   request.Name,
 	})
 
 	getOptions := &metav1.GetOptions{}
@@ -303,15 +295,11 @@ func (c revisionServiceHandler) GetRevision(
 func (c revisionServiceHandler) UpdateRevision(
 	ctx context.Context, request *UpdateRevisionRequest) (resp *UpdateRevisionResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Revision.ObjectMeta.Namespace, "name", request.Revision.ObjectMeta.Name)
 	logger.Info("UpdateRevision Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "UpdateRevision",
-		logging.NamespaceTag:    request.Revision.ObjectMeta.Namespace,
-		logging.EntityNameTag:   request.Revision.ObjectMeta.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildRevisionAuditLogEventForUpdate(
@@ -375,15 +363,11 @@ func (c revisionServiceHandler) UpdateRevision(
 func (c revisionServiceHandler) DeleteRevision(
 	ctx context.Context, request *DeleteRevisionRequest) (resp *DeleteRevisionResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace, "name", request.Name)
 	logger.Info("DeleteRevision Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "DeleteRevision",
-		logging.NamespaceTag:    request.Namespace,
-		logging.EntityNameTag:   request.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildRevisionAuditLogEventForDelete(
@@ -449,14 +433,11 @@ func (c revisionServiceHandler) DeleteRevision(
 func (c revisionServiceHandler) DeleteRevisionCollection(
 	ctx context.Context, request *DeleteRevisionCollectionRequest) (resp *DeleteRevisionCollectionResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace)
 	logger.Info("DeleteRevisionCollection Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "DeleteRevisionCollection",
-		logging.NamespaceTag:    request.Namespace,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildRevisionAuditLogEventForDeleteCollection(
@@ -525,14 +506,11 @@ func (c revisionServiceHandler) ListRevision(
 	ctx context.Context, request *ListRevisionRequest) (resp *ListRevisionResponse, err error) {
 
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace)
 	logger.Info("ListRevision Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "ListRevision",
-		logging.NamespaceTag:    request.Namespace,
 	})
 
 	result := &RevisionList{}

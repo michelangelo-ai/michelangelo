@@ -19,6 +19,12 @@ from michelangelo.lib.model_manager.constants import StorageType
 from michelangelo.lib.model_manager.schema import DataType, ModelSchema, ModelSchemaItem
 from michelangelo.lib.model_manager.schema.feature_schema import FeatureSchema
 from michelangelo.lib.model_manager.schema.feature_schema_item import FeatureSchemaItem
+from michelangelo.lib.native_transform.torch.base_transform_module import (
+    TorchTransformModule,
+    get_transform_module,
+)
+from michelangelo.lib.native_transform.torch.transform_spec import TransformSpec
+from michelangelo.lib.shared.utils.model_fuser import fused_model
 from michelangelo.workflow.schema.assembler import (
     TabularAssemblerConfig,
     TorchAssemblerConfig,
@@ -44,12 +50,20 @@ class _E2EPredictor(nn.Module):
         return input.sum(dim=-1, keepdim=True)
 
 
-class _E2ETxModule(nn.Module):
-    """Tiny real native-transform module for an end-to-end assembler test."""
-
-    def forward(self, inputs: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
-        """Double ``tx_in``, matching ``_native_tx_schema``'s input/output names."""
-        return {"pred_in": inputs["tx_in"] * 2.0}
+def _e2e_transform_spec() -> TransformSpec:
+    """Double ``tx_in``, matching ``_native_tx_schema``'s input/output names."""
+    return TransformSpec(
+        raw_transform_specs={
+            "transform_specs": [
+                {
+                    "transform_name": "Scale",
+                    "input_cols": ["tx_in"],
+                    "output_cols": ["pred_in"],
+                    "factor": 2.0,
+                }
+            ]
+        }
+    )
 
 
 def _make_schema() -> ModelSchema:
@@ -317,20 +331,24 @@ class TorchAssemblerTest(_LocalBackendTestCase):
                     prefixes,
                 )
 
-    def test_native_transform_raises_not_implemented_pending_native_transform(self):
-        """Real fusion now runs; native_transform support is still needed.
+    @patch(f"{_ASSEMBLER_MODULE}.TorchTritonPackager.create_model_package")
+    @patch(f"{_ASSEMBLER_MODULE}.TorchTritonPackager.create_raw_model_package")
+    def test_native_transform_fuses_successfully_end_to_end(
+        self, mock_create_raw, mock_create_model
+    ):
+        """Real fusion of a fitted TorchTransformModule succeeds for the raw package.
 
-        ``torch/assembler.py``'s native-transform branch resolves its
-        ``model_fuser.fuse`` import, so this no longer fails at the import
-        stub in ``_model_fuser_functions``. It reaches real fusion code and
-        still raises ``NotImplementedError`` -- now from
-        ``fuse_models_to_python``'s ``_build_tx_hydra_spec`` call, which is
-        gated on the native-transform package, which hasn't landed yet. Real
-        (non-garbage) model files are used here so the
-        ``NotImplementedError`` is unambiguously coming from that gate and
-        not an incidental file-format error.
+        Uses the ``python`` backend so no TorchScript trace is needed; the
+        packager is mocked, as in every other test in this file.
         """
-        config = TabularAssemblerConfig()
+        mock_create_model.side_effect = _fake_create_package("deployable")
+        mock_create_raw.side_effect = _fake_create_package("raw")
+
+        config = TabularAssemblerConfig(
+            torch=TorchAssemblerConfig(
+                backend="python", include_import_prefixes=[__name__]
+            )
+        )
         raw_model = ModelArtifact(
             path=self._upload_real_module_source(_E2EPredictor()),
             metadata=ModelMetadata(
@@ -339,23 +357,36 @@ class TorchAssemblerTest(_LocalBackendTestCase):
                 _sample_data=BytesIO(pickle.dumps([{"input": np.array([1.0, 2.0])}])),
             ),
         )
+        spec = _e2e_transform_spec()
         native_tx = ModelArtifact(
-            path=self._upload_real_module_source(_E2ETxModule(), as_state_dict=False),
+            path=self._upload_real_module_source(
+                get_transform_module(spec, start_level=0), as_state_dict=False
+            ),
             metadata=ModelMetadata(
-                model_class=f"{__name__}._E2ETxModule",
+                model_class=(
+                    f"{TorchTransformModule.__module__}."
+                    f"{TorchTransformModule.__qualname__}"
+                ),
+                _hyperparameters=BytesIO(pickle.dumps(spec.to_dict())),
                 _schema=BytesIO(pickle.dumps(_native_tx_schema())),
                 _sample_data=BytesIO(pickle.dumps([{"tx_in": np.array([1.0])}])),
             ),
         )
 
-        with self.assertRaises(NotImplementedError) as ctx:
-            torch_assembler(
-                config,
-                raw_model,
-                native_transform_model=native_tx,
-                storage_backend=self.storage_backend,
-            )
-        self.assertIn("native-transform", str(ctx.exception))
+        assembled = torch_assembler(
+            config,
+            raw_model,
+            native_transform_model=native_tx,
+            storage_backend=self.storage_backend,
+        )
+
+        mock_create_raw.assert_called_once()
+        self.assertEqual(
+            mock_create_raw.call_args.kwargs["model_class"],
+            f"{fused_model.FusedModel.__module__}.{fused_model.FusedModel.__qualname__}",
+        )
+        self.assertTrue(os.path.exists(assembled.deployable_model.path))
+        self.assertTrue(os.path.exists(assembled.raw_model.path))
 
 
 class FeaturePackageFusionTest(_LocalBackendTestCase):

@@ -1,3 +1,7 @@
+---
+last_verified: 2026-10-14
+---
+
 # PR Process
 
 Contributing to Michelangelo AI follows a standard fork-and-PR workflow. This guide covers everything from branch creation to merge.
@@ -31,12 +35,18 @@ Use descriptive, kebab-case branch names with a short prefix indicating the type
 
 ## PR Description
 
-A good PR description lets reviewers understand the change without asking questions. Include:
+A good PR description lets reviewers understand the change without asking questions. GitHub pre-fills the description from the [pull request template](https://github.com/michelangelo-ai/michelangelo/blob/main/.github/pull_request_template.md); fill in every section:
 
-1. **What** — what does this change do?
-2. **Why** — motivation, or link to the GitHub issue (e.g., `Closes #123`)
-3. **How to test** — steps to verify the change works
-4. **Breaking changes** — any migration steps required (API changes, config field renames, etc.)
+1. **Type** — check the applicable PR types (refactor, feature, bug fix, optimization, documentation)
+2. **What changed?** — what does this change do?
+3. **Why?** — motivation, or link to the GitHub issue (e.g., `Closes #123`)
+4. **How did you test it?** — steps you took to verify the change works
+5. **Potential risks** — what could break when this is deployed
+6. **Breaking changes** — check every category that applies (API, proto, Helm, config/deployment), or "No breaking changes"
+7. **Migration guide** — required if any breaking-change box is checked: step-by-step upgrade instructions with before/after examples
+8. **Release notes** and **Documentation changes** — anything notable for the release, and any docs you updated
+
+If you check a breaking-change box, the commit message must also carry a `BREAKING CHANGE:` footer or a `!` suffix (e.g., `feat!:`). See [Commit Messages](https://github.com/michelangelo-ai/michelangelo/blob/main/CONTRIBUTING.md#commit-messages).
 
 ## Checks That Must Pass
 
@@ -49,7 +59,7 @@ bazel test //go/...
 
 # Python: lint and pre-commit hooks
 cd python
-poetry run pre-commit
+poetry run pre-commit run --all-files
 poetry run ruff check .
 poetry run ruff format --check .
 poetry run pytest
@@ -72,12 +82,9 @@ Reviewers will check for:
 
 ## Merging
 
-Maintainers merge approved PRs. Preferred strategies:
+Maintainers merge approved PRs. The repository only allows **squash merges**, which keep `main` history clean with one commit per logical change. The PR title and description become the commit message, so write them accordingly.
 
-- **Squash merge** for feature and fix branches — keeps `main` history clean with one commit per logical change
-- **Merge commit** for branches with meaningful commit history that should be preserved
-
-After merge, delete your branch.
+Merged branches are deleted automatically.
 
 ## Stacked PRs
 

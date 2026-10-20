@@ -1,3 +1,7 @@
+---
+last_verified: 2026-10-14
+---
+
 # Mactl Coding Guidelines
 
 This document outlines coding best practices when developing features for the Michelangelo AI mactl CLI tool.
@@ -166,20 +170,24 @@ config_file = os.path.join(tmpdir, "config.yaml")  # Less readable
 ### Mock External Dependencies
 
 ```python
-@patch("michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.Repo")
 @patch("michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.generate_pipeline_run_name")
-def test_pipeline_dev_run(self, mock_generate_name, mock_repo):
-    """Test pipeline dev_run with mocked dependencies."""
+@patch("michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.generate_pipeline_run_object")
+def test_generate_pipeline_dev_run_object(self, mock_generate_run_obj, mock_generate_name):
+    """Test dev-run object generation with mocked dependencies."""
     # Setup mocks
-    mock_generate_name.return_value = "test-run-12345"
-    mock_repo.return_value.git.rev_parse.return_value = "/fake/repo"
+    mock_generate_name.return_value = "run-test-12345678"
+    mock_generate_run_obj.return_value = {
+        "metadata": {"name": "run-test-12345678", "namespace": "test-ns"},
+        "spec": {"pipeline": {"name": "test-pipeline"}},
+    }
 
     # Test the function
-    result = pipeline_dev_run(config_dict, crd_class, yaml_path)
+    yaml_dict = {"metadata": {"name": "test-pipeline", "namespace": "test-ns"}}
+    result = generate_pipeline_dev_run_object(yaml_dict, {"spec": {"steps": []}})
 
-    # Verify mocks were called correctly
-    mock_generate_name.assert_called_once()
-    mock_repo.assert_called_once()
+    # Verify the result and that mocks were called correctly
+    assert result["metadata"]["name"] == "run-test-12345678"
+    mock_generate_run_obj.assert_called_once()
 ```
 
 ### Test File Structure

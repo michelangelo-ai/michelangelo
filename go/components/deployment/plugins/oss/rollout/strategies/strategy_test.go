@@ -3,6 +3,7 @@ package strategies
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -40,9 +41,12 @@ func actorTypes(actors []conditionInterfaces.ConditionActor[*v2pb.Deployment]) [
 }
 
 func TestGetActorsForStrategy(t *testing.T) {
+	safeSettings := osscommon.RolloutSettings{Canary: true, SoakPeriod: 5 * time.Minute}
+
 	tests := []struct {
 		name       string
 		deployment *v2pb.Deployment
+		settings   osscommon.RolloutSettings
 		want       []string
 	}{
 		{
@@ -50,6 +54,7 @@ func TestGetActorsForStrategy(t *testing.T) {
 			// the per-cluster actors only appear on a later reconcile.
 			name:       "no cluster snapshot yet",
 			deployment: deploymentWithTargets(t),
+			settings:   safeSettings,
 			want:       []string{},
 		},
 		{
@@ -77,11 +82,43 @@ func TestGetActorsForStrategy(t *testing.T) {
 				"ModelCleanupComplete-c2",
 			},
 		},
+		{
+			// With a canary and a soak, each cluster is fully validated, flipped and
+			// observed under traffic before the next cluster starts loading.
+			name:       "canary and soak wrap every cluster",
+			deployment: deploymentWithTargets(t, "c1", "c2"),
+			settings:   safeSettings,
+			want: []string{
+				"CanaryRolloutComplete-c1",
+				"RollingRolloutComplete-c1",
+				"TrafficRoutingConfigured-c1",
+				"SoakComplete-c1",
+				"CanaryRolloutComplete-c2",
+				"RollingRolloutComplete-c2",
+				"TrafficRoutingConfigured-c2",
+				"SoakComplete-c2",
+				"DiscoveryRoutingConfigured",
+				"ModelCleanupComplete-c1",
+				"ModelCleanupComplete-c2",
+			},
+		},
+		{
+			name:       "canary without soak",
+			deployment: deploymentWithTargets(t, "c1"),
+			settings:   osscommon.RolloutSettings{Canary: true},
+			want: []string{
+				"CanaryRolloutComplete-c1",
+				"RollingRolloutComplete-c1",
+				"TrafficRoutingConfigured-c1",
+				"DiscoveryRoutingConfigured",
+				"ModelCleanupComplete-c1",
+			},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			actors, err := GetActorsForStrategy(context.Background(), Params{Logger: zap.NewNop()}, tt.deployment)
+			actors, err := GetActorsForStrategy(context.Background(), Params{Logger: zap.NewNop(), Settings: tt.settings}, tt.deployment)
 
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, actorTypes(actors))

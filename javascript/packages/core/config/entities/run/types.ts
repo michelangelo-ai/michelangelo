@@ -58,6 +58,10 @@ export type PipelineRun = {
       name: string;
       namespace: string;
     };
+    revision?: {
+      name: string;
+      namespace: string;
+    };
     /** Optional human-readable description for this run. */
     description?: string;
     /**
@@ -71,6 +75,12 @@ export type PipelineRun = {
     /** Inline pipeline spec for dev runs; regular runs reference a Pipeline instead. */
     pipelineSpec?: PipelineSnapshotSpec;
     notifications?: PipelineRunNotification[];
+    /**
+     * Set when a user requests this run be stopped. The run keeps reporting its real
+     * `status.state` until the kill actually takes effect, so callers that want to show
+     * an in-progress "Killing" state need to check this alongside `status.state`.
+     */
+    kill?: boolean;
   };
   status?: {
     /** Snapshot of the pipeline this run executes, captured when the run starts. */
@@ -117,13 +127,31 @@ export type Resume = {
 
 /** Mirrors proto PipelineRunState enum (pipeline_run.proto). */
 export enum PipelineRunState {
-  QUEUED = 0,
-  PENDING = 1,
-  RUNNING = 2,
-  SUCCEEDED = 3,
-  KILLED = 4,
-  FAILED = 5,
-  SKIPPED = 6,
+  QUEUED = 'PIPELINE_RUN_STATE_INVALID',
+  PENDING = 'PIPELINE_RUN_STATE_PENDING',
+  RUNNING = 'PIPELINE_RUN_STATE_RUNNING',
+  SUCCEEDED = 'PIPELINE_RUN_STATE_SUCCEEDED',
+  KILLED = 'PIPELINE_RUN_STATE_KILLED',
+  FAILED = 'PIPELINE_RUN_STATE_FAILED',
+  SKIPPED = 'PIPELINE_RUN_STATE_SKIPPED',
+}
+
+/**
+ * Synthetic run state for a run that has a kill requested (`spec.kill`) but has not reached a
+ * terminal state yet. It is not a real proto value, so it lives beside `PipelineRunState`
+ * rather than as a member of it.
+ */
+export const KILLING_RUN_STATE = 'KILLING' as const;
+
+/** Mirrors proto PipelineRunStepState enum (pipeline_run.proto). */
+export enum PipelineRunStepState {
+  INVALID = 'PIPELINE_RUN_STEP_STATE_INVALID',
+  PENDING = 'PIPELINE_RUN_STEP_STATE_PENDING',
+  RUNNING = 'PIPELINE_RUN_STEP_STATE_RUNNING',
+  SUCCEEDED = 'PIPELINE_RUN_STEP_STATE_SUCCEEDED',
+  KILLED = 'PIPELINE_RUN_STEP_STATE_KILLED',
+  FAILED = 'PIPELINE_RUN_STEP_STATE_FAILED',
+  SKIPPED = 'PIPELINE_RUN_STEP_STATE_SKIPPED',
 }
 
 /**
@@ -140,18 +168,15 @@ export const TERMINAL_RUN_STATES: ReadonlySet<PipelineRunState> = new Set([
   PipelineRunState.SKIPPED,
 ]);
 
-/** Timestamp as returned by the API for pipeline run steps. */
-type StepTimestamp = {
-  seconds?: string;
-};
-
 /** The subset of `PipelineRunStepInfo` the resume step picker and information tab read. */
 export type PipelineRunStepInfo = {
   name?: string;
   displayName?: string;
-  state?: number;
-  startTime?: StepTimestamp;
-  endTime?: StepTimestamp;
+  state?: PipelineRunStepState;
+  /** RFC 3339 (proto3 JSON `google.protobuf.Timestamp`). */
+  startTime?: string;
+  /** RFC 3339 (proto3 JSON `google.protobuf.Timestamp`). */
+  endTime?: string;
   logUrl?: string;
   subSteps?: PipelineRunStepInfo[];
 };
@@ -161,7 +186,8 @@ export type PipelineRunSummary = {
   metadata?: {
     name?: string;
     namespace?: string;
-    creationTimestamp?: StepTimestamp;
+    /** k8s `Time`; `seconds` is an int64, which proto3 JSON encodes as a string. */
+    creationTimestamp?: string;
     labels?: Record<string, string>;
   };
   spec?: {
@@ -177,7 +203,7 @@ export type PipelineRunSummary = {
     pipelineSpec?: PipelineSnapshotSpec;
   };
   status?: {
-    state?: number;
+    state?: PipelineRunState;
     steps?: PipelineRunStepInfo[];
     errorMessage?: string;
     sourcePipeline?: SourcePipelineSnapshot;

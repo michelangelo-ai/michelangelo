@@ -1,9 +1,13 @@
+---
+last_verified: 2026-10-14
+---
+
 # How to Write APIs
 This guide walks through the steps for building and compiling Protocol Buffers (Protos) of ML entities in the Michelangelo AI using Bazel and Gazelle.
 
 ## 1. ML Entities in Proto Files
 
-Define entities in protobuf in [michelangelo/proto/api/v2](https://github.com/michelangelo-ai/michelangelo/tree/main/proto-go/api/v2).
+Define entities in protobuf in [michelangelo/proto/api/v2](https://github.com/michelangelo-ai/michelangelo/tree/main/proto/api/v2).
 
 [K8s Controller : Learnings & Best Practices](https://github.com/user-attachments/files/19595646/K8s.Controller_Best.Practices.for.open.source.pdf)
 

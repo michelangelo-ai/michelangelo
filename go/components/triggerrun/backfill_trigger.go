@@ -8,6 +8,7 @@ import (
 	"github.com/go-logr/logr"
 	clientInterface "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
+	uberconfig "go.uber.org/config"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 )
 
@@ -22,6 +23,7 @@ import (
 type backfillTrigger struct {
 	Log            logr.Logger                    // Structured logger for trigger operations
 	WorkflowClient clientInterface.WorkflowClient // Workflow engine client (Cadence/Temporal)
+	ConfigProvider uberconfig.Provider            // Workflow client config provider, for building monitoring URLs
 }
 
 // NewBackfillTrigger creates a new backfill trigger Runner.
@@ -29,10 +31,11 @@ type backfillTrigger struct {
 // The returned Runner manages one-time workflows for historical data processing.
 // It requires a logger for structured logging and a workflow client for interacting
 // with the workflow engine.
-func NewBackfillTrigger(log logr.Logger, workflowClient clientInterface.WorkflowClient) Runner {
+func NewBackfillTrigger(log logr.Logger, workflowClient clientInterface.WorkflowClient, configProvider uberconfig.Provider) Runner {
 	return &backfillTrigger{
 		Log:            log,
 		WorkflowClient: workflowClient,
+		ConfigProvider: configProvider,
 	}
 }
 
@@ -90,7 +93,7 @@ func (r *backfillTrigger) Run(ctx context.Context, triggerRun *v2pb.TriggerRun) 
 		return v2pb.TriggerRunStatus{
 			State:               v2pb.TRIGGER_RUN_STATE_RUNNING,
 			ExecutionWorkflowId: *rid,
-			LogUrl:              getWorkflowURL(wid, r.WorkflowClient.GetProvider()),
+			LogUrl:              getWorkflowURL(r.ConfigProvider, wid, *rid),
 		}, nil
 	}
 	log.Info("starting backfill workflow",
@@ -122,7 +125,7 @@ func (r *backfillTrigger) Run(ctx context.Context, triggerRun *v2pb.TriggerRun) 
 	return v2pb.TriggerRunStatus{
 		State:               v2pb.TRIGGER_RUN_STATE_RUNNING,
 		ExecutionWorkflowId: exec.ID,
-		LogUrl:              getWorkflowURL(wid, r.WorkflowClient.GetProvider()),
+		LogUrl:              getWorkflowURL(r.ConfigProvider, wid, exec.RunID),
 	}, nil
 }
 

@@ -29,6 +29,9 @@ type Params struct {
 	ModelConfigProvider modelconfig.ModelConfigProvider
 	Logger              *zap.Logger
 
+	// Settings are the resolved rollout knobs: canary, load budget and soak.
+	Settings osscommon.RolloutSettings
+
 	// DynamicClient is the dynamic client for the control-plane cluster. Retained so that
 	// actors operating on control-plane-only resources can access it directly.
 	DynamicClient dynamic.Interface
@@ -45,26 +48,26 @@ type Params struct {
 }
 
 // GetActorsForStrategy returns the ordered actor chain for the deployment's rollout strategy.
-// Each cluster gets its own RollingRolloutActor; the model is exposed via a single
-// DiscoveryRoutingActor that adds the deployment's rule to the InferenceServer's discovery
-// route. Cleanup actors follow at the end so old models are removed only after every cluster
-// has flipped to the new model.
+// Every strategy rolls the model out one cluster at a time; the strategy only decides the
+// per-cluster safety steps (canary, soak) through the resolved Settings. Inside a cluster the
+// order is canary → load on every replica → route traffic → soak, and the model is exposed via
+// a single DiscoveryRoutingActor once every cluster serves it. Cleanup actors follow at the end
+// so old models are removed only after every cluster has flipped to the new model.
 func GetActorsForStrategy(ctx context.Context, params Params, deployment *v2pb.Deployment) ([]conditionInterfaces.ConditionActor[*v2pb.Deployment], error) {
 	strategy := getDeploymentStrategy(deployment)
-	params.Logger.Info("Selected rollout strategy", zap.String("strategy", strategy), zap.String("deployment", deployment.Name))
+	params.Logger.Info("Selected rollout strategy",
+		zap.String("strategy", strategy),
+		zap.String("deployment", deployment.Name),
+		zap.Bool("canary", params.Settings.Canary),
+		zap.Duration("soakPeriod", params.Settings.SoakPeriod),
+		zap.Duration("modelLoadTimeout", params.Settings.ModelLoadTimeout))
 
-	switch strategy {
-	// TODO(#623): Implement blast, zonal, shadow, and disaggregated strategies.
-	case "rolling":
-		fallthrough
-	default:
-		return getRollingActors(params, deployment)
-	}
+	return getClusterSequenceActors(params, deployment)
 }
 
-// getRollingActors builds the per-cluster actor chain for the rolling strategy. The actor
-// list is constructed from the cluster snapshot annotation written by PlacementPrepActor.
-func getRollingActors(params Params, deployment *v2pb.Deployment) ([]conditionInterfaces.ConditionActor[*v2pb.Deployment], error) {
+// getClusterSequenceActors builds the per-cluster actor chain. The actor list is constructed
+// from the cluster snapshot annotation written by PlacementPrepActor.
+func getClusterSequenceActors(params Params, deployment *v2pb.Deployment) ([]conditionInterfaces.ConditionActor[*v2pb.Deployment], error) {
 	targets, err := osscommon.ReadTargetClustersAnnotation(deployment)
 	if err != nil {
 		return nil, fmt.Errorf("read target clusters annotation: %w", err)
@@ -76,17 +79,34 @@ func getRollingActors(params Params, deployment *v2pb.Deployment) ([]conditionIn
 		return nil, nil
 	}
 
-	// Per-cluster [RollingRollout, TrafficRouting] pairs come first, interleaved so cluster N
-	// starts routing traffic as soon as its model is loaded. A single DiscoveryRoutingActor then
-	// exposes the deployment via the control-plane discovery route. Per-cluster ModelCleanup
-	// actors run at the end so old models are removed only after every cluster has flipped.
-	actors := make([]conditionInterfaces.ConditionActor[*v2pb.Deployment], 0, 3*len(targets)+1)
+	deps := strategiesCommon.ClusterActorDeps{
+		ClientFactory:       params.ClientFactory,
+		APIHandler:          params.APIHandler,
+		BackendRegistry:     params.BackendRegistry,
+		ModelConfigProvider: params.ModelConfigProvider,
+		RouteManager:        params.RouteManager,
+		Logger:              params.Logger,
+		Settings:            params.Settings,
+	}
+
+	// Per-cluster [Canary, RollingRollout, TrafficRouting, Soak] runs come first, so cluster
+	// N only starts once cluster N-1 serves the new model and has soaked on it. A single
+	// DiscoveryRoutingActor then exposes the deployment via the control-plane discovery
+	// route. Per-cluster ModelCleanup actors run at the end so old models are removed only
+	// after every cluster has flipped.
+	actors := make([]conditionInterfaces.ConditionActor[*v2pb.Deployment], 0, 5*len(targets)+1)
 
 	for _, target := range targets {
+		if params.Settings.Canary {
+			actors = append(actors, strategiesCommon.NewCanaryRolloutActor(deps, target))
+		}
 		actors = append(actors,
-			strategiesCommon.NewRollingRolloutActor(params.ClientFactory, params.APIHandler, params.BackendRegistry, params.ModelConfigProvider, params.Logger, target),
-			strategiesCommon.NewTrafficRoutingActor(params.ClientFactory, params.RouteManager, target),
+			strategiesCommon.NewRollingRolloutActor(deps, target),
+			strategiesCommon.NewTrafficRoutingActor(deps, target),
 		)
+		if params.Settings.SoakPeriod > 0 {
+			actors = append(actors, strategiesCommon.NewSoakActor(deps, target))
+		}
 	}
 	actors = append(actors, strategiesCommon.NewDiscoveryRoutingActor(params.DynamicClient, params.RouteManager))
 	for _, target := range targets {
@@ -96,9 +116,13 @@ func getRollingActors(params Params, deployment *v2pb.Deployment) ([]conditionIn
 	return actors, nil
 }
 
-// getDeploymentStrategy determines the rollout strategy from deployment configuration.
+// getDeploymentStrategy names the rollout strategy from deployment configuration.
 func getDeploymentStrategy(deployment *v2pb.Deployment) string {
 	switch deployment.Spec.GetStrategy().GetRolloutStrategy().(type) {
+	case *v2pb.DeploymentStrategy_Zonal:
+		return "zonal"
+	case *v2pb.DeploymentStrategy_Blast:
+		return "blast"
 	case *v2pb.DeploymentStrategy_Rolling:
 		return "rolling"
 	default:

@@ -3,8 +3,10 @@ import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
 
 import { InterpolatableActionsPopover } from '#core/components/actions/interpolatable-actions-popover';
+import { TASK_STATE } from '#core/components/views/execution/constants';
 import { CreateDeploymentForm } from '#core/config/entities/deployment/create-deployment-form';
 import { DEPLOYMENT_ENTITY_CONFIG } from '#core/config/entities/deployment/deployment';
+import { DEPLOYMENT_DETAIL_CONFIG } from '#core/config/entities/deployment/detail';
 import {
   DEPLOYMENT_CONDITION_STATUS,
   DEPLOYMENT_STAGE,
@@ -26,6 +28,7 @@ import {
 import { getSnackbarProviderWrapper } from '#core/test/wrappers/get-snackbar-provider-wrapper';
 
 import type { ActionConfigSchema, Data } from '#core/components/actions/types';
+import type { ExecutionDetailPageConfig } from '#core/components/views/detail-view/types/detail-view-schema-types';
 import type { DeploymentUpdateInput } from '#core/config/entities/deployment/types';
 
 describe('Deployment list page', () => {
@@ -128,7 +131,7 @@ describe('Deployment detail page', () => {
             request: createQueryMockRouter({
               GetDeployment: {
                 deployment: {
-                  spec: { definition: { type: 1 } },
+                  spec: { definition: { type: 'TARGET_TYPE_INFERENCE_SERVER' } },
                 },
               },
             }),
@@ -153,7 +156,7 @@ describe('Deployment detail page', () => {
               GetDeployment: {
                 deployment: {
                   spec: {
-                    target: { case: 'inferenceServer', value: { name: 'triton-server' } },
+                    inferenceServer: { name: 'triton-server' },
                   },
                 },
               },
@@ -206,10 +209,10 @@ describe('Deployment detail page', () => {
               },
               GetModel: {
                 model: {
-                  metadata: { creationTimestamp: { seconds: 1746000000 } },
+                  metadata: { creationTimestamp: '2025-04-30T08:00:00Z' },
                   spec: {
                     owner: { name: 'model-owner' },
-                    kind: 2,
+                    kind: 'MODEL_KIND_REGRESSION',
                     sourcePipelineRun: { name: 'run-20260825-080000' },
                   },
                 },
@@ -415,6 +418,213 @@ describe('Deployment detail page', () => {
       await screen.findAllByText('SnapshotPlacement');
       await screen.findByText('NoCapacity');
     });
+
+    it('renders state chips matching the task states during an active rollout', async () => {
+      render(
+        <EntityDetailRoute phases={{ deploy: DEPLOY_PHASE }} />,
+        buildWrapper([
+          getErrorProviderWrapper(),
+          getRouterWrapper({
+            location: '/myproject/deploy/deployments/sentiment-deployment/ongoing-operations',
+          }),
+          getServiceProviderWrapper({
+            request: createQueryMockRouter({
+              GetDeployment: {
+                deployment: buildDeployment({
+                  status: {
+                    state: DEPLOYMENT_STATE.INITIALIZING,
+                    stage: DEPLOYMENT_STAGE.PLACEMENT,
+                    conditions: [
+                      { type: 'Validation', status: DEPLOYMENT_CONDITION_STATUS.TRUE },
+                      { type: 'Placement', status: DEPLOYMENT_CONDITION_STATUS.UNKNOWN },
+                      { type: 'RolloutCompleted', status: DEPLOYMENT_CONDITION_STATUS.FALSE },
+                    ],
+                  },
+                }),
+              },
+            }),
+          }),
+        ])
+      );
+
+      expect(await screen.findByText('Succeeded')).toBeInTheDocument();
+      expect(screen.getByText('Running')).toBeInTheDocument();
+      expect(screen.getByText('Pending')).toBeInTheDocument();
+      expect(screen.queryByText('Failed')).not.toBeInTheDocument();
+    });
+
+    it('renders a "Failed" chip on the first incomplete condition when the rollout failed', async () => {
+      render(
+        <EntityDetailRoute phases={{ deploy: DEPLOY_PHASE }} />,
+        buildWrapper([
+          getErrorProviderWrapper(),
+          getRouterWrapper({
+            location: '/myproject/deploy/deployments/sentiment-deployment/ongoing-operations',
+          }),
+          getServiceProviderWrapper({
+            request: createQueryMockRouter({
+              GetDeployment: {
+                deployment: buildDeployment({
+                  status: {
+                    state: DEPLOYMENT_STATE.UNHEALTHY,
+                    stage: DEPLOYMENT_STAGE.ROLLOUT_FAILED,
+                    conditions: [],
+                    conditionsSnapshot: [
+                      { type: 'Validation', status: DEPLOYMENT_CONDITION_STATUS.TRUE },
+                      { type: 'Placement', status: DEPLOYMENT_CONDITION_STATUS.FALSE },
+                      { type: 'RolloutCompleted', status: DEPLOYMENT_CONDITION_STATUS.FALSE },
+                    ],
+                  },
+                }),
+              },
+            }),
+          }),
+        ])
+      );
+
+      expect(await screen.findByText('Succeeded')).toBeInTheDocument();
+      expect(screen.getByText('Failed')).toBeInTheDocument();
+      expect(screen.getByText('Pending')).toBeInTheDocument();
+      expect(screen.queryByText('Running')).not.toBeInTheDocument();
+    });
+
+    it('falls back to live conditions when a failed rollout has an empty snapshot', async () => {
+      render(
+        <EntityDetailRoute phases={{ deploy: DEPLOY_PHASE }} />,
+        buildWrapper([
+          getErrorProviderWrapper(),
+          getRouterWrapper({
+            location: '/myproject/deploy/deployments/sentiment-deployment/ongoing-operations',
+          }),
+          getServiceProviderWrapper({
+            request: createQueryMockRouter({
+              GetDeployment: {
+                deployment: buildDeployment({
+                  status: {
+                    state: DEPLOYMENT_STATE.UNHEALTHY,
+                    stage: DEPLOYMENT_STAGE.ROLLOUT_FAILED,
+                    conditions: [
+                      { type: 'LiveCondition', status: DEPLOYMENT_CONDITION_STATUS.FALSE },
+                    ],
+                    conditionsSnapshot: [],
+                  },
+                }),
+              },
+            }),
+          }),
+        ])
+      );
+
+      await screen.findAllByText('LiveCondition');
+    });
+
+    describe('stages', () => {
+      const page = DEPLOYMENT_DETAIL_CONFIG.pages.find((p) => p.id === 'ongoing-operations') as
+        | ExecutionDetailPageConfig
+        | undefined;
+      const accessor = page?.tasks.accessor as (data: object) => object[];
+      const stateBuilder = page?.tasks.stateBuilder as (
+        record: object,
+        index: number,
+        siblings: object[],
+        data: object
+      ) => string;
+
+      const condition = (status: string) => ({ status });
+      const atStage = (stage: string) => ({ status: { stage } });
+
+      it('marks satisfied conditions as success', () => {
+        const conditions = [condition(DEPLOYMENT_CONDITION_STATUS.TRUE)];
+        expect(
+          stateBuilder(conditions[0], 0, conditions, atStage(DEPLOYMENT_STAGE.PLACEMENT))
+        ).toBe(TASK_STATE.SUCCESS);
+      });
+
+      it('marks the first incomplete condition as running and later ones as pending during an active rollout', () => {
+        const conditions = [
+          condition(DEPLOYMENT_CONDITION_STATUS.TRUE),
+          condition(DEPLOYMENT_CONDITION_STATUS.FALSE),
+          condition(DEPLOYMENT_CONDITION_STATUS.UNKNOWN),
+        ];
+        const data = atStage(DEPLOYMENT_STAGE.PLACEMENT);
+
+        expect(stateBuilder(conditions[1], 1, conditions, data)).toBe(TASK_STATE.RUNNING);
+        expect(stateBuilder(conditions[2], 2, conditions, data)).toBe(TASK_STATE.PENDING);
+      });
+
+      it('treats an unknown-status condition as the running step when it is first incomplete', () => {
+        const conditions = [
+          condition(DEPLOYMENT_CONDITION_STATUS.UNKNOWN),
+          condition(DEPLOYMENT_CONDITION_STATUS.FALSE),
+        ];
+        const data = atStage(DEPLOYMENT_STAGE.VALIDATION);
+
+        expect(stateBuilder(conditions[0], 0, conditions, data)).toBe(TASK_STATE.RUNNING);
+        expect(stateBuilder(conditions[1], 1, conditions, data)).toBe(TASK_STATE.PENDING);
+      });
+
+      it.each([
+        ['rollout failed', DEPLOYMENT_STAGE.ROLLOUT_FAILED],
+        ['rollback failed', DEPLOYMENT_STAGE.ROLLBACK_FAILED],
+      ])('marks the first incomplete condition as error when %s', (_label, stage) => {
+        const conditions = [
+          condition(DEPLOYMENT_CONDITION_STATUS.TRUE),
+          condition(DEPLOYMENT_CONDITION_STATUS.FALSE),
+          condition(DEPLOYMENT_CONDITION_STATUS.UNKNOWN),
+        ];
+        const data = atStage(stage);
+
+        expect(stateBuilder(conditions[1], 1, conditions, data)).toBe(TASK_STATE.ERROR);
+        expect(stateBuilder(conditions[2], 2, conditions, data)).toBe(TASK_STATE.PENDING);
+      });
+
+      it('returns live conditions during an active rollout', () => {
+        const conditions = [{ type: 'Live' }];
+        const conditionsSnapshot = [{ type: 'Snapshot' }];
+        expect(
+          accessor({
+            status: { stage: DEPLOYMENT_STAGE.PLACEMENT, conditions, conditionsSnapshot },
+          })
+        ).toEqual(conditions);
+      });
+
+      it('returns the snapshot when the rollout has failed', () => {
+        const conditions = [{ type: 'Live' }];
+        const conditionsSnapshot = [{ type: 'Snapshot' }];
+        expect(
+          accessor({
+            status: { stage: DEPLOYMENT_STAGE.ROLLOUT_FAILED, conditions, conditionsSnapshot },
+          })
+        ).toEqual(conditionsSnapshot);
+      });
+
+      it('returns live conditions when the rollback has failed, even if a snapshot exists', () => {
+        const conditions = [{ type: 'Live' }];
+        const conditionsSnapshot = [{ type: 'Snapshot' }];
+        expect(
+          accessor({
+            status: { stage: DEPLOYMENT_STAGE.ROLLBACK_FAILED, conditions, conditionsSnapshot },
+          })
+        ).toEqual(conditions);
+      });
+
+      it('falls back to live conditions when the failed-rollout snapshot is empty', () => {
+        const conditions = [{ type: 'Live' }];
+        expect(
+          accessor({
+            status: {
+              stage: DEPLOYMENT_STAGE.ROLLOUT_FAILED,
+              conditions,
+              conditionsSnapshot: [],
+            },
+          })
+        ).toEqual(conditions);
+      });
+
+      it('returns an empty list when status is missing', () => {
+        expect(accessor({})).toEqual([]);
+      });
+    });
   });
 });
 
@@ -429,11 +639,11 @@ describe('Deployment retire action', () => {
       metadata: {
         name: DEPLOYMENT_NAME,
         namespace: NAMESPACE,
-        creationTimestamp: { seconds: 1757019547 },
+        creationTimestamp: '2025-09-04T20:59:07Z',
       },
       spec: {
         desiredRevision: { name: 'bert-cola-37', namespace: NAMESPACE },
-        target: { case: 'inferenceServer', value: { name: 'inference-server-example' } },
+        inferenceServer: { name: 'inference-server-example' },
       },
       status: {
         currentRevision: { name: 'bert-cola-37', namespace: NAMESPACE },
@@ -484,10 +694,7 @@ describe('Deployment retire action', () => {
     // The absent desiredRevision is what tells the backend to run cleanup; the rest of
     // the spec must be sent through intact.
     expect(payload.spec.desiredRevision).toBeUndefined();
-    expect(payload.spec.target).toEqual({
-      case: 'inferenceServer',
-      value: { name: 'inference-server-example' },
-    });
+    expect(payload.spec.inferenceServer).toEqual({ name: 'inference-server-example' });
     expect(payload.metadata.name).toBe(DEPLOYMENT_NAME);
 
     expect(
@@ -504,7 +711,7 @@ describe('Deployment retire action', () => {
     });
 
     const record = buildDeployedRecord({
-      spec: { target: { case: 'inferenceServer', value: { name: 'inference-server-example' } } },
+      spec: { inferenceServer: { name: 'inference-server-example' } },
       status: {},
     });
 
@@ -543,7 +750,7 @@ describe('Deployment retire action', () => {
     // desiredRevision already cleared but a candidate is mid-rollout — retiring must
     // still be possible to abort the rollout, matching the backend's cleanup trigger.
     const record = buildDeployedRecord({
-      spec: { target: { case: 'inferenceServer', value: { name: 'inference-server-example' } } },
+      spec: { inferenceServer: { name: 'inference-server-example' } },
       status: { candidateRevision: { name: 'bert-cola-37', namespace: NAMESPACE } },
     });
 
@@ -592,11 +799,11 @@ describe('Deployment delete action', () => {
       metadata: {
         name: DEPLOYMENT_NAME,
         namespace: NAMESPACE,
-        creationTimestamp: { seconds: 1757019547 },
+        creationTimestamp: '2025-09-04T20:59:07Z',
       },
       spec: {
         desiredRevision: { name: 'bert-cola-37', namespace: NAMESPACE },
-        target: { case: 'inferenceServer', value: { name: 'inference-server-example' } },
+        inferenceServer: { name: 'inference-server-example' },
       },
       status: {},
     };
@@ -668,8 +875,8 @@ describe('Deployment update action', () => {
       metadata: { name: string };
       spec: {
         desiredRevision?: { name?: string };
-        strategy?: { rolloutStrategy?: { case?: string } };
-        target?: { value?: { name?: string } };
+        strategy?: { rolling?: object };
+        inferenceServer?: { name?: string };
         modelFamily?: { name?: string };
       };
       status?: unknown;
@@ -701,7 +908,7 @@ describe('Deployment update action', () => {
           metadata: { name: DEPLOYMENT_NAME, namespace: NAMESPACE },
           spec: {
             desiredRevision: { name: 'bert-cola-37', namespace: NAMESPACE },
-            target: { case: 'inferenceServer', value: { name: 'inference-server-example' } },
+            inferenceServer: { name: 'inference-server-example' },
             modelFamily: { name: 'bert-cola', namespace: NAMESPACE },
           },
         }}
@@ -766,9 +973,9 @@ describe('Deployment update action', () => {
           metadata: { name: DEPLOYMENT_NAME, namespace: NAMESPACE },
           spec: {
             desiredRevision: { name: 'bert-cola-37', namespace: NAMESPACE },
-            target: { case: 'inferenceServer', value: { name: 'inference-server-example' } },
-            strategy: { rolloutStrategy: { case: 'rolling', value: { incrementPercentage: 10 } } },
-            definition: { type: 1 },
+            inferenceServer: { name: 'inference-server-example' },
+            strategy: { rolling: { incrementPercentage: 10 } },
+            definition: { type: 'TARGET_TYPE_INFERENCE_SERVER' },
             modelFamily: { name: 'bert-cola', namespace: NAMESPACE },
           },
           status: { currentRevision: { name: 'bert-cola-37', namespace: NAMESPACE } },
@@ -797,8 +1004,8 @@ describe('Deployment update action', () => {
     expect(payload.spec.desiredRevision?.name).toBe('bert-cola-38');
     // Everything else on the record rides along unchanged.
     expect(payload.metadata.name).toBe(DEPLOYMENT_NAME);
-    expect(payload.spec.target?.value?.name).toBe('inference-server-example');
-    expect(payload.spec.strategy?.rolloutStrategy?.case).toBe('rolling');
+    expect(payload.spec.inferenceServer?.name).toBe('inference-server-example');
+    expect(payload.spec.strategy?.rolling).toBeDefined();
     expect(payload.spec.modelFamily?.name).toBe('bert-cola');
     expect(payload.status).toBeDefined();
   });
@@ -857,12 +1064,9 @@ describe('Deployment create action', () => {
           spec: {
             modelFamily: { name: 'bert-cola', namespace: 'ma-dev-test' },
             desiredRevision: { name: 'bert-cola-40', namespace: 'ma-dev-test' },
-            target: {
-              case: 'inferenceServer',
-              value: { name: 'inference-server-example', namespace: 'ma-dev-test' },
-            },
-            strategy: { rolloutStrategy: { case: 'rolling', value: { incrementPercentage: 0 } } },
-            definition: { type: 1 },
+            inferenceServer: { name: 'inference-server-example', namespace: 'ma-dev-test' },
+            strategy: { rolling: { incrementPercentage: 0 } },
+            definition: { type: 'TARGET_TYPE_INFERENCE_SERVER' },
           },
         },
         {}

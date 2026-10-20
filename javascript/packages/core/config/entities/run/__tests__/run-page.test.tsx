@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react';
 
+import { PipelineRunState, PipelineRunStepState } from '#core/config/entities/run/types';
 import { TRAIN_PHASE } from '#core/config/phases/train';
 import { EntityDetailRoute } from '#core/router/entity-detail-route';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
@@ -15,7 +16,7 @@ describe('Run detail page', () => {
     const buildRun = (overrides: Record<string, unknown> = {}) => ({
       metadata: {
         name: 'run-1',
-        creationTimestamp: { seconds: '1700000000' },
+        creationTimestamp: '2023-11-14T22:13:20Z',
         labels: { 'michelangelo/environment': 'development' },
       },
       spec: {
@@ -23,14 +24,14 @@ describe('Run detail page', () => {
         pipeline: { name: 'prediction-pipeline' },
       },
       status: {
-        state: 3,
+        state: PipelineRunState.SUCCEEDED,
         steps: [
           {
             name: 'Execute Workflow',
             displayName: 'Execute Workflow',
-            state: 3,
-            startTime: { seconds: '1700000010' },
-            endTime: { seconds: '1700003186' },
+            state: PipelineRunStepState.SUCCEEDED,
+            startTime: '2023-11-14T22:13:30Z',
+            endTime: '2023-11-14T23:06:26Z',
             logUrl: 'https://workflow.example.com/run-1',
           },
         ],
@@ -82,7 +83,7 @@ describe('Run detail page', () => {
               GetPipelineRun: {
                 pipelineRun: buildRun({
                   status: {
-                    state: 5,
+                    state: PipelineRunState.FAILED,
                     steps: [],
                     errorMessage: 'Task train failed:\nOOMKilled',
                   },
@@ -111,7 +112,7 @@ describe('Run detail page', () => {
                 pipelineRun: buildRun({
                   metadata: {
                     name: 'run-1',
-                    creationTimestamp: { seconds: '1700000000' },
+                    creationTimestamp: '2023-11-14T22:13:20Z',
                     labels: {
                       'michelangelo/environment': 'production',
                       // 2023-07-22T05:46:40Z — a backfill slot well before the object was created.
@@ -156,13 +157,13 @@ describe('Run detail page', () => {
                     },
                   },
                   status: {
-                    state: 3,
+                    state: PipelineRunState.SUCCEEDED,
                     steps: [],
                     sourcePipeline: {
                       pipeline: {
                         spec: {
                           manifest: {
-                            type: 1,
+                            type: 'PIPELINE_MANIFEST_TYPE_YAML',
                             content: {
                               typeUrl: 'type.googleapis.com/michelangelo.PredictionPipelineConf',
                               value: { meta: { workflow_version: 'v2' } },
@@ -226,7 +227,7 @@ describe('Run detail page', () => {
           getServiceProviderWrapper({
             request: createQueryMockRouter({
               GetPipelineRun: {
-                pipelineRun: buildRun({ status: { state: 1, steps: [] } }),
+                pipelineRun: buildRun({ status: { state: PipelineRunState.PENDING, steps: [] } }),
               },
             }),
           }),

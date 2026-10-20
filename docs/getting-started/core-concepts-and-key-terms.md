@@ -59,8 +59,8 @@ A **task** is the fundamental unit of computation in Uniflow. Tasks are modular 
 
 ##### Key Features
 - **Input and Output Handling**: Tasks process input data and produce outputs.
-- **Caching**: Automatically caches results to prevent redundant computations.
-- **Retry Mechanism**: Built-in retries for transient failures.
+- **Caching**: Opt-in result caching (`cache_enabled=True`) to prevent redundant computations.
+- **Retry Mechanism**: Configurable retries for transient failures (`retry_attempts`, default 0).
 - **Containerized Execution**: Tasks run in isolated environments (Docker, K8s) for scalability.
 
 ```python
@@ -143,7 +143,7 @@ A Model Family is a group of related ML models within a project that address dif
 
 A piece of data registered in Michelangelo AI. Users can set up data pipelines and let Michelangelo AI manage the dataset, or directly register the dataset in Michelangelo AI and manage it externally. They can use the dataset for training and evaluation.
 
-**Familiar Equivalent**: Like registering a dataset in a data catalog (e.g., Delta Lake, Data Version Control, or AWS Glue Data Catalog). Michelangelo AI tracks dataset versions and lineage automatically.
+**Familiar Equivalent**: Like registering a dataset in a data catalog (e.g., Delta Lake, Data Version Control, or AWS Glue Data Catalog).
 
 ### Feature
 
@@ -160,10 +160,8 @@ A pipeline is a recipe that runs multiple jobs and creates desired output artifa
 ### Model & Revision
 
 As a widely used term, a machine learning model refers to output from a training job over a set of data, providing it an algorithm that it can use to reason over, learn from, and make predictions about that data.
-
-     **model name:**  identifier of a model, it also means a list of models (like a chain) in the incremental training case.
-
-     **revision id:** Revision of the model, for normal model, it will always be revision 0. But for incremental training, the revision id will keep increasing for each iteration of the model training job.
+     **model name:** identifier of a model within its project.
+     **revision id:** the Model's `spec.revisionId`. The API defines it as starting at 0 and increasing with each update or retrain, but in the open-source release nothing increments it automatically: it holds whatever the client that writes the Model sets, and defaults to 0.
 
 ### Evaluation Report
 
@@ -232,13 +230,13 @@ Uniflow tasks support standard Python types plus ML-specific formats:
 **Key Features**:
 - **Automatic serialization**: Uniflow handles serialization/deserialization automatically
 - **Type safety**: Use Python type hints for better error checking
-- **Caching**: Results are cached based on input types and values
+- **Caching**: When a task enables caching (`cache_enabled=True`), results are cached based on input types and values
 - **Protocol support**: Access files via s3://, hdfs://, file:// (via [fsspec](https://filesystem-spec.readthedocs.io/))
 
 **Common Patterns**:
 ```python
-# Simple typed task
-@uniflow.task()
+# Simple typed task (every task needs a config such as RayTask or SparkTask)
+@uniflow.task(config=RayTask())
 def add_numbers(a: int, b: int) -> int:
     return a + b
 
@@ -249,7 +247,7 @@ class ModelConfig(BaseModel):
     learning_rate: float
     batch_size: int
 
-@uniflow.task()
+@uniflow.task(config=RayTask())
 def train(config: ModelConfig):
     # Training code using config.learning_rate, config.batch_size
     pass
@@ -267,7 +265,7 @@ See [Data Type Examples](../user-guides/reference/type-system.md#appendix-uniflo
 
 ## Logs and Monitoring
 
-- **Pipeline Logs**: Viewable through Kubernetes, `ma`, or Cadence UI.
+- **Pipeline Logs**: Viewable through Kubernetes or the workflow engine UI (Cadence or Temporal).
 - **Audit & Debugging**: All execution results and logs can be persisted and traced back.
 
 ---
@@ -370,11 +368,7 @@ def training_pipeline(dataset_id: str):
 
 ### Incremental Training an Existing Model
 
-1. **Reference existing Model** by name from your Project
-2. **Update Dataset** with new data (or create new dataset version)
-3. **Run Workflow** with incremental training enabled
-4. **New Revision** created automatically (e.g., revision 0 → revision 1)
-5. **Update Deployment** to new revision (instant rollback available if needed)
+Incremental training isn't implemented in the open-source release yet. To start a run from an existing model's weights today, see [Warm starts](../user-guides/train-and-deploy-models/distributed-training.md#warm-starts).
 
 ### Deploying for A/B Testing
 

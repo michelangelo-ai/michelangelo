@@ -17,6 +17,8 @@
 // TriggerRun resources transition through the following states:
 //   - INVALID → RUNNING: Initial workflow start
 //   - RUNNING → SUCCEEDED/FAILED/KILLED: Terminal states based on execution outcome
+//   - RUNNING/PAUSED → PENDING_KILL → KILLED: A kill stops the workflow, then waits for
+//     in-flight child PipelineRuns to stop before the run becomes terminal
 //
 // The controller reconciles resources every 60 seconds to check workflow status and handle
 // kill requests. Terminal states are marked immutable to prevent further modifications.
@@ -31,6 +33,11 @@
 // run's recurring cron/schedule before GC removes it. The drain finalizer is
 // installed before the ownerReference so the run is never GC-eligible unprotected,
 // and a deleting run can never re-arm its cron; a 24h timeout is the backstop.
+//
+// Cascade cancel: killing or deleting a trigger run also requests a kill on every
+// in-flight child PipelineRun it dispatched (found via TriggeredByLabel). A killed
+// run stays PENDING_KILL, and a deleting run keeps its drain finalizer, until those
+// children are terminal.
 package triggerrun
 
 import (
@@ -165,7 +172,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			Object:      triggerRun,
 			Kind:        metricKind,
 			Finalizer:   drainFinalizer,
-			IsTerminal:  isTerminateState(triggerRun),
+			IsTerminal:  r.isDrained(ctx, log, triggerRun),
 			WorkStarted: triggerRunWorkStarted(triggerRun),
 		}
 		return cascadedelete.RunDrainStep(ctx, st, &triggerRunDrainTarget{r: r, log: log, run: triggerRun}, drainRequeueInterval)
@@ -190,8 +197,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 // State Machine Logic:
 //
 //   - Terminal states (SUCCEEDED/FAILED/KILLED): Mark resource immutable and stop reconciliation
+//     (KILLED first cancels any child PipelineRuns still in flight)
 //   - INVALID: Start workflow execution using appropriate Runner, transition to RUNNING or FAILED
 //   - RUNNING: Check workflow status, handle kill requests if Spec.Kill is true
+//   - PENDING_KILL: Cancel in-flight child PipelineRuns; transition to KILLED once none remain
 //
 // The method performs the following operations:
 //  1. Check if resource is in terminal state and mark immutable if needed
@@ -207,6 +216,16 @@ func (r *Reconciler) reconcile(
 ) (ctrl.Result, error) {
 	if isTerminateState(triggerRun) {
 		if !apiutils.IsImmutable(triggerRun) {
+			// A kill normally drains children in PENDING_KILL, but KILLED can also be
+			// reached directly (e.g. reported by the workflow engine), so cancel any
+			// children still in flight. Done before marking immutable so a failed
+			// cancel is retried on the next reconcile.
+			if triggerRun.Status.State == v2pb.TRIGGER_RUN_STATE_KILLED {
+				if _, err := r.cancelActiveChildPipelineRuns(ctx, log, triggerRun); err != nil {
+					log.Error(err, "failed to cancel child pipeline runs of killed trigger run")
+					return ctrl.Result{}, err
+				}
+			}
 			apiutils.MarkImmutable(triggerRun)
 			err := r.Update(ctx, triggerRun, &metav1.UpdateOptions{})
 			if err != nil {
@@ -215,7 +234,7 @@ func (r *Reconciler) reconcile(
 			}
 			log.Info("trigger_run resource marked as immutable")
 		}
-		log.Info(fmt.Sprintf("reached terminal state: %s", triggerRun.Status.State.String()))
+		log.Info("reached terminal state", "state", triggerRun.Status.State.String())
 		// do not requeue
 		return ctrl.Result{}, nil
 	}
@@ -292,7 +311,7 @@ StateMachine:
 				break StateMachine
 			}
 			log.Info("trigger run killed")
-			triggerRun.Status = status
+			triggerRun.Status = pendingKillStatus(status)
 			triggerRun.Spec.Action = v2pb.TRIGGER_RUN_ACTION_NO_ACTION
 			triggerRun.Spec.Kill = false
 			break StateMachine
@@ -365,7 +384,7 @@ StateMachine:
 				break StateMachine
 			}
 			log.Info("paused trigger run killed")
-			triggerRun.Status = status
+			triggerRun.Status = pendingKillStatus(status)
 			triggerRun.Spec.Action = v2pb.TRIGGER_RUN_ACTION_NO_ACTION
 			break StateMachine
 
@@ -383,6 +402,22 @@ StateMachine:
 			break StateMachine
 		}
 		// Stay paused if no action requested (no status change needed)
+
+	case v2pb.TRIGGER_RUN_STATE_PENDING_KILL:
+		log.Info("TRIGGER_RUN_STATE_PENDING_KILL")
+		// The workflow is already stopped; stay here until every child PipelineRun
+		// it dispatched has stopped, retrying failed cancels.
+		active, err := r.cancelActiveChildPipelineRuns(ctx, log, triggerRun)
+		if err != nil {
+			log.Error(err, "failed to cancel child pipeline runs of killed trigger run")
+			return ctrl.Result{}, err
+		}
+		if active > 0 {
+			log.Info("waiting for child pipeline runs to stop", "active", active)
+			return ctrl.Result{RequeueAfter: drainRequeueInterval}, nil
+		}
+		triggerRun.Status.State = v2pb.TRIGGER_RUN_STATE_KILLED
+		triggerRun.Status.ErrorMessage = ""
 	}
 
 	// Actions are one-time commands. Persist their reset through the main
@@ -488,9 +523,41 @@ func triggerRunWorkStarted(run *v2pb.TriggerRun) bool {
 	return run.Status.State != v2pb.TRIGGER_RUN_STATE_INVALID
 }
 
-// RequestCancel stops the recurring cron (idempotent kill), persists the terminal
-// status through the status subresource, and stamps the drain-counted token.
-func (t *triggerRunDrainTarget) RequestCancel(ctx context.Context) error {
+// isDrained reports whether a deleting trigger run has no in-flight work left: the
+// run itself is terminal and none of its child PipelineRuns are still active. The
+// drain finalizer is only removed once this holds (or the drain times out).
+//
+// A failed child probe is logged and reported as not drained rather than returned,
+// so RunDrainStep still evaluates the drain timeout; RequestCancel/Progress re-run
+// the child cancel after that check and surface the error for retry.
+func (r *Reconciler) isDrained(ctx context.Context, log logr.Logger, triggerRun *v2pb.TriggerRun) bool {
+	if !isTerminateState(triggerRun) || !ctrlutil.ContainsFinalizer(triggerRun, drainFinalizer) {
+		return isTerminateState(triggerRun)
+	}
+	active, err := r.cancelActiveChildPipelineRuns(ctx, log, triggerRun)
+	if err != nil {
+		log.Error(err, "failed to probe child pipeline runs during drain; treating as not drained")
+		return false
+	}
+	return active == 0
+}
+
+// killIfActive kills the trigger's workflow and persists the terminal status. It is
+// a no-op when the run is already terminal, since Kill rejects terminal runs and the
+// drain may still be waiting on children after the trigger itself has stopped. A
+// PENDING_KILL run's workflow is already stopped, so it is only moved to KILLED; the
+// drain waits on its children itself.
+func (t *triggerRunDrainTarget) killIfActive(ctx context.Context) error {
+	if isTerminateState(t.run) {
+		return nil
+	}
+	if t.run.Status.State == v2pb.TRIGGER_RUN_STATE_PENDING_KILL {
+		t.run.Status.State = v2pb.TRIGGER_RUN_STATE_KILLED
+		if err := t.r.UpdateStatus(ctx, t.run, &metav1.UpdateOptions{}); err != nil {
+			return fmt.Errorf("persist killed status for trigger run %s/%s during drain: %w", t.run.Namespace, t.run.Name, err)
+		}
+		return nil
+	}
 	runner := t.r.getRunner(t.run)
 	status, err := runner.Kill(ctx, t.run)
 	if err != nil {
@@ -499,6 +566,19 @@ func (t *triggerRunDrainTarget) RequestCancel(ctx context.Context) error {
 	t.run.Status = status
 	if err := t.r.UpdateStatus(ctx, t.run, &metav1.UpdateOptions{}); err != nil {
 		return fmt.Errorf("persist killed status for trigger run %s/%s during drain: %w", t.run.Namespace, t.run.Name, err)
+	}
+	return nil
+}
+
+// RequestCancel stops the recurring cron (idempotent kill), persists the terminal
+// status through the status subresource, requests a kill on every in-flight child
+// PipelineRun, and stamps the drain-counted token.
+func (t *triggerRunDrainTarget) RequestCancel(ctx context.Context) error {
+	if err := t.killIfActive(ctx); err != nil {
+		return err
+	}
+	if _, err := t.r.cancelActiveChildPipelineRuns(ctx, t.log, t.run); err != nil {
+		return fmt.Errorf("cancel child pipeline runs of trigger run %s/%s during drain: %w", t.run.Namespace, t.run.Name, err)
 	}
 	// Kubernetes ignores status on the main resource endpoint when the status
 	// subresource is enabled, so persist the drain-counted annotation separately
@@ -511,19 +591,18 @@ func (t *triggerRunDrainTarget) RequestCancel(ctx context.Context) error {
 	return nil
 }
 
-// Progress re-issues the idempotent kill and re-checks terminal, so a failed prior
-// status-update cannot wedge the drain. It persists status and reports terminal.
+// Progress re-issues the idempotent kill (trigger and children) and re-checks
+// terminal, so a failed prior status-update cannot wedge the drain. It reports
+// terminal only once the run is terminal and no child PipelineRun is still active.
 func (t *triggerRunDrainTarget) Progress(ctx context.Context) (bool, error) {
-	runner := t.r.getRunner(t.run)
-	status, err := runner.Kill(ctx, t.run)
-	if err != nil {
-		return false, fmt.Errorf("re-issue kill for trigger run %s/%s during drain: %w", t.run.Namespace, t.run.Name, err)
-	}
-	t.run.Status = status
-	if err := t.r.UpdateStatus(ctx, t.run, &metav1.UpdateOptions{}); err != nil {
+	if err := t.killIfActive(ctx); err != nil {
 		return false, err
 	}
-	return isTerminateState(t.run), nil
+	active, err := t.r.cancelActiveChildPipelineRuns(ctx, t.log, t.run)
+	if err != nil {
+		return false, fmt.Errorf("cancel child pipeline runs of trigger run %s/%s during drain: %w", t.run.Namespace, t.run.Name, err)
+	}
+	return isTerminateState(t.run) && active == 0, nil
 }
 
 // MarkKilled drives a never-started run straight to terminal KILLED without engine
@@ -562,6 +641,15 @@ func (t *triggerRunDrainTarget) CompleteDrain(ctx context.Context) error {
 	}
 	t.log.Info("removed cascade drain finalizer from trigger run")
 	return nil
+}
+
+// pendingKillStatus holds a successfully killed run in PENDING_KILL so its in-flight
+// child PipelineRuns are cancelled before it reports terminal KILLED.
+func pendingKillStatus(status v2pb.TriggerRunStatus) v2pb.TriggerRunStatus {
+	if status.State == v2pb.TRIGGER_RUN_STATE_KILLED {
+		status.State = v2pb.TRIGGER_RUN_STATE_PENDING_KILL
+	}
+	return status
 }
 
 // Register registers the TriggerRun controller with the controller manager.

@@ -30,24 +30,6 @@ RAY_DEFAULT_ZONE = os.environ.get("RAY_DEFAULT_ZONE", "")
 USER_ID = os.environ.get("USER_ID", "default_user")
 IMAGE_PULL_POLICY = os.environ.get("IMAGE_PULL_POLICY", "Never")
 
-RAY_LOG_URL_PREFIX = os.environ.get("RAY_LOG_URL_PREFIX")
-
-def get_ray_log_url(ray_job_name):
-    """
-    Generate a log URL for a Ray job based on the job name.
-    Only generates URL when RAY_LOG_URL_PREFIX environment variable is provided.
-    Expected format: {RAY_LOG_URL_PREFIX}/{ray_job_name}.log
-
-    Args:
-        ray_job_name: The name of the Ray job (e.g., "uf-ray-abc123")
-
-    Returns:
-        str: The complete log URL or empty string if prefix not configured
-    """
-    if RAY_LOG_URL_PREFIX and ray_job_name:
-        return "{}/{}.log".format(RAY_LOG_URL_PREFIX, ray_job_name)
-    return ""
-
 # This function defines the orchestration logic for Ray tasks.
 #
 # Configures and starts a Ray cluster based on provided specifications and environment,
@@ -195,7 +177,7 @@ def task(
 
         total_retry_attempt = retry_attempts + 1
         for retry_attempt_id in range(1, total_retry_attempt + 1):
-            job_state, job, cluster_url, ray_job_name = execute_ray_task(
+            job_state, job, cluster_url, cluster_log_url = execute_ray_task(
                 task_path = task_path,
                 task_name = task_name,
                 cluster = cluster,
@@ -212,9 +194,9 @@ def task(
                 breakpoint = breakpoint,
             )
 
-            # Generate log URL from Ray job name
-            generated_log_url = get_ray_log_url(ray_job_name)
-            log_url = generated_log_url if generated_log_url else cluster_url
+            # Prefer the persisted-log URL published on the RayCluster CR; fall
+            # back to the live dashboard URL when log persistence is disabled.
+            log_url = cluster_log_url if cluster_log_url else cluster_url
 
             retryable = process_terminated_job(
                 job_state = job_state,
@@ -305,15 +287,28 @@ def execute_ray_task(task_path, task_name, cluster, cluster_namespace, runtime_e
         fail("ray | cluster creation failed, activityId=" + first_activity_id)
 
     cluster_url = cluster["status"].get("jobUrl", "UAPI did not report RayJob URL")
+
+    # Persisted-log URL published by the RayCluster controller on
+    # RayClusterStatus.log_url, rendered from the platform's
+    # jobs.k8sengine.mapper.logPersistence.logURLFormat. Empty when log
+    # persistence is disabled, in which case callers fall back to cluster_url.
+    cluster_log_url = cluster["status"].get("logUrl", "")
+
+    # The URL reported to the control plane as this task's log location. The
+    # persisted-log URL outlives the cluster; the live dashboard URL stops
+    # resolving the moment the cluster is torn down, so prefer the former and
+    # fall back to the latter only when log persistence is disabled.
+    task_log_url = cluster_log_url if cluster_log_url else cluster_url
+
     cluster_name = cluster["metadata"]["name"]
     cluster_namespace = cluster["metadata"]["namespace"]
 
-    print("ray | cluster created:", "ns=" + cluster_namespace, "n=" + cluster_name, "url=" + cluster_url)
+    print("ray | cluster created:", "ns=" + cluster_namespace, "n=" + cluster_name, "url=" + cluster_url, "logUrl=" + cluster_log_url)
 
     report_progress(
         task_path = task_path,
         task_name = task_name,
-        task_log = cluster_url,
+        task_log = task_log_url,
         task_message = "Ray Cluster Created Successfully",
         task_state = TASK_STATE_RUNNING,
         start_time = start_time_formated_str,
@@ -337,13 +332,7 @@ def execute_ray_task(task_path, task_name, cluster, cluster_namespace, runtime_e
 
     print("ray | +run job: job=" + str(job))
 
-    # Extract Ray job ID/name from job object - try job ID first, then metadata name, then cluster name
-    ray_job_name = (job.get("spec", {}).get("jobId") or
-                    job.get("status", {}).get("jobId") or
-                    job.get("metadata", {}).get("name", cluster_name))
-    generated_log_url = get_ray_log_url(ray_job_name)
-    log_url = generated_log_url if generated_log_url else cluster_url
-    atexit.register(report_ray_task_result, job, task_path, task_name, cluster_url, start_time_formated_str, args, kwargs, retry_attempt_id, cache_version, namespace, result_url)
+    atexit.register(report_ray_task_result, job, task_path, task_name, task_log_url, start_time_formated_str, args, kwargs, retry_attempt_id, cache_version, namespace, result_url)
 
     if breakpoint:
         print("ray | breakpoint:", "ns=" + cluster_namespace, "n=" + cluster_name)
@@ -354,7 +343,7 @@ def execute_ray_task(task_path, task_name, cluster, cluster_namespace, runtime_e
         fail(err_message)
 
     # Terminate cluster
-    job_state = report_ray_task_result(job, task_path, task_name, cluster_url, start_time_formated_str, args, kwargs, retry_attempt_id, cache_version, namespace, result_url)
+    job_state = report_ray_task_result(job, task_path, task_name, task_log_url, start_time_formated_str, args, kwargs, retry_attempt_id, cache_version, namespace, result_url)
     if job_state == TASK_STATE_SUCCEEDED:
         ray.terminate_cluster(cluster_name, cluster_namespace, "job succeeded", "TERMINATION_TYPE_SUCCEEDED")
     else:
@@ -363,13 +352,13 @@ def execute_ray_task(task_path, task_name, cluster, cluster_namespace, runtime_e
     atexit.unregister(terminate_cluster)
     atexit.unregister(report_ray_task_result)
 
-    return (job_state, job, cluster_url, ray_job_name)
+    return (job_state, job, cluster_url, cluster_log_url)
 
 def terminate_cluster(cluster_namespace, cluster_name):
     ray.terminate_cluster(cluster_name, cluster_namespace, "job failed", "TERMINATION_TYPE_FAILED")
     print("ray | cluster terminated:", "ns=" + cluster_namespace, "n=" + cluster_name)
 
-def report_ray_task_result(job, task_path, task_name, cluster_url, start_time_formated_str, args, kwargs, retry_attempt_id, cache_version, namespace, result_url):
+def report_ray_task_result(job, task_path, task_name, task_log_url, start_time_formated_str, args, kwargs, retry_attempt_id, cache_version, namespace, result_url):
     end_time_seconds = time.time()
     end_time_formated_str = time.utc_format_seconds(TIME_FOMART, end_time_seconds)
 
@@ -389,7 +378,7 @@ def report_ray_task_result(job, task_path, task_name, cluster_url, start_time_fo
         report_progress(
             task_path = task_path,
             task_name = task_name,
-            task_log = cluster_url,
+            task_log = task_log_url,
             task_message = "Ray Job Succeeded",
             task_state = TASK_STATE_SUCCEEDED,
             start_time = start_time_formated_str,
@@ -405,7 +394,7 @@ def report_ray_task_result(job, task_path, task_name, cluster_url, start_time_fo
         report_progress(
             task_path = task_path,
             task_name = task_name,
-            task_log = cluster_url,
+            task_log = task_log_url,
             task_message = task_message,
             task_state = TASK_STATE_KILLED,
             start_time = start_time_formated_str,
@@ -423,7 +412,7 @@ def report_ray_task_result(job, task_path, task_name, cluster_url, start_time_fo
         report_progress(
             task_path = task_path,
             task_name = task_name,
-            task_log = cluster_url,
+            task_log = task_log_url,
             task_message = task_message,
             task_state = TASK_STATE_FAILED,
             start_time = start_time_formated_str,

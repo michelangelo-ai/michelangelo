@@ -107,13 +107,13 @@ func (r *module) createCluster(t *starlark.Thread, _ *starlark.Builtin, args sta
 				ctx, _ = workflow.NewDisconnectedContext(ctx)
 				reason = "Canceled"
 			}
-			if err = workflow.ExecuteActivity(ctx, ray.Activities.TerminateCluster, ray.TerminateClusterRequest{
+			if termErr := workflow.ExecuteActivity(ctx, ray.Activities.TerminateCluster, ray.TerminateClusterRequest{
 				Name:      cluster.Name,
 				Namespace: cluster.Namespace,
 				Type:      v2pb.TERMINATION_TYPE_FAILED.String(),
 				Reason:    reason,
-			}).Get(ctx, nil); err != nil {
-				logger.Error("builtin-error", ext.ZapError(err)...)
+			}).Get(ctx, nil); termErr != nil {
+				logger.Error("builtin-error", ext.ZapError(termErr)...)
 			}
 			return nil, err
 		}

@@ -86,6 +86,22 @@ class ParquetReadConfigToKwargsTest(TestCase):
         result = parquet_read_config_to_kwargs(config, dataset_name="train")
         self.assertEqual(result, {"override_num_blocks": 8})
 
+    def test_real_parquet_read_config_resolves_per_dataset_override(self):
+        """The shipped ParquetReadConfig carries the per-dataset mapping end to end."""
+        from michelangelo.workflow.schema.ray_data_io import ParquetReadConfig
+
+        config = ParquetReadConfig(
+            concurrency=2, override_num_blocks_per_dataset={"train": 8, "val": 2}
+        )
+        self.assertEqual(
+            parquet_read_config_to_kwargs(config, dataset_name="val"),
+            {"concurrency": 2, "override_num_blocks": 2},
+        )
+        self.assertEqual(
+            parquet_read_config_to_kwargs(config, dataset_name="test"),
+            {"concurrency": 2},
+        )
+
     def test_override_num_blocks_per_dataset_no_match_drops_key(self):
         """No matching entry for dataset_name means override_num_blocks is absent.
 

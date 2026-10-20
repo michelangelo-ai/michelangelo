@@ -71,6 +71,26 @@ describe('StateCell', () => {
       expect(result).toBe('Queued');
     });
 
+    it('should return the mapped text for a numeric enum value', () => {
+      const result = stateToString({
+        column: { id: 'state', stateTextMap: { 6: 'Paused' } },
+        // cast: proto enums decode to numbers at runtime even though the cell is typed as string
+        value: 6 as unknown as string,
+      });
+
+      expect(result).toBe('Paused');
+    });
+
+    it('should not throw for a numeric enum value missing from stateTextMap', () => {
+      const result = stateToString({
+        column: { id: 'state', stateTextMap: { 1: 'Running' } },
+        // cast: proto enums decode to numbers at runtime even though the cell is typed as string
+        value: 6 as unknown as string,
+      });
+
+      expect(result).toBe('6');
+    });
+
     it('should return sentence case for unknown states', () => {
       const result = stateToString({
         column: { id: 'state' },

@@ -48,6 +48,7 @@ export function useUrlQueryString() {}
 | Only lowercase exports      | `helpers.tsx` exporting `formatDate` | utility files, not components                |
 | Only `ALL_CAPS` exports     | `icons.tsx` exporting `ICONS`        | constant maps                                |
 | Type-only exports           | `export type { Foo }`                | `exportKind === 'type'` not counted          |
+| Default or list exports     | `export default Foo`                 | only `export` declarations are collected     |
 | Non-hook `.ts` files        | `string-utils.ts`                    | only `.tsx` and `use-*.ts` files are checked |
 
 ## File vs export — which to rename?

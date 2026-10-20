@@ -30,13 +30,13 @@ docker run -d \
     --name minio \
     -p 9090:9090 \
     -p 9091:9091 \
-    -e MINIO_ROOT_USER=minioadmin \
-    -e MINIO_ROOT_PASSWORD=minioadmin \
+    -e MINIO_ROOT_USER=michelangeloadmin \
+    -e MINIO_ROOT_PASSWORD=michelangeloadmin \
     minio/minio:latest server /data --console-address :9090 --address :9091
 
 if [ $? -eq 0 ]; then
     echo "✅ MinIO started successfully"
-    echo "   - Console: http://localhost:9090 (minioadmin/minioadmin)"
+    echo "   - Console: http://localhost:9090 (michelangeloadmin/michelangeloadmin)"
     echo "   - API: http://localhost:9091"
 else
     echo "❌ Failed to start MinIO"

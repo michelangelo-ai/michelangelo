@@ -15,7 +15,7 @@ export const SHARED_PROJECT_CELL_CONFIG = [
     url: '${row.metadata.name}',
   },
   {
-    id: 'metadata.creationTimestamp.seconds',
+    id: 'metadata.creationTimestamp',
     label: 'Created',
     type: CellType.DATE,
   },

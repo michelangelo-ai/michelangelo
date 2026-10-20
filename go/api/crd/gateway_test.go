@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apiExtFake "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/fake"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -216,14 +217,22 @@ func TestConditionalUpsert(t *testing.T) {
 			func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 				return true, nil, errors.New("test error")
 			})
+		core, logs := observer.New(zap.ErrorLevel)
 		crdGateway := gateway{
-			logger:        zap.NewExample(),
+			logger:        zap.New(core),
 			apiExtClient:  apiExtClientStub,
 			dynamicClient: fakeClientNoResource,
 		}
 		ctx := context.Background()
 		err = crdGateway.ConditionalUpsert(ctx, crd, false)
 		assert.Error(t, err, "failed to create CRD project.test: test error")
+		if assert.Len(t, logs.All(), 1) {
+			entry := logs.All()[0]
+			assert.Equal(t, "failed to create CRD", entry.Message)
+			assert.Equal(t, zap.ErrorLevel, entry.Level)
+			assert.Equal(t, crd.Name, entry.ContextMap()["name"])
+			assert.Equal(t, err.Error(), entry.ContextMap()["error"])
+		}
 	})
 
 	t.Run("test failed to get existing CRD", func(t *testing.T) {
@@ -235,14 +244,22 @@ func TestConditionalUpsert(t *testing.T) {
 			func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 				return true, nil, errors.New("test error")
 			})
+		core, logs := observer.New(zap.ErrorLevel)
 		crdGateway := gateway{
-			logger:        zap.NewExample(),
+			logger:        zap.New(core),
 			apiExtClient:  apiExtClientStub,
 			dynamicClient: fakeClientNoResource,
 		}
 		ctx := context.Background()
 		err = crdGateway.ConditionalUpsert(ctx, crd, false)
 		assert.Error(t, err, "failed to get CRD project.test: test error")
+		if assert.Len(t, logs.All(), 1) {
+			entry := logs.All()[0]
+			assert.Equal(t, "failed to get CRD", entry.Message)
+			assert.Equal(t, zap.ErrorLevel, entry.Level)
+			assert.Equal(t, crd.Name, entry.ContextMap()["name"])
+			assert.Equal(t, err.Error(), entry.ContextMap()["error"])
+		}
 	})
 
 	t.Run("test upsert CRD with missing version in new CRD", func(t *testing.T) {
@@ -261,8 +278,9 @@ func TestConditionalUpsert(t *testing.T) {
 		})
 
 		apiExtClientStub := apiExtFake.NewSimpleClientset(existingCRD)
+		core, logs := observer.New(zap.ErrorLevel)
 		crdGateway := gateway{
-			logger:        zap.NewExample(),
+			logger:        zap.New(core),
 			apiExtClient:  apiExtClientStub,
 			dynamicClient: fakeClientNoResource,
 		}
@@ -275,6 +293,14 @@ func TestConditionalUpsert(t *testing.T) {
 		// Assert: Should fail because v1 version exists on server but not in new CRD
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "has version v1 that is not in the new CRD")
+		if assert.Len(t, logs.All(), 1) {
+			entry := logs.All()[0]
+			assert.Equal(t, "CRD has version that is not in the new CRD", entry.Message)
+			assert.Equal(t, zap.ErrorLevel, entry.Level)
+			assert.Equal(t, crd.Name, entry.ContextMap()["name"])
+			assert.Equal(t, "v1", entry.ContextMap()["version"])
+			assert.Equal(t, err.Error(), entry.ContextMap()["error"])
+		}
 	})
 }
 

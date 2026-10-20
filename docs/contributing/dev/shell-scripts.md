@@ -14,6 +14,8 @@ Shell scripts in `tools/` automate code generation and development workflows. Th
 | Script | Purpose | When to run |
 |--------|---------|-------------|
 | `tools/gen-proto-go.sh` | Regenerates `proto-go/` from `.proto` sources | After any `.proto` file change |
+| `tools/gen-transcoder-services.sh` | Regenerates `helm/michelangelo/files/transcoder-services.json` from `services.ts`'s import paths | After changing `javascript/packages/rpc/services.ts` |
+| `tools/check-transcoder-services.sh` | Checks that `transcoder-services.json` matches `services.ts` | For a `services.ts`-only change; run locally to reproduce a CI failure |
 | `tools/gen-grpc-client.sh` | Generates gRPC client code (Python and JavaScript) from protobuf files | After proto changes that affect client stubs |
 | `tools/grpc-svc-gen.sh [Entity]` | Scaffolds a new gRPC service definition for a CRD type | When adding a new API resource |
 | `tools/gazelle` | Updates Bazel BUILD files for Go packages and proto targets | After adding/removing Go files or proto definitions |
@@ -32,6 +34,26 @@ Builds `//proto/...` with Bazel, copies the generated `.pb.go` files into `proto
 Check in both the proto change and the generated output together.
 
 See [Protocol Buffers](protobuf.md) for the full code generation workflow.
+
+## gen-transcoder-services.sh
+
+```bash
+tools/gen-transcoder-services.sh [output-dir]
+```
+
+Reads `javascript/packages/rpc/services.ts` to find every service the JS client imports and derives each one's fully-qualified proto service name directly from its import path — `./gen/michelangelo/api/v2/deployment_svc_pb` importing `DeploymentService` becomes `michelangelo.api.v2.DeploymentService`, since `gen-grpc-client.sh`'s generated directory layout mirrors the proto package by construction. Writes the result to `helm/michelangelo/files/transcoder-services.json`.
+
+This list is deliberately narrower than every service under `proto/api` — Envoy's `grpc_json_transcoder` filter exposes whatever is on it over plain JSON/HTTP, so a Go-only service shouldn't become web-reachable just because its proto compiles. The script fails if `services.ts` references no services at all. It does not validate each derived name against a compiled descriptor set — Envoy does that at startup, refusing to come up if an entry doesn't match, so a wrong FQN fails loudly rather than routing silently.
+
+`transcoder-services.json` is committed, not build output — `helm install` never runs this script. As a last-resort check, the Envoy ConfigMap template fails at render time if the file is missing, empty, or malformed.
+
+## check-transcoder-services.sh
+
+```bash
+tools/check-transcoder-services.sh
+```
+
+A narrow backstop: it runs `gen-transcoder-services.sh` into a scratch directory and diffs the result against the committed `transcoder-services.json`. Run it locally to reproduce a CI failure from the "Transcoder services check" workflow.
 
 ## grpc-svc-gen.sh
 

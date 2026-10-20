@@ -2,7 +2,18 @@
 # Pinned by digest (rather than the floating `alpine` tag) so Dependabot can
 # track and propose base-image updates -- see .github/dependabot.yml's
 # "docker" entry.
-FROM nginx:alpine@sha256:db35bfc6b2951e7f8a72db5db120288c127ffaeeb4a6d4b95a26fead017d5913
+FROM nginx:alpine@sha256:62ff2089abf5a9ed33bd232895bef5e22f7bb4b200675cec49a5ebc48e3d4ac8
+
+# CVE-2026-93990 (libexpat XML injection via malformed UTF-16, HIGH): fixed
+# in Alpine's own package repo (libexpat 2.8.5-r0) but not yet picked up by
+# an upstream nginx:alpine rebuild -- upgrade explicitly rather than wait.
+RUN apk add --no-cache --upgrade libexpat
+
+# CVE-2026-103111 (pcre2 out-of-bounds write via crafted regex, HIGH): fixed
+# in Alpine's own package repo (pcre2 10.49-r0) but not yet picked up by an
+# upstream nginx:alpine rebuild (base is digest-pinned, see comment above) --
+# upgrade explicitly rather than wait, same pattern as the libexpat fix above.
+RUN apk add --no-cache --upgrade pcre2
 
 # Copy pre-built UI assets
 COPY javascript/app/dist /usr/share/nginx/html

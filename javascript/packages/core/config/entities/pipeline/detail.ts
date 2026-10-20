@@ -1,25 +1,27 @@
 import { CellType } from '#core/components/cell/constants';
 import { SHARED_RUN_CELL_CONFIG } from '#core/config/entities/run/shared';
 import { TRIGGER_STATE_CELL_CONFIG } from '#core/config/entities/trigger/shared';
+import { interpolate } from '#core/interpolation/interpolate';
 import { formatTriggerSchedule } from './format-trigger-schedule';
 import {
   CRITERION_OPERATOR_EQUAL,
-  PIPELINE_RUN_PIPELINE_NAME_FIELD,
+  PIPELINE_RUN_REVISION_NAME_FIELD,
   PIPELINE_STATE_CELL,
   PIPELINE_TYPE_CELL,
 } from './shared';
 
 import type { DetailViewConfig } from '#core/components/views/types';
 import type { TriggerRun } from '#core/config/entities/trigger/types';
+import type { PipelineRevision } from './types';
 
 export const PIPELINE_DETAIL_CONFIG: DetailViewConfig = {
   type: 'detail',
   metadata: [
-    { id: 'metadata.creationTimestamp.seconds', label: 'Created', type: CellType.DATE },
+    { id: 'metadata.creationTimestamp', label: 'Created', type: CellType.DATE },
     { id: 'spec.owner.name', label: 'Owner', type: CellType.TEXT },
-    PIPELINE_TYPE_CELL,
-    { id: 'spec.commit.branch', label: 'Branch', type: CellType.TEXT },
-    PIPELINE_STATE_CELL,
+    { ...PIPELINE_TYPE_CELL, id: 'spec.content.spec.type' },
+    { id: 'spec.gitCommit.branch', label: 'Branch', type: CellType.TEXT },
+    { ...PIPELINE_STATE_CELL, id: 'spec.content.status.state' },
   ],
   pages: [
     {
@@ -32,13 +34,15 @@ export const PIPELINE_DETAIL_CONFIG: DetailViewConfig = {
         serviceOptions: {
           listOptionsExt: {
             operation: {
-              criterion: [
+              criterion: interpolate(({ page }) => [
                 {
-                  fieldName: PIPELINE_RUN_PIPELINE_NAME_FIELD,
+                  fieldName: PIPELINE_RUN_REVISION_NAME_FIELD,
                   operator: CRITERION_OPERATOR_EQUAL,
-                  matchValue: '${page.metadata.name}',
+                  // cast: page is unknown from interpolation context; always the viewed
+                  // PipelineRevision, since pipeline is always revisioned; see #1425
+                  matchValue: (page as PipelineRevision)?.metadata?.name,
                 },
-              ],
+              ]),
             },
           },
         },
@@ -63,7 +67,7 @@ export const PIPELINE_DETAIL_CONFIG: DetailViewConfig = {
         service: 'triggerRun',
         serviceOptions: {
           listOptions: {
-            fieldSelector: 'pipeline_name=${page.metadata.name}',
+            fieldSelector: 'pipeline_name=${page.spec.baseResource.name}',
           },
         },
       },
@@ -74,7 +78,7 @@ export const PIPELINE_DETAIL_CONFIG: DetailViewConfig = {
             label: 'Name',
             url: '/${studio.projectId}/${studio.phase}/triggers/${row.metadata.name}',
           },
-          { id: 'metadata.creationTimestamp.seconds', label: 'Created', type: CellType.DATE },
+          { id: 'metadata.creationTimestamp', label: 'Created', type: CellType.DATE },
           { id: 'spec.actor.name', label: 'Started by', type: CellType.TEXT },
           {
             id: 'schedule',

@@ -1,8 +1,12 @@
-Flags type and interface declarations outside of `types.ts` files.
+Flags type and interface declarations outside of `types.ts` files. A small (at most two members or union branches), single-use declaration gets an "inline it or move it" message (`inlineType`); anything else gets the "move it to types.ts" message (`typesInTypesFile`).
 
 ## Why this rule exists
 
 Scattering types across component files makes them hard to discover. Centralizing types into dedicated `types.ts` files keeps the type surface of a module predictable and browseable.
+
+## Exempt files
+
+The rule does nothing in files named `types.ts` (or `.tsx`/`.js`/`.jsx`), files named `*-types.ts`, and files inside a `types/` directory.
 
 ## The Props exception
 

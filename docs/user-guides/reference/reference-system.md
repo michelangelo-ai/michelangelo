@@ -1,3 +1,7 @@
+---
+last_verified: 2026-09-30
+---
+
 # Data Passing and References in Uniflow
 
 ## What you'll learn
@@ -6,7 +10,7 @@
 * What References are and why they're needed
 * How to work with task outputs and inputs
 * Automatic serialization and deserialization
-* Best practices for passing data between Ray and Spark tasks
+* Why data does not convert automatically across framework boundaries, and how to hand it off explicitly
 
 ---
 
@@ -158,58 +162,89 @@ def training_pipeline(data):
 
 ## Cross-Framework Data Passing (Ray to Spark)
 
-One of Uniflow's powerful features: **seamlessly pass data between Ray and Spark tasks**.
+Uniflow does **not** convert data between frameworks. A Reference records the type
+of the value that was *written*, and `unref` resolves the IO handler from that
+recorded type — it has no knowledge of the framework the consuming task runs on.
+
+So if a Ray task returns a `ray.data.Dataset`, a downstream Spark task receives a
+`ray.data.Dataset`, not a `pyspark.sql.DataFrame`. Spark DataFrame API calls on it
+fail with `AttributeError`.
+
+The good news is that the two handlers already share an interchange format: both
+`RayDatasetIO` and `SparkIO` store data as Parquet. Only the automatic dispatch is
+missing, so crossing frameworks is a matter of doing the hand-off explicitly.
+
+### The manual step
+
+A consuming task never sees the Reference itself — Uniflow resolves it into a
+materialized object before the function body runs. You therefore cannot receive a
+Ray task's output and re-read it as Parquet: by the time your code runs, it is
+already a Ray `Dataset`.
+
+The producer has to hand over a **location** instead of a dataset. Returning a
+`str` is what makes this work: strings are not a Reference-backed type, so the
+path passes through to the next task unchanged rather than being materialized.
 
 ```python
+import os
+
 from michelangelo.uniflow.core import task, workflow
 from michelangelo.uniflow.plugins.ray import RayTask
 from michelangelo.uniflow.plugins.spark import SparkTask
 
 @task(config=RayTask(head_cpu=2, head_memory="4Gi"))
-def load_with_ray(file_path: str):
-    """
-    Task 1: Load with Ray
-    Returns: Ray dataset
-    Uniflow creates: Reference
+def load_with_ray(file_path: str) -> str:
+    """Load with Ray, write Parquet, and return the location as a string.
+
+    Returning the path (not the Dataset) is the hand-off: a ``str`` is passed
+    through as-is, so the Spark task receives a URL it can read itself.
     """
     import ray.data
+
     dataset = ray.data.read_csv(file_path)
-    return dataset
+    out_url = os.path.join(os.environ["UF_STORAGE_URL"], "ray_stage")
+    dataset.write_parquet(out_url)
+    return out_url
 
 @task(config=SparkTask(driver_cpu=2, driver_memory="4Gi"))
-def process_with_spark(data):
-    """
-    Task 2: Receives Reference from Ray task
-    Uniflow automatically: Converts Ray dataset to Spark dataframe
-    Returns: Spark dataframe
-    """
-    # data is now a Spark DataFrame (automatic conversion!)
-    processed = data.filter(data.price > 100)
-    return processed
+def process_with_spark(parquet_url: str) -> str:
+    """Read the Parquet written by the Ray task, then write Parquet back out."""
+    from pyspark.sql import SparkSession
+
+    spark = SparkSession.builder.getOrCreate()
+    df = spark.read.parquet(parquet_url)
+    processed = df.filter(df.price > 100)
+
+    out_url = os.path.join(os.environ["UF_STORAGE_URL"], "spark_stage")
+    processed.write.parquet(out_url)
+    return out_url
 
 @task(config=RayTask(head_cpu=2, head_memory="4Gi"))
-def analyze_with_ray(data):
-    """
-    Task 3: Receives Reference from Spark task
-    Uniflow automatically: Converts Spark dataframe to Ray dataset
-    """
-    # data is now a Ray dataset (automatic conversion!)
-    summary = data.groupby("category").mean()
-    return summary
+def analyze_with_ray(parquet_url: str):
+    """Read the Spark output back into Ray."""
+    import ray.data
+
+    dataset = ray.data.read_parquet(parquet_url)
+    return dataset.groupby("category").mean("price")
 
 @workflow()
 def multi_framework_pipeline(file_path: str):
-    # Ray → Spark → Ray, all with automatic data conversion!
-    ray_data = load_with_ray(file_path)
-    spark_data = process_with_spark(ray_data)
-    analysis = analyze_with_ray(spark_data)
-    return analysis
+    # Each hop crosses a framework boundary, so each hop passes a path.
+    ray_stage = load_with_ray(file_path)
+    spark_stage = process_with_spark(ray_stage)
+    return analyze_with_ray(spark_stage)
 ```
 
-**This is powerful because:**
-- You don't manually convert between frameworks
-- Each task uses the best framework for its job
-- Data flows seamlessly between them
+Both boundaries need this, not just the first: a Spark task returning a
+`DataFrame` produces a Reference typed as a Spark `DataFrame`, which a downstream
+Ray task would receive as a Spark `DataFrame`.
+
+### When you don't need any of this
+
+This only applies when data crosses a framework boundary. Passing a
+`ray.data.Dataset` from one Ray task to another Ray task — or a Spark `DataFrame`
+between two Spark tasks — needs no special handling; return the object directly
+and let Uniflow's Reference system do the work, as shown earlier on this page.
 
 ---
 
@@ -338,6 +373,11 @@ def gpu_inference(model, data):
     # Ray with GPU for inference
     return predictions
 ```
+
+Mixing frameworks like this is fine, but note that data does **not** convert
+automatically where one framework's output feeds another's input. See
+[Cross-Framework Data Passing](#cross-framework-data-passing-ray-to-spark) for the
+explicit hand-off those boundaries require.
 
 ---
 

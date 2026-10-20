@@ -23,6 +23,7 @@ This guide is for ML engineers and data scientists who have already trained a mo
 - **A prepared dataset** — training and validation data as Ray Datasets. See [Data Preparation](../getting-started/prepare-your-data.md).
 - **The trainer extra installed** — `cd python && poetry install -E trainer` from the repo root. Some features need additional extras: `trainer-deepspeed` for the DeepSpeed strategy, and `trainer-mlflow` or `trainer-comet` for the matching profiler sinks.
 - **A running sandbox** for remote runs. See [Sandbox Setup](../../getting-started/sandbox-setup.md).
+- **Ray 2.55 or newer in your task image** if your platform has Ray log persistence enabled. The KubeRay `collector` sidecar that ships Ray logs to object storage defaults to the `"ALL"` event-type filter, which Ray rejects before 2.54; the v1.7 collector targets Ray 2.55. On an older Ray image the sidecar still collects file logs, but Ray event export does not work, so the History Server replay is incomplete — no task, actor, or job event timeline. Ask your platform operator to set `logPersistence.exposableEventTypes` to the explicit event list instead.
 
 ## How the pieces fit together
 
@@ -343,5 +344,5 @@ The sink is skipped when no profiler is configured or when the profiler config s
 
 - [**Model Registry**](./model-registry-guide.md) — version and store the trained model
 - [**Deploy a Model**](./deploy-a-model.md) — serve it for inference
-- [**Examples**](../examples/index.md) — working distributed runs, including GPT fine-tuning with LoRA and Nomic embedding training
+- [**Examples**](../examples/index.md) — working distributed runs, including GPT fine-tuning with LoRA and [Nomic embedding training](https://github.com/michelangelo-ai/michelangelo-examples/tree/main/src/michelangelo_examples/nomic_ai/pipelines/train)
 - [**Python SDK Reference**](../../api-reference/python-sdk/index.md) — generated signatures for the wider SDK surface (tasks, workflows, plugins); `LightningTrainer` itself isn't in the generated reference yet

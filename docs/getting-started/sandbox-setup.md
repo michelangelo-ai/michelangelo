@@ -32,7 +32,6 @@ Before you begin, make sure you have the following installed. Install commands b
 | Tool | Install (macOS) | Install (Linux) | Verify |
 |------|-----------------|-----------------|--------|
 | **Docker** | [Docker Desktop](https://docs.docker.com/get-started/get-docker) or [Colima](https://github.com/abiosoft/colima) | [Docker Engine](https://docs.docker.com/engine/install/) | `docker info` |
-| **docker buildx** | `brew install docker-buildx` (see note below) | usually bundled with Docker Engine | `docker buildx version` |
 | **kubectl** | `brew install kubectl` | [official guide](https://kubernetes.io/docs/tasks/tools/#kubectl) | `kubectl version --client` |
 | **k3d** | `brew install k3d` | [official guide](https://k3d.io/#installation) | `k3d --version` |
 | **Helm** | `brew install helm` | [official guide](https://helm.sh/docs/intro/install/) | `helm version` |
@@ -43,13 +42,6 @@ Before you begin, make sure you have the following installed. Install commands b
 > **Python version note:** Python 3.11 or 3.12 is strongly recommended. Python 3.13+ may fail during `poetry install` because pre-built wheels for some ML dependencies are not yet available for newer interpreter versions.
 
 > **Docker daemon note:** `docker info` (the verify command above) requires the Docker daemon to be running — unlike `docker --version`, which only checks the binary. If `docker info` fails, start Docker Desktop or Colima before continuing.
-
-> **buildx note (Homebrew):** `brew install docker` installs the Docker CLI only — the buildx plugin is a separate formula. Without it, `scripts/kuberay/build-kuberay-images.sh` fails with `unknown flag: --platform`. After installing, link the plugin so the CLI can find it:
->
-> ```bash
-> mkdir -p ~/.docker/cli-plugins
-> ln -sfn /opt/homebrew/opt/docker-buildx/bin/docker-buildx ~/.docker/cli-plugins/docker-buildx
-> ```
 
 > **Poetry install note (macOS, python.org builds):** if the Poetry install command aborts with `ssl.SSLCertVerificationError: [SSL: CERTIFICATE_VERIFY_FAILED]`, your interpreter has no CA bundle wired into `ssl` — python.org framework builds ship one but do not install it. Run the bundled installer once, then retry:
 >
@@ -116,22 +108,18 @@ Once prerequisites and Python dependencies are installed:
 # 1. Activate the Poetry virtual environment (from <repo-root>/python)
 source .venv/bin/activate
 
-# 2. Build local-only images required by the sandbox
-cd <repo-root>
-bash scripts/kuberay/build-kuberay-images.sh
-
-# 3. Create the sandbox (30–60 min on first run; images are cached after)
+# 2. Create the sandbox (30–60 min on first run; images are cached after)
 ma sandbox create
 
-# 4. Verify everything works by running the demo pipeline
+# 3. Verify everything works by running the demo pipeline
 ma sandbox demo pipeline
 ```
-
-> **Note on step 2:** the build script also imports the images it builds into your k3d clusters, but those clusters do not exist until step 3. It will report that cluster `michelangelo-compute-0` was not found and skip it, which is expected. If `history-server` later sits in `ImagePullBackOff`, re-run the script after `ma sandbox create` — the images are already built, so the second run only performs the import.
 
 > **Tip:** If you prefer not to activate the venv, prefix each `ma` command with `poetry run` (e.g., `poetry run ma sandbox create`). If you see `zsh: command not found: ma`, you either skipped step 1 or need to use `poetry run`. See [troubleshooting](#command-not-found-ma) below.
 
 > **Note on image pull times:** During `ma sandbox create`, several pods will sit in `ContainerCreating` for several minutes while images are pulled (some images are 500–800 MB). This is normal. The relevant question is whether pods are making progress — check with `kubectl get pods -w` and look for status transitions. Only act if a pod stays in `ImagePullBackOff` or `CrashLoopBackOff` for more than a few minutes.
+
+> **Note on KubeRay images:** All Ray components come from public registries and are pulled automatically — the operator from the `kuberay-operator` Helm chart `1.7.1`, and the History Server and Ray log `collector` sidecar from the official `quay.io/kuberay/historyserver:v1.7.1` and `quay.io/kuberay/collector:v1.7.1` images. There is no local build step for any of them.
 
 ### Choosing a workflow engine
 
@@ -313,13 +301,26 @@ See [Recovering from a failed create](#recovering-from-a-failed-create) for the 
 
 ### `history-server` stuck in `ImagePullBackOff`
 
-The `kuberay-historyserver` image is not available in any public registry — it must be built locally before running `ma sandbox create`. If you skipped the build step:
+Once the cluster is up, the Ray Dashboard for your Ray clusters is served by the History Server pod at [http://localhost:3001/select_cluster](http://localhost:3001/select_cluster) — host port `3001` maps to its NodePort `30016`. Every Ray task step on a pipeline run page links straight into it through `RayCluster.status.logUrl` (`http://localhost:3001/enter_cluster/<namespace>/raycluster/<cluster>/#/overview`): while the cluster is running that is the live dashboard, afterwards it is the replay built from the persisted logs. If the URL does not respond, check the pod first.
+
+The pod runs three images with no local build step: the official `quay.io/kuberay/historyserver:v1.7.1` API from quay.io, plus `rayproject/ray:2.55.0` (an init container copies the Ray Dashboard frontend out of it) and `nginx:1.27-alpine` (serves that frontend and proxies the API) from Docker Hub. `ma sandbox create` pulls all of them on the host and imports them into k3d, so a node that cannot reach a registry still starts them. An `ImagePullBackOff` here means an image was neither imported nor pullable by the node. Check the pull error, then confirm whether the host itself has access:
 
 ```bash
-cd <repo-root>
-bash scripts/kuberay/build-kuberay-images.sh
-ma sandbox sync   # redeploy without recreating the cluster
+kubectl describe pod -l app=history-server | grep -A 5 "Events"
+docker pull quay.io/kuberay/historyserver:v1.7.1
+docker pull rayproject/ray:2.55.0
+docker pull nginx:1.27-alpine
 ```
+
+If the `docker pull` also fails, the problem is host or proxy network access to the registry rather than anything sandbox-specific. Once the pull works, redeploy without recreating the cluster:
+
+```bash
+ma sandbox sync
+```
+
+The Ray `collector` sidecar pulls `quay.io/kuberay/collector:v1.7.1` from the same registry and fails the same way.
+
+> **Ray version:** The History Server only has something to replay if the `collector` sidecar captured it. The v1.7 collector expects **Ray 2.55 or newer** in your task image, and its default `"ALL"` event-type filter is rejected by Ray before 2.54. On an older Ray image the sidecar still collects file logs, but Ray event export does not work, so the replay is incomplete — no task, actor, or job event timeline. Set `logPersistence.exposableEventTypes` to the explicit event list instead.
 
 ### `Progress deadline exceeded` from operator installs
 
@@ -390,8 +391,8 @@ kubectl describe pod <pod-name> | grep -A 5 "Events"
 ```
 
 Common causes:
-- **Network issues**: Ensure Docker can reach `ghcr.io` (try `docker pull ghcr.io/michelangelo-ai/worker:latest`)
-- **Local-only image not built**: If `history-server` is the failing pod, see [`history-server` stuck in `ImagePullBackOff`](#history-server-stuck-in-imagepullbackoff) above
+- **Network issues**: Ensure Docker can reach `ghcr.io` (try `docker pull ghcr.io/michelangelo-ai/worker:latest`) and `quay.io`, which serves the KubeRay History Server and collector images
+- **Registry unreachable**: If `history-server` is the failing pod, see [`history-server` stuck in `ImagePullBackOff`](#history-server-stuck-in-imagepullbackoff) above
 
 ### Worker crashes with `Namespace default is not found` (Temporal only)
 
@@ -465,5 +466,5 @@ Add those exports to your `~/.zshrc` to make them permanent.
 ## What's next?
 
 - **Build your first pipeline** -- Follow [Getting Started with ML Pipelines](../user-guides/getting-started/getting-started.md) to create a training workflow (~30 min)
-- **Explore example projects** -- Try [California Housing XGBoost (`xgb_train`)](https://github.com/michelangelo-ai/michelangelo-examples/tree/main/src/michelangelo_examples/california_housing/pipelines/xgb_train) or [California Housing PyTorch Lightning (`pytorch_train`)](https://github.com/michelangelo-ai/michelangelo-examples/tree/main/src/michelangelo_examples/california_housing/pipelines/pytorch_train) in [michelangelo-examples](https://github.com/michelangelo-ai/michelangelo-examples), [BERT Text Classification](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/bert_cola), or [GPT Fine-tuning](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/gpt_oss_20b_finetune)
+- **Explore example projects** -- Try [California Housing XGBoost (`xgb_train`)](https://github.com/michelangelo-ai/michelangelo-examples/tree/main/src/michelangelo_examples/california_housing/pipelines/xgb_train), [California Housing PyTorch Lightning (`pytorch_train`)](https://github.com/michelangelo-ai/michelangelo-examples/tree/main/src/michelangelo_examples/california_housing/pipelines/pytorch_train), or [GPT Fine-tuning](https://github.com/michelangelo-ai/michelangelo-examples/tree/main/src/michelangelo_examples/gpt_oss_20b_finetune/pipelines/train) in [michelangelo-examples](https://github.com/michelangelo-ai/michelangelo-examples), or [BERT Text Classification](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/bert_cola)
 - **Learn the CLI** -- See the [CLI Reference](../user-guides/reference/cli.md) for managing pipelines and projects

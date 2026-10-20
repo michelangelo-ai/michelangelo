@@ -45,15 +45,7 @@ Skip this if you're only doing UI or apiserver work. Required if you'll run or d
 poetry install --extras plugin
 ```
 
-### 3. Build kuberay images (required for Ray history-server)
-
-```bash
-bash "$REPO_ROOT/scripts/kuberay/build-kuberay-images.sh"
-```
-
-Without this, `kuberay-historyserver` will be stuck in `ImagePullBackOff` after create — the image isn't in any public registry. Ray jobs still work without it, but the build step is cheap and avoids the noise.
-
-### 4. Activate the venv and create the sandbox
+### 3. Activate the venv and create the sandbox
 
 ```bash
 REPO_ROOT=$(git rev-parse --show-toplevel)
@@ -62,7 +54,7 @@ source "$REPO_ROOT/python/.venv/bin/activate"     # or prefix every command with
 ma sandbox create
 ```
 
-### 5. Seed demo data
+### 4. Seed demo data
 
 ```bash
 cd "$REPO_ROOT/python"
@@ -71,7 +63,7 @@ poetry run ma sandbox demo pipeline
 
 This creates the `ma-dev-test` project with training, eval, and trigger pipelines. Without this step the UI will load but show no data.
 
-### 6. Verify
+### 5. Verify
 
 ```bash
 poetry run ma sandbox health
@@ -104,4 +96,4 @@ If the UI loads but shows no data, or services aren't behaving as expected, use 
 
 ## Further reading
 
-Full docs: `docs/getting-started/ma-sandbox-setup.md`.
+Full docs: `docs/getting-started/sandbox-setup.md`.

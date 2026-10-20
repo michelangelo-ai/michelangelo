@@ -13,7 +13,7 @@ Run from ``python/`` (the OSS Poetry root):
 For remote execution on a Michelangelo cluster:
 
     python -m examples.workflow_patterns.workflow_patterns remote-run \
-        --project ma-examples \
+        --storage-url s3://<bucket>/<prefix> \
         --image ghcr.io/michelangelo-ai/examples:main
 
 Starlark / workflow-function restrictions (applies to remote execution via

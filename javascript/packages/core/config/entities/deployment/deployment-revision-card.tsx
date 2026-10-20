@@ -76,7 +76,7 @@ export function DeploymentRevisionCard({
   const owner = model?.spec?.owner?.name;
   const kind = model?.spec?.kind;
   const kindLabel = kind != null ? MODEL_KIND_TEXT_MAP[kind] : undefined;
-  const creationSeconds = model?.metadata?.creationTimestamp?.seconds;
+  const creationTimestamp = model?.metadata?.creationTimestamp;
   const sourcePipelineRun = model?.spec?.sourcePipelineRun?.name;
 
   return (
@@ -103,7 +103,7 @@ export function DeploymentRevisionCard({
 
         <DeploymentRevisionCardField label="Creation time">
           <ParagraphMedium marginTop="0" marginBottom="0">
-            {creationSeconds != null ? <DateTime timestamp={creationSeconds} /> : '—'}
+            {creationTimestamp != null ? <DateTime timestamp={creationTimestamp} /> : '—'}
           </ParagraphMedium>
         </DeploymentRevisionCardField>
 

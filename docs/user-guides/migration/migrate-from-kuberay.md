@@ -25,7 +25,7 @@ This page maps **resources and manifests**. For concept-level mapping across MLf
 - **Ray itself is unchanged.** Ray Data and Ray Train are used directly — `ray.data.Dataset` is a first-class type in the pipeline IO system, and the bundled Lightning trainer subclasses Ray Train's `TorchTrainer`.
 
 :::warning
-There is no documented minimum KubeRay version. The control plane currently compiles against the KubeRay operator's Go types at `v1.2.2`, while the local sandbox installs operator `v1.4.2`. Both are in the `ray.io/v1` API, so an existing install in that range is very likely fine, but no version floor is stated anywhere, so confirm against your own operator version before migrating anything you care about.
+There is no documented minimum KubeRay version. The control plane currently compiles against the KubeRay operator's Go types at `v1.5.0`, while the local sandbox installs operator `v1.7.1`. Both are in the `ray.io/v1` API, so an existing install in that range is very likely fine, but no version floor is stated anywhere, so confirm against your own operator version before migrating anything you care about.
 :::
 
 ## What changes

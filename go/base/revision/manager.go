@@ -55,7 +55,21 @@ func (m *revisionManager) UpsertRevision(ctx context.Context, rev client.Object,
 		return false, fmt.Errorf("cannot update immutable revision %s to mutable", name)
 	}
 
+	// rev is freshly constructed by the caller on every call (see
+	// pipeline.snapshotRevision), so it carries none of the metadata Kubernetes attaches
+	// out-of-band. A plain Update would silently wipe the ingester's own finalizer (added
+	// at Create time) — the finalizer is what lets a GC-driven cascade delete soft-delete
+	// this revision's row instead of just vanishing it. Losing it here means cascade
+	// delete stops working from the very next reconcile after creation. The same goes for
+	// annotations other writers set (client metadata, the ingester's
+	// MetadataStoragePrimaryKey), so they are merged rather than replaced.
+	//
+	// Labels and owner references are deliberately not carried over: the snapshot owns
+	// its labels, and nothing sets owner references on a Revision out-of-band. If such a
+	// writer ever appears, apply the same carry-over here.
 	rev.SetResourceVersion(existing.GetResourceVersion())
+	rev.SetFinalizers(existing.GetFinalizers())
+	rev.SetAnnotations(mergeAnnotations(existing.GetAnnotations(), rev.GetAnnotations()))
 	if opts.Immutable {
 		apiutils.MarkImmutable(rev)
 	}
@@ -64,4 +78,20 @@ func (m *revisionManager) UpsertRevision(ctx context.Context, rev client.Object,
 	}
 	logger.Info("updated revision")
 	return true, nil
+}
+
+// mergeAnnotations keeps annotations other writers set on the existing revision
+// (e.g. client metadata) so a re-snapshot does not wipe them; keys in desired win.
+func mergeAnnotations(existing, desired map[string]string) map[string]string {
+	if len(existing) == 0 {
+		return desired
+	}
+	merged := make(map[string]string, len(existing)+len(desired))
+	for k, v := range existing {
+		merged[k] = v
+	}
+	for k, v := range desired {
+		merged[k] = v
+	}
+	return merged
 }

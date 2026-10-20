@@ -1,3 +1,7 @@
+---
+last_verified: 2026-10-14
+---
+
 # Developing Uniflow Plugins
 
 This guide walks you through the end-to-end process of building a new Uniflow plugin — from the Go worker plugin that runs on Cadence/Temporal, to the Starlark orchestration layer, to the Python `TaskConfig` that users interact with.
@@ -33,7 +37,12 @@ Every plugin implements the `service.IPlugin` interface with three methods:
 ```go
 const pluginID = "ray"
 
+// Plugin is the global instance registered with the worker (see Step 2).
+var Plugin = &plugin{}
+
 type plugin struct{}
+
+var _ service.IPlugin = (*plugin)(nil)
 
 func (r *plugin) ID() string                              { return pluginID }
 func (r *plugin) Create(_ service.RunInfo) starlark.Value { return newModule() }
@@ -92,6 +101,7 @@ func RegisterYourPlugin(registry map[string]service.IPlugin) {
 var Module = fx.Options(
     // ... existing plugins ...
     fx.Invoke(RegisterYourPlugin),
+    // ... CreateStarlarkService stays last, after all plugins are registered ...
 )
 ```
 
@@ -174,7 +184,7 @@ Dataclass fields with non-`None` values are automatically converted to Starlark 
 After completing the steps above, users can use your plugin like this:
 
 ```python
-from michelangelo import uniflow
+import michelangelo.uniflow.core as uniflow
 from michelangelo.uniflow.plugins.your_plugin.task import YourTask
 
 @uniflow.task(config=YourTask(head_cpu=4, head_memory="16Gi"))

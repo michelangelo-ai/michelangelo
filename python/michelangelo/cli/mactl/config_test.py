@@ -351,8 +351,8 @@ class DefaultConstantsTest(TestCase):
     def test_default_minio_config(self):
         """Test DEFAULT_CONFIG minio section."""
         minio = DEFAULT_CONFIG["minio"]
-        self.assertEqual(minio["access_key_id"], "minioadmin")
-        self.assertEqual(minio["secret_access_key"], "minioadmin")
+        self.assertEqual(minio["access_key_id"], "michelangeloadmin")
+        self.assertEqual(minio["secret_access_key"], "michelangeloadmin")
         self.assertEqual(minio["endpoint_url"], "http://localhost:9091")
 
     def test_config_file_paths(self):

@@ -1,3 +1,7 @@
+---
+last_verified: 2026-10-14
+---
+
 # Managing Go Dependencies
 
 Third party go libraries are managed by go mod and bazel mod.

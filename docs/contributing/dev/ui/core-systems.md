@@ -1,5 +1,6 @@
 ---
 sidebar_position: 2
+last_verified: 2026-10-14
 ---
 
 # Core Systems
@@ -14,7 +15,11 @@ The Service Provider implements dependency injection for RPC requests. The core 
 
 ```typescript
 export type ServiceContextType = {
-  request: (requestId: string, args: unknown) => Promise<unknown>;
+  request: (requestId: string, args: unknown, headers?: Record<string, string>) => Promise<unknown>;
+  /** Resolvers the RPC layer applies to enrich responses before consumers see them, keyed by concern. */
+  resolvers?: {
+    team?: (uuids: string[]) => Promise<Record<string, TeamInfo>>;
+  };
 };
 ```
 
@@ -52,7 +57,7 @@ export class ApplicationError extends Error {
 
 ### ErrorProvider
 
-The [`ErrorProvider`](https://github.com/michelangelo-ai/michelangelo/blob/main/javascript/packages/core/providers/error-provider/types.ts#L3) supplies error normalization functions to convert framework-specific errors into `ApplicationError`:
+The [`ErrorProvider`](https://github.com/michelangelo-ai/michelangelo/blob/main/javascript/packages/core/providers/error-provider/types.ts#L3) supplies an error normalization function to convert transport-specific errors into `ApplicationError`. A normalizer returns `null` for errors it does not recognize, and the provider then falls back to `normalizeUniversalError`, which handles plain `Error` objects, strings, and other shapes. `ErrorNormalizer` is defined in [`types/error-types.ts`](https://github.com/michelangelo-ai/michelangelo/blob/main/javascript/packages/core/types/error-types.ts#L43):
 
 ```typescript
 export type ErrorNormalizer = (error: unknown) => ApplicationError | null;
@@ -62,29 +67,31 @@ export interface ErrorContextValue {
 }
 ```
 
-### Connect RPC Error Normalization
+### Transcoder Error Normalization
 
-The RPC package provides [`normalizeConnectError`](https://github.com/michelangelo-ai/michelangelo/blob/main/javascript/packages/rpc/normalize-connect-error.ts#L22) for Connect RPC errors:
+The UI talks to the API server with proto3 JSON over HTTP, through Envoy's gRPC JSON transcoder. The RPC package's fetch transport throws a [`GrpcTranscoderError`](https://github.com/michelangelo-ai/michelangelo/blob/main/javascript/packages/rpc/grpc-transcoder-error.ts#L3) (with `code` and `details` fields) for any non-OK response. It builds the error from the `google.rpc.Status` JSON body when present, falls back to the `grpc-status` and `grpc-message` response headers, and otherwise uses gRPC code `2` (`UNKNOWN`).
+
+The RPC package provides [`normalizeTranscoderError`](https://github.com/michelangelo-ai/michelangelo/blob/main/javascript/packages/rpc/normalize-transcoder-error.ts#L17) to convert these into `ApplicationError`:
 
 ```typescript
-import { ConnectError } from '@connectrpc/connect';
-
-export const normalizeConnectError: ErrorNormalizer = (error) => {
-  if (!(error instanceof ConnectError)) {
+export const normalizeTranscoderError: ErrorNormalizer = (error: unknown) => {
+  if (!(error instanceof GrpcTranscoderError)) {
     return null;
   }
 
-  return new ApplicationError(error.message, mapConnectCodeToGrpc(error.code), {
-    source: 'connect-rpc',
-    meta: {
-      connectErrorName: error.name,
-      details: error.details,
-      metadata: error.metadata,
-    },
-    cause: error.cause ?? error,
+  const code = (
+    error.code in GrpcStatusCode ? error.code : GrpcStatusCode.UNKNOWN
+  ) as GrpcStatusCode;
+
+  return new ApplicationError(error.message, code, {
+    source: 'grpc-transcoder',
+    meta: { details: error.details },
+    cause: error,
   });
 };
 ```
+
+The resulting `ApplicationError` has `source: 'grpc-transcoder'`, a gRPC status `code` (unrecognized codes become `UNKNOWN`), the status `details` array in `meta.details`, and the original `GrpcTranscoderError` as `cause`. Any other error type returns `null` and is handled by `normalizeUniversalError`.
 
 ## Interpolation System
 
@@ -120,23 +127,34 @@ const result = interpolation.execute({
 [`InterpolationContext`](https://github.com/michelangelo-ai/michelangelo/blob/main/javascript/packages/core/interpolation/types.ts#L74) is available to interpolation functions:
 
 ```typescript
-export interface InterpolationContext<U extends StudioParamsView = 'base'> {
-  page: any;           // Detail/form view data
-  row: any;            // Table row data
-  initialValues: any;  // Form initial state
-  response: any;       // Mutation response data
-  data: any;           // Resolved from row ?? page
-  studio: ViewTypeToParamType<U>;  // URL parameters
+export interface InterpolationContext<U extends StudioParamsView = 'base'>
+  extends InterpolationContextExtensions,
+    UserDataSources {
   repeatedLayoutContext?: RepeatedLayoutState;
+  studio: ViewTypeToParamType<U>;  // URL parameters
+  data: any;                       // Resolved from row ?? page
 }
+
+// UserDataSources
+//   page: any;           // Detail/form view data
+//   row: any;            // Table row data
+//   initialValues: any;  // Form initial state
+//   response: any;       // Mutation response data
+//   mutationName?: string;
 ```
+
+`InterpolationContextExtensions` is an empty interface that applications can augment through module declaration to add their own context.
 
 ### Interpolatable Type
 
 Fields that accept interpolation use the `Interpolatable` type:
 
 ```typescript
-export type Interpolatable<T> = T | string | FunctionInterpolation<T> | StringInterpolation;
+export type Interpolatable<T, U extends StudioParamsView = 'base'> =
+  | T
+  | string
+  | FunctionInterpolation<T, U>
+  | StringInterpolation<U>;
 
 // Usage in configuration
 interface ActionConfig {
@@ -173,7 +191,7 @@ The hook:
 
 ### useStudioMutation
 
-[`useStudioMutation`](https://github.com/michelangelo-ai/michelangelo/blob/main/javascript/packages/core/hooks/use-studio-mutation.ts#L10) performs mutations with error normalization:
+[`useStudioMutation`](https://github.com/michelangelo-ai/michelangelo/blob/main/javascript/packages/core/hooks/use-studio-mutation/use-studio-mutation.ts#L13) performs mutations with error normalization:
 
 ```typescript
 const { mutate, isPending, error } = useStudioMutation<Pipeline, CreatePipelineInput>({
@@ -207,27 +225,42 @@ View types and their parameters:
 | View Type | Parameters |
 |-----------|------------|
 | `list` | `projectId`, `phase`, `entity` |
-| `detail` | `projectId`, `phase`, `entity`, `entityId`, `entityTab`, `revisionId?` |
+| `detail` | `projectId`, `phase`, `entity`, `entityId`, `entityTab`, `revisionId?`, `pipelineName?` |
 | `form` | `projectId`, `phase`, `entity`, `entityId`, `entitySubType?`, `revisionId?` |
+| `form-detail` | Parameters shared by form and detail views; the rest are optional |
 | `base` | All available parameters with optional fields |
+| `unregistered` | Untyped `Record<string, string \| undefined>` of route and query params |
 
 ## Provider Composition
 
-Providers are composed in a specific hierarchy. The application typically wraps components with:
+The application passes its injected dependencies to `CoreApp`, which composes the providers in a fixed hierarchy:
 
 ```tsx
-<ServiceProvider request={rpcRequest}>
-  <ErrorProvider normalizeError={normalizeConnectError}>
-    <InterpolationProvider>
-      <IconProvider icons={iconMap}>
-        <UserProvider user={currentUser}>
-          {children}
-        </UserProvider>
-      </IconProvider>
-    </InterpolationProvider>
+// app/App.tsx
+const dependencies = {
+  error: { normalizeError: normalizeTranscoderError },
+  theme: { icons: ICONS },
+  service: { request, resolvers: { team: resolveTeams } },
+  user: { name, email, role, timeZone },
+};
+
+<CoreApp dependencies={dependencies} />
+```
+
+```tsx
+// packages/core/index.tsx (simplified)
+<ServiceProvider {...dependencies.service}>
+  <ErrorProvider {...dependencies.error}>
+    <IconProvider icons={dependencies.theme.icons}>
+      <UserProvider {...dependencies.user}>
+        {children}
+      </UserProvider>
+    </IconProvider>
   </ErrorProvider>
 </ServiceProvider>
 ```
+
+`InterpolationProvider` is not part of this composition; it is mounted where interpolation context extensions are needed.
 
 Available providers:
 

@@ -1,6 +1,7 @@
 package triggerrun
 
 import (
+	uberconfig "go.uber.org/config"
 	"go.uber.org/fx"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
@@ -39,14 +40,17 @@ func register(
 	mgr manager.Manager,
 	apiHandlerFactory apiHandler.Factory,
 	workflowClient clientInterface.WorkflowClient,
+	configProvider uberconfig.Provider,
 ) error {
 	cronTrigger := NewCronTrigger(
 		mgr.GetLogger().WithName("cron-trigger"),
 		workflowClient,
+		configProvider,
 	)
 	backfillTrigger := NewBackfillTrigger(
 		mgr.GetLogger().WithName("backfill-trigger"),
 		workflowClient,
+		configProvider,
 	)
 	reconciler := NewReconciler(Params{
 		Logger:            mgr.GetLogger().WithName("triggerrun"),

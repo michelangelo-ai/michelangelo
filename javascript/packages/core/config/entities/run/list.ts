@@ -36,7 +36,7 @@ export const PIPELINE_RUN_CELL_CONFIG: ColumnConfig<object>[] = [
       // cast: accessor receives unknown data; narrowing to expected proto shape for property
       // access; see #1425
       const row = data as {
-        metadata?: { labels?: Record<string, string>; creationTimestamp?: { seconds: number } };
+        metadata?: { labels?: Record<string, string>; creationTimestamp?: string };
       };
       return getCrdLastUpdatedSeconds(row);
     },

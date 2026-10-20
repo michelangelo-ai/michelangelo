@@ -84,10 +84,7 @@ export const DeploymentForm = ({ mode, record, onClose }: DeploymentFormProps) =
         ...values.spec,
         modelFamily: { ...values.spec.modelFamily, namespace: projectId },
         desiredRevision: { ...values.spec.desiredRevision, namespace: projectId },
-        target: {
-          case: 'inferenceServer',
-          value: { ...values.spec.target.value, namespace: projectId },
-        },
+        inferenceServer: { ...values.spec.inferenceServer, namespace: projectId },
       },
     });
   };
@@ -100,11 +97,8 @@ export const DeploymentForm = ({ mode, record, onClose }: DeploymentFormProps) =
     spec: {
       modelFamily: { name: record?.spec?.modelFamily?.name ?? '', namespace: projectId },
       desiredRevision: { name: currentModelName ?? '', namespace: projectId },
-      target: {
-        case: 'inferenceServer',
-        value: { name: record?.spec?.target?.value?.name ?? '', namespace: projectId },
-      },
-      strategy: { rolloutStrategy: { case: 'rolling', value: { incrementPercentage: 0 } } },
+      inferenceServer: { name: record?.spec?.inferenceServer?.name ?? '', namespace: projectId },
+      strategy: { rolling: { incrementPercentage: 0 } },
       definition: { type: record?.spec?.definition?.type ?? TARGET_TYPE.INFERENCE_SERVER },
     },
   };
@@ -134,7 +128,7 @@ export const DeploymentForm = ({ mode, record, onClose }: DeploymentFormProps) =
       />
 
       <SelectField
-        name="spec.target.value.name"
+        name="spec.inferenceServer.name"
         label="Inference server"
         required
         readOnly={isUpdate}

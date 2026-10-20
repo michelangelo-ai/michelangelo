@@ -73,6 +73,7 @@ func (a *PlacementPrepActor) Run(ctx context.Context, deployment *v2pb.Deploymen
 		return conditionsutil.GenerateUnknownCondition(condition, "NoClusterServing", "no cluster has reached serving state"), nil
 	}
 
+	common.WriteBackendTypeAnnotation(deployment, inferenceServer.Spec.GetBackendType())
 	if err := common.WriteTargetClustersAnnotation(deployment, healthy); err != nil {
 		return conditionsutil.GenerateFalseCondition(condition, "AnnotationWriteFailed", err.Error()), err
 	}

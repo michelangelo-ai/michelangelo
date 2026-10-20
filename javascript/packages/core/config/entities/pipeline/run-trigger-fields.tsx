@@ -34,6 +34,7 @@ export function RunTriggerFields({ triggerMap }: { triggerMap: Record<string, Ma
 
   return (
     <>
+      {/* TODO: #2155 The "Yes" option is not currently restricted based on the pipeline's source branch either. */}
       <RadioField
         name="autoFlip"
         label="Automatically switch to the latest revision once changes are applied? (Coming soon)"

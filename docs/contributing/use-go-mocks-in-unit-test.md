@@ -1,3 +1,7 @@
+---
+last_verified: 2026-10-14
+---
+
 # Using Go Mocks in Unit Tests
 
 1. Add following line into the .go file that the interface(s) are defined:
@@ -7,5 +11,5 @@
 ```
 
 2. Run 'go generate .' and gazelle in the directory to generate the mocks code and BUILD.bazel
-3. The package of the generated mocks code will be the original package name + mocks. For example, the mocks code generated from [api/interfaces.go](https://github.com/michelangelo-ai/michelangelo/blob/main/go/api/interface.go) is in package "github.com/michelangelo-ai/michelangelo/go/api/apimocks"   
+3. The package of the generated mocks code will be the original package name + mocks. For example, the mocks code generated from [api/interface.go](https://github.com/michelangelo-ai/michelangelo/blob/main/go/api/interface.go) is in package "github.com/michelangelo-ai/michelangelo/go/api/apimocks"   
 4. commit the generated mocks code to git repo

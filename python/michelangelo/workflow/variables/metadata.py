@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import TYPE_CHECKING, Any
 
 from michelangelo.lib.model_manager.schema.feature_schema import FeatureSchema
@@ -361,3 +362,19 @@ class FeaturePackageMetadata:
             The unpickled sample data, or ``None`` if ``_sample_data`` is unset.
         """
         return retrieve_object(self._sample_data)
+
+
+class SourceMessageType(Enum):
+    """The type of value a ``MessageVariable`` holds."""
+
+    INVALID = "invalid"
+    PROTO = "proto"
+    JSON_DATA = "json_data"
+
+
+@dataclass
+class MessageMetadata:
+    """Metadata of a ``MessageVariable``."""
+
+    class_name: str = field(default_factory=str)
+    type: SourceMessageType = field(default=SourceMessageType.INVALID)

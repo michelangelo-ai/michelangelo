@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from michelangelo.workflow.variables._private.dataset import DatasetVariable
+from michelangelo.workflow.variables._private.message import MessageVariable
 from michelangelo.workflow.variables._private.model import ModelVariable
 from michelangelo.workflow.variables.metadata import (
     DatasetMetadata,
@@ -11,6 +12,8 @@ from michelangelo.workflow.variables.metadata import (
 )
 from michelangelo.workflow.variables.types import (
     AssembledModel,
+    EvaluationMetrics,
+    EvaluationResult,
     FeaturePackageArtifact,
     ModelArtifact,
     NativeTransformResult,
@@ -21,8 +24,11 @@ __all__ = [
     "AssembledModel",
     "DatasetMetadata",
     "DatasetVariable",
+    "EvaluationMetrics",
+    "EvaluationResult",
     "FeaturePackageArtifact",
     "FeaturePackageMetadata",
+    "MessageVariable",
     "ModelArtifact",
     "ModelMetadata",
     "ModelVariable",

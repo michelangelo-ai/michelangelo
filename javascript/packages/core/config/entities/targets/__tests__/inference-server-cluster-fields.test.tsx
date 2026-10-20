@@ -8,15 +8,12 @@ describe('toClusterTarget', () => {
       metadata: { name: 'cluster-a', namespace: 'ma-system' },
       spec: {
         region: 'us-west',
-        cluster: {
-          case: 'kubernetes',
-          value: {
-            rest: {
-              host: 'https://kubernetes.default.svc',
-              port: '443',
-              tokenTag: 'cluster-a-is-token',
-              caDataTag: 'cluster-a-ca-data',
-            },
+        kubernetes: {
+          rest: {
+            host: 'https://kubernetes.default.svc',
+            port: '443',
+            tokenTag: 'cluster-a-is-token',
+            caDataTag: 'cluster-a-ca-data',
           },
         },
       },
@@ -24,14 +21,11 @@ describe('toClusterTarget', () => {
 
     expect(toClusterTarget(cluster)).toEqual({
       clusterId: 'cluster-a',
-      connection: {
-        case: 'kubernetes',
-        value: {
-          host: 'https://kubernetes.default.svc',
-          port: '443',
-          tokenTag: 'cluster-a-is-token',
-          caDataTag: 'cluster-a-ca-data',
-        },
+      kubernetes: {
+        host: 'https://kubernetes.default.svc',
+        port: '443',
+        tokenTag: 'cluster-a-is-token',
+        caDataTag: 'cluster-a-ca-data',
       },
     });
   });

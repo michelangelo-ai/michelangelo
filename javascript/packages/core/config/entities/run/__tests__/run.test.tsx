@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { vi } from 'vitest';
 
+import { PipelineRunState } from '#core/config/entities/run/types';
 import { TRAIN_PHASE } from '#core/config/phases/train';
 import { EntityDetailRoute } from '#core/router/entity-detail-route';
 import { PhaseListRoute } from '#core/router/phase-list-route';
@@ -64,18 +65,18 @@ describe('Run list page', () => {
                     // Distinct from run-without-labels' creationTimestamp below so this row's
                     // Created value (which always reads creationTimestamp) doesn't collide with
                     // the other row's Last Updated fallback (which also reads creationTimestamp).
-                    creationTimestamp: { seconds: 1660000000 },
+                    creationTimestamp: '2022-08-08T23:06:40Z',
                   },
                   spec: { actor: { name: 'jsmith' }, pipeline: { name: 'prediction-pipeline' } },
-                  status: { state: 3 },
+                  status: { state: PipelineRunState.SUCCEEDED },
                 },
                 {
                   metadata: {
                     name: 'run-without-labels',
-                    creationTimestamp: { seconds: 1650000000 },
+                    creationTimestamp: '2022-04-15T05:20:00Z',
                   },
                   spec: { actor: { name: 'jsmith' }, pipeline: { name: 'prediction-pipeline' } },
-                  status: { state: 3 },
+                  status: { state: PipelineRunState.SUCCEEDED },
                 },
               ],
             },
@@ -88,12 +89,12 @@ describe('Run list page', () => {
     expect(screen.getByText('Production')).toBeInTheDocument();
     // The UpdateTimestamp label (1700000000 seconds) is used over creationTimestamp.
     expect(screen.getByText('2023/11/14 22:13:20 (UTC)')).toBeInTheDocument();
-    // Created always reads creationTimestamp (1660000000 seconds), independent of Last Updated.
+    // Created always reads creationTimestamp (2022-08-08T23:06:40Z), independent of Last Updated.
     expect(screen.getByText('2022/08/08 23:06:40 (UTC)')).toBeInTheDocument();
 
     expect(screen.getByRole('link', { name: 'run-without-labels' })).toBeInTheDocument();
-    // No UpdateTimestamp label: Last Updated falls back to creationTimestamp (1650000000
-    // seconds), the same value Created reads directly — both cells render this text.
+    // No UpdateTimestamp label: Last Updated falls back to creationTimestamp
+    // (2022-04-15T05:20:00Z), the same value Created reads directly — both cells render this text.
     expect(screen.getAllByText('2022/04/15 05:20:00 (UTC)')).toHaveLength(2);
     // No environment label: renders no Environment text at all.
     expect(screen.queryByText('Development')).not.toBeInTheDocument();
@@ -104,20 +105,18 @@ describe('Run list page', () => {
 describe('Run detail page', () => {
   describe('configuration tab', () => {
     const buildRun = (overrides: Record<string, unknown> = {}) => ({
-      metadata: { name: 'run-1', creationTimestamp: { seconds: 1700000000 } },
+      metadata: { name: 'run-1', creationTimestamp: '2023-11-14T22:13:20Z' },
       spec: {
         actor: { name: 'jsmith' },
         pipeline: { name: 'prediction-pipeline' },
       },
       status: {
-        state: 3,
+        state: PipelineRunState.SUCCEEDED,
         sourcePipeline: {
           pipeline: {
             spec: {
               manifest: {
-                // The generated proto client decodes enum fields to their numeric
-                // discriminant (PIPELINE_MANIFEST_TYPE_YAML = 1), not the enum's string name.
-                type: 1,
+                type: 'PIPELINE_MANIFEST_TYPE_YAML',
                 filePath: 'python/examples/boston/pipeline.yaml',
                 content: {
                   typeUrl: 'type.googleapis.com/michelangelo.PredictionPipelineConf',
@@ -171,7 +170,7 @@ describe('Run detail page', () => {
           actor: { name: 'jsmith' },
           pipelineSpec: {
             manifest: {
-              type: 1,
+              type: 'PIPELINE_MANIFEST_TYPE_YAML',
               content: {
                 typeUrl: 'type.googleapis.com/michelangelo.PredictionPipelineConf',
                 value: {
@@ -187,7 +186,7 @@ describe('Run detail page', () => {
             },
           },
         },
-        status: { state: 1 },
+        status: { state: PipelineRunState.PENDING },
       });
       render(
         <EntityDetailRoute phases={{ train: TRAIN_PHASE }} />,
@@ -201,11 +200,14 @@ describe('Run detail page', () => {
     it('shows an empty state when the manifest has no configuration content', async () => {
       const run = buildRun({
         status: {
-          state: 3,
+          state: PipelineRunState.SUCCEEDED,
           sourcePipeline: {
             pipeline: {
               spec: {
-                manifest: { type: 3, uniflowTar: 's3://default/bert_local.tar' },
+                manifest: {
+                  type: 'PIPELINE_MANIFEST_TYPE_UNIFLOW',
+                  uniflowTar: 's3://default/bert_local.tar',
+                },
               },
             },
           },

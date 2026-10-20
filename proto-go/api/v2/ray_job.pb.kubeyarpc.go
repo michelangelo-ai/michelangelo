@@ -172,15 +172,11 @@ func (c rayJobServiceHandler) CreateRayJob(
 	ctx context.Context, request *CreateRayJobRequest) (resp *CreateRayJobResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
 
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.RayJob.ObjectMeta.Namespace, "name", request.RayJob.ObjectMeta.Name)
 	logger.Info("CreateRayJob Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "CreateRayJob",
-		logging.NamespaceTag:    request.RayJob.ObjectMeta.Namespace,
-		logging.EntityNameTag:   request.RayJob.ObjectMeta.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildRayJobAuditLogEventForCreate(
@@ -244,15 +240,11 @@ func (c rayJobServiceHandler) CreateRayJob(
 func (c rayJobServiceHandler) GetRayJob(
 	ctx context.Context, request *GetRayJobRequest) (resp *GetRayJobResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace, "name", request.Name)
 	logger.Info("GetRayJob Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "GetRayJob",
-		logging.NamespaceTag:    request.Namespace,
-		logging.EntityNameTag:   request.Name,
 	})
 
 	getOptions := &metav1.GetOptions{}
@@ -303,15 +295,11 @@ func (c rayJobServiceHandler) GetRayJob(
 func (c rayJobServiceHandler) UpdateRayJob(
 	ctx context.Context, request *UpdateRayJobRequest) (resp *UpdateRayJobResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.RayJob.ObjectMeta.Namespace, "name", request.RayJob.ObjectMeta.Name)
 	logger.Info("UpdateRayJob Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "UpdateRayJob",
-		logging.NamespaceTag:    request.RayJob.ObjectMeta.Namespace,
-		logging.EntityNameTag:   request.RayJob.ObjectMeta.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildRayJobAuditLogEventForUpdate(
@@ -375,15 +363,11 @@ func (c rayJobServiceHandler) UpdateRayJob(
 func (c rayJobServiceHandler) DeleteRayJob(
 	ctx context.Context, request *DeleteRayJobRequest) (resp *DeleteRayJobResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace, "name", request.Name)
 	logger.Info("DeleteRayJob Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "DeleteRayJob",
-		logging.NamespaceTag:    request.Namespace,
-		logging.EntityNameTag:   request.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildRayJobAuditLogEventForDelete(
@@ -449,14 +433,11 @@ func (c rayJobServiceHandler) DeleteRayJob(
 func (c rayJobServiceHandler) DeleteRayJobCollection(
 	ctx context.Context, request *DeleteRayJobCollectionRequest) (resp *DeleteRayJobCollectionResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace)
 	logger.Info("DeleteRayJobCollection Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "DeleteRayJobCollection",
-		logging.NamespaceTag:    request.Namespace,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildRayJobAuditLogEventForDeleteCollection(
@@ -525,14 +506,11 @@ func (c rayJobServiceHandler) ListRayJob(
 	ctx context.Context, request *ListRayJobRequest) (resp *ListRayJobResponse, err error) {
 
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace)
 	logger.Info("ListRayJob Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "ListRayJob",
-		logging.NamespaceTag:    request.Namespace,
 	})
 
 	result := &RayJobList{}

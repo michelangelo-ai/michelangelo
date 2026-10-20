@@ -31,8 +31,8 @@ workflow-engine:
 
 minio:
   awsRegion: us-east-1
-  awsAccessKeyId: minioadmin
-  awsSecretAccessKey: minioadmin
+  awsAccessKeyId: michelangeloadmin
+  awsSecretAccessKey: michelangeloadmin
   awsEndpointUrl: localhost:9091
 
 # Azure Blob Storage configuration (uncomment to enable Azure support)

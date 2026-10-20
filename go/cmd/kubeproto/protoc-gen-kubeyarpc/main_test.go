@@ -53,4 +53,12 @@ func TestGen(t *testing.T) {
 	assert.Contains(t, c, `func NewProjectServiceHandler(params FxProjectServiceHandlerParams) ProjectServiceYARPCServer {`)
 	assert.Contains(t, c, `type ProjectAPIHook interface`)
 	assert.Contains(t, c, `var ProjectSvcModule =`)
+
+	t.Run("handler logs include resource identity, not request bodies", func(t *testing.T) {
+		assert.NotContains(t, c, `logger = logger.WithValues("request",`)
+		assert.NotContains(t, c, `logger = logger.WithValues("context",`)
+		assert.Equal(t, 2, strings.Count(c, `logger = logger.WithValues("namespace", request.Project.ObjectMeta.Namespace, "name", request.Project.ObjectMeta.Name)`))
+		assert.Equal(t, 2, strings.Count(c, `logger = logger.WithValues("namespace", request.Namespace, "name", request.Name)`))
+		assert.Equal(t, 2, strings.Count(c, `logger = logger.WithValues("namespace", request.Namespace)`))
+	})
 }

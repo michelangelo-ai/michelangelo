@@ -1,3 +1,7 @@
+---
+last_verified: 2026-10-14
+---
+
 # Michelangelo AI Terminology Guide
 
 This glossary defines core concepts used throughout Michelangelo AI documentation. Use this as the authoritative reference for consistent terminology.
@@ -49,7 +53,7 @@ def training_pipeline(data_path: str):
 A **pipeline** is a deployable, versioned instance of a workflow.
 
 - **Definition**: A concrete deployment configuration bound to a workflow
-- **Configuration**: Defined in `pipeline.yaml` or configured via MA Studio UI
+- **Configuration**: Defined in a Pipeline YAML resource (for example, `pipeline.yaml`) or configured via MA Studio UI
 - **Lifecycle**: Registered with the `ma` CLI, versioned, and tracked
 - **Execution**: Can be triggered manually, via cron schedule, or via API
 - **Key Feature**: Separates workflow definition (code) from deployment configuration
@@ -62,12 +66,13 @@ kind: Pipeline
 metadata:
   name: training-pipeline
   namespace: my-project
+  annotations:
+    michelangelo/uniflow-image: my-training:latest  # Image used to run the tasks
 spec:
-  workflow: training_pipeline  # References the @workflow function
-  image: my-training:latest
-  resources:
-    cpu: "4"
-    memory: "16Gi"
+  type: PIPELINE_TYPE_TRAIN
+  manifest:
+    type: PIPELINE_MANIFEST_TYPE_UNIFLOW
+    filePath: //my/project:pipeline  # Points at the Uniflow @workflow entry point
 ```
 
 ---
@@ -78,25 +83,22 @@ spec:
 A **context** is the runtime entry point for executing a workflow.
 
 - **Definition**: Object that holds runtime information needed to execute a workflow
-- **Contains**: Environment variables, input arguments, configuration parameters
-- **Usage**: Workflows receive a context as their entry point
-- **Scope**: Isolated per execution (each PipelineRun gets its own context)
+- **Contains**: The execution target (`local-run` or `remote-run`), command-line arguments, and environment variables
+- **Usage**: Create one with `uniflow.create_context()` and start a workflow with `ctx.run(...)`
+- **Scope**: Isolated per execution
 
 **Example**:
 ```python
-@uniflow.workflow()
-def training_pipeline(context):
-    # Access runtime configuration
-    data_path = context.get_param("data_path")
-    environment = context.get_env("ENVIRONMENT")
-    return ...
+if __name__ == "__main__":
+    ctx = uniflow.create_context()
+    ctx.run(training_pipeline, data_path="s3://bucket/data")
 ```
 
 ### PipelineRun
 A **PipelineRun** is a single execution instance of a pipeline.
 
 - **Definition**: Concrete execution of a pipeline with specific input parameters and timing
-- **Lifecycle**: Created, running, succeeded, failed, or suspended
+- **Lifecycle**: Pending, running, succeeded, failed, killed, or skipped
 - **Tracking**: Each PipelineRun has logs, metrics, and can be monitored
 - **Resume**: Failed PipelineRuns can be resumed from a specific step
 - **Naming**: Automatically generated with timestamp and unique ID
@@ -111,10 +113,11 @@ A **trigger** (or **TriggerRun**) is a scheduling policy bound to a pipeline rev
 - **Definition**: Configuration that automatically creates PipelineRuns on a schedule or on-demand
 - **Types**:
   - **Cron Trigger**: Uses cron expressions (e.g., `0 9 * * *` for daily at 9 AM)
-  - **Manual Trigger**: One-time execution via API or UI
+  - **Interval Trigger**: Runs at a fixed time interval (e.g., every hour)
+  - **Batch Rerun Trigger**: Re-runs a list of PipelineRuns in batches
 - **Parameters**: Can pass dynamic parameters to each triggered run
 - **Concurrency**: Can limit simultaneous PipelineRuns
-- **Key File**: Defined in `trigger.yaml` (TriggerRun Custom Resource)
+- **Key Resource**: Defined as a TriggerRun Custom Resource (for example, in a YAML file)
 
 **Example**:
 ```yaml
@@ -129,7 +132,7 @@ spec:
   trigger:
     cronSchedule:
       cron: "0 9 * * *"  # Daily at 9 AM
-      maxConcurrency: 1
+    maxConcurrency: 1
 ```
 
 ---
@@ -196,7 +199,7 @@ A **DatasetVariable** is Michelangelo AI's abstraction for passing datasets betw
 
 **Example**:
 ```python
-from michelangelo.sdk.workflow.variables import DatasetVariable
+from michelangelo.workflow.variables import DatasetVariable
 
 train_dv = DatasetVariable(value=ray_dataset)
 train_dv.save_ray_dataset()  # Checkpoint to storage
@@ -247,7 +250,7 @@ A **remote run** executes a workflow on cloud compute infrastructure.
 - **Performance**: 2-5 minutes to provision
 - **Resources**: Cloud-allocated (Ray or Spark cluster)
 - **Best For**: Validating scalability before production
-- **Command**: `poetry run python my_workflow.py remote-run --storage-url s3://bucket`
+- **Command**: `poetry run python my_workflow.py remote-run --storage-url s3://bucket --image my-image:latest`
 
 ### Pipeline Dev Run
 A **Pipeline Dev Run** (or **dev-run**) validates the complete pipeline including Docker image building.
@@ -256,7 +259,7 @@ A **Pipeline Dev Run** (or **dev-run**) validates the complete pipeline includin
 - **Performance**: 20+ minutes (includes Docker build)
 - **Resources**: Cloud-allocated
 - **Best For**: Pre-production testing, ensuring Dockerfile and dependencies work
-- **Command**: `ma pipeline dev-run --pipeline training-pipeline --storage-url s3://bucket`
+- **Command**: `ma pipeline dev-run --file pipeline.yaml --storage-url s3://bucket`
 
 ### Pipeline Run
 A **Pipeline Run** is a production execution of a registered pipeline.

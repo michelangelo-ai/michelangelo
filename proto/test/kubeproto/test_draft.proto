@@ -2,14 +2,17 @@ syntax = "proto3";
 
 package michelangelo.test.kubeproto;
 
+import "google/protobuf/any.proto";
 import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
 import "michelangelo/api/options.proto";
 
 option go_package = "kubeproto";
 
-// TestDraftSpec is the spec of the second content wrapper.
+// TestDraftSpec is the spec of the second content wrapper, mirroring how real
+// wrappers (e.g. Revision) store their wrapped base resource as a
+// google.protobuf.Any at spec.content.
 message TestDraftSpec {
-  string content = 1;
+  google.protobuf.Any content = 1;
 }
 
 // TestDraftStatus is the status of the second content wrapper.

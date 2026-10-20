@@ -24,6 +24,11 @@ Scripts in the root `tools/` directory are for **development purposes** and may 
 - **`mamockgen`** - Mock generator for Michelangelo AI
 - **`grpc-svc-gen.sh`** - gRPC service generator
 - **`gen-grpc-client.sh`** - gRPC client generator
+- **`gen-proto-go.sh`** - Go protobuf code generator (writes to `proto-go/`)
+- **`gen-transcoder-services.sh`** - Generates the Envoy gRPC-JSON transcoder services allowlist (`helm/michelangelo/files/transcoder-services.json`)
+- **`check-transcoder-services.sh`** - Verifies the committed transcoder allowlist matches what `gen-transcoder-services.sh` produces
+- **`gopackagesdriver.sh`** - Bazel `gopackagesdriver` wrapper for editor setup
+- **`starlark.py`** - Runs a Starlark file as a Cadence or Temporal workflow (see `go/worker/starlark/README.md`)
 - **`run_ruff.sh`** - Python linter runner
 - **`assert_python_version.py`** - Python version checker
 - **`utils.py`** - Common utilities

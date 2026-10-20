@@ -1,3 +1,7 @@
+---
+last_verified: 2026-10-14
+---
+
 # Model Registry
 
 Michelangelo AI ships a built-in model registry — no external server required. This guide explains how operators verify the registry is healthy, configure storage and access, and integrate registered models with downstream serving and CI/CD systems.
@@ -52,7 +56,7 @@ Confirm the `Model` CRD is present in the cluster before expecting any registrat
 kubectl get crd models.michelangelo.api
 ```
 
-If the CRD is missing, re-run the Michelangelo AI CRD installation step described in [Platform Setup](../setup/platform-setup.md).
+If the CRD is missing, check that the API server is running with CRD sync enabled (`apiserver.crdSync.enableUpdate: true` in the Helm chart, the default). The API server registers and updates Michelangelo AI CRDs at startup; see [Platform Setup](../setup/platform-setup.md).
 
 You can also spot-check a namespace for any existing models:
 
@@ -64,7 +68,7 @@ kubectl get models -n <namespace>
 
 ## Step 2: Configure S3 Permissions for Model Artifacts
 
-The Controller Manager and task pods write model artifacts to your S3-compatible object store. The IAM role or service account bound to the Controller Manager needs the following permissions on the models bucket:
+Task pods write model artifacts to your S3-compatible object store, and the Controller Manager reads them when preparing deployments. The IAM role or service account used by the writer (task pods) needs the following permissions on the models bucket; the Controller Manager needs at least `s3:GetObject` and `s3:ListBucket`:
 
 ```json
 {
@@ -82,7 +86,7 @@ The Controller Manager and task pods write model artifacts to your S3-compatible
 }
 ```
 
-Task pods produce the raw model files during registration. If task pods run under a different IAM role or service account than the Controller Manager, apply equivalent write permissions to that identity as well.
+Task pods produce the raw model files during registration. Apply write permissions to the identity task pods run under, and grant `s3:DeleteObject` only to any retention job you run (see [Retention and Cleanup](#retention-and-cleanup)).
 
 ### Artifact URI discovery
 
@@ -91,11 +95,11 @@ The exact S3 layout for a model's artifacts is set by your platform configuratio
 ```bash
 # Raw training artifact URIs (weights, checkpoints)
 kubectl get model <model-name> -n <namespace> \
-  -o jsonpath='{.spec.model_artifact_uri}'
+  -o jsonpath='{.spec.modelArtifactUri}'
 
 # Deployable artifact URIs (packaged for serving)
 kubectl get model <model-name> -n <namespace> \
-  -o jsonpath='{.spec.deployable_artifact_uri}'
+  -o jsonpath='{.spec.deployableArtifactUri}'
 ```
 
 These spec fields are the authoritative source for artifact location. Use them in any automation that needs to consume artifacts.
@@ -201,20 +205,20 @@ spec:
   trainingFramework: sklearn
   kind: MODEL_KIND_BINARY_CLASSIFICATION
   source: TRAINING
-  package_type: DEPLOYABLE_MODEL_PACKAGE_TYPE_TRITON
-  revision_id: 3
-  model_artifact_uri:
+  packageType: DEPLOYABLE_MODEL_PACKAGE_TYPE_TRITON
+  revisionId: 3
+  modelArtifactUri:
     - s3://<your-bucket>/<path-to-raw-weights>
-  deployable_artifact_uri:
+  deployableArtifactUri:
     - s3://<your-bucket>/<path-to-serving-package>
-  input_schema:
-    schema_items:
+  inputSchema:
+    schemaItems:
       - name: transaction_features
-        data_type: DATA_TYPE_FLOAT
-  output_schema:
-    schema_items:
+        dataType: DATA_TYPE_FLOAT
+  outputSchema:
+    schemaItems:
       - name: fraud_score
-        data_type: DATA_TYPE_DOUBLE
+        dataType: DATA_TYPE_DOUBLE
 ```
 
 Key fields:
@@ -223,14 +227,14 @@ Key fields:
 |---|---|
 | `kind` | `Model` — there is no `ModelVersion` resource |
 | `spec.kind` | ML problem type (e.g. `MODEL_KIND_REGRESSION`, `MODEL_KIND_BINARY_CLASSIFICATION`) |
-| `spec.package_type` | How serving systems should interpret the deployable artifact (e.g. `DEPLOYABLE_MODEL_PACKAGE_TYPE_TRITON`) |
-| `spec.revision_id` | Integer version counter; users set this when creating the resource |
-| `spec.model_artifact_uri[]` | Repeated string — URIs to raw training artifacts |
-| `spec.deployable_artifact_uri[]` | Repeated string — URIs to packaged artifacts ready for serving |
-| `spec.input_schema` / `spec.output_schema` | `DataSchema` with `schema_items[]`; each item has `name` and `data_type` (not `dtype`) |
+| `spec.packageType` | How serving systems should interpret the deployable artifact (e.g. `DEPLOYABLE_MODEL_PACKAGE_TYPE_TRITON`) |
+| `spec.revisionId` | Integer version counter; users set this when creating the resource |
+| `spec.modelArtifactUri[]` | Repeated string — URIs to raw training artifacts |
+| `spec.deployableArtifactUri[]` | Repeated string — URIs to packaged artifacts ready for serving |
+| `spec.inputSchema` / `spec.outputSchema` | `DataSchema` with `schemaItems[]`; each item has `name` and `dataType` (not `dtype`) |
 | `status` | Empty — the Model resource carries no status conditions, phase, or timestamps |
 
-> **Heads-up:** `ModelStatus` is intentionally empty. Do not poll `kubectl wait --for=condition=Ready` on a `Model` — no such condition exists. If you need a readiness signal, key off the existence of the resource (and a non-empty `spec.deployable_artifact_uri[]`) or wait on a downstream resource such as an `InferenceServer`.
+> **Heads-up:** `ModelStatus` is intentionally empty. Do not poll `kubectl wait --for=condition=Ready` on a `Model` — no such condition exists. If you need a readiness signal, key off the existence of the resource (and a non-empty `spec.deployableArtifactUri[]`) or wait on a downstream resource such as an `InferenceServer`.
 
 ---
 
@@ -249,7 +253,7 @@ kubectl describe model <model-name> -n <namespace>
 
 # Read a single field for automation
 kubectl get model <model-name> -n <namespace> \
-  -o jsonpath='{.spec.deployable_artifact_uri[0]}'
+  -o jsonpath='{.spec.deployableArtifactUri[0]}'
 ```
 
 ### ma CLI
@@ -333,7 +337,7 @@ Because `Model` resources have no status conditions, CI/CD pipelines should chec
   run: |
     ARTIFACT_URI=$(kubectl get model "${{ env.MODEL_NAME }}" \
       -n "${{ env.NAMESPACE }}" \
-      -o jsonpath='{.spec.deployable_artifact_uri[0]}')
+      -o jsonpath='{.spec.deployableArtifactUri[0]}')
     echo "deployable_uri=$ARTIFACT_URI" >> "$GITHUB_OUTPUT"
 
 - name: Forward artifact to serving infrastructure
@@ -375,11 +379,11 @@ Model artifacts in S3 are not automatically removed when a `Model` resource is d
         | select(.metadata.creationTimestamp < $cutoff)
         | {namespace: .metadata.namespace,
            name: .metadata.name,
-           model_uris: .spec.model_artifact_uri,
-           deployable_uris: .spec.deployable_artifact_uri}'
+           model_uris: .spec.modelArtifactUri,
+           deployable_uris: .spec.deployableArtifactUri}'
    ```
 
-2. Reads `spec.model_artifact_uri[]` and `spec.deployable_artifact_uri[]` from each result to identify the S3 paths.
+2. Reads `spec.modelArtifactUri[]` and `spec.deployableArtifactUri[]` from each result to identify the S3 paths.
 3. Deletes the S3 objects first, then deletes the `Model` CR — that ordering avoids orphaned references if cleanup is interrupted.
 
 ---
@@ -388,12 +392,12 @@ Model artifacts in S3 are not automatically removed when a `Model` resource is d
 
 | Symptom | Likely cause | Resolution |
 |---|---|---|
-| `error: the server doesn't have a resource type "models"` | CRD not installed | Re-run the Michelangelo AI CRD installation step (see [Platform Setup](../setup/platform-setup.md)) |
+| `error: the server doesn't have a resource type "models"` | CRD not installed | The API server registers CRDs at startup; check `apiserver.crdSync.enableUpdate` and the API server logs (see [Platform Setup](../setup/platform-setup.md)) |
 | `kubectl get models` returns `No resources found` but CRD is present | No models registered yet, or wrong namespace | Confirm a registration task has run; check the namespace |
-| `spec.model_artifact_uri` empty after registration | Controller Manager lacks S3 write permissions, or the registration task failed | Check Controller Manager logs; verify IAM policy on the bucket |
-| `spec.deployable_artifact_uri` empty | Packaging step did not run or failed | Inspect the pipeline run logs for the registration task |
+| `spec.modelArtifactUri` empty after registration | The registration task failed or lacks S3 write permissions | Check the registration task's logs; verify the IAM policy on the bucket |
+| `spec.deployableArtifactUri` empty | Packaging step did not run or failed | Inspect the pipeline run logs for the registration task |
 | RBAC error reading models (`User ... cannot get resource "models"`) | Role missing the `michelangelo.api` API group | Use `apiGroups: ["michelangelo.api"]` (not `[""]`) and apply the manifest from [Step 3](#step-3-configure-rbac) |
-| `kubectl wait --for=condition=Ready` hangs on a Model | Model has no status conditions | Don't gate on Model conditions; use `spec.deployable_artifact_uri[0]` non-empty as the readiness signal, or wait on a downstream `InferenceServer` |
+| `kubectl wait --for=condition=Ready` hangs on a Model | Model has no status conditions | Don't gate on Model conditions; use `spec.deployableArtifactUri[0]` non-empty as the readiness signal, or wait on a downstream `InferenceServer` |
 | `InferenceServer` does not start serving | `backendType` set to lowercase string `"triton"` instead of enum value | Use `backendType: BACKEND_TYPE_TRITON` |
 
 For deeper diagnostic trees, see the [Troubleshooting Guide](../operations/troubleshooting.md).

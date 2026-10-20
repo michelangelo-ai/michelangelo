@@ -43,4 +43,4 @@ When a component receives a callback prop and forwards it directly to a child **
 const FilterOption = ({ onClick }: Props) => <Item onClick={onClick} />;
 ```
 
-The rule detects pass-throughs via scope analysis — if the value identifier is a function parameter, it is exempt. Where the rule cannot detect it (e.g. `const { onClick } = props`), use direct parameter destructuring instead.
+The rule detects pass-throughs via scope analysis — the value is exempt if the identifier is a function parameter, or if it is declared from an expression built on a parameter (e.g. `const { onClick } = props`, `props ?? {}`, `props?.foo`). A value that does not trace back to a parameter (for example one returned from a hook call) is not exempt.

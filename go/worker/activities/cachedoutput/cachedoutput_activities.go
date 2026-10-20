@@ -3,6 +3,7 @@ package cachedoutput
 import (
 	"context"
 
+	"github.com/michelangelo-ai/michelangelo/go/worker/runnertoken"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
@@ -30,13 +31,18 @@ type activities struct {
 }
 
 func (r *activities) GetCachedOutput(ctx context.Context, request v2pb.GetCachedOutputRequest) (*v2pb.GetCachedOutputResponse, error) {
+	ctx = runnertoken.WithNamespace(ctx, request.Namespace)
 	return r.cachedOutput.GetCachedOutput(ctx, &request)
 }
 
 func (r *activities) ListCachedOutput(ctx context.Context, request v2pb.ListCachedOutputRequest) (*v2pb.ListCachedOutputResponse, error) {
+	ctx = runnertoken.WithNamespace(ctx, request.Namespace)
 	return r.cachedOutput.ListCachedOutput(ctx, &request)
 }
 
 func (r *activities) CreateCachedOutput(ctx context.Context, request v2pb.CreateCachedOutputRequest) (*v2pb.CreateCachedOutputResponse, error) {
+	if request.CachedOutput != nil {
+		ctx = runnertoken.WithNamespace(ctx, request.CachedOutput.Namespace)
+	}
 	return r.cachedOutput.CreateCachedOutput(ctx, &request)
 }

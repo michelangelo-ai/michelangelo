@@ -1,3 +1,7 @@
+---
+last_verified: 2026-10-14
+---
+
 # Contributing to Michelangelo AI
 
 Michelangelo AI welcomes contributions from the community. This guide is your entry point — it explains what you can contribute, where each part of the codebase lives, and how to get started.
@@ -52,7 +56,7 @@ Understanding which directory owns which subsystem helps you find the right code
 ## Finding Work
 
 - Browse [GitHub Issues](https://github.com/michelangelo-ai/michelangelo/issues) filtered by `good first issue` or `help wanted`
-- Issues are tagged by component (e.g., `area/serving`, `area/jobs`, `area/uniflow`) to help you find relevant work
+- Issue titles and descriptions name the component they affect, which helps you find relevant work
 - If you have an idea that isn't tracked yet, open an issue before writing code
 
 ## Making a Contribution

@@ -1,3 +1,7 @@
+---
+last_verified: 2026-10-14
+---
+
 # Testing Strategy
 
 Michelangelo AI uses a three-level test strategy. Understanding when to write each type of test — and how to run them — is the most important thing to know before opening a PR.
@@ -24,7 +28,7 @@ go test ./components/jobs/scheduler/...
 
 Use gomock to mock dependencies. See [Using Go Mocks in Unit Tests](use-go-mocks-in-unit-test.md) for patterns.
 
-**Python**: Unit tests live in `python/tests/`.
+**Python**: Unit tests live in `python/tests/` or next to the code they test as `*_test.py` files (the `mactl` plugins use the co-located style).
 
 ```bash
 cd python
@@ -93,7 +97,7 @@ bazel test //go/...
 
 # Python
 cd python
-poetry run pre-commit
+poetry run pre-commit run --all-files
 poetry run ruff check .
 poetry run pytest
 ```

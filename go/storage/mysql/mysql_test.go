@@ -440,6 +440,35 @@ func TestBuildCriterionSQL_AndCombination(t *testing.T) {
 	require.Equal(t, []interface{}{"RUNNING", "env", "prod"}, params)
 }
 
+func TestBuildCriterionSQL_StateInWithNilMap(t *testing.T) {
+	// Production stores pass a nil indexPathToKeyMap, so a field criterion must use the
+	// indexed column name: "pipeline_run.state" builds, the object path "status.state" fails.
+	op := func(field string) *apipb.CriterionOperation {
+		return &apipb.CriterionOperation{
+			LogicalOperator: apipb.LOGICAL_OPERATOR_AND,
+			Criterion: []*apipb.Criterion{
+				{
+					FieldName:  field,
+					Operator:   apipb.CRITERION_OPERATOR_IN,
+					MatchValue: stringMatchValue(t, "PIPELINE_RUN_STATE_PENDING,PIPELINE_RUN_STATE_RUNNING"),
+				},
+				{
+					FieldName:  "pipeline_run.metadata.labels.pipelinerun.michelangelo/triggered-by",
+					Operator:   apipb.CRITERION_OPERATOR_EQUAL,
+					MatchValue: stringMatchValue(t, "tr"),
+				},
+			},
+		}
+	}
+
+	sql, _, err := buildCriterionSQL(op("pipeline_run.state"), "pipeline_run", nil)
+	require.NoError(t, err)
+	require.Contains(t, sql, "`state`")
+
+	_, _, err = buildCriterionSQL(op("pipeline_run.status.state"), "pipeline_run", nil)
+	require.Error(t, err)
+}
+
 func TestBuildCriterionSQL_OrCombination(t *testing.T) {
 	op := &apipb.CriterionOperation{
 		LogicalOperator: apipb.LOGICAL_OPERATOR_OR,

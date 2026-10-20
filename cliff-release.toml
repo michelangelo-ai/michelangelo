@@ -1,0 +1,157 @@
+[changelog]
+header = ""
+body = """
+{% set breaking_commits = commits | filter(attribute="breaking", value=true) %}\
+{% set feat_commits = commits | filter(attribute="group", value="🚀 Features") %}\
+{% set fix_commits = commits | filter(attribute="group", value="🐛 Bug Fixes") %}\
+{% set docs_commits = commits | filter(attribute="group", value="📚 Documentation") %}\
+{% set ci_commits = commits | filter(attribute="group", value="🔧 CI / Build") %}\
+{% set security_commits = commits | filter(attribute="group", value="🔒 Security") %}\
+{% set total_count = commits | length %}\
+{% set feat_count = feat_commits | length %}\
+{% set fix_count = fix_commits | length %}\
+{% set docs_count = docs_commits | length %}\
+{% set ci_count = ci_commits | length %}\
+{% set security_count = security_commits | length %}\
+{% set other_count = total_count - feat_count - fix_count - docs_count - ci_count - security_count %}\
+{% if other_count > 0 %}
+## What's Changed
+
+{% for commit in commits %}{% if commit.group != "🚀 Features" and commit.group != "🐛 Bug Fixes" and commit.group != "📚 Documentation" and commit.group != "🔧 CI / Build" and commit.group != "🔒 Security" %}- {{ commit.raw_message }}{% if commit.remote.pr_author or commit.remote.username %} @{{ commit.remote.pr_author | default(value=commit.remote.username) }}{% endif %}{% if commit.remote.pr_number %} (#{{ commit.remote.pr_number }}){% endif %}
+{% endif %}{% endfor -%}
+{% endif -%}
+{% if breaking_commits | length > 0 %}
+## ⚠ Breaking Changes
+
+{% if breaking_commits | length > 5 %}<details><summary>{{ breaking_commits | length }} changes</summary>
+
+{% endif -%}
+{% for commit in breaking_commits %}- {{ commit.raw_message }}{% if commit.remote.pr_author or commit.remote.username %} @{{ commit.remote.pr_author | default(value=commit.remote.username) }}{% endif %}{% if commit.remote.pr_number %} (#{{ commit.remote.pr_number }}){% endif %}
+{% endfor -%}
+{% if breaking_commits | length > 5 %}
+</details>
+{% endif %}
+{% endif -%}
+{% if feat_commits | length > 0 %}
+## 🚀 Features
+
+{% if feat_commits | length > 10 %}<details><summary>{{ feat_commits | length }} changes</summary>
+
+{% endif -%}
+{% for commit in feat_commits %}- {{ commit.raw_message }}{% if commit.remote.pr_author or commit.remote.username %} @{{ commit.remote.pr_author | default(value=commit.remote.username) }}{% endif %}{% if commit.remote.pr_number %} (#{{ commit.remote.pr_number }}){% endif %}
+{% endfor -%}
+{% if feat_commits | length > 10 %}
+</details>
+{% endif %}
+{% endif -%}
+{% if fix_commits | length > 0 %}
+## 🐛 Bug Fixes
+
+{% if fix_commits | length > 10 %}<details><summary>{{ fix_commits | length }} changes</summary>
+
+{% endif -%}
+{% for commit in fix_commits %}- {{ commit.raw_message }}{% if commit.remote.pr_author or commit.remote.username %} @{{ commit.remote.pr_author | default(value=commit.remote.username) }}{% endif %}{% if commit.remote.pr_number %} (#{{ commit.remote.pr_number }}){% endif %}
+{% endfor -%}
+{% if fix_commits | length > 10 %}
+</details>
+{% endif %}
+{% endif -%}
+{% if docs_commits | length > 0 %}
+## 📚 Documentation
+
+{% if docs_commits | length > 5 %}<details><summary>{{ docs_commits | length }} changes</summary>
+
+{% endif -%}
+{% for commit in docs_commits %}- {{ commit.raw_message }}{% if commit.remote.pr_author or commit.remote.username %} @{{ commit.remote.pr_author | default(value=commit.remote.username) }}{% endif %}{% if commit.remote.pr_number %} (#{{ commit.remote.pr_number }}){% endif %}
+{% endfor -%}
+{% if docs_commits | length > 5 %}
+</details>
+{% endif %}
+{% endif -%}
+{% if ci_commits | length > 0 %}
+## 🔧 CI / Build
+
+{% if ci_commits | length > 5 %}<details><summary>{{ ci_commits | length }} changes</summary>
+
+{% endif -%}
+{% for commit in ci_commits %}- {{ commit.raw_message }}{% if commit.remote.pr_author or commit.remote.username %} @{{ commit.remote.pr_author | default(value=commit.remote.username) }}{% endif %}{% if commit.remote.pr_number %} (#{{ commit.remote.pr_number }}){% endif %}
+{% endfor -%}
+{% if ci_commits | length > 5 %}
+</details>
+{% endif %}
+{% endif -%}
+{% if security_commits | length > 0 %}
+## 🔒 Security
+
+{% for commit in security_commits %}- {{ commit.raw_message }}{% if commit.remote.pr_author or commit.remote.username %} @{{ commit.remote.pr_author | default(value=commit.remote.username) }}{% endif %}{% if commit.remote.pr_number %} (#{{ commit.remote.pr_number }}){% endif %}
+{% endfor -%}
+{% endif -%}
+{% if previous.version and version %}
+**Full Changelog**: https://github.com/michelangelo-ai/michelangelo/compare/{{ previous.version }}...{{ version }}
+{% endif -%}
+"""
+footer = ""
+trim = true
+
+[git]
+conventional_commits = true
+filter_unconventional = false
+split_commits = false
+protect_breaking_commits = true
+tag_pattern = "v[0-9].*"
+skip_tags = ".*\\.dev.*"
+ignore_tags = ".*-rc\\..*|.*-nightly\\..*"
+topo_order = false
+sort_commits = "oldest"
+
+# Squash-merge commit titles already end in " (#NNNN)" (GitHub's default);
+# strip it so the PR number can be re-added from remote.github's authoritative
+# pr_number instead of duplicating the text that's already in the title.
+commit_preprocessors = [
+    { pattern = "(?s)\\n.*", replace = "" },
+    { pattern = "\\s*\\(#\\d+\\)$", replace = "" },
+    { pattern = "\\.$", replace = "" },
+]
+
+# Coarser than cliff.toml's 8-group breakdown by design: mirrors
+# release-drafter.yml's categories exactly (ci/build/chore/refactor/perf/test
+# all fold into "CI / Build", matching its autolabeler groups), since this
+# config's only job is to reproduce that visual format for the GitHub Release
+# body. cliff.toml's CHANGELOG.md template and groups are untouched.
+#
+# Deliberately NO catch-all ".*" parser: release-drafter's autolabeler only
+# assigns a category to PRs whose title/commit matches one of its rules, and
+# anything it can't categorize falls into the un-autolabeled "What's Changed"
+# bucket instead of being force-fit into a category -- confirmed against
+# v0.10.0's real release body, where "What's Changed" held ~15 genuinely
+# non-conventional-prefixed commits that never appear again in any category
+# section below it.
+#
+# IMPORTANT: a commit matching none of the rules below does NOT necessarily
+# end up with an empty/null `group`. git-cliff's conventional-commit parser
+# (conventional_commits = true) auto-derives `group` from ANY recognized
+# "type: description" syntax, even a type this config never mapped (e.g.
+# "deps: bump vllm to 0.9.2" -> group = "deps", not unset) -- confirmed via
+# v0.8.0..v0.9.0, where such a commit silently vanished from the release
+# body entirely (matched no category `==` check AND failed a naive
+# `not commit.group` check) before the template's "What's Changed" filter
+# was fixed to select by exclusion (group not in the 5 known categories)
+# instead of by truthiness. Historical stray types seen in this repo's log
+# beyond the ones mapped here: cli, website, design, deps, bump, bug, plus
+# capitalized variants (Fix, Docs) -- all correctly fall through to "What's
+# Changed" now.
+commit_parsers = [
+    { message = "^feat", group = "🚀 Features" },
+    { message = "^fix", group = "🐛 Bug Fixes" },
+    { message = "^docs", group = "📚 Documentation" },
+    { message = "^ci", group = "🔧 CI / Build" },
+    { message = "^build", group = "🔧 CI / Build" },
+    { message = "^chore", group = "🔧 CI / Build" },
+    { message = "^refactor", group = "🔧 CI / Build" },
+    { message = "^perf", group = "🔧 CI / Build" },
+    { message = "^test", group = "🔧 CI / Build" },
+]
+
+[remote.github]
+owner = "michelangelo-ai"
+repo = "michelangelo"

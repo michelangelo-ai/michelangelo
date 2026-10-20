@@ -1,3 +1,7 @@
+---
+last_verified: 2026-10-14
+---
+
 # Michelangelo AI React Library
 
 This guide covers integrating Michelangelo AI UI components into existing React applications as npm dependencies.
@@ -7,19 +11,19 @@ The Michelangelo AI React Library allows organizations to embed Michelangelo AI 
 ## Key Concepts
 
 - **Dependency Injection**: Pattern for providing external dependencies (themes, services) to components
-- **gRPC Client**: Generated TypeScript client for API communication
+- **RPC Client**: TypeScript client that exchanges proto3 JSON with the Michelangelo AI API through Envoy's gRPC-JSON transcoder
 
 ## Architecture
 
 ### Components
 - **@michelangelo-ai/core**: Main UI components and application logic
-- **@michelangelo-ai/rpc**: gRPC client and API communication utilities
+- **@michelangelo-ai/rpc**: RPC client (`request`), generated proto types, and transcoder error normalization (`normalizeTranscoderError`)
 
 ### Technologies
 - **Frontend**: React 18, TypeScript
 - **Styling**: BaseUI
 - **State Management and API integration**: TanStack Query
-- **Communication**: gRPC-Web via generated clients
+- **Communication**: proto3 JSON over HTTP `POST /{service}/{method}`, transcoded to gRPC by Envoy
 
 ### Design Decisions
 - **Dependency injection**: Allows customization of logging, theming, and services
@@ -28,8 +32,8 @@ The Michelangelo AI React Library allows organizations to embed Michelangelo AI 
 
 ### Prerequisites
 - React 18 application
-- TypeScript 4.8+ 
-- Node.js 18+ for development
+- TypeScript (the Michelangelo AI repository itself builds with TypeScript 5.7)
+- A Node.js version supported by your toolchain (the Michelangelo AI repository itself builds with Node.js 24.18.0)
 
 ### Installation Steps
 
@@ -48,16 +52,16 @@ npm install @michelangelo-ai/rpc  # Only if using Michelangelo's gRPC client
 2. **Install peer dependencies:**
 ```bash
 # Core React dependencies
-npm install react@18 react-dom
+npm install react@18 react-dom@18
 
 # Required for styling
-npm install baseui styletron-engine-atomic styletron-react
+npm install baseui@18 styletron-engine-atomic styletron-react
 
 # Required for API connection and state management
-npm install @tanstack/react-query
+npm install @tanstack/react-query@5
 
 # Required for routing
-npm install react-router-dom react-router-dom-v5-compat
+npm install react-router-dom@5 react-router-dom-v5-compat@6
 ```
 
 3. **Basic integration:**
@@ -68,10 +72,19 @@ import { BrowserRouter, Route, Routes } from 'react-router-dom-v5-compat';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Client as Styletron } from 'styletron-engine-atomic';
 import { Provider as StyletronProvider } from 'styletron-react';
-import { MichelangeloStudio } from '@michelangelo-ai/core';
+import { CoreApp } from '@michelangelo-ai/core';
+import { normalizeTranscoderError, request } from '@michelangelo-ai/rpc';
 
 const engine = new Styletron();
 const queryClient = new QueryClient();
+
+// CoreApp requires `error`, `service`, and `theme` dependencies. `theme.icons`
+// is explained under "Icon Configuration" below.
+const dependencies = {
+  error: { normalizeError: normalizeTranscoderError },
+  service: { request },
+  theme: { icons: {} },
+};
 
 export function App() {
   return (
@@ -79,7 +92,7 @@ export function App() {
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
           <Routes>
-            <Route path="/michelangelo/*" element={<MichelangeloStudio />} />
+            <Route path="/michelangelo/*" element={<CoreApp dependencies={dependencies} />} />
             <Route path="/" element={<YourExistingApp />} />
           </Routes>
         </BrowserRouter>
@@ -95,9 +108,11 @@ export function App() {
 ```json
 // public/config.json
 {
-  "apiBaseUrl": "https://your-api-server.com:8081"
+  "apiBaseUrl": "https://your-envoy-host.example.com"
 }
 ```
+
+`apiBaseUrl` must be the browser-reachable URL of the Envoy proxy (port 8081 by default), not the API server's gRPC port. `@michelangelo-ai/rpc` fetches `/config.json` at runtime and fails if `apiBaseUrl` is missing.
 
 **Note:** Custom request handlers don't need this configuration file - they handle API endpoints directly in code.
 
@@ -123,13 +138,14 @@ Navigate to your app and then to `/michelangelo` (or whatever route you configur
 ### Basic Configuration
 
 **Simple integration:**
+
+`CoreApp` is the only component intended for external consumption. It requires a `dependencies` prop with `error`, `service`, and `theme` entries (optional: `navigationBar`, `user`):
+
 ```tsx
-import { MichelangeloStudio } from '@michelangelo-ai/core';
+import { CoreApp } from '@michelangelo-ai/core';
 
 function App() {
-  return (
-    <MichelangeloStudio />
-  );
+  return <CoreApp dependencies={dependencies} />;
 }
 ```
 
@@ -141,72 +157,53 @@ The Michelangelo AI UI can integrate with your API through two approaches:
 Use your existing API infrastructure:
 ```tsx
 const dependencies = {
+  error: { normalizeError: yourErrorNormalizer },
+  theme: { icons: customIcons },
   service: {
-    request: async (url, options) => {
-      // Use your existing HTTP client, auth, etc.
-      return fetch(url, {
-        ...options,
-        headers: {
-          ...options.headers,
-          Authorization: `Bearer ${yourAuthToken}`,
-        },
-      });
+    // requestId is an RPC name such as 'ListProject'; args is the request
+    // message; headers are optional per-request headers (e.g. user identity).
+    request: async (requestId: string, args: unknown, headers?: Record<string, string>) => {
+      // Use your existing HTTP client, auth, etc., and return the response message.
+      return yourApiClient.call(requestId, args, headers);
     },
   },
 };
 ```
 
-#### Option 2: Michelangelo AI gRPC Client
-Use the provided gRPC-Web client (requires Envoy proxy):
+#### Option 2: Michelangelo AI RPC Client
+Use the provided client, which sends proto3 JSON to Envoy (requires the Envoy proxy):
 ```tsx
-import { normalizeConnectError, request } from '@michelangelo-ai/rpc';
+import { normalizeTranscoderError, request } from '@michelangelo-ai/rpc';
 
 const dependencies = {
   error: {
-    normalizeError: normalizeConnectError, // Optional: provides consistent error formatting
+    normalizeError: normalizeTranscoderError, // Maps transcoder HTTP/gRPC errors to ApplicationError
   },
   service: {
-    request, // Uses gRPC-Web via Envoy proxy
+    request, // POSTs proto3 JSON to Envoy, which transcodes to gRPC
   },
 };
 ```
 
-**Note:** Option 2 requires an Envoy proxy to translate HTTP requests to gRPC calls to your Michelangelo AI API server.
+**Note:** Option 2 requires an Envoy proxy with the `grpc_json_transcoder` filter to translate JSON-over-HTTP requests to gRPC calls to your Michelangelo AI API server. The Michelangelo AI Helm chart deploys this proxy for you (`envoy.enabled: true`).
 
 #### Envoy Proxy Setup (Required for @michelangelo-ai/rpc)
 
 **Port Configuration:**
-- Envoy listens on port 8081 for gRPC-Web requests
-- UI makes requests to Envoy, not directly to API server
-- Envoy forwards to your Michelangelo AI API server
+- Envoy listens on port 8081 by default (`envoy.port` in the Helm chart)
+- The client makes requests to Envoy, not directly to the API server
+- Envoy forwards to the Michelangelo AI API server's gRPC port (`apiserver.port`, 15566 by default)
 
 **CORS Configuration:**
-Envoy must allow your application's origin:
+Envoy must allow your application's origin. With the Helm chart, set `envoy.corsOrigins` to a regular expression (not an exact-match list):
 ```yaml
-cors:
-  allow_origin_string_match:
-    - exact: "http://localhost:3000"        # Your React app's dev server
-    - exact: "https://your-app-domain.com"  # Your production domain
+envoy:
+  corsOrigins: "https://your-app-domain\\.com|http://localhost:[0-9]+"
 ```
 
-**Backend Routing:**
-```yaml
-# In the route configuration:
-route:
-  cluster: michelangelo-apiserver  # This name must match below
+**Backend Routing and Transcoding:** The chart renders the route, the `michelangelo-apiserver` cluster, and the `grpc_json_transcoder` filter (with an allowlist of services generated into `helm/michelangelo/files/transcoder-services.json`). If you run your own Envoy, copy these from `helm/michelangelo/templates/core/envoy-configmap.yaml`; the UI depends on `always_print_primitive_fields: true` and `always_print_enums_as_ints: false` in the transcoder `print_options`.
 
-# In the clusters section:
-clusters:
-  - name: michelangelo-apiserver  # Must match the route cluster name
-    endpoints:
-      - endpoint:
-          address:
-            socket_address:
-              address: michelangelo-apiserver  # Your API server service name
-              port_value: 8081                # Your API server port
-```
-
-**Reference Configuration:** See complete Envoy setup in the [Deploying Michelangelo AI UI](./deploying-michelangelo-ui.md) guide.
+**Reference Configuration:** See the [Deploying Michelangelo AI UI](./deploying-michelangelo-ui.md) guide.
 
 ### Icon Configuration
 
@@ -229,7 +226,7 @@ const dependencies = {
 };
 
 function App() {
-  return <MichelangeloStudio dependencies={dependencies} />
+  return <CoreApp dependencies={dependencies} />
 }
 ```
 
@@ -252,4 +249,4 @@ A: React 18 is required.
 A: Yes, you can mount Michelangelo AI components at any route and integrate with your existing router.
 
 **Q: Can I use only specific components?**
-A: No, Michelangelo AIStudio is the only component intended for external consumption and customizable through dependency injection and configuration. If you have an unsupported use case, please submit an issue or propose a solution in PR.
+A: No, `CoreApp` is the only component intended for external consumption and customizable through dependency injection and configuration. If you have an unsupported use case, please submit an issue or propose a solution in PR.

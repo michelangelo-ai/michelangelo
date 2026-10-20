@@ -81,14 +81,14 @@ func (r *gateway) ConditionalUpsert(
 			)
 			if err != nil {
 				e := fmt.Errorf("failed to create CRD %s: %w", crd.Name, err)
-				r.logger.Error(e.Error())
+				r.logger.Error("failed to create CRD", zap.String("name", crd.Name), zap.Error(e))
 				return e
 			}
 			return nil
 		}
 
 		e := fmt.Errorf("failed to get CRD %s: %w", crd.Name, err)
-		r.logger.Error(e.Error())
+		r.logger.Error("failed to get CRD", zap.String("name", crd.Name), zap.Error(e))
 		return e
 	}
 
@@ -104,7 +104,8 @@ func (r *gateway) ConditionalUpsert(
 		}
 		if !find {
 			e := fmt.Errorf("CRD %s has version %s that is not in the new CRD", crd.Name, v.Name)
-			r.logger.Error(e.Error())
+			r.logger.Error("CRD has version that is not in the new CRD",
+				zap.String("name", crd.Name), zap.String("version", v.Name), zap.Error(e))
 			return e
 		}
 	}

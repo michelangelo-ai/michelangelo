@@ -120,7 +120,8 @@ func syncCRDs(ctx context.Context,
 			}
 			if group != crd.Spec.Group {
 				e := fmt.Errorf("CRD %s is not in the specified group [%v]", crd.Name, group)
-				logger.Error(e.Error())
+				logger.Error("CRD is not in the specified group",
+					zap.String("name", crd.Name), zap.String("group", group))
 				return e
 			}
 			crdList = append(crdList, &crd)

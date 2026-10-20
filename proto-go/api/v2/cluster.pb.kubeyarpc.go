@@ -172,15 +172,11 @@ func (c clusterServiceHandler) CreateCluster(
 	ctx context.Context, request *CreateClusterRequest) (resp *CreateClusterResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
 
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Cluster.ObjectMeta.Namespace, "name", request.Cluster.ObjectMeta.Name)
 	logger.Info("CreateCluster Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "CreateCluster",
-		logging.NamespaceTag:    request.Cluster.ObjectMeta.Namespace,
-		logging.EntityNameTag:   request.Cluster.ObjectMeta.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildClusterAuditLogEventForCreate(
@@ -244,15 +240,11 @@ func (c clusterServiceHandler) CreateCluster(
 func (c clusterServiceHandler) GetCluster(
 	ctx context.Context, request *GetClusterRequest) (resp *GetClusterResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace, "name", request.Name)
 	logger.Info("GetCluster Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "GetCluster",
-		logging.NamespaceTag:    request.Namespace,
-		logging.EntityNameTag:   request.Name,
 	})
 
 	getOptions := &metav1.GetOptions{}
@@ -303,15 +295,11 @@ func (c clusterServiceHandler) GetCluster(
 func (c clusterServiceHandler) UpdateCluster(
 	ctx context.Context, request *UpdateClusterRequest) (resp *UpdateClusterResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Cluster.ObjectMeta.Namespace, "name", request.Cluster.ObjectMeta.Name)
 	logger.Info("UpdateCluster Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "UpdateCluster",
-		logging.NamespaceTag:    request.Cluster.ObjectMeta.Namespace,
-		logging.EntityNameTag:   request.Cluster.ObjectMeta.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildClusterAuditLogEventForUpdate(
@@ -375,15 +363,11 @@ func (c clusterServiceHandler) UpdateCluster(
 func (c clusterServiceHandler) DeleteCluster(
 	ctx context.Context, request *DeleteClusterRequest) (resp *DeleteClusterResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace, "name", request.Name)
 	logger.Info("DeleteCluster Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "DeleteCluster",
-		logging.NamespaceTag:    request.Namespace,
-		logging.EntityNameTag:   request.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildClusterAuditLogEventForDelete(
@@ -449,14 +433,11 @@ func (c clusterServiceHandler) DeleteCluster(
 func (c clusterServiceHandler) DeleteClusterCollection(
 	ctx context.Context, request *DeleteClusterCollectionRequest) (resp *DeleteClusterCollectionResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace)
 	logger.Info("DeleteClusterCollection Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "DeleteClusterCollection",
-		logging.NamespaceTag:    request.Namespace,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.buildClusterAuditLogEventForDeleteCollection(
@@ -525,14 +506,11 @@ func (c clusterServiceHandler) ListCluster(
 	ctx context.Context, request *ListClusterRequest) (resp *ListClusterResponse, err error) {
 
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
-
-	logger = logger.WithValues("request", requestJSON, "context", ctx)
+	logger = logger.WithValues("namespace", request.Namespace)
 	logger.Info("ListCluster Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
 		logging.APIProcedureTag: "ListCluster",
-		logging.NamespaceTag:    request.Namespace,
 	})
 
 	result := &ClusterList{}

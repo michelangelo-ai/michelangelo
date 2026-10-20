@@ -1,5 +1,5 @@
 export type PipelineRunStatus = {
-  state: number;
+  state: string;
   workflowId: string;
   workflowRunId: string;
 };

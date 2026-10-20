@@ -1,17 +1,22 @@
+---
+last_verified: 2026-10-14
+---
+
 # Network & Ingress Configuration
 
-This guide covers the network configuration required to deploy Michelangelo AI in a Kubernetes cluster: Envoy proxy settings (CORS, cluster hostnames), Ingress setup for the API server and UI, TLS with cert-manager, and connectivity requirements for multi-cluster deployments.
+This guide covers the network configuration required to deploy Michelangelo AI in a Kubernetes cluster: Envoy proxy settings (CORS, cluster hostnames), Ingress setup for the API server, Envoy, and UI through the Helm chart, TLS with cert-manager, and connectivity requirements for multi-cluster deployments.
 
 ---
 
 ## Overview
 
-Michelangelo AI's network surface has two external-facing entry points:
+Michelangelo AI's network surface has up to three external-facing entry points, each with its own Ingress (and a distinct hostname):
 
-| Entry Point | Default Port | Purpose |
-|-------------|-------------|---------|
-| API Server Ingress | 443 (HTTPS) | gRPC API used by the `ma` CLI, workers, and SDK |
-| UI + Envoy Ingress | 443 (HTTPS) | Browser-facing UI and REST/gRPC-Web proxy |
+| Entry Point | Helm values | Default Service Port | Purpose |
+|-------------|-------------|---------|---------|
+| API Server Ingress | `apiserver.ingress` | 15566 (gRPC) | gRPC API used by the `ma` CLI and SDK clients outside the cluster |
+| Envoy Ingress | `envoy.ingress` | 8081 (HTTP) | JSON-over-HTTP API proxy the browser UI calls |
+| UI Ingress | `ui.ingress` | 80 (HTTP) | Static UI assets served by nginx |
 
 Traffic flow from the public internet to internal components:
 
@@ -20,196 +25,141 @@ Internet
   │
   ├─ api.your-domain.com ──► Ingress ──► michelangelo-apiserver:15566 (gRPC)
   │
-  └─ app.your-domain.com ──► Ingress ──► michelangelo-envoy:8081
+  ├─ app.your-domain.com ──► Ingress ──► michelangelo-ui:80 (static UI)
+  │
+  └─ envoy.your-domain.com ─► Ingress ──► michelangelo-envoy:8081
                                                   │
-                                                  └─► michelangelo-apiserver:15566 (gRPC-Web)
+                                                  └─► michelangelo-apiserver:15566 (gRPC, after JSON transcoding)
 ```
 
 ---
 
 ## Envoy Proxy Configuration
 
-The Envoy proxy sits in front of the API server for browser clients. It handles HTTP/1.1 → gRPC transcoding and CORS.
+The Envoy proxy sits in front of the API server for browser clients. It runs Envoy's gRPC-JSON transcoder, which turns the UI's proto3 JSON `POST /{service}/{method}` requests into gRPC calls, and it handles CORS. The chart renders the Envoy configuration from `helm/michelangelo/templates/core/envoy-configmap.yaml`; you do not edit the ConfigMap directly.
 
 ### CORS Configuration
 
-Add your UI domain to Envoy's CORS allowed origins. This is required for the browser-based UI to call the API. In the Envoy ConfigMap:
+Add your UI origin to Envoy's allowed origins with the `envoy.corsOrigins` Helm value. It is a regular expression (Go/RE2 syntax) matched against the browser's `Origin` header, and it is required on every Ingress install because the UI and Envoy run on different origins:
 
 ```yaml
-static_resources:
-  listeners:
-    - address:
-        socket_address: { address: 0.0.0.0, port_value: 8081 }
-      filter_chains:
-        - filters:
-            - name: envoy.filters.network.http_connection_manager
-              typed_config:
-                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
-                route_config:
-                  virtual_hosts:
-                    - name: local_service
-                      domains: ["*"]
-                      cors:
-                        allow_origin_string_match:
-                          - safe_regex:
-                              regex: "https://app\\.your-domain\\.com"
-                        allow_methods: "GET, POST, OPTIONS"
-                        allow_headers: "content-type, context-ttl-ms, grpc-timeout, rpc-caller, rpc-encoding, rpc-service, x-grpc-web, x-user-agent"
-                        expose_headers: "grpc-status, grpc-message"
-                        max_age: "1728000"
-                      routes:
-                        - match: { prefix: "/" }
-                          route:
-                            cluster: michelangelo-apiserver
-                            max_grpc_timeout: 0s
-                http_filters:
-                  - name: envoy.filters.http.grpc_web
-                    typed_config:
-                      "@type": type.googleapis.com/envoy.extensions.filters.http.grpc_web.v3.GrpcWeb
-                  - name: envoy.filters.http.cors
-                    typed_config:
-                      "@type": type.googleapis.com/envoy.extensions.filters.http.cors.v3.Cors
-                  - name: envoy.filters.http.router
-                    typed_config:
-                      "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
-
-  clusters:
-    - name: michelangelo-apiserver
-      connect_timeout: 30s
-      type: LOGICAL_DNS
-      http2_protocol_options: {}
-      load_assignment:
-        cluster_name: michelangelo-apiserver
-        endpoints:
-          - lb_endpoints:
-              - endpoint:
-                  address:
-                    socket_address:
-                      address: michelangelo-apiserver   # Kubernetes service name
-                      port_value: 15566
+envoy:
+  corsOrigins: "https://app\\.your-domain\\.com"
 ```
 
-**Fields to customize per environment:**
+If unset, the chart allows any origin (`.*`). The rendered ConfigMap contains:
 
-| Field | Description |
+```yaml
+cors:
+  allow_origin_string_match:
+    - safe_regex:
+        regex: "https://app\\.your-domain\\.com"
+  allow_methods: "GET, POST, OPTIONS"
+  allow_headers: "connect-protocol-version,connect-timeout-ms,content-type,context-ttl-ms,grpc-timeout,rpc-caller,rpc-encoding,rpc-service,x-grpc-web,x-user-agent,x-user-email,x-user-name"
+  expose_headers: "grpc-status,grpc-message"
+  max_age: "1728000"
+```
+
+The API cluster (`michelangelo-apiserver`) is rendered with the API server Service name and `apiserver.port` (default `15566`); when `apiserver.tls.enabled` is true, Envoy connects to it over TLS.
+
+**Values to customize per environment:**
+
+| Helm value | Description |
 |-------|-------------|
-| `allow_origin_string_match.regex` | Replace with your UI domain regex |
-| `socket_address.address` | API server Kubernetes service name (default: `michelangelo-apiserver`) |
-| `socket_address.port_value` | API server port (default: `15566`) |
+| `envoy.corsOrigins` | Regex matching your UI origin (scheme, host, and port) |
+| `envoy.port` | Envoy listener and Service port (default `8081`) |
+| `apiserver.port` | API server gRPC port Envoy forwards to (default `15566`) |
 
 ### Envoy TLS Termination
 
-If you terminate TLS at the Envoy pod (rather than at the Ingress), add a `transport_socket` to the listener:
-
-```yaml
-transport_socket:
-  name: envoy.transport_sockets.tls
-  typed_config:
-    "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
-    common_tls_context:
-      tls_certificates:
-        - certificate_chain:
-            filename: /etc/ssl/certs/tls.crt
-          private_key:
-            filename: /etc/ssl/certs/tls.key
-```
-
-Mount the certificate from a Kubernetes Secret:
-
-```yaml
-volumes:
-  - name: tls-cert
-    secret:
-      secretName: michelangelo-envoy-tls
-volumeMounts:
-  - name: tls-cert
-    mountPath: /etc/ssl/certs
-    readOnly: true
-```
-
-In most deployments, TLS is terminated at the Ingress layer instead — see [TLS with cert-manager](#tls-with-cert-manager) below.
+Terminate TLS for Envoy at the Ingress (`envoy.ingress.tls`). The chart does not expose values for TLS on the Envoy listener itself; terminating inside the Envoy pod would require a custom Envoy ConfigMap and volume mounts. See [TLS with cert-manager](#tls-with-cert-manager) below.
 
 ---
 
 ## Ingress Setup
+
+The chart creates each Ingress from Helm values when you set `<component>.ingress.enabled: true`. Hostnames of the three Ingress resources must differ from each other.
 
 ### API Server Ingress
 
 The API server uses gRPC (HTTP/2). Your Ingress controller must support HTTP/2 backend connections. With NGINX Ingress Controller:
 
 ```yaml
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: michelangelo-apiserver
-  namespace: michelangelo
-  annotations:
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/backend-protocol: "GRPC"
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
-    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
-spec:
-  ingressClassName: nginx
-  tls:
-    - hosts:
-        - api.your-domain.com
-      secretName: michelangelo-apiserver-tls
-  rules:
-    - host: api.your-domain.com
-      http:
+apiserver:
+  ingress:
+    enabled: true
+    mode: grpc            # or "passthrough" (requires apiserver.tls.enabled=true)
+    className: nginx
+    annotations:
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+      nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+      nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    hosts:
+      - host: api.your-domain.com
         paths:
           - path: /
             pathType: Prefix
-            backend:
-              service:
-                name: michelangelo-apiserver
-                port:
-                  number: 15566
+    tls:
+      - secretName: michelangelo-apiserver-tls
+        hosts:
+          - api.your-domain.com
 ```
 
-> **HTTP/2 requirement:** gRPC requires HTTP/2 end-to-end. If your Ingress controller terminates TLS but connects to the backend over HTTP/1.1, gRPC calls will fail. Ensure `backend-protocol: GRPC` (or equivalent) is set.
+In `grpc` mode the chart adds `nginx.ingress.kubernetes.io/backend-protocol: GRPC`; in `passthrough` mode it adds `nginx.ingress.kubernetes.io/ssl-passthrough: "true"` and the pod terminates TLS.
 
-### UI + Envoy Ingress
+> **HTTP/2 requirement:** gRPC requires HTTP/2 end-to-end. If your Ingress controller terminates TLS but connects to the backend over HTTP/1.1, gRPC calls will fail. Ensure the `backend-protocol: GRPC` annotation (or equivalent for your controller) is present.
 
-The UI and gRPC-Web proxy share a single Ingress:
+### UI and Envoy Ingress
+
+The UI and the Envoy proxy each get their own Ingress. The browser loads the UI from the UI host and calls Envoy on the Envoy host (or a path on a shared host, if your controller rewrites paths):
 
 ```yaml
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: michelangelo-ui
-  namespace: michelangelo
-  annotations:
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
-spec:
-  ingressClassName: nginx
-  tls:
-    - hosts:
-        - app.your-domain.com
-      secretName: michelangelo-ui-tls
-  rules:
-    - host: app.your-domain.com
-      http:
+ui:
+  ingress:
+    enabled: true
+    className: nginx
+    hosts:
+      - host: app.your-domain.com
         paths:
           - path: /
             pathType: Prefix
-            backend:
-              service:
-                name: michelangelo-envoy
-                port:
-                  number: 8081
+    tls:
+      - secretName: michelangelo-ui-tls
+        hosts:
+          - app.your-domain.com
+  apiBaseUrl: "https://envoy.your-domain.com"
+
+envoy:
+  corsOrigins: "https://app\\.your-domain\\.com"
+  ingress:
+    enabled: true
+    className: nginx
+    annotations:
+      nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    hosts:
+      - host: envoy.your-domain.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: michelangelo-envoy-tls
+        hosts:
+          - envoy.your-domain.com
 ```
 
-### Domain Names to Update in Overlays
+If `ui.apiBaseUrl` is left empty, the chart derives it from the first `envoy.ingress` host and path (using `https` when `envoy.ingress.tls` is set). `envoy.corsOrigins` must match the scheme and host of `ui.ingress.hosts[0].host`.
 
-After setting hostnames in Ingress resources, propagate them through ConfigMaps:
+### Domain Names to Update in Helm Values
 
-| Location | Field | Value |
-|----------|-------|-------|
-| Worker ConfigMap | `worker.address` | `api.your-domain.com:443` |
-| UI Public Config | `apiBaseUrl` | `https://app.your-domain.com` |
-| Envoy CORS config | `allow_origin_string_match.regex` | Your UI domain |
+After choosing hostnames, propagate them through Helm values:
+
+| Helm value | Value |
+|----------|-------|
+| `ui.apiBaseUrl` | `https://envoy.your-domain.com` (or derived from `envoy.ingress.hosts[0]`) |
+| `envoy.corsOrigins` | Regex for your UI origin, e.g. `https://app\\.your-domain\\.com` |
+| `apiserver.ingress.hosts`, `ui.ingress.hosts`, `envoy.ingress.hosts` | One distinct hostname each |
+
+The worker runs in the same release as the API server and reaches it through the in-cluster Service, so `worker.address` needs no change. Point it at the external address only if you run the worker elsewhere (and see `worker.useTLS` in [Authentication](authentication.md#service-authentication-internal)).
 
 See [Platform Setup — Environment Overrides](platform-setup.md#environment-overrides--domain-settings) for the full list.
 
@@ -244,12 +194,13 @@ spec:
 
 ### Referencing the Issuer in Ingress
 
-Add the cert-manager annotation to your Ingress resources:
+Add the cert-manager annotation to each Ingress through its `annotations` value (`apiserver.ingress.annotations`, `envoy.ingress.annotations`, `ui.ingress.annotations`):
 
 ```yaml
-metadata:
-  annotations:
-    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+ui:
+  ingress:
+    annotations:
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
 ```
 
 cert-manager will automatically create and renew the TLS Secret referenced in `spec.tls[].secretName`.
@@ -275,7 +226,7 @@ spec:
 When Michelangelo AI's control plane dispatches jobs to registered compute clusters, the following connectivity is required:
 
 :::warning No automatic failover
-Michelangelo AI does not automatically fail over if the control plane API server becomes unreachable. Task pods in compute clusters cannot report results, and new jobs cannot be dispatched. Configure alerting on the controller manager's health endpoint (`:8083/healthz`) so on-call is paged before users are impacted — see [Monitoring](../operations/monitoring.md).
+Michelangelo AI does not automatically fail over if the control plane API server becomes unreachable. Task pods in compute clusters cannot report results, and new jobs cannot be dispatched. Configure alerting on the controller manager's health endpoint (health probe port `controllermgr.healthPort`, `8081` by default) so on-call is paged before users are impacted — see [Monitoring](../operations/monitoring.md).
 :::
 
 ```
@@ -285,8 +236,8 @@ Control Plane Cluster                    Compute Cluster
 │ (kubeconfig for each   │               │ (port 443)                   │
 │  compute cluster)      │               └──────────────────────────────┘
 │                        │
-│ Worker                 │◄──── gRPC ────┤ Task pods (report back       │
-│ (port 15566)           │               │  via worker.address)         │
+│ API server             │◄──── gRPC ────┤ Task pods (report back via   │
+│ (port 15566)           │               │  REGISTRY_ENDPOINT)          │
 └────────────────────────┘               └──────────────────────────────┘
 ```
 
@@ -295,7 +246,7 @@ Control Plane Cluster                    Compute Cluster
 | Direction | Source | Destination | Port | Purpose |
 |-----------|--------|-------------|------|---------|
 | Outbound from control plane | Controller Manager | Compute cluster K8s API | 443 | Dispatching RayCluster / SparkApplication CRDs |
-| Outbound from compute | Task pods | Michelangelo AI API server | 443 | Worker connectivity for result reporting |
+| Outbound from compute | Task pods | Michelangelo AI API server | 15566 (or 443 through the API server Ingress) | Model registration and other API calls (`REGISTRY_ENDPOINT` in `michelangelo-config`) |
 | Outbound from compute | Task pods | S3 / object store | 443 | Artifact reads and writes |
 
 ### NetworkPolicy for Control Plane → Compute Cluster
@@ -331,7 +282,7 @@ From the Controller Manager pod, verify it can reach each registered compute clu
 
 ```bash
 # Exec into the controller manager pod
-kubectl exec -it deploy/michelangelo-controllermgr -n michelangelo -- /bin/sh
+kubectl exec -it deploy/michelangelo-controllermgr -n <release-namespace> -- /bin/sh
 
 # Check connectivity to a registered compute cluster's K8s API
 curl -sk https://<compute-cluster-api-server>:443/healthz
@@ -341,7 +292,7 @@ From a task pod in the compute cluster, verify it can reach the Michelangelo AI 
 
 ```bash
 kubectl exec -it <task-pod> -n <compute-namespace> -- \
-  curl -sk https://api.your-domain.com/healthz
+  env | grep REGISTRY_ENDPOINT
 ```
 
 ---
@@ -351,12 +302,11 @@ kubectl exec -it <task-pod> -n <compute-namespace> -- \
 Use this checklist when deploying Michelangelo AI to a new environment:
 
 - [ ] Ingress controller installed and supports HTTP/2 (for gRPC)
-- [ ] API server Ingress created with `backend-protocol: GRPC`
-- [ ] UI + Envoy Ingress created
+- [ ] API server Ingress created (`apiserver.ingress`, `mode: grpc`)
+- [ ] UI and Envoy Ingresses created on distinct hostnames (`ui.ingress`, `envoy.ingress`)
 - [ ] TLS certificates provisioned (cert-manager or manual)
-- [ ] Envoy CORS `allow_origin` updated to match UI domain
-- [ ] Worker ConfigMap `worker.address` updated to `api.your-domain.com:443`
-- [ ] UI `config.json` `apiBaseUrl` updated to UI domain
+- [ ] `envoy.corsOrigins` updated to match the UI origin
+- [ ] `ui.apiBaseUrl` updated to the Envoy URL
 - [ ] Cross-cluster connectivity verified (controller manager → compute K8s API)
 - [ ] Task pod → Michelangelo AI API server connectivity verified
 

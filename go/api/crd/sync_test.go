@@ -13,6 +13,7 @@ import (
 	"go.uber.org/config"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apiExtFake "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/fake"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
@@ -246,7 +247,8 @@ func TestSyncCRDsFx(t *testing.T) {
 }
 
 func TestSyncCRDs(t *testing.T) {
-	logger := zap.Must(zap.NewDevelopment())
+	core, logs := observer.New(zap.ErrorLevel)
+	logger := zap.New(core)
 	apiExtClientStub := apiExtFake.NewSimpleClientset()
 	crdGateway := gateway{
 		logger:        logger,
@@ -281,9 +283,18 @@ func TestSyncCRDs(t *testing.T) {
 	assert.Error(t, err, "failed to list existing CRDs: test error")
 
 	// do not update CRDs that are not in the specified groups
+	logs.TakeAll()
 	err = syncCRDs(context.Background(), logger, "test1",
 		true, &crdGateway, nil, nil, false, []string{}, map[string]string{"Project": string(crdYaml)})
-	assert.Error(t, err, "CRD projects.test is not in the specified group test1")
+	assert.EqualError(t, err, "CRD projects.test is not in the specified group [test1]")
+	if assert.Len(t, logs.All(), 1) {
+		entry := logs.All()[0]
+		assert.Equal(t, "CRD is not in the specified group", entry.Message)
+		assert.Equal(t, zap.ErrorLevel, entry.Level)
+		assert.Equal(t, "projects.test", entry.ContextMap()["name"])
+		assert.Equal(t, "test1", entry.ContextMap()["group"])
+		assert.NotContains(t, entry.ContextMap(), "error")
+	}
 
 	// incompatible change - should be allowed when skipIncompatibleCheck is true (dev env)
 	err = syncCRDs(context.Background(), logger, "test",

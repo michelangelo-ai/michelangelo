@@ -1,3 +1,7 @@
+---
+last_verified: 2026-10-14
+---
+
 # Project Management
 
 A **project** in Michelangelo AI is a top-level organizational unit that groups related ML pipelines, models, and resources under a single namespace. Each project typically maps to a business use case -- for example, a product recommendation system, a fraud detection pipeline, or a document classification service.
@@ -105,9 +109,9 @@ spec:
   owner:
     owningTeam: "00000000-0000-0000-0000-000000000001"
     owners:
-      - sally.lee
+      - your-username
     ownerGroups:
-      - ml-platform-team
+      - your-team
   tier: 4
   gitRepo: https://github.com/michelangelo-ai/michelangelo
   rootDir: python/examples
@@ -214,7 +218,7 @@ See [Pipeline Management](../ml-pipelines/pipeline-management.md) for details on
 
 ### States
 
-A project transitions through the following states after creation:
+The project schema defines the following states. The open-source API server does not currently set these values itself, so a project you create in the sandbox may show no state:
 
 | State | Description |
 | --- | --- |
@@ -225,14 +229,14 @@ A project transitions through the following states after creation:
 
 ### Phases
 
-Projects can be tagged with a lifecycle phase. Phases are organizational labels. Only `DECOMMISSION` has a functional effect -- it blocks new pipeline and pipeline run creation.
+Projects can be tagged with a lifecycle phase. Phases are organizational labels. The schema defines `DECOMMISSION` as blocking new pipeline and pipeline run creation, but the open-source API server does not currently enforce this.
 
 | Phase | Description |
 | --- | --- |
 | `DEVELOPMENT` | Active development and experimentation. |
 | `STAGING` | Pre-production validation. |
 | `PRODUCTION` | Serving live traffic. |
-| `DECOMMISSION` | Marked for retirement. New pipelines and pipeline runs cannot be created in a decommissioned project. |
+| `DECOMMISSION` | Marked for retirement. By design, new pipelines and pipeline runs should not be created in a decommissioned project. |
 
 ## Validation rules
 

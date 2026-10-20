@@ -26,7 +26,7 @@ func ProvidePluginRegistry() map[string]service.IPlugin {
 
 // Module provides HTTP client instances for all HTTP-based activities.
 var Module = fx.Options(
-	fx.Provide(NewConfig, NewYARPCDispatcher),
+	fx.Provide(NewConfig, NewYARPCDispatcher, NewRunnerTokenOutboundMiddleware),
 	fx.Provide(
 		NewRayClusterServiceClient,
 		NewRayJobServiceClient,

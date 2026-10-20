@@ -201,6 +201,12 @@ func (r *Test) TestCreateClusterFailed() {
 	err := r.env.Cadence.GetResult(&res)
 	require.Error(err)
 	require.Nil(res)
+	// Regression test for #1902: when the cleanup TerminateCluster call
+	// succeeds, createCluster must still surface the original sensor
+	// failure's reason ("internal", from the mocked
+	// yarpcerrors.CodeInternal error below) -- not the generic "unknown"
+	// that results from starlark-go rejecting a masked (nil, nil) return.
+	require.Equal("internal", err.Error())
 }
 
 func (r *Test) TestCreateRayJobSuccessfully() {

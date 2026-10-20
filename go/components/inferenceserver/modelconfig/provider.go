@@ -130,13 +130,17 @@ func (p *defaultModelConfigProvider) GetModelsFromConfig(ctx context.Context, lo
 	return modelConfigs, nil
 }
 
-// AddModelToConfig adds a model to a ConfigMap
+// AddModelToConfig adds a model to a ConfigMap, or refreshes the entry the deployment
+// already holds for it. The phase moves an entry through canary, staged and serving as a
+// rollout progresses, so a refresh replaces it rather than keeping the old one.
 func (p *defaultModelConfigProvider) AddModelToConfig(ctx context.Context, logger *zap.Logger, kubeclient client.Client, inferenceServer string, namespace string, entry ModelConfigEntry) error {
 	return p.mutateModels(ctx, logger, kubeclient, inferenceServer, namespace, func(currentConfigs []ModelConfigEntry) []ModelConfigEntry {
 		// Entries are keyed by (deployment, model): refresh this deployment's entry only.
 		for i, config := range currentConfigs {
 			if config.Name == entry.Name && config.DeploymentName == entry.DeploymentName {
 				currentConfigs[i].StoragePath = entry.StoragePath
+				currentConfigs[i].Phase = entry.Phase
+				currentConfigs[i].CanaryPod = entry.CanaryPod
 				return currentConfigs
 			}
 		}
@@ -234,6 +238,14 @@ func (p *defaultModelConfigProvider) updateConfigMapWithModels(ctx context.Conte
 			zap.String("configMap", configMap.Name))
 		return fmt.Errorf("failed to marshal model configs for ConfigMap %s/%s: %w",
 			configMap.Namespace, configMap.Name, err)
+	}
+
+	// Rollout actors re-assert their entry on every reconcile while they wait for a model
+	// to load. Skipping a write that changes nothing keeps those polls from bumping the
+	// ConfigMap's resourceVersion, and with it the kubelet's volume re-sync, every 10s.
+	if configMap.Data[modelListKey] == string(modelListJSON) {
+		logger.Debug("Model ConfigMap already up to date", zap.String("configMap", configMap.Name), zap.Int("modelCount", len(modelConfigs)))
+		return nil
 	}
 
 	// Update the ConfigMap data

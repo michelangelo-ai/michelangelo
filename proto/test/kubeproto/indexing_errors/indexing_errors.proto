@@ -61,3 +61,31 @@ message TestIndexingDuplicatedKey {
 
   TestIndexingDuplicatedKeyStatus status = 4;
 }
+
+message TestIndexingReservedNameKeySpec {
+  string name = 1;
+}
+
+message TestIndexingReservedNameKeyStatus {
+}
+
+// TestIndexingReservedNameKey is revisioned and declares an index field under
+// the reserved "name" key, which collides with the metadata.name column
+// ParseRevisionedIndex synthesizes for every revisioned sidecar table.
+message TestIndexingReservedNameKey {
+  option (michelangelo.api.resource) = {
+    scope: "Namespaced";
+    revisioned_in: ["test_wrapper"];
+  };
+  option (michelangelo.api.index) = {
+    path: "spec.name";
+    key:  "name";
+  };
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 2;
+
+  TestIndexingReservedNameKeySpec spec = 3;
+
+  TestIndexingReservedNameKeyStatus status = 4;
+}

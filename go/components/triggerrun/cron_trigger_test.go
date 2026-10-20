@@ -15,16 +15,33 @@ import (
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	uberconfig "go.uber.org/config"
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var (
-	_runID            = "test-run-id"
-	_workflowID       = "test-workflow-id"
-	_execTime   int64 = 1683616260555000000
-	_logURL           = "http://localhost:8088/domains/default/workflows/test-namespace.test-triggerrun-name"
+	_runID                    = "test-run-id"
+	_workflowID               = "test-workflow-id"
+	_execTime           int64 = 1683616260555000000
+	_testDomain               = "test-domain-config"
+	_executionUrlFormat       = "http://cadence-web:8088/domains/{{.Domain}}/workflows/{{.ExecutionID}}/{{.RunID}}"
+	_logURL                   = "http://cadence-web:8088/domains/test-domain-config/workflows/test-namespace.test-triggerrun-name/test-run-id"
 )
+
+// newTestConfigProvider returns a config.Provider with a workflowClient
+// section populated for BuildWorkflowUrl to resolve _logURL from.
+func newTestConfigProvider(t *testing.T) uberconfig.Provider {
+	t.Helper()
+	provider, err := uberconfig.NewYAML(uberconfig.Static(map[string]interface{}{
+		"workflowClient": map[string]interface{}{
+			"executionUrlFormat": _executionUrlFormat,
+			"domain":             _testDomain,
+		},
+	}))
+	require.NoError(t, err)
+	return provider
+}
 
 // getCronFromActualTrigger extracts the cron expression from a Trigger, returns empty string if not a cron trigger
 func getCronFromActualTrigger(trigger *v2pb.Trigger) string {
@@ -48,7 +65,6 @@ func TestRun(t *testing.T) {
 				ctrl := gomock.NewController(t)
 				mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
 				mockClient.EXPECT().GetDomain().Return("test-domain")
-				mockClient.EXPECT().GetProvider().Return("test-provider").AnyTimes()
 				mockClient.EXPECT().ListOpenWorkflow(
 					gomock.Any(),
 					gomock.Any(),
@@ -74,7 +90,6 @@ func TestRun(t *testing.T) {
 				ctrl := gomock.NewController(t)
 				mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
 				mockClient.EXPECT().GetDomain().Return("test-domain")
-				mockClient.EXPECT().GetProvider().Return("test-provider").AnyTimes()
 				mockClient.EXPECT().ListOpenWorkflow(gomock.Any(), gomock.Any()).AnyTimes().Return(nil, fmt.Errorf("failed to list open workflow"))
 				mockClient.EXPECT().StartWorkflow(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&clientInterface.WorkflowExecution{ID: _workflowID, RunID: _runID}, nil)
 				return mockClient
@@ -89,7 +104,6 @@ func TestRun(t *testing.T) {
 				ctrl := gomock.NewController(t)
 				mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
 				mockClient.EXPECT().GetDomain().Return("test-domain")
-				mockClient.EXPECT().GetProvider().Return("test-provider").AnyTimes()
 				mockClient.EXPECT().ListOpenWorkflow(gomock.Any(), gomock.Any()).AnyTimes().Return(
 					&clientInterface.ListOpenWorkflowExecutionsResponse{
 						Executions: []clientInterface.WorkflowExecutionInfo{
@@ -109,7 +123,6 @@ func TestRun(t *testing.T) {
 				ctrl := gomock.NewController(t)
 				mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
 				mockClient.EXPECT().GetDomain().Return("test-domain")
-				mockClient.EXPECT().GetProvider().Return("test-provider").AnyTimes()
 				mockClient.EXPECT().ListOpenWorkflow(gomock.Any(), gomock.Any()).AnyTimes().Return(
 					&clientInterface.ListOpenWorkflowExecutionsResponse{
 						Executions: []clientInterface.WorkflowExecutionInfo{
@@ -138,7 +151,8 @@ func TestRun(t *testing.T) {
 				generateWorkflowID(&_triggerRun),
 				_triggerRun.Spec.Trigger.GetCronSchedule().GetCron(),
 				mustScheduleInputHash(t, &_triggerRun),
-				"test-provider",
+				newTestConfigProvider(t),
+				_runID,
 			)
 		}
 		assert.Equal(t, test.expectedStatus, trStatus, test.name)
@@ -149,7 +163,6 @@ func TestRunStartsSchedulePaused(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
 	mockClient.EXPECT().GetDomain().Return("test-domain")
-	mockClient.EXPECT().GetProvider().Return("test-provider").AnyTimes()
 	mockClient.EXPECT().ListOpenWorkflow(gomock.Any(), gomock.Any()).Return(
 		&clientInterface.ListOpenWorkflowExecutionsResponse{}, nil)
 	mockClient.EXPECT().StartWorkflow(
@@ -428,7 +441,6 @@ func TestRunPausesExistingScheduleImmediately(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
 	mockClient.EXPECT().GetDomain().Return("test-domain")
-	mockClient.EXPECT().GetProvider().Return("test-provider")
 	mockClient.EXPECT().ListOpenWorkflow(gomock.Any(), gomock.Any()).Return(
 		&clientInterface.ListOpenWorkflowExecutionsResponse{
 			Executions: []clientInterface.WorkflowExecutionInfo{
@@ -452,7 +464,6 @@ func TestRunExistingWorkflowLeavesInputForReconciliation(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
 	mockClient.EXPECT().GetDomain().Return("test-domain")
-	mockClient.EXPECT().GetProvider().Return("test-provider")
 	mockClient.EXPECT().ListOpenWorkflow(gomock.Any(), gomock.Any()).Return(
 		&clientInterface.ListOpenWorkflowExecutionsResponse{
 			Executions: []clientInterface.WorkflowExecutionInfo{
@@ -492,7 +503,6 @@ func TestRunStoresActualNotifications(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
 	mockClient.EXPECT().GetDomain().Return("test-domain")
-	mockClient.EXPECT().GetProvider().Return("test-provider").AnyTimes()
 	mockClient.EXPECT().ListOpenWorkflow(gomock.Any(), gomock.Any()).Return(
 		&clientInterface.ListOpenWorkflowExecutionsResponse{}, nil)
 	mockClient.EXPECT().StartWorkflow(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(
@@ -527,7 +537,6 @@ func TestKill(t *testing.T) {
 				ctrl := gomock.NewController(t)
 				mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
 				mockClient.EXPECT().GetDomain().Return("test-domain")
-				mockClient.EXPECT().GetProvider().Return("test-provider").AnyTimes()
 				mockClient.EXPECT().ListOpenWorkflow(gomock.Any(), gomock.Any()).Return(&clientInterface.ListOpenWorkflowExecutionsResponse{
 					Executions: []clientInterface.WorkflowExecutionInfo{
 						{Execution: &clientInterface.WorkflowExecution{RunID: _runID}},
@@ -545,7 +554,6 @@ func TestKill(t *testing.T) {
 				ctrl := gomock.NewController(t)
 				mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
 				mockClient.EXPECT().GetDomain().Return("test-domain")
-				mockClient.EXPECT().GetProvider().Return("test-provider").AnyTimes()
 				mockClient.EXPECT().ListOpenWorkflow(gomock.Any(), gomock.Any()).Return(&clientInterface.ListOpenWorkflowExecutionsResponse{
 					Executions: []clientInterface.WorkflowExecutionInfo{
 						{Execution: &clientInterface.WorkflowExecution{RunID: _runID}},
@@ -584,7 +592,6 @@ func TestGetStatus(t *testing.T) {
 				ctrl := gomock.NewController(t)
 				mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
 				mockClient.EXPECT().GetDomain().Return("test-domain")
-				mockClient.EXPECT().GetProvider().Return("test-provider").AnyTimes()
 				mockClient.EXPECT().ListOpenWorkflow(gomock.Any(), gomock.Any()).AnyTimes().Return(
 					&clientInterface.ListOpenWorkflowExecutionsResponse{
 						Executions: []clientInterface.WorkflowExecutionInfo{
@@ -605,7 +612,6 @@ func TestGetStatus(t *testing.T) {
 				ctrl := gomock.NewController(t)
 				mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
 				mockClient.EXPECT().GetDomain().Return("test-domain")
-				mockClient.EXPECT().GetProvider().Return("test-provider").AnyTimes()
 				mockClient.EXPECT().ListOpenWorkflow(gomock.Any(), gomock.Any()).AnyTimes().Return(
 					nil, fmt.Errorf("bad connection"))
 				return mockClient
@@ -730,6 +736,7 @@ func setupCronTrigger(t *testing.T, workflowClient clientInterface.WorkflowClien
 	trigger := NewCronTrigger(
 		zapr.NewLogger(zap.NewNop()),
 		workflowClient,
+		newTestConfigProvider(t),
 	).(*cronTrigger)
 	assert.NotNil(t, trigger)
 	return trigger
@@ -1034,7 +1041,7 @@ func TestCronTrigger_Update(t *testing.T) {
 
 			logger := zapr.NewLogger(zap.NewNop())
 			workflowClient := test.workflowClientProvider(t)
-			cronTrigger := NewCronTrigger(logger, workflowClient)
+			cronTrigger := NewCronTrigger(logger, workflowClient, newTestConfigProvider(t))
 
 			action := v2pb.TRIGGER_RUN_ACTION_NO_ACTION
 			if test.action != 0 {
@@ -1090,7 +1097,7 @@ func TestCronTrigger_UpdateSyncsDriftWhilePaused(t *testing.T) {
 		gomock.Eq([]interface{}{CreateTriggerRequest{TriggerRun: scheduleWorkflowInput(triggerRun)}}),
 	).Return(nil)
 
-	status, handled, err := NewCronTrigger(zapr.NewLogger(zap.NewNop()), mockClient).Update(
+	status, handled, err := NewCronTrigger(zapr.NewLogger(zap.NewNop()), mockClient, newTestConfigProvider(t)).Update(
 		context.Background(), triggerRun, v2pb.TRIGGER_RUN_ACTION_NO_ACTION)
 
 	require.NoError(t, err)
@@ -1134,7 +1141,7 @@ func TestCronTrigger_UpdateSyncsDriftOnResume(t *testing.T) {
 		gomock.Eq([]interface{}{CreateTriggerRequest{TriggerRun: scheduleWorkflowInput(triggerRun)}}),
 	).Return(nil)
 
-	status, handled, err := NewCronTrigger(zapr.NewLogger(zap.NewNop()), mockClient).Update(
+	status, handled, err := NewCronTrigger(zapr.NewLogger(zap.NewNop()), mockClient, newTestConfigProvider(t)).Update(
 		context.Background(), triggerRun, v2pb.TRIGGER_RUN_ACTION_RESUME)
 
 	require.NoError(t, err)
@@ -1228,7 +1235,7 @@ func TestCronTrigger_UpdateNotifications(t *testing.T) {
 				).Return(test.workflowUpdateError)
 			}
 
-			status, handled, err := NewCronTrigger(zapr.NewLogger(zap.NewNop()), mockClient).Update(
+			status, handled, err := NewCronTrigger(zapr.NewLogger(zap.NewNop()), mockClient, newTestConfigProvider(t)).Update(
 				context.Background(), triggerRun, v2pb.TRIGGER_RUN_ACTION_NO_ACTION)
 
 			if test.expectError {
@@ -1302,7 +1309,7 @@ func TestCronTrigger_UpdateNotifications_SignalLimitError(t *testing.T) {
 		gomock.Eq([]interface{}{CreateTriggerRequest{TriggerRun: scheduleWorkflowInput(triggerRun)}}),
 	).Return(signalLimitErr)
 
-	runner := NewCronTrigger(zapr.NewLogger(zap.NewNop()), mockClient)
+	runner := NewCronTrigger(zapr.NewLogger(zap.NewNop()), mockClient, newTestConfigProvider(t))
 	status, handled, err := runner.Update(
 		context.Background(), triggerRun, v2pb.TRIGGER_RUN_ACTION_NO_ACTION)
 

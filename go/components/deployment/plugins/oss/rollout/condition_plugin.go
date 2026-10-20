@@ -12,6 +12,7 @@ import (
 	goapi "github.com/michelangelo-ai/michelangelo/go/api"
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	"github.com/michelangelo-ai/michelangelo/go/components/common/routing"
+	osscommon "github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/rollout/strategies"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory"
@@ -38,6 +39,8 @@ type Params struct {
 	BackendRegistry     *backends.Registry
 	ModelConfigProvider modelconfig.ModelConfigProvider
 	Logger              *zap.Logger
+	// Settings are the resolved rollout safety knobs for this deployment.
+	Settings osscommon.RolloutSettings
 }
 
 // NewRolloutPlugin creates a rollout workflow plugin with deployment-specific strategy actors.
@@ -70,6 +73,7 @@ func NewRolloutPlugin(ctx context.Context, p Params, deployment *v2pb.Deployment
 		BackendRegistry:     p.BackendRegistry,
 		ModelConfigProvider: p.ModelConfigProvider,
 		Logger:              p.Logger,
+		Settings:            p.Settings,
 	}, deployment)
 	if err != nil {
 		return nil, err

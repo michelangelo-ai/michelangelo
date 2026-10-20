@@ -1,3 +1,7 @@
+---
+last_verified: 2026-10-14
+---
+
 # Notification Delivery Setup
 
 Michelangelo AI does not bundle an email or Slack delivery service — it provides a notification workflow that calls pluggable activity functions when a PipelineRun changes state. By default those functions are no-ops that log a warning. This guide shows platform operators how to wire in real delivery by replacing the default Sink implementations.
@@ -46,10 +50,11 @@ The `notification_worker` task queue is included in the default Helm values. Ver
 
 ```yaml
 workflow:
-  # ... host, provider, domain ...
+  # ... engine, endpoint, domain ...
   taskLists:
     - default
     - trigger_run
+    - pipeline_run        # deprecated; kept for backward compatibility
     - notification_worker
 ```
 

@@ -12,6 +12,10 @@ This module exposes small building blocks so callers can compose custom collate 
 
 The default :func:`literal_eval_data_collate_function` is implemented on top of these.
 :class:`LiteralEvalFloat32Collate` wraps the same behavior for subclassing (custom device, hooks).
+
+:func:`pinned_literal_eval_data_collate_function` runs the default collate and additionally pins the
+output tensors in page-locked host memory, which can make host-to-GPU copies asynchronous. Use it as
+``LightningTrainer.data_collate_fn`` or as ``BatchIterConfig.collate_fn``.
 """
 
 from __future__ import annotations
@@ -57,6 +61,7 @@ __all__ = [
     "collate_value_to_float32_tensor",
     "literal_eval_data_collate_function",
     "pad_ragged_lists",
+    "pinned_literal_eval_data_collate_function",
     "row_is_list_of_nested_cells",
 ]
 
@@ -294,3 +299,39 @@ _DEFAULT_LITERAL_EVAL_COLLATE = LiteralEvalFloat32Collate()
 def literal_eval_data_collate_function(batch_data: dict) -> dict[str, torch.Tensor]:
     """Convert processed batch data to tensors (default training collate)."""
     return _DEFAULT_LITERAL_EVAL_COLLATE(batch_data)
+
+
+def pinned_literal_eval_data_collate_function(
+    batch_data: dict,
+) -> dict[str, torch.Tensor]:
+    """Collate like :func:`literal_eval_data_collate_function`, with tensors in pinned memory.
+
+    Pinning tensors in page-locked host memory can make host-to-GPU copies asynchronous when they are issued
+    with ``non_blocking=True``, and such copies can transfer at higher bandwidth than copies from pageable
+    memory. Whether this speeds up training depends on the downstream transfers actually being
+    non-blocking, so measure before relying on it. Ray Data's built-in ``pin_memory`` option only applies
+    to its default collate function, so a custom collate has to pin on its own.
+
+    To use it, pass the function as ``LightningTrainer.data_collate_fn``, or set
+    ``BatchIterConfig.collate_fn`` to its dotted import path, for example
+    ``"michelangelo.lib.trainer.torch.data_collate_functions.pinned_literal_eval_data_collate_function"``.
+
+    When CUDA is not available (for example when the collate runs on a CPU-only driver to produce a sample
+    row), pinning is skipped and the tensors are returned unpinned, since ``Tensor.pin_memory`` requires a
+    CUDA runtime. The function assumes the collated tensors live on the CPU, as the default collate
+    produces; tensors already on a GPU cannot be pinned.
+
+    Args:
+        batch_data: Mapping from feature name to the batch column, as accepted by
+            :func:`literal_eval_data_collate_function`.
+
+    Returns:
+        Mapping from feature name to a ``float32`` tensor. Tensors are pinned when CUDA is available.
+
+    Raises:
+        RuntimeError: If CUDA is available but pinned host memory cannot be allocated.
+    """
+    batch = literal_eval_data_collate_function(batch_data)
+    if not torch.cuda.is_available():
+        return batch
+    return {name: tensor.pin_memory() for name, tensor in batch.items()}

@@ -10,10 +10,13 @@ from __future__ import annotations
 import hashlib
 import inspect
 import logging
+import math
+import numbers
 import os
 import re
+import time
 from tempfile import TemporaryDirectory
-from typing import TYPE_CHECKING, Any, Union
+from typing import TYPE_CHECKING, Any, Literal, Union
 
 import pytorch_lightning as pl
 import ray
@@ -43,7 +46,10 @@ from michelangelo.lib.trainer.torch.pytorch_lightning._private.callbacks import 
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from michelangelo.lib.trainer.torch.pytorch_lightning.schema import (
+        CustomDataloaderParam,
         TrainingObserver,
     )
 
@@ -365,14 +371,15 @@ def _resolve_strategy(
     Args:
         strategy: One of "ddp", "fsdp", "fsdp2", "deepspeed", "single_device", or
             an existing Strategy instance.  None auto-selects based on world size.
-        strategy_kwargs: Keyword arguments forwarded to the strategy constructor. Ignored
-            when strategy is already a Strategy instance.
+        strategy_kwargs: Keyword arguments forwarded to the strategy constructor. Only
+            valid when strategy is a string.
 
     Returns:
         A Strategy instance ready to pass to the Lightning Trainer.
 
     Raises:
-        TypeError: If strategy or strategy_kwargs have an unexpected type.
+        TypeError: If strategy or strategy_kwargs have an unexpected type, or if
+            strategy_kwargs is provided together with a non-string strategy.
         ValueError: If strategy is a string that is not one of the supported values.
     """
     if strategy is not None and not isinstance(strategy, (str, Strategy)):
@@ -383,6 +390,8 @@ def _resolve_strategy(
         raise TypeError(
             f"strategy_kwargs must be a dict or None, got {type(strategy_kwargs)!r}"
         )
+    if strategy_kwargs is not None and not isinstance(strategy, str):
+        raise TypeError("strategy_kwargs can only be used when strategy is a str")
 
     if isinstance(strategy, Strategy):
         return strategy
@@ -547,6 +556,27 @@ def _resolve_callbacks(
     """Build callback list for the Lightning Trainer.
 
     A RayTrainReportCallback or RayTrainReportPerNodeCallback is always appended to the list.
+
+    Args:
+        callbacks: A dotted import path to a Callback class or factory, a Callback
+            instance, a list of Callback instances, or None.
+        callback_kwargs: Keyword arguments forwarded to the callable named by
+            callbacks. Only valid when callbacks is a string import path.
+        per_node_callback_kwargs: Keyword arguments for RayTrainReportPerNodeCallback.
+            Providing this selects per-node reporting.
+        strategy: The resolved strategy; DeepSpeed, FSDP and FSDP2 strategies select
+            per-node reporting.
+        training_observer: Optional observer passed to the Ray report callback.
+
+    Returns:
+        A tuple of the resolved callback list and whether it contains a
+        ModelCheckpoint.
+
+    Raises:
+        TypeError: If callbacks, callback_kwargs or per_node_callback_kwargs have an
+            unexpected type, if callback_kwargs is provided together with a
+            non-string callbacks, or if an imported callable returns something other
+            than Callback instances.
     """
     if callbacks is not None and not isinstance(
         callbacks, (str, Callback, list, tuple)
@@ -557,6 +587,10 @@ def _resolve_callbacks(
     if callback_kwargs is not None and not isinstance(callback_kwargs, dict):
         raise TypeError(
             f"callback_kwargs must be a dict or None, got {type(callback_kwargs)!r}"
+        )
+    if callback_kwargs is not None and not isinstance(callbacks, str):
+        raise TypeError(
+            "callback_kwargs can only be used when callbacks is a str import path"
         )
     if per_node_callback_kwargs is not None and not isinstance(
         per_node_callback_kwargs, dict
@@ -622,6 +656,113 @@ def _resolve_callbacks(
     return resolved_callbacks, has_model_checkpoint
 
 
+def _apply_batch_limit(
+    dataset: ray.data.Dataset,
+    limit: int | float | None,
+    batch_size: int,
+    num_workers: int,
+    split: Literal["train", "val"],
+) -> tuple[ray.data.Dataset, int | float | None]:
+    """Bound a split's Ray Dataset to the rows a Lightning batch limit can consume.
+
+    Lightning's ``limit_{train,val}_batches`` only stops its own loop; without
+    this, the Ray Dataset behind the loader is still read in full. An integer
+    limit ``N`` therefore caps the dataset at ``N * batch_size * num_workers`` rows
+    (Ray Train splits the rows evenly, so each worker sees ``N * batch_size``).
+    ``accumulate_grad_batches`` does not enter the math: Lightning counts
+    dataloader batches, not optimizer steps.
+
+    A fractional limit in ``(0, 1)`` cannot be honored by Lightning here because
+    the loaders returned by ``iter_torch_batches`` have no ``__len__``. It is
+    resolved to an integer batch count from the dataset's row count and then
+    capped like an integer limit. Resolving a fraction calls ``Dataset.count()``,
+    which is cheap for Parquet-backed datasets but executes the dataset's lazy
+    plan once for other lineages; an integer limit never needs the count. ``None``,
+    ``0`` and ``1.0`` leave the dataset untouched.
+
+    Note:
+        The cap is ``Dataset.limit``: the split keeps the first rows its plan
+        yields, and Lightning then draws every epoch from those rows. For a
+        dataset with a stable output order (for example one read from files) that
+        is the same subset every epoch, and the loader's local shuffle buffer only
+        reorders rows inside it. Before this cap, Lightning stopped after ``N``
+        batches of the live stream, so an upstream shuffle could vary which rows
+        were seen. Rows are not guaranteed to be the dataset's leading rows unless
+        Ray Data's ``preserve_order`` execution option is set, and a shuffle that
+        is part of the plan (for example ``random_shuffle``) is re-executed, so it
+        can still change the subset between epochs. A batch limit is intended for
+        smoke tests and debugging, not for sampling a training set.
+
+    Args:
+        dataset: The split's Ray Dataset.
+        limit: The ``limit_*_batches`` value: ``None``, an int number of batches
+            (any ``numbers.Integral``, such as a NumPy integer), or a float
+            fraction in ``[0.0, 1.0]``.
+        batch_size: Per-worker batch size.
+        num_workers: Number of Ray Train workers the dataset is split across.
+        split: The split being limited, used in log and error messages.
+
+    Returns:
+        A tuple of the (possibly limited) dataset and the limit to hand to
+        Lightning, normalized to a builtin ``int`` or ``float`` (an int whenever
+        a fraction in ``(0, 1)`` was resolved).
+
+    Raises:
+        UserInputError: If ``limit`` is not a non-negative int or a float in
+            ``[0.0, 1.0]``, or if a fraction resolves to zero batches.
+    """
+    if limit is None:
+        return dataset, None
+    # bool is an int subclass; reject it explicitly.
+    if isinstance(limit, bool) or not isinstance(limit, numbers.Real):
+        raise UserInputError(
+            f"limit_{split}_batches must be an int or a float, got {limit!r}."
+        )
+    if isinstance(limit, numbers.Integral):
+        limit = int(limit)
+        if limit < 0:
+            raise UserInputError(
+                f"limit_{split}_batches must be non-negative, got {limit!r}."
+            )
+    else:
+        limit = float(limit)
+        if not 0.0 <= limit <= 1.0:
+            raise UserInputError(
+                f"limit_{split}_batches as a float must be in [0.0, 1.0], got "
+                f"{limit!r}. Use an int to request a number of batches."
+            )
+        if limit in (0.0, 1.0):
+            return dataset, limit
+        _logger.info(
+            "Resolving limit_%s_batches=%r to a batch count; this counts the "
+            "dataset's rows and may execute its lazy plan once.",
+            split,
+            limit,
+        )
+        count_start = time.perf_counter()
+        total_rows = dataset.count()
+        _logger.info(
+            "Counted %d rows for limit_%s_batches in %.2fs.",
+            total_rows,
+            split,
+            time.perf_counter() - count_start,
+        )
+        rows_per_worker = total_rows // num_workers
+        batches_per_worker = math.ceil(rows_per_worker / batch_size)
+        limit_batches = int(batches_per_worker * limit)
+        if limit_batches == 0:
+            raise UserInputError(
+                f"limit_{split}_batches={limit!r} resolves to 0 batches: each "
+                f"worker has {rows_per_worker} rows ({batches_per_worker} "
+                f"batches of {batch_size}). Use a larger fraction or an int."
+            )
+        limit = limit_batches
+    # Reachable only for an int 0: 0.0 returned above and fractions resolve to >= 1.
+    if limit == 0:
+        return dataset, limit
+    return dataset.limit(limit * batch_size * num_workers), limit
+
+
 def _maybe_track_experiment(train_loop_config: dict, rank: int) -> None:
     """Record this run's experiment directory via the configured ExperimentStore.
 
@@ -675,6 +816,50 @@ def _maybe_track_experiment(train_loop_config: dict, rank: int) -> None:
         _logger.warning("experiment_store.track failed", exc_info=True)
 
 
+def _build_custom_dataloaders(
+    custom_dataloader: CustomDataloaderParam,
+) -> tuple[Iterable[Any], Iterable[Any]]:
+    """Build the train and validation dataloaders from a custom factory.
+
+    The factory is called once per stage. In Ray-backed mode each call also gets
+    the worker's Ray Data shard for that stage as ``ds``; in file-backed mode
+    ``ds`` is omitted and no dataset shard is looked up.
+
+    Args:
+        custom_dataloader: The custom dataloader settings from the train loop
+            config.
+
+    Returns:
+        A ``(train_dataloader, val_dataloader)`` tuple.
+
+    Raises:
+        UserInputError: If the factory returns ``None`` for a stage.
+    """
+    stages = (
+        ("train", "train", custom_dataloader.train_dataset_path),
+        ("validation", "val", custom_dataloader.validation_dataset_path),
+    )
+    loaders = []
+    for stage, shard_key, dataset_path in stages:
+        stage_kwargs: dict[str, Any] = {}
+        if not custom_dataloader.file_backed:
+            stage_kwargs["ds"] = ray.train.get_dataset_shard(shard_key)
+        loader = custom_dataloader.factory(
+            stage=stage,
+            dataset_path=dataset_path,
+            read_kwargs=custom_dataloader.read_kwargs,
+            **stage_kwargs,
+            **custom_dataloader.factory_kwargs,
+        )
+        if loader is None:
+            raise UserInputError(
+                f"The custom dataloader factory returned None for stage {stage!r}; "
+                "it must return an iterable of batches."
+            )
+        loaders.append(loader)
+    return loaders[0], loaders[1]
+
+
 # Training loop.
 def _train_loop_per_worker(train_loop_config):
     """Execute one Lightning training run on a single Ray Train worker.
@@ -711,23 +896,27 @@ def _train_loop_per_worker(train_loop_config):
     # https://docs.ray.io/en/latest/data/api/doc/ray.data.DataIterator.iter_torch_batches.html#ray.data.DataIterator.iter_torch_batches
     collate_fn_to_torch = train_loop_config["data_collate_fn"]
 
-    # Fetch dataset.
-    train_dataset_shard = ray.train.get_dataset_shard("train")
-    val_dataset_shard = ray.train.get_dataset_shard("val")
+    custom_dataloader = train_loop_config.get("custom_dataloader")
+    if custom_dataloader is not None:
+        train_dataloader, val_dataloader = _build_custom_dataloaders(custom_dataloader)
+    else:
+        # Fetch dataset.
+        train_dataset_shard = ray.train.get_dataset_shard("train")
+        val_dataset_shard = ray.train.get_dataset_shard("val")
 
-    # Create data loader.
-    # We need to adjust 'local_shuffle_buffer_size' in Ray Data.
-    train_dataloader = train_dataset_shard.iter_torch_batches(
-        batch_size=batch_size,
-        collate_fn=collate_fn_to_torch,
-        local_shuffle_buffer_size=None
-        if num_shuffle_batches == 0
-        else num_shuffle_batches * batch_size,
-    )
-    val_dataloader = val_dataset_shard.iter_torch_batches(
-        batch_size=batch_size,
-        collate_fn=collate_fn_to_torch,
-    )
+        # Create data loader.
+        # We need to adjust 'local_shuffle_buffer_size' in Ray Data.
+        train_dataloader = train_dataset_shard.iter_torch_batches(
+            batch_size=batch_size,
+            collate_fn=collate_fn_to_torch,
+            local_shuffle_buffer_size=None
+            if num_shuffle_batches == 0
+            else num_shuffle_batches * batch_size,
+        )
+        val_dataloader = val_dataset_shard.iter_torch_batches(
+            batch_size=batch_size,
+            collate_fn=collate_fn_to_torch,
+        )
 
     model = create_model_fn(**create_model_fn_kwargs)
 

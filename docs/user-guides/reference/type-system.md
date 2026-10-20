@@ -1,3 +1,7 @@
+---
+last_verified: 2026-09-22
+---
+
 # Type System and Data Serialization
 
 ## What you'll learn
@@ -530,16 +534,21 @@ Need to return custom Python object?
 
 Detailed examples of each supported data type in Uniflow tasks.
 
-> **Note**: All examples below assume `import michelangelo.uniflow.core as uniflow` and `from michelangelo.uniflow.plugins.ray import RayTask` where needed.
+> **Note**: All examples below assume `import michelangelo.uniflow.core as uniflow` and `from michelangelo.uniflow.plugins.ray import RayTask`.
+>
+> `config` is required on `@uniflow.task(...)`. The examples below are about data
+> types rather than execution, so most use a bare `RayTask()` — the plainest valid
+> config — and rely on its defaults. Substitute the config your task actually needs
+> (`RayTask(...)`, `SparkTask(...)`, `ScalaSparkTask(...)`).
 
 ### 1. Scalars
 
 ```python
-@uniflow.task()
+@uniflow.task(config=RayTask())
 def add_numbers(a: int, b: int) -> int:
     return a + b
 
-@uniflow.task()
+@uniflow.task(config=RayTask())
 def format_name(first: str, last: str) -> str:
     return f"{first} {last}"
 ```
@@ -547,11 +556,11 @@ def format_name(first: str, last: str) -> str:
 ### 2. Dictionaries
 
 ```python
-@uniflow.task()
+@uniflow.task(config=RayTask())
 def create_data():
     return {"feature_1": 10, "feature_2": 20}
 
-@uniflow.task()
+@uniflow.task(config=RayTask())
 def process_data(data: dict):
     data["feature_sum"] = data["feature_1"] + data["feature_2"]
     return data
@@ -560,15 +569,15 @@ def process_data(data: dict):
 ### 3. Lists & Tuples
 
 ```python
-@uniflow.task()
+@uniflow.task(config=RayTask())
 def get_numbers():
     return [1, 2, 3]
 
-@uniflow.task()
+@uniflow.task(config=RayTask())
 def multiply_numbers(numbers: list):
     return [x * 2 for x in numbers]
 
-@uniflow.task()
+@uniflow.task(config=RayTask())
 def split_dataset(data):
     return (train_data, val_data, test_data)  # tuple
 ```
@@ -584,11 +593,11 @@ class ModelConfig:
     batch_size: int
     epochs: int = 10  # with default
 
-@uniflow.task()
+@uniflow.task(config=RayTask())
 def get_config() -> ModelConfig:
     return ModelConfig(learning_rate=0.01, batch_size=32)
 
-@uniflow.task()
+@uniflow.task(config=RayTask())
 def train_with_config(config: ModelConfig):
     # Access config.learning_rate, config.batch_size, etc.
     pass
@@ -604,11 +613,11 @@ class ModelMetrics(BaseModel):
     loss: float
     epoch: int
 
-@uniflow.task()
+@uniflow.task(config=RayTask())
 def compute_metrics() -> ModelMetrics:
     return ModelMetrics(accuracy=0.95, loss=0.05, epoch=10)
 
-@uniflow.task()
+@uniflow.task(config=RayTask())
 def log_metrics(metrics: ModelMetrics):
     print(f"Accuracy: {metrics.accuracy}")
 ```
@@ -616,12 +625,12 @@ def log_metrics(metrics: ModelMetrics):
 ### 6. File & Path Support
 
 ```python
-@uniflow.task()
+@uniflow.task(config=RayTask())
 def read_file(file_path: str):
     with open(file_path, "r") as f:
         return f.read()
 
-@uniflow.task()
+@uniflow.task(config=RayTask())
 def save_model(model, output_path: str):
     # Supports s3://, hdfs://, file:// protocols
     with open(output_path, "wb") as f:
@@ -643,12 +652,12 @@ For large objects like datasets or model weights, use `Ref` to avoid serializati
 from michelangelo.uniflow.core.ref import Ref
 import ray.data
 
-@uniflow.task()
+@uniflow.task(config=RayTask(head_cpu=2, head_memory="4Gi"))
 def load_large_dataset() -> ray.data.Dataset:
     # Returns a Ref automatically - Uniflow detects large objects
     return ray.data.read_parquet("s3://bucket/huge_dataset.parquet")
 
-@uniflow.task()
+@uniflow.task(config=RayTask(head_cpu=2, head_memory="4Gi"))
 def process_dataset(dataset: ray.data.Dataset) -> ray.data.Dataset:
     # Receives Ref, processes without copying
     return dataset.map(lambda x: x * 2)

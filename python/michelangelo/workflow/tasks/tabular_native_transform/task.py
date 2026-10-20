@@ -113,6 +113,9 @@ def tabular_native_transform(
         retried_io_errors=rc.retried_io_errors if rc else None,
         object_store_memory_limit=rc.object_store_memory_limit if rc else None,
         wait_for_min_actors_s=rc.wait_for_min_actors_s if rc else None,
+        max_blocks_in_streaming_gen_buffer=(
+            rc.max_blocks_in_streaming_gen_buffer if rc else None
+        ),
     )
 
     inc = config.incremental_training
@@ -417,6 +420,11 @@ def _write_config_to_kwargs(write_config: WriteConfig | None) -> dict:
             )
         write_kwargs["min_rows_per_file"] = write_config.min_rows_per_file
 
+    # ``Dataset.write_parquet`` accepts ``concurrency`` in the Ray releases this
+    # package has been checked against (2.41-2.48 and 2.51), so no version gate.
+    if write_config.concurrency is not None:
+        write_kwargs["concurrency"] = write_config.concurrency
+
     return write_kwargs
 
 
@@ -435,8 +443,8 @@ def _save_datasets(
             ``DatasetVariable`` to persist.
         **write_kwargs: Forwarded to ``DatasetVariable.save_ray_dataset()``
             and ultimately to ``ray.data.Dataset.write_parquet()``.
-            Supported keys include ``max_rows_per_file`` and
-            ``min_rows_per_file``.
+            Supported keys include ``max_rows_per_file``,
+            ``min_rows_per_file`` and ``concurrency``.
     """
     for dataset_name, dataset_var in transformed_datasets.items():
         _logger.info("Saving transformed dataset: %s", dataset_name)
