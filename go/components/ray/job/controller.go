@@ -58,6 +58,9 @@ func NewReconciler(
 	clusterCache jobscluster.RegisteredClustersCache,
 	metricsScope tally.Scope,
 ) *Reconciler {
+	if metricsScope == nil {
+		metricsScope = tally.NoopScope
+	}
 	return &Reconciler{
 		logger:          logger,
 		Client:          client,

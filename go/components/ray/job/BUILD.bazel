@@ -44,6 +44,7 @@ go_test(
     deps = [
         "//go/api:go_default_library",
         "//go/api/utils:go_default_library",
+        "//go/base/env:go_default_library",
         "//go/components/jobs/client/clientmocks:go_default_library",
         "//go/components/jobs/cluster:go_default_library",
         "//go/components/jobs/common/constants:go_default_library",

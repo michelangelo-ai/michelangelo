@@ -68,7 +68,7 @@ func (r *Reconciler) getFederatedWatcher() watch.FederatedWatcher {
 				ObjType:   &rayv1.RayJob{},
 			},
 		},
-		Scope: r.metricsScope,
+		Scope: r.metricsScope.SubScope("rayjob"),
 	})
 }
 

@@ -17,6 +17,7 @@ import (
 
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
+	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/client/clientmocks"
 	jobscluster "github.com/michelangelo-ai/michelangelo/go/components/jobs/cluster"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/constants"
@@ -1944,4 +1945,14 @@ func TestRayJobConvergesAfterDeleteHandlerExhaustsRetries(t *testing.T) {
 	assert.Equal(t, v2pb.RAY_JOB_STATE_FAILED, stored.Status.State)
 	assert.Equal(t, "Resource not found in compute cluster", stored.Status.Message)
 	assert.True(t, utils.IsImmutable(&stored), "a terminal job must be frozen so the ingester can archive it")
+}
+
+// TestNewReconciler_NilMetricsScope asserts that a Reconciler built without a
+// metrics scope can still build its watcher, which derives its own scope from
+// the reconciler's.
+func TestNewReconciler_NilMetricsScope(t *testing.T) {
+	r := NewReconciler(zapr.NewLogger(zap.NewNop()), nil, env.Context{}, nil, newMockClusterCache(), nil)
+
+	require.NotNil(t, r.metricsScope)
+	assert.NotPanics(t, func() { r.getFederatedWatcher() })
 }
