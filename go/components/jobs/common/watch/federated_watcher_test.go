@@ -651,6 +651,14 @@ func TestSyncError(t *testing.T) {
 	}
 }
 
+func TestNewFederatedWatcherWithoutScope(t *testing.T) {
+	// A nil Scope disables metrics instead of panicking in the constructor.
+	require.NotPanics(t, func() {
+		w := NewFederatedWatcher(FederatedWatcherParams{Logger: zapr.NewLogger(zap.NewNop())})
+		w.(*watcher).metrics.MetricsScope.Counter(_failureWatchAddMetricName).Inc(1)
+	})
+}
+
 func TestStart(t *testing.T) {
 	g := gomock.NewController(t)
 	synced := make(chan struct{})

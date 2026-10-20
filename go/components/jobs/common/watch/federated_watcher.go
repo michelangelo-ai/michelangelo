@@ -38,7 +38,8 @@ var (
 // keeps an eye on the clusters and thus the clusters in ETCD are up-to-date.
 type FederatedWatcher interface {
 	// Start starts the eager syncing of watches. It returns once ctx is
-	// done, after stopping every watch it started.
+	// done, after signalling every watch it started to stop. It does not
+	// wait for an event handler that is already running to finish.
 	Start(ctx context.Context)
 }
 
@@ -94,6 +95,10 @@ func (wi *watchInfo) hasExited() bool {
 
 // NewFederatedWatcher returns a new federated watcher.
 func NewFederatedWatcher(p FederatedWatcherParams) FederatedWatcher {
+	scope := p.Scope
+	if scope == nil {
+		scope = tally.NoopScope
+	}
 	return &watcher{
 		clusterCache:    p.ClusterCache,
 		federatedClient: p.FederatedClient,
@@ -101,12 +106,13 @@ func NewFederatedWatcher(p FederatedWatcherParams) FederatedWatcher {
 		clusterInfoMap:  sync.Map{},
 		period:          _defaultSyncPeriod,
 		watches:         p.WatcherParams,
-		metrics:         &metrics.ControllerMetrics{MetricsScope: p.Scope.SubScope("watcher")},
+		metrics:         &metrics.ControllerMetrics{MetricsScope: scope.SubScope("watcher")},
 	}
 }
 
 // Start starts the eager syncing of watches. It returns once ctx is done,
-// after stopping every watch it started.
+// after signalling every watch it started to stop. It does not wait for an
+// event handler that is already running to finish.
 func (r *watcher) Start(ctx context.Context) {
 	r.startOnce.Do(func() {
 		r.start(ctx)
