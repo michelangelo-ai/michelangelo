@@ -33,6 +33,40 @@ rayManager:
     kueueRead: true
 
 # -----------------------------------------------------------------------------
+# Runtime contract — read by every pod the control plane creates in namespace
+# default. examples/values-minimal.yaml shows the settings you must provide.
+# -----------------------------------------------------------------------------
+runtime:
+  # Rendered verbatim into ConfigMap michelangelo-config in namespace default.
+  # Required, each reachable from this cluster: MA_FILE_SYSTEM (the storage
+  # root), AWS_ENDPOINT_URL (the object-storage endpoint) and
+  # REGISTRY_ENDPOINT (the model-registry endpoint). AWS_ACCESS_KEY_ID and
+  # AWS_SECRET_ACCESS_KEY are rejected: they belong in the Secret below.
+  # Values must be strings, numbers or booleans; quote any value whose exact
+  # spelling matters.
+  config: {}
+  # The Secret with keys AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, in
+  # namespace default. One identity serves the log collector and the task
+  # containers, so it needs the log bucket and the storage root.
+  objectStorageCredentials:
+    # Required: controllermgr's logPersistence.credentialsSecret.
+    name: ""
+    # true renders the Secret from the two keys below (sandbox, development)
+    # and keeps it on uninstall. false expects the Secret from your secret
+    # management before the first job; leave both keys empty.
+    create: false
+    accessKeyId: ""
+    secretAccessKey: ""
+
+# -----------------------------------------------------------------------------
+# helm test — checks the runtime contract from namespace default.
+# -----------------------------------------------------------------------------
+tests:
+  # Image of the test pod; it needs sh and nc. Override it for air-gapped
+  # registries.
+  image: busybox:1.36
+
+# -----------------------------------------------------------------------------
 # KubeRay operator — upstream chart kuberay-operator 1.7.1.
 # Values under kuberay-operator are passed to the pinned upstream chart.
 # -----------------------------------------------------------------------------

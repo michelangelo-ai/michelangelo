@@ -4,6 +4,8 @@
   "additionalProperties": false,
   "required": [
     "rayManager",
+    "runtime",
+    "tests",
     "kuberay-operator",
     "spark-operator"
   ],
@@ -34,6 +36,48 @@
               "type": "boolean"
             }
           }
+        }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["config", "objectStorageCredentials"],
+      "properties": {
+        "config": {
+          "type": "object",
+          "additionalProperties": {
+            "type": ["string", "number", "boolean"]
+          }
+        },
+        "objectStorageCredentials": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "create", "accessKeyId", "secretAccessKey"],
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "create": {
+              "type": "boolean"
+            },
+            "accessKeyId": {
+              "type": "string"
+            },
+            "secretAccessKey": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "tests": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["image"],
+      "properties": {
+        "image": {
+          "type": "string"
         }
       }
     },

@@ -1,0 +1,15 @@
+{{- /*
+Read by every pod the control plane creates in namespace default. runtime.config
+is rendered verbatim, every value as a string.
+*/ -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: michelangelo-config
+  namespace: default
+  labels:
+    {{- include "michelangelo-compute.labels" . | nindent 4 }}
+data:
+  {{- range $key, $value := .Values.runtime.config }}
+  {{ $key }}: {{ toString $value | quote }}
+  {{- end }}

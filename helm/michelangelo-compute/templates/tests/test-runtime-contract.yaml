@@ -1,0 +1,99 @@
+{{- /*
+helm test: checks the runtime contract from namespace default, where the
+control plane creates its pods. The Secret is an optional volume, so a missing
+Secret fails the script with a message naming it instead of leaving the pod in
+CreateContainerConfigError. The script never prints the Secret's values.
+*/ -}}
+{{- $credentialsSecret := .Values.runtime.objectStorageCredentials.name }}
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "michelangelo-compute.fullname" . }}-test-runtime-contract
+  namespace: default
+  labels:
+    {{- include "michelangelo-compute.labels" . | nindent 4 }}
+    app.kubernetes.io/component: test
+  annotations:
+    helm.sh/hook: test
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  automountServiceAccountToken: false
+  restartPolicy: Never
+  securityContext:
+    # busybox runs as root, which runAsNonRoot alone would refuse.
+    runAsNonRoot: true
+    runAsUser: 65534
+    runAsGroup: 65534
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: runtime-contract
+      image: {{ .Values.tests.image | quote }}
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop:
+            - ALL
+      envFrom:
+        - configMapRef:
+            name: michelangelo-config
+      env:
+        - name: OBJECT_STORAGE_CREDENTIALS_SECRET
+          value: {{ $credentialsSecret | quote }}
+      volumeMounts:
+        - name: object-storage-credentials
+          mountPath: /etc/object-storage-credentials
+          readOnly: true
+      command:
+        - /bin/sh
+        - -ec
+      args:
+        - |
+          status=0
+          for key in AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY; do
+            if [ -s "/etc/object-storage-credentials/$key" ]; then
+              echo "ok: Secret $OBJECT_STORAGE_CREDENTIALS_SECRET sets $key"
+            else
+              echo "FAIL: Secret $OBJECT_STORAGE_CREDENTIALS_SECRET in namespace default must exist and set $key" >&2
+              status=1
+            fi
+          done
+
+          # Checks that the endpoint in setting $1, value $2, accepts TCP
+          # connections. $2 is host:port or a URL; http and https imply ports
+          # 80 and 443.
+          check_endpoint() {
+            case "$2" in
+              https://*) port=443 ;;
+              http://*) port=80 ;;
+              *) port= ;;
+            esac
+            address="${2#*://}"
+            address="${address%%[/?#]*}"
+            address="${address##*@}"
+            case "$address" in
+              *\]) ;;
+              *:*) port="${address##*:}"; address="${address%:*}" ;;
+            esac
+            host="${address#\[}"
+            host="${host%\]}"
+            if [ -z "$host" ] || [ -z "$port" ]; then
+              echo "FAIL: $1 must be host:port or an http or https URL" >&2
+              return 1
+            fi
+            if nc -z -w 5 "$host" "$port"; then
+              echo "ok: $1 $host:$port is reachable"
+            else
+              echo "FAIL: $1 $host:$port is not reachable from namespace default" >&2
+              return 1
+            fi
+          }
+          check_endpoint AWS_ENDPOINT_URL "${AWS_ENDPOINT_URL:-}" || status=1
+          check_endpoint REGISTRY_ENDPOINT "${REGISTRY_ENDPOINT:-}" || status=1
+          exit "$status"
+  volumes:
+    - name: object-storage-credentials
+      secret:
+        secretName: {{ $credentialsSecret | quote }}
+        optional: true
