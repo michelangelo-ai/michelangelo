@@ -1310,7 +1310,7 @@ func TestRayJobEventHandler(t *testing.T) {
 }
 
 // TestRayJobDeleteEventHandler verifies KubeRay RayJob deletions transition the
-// global RayJob to a killed state.
+// global RayJob to a terminal state.
 func TestRayJobDeleteEventHandler(t *testing.T) {
 	scheme := newTestScheme()
 
@@ -1342,7 +1342,15 @@ func TestRayJobDeleteEventHandler(t *testing.T) {
 				Generation: 1,
 			},
 			Status: v2pb.RayJobStatus{
-				StatusConditions: make([]*apipb.Condition, 0),
+				State:     v2pb.RAY_JOB_STATE_RUNNING,
+				JobStatus: string(rayv1.JobStatusRunning),
+				Message:   "job is running",
+				StatusConditions: []*apipb.Condition{
+					{
+						Type:   constants.LaunchedCondition,
+						Status: apipb.CONDITION_STATUS_TRUE,
+					},
+				},
 			},
 		}
 		fakeClient := fake.NewClientBuilder().
@@ -1365,10 +1373,49 @@ func TestRayJobDeleteEventHandler(t *testing.T) {
 		killed := jobsutils.GetCondition(&updated.Status.StatusConditions, constants.KilledCondition, updated.Generation)
 		assert.Equal(t, apipb.CONDITION_STATUS_TRUE, killed.Status)
 
-		assert.Equal(t, v2pb.RAY_JOB_STATE_KILLED, updated.Status.State,
+		// FAILED, not KILLED: Uniflow retries FAILED but not KILLED, and the usual
+		// cause is the cluster being torn down, not a user kill.
+		assert.Equal(t, v2pb.RAY_JOB_STATE_FAILED, updated.Status.State,
 			"a job whose backing object is gone must reach a terminal state")
+		assert.Equal(t, "Unknown", updated.Status.JobStatus)
+		assert.Equal(t, "ray job was deleted from the compute cluster", updated.Status.Message)
 		assert.True(t, utils.IsImmutable(&updated),
 			"a terminal job must be frozen so the ingester can archive it")
+	})
+
+	// An unlaunched job has no KubeRay RayJob of its own, so the deleted object
+	// belongs to something else, e.g. an earlier job with the same name.
+	t.Run("external deletion leaves an unlaunched job untouched", func(t *testing.T) {
+		rayJob := &v2pb.RayJob{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:       rayJobName,
+				Namespace:  testNamespace,
+				Generation: 1,
+			},
+			Status: v2pb.RayJobStatus{
+				State:            v2pb.RAY_JOB_STATE_INITIALIZING,
+				Message:          "cluster default/existing-cluster is not ready",
+				StatusConditions: make([]*apipb.Condition, 0),
+			},
+		}
+		fakeClient := fake.NewClientBuilder().
+			WithScheme(scheme).
+			WithObjects(rayJob).
+			WithStatusSubresource(rayJob).
+			Build()
+		r := &Reconciler{Client: fakeClient, logger: ctrl.Log.WithName("test")}
+
+		r.rayJobDeleteEventHandler(newLocalRayJob())
+
+		var updated v2pb.RayJob
+		require.NoError(t, r.Get(context.Background(),
+			types.NamespacedName{Namespace: testNamespace, Name: rayJobName}, &updated))
+
+		assert.Equal(t, v2pb.RAY_JOB_STATE_INITIALIZING, updated.Status.State)
+		assert.Equal(t, "cluster default/existing-cluster is not ready", updated.Status.Message)
+		assert.Empty(t, updated.Status.StatusConditions,
+			"delete handler must not add conditions to a job it should skip")
+		assert.False(t, utils.IsImmutable(&updated))
 	})
 
 	t.Run("controller-initiated deletion clears killing and sets killed", func(t *testing.T) {

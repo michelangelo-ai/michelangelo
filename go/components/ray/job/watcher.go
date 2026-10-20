@@ -215,6 +215,14 @@ func (r *Reconciler) rayJobDeleteEventHandler(obj interface{}) {
 	killing := jobsutils.GetCondition(&rayJob.Status.StatusConditions, constants.KillingCondition, rayJob.Generation)
 
 	if killing.Status != apipb.CONDITION_STATUS_TRUE {
+		// An unlaunched job has no KubeRay RayJob of its own, so the deleted object
+		// belongs to something else, e.g. an earlier job with the same name.
+		launched := jobsutils.GetCondition(&rayJob.Status.StatusConditions, constants.LaunchedCondition, rayJob.Generation)
+		if launched.Status != apipb.CONDITION_STATUS_TRUE {
+			log.V(1).Info("skipping delete event for ray job that was not launched")
+			return
+		}
+
 		// Job was deleted externally without going through the controller.
 		if err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
 			var current v2pb.RayJob
@@ -237,7 +245,13 @@ func (r *Reconciler) rayJobDeleteEventHandler(obj interface{}) {
 			// the state alongside the conditions is what lets markImmutableIfTerminal
 			// freeze the job: without it the CR keeps a non-terminal state forever,
 			// is never archived by the ingester, and re-reconciles on every requeue.
-			current.Status.State = v2pb.RAY_JOB_STATE_KILLED
+			// FAILED rather than KILLED: the usual cause is the KubeRay RayCluster
+			// being deleted, which takes its RayJobs with it, and Uniflow retries a
+			// FAILED job but not a KILLED one. The safety net reports a missing
+			// object the same way.
+			current.Status.State = v2pb.RAY_JOB_STATE_FAILED
+			current.Status.JobStatus = "Unknown"
+			current.Status.Message = "ray job was deleted from the compute cluster"
 			return r.Status().Update(ctx, &current)
 		}); err != nil {
 			log.Error(err, "failed to update status on external delete")
@@ -247,7 +261,7 @@ func (r *Reconciler) rayJobDeleteEventHandler(obj interface{}) {
 			log.Error(err, "failed to mark ray job immutable after external delete")
 			return
 		}
-		log.Info("job externally deleted, marked as killed")
+		log.Info("job externally deleted, marked as failed")
 		return
 	}
 
