@@ -626,7 +626,7 @@ func TestReconciler_Reconcile(t *testing.T) {
 				})
 				mfc.EXPECT().GetJobStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(&jobtypes.JobStatus{
 					Ray: &v2pb.RayJobStatus{
-						JobStatus: "Unknown",
+						JobStatus: jobsclient.JobStatusNotFound,
 						State:     v2pb.RAY_JOB_STATE_FAILED,
 						Message:   "Resource not found in compute cluster",
 					},
@@ -2381,7 +2381,7 @@ func TestRayJobConvergesAfterDeleteHandlerExhaustsRetries(t *testing.T) {
 	mockFedClient := clientmocks.NewMockFederatedClient(mockCtrl)
 	mockFedClient.EXPECT().GetJobStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(&jobtypes.JobStatus{
 		Ray: &v2pb.RayJobStatus{
-			JobStatus: "Unknown",
+			JobStatus: jobsclient.JobStatusNotFound,
 			State:     v2pb.RAY_JOB_STATE_FAILED,
 			Message:   "Resource not found in compute cluster",
 		},
@@ -2807,7 +2807,7 @@ func TestMissingRayJobIsRecordedTheSameOnEveryPath(t *testing.T) {
 		// compute cluster.
 		mockFedClient.EXPECT().GetJobStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(&jobtypes.JobStatus{
 			Ray: &v2pb.RayJobStatus{
-				JobStatus: "Unknown",
+				JobStatus: jobsclient.JobStatusNotFound,
 				State:     v2pb.RAY_JOB_STATE_FAILED,
 				Message:   "Resource not found in compute cluster",
 			},

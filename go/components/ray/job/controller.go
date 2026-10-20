@@ -345,11 +345,11 @@ func (r *Reconciler) updateJobStatusIfLaunched(ctx context.Context, logger logr.
 
 // isRayJobMissing reports whether a GetJobStatus result stands for a KubeRay
 // RayJob missing from the compute cluster. GetJobStatus returns the compute
-// cluster API server's NotFound as a FAILED status rather than an error, with
-// a JobStatus KubeRay never reports; any other failure, a proxy's 404 included,
-// is an error and leaves the job as it is.
+// cluster API server's NotFound as a FAILED status with JobStatus
+// jobsclient.JobStatusNotFound rather than an error; any other failure, a
+// proxy's 404 included, is an error and leaves the job as it is.
 func isRayJobMissing(status *v2pb.RayJobStatus) bool {
-	return status.State == v2pb.RAY_JOB_STATE_FAILED && status.JobStatus == _jobStatusUnknown
+	return status.State == v2pb.RAY_JOB_STATE_FAILED && status.JobStatus == jobsclient.JobStatusNotFound
 }
 
 // markImmutableIfTerminal persists the michelangelo/Immutable annotation on a

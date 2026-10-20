@@ -311,6 +311,10 @@ func (c *Client) DeleteSecret(
 	return c.helper.DeleteResource(ctx, cs.CoreV1, string(corev1.ResourceSecrets), localNamespace, secrets.GetKubeSecretName(localName), opts)
 }
 
+// JobStatusNotFound is the JobStatus GetJobStatus reports when the compute
+// cluster's API server says the KubeRay RayJob is gone. KubeRay never reports it.
+const JobStatusNotFound = "Unknown"
+
 // GetJobStatus retrieves the status of a Ray job from a remote cluster
 func (c *Client) GetJobStatus(
 	ctx context.Context,
@@ -345,7 +349,7 @@ func (c *Client) GetJobStatus(
 			if apierrors.IsNotFound(err) && !apierrors.IsUnexpectedServerError(err) {
 				return &matypes.JobStatus{
 					Ray: &v2pb.RayJobStatus{
-						JobStatus: "Unknown",
+						JobStatus: JobStatusNotFound,
 						State:     v2pb.RAY_JOB_STATE_FAILED,
 						Message:   "Resource not found in compute cluster",
 					},

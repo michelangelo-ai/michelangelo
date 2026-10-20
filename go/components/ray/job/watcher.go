@@ -28,9 +28,6 @@ const (
 	_eventHandlerTimeout = 10 * time.Second
 	// Counts handler status writes that gave up, tagged by handler.
 	_handlerWriteDroppedMetricName = "handler_write_dropped"
-	// _jobStatusUnknown is the JobStatus of a job whose KubeRay RayJob is gone
-	// from the compute cluster. It is not a status KubeRay reports.
-	_jobStatusUnknown = "Unknown"
 )
 
 // isRetriableWriteError reports whether a handler's status write is worth
@@ -398,6 +395,6 @@ func markRayJobGone(job *v2pb.RayJob, lastJobStatus string) {
 		Generation: job.Generation,
 	})
 	job.Status.State = v2pb.RAY_JOB_STATE_FAILED
-	job.Status.JobStatus = _jobStatusUnknown
+	job.Status.JobStatus = jobsclient.JobStatusNotFound
 	job.Status.Message = "ray job was deleted from the compute cluster"
 }
