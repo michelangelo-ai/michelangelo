@@ -572,12 +572,12 @@ func (r *Reconciler) rayClusterDeleteEventHandler(obj interface{}) {
 		}
 		// Cluster was deleted externally without going through the controller. The
 		// backing resource is already confirmed gone, so record the complete terminal
-		// condition set in a single write (State=FAILED, Succeeded=FALSE unless an
-		// outcome was already decided, Killing=FALSE, Killed=TRUE) — the same set
-		// the safety net writes when it finds the cluster missing on the remote
-		// compute cluster. Killing=FALSE matters beyond bookkeeping:
-		// isClusterFullyTerminal requires it, and cleanupCluster would otherwise
-		// issue a pointless DeleteJobCluster.
+		// condition set in a single write (State=FAILED, or TERMINATED for a cluster
+		// that had already succeeded; Succeeded=FALSE unless an outcome was already
+		// decided; Killing=FALSE; Killed=TRUE) — the same set the safety net writes
+		// when it finds the cluster missing on the remote compute cluster.
+		// Killing=FALSE matters beyond bookkeeping: isClusterFullyTerminal requires
+		// it, and cleanupCluster would otherwise issue a pointless DeleteJobCluster.
 		//
 		// The read above can predate a kill the reconciler has begun since, so the
 		// check is repeated on the object being written. A kill that has begun owns

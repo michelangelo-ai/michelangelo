@@ -722,7 +722,8 @@ func (r *Reconciler) markImmutableIfTerminal(ctx context.Context, cluster *v2pb.
 // DeleteJobCluster against it. That same condition set is what isClusterFullyTerminal
 // looks for; the caller is responsible for calling finalizeIfTerminal afterwards to act
 // on it. An outcome that was already decided is kept, with its reason: the resource
-// vanishing does not change why the cluster ended.
+// vanishing does not change why the cluster ended. So a cluster that had already
+// succeeded ends TERMINATED, as a normal termination would, rather than FAILED.
 func (r *Reconciler) markClusterFailed(
 	ctx context.Context,
 	cluster *v2pb.RayCluster,
@@ -748,7 +749,8 @@ func markFailedUpdate(reason, message string) func(obj client.Object) {
 		c := obj.(*v2pb.RayCluster)
 		c.Status.State = v2pb.RAY_CLUSTER_STATE_FAILED
 
-		if conditionStatus(c, SucceededCondition) == apipb.CONDITION_STATUS_UNKNOWN {
+		switch conditionStatus(c, SucceededCondition) {
+		case apipb.CONDITION_STATUS_UNKNOWN:
 			succeededCond := jobsutils.GetCondition(&c.Status.StatusConditions, SucceededCondition, c.Generation)
 			jobsutils.UpdateCondition(succeededCond, jobsutils.ConditionUpdateParams{
 				Status:     apipb.CONDITION_STATUS_FALSE,
@@ -756,6 +758,10 @@ func markFailedUpdate(reason, message string) func(obj client.Object) {
 				Reason:     reason,
 				Message:    message,
 			})
+		case apipb.CONDITION_STATUS_TRUE:
+			// Nothing failed: the cluster had already succeeded when the
+			// resource went, so it ends the way a normal termination does.
+			c.Status.State = v2pb.RAY_CLUSTER_STATE_TERMINATED
 		}
 		killingCond := jobsutils.GetCondition(&c.Status.StatusConditions, KillingCondition, c.Generation)
 		jobsutils.UpdateCondition(killingCond, jobsutils.ConditionUpdateParams{

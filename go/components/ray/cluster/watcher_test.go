@@ -1310,6 +1310,41 @@ func TestRayClusterDeleteEventHandler_ExternalDeletionKeepsDecidedOutcome(t *tes
 	assert.True(t, utils.IsImmutable(&updated), "the cluster is fully terminal and should be frozen")
 }
 
+// TestRayClusterDeleteEventHandler_ExternalDeletionAfterSuccess: the cluster's
+// success is recorded but its kill has not begun when its KubeRay object goes.
+// Nothing failed, so it ends the way a normal termination does -- TERMINATED,
+// with its outcome -- instead of as a FAILED cluster that succeeded.
+func TestRayClusterDeleteEventHandler_ExternalDeletionAfterSuccess(t *testing.T) {
+	globalCluster := &v2pb.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
+		Spec: v2pb.RayClusterSpec{
+			Termination: &v2pb.TerminationSpec{Type: v2pb.TERMINATION_TYPE_SUCCEEDED, Reason: "completed"},
+		},
+		Status: v2pb.RayClusterStatus{
+			State: v2pb.RAY_CLUSTER_STATE_READY,
+			StatusConditions: []*apipb.Condition{
+				{Type: LaunchedCondition, Status: apipb.CONDITION_STATUS_TRUE},
+				{Type: SucceededCondition, Status: apipb.CONDITION_STATUS_TRUE, Reason: "completed"},
+			},
+		},
+	}
+	r := setupWatcherTest(t, globalCluster)
+
+	r.rayClusterDeleteEventHandler(newKubeRayCluster(rayClusterName, rayv1.Ready))
+
+	updated := getUpdatedCluster(t, r)
+	assert.Equal(t, v2pb.RAY_CLUSTER_STATE_TERMINATED, updated.Status.State,
+		"a cluster that succeeded must not be recorded as FAILED")
+	succeededCond := findCondition(updated.Status.StatusConditions, SucceededCondition)
+	require.NotNil(t, succeededCond)
+	assert.Equal(t, apipb.CONDITION_STATUS_TRUE, succeededCond.Status)
+	assert.Equal(t, "completed", succeededCond.Reason)
+	killedCond := findCondition(updated.Status.StatusConditions, KilledCondition)
+	require.NotNil(t, killedCond)
+	assert.Equal(t, apipb.CONDITION_STATUS_TRUE, killedCond.Status)
+	assert.True(t, utils.IsImmutable(&updated), "the cluster is fully terminal and should be frozen")
+}
+
 // TestRayClusterDeleteEventHandler_IgnoresUnlaunchedCluster: a CR that never
 // launched has no KubeRay object of its own, so a delete for its name belongs to
 // something else -- typically a same-named predecessor whose object is only now
