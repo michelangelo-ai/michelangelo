@@ -997,6 +997,45 @@ class BuildHelmSetArgsTest(TestCase):
                 self.assertFalse([a for a in args if "storageEndpoint" in a])
 
 
+# The optional Secret comes first, so on a key both set the ConfigMap wins.
+_CREDENTIALS_ENV_FROM = [
+    {"secretRef": {"name": sandbox._compute_credentials_secret, "optional": True}},
+    {"configMapRef": {"name": "michelangelo-config"}},
+]
+
+
+class CredentialsSecretEnvFromTest(TestCase):
+    """Tests for the sandbox workloads that read the credentials Secret."""
+
+    def test_model_sync_reads_the_secret_before_the_config_map(self):
+        """The DaemonSet _apply_model_sync renders lists the Secret first."""
+        with (
+            patch.object(sandbox.subprocess, "run") as mock_run,
+            patch.object(sandbox, "_exec"),
+        ):
+            mock_run.return_value = Mock(stdout="")
+            sandbox._apply_model_sync("test-is", context="k3d-test-cluster")
+
+        applied = [
+            doc
+            for c in mock_run.call_args_list
+            for doc in yaml.safe_load_all(c.kwargs.get("input") or "")
+            if doc
+        ]
+        (daemon_set,) = [doc for doc in applied if doc["kind"] == "DaemonSet"]
+        (container,) = daemon_set["spec"]["template"]["spec"]["containers"]
+        self.assertEqual(container["envFrom"], _CREDENTIALS_ENV_FROM)
+
+    def test_demo_spark_application_reads_the_secret_before_the_config_map(self):
+        """Driver and executor of the demo SparkApplication list the Secret first."""
+        with open(sandbox._dir / "resources" / "spark-app.yaml") as f:
+            app = yaml.safe_load(f)
+
+        for role in ["driver", "executor"]:
+            with self.subTest(role=role):
+                self.assertEqual(app["spec"][role]["envFrom"], _CREDENTIALS_ENV_FROM)
+
+
 class ArgumentParsingTest(TestCase):
     """Tests for CLI argument parsing."""
 

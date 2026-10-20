@@ -26,7 +26,12 @@ spec:
     serviceAccount: spark-operator-spark
     labels:
       version: 3.5.5
+    # Credentials come from the optional Secret (michelangelo-config carries none on
+    # the control plane); on a key both set, the last source (the ConfigMap) wins.
     envFrom:
+      - secretRef:
+          name: minio-credentials
+          optional: true
       - configMapRef:
           name: michelangelo-config
   executor:
@@ -34,5 +39,8 @@ spec:
     memory: 1g
     instances: 2
     envFrom:
+      - secretRef:
+          name: minio-credentials
+          optional: true
       - configMapRef:
           name: michelangelo-config

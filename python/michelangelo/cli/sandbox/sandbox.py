@@ -1617,7 +1617,11 @@ def _kube_create(path: Path):
 
 
 def _ensure_credentials_secret():
-    """Create the sandbox credentials Secrets only if absent.
+    """Create the control plane's object-storage credentials Secrets if absent.
+
+    minio-credentials is the one jobs, the Ray log collector and model-sync
+    read. The Ray History Server still reads object-storage-credentials, and the
+    bucket-setup Job mounts aws-credentials.
 
     This is deliberately create-only: a sandbox VM that was pre-configured
     with non-default credentials (e.g. the GCP CI runner) keeps its own
