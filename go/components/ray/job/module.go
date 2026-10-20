@@ -2,12 +2,14 @@ package job
 
 import (
 	"github.com/go-logr/logr"
+	"github.com/uber-go/tally"
 	"go.uber.org/fx"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	jobsclient "github.com/michelangelo-ai/michelangelo/go/components/jobs/client"
 	jobsCluster "github.com/michelangelo-ai/michelangelo/go/components/jobs/cluster"
+	matypes "github.com/michelangelo-ai/michelangelo/go/components/jobs/common/types"
 	"github.com/michelangelo-ai/michelangelo/go/components/ray/cluster"
 )
 
@@ -16,23 +18,34 @@ var Module = fx.Options(
 	fx.Invoke(register),
 )
 
-func register(
-	conf cluster.Config,
-	logger logr.Logger,
-	env env.Context,
-	mgr manager.Manager,
-	federatedClient jobsclient.FederatedClient,
-	clusterCache jobsCluster.RegisteredClustersCache,
-) error {
-	restConfig := mgr.GetConfig()
-	restConfig.QPS = conf.QPS
-	restConfig.Burst = conf.Burst
+// params collects the Reconciler's dependencies. It is an fx.In struct because
+// the k8sengine Mapper is provided under a name, which plain positional
+// parameters cannot express.
+type params struct {
+	fx.In
+
+	Conf            cluster.Config
+	Logger          logr.Logger
+	Env             env.Context
+	Manager         manager.Manager
+	FederatedClient jobsclient.FederatedClient
+	ClusterCache    jobsCluster.RegisteredClustersCache
+	Mapper          matypes.Mapper `name:"k8sengineMapper"`
+	MetricsScope    tally.Scope
+}
+
+func register(p params) error {
+	restConfig := p.Manager.GetConfig()
+	restConfig.QPS = p.Conf.QPS
+	restConfig.Burst = p.Conf.Burst
 
 	return NewReconciler(
-		logger,
-		mgr.GetClient(),
-		env,
-		federatedClient,
-		clusterCache,
-	).Register(mgr)
+		p.Logger,
+		p.Manager.GetClient(),
+		p.Env,
+		p.FederatedClient,
+		p.ClusterCache,
+		p.Mapper,
+		p.MetricsScope,
+	).Register(p.Manager)
 }

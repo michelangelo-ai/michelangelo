@@ -36,6 +36,7 @@ go_test(
         "mapper_test.go",
         "nvidia_gpu_test.go",
         "ray_collector_test.go",
+        "ray_job_status_test.go",
     ],
     embed = [":go_default_library"],
     deps = [
