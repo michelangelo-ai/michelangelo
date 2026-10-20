@@ -1476,7 +1476,7 @@ func TestRayJobDeleteEventHandler(t *testing.T) {
 	})
 
 	// A job whose outcome is already recorded must survive KubeRay removing the
-	// backing object (TTL cleanup, cluster teardown, an operator sweep): that is
+	// backing object (owner GC at cluster teardown, an operator sweep): that is
 	// garbage collection, not a kill, and must not overwrite the terminal record.
 	for _, tc := range []struct {
 		name      string
@@ -1591,9 +1591,10 @@ func errorLogs(logs *observer.ObservedLogs) []string {
 //
 // The KubeRay RayJob outlives the global CR: the ingester archives a terminal
 // job out of etcd as soon as it finishes, while KubeRay keeps its own object
-// until TTLSecondsAfterFinished elapses. Every event in that window -- the
-// trailing status updates and the eventual GC delete -- arrives with nothing
-// left to record it on.
+// until owner GC removes it with its KubeRay RayCluster (KubeRay skips TTL
+// cleanup for jobs that target an existing cluster). Every event in that window
+// -- the trailing status updates and the eventual GC delete -- arrives with
+// nothing left to record it on.
 func TestJobWatcherHandlersIgnoreMissingGlobalJob(t *testing.T) {
 	newLocal := func() *rayv1.RayJob {
 		return &rayv1.RayJob{

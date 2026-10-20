@@ -110,8 +110,9 @@ func (r *Reconciler) rayJobEventHandler(obj interface{}) {
 		if utils.IsNotFoundError(err) {
 			// The global RayJob is gone: the ingester moved a terminal job to metadata
 			// storage, or it was deleted outright. The KubeRay object outlives it until
-			// TTL cleanup, so its trailing events are expected and there is nothing to
-			// update.
+			// owner GC removes it with its KubeRay RayCluster (KubeRay skips TTL cleanup
+			// for jobs that target an existing cluster), so its trailing events are
+			// expected and there is nothing to update.
 			log.V(1).Info("global ray job no longer exists, ignoring event")
 			return
 		}
@@ -212,8 +213,9 @@ func (r *Reconciler) rayJobDeleteEventHandler(obj interface{}) {
 		if utils.IsNotFoundError(err) {
 			// The global RayJob is gone: the ingester moved a terminal job to metadata
 			// storage, or it was deleted outright. The KubeRay object outlives it until
-			// TTL cleanup, so its trailing events are expected and there is nothing to
-			// update.
+			// owner GC removes it with its KubeRay RayCluster (KubeRay skips TTL cleanup
+			// for jobs that target an existing cluster), so its trailing events are
+			// expected and there is nothing to update.
 			log.V(1).Info("global ray job no longer exists, ignoring event")
 			return
 		}
@@ -222,8 +224,9 @@ func (r *Reconciler) rayJobDeleteEventHandler(obj interface{}) {
 	}
 
 	// A job that already reached a terminal state has its outcome recorded. KubeRay
-	// removing the object afterwards -- TTL cleanup, cluster teardown, an operator
-	// sweep -- is garbage collection, not a kill, so the terminal record stands.
+	// removing the object afterwards -- owner GC when its KubeRay RayCluster is torn
+	// down, an operator sweep -- is garbage collection, not a kill, so the terminal
+	// record stands.
 	// Terminal status and immutability are written by separate passes, so both are
 	// checked to close the window between them.
 	if utils.IsImmutable(&rayJob) || isTerminalRayJobState(rayJob.Status.State) {
@@ -288,7 +291,8 @@ func (r *Reconciler) rayJobDeleteEventHandler(obj interface{}) {
 		return
 	}
 
-	// Expected deletion — killing was in progress.
+	// Expected deletion — killing was in progress. Nothing sets KillingCondition
+	// on a RayJob yet; this is reserved for a future RayJob kill path.
 	if err = retry.OnError(retry.DefaultBackoff, isRetriableWriteError, func() error {
 		var current v2pb.RayJob
 		if getErr := r.Get(ctx, types.NamespacedName{Namespace: projectName, Name: local.Name}, &current); getErr != nil {
