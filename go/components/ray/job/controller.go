@@ -15,6 +15,7 @@ import (
 
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
+	"github.com/michelangelo-ai/michelangelo/go/components/controllerutil"
 	jobsclient "github.com/michelangelo-ai/michelangelo/go/components/jobs/client"
 	jobscluster "github.com/michelangelo-ai/michelangelo/go/components/jobs/cluster"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/constants"
@@ -154,10 +155,14 @@ func (r *Reconciler) Register(mgr ctrl.Manager) error {
 
 	r.federatedWatcher = r.getFederatedWatcher()
 
-	go func() {
-		<-mgr.Elected()
-		r.federatedWatcher.Start(context.TODO())
-	}()
+	// Leader-only runnables start once the manager's caches have synced and get
+	// its context, so the watcher stops with the manager. Start blocks until then.
+	if err := mgr.Add(controllerutil.LeaderOnlyRunnable(func(ctx context.Context) error {
+		r.federatedWatcher.Start(ctx)
+		return nil
+	})); err != nil {
+		return err
+	}
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v2pb.RayJob{}).
