@@ -478,33 +478,22 @@ func (r *Reconciler) rayClusterEventHandler(obj interface{}) {
 
 	// Derive the globally-meaningful parts of the status from the compute-cluster
 	// object. The mapper owns that translation — it knows the log-URL template,
-	// the compute-cluster Ray namespace, and how to read a reason and pod errors
-	// out of KubeRay's conditions — so surfacing what it returns keeps the
-	// event-driven path reporting exactly what the polling path used to.
+	// the compute-cluster Ray namespace, how KubeRay's state maps onto ours
+	// (including a suspension that spec/conditions show before status.state
+	// catches up), and how to read a reason and pod errors out of KubeRay's
+	// conditions — so surfacing what it returns keeps the event-driven path
+	// reporting exactly what the polling path used to.
+	globalStatus, err := r.mapper.MapLocalClusterStatusToGlobal(local)
+	if err != nil || globalStatus == nil || globalStatus.Ray == nil {
+		log.Error(err, "could not map the local ray cluster status")
+		return
+	}
 	var (
-		logURL             string
-		reason             string
-		conditionPodErrors []*v2pb.PodErrors
+		newState           = globalStatus.Ray.State
+		logURL             = globalStatus.Ray.LogUrl
+		reason             = globalStatus.Reason
+		conditionPodErrors = globalStatus.Ray.PodErrors
 	)
-	if globalStatus, err := r.mapper.MapLocalClusterStatusToGlobal(local); err != nil {
-		log.Error(err, "could not map the local ray cluster status, falling back to state only")
-	} else if globalStatus != nil {
-		reason = globalStatus.Reason
-		if globalStatus.Ray != nil {
-			logURL = globalStatus.Ray.LogUrl
-			conditionPodErrors = globalStatus.Ray.PodErrors
-		}
-	}
-
-	newState := mapKubeRayClusterState(local.Status.State)
-
-	// Suspension is visible in spec/conditions before status.state catches up
-	// (e.g. a cluster suspended by its admission webhook at creation still has
-	// state ""); report SUSPENDED for the whole window. Mirrors
-	// k8sengine.convertRayV1ClusterStatusToV2.
-	if isSuspended(local) {
-		newState = v2pb.RAY_CLUSTER_STATE_SUSPENDED
-	}
 
 	// Cache re-sync gives Update events even when the local cluster did not
 	// change. Exit early if global already reflects the local state to avoid
@@ -651,55 +640,6 @@ func mergePodErrors(cluster *v2pb.RayCluster, podErrors []*v2pb.PodErrors) {
 		indexByName[podError.GetName()] = len(cluster.Status.PodErrors)
 		cluster.Status.PodErrors = append(cluster.Status.PodErrors, podError)
 	}
-}
-
-// mapKubeRayClusterState maps a KubeRay v1 ClusterState to our internal RayClusterState.
-// It mirrors k8sengine.getRayClusterStateFromKubeRayState (KubeRay has no exported
-// "unhealthy" constant, hence the string literal).
-func mapKubeRayClusterState(state rayv1.ClusterState) v2pb.RayClusterState {
-	switch state {
-	case rayv1.Ready:
-		return v2pb.RAY_CLUSTER_STATE_READY
-	case rayv1.Failed:
-		return v2pb.RAY_CLUSTER_STATE_FAILED
-	case "unhealthy":
-		return v2pb.RAY_CLUSTER_STATE_UNHEALTHY
-	case rayv1.Suspended:
-		return v2pb.RAY_CLUSTER_STATE_SUSPENDED
-	default:
-		return v2pb.RAY_CLUSTER_STATE_UNKNOWN
-	}
-}
-
-// KubeRay writes these condition types while suspending/resuming a cluster
-// (RayCluster.spec.suspend). The vendored ray-operator API (v1.2.2) predates
-// their constants, so they are string-matched here. Mirrors k8sengine.
-const (
-	rayClusterSuspendingConditionType = "RayClusterSuspending"
-	rayClusterSuspendedConditionType  = "RayClusterSuspended"
-)
-
-// isSuspended reports whether the cluster is suspended or being suspended
-// (spec.suspend=true, e.g. set by a queueing/admission controller such as
-// Kueue). Spec intent, reported state, and conditions are all checked because
-// status.state lags spec.suspend when a cluster is suspended at creation.
-// Mirrors k8sengine.isSuspended so the watcher and the mapper agree.
-func isSuspended(rc *rayv1.RayCluster) bool {
-	if rc.Spec.Suspend != nil && *rc.Spec.Suspend {
-		return true
-	}
-	if rc.Status.State == rayv1.Suspended {
-		return true
-	}
-	for _, cond := range rc.Status.Conditions {
-		if cond.Status != metav1.ConditionTrue {
-			continue
-		}
-		if cond.Type == rayClusterSuspendingConditionType || cond.Type == rayClusterSuspendedConditionType {
-			return true
-		}
-	}
-	return false
 }
 
 // Helper functions for extracting head pod information.

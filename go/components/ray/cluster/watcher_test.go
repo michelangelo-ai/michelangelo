@@ -175,28 +175,6 @@ func findCondition(conds []*apipb.Condition, condType string) *apipb.Condition {
 	return nil
 }
 
-func TestMapKubeRayClusterState(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    rayv1.ClusterState
-		expected v2pb.RayClusterState
-	}{
-		{name: "ready state", input: rayv1.Ready, expected: v2pb.RAY_CLUSTER_STATE_READY},
-		{name: "failed state", input: rayv1.Failed, expected: v2pb.RAY_CLUSTER_STATE_FAILED},
-		{name: "unhealthy state", input: _unhealthyState, expected: v2pb.RAY_CLUSTER_STATE_UNHEALTHY},
-		{name: "suspended state", input: rayv1.Suspended, expected: v2pb.RAY_CLUSTER_STATE_SUSPENDED},
-		{name: "empty state", input: "", expected: v2pb.RAY_CLUSTER_STATE_UNKNOWN},
-		{name: "unknown state string", input: "SomeNewState", expected: v2pb.RAY_CLUSTER_STATE_UNKNOWN},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			result := mapKubeRayClusterState(tc.input)
-			assert.Equal(t, tc.expected, result)
-		})
-	}
-}
-
 func TestRayClusterEventHandler_Ready(t *testing.T) {
 	globalCluster := &v2pb.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
