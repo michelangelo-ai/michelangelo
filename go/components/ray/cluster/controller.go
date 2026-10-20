@@ -34,6 +34,9 @@ const (
 	// Defines the delay before retrying the reconciliation process
 	requeueAfter            = time.Second * 10
 	_updateStatusCtxTimeout = time.Second * 10
+	// How often a launched cluster is re-checked on its compute cluster, as a
+	// fallback for events the federated watcher missed (see Reconcile).
+	_safetyNetPeriod = 5 * time.Minute
 )
 
 // Condition constants for tracking RayCluster lifecycle
@@ -204,10 +207,55 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{RequeueAfter: requeueAfter}, nil
 	}
 
-	// Status is now synced by the federated watcher event handlers.
-	// No polling required once the cluster is launched.
+	// The federated watcher keeps a launched cluster's status current, but it is
+	// edge-triggered: an event that arrives while an informer is being rebuilt
+	// (restart, failover, compute cluster leaving the ready set) is never
+	// replayed, a failed handler write for a deleted object is never retried, and
+	// KubeRay objects created before their ma/* labels existed are not watched at
+	// all. So re-read the KubeRay object every _safetyNetPeriod and apply it the
+	// way the KubeRay handler does. Once termination has begun the termination
+	// branch above owns the cluster, so there is nothing left to observe.
+	if isClusterTerminating(&rayCluster) {
+		logger.Info("Reconcile finished")
+		return res, nil
+	}
+	clusterStatus, err := r.getClusterStatus(ctx, logger, assignedCluster, &rayCluster)
+	if err != nil {
+		if utils.IsNotFoundError(err) {
+			// The RayCluster no longer exists on the remote compute cluster. This is a
+			// terminal, non-recoverable condition: there is nothing left to monitor or
+			// clean up. Mark it failed so we stop reconciling instead of requeuing forever.
+			logger.Info("cluster not found on remote compute cluster, marking as failed")
+			if err := r.markClusterFailed(ctx, &rayCluster,
+				"ClusterNotFoundOnRemote",
+				"RayCluster no longer exists on the remote compute cluster",
+			); err != nil {
+				logger.Error(err, "failed to mark cluster as failed")
+				return ctrl.Result{RequeueAfter: requeueAfter}, err
+			}
+			return r.finalizeIfTerminal(ctx, &rayCluster, logger)
+		}
+		// An unreachable compute cluster says nothing about the RayCluster on it;
+		// leave the status to the watcher and look again next period.
+		logger.Error(err, "failed to get cluster status")
+		return ctrl.Result{RequeueAfter: _safetyNetPeriod}, nil
+	}
 
-	logger.Info("Reconcile finished")
+	if applyClusterObservation(rayCluster.DeepCopy(), clusterStatus) {
+		if err := jobsutils.UpdateStatusWithRetries(
+			ctx, r, &rayCluster,
+			func(obj client.Object) {
+				applyClusterObservation(obj.(*v2pb.RayCluster), clusterStatus)
+			},
+			&metav1.UpdateOptions{FieldManager: "reconcileClusterStatus"},
+		); err != nil {
+			logger.Error(err, "failed to update ray cluster status")
+			return res, fmt.Errorf("update ray cluster status for %q: %w", req.NamespacedName, err)
+		}
+	}
+
+	res.RequeueAfter = _safetyNetPeriod
+	logger.Info("Reconcile finished", "requeueAfter", res.RequeueAfter)
 	return res, nil
 }
 
@@ -529,6 +577,43 @@ func (r *Reconciler) getClusterIfScheduled(cluster *v2pb.RayCluster) *v2pb.Clust
 
 	assignedCluster := r.clusterCache.GetCluster(cluster.Status.Assignment.Cluster)
 	return assignedCluster
+}
+
+// getClusterStatus retrieves the current status of a RayCluster resource from the federated cluster
+func (r *Reconciler) getClusterStatus(ctx context.Context, log logr.Logger, assignedKubeCluster *v2pb.Cluster, rayCluster *v2pb.RayCluster) (*matypes.JobClusterStatus, error) {
+	// Use the federated client to get the status from the remote cluster
+	clusterStatus, err := r.federatedClient.GetJobClusterStatus(ctx, rayCluster, assignedKubeCluster)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get cluster status: %w", err)
+	}
+
+	log.V(1).Info("retrieved cluster status",
+		"cluster", rayCluster.GetName(),
+		"namespace", rayCluster.GetNamespace(),
+		"state", clusterStatus.Ray.GetState())
+
+	return clusterStatus, nil
+}
+
+// conditionStatus returns the status of the condType condition on cluster, or
+// UNKNOWN if it has none. Unlike jobsutils.GetCondition it does not append a
+// missing condition, so it is safe on an object that is about to be written.
+func conditionStatus(cluster *v2pb.RayCluster, condType string) apipb.ConditionStatus {
+	for _, cond := range cluster.Status.StatusConditions {
+		if cond.GetType() == condType {
+			return cond.GetStatus()
+		}
+	}
+	return apipb.CONDITION_STATUS_UNKNOWN
+}
+
+// isClusterTerminating reports whether cluster has entered termination: its
+// outcome is decided, or a kill is under way or done. From then on Reconcile's
+// termination branch owns State and the conditions.
+func isClusterTerminating(cluster *v2pb.RayCluster) bool {
+	return conditionStatus(cluster, SucceededCondition) != apipb.CONDITION_STATUS_UNKNOWN ||
+		conditionStatus(cluster, KillingCondition) == apipb.CONDITION_STATUS_TRUE ||
+		conditionStatus(cluster, KilledCondition) == apipb.CONDITION_STATUS_TRUE
 }
 
 // isClusterFullyTerminal reports whether cluster has fully converged to a terminal

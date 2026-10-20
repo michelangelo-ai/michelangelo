@@ -446,6 +446,80 @@ func TestRayClusterEventHandler_ReadyDoesNotAddQueued(t *testing.T) {
 	assert.Nil(t, findCondition(updated.Status.StatusConditions, QueuedCondition))
 }
 
+// TestApplyClusterObservation_ReportsChanges pins the contract both callers rely
+// on. Reconcile's safety net applies an observation to a copy and writes only if
+// that reports a change, so a re-applied observation has to come back unchanged;
+// otherwise every launched cluster would be rewritten every _safetyNetPeriod.
+func TestApplyClusterObservation_ReportsChanges(t *testing.T) {
+	tests := []struct {
+		name     string
+		status   v2pb.RayClusterStatus
+		observed *matypes.JobClusterStatus
+	}{
+		{
+			name: "provisioning cluster becomes ready",
+			status: v2pb.RayClusterStatus{
+				State: v2pb.RAY_CLUSTER_STATE_PROVISIONING,
+				StatusConditions: []*apipb.Condition{
+					{Type: LaunchedCondition, Status: apipb.CONDITION_STATUS_TRUE, Reason: "ClusterCreated"},
+				},
+			},
+			observed: &matypes.JobClusterStatus{Ray: &v2pb.RayClusterStatus{
+				State: v2pb.RAY_CLUSTER_STATE_READY, LogUrl: testLogURL,
+			}},
+		},
+		{
+			name:   "cluster is suspended",
+			status: v2pb.RayClusterStatus{State: v2pb.RAY_CLUSTER_STATE_PROVISIONING},
+			observed: &matypes.JobClusterStatus{
+				Ray:    &v2pb.RayClusterStatus{State: v2pb.RAY_CLUSTER_STATE_SUSPENDED},
+				Reason: "ClusterSuspended",
+			},
+		},
+		{
+			name:   "cluster fails",
+			status: v2pb.RayClusterStatus{State: v2pb.RAY_CLUSTER_STATE_PROVISIONING},
+			observed: &matypes.JobClusterStatus{
+				Ray: &v2pb.RayClusterStatus{
+					State:     v2pb.RAY_CLUSTER_STATE_FAILED,
+					PodErrors: []*v2pb.PodErrors{{Name: string(rayv1.RayClusterReplicaFailure), Reason: "FailedCreateWorkerPod"}},
+				},
+				Reason: "FailedCreateWorkerPod",
+			},
+		},
+		{
+			name:     "cluster is still coming up",
+			status:   v2pb.RayClusterStatus{State: v2pb.RAY_CLUSTER_STATE_PROVISIONING},
+			observed: &matypes.JobClusterStatus{Ray: &v2pb.RayClusterStatus{State: v2pb.RAY_CLUSTER_STATE_UNKNOWN}},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cluster := &v2pb.RayCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
+				Status:     tt.status,
+			}
+
+			assert.True(t, applyClusterObservation(cluster, tt.observed),
+				"the first observation moves the cluster, so it has to be reported")
+			applied := cluster.DeepCopy()
+
+			assert.False(t, applyClusterObservation(cluster, tt.observed),
+				"re-applying the same observation must be a no-op")
+			assert.Equal(t, applied.Status, cluster.Status,
+				"a no-op must not touch the status, timestamps included")
+		})
+	}
+
+	t.Run("no observation is a no-op", func(t *testing.T) {
+		cluster := &v2pb.RayCluster{Status: v2pb.RayClusterStatus{State: v2pb.RAY_CLUSTER_STATE_READY}}
+		assert.False(t, applyClusterObservation(cluster, nil))
+		assert.False(t, applyClusterObservation(cluster, &matypes.JobClusterStatus{}))
+		assert.Equal(t, v2pb.RAY_CLUSTER_STATE_READY, cluster.Status.State)
+	})
+}
+
 // TestMergePodErrors pins the merge semantics every writer depends on. The
 // informer re-syncs every _reSyncPeriod and a wedged pod is re-reported on each
 // status change, so entries must update in place rather than accumulate; and

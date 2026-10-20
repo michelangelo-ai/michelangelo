@@ -17,6 +17,7 @@ import (
 	jobsclient "github.com/michelangelo-ai/michelangelo/go/components/jobs/client"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/client/k8sengine"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/constants"
+	matypes "github.com/michelangelo-ai/michelangelo/go/components/jobs/common/types"
 	jobsutils "github.com/michelangelo-ai/michelangelo/go/components/jobs/common/utils"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/watch"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
@@ -488,12 +489,7 @@ func (r *Reconciler) rayClusterEventHandler(obj interface{}) {
 		log.Error(err, "could not map the local ray cluster status")
 		return
 	}
-	var (
-		newState           = globalStatus.Ray.State
-		logURL             = globalStatus.Ray.LogUrl
-		reason             = globalStatus.Reason
-		conditionPodErrors = globalStatus.Ray.PodErrors
-	)
+	newState := globalStatus.Ray.State
 
 	// Cache re-sync gives Update events even when the local cluster did not
 	// change. Exit early if global already reflects the local state to avoid
@@ -501,7 +497,7 @@ func (r *Reconciler) rayClusterEventHandler(obj interface{}) {
 	// The log URL clause keeps a cluster that went ready under an older build
 	// (or before log persistence was configured) from being skipped forever.
 	if globalCluster.Status.State == newState && newState == v2pb.RAY_CLUSTER_STATE_READY &&
-		(logURL == "" || globalCluster.Status.LogUrl != "") {
+		(globalStatus.Ray.LogUrl == "" || globalCluster.Status.LogUrl != "") {
 		launchedCond := jobsutils.GetCondition(&globalCluster.Status.StatusConditions, LaunchedCondition, globalCluster.Generation)
 		if launchedCond.GetStatus() == apipb.CONDITION_STATUS_TRUE {
 			log.V(1).Info("ray cluster already ready, skipping update")
@@ -513,81 +509,130 @@ func (r *Reconciler) rayClusterEventHandler(obj interface{}) {
 
 	if err := jobsutils.UpdateStatusWithRetries(ctx, r, &globalCluster,
 		func(obj client.Object) {
-			cluster := obj.(*v2pb.RayCluster)
-			cluster.Status.State = newState
-			if logURL != "" {
-				cluster.Status.LogUrl = logURL
-			}
-			mergePodErrors(cluster, conditionPodErrors)
-
-			switch newState {
-			case v2pb.RAY_CLUSTER_STATE_READY:
-				launchedCond := jobsutils.GetCondition(&cluster.Status.StatusConditions, LaunchedCondition, cluster.Generation)
-				jobsutils.UpdateCondition(launchedCond, jobsutils.ConditionUpdateParams{
-					Status:     apipb.CONDITION_STATUS_TRUE,
-					Generation: cluster.Generation,
-					Reason:     "ClusterReady",
-				})
-				// A cluster that was waiting for admission is admitted now. Only
-				// flip an existing Queued condition: clusters that were never
-				// suspended should not grow one.
-				for _, cond := range cluster.Status.StatusConditions {
-					if cond.GetType() == QueuedCondition && cond.GetStatus() == apipb.CONDITION_STATUS_TRUE {
-						jobsutils.UpdateCondition(cond, jobsutils.ConditionUpdateParams{
-							Status:     apipb.CONDITION_STATUS_FALSE,
-							Generation: cluster.Generation,
-							Reason:     "ClusterAdmitted",
-						})
-					}
-				}
-			case v2pb.RAY_CLUSTER_STATE_FAILED:
-				succeededCond := jobsutils.GetCondition(&cluster.Status.StatusConditions, SucceededCondition, cluster.Generation)
-				jobsutils.UpdateCondition(succeededCond, jobsutils.ConditionUpdateParams{
-					Status:     apipb.CONDITION_STATUS_FALSE,
-					Generation: cluster.Generation,
-					Reason:     reasonOr(reason, "ClusterFailed"),
-				})
-			case v2pb.RAY_CLUSTER_STATE_UNHEALTHY:
-				succeededCond := jobsutils.GetCondition(&cluster.Status.StatusConditions, SucceededCondition, cluster.Generation)
-				jobsutils.UpdateCondition(succeededCond, jobsutils.ConditionUpdateParams{
-					Status:     apipb.CONDITION_STATUS_FALSE,
-					Generation: cluster.Generation,
-					Reason:     reasonOr(reason, "ClusterUnhealthy"),
-				})
-			case v2pb.RAY_CLUSTER_STATE_UNKNOWN:
-				// If the cluster is in an unknown state but we have already recorded
-				// terminal pod errors, treat it as failed to trigger termination.
-				if jobsutils.HasTerminalPodErrors(cluster.Status.PodErrors) {
-					cluster.Status.State = v2pb.RAY_CLUSTER_STATE_FAILED
-					succeededCond := jobsutils.GetCondition(&cluster.Status.StatusConditions, SucceededCondition, cluster.Generation)
-					jobsutils.UpdateCondition(succeededCond, jobsutils.ConditionUpdateParams{
-						Status:     apipb.CONDITION_STATUS_FALSE,
-						Generation: cluster.Generation,
-						Reason:     reasonOr(reason, "ClusterFailedWithPodErrors"),
-					})
-				}
-			case v2pb.RAY_CLUSTER_STATE_SUSPENDED:
-				// Suspension (RayCluster.spec.suspend, e.g. Kueue admission
-				// gating) is non-terminal: pods are intentionally absent until
-				// the cluster is unsuspended, so keep monitoring without
-				// touching the Succeeded condition. Deliberately no
-				// terminal-pod-error check here — while suspended, pod-level
-				// signals carry no meaning. Mirrors #1700's controller handling.
-				// Surface the wait as a Queued condition so callers can tell
-				// "held for admission" apart from "launching".
-				queuedCond := jobsutils.GetCondition(&cluster.Status.StatusConditions, QueuedCondition, cluster.Generation)
-				jobsutils.UpdateCondition(queuedCond, jobsutils.ConditionUpdateParams{
-					Status:     apipb.CONDITION_STATUS_TRUE,
-					Generation: cluster.Generation,
-					Reason:     "AwaitingAdmission",
-					Message:    reason,
-				})
-			}
+			applyClusterObservation(obj.(*v2pb.RayCluster), globalStatus)
 		}, &metav1.UpdateOptions{
 			FieldManager: "rayClusterEventHandler",
 		}); err != nil {
 		log.Error(err, "failed to update global ray cluster status")
 	}
+}
+
+// applyClusterObservation folds one observation of the compute-cluster
+// RayCluster, as mapped by the k8sengine mapper, into cluster's status, and
+// reports whether that changed anything.
+//
+// This is the cluster state machine, and the only copy of it:
+// rayClusterEventHandler applies every KubeRay event through it, and Reconcile's
+// safety net applies what GetJobClusterStatus returns, so the event path and the
+// level-triggered path cannot disagree. It has to stay pure and idempotent:
+// UpdateStatusWithRetries re-runs it on a re-fetched object after a conflict,
+// and the safety net applies it to a copy first to skip writes that would change
+// nothing.
+func applyClusterObservation(cluster *v2pb.RayCluster, observed *matypes.JobClusterStatus) bool {
+	if observed == nil || observed.Ray == nil {
+		return false
+	}
+	changed := false
+	if logURL := observed.Ray.LogUrl; logURL != "" && cluster.Status.LogUrl != logURL {
+		cluster.Status.LogUrl = logURL
+		changed = true
+	}
+	if mergePodErrors(cluster, observed.Ray.PodErrors) {
+		changed = true
+	}
+
+	reason := observed.Reason
+	oldState := cluster.Status.State
+	cluster.Status.State = observed.Ray.State
+	switch observed.Ray.State {
+	case v2pb.RAY_CLUSTER_STATE_READY:
+		// Becoming ready is what flips Launched to ClusterReady; a cluster that is
+		// already there keeps the condition, and its timestamp, as it is.
+		if oldState != v2pb.RAY_CLUSTER_STATE_READY || conditionStatus(cluster, LaunchedCondition) != apipb.CONDITION_STATUS_TRUE {
+			if setCondition(cluster, LaunchedCondition, jobsutils.ConditionUpdateParams{
+				Status:     apipb.CONDITION_STATUS_TRUE,
+				Generation: cluster.Generation,
+				Reason:     "ClusterReady",
+			}) {
+				changed = true
+			}
+		}
+		// A cluster that was waiting for admission is admitted now. Only
+		// flip an existing Queued condition: clusters that were never
+		// suspended should not grow one.
+		for _, cond := range cluster.Status.StatusConditions {
+			if cond.GetType() == QueuedCondition && cond.GetStatus() == apipb.CONDITION_STATUS_TRUE {
+				jobsutils.UpdateCondition(cond, jobsutils.ConditionUpdateParams{
+					Status:     apipb.CONDITION_STATUS_FALSE,
+					Generation: cluster.Generation,
+					Reason:     "ClusterAdmitted",
+				})
+				changed = true
+			}
+		}
+	case v2pb.RAY_CLUSTER_STATE_FAILED:
+		if setCondition(cluster, SucceededCondition, jobsutils.ConditionUpdateParams{
+			Status:     apipb.CONDITION_STATUS_FALSE,
+			Generation: cluster.Generation,
+			Reason:     reasonOr(reason, "ClusterFailed"),
+		}) {
+			changed = true
+		}
+	case v2pb.RAY_CLUSTER_STATE_UNHEALTHY:
+		if setCondition(cluster, SucceededCondition, jobsutils.ConditionUpdateParams{
+			Status:     apipb.CONDITION_STATUS_FALSE,
+			Generation: cluster.Generation,
+			Reason:     reasonOr(reason, "ClusterUnhealthy"),
+		}) {
+			changed = true
+		}
+	case v2pb.RAY_CLUSTER_STATE_UNKNOWN:
+		// If the cluster is in an unknown state but we have already recorded
+		// terminal pod errors, treat it as failed to trigger termination.
+		if jobsutils.HasTerminalPodErrors(cluster.Status.PodErrors) {
+			cluster.Status.State = v2pb.RAY_CLUSTER_STATE_FAILED
+			if setCondition(cluster, SucceededCondition, jobsutils.ConditionUpdateParams{
+				Status:     apipb.CONDITION_STATUS_FALSE,
+				Generation: cluster.Generation,
+				Reason:     reasonOr(reason, "ClusterFailedWithPodErrors"),
+			}) {
+				changed = true
+			}
+		}
+	case v2pb.RAY_CLUSTER_STATE_SUSPENDED:
+		// Suspension (RayCluster.spec.suspend, e.g. Kueue admission
+		// gating) is non-terminal: pods are intentionally absent until
+		// the cluster is unsuspended, so keep monitoring without
+		// touching the Succeeded condition. Deliberately no
+		// terminal-pod-error check here — while suspended, pod-level
+		// signals carry no meaning. Mirrors #1700's controller handling.
+		// Surface the wait as a Queued condition so callers can tell
+		// "held for admission" apart from "launching".
+		if setCondition(cluster, QueuedCondition, jobsutils.ConditionUpdateParams{
+			Status:     apipb.CONDITION_STATUS_TRUE,
+			Generation: cluster.Generation,
+			Reason:     "AwaitingAdmission",
+			Message:    reason,
+		}) {
+			changed = true
+		}
+	}
+	return changed || cluster.Status.State != oldState
+}
+
+// setCondition sets the condType condition on cluster unless it already says
+// the same thing, and reports whether it changed it. Leaving an equal condition
+// alone keeps its timestamp, which is what makes re-applying an observation a
+// no-op.
+func setCondition(cluster *v2pb.RayCluster, condType string, p jobsutils.ConditionUpdateParams) bool {
+	for _, cond := range cluster.Status.StatusConditions {
+		if cond.GetType() == condType && cond.GetStatus() == p.Status && cond.GetReason() == p.Reason &&
+			cond.GetMessage() == p.Message && cond.GetObservedGeneration() == p.Generation {
+			return false
+		}
+	}
+	jobsutils.UpdateCondition(jobsutils.GetCondition(&cluster.Status.StatusConditions, condType, cluster.Generation), p)
+	return true
 }
 
 // reasonOr returns the mapper-derived reason, falling back to a generic one when
@@ -609,11 +654,12 @@ func reasonOr(reason, fallback string) string {
 // also keeps the mutation idempotent under UpdateStatusWithRetries, which
 // re-runs its closure on conflict. The list is bounded by two errors per
 // expected pod; at the bound, existing entries can still be refreshed but new
-// ones are dropped.
-func mergePodErrors(cluster *v2pb.RayCluster, podErrors []*v2pb.PodErrors) {
+// ones are dropped. It reports whether the list changed.
+func mergePodErrors(cluster *v2pb.RayCluster, podErrors []*v2pb.PodErrors) bool {
 	if len(podErrors) == 0 {
-		return
+		return false
 	}
+	changed := false
 	maxPodErrorLength := 2 * (1 + jobsutils.NumRayWorkers(cluster))
 	indexByName := make(map[string]int, len(cluster.Status.PodErrors))
 	for i, podError := range cluster.Status.PodErrors {
@@ -631,15 +677,20 @@ func mergePodErrors(cluster *v2pb.RayCluster, podErrors []*v2pb.PodErrors) {
 			if jobsutils.IsPostMortemPodError(podError) && !jobsutils.IsPostMortemPodError(cluster.Status.PodErrors[i]) {
 				continue
 			}
-			cluster.Status.PodErrors[i] = podError
+			if *cluster.Status.PodErrors[i] != *podError {
+				cluster.Status.PodErrors[i] = podError
+				changed = true
+			}
 			continue
 		}
 		if len(cluster.Status.PodErrors) >= maxPodErrorLength {
-			return
+			return changed
 		}
 		indexByName[podError.GetName()] = len(cluster.Status.PodErrors)
 		cluster.Status.PodErrors = append(cluster.Status.PodErrors, podError)
+		changed = true
 	}
+	return changed
 }
 
 // Helper functions for extracting head pod information.
