@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/golang/mock/gomock"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/uber-go/tally"
@@ -31,6 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/config"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
+	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	"github.com/michelangelo-ai/michelangelo/go/api/handler/handlermocks"
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
@@ -1251,6 +1253,45 @@ func TestReconcilerReconcile_KillConvergesToImmutable(t *testing.T) {
 	assert.Equal(t, v2pb.RAY_CLUSTER_STATE_TERMINATED, afterSecond.Status.State)
 	assert.True(t, utils.IsImmutable(&afterSecond),
 		"cluster should be marked immutable once fully terminated")
+}
+
+// TestSafetyNetDoesNotRewindANewerWrite: the safety net reads the cluster before
+// it asks the compute cluster, so a watcher handler can write a newer
+// observation in between. Here KubeRay reports the cluster ready while
+// GetJobClusterStatus's answer, from just before, still says it is coming up.
+// Written over the handler's, that answer would take a READY cluster back to
+// UNKNOWN. The conflict is covered in both shapes: the API handler's gRPC
+// FailedPrecondition, and a Kubernetes conflict as it is.
+func TestSafetyNetDoesNotRewindANewerWrite(t *testing.T) {
+	handlers := []struct {
+		name       string
+		newHandler func(client.Client) api.Handler
+	}{
+		{name: "api handler", newHandler: apiHandler.NewFakeAPIHandler},
+		{name: "kubernetes errors", newHandler: func(c client.Client) api.Handler { return &mockAPIHandler{Client: c} }},
+	}
+	for _, h := range handlers {
+		t.Run(h.name, func(t *testing.T) {
+			r := setupWatcherTest(t, provisioningCluster())
+			store := r.Handler.(*mockAPIHandler).Client
+			r.Handler = h.newHandler(store)
+			comingUp := observedAs(t, r, newKubeRayCluster(rayClusterName, ""))
+			withSafetyNet(t, r).EXPECT().GetJobClusterStatus(gomock.Any(), gomock.Any(), gomock.Any()).
+				DoAndReturn(func(context.Context, runtime.Object, *v2pb.Cluster) (*matypes.JobClusterStatus, error) {
+					r.rayClusterEventHandler(newKubeRayCluster(rayClusterName, rayv1.Ready))
+					return comingUp, nil
+				})
+
+			res := reconcile(t, r)
+
+			assert.Equal(t, _safetyNetPeriod, res.RequeueAfter, "the cluster should still be looked at again")
+			var updated v2pb.RayCluster
+			require.NoError(t, store.Get(context.Background(),
+				types.NamespacedName{Name: rayClusterName, Namespace: testNamespace}, &updated))
+			assert.Equal(t, v2pb.RAY_CLUSTER_STATE_READY, updated.Status.State,
+				"an observation older than the cluster's last write must not be written over it")
+		})
+	}
 }
 
 // capturingManager is a manager that is never started; it records the runnables

@@ -126,6 +126,11 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{}, nil
 	}
 
+	// The condition lookups below add the conditions they do not find to
+	// rayCluster as they go. The safety net writes onto the cluster as read, so
+	// keep a copy of that.
+	asRead := rayCluster.DeepCopy()
+
 	// Check for termination
 	if r.shouldTerminateCluster(&rayCluster) {
 		logger.Info("processing cluster termination")
@@ -246,14 +251,24 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{RequeueAfter: _safetyNetPeriod}, nil
 	}
 
-	if applyClusterObservation(rayCluster.DeepCopy(), clusterStatus) {
-		if err := jobsutils.UpdateStatusWithRetries(
-			ctx, r, &rayCluster,
-			func(obj client.Object) {
-				applyClusterObservation(obj.(*v2pb.RayCluster), clusterStatus)
-			},
-			&metav1.UpdateOptions{FieldManager: "reconcileClusterStatus"},
-		); err != nil {
+	// The observation was made after the cluster was read, so a watcher handler
+	// can have written a newer one in between: KubeRay reported the cluster
+	// ready, say, while GetJobClusterStatus's answer from just before still says
+	// it is coming up. Applied to a fresh read, that answer would take the
+	// cluster back to where it found it. So it is written once, onto the cluster
+	// as read. A conflict means the cluster has moved on, and the write that
+	// moved it has enqueued another pass, which observes afresh.
+	if applyClusterObservation(asRead, clusterStatus) {
+		if err := r.UpdateStatus(ctx, asRead,
+			&metav1.UpdateOptions{FieldManager: "reconcileClusterStatus"}); err != nil {
+			// The API handler reports a conflict as gRPC FailedPrecondition, which
+			// IsRetriableError matches; IsConflict covers an api.Handler that
+			// returns Kubernetes errors as they are.
+			if apiErrors.IsConflict(err) || jobsutils.IsRetriableError(err) {
+				logger.V(1).Info("ray cluster changed since it was read, not writing the older observation",
+					"error", err.Error())
+				return ctrl.Result{RequeueAfter: _safetyNetPeriod}, nil
+			}
 			logger.Error(err, "failed to update ray cluster status")
 			return res, fmt.Errorf("update ray cluster status for %q: %w", req.NamespacedName, err)
 		}
