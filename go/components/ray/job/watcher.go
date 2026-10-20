@@ -32,10 +32,16 @@ const (
 
 // isRetriableWriteError reports whether a handler's status write is worth
 // retrying: a conflict with a concurrent writer, or a transient API server
-// error. The delete path in particular gets a single event, so a dropped write
-// is left to the reconciler's slow safety net.
+// error -- throttling, an unavailable or timed-out server, or an etcd timeout.
+// The delete path in particular gets a single event, so a dropped write is left
+// to the reconciler's slow safety net.
 func isRetriableWriteError(err error) bool {
-	return apiErrors.IsConflict(err) || jobsutils.IsRetriableError(err)
+	return apiErrors.IsConflict(err) ||
+		apiErrors.IsTooManyRequests(err) ||
+		apiErrors.IsServiceUnavailable(err) ||
+		apiErrors.IsServerTimeout(err) ||
+		apiErrors.IsTimeout(err) ||
+		jobsutils.IsRetriableError(err)
 }
 
 // getFederatedWatcher creates a federated watcher for the RayJob controller.

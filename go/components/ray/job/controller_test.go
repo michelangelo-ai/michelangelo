@@ -2163,6 +2163,35 @@ func TestJobWatcherHandlersRetryTransientErrors(t *testing.T) {
 	}
 }
 
+// TestIsRetriableWriteError pins which failed handler writes are retried. A
+// handler has no requeue, so a transient failure it gives up on loses its
+// event: until the next re-sync for an update, until the safety net for a
+// delete.
+func TestIsRetriableWriteError(t *testing.T) {
+	rayJobs := schema.GroupResource{Group: "michelangelo.api", Resource: "rayjobs"}
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{name: "conflict", err: apiErrors.NewConflict(rayJobs, rayJobName, fmt.Errorf("the object has been modified")), want: true},
+		{name: "throttled", err: apiErrors.NewTooManyRequests("too many requests", 1), want: true},
+		{name: "server unavailable", err: apiErrors.NewServiceUnavailable("the server is shutting down"), want: true},
+		{name: "server timeout", err: apiErrors.NewServerTimeout(rayJobs, "update", 1), want: true},
+		{name: "gateway timeout", err: apiErrors.NewTimeoutError("the request did not complete in time", 1), want: true},
+		{name: "etcd timeout", err: apiErrors.NewInternalError(fmt.Errorf("etcdserver: request timed out")), want: true},
+		{name: "not found", err: apiErrors.NewNotFound(rayJobs, rayJobName), want: false},
+		{name: "invalid", err: apiErrors.NewBadRequest("the status is invalid"), want: false},
+		{name: "forbidden", err: apiErrors.NewForbidden(rayJobs, rayJobName, fmt.Errorf("access denied")), want: false},
+		{name: "rejected", err: fmt.Errorf("admission webhook denied the request"), want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, isRetriableWriteError(tt.err))
+		})
+	}
+}
+
 // TestRayJobConvergesAfterDeleteHandlerExhaustsRetries covers a delete whose
 // status write keeps conflicting -- e.g. against a stale cache -- until the
 // handler gives up. The handler gets no second event, so the job must still
