@@ -1413,6 +1413,38 @@ func TestRayClusterDeleteEventHandler_Tombstone(t *testing.T) {
 	r.rayClusterDeleteEventHandler(tombstone)
 }
 
+// TestRayClusterDeleteEventHandler_KillBegunAfterReadOwnsOutcome: an external
+// delete can race the reconciler starting a kill, so the read the handler made
+// its decision on may predate Killing=TRUE. The kill then owns the outcome --
+// cleanupCluster finds the object gone and records it -- so the external-delete
+// write must not land on the object as it is now.
+func TestRayClusterDeleteEventHandler_KillBegunAfterReadOwnsOutcome(t *testing.T) {
+	stored := terminatedCluster()
+	stored.Status.State = v2pb.RAY_CLUSTER_STATE_READY
+	stored.Status.StatusConditions = []*apipb.Condition{
+		{Type: LaunchedCondition, Status: apipb.CONDITION_STATUS_TRUE},
+		{Type: SucceededCondition, Status: apipb.CONDITION_STATUS_TRUE, Reason: "completed"},
+		{Type: KillingCondition, Status: apipb.CONDITION_STATUS_TRUE},
+	}
+	stale := stored.DeepCopy()
+	stale.Status.StatusConditions = []*apipb.Condition{
+		{Type: LaunchedCondition, Status: apipb.CONDITION_STATUS_TRUE},
+	}
+	r, _ := setupWatcherTestWithStaleRead(t, stored, stale)
+
+	r.rayClusterDeleteEventHandler(newKubeRayCluster(rayClusterName, rayv1.Ready))
+
+	updated := getUpdatedCluster(t, r)
+	assert.NotEqual(t, v2pb.RAY_CLUSTER_STATE_FAILED, updated.Status.State,
+		"a kill that has begun must not be recorded as an external delete")
+	succeededCond := findCondition(updated.Status.StatusConditions, SucceededCondition)
+	require.NotNil(t, succeededCond)
+	assert.Equal(t, "completed", succeededCond.Reason)
+	assert.Nil(t, findCondition(updated.Status.StatusConditions, KilledCondition),
+		"cleanupCluster records the kill it started")
+	assert.False(t, utils.IsImmutable(&updated))
+}
+
 func TestRayClusterAddEventHandler(t *testing.T) {
 	globalCluster := &v2pb.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},

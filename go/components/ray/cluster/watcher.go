@@ -578,9 +578,22 @@ func (r *Reconciler) rayClusterDeleteEventHandler(obj interface{}) {
 		// compute cluster. Killing=FALSE matters beyond bookkeeping:
 		// isClusterFullyTerminal requires it, and cleanupCluster would otherwise
 		// issue a pointless DeleteJobCluster.
+		//
+		// The read above can predate a kill the reconciler has begun since, so the
+		// check is repeated on the object being written. A kill that has begun owns
+		// the outcome: cleanupCluster finds the KubeRay object gone and records it.
+		recordExternalDelete := markFailedUpdate(constants.ClusterKilled,
+			fmt.Sprintf("ray cluster was deleted externally, state: %+v", local.Status.State))
+		killBegun := false
 		if err := r.updateStatusFromHandler(ctx, &globalCluster,
-			markFailedUpdate(constants.ClusterKilled,
-				fmt.Sprintf("ray cluster was deleted externally, state: %+v", local.Status.State)),
+			func(obj client.Object) {
+				cluster := obj.(*v2pb.RayCluster)
+				killBegun = conditionStatus(cluster, KillingCondition) == apipb.CONDITION_STATUS_TRUE ||
+					conditionStatus(cluster, KilledCondition) == apipb.CONDITION_STATUS_TRUE
+				if !killBegun {
+					recordExternalDelete(cluster)
+				}
+			},
 			"rayClusterDeleteEventHandler",
 		); err != nil {
 			log.Error(err, "failed to update status on external delete")
@@ -588,6 +601,10 @@ func (r *Reconciler) rayClusterDeleteEventHandler(obj interface{}) {
 		}
 		if err := r.markImmutableIfTerminal(ctx, &globalCluster); err != nil {
 			log.Error(err, "failed to mark cluster immutable after external delete")
+			return
+		}
+		if killBegun {
+			log.Info("ray cluster kill began before the external delete was recorded, leaving the outcome to it")
 			return
 		}
 		log.Info("cluster externally deleted, marked as killed")
