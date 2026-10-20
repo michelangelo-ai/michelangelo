@@ -68,7 +68,8 @@ type Reconciler struct {
 // NewReconciler constructs a Reconciler with required dependencies.
 //
 // This provides a stable construction API for downstream users so they do not
-// need to rely on reflection to set unexported fields.
+// need to rely on reflection to set unexported fields. A nil metricsScope
+// disables metrics; a nil mapper is rejected by Register.
 func NewReconciler(
 	logger logr.Logger,
 	apiHandlerFactory apiHandler.Factory,
@@ -79,6 +80,9 @@ func NewReconciler(
 	mapper matypes.Mapper,
 	metricsScope tally.Scope,
 ) *Reconciler {
+	if metricsScope == nil {
+		metricsScope = tally.NoopScope
+	}
 	return &Reconciler{
 		logger:            logger,
 		apiHandlerFactory: apiHandlerFactory,
@@ -262,6 +266,11 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 // Register adds the Reconciler to the controller manager
 func (r *Reconciler) Register(mgr ctrl.Manager) error {
+	// The watcher maps every KubeRay event through the mapper. Without one each
+	// event would panic in an informer goroutine, so refuse to start instead.
+	if r.mapper == nil {
+		return errors.New("ray cluster controller: a mapper is required")
+	}
 	r.logger = mgr.GetLogger().WithName("raycluster")
 	handler, err := r.apiHandlerFactory.GetAPIHandler(mgr.GetClient())
 	if err != nil {

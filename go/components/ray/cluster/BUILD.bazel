@@ -58,6 +58,7 @@ go_test(
         "//go/base/config:go_default_library",
         "//go/base/env:go_default_library",
         "//go/components/controllerutil:go_default_library",
+        "//go/components/jobs/client:go_default_library",
         "//go/components/jobs/client/clientmocks:go_default_library",
         "//go/components/jobs/client/k8sengine:go_default_library",
         "//go/components/jobs/cluster:go_default_library",

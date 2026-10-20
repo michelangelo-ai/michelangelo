@@ -83,7 +83,7 @@ func (r *Reconciler) getFederatedWatcher() watch.FederatedWatcher {
 				ObjType:   &rayv1.RayCluster{},
 			},
 		},
-		Scope: r.metricsScope,
+		Scope: r.watcherScope(),
 	})
 }
 

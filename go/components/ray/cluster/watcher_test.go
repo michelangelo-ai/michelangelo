@@ -3,10 +3,14 @@ package cluster
 import (
 	"context"
 	"errors"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/go-logr/logr"
 	"github.com/go-logr/zapr"
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/uber-go/tally"
@@ -32,6 +36,8 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	maconfig "github.com/michelangelo-ai/michelangelo/go/base/config"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
+	jobsclient "github.com/michelangelo-ai/michelangelo/go/components/jobs/client"
+	"github.com/michelangelo-ai/michelangelo/go/components/jobs/client/clientmocks"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/client/k8sengine"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/constants"
 	matypes "github.com/michelangelo-ai/michelangelo/go/components/jobs/common/types"
@@ -2099,4 +2105,66 @@ func TestWatcherHandlersIgnoreMissingGlobalCluster(t *testing.T) {
 				"losing the race against teardown is routine and must not be logged as an error")
 		})
 	}
+}
+
+// watchesRequestedBy runs r's federated watcher against one ready compute
+// cluster until it asks that cluster for its watches, and returns what it
+// asked for. The request is refused, so no informer is started, and the
+// watcher has stopped by the time this returns.
+func watchesRequestedBy(t *testing.T, r *Reconciler) []*jobsclient.WatcherParams {
+	t.Helper()
+	federatedClient := clientmocks.NewMockFederatedClient(gomock.NewController(t))
+	clusterCache := newMockClusterCache()
+	clusterCache.addCluster(assignedCluster, &v2pb.Cluster{ObjectMeta: metav1.ObjectMeta{Name: assignedCluster}})
+	r.federatedClient, r.clusterCache = federatedClient, clusterCache
+
+	requested := make(chan []*jobsclient.WatcherParams, 1)
+	federatedClient.EXPECT().Watcher(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(params []*jobsclient.WatcherParams, _ *v2pb.Cluster) ([]*jobsclient.ResourceWatcher, error) {
+			select {
+			case requested <- params:
+			default: // a later sync asking again
+			}
+			return nil, errors.New("compute cluster unreachable")
+		}).
+		AnyTimes()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	stopped := make(chan struct{})
+	go func() {
+		defer close(stopped)
+		r.getFederatedWatcher().Start(ctx)
+	}()
+	defer func() {
+		cancel()
+		<-stopped
+	}()
+
+	select {
+	case params := <-requested:
+		return params
+	case <-time.After(5 * time.Second):
+		t.Fatal("the watcher should ask the ready compute cluster for its watches")
+		return nil
+	}
+}
+
+// TestFederatedWatcherMetricsAreNamespaced checks that the federated watcher
+// reports under the controller's raycluster scope, so its metrics stay apart
+// from the RayJob controller's watcher.
+func TestFederatedWatcherMetricsAreNamespaced(t *testing.T) {
+	scope := tally.NewTestScope("test", nil)
+	watchesRequestedBy(t, &Reconciler{logger: logr.Discard(), metricsScope: scope})
+
+	snapshot := scope.Snapshot()
+	var names []string
+	for name := range snapshot.Counters() {
+		names = append(names, name)
+	}
+	for name := range snapshot.Timers() {
+		names = append(names, name)
+	}
+	assert.True(t, slices.ContainsFunc(names, func(name string) bool {
+		return strings.HasPrefix(name, "test.raycluster.watcher.")
+	}), "the watcher's metrics should be under the raycluster scope, got %v", names)
 }

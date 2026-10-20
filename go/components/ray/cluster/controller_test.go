@@ -1316,3 +1316,30 @@ func TestRegisterRunsWatcherOnLeader(t *testing.T) {
 		t.Fatal("the watcher should stop when the manager cancels its context")
 	}
 }
+
+// TestRegisterRequiresMapper checks that a Reconciler without a mapper fails at
+// startup rather than on the first KubeRay event.
+func TestRegisterRequiresMapper(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	r := NewReconciler(logr.Discard(), handlermocks.NewMockFactory(mockCtrl), env.Context{}, &mockSchedulerQueue{},
+		clientmocks.NewMockFederatedClient(mockCtrl), newMockClusterCache(), nil, tally.NoopScope)
+	mgr := newCapturingManager(t)
+
+	assert.Error(t, r.Register(mgr))
+	assert.Empty(t, mgr.runnables, "nothing should be started for a reconciler that cannot run")
+}
+
+// TestNewReconcilerToleratesNilScope checks that a nil metrics scope only
+// disables metrics.
+func TestNewReconcilerToleratesNilScope(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	factory := handlermocks.NewMockFactory(mockCtrl)
+	factory.EXPECT().GetAPIHandler(gomock.Any()).Return(&mockAPIHandler{}, nil)
+	r := NewReconciler(logr.Discard(), factory, env.Context{}, &mockSchedulerQueue{},
+		clientmocks.NewMockFederatedClient(mockCtrl), newMockClusterCache(), newTestMapper(), nil)
+	mgr := newCapturingManager(t)
+
+	assert.NotPanics(t, func() {
+		assert.NoError(t, r.Register(mgr))
+	})
+}
