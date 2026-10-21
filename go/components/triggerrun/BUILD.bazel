@@ -4,6 +4,7 @@ go_library(
     name = "go_default_library",
     srcs = [
         "backfill_trigger.go",
+        "backfill_window.go",
         "children.go",
         "controller.go",
         "cron_trigger.go",
@@ -45,6 +46,7 @@ go_test(
     name = "go_default_test",
     srcs = [
         "backfill_trigger_test.go",
+        "backfill_window_test.go",
         "cascade_test.go",
         "children_test.go",
         "controller_test.go",

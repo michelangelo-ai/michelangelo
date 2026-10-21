@@ -26,7 +26,7 @@ func testScheme(t *testing.T) *runtime.Scheme {
 	return scheme
 }
 
-func TestBeforeCreateStampsSourcePipelineTypeLabel(t *testing.T) {
+func TestBeforeCreateStampsSourcePipelineLabels(t *testing.T) {
 	mc := gomock.NewController(t)
 	defer mc.Finish()
 
@@ -36,7 +36,10 @@ func TestBeforeCreateStampsSourcePipelineTypeLabel(t *testing.T) {
 		DoAndReturn(func(_ context.Context, _, _ string, _ *metav1.GetOptions, obj *v2.Pipeline) error {
 			obj.Name = "test-pipeline"
 			obj.Namespace = "test-ns"
-			obj.Spec = v2.PipelineSpec{Type: v2.PIPELINE_TYPE_TRAIN}
+			obj.Spec = v2.PipelineSpec{
+				Type:     v2.PIPELINE_TYPE_TRAIN,
+				Manifest: &v2.PipelineManifest{Type: v2.PIPELINE_MANIFEST_TYPE_YAML},
+			}
 			return nil
 		})
 
@@ -45,6 +48,7 @@ func TestBeforeCreateStampsSourcePipelineTypeLabel(t *testing.T) {
 		TriggerRun: &v2.TriggerRun{
 			ObjectMeta: metav1.ObjectMeta{Name: "run", Namespace: "test-ns"},
 			Spec: v2.TriggerRunSpec{
+				Trigger:  cronSpec("0 * * * *"),
 				Pipeline: &api.ResourceIdentifier{Name: "test-pipeline"},
 			},
 		},
@@ -53,6 +57,8 @@ func TestBeforeCreateStampsSourcePipelineTypeLabel(t *testing.T) {
 	require.NoError(t, h.BeforeCreate(context.Background(), request))
 	require.Equal(t, "PIPELINE_TYPE_TRAIN",
 		request.TriggerRun.GetLabels()[mlapi.SourcePipelineTypeLabelName])
+	require.Equal(t, "PIPELINE_MANIFEST_TYPE_YAML",
+		request.TriggerRun.GetLabels()[mlapi.SourcePipelineManifestTypeLabelName])
 }
 
 func TestBeforeCreatePipelineNotFoundDoesNotFailCreation(t *testing.T) {
@@ -69,6 +75,7 @@ func TestBeforeCreatePipelineNotFoundDoesNotFailCreation(t *testing.T) {
 		TriggerRun: &v2.TriggerRun{
 			ObjectMeta: metav1.ObjectMeta{Name: "run", Namespace: "test-ns"},
 			Spec: v2.TriggerRunSpec{
+				Trigger:  cronSpec("0 * * * *"),
 				Pipeline: &api.ResourceIdentifier{Name: "missing-pipeline"},
 			},
 		},
@@ -92,6 +99,7 @@ func TestBeforeCreatePipelineLookupErrorDoesNotFailCreation(t *testing.T) {
 		TriggerRun: &v2.TriggerRun{
 			ObjectMeta: metav1.ObjectMeta{Name: "run", Namespace: "test-ns"},
 			Spec: v2.TriggerRunSpec{
+				Trigger:  cronSpec("0 * * * *"),
 				Pipeline: &api.ResourceIdentifier{Name: "test-pipeline"},
 			},
 		},
@@ -112,7 +120,7 @@ func TestBeforeCreateNoPipelineRefIsNoop(t *testing.T) {
 	request := &v2.CreateTriggerRunRequest{
 		TriggerRun: &v2.TriggerRun{
 			ObjectMeta: metav1.ObjectMeta{Name: "run", Namespace: "test-ns"},
-			Spec:       v2.TriggerRunSpec{},
+			Spec:       v2.TriggerRunSpec{Trigger: cronSpec("0 * * * *")},
 		},
 	}
 
@@ -130,7 +138,7 @@ func TestBeforeCreateMissingEnvironmentLabelDefaulted(t *testing.T) {
 	request := &v2.CreateTriggerRunRequest{
 		TriggerRun: &v2.TriggerRun{
 			ObjectMeta: metav1.ObjectMeta{Name: "run", Namespace: "test-ns"},
-			Spec:       v2.TriggerRunSpec{},
+			Spec:       v2.TriggerRunSpec{Trigger: cronSpec("0 * * * *")},
 		},
 	}
 
@@ -148,7 +156,7 @@ func TestBeforeCreateMissingEnvironmentLabelDefaultsToUnspecified(t *testing.T) 
 	request := &v2.CreateTriggerRunRequest{
 		TriggerRun: &v2.TriggerRun{
 			ObjectMeta: metav1.ObjectMeta{Name: "run", Namespace: "test-ns"},
-			Spec:       v2.TriggerRunSpec{},
+			Spec:       v2.TriggerRunSpec{Trigger: cronSpec("0 * * * *")},
 		},
 	}
 
@@ -170,7 +178,7 @@ func TestBeforeCreateExistingEnvironmentLabelNotOverwritten(t *testing.T) {
 				Namespace: "test-ns",
 				Labels:    map[string]string{mlapi.EnvironmentLabel: "production"},
 			},
-			Spec: v2.TriggerRunSpec{},
+			Spec: v2.TriggerRunSpec{Trigger: cronSpec("0 * * * *")},
 		},
 	}
 
@@ -189,6 +197,7 @@ func TestBeforeCreateRevisionPinnedMissingEnvironmentLabelDefaulted(t *testing.T
 		TriggerRun: &v2.TriggerRun{
 			ObjectMeta: metav1.ObjectMeta{Name: "run", Namespace: "test-ns"},
 			Spec: v2.TriggerRunSpec{
+				Trigger:  cronSpec("0 * * * *"),
 				Revision: &api.ResourceIdentifier{Name: "test-revision"},
 			},
 		},

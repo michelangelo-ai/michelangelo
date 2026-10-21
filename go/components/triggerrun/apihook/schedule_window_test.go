@@ -140,6 +140,35 @@ func TestBeforeCreateScheduleWindowRules(t *testing.T) {
 	}
 }
 
+// A timestamp that cannot be converted is a client error on either side of the window,
+// and the error names the field.
+func TestScheduleWindowInvalidTimestamps(t *testing.T) {
+	invalid := &pbtypes.Timestamp{Seconds: 0, Nanos: 1_000_000_000} // nanos out of range
+
+	t.Run("start_timestamp", func(t *testing.T) {
+		err := apiHook{}.BeforeCreate(context.Background(), &v2.CreateTriggerRunRequest{TriggerRun: &v2.TriggerRun{
+			ObjectMeta: metav1.ObjectMeta{Name: "run", Namespace: "test-ns"},
+			Spec:       v2.TriggerRunSpec{Trigger: cronSpec("0 * * * *"), StartTimestamp: invalid},
+		}})
+		require.Equal(t, codes.InvalidArgument, status.Code(err))
+		require.ErrorContains(t, err, "invalid start_timestamp")
+	})
+
+	t.Run("end_timestamp", func(t *testing.T) {
+		err := apiHook{}.BeforeCreate(context.Background(), &v2.CreateTriggerRunRequest{TriggerRun: &v2.TriggerRun{
+			ObjectMeta: metav1.ObjectMeta{Name: "run", Namespace: "test-ns"},
+			Spec:       v2.TriggerRunSpec{Trigger: cronSpec("0 * * * *"), EndTimestamp: invalid},
+		}})
+		require.Equal(t, codes.InvalidArgument, status.Code(err))
+		require.ErrorContains(t, err, "invalid end_timestamp")
+	})
+
+	t.Run("past-window rule reports the conversion error too", func(t *testing.T) {
+		err := validateBackfillWindowIsPast(&v2.TriggerRunSpec{StartTimestamp: invalid}, time.Now())
+		require.Equal(t, codes.InvalidArgument, status.Code(err))
+	})
+}
+
 // An update must be able to reach an object that already exists, however the clock has
 // moved since it was created: the past-window rule is creation-only, while the
 // clock-independent rules still apply.

@@ -17,14 +17,15 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
-// RegisterTriggerRunAPIHook registers the API hook that validates the schedule
-// window on create and update, defaults the environment label on TriggerRun
-// creation, stamps the owning Pipeline as the controller ownerReference, and
-// stamps the owning Pipeline's type as the michelangelo/SourcePipelineType
-// label. The Pipeline-related stamps are best-effort: if the owning Pipeline
-// can't be resolved, creation proceeds without them. defaultEnv is the
-// operator-configured default (api.UnspecifiedEnvironment is used instead when
-// the operator has configured none), mirroring RegisterPipelineRunAPIHook.
+// RegisterTriggerRunAPIHook registers the API hook that validates and defaults
+// the TriggerRun spec on create and update, refuses to delete a TriggerRun that
+// is still live, defaults the environment label on creation, stamps the owning
+// Pipeline as the controller ownerReference, and stamps the owning Pipeline's
+// type and manifest type as labels. The Pipeline-related stamps are
+// best-effort: if the owning Pipeline can't be resolved, creation proceeds
+// without them. defaultEnv is the operator-configured default
+// (api.UnspecifiedEnvironment is used instead when the operator has configured
+// none), mirroring RegisterPipelineRunAPIHook.
 func RegisterTriggerRunAPIHook(logger *zap.Logger, apiHandler api.Handler, scheme *runtime.Scheme, defaultEnv string) {
 	v2.RegisterTriggerRunAPIHook(apiHook{
 		logger:     logger,
@@ -43,10 +44,10 @@ type apiHook struct {
 }
 
 func (a apiHook) BeforeCreate(ctx context.Context, request *v2.CreateTriggerRunRequest) error {
-	if err := validateScheduleWindow(&request.TriggerRun.Spec); err != nil {
+	if err := validateSpec(request.TriggerRun); err != nil {
 		return err
 	}
-	if err := validateBackfillWindowIsPast(&request.TriggerRun.Spec, time.Now()); err != nil {
+	if err := validateOnCreate(request.TriggerRun, time.Now()); err != nil {
 		return err
 	}
 
@@ -60,13 +61,9 @@ func (a apiHook) BeforeCreate(ctx context.Context, request *v2.CreateTriggerRunR
 	if pipelineRef == nil || pipelineRef.GetName() == "" {
 		return nil
 	}
-	namespace := pipelineRef.GetNamespace()
-	if namespace == "" {
-		namespace = request.TriggerRun.GetNamespace()
-	}
-
+	// pipelineRef.Namespace was defaulted to the TriggerRun's namespace by validateSpec.
 	pipeline := &v2.Pipeline{}
-	if err := a.apiHandler.Get(ctx, namespace, pipelineRef.GetName(), &metav1.GetOptions{}, pipeline); err != nil {
+	if err := a.apiHandler.Get(ctx, pipelineRef.GetNamespace(), pipelineRef.GetName(), &metav1.GetOptions{}, pipeline); err != nil {
 		if utils.IsNotFoundError(err) {
 			return nil
 		}
@@ -78,16 +75,24 @@ func (a apiHook) BeforeCreate(ctx context.Context, request *v2.CreateTriggerRunR
 	if pipelineType := pipeline.Spec.GetType(); pipelineType != v2.PIPELINE_TYPE_INVALID {
 		api.StampSourcePipelineTypeLabelOnCreate(request.TriggerRun, pipelineType.String())
 	}
+	// The worker copies this label onto every PipelineRun the trigger starts, and
+	// notifications read it from there.
+	if manifestType := pipeline.Spec.GetManifest().GetType(); manifestType != v2.PIPELINE_MANIFEST_TYPE_INVALID {
+		request.TriggerRun.ObjectMeta.Labels[api.SourcePipelineManifestTypeLabelName] = manifestType.String()
+	}
 
 	return cascadedelete.StampOwnerRefOnCreate(ctx, a.logger, a.scheme, request.TriggerRun, pipeline)
 }
 
-// BeforeUpdate re-checks the structural window rules only. The "backfill window must
-// be in the past" rule is creation-only: an update usually carries an action such as
-// KILL for an object that already exists, and refusing it because the clock moved
-// would leave exactly the objects that most need killing stuck.
+// BeforeUpdate re-applies the defaults and the structural rules (validateSpec)
+// and nothing else: the creation-only rules are skipped so an object that already
+// exists can always be updated, and a kill skips the structural rules too, so an
+// object created before a rule existed can always be stopped.
 func (a apiHook) BeforeUpdate(_ context.Context, request *v2.UpdateTriggerRunRequest) error {
-	return validateScheduleWindow(&request.TriggerRun.Spec)
+	if isKillRequest(&request.TriggerRun.Spec) {
+		return nil
+	}
+	return validateSpec(request.TriggerRun)
 }
 
 // defaultEnvironment returns the configured default, or

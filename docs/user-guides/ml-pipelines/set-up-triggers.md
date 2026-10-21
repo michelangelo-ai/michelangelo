@@ -107,7 +107,7 @@ Here are the commands for managing your trigger runs:
 
 A few things to keep in mind:
 
-- **`kill` vs `delete`:** Use `kill` to stop a running trigger (it sets a kill flag and cleanly terminates the workflow); the trigger stays visible as `KILLED`. Use `delete` to remove the trigger resource entirely; it is removed once its pipeline runs have stopped. Either way, pipeline runs the trigger started that are still pending or running are killed, not deleted, and stay in the run history as `KILLED`. For details, see Cascade Delete in the [Operator Guides](../../operator-guides/cascade-delete.md).
+- **`kill` vs `delete`:** Use `kill` to stop a running trigger (it sets the kill action and cleanly terminates the workflow); the trigger stays visible as `KILLED`, and pipeline runs it started that are still pending or running are killed, not deleted, and stay in the run history as `KILLED`. Use `delete` to remove the trigger resource once it has stopped: the API refuses to delete a trigger that is not `FAILED`, `KILLED` or `SUCCEEDED` (gRPC `FailedPrecondition`), so kill it first. Deleting the owning Pipeline still removes its triggers, running or not, through cascade delete; for details, see Cascade Delete in the [Operator Guides](../../operator-guides/cascade-delete.md).
 - **`kill` will ask for confirmation** before proceeding. Add `--yes` to skip the prompt (useful in scripts).
 
 For the full list of CLI options and flags, see the [CLI reference guide](../reference/cli.md).
@@ -173,7 +173,25 @@ spec:
 
 In this example, the cron schedule is "daily at 9 AM" and the window covers January 1-7. That means the system creates **7 pipeline runs** — one for each day at 9:00 AM. If you also have `parameters_map` entries, the total is multiplied (7 days x 2 parameter sets = 14 runs).
 
-> **Tip:** Make sure your time window actually includes at least one cron cycle. For example, if your cron runs weekly on Saturdays (`"0 9 * * 6"`), a window from Monday to Friday won't generate any runs!
+> **Tip:** Make sure your time window actually includes at least one cron cycle. For example, if your cron runs weekly on Saturdays (`"0 9 * * 6"`), a window from Monday to Friday won't generate any runs, and the API rejects it (see [What the API Rejects](#what-the-api-rejects)).
+
+### What the API Rejects
+
+The API server validates a TriggerRun when it is created and when it is updated, and answers with gRPC `InvalidArgument` and a message naming the field, so a mistake surfaces immediately instead of as a `FAILED` trigger later.
+
+On create and update:
+
+- `spec.trigger` must set `cron_schedule`, and the cron expression must parse (5 fields, or a descriptor such as `@every 1h`). `interval_schedule` and `batch_rerun` are not accepted until a runner is registered for them.
+- `end_timestamp` must be after `start_timestamp`, and `catchup` is not accepted on a `batch_rerun` trigger.
+- An empty `spec.pipeline.namespace` or `spec.revision.namespace` defaults to the TriggerRun's namespace.
+
+On create only:
+
+- A backfill window (both timestamps, no `catchup`) must lie entirely in the past and contain at least one cron occurrence.
+- `auto_flip` cannot be set on a backfill window.
+- `metadata.name` must be a valid label value (at most 63 characters): it is stamped as the `pipelinerun.michelangelo/triggered-by` label on every pipeline run the trigger starts.
+
+A kill (`spec.action: TRIGGER_RUN_ACTION_KILL`) is never refused by these rules, so a trigger created before a rule existed can always be stopped.
 
 ## Advanced Configuration
 
