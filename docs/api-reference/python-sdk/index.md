@@ -89,5 +89,6 @@ This section is generated from source docstrings via `pydoc-markdown`, configure
 pages above by running `bun run docs:api` from the `website/` directory.
 
 `pydoc-markdown` isn't currently declared as a project dependency, so on a fresh
-checkout you may need to install it yourself (`pip install pydoc-markdown`) before
-the script succeeds.
+checkout you need to install it yourself before the script succeeds. Install the
+version the committed pages were generated with, `pip install pydoc-markdown==4.8.2`;
+other versions can produce different output from the same docstrings.

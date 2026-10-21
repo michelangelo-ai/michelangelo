@@ -13,28 +13,32 @@ The context system provides:
 - Integration with Cadence and Temporal workflow engines
 
 Example:
-    Local workflow execution::
+Local workflow execution:
 
-        from michelangelo.uniflow.core.context import create_context
-        from michelangelo.uniflow.core.decorator import workflow
+```python
+from michelangelo.uniflow.core.context import create_context
+from michelangelo.uniflow.core.decorator import workflow
 
-        @workflow()
-        def my_workflow():
-            return "Hello, World!"
+@workflow()
+def my_workflow():
+    return "Hello, World!"
 
-        if __name__ == "__main__":
-            ctx = create_context()
-            ctx.run(my_workflow)
+if __name__ == "__main__":
+    ctx = create_context()
+    ctx.run(my_workflow)
+```
 
-    Remote workflow execution::
+Remote workflow execution:
 
-        # Command line:
-        # python my_workflow.py remote-run \\
-        #     --storage-url s3://bucket/storage \\
-        #     --image my-image:latest
+```python
+# Command line:
+# python my_workflow.py remote-run \
+#     --storage-url s3://bucket/storage \
+#     --image my-image:latest
 
-        ctx = create_context()  # Automatically detects remote-run mode
-        ctx.run(my_workflow)
+ctx = create_context()  # Automatically detects remote-run mode
+ctx.run(my_workflow)
+```
 """
 
 import argparse
@@ -133,18 +137,22 @@ def create_context() -> Context:
         AssertionError: If an unsupported execution target is specified.
 
     Example:
-        Creating context for local execution::
+    Creating context for local execution:
 
-            # python my_workflow.py
-            # or: python my_workflow.py local-run
-            ctx = create_context()
-            assert ctx.is_local_run()
+    ```python
+    # python my_workflow.py
+    # or: python my_workflow.py local-run
+    ctx = create_context()
+    assert ctx.is_local_run()
+    ```
 
-        Creating context for remote execution::
+    Creating context for remote execution:
 
-            # python my_workflow.py remote-run --storage-url s3://... --image ...
-            ctx = create_context()
-            assert not ctx.is_local_run()
+    ```python
+    # python my_workflow.py remote-run --storage-url s3://... --image ...
+    ctx = create_context()
+    assert not ctx.is_local_run()
+    ```
     """
     logging.basicConfig(level=logging.INFO, format=LOGGING_FORMAT, force=True)
 

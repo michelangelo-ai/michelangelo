@@ -1,6 +1,6 @@
 ---
 sidebar_label: task
-title: michelangelo.uniflow.plugins.ray.task
+title: uniflow.plugins.ray.task
 ---
 
 Ray task configuration and execution for Uniflow workflows.
@@ -30,6 +30,9 @@ Unlike SparkTask which uses driver/executor terminology, RayTask uses head/worke
 terminology to describe the cluster nodes. The head node coordinates execution
 while worker nodes perform distributed computation.
 
+All fields default to `None` (unset); the Starlark orchestration function
+supplies defaults for anything you don't specify.
+
 **Attributes**:
 
 - `head_cpu` - Number of CPUs allocated to the head node.
@@ -46,9 +49,7 @@ while worker nodes perform distributed computation.
 - `breakpoint` - If True, enables breakpoint debugging for the task.
 - `runtime_env` - Runtime environment configuration dict for Ray
   (packages, env vars, etc.).
-
-All fields default to `None` (unset); the Starlark orchestration function
-supplies defaults for anything you don't specify.
+  
 
 **Example**:
 
@@ -118,3 +119,4 @@ def post_run()
 Shut down the Ray cluster after task execution.
 
 Ensures proper cleanup of Ray resources by shutting down the Ray runtime.
+

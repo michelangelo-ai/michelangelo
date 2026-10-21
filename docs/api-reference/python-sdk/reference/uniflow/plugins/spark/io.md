@@ -1,6 +1,6 @@
 ---
 sidebar_label: io
-title: michelangelo.uniflow.plugins.spark.io
+title: uniflow.plugins.spark.io
 ---
 
 I/O handlers for Spark DataFrames in Uniflow workflows.
@@ -37,6 +37,7 @@ Read a Spark DataFrame from a Parquet file.
 **Arguments**:
 
 - `url` - The URL or path to read from. Supports local paths and S3 URLs.
+  
 
 **Returns**:
 
@@ -69,6 +70,7 @@ Write a Spark DataFrame to the specified URL in Parquet format.
 - `url` - Target URL where the DataFrame should be written. Supports local paths
   (including ~-prefixed paths) and S3 URLs.
 - `value` - The Spark DataFrame to write.
+  
 
 **Returns**:
 
@@ -87,6 +89,7 @@ Read a Spark DataFrame from the specified URL.
 - `url` - Source URL from which to read the DataFrame. Supports local paths
   (including ~-prefixed paths) and S3 URLs.
 - `_metadata` - Optional metadata from write operation. Currently unused.
+  
 
 **Returns**:
 
@@ -118,7 +121,9 @@ Read DataFrame from Parquet format at the given URL.
 **Arguments**:
 
 - `url` - Source URL for reading. Tilde paths are expanded.
+  
 
 **Returns**:
 
   The loaded Spark DataFrame.
+

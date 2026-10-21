@@ -1,6 +1,6 @@
 ---
 sidebar_label: decorator
-title: michelangelo.uniflow.core.decorator
+title: uniflow.core.decorator
 ---
 
 Task and workflow decorators for Uniflow.
@@ -15,8 +15,8 @@ functions as workflow entry points.
 
 **Example**:
 
-Basic task definition:
-
+  Basic task definition:
+  
 ```python
 from michelangelo.uniflow.core import task
 from michelangelo.uniflow.plugins.ray import RayTask
@@ -26,9 +26,9 @@ def process_data(input_file: str) -> dict:
     # Process data and return results
     return {"status": "complete"}
 ```
-
-Workflow with multiple tasks:
-
+  
+  Workflow with multiple tasks:
+  
 ```python
 @workflow()
 def my_workflow():
@@ -62,6 +62,7 @@ instantiated directly.
 - `cache_version` - Optional version identifier for cached results.
 - `retry_attempts` - Number of times to retry failed executions.
 - `image_spec` - Optional container image specification.
+  
 
 **Example**:
 
@@ -150,10 +151,12 @@ Manages the complete task execution lifecycle:
 - `**kwargs` - Keyword arguments to pass to the wrapped function.
   Special keyword _uf_result_url can be used to specify
   where to write the result.
+  
 
 **Returns**:
 
   The result of executing the wrapped function, wrapped in a Ref.
+  
 
 **Raises**:
 
@@ -175,6 +178,12 @@ This method allows creating a variant of the task with different configuration
 while sharing the same function, I/O registry, and cache settings. Useful for
 running the same task with different resource allocations.
 
+**Caveat**: `with_overrides()` has no `image_spec` parameter, and it does not
+carry the original task's `image_spec` forward either — the returned
+`TaskFunction` always has `image_spec=None`. If the task depends on a custom
+container image, re-declare it with a fresh `@task(...)` definition instead
+of `with_overrides()`.
+
 **Arguments**:
 
 - `alias` - Optional alternative task name. If not provided, uses original alias.
@@ -186,16 +195,12 @@ running the same task with different resource allocations.
   original `head_memory` value is not carried over). Pass every field you
   want the override to keep.
 - `retry_attempts` - Optional retry count. If not provided, uses original value.
+  
 
 **Returns**:
 
   A new TaskFunction instance with the specified overrides.
-
-**Caveat**: `with_overrides()` has no `image_spec` parameter, and it does not
-carry the original task's `image_spec` forward either — the returned
-`TaskFunction` always has `image_spec=None`. If the task depends on a custom
-container image, re-declare it with a fresh `@task(...)` definition instead
-of `with_overrides()`.
+  
 
 **Example**:
 
@@ -243,24 +248,26 @@ or distributed across Ray/Spark clusters depending on the config.
   (no retries).
 - `image_spec` - Optional container image specification. Allows specifying custom
   container images and build targets for the task execution environment.
+  
 
 **Returns**:
 
   A decorator that converts a function into a TaskFunction.
+  
 
 **Example**:
 
-Basic task with caching:
-
+  Basic task with caching:
+  
 ```python
 @task(config=RayTask(head_cpu=2), cache_enabled=True)
 def process_data(input_path: str) -> dict:
     # Process data
     return {"status": "complete"}
 ```
-
-Task with custom image:
-
+  
+  Task with custom image:
+  
 ```python
 @task(
     config=RayTask(head_cpu=4, head_memory="8Gi"),
@@ -273,9 +280,9 @@ def train_model(data: pd.DataFrame) -> Model:
     # Train model
     return trained_model
 ```
-
-Task with alias and retry:
-
+  
+  Task with alias and retry:
+  
 ```python
 @task(
     config=SparkTask(driver_cpu=2, executor_cpu=4),
@@ -302,11 +309,12 @@ are always executed locally and serve as the coordination layer.
 **Returns**:
 
   A decorator that marks a function as a workflow.
+  
 
 **Example**:
 
-Simple workflow:
-
+  Simple workflow:
+  
 ```python
 @workflow()
 def my_workflow(input_file: str):
@@ -321,9 +329,9 @@ def my_workflow(input_file: str):
 
     return result
 ```
-
-Workflow with multiple stages:
-
+  
+  Workflow with multiple stages:
+  
 ```python
 @workflow()
 def training_pipeline(dataset_path: str, model_type: str):
@@ -355,10 +363,12 @@ functionality into the Starlark execution environment.
 **Arguments**:
 
 - `binding` - The binding name to use in Starlark.
+  
 
 **Returns**:
 
   A decorator that marks a function as a Starlark plugin.
+  
 
 **Example**:
 
@@ -380,6 +390,7 @@ Check if a function is a Starlark plugin.
 **Arguments**:
 
 - `fn` - Function to check.
+  
 
 **Returns**:
 
@@ -396,6 +407,7 @@ Check if a function is a workflow.
 **Arguments**:
 
 - `fn` - Function to check.
+  
 
 **Returns**:
 
@@ -412,10 +424,12 @@ Get the Starlark binding name for a plugin function.
 **Arguments**:
 
 - `fn` - Function to get binding from.
+  
 
 **Returns**:
 
   The binding name string.
+  
 
 **Raises**:
 
@@ -436,7 +450,9 @@ specified filesystem URL.
 
 - `url` - Filesystem URL where to write the result.
 - `value` - The value to serialize and write.
+  
 
 **Raises**:
 
 - `IOError` - If writing to the URL fails.
+

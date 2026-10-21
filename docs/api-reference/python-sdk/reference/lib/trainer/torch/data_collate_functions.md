@@ -1,6 +1,6 @@
 ---
 sidebar_label: data_collate_functions
-title: michelangelo.lib.trainer.torch.data_collate_functions
+title: lib.trainer.torch.data_collate_functions
 ---
 
 Collate helpers for Ray Data / PyTorch training.
@@ -8,7 +8,7 @@ Collate helpers for Ray Data / PyTorch training.
 This module exposes small building blocks so callers can compose custom collate functions:
 
 - `DEFAULT_COLLATE_NUMPY_DTYPE` / `DEFAULT_COLLATE_TORCH_DTYPE` — default dtypes
-  (`float32` unless overridden via function or `LiteralEvalFloat32Collate` kwargs).
+(`float32` unless overridden via function or `LiteralEvalFloat32Collate` kwargs).
 - `pad_ragged_lists` — pad nested Python lists to a dense array of *numpy_dtype*.
 - `cell_is_nested_subsequence` / `row_is_list_of_nested_cells` — structure checks.
 - `collate_value_to_float32_numpy` — one feature column → `numpy.ndarray`.
@@ -18,10 +18,14 @@ This module exposes small building blocks so callers can compose custom collate 
 The default `literal_eval_data_collate_function` is implemented on top of these.
 `LiteralEvalFloat32Collate` wraps the same behavior for subclassing (custom device, hooks).
 
+`pinned_literal_eval_data_collate_function` runs the default collate and additionally pins the
+output tensors in page-locked host memory, which can make host-to-GPU copies asynchronous. Use it as
+`LightningTrainer.data_collate_fn` or as `BatchIterConfig.collate_fn`.
+
 **Example**:
 
-Using the default collate with a PyTorch `DataLoader`:
-
+  Using the default collate with a PyTorch `DataLoader`:
+  
 ```python
 from torch.utils.data import DataLoader
 from michelangelo.lib.trainer.torch.data_collate_functions import (
@@ -177,3 +181,43 @@ def literal_eval_data_collate_function(
 ```
 
 Convert processed batch data to tensors (default training collate).
+
+#### pinned\_literal\_eval\_data\_collate\_function
+
+```python
+def pinned_literal_eval_data_collate_function(
+        batch_data: dict) -> dict[str, torch.Tensor]
+```
+
+Collate like `literal_eval_data_collate_function`, with tensors in pinned memory.
+
+Pinning tensors in page-locked host memory can make host-to-GPU copies asynchronous when they are issued
+with `non_blocking=True`, and such copies can transfer at higher bandwidth than copies from pageable
+memory. Whether this speeds up training depends on the downstream transfers actually being
+non-blocking, so measure before relying on it. Ray Data's built-in `pin_memory` option only applies
+to its default collate function, so a custom collate has to pin on its own.
+
+To use it, pass the function as `LightningTrainer.data_collate_fn`, or set
+`BatchIterConfig.collate_fn` to its dotted import path, for example
+`"michelangelo.lib.trainer.torch.data_collate_functions.pinned_literal_eval_data_collate_function"`.
+
+When CUDA is not available (for example when the collate runs on a CPU-only driver to produce a sample
+row), pinning is skipped and the tensors are returned unpinned, since `Tensor.pin_memory` requires a
+CUDA runtime. The function assumes the collated tensors live on the CPU, as the default collate
+produces; tensors already on a GPU cannot be pinned.
+
+**Arguments**:
+
+- `batch_data` - Mapping from feature name to the batch column, as accepted by
+  `literal_eval_data_collate_function`.
+  
+
+**Returns**:
+
+  Mapping from feature name to a `float32` tensor. Tensors are pinned when CUDA is available.
+  
+
+**Raises**:
+
+- `RuntimeError` - If CUDA is available but pinned host memory cannot be allocated.
+

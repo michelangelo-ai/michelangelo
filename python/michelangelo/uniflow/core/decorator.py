@@ -9,23 +9,27 @@ handling, I/O management, and resource configuration. The @workflow decorator ma
 functions as workflow entry points.
 
 Example:
-    Basic task definition::
+Basic task definition:
 
-        from michelangelo.uniflow.core import task
-        from michelangelo.uniflow.plugins.ray import RayTask
+```python
+from michelangelo.uniflow.core import task
+from michelangelo.uniflow.plugins.ray import RayTask
 
-        @task(config=RayTask(head_cpu=2, head_memory="4Gi"))
-        def process_data(input_file: str) -> dict:
-            # Process data and return results
-            return {"status": "complete"}
+@task(config=RayTask(head_cpu=2, head_memory="4Gi"))
+def process_data(input_file: str) -> dict:
+    # Process data and return results
+    return {"status": "complete"}
+```
 
-    Workflow with multiple tasks::
+Workflow with multiple tasks:
 
-        @workflow()
-        def my_workflow():
-            data = load_data()
-            result = process_data(data)
-            return result
+```python
+@workflow()
+def my_workflow():
+    data = load_data()
+    result = process_data(data)
+    return result
+```
 """
 
 import ast
@@ -84,10 +88,12 @@ class TaskFunction(Generic[P, R]):
         image_spec: Optional container image specification.
 
     Example:
-        >>> @task(config=RayTask(head_cpu=1))
-        ... def my_task(x: int) -> int:
-        ...     return x * 2
-        >>> result = my_task(5)  # Executes wrapped function
+    ```python
+    >>> @task(config=RayTask(head_cpu=1))
+    ... def my_task(x: int) -> int:
+    ...     return x * 2
+    >>> result = my_task(5)  # Executes wrapped function
+    ```
     """
 
     def __init__(
@@ -231,26 +237,36 @@ class TaskFunction(Generic[P, R]):
         while sharing the same function, I/O registry, and cache settings. Useful for
         running the same task with different resource allocations.
 
+        **Caveat**: `with_overrides()` has no `image_spec` parameter, and it does not
+        carry the original task's `image_spec` forward either — the returned
+        `TaskFunction` always has `image_spec=None`. If the task depends on a custom
+        container image, re-declare it with a fresh `@task(...)` definition instead
+        of `with_overrides()`.
+
         Args:
             alias: Optional alternative task name. If not provided, uses original alias.
-            config: Optional task configuration. If provided, this configuration will be
-                merged with the original configuration. For example, if the original
-                config specifies head_cpu=4 and head_memory="16Gi", and the new
-                config specifies head_cpu=8, the result will have head_cpu=8 and
-                head_memory="16Gi".
+            config: Optional task configuration. If provided, this configuration
+                **fully replaces** the original configuration — fields are not merged
+                field-by-field. For example, if the original config specifies
+                `head_cpu=4` and `head_memory="16Gi"`, and the new config specifies only
+                `head_cpu=8`, the result has `head_cpu=8` and `head_memory=None` (the
+                original `head_memory` value is not carried over). Pass every field you
+                want the override to keep.
             retry_attempts: Optional retry count. If not provided, uses original value.
 
         Returns:
             A new TaskFunction instance with the specified overrides.
 
         Example:
-            >>> @task(config=RayTask(head_cpu=2))
-            ... def my_task(x):
-            ...     return x * 2
-            >>> high_cpu_task = my_task.with_overrides(
-            ...     alias="my_task_8cpu",
-            ...     config=RayTask(head_cpu=8)
-            ... )
+        ```python
+        >>> @task(config=RayTask(head_cpu=2))
+        ... def my_task(x):
+        ...     return x * 2
+        >>> high_cpu_task = my_task.with_overrides(
+        ...     alias="my_task_8cpu",
+        ...     config=RayTask(head_cpu=8),
+        ... )
+        ```
         """
         return TaskFunction(
             fn=self._fn,
@@ -268,9 +284,11 @@ class TaskFunction(Generic[P, R]):
         Constructs an AST expression representing the task in Starlark format.
         The expression calls a task factory function with configuration parameters.
 
-        The resulting expression follows the format::
+        The resulting expression follows the format:
 
-            __task_factory__(alias="task_1", cpu=4, gpu=1, ...)
+        ```python
+        __task_factory__(alias="task_1", cpu=4, gpu=1, ...)
+        ```
 
         Args:
             dependencies: Collection to register external dependencies.
@@ -279,14 +297,16 @@ class TaskFunction(Generic[P, R]):
             An AST Call node representing the task in Starlark.
 
         Example:
-            For a task with RayTask config, generates::
+        For a task with RayTask config, generates:
 
-                __ray_task__(
-                    "my.module.task_function",
-                    alias="my_task",
-                    head_cpu=4,
-                    head_memory="8Gi"
-                )
+        ```python
+        __ray_task__(
+            "my.module.task_function",
+            alias="my_task",
+            head_cpu=4,
+            head_memory="8Gi"
+        )
+        ```
         """
         # Register the task's Starlark Binding (Task Factory Function) in the
         # Dependencies collection.
@@ -370,36 +390,42 @@ def task(
         A decorator that converts a function into a TaskFunction.
 
     Example:
-        Basic task with caching::
+    Basic task with caching:
 
-            @task(config=RayTask(head_cpu=2), cache_enabled=True)
-            def process_data(input_path: str) -> dict:
-                # Process data
-                return {"status": "complete"}
+    ```python
+    @task(config=RayTask(head_cpu=2), cache_enabled=True)
+    def process_data(input_path: str) -> dict:
+        # Process data
+        return {"status": "complete"}
+    ```
 
-        Task with custom image::
+    Task with custom image:
 
-            @task(
-                config=RayTask(head_cpu=4, head_memory="8Gi"),
-                image_spec=ImageSpec(
-                    container_image="my-image:latest",
-                    recipe="bazel://path/to:target"
-                )
-            )
-            def train_model(data: pd.DataFrame) -> Model:
-                # Train model
-                return trained_model
+    ```python
+    @task(
+        config=RayTask(head_cpu=4, head_memory="8Gi"),
+        image_spec=ImageSpec(
+            container_image="my-image:latest",
+            recipe="bazel://path/to:target"
+        )
+    )
+    def train_model(data: pd.DataFrame) -> Model:
+        # Train model
+        return trained_model
+    ```
 
-        Task with alias and retry::
+    Task with alias and retry:
 
-            @task(
-                config=SparkTask(driver_cpu=2, executor_cpu=4),
-                alias="preprocess_v2",
-                retry_attempts=3
-            )
-            def preprocess(df: DataFrame) -> DataFrame:
-                # Preprocess DataFrame
-                return processed_df
+    ```python
+    @task(
+        config=SparkTask(driver_cpu=2, executor_cpu=4),
+        alias="preprocess_v2",
+        retry_attempts=3
+    )
+    def preprocess(df: DataFrame) -> DataFrame:
+        # Preprocess DataFrame
+        return processed_df
+    ```
     """
 
     def decorator(fn: Callable[P, R]) -> TaskFunction[P, R]:
@@ -441,36 +467,40 @@ def workflow():
         A decorator that marks a function as a workflow.
 
     Example:
-        Simple workflow::
+    Simple workflow:
 
-            @workflow()
-            def my_workflow(input_file: str):
-                # Load data
-                data = load_task(input_file)
+    ```python
+    @workflow()
+    def my_workflow(input_file: str):
+        # Load data
+        data = load_task(input_file)
 
-                # Process data
-                result = process_task(data)
+        # Process data
+        result = process_task(data)
 
-                # Save results
-                save_task(result)
+        # Save results
+        save_task(result)
 
-                return result
+        return result
+    ```
 
-        Workflow with multiple stages::
+    Workflow with multiple stages:
 
-            @workflow()
-            def training_pipeline(dataset_path: str, model_type: str):
-                # Data preparation stage
-                raw_data = load_data(dataset_path)
-                clean_data = clean_data_task(raw_data)
+    ```python
+    @workflow()
+    def training_pipeline(dataset_path: str, model_type: str):
+        # Data preparation stage
+        raw_data = load_data(dataset_path)
+        clean_data = clean_data_task(raw_data)
 
-                # Training stage
-                model = train_model_task(clean_data, model_type)
+        # Training stage
+        model = train_model_task(clean_data, model_type)
 
-                # Evaluation stage
-                metrics = evaluate_model_task(model, clean_data)
+        # Evaluation stage
+        metrics = evaluate_model_task(model, clean_data)
 
-                return {"model": model, "metrics": metrics}
+        return {"model": model, "metrics": metrics}
+    ```
     """
 
     def decorator(fn: Callable[P, R]) -> Callable[P, R]:
@@ -517,10 +547,12 @@ def star_plugin(binding: str):
         A decorator that marks a function as a Starlark plugin.
 
     Example:
-        >>> @star_plugin(binding="custom_transform")
-        ... def transform_data(data: dict) -> dict:
-        ...     # Transform logic
-        ...     return transformed
+    ```python
+    >>> @star_plugin(binding="custom_transform")
+    ... def transform_data(data: dict) -> dict:
+    ...     # Transform logic
+    ...     return transformed
+    ```
     """
 
     def decorator(fn: Callable[P, R]) -> Callable[P, R]:
@@ -602,10 +634,12 @@ def _in_the_box(txt):
         String with text centered in a box with rounded corners.
 
     Example:
-        >>> print(_in_the_box("Running Task"))
-        ╭───────────────────────────────────╮
-        │          Running Task             │
-        ╰───────────────────────────────────╯
+    ```python
+    >>> print(_in_the_box("Running Task"))
+    ╭───────────────────────────────────╮
+    │          Running Task             │
+    ╰───────────────────────────────────╯
+    ```
     """
     txt = f"│ {txt:^75} │"
     n = len(txt)

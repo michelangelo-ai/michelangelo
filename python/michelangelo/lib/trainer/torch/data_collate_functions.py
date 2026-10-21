@@ -2,20 +2,36 @@
 
 This module exposes small building blocks so callers can compose custom collate functions:
 
-- :data:`DEFAULT_COLLATE_NUMPY_DTYPE` / :data:`DEFAULT_COLLATE_TORCH_DTYPE` — default dtypes
-  (``float32`` unless overridden via function or :class:`LiteralEvalFloat32Collate` kwargs).
-- :func:`pad_ragged_lists` — pad nested Python lists to a dense array of *numpy_dtype*.
-- :func:`cell_is_nested_subsequence` / :func:`row_is_list_of_nested_cells` — structure checks.
-- :func:`collate_value_to_float32_numpy` — one feature column → :class:`numpy.ndarray`.
-- :func:`collate_value_to_float32_tensor` — one feature column → :class:`torch.Tensor`.
-- :func:`collate_batch_to_float32_tensors` — full batch dict → tensors.
+- `DEFAULT_COLLATE_NUMPY_DTYPE` / `DEFAULT_COLLATE_TORCH_DTYPE` — default dtypes
+  (`float32` unless overridden via function or `LiteralEvalFloat32Collate` kwargs).
+- `pad_ragged_lists` — pad nested Python lists to a dense array of *numpy_dtype*.
+- `cell_is_nested_subsequence` / `row_is_list_of_nested_cells` — structure checks.
+- `collate_value_to_float32_numpy` — one feature column → `numpy.ndarray`.
+- `collate_value_to_float32_tensor` — one feature column → `torch.Tensor`.
+- `collate_batch_to_float32_tensors` — full batch dict → tensors.
 
-The default :func:`literal_eval_data_collate_function` is implemented on top of these.
-:class:`LiteralEvalFloat32Collate` wraps the same behavior for subclassing (custom device, hooks).
+The default `literal_eval_data_collate_function` is implemented on top of these.
+`LiteralEvalFloat32Collate` wraps the same behavior for subclassing (custom device, hooks).
 
-:func:`pinned_literal_eval_data_collate_function` runs the default collate and additionally pins the
+`pinned_literal_eval_data_collate_function` runs the default collate and additionally pins the
 output tensors in page-locked host memory, which can make host-to-GPU copies asynchronous. Use it as
-``LightningTrainer.data_collate_fn`` or as ``BatchIterConfig.collate_fn``.
+`LightningTrainer.data_collate_fn` or as `BatchIterConfig.collate_fn`.
+
+Example:
+Using the default collate with a PyTorch `DataLoader`:
+
+```python
+from torch.utils.data import DataLoader
+from michelangelo.lib.trainer.torch.data_collate_functions import (
+    literal_eval_data_collate_function,
+)
+
+loader = DataLoader(
+    dataset,
+    batch_size=32,
+    collate_fn=literal_eval_data_collate_function,
+)
+```
 """
 
 from __future__ import annotations
@@ -81,7 +97,7 @@ def cell_is_nested_subsequence(cell) -> bool:
 def row_is_list_of_nested_cells(flat0: list | np.ndarray) -> bool:
     """Return True when *flat0* is a row of cells where at least one cell is a sub-sequence (3-D path).
 
-    Uses every cell, not only ``flat0[0]``, so a leading scalar with later list cells still
+    Uses every cell, not only `flat0[0]`, so a leading scalar with later list cells still
     selects the 3-D normalization branch.
     """
     if len(flat0) == 0:
@@ -98,7 +114,7 @@ def _batch_rows_are_one_scalar_each(items: list) -> bool:
 
 
 def _literal_eval_str_cells_in_object_array(obj: object) -> object:
-    """Apply :func:`ast.literal_eval` to ``str`` cells in object-dtype structures."""
+    """Apply `ast.literal_eval` to `str` cells in object-dtype structures."""
     if isinstance(obj, str):
         return ast.literal_eval(obj)
     if isinstance(obj, np.ndarray) and obj.dtype == np.dtype(object):
@@ -116,7 +132,7 @@ def pad_ragged_lists(
     *,
     numpy_dtype: np.dtype | None = None,
 ) -> np.ndarray:
-    """Pad nested lists to a rectangular array of *numpy_dtype* (default: :data:`DEFAULT_COLLATE_NUMPY_DTYPE`)."""
+    """Pad nested lists to a rectangular array of *numpy_dtype* (default: `DEFAULT_COLLATE_NUMPY_DTYPE`)."""
     target = (
         np.dtype(numpy_dtype)
         if numpy_dtype is not None
@@ -161,7 +177,7 @@ def collate_value_to_float32_numpy(
     parse_string_with_literal_eval: bool = True,
     numpy_dtype: np.dtype | None = None,
 ) -> np.ndarray:
-    """Convert a single batch column value to a :class:`numpy.ndarray` of *numpy_dtype*."""
+    """Convert a single batch column value to a `numpy.ndarray` of *numpy_dtype*."""
     target = (
         np.dtype(numpy_dtype)
         if numpy_dtype is not None
@@ -197,7 +213,7 @@ def collate_value_to_float32_tensor(
     parse_string_with_literal_eval: bool = True,
     numpy_dtype: np.dtype | None = None,
 ) -> torch.Tensor:
-    """Convert one column value to :class:`torch.Tensor` on *device* (see :func:`collate_value_to_float32_numpy`)."""
+    """Convert one column value to `torch.Tensor` on *device* (see `collate_value_to_float32_numpy`)."""
     target = (
         np.dtype(numpy_dtype)
         if numpy_dtype is not None
@@ -240,7 +256,7 @@ def collate_batch_to_float32_tensors(
 
 
 class LiteralEvalFloat32Collate:
-    """Default collate with :func:`ast.literal_eval` for stringified arrays."""
+    """Default collate with `ast.literal_eval` for stringified arrays."""
 
     def __init__(
         self,
@@ -254,11 +270,11 @@ class LiteralEvalFloat32Collate:
 
         Args:
             device: Target device for emitted tensors.
-            reshape_1d_features: If True, scalar features are reshaped to ``(N, 1)``.
+            reshape_1d_features: If True, scalar features are reshaped to `(N, 1)`.
             parse_string_with_literal_eval: If True, string-encoded arrays are decoded
-                via :func:`ast.literal_eval`.
+                via `ast.literal_eval`.
             numpy_dtype: Optional numpy dtype to cast numeric values to before tensor
-                conversion; defaults to :data:`DEFAULT_COLLATE_NUMPY_DTYPE`.
+                conversion; defaults to `DEFAULT_COLLATE_NUMPY_DTYPE`.
         """
         self.device = device
         self.reshape_1d_features = reshape_1d_features
@@ -270,7 +286,7 @@ class LiteralEvalFloat32Collate:
         )
 
     def collate_value_to_numpy(self, value) -> np.ndarray:
-        """Convert one column value to :class:`~numpy.ndarray` (override in subclasses)."""
+        """Convert one column value to `numpy.ndarray` (override in subclasses)."""
         return collate_value_to_float32_numpy(
             value,
             reshape_1d_features=self.reshape_1d_features,
@@ -279,7 +295,7 @@ class LiteralEvalFloat32Collate:
         )
 
     def collate_value_to_tensor(self, value) -> torch.Tensor:
-        """Convert one column value to :class:`torch.Tensor` on :attr:`device`."""
+        """Convert one column value to `torch.Tensor` on `device`."""
         arr = self.collate_value_to_numpy(value)
         torch_dtype = _torch_dtype_for_numpy_dtype(self.numpy_dtype)
         return torch.tensor(arr, dtype=torch_dtype).to(self.device)
@@ -289,7 +305,7 @@ class LiteralEvalFloat32Collate:
         return {k: self.collate_value_to_tensor(v) for k, v in batch_data.items()}
 
     def __call__(self, batch_data: dict) -> dict[str, torch.Tensor]:
-        """Delegate to :meth:`collate_batch`."""
+        """Delegate to `collate_batch`."""
         return self.collate_batch(batch_data)
 
 
@@ -304,29 +320,29 @@ def literal_eval_data_collate_function(batch_data: dict) -> dict[str, torch.Tens
 def pinned_literal_eval_data_collate_function(
     batch_data: dict,
 ) -> dict[str, torch.Tensor]:
-    """Collate like :func:`literal_eval_data_collate_function`, with tensors in pinned memory.
+    """Collate like `literal_eval_data_collate_function`, with tensors in pinned memory.
 
     Pinning tensors in page-locked host memory can make host-to-GPU copies asynchronous when they are issued
-    with ``non_blocking=True``, and such copies can transfer at higher bandwidth than copies from pageable
+    with `non_blocking=True`, and such copies can transfer at higher bandwidth than copies from pageable
     memory. Whether this speeds up training depends on the downstream transfers actually being
-    non-blocking, so measure before relying on it. Ray Data's built-in ``pin_memory`` option only applies
+    non-blocking, so measure before relying on it. Ray Data's built-in `pin_memory` option only applies
     to its default collate function, so a custom collate has to pin on its own.
 
-    To use it, pass the function as ``LightningTrainer.data_collate_fn``, or set
-    ``BatchIterConfig.collate_fn`` to its dotted import path, for example
-    ``"michelangelo.lib.trainer.torch.data_collate_functions.pinned_literal_eval_data_collate_function"``.
+    To use it, pass the function as `LightningTrainer.data_collate_fn`, or set
+    `BatchIterConfig.collate_fn` to its dotted import path, for example
+    `"michelangelo.lib.trainer.torch.data_collate_functions.pinned_literal_eval_data_collate_function"`.
 
     When CUDA is not available (for example when the collate runs on a CPU-only driver to produce a sample
-    row), pinning is skipped and the tensors are returned unpinned, since ``Tensor.pin_memory`` requires a
+    row), pinning is skipped and the tensors are returned unpinned, since `Tensor.pin_memory` requires a
     CUDA runtime. The function assumes the collated tensors live on the CPU, as the default collate
     produces; tensors already on a GPU cannot be pinned.
 
     Args:
         batch_data: Mapping from feature name to the batch column, as accepted by
-            :func:`literal_eval_data_collate_function`.
+            `literal_eval_data_collate_function`.
 
     Returns:
-        Mapping from feature name to a ``float32`` tensor. Tensors are pinned when CUDA is available.
+        Mapping from feature name to a `float32` tensor. Tensors are pinned when CUDA is available.
 
     Raises:
         RuntimeError: If CUDA is available but pinned host memory cannot be allocated.

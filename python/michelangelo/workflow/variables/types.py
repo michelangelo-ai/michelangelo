@@ -210,7 +210,7 @@ class EvaluationResult:
 
     Attributes:
         metrics: Mapping of dataset name (e.g. ``"train"``, ``"validation"``,
-            ``"test"``) to that dataset's :class:`EvaluationMetrics`.
+            ``"test"``) to that dataset's `EvaluationMetrics`.
         reports: Mapping of report name to a ``MessageVariable`` holding a
             rendered ``EvaluationReport``.
             Holds one entry per evaluated dataset, keyed by dataset name, plus

@@ -1,6 +1,6 @@
 ---
 sidebar_label: task
-title: michelangelo.uniflow.plugins.spark.task
+title: uniflow.plugins.spark.task
 ---
 
 Spark task configuration and execution for Uniflow workflows.
@@ -47,6 +47,7 @@ runtime overrides of the default settings.
 - `executor_disk` - Disk space allocation per executor (e.g., "10G").
 - `executor_gpu` - Number of GPUs allocated per executor.
 - `executor_instances` - Number of executor instances to launch.
+  
 
 **Example**:
 
@@ -117,3 +118,4 @@ Stop the Spark session after task execution.
 
 Ensures proper cleanup of Spark resources by stopping the active
 session if one exists.
+

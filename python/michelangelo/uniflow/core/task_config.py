@@ -11,30 +11,32 @@ Key components:
 - Dependencies: Tracks Starlark and Python dependencies during transpilation
 
 Example:
-    Creating a custom task configuration::
+Creating a custom task configuration:
 
-        from pathlib import Path
-        from michelangelo.uniflow.core.task_config import TaskConfig, TaskBinding
+```python
+from pathlib import Path
+from michelangelo.uniflow.core.task_config import TaskConfig, TaskBinding
 
-        @dataclass
-        class MyTask(TaskConfig):
-            cpu: int = 1
-            memory: str = "4Gi"
+@dataclass
+class MyTask(TaskConfig):
+    cpu: int = 1
+    memory: str = "4Gi"
 
-            def get_binding(self) -> TaskBinding:
-                return TaskBinding(
-                    star_file=Path(__file__).parent / "my_task.star",
-                    function="my_task",
-                    export="__my_task"
-                )
+    def get_binding(self) -> TaskBinding:
+        return TaskBinding(
+            star_file=Path(__file__).parent / "my_task.star",
+            function="my_task",
+            export="__my_task"
+        )
 
-            def pre_run(self):
-                # Setup code
-                pass
+    def pre_run(self):
+        # Setup code
+        pass
 
-            def post_run(self):
-                # Cleanup code
-                pass
+    def post_run(self):
+        # Cleanup code
+        pass
+```
 """
 
 import ast
@@ -62,11 +64,13 @@ class Dependencies:
         py_functions: Maps alias to Python callable objects.
 
     Example:
-        >>> deps = Dependencies()
-        >>> deps.add_star_attribute("__ray_task", Path("ray.star"), "ray_task")
-        >>> deps.add_py_function("helper", my_helper_function)
-        >>> len(deps.py_functions)
-        1
+    ```python
+    >>> deps = Dependencies()
+    >>> deps.add_star_attribute("__ray_task", Path("ray.star"), "ray_task")
+    >>> deps.add_py_function("helper", my_helper_function)
+    >>> len(deps.py_functions)
+    1
+    ```
     """
 
     def __init__(self):
@@ -87,8 +91,10 @@ class Dependencies:
             attribute: Name of the attribute to load from the file.
 
         Example:
-            >>> deps.add_star_attribute("__ray_task", Path("ray.star"), "ray_task")
-            >>> # Generates: load("ray.star", __ray_task="ray_task")
+        ```python
+        >>> deps.add_star_attribute("__ray_task", Path("ray.star"), "ray_task")
+        >>> # Generates: load("ray.star", __ray_task="ray_task")
+        ```
         """
         star_file = star_file.resolve()
         self.star_attributes[alias] = (
@@ -106,8 +112,10 @@ class Dependencies:
             plugin_id: The plugin identifier (e.g., "chronon").
 
         Example:
-            >>> deps.add_star_plugin("__chronon__", "chronon")
-            >>> # Generates: load("@plugin", __chronon__="chronon")
+        ```python
+        >>> deps.add_star_plugin("__chronon__", "chronon")
+        >>> # Generates: load("@plugin", __chronon__="chronon")
+        ```
         """
         self.star_plugins[alias] = plugin_id
 
@@ -122,9 +130,11 @@ class Dependencies:
             fn: The Python callable to include.
 
         Example:
-            >>> def my_workflow():
-            ...     pass
-            >>> deps.add_py_function("my_workflow", my_workflow)
+        ```python
+        >>> def my_workflow():
+        ...     pass
+        >>> deps.add_py_function("my_workflow", my_workflow)
+        ```
         """
         self.py_functions[alias] = fn
 
@@ -137,9 +147,11 @@ class TaskBinding:
     handles the actual task execution. Used during transpilation to generate
     proper load statements.
 
-    The binding generates a Starlark load statement in the format::
+    The binding generates a Starlark load statement in the format:
 
-        load(star_file, export="function")
+    ```
+    load(star_file, export="function")
+    ```
 
     Attributes:
         star_file: Path to the .star file containing the orchestration function.
@@ -147,12 +159,14 @@ class TaskBinding:
         export: Name to use when importing the function (typically with __ prefix).
 
     Example:
-        >>> binding = TaskBinding(
-        ...     star_file=Path("ray/task.star"),
-        ...     function="ray_task",
-        ...     export="__ray_task"
-        ... )
-        >>> # Generates: load("ray/task.star", __ray_task="ray_task")
+    ```python
+    >>> binding = TaskBinding(
+    ...     star_file=Path("ray/task.star"),
+    ...     function="ray_task",
+    ...     export="__ray_task"
+    ... )
+    >>> # Generates: load("ray/task.star", __ray_task="ray_task")
+    ```
     """
 
     star_file: Path
@@ -178,26 +192,28 @@ class TaskConfig(ABC):
     options. These fields are automatically converted to Starlark keywords.
 
     Example:
-        >>> from dataclasses import dataclass
-        >>> @dataclass
-        ... class RayTask(TaskConfig):
-        ...     head_cpu: int = 1
-        ...     head_memory: str = "4Gi"
-        ...
-        ...     def get_binding(self) -> TaskBinding:
-        ...         return TaskBinding(
-        ...             star_file=Path(__file__).parent / "task.star",
-        ...             function="ray_task",
-        ...             export="__ray_task"
-        ...         )
-        ...
-        ...     def pre_run(self):
-        ...         # Initialize Ray cluster
-        ...         pass
-        ...
-        ...     def post_run(self):
-        ...         # Cleanup Ray resources
-        ...         pass
+    ```python
+    >>> from dataclasses import dataclass
+    >>> @dataclass
+    ... class RayTask(TaskConfig):
+    ...     head_cpu: int = 1
+    ...     head_memory: str = "4Gi"
+    ...
+    ...     def get_binding(self) -> TaskBinding:
+    ...         return TaskBinding(
+    ...             star_file=Path(__file__).parent / "task.star",
+    ...             function="ray_task",
+    ...             export="__ray_task"
+    ...         )
+    ...
+    ...     def pre_run(self):
+    ...         # Initialize Ray cluster
+    ...         pass
+    ...
+    ...     def post_run(self):
+    ...         # Cleanup Ray resources
+    ...         pass
+    ```
     """
 
     @abstractmethod
@@ -211,15 +227,17 @@ class TaskConfig(ABC):
             TaskBinding specifying the star file, function name, and export name.
 
         Example:
-            >>> def get_binding(self) -> TaskBinding:
-            ...     return TaskBinding(
-            ...         star_file=Path(__file__).parent / "ray_task.star",
-            ...         function="ray_task",
-            ...         export="__ray_task"
-            ...     )
+        ```python
+        >>> def get_binding(self) -> TaskBinding:
+        ...     return TaskBinding(
+        ...         star_file=Path(__file__).parent / "ray_task.star",
+        ...         function="ray_task",
+        ...         export="__ray_task"
+        ...     )
+        ```
 
         Note:
-            Use a double underscore prefix for export names (e.g., "__ray_task")
+            Use a double underscore prefix for export names (e.g., `__ray_task`)
             to avoid naming conflicts with user code.
         """
         raise NotImplementedError
@@ -236,13 +254,15 @@ class TaskConfig(ABC):
             TaskBinding for the configuration's Starlark representation.
 
         Example:
-            >>> @classmethod
-            ... def get_config_binding(cls) -> TaskBinding:
-            ...     return TaskBinding(
-            ...         star_file=Path(__file__).parent / "config.star",
-            ...         function="ray_config",
-            ...         export="__ray_config"
-            ...     )
+        ```python
+        >>> @classmethod
+        ... def get_config_binding(cls) -> TaskBinding:
+        ...     return TaskBinding(
+        ...         star_file=Path(__file__).parent / "config.star",
+        ...         function="ray_config",
+        ...         export="__ray_config"
+        ...     )
+        ```
         """
         raise NotImplementedError
 
@@ -255,9 +275,11 @@ class TaskConfig(ABC):
         or perform validation.
 
         Example:
-            >>> def pre_run(self):
-            ...     # Initialize Spark session
-            ...     self.spark = SparkSession.builder.getOrCreate()
+        ```python
+        >>> def pre_run(self):
+        ...     # Initialize Spark session
+        ...     self.spark = SparkSession.builder.getOrCreate()
+        ```
         """
         raise NotImplementedError
 
@@ -270,10 +292,12 @@ class TaskConfig(ABC):
         close connections, or perform cleanup.
 
         Example:
-            >>> def post_run(self):
-            ...     # Stop Spark session
-            ...     if self.spark:
-            ...         self.spark.stop()
+        ```python
+        >>> def post_run(self):
+        ...     # Stop Spark session
+        ...     if self.spark:
+        ...         self.spark.stop()
+        ```
         """
         raise NotImplementedError
 
@@ -288,11 +312,13 @@ class TaskConfig(ABC):
             List of ast.keyword nodes for non-None configuration fields.
 
         Example:
-            For a RayTask with head_cpu=4 and head_memory="8Gi"::
+        For a RayTask with `head_cpu=4` and `head_memory="8Gi"`:
 
-                keywords = config.to_keywords()
-                # Generates AST equivalent to:
-                # __ray_task__(head_cpu=4, head_memory="8Gi")
+        ```python
+        keywords = config.to_keywords()
+        # Generates AST equivalent to:
+        # __ray_task__(head_cpu=4, head_memory="8Gi")
+        ```
 
         Note:
             Only includes fields with non-None values. This allows optional

@@ -178,3 +178,58 @@ The outcome of a single plugin execution.
   >>> result.error is None
   True
 
+## EvaluationMetrics Objects
+
+```python
+@dataclass
+class EvaluationMetrics()
+```
+
+One evaluated dataset's metric tables.
+
+**Attributes**:
+
+- `summary_metrics` - One row per scope -- the aggregate ``GLOBAL`` row plus
+  one row per surviving segment -- and one column per metric. Wrapped
+  as a ``DatasetVariable`` so a downstream task (a pusher writing to a
+  warehouse table, say) can read it back without the evaluator holding
+  it in memory.
+- `instance_metrics` - Per-row metric values, when the evaluator produced
+  them. The TorchMetrics path aggregates rather than scoring each row,
+  so it leaves this holding ``None``.
+  
+
+**Example**:
+
+  >>> metrics = EvaluationMetrics()
+  >>> metrics.instance_metrics is None
+  True
+
+## EvaluationResult Objects
+
+```python
+@dataclass
+class EvaluationResult()
+```
+
+The result of the evaluator task.
+
+**Attributes**:
+
+- `metrics` - Mapping of dataset name (e.g. ``"train"``, ``"validation"``,
+  ``"test"``) to that dataset's `EvaluationMetrics`.
+- `reports` - Mapping of report name to a ``MessageVariable`` holding a
+  rendered ``EvaluationReport``.
+  Holds one entry per evaluated dataset, keyed by dataset name, plus
+  a ``"performance_evaluation_report"`` entry combining them all --
+  the one a pusher publishes.
+  
+
+**Example**:
+
+  >>> result = EvaluationResult()
+  >>> result.metrics
+  {}
+  >>> result.reports
+  {}
+

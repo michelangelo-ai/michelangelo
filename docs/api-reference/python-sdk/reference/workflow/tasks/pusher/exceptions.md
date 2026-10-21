@@ -1,6 +1,6 @@
 ---
 sidebar_label: exceptions
-title: michelangelo.workflow.tasks.pusher.exceptions
+title: workflow.tasks.pusher.exceptions
 ---
 
 Runtime exception hierarchy for the pusher module.
@@ -45,6 +45,7 @@ Raised when an artifact named in config is absent from the artifacts dict.
 
 - `name` - The artifact name that was expected.
 - `available` - The artifact names that are actually present in the dict.
+  
 
 **Example**:
 
@@ -78,6 +79,7 @@ attribute so the full stack trace is preserved.
 
 - `artifact_name` - The artifact name the plugin was processing.
 - `plugin_name` - The name of the plugin that raised.
+  
 
 **Example**:
 
@@ -94,3 +96,4 @@ def __init__(artifact_name: str, plugin_name: str) -> None
 ```
 
 Initialize with the artifact name and plugin name that failed.
+

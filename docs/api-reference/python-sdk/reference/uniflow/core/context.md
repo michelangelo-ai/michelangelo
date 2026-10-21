@@ -1,6 +1,6 @@
 ---
 sidebar_label: context
-title: michelangelo.uniflow.core.context
+title: uniflow.core.context
 ---
 
 Workflow execution context for local and remote runs.
@@ -19,8 +19,8 @@ The context system provides:
 
 **Example**:
 
-Local workflow execution:
-
+  Local workflow execution:
+  
 ```python
 from michelangelo.uniflow.core.context import create_context
 from michelangelo.uniflow.core.decorator import workflow
@@ -33,9 +33,9 @@ if __name__ == "__main__":
     ctx = create_context()
     ctx.run(my_workflow)
 ```
-
-Remote workflow execution:
-
+  
+  Remote workflow execution:
+  
 ```python
 # Command line:
 # python my_workflow.py remote-run \
@@ -103,26 +103,29 @@ to local-run.
 **Returns**:
 
   A Context instance configured for the requested execution mode.
+  
 
 **Raises**:
 
 - `AssertionError` - If an unsupported execution target is specified.
+  
 
 **Example**:
 
-Creating context for local execution:
-
+  Creating context for local execution:
+  
 ```python
 # python my_workflow.py
 # or: python my_workflow.py local-run
 ctx = create_context()
 assert ctx.is_local_run()
 ```
-
-Creating context for remote execution:
-
+  
+  Creating context for remote execution:
+  
 ```python
 # python my_workflow.py remote-run --storage-url s3://... --image ...
 ctx = create_context()
 assert not ctx.is_local_run()
 ```
+
