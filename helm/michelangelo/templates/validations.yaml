@@ -8,3 +8,18 @@ This file renders to empty YAML when all checks pass.
 {{- if and .Values.monitoring.enabled (not .Values.controllermgr.enabled) -}}
 {{- fail "monitoring.enabled requires controllermgr.enabled=true — the controller manager is the only component exposing a /metrics endpoint. See helm/michelangelo/README.md." -}}
 {{- end -}}
+{{- $authMode := default "" .Values.apiserver.auth.mode -}}
+{{- if not (has $authMode (list "" "dummy" "k8s-rbac")) -}}
+{{- fail (printf "apiserver.auth.mode must be \"dummy\" or \"k8s-rbac\" (got %q) — a typo here renders no auth config at all and silently falls back to the permissive dummy default. See docs/operator-guides/setup/authentication.md." $authMode) -}}
+{{- end -}}
+{{- if eq $authMode "k8s-rbac" -}}
+{{- if and (not .Values.apiserver.auth.oidc.issuerUrl) (not .Values.apiserver.auth.serviceAccounts.enabled) -}}
+{{- fail "apiserver.auth.mode=k8s-rbac requires apiserver.auth.oidc.issuerUrl and/or apiserver.auth.serviceAccounts.enabled=true — otherwise no caller could ever authenticate. See docs/operator-guides/setup/authentication.md." -}}
+{{- end -}}
+{{- if and .Values.apiserver.auth.oidc.issuerUrl (not .Values.apiserver.auth.oidc.audiences) -}}
+{{- fail "apiserver.auth.oidc.issuerUrl is set but apiserver.auth.oidc.audiences is empty — at least one accepted audience is required. See docs/operator-guides/setup/authentication.md." -}}
+{{- end -}}
+{{- end -}}
+{{- if and .Values.worker.runnerToken.enabled (ne $authMode "k8s-rbac") -}}
+{{- fail "worker.runnerToken.enabled=true has no effect unless apiserver.auth.mode=k8s-rbac — in dummy mode the apiserver accepts every request regardless, so the worker would mint tokens nobody validates. See docs/operator-guides/setup/authentication.md." -}}
+{{- end -}}

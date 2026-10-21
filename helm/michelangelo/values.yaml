@@ -156,6 +156,81 @@ apiserver:
   crdSync:
     enableUpdate: true
 
+  # ---------------------------------------------------------------------------
+  # Authentication + authorization for the Michelangelo API.
+  # ---------------------------------------------------------------------------
+  auth:
+    # "dummy" (default) allows every request, exactly as before.
+    # "k8s-rbac" authenticates bearer tokens (OIDC and/or Kubernetes
+    # ServiceAccount TokenReview) and authorizes each request through
+    # Kubernetes RBAC via SubjectAccessReview, so access is granted with
+    # ordinary RoleBindings on the Michelangelo resources (see the
+    # michelangelo-viewer / michelangelo-editor ClusterRoles the chart
+    # ships in this mode, and docs/operator-guides/setup/authentication.md).
+    mode: dummy
+
+    # OIDC ID-token verification for human callers. Enabled by setting
+    # issuerUrl. Requires at least one audience.
+    oidc:
+      # OIDC issuer URL; discovery uses <issuerUrl>/.well-known/openid-configuration.
+      # The apiserver fails startup if the issuer is unreachable.
+      issuerUrl: ""
+      # Accepted values of the token's `aud` claim (any-of). List several
+      # when the UI and the CLI use different client IDs.
+      audiences: []
+      # Claim used as the username RBAC sees (SubjectAccessReview user).
+      # Defaulting to "email" means the apiserver requires the token's
+      # email_verified claim to be true (see allowUnverifiedEmail below);
+      # use "sub" instead for an opaque-but-stable, IdP-assigned identity
+      # that doesn't depend on that claim.
+      usernameClaim: email
+      # Prepended to the username claim's value. Leave empty only if the
+      # claim can never produce a "system:"-prefixed value -- otherwise
+      # the apiserver rejects it outright, to keep an IdP-supplied string
+      # from colliding with a Kubernetes built-in identity.
+      usernamePrefix: ""
+      # Opts out of requiring email_verified=true when usernameClaim is
+      # "email" (the default). Has no effect for any other usernameClaim.
+      # Leave this false unless you have verified your IdP never issues an
+      # unverified email in this claim.
+      allowUnverifiedEmail: false
+      # Claim carrying group memberships (SubjectAccessReview groups).
+      groupsClaim: groups
+      # Prepended to every group claim value, for the same reason as
+      # usernamePrefix.
+      groupsPrefix: ""
+      # JWT signing algorithms accepted. Empty uses the apiserver's default
+      # allowlist (RS256, ES256) rather than whatever the issuer's discovery
+      # document advertises.
+      supportedSigningAlgs: []
+      # Accepted clock skew when validating token expiry / not-before.
+      # Must not exceed 5m.
+      clockSkewLeeway: 30s
+
+    # TokenReview-based authentication for in-cluster callers, including
+    # the worker's per-project michelangelo-runner tokens (see
+    # worker.runnerToken below).
+    serviceAccounts:
+      enabled: true
+      # Audiences TokenReview accepts. Empty accepts the cluster API
+      # server's default audiences -- fine for a single-cluster dev setup,
+      # but in production list the exact audience(s) you issue projected
+      # tokens with, so a token minted for an unrelated API cannot be
+      # replayed against this one.
+      audiences: []
+
+    # SubjectAccessReview decision cache. Bounds how long a revoked
+    # RoleBinding can still be honored; 0s disables that cache.
+    sarCache:
+      allowTTL: 10s
+      denyTTL: 10s
+
+    # Project namespaces that get a michelangelo-runner ServiceAccount and
+    # an editor RoleBinding, the identity the worker's pipeline activities
+    # run as when worker.runnerToken.enabled is on. The namespaces must
+    # already exist.
+    runnerProjects: []
+
   # Default values applied when creating PipelineRun/Model objects that don't
   # set them explicitly. Empty (the default) means the apiserver falls back to
   # its own write-time sentinel ("unspecified") rather than a guessed real
@@ -336,6 +411,24 @@ worker:
     level: info
     development: true
     encoding: console
+
+  # Per-project machine identity for the worker's API-server calls. When
+  # enabled, the worker mints a short-lived token for the target project's
+  # michelangelo-runner ServiceAccount (TokenRequest API) and attaches it
+  # as a bearer header, so each pipeline runs with that project's RBAC
+  # grants only. Requires apiserver.auth.mode=k8s-rbac with
+  # serviceAccounts.enabled, plus the runner ServiceAccounts
+  # (apiserver.auth.runnerProjects) and the token-mint grant the chart
+  # ships alongside this flag. Disabled, the worker sends no credential.
+  runnerToken:
+    enabled: false
+    # Audiences requested for the minted tokens; when
+    # apiserver.auth.serviceAccounts.audiences is set, list one of them.
+    audiences: []
+    # Requested lifetime for minted tokens. Empty leaves the cluster's
+    # TokenRequest default; Kubernetes enforces its own minimum (10
+    # minutes) regardless of what's requested here.
+    ttl: ""
 
   resources: {}
 
