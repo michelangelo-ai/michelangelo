@@ -1,3 +1,10 @@
+{{- $blockedVersions := list "1.107.0" -}}
+{{- $runtimeVersion := trimPrefix "v" (first (splitList "@" .Values.litellm.image.tag)) -}}
+{{- $appVersion := trimPrefix "v" .Chart.AppVersion -}}
+{{- if or (has $runtimeVersion $blockedVersions) (has $appVersion $blockedVersions) -}}
+{{- fail "LiteLLM 1.107.0 is blocked: compromised upstream release" -}}
+{{- end -}}
+
 {{- if ne .Values.litellm.nameOverride "litellm" -}}
 {{- fail "litellm.nameOverride must remain litellm so wrapper selectors stay stable" -}}
 {{- end -}}
