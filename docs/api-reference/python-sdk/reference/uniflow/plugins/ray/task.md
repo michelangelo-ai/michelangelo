@@ -30,9 +30,6 @@ Unlike SparkTask which uses driver/executor terminology, RayTask uses head/worke
 terminology to describe the cluster nodes. The head node coordinates execution
 while worker nodes perform distributed computation.
 
-All fields default to `None` (unset); the Starlark orchestration function
-supplies defaults for anything you don't specify.
-
 **Attributes**:
 
 - `head_cpu` - Number of CPUs allocated to the head node.
@@ -49,27 +46,6 @@ supplies defaults for anything you don't specify.
 - `breakpoint` - If True, enables breakpoint debugging for the task.
 - `runtime_env` - Runtime environment configuration dict for Ray
   (packages, env vars, etc.).
-  
-
-**Example**:
-
-```python
-from michelangelo.uniflow.core.decorator import task
-from michelangelo.uniflow.plugins.ray.task import RayTask
-
-@task(
-    config=RayTask(
-        head_cpu=2,
-        head_memory="4Gi",
-        worker_cpu=4,
-        worker_memory="8Gi",
-        worker_instances=2,
-    )
-)
-def process_batch(data_path: str) -> dict:
-    # Runs inside a Ray cluster sized per the config above
-    return {"status": "complete"}
-```
 
 #### get\_binding
 
