@@ -1,0 +1,18 @@
+{{ .Release.Name }} installed {{ .Chart.Name }} {{ .Chart.Version }} in namespace {{ .Release.Namespace }}.
+
+Kueue queue objects:
+  - ResourceFlavor {{ .Values.flavorName }}
+  - ClusterQueue {{ .Values.clusterQueueName }}, with quota for {{ keys .Values.quota | sortAlpha | join ", " }}
+{{- if .Values.localQueues }}
+  - LocalQueues in namespace default: {{ join ", " .Values.localQueues }}
+{{- else }}
+  - No LocalQueues (localQueues is empty)
+{{- end }}
+{{- if .Values.priorityClasses }}
+  - WorkloadPriorityClasses: {{ range $index, $class := .Values.priorityClasses }}{{ if $index }}, {{ end }}{{ $class.name }}{{ end }}
+{{- end }}
+
+To onboard a project, append its LocalQueue to localQueues and run helm upgrade
+again. To list the queues and their workloads:
+  kubectl get clusterqueue {{ .Values.clusterQueueName }}
+  kubectl --namespace default get localqueues

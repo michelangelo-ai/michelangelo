@@ -1,0 +1,17 @@
+{{- /*
+Optional WorkloadPriorityClasses, none by default. A class that a workload
+names but that does not exist keeps the workload from being created.
+*/ -}}
+{{- range .Values.priorityClasses }}
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: WorkloadPriorityClass
+metadata:
+  name: {{ .name }}
+  labels:
+    {{- include "michelangelo-compute-queues.labels" $ | nindent 4 }}
+value: {{ toYaml .value }}
+{{- with .description }}
+description: {{ quote . }}
+{{- end }}
+{{- end }}

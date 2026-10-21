@@ -1,0 +1,17 @@
+{{- /*
+One LocalQueue per localQueues entry, in namespace default, where the control
+plane dispatches. Helm deletes a LocalQueue once its name leaves localQueues,
+so each name is managed here or by hand, never both.
+*/ -}}
+{{- range .Values.localQueues }}
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: LocalQueue
+metadata:
+  name: {{ . }}
+  namespace: default
+  labels:
+    {{- include "michelangelo-compute-queues.labels" $ | nindent 4 }}
+spec:
+  clusterQueue: {{ $.Values.clusterQueueName }}
+{{- end }}

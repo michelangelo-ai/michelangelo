@@ -1,0 +1,11 @@
+{{- /*
+The single flavor the ClusterQueue's quota belongs to. Its spec is empty: no
+node labels or taints, so it matches every node.
+*/ -}}
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: ResourceFlavor
+metadata:
+  name: {{ .Values.flavorName }}
+  labels:
+    {{- include "michelangelo-compute-queues.labels" . | nindent 4 }}
+spec: {}

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Render checks for helm/michelangelo-compute; run after helm dependency build.
-# HELM, KUBECONFORM and YQ select the binaries, so the same checks run on every
-# supported Helm version.
+# Render checks for helm/michelangelo-compute and
+# helm/michelangelo-compute-queues; run after helm dependency build
+# helm/michelangelo-compute. HELM, KUBECONFORM and YQ select the binaries, so
+# the same checks run on every supported Helm version.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -568,6 +569,138 @@ if [[ "${SKIP_PACKAGE:-false}" != "true" ]]; then
   assert_contains "$package_contents" 'michelangelo-compute/charts/spark-operator/crds/sparkoperator.k8s.io_sparkapplications.yaml'
   # Kueue is disabled by default, but the published chart must still bundle it.
   assert_contains "$package_contents" 'michelangelo-compute/charts/kueue/Chart.yaml'
+fi
+
+echo "Validated $CHART_DIR"
+
+# helm/michelangelo-compute-queues: the cluster's Kueue queue objects, with no
+# dependencies and no CRDs. The helpers above render it once CHART_DIR, RELEASE
+# and VALUES_FILE point at it; the RFC installs it in the compute chart's
+# namespace too.
+CHART_DIR="$REPO_ROOT/helm/michelangelo-compute-queues"
+RELEASE=michelangelo-compute-queues
+# Sets quota, which has no default, and two LocalQueues.
+VALUES_FILE="$CHART_DIR/examples/values-minimal.yaml"
+
+# Prints "<namespace> <name> <spec.clusterQueue>" per rendered LocalQueue.
+local_queues() {
+  "$YQ" --no-doc 'select(.kind == "LocalQueue") | .metadata.namespace + " " + .metadata.name + " " + .spec.clusterQueue' <<<"$1"
+}
+
+# Prints "<name> <value> <description>" per rendered WorkloadPriorityClass,
+# with - when the class sets no description.
+priority_classes() {
+  "$YQ" --no-doc 'select(.kind == "WorkloadPriorityClass") | .metadata.name + " " + (.value | to_string) + " " + (.description // "-")' <<<"$1"
+}
+
+assert_equals() {
+  local actual="$1"
+  local expected="$2"
+
+  if [[ "$actual" != "$expected" ]]; then
+    printf 'Expected:\n%s\nRendered:\n%s\n' "$expected" "$actual" >&2
+    exit 1
+  fi
+}
+
+validate_profile
+queues_output="$(template)"
+queues_objects="$(objects "$queues_output")"
+assert_object "$queues_objects" 'ResourceFlavor - default-flavor'
+assert_object_count "$queues_objects" ResourceFlavor 1
+assert_object "$queues_objects" 'ClusterQueue - cluster-queue'
+assert_object_count "$queues_objects" ClusterQueue 1
+assert_object_count "$queues_objects" LocalQueue 2
+assert_object_count "$queues_objects" WorkloadPriorityClass 0
+assert_equals "$(local_queues "$queues_output")" 'default ma-california-housing cluster-queue
+default ma-ma-dev-test cluster-queue'
+assert_contains "$(template --show-only templates/resource-flavor.yaml)" $'\nspec: {}'
+assert_contains "$queues_output" 'spec:
+  namespaceSelector:
+    matchLabels:
+      kubernetes.io/metadata.name: default
+  queueingStrategy: BestEffortFIFO
+  resourceGroups:
+    - coveredResources:
+        - cpu
+        - memory
+      flavors:
+        - name: default-flavor
+          resources:
+            - name: cpu
+              nominalQuota: 64
+            - name: memory
+              nominalQuota: 256Gi'
+
+# coveredResources lists the quota keys sorted, and resources follows that
+# order. Numbers render as written; a fractional one renders as a string,
+# because nominalQuota takes an integer or a quantity string. A quota key's
+# dots must be escaped in --set.
+quota_values=(
+  --set 'quota.nvidia\.com/gpu=8'
+  --set-json 'quota.pods=1000000'
+  --set-json 'quota.cpu=2.5'
+)
+validate_profile "${quota_values[@]}"
+quota_output="$(template --show-only templates/cluster-queue.yaml "${quota_values[@]}")"
+assert_contains "$quota_output" '    - coveredResources:
+        - cpu
+        - memory
+        - nvidia.com/gpu
+        - pods
+      flavors:
+        - name: default-flavor
+          resources:
+            - name: cpu
+              nominalQuota: "2.5"
+            - name: memory
+              nominalQuota: 256Gi
+            - name: nvidia.com/gpu
+              nominalQuota: 8
+            - name: pods
+              nominalQuota: 1000000'
+
+custom_names_values=(
+  --set clusterQueueName=michelangelo
+  --set flavorName=on-demand
+)
+custom_names_output="$(template "${custom_names_values[@]}")"
+custom_names_objects="$(objects "$custom_names_output")"
+assert_object "$custom_names_objects" 'ResourceFlavor - on-demand'
+assert_object "$custom_names_objects" 'ClusterQueue - michelangelo'
+assert_contains "$custom_names_output" $'      flavors:\n        - name: on-demand\n'
+assert_equals "$(local_queues "$custom_names_output")" 'default ma-california-housing michelangelo
+default ma-ma-dev-test michelangelo'
+
+priority_class_values=(
+  --set-json 'priorityClasses=[{"name":"low","value":100,"description":"Batch work that can wait"},{"name":"high","value":1000000}]'
+)
+validate_profile "${priority_class_values[@]}"
+priority_class_output="$(template "${priority_class_values[@]}")"
+assert_object_count "$(objects "$priority_class_output")" WorkloadPriorityClass 2
+assert_equals "$(priority_classes "$priority_class_output")" 'low 100 Batch work that can wait
+high 1000000 -'
+
+VALUES_FILE='' expect_failure "queues chart defaults alone" "quota"
+expect_failure "quota key with unescaped dots" "quota.nvidia" \
+  --set quota.nvidia.com/gpu=8
+expect_failure "duplicate localQueues entry" "localQueues" \
+  --set-json 'localQueues=["ma-california-housing","ma-california-housing"]'
+expect_failure "empty localQueues entry" "localQueues.1" \
+  --set-json 'localQueues=["ma-california-housing",""]'
+expect_failure "priority class without a value" "priorityClasses.0" \
+  --set-json 'priorityClasses=[{"name":"low"}]'
+expect_failure "unknown top-level queues value" "unknownQueuesValue" \
+  --set unknownQueuesValue=true
+expect_failure "Kubernetes older than the queues chart's kubeVersion" ">=1.29.0-0" \
+  --kube-version 1.28.0
+
+if [[ "${SKIP_PACKAGE:-false}" != "true" ]]; then
+  "$HELM" package "$CHART_DIR" --destination "$scratch_dir" >/dev/null
+  chart_version="$(awk '$1 == "version:" {gsub(/"/, "", $2); print $2; exit}' "$CHART_DIR/Chart.yaml")"
+  package_contents="$(tar tzf "$scratch_dir/michelangelo-compute-queues-$chart_version.tgz")"
+  assert_contains "$package_contents" 'michelangelo-compute-queues/values.schema.json'
+  assert_contains "$package_contents" 'michelangelo-compute-queues/examples/values-minimal.yaml'
 fi
 
 echo "Validated $CHART_DIR"

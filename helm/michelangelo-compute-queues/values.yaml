@@ -1,0 +1,5 @@
+clusterQueueName: cluster-queue
+flavorName: default-flavor
+quota: {}                            # required, e.g. {cpu: 64, memory: 256Gi, nvidia.com/gpu: 8}
+localQueues: []                      # full names, e.g. [ma-california-housing]
+priorityClasses: []                  # optional WorkloadPriorityClasses, e.g. [{name: low, value: 100}]

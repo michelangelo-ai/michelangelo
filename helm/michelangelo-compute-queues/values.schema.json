@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "clusterQueueName",
+    "flavorName",
+    "quota",
+    "localQueues",
+    "priorityClasses"
+  ],
+  "properties": {
+    "clusterQueueName": {
+      "type": "string",
+      "minLength": 1
+    },
+    "flavorName": {
+      "type": "string",
+      "minLength": 1
+    },
+    "quota": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": ["string", "number"]
+      }
+    },
+    "localQueues": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "priorityClasses": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "value"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "value": {
+            "type": "integer"
+          },
+          "description": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

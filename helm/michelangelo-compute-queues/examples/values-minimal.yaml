@@ -1,0 +1,10 @@
+# The values every michelangelo-compute-queues release must set. Size the
+# quota to the capacity Michelangelo may use on this cluster.
+quota:
+  cpu: 64
+  memory: 256Gi
+# One LocalQueue per project, named ma-<project> unless the control plane's
+# jobs.scheduler.kueue settings say otherwise.
+localQueues:
+  - ma-california-housing
+  - ma-ma-dev-test

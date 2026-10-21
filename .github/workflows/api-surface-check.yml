@@ -246,17 +246,23 @@ jobs:
         run: |
           # helm/michelangelo is checked on its top-level keys. The compute
           # chart is also checked on every key path under its own blocks
-          # (sequence indices dropped) and on its dependency toggles.
+          # (sequence indices dropped) and on its dependency toggles, and the
+          # queues chart on every key path.
           surface() {
             local filter='keys | .[]'
-            if [ "$1" = helm/michelangelo-compute ]; then
-              filter='.. | path | map(select(tag != "!!int")) | join(".")
-                | select(test("^(rayManager|runtime|tests)([.]|$)|^(kuberay-operator|spark-operator|kueue)[.]enabled$|^[^.]+$"))'
-            fi
+            case "$1" in
+              helm/michelangelo-compute)
+                filter='.. | path | map(select(tag != "!!int")) | join(".")
+                  | select(test("^(rayManager|runtime|tests)([.]|$)|^(kuberay-operator|spark-operator|kueue)[.]enabled$|^[^.]+$"))'
+                ;;
+              helm/michelangelo-compute-queues)
+                filter='.. | path | map(select(tag != "!!int")) | join(".") | select(. != "")'
+                ;;
+            esac
             yq "$filter" "$2/$1/values.yaml" 2>/dev/null | sort -u || true
           }
           removed=$(
-            for chart in helm/michelangelo helm/michelangelo-compute; do
+            for chart in helm/michelangelo helm/michelangelo-compute helm/michelangelo-compute-queues; do
               comm -23 <(surface "$chart" base) <(surface "$chart" head) | sed "s|^|$chart: |"
             done
           )

@@ -1,0 +1,36 @@
+{{- /*
+The cluster's quota: one flavor, no cohort, borrowing or preemption. Only
+LocalQueues in namespace default, where the control plane dispatches, draw on
+it. BestEffortFIFO lets smaller workloads that fit pass a large one at the
+head of the queue.
+
+range visits the quota keys in sorted order, so resources lists them in the
+order of coveredResources, as Kueue requires. nominalQuota takes an integer
+or a quantity string, so a fractional number renders as a string.
+*/ -}}
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: ClusterQueue
+metadata:
+  name: {{ .Values.clusterQueueName }}
+  labels:
+    {{- include "michelangelo-compute-queues.labels" . | nindent 4 }}
+spec:
+  namespaceSelector:
+    matchLabels:
+      kubernetes.io/metadata.name: default
+  queueingStrategy: BestEffortFIFO
+  resourceGroups:
+    - coveredResources:
+        {{- range $name, $_ := .Values.quota }}
+        - {{ $name }}
+        {{- end }}
+      flavors:
+        - name: {{ .Values.flavorName }}
+          resources:
+            {{- range $name, $quantity := .Values.quota }}
+            {{- if and (kindIs "float64" $quantity) (ne $quantity (floor $quantity)) }}
+            {{- $quantity = toJson $quantity }}
+            {{- end }}
+            - name: {{ $name }}
+              nominalQuota: {{ toYaml $quantity }}
+            {{- end }}
