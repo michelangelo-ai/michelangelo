@@ -316,15 +316,17 @@ func getWorkflowURL(configProvider uberconfig.Provider, executionID string, runI
 	return workflowConfig.BuildWorkflowUrl(executionID, runID)
 }
 
+// IsTerminalState reports whether state is one a TriggerRun never leaves:
+// FAILED, KILLED or SUCCEEDED.
+func IsTerminalState(state v2pb.TriggerRunState) bool {
+	return state == v2pb.TRIGGER_RUN_STATE_FAILED ||
+		state == v2pb.TRIGGER_RUN_STATE_KILLED ||
+		state == v2pb.TRIGGER_RUN_STATE_SUCCEEDED
+}
+
 // isTerminateState checks if a TriggerRun is in a terminal state.
-//
-// Terminal states are SUCCEEDED, FAILED, or KILLED. Once a TriggerRun reaches
-// a terminal state, it should be marked immutable and no further reconciliation
-// is required.
-//
-// Returns true if the TriggerRun is in a terminal state, false otherwise.
 func isTerminateState(tr *v2pb.TriggerRun) bool {
-	return tr.Status.State == v2pb.TRIGGER_RUN_STATE_FAILED || tr.Status.State == v2pb.TRIGGER_RUN_STATE_KILLED || tr.Status.State == v2pb.TRIGGER_RUN_STATE_SUCCEEDED
+	return IsTerminalState(tr.Status.State)
 }
 
 // GetTriggerType determines the trigger type from a TriggerRun specification.

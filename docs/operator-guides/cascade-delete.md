@@ -17,7 +17,7 @@ Cascade is on by default and **irreversible** — deleting a Pipeline terminates
 
 ## Cancel cascade (TriggerRun)
 
-Killing or deleting a TriggerRun cancels the pipeline runs it started. The controller finds them by the `pipelinerun.michelangelo/triggered-by=<trigger-name>` label (child runs carry no ownerReference to their trigger) and sets `spec.kill=true` on each one. It doesn't delete them, so they stay in the run history as `KILLED`.
+Killing a TriggerRun, or deleting the Pipeline that owns it (which cascades to the TriggerRun), cancels the pipeline runs it started. The controller finds them by the `pipelinerun.michelangelo/triggered-by=<trigger-name>` label (child runs carry no ownerReference to their trigger) and sets `spec.kill=true` on each one. It doesn't delete them, so they stay in the run history as `KILLED`.
 
 Runs that are pending or running are cancelled, and so are runs in `INVALID`: a run the trigger just created that hasn't started yet. Cancelling it stops it from starting.
 
@@ -28,7 +28,7 @@ kubectl get pipelineruns -n <namespace> -l pipelinerun.michelangelo/triggered-by
 ```
 
 - **Kill:** the TriggerRun stays in `PENDING_KILL` until its child runs are terminal, then ends `KILLED` and stays visible. `PENDING_KILL` has no timeout: the controller keeps retrying the cancels and waits until every child stops. If a child run is stuck, kill that pipeline run directly.
-- **Delete:** the TriggerRun's drain finalizer (see [Drain finalizers](#drain-finalizers)) is held until its child runs are terminal, bounded by the same 24-hour [safety timeout](#safety-timeout).
+- **Delete:** the API refuses to delete a TriggerRun that is not `FAILED`, `KILLED` or `SUCCEEDED` (gRPC `FailedPrecondition`): kill it first. A TriggerRun removed by cascade from its Pipeline bypasses that check; its drain finalizer (see [Drain finalizers](#drain-finalizers)) is then held until its child runs are terminal, bounded by the same 24-hour [safety timeout](#safety-timeout).
 
 ## Controlling cascade behavior
 

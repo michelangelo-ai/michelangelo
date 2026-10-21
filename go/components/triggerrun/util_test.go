@@ -724,3 +724,17 @@ func TestGetAdhocRunWorkflowStatus(t *testing.T) {
 		})
 	}
 }
+
+func TestIsTerminalState(t *testing.T) {
+	for state, want := range map[v2pb.TriggerRunState]bool{
+		v2pb.TRIGGER_RUN_STATE_INVALID:      false,
+		v2pb.TRIGGER_RUN_STATE_RUNNING:      false,
+		v2pb.TRIGGER_RUN_STATE_PENDING_KILL: false,
+		v2pb.TRIGGER_RUN_STATE_PAUSED:       false,
+		v2pb.TRIGGER_RUN_STATE_FAILED:       true,
+		v2pb.TRIGGER_RUN_STATE_KILLED:       true,
+		v2pb.TRIGGER_RUN_STATE_SUCCEEDED:    true,
+	} {
+		assert.Equal(t, want, IsTerminalState(state), state.String())
+	}
+}
