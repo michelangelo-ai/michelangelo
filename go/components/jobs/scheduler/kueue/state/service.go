@@ -181,6 +181,23 @@ func (s *Service) Lookup(cluster, localQueue string) (View, error) {
 	return view, nil
 }
 
+// LastKnown implements State.
+func (s *Service) LastKnown(cluster, localQueue string) (exists, known bool) {
+	w := s.watch(cluster)
+	// the informer stays synced through a broken watch, its store holding the
+	// LocalQueues as last listed and watched
+	if w == nil || !w.localQueues.informer.HasSynced() {
+		return false, false
+	}
+	_, found, err := w.localQueues.get(k8sengine.RayLocalNamespace + "/" + localQueue)
+	if err != nil {
+		s.log.V(1).Info("Cannot read the LocalQueue as last listed", "cluster", cluster, "localQueue", localQueue,
+			"error", err.Error())
+		return false, false
+	}
+	return found, true
+}
+
 // Ask implements Demand.
 func (s *Service) Ask(job *v2pb.RayCluster, cluster *v2pb.Cluster) (corev1.ResourceList, error) {
 	return s.tracker.ask(job, cluster)

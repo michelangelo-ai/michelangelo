@@ -546,6 +546,70 @@ func TestServiceWatchErrorUnsyncsTheClusterUntilItRelists(t *testing.T) {
 	requireView(t, svc, "ma-team-a", pendingWorkloads(7))
 }
 
+// TestServiceLastKnown follows the LocalQueues as last listed and watched
+// through a cluster's first list, a broken LocalQueue watch and a restart with
+// a new client.
+func TestServiceLastKnown(t *testing.T) {
+	fk := newFakeKueue(t, "v1beta2",
+		loadFixture(t, "v1beta2", "clusterqueue-single-flavor"),
+		loadFixture(t, "v1beta2", "localqueue-active"),
+	)
+	svc, _ := newTestService(t, "")
+	runService(t, svc)
+	requireLastKnown := func(t *testing.T, localQueue string, wantExists, wantKnown bool) {
+		t.Helper()
+		exists, known := svc.LastKnown("cluster-1", localQueue)
+		require.Equal(t, wantExists, exists, "exists")
+		require.Equal(t, wantKnown, known, "known")
+	}
+
+	// the first list hangs
+	fk.holdLists()
+	svc.Watch(kueueClusterAt("cluster-1", fk.server.URL, "token"))
+	require.Eventually(t, func() bool { return fk.requestCount("list localqueues") >= 1 }, _timeout, _tick)
+	requireLastKnown(t, "ma-team-a", false, false)
+
+	fk.releaseLists()
+	requireSynced(t, svc, "cluster-1")
+	requireLastKnown(t, "ma-team-a", true, true)
+	requireLastKnown(t, "ma-team-c", false, true)
+	exists, known := svc.LastKnown("cluster-2", "ma-team-a")
+	assert.False(t, exists || known, "a cluster not watched")
+
+	// a LocalQueue is created over the watch
+	fk.put(t, localQueue(t, "v1beta2", "ma-team-c", "cluster-queue"))
+	requireView(t, svc, "ma-team-c", func(v View) bool { return v.Exists })
+
+	// the LocalQueue watch ends and cannot be restarted, and lists hang
+	fk.holdLists()
+	fk.fail("watch localqueues", http.StatusForbidden)
+	fk.endWatches("localqueues")
+	require.Eventually(t, func() bool { return !svc.Synced("cluster-1") }, _timeout, _tick)
+	view, err := svc.Lookup("cluster-1", "ma-team-a")
+	require.NoError(t, err)
+	assert.Equal(t, View{}, view)
+	requireLastKnown(t, "ma-team-a", true, true)
+	requireLastKnown(t, "ma-team-c", true, true)
+	requireLastKnown(t, "ma-team-d", false, true)
+
+	// restarted with a new client, whose list hangs
+	old := svc.watch("cluster-1")
+	svc.Rewatch("cluster-1")
+	requireClosed(t, old.done)
+	requireLastKnown(t, "ma-team-a", false, false)
+
+	fk.fail("watch localqueues", 0)
+	fk.releaseLists()
+	requireSynced(t, svc, "cluster-1")
+	requireLastKnown(t, "ma-team-a", true, true)
+	requireLastKnown(t, "ma-team-c", true, true)
+
+	// a stored object that is not a LocalQueue cannot be read
+	require.NoError(t, svc.watch("cluster-1").localQueues.informer.GetStore().Add(
+		&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "ma-team-x", Namespace: "default"}}))
+	requireLastKnown(t, "ma-team-x", false, false)
+}
+
 func TestServiceKueueAbsent(t *testing.T) {
 	fk := newFakeKueue(t, "v1beta2",
 		loadFixture(t, "v1beta2", "clusterqueue-single-flavor"),

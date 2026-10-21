@@ -38,6 +38,21 @@ func (m *MockState) EXPECT() *MockStateMockRecorder {
 	return m.recorder
 }
 
+// LastKnown mocks base method.
+func (m *MockState) LastKnown(cluster, localQueue string) (bool, bool) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LastKnown", cluster, localQueue)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(bool)
+	return ret0, ret1
+}
+
+// LastKnown indicates an expected call of LastKnown.
+func (mr *MockStateMockRecorder) LastKnown(cluster, localQueue interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LastKnown", reflect.TypeOf((*MockState)(nil).LastKnown), cluster, localQueue)
+}
+
 // Lookup mocks base method.
 func (m *MockState) Lookup(cluster, localQueue string) (state.View, error) {
 	m.ctrl.T.Helper()

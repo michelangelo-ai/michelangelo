@@ -30,6 +30,10 @@ const (
 	_inferenceServerConfigKey = "inferenceServer"
 	_deploymentConfigKey      = "deployment"
 	_schedulerConfigKey       = "jobs.scheduler"
+
+	// _schedulerBackendKueue is the jobs.scheduler.backend value of the Kueue
+	// backend.
+	_schedulerBackendKueue = "kueue"
 )
 
 // K8sConfig is the configuration for k8s REST client.
@@ -111,12 +115,32 @@ type KueueConfig struct {
 // jobs.scheduler.kueue.admissionTimeout is absent or zero.
 const DefaultAdmissionTimeout = 24 * time.Hour
 
+// The values of jobs.scheduler.assignmentStrategy (RFC-20260731 Phase 2).
+const (
+	// AssignmentStrategyClusterOnly assigns a job to the cluster its
+	// affinity names, else to the first Ready cluster. An empty strategy
+	// means it.
+	AssignmentStrategyClusterOnly = "cluster_only"
+	// AssignmentStrategyKueueAwareShadow assigns as cluster_only does, and
+	// computes and reports the kueue_aware decision beside it.
+	AssignmentStrategyKueueAwareShadow = "kueue_aware_shadow"
+	// AssignmentStrategyKueueAware assigns a job to the Kueue-managed
+	// cluster that ranks first for it by the clusters' Kueue state.
+	AssignmentStrategyKueueAware = "kueue_aware"
+)
+
 // SchedulerConfig selects and configures the job scheduler backend.
 type SchedulerConfig struct {
 	// Backend is the scheduler backend: "default" (or empty) for the
 	// built-in immediate-admission queue, "kueue" for Kueue-managed
 	// admission.
 	Backend string `yaml:"backend"`
+	// AssignmentStrategy picks the cluster a job is assigned to:
+	// AssignmentStrategyClusterOnly (or empty),
+	// AssignmentStrategyKueueAwareShadow or AssignmentStrategyKueueAware. The
+	// two Kueue values require Backend "kueue". Any other value is a startup
+	// error.
+	AssignmentStrategy string `yaml:"assignmentStrategy"`
 	// Kueue holds Kueue backend settings; ignored unless Backend is "kueue".
 	Kueue KueueConfig `yaml:"kueue"`
 }
@@ -201,10 +225,14 @@ func GetWorkflowClientConfig(provider config.Provider) (WorkflowClientConfig, er
 
 // GetSchedulerConfig parses the configuration file and returns the job scheduler configuration.
 // An absent or zero admission timeout is DefaultAdmissionTimeout; a negative one is an error.
+// An unknown assignment strategy, or a Kueue one without the Kueue backend, is an error.
 func GetSchedulerConfig(provider config.Provider) (SchedulerConfig, error) {
 	schedulerConfig := SchedulerConfig{}
 	if err := provider.Get(_schedulerConfigKey).Populate(&schedulerConfig); err != nil {
 		return schedulerConfig, err
+	}
+	if err := validateAssignmentStrategy(schedulerConfig); err != nil {
+		return SchedulerConfig{}, err
 	}
 	switch timeout := schedulerConfig.Kueue.AdmissionTimeout; {
 	case timeout < 0:
@@ -213,6 +241,26 @@ func GetSchedulerConfig(provider config.Provider) (SchedulerConfig, error) {
 		schedulerConfig.Kueue.AdmissionTimeout = DefaultAdmissionTimeout
 	}
 	return schedulerConfig, nil
+}
+
+// validateAssignmentStrategy checks jobs.scheduler.assignmentStrategy: it is
+// one of its values, and a Kueue one comes with the Kueue backend, whose job
+// queue keeps the enqueue-time contract the Kueue strategies' decisions need.
+func validateAssignmentStrategy(c SchedulerConfig) error {
+	switch c.AssignmentStrategy {
+	case "", AssignmentStrategyClusterOnly:
+		return nil
+	case AssignmentStrategyKueueAwareShadow, AssignmentStrategyKueueAware:
+		if c.Backend != _schedulerBackendKueue {
+			return fmt.Errorf("%s.assignmentStrategy %q requires %s.backend %q, got %q",
+				_schedulerConfigKey, c.AssignmentStrategy, _schedulerConfigKey, _schedulerBackendKueue, c.Backend)
+		}
+		return nil
+	default:
+		return fmt.Errorf("unrecognized %s.assignmentStrategy %q (expected %q, %q or %q)",
+			_schedulerConfigKey, c.AssignmentStrategy,
+			AssignmentStrategyClusterOnly, AssignmentStrategyKueueAwareShadow, AssignmentStrategyKueueAware)
+	}
 }
 
 // GetMySQLConfig parses the configuration file and returns the MySQL configuration.

@@ -9,6 +9,7 @@ import (
 	commonscheduler "github.com/michelangelo-ai/michelangelo/go/components/jobs/common/scheduler"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/scheduler/framework"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/scheduler/kueue"
+	kueuestate "github.com/michelangelo-ai/michelangelo/go/components/jobs/scheduler/kueue/state"
 	"github.com/uber-go/tally"
 	"go.uber.org/fx"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -44,15 +45,20 @@ type ProvideIn struct {
 	AssignmentStrategy framework.AssignmentStrategy
 	ClusterCache       cluster.RegisteredClustersCache
 	LocalQueues        kueue.LocalQueues
-	Scope              tally.Scope
+	// KueueState and KueueDemand are the Kueue state the kueue_aware
+	// strategies place jobs by.
+	KueueState  kueuestate.State
+	KueueDemand kueuestate.Demand
+	Scope       tally.Scope
 }
 
 // provide returns the JobQueue selected by jobs.scheduler.backend. The Kueue
 // backend replaces the default scheduler's decision path: it makes and
 // persists each job's single placement decision at enqueue, validating
 // LocalQueue placement first for jobs headed to Kueue-managed clusters, so no
-// cluster is selected again after validation. The default backend is
-// unchanged.
+// cluster is selected again after validation. It decides by
+// jobs.scheduler.assignmentStrategy, which the config allows to be a Kueue
+// one only under this backend. The default backend is unchanged.
 func provide(in ProvideIn) (JobQueue, error) {
 	switch in.Config.Backend {
 	case "", _backendDefault:
@@ -70,10 +76,31 @@ func provide(in ProvideIn) (JobQueue, error) {
 			Config:             in.Config,
 			Scope:              in.Scope,
 			Logger:             in.Manager.GetLogger(),
-		}), nil
+		}, kueueOptions(in)...), nil
 	default:
 		return nil, fmt.Errorf(
 			"unrecognized jobs.scheduler.backend %q (expected %q or %q)",
 			in.Config.Backend, _backendDefault, _backendKueue)
+	}
+}
+
+// kueueOptions returns the Kueue backend's options for
+// jobs.scheduler.assignmentStrategy: kueue_aware and kueue_aware_shadow add
+// the kueue_aware strategy, and cluster_only, the default, adds nothing.
+func kueueOptions(in ProvideIn) []kueue.Option {
+	switch in.Config.AssignmentStrategy {
+	case maconfig.AssignmentStrategyKueueAware, maconfig.AssignmentStrategyKueueAwareShadow:
+		strategy := kueue.NewKueueAwareStrategy(kueue.KueueAwareParams{
+			ClusterCache: in.ClusterCache,
+			LocalQueues:  in.LocalQueues,
+			State:        in.KueueState,
+			Demand:       in.KueueDemand,
+			Config:       in.Config,
+			Logger:       in.Manager.GetLogger(),
+		})
+		shadow := in.Config.AssignmentStrategy == maconfig.AssignmentStrategyKueueAwareShadow
+		return []kueue.Option{kueue.WithKueueAwareStrategy(strategy, shadow)}
+	default:
+		return nil
 	}
 }

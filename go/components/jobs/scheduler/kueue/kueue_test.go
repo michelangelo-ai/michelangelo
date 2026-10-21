@@ -94,10 +94,9 @@ func defaultCluster(name string) *v2pb.Cluster {
 	return &v2pb.Cluster{ObjectMeta: metav1.ObjectMeta{Name: name}}
 }
 
-func newTestQueue(t *testing.T, strategy framework.AssignmentStrategy,
-	clusters *clustermocks.MockRegisteredClustersCache, queues LocalQueues, cfg maconfig.SchedulerConfig,
-	objs ...client.Object,
-) (*KueueJobQueue, *countingHandler) {
+// newCountingHandler returns a handler over a fake client that stores the
+// objects.
+func newCountingHandler(t *testing.T, objs ...client.Object) *countingHandler {
 	scheme := runtime.NewScheme()
 	require.NoError(t, v2pb.AddToScheme(scheme))
 	fakeClient := fake.NewClientBuilder().
@@ -105,7 +104,14 @@ func newTestQueue(t *testing.T, strategy framework.AssignmentStrategy,
 		WithObjects(objs...).
 		WithStatusSubresource(&v2pb.RayCluster{}, &v2pb.SparkJob{}).
 		Build()
-	handler := &countingHandler{Handler: apiHandler.NewFakeAPIHandler(fakeClient)}
+	return &countingHandler{Handler: apiHandler.NewFakeAPIHandler(fakeClient)}
+}
+
+func newTestQueue(t *testing.T, strategy framework.AssignmentStrategy,
+	clusters *clustermocks.MockRegisteredClustersCache, queues LocalQueues, cfg maconfig.SchedulerConfig,
+	objs ...client.Object,
+) (*KueueJobQueue, *countingHandler) {
+	handler := newCountingHandler(t, objs...)
 
 	q := NewKueueJobQueue(Params{
 		Handler:            handler,
@@ -877,7 +883,7 @@ func TestRecordPlacement(t *testing.T) {
 			rc.Generation = 3
 			rc.Status.StatusConditions = tt.conditions
 
-			require.True(t, recordPlacement(rc, "cluster-x"))
+			require.True(t, recordPlacement(rc, "cluster-x", tierNone))
 			assertScheduledTo(t, &rc.Status, "cluster-x")
 			scheduled := findCondition(rc.Status.StatusConditions, constants.ScheduledCondition)
 			assert.Equal(t, int64(3), scheduled.ObservedGeneration)
@@ -901,19 +907,32 @@ func TestRecordPlacement(t *testing.T) {
 			condition(constants.EnqueuedCondition, apipb.CONDITION_STATUS_FALSE, constants.KueueQueueNotFound),
 		}
 		before := rc.DeepCopy()
-		assert.False(t, recordPlacement(rc, "cluster-x"))
+		assert.False(t, recordPlacement(rc, "cluster-x", tierFitsNow))
 		assert.Equal(t, before, rc)
 	})
 
 	t.Run("spark job", func(t *testing.T) {
 		sj := &v2pb.SparkJob{}
-		require.True(t, recordPlacement(sj, "cluster-x"))
+		require.True(t, recordPlacement(sj, "cluster-x", tierNone))
 		assert.Equal(t, "cluster-x", sj.Status.Assignment.GetCluster())
 		assert.True(t, findCondition(sj.Status.StatusConditions, constants.ScheduledCondition).Status == apipb.CONDITION_STATUS_TRUE)
 	})
 
 	t.Run("unsupported type", func(t *testing.T) {
-		assert.False(t, recordPlacement(&v2pb.RayJob{}, "cluster-x"))
+		assert.False(t, recordPlacement(&v2pb.RayJob{}, "cluster-x", tierNone))
+	})
+
+	t.Run("a ranked cluster's tier is appended to the message", func(t *testing.T) {
+		for _, tier := range []Tier{tierFitsNow, tierQueueDepth, tierUnsynced, tierHeld} {
+			rc := testRayCluster(nil, "")
+			require.True(t, recordPlacement(rc, "cluster-x", tier))
+			assert.Equal(t, "cluster-x", rc.Status.Assignment.GetCluster())
+			scheduled := findCondition(rc.Status.StatusConditions, constants.ScheduledCondition)
+			require.NotNil(t, scheduled)
+			assert.Equal(t, apipb.CONDITION_STATUS_TRUE, scheduled.Status)
+			assert.Equal(t, constants.ClusterMatched, scheduled.Reason)
+			assert.Equal(t, fmt.Sprintf("cluster cluster-x, tier %d", tier), scheduled.Message)
+		}
 	})
 }
 

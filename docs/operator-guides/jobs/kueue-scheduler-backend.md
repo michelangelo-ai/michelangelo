@@ -111,6 +111,7 @@ controllermgr:
   jobs:
     scheduler:
       backend: kueue
+      # assignmentStrategy: cluster_only   # default; kueue_aware_shadow, then kueue_aware
       # Optional:
       # kueue:
       #   localQueueTemplate: "ma-{project}"   # default
@@ -130,16 +131,55 @@ Config path `jobs.scheduler` (Helm: `controllermgr.jobs.scheduler`):
 | Key | Default | Meaning |
 |-----|---------|---------|
 | `backend` | `default` | `default` for immediate admission; `kueue` to validate and label jobs bound for Kueue-managed clusters. |
+| `assignmentStrategy` | `cluster_only` | How the Kueue backend picks a job's cluster. `cluster_only` is today's placement: the pinned cluster, else the first Ready cluster. `kueue_aware_shadow` assigns as `cluster_only`, and logs and counts the `kueue_aware` decision beside it. `kueue_aware` places RayClusters by the clusters' Kueue state; see [Kueue-aware placement](#kueue-aware-placement). Both Kueue values require `backend: kueue`, or the controllermgr fails at startup, as it does on any other value. SparkJobs keep `cluster_only`. |
 | `kueue.localQueueTemplate` | `ma-{project}` | LocalQueue naming convention; `{project}` is replaced with the job's project. |
 | `kueue.localQueueOverrides` | `{}` | Per-project explicit LocalQueue names; an override wins over the template. |
 | `kueue.apiVersion` | `v1beta2` | `kueue.x-k8s.io` API version used for the LocalQueue existence check on compute clusters. |
 | `kueue.admissionTimeout` | `24h` | Bound on a RayCluster's admission wait: time waiting for a placement plus time held by Kueue, measured from creation and again from each eviction. On expiry the RayCluster fails with `AdmissionTimeout` and its compute-side object is deleted. A negative value fails at startup. |
 | `kueue.trustProjectLabel` | `false` | When `true`, the `ma/project-name` label overrides the namespace as the job's project. See [Queue topology](#queue-topology). |
 
+## Kueue-aware placement
+
+With `assignmentStrategy: kueue_aware`, the control plane places each RayCluster on the Kueue-managed cluster where Kueue is likely to admit it soonest. It decides from the ClusterQueues and LocalQueues it watches on each cluster. Kueue stays the only queue: placement only picks which cluster's queue a job joins.
+
+Each decision takes five steps:
+
+1. **Pin:** a job whose affinity names a registered cluster considers only that cluster. A Kueue-managed pin skips ranking, not the checks. Any other pin is assigned as today.
+2. **Candidates:** the Ready, Kueue-managed clusters that carry the job's LocalQueue. On a cluster whose watch has not synced, the LocalQueue is checked directly.
+3. **Eligible:** a candidate whose ClusterQueue's nominal quota covers the job's request of every resource. A resource the ClusterQueue does not cover counts as zero. A candidate that cannot be scored stays eligible.
+4. **Rank:** by tier, then within the tier, then by cluster name.
+5. **Assign** the top-ranked eligible candidate.
+
+Tiers, best first:
+
+- **Tier 1:** the request fits the ClusterQueue's free quota now (nominal, minus reserved, minus jobs in flight). Most room left on the job's tightest resource, as a share of nominal quota, first.
+- **Tier 2:** the cluster's state is synced, but the request does not fit now or cannot be scored. Fewest pending workloads first, jobs in flight included, then the smallest shortfall.
+- **Tier 3:** the cluster's state has not synced. In `cluster_only` order.
+- **Tier 4:** the LocalQueue is inactive, or the ClusterQueue's stop policy holds admissions, so Kueue holds the job there.
+
+Remaining ties go to the cluster whose name sorts first. A candidate cannot be scored when its ClusterQueue is missing, has several flavors or has a cohort, or when the job's request cannot be computed.
+
+With no eligible candidate:
+
+| Situation | Outcome |
+|---|---|
+| The job is not pinned, and no Kueue-managed cluster carries its LocalQueue or may carry it | Assigned as `cluster_only` would, over the Ready clusters without Kueue, so a project that is not onboarded runs as today |
+| The same, but no Ready cluster without Kueue exists, or the job is pinned to a Kueue-managed cluster without the LocalQueue | Waits with `KueueQueueNotFound` |
+| No Ready cluster carries the LocalQueue, but one that is not Ready does or may | Waits with `KueueClusterNotReady` |
+| The request exceeds the nominal quota of every candidate | Waits with `KueueQuotaExceeded` |
+| A Ready cluster's LocalQueue cannot be read. This wins over the rows above, because that cluster may be eligible | Waits with `KueueQueueCheckFailed` |
+
+A waiting job shows `Enqueued=False` with the reason and a message naming its LocalQueue, and is placed again with backoff.
+
+- **Clusters that are not Ready** are never dialed. Their watched state decides whether they carry the LocalQueue, or else their LocalQueues as last listed, so a broken watch does not hold jobs back. If neither can say, because its LocalQueues have not been listed since its watch last started or cannot be read, the cluster may carry the LocalQueue: it blocks the fallback, and the message marks it `(queues not listed yet)` or `(queues cannot be read)`. LocalQueues go unlisted only when the control plane restarts, or the cluster's credentials change, while the cluster is down. That wait lasts until the cluster is Ready again.
+- **Re-placed jobs:** the decision first skips the clusters the job was already assigned to, and decides without skipping them only if nothing is left.
+- **Scheduled message:** when `kueue_aware` ranked the cluster, the `Scheduled` condition reads `cluster X, tier N`.
+- **Shadow mode:** `kueue_aware_shadow` assigns and validates as `cluster_only`. Beside it, it makes the `kueue_aware` decision, logs it next to the `cluster_only` pick, and counts it (see [Observability](#observability)). It writes no conditions of its own. Run it before you switch to `kueue_aware`.
+
 ## Observability
 
 - **Waiting for quota:** the RayCluster carries `Queued=True` (reason `AwaitingAdmission`) exactly while Kueue holds it, flipping to `False`/`ClusterAdmitted` when Kueue admits it. A queued job is therefore distinguishable from one stuck launching, and the condition's timestamp is when it started or stopped waiting.
-- **Waiting for a placement:** a missing LocalQueue sets `Enqueued=False` with reason `KueueQueueNotFound` and a message naming the queue; a compute cluster that cannot be asked sets `KueueQueueCheckFailed`. The job keeps that condition, rewritten only when the reason changes, and is re-checked.
+- **Waiting for a placement:** a missing LocalQueue sets `Enqueued=False` with reason `KueueQueueNotFound` and a message naming the queue; a compute cluster that cannot be asked sets `KueueQueueCheckFailed`. Under `kueue_aware`, a LocalQueue carried only by clusters that are not Ready sets `KueueClusterNotReady`, and a request over every candidate's nominal quota sets `KueueQuotaExceeded` (see [Kueue-aware placement](#kueue-aware-placement)). The job keeps that condition, rewritten only when the reason changes, and is re-checked.
 - **Admission bound:** a RayCluster whose admission wait exceeds `kueue.admissionTimeout` fails with `Succeeded=False`, reason `AdmissionTimeout`, and its compute-side RayCluster is deleted, releasing its queue position. The wait counts placement waits and time held by Kueue, from creation and again from each eviction. Uniflow's provisioning budget (1800 s by default) no longer counts time held by Kueue.
 - **Dispatch retries.** A create that fails with a transient error, such as Kueue's webhook during a restart, is retried with backoff for up to 10 minutes.
   - While it retries, the RayCluster shows `Launched=False`, reason `ClusterCreationFailed`, with the last error in the message.
@@ -150,6 +190,12 @@ Config path `jobs.scheduler` (Helm: `controllermgr.jobs.scheduler`):
   - A create that may have reached the cluster, for example one that timed out after connecting, is retried in place on the same cluster.
 - **Compute-side ownership.** Every RayCluster and RayJob the control plane creates on a compute cluster carries the annotations `ma/owner` (`<namespace>/<name>` of the control-plane object) and `ma/owner-uid`. The control plane deletes only objects whose `ma/owner-uid` matches. A create that finds an object of the same name adopts it only if the object's `ma/owner-uid` is the job's, or the object has no owner annotation, as objects created before this release do. An object owned by another job fails the create at once with `ClusterCreationFailed`, naming that job. Compute-side objects are named after the job alone, in `default`, so same-named jobs in two projects collide, and one of them must be renamed. If the control plane restarts between a create and recording it, and the job is then placed elsewhere, the first object can be left behind. To find such orphans, list the RayClusters in `default` whose `ma/owner-uid` matches no live control-plane RayCluster.
 - **Metrics:** the `kueuescheduler` controller scope emits `kueue.queue_not_found_count` and `kueue.queue_check_failed_count`. The controllermgr metrics endpoint serves `michelangelo_jobs_admission_timeouts_total`, the `michelangelo_jobs_admission_wait_seconds` histogram, `michelangelo_jobs_create_retries_total` and `michelangelo_jobs_replacements_total`.
+  - It also serves `michelangelo_kueue_assignment_decisions_total`, one count per `kueue_aware` decision under either Kueue strategy, with these labels:
+  - `strategy` is `kueue_aware` or `kueue_aware_shadow`.
+  - `tier` is the chosen cluster's tier, `1` to `4`, or `none` when the job waits or goes to a cluster without Kueue.
+  - `outcome` is `assigned`, `pinned`, `fallback`, `queue_not_found`, `cluster_not_ready`, `quota_exceeded` or `check_failed`.
+  - `actual_tier` is set in shadow mode only: the tier of the `cluster_only` pick that was assigned, or `none` when that pick is not a candidate.
+- **Shadow mode's would-have-fit-elsewhere rate:** shadow decisions with `tier="1"` whose `actual_tier` is not `1`, over all shadow decisions. These jobs fit now on the cluster `kueue_aware` chose, and were not known to fit on the cluster they got. The rate is an upper bound: tier 3 clusters, whose state has not synced, and clusters that cannot be scored have unknown room.
 - On the compute cluster, Kueue's own metrics and `kubectl get workloads`/`localqueues` show admission state and quota usage.
 
 ## Compatibility
@@ -162,6 +208,7 @@ Config path `jobs.scheduler` (Helm: `controllermgr.jobs.scheduler`):
 
 Each step is independently reversible:
 
+- Set `jobs.scheduler.assignmentStrategy: cluster_only` (or remove it) to return to today's placement; jobs already placed keep their cluster.
 - Set `jobs.scheduler.backend: default` (or remove it) to stop validating and labeling; already-dispatched suspended clusters still get admitted by Kueue on the compute cluster.
 - Remove `scheduler_type` from a `Cluster` spec to return that cluster to immediate admission while the backend stays on for others.
 - Uninstalling Kueue from a compute cluster leaves any still-suspended RayClusters suspended: terminate them (or clear `spec.suspend` on the KubeRay object) before removing Kueue.
