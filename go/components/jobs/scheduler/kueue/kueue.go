@@ -155,7 +155,7 @@ func (q *KueueJobQueue) targetCluster(ctx context.Context, job framework.BatchJo
 		}
 		log.Info("Recorded assignment names an unregistered cluster; selecting again", "recordedCluster", name)
 	}
-	ai, found, _, err := q.strategy.Select(ctx, job)
+	ai, found, err := q.selectCluster(ctx, job, log)
 	if err != nil {
 		return nil, err
 	}
@@ -163,6 +163,33 @@ func (q *KueueJobQueue) targetCluster(ctx context.Context, job framework.BatchJo
 		return nil, nil
 	}
 	return q.clusters.GetCluster(ai.GetCluster()), nil
+}
+
+// selectCluster returns the assignment strategy's decision. For a job
+// re-placed off earlier targets, a strategy that can exclude clusters
+// (framework.ExcludingAssignmentStrategy) decides without them; when that
+// finds no cluster, it decides again with them, which keeps the outcome a
+// decision without the exclusion has: a wait or the same cluster (RFC 0f).
+func (q *KueueJobQueue) selectCluster(ctx context.Context, job framework.BatchJob, log logr.Logger) (*v2pb.AssignmentInfo, bool, error) {
+	if excluding, ok := q.strategy.(framework.ExcludingAssignmentStrategy); ok {
+		state, err := utils.DispatchStateFromCondition(utils.FindCondition(*job.GetConditions(), constants.LaunchedCondition))
+		if err != nil {
+			log.Error(err, "Ignoring an undecodable dispatch record")
+		}
+		if len(state.ExcludedClusters) > 0 {
+			ai, found, _, err := excluding.SelectExcluding(ctx, job, state.ExcludedClusters)
+			if err != nil {
+				return nil, false, err
+			}
+			if found && ai.GetCluster() != "" {
+				return ai, true, nil
+			}
+			log.Info("No cluster left after excluding earlier targets; deciding without the exclusion",
+				"excludedClusters", state.ExcludedClusters)
+		}
+	}
+	ai, found, _, err := q.strategy.Select(ctx, job)
+	return ai, found, err
 }
 
 // validateLocalQueue checks that the job's LocalQueue exists on the

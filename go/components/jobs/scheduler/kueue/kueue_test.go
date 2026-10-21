@@ -21,9 +21,11 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	maconfig "github.com/michelangelo-ai/michelangelo/go/base/config"
+	"github.com/michelangelo-ai/michelangelo/go/components/jobs/cluster"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/cluster/clustermocks"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/constants"
 	matypes "github.com/michelangelo-ai/michelangelo/go/components/jobs/common/types"
+	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/utils"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/scheduler/framework"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/scheduler/framework/frameworkmocks"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/scheduler/kueue/kueuemocks"
@@ -441,6 +443,94 @@ func TestEnqueueExistingAssignmentToUnregisteredClusterSelectsAgain(t *testing.T
 	queues := kueuemocks.NewMockLocalQueues(g)
 
 	q, _, readBack := setup(t, rc, strategy, clusters, queues, kueueConfig())
+	require.NoError(t, q.Enqueue(context.Background(), schedulableJob(rc)))
+	assertScheduledTo(t, &readBack().Status, "cluster-a")
+}
+
+// replacedRayCluster is a RayCluster re-placed off the excluded clusters, so
+// it has no assignment and its Launched condition records them.
+func replacedRayCluster(t *testing.T, labels map[string]string, excluded ...string) *v2pb.RayCluster {
+	t.Helper()
+	rc := testRayCluster(labels, "")
+	metadata, err := utils.DispatchState{Replacements: len(excluded), ExcludedClusters: excluded}.Metadata()
+	require.NoError(t, err)
+	rc.Status.StatusConditions = []*apipb.Condition{{
+		Type: constants.LaunchedCondition, Status: apipb.CONDITION_STATUS_UNKNOWN, Metadata: metadata,
+	}}
+	return rc
+}
+
+// readyClusters is a cluster cache of the named clusters, all registered and
+// Ready, in order.
+func readyClusters(g *gomock.Controller, names ...string) *clustermocks.MockRegisteredClustersCache {
+	byName := map[string]*v2pb.Cluster{}
+	var ready []*v2pb.Cluster
+	for _, name := range names {
+		byName[name] = defaultCluster(name)
+		ready = append(ready, byName[name])
+	}
+	clusters := clustermocks.NewMockRegisteredClustersCache(g)
+	clusters.EXPECT().GetClusters(cluster.ReadyClusters).Return(ready).AnyTimes()
+	clusters.EXPECT().GetCluster(gomock.Any()).DoAndReturn(func(name string) *v2pb.Cluster { return byName[name] }).AnyTimes()
+	return clusters
+}
+
+func TestEnqueueReplacementExcludesEarlierTargets(t *testing.T) {
+	tests := []struct {
+		name     string
+		labels   map[string]string
+		excluded []string
+		want     string
+	}{
+		{
+			name:     "an excluded Ready cluster is skipped",
+			excluded: []string{"cluster-a"},
+			want:     "cluster-b",
+		},
+		{
+			name:     "with every Ready cluster excluded, the decision is made without the exclusion",
+			excluded: []string{"cluster-b", "cluster-a"},
+			want:     "cluster-a",
+		},
+		{
+			name:     "a pin is kept",
+			labels:   map[string]string{constants.ClusterAffinityLabelKey: "cluster-a"},
+			excluded: []string{"cluster-a"},
+			want:     "cluster-a",
+		},
+		{
+			name: "a job without exclusions is unchanged",
+			want: "cluster-a",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := gomock.NewController(t)
+			clusters := readyClusters(g, "cluster-a", "cluster-b")
+			strategy := framework.NewClusterOnlyAssignmentStrategy(clusters, logr.Discard())
+			rc := replacedRayCluster(t, tt.labels, tt.excluded...)
+
+			q, handler, readBack := setup(t, rc, strategy, clusters, kueuemocks.NewMockLocalQueues(g), kueueConfig())
+			require.NoError(t, q.Enqueue(context.Background(), schedulableJob(rc)))
+
+			require.Len(t, handler.statusWrites(), 1)
+			assertScheduledTo(t, &readBack().Status, tt.want)
+		})
+	}
+}
+
+func TestEnqueueReplacementWithAStrategyThatCannotExcludeSelects(t *testing.T) {
+	g := gomock.NewController(t)
+	rc := replacedRayCluster(t, nil, "cluster-a")
+
+	// The mock implements only AssignmentStrategy.
+	strategy := frameworkmocks.NewMockAssignmentEngine(g)
+	strategy.EXPECT().Select(gomock.Any(), gomock.Any()).
+		Return(&v2pb.AssignmentInfo{Cluster: "cluster-a"}, true, "", nil)
+	clusters := clustermocks.NewMockRegisteredClustersCache(g)
+	clusters.EXPECT().GetCluster("cluster-a").Return(defaultCluster("cluster-a"))
+
+	q, _, readBack := setup(t, rc, strategy, clusters, kueuemocks.NewMockLocalQueues(g), kueueConfig())
 	require.NoError(t, q.Enqueue(context.Background(), schedulableJob(rc)))
 	assertScheduledTo(t, &readBack().Status, "cluster-a")
 }

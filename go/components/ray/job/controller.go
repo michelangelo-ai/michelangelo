@@ -21,12 +21,18 @@ import (
 	jobsutils "github.com/michelangelo-ai/michelangelo/go/components/jobs/common/utils"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
-	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 )
 
 const (
 	requeueAfter = time.Second * 10
 	apiVersion   = "ray.io/v1"
+
+	// dispatchMetricsJobType labels the dispatch counters.
+	dispatchMetricsJobType = "RayJob"
+
+	// clusterCreationFailedReason is the Launched reason of a create the
+	// target refused for good (RFC 0f).
+	clusterCreationFailedReason = "ClusterCreationFailed"
 )
 
 // Reconciler reconciles a Ray Job object
@@ -36,6 +42,7 @@ type Reconciler struct {
 	federatedClient jobsclient.FederatedClient
 	clusterCache    jobscluster.RegisteredClustersCache
 	env             env.Context
+	now             func() time.Time // Clock; time.Now when nil
 }
 
 // NewReconciler constructs a Reconciler with required dependencies.
@@ -221,12 +228,45 @@ func (r *Reconciler) createRayJobIfNotLaunched(ctx context.Context, logger logr.
 		return
 	}
 
-	err := r.federatedClient.CreateJob(ctx, rayJob, rayCluster, assignedCluster)
-	if err != nil && !apiErrors.IsAlreadyExists(err) {
+	// The create retries in place within a window, with its backoff kept in
+	// the Launched condition's metadata (RFC 0f). Kueue's RayJob webhook
+	// fails closed, so a Kueue restart must not fail submissions.
+	now := r.clock()
+	state, err := jobsutils.DispatchStateFromCondition(jobsutils.FindCondition(rayJob.Status.StatusConditions, constants.LaunchedCondition))
+	if err != nil {
+		logger.Error(err, "ignoring an undecodable dispatch record")
+	}
+	// Back off between attempts: the reconcile triggered by an attempt's own
+	// status write neither dials nor writes.
+	if wait := state.BackoffRemaining(now); wait > 0 {
+		res.RequeueAfter = wait
+		return
+	}
+
+	err = r.federatedClient.CreateJob(ctx, rayJob, rayCluster, assignedCluster)
+	class := jobsclient.ClassifyDispatchError(err)
+	if class == jobsclient.DispatchAlreadyExists {
+		class, err = r.resolveAlreadyExists(ctx, logger, rayJob, assignedCluster)
+	}
+	switch class {
+	case jobsclient.DispatchSuccess:
+	case jobsclient.DispatchPermanent:
 		logger.Error(err, "failed to create ray job via federated client")
 		rayJob.Status.State = v2pb.RAY_JOB_STATE_FAILED
 		rayJob.Status.Message = fmt.Sprintf("failed to create ray job: %v", err)
+		// The dispatch record stays, for the attempts that preceded this one.
+		launchedCond := jobsutils.GetCondition(&rayJob.Status.StatusConditions, constants.LaunchedCondition, rayJob.Generation)
+		jobsutils.UpdateCondition(launchedCond, jobsutils.ConditionUpdateParams{
+			Status:     apipb.CONDITION_STATUS_FALSE,
+			Generation: rayJob.Generation,
+			Reason:     clusterCreationFailedReason,
+			Message:    rayJob.Status.Message,
+			Metadata:   launchedCond.Metadata,
+		})
 		res.RequeueAfter = requeueAfter
+		return
+	default:
+		r.recordFailedAttempt(logger, rayJob, state.WithAttempt(now, class == jobsclient.DispatchAmbiguous), class, err, now, res)
 		return
 	}
 
@@ -239,6 +279,56 @@ func (r *Reconciler) createRayJobIfNotLaunched(ctx context.Context, logger logr.
 		Reason:     "Launched",
 	})
 	res.RequeueAfter = requeueAfter
+}
+
+// resolveAlreadyExists resolves a create that got AlreadyExists from the
+// owner of the RayJob found on the target (RFC 0f): the job adopts its own
+// object, or one without an owner, and fails at once on another job's.
+func (r *Reconciler) resolveAlreadyExists(ctx context.Context, logger logr.Logger, rayJob *v2pb.RayJob, assignedCluster *v2pb.Cluster) (jobsclient.DispatchClass, error) {
+	owner, readErr := r.federatedClient.GetJobOwner(ctx, rayJob, assignedCluster)
+	class, err := jobsclient.ResolveAlreadyExists(string(rayJob.UID), owner, readErr)
+	if class == jobsclient.DispatchSuccess {
+		logger.Info("ray job already exists, treating as launched", "owner", owner.Owner, "ownerUID", owner.UID)
+	}
+	return class, err
+}
+
+// recordFailedAttempt records a failed create in the Launched condition, and
+// requeues the job for the end of its backoff; at the window's end the job
+// fails instead.
+func (r *Reconciler) recordFailedAttempt(logger logr.Logger, rayJob *v2pb.RayJob, state jobsutils.DispatchState,
+	class jobsclient.DispatchClass, cause error, now time.Time, res *ctrl.Result,
+) {
+	metadata, err := state.Metadata()
+	if err != nil {
+		logger.Error(err, "could not encode the dispatch record")
+		res.RequeueAfter = requeueAfter
+		return
+	}
+	launchedCond := jobsutils.GetCondition(&rayJob.Status.StatusConditions, constants.LaunchedCondition, rayJob.Generation)
+	jobsutils.UpdateCondition(launchedCond, jobsutils.ConditionUpdateParams{
+		Status:     apipb.CONDITION_STATUS_FALSE,
+		Generation: rayJob.Generation,
+		Message:    cause.Error(),
+		Metadata:   metadata,
+	})
+	if state.WindowExpired(now) {
+		logger.Error(cause, "failed to create ray job via federated client", "class", class.String(), "attempts", state.Attempts)
+		rayJob.Status.State = v2pb.RAY_JOB_STATE_FAILED
+		rayJob.Status.Message = fmt.Sprintf("failed to create ray job in %d attempts over %s: %v", state.Attempts, jobsutils.DispatchWindow, cause)
+		res.RequeueAfter = requeueAfter
+		return
+	}
+	jobsclient.IncCreateRetries(dispatchMetricsJobType, class)
+	res.RequeueAfter = state.NextAttemptAt.Sub(now)
+	logger.Info("ray job creation failed, retrying", "class", class.String(), "attempts", state.Attempts, "requeueAfter", res.RequeueAfter, "error", cause.Error())
+}
+
+func (r *Reconciler) clock() time.Time {
+	if r.now != nil {
+		return r.now()
+	}
+	return time.Now()
 }
 
 // updateJobStatusIfLaunched updates the job status if it has already been launched.

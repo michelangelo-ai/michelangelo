@@ -123,6 +123,20 @@ func (mr *MockFederatedClientMockRecorder) DeleteJobCluster(ctx, jobClusterObjec
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteJobCluster", reflect.TypeOf((*MockFederatedClient)(nil).DeleteJobCluster), ctx, jobClusterObject, cluster)
 }
 
+// DeleteJobClusterIfOwned mocks base method.
+func (m *MockFederatedClient) DeleteJobClusterIfOwned(ctx context.Context, jobClusterObject runtime.Object, cluster *v2.Cluster) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteJobClusterIfOwned", ctx, jobClusterObject, cluster)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteJobClusterIfOwned indicates an expected call of DeleteJobClusterIfOwned.
+func (mr *MockFederatedClientMockRecorder) DeleteJobClusterIfOwned(ctx, jobClusterObject, cluster interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteJobClusterIfOwned", reflect.TypeOf((*MockFederatedClient)(nil).DeleteJobClusterIfOwned), ctx, jobClusterObject, cluster)
+}
+
 // DeletePromConfigMap mocks base method.
 func (m *MockFederatedClient) DeletePromConfigMap(ctx context.Context, jobObject runtime.Object, cluster *v2.Cluster) error {
 	m.ctrl.T.Helper()
@@ -166,6 +180,21 @@ func (mr *MockFederatedClientMockRecorder) GetClusterStatus(ctx, cluster interfa
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetClusterStatus", reflect.TypeOf((*MockFederatedClient)(nil).GetClusterStatus), ctx, cluster)
 }
 
+// GetJobClusterOwner mocks base method.
+func (m *MockFederatedClient) GetJobClusterOwner(ctx context.Context, jobClusterObject runtime.Object, cluster *v2.Cluster) (client.ComputeOwner, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetJobClusterOwner", ctx, jobClusterObject, cluster)
+	ret0, _ := ret[0].(client.ComputeOwner)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetJobClusterOwner indicates an expected call of GetJobClusterOwner.
+func (mr *MockFederatedClientMockRecorder) GetJobClusterOwner(ctx, jobClusterObject, cluster interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetJobClusterOwner", reflect.TypeOf((*MockFederatedClient)(nil).GetJobClusterOwner), ctx, jobClusterObject, cluster)
+}
+
 // GetJobClusterStatus mocks base method.
 func (m *MockFederatedClient) GetJobClusterStatus(ctx context.Context, jobClusterObject runtime.Object, cluster *v2.Cluster) (*types.JobClusterStatus, error) {
 	m.ctrl.T.Helper()
@@ -179,6 +208,21 @@ func (m *MockFederatedClient) GetJobClusterStatus(ctx context.Context, jobCluste
 func (mr *MockFederatedClientMockRecorder) GetJobClusterStatus(ctx, jobClusterObject, cluster interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetJobClusterStatus", reflect.TypeOf((*MockFederatedClient)(nil).GetJobClusterStatus), ctx, jobClusterObject, cluster)
+}
+
+// GetJobOwner mocks base method.
+func (m *MockFederatedClient) GetJobOwner(ctx context.Context, jobObject runtime.Object, cluster *v2.Cluster) (client.ComputeOwner, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetJobOwner", ctx, jobObject, cluster)
+	ret0, _ := ret[0].(client.ComputeOwner)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetJobOwner indicates an expected call of GetJobOwner.
+func (mr *MockFederatedClientMockRecorder) GetJobOwner(ctx, jobObject, cluster interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetJobOwner", reflect.TypeOf((*MockFederatedClient)(nil).GetJobOwner), ctx, jobObject, cluster)
 }
 
 // GetJobStatus mocks base method.

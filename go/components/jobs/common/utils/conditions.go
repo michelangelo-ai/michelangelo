@@ -27,6 +27,18 @@ func GetCondition(cs *[]*apipb.Condition, name string, generation int64) *apipb.
 	return cond
 }
 
+// FindCondition returns the condition of the supplied type, or nil if there
+// is none. Unlike GetCondition, it never adds a condition, so it is the way
+// to test whether a condition is absent.
+func FindCondition(cs []*apipb.Condition, name string) *apipb.Condition {
+	for _, c := range cs {
+		if c.GetType() == name {
+			return c
+		}
+	}
+	return nil
+}
+
 // ConditionUpdateParams provides params
 // for update to a condition
 type ConditionUpdateParams struct {

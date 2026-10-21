@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	maconfig "github.com/michelangelo-ai/michelangelo/go/base/config"
+	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/constants"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -67,7 +68,7 @@ func TestMapper_MapGlobalJobToLocal(t *testing.T) {
 	}
 
 	rayJob := &v2pb.RayJob{
-		ObjectMeta: metav1.ObjectMeta{Name: "test-job"},
+		ObjectMeta: metav1.ObjectMeta{Name: "test-job", Namespace: "proj-ns", UID: "job-uid"},
 		Spec:       v2pb.RayJobSpec{Entrypoint: "python main.py"},
 	}
 	rayCluster := &v2pb.RayCluster{
@@ -109,6 +110,10 @@ func TestMapper_MapGlobalJobToLocal(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      rayJob.Name,
 					Namespace: RayLocalNamespace,
+					Annotations: map[string]string{
+						constants.OwnerAnnotationKey:    "proj-ns/test-job",
+						constants.OwnerUIDAnnotationKey: "job-uid",
+					},
 				},
 				Spec: rayv1.RayJobSpec{
 					Entrypoint: rayJob.Spec.Entrypoint,
@@ -183,7 +188,7 @@ func TestMapper_MapGlobalJobClusterToLocal(t *testing.T) {
 	workerPod := &corev1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"role": "worker"}}}
 
 	rayCluster := &v2pb.RayCluster{
-		ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
+		ObjectMeta: metav1.ObjectMeta{Name: "test-cluster", Namespace: "proj-ns", UID: "cluster-uid"},
 		Spec: v2pb.RayClusterSpec{
 			RayVersion: "2.3.1",
 			Head: &v2pb.RayHeadSpec{
@@ -223,6 +228,10 @@ func TestMapper_MapGlobalJobClusterToLocal(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      rayCluster.Name,
 					Namespace: RayLocalNamespace,
+					Annotations: map[string]string{
+						constants.OwnerAnnotationKey:    "proj-ns/test-cluster",
+						constants.OwnerUIDAnnotationKey: "cluster-uid",
+					},
 				},
 				Spec: rayv1.RayClusterSpec{
 					HeadGroupSpec: rayv1.HeadGroupSpec{
@@ -749,4 +758,37 @@ func TestMapRayClusterKueueLabels(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "LocalQueue")
 	})
+}
+
+// TestMapper_StampsOwnerAnnotations checks that compute-side RayClusters and
+// RayJobs name their global owner, which owner-checked deletes match: two
+// global objects ns1/foo and ns2/foo share the compute-side name default/foo.
+func TestMapper_StampsOwnerAnnotations(t *testing.T) {
+	m := Mapper{}
+	kueueCluster := &v2pb.Cluster{Spec: v2pb.ClusterSpec{SchedulerType: v2pb.SCHEDULER_TYPE_KUEUE}}
+	rc := &v2pb.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "ns1", UID: "rc-uid-1"},
+		Spec:       v2pb.RayClusterSpec{Head: &v2pb.RayHeadSpec{}},
+	}
+	rj := &v2pb.RayJob{ObjectMeta: metav1.ObjectMeta{Name: "foo-job", Namespace: "ns1", UID: "rj-uid-1"}}
+
+	for name, cluster := range map[string]*v2pb.Cluster{"plain cluster": {}, "kueue cluster": kueueCluster} {
+		t.Run(name, func(t *testing.T) {
+			obj, err := m.MapGlobalJobClusterToLocal(rc, cluster)
+			require.NoError(t, err)
+			local := obj.(*rayv1.RayCluster)
+			assert.Equal(t, RayLocalNamespace, local.Namespace)
+			assert.Equal(t, map[string]string{
+				constants.OwnerAnnotationKey:    "ns1/foo",
+				constants.OwnerUIDAnnotationKey: "rc-uid-1",
+			}, local.Annotations)
+
+			obj, err = m.MapGlobalJobToLocal(rj, rc, cluster)
+			require.NoError(t, err)
+			assert.Equal(t, map[string]string{
+				constants.OwnerAnnotationKey:    "ns1/foo-job",
+				constants.OwnerUIDAnnotationKey: "rj-uid-1",
+			}, obj.(*rayv1.RayJob).Annotations)
+		})
+	}
 }

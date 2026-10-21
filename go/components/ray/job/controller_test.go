@@ -12,6 +12,7 @@ import (
 
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
+	jobsclient "github.com/michelangelo-ai/michelangelo/go/components/jobs/client"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/client/clientmocks"
 	jobscluster "github.com/michelangelo-ai/michelangelo/go/components/jobs/cluster"
 	jobtypes "github.com/michelangelo-ai/michelangelo/go/components/jobs/common/types"
@@ -872,7 +873,7 @@ func TestReconciler_Reconcile(t *testing.T) {
 			verifyConditions: func(t *testing.T, job *v2pb.RayJob) {},
 		},
 		{
-			name: "job creation fails",
+			name: "job creation fails permanently",
 			setup: func() []client.Object {
 				objects := make([]client.Object, 0)
 				rayJob := &v2pb.RayJob{
@@ -912,7 +913,7 @@ func TestReconciler_Reconcile(t *testing.T) {
 						Name: assignedCluster,
 					},
 				})
-				mfc.EXPECT().CreateJob(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(fmt.Errorf("failed to create job"))
+				mfc.EXPECT().CreateJob(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(apiErrors.NewBadRequest("failed to create job"))
 			},
 			expectedState:   v2pb.RAY_JOB_STATE_FAILED,
 			expectedMessage: "failed to create ray job",
@@ -964,6 +965,9 @@ func TestReconciler_Reconcile(t *testing.T) {
 					},
 				})
 				mfc.EXPECT().CreateJob(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(apiErrors.NewAlreadyExists(schema.GroupResource{Group: "ray.io", Resource: "rayjobs"}, rayJobName))
+				// The job found records no owner, as jobs created before
+				// owners were recorded do, so it is adopted.
+				mfc.EXPECT().GetJobOwner(gomock.Any(), gomock.Any(), gomock.Any()).Return(jobsclient.ComputeOwner{}, nil)
 			},
 			expectedState:   v2pb.RAY_JOB_STATE_INITIALIZING,
 			expectedMessage: "",

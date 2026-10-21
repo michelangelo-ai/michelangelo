@@ -6,6 +6,7 @@ go_library(
         "controller.go",
         "health.go",
         "module.go",
+        "readiness.go",
         "types.go",
     ],
     importpath = "github.com/michelangelo-ai/michelangelo/go/components/jobs/cluster",
@@ -41,6 +42,7 @@ go_test(
     srcs = [
         "controller_test.go",
         "health_test.go",
+        "readiness_test.go",
         "types_test.go",
     ],
     embed = [":go_default_library"],

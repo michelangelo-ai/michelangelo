@@ -6,6 +6,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
+	maconfig "github.com/michelangelo-ai/michelangelo/go/base/config"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/client"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/cluster"
@@ -26,7 +27,10 @@ func register(
 	schedulerQueue scheduler.JobQueue,
 	federatedClient client.FederatedClient,
 	clusterCache cluster.RegisteredClustersCache,
+	schedulerConfig maconfig.SchedulerConfig,
+	clusterReadiness cluster.ClusterReadiness,
 ) error {
+	client.RegisterDispatchMetrics()
 	return NewReconciler(
 		logger,
 		apiHandlerFactory,
@@ -34,5 +38,7 @@ func register(
 		schedulerQueue,
 		federatedClient,
 		clusterCache,
+		WithSchedulerConfig(schedulerConfig),
+		WithClusterReadiness(clusterReadiness),
 	).Register(mgr)
 }

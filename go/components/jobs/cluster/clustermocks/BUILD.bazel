@@ -2,7 +2,10 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library")
 
 go_library(
     name = "go_default_library",
-    srcs = ["types_mocks.go"],
+    srcs = [
+        "readiness_mocks.go",
+        "types_mocks.go",
+    ],
     importpath = "github.com/michelangelo-ai/michelangelo/go/components/jobs/cluster/clustermocks",
     visibility = ["//visibility:public"],
     deps = [

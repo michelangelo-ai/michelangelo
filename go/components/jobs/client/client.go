@@ -139,6 +139,18 @@ type FederatedClient interface {
 	// DeleteJobCluster deletes a job cluster from the specified cluster
 	DeleteJobCluster(ctx context.Context, jobClusterObject runtime.Object, cluster *v2pb.Cluster) error
 
+	// DeleteJobClusterIfOwned deletes a job cluster from the specified cluster
+	// only if the compute-side object is owned by jobClusterObject
+	DeleteJobClusterIfOwned(ctx context.Context, jobClusterObject runtime.Object, cluster *v2pb.Cluster) error
+
+	// GetJobOwner reads the owner recorded on the job's compute-side object
+	// on the specified cluster
+	GetJobOwner(ctx context.Context, jobObject runtime.Object, cluster *v2pb.Cluster) (ComputeOwner, error)
+
+	// GetJobClusterOwner reads the owner recorded on the job cluster's
+	// compute-side object on the specified cluster
+	GetJobClusterOwner(ctx context.Context, jobClusterObject runtime.Object, cluster *v2pb.Cluster) (ComputeOwner, error)
+
 	// GetJobClusterStatus gets the job cluster status from the specified cluster
 	GetJobClusterStatus(ctx context.Context, jobClusterObject runtime.Object, cluster *v2pb.Cluster) (*matypes.JobClusterStatus, error)
 
@@ -383,6 +395,10 @@ func (c *Client) DeleteJob(
 
 // CreateJob sends request to Compute to create Ray job on the cluster
 // This will create pod spec with volume and then create raycluster
+//
+// It runs under DispatchRequestTimeout, each request under the connect bound,
+// and its errors classify with ClassifyDispatchError; the owner-reference GET
+// classifies like the create.
 func (c *Client) CreateJob(
 	ctx context.Context,
 	jobObject runtime.Object,
@@ -391,22 +407,28 @@ func (c *Client) CreateJob(
 ) error {
 	switch job := jobObject.(type) {
 	case *v2pb.RayJob:
+		ctx, cancel := context.WithTimeout(ctx, DispatchRequestTimeout)
+		defer cancel()
+
 		cs, err := c.factory.GetClientSetForCluster(kubeCluster)
 		if err != nil {
-			return fmt.Errorf("get client for cluster err:%v", err)
+			return fmt.Errorf("get client for cluster err:%w", markError(err, ErrClusterClientUnavailable))
 		}
 
 		kubeRayJob, err := c.mapper.MapGlobalJobToLocal(jobObject, jobClusterObject, kubeCluster)
 		if err != nil {
-			return fmt.Errorf("map global to local err:%w", err)
+			return fmt.Errorf("map global to local err:%w", markError(err, ErrJobSpecMapping))
 		}
 
 		// Fetch the remote RayCluster to get its UID for ownerReference.
 		// When the RayCluster is later deleted, K8s GC cascade-deletes all owned RayJobs.
 		clusterNamespace, clusterName := c.mapper.GetLocalName(jobClusterObject)
 		remoteCluster := &rayv1.RayCluster{}
-		err = c.helper.GetResource(ctx, cs.Ray, constants.KubeRayResource, clusterNamespace, clusterName, remoteCluster)
+		err = tracedRequest(ctx, func(ctx context.Context) error {
+			return c.helper.GetResource(ctx, cs.Ray, constants.KubeRayResource, clusterNamespace, clusterName, remoteCluster)
+		})
 		if err != nil {
+			c.invalidateOnCredentialError(kubeCluster, err)
 			return fmt.Errorf("get remote ray cluster for owner ref: %w", err)
 		}
 		kubeRayJobTyped := kubeRayJob.(*rayv1.RayJob)
@@ -420,13 +442,16 @@ func (c *Client) CreateJob(
 
 		// always use mapper's local namespace/name to avoid inconsistencies
 		localNamespace, _ := c.mapper.GetLocalName(jobObject)
-		err = c.helper.CreateResource(
-			ctx,
-			cs.Ray,
-			kubeRayJob,
-			constants.KubeRayJobResource,
-			localNamespace)
+		err = tracedRequest(ctx, func(ctx context.Context) error {
+			return c.helper.CreateResource(
+				ctx,
+				cs.Ray,
+				kubeRayJob,
+				constants.KubeRayJobResource,
+				localNamespace)
+		})
 		if err != nil {
+			c.invalidateOnCredentialError(kubeCluster, err)
 			return fmt.Errorf("create ray job err:%w", err)
 		}
 		c.logger.Info("Successfully created job in ray cluster", zap.String(constants.Job, job.GetName()), zap.String("namespace", localNamespace), zap.String("cluster", job.Spec.GetCluster().GetName()))
@@ -439,25 +464,34 @@ func (c *Client) CreateJob(
 	return nil
 }
 
+// CreateJobCluster creates the job cluster on the specified cluster. It runs
+// under DispatchRequestTimeout, the create under the connect bound, and its
+// errors classify with ClassifyDispatchError.
 func (c *Client) CreateJobCluster(ctx context.Context, jobClusterObject runtime.Object, kubeCluster *v2pb.Cluster) error {
+	ctx, cancel := context.WithTimeout(ctx, DispatchRequestTimeout)
+	defer cancel()
+
 	cs, err := c.factory.GetClientSetForCluster(kubeCluster)
 	if err != nil {
-		return fmt.Errorf("get client for cluster err:%v", err)
+		return fmt.Errorf("get client for cluster err:%w", markError(err, ErrClusterClientUnavailable))
 	}
 
 	localNamespace, _ := c.mapper.GetLocalName(jobClusterObject)
 	localCluster, err := c.mapper.MapGlobalJobClusterToLocal(jobClusterObject, kubeCluster)
 	if err != nil {
-		return fmt.Errorf("map global to local err:%w", err)
+		return fmt.Errorf("map global to local err:%w", markError(err, ErrJobSpecMapping))
 	}
 
-	err = c.helper.CreateResource(
-		ctx,
-		cs.Ray,
-		localCluster,
-		constants.KubeRayResource,
-		localNamespace)
+	err = tracedRequest(ctx, func(ctx context.Context) error {
+		return c.helper.CreateResource(
+			ctx,
+			cs.Ray,
+			localCluster,
+			constants.KubeRayResource,
+			localNamespace)
+	})
 	if err != nil {
+		c.invalidateOnCredentialError(kubeCluster, err)
 		return fmt.Errorf("create ray cluster err:%w", err)
 	}
 	return nil
@@ -482,6 +516,69 @@ func (c *Client) DeleteJobCluster(ctx context.Context, jobClusterObject runtime.
 	default:
 		return fmt.Errorf("unsupported cluster type: %T", jobClusterObject)
 	}
+}
+
+// DeleteJobClusterIfOwned deletes the compute-side RayCluster only if its
+// ma/owner-uid annotation names jobClusterObject. Compute-side names drop
+// the global namespace, so an object of the same name may belong to another
+// job, or predate the annotation: such objects are left alone. A missing
+// object is success. It runs under DispatchRequestTimeout, and deletes with
+// a UID precondition so that it removes exactly the object it checked.
+func (c *Client) DeleteJobClusterIfOwned(ctx context.Context, jobClusterObject runtime.Object, kubeCluster *v2pb.Cluster) error {
+	owner, ok := jobClusterObject.(*v2pb.RayCluster)
+	if !ok {
+		return fmt.Errorf("unsupported cluster type: %T", jobClusterObject)
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, DispatchRequestTimeout)
+	defer cancel()
+
+	cs, err := c.factory.GetClientSetForCluster(kubeCluster)
+	if err != nil {
+		return fmt.Errorf("get client for cluster err:%w", markError(err, ErrClusterClientUnavailable))
+	}
+
+	localNamespace, localName := c.mapper.GetLocalName(jobClusterObject)
+	remoteCluster := &rayv1.RayCluster{}
+	err = c.helper.GetResource(ctx, cs.Ray, constants.KubeRayResource, localNamespace, localName, remoteCluster)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		c.invalidateOnCredentialError(kubeCluster, err)
+		return fmt.Errorf("get ray cluster err:%w", err)
+	}
+
+	ownerUID := string(owner.GetUID())
+	foundUID := remoteCluster.GetAnnotations()[constants.OwnerUIDAnnotationKey]
+	if ownerUID == "" || foundUID != ownerUID {
+		c.logger.Info("compute-side ray cluster is not owned by this job, leaving it",
+			zap.String("cluster", kubeCluster.GetName()),
+			zap.String("namespace", localNamespace),
+			zap.String("name", localName),
+			zap.String("owner", owner.GetNamespace()+"/"+owner.GetName()),
+			zap.String("ownerUID", ownerUID),
+			zap.String("foundOwnerUID", foundUID))
+		return nil
+	}
+
+	uid := remoteCluster.GetUID()
+	err = c.helper.DeleteResource(ctx, cs.Ray, constants.KubeRayResource, localNamespace, localName,
+		metav1.DeleteOptions{Preconditions: &metav1.Preconditions{UID: &uid}})
+	if err != nil && !apierrors.IsNotFound(err) {
+		c.invalidateOnCredentialError(kubeCluster, err)
+		return fmt.Errorf("delete ray cluster err:%w", err)
+	}
+	return nil
+}
+
+// invalidateOnCredentialError drops the cluster's cached client after a 401
+// or a TLS verification error, so the next attempt re-reads its credentials.
+func (c *Client) invalidateOnCredentialError(kubeCluster *v2pb.Cluster, err error) {
+	if kubeCluster == nil || !isCredentialError(err) {
+		return
+	}
+	c.factory.Invalidate(&kubeCluster.Spec)
 }
 
 // GetJobClusterStatus gets the job cluster status from the specified cluster

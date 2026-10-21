@@ -2,7 +2,6 @@ package cluster
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
 
@@ -26,6 +25,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
+	jobsclient "github.com/michelangelo-ai/michelangelo/go/components/jobs/client"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/client/clientmocks"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/cluster"
 	matypes "github.com/michelangelo-ai/michelangelo/go/components/jobs/common/types"
@@ -397,6 +397,9 @@ func TestReconcilerReconcile(t *testing.T) {
 				})
 				mfc.EXPECT().CreateJobCluster(gomock.Any(), gomock.Any(), gomock.Any()).Return(
 					apiErrors.NewAlreadyExists(schema.GroupResource{Group: "ray.io", Resource: "rayclusters"}, rayClusterName))
+				// The cluster found records no owner, as clusters created
+				// before owners were recorded do, so it is adopted.
+				mfc.EXPECT().GetJobClusterOwner(gomock.Any(), gomock.Any(), gomock.Any()).Return(jobsclient.ComputeOwner{}, nil)
 			},
 			expectedState:   v2pb.RAY_CLUSTER_STATE_PROVISIONING,
 			expectedMessage: "",
@@ -418,7 +421,7 @@ func TestReconcilerReconcile(t *testing.T) {
 			},
 		},
 		{
-			name: "Cluster creation fails",
+			name: "Cluster creation fails permanently",
 			setup: func() []client.Object {
 				objects := make([]client.Object, 0)
 				cluster := &v2pb.RayCluster{
@@ -453,7 +456,7 @@ func TestReconcilerReconcile(t *testing.T) {
 						Name: assignedCluster,
 					},
 				})
-				mfc.EXPECT().CreateJobCluster(gomock.Any(), gomock.Any(), gomock.Any()).Return(fmt.Errorf("failed to create cluster"))
+				mfc.EXPECT().CreateJobCluster(gomock.Any(), gomock.Any(), gomock.Any()).Return(apiErrors.NewBadRequest("failed to create cluster"))
 			},
 			expectedState:   v2pb.RAY_CLUSTER_STATE_FAILED,
 			expectedMessage: "",

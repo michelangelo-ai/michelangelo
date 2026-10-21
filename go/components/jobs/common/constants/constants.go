@@ -70,6 +70,22 @@ const (
 // Condition metadata key names. These should be unique with a given condition.
 const (
 	NumSchedulerAttempts string = "numSchedulerAttempts"
+
+	// Dispatch state in the Launched condition (RFC 0f): the first failed
+	// create on the current target, the failed creates there so far, whether
+	// one of them may have reached the server, the earliest time of the next
+	// create, and the job's re-placements so far.
+	DispatchWindowStart string = "dispatchWindowStart"
+	DispatchAttempts    string = "dispatchAttempts"
+	DispatchAmbiguous   string = "dispatchAmbiguous"
+	NextAttemptAt       string = "nextAttemptAt"
+	Replacements        string = "replacements"
+	// ExcludedClusters lists the clusters the job was re-placed away from, in
+	// order, which its next placement decision avoids (RFC 0f).
+	ExcludedClusters string = "excludedClusters"
+	// CleanupStart is the start of the terminal-path cleanup after a create
+	// that may have reached its target, also in the Launched condition.
+	CleanupStart string = "cleanupStart"
 )
 
 // These are valid condition types of a cluster
@@ -128,6 +144,16 @@ const (
 // Annotations
 const (
 	GenericSpiffeAnnotationValue string = "michelangelo/ray/workload"
+)
+
+// Owner annotations stamped on compute-side objects. Compute-side names drop
+// the global object's namespace, so deletes check these before removing an
+// object by name.
+const (
+	// OwnerAnnotationKey holds the global object's <namespace>/<name>.
+	OwnerAnnotationKey string = "ma/owner"
+	// OwnerUIDAnnotationKey holds the global object's UID.
+	OwnerUIDAnnotationKey string = "ma/owner-uid"
 )
 
 // Ray node type labels

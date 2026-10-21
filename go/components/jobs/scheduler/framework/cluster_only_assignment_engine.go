@@ -2,6 +2,7 @@ package framework
 
 import (
 	"context"
+	"slices"
 
 	"github.com/go-logr/logr"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/cluster"
@@ -9,7 +10,7 @@ import (
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
-var _ AssignmentStrategy = ClusterOnlyAssignmentStrategy{}
+var _ ExcludingAssignmentStrategy = ClusterOnlyAssignmentStrategy{}
 
 // ClusterOnlyAssignmentStrategy selects a cluster using affinity, else a Ready cluster.
 type ClusterOnlyAssignmentStrategy struct {
@@ -53,4 +54,31 @@ func (e ClusterOnlyAssignmentStrategy) Select(_ context.Context, job BatchJob) (
 		return nil, false, constants.AssignmentReasonNoClustersFound, nil
 	}
 	return &v2pb.AssignmentInfo{Cluster: clusters[0].GetName()}, true, constants.AssignmentReasonClusterDefaultSelected, nil
+}
+
+// SelectExcluding implements ExcludingAssignmentStrategy: it selects as
+// Select does, from a view of the cluster cache whose Ready list leaves out
+// the excluded clusters. A pin is looked up by name, so it is kept.
+func (e ClusterOnlyAssignmentStrategy) SelectExcluding(ctx context.Context, job BatchJob, excluded []string) (*v2pb.AssignmentInfo, bool, string, error) {
+	e.ClusterCache = excludingClusters{RegisteredClustersCache: e.ClusterCache, excluded: excluded}
+	return e.Select(ctx, job)
+}
+
+// excludingClusters is a view of a cluster cache whose cluster lists leave
+// out the excluded clusters. Lookups by name still find them.
+type excludingClusters struct {
+	cluster.RegisteredClustersCache
+	excluded []string
+}
+
+// GetClusters returns the cache's clusters for filter, without the excluded
+// ones.
+func (c excludingClusters) GetClusters(filter cluster.FilterType) []*v2pb.Cluster {
+	var kept []*v2pb.Cluster
+	for _, cl := range c.RegisteredClustersCache.GetClusters(filter) {
+		if !slices.Contains(c.excluded, cl.GetName()) {
+			kept = append(kept, cl)
+		}
+	}
+	return kept
 }

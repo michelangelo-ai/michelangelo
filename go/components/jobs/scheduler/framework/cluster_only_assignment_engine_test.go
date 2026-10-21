@@ -231,3 +231,118 @@ func TestClusterOnlyEngine_Select(t *testing.T) {
 		})
 	}
 }
+
+func TestClusterOnlyEngine_SelectExcluding(t *testing.T) {
+	makeCluster := func(name string) *v2pb.Cluster {
+		return &v2pb.Cluster{ObjectMeta: metav1.ObjectMeta{Name: name}}
+	}
+	makeRayClusterJob := func(clusterLabel string) BatchJob {
+		labels := map[string]string{}
+		if clusterLabel != "" {
+			labels[constants.ClusterAffinityLabelKey] = clusterLabel
+		}
+		return BatchRayCluster{RayCluster: &v2pb.RayCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: "rc", Namespace: "ns", Labels: labels},
+		}}
+	}
+
+	tests := []struct {
+		name        string
+		cache       cluster.RegisteredClustersCache
+		job         BatchJob
+		excluded    []string
+		wantFound   bool
+		wantReason  string
+		wantCluster string
+	}{
+		{
+			name:        "an excluded Ready cluster is skipped",
+			cache:       newFakeClusterCache(makeCluster("c1"), makeCluster("c2")),
+			job:         makeRayClusterJob(""),
+			excluded:    []string{"c1"},
+			wantFound:   true,
+			wantReason:  "cluster_default_selected",
+			wantCluster: "c2",
+		},
+		{
+			name:        "every excluded cluster is skipped",
+			cache:       newFakeClusterCache(makeCluster("c1"), makeCluster("c2"), makeCluster("c3")),
+			job:         makeRayClusterJob(""),
+			excluded:    []string{"c2", "c1"},
+			wantFound:   true,
+			wantReason:  "cluster_default_selected",
+			wantCluster: "c3",
+		},
+		{
+			name:       "no Ready cluster left is not found",
+			cache:      newFakeClusterCache(makeCluster("c1"), makeCluster("c2")).withUnready("c2"),
+			job:        makeRayClusterJob(""),
+			excluded:   []string{"c1"},
+			wantFound:  false,
+			wantReason: "no_clusters_found",
+		},
+		{
+			name:        "a pin is kept even when excluded",
+			cache:       newFakeClusterCache(makeCluster("c1"), makeCluster("c2")),
+			job:         makeRayClusterJob("c1"),
+			excluded:    []string{"c1"},
+			wantFound:   true,
+			wantReason:  "cluster_matched_by_affinity",
+			wantCluster: "c1",
+		},
+		{
+			name:        "a pin to an unregistered cluster falls back to a Ready cluster not excluded",
+			cache:       newFakeClusterCache(makeCluster("c1"), makeCluster("c2")),
+			job:         makeRayClusterJob("unknown"),
+			excluded:    []string{"c1"},
+			wantFound:   true,
+			wantReason:  "cluster_default_selected",
+			wantCluster: "c2",
+		},
+		{
+			name:        "no exclusions select as Select does",
+			cache:       newFakeClusterCache(makeCluster("c1"), makeCluster("c2")),
+			job:         makeRayClusterJob(""),
+			wantFound:   true,
+			wantReason:  "cluster_default_selected",
+			wantCluster: "c1",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			engine := newTestClusterOnlyStrategy(tt.cache)
+
+			assign, found, reason, err := engine.SelectExcluding(context.Background(), tt.job, tt.excluded)
+			if err != nil {
+				t.Fatalf("SelectExcluding returned error: %v", err)
+			}
+			if found != tt.wantFound {
+				t.Fatalf("found = %v, want %v", found, tt.wantFound)
+			}
+			if reason != tt.wantReason {
+				t.Fatalf("reason = %q, want %q", reason, tt.wantReason)
+			}
+			if got := assign.GetCluster(); got != tt.wantCluster {
+				t.Fatalf("assignment.Cluster = %q, want %q", got, tt.wantCluster)
+			}
+		})
+	}
+}
+
+func TestClusterOnlyEngine_SelectExcludingLeavesTheStrategyUnchanged(t *testing.T) {
+	cache := newFakeClusterCache(&v2pb.Cluster{ObjectMeta: metav1.ObjectMeta{Name: "c1"}}, &v2pb.Cluster{ObjectMeta: metav1.ObjectMeta{Name: "c2"}})
+	strategy := NewClusterOnlyAssignmentStrategy(cache, logr.Discard())
+	excluding, ok := strategy.(ExcludingAssignmentStrategy)
+	if !ok {
+		t.Fatalf("cluster_only does not implement ExcludingAssignmentStrategy")
+	}
+	job := BatchRayCluster{RayCluster: &v2pb.RayCluster{ObjectMeta: metav1.ObjectMeta{Name: "rc", Namespace: "ns"}}}
+
+	if assign, _, _, _ := excluding.SelectExcluding(context.Background(), job, []string{"c1"}); assign.GetCluster() != "c2" {
+		t.Fatalf("SelectExcluding chose %q, want c2", assign.GetCluster())
+	}
+	if assign, _, _, _ := strategy.Select(context.Background(), job); assign.GetCluster() != "c1" {
+		t.Fatalf("Select after SelectExcluding chose %q, want c1", assign.GetCluster())
+	}
+}
