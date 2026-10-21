@@ -56,6 +56,16 @@ const (
 	// KueueQueueCheckFailed means the LocalQueue existence check itself
 	// errored (target cluster unreachable etc.); the job is retried.
 	KueueQueueCheckFailed string = "KueueQueueCheckFailed"
+
+	// AwaitingAdmission (Queued=True) means the job is held suspended on its
+	// target cluster until Kueue admits it.
+	AwaitingAdmission string = "AwaitingAdmission"
+	// ClusterAdmitted (Queued=False) means the job was admitted on its
+	// target cluster.
+	ClusterAdmitted string = "ClusterAdmitted"
+	// AdmissionTimeout (Succeeded=False) means the job failed because its
+	// wait for admission exceeded jobs.scheduler.kueue.admissionTimeout.
+	AdmissionTimeout string = "AdmissionTimeout"
 )
 
 // condition messages - the prefix
@@ -86,6 +96,11 @@ const (
 	// CleanupStart is the start of the terminal-path cleanup after a create
 	// that may have reached its target, also in the Launched condition.
 	CleanupStart string = "cleanupStart"
+
+	// AdmissionWaitStart is the start of the current wait for admission, in
+	// a True Queued condition (RFC 0a): the job's creation, or its latest
+	// eviction.
+	AdmissionWaitStart string = "admissionWaitStart"
 )
 
 // These are valid condition types of a cluster

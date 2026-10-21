@@ -286,12 +286,147 @@ func TestEnqueueNoTargetWritesOnlyOnChange(t *testing.T) {
 			require.NotNil(t, cond)
 			assert.Equal(t, apipb.CONDITION_STATUS_FALSE, cond.Status)
 			assert.Equal(t, constants.NoClustersFoundForAssignment, cond.Reason)
+			// The job waits in the queue: the same write sets Enqueued True.
+			enqueued := findCondition(got.Status.StatusConditions, constants.EnqueuedCondition)
+			require.NotNil(t, enqueued)
+			assert.Equal(t, apipb.CONDITION_STATUS_TRUE, enqueued.Status)
+			assert.Equal(t, constants.AddedToSchedulerQueue, enqueued.Reason)
 
 			// The same outcome again is a fresh decision but no new write.
 			require.NoError(t, q.Enqueue(context.Background(), schedulableJob(rc)))
 			assert.Len(t, handler.statusWrites(), 1)
 		})
 	}
+}
+
+func TestEnqueueNoTargetAfterAFailedValidationSetsEnqueuedTrueOnce(t *testing.T) {
+	g := gomock.NewController(t)
+	rc := testRayCluster(projectLabels(), "")
+	rc.Status.StatusConditions = []*apipb.Condition{
+		{Type: constants.EnqueuedCondition, Status: apipb.CONDITION_STATUS_FALSE, Reason: constants.KueueQueueNotFound},
+		{Type: constants.ScheduledCondition, Status: apipb.CONDITION_STATUS_FALSE, Reason: constants.NoClustersFoundForAssignment},
+	}
+	strategy := frameworkmocks.NewMockAssignmentEngine(g)
+	strategy.EXPECT().Select(gomock.Any(), gomock.Any()).Return(nil, false, "no clusters", nil).Times(2)
+	clusters := clustermocks.NewMockRegisteredClustersCache(g)
+	queues := kueuemocks.NewMockLocalQueues(g)
+
+	q, handler, readBack := setup(t, rc, strategy, clusters, queues, kueueConfig())
+	require.NoError(t, q.Enqueue(context.Background(), schedulableJob(rc)))
+	require.Len(t, handler.statusWrites(), 1, "Scheduled is unchanged, but Enqueued turns True")
+	enqueued := findCondition(readBack().Status.StatusConditions, constants.EnqueuedCondition)
+	require.NotNil(t, enqueued)
+	assert.Equal(t, apipb.CONDITION_STATUS_TRUE, enqueued.Status)
+	assert.Equal(t, constants.AddedToSchedulerQueue, enqueued.Reason)
+
+	require.NoError(t, q.Enqueue(context.Background(), schedulableJob(rc)))
+	assert.Len(t, handler.statusWrites(), 1)
+}
+
+func TestEnqueueFailedValidationWritesEnqueuedFalseOncePerReason(t *testing.T) {
+	g := gomock.NewController(t)
+	rc := testRayCluster(projectLabels(), "")
+	rc.Status.StatusConditions = []*apipb.Condition{
+		// The RayCluster controller no longer pre-writes Enqueued under this
+		// backend; a True one comes from an earlier decision, such as one a
+		// re-placement undid.
+		{Type: constants.EnqueuedCondition, Status: apipb.CONDITION_STATUS_TRUE, Reason: constants.AddedToSchedulerQueue},
+	}
+
+	strategy := frameworkmocks.NewMockAssignmentEngine(g)
+	strategy.EXPECT().Select(gomock.Any(), gomock.Any()).
+		Return(&v2pb.AssignmentInfo{Cluster: "kueue-a"}, true, "", nil).AnyTimes()
+	target := kueueCluster("kueue-a")
+	clusters := clustermocks.NewMockRegisteredClustersCache(g)
+	clusters.EXPECT().GetCluster("kueue-a").Return(target).AnyTimes()
+	queues := kueuemocks.NewMockLocalQueues(g)
+	gomock.InOrder(
+		queues.EXPECT().Exists(gomock.Any(), target, "default", "ma-proj-ns").Return(false, nil).Times(3),
+		queues.EXPECT().Exists(gomock.Any(), target, "default", "ma-proj-ns").Return(false, errors.New("connection refused")),
+		queues.EXPECT().Exists(gomock.Any(), target, "default", "ma-proj-ns").Return(false, errors.New("i/o timeout")),
+	)
+
+	q, handler, readBack := setup(t, rc, strategy, clusters, queues, kueueConfig())
+	enqueued := func() *apipb.Condition {
+		cond := findCondition(readBack().Status.StatusConditions, constants.EnqueuedCondition)
+		require.NotNil(t, cond)
+		return cond
+	}
+
+	// A failing validation returns an error every time, but writes
+	// False/<reason> once across the retries.
+	for range 3 {
+		require.Error(t, q.Enqueue(context.Background(), schedulableJob(rc)))
+	}
+	require.Len(t, handler.statusWrites(), 1)
+	assert.Equal(t, apipb.CONDITION_STATUS_FALSE, enqueued().Status)
+	assert.Equal(t, constants.KueueQueueNotFound, enqueued().Reason)
+
+	// A new reason is written once; a new message alone is not.
+	require.Error(t, q.Enqueue(context.Background(), schedulableJob(rc)))
+	require.Len(t, handler.statusWrites(), 2)
+	assert.Equal(t, constants.KueueQueueCheckFailed, enqueued().Reason)
+	assert.Contains(t, enqueued().Message, "connection refused")
+	require.Error(t, q.Enqueue(context.Background(), schedulableJob(rc)))
+	assert.Len(t, handler.statusWrites(), 2)
+	assert.Contains(t, enqueued().Message, "connection refused")
+}
+
+func TestRecordNoTargetResult(t *testing.T) {
+	condition := func(condType string, status apipb.ConditionStatus, reason string) *apipb.Condition {
+		return &apipb.Condition{Type: condType, Status: status, Reason: reason, LastUpdatedTimestamp: 7}
+	}
+	noTarget := func() *apipb.Condition {
+		return condition(constants.ScheduledCondition, apipb.CONDITION_STATUS_FALSE, constants.NoClustersFoundForAssignment)
+	}
+	enqueued := func() *apipb.Condition {
+		return condition(constants.EnqueuedCondition, apipb.CONDITION_STATUS_TRUE, constants.AddedToSchedulerQueue)
+	}
+	tests := []struct {
+		name        string
+		conditions  []*apipb.Condition
+		wantChanged bool
+	}{
+		{name: "no conditions", wantChanged: true},
+		{name: "Enqueued True, Scheduled Unknown", conditions: []*apipb.Condition{enqueued()}, wantChanged: true},
+		{
+			name:        "Scheduled already False/NoClustersFoundForAssignment, Enqueued False",
+			conditions:  []*apipb.Condition{noTarget(), condition(constants.EnqueuedCondition, apipb.CONDITION_STATUS_FALSE, constants.KueueQueueNotFound)},
+			wantChanged: true,
+		},
+		{name: "both already recorded", conditions: []*apipb.Condition{noTarget(), enqueued()}},
+		{
+			name:       "never over a recorded decision",
+			conditions: []*apipb.Condition{condition(constants.ScheduledCondition, apipb.CONDITION_STATUS_TRUE, constants.ClusterMatched)},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rc := testRayCluster(nil, "")
+			rc.Generation = 2
+			rc.Status.StatusConditions = tt.conditions
+			before := rc.DeepCopy()
+
+			changed := recordNoTargetResult(rc)
+			assert.Equal(t, tt.wantChanged, changed)
+			if !changed {
+				assert.Equal(t, before, rc)
+				return
+			}
+			scheduled := findCondition(rc.Status.StatusConditions, constants.ScheduledCondition)
+			require.NotNil(t, scheduled)
+			assert.Equal(t, apipb.CONDITION_STATUS_FALSE, scheduled.Status)
+			assert.Equal(t, constants.NoClustersFoundForAssignment, scheduled.Reason)
+			got := findCondition(rc.Status.StatusConditions, constants.EnqueuedCondition)
+			require.NotNil(t, got)
+			assert.Equal(t, apipb.CONDITION_STATUS_TRUE, got.Status)
+			assert.Equal(t, constants.AddedToSchedulerQueue, got.Reason)
+		})
+	}
+
+	t.Run("unsupported type", func(t *testing.T) {
+		assert.False(t, recordNoTargetResult(&v2pb.RayJob{}))
+	})
 }
 
 func TestEnqueueAlreadyScheduledIsNoop(t *testing.T) {

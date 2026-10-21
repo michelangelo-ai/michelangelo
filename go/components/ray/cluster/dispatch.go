@@ -33,7 +33,7 @@ const (
 	// backendKueue is the scheduler backend under which a failing dispatch is
 	// re-placed (jobs/scheduler's backend names).
 	backendKueue = "kueue"
-	// dispatchMetricsJobType labels the dispatch counters.
+	// dispatchMetricsJobType labels the dispatch and admission metrics.
 	dispatchMetricsJobType = "RayCluster"
 
 	clusterCreatedReason        = "ClusterCreated"
@@ -180,7 +180,7 @@ func (r *Reconciler) dispatch(ctx context.Context, rc *v2pb.RayCluster, log logr
 	}
 	switch class {
 	case jobsclient.DispatchSuccess:
-		return r.recordLaunched(ctx, rc, target, log)
+		return r.recordLaunched(ctx, rc, target, r.launchAdmits(targetCluster), log)
 	case jobsclient.DispatchPermanent:
 		log.Error(err, "failed to create ray cluster via federated client")
 		return r.failDispatch(ctx, rc, target, err.Error(), nil, state.Ambiguous || r.isLatched(rc.UID), log)
@@ -361,8 +361,10 @@ func (r *Reconciler) failDispatch(ctx context.Context, rc *v2pb.RayCluster, targ
 }
 
 // recordLaunched records a successful create: State PROVISIONING and
-// Launched=True, which clears the dispatch record.
-func (r *Reconciler) recordLaunched(ctx context.Context, rc *v2pb.RayCluster, target string, log logr.Logger) (ctrl.Result, error) {
+// Launched=True, which clears the dispatch record. admits is whether the
+// launch admits the job (launchAdmits): its wait is recorded once the launch
+// is.
+func (r *Reconciler) recordLaunched(ctx context.Context, rc *v2pb.RayCluster, target string, admits bool, log logr.Logger) (ctrl.Result, error) {
 	written, _, err := r.updateDispatchStatus(ctx, rc, target, func(c *v2pb.RayCluster) bool {
 		c.Status.State = v2pb.RAY_CLUSTER_STATE_PROVISIONING
 		launched := jobsutils.GetCondition(&c.Status.StatusConditions, LaunchedCondition, c.Generation)
@@ -375,13 +377,16 @@ func (r *Reconciler) recordLaunched(ctx context.Context, rc *v2pb.RayCluster, ta
 	})
 	if err != nil {
 		log.Error(err, "failed to update launched condition")
-		return r.recoverLaunchedWrite(ctx, rc, target, err, log)
+		return r.recoverLaunchedWrite(ctx, rc, target, admits, err, log)
 	}
 	if !written {
 		// Only the guard skips this write: the job moved off the target.
 		return r.afterGuardMismatch(ctx, rc, target, true, log)
 	}
 	r.forget(rc.UID)
+	if admits {
+		r.observeAdmission(rc.CreationTimestamp.Time)
+	}
 	log.Info("cluster creation initiated")
 	return ctrl.Result{RequeueAfter: requeueAfter}, nil
 }
@@ -390,8 +395,9 @@ func (r *Reconciler) recordLaunched(ctx context.Context, rc *v2pb.RayCluster, ta
 // may still have committed (a 504, an etcd timeout, conflicts outlasting the
 // retries), so it deletes nothing unless a live read shows that the job moved
 // off the target. Otherwise it records that the object may exist; the next
-// create then gets AlreadyExists and adopts it.
-func (r *Reconciler) recoverLaunchedWrite(ctx context.Context, rc *v2pb.RayCluster, target string, writeErr error, log logr.Logger) (ctrl.Result, error) {
+// create then gets AlreadyExists and adopts it. admits is as for
+// recordLaunched.
+func (r *Reconciler) recoverLaunchedWrite(ctx context.Context, rc *v2pb.RayCluster, target string, admits bool, writeErr error, log logr.Logger) (ctrl.Result, error) {
 	writeErr = fmt.Errorf("record launched ray cluster: %w", writeErr)
 	if r.apiReader == nil {
 		r.latch(rc.UID)
@@ -407,6 +413,9 @@ func (r *Reconciler) recoverLaunchedWrite(ctx context.Context, rc *v2pb.RayClust
 	case jobsutils.FindCondition(live.Status.StatusConditions, LaunchedCondition).GetStatus() == apipb.CONDITION_STATUS_TRUE:
 		// The write committed.
 		r.forget(rc.UID)
+		if admits {
+			r.observeAdmission(rc.CreationTimestamp.Time)
+		}
 		return ctrl.Result{}, writeErr
 	case !isDispatchedTo(live, target):
 		r.removeFromTarget(ctx, rc, target, log)

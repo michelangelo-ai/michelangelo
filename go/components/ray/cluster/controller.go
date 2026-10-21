@@ -150,6 +150,15 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return r.finalizeIfTerminal(ctx, &rayCluster, logger)
 	}
 
+	// Fail a cluster whose wait for admission has reached the bound; the
+	// termination flow then removes it from its target (RFC 0a).
+	if expired, err := r.failIfAdmissionExpired(ctx, &rayCluster, logger); err != nil || expired {
+		if err != nil {
+			logger.Error(err, "failed to record the admission timeout")
+		}
+		return ctrl.Result{RequeueAfter: requeueAfter}, err
+	}
+
 	// Enqueue if not scheduled
 	err := r.enqueueIfRequired(ctx, &rayCluster, logger)
 	if err != nil {
@@ -198,7 +207,8 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{RequeueAfter: requeueAfter}, err
 	}
 
-	if err := r.applyRayClusterStatus(&rayCluster, clusterStatus, logger, &res); err != nil {
+	queuedChange, err := r.applyRayClusterStatus(&rayCluster, clusterStatus, jobsutils.IsKueueManaged(assignedCluster), logger, &res)
+	if err != nil {
 		logger.Error(err, "failed to apply cluster status")
 		return ctrl.Result{RequeueAfter: requeueAfter}, err
 	}
@@ -216,6 +226,11 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			logger.Error(err, "failed to update ray cluster status")
 			return res, fmt.Errorf("update ray cluster status for %q: %w", req.NamespacedName, err)
 		}
+	}
+
+	// An admission is recorded once its Queued transition is persisted.
+	if queuedChange != nil && queuedChange.Admitted() {
+		r.observeAdmission(queuedChange.WaitStart)
 	}
 
 	logger.Info("Reconcile finished", "requeueAfter", res.RequeueAfter)
@@ -469,6 +484,13 @@ func (r *Reconciler) enqueueIfRequired(
 	cluster *v2pb.RayCluster,
 	log logr.Logger,
 ) error {
+	// Under the Kueue backend the queue is the only writer of Enqueued
+	// (RFC 0a): a cluster that is not scheduled, new or handed back by a
+	// re-placement, goes on the queue without a status write here.
+	if r.kueueBackend() {
+		return r.enqueueIfNotScheduled(ctx, cluster, log)
+	}
+
 	enqueued := jobsutils.GetCondition(&cluster.Status.StatusConditions, EnqueuedCondition, cluster.Generation)
 	enqueuedStatus := enqueued.Status
 
@@ -512,6 +534,19 @@ func (r *Reconciler) enqueueIfRequired(
 	}
 
 	// In restart cases, scheduled clusters need to be placed back on the queue
+	return r.enqueueIfNotScheduled(ctx, cluster, log)
+}
+
+// enqueueIfNotScheduled places a cluster that is not scheduled (back) on the
+// scheduler queue.
+func (r *Reconciler) enqueueIfNotScheduled(
+	ctx context.Context,
+	cluster *v2pb.RayCluster,
+	log logr.Logger,
+) error {
+	ctx, cancel := context.WithTimeout(ctx, _updateStatusCtxTimeout)
+	defer cancel()
+
 	scheduled := jobsutils.GetCondition(&cluster.Status.StatusConditions, ScheduledCondition, cluster.Generation)
 	scheduledStatus := scheduled.Status
 	if scheduledStatus != apipb.CONDITION_STATUS_TRUE {
@@ -676,14 +711,16 @@ func (r *Reconciler) markClusterFailed(
 }
 
 // applyRayClusterStatus updates the RayCluster status and conditions based on the cluster state from KubeRay.
+// kueueTarget is whether the cluster's target is Kueue-managed. It returns the Queued transition it made, if any.
 func (r *Reconciler) applyRayClusterStatus(
 	rayCluster *v2pb.RayCluster,
 	clusterStatus *matypes.JobClusterStatus,
+	kueueTarget bool,
 	logger logr.Logger,
 	res *ctrl.Result,
-) error {
+) (*jobsutils.QueuedChange, error) {
 	if clusterStatus == nil || clusterStatus.Ray == nil {
-		return fmt.Errorf("received nil cluster status")
+		return nil, fmt.Errorf("received nil cluster status")
 	}
 
 	// Extract state from the typed status
@@ -719,18 +756,6 @@ func (r *Reconciler) applyRayClusterStatus(
 			Generation: rayCluster.Generation,
 			Reason:     "ClusterReady",
 		})
-		// A cluster that was waiting for admission is admitted now. Only flip
-		// an existing Queued condition: clusters that were never suspended
-		// should not grow one.
-		for _, cond := range rayCluster.Status.StatusConditions {
-			if cond.GetType() == QueuedCondition && cond.GetStatus() == apipb.CONDITION_STATUS_TRUE {
-				jobsutils.UpdateCondition(cond, jobsutils.ConditionUpdateParams{
-					Status:     apipb.CONDITION_STATUS_FALSE,
-					Generation: rayCluster.Generation,
-					Reason:     "ClusterAdmitted",
-				})
-			}
-		}
 		res.RequeueAfter = time.Duration(0)
 
 	case v2pb.RAY_CLUSTER_STATE_FAILED:
@@ -792,16 +817,9 @@ func (r *Reconciler) applyRayClusterStatus(
 		// non-terminal: pods are intentionally absent until the cluster is
 		// unsuspended, so keep monitoring without touching the Succeeded
 		// condition. Deliberately no terminal-pod-error check here — while
-		// suspended, pod-level signals carry no meaning.
-		// Surface the wait as a Queued condition so callers can tell "held
-		// for admission" apart from "launching".
-		queuedCond := jobsutils.GetCondition(&rayCluster.Status.StatusConditions, QueuedCondition, rayCluster.Generation)
-		jobsutils.UpdateCondition(queuedCond, jobsutils.ConditionUpdateParams{
-			Status:     apipb.CONDITION_STATUS_TRUE,
-			Generation: rayCluster.Generation,
-			Reason:     "AwaitingAdmission",
-			Message:    reasonStr,
-		})
+		// suspended, pod-level signals carry no meaning. The wait surfaces
+		// as the Queued condition below, so callers can tell "held for
+		// admission" apart from "launching".
 		logger.Info("cluster is suspended (queued for admission), continuing to monitor",
 			"state", newState,
 			"reason", reasonStr)
@@ -812,5 +830,12 @@ func (r *Reconciler) applyRayClusterStatus(
 			"reason", reasonStr)
 	}
 
-	return nil
+	change, err := r.applyQueued(rayCluster, newState, reasonStr, kueueTarget)
+	if err != nil {
+		return nil, fmt.Errorf("set queued condition: %w", err)
+	}
+	if change != nil {
+		logger.Info("queued condition changed", "status", change.Status.String(), "reason", change.Reason)
+	}
+	return change, nil
 }

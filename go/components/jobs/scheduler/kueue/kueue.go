@@ -110,6 +110,12 @@ func NewKueueJobQueue(p Params) *KueueJobQueue {
 // Any other target is recorded as is, which is what allows mixed fleets
 // during migration. With no target, Scheduled is set False and nil is
 // returned so the caller retries later with a fresh decision.
+//
+// Under this backend Enqueue is the only writer of Enqueued (RFC 0a): True
+// with a recorded decision or a no-target result, False with the reason on a
+// failed validation. Each is written only when it changes the condition's
+// status or reason, so that a waiting job's status is not rewritten on every
+// retry and the condition's timestamp is the start of the current wait.
 func (q *KueueJobQueue) Enqueue(ctx context.Context, job matypes.SchedulableJob) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
@@ -255,18 +261,16 @@ func (q *KueueJobQueue) recordAssignment(ctx context.Context, job framework.Batc
 	return nil
 }
 
-// recordNoTarget sets Scheduled=False/NoClustersFoundForAssignment, writing
-// only when that changes the condition.
+// recordNoTarget sets Scheduled=False/NoClustersFoundForAssignment and
+// Enqueued=True/AddedToSchedulerQueue, writing only when that changes either
+// condition.
 func (q *KueueJobQueue) recordNoTarget(ctx context.Context, job framework.BatchJob, log logr.Logger) error {
 	log.Info("No clusters found for assignment")
-	conds := *job.GetConditions()
-	if !noTargetChangesScheduled(utils.GetCondition(&conds, constants.ScheduledCondition, job.GetGeneration())) {
+	if !noTargetChangesStatus(*job.GetConditions()) {
 		return nil
 	}
-	if err := utils.UpdateStatusWithRetries(ctx, q.handler, job.GetObject(),
-		func(obj client.Object) {
-			recordNoPlacement(obj)
-		}, &metav1.UpdateOptions{
+	if _, err := utils.UpdateStatusIfWithRetries(ctx, q.handler, job.GetObject(), recordNoTargetResult,
+		&metav1.UpdateOptions{
 			FieldManager: "kueueAssignJobNoMatch",
 		}); err != nil {
 		return fmt.Errorf("kueue placement: record that job %q has no target cluster: %w", job.GetName(), err)
@@ -310,14 +314,46 @@ func recordPlacement(obj client.Object, clusterName string) bool {
 		Generation: generation,
 		Message:    "cluster " + clusterName,
 	})
-	enqueued := utils.GetCondition(conds, constants.EnqueuedCondition, generation)
-	if enqueued.GetStatus() != apipb.CONDITION_STATUS_TRUE {
-		utils.UpdateCondition(enqueued, utils.ConditionUpdateParams{
-			Status:     apipb.CONDITION_STATUS_TRUE,
-			Reason:     constants.AddedToSchedulerQueue,
-			Generation: generation,
-		})
+	markEnqueued(conds, generation)
+	return true
+}
+
+// markEnqueued sets Enqueued=True/AddedToSchedulerQueue unless Enqueued is
+// already True.
+func markEnqueued(conds *[]*apipb.Condition, generation int64) {
+	if utils.FindCondition(*conds, constants.EnqueuedCondition).GetStatus() == apipb.CONDITION_STATUS_TRUE {
+		return
 	}
+	utils.UpdateCondition(utils.GetCondition(conds, constants.EnqueuedCondition, generation), utils.ConditionUpdateParams{
+		Status:     apipb.CONDITION_STATUS_TRUE,
+		Reason:     constants.AddedToSchedulerQueue,
+		Generation: generation,
+	})
+}
+
+// noTargetChangesStatus reports whether recording a no-target result changes
+// the conditions: never over a recorded decision; otherwise when Scheduled is
+// not already False/NoClustersFoundForAssignment, or Enqueued is not True.
+func noTargetChangesStatus(conds []*apipb.Condition) bool {
+	scheduled := utils.FindCondition(conds, constants.ScheduledCondition)
+	if scheduled.GetStatus() == apipb.CONDITION_STATUS_TRUE {
+		return false
+	}
+	return noTargetChangesScheduled(scheduled) ||
+		utils.FindCondition(conds, constants.EnqueuedCondition).GetStatus() != apipb.CONDITION_STATUS_TRUE
+}
+
+// recordNoTargetResult records a no-target result on obj when that changes
+// its conditions: Scheduled=False/NoClustersFoundForAssignment, and
+// Enqueued=True/AddedToSchedulerQueue, since the job waits in the queue for a
+// target. It reports whether it changed anything.
+func recordNoTargetResult(obj client.Object) bool {
+	conds, _, ok := placementStatus(obj)
+	if !ok || !noTargetChangesStatus(*conds) {
+		return false
+	}
+	recordNoPlacement(obj)
+	markEnqueued(conds, obj.GetGeneration())
 	return true
 }
 
@@ -376,28 +412,35 @@ func (q *KueueJobQueue) fetchLatestJob(ctx context.Context, job matypes.Schedula
 	}
 }
 
+// setEnqueuedCondition sets Enqueued=False with the reason of a failed
+// validation, writing only when that changes the condition's status or
+// reason: a validation that keeps failing the same way writes once.
 func (q *KueueJobQueue) setEnqueuedCondition(ctx context.Context, job framework.BatchJob, reason, message string) error {
-	return utils.UpdateStatusWithRetries(ctx, q.handler, job.GetObject(),
-		func(obj client.Object) {
-			switch j := obj.(type) {
-			case *v2pb.RayCluster:
-				cond := utils.GetCondition(&j.Status.StatusConditions, constants.EnqueuedCondition, j.GetGeneration())
-				utils.UpdateCondition(cond, utils.ConditionUpdateParams{
-					Status:     apipb.CONDITION_STATUS_FALSE,
-					Reason:     reason,
-					Generation: j.GetGeneration(),
-					Message:    message,
-				})
-			case *v2pb.SparkJob:
-				cond := utils.GetCondition(&j.Status.StatusConditions, constants.EnqueuedCondition, j.GetGeneration())
-				utils.UpdateCondition(cond, utils.ConditionUpdateParams{
-					Status:     apipb.CONDITION_STATUS_FALSE,
-					Reason:     reason,
-					Generation: j.GetGeneration(),
-					Message:    message,
-				})
+	if !notEnqueuedChanges(*job.GetConditions(), reason) {
+		return nil
+	}
+	_, err := utils.UpdateStatusIfWithRetries(ctx, q.handler, job.GetObject(),
+		func(obj client.Object) bool {
+			conds, _, ok := placementStatus(obj)
+			if !ok || !notEnqueuedChanges(*conds, reason) {
+				return false
 			}
+			utils.UpdateCondition(utils.GetCondition(conds, constants.EnqueuedCondition, obj.GetGeneration()), utils.ConditionUpdateParams{
+				Status:     apipb.CONDITION_STATUS_FALSE,
+				Reason:     reason,
+				Generation: obj.GetGeneration(),
+				Message:    message,
+			})
+			return true
 		}, &metav1.UpdateOptions{
 			FieldManager: "kueueQueueValidation",
 		})
+	return err
+}
+
+// notEnqueuedChanges reports whether Enqueued=False/reason changes the
+// conditions: unless Enqueued is already False with that reason.
+func notEnqueuedChanges(conds []*apipb.Condition, reason string) bool {
+	enqueued := utils.FindCondition(conds, constants.EnqueuedCondition)
+	return enqueued.GetStatus() != apipb.CONDITION_STATUS_FALSE || enqueued.GetReason() != reason
 }

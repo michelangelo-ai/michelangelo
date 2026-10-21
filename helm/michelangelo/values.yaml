@@ -482,6 +482,13 @@ controllermgr:
         # to honor the ma/project-name label instead, only if your admission
         # path stamps that label and overwrites any client-supplied value.
         trustProjectLabel: false
+        # Bound on a RayCluster's wait for admission, counted from its
+        # creation or latest eviction. The cluster waits while Kueue holds it
+        # suspended and, under the "kueue" backend, until it is dispatched.
+        # A cluster that waits longer fails with
+        # Succeeded=False/AdmissionTimeout. A Go duration such as "90m";
+        # empty uses the built-in default "24h".
+        admissionTimeout: ""
     k8sengine:
       mapper:
         logPersistence:
