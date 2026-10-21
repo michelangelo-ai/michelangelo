@@ -1,0 +1,23 @@
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: LocalQueue
+metadata:
+  creationTimestamp: "2026-10-20T10:00:00Z"
+  generation: 1
+  name: ma-team-b
+  namespace: default
+  resourceVersion: "41230"
+  uid: 7c2d9a10-5b1e-4f6a-8d3c-2e9f1a0b4c02
+spec:
+  clusterQueue: cluster-queue
+  stopPolicy: None
+status:
+  admittedWorkloads: 2
+  conditions:
+  - lastTransitionTime: "2026-10-20T10:00:02Z"
+    message: "Can't submit new workloads to clusterQueue"
+    observedGeneration: 1
+    reason: ClusterQueueIsInactive
+    status: "False"
+    type: Active
+  pendingWorkloads: 1
+  reservingWorkloads: 2

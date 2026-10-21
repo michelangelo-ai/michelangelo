@@ -39,6 +39,7 @@ go_test(
         "@com_github_golang_mock//gomock:go_default_library",
         "@com_github_stretchr_testify//require:go_default_library",
         "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
+        "@io_k8s_apimachinery//pkg/runtime:go_default_library",
         "@org_uber_go_fx//:go_default_library",
         "@org_uber_go_fx//fxtest:go_default_library",
     ],

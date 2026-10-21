@@ -27,6 +27,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/client"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/cluster"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/scheduler"
+	kueuestate "github.com/michelangelo-ai/michelangelo/go/components/jobs/scheduler/kueue/state"
 	"github.com/michelangelo-ai/michelangelo/go/components/pipeline"
 	"github.com/michelangelo-ai/michelangelo/go/components/pipelinerun"
 	"github.com/michelangelo-ai/michelangelo/go/components/ray"
@@ -136,6 +137,7 @@ func options() fx.Option {
 		inferenceserverOSSPlugin.Module,
 		inferenceserver.Module,
 		scheduler.Module,
+		kueuestate.Module,
 		cluster.Module,
 		client.Module,
 		fx.Invoke(func(logger logr.Logger) {

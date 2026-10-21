@@ -18,6 +18,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 func TestNewClientSetFactory(t *testing.T) {
@@ -165,5 +166,53 @@ func TestInvalidate(t *testing.T) {
 		factory := NewClientSetFactory(secretsmocks.NewMockSecretProvider(ctrl))
 		factory.Invalidate(&newCluster("https://host.example.com", "6443").Spec)
 		factory.Invalidate(&v2pb.ClusterSpec{})
+	})
+}
+
+func TestGetRestConfigForCluster(t *testing.T) {
+	cluster := &v2pb.Cluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "testCluster", Namespace: constants.ClustersNamespace},
+		Spec: v2pb.ClusterSpec{
+			Cluster: &v2pb.ClusterSpec_Kubernetes{
+				Kubernetes: &v2pb.KubernetesSpec{
+					Rest: &v2pb.ConnectionSpec{Host: "https://host.example.com", Port: "6443", TokenTag: "token-secret"},
+				},
+			},
+		},
+	}
+
+	t.Run("builds the config from the current credentials on every call", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		mockProvider := secretsmocks.NewMockSecretProvider(ctrl)
+		token := "token-1"
+		mockProvider.EXPECT().GetClusterClientAuth(gomock.Any(), cluster).DoAndReturn(
+			func(context.Context, *v2pb.Cluster) (secrets.ClientAuth, error) {
+				return secrets.ClientAuth{CertificateAuthorityData: "ca-data", ClientTokenData: token}, nil
+			}).Times(2)
+		factory := NewClientSetFactory(mockProvider)
+
+		cfg, err := factory.GetRestConfigForCluster(cluster)
+		require.NoError(t, err)
+		require.Equal(t, "https://host.example.com:6443", cfg.Host)
+		require.Equal(t, "token-1", cfg.BearerToken)
+		require.Equal(t, []byte("ca-data"), cfg.CAData)
+		require.Equal(t, runtime.ContentTypeJSON, cfg.ContentType)
+
+		// a rotated token shows on the next call, with no Invalidate
+		token = "token-2"
+		cfg, err = factory.GetRestConfigForCluster(cluster)
+		require.NoError(t, err)
+		require.Equal(t, "token-2", cfg.BearerToken)
+	})
+
+	t.Run("secret provider error", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		mockProvider := secretsmocks.NewMockSecretProvider(ctrl)
+		mockProvider.EXPECT().GetClusterClientAuth(gomock.Any(), cluster).
+			Return(secrets.ClientAuth{}, fmt.Errorf("mock error"))
+		factory := NewClientSetFactory(mockProvider)
+
+		_, err := factory.GetRestConfigForCluster(cluster)
+		require.ErrorContains(t, err, "mock error")
 	})
 }

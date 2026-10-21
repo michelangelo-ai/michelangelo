@@ -5,6 +5,7 @@ go_library(
     srcs = [
         "controller.go",
         "health.go",
+        "kueue_watches.go",
         "module.go",
         "readiness.go",
         "types.go",
@@ -42,6 +43,7 @@ go_test(
     srcs = [
         "controller_test.go",
         "health_test.go",
+        "kueue_watches_test.go",
         "readiness_test.go",
         "types_test.go",
     ],

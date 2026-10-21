@@ -46,6 +46,10 @@ type Reconciler struct {
 
 	// clusterDataMap is a mapping of ClusterName and the cluster specific details.
 	clusterDataMap *clusterMap
+
+	// kueueWatches keeps the Kueue-managed clusters' Kueue watches in step with
+	// the clusters; nil for none.
+	kueueWatches KueueWatches
 }
 
 // Params for controller constructor
@@ -55,6 +59,9 @@ type Params struct {
 	ComputeFactory    compute.Factory
 	Scope             tally.Scope
 	APIHandlerFactory apiHandler.Factory
+	// KueueWatches is the Kueue state's watch control; with none provided, no
+	// cluster is watched.
+	KueueWatches KueueWatches `optional:"true"`
 }
 
 // Result is the output of the module.
@@ -75,6 +82,7 @@ func NewReconciler(p Params) Result {
 		computeFactory:    p.ComputeFactory,
 		clusterDataMap:    &clusterMap{},
 		metrics:           metrics.NewControllerMetrics(p.Scope, _controllerName),
+		kueueWatches:      p.KueueWatches,
 	}
 
 	return Result{
@@ -214,19 +222,22 @@ func (r *Reconciler) isClusterSpecSame(cachedObj *v2pb.Cluster, newObj *v2pb.Clu
 
 // refreshCluster swaps the updated object into the cache in place, so the
 // cluster keeps its readiness and GetCluster never returns nil, drops the
-// cluster's client if it was built from the old connection settings, and probes
-// the updated cluster.
+// cluster's client if it was built from the old connection settings, starts,
+// restarts or stops the cluster's Kueue watches to match, and probes the
+// updated cluster.
 func (r *Reconciler) refreshCluster(data *Data, obj *v2pb.Cluster, log logr.Logger) {
 	oldObj := data.refreshSpec(obj)
 	if clientNeedsRebuild(&oldObj.Spec, &obj.Spec) {
 		// the client is cached by the old spec's host:port
 		r.computeFactory.Invalidate(&oldObj.Spec)
 	}
+	r.updateKueueWatches(obj, kueueWatchChange(&oldObj.Spec, &obj.Spec))
 	r.probeCluster(obj.Name, log)
 }
 
 func (r *Reconciler) delCluster(obj *v2pb.Cluster) {
 	r.clusterDataMap.delete(obj.Name)
+	r.watches().Unwatch(obj.Name)
 }
 
 func (r *Reconciler) addCluster(obj *v2pb.Cluster, log logr.Logger) {
@@ -237,6 +248,7 @@ func (r *Reconciler) addCluster(obj *v2pb.Cluster, log logr.Logger) {
 	}
 
 	r.clusterDataMap.add(obj.Name, &Data{cachedObj: obj.DeepCopy()})
+	r.updateKueueWatches(obj, kueueWatchChange(nil, &obj.Spec))
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -324,6 +336,8 @@ func (r *Reconciler) updateClusterHealth(name string) error {
 		// place: the next call rebuilds the client from the current Secrets.
 		if shouldInvalidateClient(probeErr) {
 			r.computeFactory.Invalidate(&cluster.Spec)
+			// the cluster's Kueue watches hold a client built from the same credentials
+			r.watches().Rewatch(name)
 		}
 		// Store a not-Ready status, so the cluster gets no new jobs until a probe succeeds.
 		currentClusterStatus = failedProbeStatus(currentClusterStatus, probeErr, metav1.Now())

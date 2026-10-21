@@ -10,6 +10,7 @@ import (
 	gomock "github.com/golang/mock/gomock"
 	compute "github.com/michelangelo-ai/michelangelo/go/components/jobs/compute"
 	v2 "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
+	rest "k8s.io/client-go/rest"
 )
 
 // MockFactory is a mock of Factory interface.
@@ -48,6 +49,21 @@ func (m *MockFactory) GetClientSetForCluster(arg0 *v2.Cluster) (*compute.ClientS
 func (mr *MockFactoryMockRecorder) GetClientSetForCluster(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetClientSetForCluster", reflect.TypeOf((*MockFactory)(nil).GetClientSetForCluster), arg0)
+}
+
+// GetRestConfigForCluster mocks base method.
+func (m *MockFactory) GetRestConfigForCluster(arg0 *v2.Cluster) (*rest.Config, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetRestConfigForCluster", arg0)
+	ret0, _ := ret[0].(*rest.Config)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetRestConfigForCluster indicates an expected call of GetRestConfigForCluster.
+func (mr *MockFactoryMockRecorder) GetRestConfigForCluster(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRestConfigForCluster", reflect.TypeOf((*MockFactory)(nil).GetRestConfigForCluster), arg0)
 }
 
 // Invalidate mocks base method.
