@@ -141,6 +141,7 @@ kubectl --context "${COMPUTE_CONTEXT}" -n default create secret generic michelan
 |---|---|---|
 | `kuberay-operator` | 1.7.1 | `kuberay-operator.enabled` (`true`) |
 | `spark-operator` (Kubeflow) | 2.5.2 | `spark-operator.enabled` (`true`) |
+| `kueue` | 0.19.9 | `kueue.enabled` (`false`): opt in per cluster for the [Kueue scheduler backend](../jobs/kueue-scheduler-backend.md#1-install-kueue-on-the-compute-cluster), which covers its settings and the queues chart |
 
 Values under a subchart's key are passed to the pinned upstream chart. Set a toggle to `false` to keep a standalone operator instead (see [Migrating existing clusters](#migrating-existing-clusters)); that component's pin and enforced settings then no longer apply.
 
@@ -338,6 +339,7 @@ Objects from an earlier version of [Register a Compute Cluster](register-a-compu
 | ClusterRole `ray-manager`, ClusterRoleBinding `ray-manager-binding` | Deleted after the install, so dispatch never loses permission. Deleting them is what narrows `ray-manager`. |
 | ConfigMap `michelangelo-config` | Deleted just before the install, once its other keys are in `runtime.config`. Adopting it would keep the credential keys, because Helm leaves keys it never rendered. Pods that start in between wait until the chart recreates it. |
 | Secret `aws-credentials` | Left alone: the chart does not render it, and nothing Michelangelo runs on a compute cluster reads it. |
+| Queue objects | With a kept Kueue, adopted into `michelangelo-compute-queues`, or kept by hand and left out of `localQueues`. Replacing Kueue deletes them first ([Install Kueue](../jobs/kueue-scheduler-backend.md#1-install-kueue-on-the-compute-cluster)). |
 
 In order:
 
@@ -393,13 +395,19 @@ A cluster registered with a token from `kubectl create token` instead of `ray-ma
      "cluster-${COMPUTE_CLUSTER}-client-token" "cluster-${COMPUTE_CLUSTER}-ca-data"
    ```
 
-2. Uninstall the release:
+2. If the release runs Kueue (`kueue.enabled: true`), uninstall the queues first, once `kubectl --context "${COMPUTE_CONTEXT}" get workloads -n default` returns nothing. Uninstalling `michelangelo-compute` removes Kueue's controller, and a queue object left behind would keep a finalizer that nothing clears (see the caution in [Install Kueue](../jobs/kueue-scheduler-backend.md#1-install-kueue-on-the-compute-cluster)):
+
+   ```bash
+   helm uninstall michelangelo-compute-queues --kube-context "${COMPUTE_CONTEXT}" --namespace michelangelo-compute --wait
+   ```
+
+3. Uninstall the release:
 
    ```bash
    helm uninstall michelangelo-compute --kube-context "${COMPUTE_CONTEXT}" --namespace michelangelo-compute
    ```
 
-KubeRay's and the Spark Operator's CRDs survive, along with their objects, because Helm never deletes `crds/`; no operator reconciles those objects after the uninstall. A credentials Secret that the chart created survives too.
+KubeRay's and the Spark Operator's CRDs survive, along with their objects, because Helm never deletes `crds/`; no operator reconciles those objects after the uninstall. A credentials Secret that the chart created survives too. Kueue's CRDs do not: the chart renders them from templates, so the uninstall deletes them together with every Workload and queue object.
 
 ## Related
 
