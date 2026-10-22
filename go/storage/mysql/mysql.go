@@ -648,6 +648,10 @@ func convertCriterionOperator(fieldName string, op apipb.CriterionOperator, valu
 //	" `uid` in (SELECT `obj_uid` FROM <labelTable> WHERE `key`= ? AND `value` = ? )"
 //
 // Note: lowercase `in`, no backticks around <labelTable>, trailing " )".
+//
+// IS_NULL is the exception: it matches objects without the label key, via
+//
+//	" `uid` NOT IN (SELECT `obj_uid` FROM <labelTable> WHERE `key`= ? )"
 func buildLabelCriterionSQL(op *apipb.CriterionOperation, tableName string) ([]string, []interface{}, error) {
 	var queryStrs []string
 	var params []interface{}
@@ -663,6 +667,15 @@ func buildLabelCriterionSQL(op *apipb.CriterionOperation, tableName string) ([]s
 		}
 
 		criterionOp := item.GetOperator()
+
+		// A label has no row when it is unset, so IS_NULL means "label key not set"
+		// rather than matching a NULL `value` (which would always be empty).
+		if criterionOp == apipb.CRITERION_OPERATOR_IS_NULL {
+			queryStrs = append(queryStrs, " `uid` NOT IN (SELECT `obj_uid` FROM "+labelTable+" WHERE `key`= ? )")
+			params = append(params, labelKey)
+			continue
+		}
+
 		var valueStr string
 		if !isNoParamOp(criterionOp) {
 			valueStr, err = extractMatchValue(item.GetMatchValue())
