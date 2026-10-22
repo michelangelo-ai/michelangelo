@@ -175,6 +175,36 @@ In this example, the cron schedule is "daily at 9 AM" and the window covers Janu
 
 > **Tip:** Make sure your time window actually includes at least one cron cycle. For example, if your cron runs weekly on Saturdays (`"0 9 * * 6"`), a window from Monday to Friday won't generate any runs!
 
+## Overlap and Catch-Up Policies
+
+Two fields on the trigger (in `triggerMap`, or on a TriggerRun's `spec.trigger`) control what a recurring schedule does at its edges:
+
+```yaml
+    triggerMap:
+      hourly-scoring:
+        cronSchedule:
+          cron: "0 * * * *"
+        maxConcurrency: 4
+        overlapPolicy: OVERLAP_POLICY_BUFFER      # default: OVERLAP_POLICY_SKIP
+        catchUpPolicy: CATCH_UP_POLICY_LATEST     # default: CATCH_UP_POLICY_SKIP
+```
+
+| Field | Values | Meaning |
+| :---- | :---- | :---- |
+| `overlapPolicy` | `OVERLAP_POLICY_SKIP` (default) | An occurrence that comes due while the previous one is still running is dropped. |
+| | `OVERLAP_POLICY_BUFFER` | It waits and runs as soon as the previous one finishes; several wait in order. |
+| | `OVERLAP_POLICY_ALLOW` | It runs alongside the previous one. `maxConcurrency` then applies to each separately. |
+| | `OVERLAP_POLICY_REPLACE` | The previous one is cancelled and the new one starts. |
+| `catchUpPolicy` | `CATCH_UP_POLICY_SKIP` (default) | Missed occurrences are never replayed; the schedule continues from its next one. |
+| | `CATCH_UP_POLICY_LATEST` | Only the most recent missed occurrence is replayed, then the schedule continues. |
+| | `CATCH_UP_POLICY_ALL` | Every missed occurrence is replayed once, in order (bounded; an over-large window is rejected). |
+
+"Missed occurrences" are the ones between a `start_timestamp` in the past and the moment the TriggerRun is created, and the ones that fall inside a pause/resume interval. Each replayed run carries the logical timestamp of the occurrence it stands for.
+
+`overlapPolicy` governs the per-occurrence execution that fans out your `parametersMap`; it does not change how many pipeline runs one occurrence starts, which `maxConcurrency` and `batchPolicy` control.
+
+> **`catchup: true` shorthand:** `spec.catchup: true` is the same as `catchUpPolicy: CATCH_UP_POLICY_ALL`, kept for flag-style definitions such as Airflow DAG settings. Setting both to different values is rejected. `catchup: false` means "not set", so use `catchUpPolicy: CATCH_UP_POLICY_SKIP` when you want to state "never replay" explicitly. A closed window (`start_timestamp` and `end_timestamp`) with neither field set still runs as the one-shot backfill described above.
+
 ## Advanced Configuration
 
 ### Automatic Revision Tracking (auto_flip) — Preview

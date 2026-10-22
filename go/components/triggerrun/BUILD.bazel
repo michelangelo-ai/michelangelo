@@ -8,6 +8,7 @@ go_library(
         "controller.go",
         "cron_trigger.go",
         "module.go",
+        "policy.go",
         "runner.go",
         "schedule_input.go",
         "util.go",

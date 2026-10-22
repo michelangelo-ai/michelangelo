@@ -85,6 +85,8 @@ func (r *cronTrigger) Run(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2p
 		ScheduleStartAt:                 window.startAt,
 		ScheduleEndAt:                   window.endAt,
 		CatchUpFrom:                     window.catchUpFrom,
+		OverlapPolicy:                   window.overlap,
+		CatchUpPolicy:                   window.catchUp,
 	}
 	domain := r.WorkflowClient.GetDomain()
 	rid, err := getWorkflowOpenRunID(ctx, wid, r.WorkflowClient, domain)
@@ -197,24 +199,40 @@ func (r *cronTrigger) Run(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2p
 const maxCatchUpOccurrences = 500
 
 // scheduleWindow is the engine-facing reading of spec.start_timestamp,
-// spec.end_timestamp and spec.catchup. Zero times mean "unset".
+// spec.end_timestamp, trigger.overlap_policy and trigger.catch_up_policy (with the
+// spec.catchup shorthand folded in). Zero times mean "unset".
 type scheduleWindow struct {
 	startAt     time.Time
 	endAt       time.Time
 	catchUpFrom time.Time
+	overlap     clientInterface.OverlapPolicy
+	catchUp     clientInterface.CatchUpPolicy
 }
 
 // resolveScheduleWindow validates the window and decides whether a catch-up is due.
 //
 // Nothing here depends on "now" except the catch-up range itself: the window is
-// passed to the engine as-is, and catch-up is requested only when the spec asks for
-// it and the window has already opened. A future start simply idles the schedule.
+// passed to the engine as-is, and a catch-up is requested only when the policy asks
+// for one and the window has already opened. A future start simply idles the
+// schedule. CATCH_UP_POLICY_ALL replays from the window start; CATCH_UP_POLICY_LATEST
+// replays from the last occurrence before now, so exactly one occurrence is replayed.
 //
 // The explicit nil checks are required: types.TimestampFromProto maps a nil timestamp
 // to the Unix epoch, which would read as a window starting in 1970.
 func resolveScheduleWindow(triggerRun *v2pb.TriggerRun, now time.Time) (scheduleWindow, error) {
 	var window scheduleWindow
 	spec := &triggerRun.Spec
+	overlap, err := overlapPolicyOption(spec.GetTrigger().GetOverlapPolicy())
+	if err != nil {
+		return window, err
+	}
+	window.overlap = overlap
+	policy := effectiveCatchUpPolicy(spec)
+	catchUp, err := catchUpPolicyOption(policy)
+	if err != nil {
+		return window, err
+	}
+	window.catchUp = catchUp
 	if spec.StartTimestamp != nil {
 		startAt, err := pbtypes.TimestampFromProto(spec.StartTimestamp)
 		if err != nil {
@@ -233,7 +251,7 @@ func resolveScheduleWindow(triggerRun *v2pb.TriggerRun, now time.Time) (schedule
 		return window, fmt.Errorf("end_timestamp %s must be after start_timestamp %s",
 			window.endAt.Format(time.RFC3339), window.startAt.Format(time.RFC3339))
 	}
-	if !spec.Catchup || window.startAt.IsZero() || !window.startAt.Before(now) {
+	if policy == v2pb.CATCH_UP_POLICY_SKIP || window.startAt.IsZero() || !window.startAt.Before(now) {
 		return window, nil
 	}
 
@@ -242,6 +260,17 @@ func resolveScheduleWindow(triggerRun *v2pb.TriggerRun, now time.Time) (schedule
 		catchUpTo = window.endAt
 	}
 	cronExpr := spec.Trigger.GetCronSchedule().GetCron()
+	if policy == v2pb.CATCH_UP_POLICY_LATEST {
+		latest, err := lastCronOccurrenceBefore(cronExpr, window.startAt, catchUpTo)
+		if err != nil {
+			return window, err
+		}
+		// No occurrence in the window: nothing to replay, the schedule just starts.
+		if !latest.IsZero() {
+			window.catchUpFrom = latest
+		}
+		return window, nil
+	}
 	occurrences, err := countCronOccurrences(cronExpr, window.startAt, catchUpTo, maxCatchUpOccurrences)
 	if err != nil {
 		return window, err
@@ -249,7 +278,7 @@ func resolveScheduleWindow(triggerRun *v2pb.TriggerRun, now time.Time) (schedule
 	if occurrences > maxCatchUpOccurrences {
 		return window, fmt.Errorf(
 			"catch-up from %s would replay more than %d occurrences of %q; "+
-				"narrow the window or split it across several TriggerRuns",
+				"narrow the window, use CATCH_UP_POLICY_LATEST, or split it across several TriggerRuns",
 			window.startAt.Format(time.RFC3339), maxCatchUpOccurrences, cronExpr)
 	}
 	window.catchUpFrom = window.startAt

@@ -102,16 +102,38 @@ message Trigger {
   // which starts runs sequentially.
   //
   // Scoped to one execution, not to the trigger as a whole: two overlapping executions
-  // could each start up to this many. They are not expected to overlap in practice -
-  // the schedule skips an occurrence whose predecessor is still running, and a catch-up
-  // backfill (see TriggerRunSpec.catchup) replays missed occurrences one at a time,
-  // in chronological order, so peak parallelism stays at this bound.
+  // could each start up to this many. With the default overlap_policy (SKIP) they never
+  // overlap, and a catch-up (see catch_up_policy) replays missed occurrences one at a
+  // time, in chronological order, so peak parallelism stays at this bound. OVERLAP_POLICY_ALLOW
+  // lifts that guarantee.
   int32 max_concurrency = 5;
 
   // proxy_user is the service account identity for pipeline runs spawned by this
   // trigger. When set, spawned TriggerRuns will have Actor.proxy_user
   // auto-populated with this value.
   string proxy_user = 7;
+
+  // What happens when an occurrence of a cron or interval schedule comes due while the
+  // execution started by the previous occurrence is still running. This governs the
+  // per-occurrence execution (the fan-out over parameters_map), not the pipeline runs it
+  // starts; max_concurrency bounds those.
+  //
+  // Unset is OVERLAP_POLICY_SKIP, the behaviour before this field existed. Ignored on
+  // a BatchRerun trigger and on a one-shot backfill window.
+  OverlapPolicy overlap_policy = 8;
+
+  // How occurrences the schedule missed are handled: those between a past
+  // TriggerRunSpec.start_timestamp and the time the TriggerRun is created, and those
+  // that fell inside a PAUSE / RESUME interval.
+  //
+  // Unset is CATCH_UP_POLICY_SKIP. Replays are bounded by occurrence count, not by
+  // wall-clock age: a window that expands to more occurrences than the controller's
+  // limit is rejected rather than silently clamped, so a mistyped year on a frequent
+  // cron cannot enqueue thousands of runs. Each replayed run carries the logical
+  // timestamp of the occurrence it stands for, not the time it actually executes.
+  // Ignored on a BatchRerun trigger. Requires an engine with schedule backfill
+  // (Temporal Schedules, Cadence Schedules on server v1.4.1 or later).
+  CatchUpPolicy catch_up_policy = 9;
 }
 
 // TriggerRunSpec defines the specification for executing a pipeline trigger.
@@ -150,13 +172,15 @@ message TriggerRunSpec {
   bool kill = 5 [deprecated = true];
 
   // Start of the schedule's active window. Maps to the workflow engine's StartAt.
-  // Occurrences before this time are never fired unless catchup is true, in which
-  // case the missed occurrences between start_timestamp and now are replayed once.
-  // A start in the future leaves the schedule idle until then.
+  // Occurrences between this time and the TriggerRun's creation are missed occurrences
+  // and are handled per trigger.catch_up_policy (skipped by default). A start in the
+  // future leaves the schedule idle until then.
   //
-  // Compatibility: when both start_timestamp and end_timestamp are set and catchup
-  // is false, the TriggerRun keeps today's behavior and runs as a one-shot backfill
-  // over [start_timestamp, end_timestamp]. New specs should set catchup explicitly.
+  // Compatibility: when both start_timestamp and end_timestamp are set and neither
+  // trigger.catch_up_policy nor the catchup shorthand is set, the TriggerRun keeps
+  // the original behaviour and runs as a one-shot backfill over
+  // [start_timestamp, end_timestamp]. A recurring schedule with a closed window sets
+  // trigger.catch_up_policy explicitly.
   google.protobuf.Timestamp start_timestamp = 6;
 
   // End of the schedule's active window, half-open: occurrences at or after this
@@ -196,22 +220,12 @@ message TriggerRunSpec {
   // Note: PAUSE and RESUME are only applicable to cron and interval triggers.
   TriggerRunAction action = 11;
 
-  // When true and start_timestamp is in the past, every occurrence in
-  // [start_timestamp, min(now, end_timestamp)) is fired once, in chronological
-  // order, via the workflow engine's schedule backfill, and the schedule then
-  // keeps firing on its normal cadence until end_timestamp (if set). Each replayed
-  // run carries the logical timestamp of the occurrence it stands for, not the time
-  // it actually executes. Applies to cron and interval triggers alike; rejected on
-  // BatchRerun.
-  //
-  // Catch-up is bounded by occurrence count, not by wall-clock age: a window that
-  // expands to more occurrences than the controller's limit is rejected rather than
-  // silently clamped, so a mistyped year on a frequent cron cannot enqueue thousands
-  // of runs. Ignored when the trigger is created paused, since a paused schedule
-  // takes no actions.
-  //
-  // Requires an engine with schedule backfill (Temporal Schedules, Cadence
-  // Schedules). Rejected on the legacy Cadence cron provider.
+  // Shorthand for trigger.catch_up_policy = CATCH_UP_POLICY_ALL, for definitions that
+  // express catch-up as a flag (Airflow-style DAG settings, existing YAML). The enum is
+  // the canonical field: true with the enum unset is read as CATCH_UP_POLICY_ALL; true
+  // with any other explicit policy is rejected; false is indistinguishable from unset
+  // in proto3 and therefore means "no opinion", not "never" (set the enum to
+  // CATCH_UP_POLICY_SKIP for that). Controllers read only the resolved enum.
   bool catchup = 12;
 }
 
@@ -257,6 +271,44 @@ enum TriggerRunAction {
   TRIGGER_RUN_ACTION_KILL = 1;
   TRIGGER_RUN_ACTION_PAUSE = 2;
   TRIGGER_RUN_ACTION_RESUME = 3;
+}
+
+// What a recurring schedule does when an occurrence comes due while the execution
+// started by the previous occurrence is still running. Named after the Kubernetes
+// CronJob concurrencyPolicy values where one exists; each maps onto the workflow
+// engine's own policy (Temporal: SKIP / BUFFER_ALL / ALLOW_ALL / CANCEL_OTHER;
+// Cadence: SKIP_NEW / BUFFER / CONCURRENT / CANCEL_PREVIOUS).
+enum OverlapPolicy {
+  // Not set; treated as OVERLAP_POLICY_SKIP.
+  OVERLAP_POLICY_UNSPECIFIED = 0;
+  // Drop the new occurrence. The default, and the only behaviour before this enum.
+  OVERLAP_POLICY_SKIP = 1;
+  // Queue the new occurrence and start it when the running one finishes; several
+  // queued occurrences run back to back in order.
+  OVERLAP_POLICY_BUFFER = 2;
+  // Start the new occurrence alongside the running one. max_concurrency then bounds
+  // each execution separately, not the trigger as a whole.
+  OVERLAP_POLICY_ALLOW = 3;
+  // Cancel the running occurrence, then start the new one.
+  OVERLAP_POLICY_REPLACE = 4;
+}
+
+// How a recurring schedule treats occurrences it missed: those between a past
+// start_timestamp and the TriggerRun's creation, and those that fell inside a
+// PAUSE / RESUME interval. The same three-way split as Cadence's CatchUpPolicy
+// (SKIP / ONE / ALL), Oozie's coordinator execution (NONE / LAST_ONLY / FIFO) and
+// Quartz's misfire instructions; Airflow's catchup=false is LATEST and catchup=true
+// is ALL.
+enum CatchUpPolicy {
+  // Not set; treated as CATCH_UP_POLICY_SKIP.
+  CATCH_UP_POLICY_UNSPECIFIED = 0;
+  // Never replay a missed occurrence; the schedule resumes at its next one.
+  CATCH_UP_POLICY_SKIP = 1;
+  // Replay only the most recent missed occurrence, then continue on cadence.
+  CATCH_UP_POLICY_LATEST = 2;
+  // Replay every missed occurrence once, in chronological order, bounded by the
+  // controller's occurrence limit (rejected, not clamped, when exceeded).
+  CATCH_UP_POLICY_ALL = 3;
 }
 
 // Describes the state of a trigger run:

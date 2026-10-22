@@ -335,11 +335,12 @@ func isTerminateState(tr *v2pb.TriggerRun) bool {
 // in priority order:
 //
 //  1. BatchRerun: Spec.Trigger.BatchRerun is set
-//  2. Backfill: Both Spec.StartTimestamp and Spec.EndTimestamp are set and
-//     Spec.Catchup is false. This keeps pre-catchup backfill specs on the one-shot
-//     backfill runner. With Spec.Catchup set, the timestamps are the schedule's
-//     window and the recurring runner below owns the object, so adding or removing
-//     an end date never changes its type.
+//  2. Backfill: Both Spec.StartTimestamp and Spec.EndTimestamp are set and no
+//     catch-up policy of any kind is set (neither Spec.Trigger.CatchUpPolicy nor the
+//     Spec.Catchup shorthand). This keeps pre-policy backfill specs on the one-shot
+//     backfill runner. With a policy set, the timestamps are the schedule's window
+//     and the recurring runner below owns the object, so adding or removing an end
+//     date never changes its type (see isLegacyBackfillShape).
 //  3. Interval: Spec.Trigger.IntervalSchedule is set
 //  4. Cron: Spec.Trigger.CronSchedule is set
 //  5. Unknown: None of the above conditions match
@@ -353,7 +354,7 @@ func GetTriggerType(tr *v2pb.TriggerRun) string {
 	if tr.Spec.Trigger.GetBatchRerun() != nil {
 		return TriggerTypeBatchRerun
 	}
-	if tr.Spec.StartTimestamp != nil && tr.Spec.EndTimestamp != nil && !tr.Spec.Catchup {
+	if isLegacyBackfillShape(&tr.Spec) {
 		return TriggerTypeBackfill
 	}
 	if tr.Spec.Trigger.GetIntervalSchedule() != nil {

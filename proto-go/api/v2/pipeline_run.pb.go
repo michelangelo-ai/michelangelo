@@ -6518,6 +6518,13 @@ spec:
                                     type: string
                                   type: array
                               type: object
+                            catchUpPolicy:
+                              enum:
+                              - CATCH_UP_POLICY_UNSPECIFIED
+                              - CATCH_UP_POLICY_SKIP
+                              - CATCH_UP_POLICY_LATEST
+                              - CATCH_UP_POLICY_ALL
+                              type: string
                             cronSchedule:
                               properties:
                                 cron:
@@ -6531,6 +6538,14 @@ spec:
                             maxConcurrency:
                               format: int32
                               type: integer
+                            overlapPolicy:
+                              enum:
+                              - OVERLAP_POLICY_UNSPECIFIED
+                              - OVERLAP_POLICY_SKIP
+                              - OVERLAP_POLICY_BUFFER
+                              - OVERLAP_POLICY_ALLOW
+                              - OVERLAP_POLICY_REPLACE
+                              type: string
                             parametersMap:
                               additionalProperties:
                                 properties:
@@ -6960,6 +6975,13 @@ spec:
                                             type: string
                                           type: array
                                       type: object
+                                    catchUpPolicy:
+                                      enum:
+                                      - CATCH_UP_POLICY_UNSPECIFIED
+                                      - CATCH_UP_POLICY_SKIP
+                                      - CATCH_UP_POLICY_LATEST
+                                      - CATCH_UP_POLICY_ALL
+                                      type: string
                                     cronSchedule:
                                       properties:
                                         cron:
@@ -6973,6 +6995,14 @@ spec:
                                     maxConcurrency:
                                       format: int32
                                       type: integer
+                                    overlapPolicy:
+                                      enum:
+                                      - OVERLAP_POLICY_UNSPECIFIED
+                                      - OVERLAP_POLICY_SKIP
+                                      - OVERLAP_POLICY_BUFFER
+                                      - OVERLAP_POLICY_ALLOW
+                                      - OVERLAP_POLICY_REPLACE
+                                      type: string
                                     parametersMap:
                                       additionalProperties:
                                         properties:
@@ -7335,6 +7365,13 @@ spec:
                                             type: string
                                           type: array
                                       type: object
+                                    catchUpPolicy:
+                                      enum:
+                                      - CATCH_UP_POLICY_UNSPECIFIED
+                                      - CATCH_UP_POLICY_SKIP
+                                      - CATCH_UP_POLICY_LATEST
+                                      - CATCH_UP_POLICY_ALL
+                                      type: string
                                     cronSchedule:
                                       properties:
                                         cron:
@@ -7348,6 +7385,14 @@ spec:
                                     maxConcurrency:
                                       format: int32
                                       type: integer
+                                    overlapPolicy:
+                                      enum:
+                                      - OVERLAP_POLICY_UNSPECIFIED
+                                      - OVERLAP_POLICY_SKIP
+                                      - OVERLAP_POLICY_BUFFER
+                                      - OVERLAP_POLICY_ALLOW
+                                      - OVERLAP_POLICY_REPLACE
+                                      type: string
                                     parametersMap:
                                       additionalProperties:
                                         properties:
