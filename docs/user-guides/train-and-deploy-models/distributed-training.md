@@ -126,8 +126,10 @@ def train(train_dv: DatasetVariable, val_dv: DatasetVariable):
 | --- | --- | --- |
 | `create_model_fn` | `Callable` | Factory returning a `LightningModule`, called on each worker |
 | `create_model_fn_kwargs` | `dict` | Keyword arguments passed to the factory |
-| `train_data` | `ray.data.Dataset` | Training dataset |
-| `val_data` | `ray.data.Dataset` | Validation dataset |
+| `train_data` | `ray.data.Dataset` | Training dataset¹ |
+| `val_data` | `ray.data.Dataset` | Validation dataset¹ |
+
+¹ Both are typed `ray.data.Dataset | None`. They can be `None` only with a file-backed `custom_dataloader` (`CustomDataloaderParam(file_backed=True)`); otherwise construction raises `UserInputError`. See [Custom dataloaders](#custom-dataloaders).
 
 **Optional:**
 
@@ -144,6 +146,7 @@ def train(train_dv: DatasetVariable, val_dv: DatasetVariable):
 | `training_observer` | `None` | Callbacks for training events — see [Observing a run](#observing-a-run) |
 | `experiment_store` | `None` | Enables opt-in auto-resume — see [Auto-resume](#auto-resume-across-runs) |
 | `profiler_sink` | `None` | Ships profiler output to an experiment tracker |
+| `custom_dataloader` | `None` | Replaces the Ray Data dataloaders with your own factory — see [Custom dataloaders](#custom-dataloaders) |
 
 :::warning
 `num_epochs` is deprecated and logs a warning when set. Use `lightning_trainer_kwargs={"max_epochs": N}` instead.
@@ -164,6 +167,83 @@ The trainer applies three defaults before constructing `pytorch_lightning.Traine
 :::
 
 `enable_checkpointing` is the exception — it is **derived** from whether a `ModelCheckpoint` callback is present, and setting it directly in `lightning_trainer_kwargs` is ignored with a warning.
+
+## Custom dataloaders
+
+By default each worker iterates its Ray Data shard with `iter_torch_batches`. To build batches yourself, for example to use a file format Ray Data can't read or an existing PyTorch dataloader, supply a dataloader factory. There are two ways to configure it, depending on which layer you use.
+
+### Library level: `CustomDataloaderParam`
+
+When you construct `LightningTrainerParam` yourself, set `custom_dataloader` to a `CustomDataloaderParam`. It's defined in `michelangelo.lib.trainer.torch.pytorch_lightning.schema`.
+
+| Field | Default | Description |
+| --- | --- | --- |
+| `factory` | required | A `DataLoaderFactory` callable (see below). It's resolved on the driver and shipped to workers, so it must be picklable |
+| `train_dataset_path` | required | Path or URI passed to the factory for the `"train"` stage |
+| `validation_dataset_path` | required | Path or URI passed to the factory for the `"validation"` stage |
+| `factory_kwargs` | `{}` | Extra keyword arguments forwarded to every factory call |
+| `read_kwargs` | `{}` | Read settings, such as `{"columns": [...]}`, forwarded to the factory |
+| `file_backed` | `False` | `True` means the factory reads files itself and no Ray Dataset is shipped to workers |
+
+The factory follows the `DataLoaderFactory` protocol from the same module. It runs once per stage on every worker, and the iterable it returns becomes Lightning's dataloader for that stage:
+
+```python
+def __call__(
+    self,
+    stage: str,                   # "train" or "validation"
+    *,
+    dataset_path: str,
+    read_kwargs: dict[str, Any],
+    **kwargs: Any,                # factory_kwargs, plus ds in Ray-backed mode
+) -> Iterable[Any]: ...
+```
+
+The two modes differ in what the factory receives:
+
+- **Ray-backed** (`file_backed=False`): the factory also gets `ds=`, the worker's shard of `train_data` or `val_data`. Ray has already split it across workers.
+- **File-backed** (`file_backed=True`): there's no `ds`. The factory reads `dataset_path` itself and **must shard by worker**, for example with `ray.train.get_context().get_world_rank()` and `get_world_size()`. In this mode `train_data` and `val_data` may be `None`.
+
+Declare `ds=None`, or accept `**kwargs`, and the same factory works in both modes:
+
+```python
+from michelangelo.lib.trainer.torch.pytorch_lightning.schema import CustomDataloaderParam
+
+
+def build_loader(stage, *, dataset_path, read_kwargs, batch_size=32, ds=None):
+    if ds is not None:
+        return ds.iter_torch_batches(batch_size=batch_size)
+    return MyFileDataLoader(dataset_path, columns=read_kwargs.get("columns"))  # your own loader
+
+
+custom_dataloader = CustomDataloaderParam(
+    factory=build_loader,
+    train_dataset_path="s3://my-bucket/train/",
+    validation_dataset_path="s3://my-bucket/val/",
+    factory_kwargs={"batch_size": 64},
+    file_backed=True,
+)
+```
+
+The factory owns batching, so with a custom dataloader these settings are **not applied**:
+
+- `batch_size`, `num_shuffle_batches` and `data_collate_fn`;
+- the Ray Dataset capping done for `limit_*_batches`. Lightning still honours integer `limit_*_batches` values itself.
+
+A factory that returns `None` for a stage raises `UserInputError`.
+
+### Workflow level: `CustomDataloaderConfig`
+
+The tabular trainer task configures the same feature through `CustomDataloaderConfig`, which is in `michelangelo.workflow.schema.custom_dataloader`. It uses different field names, because it refers to the factory by import path instead of holding the function:
+
+| Field | Default | Description |
+| --- | --- | --- |
+| `build_dataloader_fn` | required | **Dotted import path** to the factory, e.g. `"my_project.data.build_loader"` |
+| `build_dataloader_kwargs` | `{}` | Extra keyword arguments forwarded to the factory |
+| `sample_data_fn` | `None` | Optional dotted path to a function that builds the model's `sample_data` on the driver. When unset, sample data comes from the first train batch |
+| `sample_data_fn_kwargs` | `{}` | Extra keyword arguments for `sample_data_fn` |
+| `kind` | `CustomDataloaderKind.RAY_DATA` | `RAY_DATA` or `FILE_BACKED`, matching the two modes above |
+
+Set it through `LightningTrainerConfig(dataloading_config=DataloadingConfig(custom_dataloader_config=...))`. Both classes are importable from `michelangelo.workflow.schema.tabular_trainer`. Combining it with `parquet_read_config` or `batch_iter_config` raises `ConfigurationError`, because those settings would be ignored. Each batch the factory yields must be a `dict` mapping column names to batched tensors. For worked configurations, see `python/michelangelo/workflow/tasks/tabular_trainer/tests/custom_dataloader_test.py`.
 
 ## Choosing a distributed strategy
 

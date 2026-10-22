@@ -147,6 +147,45 @@ If the new layer needs fitted statistics (like `StandardScaler` or
 `TransformSpec` that resolves it into a concrete spec, following the pattern
 of `update_standard_scaler_specs`/`update_min_max_scaler_specs`.
 
+### The layer contract
+
+Every layer subclasses `TorchTransformBaseLayer` (`lib/native_transform/torch/base_layers.py`), which is a `torch.nn.Module`:
+
+```python
+def __init__(self, input_cols: list[str], output_cols: list[str], **kwargs) -> None: ...
+
+def forward(self, inputs: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]: ...
+```
+
+- `forward` reads its inputs by `self.input_cols`. It returns a dict with one entry per name in `self.output_cols`.
+- The optional `name=` keyword sets `self.name`. If you leave it out, the base class generates one from the class name. Either way, names must be unique within a model. Forward any extra layer options to `super().__init__(input_cols, output_cols, **kwargs)`.
+- The layer must survive `torch.jit.script`, because that's how the transform is exported for serving (see above). Keep `forward` to TorchScript-compatible code: typed locals, no arbitrary Python objects. The test suite enforces this. `lib/native_transform/torch/tests/test_base_layers.py` requires every layer to script, to save and load, and to reproduce the eager output afterwards. Add your layer to those tests.
+- `Cast` in `base_layers.py` is the idiomatic example to copy. Its `forward` stacks the inputs with `format_inputs`, applies one tensor op, and splits the result back out with `format_outputs`. Both helpers are in `lib/native_transform/torch/utils.py`.
+
+The three-step registration recipe above is for **contributors editing this repository**. A third dict, `TORCH_TRANSFORM_LAYER_CLASS_NAME_TO_SPEC_CLASS_NAME_DICT` in `transform_spec.py`, is built **once, at import time**, from `TORCH_TRANSFORM_LAYERS_SPECS_DICT`. If code outside the repo adds a spec to `TORCH_TRANSFORM_LAYERS_SPECS_DICT` at runtime, the derived dict doesn't change. `TransformSpec.to_dict()` / `load_from_dict()` round trips then fail with `Layer spec class name ... not found`.
+
+To use a custom layer without registering it, skip the spec/DAG path and build the module directly:
+
+```python
+import torch
+
+from michelangelo.lib.native_transform.torch.base_layers import Cast
+from michelangelo.lib.native_transform.torch.base_transform_module import TorchTransformModule
+
+module = TorchTransformModule(
+    name="my_transforms",
+    input_cols=["age"],
+    output_cols=["age_scaled"],
+    layers=torch.nn.ModuleList([
+        Cast(input_cols=["age"], output_cols=["age_f"], dtype=torch.float32),
+        MyScaleLayer(input_cols=["age_f"], output_cols=["age_scaled"]),  # your TorchTransformBaseLayer subclass
+    ]),
+)
+scripted_module = torch.jit.script(module)
+```
+
+`layers` must already be in dependency order, and every element must be a `TorchTransformBaseLayer`.
+
 To support persisting a *new* transform-related type as a workflow value the
 way `TransformSpecIO` does for `TransformSpec`, implement the
 `IO[T]` protocol (`write`/`read`) and register it with

@@ -36,6 +36,8 @@ The registry separates operator and user responsibilities cleanly:
 
 The registry is backed by a single Kubernetes Custom Resource: `Model` (CRD name `models.michelangelo.api`).
 
+For the user side (registering a model from task code with `push()`, or plugging in a different registry), point users to [Push Models and Artifacts](../../user-guides/train-and-deploy-models/push-models-and-artifacts.md).
+
 ---
 
 ## Prerequisites

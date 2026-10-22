@@ -125,6 +125,8 @@ task_configs:
           dataset_plugin: {}
 ```
 
+The `pusher` task runs `push()`. For what each plugin does, the `PusherConfig` fields it accepts, and how to add your own plugins, see [Push Models and Artifacts](../train-and-deploy-models/push-models-and-artifacts.md).
+
 ### Pipeline creation for custom workflows
 
 #### Typical code structure
