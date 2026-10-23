@@ -88,6 +88,32 @@ Run locally:
 python my_pipeline.py
 ```
 
+### Reporting workflow failures
+
+Use `@uniflow.workflow(on_failure=report_failure)` to report an error without
+changing the workflow's outcome:
+
+```python
+def report_failure(failure):
+    category = failure.details.get("exception_type") or failure.reason or "unknown"
+    print("{}: {}".format(category, failure.message))
+
+@uniflow.workflow(on_failure=report_failure)
+def run_pipeline(name: str):
+    return sensor_pipeline_run(name)
+```
+
+The callback runs on ordinary execution failures (not startup errors or worker
+cancellation). If reporting fails, the original workflow error still wins.
+It can inspect `message`, `reason` (the Python exception class locally or a
+backend error code remotely), `details` (including `exception_type` when
+supplied), and `backtrace`. Plain Starlark errors might not have a reason or
+exception type.
+Local runs execute the callback in Python. Remote builds require a backend that
+can lower it to Starlark; the OSS SDK does not provide `std.catch` and rejects
+remote builds with `on_failure` if no backend is configured. Workflows without
+`on_failure` are unchanged.
+
 Want to use Spark instead of Ray? Just swap the task config:
 
 ```python
