@@ -333,7 +333,7 @@ func (r *cronTrigger) GetStatus(
 
 // Pause suspends the cron trigger schedule to prevent new executions.
 //
-// This method pauses the Temporal Schedule associated with the cron trigger,
+// This method pauses the engine schedule associated with the cron trigger,
 // preventing new workflow executions from being scheduled while keeping the
 // trigger run in a recoverable state.
 //
@@ -344,7 +344,7 @@ func (c *cronTrigger) Pause(ctx context.Context, triggerRun *v2pb.TriggerRun) (v
 
 // Resume reactivates a paused cron trigger schedule.
 //
-// This method resumes the Temporal Schedule associated with the cron trigger,
+// This method resumes the engine schedule associated with the cron trigger,
 // allowing new workflow executions to be scheduled according to the original
 // cron expression.
 //
@@ -362,8 +362,9 @@ func (c *cronTrigger) Resume(ctx context.Context, triggerRun *v2pb.TriggerRun) (
 //  3. Compare the desired and actual schedules
 //  4. If different, update the workflow engine schedule to match the spec
 //
-// For Temporal, this updates the schedule via ScheduleClient.Update. For Cadence, this is a no-op
-// since Cadence doesn't support external schedule updates.
+// Both engines apply the change to the trigger's schedule in place. A Cadence trigger started
+// before schedule support runs as a legacy cron workflow and cannot be updated in place; the
+// workflow client reports that with an error asking for the trigger to be recreated.
 //
 // Returns the current TriggerRunStatus (preserving state) on success, or an error status if
 // the update fails.

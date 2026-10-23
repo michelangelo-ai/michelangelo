@@ -235,6 +235,8 @@ minio:
 
 Michelangelo AI uses a workflow engine (Temporal or Cadence) for orchestrating workflows. The chart's `workflow.engine` value selects `cadence` (the default, used in the sandbox) or `temporal`.
 
+Recurring `TriggerRun`s (cron triggers) are engine schedules on both engines. On Cadence this requires **Cadence server v1.4.1 or later** with the scheduler worker enabled for the Michelangelo domain through the dynamic-config key `worker.enableScheduler` (off by default in Cadence; the bundled Helm subchart enables it). A cron trigger created against an older Cadence, or one whose domain has the scheduler disabled, is accepted by the API but never fires; pause, resume and in-place spec updates of cron triggers also depend on schedules. Cron triggers started before this requirement keep running as legacy Cadence cron workflows until they are killed; recreate them to gain pause, resume and in-place updates.
+
 ## Controller Manager Workflow Client
 
 From `helm/michelangelo/templates/core/controllermgr-configmap.yaml` (rendered from `workflow.engine`, `workflow.endpoint`, `workflow.domain`):

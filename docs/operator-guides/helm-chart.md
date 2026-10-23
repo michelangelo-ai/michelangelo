@@ -194,6 +194,8 @@ If you do not have a workflow engine available, the chart can install one for yo
 
 ### Cadence subchart
 
+Recurring `TriggerRun`s are [Cadence Schedules](https://cadenceworkflow.io/docs/concepts/schedules), so the Cadence server must be **v1.4.1 or later** with the scheduler worker enabled for the Michelangelo domain (dynamic config `worker.enableScheduler`, which Cadence ships disabled). The bundled subchart (chart 1.6.7, server v1.4.1) sets it; if you bring your own Cadence, enable it there. Without it a trigger's schedule is created but never fires.
+
 ```bash
 helm dependency update helm/michelangelo
 

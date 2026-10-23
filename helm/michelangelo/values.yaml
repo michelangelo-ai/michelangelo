@@ -636,8 +636,13 @@ commonAnnotations: {}
 # Cadence — optional bundled workflow engine.
 #
 # When enabled, the official Cadence Helm chart (cadence-workflow/cadence
-# v1.1.0) is installed as a subchart of this release. Disabled by default —
-# bring your own Cadence or Temporal in production.
+# v1.6.7, Cadence server v1.4.1) is installed as a subchart of this release.
+# Disabled by default — bring your own Cadence or Temporal in production.
+#
+# Recurring TriggerRuns are Cadence Schedules, which need Cadence server
+# v1.4.1 or later with the scheduler worker enabled for the domain
+# (dynamic config `worker.enableScheduler`, off by default in Cadence). The
+# bundled subchart below turns it on; a self-managed Cadence must do the same.
 #
 # Prerequisite: run `helm dependency update ./helm/michelangelo` once before
 # the first install with cadence.enabled=true. Helm will not auto-download
@@ -697,6 +702,16 @@ cadence:
   # Cadence web UI. Useful for inspecting workflows. Disable to save a pod.
   web:
     enabled: true
+
+  # Dynamic config. Key names must be exact; unknown keys are silently ignored.
+  dynamicConfig:
+    values:
+      # The scheduler worker runs Cadence Schedules, which back recurring
+      # TriggerRuns. Cadence ships it disabled; without it a schedule is
+      # created but never fires.
+      worker.enableScheduler:
+        - value: true
+          constraints: {}
 
 # -----------------------------------------------------------------------------
 # Temporal — optional bundled workflow engine.

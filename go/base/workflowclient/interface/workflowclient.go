@@ -25,7 +25,52 @@ type StartWorkflowOptions struct {
 	// means no catch-up. Ignored when StartPaused is set, since a paused schedule takes
 	// no actions.
 	CatchUpFrom time.Time
+	// OverlapPolicy is what a recurring schedule does when an occurrence comes due while
+	// the action of an earlier occurrence is still running. Zero means SkipNew.
+	OverlapPolicy OverlapPolicy
+	// CatchUpPolicy is how a recurring schedule treats the occurrences it missed while
+	// paused, applied when it is unpaused. Zero means Skip. The Temporal provider cannot
+	// replay missed occurrences on unpause and rejects One and All.
+	CatchUpPolicy CatchUpPolicy
 }
+
+// OverlapPolicy is what a recurring schedule does when an occurrence comes due while the
+// action of an earlier occurrence is still running. It governs the per-occurrence trigger
+// workflow only; the pipeline runs that workflow creates are bounded by the trigger's own
+// concurrency settings.
+type OverlapPolicy int32
+
+const (
+	// OverlapPolicyUnspecified lets the adapter choose. Every adapter treats it as SkipNew.
+	OverlapPolicyUnspecified OverlapPolicy = iota
+	// OverlapPolicySkipNew drops the new occurrence while the earlier action still runs.
+	OverlapPolicySkipNew
+	// OverlapPolicyBuffer queues the new occurrence and starts it once the earlier action
+	// finishes.
+	OverlapPolicyBuffer
+	// OverlapPolicyConcurrent starts the new occurrence alongside the running one.
+	OverlapPolicyConcurrent
+	// OverlapPolicyCancelPrevious requests cancellation of the running action, then starts
+	// the new one.
+	OverlapPolicyCancelPrevious
+	// OverlapPolicyTerminatePrevious terminates the running action, then starts the new one.
+	OverlapPolicyTerminatePrevious
+)
+
+// CatchUpPolicy is how a recurring schedule treats the occurrences it missed while paused,
+// applied when the schedule is unpaused.
+type CatchUpPolicy int32
+
+const (
+	// CatchUpPolicyUnspecified lets the adapter choose. Every adapter treats it as Skip.
+	CatchUpPolicyUnspecified CatchUpPolicy = iota
+	// CatchUpPolicySkip drops the missed occurrences and resumes from now.
+	CatchUpPolicySkip
+	// CatchUpPolicyOne replays only the most recent missed occurrence.
+	CatchUpPolicyOne
+	// CatchUpPolicyAll replays every missed occurrence, oldest first.
+	CatchUpPolicyAll
+)
 
 // CatchUpError reports that a recurring schedule was created and is firing forward, but
 // its catch-up backfill did not run.
@@ -151,18 +196,25 @@ type WorkflowClient interface {
 	GetActivityTaskCompletedEventType() string
 	// GetDecisionTaskCompletedEventType returns the engine-specific event type string for DecisionTaskCompleted
 	GetDecisionTaskCompletedEventType() string
-	// PauseTrigger pauses a recurring trigger by workflow ID.
+	// PauseTrigger pauses a recurring trigger by workflow ID. Recurring triggers are engine
+	// schedules on both providers; a Cadence trigger started before schedule support runs
+	// as a legacy cron workflow and cannot be paused, so the call fails with an error that
+	// says the trigger must be recreated.
 	PauseTrigger(ctx context.Context, workflowID string) error
-	// UnpauseTrigger resumes a paused recurring trigger by workflow ID.
+	// UnpauseTrigger resumes a paused recurring trigger by workflow ID. Missed occurrences
+	// are handled per the CatchUpPolicy the trigger was started with.
 	UnpauseTrigger(ctx context.Context, workflowID string) error
 	// DeleteTrigger deletes a recurring trigger and terminates any running execution.
 	// workflowID identifies the trigger; runID is the currently running execution (empty if none).
 	DeleteTrigger(ctx context.Context, workflowID string, runID string) error
 	// UpdateTrigger updates the cron schedule, optionally the paused state, and optionally the
-	// workflow action args of a recurring trigger in a single atomic operation.
+	// workflow action args of a recurring trigger.
 	// workflowID identifies the trigger; newCronSchedule is the new cron expression (empty = no
-	// cron change); paused, when non-nil, sets the schedule's paused state atomically; args, when
+	// cron change); paused, when non-nil, sets the schedule's paused state; args, when
 	// non-nil, replaces the schedule action's workflow input (used to propagate spec changes such
-	// as updated notification settings). Only supported for Temporal. Returns nil for Cadence.
+	// as updated notification settings). Temporal applies all three in one schedule update.
+	// Cadence applies the cron and args in one schedule update and the paused state with a
+	// separate pause or unpause call, so a failure between the two can leave the spec updated
+	// and the state unchanged; the caller's next reconciliation retries the action.
 	UpdateTrigger(ctx context.Context, workflowID string, newCronSchedule string, paused *bool, args []interface{}) error
 }

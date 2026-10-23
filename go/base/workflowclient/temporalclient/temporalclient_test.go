@@ -9,6 +9,7 @@ import (
 
 	"github.com/cadence-workflow/starlark-worker/temporal"
 	clientInterface "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	commonV1 "go.temporal.io/api/common/v1"
@@ -1139,4 +1140,73 @@ func TestCreateScheduleReturnsLiveScheduleWhenBackfillFails(t *testing.T) {
 	require.True(t, _catchUpFrom.Equal(catchUpErr.CatchUpFrom),
 		"the unreplayed window must be reported so an operator can close it")
 	require.ErrorContains(t, catchUpErr.Err, "backfill rejected", "underlying cause must stay unwrappable")
+}
+
+func TestMapOverlapPolicy(t *testing.T) {
+	cases := map[clientInterface.OverlapPolicy]temporalEnumsV1.ScheduleOverlapPolicy{
+		clientInterface.OverlapPolicyUnspecified:       temporalEnumsV1.SCHEDULE_OVERLAP_POLICY_SKIP,
+		clientInterface.OverlapPolicySkipNew:           temporalEnumsV1.SCHEDULE_OVERLAP_POLICY_SKIP,
+		clientInterface.OverlapPolicyBuffer:            temporalEnumsV1.SCHEDULE_OVERLAP_POLICY_BUFFER_ALL,
+		clientInterface.OverlapPolicyConcurrent:        temporalEnumsV1.SCHEDULE_OVERLAP_POLICY_ALLOW_ALL,
+		clientInterface.OverlapPolicyCancelPrevious:    temporalEnumsV1.SCHEDULE_OVERLAP_POLICY_CANCEL_OTHER,
+		clientInterface.OverlapPolicyTerminatePrevious: temporalEnumsV1.SCHEDULE_OVERLAP_POLICY_TERMINATE_OTHER,
+	}
+	for in, want := range cases {
+		got, err := mapOverlapPolicy(in)
+		require.NoError(t, err, "overlap policy %d", in)
+		assert.Equal(t, want, got, "overlap policy %d", in)
+	}
+	_, err := mapOverlapPolicy(clientInterface.OverlapPolicy(99))
+	assert.Error(t, err)
+}
+
+func TestCheckCatchUpPolicy(t *testing.T) {
+	assert.NoError(t, checkCatchUpPolicy(clientInterface.CatchUpPolicyUnspecified))
+	assert.NoError(t, checkCatchUpPolicy(clientInterface.CatchUpPolicySkip))
+	for _, policy := range []clientInterface.CatchUpPolicy{clientInterface.CatchUpPolicyOne, clientInterface.CatchUpPolicyAll} {
+		err := checkCatchUpPolicy(policy)
+		require.Error(t, err, "catch-up policy %d", policy)
+		assert.Contains(t, err.Error(), "not supported by the Temporal provider")
+	}
+}
+
+func TestCreateScheduleAppliesOverlapPolicy(t *testing.T) {
+	mockClient := &temporalMocks.Client{}
+	mockScheduleClient := &temporalMocks.ScheduleClient{}
+	mockScheduleHandle := &temporalMocks.ScheduleHandle{}
+	mockClient.On("ScheduleClient").Return(mockScheduleClient)
+	mockScheduleClient.On("GetHandle", mock.Anything, "buffered-workflow-schedule").Return(mockScheduleHandle)
+	mockScheduleHandle.On("Describe", mock.Anything).Return(nil, fmt.Errorf("schedule not found"))
+	mockScheduleClient.On("Create", mock.Anything, mock.MatchedBy(func(options temporalClient.ScheduleOptions) bool {
+		return options.Overlap == temporalEnumsV1.SCHEDULE_OVERLAP_POLICY_BUFFER_ALL
+	})).Return(mockScheduleHandle, nil)
+	client := &TemporalClient{Client: mockClient}
+
+	exec, err := client.StartWorkflow(context.Background(), clientInterface.StartWorkflowOptions{
+		ID:            "buffered-workflow",
+		TaskList:      "test-task-list",
+		CronSchedule:  "0 * * * *",
+		OverlapPolicy: clientInterface.OverlapPolicyBuffer,
+	}, "test-workflow-name", "arg1")
+
+	require.NoError(t, err)
+	assert.Equal(t, "buffered-workflow-schedule", exec.ID)
+	mockScheduleClient.AssertExpectations(t)
+}
+
+func TestCreateScheduleRejectsReplayingCatchUpPolicy(t *testing.T) {
+	mockClient := &temporalMocks.Client{}
+	client := &TemporalClient{Client: mockClient}
+
+	exec, err := client.StartWorkflow(context.Background(), clientInterface.StartWorkflowOptions{
+		ID:            "replay-workflow",
+		TaskList:      "test-task-list",
+		CronSchedule:  "0 * * * *",
+		CatchUpPolicy: clientInterface.CatchUpPolicyAll,
+	}, "test-workflow-name", "arg1")
+
+	require.Error(t, err)
+	assert.Nil(t, exec)
+	assert.Contains(t, err.Error(), "not supported by the Temporal provider")
+	mockClient.AssertNotCalled(t, "ScheduleClient")
 }

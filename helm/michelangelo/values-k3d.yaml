@@ -206,6 +206,11 @@ cadence:
   # prefix). Wrong prefix (system.) or wrong case are silently ignored.
   dynamicConfig:
     values:
+      # Recurring TriggerRuns are Cadence Schedules; the scheduler worker that
+      # fires them is off by default in Cadence (see values.yaml).
+      worker.enableScheduler:
+        - value: true
+          constraints: {}
       system.minRetentionDays:
         - value: 0
           constraints: {}

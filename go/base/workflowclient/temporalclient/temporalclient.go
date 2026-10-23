@@ -96,13 +96,19 @@ func (c *TemporalClient) createScheduleForCron(ctx context.Context, options clie
 	// Generate a schedule ID based on the workflow ID
 	scheduleID := scheduleIDForWorkflow(options.ID)
 
-	// Schedule should always fire when cron time is met
-	// The trigger workflow itself will handle maxConcurrency logic for pipeline runs
-	overlapPolicy := temporalEnumsV1.SCHEDULE_OVERLAP_POLICY_SKIP
-
-	// Log the configuration for debugging
-	fmt.Printf("[TemporalClient] Creating schedule %s with overlapPolicy=%v (trigger workflow handles maxConcurrency)\n",
-		scheduleID, overlapPolicy)
+	// The overlap policy governs the per-occurrence trigger workflow only; that workflow
+	// bounds its own pipeline-run fan-out, so the default is to skip an occurrence that
+	// comes due while the previous one still runs.
+	overlapPolicy, err := mapOverlapPolicy(options.OverlapPolicy)
+	if err != nil {
+		return nil, err
+	}
+	if err := checkCatchUpPolicy(options.CatchUpPolicy); err != nil {
+		return nil, err
+	}
+	c.logger().Info("creating Temporal schedule",
+		zap.String("schedule_id", scheduleID),
+		zap.Stringer("overlap_policy", overlapPolicy))
 
 	// Check if schedule already exists
 	scheduleHandle := c.Client.ScheduleClient().GetHandle(ctx, scheduleID)
@@ -522,6 +528,39 @@ func (c *TemporalClient) GetDecisionTaskCompletedEventType() string {
 // scheduleIDForWorkflow generates a Temporal schedule ID from a workflow ID.
 func scheduleIDForWorkflow(workflowID string) string {
 	return workflowID + "-schedule"
+}
+
+// mapOverlapPolicy translates the engine-neutral overlap policy to Temporal's. The zero
+// value maps to SKIP, the policy this adapter has always used.
+func mapOverlapPolicy(policy clientInterface.OverlapPolicy) (temporalEnumsV1.ScheduleOverlapPolicy, error) {
+	switch policy {
+	case clientInterface.OverlapPolicyUnspecified, clientInterface.OverlapPolicySkipNew:
+		return temporalEnumsV1.SCHEDULE_OVERLAP_POLICY_SKIP, nil
+	case clientInterface.OverlapPolicyBuffer:
+		return temporalEnumsV1.SCHEDULE_OVERLAP_POLICY_BUFFER_ALL, nil
+	case clientInterface.OverlapPolicyConcurrent:
+		return temporalEnumsV1.SCHEDULE_OVERLAP_POLICY_ALLOW_ALL, nil
+	case clientInterface.OverlapPolicyCancelPrevious:
+		return temporalEnumsV1.SCHEDULE_OVERLAP_POLICY_CANCEL_OTHER, nil
+	case clientInterface.OverlapPolicyTerminatePrevious:
+		return temporalEnumsV1.SCHEDULE_OVERLAP_POLICY_TERMINATE_OTHER, nil
+	default:
+		return temporalEnumsV1.SCHEDULE_OVERLAP_POLICY_UNSPECIFIED, fmt.Errorf("unknown overlap policy %d", policy)
+	}
+}
+
+// checkCatchUpPolicy rejects the catch-up policies Temporal cannot honour. A Temporal
+// schedule takes no action for the occurrences it missed while paused, which is Skip;
+// replaying one or all of them would need a backfill over the paused interval, which this
+// adapter does not perform.
+func checkCatchUpPolicy(policy clientInterface.CatchUpPolicy) error {
+	switch policy {
+	case clientInterface.CatchUpPolicyUnspecified, clientInterface.CatchUpPolicySkip:
+		return nil
+	default:
+		return fmt.Errorf("catch-up policy %d is not supported by the Temporal provider: "+
+			"a Temporal schedule does not replay occurrences missed while paused", policy)
+	}
 }
 
 // PauseTrigger pauses the Temporal schedule associated with the given workflow ID.
