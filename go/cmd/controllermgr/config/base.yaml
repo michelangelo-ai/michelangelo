@@ -154,3 +154,11 @@ deployment:
     # against threshold ("gt" by default, or "lt"). With no queries configured the
     # gate uses Triton's per-model failure ratio over 5m with a 5% threshold.
     queries: []
+
+# Secret provider selection for cluster credentials (jobs engine and
+# inference-server client factory). Defaults to the sample provider, which
+# reads Secrets from the control-plane cluster.
+# secrets:
+#   provider: eso  # "sample" (default) or "eso" (External Secrets Operator)
+#   eso:
+#     namespace: ""  # Optional: where operator-synced Secrets live (default "default")
