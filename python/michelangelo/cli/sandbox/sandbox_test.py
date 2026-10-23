@@ -193,3 +193,41 @@ class SnapshotRestoreTest(TestCase):
         ):
             sandbox._snapshot_restore(argparse.Namespace(timestamp="does-not-exist"))
         mock_err.assert_called_once()
+
+
+class ClusterEndpointForCrdTest(TestCase):
+    """Test cases for `_cluster_endpoint_for_crd`."""
+
+    def test_sandbox_cluster_uses_in_cluster_endpoint(self):
+        """The sandbox's own cluster always maps to kubernetes.default.svc."""
+        host, port = sandbox._cluster_endpoint_for_crd(
+            sandbox._michelangelo_sandbox_kube_cluster_name,
+            "https://0.0.0.0:59896",
+        )
+        self.assertEqual(host, "https://kubernetes.default.svc")
+        self.assertEqual(port, "443")
+
+    def test_unroutable_host_maps_to_k3d_server_container(self):
+        """0.0.0.0 and friends map to the k3d server container endpoint."""
+        for server_url in (
+            "https://0.0.0.0:59896",
+            "https://127.0.0.1:52910",
+            "https://localhost:52910",
+            "https://host.docker.internal:52910",
+        ):
+            host, port = sandbox._cluster_endpoint_for_crd("ray-jobs", server_url)
+            self.assertEqual(host, "https://k3d-ray-jobs-server-0")
+            self.assertEqual(port, "6443")
+
+    def test_routable_host_passes_through_unchanged(self):
+        """A genuinely reachable address is kept verbatim."""
+        host, port = sandbox._cluster_endpoint_for_crd(
+            "remote-cluster", "https://api.remote.example.com:6443"
+        )
+        self.assertEqual(host, "https://api.remote.example.com")
+        self.assertEqual(port, "6443")
+
+    def test_malformed_server_url_raises(self):
+        """A server URL without host:port raises ValueError."""
+        with self.assertRaises(ValueError):
+            sandbox._cluster_endpoint_for_crd("ray-jobs", "not-a-url")
