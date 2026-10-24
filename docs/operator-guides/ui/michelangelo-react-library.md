@@ -207,7 +207,8 @@ envoy:
 
 ### Icon Configuration
 
-The Michelangelo AI UI requires icon mapping through dependency injection.
+The Michelangelo AI UI ships no icon artwork. Components reference icons by name, and
+you supply the components through dependency injection.
 
 ```tsx
 import YourLaunchIcon from '@your-icon-library/launch';
@@ -216,7 +217,7 @@ import YourCheckIcon from '@your-icon-library/check-circle';
 const customIcons = {
   arrowLaunch: YourLaunchIcon,
   circleCheckFilled: YourCheckIcon,
-  // Map other required icons
+  // ...one entry per key Studio looks up — full list in the Icon Registry guide below
 };
 
 const dependencies = {
@@ -229,6 +230,12 @@ function App() {
   return <CoreApp dependencies={dependencies} />
 }
 ```
+
+See the [Icon Registry](./icon-registry.md) guide for the full list of icon keys Studio
+looks up, the prop contract your icon components must satisfy (and why most libraries
+need a small adapter), and two behaviours that cause surprises: unregistered keys render
+nothing with no warning, and registry entries also replace icons inside BaseWeb
+components.
 
 ## Troubleshooting
 
