@@ -449,3 +449,32 @@ class TestMinioStorageBackendDownload(TestCase):
         self._tmp_dirs.append(dest)
         with self.assertRaises(OSError):
             backend.download("s3://test-bucket/models/clf/raw", dest)
+
+
+class TestMinioStorageBackendPickling(TestCase):
+    """The backend must be shippable to remote workers."""
+
+    def test_pickle_round_trip_rebuilds_the_client(self):
+        """A pickled backend keeps its bucket and gets a working client back."""
+        import pickle
+
+        import pytest
+
+        pytest.importorskip("minio")
+        from michelangelo.lib.artifact_manager.minio_backend import (
+            MinioStorageBackend,
+        )
+
+        backend = MinioStorageBackend(
+            endpoint="localhost:9000",
+            bucket="models",
+            access_key="key",
+            secret_key="secret",
+            secure=False,
+        )
+
+        restored = pickle.loads(pickle.dumps(backend))
+
+        self.assertEqual(restored.get_storage_location(), "s3://models")
+        self.assertIsNot(restored._client, backend._client)
+        self.assertEqual(restored._parse_uri("s3://models/a/b"), ("models", "a/b"))
