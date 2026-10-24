@@ -4,6 +4,7 @@ import (
 	"context"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	ctrlRTClient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -28,6 +29,12 @@ func (k *K8sHandlerImpl) Create(ctx context.Context, obj ctrlRTClient.Object, op
 		FieldManager: opts.FieldManager,
 		Raw:          opts,
 	})
+}
+
+// IsObjectNamespaced reports whether the object's kind is namespaced, by delegating to the controller-runtime client.
+// It is not part of the K8sHandler interface; apiHandler discovers it with a type assertion (see namespaceScoper).
+func (k *K8sHandlerImpl) IsObjectNamespaced(obj runtime.Object) (bool, error) {
+	return k.client.IsObjectNamespaced(obj)
 }
 
 // Get implements K8sHandler.Get by delegating to the controller-runtime client.
