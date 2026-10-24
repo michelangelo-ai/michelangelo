@@ -6,10 +6,18 @@ from unittest.mock import MagicMock, Mock, patch
 
 from michelangelo.cli.mactl.plugins.entity.trigger_run.main import apply_plugins
 
+_RERUN_PATCH_TARGETS = (
+    "michelangelo.cli.mactl.plugins.entity.trigger_run.main.generate_rerun",
+    "michelangelo.cli.mactl.plugins.entity.trigger_run.main"
+    ".add_rerun_function_signature",
+)
+
 
 class ApplyPluginsKillTest(TestCase):
     """Tests for apply_plugins function."""
 
+    @patch(_RERUN_PATCH_TARGETS[0])
+    @patch(_RERUN_PATCH_TARGETS[1])
     @patch("michelangelo.cli.mactl.plugins.entity.trigger_run.main.generate_create")
     @patch(
         "michelangelo.cli.mactl.plugins.entity.trigger_run.main"
@@ -20,7 +28,7 @@ class ApplyPluginsKillTest(TestCase):
         "michelangelo.cli.mactl.plugins.entity.trigger_run.main.add_function_signature"
     )
     def test_apply_plugins_adds_function_signature(
-        self, mock_add_function_signature, _, __, ___
+        self, mock_add_function_signature, _, __, ___, ____, _____
     ):
         """Test that apply_plugins calls add_function_signature with CRD."""
         # Setup
@@ -33,6 +41,8 @@ class ApplyPluginsKillTest(TestCase):
         # Verify
         mock_add_function_signature.assert_called_once_with(mock_crd)
 
+    @patch(_RERUN_PATCH_TARGETS[0])
+    @patch(_RERUN_PATCH_TARGETS[1])
     @patch("michelangelo.cli.mactl.plugins.entity.trigger_run.main.generate_create")
     @patch(
         "michelangelo.cli.mactl.plugins.entity.trigger_run.main"
@@ -42,7 +52,9 @@ class ApplyPluginsKillTest(TestCase):
     @patch(
         "michelangelo.cli.mactl.plugins.entity.trigger_run.main.add_function_signature"
     )
-    def test_apply_plugins_adds_generate_kill_method(self, _, __, ___, ____):
+    def test_apply_plugins_adds_generate_kill_method(
+        self, _, __, ___, ____, _____, ______
+    ):
         """Test that apply_plugins adds generate_kill method to CRD."""
         # Setup
         mock_crd = Mock()
@@ -55,6 +67,8 @@ class ApplyPluginsKillTest(TestCase):
         self.assertTrue(hasattr(mock_crd, "generate_kill"))
         self.assertIsInstance(mock_crd.generate_kill, MethodType)
 
+    @patch(_RERUN_PATCH_TARGETS[0])
+    @patch(_RERUN_PATCH_TARGETS[1])
     @patch("michelangelo.cli.mactl.plugins.entity.trigger_run.main.generate_create")
     @patch(
         "michelangelo.cli.mactl.plugins.entity.trigger_run.main"
@@ -65,7 +79,7 @@ class ApplyPluginsKillTest(TestCase):
         "michelangelo.cli.mactl.plugins.entity.trigger_run.main.add_function_signature"
     )
     def test_apply_plugins_generate_kill_calls_correct_function(
-        self, _, mock_generate_kill, __, ___
+        self, _, mock_generate_kill, __, ___, ____, _____
     ):
         """Test that the added generate_kill method calls generate_kill function."""
         # Setup
@@ -82,11 +96,15 @@ class ApplyPluginsKillTest(TestCase):
         # Verify that generate_kill was called with correct arguments
         mock_generate_kill.assert_called_once_with(mock_crd, mock_channel, mock_parser)
 
+    @patch(_RERUN_PATCH_TARGETS[0])
+    @patch(_RERUN_PATCH_TARGETS[1])
     @patch("michelangelo.cli.mactl.plugins.entity.trigger_run.main.generate_kill")
     @patch(
         "michelangelo.cli.mactl.plugins.entity.trigger_run.main.add_function_signature"
     )
-    def test_apply_plugins_with_real_crd_object(self, mock_add_function_signature, _):
+    def test_apply_plugins_with_real_crd_object(
+        self, mock_add_function_signature, _, __, ___
+    ):
         """Test apply_plugins with a more realistic CRD object."""
         # Setup - Create a mock CRD with some attributes
         mock_crd = MagicMock()
@@ -101,11 +119,13 @@ class ApplyPluginsKillTest(TestCase):
         mock_add_function_signature.assert_called_once_with(mock_crd)
         self.assertTrue(hasattr(mock_crd, "generate_kill"))
 
+    @patch(_RERUN_PATCH_TARGETS[0])
+    @patch(_RERUN_PATCH_TARGETS[1])
     @patch("michelangelo.cli.mactl.plugins.entity.trigger_run.main.generate_kill")
     @patch(
         "michelangelo.cli.mactl.plugins.entity.trigger_run.main.add_function_signature"
     )
-    def test_apply_plugins_preserves_existing_crd_attributes(self, _, __):
+    def test_apply_plugins_preserves_existing_crd_attributes(self, _, __, ___, ____):
         """Test that apply_plugins doesn't modify existing CRD attributes."""
         # Setup
         mock_crd = MagicMock()
@@ -124,6 +144,8 @@ class ApplyPluginsKillTest(TestCase):
 class ApplyPluginsCreateTest(TestCase):
     """Tests for apply_plugins create-related functionality."""
 
+    @patch(_RERUN_PATCH_TARGETS[0])
+    @patch(_RERUN_PATCH_TARGETS[1])
     @patch("michelangelo.cli.mactl.plugins.entity.trigger_run.main.generate_create")
     @patch(
         "michelangelo.cli.mactl.plugins.entity.trigger_run.main"
@@ -134,7 +156,7 @@ class ApplyPluginsCreateTest(TestCase):
         "michelangelo.cli.mactl.plugins.entity.trigger_run.main.add_function_signature"
     )
     def test_apply_plugins_calls_add_create_function_signature(
-        self, _, __, mock_add_create_sig, ___
+        self, _, __, mock_add_create_sig, ___, ____, _____
     ):
         """Test that apply_plugins calls add_create_function_signature."""
         mock_crd = Mock()
@@ -144,6 +166,8 @@ class ApplyPluginsCreateTest(TestCase):
 
         mock_add_create_sig.assert_called_once_with(mock_crd)
 
+    @patch(_RERUN_PATCH_TARGETS[0])
+    @patch(_RERUN_PATCH_TARGETS[1])
     @patch("michelangelo.cli.mactl.plugins.entity.trigger_run.main.generate_create")
     @patch(
         "michelangelo.cli.mactl.plugins.entity.trigger_run.main"
@@ -153,7 +177,9 @@ class ApplyPluginsCreateTest(TestCase):
     @patch(
         "michelangelo.cli.mactl.plugins.entity.trigger_run.main.add_function_signature"
     )
-    def test_apply_plugins_adds_generate_create_method(self, _, __, ___, ____):
+    def test_apply_plugins_adds_generate_create_method(
+        self, _, __, ___, ____, _____, ______
+    ):
         """Test that apply_plugins adds generate_create method to CRD."""
         mock_crd = Mock()
         mock_channel = Mock()
@@ -163,6 +189,8 @@ class ApplyPluginsCreateTest(TestCase):
         self.assertTrue(hasattr(mock_crd, "generate_create"))
         self.assertIsInstance(mock_crd.generate_create, MethodType)
 
+    @patch(_RERUN_PATCH_TARGETS[0])
+    @patch(_RERUN_PATCH_TARGETS[1])
     @patch("michelangelo.cli.mactl.plugins.entity.trigger_run.main.generate_create")
     @patch(
         "michelangelo.cli.mactl.plugins.entity.trigger_run.main"
@@ -173,7 +201,7 @@ class ApplyPluginsCreateTest(TestCase):
         "michelangelo.cli.mactl.plugins.entity.trigger_run.main.add_function_signature"
     )
     def test_generate_create_method_delegates_correctly(
-        self, _, __, ___, mock_generate_create
+        self, _, __, ___, mock_generate_create, ____, _____
     ):
         """Test that the bound generate_create calls generate_create."""
         mock_crd = Mock()
@@ -187,3 +215,86 @@ class ApplyPluginsCreateTest(TestCase):
         mock_generate_create.assert_called_once_with(
             mock_crd, mock_channel, mock_parser
         )
+
+
+class ApplyPluginsRerunTest(TestCase):
+    """Tests for apply_plugins rerun-related functionality."""
+
+    @patch("michelangelo.cli.mactl.plugins.entity.trigger_run.main.generate_rerun")
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.trigger_run.main"
+        ".add_rerun_function_signature"
+    )
+    @patch("michelangelo.cli.mactl.plugins.entity.trigger_run.main.generate_create")
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.trigger_run.main"
+        ".add_create_function_signature"
+    )
+    @patch("michelangelo.cli.mactl.plugins.entity.trigger_run.main.generate_kill")
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.trigger_run.main.add_function_signature"
+    )
+    def test_apply_plugins_calls_add_rerun_function_signature(
+        self, _, __, ___, ____, mock_add_rerun_sig, _____
+    ):
+        """Test that apply_plugins calls add_rerun_function_signature."""
+        mock_crd = Mock()
+        mock_channel = Mock()
+
+        apply_plugins(mock_crd, mock_channel)
+
+        mock_add_rerun_sig.assert_called_once_with(mock_crd)
+
+    @patch("michelangelo.cli.mactl.plugins.entity.trigger_run.main.generate_rerun")
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.trigger_run.main"
+        ".add_rerun_function_signature"
+    )
+    @patch("michelangelo.cli.mactl.plugins.entity.trigger_run.main.generate_create")
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.trigger_run.main"
+        ".add_create_function_signature"
+    )
+    @patch("michelangelo.cli.mactl.plugins.entity.trigger_run.main.generate_kill")
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.trigger_run.main.add_function_signature"
+    )
+    def test_apply_plugins_adds_generate_rerun_method(
+        self, _, __, ___, ____, _____, ______
+    ):
+        """Test that apply_plugins adds generate_rerun method to CRD."""
+        mock_crd = Mock()
+        mock_channel = Mock()
+
+        apply_plugins(mock_crd, mock_channel)
+
+        self.assertTrue(hasattr(mock_crd, "generate_rerun"))
+        self.assertIsInstance(mock_crd.generate_rerun, MethodType)
+
+    @patch("michelangelo.cli.mactl.plugins.entity.trigger_run.main.generate_rerun")
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.trigger_run.main"
+        ".add_rerun_function_signature"
+    )
+    @patch("michelangelo.cli.mactl.plugins.entity.trigger_run.main.generate_create")
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.trigger_run.main"
+        ".add_create_function_signature"
+    )
+    @patch("michelangelo.cli.mactl.plugins.entity.trigger_run.main.generate_kill")
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.trigger_run.main.add_function_signature"
+    )
+    def test_generate_rerun_method_delegates_correctly(
+        self, _, __, ___, ____, _____, mock_generate_rerun
+    ):
+        """Test that the bound generate_rerun calls generate_rerun."""
+        mock_crd = Mock()
+        mock_channel = Mock()
+        mock_parser = Mock()
+
+        apply_plugins(mock_crd, mock_channel)
+
+        mock_crd.generate_rerun(mock_channel, mock_parser)
+
+        mock_generate_rerun.assert_called_once_with(mock_crd, mock_channel, mock_parser)

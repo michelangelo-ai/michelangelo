@@ -33,9 +33,9 @@ var Module = fx.Options(
 // Currently supports:
 //   - CronTrigger: Recurring workflows based on cron expressions
 //   - BackfillTrigger: One-time workflows for historical data processing
+//   - BatchRerunTrigger: One-time workflows that resume a batch of prior pipeline runs
 //
-// Additional trigger types (interval and batch rerun) are planned but not yet implemented.
-// See TODO(#548) for tracking remaining trigger type implementations.
+// Interval triggers are planned but not yet implemented. See TODO(#548).
 func register(
 	mgr manager.Manager,
 	apiHandlerFactory apiHandler.Factory,
@@ -52,13 +52,19 @@ func register(
 		workflowClient,
 		configProvider,
 	)
+	batchRerunTrigger := NewBatchRerunTrigger(
+		mgr.GetLogger().WithName("batch-rerun-trigger"),
+		workflowClient,
+		configProvider,
+	)
 	reconciler := NewReconciler(Params{
 		Logger:            mgr.GetLogger().WithName("triggerrun"),
 		WorkflowClient:    workflowClient,
 		APIHandlerFactory: apiHandlerFactory,
 		CronTrigger:       cronTrigger,
 		BackfillTrigger:   backfillTrigger,
-		// TODO(#548): Add other trigger types as needed
+		BatchRerunTrigger: batchRerunTrigger,
+		// TODO(#548): Add interval trigger when it's implemented
 	})
 	return reconciler.Register(mgr)
 }
