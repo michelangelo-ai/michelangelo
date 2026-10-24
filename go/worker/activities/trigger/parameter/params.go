@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/michelangelo-ai/michelangelo/go/components/triggerrun"
+	api "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
@@ -26,6 +27,14 @@ type Params struct {
 	ParamID string
 	// Backfill stores execution metadata for backfill triggers (empty for cron/interval triggers)
 	Backfill BackfillParam
+	// BatchRerun stores the pipeline_run to resume from for batch rerun triggers
+	// (empty for cron/interval/backfill triggers)
+	BatchRerun BatchRerunParam
+}
+
+// BatchRerunParam stores the pipeline_run a batch rerun should resume from.
+type BatchRerunParam struct {
+	PipelineRun *api.ResourceIdentifier
 }
 
 // GetParameterID returns the parameter ID (works for both cron and backfill)
@@ -61,12 +70,17 @@ type TriggeredRun struct {
 // This data can be used by the caller to update trigger context in whatever format they need
 func (p *Params) GetTriggeredRun(pipelineRunName string, executionTimestamp, createdTimestamp time.Time) TriggeredRun {
 	triggerType := triggerrun.TriggerTypeCron
-	if p.Backfill.ExecutionTimestamp != nil {
+	paramID := p.GetParameterID()
+	switch {
+	case p.BatchRerun.PipelineRun != nil:
+		triggerType = triggerrun.TriggerTypeBatchRerun
+		paramID = p.BatchRerun.PipelineRun.Name
+	case p.Backfill.ExecutionTimestamp != nil:
 		triggerType = triggerrun.TriggerTypeBackfill
 	}
 
 	return TriggeredRun{
-		ParamID:            p.GetParameterID(),
+		ParamID:            paramID,
 		PipelineRunName:    pipelineRunName,
 		ExecutionTimestamp: executionTimestamp,
 		CreatedAt:          createdTimestamp,
@@ -100,6 +114,8 @@ func GetParameterGenerator(triggerType string) ParameterGenerator {
 		return &CronParameterGenerator{}
 	case triggerrun.TriggerTypeBackfill:
 		return &BackfillParameterGenerator{}
+	case triggerrun.TriggerTypeBatchRerun:
+		return &BatchRerunParameterGenerator{}
 	default:
 		return &CronParameterGenerator{}
 	}
