@@ -2,7 +2,7 @@
 #
 # Source: upstream kuberay historyserver/config/historyserver.yaml @ v1.7.1,
 # adapted for the sandbox:
-#   - MinIO instead of real S3 (S3_ENDPOINT minio:9091, path-style, SSL off),
+#   - MinIO instead of real S3 (S3_ENDPOINT objectstore:9091, path-style, SSL off),
 #     credentials from the object-storage-credentials Secret
 #   - NodePort 30016 instead of the upstream ClusterIP
 #   - resources and --session-cache-max-memory scaled down for a single-node
@@ -279,7 +279,7 @@ spec:
         - name: S3_BUCKET
           value: "ray-history"
         - name: S3_ENDPOINT
-          value: "minio:9091"
+          value: "objectstore:9091"
         - name: S3_REGION
           value: "us-east-1"
         - name: S3FORCE_PATH_STYLE
