@@ -8,6 +8,7 @@ data:
     apiVersion: 1
     datasources:
     - name: Prometheus
+      uid: Prometheus
       type: prometheus
       access: proxy
       url: http://prometheus:9090
@@ -91,6 +92,1037 @@ data:
 apiVersion: v1
 kind: ConfigMap
 metadata:
+  name: grafana-dashboard-controllermgr
+data:
+  controllermgr.json: |
+    {
+      "id": null,
+      "uid": "adgpdn8",
+      "title": "controllermgr",
+      "tags": [
+        "michelangelo",
+        "controllermgr"
+      ],
+      "style": "dark",
+      "timezone": "browser",
+      "schemaVersion": 39,
+      "refresh": "10s",
+      "time": {
+        "from": "now-24h",
+        "to": "now"
+      },
+      "panels": [
+        {
+          "id": 1,
+          "type": "row",
+          "title": "Controller Reconciliation",
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 0
+          },
+          "collapsed": false,
+          "panels": []
+        },
+        {
+          "id": 2,
+          "title": "Reconcile Rate by Controller & Result",
+          "type": "timeseries",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 1
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "targets": [
+            {
+              "expr": "sum by(controller, result) (rate(controller_runtime_reconcile_total[5m]))",
+              "legendFormat": "{{controller}} - {{result}}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "title": "Reconcile Error Rate by Controller",
+          "type": "timeseries",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 1
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "targets": [
+            {
+              "expr": "sum by(controller) (rate(controller_runtime_reconcile_errors_total[5m]))",
+              "legendFormat": "{{controller}}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "title": "Avg Reconcile Duration by Controller",
+          "type": "timeseries",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 9
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "targets": [
+            {
+              "expr": "sum by(controller) (rate(controller_runtime_reconcile_time_seconds_sum[5m])) / sum by(controller) (rate(controller_runtime_reconcile_time_seconds_count[5m]))",
+              "legendFormat": "{{controller}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s"
+            },
+            "overrides": []
+          }
+        },
+        {
+          "id": 5,
+          "title": "p99 Reconcile Duration by Controller",
+          "type": "timeseries",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 9
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.99, sum by(controller, le) (rate(controller_runtime_reconcile_time_seconds_bucket[5m])))",
+              "legendFormat": "{{controller}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s"
+            },
+            "overrides": []
+          }
+        },
+        {
+          "id": 6,
+          "title": "Active Workers by Controller",
+          "type": "timeseries",
+          "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 0,
+            "y": 17
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "targets": [
+            {
+              "expr": "controller_runtime_active_workers",
+              "legendFormat": "{{controller}}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 7,
+          "title": "Max Concurrent Reconciles by Controller",
+          "type": "timeseries",
+          "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 8,
+            "y": 17
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "targets": [
+            {
+              "expr": "controller_runtime_max_concurrent_reconciles",
+              "legendFormat": "{{controller}}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 8,
+          "title": "Reconcile Panics by Controller",
+          "type": "timeseries",
+          "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 16,
+            "y": 17
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "targets": [
+            {
+              "expr": "sum by(controller) (rate(controller_runtime_reconcile_panics_total[5m]))",
+              "legendFormat": "{{controller}}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 9,
+          "title": "Terminal Reconcile Errors by Controller",
+          "type": "timeseries",
+          "gridPos": {
+            "h": 8,
+            "w": 24,
+            "x": 0,
+            "y": 25
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "targets": [
+            {
+              "expr": "sum by(controller) (rate(controller_runtime_terminal_reconcile_errors_total[5m]))",
+              "legendFormat": "{{controller}}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 10,
+          "type": "row",
+          "title": "Workqueue",
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 33
+          },
+          "collapsed": false,
+          "panels": []
+        },
+        {
+          "id": 11,
+          "title": "Workqueue Depth by Controller",
+          "type": "timeseries",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 34
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "targets": [
+            {
+              "expr": "workqueue_depth",
+              "legendFormat": "{{controller}}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 12,
+          "title": "Workqueue Add Rate by Controller",
+          "type": "timeseries",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 34
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "targets": [
+            {
+              "expr": "sum by(controller) (rate(workqueue_adds_total[5m]))",
+              "legendFormat": "{{controller}}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 13,
+          "title": "Workqueue Retry Rate by Controller",
+          "type": "timeseries",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 42
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "targets": [
+            {
+              "expr": "sum by(controller) (rate(workqueue_retries_total[5m]))",
+              "legendFormat": "{{controller}}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 14,
+          "title": "Workqueue Unfinished Work (s) by Controller",
+          "type": "timeseries",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 42
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "targets": [
+            {
+              "expr": "workqueue_unfinished_work_seconds",
+              "legendFormat": "{{controller}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s"
+            },
+            "overrides": []
+          }
+        },
+        {
+          "id": 15,
+          "title": "p99 Workqueue Queue Duration by Controller",
+          "type": "timeseries",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 50
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.99, sum by(controller, le) (rate(workqueue_queue_duration_seconds_bucket[5m])))",
+              "legendFormat": "{{controller}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s"
+            },
+            "overrides": []
+          }
+        },
+        {
+          "id": 16,
+          "title": "p99 Workqueue Work Duration by Controller",
+          "type": "timeseries",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 50
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.99, sum by(controller, le) (rate(workqueue_work_duration_seconds_bucket[5m])))",
+              "legendFormat": "{{controller}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s"
+            },
+            "overrides": []
+          }
+        },
+        {
+          "id": 17,
+          "title": "Workqueue Longest Running Processor (s) by Controller",
+          "type": "timeseries",
+          "gridPos": {
+            "h": 8,
+            "w": 24,
+            "x": 0,
+            "y": 58
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "targets": [
+            {
+              "expr": "workqueue_longest_running_processor_seconds",
+              "legendFormat": "{{controller}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s"
+            },
+            "overrides": []
+          }
+        },
+        {
+          "id": 18,
+          "type": "row",
+          "title": "Pipeline / PipelineRun Reconciliation",
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 66
+          },
+          "collapsed": false,
+          "panels": []
+        },
+        {
+          "id": 19,
+          "title": "Pipeline Reconcile Success Rate",
+          "type": "timeseries",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 67
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "targets": [
+            {
+              "expr": "sum by(pipeline) (rate(pipeline_reconcile_success_total[5m]))",
+              "legendFormat": "{{pipeline}}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 20,
+          "title": "PipelineRun Reconcile Success Rate",
+          "type": "timeseries",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 67
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "targets": [
+            {
+              "expr": "sum by(pipeline_run) (rate(pipelinerun_reconcile_success_total{pipeline_run=~\"$pipeline_run\"}[5m]))",
+              "legendFormat": "{{pipeline_run}}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 21,
+          "title": "PipelineRun Reconcile Errors (current)",
+          "type": "table",
+          "gridPos": {
+            "h": 8,
+            "w": 24,
+            "x": 0,
+            "y": 75
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "targets": [
+            {
+              "expr": "pipelinerun_reconcile_errors_total{pipeline_run=~\"$pipeline_run\"}",
+              "legendFormat": "{{pipeline_run}}",
+              "refId": "A",
+              "format": "table",
+              "instant": true
+            }
+          ]
+        }
+      ],
+      "templating": {
+        "list": [
+          {
+            "name": "pipeline_run",
+            "type": "query",
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus"
+            },
+            "query": "label_values(pipelinerun_reconcile_success_total, pipeline_run)",
+            "includeAll": true,
+            "multi": true,
+            "current": {
+              "text": "All",
+              "value": "$__all"
+            },
+            "refresh": 2
+          }
+        ]
+      }
+    }
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-model-serving
+data:
+  model-serving.json: |
+    {
+      "id": null,
+      "uid": "model-serving",
+      "title": "Model Serving",
+      "tags": [
+        "michelangelo",
+        "triton",
+        "model-serving"
+      ],
+      "style": "dark",
+      "timezone": "browser",
+      "schemaVersion": 39,
+      "refresh": "10s",
+      "time": {
+        "from": "now-1h",
+        "to": "now"
+      },
+      "templating": {
+        "list": [
+          {
+            "name": "inference_server",
+            "type": "query",
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus"
+            },
+            "query": "label_values(nv_inference_count, inference_server)",
+            "includeAll": true,
+            "multi": true,
+            "current": {
+              "text": "All",
+              "value": "$__all"
+            },
+            "refresh": 2
+          },
+          {
+            "name": "model",
+            "type": "query",
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus"
+            },
+            "query": "label_values(nv_inference_count{inference_server=~\"$inference_server\"}, model)",
+            "includeAll": true,
+            "multi": true,
+            "current": {
+              "text": "All",
+              "value": "$__all"
+            },
+            "refresh": 2
+          }
+        ]
+      },
+      "panels": [
+        {
+          "id": 1,
+          "type": "row",
+          "title": "Request Volume & Success",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+          "collapsed": false,
+          "panels": []
+        },
+        {
+          "id": 2,
+          "title": "Inference Request Rate by Model",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 1 },
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "targets": [
+            {
+              "expr": "sum by(model, version) (rate(nv_inference_count{inference_server=~\"$inference_server\", model=~\"$model\"}[5m]))",
+              "legendFormat": "{{model}} v{{version}}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "title": "Inference Success vs Failure Rate",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 1 },
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "targets": [
+            {
+              "expr": "sum by(model) (rate(nv_inference_request_success{inference_server=~\"$inference_server\", model=~\"$model\"}[5m]))",
+              "legendFormat": "{{model}} - success",
+              "refId": "A"
+            },
+            {
+              "expr": "sum by(model) (rate(nv_inference_request_failure{inference_server=~\"$inference_server\", model=~\"$model\"}[5m]))",
+              "legendFormat": "{{model}} - failure",
+              "refId": "B"
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "title": "Execution Count by Model",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 9 },
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "targets": [
+            {
+              "expr": "sum by(model) (rate(nv_inference_exec_count{inference_server=~\"$inference_server\", model=~\"$model\"}[5m]))",
+              "legendFormat": "{{model}}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 5,
+          "title": "Pending Request Count by Model",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 9 },
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "targets": [
+            {
+              "expr": "nv_inference_pending_request_count{inference_server=~\"$inference_server\", model=~\"$model\"}",
+              "legendFormat": "{{model}}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 6,
+          "type": "row",
+          "title": "Latency",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 17 },
+          "collapsed": false,
+          "panels": []
+        },
+        {
+          "id": 7,
+          "title": "Avg Request Duration by Model (ms)",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 18 },
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "targets": [
+            {
+              "expr": "sum by(model) (rate(nv_inference_request_duration_us{inference_server=~\"$inference_server\", model=~\"$model\"}[5m])) / sum by(model) (rate(nv_inference_count{inference_server=~\"$inference_server\", model=~\"$model\"}[5m])) / 1000",
+              "legendFormat": "{{model}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": { "unit": "ms" },
+            "overrides": []
+          }
+        },
+        {
+          "id": 8,
+          "title": "Avg Compute Duration Breakdown by Model (ms)",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 18 },
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "targets": [
+            {
+              "expr": "sum by(model) (rate(nv_inference_compute_input_duration_us{inference_server=~\"$inference_server\", model=~\"$model\"}[5m])) / sum by(model) (rate(nv_inference_count{inference_server=~\"$inference_server\", model=~\"$model\"}[5m])) / 1000",
+              "legendFormat": "{{model}} - input",
+              "refId": "A"
+            },
+            {
+              "expr": "sum by(model) (rate(nv_inference_compute_infer_duration_us{inference_server=~\"$inference_server\", model=~\"$model\"}[5m])) / sum by(model) (rate(nv_inference_count{inference_server=~\"$inference_server\", model=~\"$model\"}[5m])) / 1000",
+              "legendFormat": "{{model}} - infer",
+              "refId": "B"
+            },
+            {
+              "expr": "sum by(model) (rate(nv_inference_compute_output_duration_us{inference_server=~\"$inference_server\", model=~\"$model\"}[5m])) / sum by(model) (rate(nv_inference_count{inference_server=~\"$inference_server\", model=~\"$model\"}[5m])) / 1000",
+              "legendFormat": "{{model}} - output",
+              "refId": "C"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": { "unit": "ms" },
+            "overrides": []
+          }
+        },
+        {
+          "id": 9,
+          "title": "Avg Queue Duration by Model (ms)",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 26 },
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "targets": [
+            {
+              "expr": "sum by(model) (rate(nv_inference_queue_duration_us{inference_server=~\"$inference_server\", model=~\"$model\"}[5m])) / sum by(model) (rate(nv_inference_count{inference_server=~\"$inference_server\", model=~\"$model\"}[5m])) / 1000",
+              "legendFormat": "{{model}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": { "unit": "ms" },
+            "overrides": []
+          }
+        },
+        {
+          "id": 10,
+          "title": "Model (Re)load Duration (s)",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 26 },
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "targets": [
+            {
+              "expr": "nv_model_load_duration_secs{inference_server=~\"$inference_server\", model=~\"$model\"}",
+              "legendFormat": "{{model}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": { "unit": "s" },
+            "overrides": []
+          }
+        },
+        {
+          "id": 11,
+          "type": "row",
+          "title": "Server Resource Usage",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 34 },
+          "collapsed": false,
+          "panels": []
+        },
+        {
+          "id": 12,
+          "title": "CPU Utilization by Server",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 35 },
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "targets": [
+            {
+              "expr": "nv_cpu_utilization{inference_server=~\"$inference_server\"}",
+              "legendFormat": "{{pod}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": { "unit": "percentunit" },
+            "overrides": []
+          }
+        },
+        {
+          "id": 13,
+          "title": "Memory Used by Server",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 35 },
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "targets": [
+            {
+              "expr": "nv_cpu_memory_used_bytes{inference_server=~\"$inference_server\"}",
+              "legendFormat": "{{pod}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": { "unit": "bytes" },
+            "overrides": []
+          }
+        }
+      ]
+    }
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-ray-jobs
+data:
+  ray-jobs.json: |
+    {
+      "id": null,
+      "uid": "ray-jobs",
+      "title": "Ray Jobs",
+      "tags": [
+        "michelangelo",
+        "ray",
+        "ray-jobs"
+      ],
+      "style": "dark",
+      "timezone": "browser",
+      "schemaVersion": 39,
+      "refresh": "10s",
+      "time": {
+        "from": "now-1h",
+        "to": "now"
+      },
+      "templating": {
+        "list": [
+          {
+            "name": "ray_io_cluster",
+            "type": "query",
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus"
+            },
+            "query": "label_values(ray_running_jobs, ray_io_cluster)",
+            "includeAll": true,
+            "multi": true,
+            "current": {
+              "text": "All",
+              "value": "$__all"
+            },
+            "refresh": 2
+          }
+        ]
+      },
+      "panels": [
+        {
+          "id": 1,
+          "type": "row",
+          "title": "Ray Job Status",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+          "collapsed": false,
+          "panels": []
+        },
+        {
+          "id": 2,
+          "title": "Running Jobs by Cluster",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 1 },
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "targets": [
+            {
+              "expr": "sum by(ray_io_cluster) (ray_running_jobs{ray_io_cluster=~\"$ray_io_cluster\"})",
+              "legendFormat": "{{ray_io_cluster}}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "title": "Finished Jobs Rate by Cluster",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 1 },
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "targets": [
+            {
+              "expr": "sum by(ray_io_cluster) (rate(ray_finished_jobs_total{ray_io_cluster=~\"$ray_io_cluster\"}[5m]))",
+              "legendFormat": "{{ray_io_cluster}}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "title": "Job Duration (s)",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 9 },
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "targets": [
+            {
+              "expr": "ray_job_duration_s{ray_io_cluster=~\"$ray_io_cluster\"}",
+              "legendFormat": "{{ray_io_cluster}} - {{pod}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": { "unit": "s" },
+            "overrides": []
+          }
+        },
+        {
+          "id": 5,
+          "title": "Active Tasks by Cluster",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 9 },
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "targets": [
+            {
+              "expr": "sum by(ray_io_cluster, State) (ray_tasks{ray_io_cluster=~\"$ray_io_cluster\"})",
+              "legendFormat": "{{ray_io_cluster}} - {{State}}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 6,
+          "type": "row",
+          "title": "Cluster Node Resource Usage",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 17 },
+          "collapsed": false,
+          "panels": []
+        },
+        {
+          "id": 7,
+          "title": "Node CPU Utilization by Cluster & Node Type",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 18 },
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "targets": [
+            {
+              "expr": "ray_node_cpu_utilization{ray_io_cluster=~\"$ray_io_cluster\"}",
+              "legendFormat": "{{ray_io_cluster}} - {{ray_io_node_type}} ({{pod}})",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": { "unit": "percentunit" },
+            "overrides": []
+          }
+        },
+        {
+          "id": 8,
+          "title": "Node Memory Used vs Total by Node",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 18 },
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "targets": [
+            {
+              "expr": "ray_node_mem_used{ray_io_cluster=~\"$ray_io_cluster\"}",
+              "legendFormat": "{{pod}} - used",
+              "refId": "A"
+            },
+            {
+              "expr": "ray_node_mem_total{ray_io_cluster=~\"$ray_io_cluster\"}",
+              "legendFormat": "{{pod}} - total",
+              "refId": "B"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": { "unit": "bytes" },
+            "overrides": []
+          }
+        },
+        {
+          "id": 9,
+          "title": "Active Actors by Cluster",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 26 },
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "targets": [
+            {
+              "expr": "sum by(ray_io_cluster, State) (ray_actors{ray_io_cluster=~\"$ray_io_cluster\"})",
+              "legendFormat": "{{ray_io_cluster}} - {{State}}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 10,
+          "title": "Cluster Active/Idle/Failed Nodes",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 26 },
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "targets": [
+            {
+              "expr": "ray_cluster_active_nodes{ray_io_cluster=~\"$ray_io_cluster\"}",
+              "legendFormat": "{{ray_io_cluster}} - active",
+              "refId": "A"
+            },
+            {
+              "expr": "ray_cluster_idle_nodes{ray_io_cluster=~\"$ray_io_cluster\"}",
+              "legendFormat": "{{ray_io_cluster}} - idle",
+              "refId": "B"
+            },
+            {
+              "expr": "ray_cluster_failed_nodes{ray_io_cluster=~\"$ray_io_cluster\"}",
+              "legendFormat": "{{ray_io_cluster}} - failed",
+              "refId": "C"
+            }
+          ]
+        },
+        {
+          "id": 11,
+          "type": "row",
+          "title": "Michelangelo PipelineRun (Ray Job orchestration)",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 34 },
+          "collapsed": false,
+          "panels": []
+        },
+        {
+          "id": 12,
+          "title": "PipelineRun Step Success Rate",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 35 },
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "targets": [
+            {
+              "expr": "sum by(pipeline_run) (rate(pipelinerun_step_success_total[5m]))",
+              "legendFormat": "{{pipeline_run}}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 13,
+          "title": "PipelineRun Result Success vs Failure",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 35 },
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "targets": [
+            {
+              "expr": "sum(rate(pipelinerun_result_success_total[5m]))",
+              "legendFormat": "success",
+              "refId": "A"
+            },
+            {
+              "expr": "sum(rate(pipelinerun_result_failure_total[5m]))",
+              "legendFormat": "failure",
+              "refId": "B"
+            }
+          ]
+        }
+      ]
+    }
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
   name: grafana-dashboards-config
 data:
   dashboards.yaml: |
@@ -143,7 +1175,13 @@ spec:
         - name: grafana-dashboards-config
           mountPath: /etc/grafana/provisioning/dashboards
         - name: grafana-dashboard-crd-metrics
-          mountPath: /var/lib/grafana/dashboards
+          mountPath: /var/lib/grafana/dashboards/crd-metrics
+        - name: grafana-dashboard-controllermgr
+          mountPath: /var/lib/grafana/dashboards/controllermgr
+        - name: grafana-dashboard-model-serving
+          mountPath: /var/lib/grafana/dashboards/model-serving
+        - name: grafana-dashboard-ray-jobs
+          mountPath: /var/lib/grafana/dashboards/ray-jobs
       volumes:
       - name: grafana-storage
         emptyDir: {}
@@ -156,6 +1194,15 @@ spec:
       - name: grafana-dashboard-crd-metrics
         configMap:
           name: grafana-dashboard-crd-metrics
+      - name: grafana-dashboard-controllermgr
+        configMap:
+          name: grafana-dashboard-controllermgr
+      - name: grafana-dashboard-model-serving
+        configMap:
+          name: grafana-dashboard-model-serving
+      - name: grafana-dashboard-ray-jobs
+        configMap:
+          name: grafana-dashboard-ray-jobs
 
 ---
 apiVersion: v1
