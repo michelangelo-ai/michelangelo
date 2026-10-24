@@ -6,6 +6,7 @@ Tests the kill command functionality for pipeline runs.
 from unittest import TestCase
 from unittest.mock import MagicMock, Mock, patch
 
+from google.protobuf import descriptor_pb2, descriptor_pool, message_factory
 from google.protobuf.message import Message
 
 from michelangelo.cli.mactl.crd import CRD
@@ -13,6 +14,20 @@ from michelangelo.cli.mactl.plugins.entity.pipeline.kill import (
     add_function_signature,
     generate_kill,
 )
+from michelangelo.gen.api.v2 import pipeline_run_svc_pb2
+
+
+def _get_response(has_spec: bool = True) -> MagicMock:
+    """A Get*Response stand-in whose resource reports a populated spec.
+
+    kill_func copies the resource proto across instead of round-tripping it
+    through a dict, so it asks the response for the field directly.
+    """
+    resource = MagicMock()
+    resource.HasField.return_value = has_spec
+    response = MagicMock()
+    response.pipeline_run = resource
+    return response
 
 
 class PipelineKillTest(TestCase):
@@ -89,8 +104,7 @@ class PipelineKillTest(TestCase):
             generate_kill(self.mock_crd, self.mock_channel)
 
     @patch("michelangelo.cli.mactl.plugins.entity.pipeline.kill.MessageToDict")
-    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.kill.ParseDict")
-    def test_kill_func_with_yes_flag(self, mock_parse_dict, mock_message_to_dict):
+    def test_kill_func_with_yes_flag(self, mock_message_to_dict):
         """Test kill_func execution with --yes flag (auto-confirm)."""
         # Mock generate_get and _extract_method_info
         self.mock_crd.generate_get = Mock()
@@ -101,7 +115,7 @@ class PipelineKillTest(TestCase):
         )
 
         # Mock get method response
-        mock_get_response = Mock(spec=Message)
+        mock_get_response = _get_response()
         self.mock_crd.get = Mock(return_value=mock_get_response)
 
         # Setup mock channel responses
@@ -111,11 +125,8 @@ class PipelineKillTest(TestCase):
 
         self.mock_channel.unary_unary.return_value = mock_update_stub
 
-        # Setup MessageToDict to return proper structure
-        mock_message_to_dict.side_effect = [
-            {"pipeline_run": {"spec": {"some_field": "value"}}},
-            {"pipeline_run": {"spec": {"kill": True}}},
-        ]
+        # MessageToDict now renders only the update response
+        mock_message_to_dict.return_value = {"pipeline_run": {"spec": {"kill": True}}}
 
         # Generate kill function
         generate_kill(self.mock_crd, self.mock_channel)
@@ -138,11 +149,8 @@ class PipelineKillTest(TestCase):
         self.mock_crd.get.assert_called_once_with("test-namespace", "test-pipeline-run")
 
     @patch("michelangelo.cli.mactl.plugins.entity.pipeline.kill.MessageToDict")
-    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.kill.ParseDict")
     @patch("builtins.input")
-    def test_kill_func_user_confirms(
-        self, mock_input, mock_parse_dict, mock_message_to_dict
-    ):
+    def test_kill_func_user_confirms(self, mock_input, mock_message_to_dict):
         """Test kill_func execution with user confirmation."""
         # User types 'yes'
         mock_input.return_value = "yes"
@@ -156,7 +164,7 @@ class PipelineKillTest(TestCase):
         )
 
         # Mock get method response
-        mock_get_response = Mock(spec=Message)
+        mock_get_response = _get_response()
         self.mock_crd.get = Mock(return_value=mock_get_response)
 
         # Setup mock channel responses
@@ -166,10 +174,7 @@ class PipelineKillTest(TestCase):
 
         self.mock_channel.unary_unary.return_value = mock_update_stub
 
-        mock_message_to_dict.side_effect = [
-            {"pipeline_run": {"spec": {}}},
-            {"pipeline_run": {"spec": {"kill": True}}},
-        ]
+        mock_message_to_dict.return_value = {"pipeline_run": {"spec": {"kill": True}}}
 
         generate_kill(self.mock_crd, self.mock_channel)
         kill_func = self.mock_crd.kill
@@ -206,8 +211,7 @@ class PipelineKillTest(TestCase):
         self.assertIsNone(result)
         mock_print.assert_called_with("Kill operation cancelled.")
 
-    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.kill.MessageToDict")
-    def test_kill_func_missing_spec_field(self, mock_message_to_dict):
+    def test_kill_func_missing_spec_field(self):
         """Test kill_func error when spec field is missing."""
         # Mock generate_get and _extract_method_info
         self.mock_crd.generate_get = Mock()
@@ -218,11 +222,11 @@ class PipelineKillTest(TestCase):
         )
 
         # Mock get method response
-        mock_get_response = Mock(spec=Message)
+        mock_get_response = _get_response()
         self.mock_crd.get = Mock(return_value=mock_get_response)
 
-        # MessageToDict returns structure without spec field
-        mock_message_to_dict.return_value = {"pipeline_run": {}}
+        # The fetched resource carries no spec
+        mock_get_response.pipeline_run.HasField.return_value = False
 
         generate_kill(self.mock_crd, self.mock_channel)
         kill_func = self.mock_crd.kill
@@ -233,8 +237,7 @@ class PipelineKillTest(TestCase):
         self.assertIn("Cannot set kill flag", str(context.exception))
 
     @patch("michelangelo.cli.mactl.plugins.entity.pipeline.kill.MessageToDict")
-    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.kill.ParseDict")
-    def test_kill_func_kill_flag_not_set(self, mock_parse_dict, mock_message_to_dict):
+    def test_kill_func_kill_flag_not_set(self, mock_message_to_dict):
         """Test kill_func error when kill flag is not set in response."""
         # Mock generate_get and _extract_method_info
         self.mock_crd.generate_get = Mock()
@@ -245,7 +248,7 @@ class PipelineKillTest(TestCase):
         )
 
         # Mock get method response
-        mock_get_response = Mock(spec=Message)
+        mock_get_response = _get_response()
         self.mock_crd.get = Mock(return_value=mock_get_response)
 
         # Setup mock channel responses
@@ -255,11 +258,8 @@ class PipelineKillTest(TestCase):
 
         self.mock_channel.unary_unary.return_value = mock_update_stub
 
-        # First call for get, second for update response
-        mock_message_to_dict.side_effect = [
-            {"pipeline_run": {"spec": {}}},
-            {"pipeline_run": {"spec": {"kill": False}}},  # Kill flag not set
-        ]
+        # Kill flag not set in the update response
+        mock_message_to_dict.return_value = {"pipeline_run": {"spec": {"kill": False}}}
 
         generate_kill(self.mock_crd, self.mock_channel)
         kill_func = self.mock_crd.kill
@@ -280,8 +280,7 @@ class KillGrpcMetadataTest(TestCase):
     """
 
     @patch("michelangelo.cli.mactl.plugins.entity.pipeline.kill.MessageToDict")
-    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.kill.ParseDict")
-    def test_kill_grpc_call_uses_crd_metadata(self, _parse, mock_to_dict):
+    def test_kill_grpc_call_uses_crd_metadata(self, mock_to_dict):
         """stub_method must be called with [*_self.metadata, ("ttl", "600")]."""
         crd_metadata = [("service-name", "test-svc"), ("caller-name", "test-caller")]
         mock_crd = Mock(spec=CRD)
@@ -311,11 +310,8 @@ class KillGrpcMetadataTest(TestCase):
         mock_crd._extract_method_info = Mock(
             return_value=("UpdatePipelineRun", MagicMock(), MagicMock())
         )
-        mock_crd.get = Mock(return_value=Mock(spec=Message))
-        mock_to_dict.side_effect = [
-            {"pipeline_run": {"spec": {"placeholder": "v"}}},
-            {"pipeline_run": {"spec": {"kill": True}}},
-        ]
+        mock_crd.get = Mock(return_value=_get_response())
+        mock_to_dict.return_value = {"pipeline_run": {"spec": {"kill": True}}}
 
         mock_stub = Mock(return_value=Mock(spec=Message))
         mock_channel = Mock()
@@ -328,3 +324,97 @@ class KillGrpcMetadataTest(TestCase):
         # NOT the stale-import empty list.
         _, kwargs = mock_stub.call_args
         self.assertEqual(kwargs["metadata"], [*crd_metadata, ("ttl", "600")])
+
+
+def _reflection_built(message_class):
+    """Rebuild `message_class` in its own pool, yielding a distinct Python class.
+
+    The CRD framework builds its message classes from server reflection, so the
+    fetched resource and the Update request field are different classes for the
+    same proto. Anything that requires them to be the same class fails there but
+    not against the statically generated pb2 modules.
+    """
+    pool = descriptor_pool.DescriptorPool()
+    added = set()
+
+    def add(file_descriptor):
+        if file_descriptor.name in added:
+            return
+        added.add(file_descriptor.name)
+        for dependency in file_descriptor.dependencies:
+            add(dependency)
+        proto = descriptor_pb2.FileDescriptorProto()
+        file_descriptor.CopyToProto(proto)
+        pool.Add(proto)
+
+    add(message_class.DESCRIPTOR.file)
+    return message_factory.GetMessageClass(
+        pool.FindMessageTypeByName(message_class.DESCRIPTOR.full_name)
+    )
+
+
+class KillOpaqueAnyTest(TestCase):
+    """Regression: a resource carrying an Any the descriptor pool cannot resolve.
+
+    kill_func used to render the fetched resource with MessageToDict and read it
+    back with ParseDict to flip one boolean. Neither handles an Any whose type is
+    absent from the pool, so ParseDict raised and the kill failed on a resource
+    the server had just returned. Copying the proto carries those bytes through.
+    """
+
+    def test_unresolvable_any_survives_into_the_update_request(self):
+        """The opaque Any reaches the Update request byte-for-byte."""
+        opaque_type = "type.googleapis.com/example.NotInDescriptorPool"
+        payload = b"\x08\x01opaque-payload-bytes"
+
+        fetched = _reflection_built(pipeline_run_svc_pb2.GetPipelineRunResponse)()
+        fetched.pipeline_run.spec.kill = False
+        detail = fetched.pipeline_run.status.details.add()
+        detail.type_url = opaque_type
+        detail.value = payload
+
+        updated = pipeline_run_svc_pb2.UpdatePipelineRunResponse()
+        updated.pipeline_run.spec.kill = True
+
+        crd = Mock(spec=CRD)
+        crd.name = "pipeline_run"
+        crd.full_name = "michelangelo.api.v2.PipelineRunService"
+        crd.metadata = []
+        crd.func_signature = {}
+        signature = Mock()
+
+        def _bind(*args, **kwargs):
+            bound = Mock()
+            bound.arguments = {
+                "self": args[0] if args else kwargs.get("self"),
+                "namespace": kwargs.get("namespace"),
+                "name": kwargs.get("name"),
+                "yes": kwargs.get("yes", False),
+                "dry_run": kwargs.get("dry_run", False),
+            }
+            return bound
+
+        signature.bind = _bind
+        crd._read_signatures = Mock(return_value=signature)
+        crd.configure_parser = Mock()
+        crd.generate_get = Mock()
+        crd._extract_method_info = Mock(
+            return_value=(
+                "UpdatePipelineRun",
+                pipeline_run_svc_pb2.UpdatePipelineRunRequest,
+                pipeline_run_svc_pb2.UpdatePipelineRunResponse,
+            )
+        )
+        crd.get = Mock(return_value=fetched)
+
+        stub = Mock(return_value=updated)
+        channel = Mock()
+        channel.unary_unary.return_value = stub
+
+        generate_kill(crd, channel)
+        crd.kill(crd, namespace="ns", name="test-run", yes=True, dry_run=False)
+
+        sent = stub.call_args[0][0]
+        self.assertTrue(sent.pipeline_run.spec.kill)
+        self.assertEqual(sent.pipeline_run.status.details[0].type_url, opaque_type)
+        self.assertEqual(sent.pipeline_run.status.details[0].value, payload)
