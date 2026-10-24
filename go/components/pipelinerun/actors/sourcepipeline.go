@@ -146,30 +146,25 @@ func (a *SourcePipelineActor) Run(ctx context.Context, pipelineRun *v2.PipelineR
 		devPipeline, err := a.createPipelineFromSpec(pipelineRunSpec, pipelineRun)
 		if err != nil {
 			logger.Error("failed to create pipeline from spec", zap.Error(err))
-			return &apipb.Condition{
-				Type:   SourcePipelineType,
-				Status: apipb.CONDITION_STATUS_FALSE,
-			}, fmt.Errorf("failed to create pipeline from spec: %w", err)
+			return nil, fmt.Errorf("failed to create pipeline from spec: %w", err)
 		}
 		pipeline = devPipeline
 	} else {
 		// Regular pipeline run - fetch from Kubernetes using pipeline reference
 		if pipelineRunSpec.GetPipeline() == nil {
-			logger.Info("pipeline run has no pipeline resource ID, setting to false")
-			return &apipb.Condition{
-				Type:   SourcePipelineType,
-				Status: apipb.CONDITION_STATUS_FALSE,
-			}, fmt.Errorf("pipeline resource ID is nil")
+			logger.Error("pipeline run has no pipeline resource ID")
+			return nil, fmt.Errorf("pipeline resource ID is nil")
 		}
 
 		pipelineResourceID := pipelineRunSpec.GetPipeline()
 		err := a.apiHandler.Get(ctx, pipelineRun.Namespace, pipelineResourceID.GetName(), &metav1.GetOptions{}, pipeline)
 		if err != nil {
 			logger.Error("failed to get pipeline", zap.Error(err))
-			return &apipb.Condition{
-				Type:   SourcePipelineType,
-				Status: apipb.CONDITION_STATUS_FALSE,
-			}, fmt.Errorf("failed to get pipeline: %w", err)
+			if !pipelinerunutils.RetryableAPIError(err) {
+				return nil, fmt.Errorf("failed to get pipeline: %w", err)
+			}
+			return pipelinerunutils.TransientCondition(pipelineRun, SourcePipelineType,
+				pipelinerunutils.ReasonPipelineFetchFailed, err, pipelinerunutils.StartupRetryDeadline)
 		}
 
 		pipeline.ObjectMeta = metav1.ObjectMeta{

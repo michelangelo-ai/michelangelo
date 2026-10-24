@@ -901,7 +901,7 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		{
-			name: "error getting workflow execution info",
+			name: "transient error getting workflow execution info requeues instead of failing",
 			initialObjects: []client.Object{
 				&v2.PipelineRun{
 					ObjectMeta: metav1.ObjectMeta{
@@ -985,7 +985,9 @@ func TestReconcile(t *testing.T) {
 				// SourcePipeline.Retrieve() returns TRUE
 				// ImageBuild.Retrieve() returns TRUE
 				// ExecuteWorkflow.Retrieve() returns FALSE (workflow is running)
-				// ExecuteWorkflow.Run() tries to query workflow but gets an error; this is terminal
+				// ExecuteWorkflow.Run() cannot reach the workflow service. The workflow
+				// itself is the source of truth for this run, so the failure is
+				// transport-level: the run stays RUNNING and is requeued.
 				mockWorkflowClient.EXPECT().GetWorkflowExecutionInfo(
 					gomock.Any(),
 					"test-workflow-id",
@@ -994,8 +996,8 @@ func TestReconcile(t *testing.T) {
 			},
 			errMsg: "",
 			expectedResult: ctrl.Result{
-				Requeue:      false,
-				RequeueAfter: 0,
+				Requeue:      true,
+				RequeueAfter: 10 * time.Second,
 			},
 			expectedConditions: []*apipb.Condition{
 				{
@@ -1007,12 +1009,14 @@ func TestReconcile(t *testing.T) {
 					Status: apipb.CONDITION_STATUS_TRUE,
 				},
 				{
-					Type:   actors.ExecuteWorkflowType,
-					Status: apipb.CONDITION_STATUS_UNKNOWN,
+					Type:    actors.ExecuteWorkflowType,
+					Status:  apipb.CONDITION_STATUS_UNKNOWN,
+					Reason:  pipelinerunutils.ReasonWorkflowStatusUnavailable,
+					Message: "workflow service unavailable",
 				},
 			},
 			expectedPipelineRunStatus: v2.PipelineRunStatus{
-				State:         v2.PIPELINE_RUN_STATE_FAILED,
+				State:         v2.PIPELINE_RUN_STATE_RUNNING,
 				WorkflowId:    "test-workflow-id",
 				WorkflowRunId: "test-run-id",
 			},
@@ -1027,7 +1031,7 @@ func TestReconcile(t *testing.T) {
 				},
 				{
 					Name:  pipelinerunutils.ExecuteWorkflowStepName,
-					State: v2.PIPELINE_RUN_STEP_STATE_RUNNING, // Remains RUNNING from initial status since error happens before step update
+					State: v2.PIPELINE_RUN_STEP_STATE_RUNNING, // Untouched: the transient read failure leaves the step alone
 				},
 			},
 		},
@@ -1061,6 +1065,11 @@ func TestReconcile(t *testing.T) {
 				require.Contains(t, err.Error(), testCase.errMsg)
 			} else {
 				require.NoError(t, err)
+			}
+			for _, condition := range pipelineRun.Status.Conditions {
+				// Transient conditions stamp a wall-clock timestamp used to age out
+				// retries; the cases assert on type, status, reason and message.
+				condition.LastUpdatedTimestamp = 0
 			}
 			require.Equal(t, testCase.expectedConditions, pipelineRun.Status.Conditions)
 			require.Equal(t, testCase.expectedPipelineRunStatus.State, pipelineRun.Status.State)
