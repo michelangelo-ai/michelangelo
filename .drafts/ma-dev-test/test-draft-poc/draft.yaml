@@ -1,0 +1,6 @@
+# Draft proof-of-concept
+# Draft: ma-dev-test/test-draft-poc
+# This file was created by the Michelangelo draft controller.
+kind: Draft
+name: test-draft-poc
+namespace: ma-dev-test
