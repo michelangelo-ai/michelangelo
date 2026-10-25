@@ -37,7 +37,7 @@ spec:
   volumes:
     - name: data-volume
       hostPath:
-        path: /shared/minio-data
+        path: /shared/objectstore-data
         type: DirectoryOrCreate
 ---
 apiVersion: v1
