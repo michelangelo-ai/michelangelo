@@ -1651,7 +1651,6 @@ def _ensure_credentials_secret():
         ("object-storage-credentials", "object-storage-credentials.yaml"),
         ("aws-credentials", "aws-credentials.yaml"),
         ("minio-credentials", "minio-credentials.yaml"),
-        ("objectstore-credentials", "objectstore-credentials.yaml"),
     ]:
         exists = (
             subprocess.run(
