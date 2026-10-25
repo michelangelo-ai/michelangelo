@@ -537,6 +537,7 @@ class DeployServicesObjectStoreTest(TestCase):
         with (
             patch("michelangelo.cli.sandbox.sandbox._kube_apply") as mock_kube_apply,
             patch("michelangelo.cli.sandbox.sandbox._create_bucket_setup"),
+            patch("michelangelo.cli.sandbox.sandbox._import_log_persistence_images"),
             patch("michelangelo.cli.sandbox.sandbox._ensure_credentials_secret"),
             patch("michelangelo.cli.sandbox.sandbox._sync_config_from_secret"),
             patch("michelangelo.cli.sandbox.sandbox._assert_command"),

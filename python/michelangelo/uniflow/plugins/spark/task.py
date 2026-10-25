@@ -66,6 +66,25 @@ class SparkTask(TaskConfig):
         executor_disk: Disk space allocation per executor (e.g., "10G").
         executor_gpu: Number of GPUs allocated per executor.
         executor_instances: Number of executor instances to launch.
+
+    Example:
+    ```python
+    from michelangelo.uniflow.core.decorator import task
+    from michelangelo.uniflow.plugins.spark.task import SparkTask
+
+    @task(
+        config=SparkTask(
+            driver_cpu=2,
+            driver_memory="4G",
+            executor_cpu=4,
+            executor_memory="8G",
+            executor_instances=4,
+        )
+    )
+    def aggregate_events(input_path: str) -> dict:
+        # Runs inside a Spark session started by SparkTask.pre_run()
+        return {"status": "complete"}
+    ```
     """
 
     driver_cpu: Optional[int] = None

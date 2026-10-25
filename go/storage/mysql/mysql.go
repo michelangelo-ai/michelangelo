@@ -164,6 +164,22 @@ func (m *mysqlMetadataStorage) Upsert(ctx context.Context, object runtime.Object
 	// object row and its label/annotation child rows are all keyed consistently.
 	primaryKey := metadataStoragePrimaryKey(metaObj)
 
+	// Skip the write when the row already holds this exact object version. An informer
+	// relist (controller restart or resync) replays every unchanged object; rewriting it
+	// would only bump update_time and make long-finished objects look recently updated.
+	//
+	// Consequence: a relist no longer rewrites unchanged rows as a side effect, so it does
+	// not backfill newly added indexed columns or repair label/annotation child rows that
+	// were modified directly in MySQL. Such rows are only rewritten on the object's next
+	// resourceVersion bump; backfills need an explicit tool or an RV bump.
+	unchanged, err := m.isStoredVersionUnchanged(ctx, tx, tableName, primaryKey, object, metaObj)
+	if err != nil {
+		return err
+	}
+	if unchanged {
+		return tx.Commit()
+	}
+
 	err = m.fullUpsert(ctx, tx, tableName, groupVer, metaObj, protoBytes, jsonBytes, indexedFields)
 	if err != nil {
 		return err
@@ -632,6 +648,10 @@ func convertCriterionOperator(fieldName string, op apipb.CriterionOperator, valu
 //	" `uid` in (SELECT `obj_uid` FROM <labelTable> WHERE `key`= ? AND `value` = ? )"
 //
 // Note: lowercase `in`, no backticks around <labelTable>, trailing " )".
+//
+// IS_NULL is the exception: it matches objects without the label key, via
+//
+//	" `uid` NOT IN (SELECT `obj_uid` FROM <labelTable> WHERE `key`= ? )"
 func buildLabelCriterionSQL(op *apipb.CriterionOperation, tableName string) ([]string, []interface{}, error) {
 	var queryStrs []string
 	var params []interface{}
@@ -647,6 +667,15 @@ func buildLabelCriterionSQL(op *apipb.CriterionOperation, tableName string) ([]s
 		}
 
 		criterionOp := item.GetOperator()
+
+		// A label has no row when it is unset, so IS_NULL means "label key not set"
+		// rather than matching a NULL `value` (which would always be empty).
+		if criterionOp == apipb.CRITERION_OPERATOR_IS_NULL {
+			queryStrs = append(queryStrs, " `uid` NOT IN (SELECT `obj_uid` FROM "+labelTable+" WHERE `key`= ? )")
+			params = append(params, labelKey)
+			continue
+		}
+
 		var valueStr string
 		if !isNoParamOp(criterionOp) {
 			valueStr, err = extractMatchValue(item.GetMatchValue())
@@ -1162,6 +1191,64 @@ func metadataStoragePrimaryKey(metaObj metav1.Object) string {
 		}
 	}
 	return string(metaObj.GetUID())
+}
+
+// isStoredVersionUnchanged reports whether the live row keyed by primaryKey already holds
+// this exact object version: the same K8s UID and resourceVersion. resourceVersion alone is
+// not enough because it is only meaningful within one etcd; after a cluster migration (same
+// primaryKey via MetadataStoragePrimaryKeyAnnotation, new UID) the RVs may collide. The row
+// is locked FOR UPDATE so a concurrent upsert cannot slip in between the check and the
+// write. An empty resourceVersion, a missing row, a soft-deleted row, or an empty or
+// unreadable stored proto reports false so the caller falls through to a full upsert.
+//
+// The direct path (directUpdate) writes a storage-side res_version (storedRV+1) that is
+// not an etcd revision. That cannot collide with an etcd replay here: the direct path is
+// only taken once the object is NotFound in etcd, and an object evicted from etcd cannot
+// be written there again under the same UID (a recreate gets a new UID).
+func (m *mysqlMetadataStorage) isStoredVersionUnchanged(ctx context.Context, tx *sql.Tx, tableName string, primaryKey string, object runtime.Object, metaObj metav1.Object) (bool, error) {
+	if metaObj.GetResourceVersion() == "" {
+		return false, nil
+	}
+	// Only fetch the proto blob when res_version matches. On a real update (the common
+	// steady-state case) the RV differs and the blob would be read only to be discarded.
+	// res_version is compared as a string so a non-numeric RV is never coerced to 0.
+	query := fmt.Sprintf(`
+		SELECT res_version, IF(CAST(res_version AS CHAR) = ?, proto, NULL)
+		FROM %s
+		WHERE uid = ? AND delete_time IS NULL
+		FOR UPDATE
+	`, tableName)
+	var (
+		storedRV    string
+		storedProto []byte
+	)
+	err := tx.QueryRowContext(ctx, query, metaObj.GetResourceVersion(), primaryKey).Scan(&storedRV, &storedProto)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, status.Errorf(codes.Internal, "failed to read stored version: %v", err)
+	}
+	if storedRV != metaObj.GetResourceVersion() || len(storedProto) == 0 {
+		return false, nil
+	}
+
+	storedObject := object.DeepCopyObject()
+	storedMsg, ok := storedObject.(proto.Message)
+	if !ok {
+		return false, status.Errorf(codes.InvalidArgument, "object does not implement proto.Message")
+	}
+	storedMsg.Reset()
+	if err := proto.Unmarshal(storedProto, storedMsg); err != nil {
+		// An unreadable stored row is rewritten rather than trusted; the full upsert
+		// replaces it with a good copy, so there is nothing for the caller to handle.
+		return false, nil
+	}
+	storedMeta, err := getObjectMeta(storedObject)
+	if err != nil {
+		return false, err
+	}
+	return storedMeta.GetUID() == metaObj.GetUID(), nil
 }
 
 func (m *mysqlMetadataStorage) fullUpsert(ctx context.Context, tx *sql.Tx, tableName string, groupVer string, metaObj metav1.Object, protoBytes, jsonBytes []byte, indexedFields []storage.IndexedField) error {

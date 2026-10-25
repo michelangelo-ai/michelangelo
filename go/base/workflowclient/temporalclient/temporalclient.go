@@ -128,6 +128,9 @@ func (c *TemporalClient) createScheduleForCron(ctx context.Context, options clie
 		ID: scheduleID,
 		Spec: temporalClient.ScheduleSpec{
 			CronExpressions: []string{options.CronSchedule},
+			// Zero values are treated as unset by the SDK.
+			StartAt: options.ScheduleStartAt,
+			EndAt:   options.ScheduleEndAt,
 		},
 		Action: &temporalClient.ScheduleWorkflowAction{
 			ID:        options.ID,
@@ -135,7 +138,7 @@ func (c *TemporalClient) createScheduleForCron(ctx context.Context, options clie
 			TaskQueue: options.TaskList,
 			Args:      args,
 		},
-		Overlap:        overlapPolicy, // Use extracted policy based on maxConcurrency
+		Overlap:        overlapPolicy,
 		PauseOnFailure: false,
 		Paused:         options.StartPaused,
 	}
@@ -149,15 +152,74 @@ func (c *TemporalClient) createScheduleForCron(ctx context.Context, options clie
 	}
 
 	// Create the schedule
-	_, err := c.Client.ScheduleClient().Create(ctx, scheduleOptions)
+	handle, err := c.Client.ScheduleClient().Create(ctx, scheduleOptions)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Temporal schedule: %w", err)
 	}
 
-	return &clientInterface.WorkflowExecution{
+	execution := &clientInterface.WorkflowExecution{
 		ID:    scheduleID,
 		RunID: "", // Schedules don't have runIDs
-	}, nil
+	}
+
+	if !options.CatchUpFrom.IsZero() && !options.StartPaused {
+		catchUpTo := catchUpEnd(options.ScheduleEndAt, time.Now())
+		if err := backfillSchedule(ctx, handle, options.CatchUpFrom, catchUpTo); err != nil {
+			// Return the execution alongside the error: the schedule was created and is
+			// firing forward, so the caller must keep the trigger alive. Reporting a bare
+			// failure here would strand a live schedule behind a terminated TriggerRun.
+			return execution, &clientInterface.CatchUpError{
+				ScheduleID:  scheduleID,
+				CatchUpFrom: options.CatchUpFrom,
+				Err:         err,
+			}
+		}
+	}
+
+	return execution, nil
+}
+
+// catchUpEnd bounds a catch-up replay. Occurrences are replayed up to now, or up to the
+// schedule's own end when that came first, so a window that already closed is not
+// replayed past its end.
+func catchUpEnd(scheduleEndAt, now time.Time) time.Time {
+	if !scheduleEndAt.IsZero() && scheduleEndAt.Before(now) {
+		return scheduleEndAt
+	}
+	return now
+}
+
+// backfillSchedule replays the occurrences the schedule would have taken between
+// catchUpFrom and catchUpTo, one action each.
+//
+// ScheduleSpec.StartAt cannot do this - it only filters out times before it, and
+// CatchupWindow covers server downtime rather than a backdated start - so the
+// backfill API is the mechanism that actually replays a historical range.
+//
+// Overlap is overridden to BUFFER_ALL for this request only: the schedule's
+// steady-state SKIP policy would drop nearly every occurrence in the burst, since
+// backfilled actions are taken as if their time passed all at once.
+//
+// BUFFER_ALL is also what keeps the replay inside the trigger's maxConcurrency budget.
+// That setting bounds parallel pipeline runs *within* one CronTrigger execution, so the
+// peak during a backfill is (concurrent occurrences) x maxConcurrency. BUFFER_ALL pins
+// the first term to 1, landing peak concurrency exactly on maxConcurrency.
+//
+// Do not "use the spare capacity" by switching to ALLOW_ALL when maxConcurrency > 1:
+// that runs every occurrence at once, making peak N x maxConcurrency - a 24-tick catch-up
+// at maxConcurrency 3 would put 72 pipeline runs in flight. Temporal's overlap policies
+// are not numeric, so there is no setting for "at most N occurrences"; serializing them
+// is the only way to hold the bound.
+func backfillSchedule(ctx context.Context, handle temporalClient.ScheduleHandle, catchUpFrom, catchUpTo time.Time) error {
+	return handle.Backfill(ctx, temporalClient.ScheduleBackfillOptions{
+		Backfill: []temporalClient.ScheduleBackfill{
+			{
+				Start:   catchUpFrom,
+				End:     catchUpTo,
+				Overlap: temporalEnumsV1.SCHEDULE_OVERLAP_POLICY_BUFFER_ALL,
+			},
+		},
+	})
 }
 
 // GetWorkflowExecutionInfo gets the execution info of a workflow

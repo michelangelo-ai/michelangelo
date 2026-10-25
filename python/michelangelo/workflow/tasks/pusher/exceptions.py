@@ -1,13 +1,16 @@
 """Runtime exception hierarchy for the pusher module.
 
-Defines ``PusherError`` and its runtime subclasses (``ArtifactNotFoundError``,
-``PusherPluginError``). These are raised during ``push()`` execution.
+Defines `PusherError` and its runtime subclasses (`ArtifactNotFoundError`,
+`PusherPluginError`). These are raised during `push()` execution.
 
-``ConfigurationError`` is a schema-layer exception defined in
-``michelangelo.workflow.schema.exceptions`` and re-exported here for backwards
-compatibility. It is intentionally *not* a subclass of ``PusherError`` — it is
-raised by config dataclass ``__post_init__`` validation before any push
-execution begins, not by the runtime.
+`ConfigurationError` is a schema-layer exception defined in
+`michelangelo.workflow.schema.exceptions` and re-exported here for backwards
+compatibility, so `from michelangelo.workflow.tasks.pusher.exceptions import
+ConfigurationError` works. It is intentionally *not* a subclass of
+`PusherError`, since it's raised by config dataclass `__post_init__`
+validation before any push execution begins, not by the runtime.
+`michelangelo.workflow.schema.exceptions` isn't part of this generated
+reference yet, so `ConfigurationError` itself isn't documented on this page.
 """
 
 from __future__ import annotations
@@ -27,11 +30,11 @@ class PusherError(Exception):
 
     All exceptions raised by the pusher module at execution time inherit from
     this class, allowing callers to catch the full family with a single
-    ``except PusherError`` clause.
+    `except PusherError` clause.
 
-    Note that ``ConfigurationError`` (raised at config-validation time) is
-    intentionally *not* a subclass of ``PusherError`` — it originates from
-    the schema layer, not the runtime layer.
+    Note that `ConfigurationError` (raised at config-validation time) is
+    intentionally *not* a subclass of `PusherError` — see the module
+    description above for why.
     """
 
 
@@ -43,9 +46,11 @@ class ArtifactNotFoundError(PusherError):
         available: The artifact names that are actually present in the dict.
 
     Example:
-        >>> err = ArtifactNotFoundError("model", ["dataset", "report"])
-        >>> "model" in str(err)
-        True
+    ```python
+    >>> err = ArtifactNotFoundError("model", ["dataset", "report"])
+    >>> "model" in str(err)
+    True
+    ```
     """
 
     def __init__(self, name: str, available: list[str]) -> None:
@@ -54,10 +59,10 @@ class ArtifactNotFoundError(PusherError):
 
 
 class PusherPluginError(PusherError):
-    """Raised when a plugin's ``execute()`` raises an unexpected exception.
+    """Raised when a plugin's `execute()` raises an unexpected exception.
 
-    This exception is raised by ``push()`` when ``fail_fast=True`` and a
-    plugin raises. The original exception is chained via the ``__cause__``
+    This exception is raised by `push()` when `fail_fast=True` and a
+    plugin raises. The original exception is chained via the `__cause__`
     attribute so the full stack trace is preserved.
 
     Args:
@@ -65,9 +70,11 @@ class PusherPluginError(PusherError):
         plugin_name: The name of the plugin that raised.
 
     Example:
-        >>> err = PusherPluginError("model", "model_plugin")
-        >>> "model_plugin" in str(err)
-        True
+    ```python
+    >>> err = PusherPluginError("model", "model_plugin")
+    >>> "model_plugin" in str(err)
+    True
+    ```
     """
 
     def __init__(self, artifact_name: str, plugin_name: str) -> None:

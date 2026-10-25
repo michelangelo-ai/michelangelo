@@ -1,6 +1,6 @@
 ---
 sidebar_label: task_config
-title: michelangelo.uniflow.core.task_config
+title: uniflow.core.task_config
 ---
 
 Task configuration and dependencies for Uniflow workflows.
@@ -17,8 +17,8 @@ Key components:
 
 **Example**:
 
-Creating a custom task configuration:
-
+  Creating a custom task configuration:
+  
 ```python
 from pathlib import Path
 from michelangelo.uniflow.core.task_config import TaskConfig, TaskBinding
@@ -66,6 +66,7 @@ necessary code into the workflow tarball.
 - `star_attributes` - Maps alias to (star_file_path, attribute_name) tuples.
 - `star_plugins` - Maps alias to plugin identifier.
 - `py_functions` - Maps alias to Python callable objects.
+  
 
 **Example**:
 
@@ -101,6 +102,7 @@ loaded in the generated Starlark code.
 - `alias` - The name to use when loading the attribute.
 - `star_file` - Path to the .star file containing the attribute.
 - `attribute` - Name of the attribute to load from the file.
+  
 
 **Example**:
 
@@ -123,6 +125,7 @@ Registers a plugin from the @plugin module that needs to be loaded.
 
 - `alias` - The alias to use for the plugin.
 - `plugin_id` - The plugin identifier (e.g., "chronon").
+  
 
 **Example**:
 
@@ -146,6 +149,7 @@ to be transpiled and included in the package.
 
 - `alias` - The name to use for the function.
 - `fn` - The Python callable to include.
+  
 
 **Example**:
 
@@ -170,6 +174,7 @@ proper load statements.
 
 The binding generates a Starlark load statement in the format:
 
+
 ```
 load(star_file, export="function")
 ```
@@ -179,6 +184,7 @@ load(star_file, export="function")
 - `star_file` - Path to the .star file containing the orchestration function.
 - `function` - Name of the Starlark function in the file.
 - `export` - Name to use when importing the function (typically with __ prefix).
+  
 
 **Example**:
 
@@ -260,6 +266,7 @@ handle task orchestration for this configuration type.
 **Returns**:
 
   TaskBinding specifying the star file, function name, and export name.
+  
 
 **Example**:
 
@@ -271,6 +278,7 @@ handle task orchestration for this configuration type.
 ...         export="__ray_task"
 ...     )
 ```
+  
 
 **Notes**:
 
@@ -293,6 +301,7 @@ Used during transpilation when the TaskConfig class is referenced.
 **Returns**:
 
   TaskBinding for the configuration's Starlark representation.
+  
 
 **Example**:
 
@@ -364,18 +373,21 @@ Starlark function call with configuration parameters.
 **Returns**:
 
   List of ast.keyword nodes for non-None configuration fields.
+  
 
 **Example**:
 
-For a RayTask with `head_cpu=4` and `head_memory="8Gi"`:
-
+  For a RayTask with `head_cpu=4` and `head_memory="8Gi"`:
+  
 ```python
 keywords = config.to_keywords()
 # Generates AST equivalent to:
 # __ray_task__(head_cpu=4, head_memory="8Gi")
 ```
+  
 
 **Notes**:
 
   Only includes fields with non-None values. This allows optional
   configuration parameters to be omitted from the generated code.
+

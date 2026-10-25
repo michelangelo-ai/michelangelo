@@ -2,7 +2,23 @@
 
 This module provides I/O functionality for reading and writing Spark DataFrames in
 Uniflow workflows. It handles S3A filesystem configuration for MinIO compatibility
-and supports Parquet format for data persistence.
+and supports Parquet format for data persistence. S3A credentials and endpoint are
+read from the standard `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and
+`AWS_ENDPOINT_URL` environment variables; path-style access is enabled automatically
+for MinIO compatibility.
+
+Example:
+```python
+from michelangelo.uniflow.plugins.spark.io import SparkIO
+from pyspark.sql import SparkSession
+
+spark = SparkSession.builder.getOrCreate()
+df = spark.createDataFrame([(1, "a"), (2, "b")], ["id", "label"])
+
+io_handler = SparkIO()
+io_handler.write("s3://bucket/data.parquet", df)
+loaded_df = io_handler.read("s3://bucket/data.parquet", None)
+```
 """
 
 import os

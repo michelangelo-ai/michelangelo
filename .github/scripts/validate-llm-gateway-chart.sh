@@ -374,6 +374,10 @@ expect_failure "NetworkPolicy endPort bounds" "endPort cannot be less than port"
   --set networkPolicy.enabled=true \
   --set networkPolicy.migration.managedExternally=true \
   --set-json 'networkPolicy.egress=[{"ports":[{"protocol":"TCP","port":445,"endPort":443}]}]'
+expect_failure "compromised LiteLLM release" \
+  "LiteLLM 1.107.0 is blocked: compromised upstream release" \
+  --skip-schema-validation \
+  --set-string litellm.image.tag=v1.107.0
 expect_failure "runtime image digest" "litellm.image.tag" \
   --set litellm.image.tag=v1.85.1
 expect_failure "test image digest" "tests.image.tag" \

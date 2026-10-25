@@ -7891,6 +7891,10 @@ spec:
                                                     type: integer
                                                   signerName:
                                                     type: string
+                                                  userAnnotations:
+                                                    additionalProperties:
+                                                      type: string
+                                                    type: object
                                                 type: object
                                               secret:
                                                 properties:
@@ -8045,6 +8049,15 @@ spec:
                                   type: object
                               type: object
                             type: array
+                          workloadRef:
+                            properties:
+                              name:
+                                type: string
+                              podGroup:
+                                type: string
+                              podGroupReplicaKey:
+                                type: string
+                            type: object
                         type: object
                     type: object
                   rayStartParams:
@@ -12002,6 +12015,10 @@ spec:
                                                       type: integer
                                                     signerName:
                                                       type: string
+                                                    userAnnotations:
+                                                      additionalProperties:
+                                                        type: string
+                                                      type: object
                                                   type: object
                                                 secret:
                                                   properties:
@@ -12156,6 +12173,15 @@ spec:
                                     type: object
                                 type: object
                               type: array
+                            workloadRef:
+                              properties:
+                                name:
+                                  type: string
+                                podGroup:
+                                  type: string
+                                podGroupReplicaKey:
+                                  type: string
+                              type: object
                           type: object
                       type: object
                     rayStartParams:
