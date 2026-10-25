@@ -18,18 +18,18 @@ spec:
           -master.port=9333 -volume.port=8080 -filer.port=8888
           -s3 -s3.port=9091
       # With no -s3.config, SeaweedFS creates an admin identity from these env
-      # vars, so credentials come from the same Secret MinIO uses instead of
+      # vars, so credentials come from a dedicated Secret instead of
       # being hardcoded in a ConfigMap.
       env:
         - name: AWS_ACCESS_KEY_ID
           valueFrom:
             secretKeyRef:
-              name: "minio-credentials"
+              name: "objectstore-credentials"
               key: "AWS_ACCESS_KEY_ID"
         - name: AWS_SECRET_ACCESS_KEY
           valueFrom:
             secretKeyRef:
-              name: "minio-credentials"
+              name: "objectstore-credentials"
               key: "AWS_SECRET_ACCESS_KEY"
       volumeMounts:
         - mountPath: /data

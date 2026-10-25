@@ -1640,7 +1640,7 @@ def _kube_create(path: Path):
 
 
 def _ensure_credentials_secret():
-    """Create object-storage-credentials and aws-credentials Secrets only if absent.
+    """Create the sandbox credentials Secrets only if absent.
 
     This is deliberately create-only: a sandbox VM that was pre-configured
     with non-default credentials (e.g. the GCP CI runner) keeps its own
@@ -1651,6 +1651,7 @@ def _ensure_credentials_secret():
         ("object-storage-credentials", "object-storage-credentials.yaml"),
         ("aws-credentials", "aws-credentials.yaml"),
         ("minio-credentials", "minio-credentials.yaml"),
+        ("objectstore-credentials", "objectstore-credentials.yaml"),
     ]:
         exists = (
             subprocess.run(
