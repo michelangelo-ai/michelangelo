@@ -129,6 +129,10 @@ ma sandbox demo pipeline
 
 `ma sandbox create` defaults to **MinIO**. Pass `--object-store seaweedfs` to run [SeaweedFS](https://github.com/seaweedfs/seaweedfs) instead — both are S3-compatible, so pipelines that read/write via `objectStorage.endpoint` work identically against either backend. SeaweedFS's sandbox deployment runs its lightweight all-in-one mode (no admin/browsing UI); it's intended for exercising the S3 API path, not for browsing objects interactively.
 
+Whichever backend you pick, in-cluster clients reach it at `objectstore:9091` (the `objectstore` Service). Each backend keeps its own data (`/shared/minio-data` for MinIO, `/shared/objectstore-data` for SeaweedFS), so switching backends starts with an empty store; to switch, run `ma sandbox delete` and `ma sandbox create --object-store <backend>`.
+
+**Upgrading an existing sandbox:** earlier versions named this Service `minio`. `ma sandbox sync` now creates `objectstore`, keeps a `minio` alias so existing `minio:9091` endpoints still resolve, and refreshes the `michelangelo-config` ConfigMap. Update any custom config or `--environ AWS_ENDPOINT_URL=http://minio:9091` to `objectstore:9091`; the alias is only a compatibility bridge.
+
 ### Verifying success
 
 When `ma sandbox create` completes, all Michelangelo AI services start in your k3d cluster. Verify with:
@@ -193,7 +197,7 @@ ma sandbox create --exclude ui --create-compute-cluster
 ma sandbox sync
 ```
 
-Redeploys services into an existing cluster, skipping cluster creation and image import. Use this to recover from a partially failed `create` — for example, if operator deployments timed out but the cluster itself was created successfully.
+Redeploys services into an existing cluster, skipping cluster creation and image import. Pass the same `--object-store` you created the cluster with; `sync` refuses to run if the cluster has the other backend. Use this to recover from a partially failed `create` — for example, if operator deployments timed out but the cluster itself was created successfully.
 
 If `ma sandbox create` fails and you see `Failed to create cluster ... already exists` when you try again, run `ma sandbox sync` instead. See [Recovering from a failed create](#recovering-from-a-failed-create) below.
 

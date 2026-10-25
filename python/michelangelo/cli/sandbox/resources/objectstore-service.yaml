@@ -1,0 +1,21 @@
+# Backend-neutral Service in front of the object-store Pod (minio or seaweedfs).
+# Consumers always use `objectstore:9091`, so they never need to know the backend.
+# `ma sandbox` fills in the selector with the chosen backend's Pod label and
+# applies this on both `create` and `sync` (see _ensure_objectstore_service).
+apiVersion: v1
+kind: Service
+metadata:
+  name: objectstore
+  labels:
+    app: objectstore
+spec:
+  type: NodePort
+  ports:
+    - port: 9090
+      nodePort: 30008
+      name: "9090"
+    - port: 9091
+      nodePort: 30007
+      name: "9091"
+  selector:
+    app: OBJECT_STORE_POD  # replaced with `minio` or `seaweedfs`
