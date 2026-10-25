@@ -138,6 +138,8 @@ RUN ln -sfn "$(dirname "$(dirname "$(readlink -f "$(which java)")")")" /usr/lib/
 
 ENV JAVA_HOME=/usr/lib/jvm/default-java
 ENV PATH="${JAVA_HOME}/bin:${PATH}"
+# Fail the build if JAVA_HOME does not point at a working JDK.
+RUN "${JAVA_HOME}/bin/java" -version
 
 # Set working directory
 WORKDIR /app
