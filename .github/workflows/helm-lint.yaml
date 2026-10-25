@@ -5,11 +5,15 @@ on:
   pull_request:
     paths:
       - 'helm/**'
+      - 'go/auth/mapping.go'
+      - '.github/workflows/helm-lint.yaml'
   push:
     branches:
       - main
     paths:
       - 'helm/**'
+      - 'go/auth/mapping.go'
+      - '.github/workflows/helm-lint.yaml'
 
 permissions:
   contents: read
@@ -169,3 +173,34 @@ jobs:
             --set 'apiserver.ingress.hosts[0].host=grpc.michelangelo.example.com' \
             --set 'apiserver.ingress.hosts[0].paths[0].path=/' \
             2>/dev/null
+
+      - name: Validate watchNamespace Role covers every CRD plural
+        # go/auth/mapping.go's resourceForKind is pinned to the generated CRDs by
+        # TestResourceForKindMatchesCRDs; the Role must name exactly those plurals,
+        # since RBAC silently ignores a resource name that doesn't exist (#1859).
+        run: |
+          helm template michelangelo helm/michelangelo \
+            -f helm/michelangelo/values-k3d.yaml \
+            --set 'controllermgr.watchNamespace={team-a}' \
+            -s templates/rbac/clusterrole.yaml > /tmp/role.yaml
+          python3 - <<'PY'
+          import re, sys, yaml
+          # Only the resourceForKind literal, so other quoted "key": "value" lines in the file cannot widen the set.
+          table = re.search(r'^var resourceForKind = map\[string\]string\{\n(.*?)^\}', open("go/auth/mapping.go").read(), re.M | re.S)
+          if not table:
+              sys.exit("resourceForKind map not found in go/auth/mapping.go")
+          want = set(re.findall(r'^\s*"\w+":\s*"(\w+)",', table.group(1), re.M))
+          role = next(d for d in yaml.safe_load_all(open("/tmp/role.yaml")) if d and d["kind"] == "Role")
+          # Merge every michelangelo.api rule and split on the /status suffix, so rule order and extra
+          # rules (for example a future finalizers rule) do not matter.
+          rules = [r for r in role["rules"] if r["apiGroups"] == ["michelangelo.api"]]
+          all_res = {x for r in rules for x in r["resources"]}
+          got = {x for x in all_res if "/" not in x}
+          status = {x.removesuffix("/status") for x in all_res if x.endswith("/status")}
+          ok = bool(want)
+          for name, have in (("resources", got), ("status", status)):
+              if have != want:
+                  ok = False
+                  print(f"Role {name}: missing {sorted(want - have)}, unknown {sorted(have - want)}")
+          sys.exit(0 if ok else 1)
+          PY
