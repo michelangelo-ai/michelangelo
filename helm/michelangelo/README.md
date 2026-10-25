@@ -13,7 +13,7 @@ The chart owns only the **control plane**. Infrastructure (metadata storage, obj
 | Kubernetes | 1.27+ | Tested on 1.27 – 1.30. CRDs use `apiextensions.k8s.io/v1`. |
 | Helm | 3.12+ | Required for the `lookup` and `required` template functions used by the chart. |
 | Metadata storage | MySQL 8.0 or PostgreSQL 14+ | The chart provisions schema via an init container; you provide a reachable host and root credentials. |
-| Object storage | S3-compatible | S3, GCS (HMAC), MinIO, or any S3-API endpoint. The chart consumes `endpoint`, access key, and secret key. |
+| Object storage | S3-compatible | S3, GCS (HMAC), MinIO, SeaweedFS, or any S3-API endpoint. The chart consumes `endpoint`, access key, and secret key. |
 | Workflow engine | Cadence or Temporal | Bring your own (any reachable host:port), or set `cadence.enabled=true` to install the official Cadence chart as a subchart. See [Bundled Cadence](#bundled-cadence-optional-subchart). |
 | Helm dependencies | – | Run `helm dependency build ./helm/michelangelo` once before the first install if you enable any subchart (`cadence.enabled=true`). |
 | Optional: cluster operators | KubeRay, Spark Operator | Required only if your pipelines use Ray or Spark tasks. Install separately from their upstream charts. |
@@ -243,9 +243,9 @@ Top-level keys. See [`values.yaml`](./values.yaml) for the full annotated schema
 | `metadataStorage.port` | int | `3306` | no | Defaults to 3306 for MySQL, 5432 for Postgres. |
 | `metadataStorage.database` | string | `michelangelo` | no | Database name; created by the schema-init container if it does not exist. |
 | `metadataStorage.rootPassword` | string | `""` | **yes** | Root password used by schema-init and runtime services. |
-| `objectStorage.endpoint` | string | `""` | **yes** | S3-compatible endpoint (e.g. `s3.amazonaws.com`, `minio:9000`). |
-| `objectStorage.secure` | bool | `true` | no | TLS for object storage. Set `false` for in-cluster MinIO. |
-| `objectStorage.region` | string | `us-east-1` | no | AWS region; used by S3, GCS HMAC, and MinIO. |
+| `objectStorage.endpoint` | string | `""` | **yes** | S3-compatible endpoint (e.g. `s3.amazonaws.com`, `minio:9000`, or a SeaweedFS S3 gateway on port `8333`). |
+| `objectStorage.secure` | bool | `true` | no | TLS for object storage. Set `false` for an in-cluster object store without TLS (MinIO, SeaweedFS). |
+| `objectStorage.region` | string | `us-east-1` | no | AWS region; used by S3, GCS HMAC, MinIO, and SeaweedFS. |
 | `objectStorage.bucket` | string | `michelangelo` | no | Bucket name for artifacts, models, and logs. |
 | `objectStorage.accessKeyId` | string | `""` | conditional | Required unless `objectStorage.existingSecret` is set. |
 | `objectStorage.secretAccessKey` | string | `""` | conditional | Required unless `objectStorage.existingSecret` is set. |

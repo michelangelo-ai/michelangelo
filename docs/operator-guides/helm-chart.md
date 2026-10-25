@@ -34,7 +34,7 @@ You also need the following infrastructure reachable from the cluster **before**
 | Component | What the chart needs | Examples |
 |-----------|---------------------|----------|
 | Metadata storage | A reachable MySQL or PostgreSQL endpoint, plus credentials (root password OR an existing Kubernetes Secret) | RDS, Cloud SQL, an in-cluster pod |
-| Object storage | An S3-compatible endpoint and access keys (or an existing Secret) | S3, GCS, MinIO |
+| Object storage | An S3-compatible endpoint and access keys (or an existing Secret) | S3, GCS, MinIO, SeaweedFS |
 | Workflow engine | A Cadence or Temporal frontend address — or enable a bundled subchart (see [Self-contained install](#self-contained-install-with-cadence-or-temporal)) | Managed Cadence/Temporal, in-cluster install |
 
 ## Quick start

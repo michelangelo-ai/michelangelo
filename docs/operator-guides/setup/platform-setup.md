@@ -223,7 +223,7 @@ minio:
 * `awsRegion` – The AWS region of your S3 bucket (`objectStorage.region`).
 * `awsEndpointUrl` – S3 endpoint (`s3.amazonaws.com` or regional endpoint) (`objectStorage.endpoint`, required).
 * `awsAccessKeyId` / `awsSecretAccessKey` – Injected as environment variables from the chart-managed Secret, or from your own Secret via `objectStorage.existingSecret`. Do not hardcode keys in values files.
-* `secure` – Use TLS to the endpoint (`objectStorage.secure`). Set `false` only for in-cluster MinIO without TLS.
+* `secure` – Use TLS to the endpoint (`objectStorage.secure`). Set `false` only for an in-cluster object store without TLS (MinIO, SeaweedFS).
 
 ### **Storage Setup Checklist**
 

@@ -47,13 +47,17 @@ metadataStorage:
 # -----------------------------------------------------------------------------
 objectStorage:
   # REQUIRED. S3-compatible endpoint.
-  # Examples: "s3.amazonaws.com", "storage.googleapis.com", "minio:9000"
+  # Examples: "s3.amazonaws.com", "storage.googleapis.com", "minio:9000",
+  # or a self-hosted SeaweedFS S3 gateway (default port 8333), e.g.
+  # "<seaweedfs-s3-service>.<namespace>.svc.cluster.local:8333" (the Service
+  # name comes from your SeaweedFS release; check `kubectl get svc`).
   endpoint: ""
 
-  # TLS. Set false only for in-cluster MinIO without TLS termination.
+  # TLS. Set false only for an in-cluster object store without TLS termination
+  # (e.g. a self-hosted MinIO or SeaweedFS instance).
   secure: true
 
-  # AWS region. Used by S3, GCS HMAC, and MinIO. The chart sets AWS_REGION
+  # AWS region. Used by S3, GCS HMAC, MinIO, and SeaweedFS. The chart sets AWS_REGION
   # in every service that talks to object storage.
   region: us-east-1
 
@@ -498,7 +502,7 @@ controllermgr:
           # Secret (michelangelo.objectStorageSecretName) when empty.
           credentialsSecret: ""
 
-          # Set S3DISABLE_SSL=true on the collector. Enable for in-cluster MinIO; disable for OCI/S3.
+          # Set S3DISABLE_SSL=true on the collector. Enable for an in-cluster object store (MinIO, SeaweedFS); disable for OCI/S3.
           s3DisableSSL: true
 
           # RAY_DASHBOARD_AGGREGATOR_AGENT_EXPOSABLE_EVENT_TYPES on every Ray
@@ -514,8 +518,11 @@ controllermgr:
           # Empty string disables log_url emission.
           # Example (History Server deep link, live or replayed dashboard; see values-k3d.yaml):
           #   "http://localhost:3001/enter_cluster/{{.RayLocalNamespace}}/raycluster/{{.ClusterName}}/#/overview"
-          # Example (object-storage console, raw files only):
+          # Example (MinIO console, raw files only):
           #   "http://localhost:9090/browser/{{.Bucket}}/{{.PathPrefix}}/cluster-history/raycluster/{{.RayLocalNamespace}}/{{.ClusterName}}/"
+          # SeaweedFS has no equivalent bucket-browser URL in the sandbox (its
+          # all-in-one mode ships no UI); use the History Server link above, or
+          # your SeaweedFS filer UI URL if you run one.
           logURLFormat: ""
 
   resources: {}
