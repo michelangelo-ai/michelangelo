@@ -445,10 +445,16 @@ def _sync(ns: argparse.Namespace):
     # Infrastructure (mysql, cadence, minio, grafana, prometheus) is left running.
 
     _ensure_mysql_running()
+    _check_object_store_backend(ns)
+    _ensure_objectstore_service(ns)
     _ensure_object_store_running(ns)
     _refresh_mysql_schema()
 
     _ensure_credentials_secret()
+    # Clusters created before the objectstore rename still have the old
+    # endpoint in michelangelo-config; refresh it and re-sync credentials.
+    _kube_apply(_dir / "resources" / "michelangelo-config.yaml")
+    _sync_config_from_secret()
     _helm_ensure_repos()
     helm_args = _build_helm_set_args(ns)
 
@@ -594,6 +600,72 @@ def _ensure_pod_running(name: str, manifest: str):
 def _ensure_mysql_running():
     """Make sure the mysql pod is up before the schema refresh execs into it."""
     _ensure_pod_running("mysql", "mysql.yaml")
+
+
+def _ensure_objectstore_service(ns: argparse.Namespace):
+    """Point the `objectstore` Service at the selected backend's Pod.
+
+    Applied on every create and sync, so clusters created before the Service
+    was renamed from `minio` get it too. A legacy NodePort `minio` Service is
+    removed first because it holds NodePorts 30007/30008, which `objectstore`
+    needs. A ClusterIP `minio` alias (no NodePorts) is kept so configs that
+    still say `minio:9091` (older ConfigMaps, custom configs) keep resolving.
+    """
+    pod = "seaweedfs" if ns.object_store == "seaweedfs" else "minio"
+    legacy_type = subprocess.run(
+        ["kubectl", "get", "svc", "minio", "-o", "jsonpath={.spec.type}"],
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout.strip()
+    if legacy_type == "NodePort":
+        subprocess.run(
+            ["kubectl", "delete", "svc", "minio", "--ignore-not-found=true"],
+            capture_output=True,
+            check=False,
+        )
+    with open(_dir / "resources" / "objectstore-service.yaml") as f:
+        service = yaml.safe_load(f)
+    service["spec"]["selector"] = {"app": pod}
+    alias = {
+        "apiVersion": "v1",
+        "kind": "Service",
+        "metadata": {"name": "minio", "labels": {"app": "objectstore"}},
+        "spec": {
+            "type": "ClusterIP",
+            "ports": [
+                {"port": p["port"], "name": p["name"]} for p in service["spec"]["ports"]
+            ],
+            "selector": {"app": pod},
+        },
+    }
+    with tempfile.TemporaryDirectory() as tmp:
+        rendered = Path(tmp) / "objectstore-service.yaml"
+        rendered.write_text(yaml.safe_dump_all([service, alias]))
+        _kube_apply(rendered)
+
+
+def _check_object_store_backend(ns: argparse.Namespace):
+    """Refuse to sync onto a cluster that runs the other object-store backend.
+
+    The backends keep separate data and share the `objectstore` Service, so
+    switching on a live cluster would leave two pods and an empty store.
+    """
+    other = "minio" if ns.object_store == "seaweedfs" else "seaweedfs"
+    exists = (
+        subprocess.run(
+            ["kubectl", "get", "pod", other], capture_output=True, check=False
+        ).returncode
+        == 0
+    )
+    if exists:
+        flag = "minio" if other == "seaweedfs" else "seaweedfs"
+        sys.exit(
+            f"This cluster runs the {other} object store but --object-store is "
+            f"{ns.object_store}. Pass --object-store {other} to sync it, or run "
+            f"`ma sandbox delete` and `ma sandbox create --object-store {flag}` "
+            f"to switch (data is not carried over)."
+        )
 
 
 def _ensure_object_store_running(ns: argparse.Namespace):
@@ -993,6 +1065,8 @@ def _deploy_services(ns: argparse.Namespace):
     # "objectstore" with NodePorts 9090/9091 so that consumers
     # (sandbox-bucket-setup.yaml, history-server.yaml, michelangelo-config.yaml,
     # etc.) never need to change.
+
+    _ensure_objectstore_service(ns)
 
     if ns.object_store == "seaweedfs":
         resources.append("weed-server.yaml")

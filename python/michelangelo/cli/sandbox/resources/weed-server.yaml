@@ -39,21 +39,3 @@ spec:
       hostPath:
         path: /shared/objectstore-data
         type: DirectoryOrCreate
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: objectstore
-  labels:
-    app: objectstore
-spec:
-  type: NodePort
-  ports:
-    - port: 9090
-      nodePort: 30008
-      name: "9090"
-    - port: 9091
-      nodePort: 30007
-      name: "9091"
-  selector:
-    app: seaweedfs

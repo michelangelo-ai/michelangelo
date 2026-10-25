@@ -3,7 +3,10 @@
 import argparse
 import subprocess
 from unittest import TestCase
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
+
+import pytest
+import yaml
 
 from michelangelo.cli.sandbox import sandbox
 
@@ -683,6 +686,110 @@ class TestEnsurePodRunning:
         _, apply = self._run("Running|ghcr.io/old/mysql:arm64-only\n")
 
         apply.assert_called_once()
+
+
+class TestObjectstoreService:
+    """The `objectstore` Service is applied on create and sync, per backend."""
+
+    def _apply(self, object_store, legacy_type="NodePort"):
+        from michelangelo.cli.sandbox.sandbox import _ensure_objectstore_service
+
+        calls = []
+        applied = {}
+        aliases = []
+
+        def fake_run(args, **kwargs):
+            calls.append(("run", tuple(args)))
+            return MagicMock(returncode=0, stdout=legacy_type)
+
+        def fake_apply(path, context=None):
+            calls.append(("apply", path.name))
+            docs = list(yaml.safe_load_all(path.read_text()))
+            applied.update(docs[0])
+            aliases.extend(docs[1:])
+
+        with (
+            patch("michelangelo.cli.sandbox.sandbox.subprocess.run", fake_run),
+            patch("michelangelo.cli.sandbox.sandbox._kube_apply", fake_apply),
+        ):
+            _ensure_objectstore_service(argparse.Namespace(object_store=object_store))
+        applied["_aliases"] = aliases
+        return calls, applied
+
+    def test_legacy_minio_service_is_deleted_before_apply(self):
+        """The old `minio` Service holds the NodePorts, so it must go first."""
+        calls, _ = self._apply("minio")
+        delete = ("kubectl", "delete", "svc", "minio", "--ignore-not-found=true")
+        assert ("run", delete) in calls
+        assert calls.index(("run", delete)) < calls.index(
+            ("apply", "objectstore-service.yaml")
+        )
+
+    def test_minio_alias_is_not_deleted_on_repeat_sync(self):
+        """An existing ClusterIP alias is left alone, so repeat syncs don't blip."""
+        calls, _ = self._apply("minio", legacy_type="ClusterIP")
+        assert not any("delete" in c[1] for c in calls if c[0] == "run")
+
+    def test_minio_alias_has_no_nodeports_and_follows_backend(self):
+        """`minio:9091` keeps resolving without claiming NodePorts."""
+        for backend in ("minio", "seaweedfs"):
+            alias = self._apply(backend)[1]["_aliases"][0]
+            assert alias["metadata"]["name"] == "minio"
+            assert alias["spec"]["type"] == "ClusterIP"
+            assert alias["spec"]["selector"] == {"app": backend}
+            assert all("nodePort" not in p for p in alias["spec"]["ports"])
+
+    def test_selector_follows_backend(self):
+        """The Service selects the chosen backend's Pod."""
+        assert self._apply("minio")[1]["spec"]["selector"] == {"app": "minio"}
+        assert self._apply("seaweedfs")[1]["spec"]["selector"] == {"app": "seaweedfs"}
+
+    def test_pod_manifests_do_not_define_the_service(self):
+        """Only objectstore-service.yaml defines it, so NodePorts can't clash."""
+        from michelangelo.cli.sandbox import sandbox
+
+        for name in ("minio.yaml", "weed-server.yaml"):
+            with open(sandbox._dir / "resources" / name) as f:
+                kinds = {d["kind"] for d in yaml.safe_load_all(f) if d}
+            assert kinds == {"Pod"}, name
+
+    def test_service_nodeports_match_cluster_mappings(self):
+        """30007/30008 are the ports the k3d cluster maps to 9091/9090."""
+        from michelangelo.cli.sandbox import sandbox
+
+        with open(sandbox._dir / "resources" / "objectstore-service.yaml") as f:
+            ports = {
+                p["port"]: p["nodePort"] for p in yaml.safe_load(f)["spec"]["ports"]
+            }
+        assert ports == {9090: 30008, 9091: 30007}
+
+
+class TestCheckObjectStoreBackend:
+    """sync refuses to run onto a cluster that has the other backend's pod."""
+
+    def _check(self, object_store, existing_pods):
+        from michelangelo.cli.sandbox.sandbox import _check_object_store_backend
+
+        def fake_run(args, **kwargs):
+            return MagicMock(returncode=0 if args[-1] in existing_pods else 1)
+
+        with patch("michelangelo.cli.sandbox.sandbox.subprocess.run", fake_run):
+            _check_object_store_backend(argparse.Namespace(object_store=object_store))
+
+    def test_same_backend_is_allowed(self):
+        """A minio cluster synced with the default backend is fine."""
+        self._check("minio", {"minio"})
+
+    def test_fresh_cluster_is_allowed(self):
+        """No object-store pod yet: nothing to conflict with."""
+        self._check("seaweedfs", set())
+
+    def test_other_backend_is_refused_with_guidance(self):
+        """Syncing minio onto a seaweedfs cluster exits and names the fix."""
+        with pytest.raises(SystemExit) as exc:
+            self._check("minio", {"seaweedfs"})
+        assert "--object-store seaweedfs" in str(exc.value)
+        assert "ma sandbox delete" in str(exc.value)
 
 
 class TestEnsureObjectStoreRunning:
