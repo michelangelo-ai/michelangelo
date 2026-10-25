@@ -177,7 +177,7 @@ func (handler *apiHandler) Update(ctx context.Context, obj ctrlRTClient.Object, 
 	err = handler.k8sHandler.Update(ctx, obj, opts)
 
 	// If the object does not exist in K8s/ETCD, update it in MetadataStorage directly.
-	if apiErrors.IsNotFound(err) && storage.EnableMetadataStorage(&handler.conf) {
+	if storage.EnableMetadataStorage(&handler.conf) && handler.isMissingFromK8s(ctx, obj, err) {
 		if dryRun {
 			return nil
 		}
@@ -466,6 +466,27 @@ func initLogger(ctx context.Context, log logr.Logger, action string, namespace s
 	initLog := log.WithValues("action", action, "namespace", namespace, "name", name, "kind", kind)
 	headers := utils.GetHeaders(ctx)
 	return initLog, headers
+}
+
+// isMissingFromK8s reports whether a failed K8s/ETCD update means the object is not in
+// K8s/ETCD, so the update should go to metadata storage instead.
+//
+// An object read back from metadata storage (e.g. an immutable object the ingester has
+// already moved out of ETCD) still carries its UID. Kubernetes turns that UID into an
+// update precondition, and when the object is gone the precondition fails with a
+// Conflict ("Precondition failed: UID in precondition: ..., UID in object meta: ")
+// rather than NotFound. A Conflict is therefore only treated as missing after
+// confirming the object is absent from K8s/ETCD; a genuine resourceVersion conflict on
+// an existing object is still surfaced to the caller.
+func (handler *apiHandler) isMissingFromK8s(ctx context.Context, obj ctrlRTClient.Object, updateErr error) bool {
+	if apiErrors.IsNotFound(updateErr) {
+		return true
+	}
+	if !apiErrors.IsConflict(updateErr) {
+		return false
+	}
+	existing := reflect.New(reflect.TypeOf(obj).Elem()).Interface().(ctrlRTClient.Object)
+	return apiErrors.IsNotFound(handler.k8sHandler.Get(ctx, obj.GetNamespace(), obj.GetName(), existing))
 }
 
 func (handler *apiHandler) hasSpecChange(ctx context.Context, objForUpdate ctrlRTClient.Object) (bool, error) {
