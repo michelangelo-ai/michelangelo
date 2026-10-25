@@ -16,20 +16,29 @@ spec:
         - >
           weed server -dir=/data
           -master.port=9333 -volume.port=8080 -filer.port=8888
-          -s3 -s3.port=9091 -s3.config=/etc/seaweedfs/s3_config.json
+          -s3 -s3.port=9091
+      # With no -s3.config, SeaweedFS creates an admin identity from these env
+      # vars, so credentials come from the same Secret MinIO uses instead of
+      # being hardcoded in a ConfigMap.
+      env:
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: "minio-credentials"
+              key: "AWS_ACCESS_KEY_ID"
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: "minio-credentials"
+              key: "AWS_SECRET_ACCESS_KEY"
       volumeMounts:
         - mountPath: /data
           name: data-volume
-        - mountPath: /etc/seaweedfs
-          name: s3-config-volume
   volumes:
     - name: data-volume
       hostPath:
         path: /shared/minio-data
         type: DirectoryOrCreate
-    - name: s3-config-volume
-      configMap:
-        name: seaweedfs-s3-config
 ---
 apiVersion: v1
 kind: Service

@@ -995,7 +995,6 @@ def _deploy_services(ns: argparse.Namespace):
     # etc.) never need to change.
 
     if ns.object_store == "seaweedfs":
-        resources.append("seaweedfs-s3-config.yaml")
         resources.append("weed-server.yaml")
         # SeaweedFS's all-in-one server mode has no MinIO-console-equivalent
         # admin UI on port 9090, so no console link is printed for this
