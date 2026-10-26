@@ -155,13 +155,23 @@ export type Interpolatable<T, U extends StudioParamsView = 'base'> =
   | string
   | FunctionInterpolation<T, U>
   | StringInterpolation<U>;
-
-// Usage in configuration
-interface ActionConfig {
-  title: Interpolatable<string>;
-  disabled: Interpolatable<boolean>;
-}
 ```
+
+Config types usually get interpolation through `DeepInterpolatable<T>`, which makes every leaf of `T` interpolatable (functions and React components are left as-is). For example, actions are written as `ActionConfigSchema`, which is `DeepInterpolatable<ActionConfig>`, so a confirm modal's title can be computed from the record:
+
+```typescript
+// From: config/entities/deployment/deployment.ts
+modal: {
+  type: 'confirm',
+  header: {
+    title: interpolate(
+      ({ data }) => `Are you sure you want to retire ${(data as DeploymentRecord).metadata?.name}`
+    ),
+  },
+},
+```
+
+See the [Action Configuration Reference](./configuration/action-configuration-reference.md#interpolation).
 
 ## Hook Patterns
 

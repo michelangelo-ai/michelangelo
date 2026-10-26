@@ -166,68 +166,7 @@ export interface CellRendererProps<T = unknown, CellConfig = SharedCell<unknown,
 
 ## Form System
 
-Forms are built on [React Final Form](https://final-form.org/react).
-
-### Form Component
-
-[`FormProps`](https://github.com/michelangelo-ai/michelangelo/blob/main/javascript/packages/core/components/form/types/form-types.ts) is the base form component interface:
-
-```typescript
-export interface FormProps<FieldValues extends FormData = FormData> {
-  onSubmit: (values: FieldValues) => void | object | Promise<object>;
-  initialValues?: DeepPartial<FieldValues>;
-  id?: string;           // For external submit buttons
-  children: React.ReactNode;
-  focusOnError?: boolean; // Focus first invalid field on failed submit (default: true)
-  render?: (formElement: React.ReactNode) => React.ReactNode;
-}
-```
-
-### Form State
-
-```typescript
-export interface FormState<FieldValues extends FormData = FormData> {
-  submitting: boolean;
-  submitError?: string | Error;
-  values?: FieldValues;
-  // plus submitFailed, hasValidationErrors, errors, submitErrors, touched
-}
-
-export interface FieldState {
-  error?: string;
-  touched: boolean;
-}
-
-export interface FieldInput<T = unknown, InputValue = T> {
-  value: InputValue;
-  name: string;
-  onChange: (value: InputValue) => void;
-  onBlur: () => void;
-  onFocus: () => void;
-}
-```
-
-### Field Types
-
-Available field components:
-
-| Field | Description |
-|-------|-------------|
-| StringField | Text input |
-| BooleanField | Checkbox/toggle |
-| SelectField | Dropdown selection |
-| RadioField | Radio button group |
-| TextareaField | Multi-line text input |
-| UrlField | URL input |
-| NumberField | Numeric input |
-| CheckboxField | Checkbox |
-| DateField | Date input |
-| MarkdownField | Markdown editor |
-
-### Form Hooks
-
-- `useField(name)` - Get field state and input props
-- `useFormState()` - Get form submission state
+Forms are built from React components on top of [React Final Form](https://final-form.org/react): `Form` or `FormDialog`, field components (`StringField`, `SelectField`, `BooleanField`, …), layout components (`FormGroup`, `FormRow`, …), validators and the `useForm` / `useFormState` / `useField` hooks. See the [Form Reference](./configuration/form-reference.md) for every prop, field and validator.
 
 ## Theme and Styling
 

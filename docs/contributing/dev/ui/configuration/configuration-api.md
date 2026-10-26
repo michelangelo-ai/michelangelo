@@ -116,12 +116,13 @@ See `javascript/packages/core/config/entities/*/list.ts` and `*/detail.ts` for c
 
 - Entity list views (tables with columns, sorting, filtering)
 - Entity detail views (metadata headers, content sections)
-- Data input forms _(coming soon)_
+- Record actions (delete, retry, open a form) and confirm dialogs, via [action configuration](./action-configuration-reference.md)
 - Workflow phases grouping related entities
 - Standard display types (dates, states, text, links)
 
 **Write custom components when you need:**
 
+- Data input forms: these are always React components built from the [form components](./form-reference.md), opened from an action
 - UI patterns not covered by existing configurations
 - Complex interactive visualizations or custom interactions
 - Business logic beyond what accessor functions can handle
@@ -225,6 +226,9 @@ Detailed API references for each configuration type:
 - [Table Configuration Reference](./table-configuration-reference.md)
 - [Phase Configuration Reference](./phase-configuration-reference.md)
 - [Entity Configuration Reference](./entity-configuration-reference.md)
+- [Detail View Configuration Reference](./detail-view-configuration-reference.md)
+- [Action Configuration Reference](./action-configuration-reference.md)
+- [Form Reference](./form-reference.md)
 
 ### FAQ
 

@@ -90,6 +90,8 @@ Controls what displays when the table has no data.
 ### `actions`
 
 - Array of action configurations rendered as an actions popover in the last column of each row
+- **Ignored on entity list views.** The list table's `actions` are always replaced by the entity's own `actions` (`PhaseEntityConfig.actions`), even when the entity has none. Put list-row actions on the entity. `TableConfig.actions` applies to tables in detail view pages
+- See [Action Configuration Reference](./action-configuration-reference.md)
 
 ### `enableStickySides`
 
@@ -112,4 +114,5 @@ Controls what displays when the table has no data.
 
 - [Cell Types Reference](./cell-type-reference.md) - Column configuration (the `columns` property)
 - [Entity Configuration Reference](./entity-configuration-reference.md) - How entities use list and detail views
+- [Action Configuration Reference](./action-configuration-reference.md) - The `actions` property
 - [Configuration API](./configuration-api.md) - overview of configuration system
