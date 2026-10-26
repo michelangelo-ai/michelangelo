@@ -1179,7 +1179,6 @@ class ComputeChartTest(TestCase):
                     "k3d-test-cluster",
                     "-n",
                     "michelangelo-compute",
-                    "--logs",
                 ),
             ],
         )
@@ -1487,7 +1486,7 @@ class SyncTest(TestCase):
             ),
             patch.object(sandbox, "_helm_wait", side_effect=self._recorder("wait")),
             patch.object(sandbox, "_ensure_mysql_running"),
-            patch.object(sandbox, "_ensure_minio_running"),
+            patch.object(sandbox, "_ensure_object_store_running"),
             patch.object(sandbox, "_refresh_mysql_schema"),
             patch.object(sandbox, "_ensure_credentials_secret"),
             patch.object(sandbox, "_helm_ensure_repos"),
