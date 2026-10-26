@@ -49,3 +49,15 @@ func (mr *MockFactoryMockRecorder) GetClientSetForCluster(arg0 interface{}) *gom
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetClientSetForCluster", reflect.TypeOf((*MockFactory)(nil).GetClientSetForCluster), arg0)
 }
+
+// Invalidate mocks base method.
+func (m *MockFactory) Invalidate(spec *v2.ClusterSpec) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Invalidate", spec)
+}
+
+// Invalidate indicates an expected call of Invalidate.
+func (mr *MockFactoryMockRecorder) Invalidate(spec interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Invalidate", reflect.TypeOf((*MockFactory)(nil).Invalidate), spec)
+}

@@ -46,6 +46,48 @@ func TestData_UpdateClusterAndStatus(t *testing.T) {
 	assert.Equal(t, len(newStatus.StatusConditions), len(data.cachedObj.Status.StatusConditions))
 }
 
+func TestData_RefreshSpecAndProbeResults(t *testing.T) {
+	cached := &v2pb.Cluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-cluster", ResourceVersion: "1"},
+		Status:     *newReadyStatus(),
+	}
+	data := &Data{cachedObj: cached, clusterStatus: newReadyStatus()}
+	_, oldVersion := data.snapshot()
+
+	updated := &v2pb.Cluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-cluster", ResourceVersion: "2"},
+		Spec:       v2pb.ClusterSpec{SchedulerType: v2pb.SCHEDULER_TYPE_KUEUE},
+	}
+	assert.Same(t, cached, data.refreshSpec(updated))
+
+	// the refreshed object is a copy that keeps the probed status and readiness
+	got, version := data.snapshot()
+	assert.Equal(t, oldVersion+1, version)
+	assert.NotSame(t, updated, got)
+	assert.Equal(t, v2pb.SCHEDULER_TYPE_KUEUE, got.Spec.SchedulerType)
+	assert.Equal(t, "2", got.ResourceVersion)
+	assert.True(t, isClusterReady(&got.Status))
+	assert.True(t, isClusterReady(data.GetClusterStatus()))
+	assert.Equal(t, v2pb.SCHEDULER_TYPE_INVALID, cached.Spec.SchedulerType, "the replaced object is not modified")
+
+	// results of a probe of the old spec are dropped
+	_, stored := data.storeProbeResult(oldVersion, &v2pb.ClusterStatus{})
+	assert.False(t, stored)
+	assert.True(t, isClusterReady(data.GetClusterStatus()))
+	data.setResourceVersion(oldVersion, "9")
+	assert.Equal(t, "2", data.getCachedObj().ResourceVersion)
+
+	// results of a probe of the current spec are stored, and the write gets a copy
+	written, stored := data.storeProbeResult(version, &v2pb.ClusterStatus{})
+	assert.True(t, stored)
+	assert.NotSame(t, data.getCachedObj(), written)
+	assert.False(t, isClusterReady(data.GetClusterStatus()))
+	assert.True(t, isClusterReady(&got.Status), "a handed-out object is not modified")
+	data.setResourceVersion(version, "3")
+	assert.Equal(t, "3", data.getCachedObj().ResourceVersion)
+	assert.Equal(t, "2", got.ResourceVersion, "a handed-out object is not modified")
+}
+
 func TestFilterType_Constants(t *testing.T) {
 	assert.Equal(t, FilterType(0), ReadyClusters)
 	assert.Equal(t, FilterType(1), UnreadyClusters)

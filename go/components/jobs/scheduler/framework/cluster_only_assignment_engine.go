@@ -11,7 +11,7 @@ import (
 
 var _ AssignmentStrategy = ClusterOnlyAssignmentStrategy{}
 
-// ClusterOnlyAssignmentStrategy selects a cluster using affinity.
+// ClusterOnlyAssignmentStrategy selects a cluster using affinity, else a Ready cluster.
 type ClusterOnlyAssignmentStrategy struct {
 	ClusterCache cluster.RegisteredClustersCache
 	log          logr.Logger
@@ -27,11 +27,12 @@ func NewClusterOnlyAssignmentStrategy(cache cluster.RegisteredClustersCache, log
 
 // Select implements Engine.
 func (e ClusterOnlyAssignmentStrategy) Select(_ context.Context, job BatchJob) (*v2pb.AssignmentInfo, bool, string, error) {
-	// For OSS MVP: choose the first available cluster, or a specific one
+	// For OSS MVP: choose the first Ready cluster, or a specific one
 	// if job affinity provides an explicit cluster name via resource selector label
 	// "resourcepool.michelangelo/cluster".
 
-	// Prefer explicit cluster by label, else first available.
+	// Prefer explicit cluster by label (honored whether or not it is Ready),
+	// else the first Ready cluster.
 	selector := job.GetAffinity().GetResourceAffinity().GetSelector()
 	if selector != nil && selector.MatchLabels != nil {
 		if name, ok := selector.MatchLabels[constants.ClusterAffinityLabelKey]; ok && name != "" {
@@ -47,7 +48,7 @@ func (e ClusterOnlyAssignmentStrategy) Select(_ context.Context, job BatchJob) (
 		}
 	}
 
-	clusters := e.ClusterCache.GetClusters(cluster.AllClusters)
+	clusters := e.ClusterCache.GetClusters(cluster.ReadyClusters)
 	if len(clusters) == 0 {
 		return nil, false, constants.AssignmentReasonNoClustersFound, nil
 	}

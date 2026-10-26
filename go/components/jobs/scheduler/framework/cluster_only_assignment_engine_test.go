@@ -17,20 +17,41 @@ import (
 
 // fakeClusterCache is a simple in-memory implementation of RegisteredClustersCache
 type fakeClusterCache struct {
-	list   []*v2pb.Cluster
-	byName map[string]*v2pb.Cluster
+	list    []*v2pb.Cluster
+	byName  map[string]*v2pb.Cluster
+	unready map[string]bool
 }
 
+// newFakeClusterCache returns a cache of the given clusters, all Ready.
 func newFakeClusterCache(clusters ...*v2pb.Cluster) *fakeClusterCache {
 	by := make(map[string]*v2pb.Cluster, len(clusters))
 	for _, c := range clusters {
 		by[c.GetName()] = c
 	}
-	return &fakeClusterCache{list: clusters, byName: by}
+	return &fakeClusterCache{list: clusters, byName: by, unready: map[string]bool{}}
 }
 
-func (f *fakeClusterCache) GetClusters(_ cluster.FilterType) []*v2pb.Cluster { return f.list }
-func (f *fakeClusterCache) GetCluster(name string) *v2pb.Cluster             { return f.byName[name] }
+// withUnready marks the named clusters as not Ready.
+func (f *fakeClusterCache) withUnready(names ...string) *fakeClusterCache {
+	for _, name := range names {
+		f.unready[name] = true
+	}
+	return f
+}
+
+func (f *fakeClusterCache) GetClusters(filter cluster.FilterType) []*v2pb.Cluster {
+	var result []*v2pb.Cluster
+	for _, c := range f.list {
+		ready := !f.unready[c.GetName()]
+		if (filter == cluster.ReadyClusters && !ready) || (filter == cluster.UnreadyClusters && ready) {
+			continue
+		}
+		result = append(result, c)
+	}
+	return result
+}
+
+func (f *fakeClusterCache) GetCluster(name string) *v2pb.Cluster { return f.byName[name] }
 
 // newTestClusterOnlyStrategy creates a ClusterOnlyAssignmentStrategy for testing with a no-op logger
 func newTestClusterOnlyStrategy(cache cluster.RegisteredClustersCache) ClusterOnlyAssignmentStrategy {
@@ -129,6 +150,52 @@ func TestClusterOnlyEngine_Select(t *testing.T) {
 			wantFound:   true,
 			wantReason:  "cluster_default_selected",
 			wantCluster: "first",
+		},
+		{
+			name:        "default selection skips clusters that are not Ready",
+			cache:       newFakeClusterCache(makeCluster("c1"), makeCluster("c2")).withUnready("c1"),
+			job:         makeJob(nil),
+			wantFound:   true,
+			wantReason:  "cluster_default_selected",
+			wantCluster: "c2",
+		},
+		{
+			name:       "no Ready cluster is not found",
+			cache:      newFakeClusterCache(makeCluster("c1"), makeCluster("c2")).withUnready("c1", "c2"),
+			job:        makeJob(nil),
+			wantFound:  false,
+			wantReason: "no_clusters_found",
+		},
+		{
+			name:        "affinity to a registered cluster that is not Ready is honored",
+			cache:       newFakeClusterCache(makeCluster("c1"), makeCluster("c2")).withUnready("c1"),
+			job:         makeJob(map[string]string{constants.ClusterAffinityLabelKey: "c1"}),
+			wantFound:   true,
+			wantReason:  "cluster_matched_by_affinity",
+			wantCluster: "c1",
+		},
+		{
+			name:        "ray cluster label for a cluster that is not Ready is honored",
+			cache:       newFakeClusterCache(makeCluster("c1")).withUnready("c1"),
+			job:         makeRayClusterJob("c1"),
+			wantFound:   true,
+			wantReason:  "cluster_matched_by_affinity",
+			wantCluster: "c1",
+		},
+		{
+			name:        "affinity cluster not found falls back to a Ready cluster",
+			cache:       newFakeClusterCache(makeCluster("c1"), makeCluster("c2")).withUnready("c1"),
+			job:         makeJob(map[string]string{constants.ClusterAffinityLabelKey: "unknown"}),
+			wantFound:   true,
+			wantReason:  "cluster_default_selected",
+			wantCluster: "c2",
+		},
+		{
+			name:       "affinity cluster not found and no Ready cluster is not found",
+			cache:      newFakeClusterCache(makeCluster("c1")).withUnready("c1"),
+			job:        makeJob(map[string]string{constants.ClusterAffinityLabelKey: "unknown"}),
+			wantFound:  false,
+			wantReason: "no_clusters_found",
 		},
 	}
 
