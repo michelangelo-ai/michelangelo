@@ -21,6 +21,19 @@ rules:
 - apiGroups: [""]
   resources: ["pods"]
   verbs: ["get","list","watch"]
+# The federated client creates, reads and deletes the SparkApplication it
+# projects for each SparkJob, and the SparkApplication watcher lists and watches
+# them.
+- apiGroups: ["sparkoperator.k8s.io"]
+  resources: ["sparkapplications"]
+  verbs: ["create","get","list","watch","delete"]
+# With jobs.scheduler.backend kueue, the control plane checks that a job's
+# LocalQueue exists on a Kueue-managed cluster before it dispatches the job
+# there. Without this the check is refused, and no job is dispatched to the
+# cluster.
+- apiGroups: ["kueue.x-k8s.io"]
+  resources: ["localqueues"]
+  verbs: ["get"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

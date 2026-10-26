@@ -1,3 +1,14 @@
+// Package client is the standalone Spark Operator client that the SparkJob
+// controller used before SparkJobs were scheduled through the federated jobs
+// control plane.
+//
+// Deprecated: nothing consumes this package. The SparkJob controller now creates
+// SparkApplications on member clusters through the federated jobs client, and the
+// SparkJob to SparkApplication translation lives in
+// go/components/jobs/client/k8sengine/spark.go. The package stays in the tree so
+// that the controller change can be reverted on its own; remove it, together with
+// spark/job/interface.go and spark/job/jobmocks, once the federated path has run
+// on a real cluster.
 package client
 
 import (

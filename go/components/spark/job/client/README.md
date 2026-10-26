@@ -1,5 +1,9 @@
 # Spark Job Client
 
+> **Deprecated.** This package is the standalone Spark Operator client that the SparkJob controller used before SparkJobs were scheduled through the federated jobs control plane. Nothing consumes it. The SparkJob controller now creates SparkApplications on member clusters through the federated jobs client, and the SparkJob to SparkApplication translation lives in `go/components/jobs/client/k8sengine/spark.go`. The package stays in the tree so that the controller change can be reverted on its own; remove it, together with `go/components/spark/job/interface.go` and `go/components/spark/job/jobmocks`, once the federated path has run on a real cluster.
+>
+> The rest of this file describes the package as it was when the controller used it. It is kept as history.
+
 This client is a **demo implementation** of the `Client` interface defined in `interface.go` in the parent package (`go/components/spark/job/interface.go`). It is designed to interact with a specific version of the Spark Operator and its corresponding Kubernetes Custom Resource Definitions (CRDs). The client provides methods to create Spark jobs, retrieve their statuses, and delete (terminate) them by leveraging the Spark Operator's API.
 
 ## Overview
