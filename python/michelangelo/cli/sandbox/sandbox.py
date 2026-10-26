@@ -1870,11 +1870,13 @@ def _kube_wait(pods: bool = True, jobs: bool = True, timeout: int = 600):
 
 
 def _apply_compute_cluster_rbac(cluster_name: str):
-    """Apply RBAC for Ray management in the compute cluster.
+    """Apply RBAC for Ray and Spark management in the compute cluster.
 
-    This creates the ServiceAccount `ray-manager`, a namespaced Role with permissions on
-    Ray resources, and a RoleBinding to bind them, in the `default` namespace of the
-    jobs cluster.
+    This creates the ServiceAccount `ray-manager` in the `default` namespace of the
+    jobs cluster; a ClusterRole `ray-manager` that may manage Ray resources and the
+    Spark Operator's SparkApplications, and read pods and Kueue LocalQueues; and a
+    ClusterRoleBinding that grants the ClusterRole to the ServiceAccount. The
+    control plane reaches the cluster with a token minted for this ServiceAccount.
     """
     rbac_path = _dir / "resources" / "rbac-ray.yaml"
     _exec(
