@@ -1616,6 +1616,599 @@ class SyncTest(TestCase):
         self.assertEqual(len(self.log), 1)
 
 
+def _completed(args, returncode=0, stdout=""):
+    return subprocess.CompletedProcess(args, returncode, stdout, "")
+
+
+class KueueDemoTest(TestCase):
+    """Tests for demo kueue, and for sync on a cluster that runs Kueue."""
+
+    _control_plane = "k3d-michelangelo-sandbox"
+    _compute = "k3d-michelangelo-compute-0"
+
+    def setUp(self):
+        """A compute-mode sandbox whose compute-0 runs an earlier demo's Kueue."""
+        self.log = []
+        self.slept = 0
+        # Installed Helm releases, (context, release, namespace) → their values,
+        # and the values of every helm upgrade --install, in order.
+        self.releases = {
+            (context, "michelangelo-compute", "michelangelo-compute"): {}
+            for context in (self._control_plane, self._compute)
+        }
+        self.releases[(self._compute, "kueue", "kueue-system")] = {}
+        self.installs = []
+        # What successive reads of compute-0 list; the last answer repeats.
+        self.workload_reads = [[]]
+        self.crd_reads = [[]]
+        # Exit code of every read of compute-0's workloads.
+        self.workloads_returncode = 0
+        # The command argument that makes its command fail.
+        self.failing = None
+
+    @staticmethod
+    def _flag(args, name):
+        return args[args.index(name) + 1]
+
+    def _release(self, args, release_index):
+        """Return the (context, release, namespace) a helm command names."""
+        return (
+            self._flag(args, "--kube-context"),
+            args[release_index],
+            self._flag(args, "-n"),
+        )
+
+    def _fake_exec(self, *args, **kwargs):
+        """Record a command, apply it to the sandbox and answer its reads."""
+        args = list(args)
+        install = args[:3] == ["helm", "upgrade", "--install"]
+        if install:
+            # The values file is removed once the command returns.
+            i = args.index("-f") + 1
+            with open(args[i]) as f:
+                values = yaml.safe_load(f)
+            args[i] = "<file>"
+        self.log.append(("exec", tuple(args)))
+        if self.failing in args:
+            raise subprocess.CalledProcessError(1, args)
+        if install:
+            release = self._release(args, 3)
+            self.releases[release] = values
+            self.installs.append((*release[:2], values))
+        if args[:2] == ["helm", "uninstall"]:
+            del self.releases[self._release(args, 2)]
+        if "version" in args:
+            return json.dumps({"serverVersion": {"major": "1", "minor": "31"}})
+        if args[:3] == ["helm", "show", "crds"]:
+            return ""
+        if "minio-credentials" in args:
+            return f"{_b64('test-access-key')} {_b64('test-secret-key')}"
+        return None
+
+    @staticmethod
+    def _next(reads):
+        return reads.pop(0) if len(reads) > 1 else reads[0]
+
+    def _fake_run(self, args, **kwargs):
+        """Answer the reads that may fail from the sandbox state."""
+        self.log.append(("run", tuple(args)))
+        if args[:2] == ["helm", "status"] and "--kube-context" in args:
+            return _completed(args, 0 if self._release(args, 2) in self.releases else 1)
+        if args[:2] == ["helm", "status"]:  # sync's michelangelo release
+            return _completed(args, 0, '{"info":{"status":"deployed"}}')
+        if args[:3] == ["helm", "get", "values"]:
+            values = self.releases.get(self._release(args, 3))
+            if values is None:
+                return _completed(args, 1)
+            # helm prints null for a release installed without values.
+            return _completed(args, 0, json.dumps(values or None))
+        if "workloads.kueue.x-k8s.io" in args:
+            workloads = "\n".join(self._next(self.workload_reads))
+            return _completed(args, self.workloads_returncode, workloads)
+        if sandbox._kueue_crds_jsonpath in args:
+            return _completed(args, 0, " ".join(self._next(self.crd_reads)))
+        if "clusters.michelangelo.api" in args:
+            return _completed(args, 0, "michelangelo-compute-0 michelangelo-sandbox")
+        if args[:3] == ["kubectl", "config", "get-contexts"]:
+            return _completed(args, 0, f"{self._compute}\n{self._control_plane}")
+        if args[:3] == ["k3d", "cluster", "get"]:
+            return _completed(args)
+        return _completed(args, 1)  # e.g. no hand-built object to adopt
+
+    def _record_cluster_cr(self, cluster_name, scheduler_type=""):
+        self.log.append(("cluster-cr", (cluster_name, scheduler_type)))
+
+    def _record_sleep(self, seconds):
+        self.slept += seconds
+
+    def _demo(self, cluster_name="michelangelo-compute-0"):
+        p = argparse.ArgumentParser()
+        sandbox.init_arguments(p)
+        ns = p.parse_args(["demo", "kueue", "--compute-cluster-name", cluster_name])
+        with (
+            patch.object(sandbox, "_exec", side_effect=self._fake_exec),
+            patch.object(sandbox.subprocess, "run", side_effect=self._fake_run),
+            patch.object(sandbox, "_helm_ensure_repos"),
+            patch.object(
+                sandbox,
+                "_create_compute_cluster_crd",
+                side_effect=self._record_cluster_cr,
+            ),
+            patch.object(sandbox.time, "sleep", side_effect=self._record_sleep),
+        ):
+            sandbox._create_kueue_demo_crs(ns)
+
+    def _demo_fails(self) -> str:
+        """Run the demo, expecting it to exit; return its error message."""
+        with (
+            patch.object(sandbox, "_err_exit", side_effect=SystemExit(1)) as mock_err,
+            self.assertRaises(SystemExit),
+        ):
+            self._demo()
+        return mock_err.call_args[0][0]
+
+    def _sync(self):
+        p = argparse.ArgumentParser()
+        sandbox.init_arguments(p)
+        ns = p.parse_args(["sync"])
+        with (
+            patch.object(sandbox, "_exec", side_effect=self._fake_exec),
+            patch.object(sandbox.subprocess, "run", side_effect=self._fake_run),
+            patch.object(sandbox, "_helm_ensure_repos"),
+            patch.object(sandbox, "_helm_wait"),
+            patch.object(sandbox, "_ensure_mysql_running"),
+            patch.object(sandbox, "_ensure_object_store_running"),
+            patch.object(sandbox, "_refresh_mysql_schema"),
+            patch.object(sandbox, "_ensure_credentials_secret"),
+        ):
+            sandbox._sync(ns)
+
+    def _installed(self, context, release):
+        """Return the values of the last install of the release on the cluster."""
+        return next(
+            values
+            for c, r, values in reversed(self.installs)
+            if (c, r) == (context, release)
+        )
+
+    def _steps(self):
+        """Name the logged calls whose order matters."""
+        steps = []
+        for kind, args in self.log:
+            if kind == "cluster-cr":
+                steps.append(f"mark {args[1]}" if args[1] else "unmark")
+            elif kind == "run":
+                if "workloads.kueue.x-k8s.io" in args:
+                    steps.append("list workloads")
+                elif sandbox._kueue_crds_jsonpath in args:
+                    steps.append("list kueue crds")
+            elif "delete" in args:
+                steps.append(f"delete {self._flag(args, 'delete')}")
+            elif "wait" in args:
+                steps.append(f"wait {self._flag(args, 'wait')}")
+            elif args[:2] in (("helm", "uninstall"), ("helm", "test")):
+                steps.append(" ".join(args[1:3]))
+            elif args[:3] == ("helm", "upgrade", "--install"):
+                steps.append(f"install {args[3]}")
+        return steps
+
+    def test_demo_replaces_a_standalone_kueue_in_order(self):
+        """Drain, delete the queues, uninstall, then the charts and the mark."""
+        self.workload_reads = [["workload.kueue.x-k8s.io/raycluster-demo-1a2b3"], []]
+        self.crd_reads = [["workloads.kueue.x-k8s.io"], []]
+
+        self._demo()
+
+        self.assertEqual(
+            self._steps(),
+            [
+                "unmark",
+                "list workloads",
+                "list workloads",
+                "delete localqueue/ma-ma-dev-test",
+                "delete clusterqueue/cluster-queue",
+                "delete resourceflavor/default-flavor",
+                "uninstall kueue",
+                "list kueue crds",
+                "list kueue crds",
+                "install michelangelo-compute",
+                "delete clusterrolebinding/ray-manager-binding",
+                "test michelangelo-compute",
+                "wait --for=condition=Established",
+                "wait --for=condition=Available",
+                "install michelangelo-compute-queues",
+                "mark SCHEDULER_TYPE_KUEUE",
+            ],
+        )
+        context = self._compute
+        commands = [args for kind, args in self.log if kind in ("exec", "run")]
+        for command in [
+            (
+                "helm",
+                "status",
+                "kueue",
+                "--kube-context",
+                context,
+                "-n",
+                "kueue-system",
+            ),
+            (
+                "kubectl",
+                "--context",
+                context,
+                "get",
+                "workloads.kueue.x-k8s.io",
+                "--all-namespaces",
+                "-o",
+                "name",
+            ),
+            (
+                "kubectl",
+                "--context",
+                context,
+                "-n",
+                "default",
+                "delete",
+                "localqueue/ma-ma-dev-test",
+                "--wait",
+                "--ignore-not-found",
+                "--timeout=2m",
+            ),
+            (
+                "kubectl",
+                "--context",
+                context,
+                "delete",
+                "clusterqueue/cluster-queue",
+                "--wait",
+                "--ignore-not-found",
+                "--timeout=2m",
+            ),
+            (
+                "kubectl",
+                "--context",
+                context,
+                "delete",
+                "resourceflavor/default-flavor",
+                "--wait",
+                "--ignore-not-found",
+                "--timeout=2m",
+            ),
+            (
+                "helm",
+                "uninstall",
+                "kueue",
+                "--kube-context",
+                context,
+                "-n",
+                "kueue-system",
+                "--wait",
+            ),
+            (
+                "kubectl",
+                "--context",
+                context,
+                "get",
+                "crd",
+                "-o",
+                'jsonpath={.items[?(@.spec.group=="kueue.x-k8s.io")].metadata.name}',
+            ),
+            (
+                "kubectl",
+                "--context",
+                context,
+                "wait",
+                "--for=condition=Established",
+                "crd",
+                "-l",
+                "app.kubernetes.io/name=kueue,"
+                "app.kubernetes.io/instance=michelangelo-compute",
+                "--timeout=5m",
+            ),
+            (
+                "kubectl",
+                "--context",
+                context,
+                "-n",
+                "michelangelo-compute",
+                "wait",
+                "--for=condition=Available",
+                "deployment/michelangelo-compute-kueue-controller-manager",
+                "--timeout=5m",
+            ),
+            (
+                "helm",
+                "upgrade",
+                "--install",
+                "michelangelo-compute-queues",
+                str(sandbox._compute_queues_chart_dir),
+                "--kube-context",
+                context,
+                "-n",
+                "michelangelo-compute",
+                "-f",
+                "<file>",
+                "--wait",
+            ),
+        ]:
+            with self.subTest(command=command[:4]):
+                self.assertIn(command, commands)
+        self.assertNotIn((context, "kueue", "kueue-system"), self.releases)
+        self.assertEqual(
+            self._installed(context, "michelangelo-compute")["kueue"],
+            {"enabled": True},
+        )
+        self.assertEqual(self.slept, 10)
+
+    def test_demo_without_a_standalone_kueue_skips_the_replacement(self):
+        """No standalone release: no unmark, drain, delete or uninstall."""
+        del self.releases[(self._compute, "kueue", "kueue-system")]
+
+        self._demo()
+
+        self.assertEqual(
+            self._steps(),
+            [
+                "install michelangelo-compute",
+                "delete clusterrolebinding/ray-manager-binding",
+                "test michelangelo-compute",
+                "wait --for=condition=Established",
+                "wait --for=condition=Available",
+                "install michelangelo-compute-queues",
+                "mark SCHEDULER_TYPE_KUEUE",
+            ],
+        )
+
+    def test_demo_queues_get_the_demo_quota_and_local_queue(self):
+        """The queues chart gets 8 CPU / 16Gi and the demo project's LocalQueue."""
+        self._demo()
+
+        self.assertEqual(
+            self._installed(self._compute, "michelangelo-compute-queues"),
+            {"quota": {"cpu": 8, "memory": "16Gi"}, "localQueues": ["ma-ma-dev-test"]},
+        )
+
+    def test_demo_keeps_the_operator_toggles_of_the_release(self):
+        """An operator the sandbox was created without stays disabled."""
+        cases = {
+            (): {},
+            ("spark",): {"spark-operator": {"enabled": False}},
+            ("ray", "spark"): {
+                "kuberay-operator": {"enabled": False},
+                "spark-operator": {"enabled": False},
+            },
+        }
+        for exclude, toggles in cases.items():
+            with self.subTest(exclude=exclude):
+                self.setUp()
+                release = (
+                    self._compute,
+                    "michelangelo-compute",
+                    "michelangelo-compute",
+                )
+                self.releases[release] = dict(toggles)
+
+                self._demo()
+
+                values = self._installed(self._compute, "michelangelo-compute")
+                values.pop("runtime")
+                self.assertEqual(values, {**toggles, "kueue": {"enabled": True}})
+
+    def test_demo_enables_kueue_that_the_release_turned_off(self):
+        """The release's kueue.enabled: false becomes true; its other keys stay."""
+        release = (self._compute, "michelangelo-compute", "michelangelo-compute")
+        self.releases[release] = {
+            "kueue": {"enabled": False, "controllerManager": {"replicas": 3}}
+        }
+
+        self._demo()
+
+        self.assertEqual(
+            self._installed(self._compute, "michelangelo-compute")["kueue"],
+            {"enabled": True, "controllerManager": {"replicas": 3}},
+        )
+
+    def test_demo_on_the_sandbox_cluster_uses_control_plane_values(self):
+        """Single-cluster mode: the control plane's release gets Kueue."""
+        self.releases[(self._control_plane, "kueue", "kueue-system")] = {}
+
+        self._demo(cluster_name="michelangelo-sandbox")
+
+        values = self._installed(self._control_plane, "michelangelo-compute")
+        self.assertEqual(
+            values["runtime"]["objectStorageCredentials"],
+            {"name": "minio-credentials", "create": False},
+        )
+        self.assertEqual(values["kueue"], {"enabled": True})
+        self.assertNotIn((self._control_plane, "kueue", "kueue-system"), self.releases)
+        self.assertIn((self._compute, "kueue", "kueue-system"), self.releases)
+        # Its chart tests run in create and sync, once the apiserver is up.
+        self.assertNotIn("test michelangelo-compute", self._steps())
+        self.assertEqual(
+            [args for kind, args in self.log if kind == "cluster-cr"],
+            [
+                ("michelangelo-sandbox", ""),
+                ("michelangelo-sandbox", "SCHEDULER_TYPE_KUEUE"),
+            ],
+        )
+
+    def test_demo_calls_name_their_cluster(self):
+        """Every helm and kubectl call that reaches a cluster names it."""
+        self.workload_reads = [["workload.kueue.x-k8s.io/raycluster-demo-1a2b3"], []]
+        self.crd_reads = [["workloads.kueue.x-k8s.io"], []]
+
+        self._demo()
+
+        client_only = [("helm", "dependency"), ("helm", "show")]
+        for kind, args in self.log:
+            if kind == "cluster-cr" or args[:2] in client_only:
+                continue
+            with self.subTest(args=args):
+                flag = "--kube-context" if args[0] == "helm" else "--context"
+                # Compute clusters copy the control plane's object-storage keys.
+                if "minio-credentials" in args:
+                    self.assertEqual(self._flag(args, flag), self._control_plane)
+                else:
+                    self.assertEqual(self._flag(args, flag), self._compute)
+
+    def test_workloads_that_remain_stop_the_demo(self):
+        """Workloads left after 5 minutes stop the demo before any delete."""
+        self.workload_reads = [["workload.kueue.x-k8s.io/raycluster-demo-1a2b3"]]
+
+        message = self._demo_fails()
+
+        self.assertEqual(self.slept, 300)
+        self.assertEqual(self._steps()[-1], "list workloads")
+        for part in [
+            self._compute,
+            "5 minutes",
+            "get workloads --all-namespaces",
+            "ma sandbox demo kueue again",
+        ]:
+            self.assertIn(part, message)
+
+    def test_failed_workload_reads_stop_the_demo(self):
+        """A read that fails is not an empty list: the release stays installed."""
+        self.workloads_returncode = 1
+
+        message = self._demo_fails()
+
+        self.assertEqual(self.slept, 300)
+        self.assertNotIn("uninstall kueue", self._steps())
+        self.assertIn((self._compute, "kueue", "kueue-system"), self.releases)
+        self.assertIn("Kueue workloads remain", message)
+
+    def test_queue_object_left_after_two_minutes_stops_the_demo(self):
+        """A queue object Kueue does not release stops the demo before uninstall."""
+        self.failing = "clusterqueue/cluster-queue"
+
+        message = self._demo_fails()
+
+        self.assertEqual(self._steps()[-1], "delete clusterqueue/cluster-queue")
+        self.assertIn((self._compute, "kueue", "kueue-system"), self.releases)
+        for part in [
+            "clusterqueue/cluster-queue",
+            "2 minutes",
+            f"kubectl --context {self._compute} -n kueue-system get pods",
+            "ma sandbox demo kueue again",
+        ]:
+            self.assertIn(part, message)
+
+    def test_kueue_crds_left_after_two_minutes_stop_the_demo(self):
+        """CRDs still being deleted stop the demo before the chart installs."""
+        self.crd_reads = [["clusterqueues.kueue.x-k8s.io"]]
+
+        message = self._demo_fails()
+
+        self.assertEqual(self.slept, 120)
+        self.assertEqual(self._steps()[-1], "list kueue crds")
+        for part in [
+            self._compute,
+            "2 minutes",
+            "finalizers",
+            "ma sandbox demo kueue again",
+        ]:
+            self.assertIn(part, message)
+
+    def test_kueue_crds_not_established_stop_the_demo(self):
+        """CRDs that are not Established stop the demo before the queues chart."""
+        self.failing = "--for=condition=Established"
+
+        message = self._demo_fails()
+
+        self.assertEqual(self._steps()[-1], "wait --for=condition=Established")
+        for part in [
+            "Established",
+            "5 minutes",
+            "helm status michelangelo-compute --kube-context "
+            f"{self._compute} -n michelangelo-compute",
+            "ma sandbox demo kueue again",
+        ]:
+            self.assertIn(part, message)
+
+    def test_kueue_controller_not_available_stops_the_demo(self):
+        """An unavailable controller stops the demo before the queues chart."""
+        self.failing = "--for=condition=Available"
+
+        message = self._demo_fails()
+
+        self.assertEqual(self._steps()[-1], "wait --for=condition=Available")
+        for part in [
+            "Available",
+            "5 minutes",
+            f"kubectl --context {self._compute} -n michelangelo-compute get pods",
+            "ma sandbox demo kueue again",
+        ]:
+            self.assertIn(part, message)
+
+    def test_sync_after_demo_kueue_keeps_kueue_enabled(self):
+        """Sync keeps kueue.enabled=true and its kueue block, so the CRDs stay."""
+        for cluster, context, other in [
+            ("michelangelo-compute-0", self._compute, self._control_plane),
+            ("michelangelo-sandbox", self._control_plane, self._compute),
+        ]:
+            with self.subTest(cluster=cluster):
+                self.setUp()
+                self._demo(cluster_name=cluster)
+                release = (context, "michelangelo-compute", "michelangelo-compute")
+                self.releases[release]["kueue"]["controllerManager"] = {"replicas": 3}
+                self.installs = []
+
+                self._sync()
+
+                self.assertEqual(
+                    [install[:2] for install in self.installs],
+                    [
+                        (self._control_plane, "michelangelo-compute"),
+                        (self._compute, "michelangelo-compute"),
+                    ],
+                )
+                self.assertEqual(
+                    self._installed(context, "michelangelo-compute")["kueue"],
+                    {"enabled": True, "controllerManager": {"replicas": 3}},
+                )
+                self.assertNotIn(
+                    "kueue", self._installed(other, "michelangelo-compute")
+                )
+                queues = (
+                    context,
+                    "michelangelo-compute-queues",
+                    "michelangelo-compute",
+                )
+                self.assertIn(queues, self.releases)
+
+    def test_sync_never_turns_kueue_on(self):
+        """A kueue block that is off, or has no enabled key, stays out of sync."""
+        for kueue in [{"enabled": False}, {"controllerManager": {"replicas": 3}}]:
+            with self.subTest(kueue=kueue):
+                self.setUp()
+                release = (
+                    self._compute,
+                    "michelangelo-compute",
+                    "michelangelo-compute",
+                )
+                self.releases[release] = {"kueue": kueue}
+
+                self._sync()
+
+                for context in [self._control_plane, self._compute]:
+                    self.assertNotIn(
+                        "kueue", self._installed(context, "michelangelo-compute")
+                    )
+
+    def test_sync_without_a_compute_release_installs_chart_defaults(self):
+        """No release to read: sync installs with chart defaults and goes on."""
+        self.releases = {}
+
+        self._sync()
+
+        for context in [self._control_plane, self._compute]:
+            with self.subTest(context=context):
+                values = self._installed(context, "michelangelo-compute")
+                self.assertEqual(list(values), ["runtime"])
+        self.assertEqual(self._steps()[-1], "test michelangelo-compute")
+
+
 # The optional Secret comes first, so on a key both set the ConfigMap wins.
 _CREDENTIALS_ENV_FROM = [
     {"secretRef": {"name": sandbox._compute_credentials_secret, "optional": True}},

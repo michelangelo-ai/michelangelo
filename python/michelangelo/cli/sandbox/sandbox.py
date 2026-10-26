@@ -32,13 +32,6 @@ _michelangelo_sandbox_kube_cluster_name = "michelangelo-sandbox"
 _cadence_domain = "default"
 _default_compute_kube_cluster_name = "michelangelo-compute-0"
 
-# Kueue release installed on demo compute clusters. 0.15+ serves
-# kueue.x-k8s.io/v1beta2, matching the control plane's default apiVersion for
-# the LocalQueue existence check, and enables the RayCluster integration in
-# its default configuration.
-_kueue_version = "0.15.0"
-_kueue_demo_dir = _dir / "demo" / "kueue"
-
 # Path to the Michelangelo Helm chart (relative to this file)
 _chart_dir = Path(__file__).parent.parent.parent.parent.parent / "helm" / "michelangelo"
 
@@ -51,6 +44,12 @@ _values_k3d_path = _chart_dir / "values-k3d.yaml"
 _compute_chart_dir = _chart_dir.parent / "michelangelo-compute"
 _compute_release = "michelangelo-compute"
 _compute_namespace = "michelangelo-compute"
+
+# Path to the michelangelo-compute-queues Helm chart: the Kueue queue objects of
+# a cluster whose michelangelo-compute release runs Kueue. Its release lives in
+# the same namespace.
+_compute_queues_chart_dir = _chart_dir.parent / "michelangelo-compute-queues"
+_compute_queues_release = "michelangelo-compute-queues"
 
 # Object-storage Secret the chart's runtime contract names on every cluster.
 # _ensure_credentials_secret creates it on the control plane; the chart renders
@@ -96,6 +95,41 @@ _compute_adopted_resources = [
     "clusterrole/ray-manager-clusterqueues",
     "clusterrolebinding/ray-manager-clusterqueues",
 ]
+
+# The standalone Kueue release, as (release, namespace), that `ma sandbox demo
+# kueue` of earlier sandboxes installed. Only the demo replaces it, after
+# draining the cluster: Kueue's CRDs are templates, so uninstalling the release
+# deletes every Kueue object.
+_standalone_kueue_release = ("kueue", "kueue-system")
+
+# The demo's queue objects, as (resource, namespace or None if cluster-scoped).
+# Earlier sandboxes applied them by hand under the names the queues chart
+# renders by default.
+_kueue_demo_queue_objects = [
+    ("localqueue/ma-ma-dev-test", "default"),
+    ("clusterqueue/cluster-queue", None),
+    ("resourceflavor/default-flavor", None),
+]
+
+# michelangelo-compute-queues values of the demo: its quota, and the LocalQueue
+# of the demo project, ma-{project} for its namespace ma-dev-test.
+_kueue_demo_queues_values = {
+    "quota": {"cpu": 8, "memory": "16Gi"},
+    "localQueues": ["ma-ma-dev-test"],
+}
+
+# Kueue's controller, which the kueue subchart names after the release, and
+# the labels of the CRDs the subchart renders.
+_kueue_controller_deployment = f"{_compute_release}-kueue-controller-manager"
+_kueue_crd_selector = (
+    f"app.kubernetes.io/name=kueue,app.kubernetes.io/instance={_compute_release}"
+)
+
+# kubectl get crd output format that prints the names of Kueue's CRDs,
+# whichever release installed them.
+_kueue_crds_jsonpath = (
+    'jsonpath={.items[?(@.spec.group=="kueue.x-k8s.io")].metadata.name}'
+)
 
 # Targets of _compute_values. A compute cluster reaches the control plane's
 # object store and apiserver through NodePorts on the control plane's agent node.
@@ -2153,6 +2187,35 @@ def _helm_release_exists(context: str, release: str, namespace: str) -> bool:
     return result.returncode == 0
 
 
+def _deployed_compute_values(context: str) -> dict:
+    """Return the values the michelangelo-compute release was installed with.
+
+    Returns:
+        The values passed to its last install or upgrade, without the chart
+        defaults, or {} if the release is not installed.
+    """
+    result = subprocess.run(
+        [
+            "helm",
+            "get",
+            "values",
+            _compute_release,
+            "--kube-context",
+            context,
+            "-n",
+            _compute_namespace,
+            "-o",
+            "json",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return {}  # not installed yet: the chart defaults apply
+    # A release installed without values prints null.
+    return json.loads(result.stdout) or {}
+
+
 def _unowned_compute_object(context: str, resource: str) -> Optional[dict]:
     """Return a resource that the michelangelo-compute release does not own.
 
@@ -2256,13 +2319,19 @@ def _migrate_to_compute_chart(context: str, exclude: list[str]) -> Optional[dict
     }
 
 
-def _install_compute_chart(context: str, target: str, exclude: list[str]):
+def _install_compute_chart(
+    context: str, target: str, exclude: list[str], kueue: bool = False
+):
     """Install or upgrade the michelangelo-compute chart on a cluster.
 
     What earlier sandboxes installed by hand is migrated to the chart first.
     The chart tests check the runtime contract's endpoints, so a compute
     cluster is tested right after install, while the control plane is tested
     by the caller once its apiserver is up.
+
+    kueue enables Kueue. A release that runs Kueue keeps it, together with its
+    kueue values: the release renders Kueue's CRDs, so disabling Kueue would
+    delete every queue and workload.
     """
     _check_kube_version(context)
     _build_compute_chart()
@@ -2272,6 +2341,9 @@ def _install_compute_chart(context: str, target: str, exclude: list[str]):
     if legacy_config is not None:
         # The keys the sandbox sets win over the hand-built ones.
         values["runtime"]["config"] = {**legacy_config, **values["runtime"]["config"]}
+    deployed_kueue = _deployed_compute_values(context).get("kueue") or {}
+    if kueue or deployed_kueue.get("enabled") is True:
+        values["kueue"] = {**deployed_kueue, "enabled": True}
     # mkstemp creates the file readable by its owner only: it can hold the
     # object-storage keys. It is removed when the block exits.
     with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as values_file:
@@ -3249,51 +3321,49 @@ def _setup_istio_with_gateway_api(context: Optional[str] = None):
 def _create_kueue_demo_crs(ns: argparse.Namespace):
     """Turn a registered compute cluster into a Kueue-managed one.
 
-    Installs Kueue on the target cluster (its default configuration already
-    enables the RayCluster integration), creates a demo ClusterQueue plus the
-    demo project's LocalQueue, and re-applies the cluster's Cluster CR with
-    scheduler_type: SCHEDULER_TYPE_KUEUE so the control plane labels
-    dispatched RayClusters with their LocalQueue.
+    Enables Kueue in the cluster's michelangelo-compute release, creates the
+    demo ClusterQueue and the demo project's LocalQueue with the
+    michelangelo-compute-queues chart, and re-applies the cluster's Cluster CR
+    with scheduler_type: SCHEDULER_TYPE_KUEUE so the control plane labels
+    dispatched RayClusters with their LocalQueue. The standalone Kueue that
+    earlier sandboxes installed is replaced first.
     """
     cluster_name = ns.compute_cluster_name
     context = f"k3d-{cluster_name}"
+    # Without a dedicated compute cluster the control plane registers itself.
+    if cluster_name == _michelangelo_sandbox_kube_cluster_name:
+        target = _compute_target_control_plane
+    else:
+        target = _compute_target_compute_cluster
 
-    print(f"\n📦 Installing Kueue {_kueue_version} on {cluster_name}...")
-    _exec(
-        "helm",
-        "upgrade",
-        "--install",
-        "kueue",
-        "oci://registry.k8s.io/kueue/charts/kueue",
-        "--kube-context",
-        context,
-        "--version",
-        _kueue_version,
-        "--namespace",
-        "kueue-system",
-        "--create-namespace",
-        "--wait",
-        "--timeout",
-        "5m",
-    )
+    release, namespace = _standalone_kueue_release
+    if _helm_release_exists(context, release, namespace):
+        _replace_standalone_kueue(cluster_name)
+
+    # An operator the sandbox was created without stays disabled.
+    deployed = _deployed_compute_values(context)
+    exclude = [
+        svc
+        for svc, (subchart, _) in _compute_operators.items()
+        if (deployed.get(subchart) or {}).get("enabled") is False
+    ]
+    print(f"\n📦 Enabling Kueue in the {_compute_release} release on {cluster_name}...")
+    _install_compute_chart(context, target, exclude, kueue=True)
+    _wait_for_kueue(context)
 
     # Demo quota: one ClusterQueue for the cluster, one LocalQueue for the
     # demo project, in the namespace where dispatched RayClusters land.
-    _exec(
-        "kubectl",
-        "--context",
-        context,
-        "apply",
-        "-f",
-        str(_kueue_demo_dir / "queues.yaml"),
-    )
+    _install_compute_queues_chart(context, _kueue_demo_queues_values)
 
     # Mark the Cluster CR as Kueue-managed.
     _create_compute_cluster_crd(cluster_name, scheduler_type="SCHEDULER_TYPE_KUEUE")
 
     print("\n✅ Kueue demo setup complete!")
-    print(f"  • Kueue {_kueue_version} installed on {cluster_name}")
-    print("  • ClusterQueue 'cluster-queue' and LocalQueue 'ma-ma-dev-test' created")
+    print(f"  • Kueue enabled in the {_compute_release} release on {cluster_name}")
+    print(
+        "  • ClusterQueue 'cluster-queue' (8 CPU, 16Gi) and LocalQueue "
+        f"'ma-ma-dev-test' created by the {_compute_queues_release} release"
+    )
     print(
         f"  • Cluster CR '{cluster_name}' marked scheduler_type: SCHEDULER_TYPE_KUEUE"
     )
@@ -3301,6 +3371,164 @@ def _create_kueue_demo_crs(ns: argparse.Namespace):
     print("Enable the backend on the control plane (the controllermgr restarts")
     print("automatically on the config change):")
     print("  ma sandbox sync --set controllermgr.jobs.scheduler.backend=kueue")
+
+
+def _replace_standalone_kueue(cluster_name: str):
+    """Drain and uninstall the standalone Kueue release of an earlier sandbox.
+
+    Uninstalling it deletes Kueue's CRDs, and with them every Kueue object. An
+    object whose Kueue finalizer is still set once the controller is gone
+    would keep its CRD from being deleted, so the cluster is drained and the
+    demo queue objects are deleted while the controller still runs. The queues
+    chart recreates them.
+    """
+    context = f"k3d-{cluster_name}"
+    release, namespace = _standalone_kueue_release
+    print(f"\n♻️  Replacing the standalone Kueue release on {cluster_name}...")
+    # Unmarked, the cluster gets no new workloads.
+    _create_compute_cluster_crd(cluster_name)
+    print(f"Waiting until no Kueue workloads remain on {context}...")
+    if not _wait_until_empty(
+        context, ["workloads.kueue.x-k8s.io", "--all-namespaces", "-o", "name"], 300
+    ):
+        _err_exit(
+            f"Kueue workloads remain on {context} after 5 minutes. Let their jobs "
+            f"finish or delete their RayClusters (kubectl --context {context} get "
+            "workloads --all-namespaces lists them), then run ma sandbox demo "
+            "kueue again."
+        )
+    for resource, resource_namespace in _kueue_demo_queue_objects:
+        scope = ["-n", resource_namespace] if resource_namespace else []
+        try:
+            _exec(
+                "kubectl",
+                "--context",
+                context,
+                *scope,
+                "delete",
+                resource,
+                "--wait",
+                "--ignore-not-found",
+                "--timeout=2m",
+                raise_error=True,
+            )
+        except subprocess.CalledProcessError:
+            _err_exit(
+                f"{resource} on {context} was not deleted within 2 minutes. Kueue "
+                "removes its finalizer once no workload uses it, so check that its "
+                f"controller runs: kubectl --context {context} -n {namespace} get "
+                "pods. Then run ma sandbox demo kueue again."
+            )
+    _exec(
+        "helm",
+        "uninstall",
+        release,
+        "--kube-context",
+        context,
+        "-n",
+        namespace,
+        "--wait",
+    )
+    # A CRD is deleted only once every object of its kind is gone.
+    if not _wait_until_empty(context, ["crd", "-o", _kueue_crds_jsonpath], 120):
+        _err_exit(
+            f"Kueue's CRDs on {context} are still being deleted after 2 minutes: "
+            "objects with a Kueue finalizer hold them. Remove the finalizers of "
+            f"what kubectl --context {context} get clusterqueues,resourceflavors,"
+            "localqueues,workloads --all-namespaces lists, then run ma sandbox "
+            "demo kueue again."
+        )
+
+
+def _wait_until_empty(context: str, get_args: list[str], timeout_seconds: int) -> bool:
+    """Poll a kubectl get on the cluster until it prints nothing.
+
+    Returns:
+        Whether it printed nothing within the timeout. A failed read does not
+        count as empty.
+    """
+    for _ in range(timeout_seconds // 5):
+        result = subprocess.run(
+            ["kubectl", "--context", context, "get", *get_args],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0 and not result.stdout.strip():
+            return True
+        time.sleep(5)
+    return False
+
+
+def _wait_for_kueue(context: str):
+    """Wait until Kueue on the cluster serves its API and its webhooks.
+
+    Kueue's ClusterQueue and ResourceFlavor webhooks fail closed, so queue
+    objects are rejected until its controller is Available.
+    """
+    try:
+        _exec(
+            "kubectl",
+            "--context",
+            context,
+            "wait",
+            "--for=condition=Established",
+            "crd",
+            "-l",
+            _kueue_crd_selector,
+            "--timeout=5m",
+            raise_error=True,
+        )
+    except subprocess.CalledProcessError:
+        _err_exit(
+            f"Kueue's CRDs on {context} are not Established after 5 minutes. "
+            f"Check the release: helm status {_compute_release} --kube-context "
+            f"{context} -n {_compute_namespace}. Then run ma sandbox demo kueue "
+            "again."
+        )
+    try:
+        _exec(
+            "kubectl",
+            "--context",
+            context,
+            "-n",
+            _compute_namespace,
+            "wait",
+            "--for=condition=Available",
+            f"deployment/{_kueue_controller_deployment}",
+            "--timeout=5m",
+            raise_error=True,
+        )
+    except subprocess.CalledProcessError:
+        _err_exit(
+            f"Kueue's controller on {context} is not Available after 5 minutes. "
+            f"Check its pods: kubectl --context {context} -n {_compute_namespace} "
+            "get pods -l app.kubernetes.io/name=kueue. Then run ma sandbox demo "
+            "kueue again."
+        )
+
+
+def _install_compute_queues_chart(context: str, values: dict):
+    """Install or upgrade the michelangelo-compute-queues chart on a cluster.
+
+    Kueue's controller must be Available first: its webhooks fail closed.
+    """
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as values_file:
+        yaml.safe_dump(values, values_file)
+        values_file.flush()
+        _exec(
+            "helm",
+            "upgrade",
+            "--install",
+            _compute_queues_release,
+            str(_compute_queues_chart_dir),
+            "--kube-context",
+            context,
+            "-n",
+            _compute_namespace,
+            "-f",
+            values_file.name,
+            "--wait",
+        )
 
 
 def _create_pipeline_demo_crs():
