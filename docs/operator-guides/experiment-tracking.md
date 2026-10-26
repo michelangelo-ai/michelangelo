@@ -98,7 +98,7 @@ spec:
 
 Michelangelo AI injects environment variables into every task pod (Ray head, Ray workers, Spark drivers, and Spark executors) via the `michelangelo-config` ConfigMap. This ConfigMap is mounted as an `envFrom` source, so every key in it becomes an environment variable in the pod.
 
-You created this ConfigMap when you [registered the compute cluster](setup/register-a-compute-cluster-to-michelangelo-control-plane.md). Add the tracking server URI as a new key:
+The `michelangelo-compute` chart renders this ConfigMap from `runtime.config` when you [install it on the compute cluster](setup/install-compute-cluster-charts.md#runtime-config). Add the tracking server URI as a new key:
 
 ```bash
 kubectl patch configmap michelangelo-config \
@@ -107,23 +107,17 @@ kubectl patch configmap michelangelo-config \
   -p '{"data":{"TRACKING_URI":"http://tracking.internal:5000"}}'
 ```
 
-Or, if you manage the ConfigMap declaratively, add the key to your existing manifest:
+Or, to keep the chart's values the source of truth, add the key to `runtime.config` in your values file and re-run `helm upgrade`:
 
 ```yaml
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: michelangelo-config
-  namespace: <compute-namespace>
-data:
-  # Existing keys — replace these with your environment-specific values
-  MA_FILE_SYSTEM: s3://default
-  MA_FILE_SYSTEM_S3_SCHEME: http
-  AWS_ACCESS_KEY_ID: <your-access-key-id>
-  AWS_SECRET_ACCESS_KEY: <your-secret-access-key>
-  AWS_ENDPOINT_URL: <your-storage-endpoint>
-  # Add your tracking URI
-  TRACKING_URI: "http://tracking.internal:5000"
+runtime:
+  config:
+    # Existing keys — replace these with your environment-specific values
+    MA_FILE_SYSTEM: s3://default
+    AWS_ENDPOINT_URL: <your-storage-endpoint>
+    REGISTRY_ENDPOINT: <your-registry-endpoint>
+    # Add your tracking URI
+    TRACKING_URI: "http://tracking.internal:5000"
 ```
 
 New task pods will pick up the updated ConfigMap automatically — no worker restart is needed. Already-running pods will not see the change until they are replaced.
@@ -141,7 +135,7 @@ kubectl patch configmap michelangelo-config \
   -p '{"data":{"TRACKING_URI":"http://tracking.internal:5000","TRACKING_API_KEY":"<your-api-key>"}}'
 ```
 
-Note that `michelangelo-config` is a ConfigMap, not a Secret — values are stored in plaintext. This is the same ConfigMap that holds AWS credentials for storage access. If your security requirements demand encrypted-at-rest credential storage, consider using [workload identity](https://kubernetes.io/docs/concepts/security/service-accounts/) (e.g., IRSA on AWS, Workload Identity on GKE) so that task pods authenticate to the tracking server via IAM roles rather than static keys.
+Note that `michelangelo-config` is a ConfigMap, not a Secret — values are stored in plaintext. To keep the key out of it, put `TRACKING_API_KEY` in the object-storage credentials Secret named by controllermgr's `logPersistence.credentialsSecret` instead: controllermgr mounts that Secret into the same task containers as an `envFrom` source, ahead of the ConfigMap, so on a key in both the ConfigMap wins. If your security requirements demand encrypted-at-rest credential storage, consider using [workload identity](https://kubernetes.io/docs/concepts/security/service-accounts/) (e.g., IRSA on AWS, Workload Identity on GKE) so that task pods authenticate to the tracking server via IAM roles rather than static keys.
 
 **Never hardcode credentials in task code.**
 

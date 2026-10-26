@@ -64,7 +64,7 @@ kubectl -n <release-namespace> run connectivity-test --rm -it --restart=Never \
 
 ## Ray pods not starting on the compute cluster
 
-**Symptoms**: A RayCluster or RayJob resource is created on the compute cluster, but head or worker pods remain Pending or enter CrashLoopBackOff.
+**Symptoms**: A RayCluster or RayJob resource is created on the compute cluster, but head or worker pods remain Pending, enter CrashLoopBackOff, or report CreateContainerConfigError.
 
 **Diagnostics**:
 ```bash
@@ -78,12 +78,20 @@ kubectl --context <compute-context> get pods -l ray.io/cluster=<cluster-name>
 # Check head pod logs
 kubectl --context <compute-context> logs <head-pod-name>
 
-# Verify storage config is present on the compute cluster
-kubectl --context <compute-context> get configmap michelangelo-config
-kubectl --context <compute-context> get secret aws-credentials
+# Check the runtime contract: the credentials Secret and both endpoints, from namespace default
+helm test michelangelo-compute --kube-context <compute-context> --namespace michelangelo-compute
+
+# If it fails, read the failed checks; the test pod stays in default until the next run
+kubectl --context <compute-context> -n default logs michelangelo-compute-test-runtime-contract
+
+# Verify the runtime objects are present on the compute cluster
+kubectl --context <compute-context> -n default get configmap michelangelo-config
+kubectl --context <compute-context> -n default get secret <credentials-secret>  # controllermgr's logPersistence.credentialsSecret
 ```
 
 **Likely causes**:
+- The object-storage credentials Secret named by controllermgr's `logPersistence.credentialsSecret` is missing from `default` — the Ray log collector sidecar reads its keys directly, so the pod reports CreateContainerConfigError and `kubectl describe pod` names the Secret; task containers start without it but get no object-storage credentials (see [Object-storage credentials](../setup/install-compute-cluster-charts.md#object-storage-credentials))
+- The `helm test` pod's log reports `FAIL:` for `AWS_ENDPOINT_URL` or `REGISTRY_ENDPOINT` — the value in `runtime.config` is wrong, or the endpoint is unreachable from `default` (see [Required Connectivity](../setup/network.md#required-connectivity))
 - The `michelangelo-config` ConfigMap is missing or has the wrong `AWS_ENDPOINT_URL`
 - The container image cannot be pulled (wrong registry, missing imagePullSecret)
 - Insufficient CPU or memory quota on the compute cluster — check `kubectl --context <compute-context> describe nodes`

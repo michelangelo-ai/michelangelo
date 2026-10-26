@@ -39,6 +39,8 @@ Before you begin, make sure you have the following installed. Install commands b
 | **Poetry** | `curl -sSL https://install.python-poetry.org \| python3 -` | same as macOS | `poetry --version` |
 | **temporal** *(Temporal only)* | `brew install temporal` | [official guide](https://docs.temporal.io/cli#install) | `temporal --version` |
 
+> **Kubernetes version note:** the sandbox installs the KubeRay and Spark operators with the `michelangelo-compute` chart, which requires Kubernetes 1.29 or later. `k3d --version` prints the k3s version k3d uses by default; it must be 1.29 or later.
+
 > **Python version note:** Python 3.11 or 3.12 is strongly recommended. Python 3.13+ may fail during `poetry install` because pre-built wheels for some ML dependencies are not yet available for newer interpreter versions.
 
 > **Docker daemon note:** `docker info` (the verify command above) requires the Docker daemon to be running — unlike `docker --version`, which only checks the binary. If `docker info` fails, start Docker Desktop or Colima before continuing.
@@ -119,7 +121,7 @@ ma sandbox demo pipeline
 
 > **Note on image pull times:** During `ma sandbox create`, several pods will sit in `ContainerCreating` for several minutes while images are pulled (some images are 500–800 MB). This is normal. The relevant question is whether pods are making progress — check with `kubectl get pods -w` and look for status transitions. Only act if a pod stays in `ImagePullBackOff` or `CrashLoopBackOff` for more than a few minutes.
 
-> **Note on KubeRay images:** All Ray components come from public registries and are pulled automatically — the operator from the `kuberay-operator` Helm chart `1.7.1`, and the History Server and Ray log `collector` sidecar from the official `quay.io/kuberay/historyserver:v1.7.1` and `quay.io/kuberay/collector:v1.7.1` images. There is no local build step for any of them.
+> **Note on KubeRay images:** All Ray components come from public registries and are pulled automatically — the operator from the `michelangelo-compute` chart, which pins the `kuberay-operator` chart at `1.7.1` (and the Spark Operator at `2.5.2`), and the History Server and Ray log `collector` sidecar from the official `quay.io/kuberay/historyserver:v1.7.1` and `quay.io/kuberay/collector:v1.7.1` images. There is no local build step for any of them.
 
 ### Choosing a workflow engine
 
@@ -227,7 +229,7 @@ ma sandbox demo inference   # sets up demo inference server
 
 ## Recovering from a failed create
 
-If `ma sandbox create` fails partway through — for example, with a Helm timeout on `kuberay-operator` or `spark-operator` — the k3d cluster may already exist even though not all services deployed successfully.
+If `ma sandbox create` fails partway through — for example, with a Helm timeout on the `michelangelo-compute` chart, which installs the KubeRay and Spark operators — the k3d cluster may already exist even though not all services deployed successfully.
 
 Running `ma sandbox create` again will fail with `Failed to create cluster ... because a cluster with that name already exists`.
 
@@ -329,7 +331,7 @@ The Ray `collector` sidecar pulls `quay.io/kuberay/collector:v1.7.1` from the sa
 
 ### `Progress deadline exceeded` from operator installs
 
-During `ma sandbox create`, Helm deploys operators (kuberay, spark) with a timeout. On slow connections or underpowered machines, the timeout can fire before the operator pod finishes pulling its image — even though the deployment will succeed on its own a few minutes later.
+During `ma sandbox create`, Helm deploys the operators (KubeRay and Spark, through the `michelangelo-compute` chart) with a timeout. On slow connections or underpowered machines, the timeout can fire before the operator pod finishes pulling its image — even though the deployment will succeed on its own a few minutes later.
 
 This is a **first-run phenomenon** caused by large image pulls racing against Helm's deadline. On subsequent `create` or `sync` runs with cached images, operator deployments complete well within the timeout.
 

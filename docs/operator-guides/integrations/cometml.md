@@ -54,14 +54,14 @@ poetry run python pipeline.py remote-run --image <img> --storage-url <url> \
   --environ COMET_URL_OVERRIDE=https://comet.internal/clientlib/   # self-hosted only
 ```
 
-**Cluster-wide default (operator)** — task pods read environment variables only from the `michelangelo-config` ConfigMap (mounted via `envFrom`); a separate Secret is not mounted into task pods automatically. Add the Comet settings to that ConfigMap:
+**Cluster-wide default (operator)** — task pods read environment variables from the `michelangelo-config` ConfigMap and from the object-storage credentials Secret named by controllermgr's `logPersistence.credentialsSecret`, both mounted via `envFrom`; on a key in both, the ConfigMap wins. Other Secrets are not mounted into task pods automatically. Add the Comet settings to that ConfigMap (on a cluster installed with the `michelangelo-compute` chart, put them in `runtime.config` instead, as the chart renders the ConfigMap from it):
 
 ```bash
 kubectl patch configmap michelangelo-config -n <compute-namespace> --type merge \
   -p '{"data":{"COMET_API_KEY":"<key>","COMET_WORKSPACE":"<workspace>","COMET_URL_OVERRIDE":"https://comet.internal/clientlib/"}}'
 ```
 
-ConfigMap values are stored in plaintext (the same ConfigMap holds the storage credentials). If that is not acceptable, pass the key per run with `--environ` instead, or use workload identity where your Comet deployment supports it. See the [Experiment Tracking operator guide](../experiment-tracking.md#step-3-handle-credentials-if-required) for details.
+ConfigMap values are stored in plaintext. If that is not acceptable, put `COMET_API_KEY` in the credentials Secret instead, which reaches the same task containers, pass the key per run with `--environ`, or use workload identity where your Comet deployment supports it. See the [Experiment Tracking operator guide](../experiment-tracking.md#step-3-handle-credentials-if-required) for details.
 
 `pipeline.yaml` (the deploy manifest used with `ma pipeline apply`/`run`) holds no Comet config of its own — credentials come from the environment as above, and the task image it references must include `comet_ml` plus your framework's extras.
 

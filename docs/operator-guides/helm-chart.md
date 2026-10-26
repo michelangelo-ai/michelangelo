@@ -124,7 +124,7 @@ Instead of passing credentials through `--set`, point the chart at Secrets you m
 metadataStorage:
   existingSecret: my-mysql-secret    # must contain key: rootPassword
 objectStorage:
-  existingSecret: my-s3-secret       # must contain keys: accessKeyId, secretAccessKey
+  existingSecret: my-s3-secret       # must contain keys: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
 ```
 
 ### Enable monitoring resources
@@ -302,7 +302,7 @@ Most commonly set values. See `helm/michelangelo/values.yaml` for the complete l
 | `objectStorage.endpoint` | yes | — | S3-compatible endpoint |
 | `objectStorage.accessKeyId` | yes¹ | — | S3 access key ID |
 | `objectStorage.secretAccessKey` | yes¹ | — | S3 secret access key |
-| `objectStorage.existingSecret` | no | — | Secret containing `accessKeyId`/`secretAccessKey` |
+| `objectStorage.existingSecret` | no | — | Secret containing `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` |
 | `workflow.engine` | no | `cadence` | `cadence` or `temporal` |
 | `workflow.endpoint` | yes | — | `host:port` of workflow frontend |
 | `apiserver.tls.enabled` | no | `false` | Enable TLS on the apiserver gRPC port |
@@ -328,6 +328,8 @@ The `michelangelo` chart owns the **control plane only**. Three tiers, with clea
   - `michelangelo-worker` — Cadence/Temporal workflow client
   - `michelangelo-controllermgr` — Kubernetes controller manager
 - **Observability tier** — optional. Bring your own Prometheus and Grafana; if you run the Prometheus Operator and/or Grafana Operator, `monitoring.enabled=true` installs a ServiceMonitor, starter alert rules, and two dashboards (see [Monitoring & Observability](operations/monitoring.md)).
+
+Compute clusters get their operators, the `ray-manager` identity and the runtime objects from the separate `michelangelo-compute` chart; see [Install the Compute Cluster Chart](setup/install-compute-cluster-charts.md). Its runtime contract expects, in each compute cluster's `default` namespace, the object-storage credentials Secret named by `controllermgr.jobs.k8sengine.mapper.logPersistence.credentialsSecret`.
 
 ### Chart layout
 
@@ -405,5 +407,6 @@ When enabled via `controllermgr.jobs.k8sengine.mapper.logPersistence`, controlle
 - [Platform Setup](setup/platform-setup.md) — configure the components installed by this chart through their ConfigMaps
 - [Network & Ingress](setup/network.md) — TLS and multi-cluster connectivity
 - [Authentication](setup/authentication.md) — connect an identity provider and configure RBAC
+- [Install the Compute Cluster Chart](setup/install-compute-cluster-charts.md) — set up a compute cluster with the `michelangelo-compute` chart
 - [Register a Compute Cluster](setup/register-a-compute-cluster-to-michelangelo-control-plane.md) — connect a cluster for Ray and Spark job dispatch
 - [Monitoring & Observability](operations/monitoring.md) — scrape metrics and configure dashboards
