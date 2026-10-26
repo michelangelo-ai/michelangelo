@@ -17,6 +17,16 @@ import (
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
+const (
+	// ClientCertTagAnnotation names the Secret holding the PEM client certificate, under
+	// tls.crt, that the Provider presents to a cluster requiring mTLS. Set it together with
+	// ClientKeyTagAnnotation on the Cluster; the token tag then becomes optional.
+	ClientCertTagAnnotation = "michelangelo/client-cert-tag"
+	// ClientKeyTagAnnotation names the Secret holding the client certificate's PEM private
+	// key, under tls.key.
+	ClientKeyTagAnnotation = "michelangelo/client-key-tag"
+)
+
 // SecretProvider defines the interface for secret management
 type SecretProvider interface {
 	GetClusterClientAuth(ctx context.Context, cluster *v2pb.Cluster) (ClientAuth, error)
@@ -110,6 +120,15 @@ func (p Provider) retrieveSecretData(ctx context.Context, secretName, dataKey st
 	return string(secret.Data[dataKey]), nil
 }
 
+// retrieveRequiredSecretData is retrieveSecretData for data that must not be empty.
+func (p Provider) retrieveRequiredSecretData(ctx context.Context, secretName, dataKey string) (string, error) {
+	data, err := p.retrieveSecretData(ctx, secretName, dataKey)
+	if err == nil && data == "" {
+		err = fmt.Errorf("secret %s has no %s", secretName, dataKey)
+	}
+	return data, err
+}
+
 // GetClusterClientAuth retrieves the client authentication data for a given cluster
 func (p Provider) GetClusterClientAuth(ctx context.Context, cluster *v2pb.Cluster) (ClientAuth, error) {
 	var kubeClusterSpec *v2pb.KubernetesSpec
@@ -121,21 +140,38 @@ func (p Provider) GetClusterClientAuth(ctx context.Context, cluster *v2pb.Cluste
 		return ClientAuth{}, fmt.Errorf("cluster type %s not supported", cluster.Spec.GetCluster())
 	}
 
+	certTag := cluster.GetAnnotations()[ClientCertTagAnnotation]
+	keyTag := cluster.GetAnnotations()[ClientKeyTagAnnotation]
+	if (certTag == "") != (keyTag == "") {
+		return ClientAuth{}, fmt.Errorf("cluster %s/%s must set both %s and %s, or neither",
+			cluster.Namespace, cluster.Name, ClientCertTagAnnotation, ClientKeyTagAnnotation)
+	}
+
 	// Get the certificate authority data secret
 	caDataDecoded, err := p.retrieveSecretData(ctx, kubeClusterSpec.Rest.CaDataTag, "cadata")
 	if err != nil {
 		return ClientAuth{}, err
 	}
-
-	// Get the Token secret
-	clientTokenDecoded, err := p.retrieveSecretData(ctx, kubeClusterSpec.Rest.TokenTag, "token")
-	if err != nil {
-		return ClientAuth{}, err
-	}
-
 	clientAuth := ClientAuth{
 		CertificateAuthorityData: caDataDecoded,
-		ClientTokenData:          clientTokenDecoded,
+	}
+
+	// Get the client certificate and key secrets
+	if certTag != "" {
+		if clientAuth.ClientCertificateData, err = p.retrieveRequiredSecretData(ctx, certTag, "tls.crt"); err != nil {
+			return ClientAuth{}, err
+		}
+		if clientAuth.ClientKeyData, err = p.retrieveRequiredSecretData(ctx, keyTag, "tls.key"); err != nil {
+			return ClientAuth{}, err
+		}
+	}
+
+	// Get the Token secret. A client certificate authenticates on its own, so with one
+	// the token is read only when the cluster names it.
+	if certTag == "" || kubeClusterSpec.Rest.TokenTag != "" {
+		if clientAuth.ClientTokenData, err = p.retrieveSecretData(ctx, kubeClusterSpec.Rest.TokenTag, "token"); err != nil {
+			return ClientAuth{}, err
+		}
 	}
 	return clientAuth, nil
 }
