@@ -297,44 +297,86 @@ func NewAssignmentStrategy(config Config, cache cluster.RegisteredClustersCache)
 
 ### Option 2: Custom JobQueue Implementation
 
-**Best for:** Delegating admission to an external system.
+**Best for:** Replacing the entire scheduling backend with an external system.
 
-**Shipped example: the Kueue backend.** `go/components/jobs/scheduler/kueue` implements `JobQueue` for [Kueue](https://kueue.sigs.k8s.io/)-managed compute clusters and is selected with `jobs.scheduler.backend: kueue` -- see the [Kueue Scheduler Backend](kueue-scheduler-backend.md) guide for operating it.
+**Examples:**
+- Kueue integration (quota-aware scheduling)
+- Volcano integration (gang scheduling, fair-share)
+- Custom external scheduler
 
-Its design is instructive for any external-admission backend: it does **not** replace the default scheduler or hand-craft admission objects (an earlier sketch of this page created Kueue `Workload`s from the control plane -- Kueue's own integrations do that better). Instead it wraps the default scheduler:
+**Steps:**
+
+1. **Implement the JobQueue interface:**
 
 ```go
-// KueueJobQueue validates a job's Kueue placement, then delegates.
-func (q *KueueJobQueue) Enqueue(ctx context.Context, job matypes.SchedulableJob) error {
-    // 1. Predict the target cluster (existing assignment, else the same
-    //    AssignmentStrategy the default scheduler uses).
-    // 2. If the target is not Kueue-managed, pass through unchanged.
-    // 3. Resolve the job's project to a LocalQueue and verify it exists on
-    //    the target; fail visibly (Enqueued=False) if not.
-    // 4. Hand the job to the default scheduler. The k8s engine labels the
-    //    dispatched object with kueue.x-k8s.io/queue-name, and Kueue's own
-    //    RayCluster integration suspends and gang-admits it on the
-    //    compute cluster.
+package kueue
+
+import (
+    "context"
+    matypes "github.com/michelangelo-ai/michelangelo/go/components/jobs/common/types"
+    "github.com/michelangelo-ai/michelangelo/go/components/jobs/scheduler"
+)
+
+type KueueScheduler struct {
+    kueueClient   kueueclient.Interface
+    flavorMapping FlavorMapping
+    // ... other dependencies
+}
+
+var _ scheduler.JobQueue = (*KueueScheduler)(nil)
+
+func (s *KueueScheduler) Enqueue(ctx context.Context, job matypes.SchedulableJob) error {
+    // Convert job to Kueue Workload
+    workload := s.convertToWorkload(job)
+
+    // Create Workload in Kueue
+    _, err := s.kueueClient.KueueV1beta1().Workloads(job.GetNamespace()).Create(
+        ctx, workload, metav1.CreateOptions{},
+    )
+    if err != nil {
+        return fmt.Errorf("failed to create workload: %w", err)
+    }
+
+    // Kueue handles admission - watch for admission status separately
+    return nil
+}
+
+// Additional methods for watching admission, updating job status, etc.
+func (s *KueueScheduler) watchAdmissions(ctx context.Context) {
+    // Watch Workload admission status
+    // Map ResourceFlavor back to cluster name
+    // Update job's AssignmentInfo
 }
 ```
 
-**Wiring:** the scheduler module provides the concrete `*Scheduler` plus a factory that switches on config -- add your backend as a new case:
+2. **Wire via FX with factory:**
 
 ```go
-// scheduler/module.go
-func provide(in ProvideIn) (JobQueue, error) {
-    switch in.Config.Backend {
-    case "", _backendDefault:
-        return in.Scheduler, nil
-    case _backendKueue:
-        // wrap in.Scheduler in the Kueue-validating queue
+// scheduler/factory.go
+func NewJobQueue(config SchedulerConfig, deps Dependencies) (JobQueue, error) {
+    switch config.Type {
+    case "kueue":
+        return kueue.NewKueueScheduler(deps.KueueClient, deps.FlavorMapping)
+    case "volcano":
+        return volcano.NewVolcanoScheduler(deps.VolcanoClient)
     default:
-        return nil, fmt.Errorf("unrecognized jobs.scheduler.backend %q", in.Config.Backend)
+        return NewScheduler(deps.Params)  // Default implementation
     }
 }
 ```
 
-A fully replacing backend (e.g. a Volcano integration that owns queueing end to end) plugs into the same switch; implementing `Enqueue` and updating the job's conditions/`AssignmentInfo` is the whole contract. Prefer the wrapping shape where the external system runs on the compute clusters, and a replacing shape only when it runs centrally.
+```go
+// scheduler/module.go
+var Module = fx.Options(
+    fx.Provide(
+        fx.Annotate(
+            NewJobQueue,
+            fx.As(new(JobQueue)),
+        ),
+    ),
+    // ... other providers
+)
+```
 
 ### Option 3: Custom Queue Implementation
 

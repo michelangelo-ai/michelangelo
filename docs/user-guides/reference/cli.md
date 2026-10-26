@@ -543,7 +543,6 @@ The `ma sandbox` commands manage a local K3d development environment. For prereq
 | `ma sandbox demo pipeline` | Create demo pipeline resources |
 | `ma sandbox demo inference` | Create demo inference server resources |
 | `ma sandbox demo inference-multicluster` | Create a multi-cluster inference server demo |
-| `ma sandbox demo kueue [--compute-cluster-name <name>]` | Install Kueue on a registered compute cluster, create the demo ClusterQueue and LocalQueue, and set the cluster's `scheduler_type`. Defaults to the sandbox cluster itself (`michelangelo-sandbox`). See the [Kueue scheduler backend guide](../../operator-guides/jobs/kueue-scheduler-backend.md). |
 | `ma sandbox snapshot create` | Save all Michelangelo AI resources (CRDs) in the cluster to disk |
 | `ma sandbox snapshot restore <timestamp>` | Restore a snapshot into the cluster. `<timestamp>` is required: the bare timestamp (e.g. `20260807-170000`) or the full path printed by `snapshot create`. |
 
