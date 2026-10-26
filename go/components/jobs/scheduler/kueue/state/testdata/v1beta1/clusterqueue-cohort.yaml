@@ -1,0 +1,72 @@
+apiVersion: kueue.x-k8s.io/v1beta1
+kind: ClusterQueue
+metadata:
+  creationTimestamp: "2026-10-20T10:00:00Z"
+  finalizers:
+  - kueue.x-k8s.io/resource-in-use
+  generation: 1
+  name: research-queue
+  resourceVersion: "41223"
+  uid: 0f8a3b9e-4f0c-4d84-9a8c-5c8f4f6a1d03
+spec:
+  cohort: research
+  flavorFungibility:
+    whenCanBorrow: MayStopSearch
+    whenCanPreempt: TryNextFlavor
+  namespaceSelector: {}
+  preemption:
+    borrowWithinCohort:
+      policy: Never
+    reclaimWithinCohort: Never
+    withinClusterQueue: Never
+  queueingStrategy: BestEffortFIFO
+  resourceGroups:
+  - coveredResources:
+    - cpu
+    - memory
+    - nvidia.com/gpu
+    flavors:
+    - name: default-flavor
+      resources:
+      - name: cpu
+        nominalQuota: "64"
+      - name: memory
+        nominalQuota: 256Gi
+      - name: nvidia.com/gpu
+        nominalQuota: 8
+  stopPolicy: None
+status:
+  admittedWorkloads: 2
+  conditions:
+  - lastTransitionTime: "2026-10-20T10:00:01Z"
+    message: "Can admit new workloads"
+    observedGeneration: 1
+    reason: Ready
+    status: "True"
+    type: Active
+  flavorsReservation:
+  - name: default-flavor
+    resources:
+    - borrowed: "0"
+      name: cpu
+      total: "24"
+    - borrowed: "0"
+      name: memory
+      total: 96Gi
+    - borrowed: "0"
+      name: nvidia.com/gpu
+      total: "2"
+  flavorsUsage:
+  - name: default-flavor
+    resources:
+    - borrowed: "0"
+      name: cpu
+      total: "24"
+    - borrowed: "0"
+      name: memory
+      total: 96Gi
+    - borrowed: "0"
+      name: nvidia.com/gpu
+      total: "2"
+  pendingWorkloads: 3
+  reservingWorkloads: 2

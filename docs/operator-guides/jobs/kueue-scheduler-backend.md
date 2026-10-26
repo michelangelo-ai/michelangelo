@@ -154,7 +154,7 @@ Config path `jobs.scheduler` (Helm: `controllermgr.jobs.scheduler`):
 
 ## Compatibility
 
-- **Kueue version:** the control plane only performs an existence `GET` against `kueue.x-k8s.io`, so there is no client-library coupling. The default `apiVersion: v1beta2` requires Kueue 0.15+; set `kueue.apiVersion: v1beta1` to run against older Kueue releases.
+- **Kueue version:** the control plane reads `kueue.x-k8s.io` objects as plain JSON at `kueue.apiVersion`, so there is no client-library coupling. It reads them in two ways: an existence `GET` of a job's LocalQueue when placing the job, and, under `backend: kueue`, a read-only list and watch of each Kueue-managed cluster's ClusterQueues and of its LocalQueues in `default`. The default `apiVersion: v1beta2` requires Kueue 0.15+; set `kueue.apiVersion: v1beta1` to run against older Kueue releases.
 - **RayJobs:** Michelangelo AI RayJobs target an existing RayCluster via `ClusterSelector`, which Kueue's RayJob integration deliberately skips -- admission is enforced on the RayCluster, which is the resource-owning object. RayJobs never get a queue label.
 - **`waitForPodsReady`:** Kueue 0.19 and later always run it (30 minutes by default), and before 0.19 it is opt-in. Configure it as a backstop rather than a provisioning limit: `timeout: 1h`, above Uniflow's 1800 s provisioning budget, so it never evicts a cluster that is still provisioning; `recoveryTimeout: 0s`, so a running cluster is not evicted when one of its pods restarts; and `requeuingStrategy.backoffLimitCount: 2`, so Kueue deactivates a workload after its third failed start and the admission bound then fails and deletes it.
 

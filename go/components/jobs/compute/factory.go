@@ -28,6 +28,11 @@ type Factory interface {
 	// spec the client was built from: after a spec change, the old one, since the
 	// cache key comes from the spec's host and port.
 	Invalidate(spec *v2pb.ClusterSpec)
+	// GetRestConfigForCluster returns a REST config for the cluster built from
+	// its current credentials, for clients the client set does not hold. The
+	// config is built on every call, not cached, so a caller that rebuilds its
+	// client after a credential change gets the new credentials.
+	GetRestConfigForCluster(*v2pb.Cluster) (*rest.Config, error)
 }
 
 // ClientSet keeps rest clients
@@ -120,6 +125,10 @@ func (f *factory) Invalidate(spec *v2pb.ClusterSpec) {
 	f.m.Lock()
 	defer f.m.Unlock()
 	f.clients.Delete(key)
+}
+
+func (f *factory) GetRestConfigForCluster(c *v2pb.Cluster) (*rest.Config, error) {
+	return f.getClientCfg(c, clusterKey(&c.Spec))
 }
 
 func (f *factory) getClusterKey(c *v2pb.Cluster) (string, error) {

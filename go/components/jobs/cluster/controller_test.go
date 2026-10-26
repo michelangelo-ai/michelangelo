@@ -64,9 +64,10 @@ var _testCluster = v2pb.Cluster{
 
 // testParams holds parameters for setting up test reconciler
 type testParams struct {
-	gCtrl   *gomock.Controller
-	factory compute.Factory
-	helper  client.Helper
+	gCtrl        *gomock.Controller
+	factory      compute.Factory
+	helper       client.Helper
+	kueueWatches KueueWatches
 }
 
 // createTestScheme creates a test scheme with v2pb types registered
@@ -110,6 +111,7 @@ func setupReconciler(t *testing.T, params testParams) (*Reconciler, *apimocks.Mo
 		Scope:          testScope,
 		ClusterClient:  createTestClient(t, params.factory, params.helper, logger),
 		ComputeFactory: params.factory,
+		KueueWatches:   params.kueueWatches,
 	}).Reconciler
 
 	r.log = zapr.NewLogger(zaptest.NewLogger(t))
