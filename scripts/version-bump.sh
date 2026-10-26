@@ -11,6 +11,13 @@ VERSION_FILES=(
   "website/package.json"
   "helm/michelangelo/Chart.yaml"
   "helm/michelangelo-llm-gateway/Chart.yaml"
+  "helm/michelangelo-compute/Chart.yaml"
+)
+
+# Charts whose appVersion is also the platform version.
+APP_VERSION_FILES=(
+  "helm/michelangelo/Chart.yaml"
+  "helm/michelangelo-compute/Chart.yaml"
 )
 
 usage() {
@@ -43,7 +50,7 @@ get_version() {
 }
 
 get_app_version() {
-  grep '^appVersion:' "$REPO_ROOT/helm/michelangelo/Chart.yaml" | head -1 | sed 's/appVersion: *"\(.*\)"/\1/'
+  grep '^appVersion:' "$REPO_ROOT/$1" | head -1 | sed 's/appVersion: *"\(.*\)"/\1/'
 }
 
 check_versions() {
@@ -62,11 +69,13 @@ check_versions() {
     fi
   done
 
-  app_ver=$(get_app_version)
-  printf "  %-50s %s\n" "helm/michelangelo/Chart.yaml (appVersion)" "$app_ver"
-  if [ "$app_ver" != "$first_version" ]; then
-    all_match=false
-  fi
+  for file in "${APP_VERSION_FILES[@]}"; do
+    app_ver=$(get_app_version "$file")
+    printf "  %-50s %s\n" "$file (appVersion)" "$app_ver"
+    if [ "$app_ver" != "$first_version" ]; then
+      all_match=false
+    fi
+  done
 
   echo "─────────────────────────────────────────────────"
   if [ "$all_match" = true ]; then
@@ -120,11 +129,13 @@ set_version() {
   printf "  %-50s → %s\n" "javascript/packages/rpc/package.json (internal deps)" "$new_version"
 
   # Helm Chart.yaml — version and appVersion
-  sed -i.bak "s/^version: .*/version: $new_version/" "$REPO_ROOT/helm/michelangelo/Chart.yaml"
-  sed -i.bak "s/^appVersion: .*/appVersion: \"$new_version\"/" "$REPO_ROOT/helm/michelangelo/Chart.yaml"
-  rm -f "$REPO_ROOT/helm/michelangelo/Chart.yaml.bak"
-  printf "  %-50s → %s\n" "helm/michelangelo/Chart.yaml (version)" "$new_version"
-  printf "  %-50s → %s\n" "helm/michelangelo/Chart.yaml (appVersion)" "$new_version"
+  for file in "${APP_VERSION_FILES[@]}"; do
+    sed -i.bak "s/^version: .*/version: $new_version/" "$REPO_ROOT/$file"
+    sed -i.bak "s/^appVersion: .*/appVersion: \"$new_version\"/" "$REPO_ROOT/$file"
+    rm -f "$REPO_ROOT/$file.bak"
+    printf "  %-50s → %s\n" "$file (version)" "$new_version"
+    printf "  %-50s → %s\n" "$file (appVersion)" "$new_version"
+  done
 
   # The gateway shares Michelangelo's release version, while its appVersion
   # continues to identify the independently pinned LiteLLM runtime.
