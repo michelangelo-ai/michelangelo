@@ -217,7 +217,8 @@ func (r *Reconciler) clearPodError(pod *corev1.Pod) {
 // whether there was one. Post-mortem entries describe a pod that is gone, so a
 // live pod of the same name has not cleared them. Nothing is removed once
 // termination has begun: by then the recorded errors are the reason the
-// cluster ended.
+// cluster ended. A cluster that has not launched needs no check: recordPodError
+// records nothing on one, so any entry it has is stale.
 func removeRecoveredPodError(cluster *v2pb.RayCluster, podName string) bool {
 	if isFrozenOrDeleting(cluster) || isClusterTerminating(cluster) {
 		return false
@@ -251,6 +252,16 @@ func isFrozenOrDeleting(cluster *v2pb.RayCluster) bool {
 	return utils.IsImmutable(cluster) || cluster.GetDeletionTimestamp() != nil
 }
 
+// isLaunched reports whether Reconcile has recorded the cluster's launch. Only
+// then does the cluster have a KubeRay object, and pods, of its own. Before
+// that, the ones carrying its name belong to something else, typically a
+// same-named predecessor that is still going away, and nothing they report may
+// be recorded on the cluster. Every write checks it again on the object it
+// lands on, since such a successor can take the name over after the read.
+func isLaunched(cluster *v2pb.RayCluster) bool {
+	return conditionStatus(cluster, LaunchedCondition) == apipb.CONDITION_STATUS_TRUE
+}
+
 // isRayContainer matches the containers whose failures belong to the cluster.
 //
 // The ray containers are named by the job author, so there is no fixed name to
@@ -268,7 +279,9 @@ func isRayContainer(containerStatus corev1.ContainerStatus) bool {
 // write re-runs its closure on conflict, which an append would turn into
 // duplicate entries. The cap on the number of recorded errors is enforced by
 // mergePodErrors. skipIfTerminating drops an error that only means something
-// while the cluster is meant to be running.
+// while the cluster is meant to be running. Nothing is recorded on a cluster
+// that has not launched: the pod is a same-named predecessor's, and an error no
+// retry can fix would fail the cluster as soon as it launched.
 func (r *Reconciler) recordPodError(pod *corev1.Pod, podError *v2pb.PodErrors, fieldManager string, skipIfTerminating bool) {
 	log := r.logger.WithValues("pod_name", pod.Name, "reason", podError.GetReason())
 
@@ -299,10 +312,10 @@ func (r *Reconciler) recordPodError(pod *corev1.Pod, podError *v2pb.PodErrors, f
 		return
 	}
 	acceptsPodError := func(cluster *v2pb.RayCluster) bool {
-		return !isFrozenOrDeleting(cluster) && !(skipIfTerminating && isClusterTerminating(cluster))
+		return isLaunched(cluster) && !isFrozenOrDeleting(cluster) && !(skipIfTerminating && isClusterTerminating(cluster))
 	}
 	if !acceptsPodError(&rayCluster) {
-		log.V(1).Info("ray cluster no longer takes this pod error, not recording it")
+		log.V(1).Info("ray cluster does not take this pod error, not recording it")
 		return
 	}
 
@@ -361,9 +374,11 @@ func (r *Reconciler) podEventHandler(pod *corev1.Pod) {
 		return
 	}
 	// A terminating cluster takes only pod errors and the log URL from the
-	// watcher; its head pod is going away with the rest of it.
-	if isFrozenOrDeleting(&rayCluster) || isClusterTerminating(&rayCluster) {
-		log.V(1).Info("ray cluster is terminating, frozen or being deleted, ignoring head pod event")
+	// watcher; its head pod is going away with the rest of it. A cluster that has
+	// not launched has no head pod yet: one carrying its name is a same-named
+	// predecessor's.
+	if isFrozenOrDeleting(&rayCluster) || isClusterTerminating(&rayCluster) || !isLaunched(&rayCluster) {
+		log.V(1).Info("ray cluster is not launched, terminating, frozen or being deleted, ignoring head pod event")
 		return
 	}
 
@@ -384,7 +399,7 @@ func (r *Reconciler) podEventHandler(pod *corev1.Pod) {
 	if err = r.updateStatusFromHandler(ctx, &rayCluster,
 		func(obj client.Object) {
 			cluster := obj.(*v2pb.RayCluster)
-			if isFrozenOrDeleting(cluster) || isClusterTerminating(cluster) {
+			if isFrozenOrDeleting(cluster) || isClusterTerminating(cluster) || !isLaunched(cluster) {
 				return
 			}
 			cluster.Status.HeadNode = &v2pb.RayHeadNodeInfo{
@@ -549,6 +564,12 @@ func (r *Reconciler) rayClusterDeleteEventHandler(obj interface{}) {
 		log.Info("skipping delete event for immutable ray cluster")
 		return
 	}
+	// A cluster whose CR is being deleted is going away; like every handler, this
+	// one leaves it to the ingester as it is.
+	if globalCluster.GetDeletionTimestamp() != nil {
+		log.V(1).Info("skipping delete event for ray cluster being deleted")
+		return
+	}
 
 	// Killed=TRUE means the kill is already recorded -- cleanupCluster does that
 	// right after it deletes the KubeRay object -- so this delete is its echo.
@@ -568,7 +589,7 @@ func (r *Reconciler) rayClusterDeleteEventHandler(obj interface{}) {
 		// Only a launched cluster has a KubeRay object of its own. A delete for an
 		// unlaunched one belongs to something else, such as a same-named
 		// predecessor's object that is only now going away.
-		if conditionStatus(&globalCluster, LaunchedCondition) != apipb.CONDITION_STATUS_TRUE {
+		if !isLaunched(&globalCluster) {
 			log.Info("ignoring delete event for a ray cluster that was never launched")
 			return
 		}
@@ -584,21 +605,30 @@ func (r *Reconciler) rayClusterDeleteEventHandler(obj interface{}) {
 		// The read above can predate a kill the reconciler has begun since, so the
 		// check is repeated on the object being written. A kill that has begun owns
 		// the outcome: cleanupCluster finds the KubeRay object gone and records it.
+		// The other checks are repeated too: since the read, the cluster can have
+		// been frozen, its CR deleted, or the cluster replaced by a same-named one
+		// that has not launched, which a delayed delete of its predecessor's object
+		// must not fail.
 		recordExternalDelete := markFailedUpdate(constants.ClusterKilled,
 			fmt.Sprintf("ray cluster was deleted externally, state: %+v", local.Status.State))
-		killBegun := false
+		leftAlone, killBegun := false, false
 		if err := r.updateStatusFromHandler(ctx, &globalCluster,
 			func(obj client.Object) {
 				cluster := obj.(*v2pb.RayCluster)
+				leftAlone = isFrozenOrDeleting(cluster) || !isLaunched(cluster)
 				killBegun = conditionStatus(cluster, KillingCondition) == apipb.CONDITION_STATUS_TRUE ||
 					conditionStatus(cluster, KilledCondition) == apipb.CONDITION_STATUS_TRUE
-				if !killBegun {
+				if !leftAlone && !killBegun {
 					recordExternalDelete(cluster)
 				}
 			},
 			"rayClusterDeleteEventHandler",
 		); err != nil {
 			log.Error(err, "failed to update status on external delete")
+			return
+		}
+		if leftAlone {
+			log.V(1).Info("skipping: ray cluster changed concurrently")
 			return
 		}
 		if err := r.markImmutableIfTerminal(ctx, &globalCluster); err != nil {
@@ -615,10 +645,27 @@ func (r *Reconciler) rayClusterDeleteEventHandler(obj interface{}) {
 
 	// Expected deletion — killing was in progress, and this event got here before
 	// cleanupCluster recorded the kill. Record it exactly as cleanupCluster does,
-	// TERMINATED included: the freeze below archives whatever it finds.
-	if err := r.updateStatusFromHandler(ctx, &globalCluster, markKilledUpdate,
+	// TERMINATED included: the freeze below archives whatever it finds. The checks
+	// are repeated on the object being written: since the read, the cluster can
+	// have been frozen, its CR deleted, or the cluster replaced by a same-named one
+	// that no kill has begun on, and each of those is left alone.
+	leftAlone := false
+	if err := r.updateStatusFromHandler(ctx, &globalCluster,
+		func(obj client.Object) {
+			cluster := obj.(*v2pb.RayCluster)
+			killBegun := conditionStatus(cluster, KillingCondition) == apipb.CONDITION_STATUS_TRUE ||
+				conditionStatus(cluster, KilledCondition) == apipb.CONDITION_STATUS_TRUE
+			leftAlone = isFrozenOrDeleting(cluster) || !killBegun
+			if !leftAlone {
+				markKilledUpdate(cluster)
+			}
+		},
 		"rayClusterDeleteEventHandler"); err != nil {
 		log.Error(err, "failed to update status on expected delete")
+		return
+	}
+	if leftAlone {
+		log.V(1).Info("skipping: ray cluster changed concurrently")
 		return
 	}
 	// Reconcile's termination branch freezes the cluster via finalizeIfTerminal once it
@@ -673,6 +720,19 @@ func (r *Reconciler) rayClusterEventHandler(obj interface{}) {
 		log.V(1).Info("skipping status update for cluster being deleted")
 		return
 	}
+	// Reconcile owns a cluster's status until it records the launch, as in the
+	// delete handler: only then is the KubeRay object carrying the cluster's name
+	// its own. Until then it is something else's, typically a same-named
+	// predecessor's that is still going away. Its READY would mark the cluster
+	// launched, so that Reconcile never creates the cluster's own KubeRay object
+	// and the predecessor's delete then fails the cluster; its failure would end
+	// a cluster that has not started. The cluster's own object is created just
+	// before the launch is recorded, and the next KubeRay update, or the safety
+	// net in the reconcile that the launch write triggers, delivers its status.
+	if !isLaunched(&globalCluster) {
+		log.V(1).Info("skipping status update for cluster that is not launched yet")
+		return
+	}
 
 	// Derive the globally-meaningful parts of the status from the compute-cluster
 	// object. The mapper owns that translation — it knows the log-URL template,
@@ -719,8 +779,13 @@ func (r *Reconciler) rayClusterEventHandler(obj interface{}) {
 // level-triggered path cannot disagree. It has to stay pure and idempotent:
 // the status write re-runs it on a re-fetched object after a conflict, and both
 // callers apply it to a copy first to skip writes that would change nothing.
+//
+// A cluster that is frozen, being deleted, or not launched takes nothing from
+// it. The safety net only observes launched clusters, but the object the
+// handler's write lands on can be a same-named successor that has not launched,
+// and the observation is of its predecessor's KubeRay object.
 func applyClusterObservation(cluster *v2pb.RayCluster, observed *matypes.JobClusterStatus) bool {
-	if observed == nil || observed.Ray == nil || isFrozenOrDeleting(cluster) {
+	if observed == nil || observed.Ray == nil || isFrozenOrDeleting(cluster) || !isLaunched(cluster) {
 		return false
 	}
 	changed := false
@@ -753,9 +818,10 @@ func applyClusterObservation(cluster *v2pb.RayCluster, observed *matypes.JobClus
 	cluster.Status.State = observed.Ray.State
 	switch observed.Ray.State {
 	case v2pb.RAY_CLUSTER_STATE_READY:
-		// Becoming ready is what flips Launched to ClusterReady; a cluster that is
-		// already there keeps the condition, and its timestamp, as it is.
-		if oldState != v2pb.RAY_CLUSTER_STATE_READY || conditionStatus(cluster, LaunchedCondition) != apipb.CONDITION_STATUS_TRUE {
+		// Becoming ready is what flips Launched from ClusterCreated to
+		// ClusterReady; a cluster that is already there keeps the condition, and
+		// its timestamp, as it is.
+		if oldState != v2pb.RAY_CLUSTER_STATE_READY {
 			if setCondition(cluster, LaunchedCondition, jobsutils.ConditionUpdateParams{
 				Status:     apipb.CONDITION_STATUS_TRUE,
 				Generation: cluster.Generation,

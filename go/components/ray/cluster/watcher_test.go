@@ -191,11 +191,19 @@ func findCondition(conds []*apipb.Condition, condType string) *apipb.Condition {
 	return nil
 }
 
+// launchedCondition is the Launched condition Reconcile records once it has
+// created a cluster's KubeRay object. The watcher writes only clusters that
+// carry it, as every cluster with a KubeRay object of its own does.
+func launchedCondition() *apipb.Condition {
+	return &apipb.Condition{Type: LaunchedCondition, Status: apipb.CONDITION_STATUS_TRUE, Reason: "ClusterCreated"}
+}
+
 func TestRayClusterEventHandler_Ready(t *testing.T) {
 	globalCluster := &v2pb.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
 		Status: v2pb.RayClusterStatus{
-			State: v2pb.RAY_CLUSTER_STATE_PROVISIONING,
+			StatusConditions: []*apipb.Condition{launchedCondition()},
+			State:            v2pb.RAY_CLUSTER_STATE_PROVISIONING,
 		},
 	}
 	r := setupWatcherTest(t, globalCluster)
@@ -311,7 +319,10 @@ func suspended(rc *rayv1.RayCluster) *rayv1.RayCluster {
 func TestRayClusterEventHandler_FailedSurfacesKubeRayReason(t *testing.T) {
 	globalCluster := &v2pb.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
-		Status:     v2pb.RayClusterStatus{State: v2pb.RAY_CLUSTER_STATE_PROVISIONING},
+		Status: v2pb.RayClusterStatus{
+			State:            v2pb.RAY_CLUSTER_STATE_PROVISIONING,
+			StatusConditions: []*apipb.Condition{launchedCondition()},
+		},
 	}
 	r := setupWatcherTest(t, globalCluster)
 
@@ -342,7 +353,10 @@ func TestRayClusterEventHandler_FailedSurfacesKubeRayReason(t *testing.T) {
 func TestRayClusterEventHandler_UnknownWithTerminalPodErrorsFails(t *testing.T) {
 	globalCluster := &v2pb.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
-		Status:     v2pb.RayClusterStatus{State: v2pb.RAY_CLUSTER_STATE_PROVISIONING},
+		Status: v2pb.RayClusterStatus{
+			State:            v2pb.RAY_CLUSTER_STATE_PROVISIONING,
+			StatusConditions: []*apipb.Condition{launchedCondition()},
+		},
 	}
 	r := setupWatcherTest(t, globalCluster)
 
@@ -368,7 +382,10 @@ func TestRayClusterEventHandler_UnknownWithTerminalPodErrorsFails(t *testing.T) 
 func TestRayClusterEventHandler_UnknownWithNonTerminalPodErrorsStaysUnknown(t *testing.T) {
 	globalCluster := &v2pb.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
-		Status:     v2pb.RayClusterStatus{State: v2pb.RAY_CLUSTER_STATE_PROVISIONING},
+		Status: v2pb.RayClusterStatus{
+			State:            v2pb.RAY_CLUSTER_STATE_PROVISIONING,
+			StatusConditions: []*apipb.Condition{launchedCondition()},
+		},
 	}
 	r := setupWatcherTest(t, globalCluster)
 
@@ -397,7 +414,10 @@ func TestRayClusterEventHandler_UnknownWithNonTerminalPodErrorsStaysUnknown(t *t
 func TestRayClusterEventHandler_SuspendedSetsQueued(t *testing.T) {
 	globalCluster := &v2pb.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
-		Status:     v2pb.RayClusterStatus{State: v2pb.RAY_CLUSTER_STATE_PROVISIONING},
+		Status: v2pb.RayClusterStatus{
+			State:            v2pb.RAY_CLUSTER_STATE_PROVISIONING,
+			StatusConditions: []*apipb.Condition{launchedCondition()},
+		},
 	}
 	r := setupWatcherTest(t, globalCluster)
 
@@ -429,6 +449,7 @@ func TestRayClusterEventHandler_ReadyClearsQueued(t *testing.T) {
 		Status: v2pb.RayClusterStatus{
 			State: v2pb.RAY_CLUSTER_STATE_SUSPENDED,
 			StatusConditions: []*apipb.Condition{
+				launchedCondition(),
 				{Type: QueuedCondition, Status: apipb.CONDITION_STATUS_TRUE, Reason: "AwaitingAdmission"},
 			},
 		},
@@ -452,7 +473,10 @@ func TestRayClusterEventHandler_ReadyClearsQueued(t *testing.T) {
 func TestRayClusterEventHandler_ReadyDoesNotAddQueued(t *testing.T) {
 	globalCluster := &v2pb.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
-		Status:     v2pb.RayClusterStatus{State: v2pb.RAY_CLUSTER_STATE_PROVISIONING},
+		Status: v2pb.RayClusterStatus{
+			State:            v2pb.RAY_CLUSTER_STATE_PROVISIONING,
+			StatusConditions: []*apipb.Condition{launchedCondition()},
+		},
 	}
 	r := setupWatcherTest(t, globalCluster)
 
@@ -638,16 +662,22 @@ func TestApplyClusterObservation_ReportsChanges(t *testing.T) {
 			}},
 		},
 		{
-			name:   "cluster is suspended",
-			status: v2pb.RayClusterStatus{State: v2pb.RAY_CLUSTER_STATE_PROVISIONING},
+			name: "cluster is suspended",
+			status: v2pb.RayClusterStatus{
+				State:            v2pb.RAY_CLUSTER_STATE_PROVISIONING,
+				StatusConditions: []*apipb.Condition{launchedCondition()},
+			},
 			observed: &matypes.JobClusterStatus{
 				Ray:    &v2pb.RayClusterStatus{State: v2pb.RAY_CLUSTER_STATE_SUSPENDED},
 				Reason: "ClusterSuspended",
 			},
 		},
 		{
-			name:   "cluster fails",
-			status: v2pb.RayClusterStatus{State: v2pb.RAY_CLUSTER_STATE_PROVISIONING},
+			name: "cluster fails",
+			status: v2pb.RayClusterStatus{
+				State:            v2pb.RAY_CLUSTER_STATE_PROVISIONING,
+				StatusConditions: []*apipb.Condition{launchedCondition()},
+			},
 			observed: &matypes.JobClusterStatus{
 				Ray: &v2pb.RayClusterStatus{
 					State:     v2pb.RAY_CLUSTER_STATE_FAILED,
@@ -657,8 +687,11 @@ func TestApplyClusterObservation_ReportsChanges(t *testing.T) {
 			},
 		},
 		{
-			name:     "cluster is still coming up",
-			status:   v2pb.RayClusterStatus{State: v2pb.RAY_CLUSTER_STATE_PROVISIONING},
+			name: "cluster is still coming up",
+			status: v2pb.RayClusterStatus{
+				State:            v2pb.RAY_CLUSTER_STATE_PROVISIONING,
+				StatusConditions: []*apipb.Condition{launchedCondition()},
+			},
 			observed: &matypes.JobClusterStatus{Ray: &v2pb.RayClusterStatus{State: v2pb.RAY_CLUSTER_STATE_UNKNOWN}},
 		},
 	}
@@ -682,10 +715,21 @@ func TestApplyClusterObservation_ReportsChanges(t *testing.T) {
 	}
 
 	t.Run("no observation is a no-op", func(t *testing.T) {
-		cluster := &v2pb.RayCluster{Status: v2pb.RayClusterStatus{State: v2pb.RAY_CLUSTER_STATE_READY}}
+		cluster := &v2pb.RayCluster{Status: v2pb.RayClusterStatus{
+			State:            v2pb.RAY_CLUSTER_STATE_READY,
+			StatusConditions: []*apipb.Condition{launchedCondition()},
+		}}
 		assert.False(t, applyClusterObservation(cluster, nil))
 		assert.False(t, applyClusterObservation(cluster, &matypes.JobClusterStatus{}))
 		assert.Equal(t, v2pb.RAY_CLUSTER_STATE_READY, cluster.Status.State)
+	})
+
+	t.Run("a cluster that has not launched takes nothing", func(t *testing.T) {
+		cluster := unlaunchedCluster()
+		assert.False(t, applyClusterObservation(cluster, &matypes.JobClusterStatus{Ray: &v2pb.RayClusterStatus{
+			State: v2pb.RAY_CLUSTER_STATE_READY, LogUrl: testLogURL,
+		}}))
+		assertNothingRecorded(t, *cluster)
 	})
 }
 
@@ -845,7 +889,10 @@ func TestMergePodErrors(t *testing.T) {
 func TestHandlePodEvent_RecordsUnschedulablePod(t *testing.T) {
 	globalCluster := &v2pb.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
-		Status:     v2pb.RayClusterStatus{State: v2pb.RAY_CLUSTER_STATE_PROVISIONING},
+		Status: v2pb.RayClusterStatus{
+			State:            v2pb.RAY_CLUSTER_STATE_PROVISIONING,
+			StatusConditions: []*apipb.Condition{launchedCondition()},
+		},
 	}
 	r := setupWatcherTest(t, globalCluster)
 
@@ -957,7 +1004,10 @@ func TestTerminalConditionErrorGetsInAtTheCap(t *testing.T) {
 func TestHandlePodEvent_ContainerErrorWinsOverScheduling(t *testing.T) {
 	globalCluster := &v2pb.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
-		Status:     v2pb.RayClusterStatus{State: v2pb.RAY_CLUSTER_STATE_PROVISIONING},
+		Status: v2pb.RayClusterStatus{
+			State:            v2pb.RAY_CLUSTER_STATE_PROVISIONING,
+			StatusConditions: []*apipb.Condition{launchedCondition()},
+		},
 	}
 	r := setupWatcherTest(t, globalCluster)
 
@@ -1168,7 +1218,8 @@ func TestStaleConditionPodErrorDoesNotFailProvisioningCluster(t *testing.T) {
 	globalCluster := &v2pb.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
 		Status: v2pb.RayClusterStatus{
-			State: v2pb.RAY_CLUSTER_STATE_UNKNOWN,
+			StatusConditions: []*apipb.Condition{launchedCondition()},
+			State:            v2pb.RAY_CLUSTER_STATE_UNKNOWN,
 			PodErrors: []*v2pb.PodErrors{
 				{Name: string(rayv1.RayClusterReplicaFailure), Reason: "FailedCreateWorkerPod"},
 			},
@@ -1273,6 +1324,7 @@ func TestPodRecoveryKeepsTerminatingClusterEvidence(t *testing.T) {
 		Status: v2pb.RayClusterStatus{
 			State: v2pb.RAY_CLUSTER_STATE_FAILED,
 			StatusConditions: []*apipb.Condition{
+				launchedCondition(),
 				{Type: SucceededCondition, Status: apipb.CONDITION_STATUS_FALSE, Reason: "ClusterFailedWithPodErrors"},
 				{Type: KillingCondition, Status: apipb.CONDITION_STATUS_TRUE},
 			},
@@ -1297,7 +1349,8 @@ func TestPodRecoveryKeepsPostMortemEntry(t *testing.T) {
 	globalCluster := &v2pb.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
 		Status: v2pb.RayClusterStatus{
-			State: v2pb.RAY_CLUSTER_STATE_UNKNOWN,
+			StatusConditions: []*apipb.Condition{launchedCondition()},
+			State:            v2pb.RAY_CLUSTER_STATE_UNKNOWN,
 			PodErrors: []*v2pb.PodErrors{
 				{Name: "worker-1", Reason: "ContainerStatusUnknown"},
 			},
@@ -1319,8 +1372,9 @@ func TestHealthyPodWithNothingToClearDoesNotWrite(t *testing.T) {
 	globalCluster := &v2pb.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
 		Status: v2pb.RayClusterStatus{
-			State:     v2pb.RAY_CLUSTER_STATE_READY,
-			PodErrors: []*v2pb.PodErrors{{Name: "worker-2", Reason: "OOMKilled"}},
+			StatusConditions: []*apipb.Condition{launchedCondition()},
+			State:            v2pb.RAY_CLUSTER_STATE_READY,
+			PodErrors:        []*v2pb.PodErrors{{Name: "worker-2", Reason: "OOMKilled"}},
 		},
 	}
 	r, writes, _ := setupWatcherTestObserved(t, globalCluster)
@@ -1333,7 +1387,10 @@ func TestHealthyPodWithNothingToClearDoesNotWrite(t *testing.T) {
 func TestRayClusterEventHandler_Failed(t *testing.T) {
 	globalCluster := &v2pb.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
-		Status:     v2pb.RayClusterStatus{State: v2pb.RAY_CLUSTER_STATE_PROVISIONING},
+		Status: v2pb.RayClusterStatus{
+			State:            v2pb.RAY_CLUSTER_STATE_PROVISIONING,
+			StatusConditions: []*apipb.Condition{launchedCondition()},
+		},
 	}
 	r := setupWatcherTest(t, globalCluster)
 
@@ -1350,7 +1407,10 @@ func TestRayClusterEventHandler_Failed(t *testing.T) {
 func TestRayClusterEventHandler_Unhealthy(t *testing.T) {
 	globalCluster := &v2pb.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
-		Status:     v2pb.RayClusterStatus{State: v2pb.RAY_CLUSTER_STATE_READY},
+		Status: v2pb.RayClusterStatus{
+			State:            v2pb.RAY_CLUSTER_STATE_READY,
+			StatusConditions: []*apipb.Condition{launchedCondition()},
+		},
 	}
 	r := setupWatcherTest(t, globalCluster)
 
@@ -1369,8 +1429,9 @@ func TestRayClusterEventHandler_UnknownWithTerminalPodErrors(t *testing.T) {
 	globalCluster := &v2pb.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
 		Status: v2pb.RayClusterStatus{
-			State:     v2pb.RAY_CLUSTER_STATE_PROVISIONING,
-			PodErrors: []*v2pb.PodErrors{{Name: "worker-1", Reason: "InvalidImageName"}},
+			StatusConditions: []*apipb.Condition{launchedCondition()},
+			State:            v2pb.RAY_CLUSTER_STATE_PROVISIONING,
+			PodErrors:        []*v2pb.PodErrors{{Name: "worker-1", Reason: "InvalidImageName"}},
 		},
 	}
 	r := setupWatcherTest(t, globalCluster)
@@ -1397,8 +1458,9 @@ func TestRayClusterEventHandler_Suspended(t *testing.T) {
 	globalCluster := &v2pb.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
 		Status: v2pb.RayClusterStatus{
-			State:     v2pb.RAY_CLUSTER_STATE_PROVISIONING,
-			PodErrors: []*v2pb.PodErrors{{Reason: "InvalidImageName"}},
+			StatusConditions: []*apipb.Condition{launchedCondition()},
+			State:            v2pb.RAY_CLUSTER_STATE_PROVISIONING,
+			PodErrors:        []*v2pb.PodErrors{{Reason: "InvalidImageName"}},
 		},
 	}
 	r := setupWatcherTest(t, globalCluster)
@@ -1424,8 +1486,9 @@ func TestRayClusterEventHandler_SuspendedViaSpec(t *testing.T) {
 	globalCluster := &v2pb.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
 		Status: v2pb.RayClusterStatus{
-			State:     v2pb.RAY_CLUSTER_STATE_PROVISIONING,
-			PodErrors: []*v2pb.PodErrors{{Reason: "InvalidImageName"}},
+			StatusConditions: []*apipb.Condition{launchedCondition()},
+			State:            v2pb.RAY_CLUSTER_STATE_PROVISIONING,
+			PodErrors:        []*v2pb.PodErrors{{Reason: "InvalidImageName"}},
 		},
 	}
 	r := setupWatcherTest(t, globalCluster)
@@ -1589,29 +1652,193 @@ func TestRayClusterDeleteEventHandler_ExternalDeletionAfterSuccess(t *testing.T)
 	assert.True(t, utils.IsImmutable(&updated), "the cluster is fully terminal and should be frozen")
 }
 
-// TestRayClusterDeleteEventHandler_IgnoresUnlaunchedCluster: a CR that never
-// launched has no KubeRay object of its own, so a delete for its name belongs to
-// something else -- typically a same-named predecessor whose object is only now
-// going away -- and must not fail the new CR.
-func TestRayClusterDeleteEventHandler_IgnoresUnlaunchedCluster(t *testing.T) {
-	globalCluster := &v2pb.RayCluster{
+// unlaunchedCluster is a cluster that is scheduled but not launched: Reconcile
+// has not created its KubeRay object yet, so the KubeRay object and pods that
+// carry its name belong to something else -- typically a same-named predecessor
+// whose objects are only now going away.
+func unlaunchedCluster() *v2pb.RayCluster {
+	return &v2pb.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
+		Spec:       createRayClusterSpec(),
 		Status: v2pb.RayClusterStatus{
 			StatusConditions: []*apipb.Condition{
 				{Type: EnqueuedCondition, Status: apipb.CONDITION_STATUS_TRUE},
 				{Type: ScheduledCondition, Status: apipb.CONDITION_STATUS_TRUE},
 			},
+			Assignment: &v2pb.AssignmentInfo{Cluster: assignedCluster},
 		},
 	}
-	r, writes, logs := setupWatcherTestObserved(t, globalCluster)
+}
 
+// assertNothingRecorded checks that an unlaunched cluster carries nothing taken
+// from another cluster's objects: no state, launch, outcome or kill, no head
+// node, pod errors or log URL, and no freeze.
+func assertNothingRecorded(t *testing.T, cluster v2pb.RayCluster) {
+	t.Helper()
+	assert.False(t, utils.IsImmutable(&cluster), "the cluster must not be frozen")
+	assert.Equal(t, v2pb.RAY_CLUSTER_STATE_INVALID, cluster.Status.State)
+	for _, condType := range []string{LaunchedCondition, SucceededCondition, KillingCondition, KilledCondition, QueuedCondition} {
+		assert.Nil(t, findCondition(cluster.Status.StatusConditions, condType), "no %s condition may be recorded", condType)
+	}
+	assert.Nil(t, cluster.Status.HeadNode)
+	assert.Empty(t, cluster.Status.PodErrors)
+	assert.Empty(t, cluster.Status.LogUrl)
+}
+
+// TestRayClusterHandlersSkipFrozenDeletingAndUnlaunchedClusters: the KubeRay
+// handlers write none of these. A frozen cluster is waiting to be archived, and
+// a cluster whose CR is being deleted is going away. A cluster that has not
+// launched has no KubeRay object of its own, so every event for its name belongs
+// to something else, typically a same-named predecessor that is still going
+// away: its READY would mark the cluster launched, so that Reconcile never
+// creates the cluster's KubeRay object, and its delete would then fail and freeze
+// the cluster; its failure would end a cluster that has not started.
+func TestRayClusterHandlersSkipFrozenDeletingAndUnlaunchedClusters(t *testing.T) {
+	events := []struct {
+		name  string
+		event func(r *Reconciler)
+	}{
+		{name: "ready", event: func(r *Reconciler) {
+			r.rayClusterAddEventHandler(newKubeRayCluster(rayClusterName, rayv1.Ready))
+		}},
+		{name: "failed", event: func(r *Reconciler) {
+			r.rayClusterUpdateEventHandler(nil, newKubeRayCluster(rayClusterName, rayv1.Failed))
+		}},
+		{name: "suspended", event: func(r *Reconciler) {
+			r.rayClusterUpdateEventHandler(nil, newKubeRayCluster(rayClusterName, rayv1.Suspended))
+		}},
+		{name: "head pod cannot pull its image", event: func(r *Reconciler) {
+			r.rayClusterUpdateEventHandler(nil, withConditions(newKubeRayCluster(rayClusterName, ""), metav1.Condition{
+				Type: string(rayv1.HeadPodReady), Status: metav1.ConditionFalse, Reason: "ErrImagePull",
+			}))
+		}},
+		{name: "delete", event: func(r *Reconciler) {
+			r.rayClusterDeleteEventHandler(newKubeRayCluster(rayClusterName, rayv1.Ready))
+		}},
+	}
+	clusters := []struct {
+		name    string
+		cluster func() *v2pb.RayCluster
+	}{
+		{name: "frozen", cluster: frozenCluster},
+		{name: "being deleted", cluster: deletingCluster},
+		{name: "not launched", cluster: unlaunchedCluster},
+	}
+
+	for _, c := range clusters {
+		for _, e := range events {
+			t.Run(c.name+"/"+e.name, func(t *testing.T) {
+				r, writes, logs := setupWatcherTestObserved(t, c.cluster())
+
+				e.event(r)
+
+				assert.Zero(t, *writes, "a %s cluster must not be written to", c.name)
+				assert.Empty(t, errorLogs(logs))
+			})
+		}
+	}
+}
+
+// TestUnlaunchedClusterStillLaunches runs a same-named predecessor's READY and
+// then its delete past a cluster that has not launched, and then Reconcile. The
+// cluster must be launched by Reconcile creating its KubeRay object, not taken
+// for launched on the predecessor's READY and then failed when the predecessor
+// goes.
+func TestUnlaunchedClusterStillLaunches(t *testing.T) {
+	r := setupWatcherTest(t, unlaunchedCluster())
+	withSafetyNet(t, r).EXPECT().CreateJobCluster(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+
+	r.rayClusterUpdateEventHandler(nil, newKubeRayCluster(rayClusterName, rayv1.Ready))
 	r.rayClusterDeleteEventHandler(newKubeRayCluster(rayClusterName, rayv1.Ready))
+	reconcile(t, r)
 
-	assert.Zero(t, *writes, "an unlaunched cluster must not be written to")
-	assert.Empty(t, errorLogs(logs))
 	updated := getUpdatedCluster(t, r)
+	assert.False(t, utils.IsImmutable(&updated), "the predecessor's delete must not freeze the cluster")
+	assert.Equal(t, v2pb.RAY_CLUSTER_STATE_PROVISIONING, updated.Status.State)
+	launchedCond := findCondition(updated.Status.StatusConditions, LaunchedCondition)
+	require.NotNil(t, launchedCond)
+	assert.Equal(t, "ClusterCreated", launchedCond.Reason, "Reconcile should have launched the cluster")
 	assert.Nil(t, findCondition(updated.Status.StatusConditions, SucceededCondition))
-	assert.Nil(t, findCondition(updated.Status.StatusConditions, KilledCondition))
+}
+
+// TestWatcherRechecksLaunchOnTheWrittenObject: a handler's read can predate a
+// same-named cluster taking the name over -- the write re-fetches the cluster,
+// and fetches it again after a conflict -- so the launch is checked again on the
+// object the write lands on, as the RayJob handlers do.
+func TestWatcherRechecksLaunchOnTheWrittenObject(t *testing.T) {
+	killing := func() *v2pb.RayCluster {
+		cluster := provisioningCluster()
+		cluster.Status.StatusConditions = append(cluster.Status.StatusConditions,
+			&apipb.Condition{Type: KillingCondition, Status: apipb.CONDITION_STATUS_TRUE})
+		return cluster
+	}
+	tests := []struct {
+		name string
+		// read is the launched cluster the handler's first read returns.
+		read  func() *v2pb.RayCluster
+		event func(r *Reconciler)
+	}{
+		{name: "ready", read: provisioningCluster, event: func(r *Reconciler) {
+			r.rayClusterUpdateEventHandler(nil, newKubeRayCluster(rayClusterName, rayv1.Ready))
+		}},
+		{name: "running head pod", read: provisioningCluster, event: func(r *Reconciler) {
+			r.podAddEventHandler(newHeadPod("head-pod", rayClusterName, corev1.PodRunning))
+		}},
+		{name: "pod with an invalid image name", read: provisioningCluster, event: func(r *Reconciler) {
+			r.podUpdateEventHandler(nil, invalidImageWorkerPod())
+		}},
+		{name: "pod delete", read: provisioningCluster, event: func(r *Reconciler) {
+			r.podDeleteEventHandler(crashedPod(corev1.PodFailed))
+		}},
+		{name: "external delete", read: provisioningCluster, event: func(r *Reconciler) {
+			r.rayClusterDeleteEventHandler(newKubeRayCluster(rayClusterName, rayv1.Ready))
+		}},
+		{name: "delete during a kill", read: killing, event: func(r *Reconciler) {
+			r.rayClusterDeleteEventHandler(newKubeRayCluster(rayClusterName, rayv1.Ready))
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r, gets := setupWatcherTestWithStaleRead(t, unlaunchedCluster(), tt.read())
+
+			tt.event(r)
+
+			require.Greater(t, *gets, 1, "the handler should have re-fetched the cluster to write it")
+			assertNothingRecorded(t, getUpdatedCluster(t, r))
+		})
+	}
+}
+
+// TestRayClusterDeleteEventHandler_DeletionCheckedOnTheWrittenObject: the CR's
+// deletion can begin between the handler's read and its write, so the check is
+// repeated on the object the write lands on.
+func TestRayClusterDeleteEventHandler_DeletionCheckedOnTheWrittenObject(t *testing.T) {
+	killing := func(cluster *v2pb.RayCluster) *v2pb.RayCluster {
+		cluster.Status.StatusConditions = append(cluster.Status.StatusConditions,
+			&apipb.Condition{Type: KillingCondition, Status: apipb.CONDITION_STATUS_TRUE})
+		return cluster
+	}
+	tests := []struct {
+		name         string
+		read, stored *v2pb.RayCluster
+	}{
+		{name: "external delete", read: provisioningCluster(), stored: deletingCluster()},
+		{name: "delete during a kill", read: killing(provisioningCluster()), stored: killing(deletingCluster())},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r, gets := setupWatcherTestWithStaleRead(t, tt.stored, tt.read)
+
+			r.rayClusterDeleteEventHandler(newKubeRayCluster(rayClusterName, rayv1.Ready))
+
+			require.Greater(t, *gets, 1, "the handler should have re-fetched the cluster to write it")
+			updated := getUpdatedCluster(t, r)
+			assert.Equal(t, v2pb.RAY_CLUSTER_STATE_READY, updated.Status.State)
+			assert.Nil(t, findCondition(updated.Status.StatusConditions, SucceededCondition))
+			assert.Nil(t, findCondition(updated.Status.StatusConditions, KilledCondition))
+			assert.False(t, utils.IsImmutable(&updated))
+		})
+	}
 }
 
 func TestRayClusterDeleteEventHandler_SkipsImmutable(t *testing.T) {
@@ -1620,6 +1847,7 @@ func TestRayClusterDeleteEventHandler_SkipsImmutable(t *testing.T) {
 		Status: v2pb.RayClusterStatus{
 			State: v2pb.RAY_CLUSTER_STATE_FAILED,
 			StatusConditions: []*apipb.Condition{
+				launchedCondition(),
 				{Type: SucceededCondition, Status: apipb.CONDITION_STATUS_FALSE},
 			},
 		},
@@ -1684,6 +1912,7 @@ func TestRayClusterDeleteEventHandler_ExpectedDeletionFreezesWhenTerminal(t *tes
 		Status: v2pb.RayClusterStatus{
 			State: v2pb.RAY_CLUSTER_STATE_READY,
 			StatusConditions: []*apipb.Condition{
+				launchedCondition(),
 				{Type: KillingCondition, Status: apipb.CONDITION_STATUS_TRUE},
 				{Type: SucceededCondition, Status: apipb.CONDITION_STATUS_TRUE},
 			},
@@ -1799,7 +2028,10 @@ func TestRayClusterDeleteEventHandler_KillBegunAfterReadOwnsOutcome(t *testing.T
 func TestRayClusterAddEventHandler(t *testing.T) {
 	globalCluster := &v2pb.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
-		Status:     v2pb.RayClusterStatus{State: v2pb.RAY_CLUSTER_STATE_PROVISIONING},
+		Status: v2pb.RayClusterStatus{
+			State:            v2pb.RAY_CLUSTER_STATE_PROVISIONING,
+			StatusConditions: []*apipb.Condition{launchedCondition()},
+		},
 	}
 	r := setupWatcherTest(t, globalCluster)
 
@@ -1812,7 +2044,10 @@ func TestRayClusterAddEventHandler(t *testing.T) {
 func TestRayClusterUpdateEventHandler(t *testing.T) {
 	globalCluster := &v2pb.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
-		Status:     v2pb.RayClusterStatus{State: v2pb.RAY_CLUSTER_STATE_PROVISIONING},
+		Status: v2pb.RayClusterStatus{
+			State:            v2pb.RAY_CLUSTER_STATE_PROVISIONING,
+			StatusConditions: []*apipb.Condition{launchedCondition()},
+		},
 	}
 	r := setupWatcherTest(t, globalCluster)
 
@@ -1829,7 +2064,10 @@ func TestRayClusterUpdateEventHandler(t *testing.T) {
 func TestPodEventHandler_UpdatesHeadNode(t *testing.T) {
 	globalCluster := &v2pb.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
-		Status:     v2pb.RayClusterStatus{State: v2pb.RAY_CLUSTER_STATE_PROVISIONING},
+		Status: v2pb.RayClusterStatus{
+			State:            v2pb.RAY_CLUSTER_STATE_PROVISIONING,
+			StatusConditions: []*apipb.Condition{launchedCondition()},
+		},
 	}
 	r := setupWatcherTest(t, globalCluster)
 
@@ -1853,7 +2091,10 @@ func TestPodEventHandler_UpdatesHeadNode(t *testing.T) {
 func TestPodEventHandler_MissingPortAnnotationsAreNotErrors(t *testing.T) {
 	globalCluster := &v2pb.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
-		Status:     v2pb.RayClusterStatus{State: v2pb.RAY_CLUSTER_STATE_PROVISIONING},
+		Status: v2pb.RayClusterStatus{
+			State:            v2pb.RAY_CLUSTER_STATE_PROVISIONING,
+			StatusConditions: []*apipb.Condition{launchedCondition()},
+		},
 	}
 	r, _, logs := setupWatcherTestObserved(t, globalCluster)
 
@@ -1878,7 +2119,10 @@ func TestPodEventHandler_MissingPortAnnotationsAreNotErrors(t *testing.T) {
 func TestPodEventHandler_UnchangedHeadPodIsQuiet(t *testing.T) {
 	globalCluster := &v2pb.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
-		Status:     v2pb.RayClusterStatus{State: v2pb.RAY_CLUSTER_STATE_PROVISIONING},
+		Status: v2pb.RayClusterStatus{
+			State:            v2pb.RAY_CLUSTER_STATE_PROVISIONING,
+			StatusConditions: []*apipb.Condition{launchedCondition()},
+		},
 	}
 	r, writes, logs := setupWatcherTestObserved(t, globalCluster)
 	pod := newHeadPod("head-pod", rayClusterName, corev1.PodRunning)
@@ -1927,7 +2171,10 @@ func TestPodEventHandler_SkipsTerminatingCluster(t *testing.T) {
 func TestPodAddEventHandler_IgnoresNonHeadPod(t *testing.T) {
 	globalCluster := &v2pb.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
-		Status:     v2pb.RayClusterStatus{State: v2pb.RAY_CLUSTER_STATE_PROVISIONING},
+		Status: v2pb.RayClusterStatus{
+			State:            v2pb.RAY_CLUSTER_STATE_PROVISIONING,
+			StatusConditions: []*apipb.Condition{launchedCondition()},
+		},
 	}
 	r := setupWatcherTest(t, globalCluster)
 
@@ -1945,7 +2192,10 @@ func TestPodAddEventHandler_IgnoresNonHeadPod(t *testing.T) {
 func TestHandlePodEvent_SkipsNonRunningPod(t *testing.T) {
 	globalCluster := &v2pb.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
-		Status:     v2pb.RayClusterStatus{State: v2pb.RAY_CLUSTER_STATE_PROVISIONING},
+		Status: v2pb.RayClusterStatus{
+			State:            v2pb.RAY_CLUSTER_STATE_PROVISIONING,
+			StatusConditions: []*apipb.Condition{launchedCondition()},
+		},
 	}
 	r := setupWatcherTest(t, globalCluster)
 
@@ -1963,7 +2213,10 @@ func TestHandlePodEvent_SkipsNonRunningPod(t *testing.T) {
 func TestHandlePodEvent_RecordsErrorOnLivePod(t *testing.T) {
 	globalCluster := &v2pb.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
-		Status:     v2pb.RayClusterStatus{State: v2pb.RAY_CLUSTER_STATE_PROVISIONING},
+		Status: v2pb.RayClusterStatus{
+			State:            v2pb.RAY_CLUSTER_STATE_PROVISIONING,
+			StatusConditions: []*apipb.Condition{launchedCondition()},
+		},
 	}
 	r := setupWatcherTest(t, globalCluster)
 
@@ -1997,7 +2250,10 @@ func TestHandlePodEvent_RecordsErrorOnLivePod(t *testing.T) {
 func TestHandlePodEvent_RepeatedEventsDoNotDuplicate(t *testing.T) {
 	globalCluster := &v2pb.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
-		Status:     v2pb.RayClusterStatus{State: v2pb.RAY_CLUSTER_STATE_PROVISIONING},
+		Status: v2pb.RayClusterStatus{
+			State:            v2pb.RAY_CLUSTER_STATE_PROVISIONING,
+			StatusConditions: []*apipb.Condition{launchedCondition()},
+		},
 	}
 	r := setupWatcherTest(t, globalCluster)
 
@@ -2026,7 +2282,10 @@ func TestHandlePodEvent_RepeatedEventsDoNotDuplicate(t *testing.T) {
 func TestHandlePodEvent_HealthyStartupRecordsNothing(t *testing.T) {
 	globalCluster := &v2pb.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
-		Status:     v2pb.RayClusterStatus{State: v2pb.RAY_CLUSTER_STATE_PROVISIONING},
+		Status: v2pb.RayClusterStatus{
+			State:            v2pb.RAY_CLUSTER_STATE_PROVISIONING,
+			StatusConditions: []*apipb.Condition{launchedCondition()},
+		},
 	}
 	r := setupWatcherTest(t, globalCluster)
 
@@ -2057,7 +2316,10 @@ func TestHandlePodEvent_HealthyStartupRecordsNothing(t *testing.T) {
 func TestHandlePodEvent_IgnoresCollectorSidecar(t *testing.T) {
 	globalCluster := &v2pb.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
-		Status:     v2pb.RayClusterStatus{State: v2pb.RAY_CLUSTER_STATE_PROVISIONING},
+		Status: v2pb.RayClusterStatus{
+			State:            v2pb.RAY_CLUSTER_STATE_PROVISIONING,
+			StatusConditions: []*apipb.Condition{launchedCondition()},
+		},
 	}
 	r := setupWatcherTest(t, globalCluster)
 
@@ -2084,7 +2346,10 @@ func TestHandlePodEvent_IgnoresCollectorSidecar(t *testing.T) {
 func TestHandlePodEvent_RecordsInitContainerError(t *testing.T) {
 	globalCluster := &v2pb.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
-		Status:     v2pb.RayClusterStatus{State: v2pb.RAY_CLUSTER_STATE_PROVISIONING},
+		Status: v2pb.RayClusterStatus{
+			State:            v2pb.RAY_CLUSTER_STATE_PROVISIONING,
+			StatusConditions: []*apipb.Condition{launchedCondition()},
+		},
 	}
 	r := setupWatcherTest(t, globalCluster)
 
@@ -2113,7 +2378,10 @@ func TestHandlePodEvent_RecordsInitContainerError(t *testing.T) {
 func TestPodDeleteEventHandler_RecordsPodError(t *testing.T) {
 	globalCluster := &v2pb.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
-		Status:     v2pb.RayClusterStatus{State: v2pb.RAY_CLUSTER_STATE_PROVISIONING},
+		Status: v2pb.RayClusterStatus{
+			State:            v2pb.RAY_CLUSTER_STATE_PROVISIONING,
+			StatusConditions: []*apipb.Condition{launchedCondition()},
+		},
 	}
 	r := setupWatcherTest(t, globalCluster)
 
@@ -2146,8 +2414,9 @@ func frozenCluster() *v2pb.RayCluster {
 	return cluster
 }
 
-// deletingCluster is a cluster whose CR is being deleted. The fake client only
-// accepts a deletion timestamp on an object that still has a finalizer.
+// deletingCluster is a launched cluster whose CR is being deleted. The fake
+// client only accepts a deletion timestamp on an object that still has a
+// finalizer.
 func deletingCluster() *v2pb.RayCluster {
 	now := metav1.Now()
 	return &v2pb.RayCluster{
@@ -2156,7 +2425,10 @@ func deletingCluster() *v2pb.RayCluster {
 			DeletionTimestamp: &now,
 			Finalizers:        []string{"michelangelo/test"},
 		},
-		Status: v2pb.RayClusterStatus{State: v2pb.RAY_CLUSTER_STATE_READY},
+		Status: v2pb.RayClusterStatus{
+			State:            v2pb.RAY_CLUSTER_STATE_READY,
+			StatusConditions: []*apipb.Condition{launchedCondition()},
+		},
 	}
 }
 
@@ -2172,17 +2444,36 @@ func crashedPod(phase corev1.PodPhase) *corev1.Pod {
 	return pod
 }
 
-// TestPodHandlersSkipFrozenAndDeletingClusters: the CR is frozen within one
-// reconcile of DeleteJobCluster, but the pods it deleted take seconds to go, and
-// their trailing events must not write into an object that is waiting to be
-// archived (or, with metadata storage on, is already gone from etcd).
-func TestPodHandlersSkipFrozenAndDeletingClusters(t *testing.T) {
+// invalidImageWorkerPod is a worker pod whose image name does not parse, an
+// error no retry can fix.
+func invalidImageWorkerPod() *corev1.Pod {
+	pod := newHeadPod("worker-1", rayClusterName, corev1.PodPending)
+	pod.Labels[constants.RayNodeTypeLabelKey] = constants.RayWorkerNodeType
+	pod.Status.ContainerStatuses = []corev1.ContainerStatus{{
+		Name: headContainerName,
+		State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{
+			Reason: "InvalidImageName", Message: "couldn't parse image name",
+		}},
+	}}
+	return pod
+}
+
+// TestPodHandlersSkipFrozenDeletingAndUnlaunchedClusters: the CR is frozen
+// within one reconcile of DeleteJobCluster, but the pods it deleted take seconds
+// to go, and their trailing events must not write into an object that is
+// waiting to be archived (or, with metadata storage on, is already gone from
+// etcd). A cluster that has not launched has no pods of its own: the ones
+// carrying its name are a same-named predecessor's, whose head node is not the
+// cluster's, and whose error no retry can fix would fail the cluster as soon as
+// it launched.
+func TestPodHandlersSkipFrozenDeletingAndUnlaunchedClusters(t *testing.T) {
 	events := []struct {
 		name  string
 		event func(r *Reconciler)
 	}{
 		{name: "pod delete", event: func(r *Reconciler) { r.podDeleteEventHandler(crashedPod(corev1.PodFailed)) }},
 		{name: "container error on a live pod", event: func(r *Reconciler) { r.handlePodEvent(crashedPod(corev1.PodRunning)) }},
+		{name: "invalid image name", event: func(r *Reconciler) { r.handlePodEvent(invalidImageWorkerPod()) }},
 		{
 			name: "running head pod",
 			event: func(r *Reconciler) {
@@ -2196,6 +2487,7 @@ func TestPodHandlersSkipFrozenAndDeletingClusters(t *testing.T) {
 	}{
 		{name: "frozen", cluster: frozenCluster},
 		{name: "being deleted", cluster: deletingCluster},
+		{name: "not launched", cluster: unlaunchedCluster},
 	}
 
 	for _, c := range clusters {
@@ -2262,7 +2554,10 @@ func TestPodDeleteEventHandler_NormalDeletionIsNotAnError(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			globalCluster := &v2pb.RayCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
-				Status:     v2pb.RayClusterStatus{State: v2pb.RAY_CLUSTER_STATE_READY},
+				Status: v2pb.RayClusterStatus{
+					State:            v2pb.RAY_CLUSTER_STATE_READY,
+					StatusConditions: []*apipb.Condition{launchedCondition()},
+				},
 			}
 			r := setupWatcherTest(t, globalCluster)
 
@@ -2297,7 +2592,10 @@ func TestPodDeleteEventHandler_ConditionsFallback(t *testing.T) {
 	t.Run("live cluster", func(t *testing.T) {
 		globalCluster := &v2pb.RayCluster{
 			ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
-			Status:     v2pb.RayClusterStatus{State: v2pb.RAY_CLUSTER_STATE_READY},
+			Status: v2pb.RayClusterStatus{
+				State:            v2pb.RAY_CLUSTER_STATE_READY,
+				StatusConditions: []*apipb.Condition{launchedCondition()},
+			},
 		}
 		r := setupWatcherTest(t, globalCluster)
 
@@ -2331,7 +2629,10 @@ func TestPodDeleteEventHandler_Tombstone(t *testing.T) {
 func TestPodDeleteEventHandler_TombstoneWithObject(t *testing.T) {
 	globalCluster := &v2pb.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
-		Status:     v2pb.RayClusterStatus{State: v2pb.RAY_CLUSTER_STATE_PROVISIONING},
+		Status: v2pb.RayClusterStatus{
+			State:            v2pb.RAY_CLUSTER_STATE_PROVISIONING,
+			StatusConditions: []*apipb.Condition{launchedCondition()},
+		},
 	}
 	r := setupWatcherTest(t, globalCluster)
 
@@ -2465,7 +2766,10 @@ func setupWatcherTestWithLaggingCache(t *testing.T, globalCluster *v2pb.RayClust
 func TestHandlerWriteOutlastsLaggingCache(t *testing.T) {
 	globalCluster := &v2pb.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
-		Status:     v2pb.RayClusterStatus{State: v2pb.RAY_CLUSTER_STATE_PROVISIONING},
+		Status: v2pb.RayClusterStatus{
+			State:            v2pb.RAY_CLUSTER_STATE_PROVISIONING,
+			StatusConditions: []*apipb.Condition{launchedCondition()},
+		},
 	}
 	r, _ := setupWatcherTestWithLaggingCache(t, globalCluster, 150*time.Millisecond)
 
@@ -2482,7 +2786,10 @@ func TestHandlerWriteOutlastsLaggingCache(t *testing.T) {
 func TestDroppedHandlerWriteIsCounted(t *testing.T) {
 	globalCluster := &v2pb.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: rayClusterName, Namespace: testNamespace, Generation: 1},
-		Status:     v2pb.RayClusterStatus{State: v2pb.RAY_CLUSTER_STATE_PROVISIONING},
+		Status: v2pb.RayClusterStatus{
+			State:            v2pb.RAY_CLUSTER_STATE_PROVISIONING,
+			StatusConditions: []*apipb.Condition{launchedCondition()},
+		},
 	}
 	r, scope := setupWatcherTestWithLaggingCache(t, globalCluster, time.Hour)
 

@@ -1521,6 +1521,25 @@ func TestReconcileLeavesAClusterFrozenSinceItsRead(t *testing.T) {
 	})
 }
 
+// TestSafetyNetLeavesAClusterReplacedSinceItsRead: the cluster can be deleted
+// and a same-named one created while the safety net asks the compute cluster
+// about it. The KubeRay object it then finds gone was the predecessor's, so
+// recording that must not fail, and freeze, a cluster that has not launched.
+func TestSafetyNetLeavesAClusterReplacedSinceItsRead(t *testing.T) {
+	r := setupWatcherTest(t, provisioningCluster())
+	store := r.Handler.(*mockAPIHandler).Client
+	withSafetyNet(t, r).EXPECT().GetJobClusterStatus(gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(ctx context.Context, _ runtime.Object, _ *v2pb.Cluster) (*matypes.JobClusterStatus, error) {
+			require.NoError(t, store.Delete(ctx, provisioningCluster()))
+			require.NoError(t, store.Create(ctx, unlaunchedCluster()))
+			return nil, apiErrors.NewNotFound(schema.GroupResource{Group: "ray.io", Resource: "rayclusters"}, rayClusterName)
+		})
+
+	reconcile(t, r)
+
+	assertNothingRecorded(t, getUpdatedCluster(t, r))
+}
+
 // capturingManager is a manager that is never started; it records the runnables
 // added to it instead of running them.
 type capturingManager struct {

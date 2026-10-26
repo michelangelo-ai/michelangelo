@@ -770,7 +770,9 @@ func (r *Reconciler) markImmutableIfTerminal(ctx context.Context, cluster *v2pb.
 // handler can have got there since -- the KubeRay delete handler records the same
 // vanished object and freezes it -- so a cluster that is frozen or terminating by the
 // time of the write is left alone: its outcome is recorded, or the termination branch
-// owns it.
+// owns it. So is one that has not launched: the cluster was replaced by a same-named
+// one while the caller asked the compute cluster about it, and the vanished object
+// was the predecessor's.
 func (r *Reconciler) markClusterFailed(
 	ctx context.Context,
 	cluster *v2pb.RayCluster,
@@ -782,7 +784,7 @@ func (r *Reconciler) markClusterFailed(
 	if err := jobsutils.UpdateStatusWithRetries(
 		ctx, r, cluster,
 		func(obj client.Object) {
-			if cluster := obj.(*v2pb.RayCluster); !isFrozenOrDeleting(cluster) && !isClusterTerminating(cluster) {
+			if cluster := obj.(*v2pb.RayCluster); isLaunched(cluster) && !isFrozenOrDeleting(cluster) && !isClusterTerminating(cluster) {
 				markFailed(cluster)
 			}
 		},
