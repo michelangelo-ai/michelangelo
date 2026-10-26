@@ -56,6 +56,12 @@ const (
 	// KueueQueueCheckFailed means the LocalQueue existence check itself
 	// errored (target cluster unreachable etc.); the job is retried.
 	KueueQueueCheckFailed string = "KueueQueueCheckFailed"
+	// KueueClusterNotReady means every cluster that carries the job's
+	// LocalQueue is not Ready; the job is retried.
+	KueueClusterNotReady string = "KueueClusterNotReady"
+	// KueueQuotaExceeded means the job's ask exceeds the nominal quota of
+	// every candidate cluster's ClusterQueue; the job is retried.
+	KueueQuotaExceeded string = "KueueQuotaExceeded"
 
 	// AwaitingAdmission (Queued=True) means the job is held suspended on its
 	// target cluster until Kueue admits it.

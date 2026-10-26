@@ -250,6 +250,7 @@ func TestGetSchedulerConfig(t *testing.T) {
 jobs:
   scheduler:
     backend: kueue
+    assignmentStrategy: kueue_aware
     kueue:
       localQueueTemplate: "ma-{project}"
       localQueueOverrides:
@@ -263,6 +264,7 @@ jobs:
 	conf, err := GetSchedulerConfig(provider)
 	assert.NoError(t, err)
 	assert.Equal(t, "kueue", conf.Backend)
+	assert.Equal(t, AssignmentStrategyKueueAware, conf.AssignmentStrategy)
 	assert.Equal(t, "ma-{project}", conf.Kueue.LocalQueueTemplate)
 	assert.Equal(t, map[string]string{"some-project": "custom-queue"}, conf.Kueue.LocalQueueOverrides)
 	assert.Equal(t, "v1beta1", conf.Kueue.APIVersion)
@@ -275,8 +277,82 @@ jobs:
 	conf, err = GetSchedulerConfig(providerEmpty)
 	assert.NoError(t, err)
 	assert.Equal(t, "", conf.Backend)
+	assert.Equal(t, "", conf.AssignmentStrategy)
 	assert.False(t, conf.Kueue.TrustProjectLabel)
 	assert.Equal(t, DefaultAdmissionTimeout, conf.Kueue.AdmissionTimeout)
+}
+
+func TestGetSchedulerConfigAssignmentStrategy(t *testing.T) {
+	tests := []struct {
+		name    string
+		yaml    string
+		want    string
+		wantErr string
+	}{
+		{name: "absent means cluster_only", yaml: "jobs: {scheduler: {backend: kueue}}", want: ""},
+		{name: "absent under the default backend", yaml: "foo: bar", want: ""},
+		{name: "cluster_only", yaml: "jobs: {scheduler: {assignmentStrategy: cluster_only}}", want: AssignmentStrategyClusterOnly},
+		{
+			name: "cluster_only under the Kueue backend",
+			yaml: "jobs: {scheduler: {backend: kueue, assignmentStrategy: cluster_only}}",
+			want: AssignmentStrategyClusterOnly,
+		},
+		{
+			name: "kueue_aware_shadow under the Kueue backend",
+			yaml: "jobs: {scheduler: {backend: kueue, assignmentStrategy: kueue_aware_shadow}}",
+			want: AssignmentStrategyKueueAwareShadow,
+		},
+		{
+			name: "kueue_aware under the Kueue backend",
+			yaml: "jobs: {scheduler: {backend: kueue, assignmentStrategy: kueue_aware}}",
+			want: AssignmentStrategyKueueAware,
+		},
+		{
+			name:    "unknown strategy",
+			yaml:    "jobs: {scheduler: {backend: kueue, assignmentStrategy: kueue-aware}}",
+			wantErr: `unrecognized jobs.scheduler.assignmentStrategy "kueue-aware" (expected "cluster_only", "kueue_aware_shadow" or "kueue_aware")`,
+		},
+		{
+			name:    "unknown strategy under the default backend",
+			yaml:    "jobs: {scheduler: {assignmentStrategy: random}}",
+			wantErr: `unrecognized jobs.scheduler.assignmentStrategy "random"`,
+		},
+		{
+			name:    "kueue_aware without a backend",
+			yaml:    "jobs: {scheduler: {assignmentStrategy: kueue_aware}}",
+			wantErr: `jobs.scheduler.assignmentStrategy "kueue_aware" requires jobs.scheduler.backend "kueue", got ""`,
+		},
+		{
+			name:    "kueue_aware under the default backend",
+			yaml:    "jobs: {scheduler: {backend: default, assignmentStrategy: kueue_aware}}",
+			wantErr: `jobs.scheduler.assignmentStrategy "kueue_aware" requires jobs.scheduler.backend "kueue", got "default"`,
+		},
+		{
+			name:    "kueue_aware_shadow under the default backend",
+			yaml:    "jobs: {scheduler: {backend: default, assignmentStrategy: kueue_aware_shadow}}",
+			wantErr: `jobs.scheduler.assignmentStrategy "kueue_aware_shadow" requires jobs.scheduler.backend "kueue", got "default"`,
+		},
+		{
+			name:    "kueue_aware_shadow under an unknown backend",
+			yaml:    "jobs: {scheduler: {backend: yunikorn, assignmentStrategy: kueue_aware_shadow}}",
+			wantErr: `requires jobs.scheduler.backend "kueue", got "yunikorn"`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			provider, err := config.NewYAML(config.Source(strings.NewReader(tt.yaml)))
+			require.NoError(t, err)
+			conf, err := GetSchedulerConfig(provider)
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantErr)
+				assert.Equal(t, SchedulerConfig{}, conf)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, conf.AssignmentStrategy)
+		})
+	}
 }
 
 func TestGetSchedulerConfigAdmissionTimeout(t *testing.T) {

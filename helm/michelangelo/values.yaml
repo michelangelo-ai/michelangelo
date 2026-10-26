@@ -468,6 +468,15 @@ controllermgr:
       # compute cluster gang-admits it. Clusters without the marker behave
       # exactly as "default".
       backend: default
+      # How a job's cluster is picked. "cluster_only" (empty means
+      # cluster_only): the cluster the job's affinity pins, else the first
+      # Ready cluster. "kueue_aware": the Kueue-managed cluster where the job
+      # is likely admitted soonest, by each cluster's Kueue queues and quota;
+      # a job no cluster can admit waits with Enqueued=False and the reason.
+      # "kueue_aware_shadow": picks as cluster_only, and logs and counts the
+      # kueue_aware decision beside it. The two Kueue values require backend
+      # "kueue".
+      assignmentStrategy: ""
       kueue:
         # LocalQueue naming convention; "{project}" is replaced with the
         # job's project. Empty uses the built-in default "ma-{project}".

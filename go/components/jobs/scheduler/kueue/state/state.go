@@ -23,6 +23,12 @@ type State interface {
 	// the view says only that, with a nil error: the error is for queues that
 	// cannot be read.
 	Lookup(cluster, localQueue string) (View, error)
+	// LastKnown reports whether the named LocalQueue exists on the named
+	// cluster as its LocalQueues were last listed and watched, also while its
+	// watch is broken and Lookup says only that it is not synced. known is
+	// false, and exists with it, until the cluster's current watch has listed
+	// its LocalQueues, and when they cannot be read.
+	LastKnown(cluster, localQueue string) (exists, known bool)
 	// Synced reports whether the named cluster is watched and has listed its
 	// queues since its watch started or last failed.
 	Synced(cluster string) bool

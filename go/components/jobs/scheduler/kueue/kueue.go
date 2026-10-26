@@ -76,7 +76,7 @@ type Params struct {
 // job is dispatched to.
 type KueueJobQueue struct {
 	// mu serializes decisions: each one is made and recorded before the next
-	// starts.
+	// starts, so each sees the assignments recorded before it in flight.
 	mu       sync.Mutex
 	handler  api.Handler
 	strategy framework.AssignmentStrategy
@@ -85,13 +85,33 @@ type KueueJobQueue struct {
 	cfg      maconfig.SchedulerConfig
 	metrics  *metrics.ControllerMetrics
 	log      logr.Logger
+
+	// kueueAware, when set, decides RayClusters' placements, or in shadow
+	// mode only reports its decisions beside strategy's.
+	kueueAware *KueueAwareStrategy
+	shadow     bool
 }
 
 var _ JobQueue = (*KueueJobQueue)(nil)
 
+// Option configures an optional dependency of the KueueJobQueue.
+type Option func(*KueueJobQueue)
+
+// WithKueueAwareStrategy has the queue place RayClusters with the kueue_aware
+// strategy and add each assignment it records to the Kueue state's in-flight
+// demand. In shadow mode the queue still assigns Params.AssignmentStrategy's
+// choice, validated as without the option, and computes, logs and counts the
+// kueue_aware decision beside it.
+func WithKueueAwareStrategy(strategy *KueueAwareStrategy, shadow bool) Option {
+	return func(q *KueueJobQueue) {
+		q.kueueAware = strategy
+		q.shadow = shadow
+	}
+}
+
 // NewKueueJobQueue constructs the Kueue backend.
-func NewKueueJobQueue(p Params) *KueueJobQueue {
-	return &KueueJobQueue{
+func NewKueueJobQueue(p Params, opts ...Option) *KueueJobQueue {
+	q := &KueueJobQueue{
 		handler:  p.Handler,
 		strategy: p.AssignmentStrategy,
 		clusters: p.ClusterCache,
@@ -100,6 +120,10 @@ func NewKueueJobQueue(p Params) *KueueJobQueue {
 		metrics:  metrics.NewControllerMetrics(p.Scope, _controllerName),
 		log:      p.Logger.WithValues(constants.Component, _controllerName),
 	}
+	for _, opt := range opts {
+		opt(q)
+	}
+	return q
 }
 
 // Enqueue makes the job's placement decision and records it, unless the job
@@ -110,6 +134,11 @@ func NewKueueJobQueue(p Params) *KueueJobQueue {
 // Any other target is recorded as is, which is what allows mixed fleets
 // during migration. With no target, Scheduled is set False and nil is
 // returned so the caller retries later with a fresh decision.
+//
+// Under kueue_aware a RayCluster is placed by that strategy, which checks a
+// Kueue-managed target's LocalQueue itself and ranks it in a tier that the
+// Scheduled message names. A RayCluster it cannot place yet waits the same
+// way as one that fails validation, with the decision's reason.
 //
 // Under this backend Enqueue is the only writer of Enqueued (RFC 0a): True
 // with a recorded decision or a no-target result, False with the reason on a
@@ -133,42 +162,112 @@ func (q *KueueJobQueue) Enqueue(ctx context.Context, job matypes.SchedulableJob)
 
 	log := q.log.WithValues(constants.Job, latest.GetNamespace()+"/"+latest.GetName())
 
-	target, err := q.targetCluster(vctx, latest, log)
+	p, err := q.place(vctx, latest, log)
 	if err != nil {
-		return fmt.Errorf("kueue placement: select a cluster for job %q: %w", latest.GetName(), err)
+		return err
 	}
-	if target == nil {
+	if p.target == nil {
 		return q.recordNoTarget(vctx, latest, log)
 	}
-	log = log.WithValues("cluster", target.GetName())
+	log = log.WithValues("cluster", p.target.GetName())
 
-	targetSpec := target.GetSpec()
-	if targetSpec.GetSchedulerType() == v2pb.SCHEDULER_TYPE_KUEUE {
-		if err := q.validateLocalQueue(vctx, latest, target, log); err != nil {
+	if utils.IsKueueManaged(p.target) && !p.checked {
+		if err := q.validateLocalQueue(vctx, latest, p.target, log); err != nil {
 			return err
 		}
 	}
-	return q.recordAssignment(vctx, latest, target.GetName(), log)
+	return q.recordAssignment(vctx, latest, p, log)
 }
 
-// targetCluster returns the job's placement target: its recorded assignment
-// while that cluster is still registered, otherwise the assignment strategy's
-// choice. Returns nil when there is no target.
-func (q *KueueJobQueue) targetCluster(ctx context.Context, job framework.BatchJob, log logr.Logger) (*v2pb.Cluster, error) {
+// placement is a placement decision to record.
+type placement struct {
+	// target is the cluster to assign the job to; nil when there is none.
+	target *v2pb.Cluster
+	// tier is the tier the target ranked in under kueue_aware; zero when it
+	// was not ranked.
+	tier Tier
+	// checked is whether the decision already checked the target's LocalQueue,
+	// so the target is recorded without validating it again.
+	checked bool
+}
+
+// place returns the job's placement: its recorded assignment while that
+// cluster is still registered, otherwise the configured strategy's decision.
+// A RayCluster that kueue_aware cannot place yet gets Enqueued=False with the
+// decision's reason, and an error is returned.
+func (q *KueueJobQueue) place(ctx context.Context, job framework.BatchJob, log logr.Logger) (placement, error) {
 	if name := job.GetAssignmentInfo().GetCluster(); name != "" {
 		if target := q.clusters.GetCluster(name); target != nil {
-			return target, nil
+			return placement{target: target}, nil
 		}
 		log.Info("Recorded assignment names an unregistered cluster; selecting again", "recordedCluster", name)
 	}
+	_, isRayCluster := job.GetObject().(*v2pb.RayCluster)
+	if q.kueueAware != nil && !q.shadow && isRayCluster {
+		return q.placeKueueAware(ctx, job, log)
+	}
 	ai, found, err := q.selectCluster(ctx, job, log)
 	if err != nil {
-		return nil, err
+		return placement{}, fmt.Errorf("kueue placement: select a cluster for job %q: %w", job.GetName(), err)
 	}
-	if !found || ai.GetCluster() == "" {
-		return nil, nil
+	var target *v2pb.Cluster
+	if found && ai.GetCluster() != "" {
+		target = q.clusters.GetCluster(ai.GetCluster())
 	}
-	return q.clusters.GetCluster(ai.GetCluster()), nil
+	if q.kueueAware != nil && q.shadow && isRayCluster {
+		var pick string
+		if target != nil {
+			pick = target.GetName()
+		}
+		q.shadowDecision(ctx, job, pick, log)
+	}
+	return placement{target: target}, nil
+}
+
+// placeKueueAware places a RayCluster with the kueue_aware strategy, and
+// counts and logs the decision. A job the strategy cannot place yet gets
+// Enqueued=False with the decision's reason, written only when the reason
+// changes, and an error is returned, as for a failed validation.
+func (q *KueueJobQueue) placeKueueAware(ctx context.Context, job framework.BatchJob, log logr.Logger) (placement, error) {
+	d, err := q.kueueAwareDecision(ctx, job, log)
+	if err != nil {
+		return placement{}, fmt.Errorf("kueue placement: select a cluster for job %q: %w", job.GetName(), err)
+	}
+	countDecision(maconfig.AssignmentStrategyKueueAware, d, "")
+	log.Info("Kueue-aware placement decision", d.logValues()...)
+	if d.Cluster != nil {
+		return placement{target: d.Cluster, tier: d.Tier, checked: true}, nil
+	}
+	if uerr := q.setEnqueuedCondition(ctx, job, d.Reason, d.Message); uerr != nil {
+		log.Error(uerr, "Failed to update Enqueued condition")
+	}
+	return placement{}, fmt.Errorf("kueue placement: job %q waits: %s: %s", job.GetName(), d.Reason, d.Message)
+}
+
+// shadowDecision computes the kueue_aware decision for a RayCluster beside
+// cluster_only's pick, empty when it found none, logs the two and counts the
+// decision with the pick's tier among its candidates. It never changes what is
+// assigned.
+func (q *KueueJobQueue) shadowDecision(ctx context.Context, job framework.BatchJob, pick string, log logr.Logger) {
+	d, err := q.kueueAwareDecision(ctx, job, log)
+	if err != nil {
+		log.Error(err, "Kueue-aware shadow decision failed")
+		return
+	}
+	actualTier := d.candidateTier(pick)
+	countDecision(maconfig.AssignmentStrategyKueueAwareShadow, d, actualTier)
+	log.Info("Kueue-aware placement decision (shadow)",
+		append(d.logValues(), "clusterOnlyCluster", pick, "actualTier", actualTier)...)
+}
+
+// kueueAwareDecision returns the kueue_aware decision for a RayCluster. A job
+// re-placed off earlier targets is decided without them unless that leaves no
+// candidate, as selectCluster decides under cluster_only (RFC 0f).
+func (q *KueueJobQueue) kueueAwareDecision(ctx context.Context, job framework.BatchJob, log logr.Logger) (Decision, error) {
+	if excluded := excludedClusters(job, log); len(excluded) > 0 {
+		return q.kueueAware.SelectExcluding(ctx, job, excluded)
+	}
+	return q.kueueAware.Select(ctx, job)
 }
 
 // selectCluster returns the assignment strategy's decision. For a job
@@ -178,12 +277,8 @@ func (q *KueueJobQueue) targetCluster(ctx context.Context, job framework.BatchJo
 // decision without the exclusion has: a wait or the same cluster (RFC 0f).
 func (q *KueueJobQueue) selectCluster(ctx context.Context, job framework.BatchJob, log logr.Logger) (*v2pb.AssignmentInfo, bool, error) {
 	if excluding, ok := q.strategy.(framework.ExcludingAssignmentStrategy); ok {
-		state, err := utils.DispatchStateFromCondition(utils.FindCondition(*job.GetConditions(), constants.LaunchedCondition))
-		if err != nil {
-			log.Error(err, "Ignoring an undecodable dispatch record")
-		}
-		if len(state.ExcludedClusters) > 0 {
-			ai, found, _, err := excluding.SelectExcluding(ctx, job, state.ExcludedClusters)
+		if excluded := excludedClusters(job, log); len(excluded) > 0 {
+			ai, found, _, err := excluding.SelectExcluding(ctx, job, excluded)
 			if err != nil {
 				return nil, false, err
 			}
@@ -191,11 +286,21 @@ func (q *KueueJobQueue) selectCluster(ctx context.Context, job framework.BatchJo
 				return ai, true, nil
 			}
 			log.Info("No cluster left after excluding earlier targets; deciding without the exclusion",
-				"excludedClusters", state.ExcludedClusters)
+				"excludedClusters", excluded)
 		}
 	}
 	ai, found, _, err := q.strategy.Select(ctx, job)
 	return ai, found, err
+}
+
+// excludedClusters returns the clusters the job was re-placed away from, as
+// its Launched condition records them (RFC 0f).
+func excludedClusters(job framework.BatchJob, log logr.Logger) []string {
+	state, err := utils.DispatchStateFromCondition(utils.FindCondition(*job.GetConditions(), constants.LaunchedCondition))
+	if err != nil {
+		log.Error(err, "Ignoring an undecodable dispatch record")
+	}
+	return state.ExcludedClusters
 }
 
 // validateLocalQueue checks that the job's LocalQueue exists on the
@@ -242,12 +347,16 @@ func (q *KueueJobQueue) validateLocalQueue(ctx context.Context, job framework.Ba
 
 // recordAssignment persists the decision in one status write, applied to the
 // re-read object so that a decision made from a stale read never overwrites
-// a newer one.
-func (q *KueueJobQueue) recordAssignment(ctx context.Context, job framework.BatchJob, clusterName string, log logr.Logger) error {
+// a newer one. Under the kueue_aware strategies, a recorded RayCluster then
+// counts as in flight to its cluster for the decisions that follow.
+func (q *KueueJobQueue) recordAssignment(ctx context.Context, job framework.BatchJob, p placement, log logr.Logger) error {
+	clusterName := p.target.GetName()
 	var recorded bool
+	var written *v2pb.RayCluster
 	if err := utils.UpdateStatusWithRetries(ctx, q.handler, job.GetObject(),
 		func(obj client.Object) {
-			recorded = recordPlacement(obj, clusterName)
+			recorded = recordPlacement(obj, clusterName, p.tier)
+			written, _ = obj.(*v2pb.RayCluster)
 		}, &metav1.UpdateOptions{
 			FieldManager: "kueueAssignJob",
 		}); err != nil {
@@ -256,6 +365,9 @@ func (q *KueueJobQueue) recordAssignment(ctx context.Context, job framework.Batc
 	if !recorded {
 		log.Info("Job was already scheduled by another decision; nothing recorded")
 		return nil
+	}
+	if q.kueueAware != nil && written != nil {
+		q.kueueAware.RecordAssignment(written, clusterName)
 	}
 	log.Info("Job scheduled successfully")
 	return nil
@@ -293,10 +405,10 @@ func placementStatus(obj client.Object) (conds *[]*apipb.Condition, assignment *
 
 // recordPlacement records clusterName as obj's placement decision:
 // Status.Assignment, Scheduled=True/ClusterMatched with message
-// "cluster <name>", and Enqueued=True/AddedToSchedulerQueue unless Enqueued
-// is already True. It changes nothing and returns false when obj is already
-// scheduled.
-func recordPlacement(obj client.Object, clusterName string) bool {
+// "cluster <name>", followed by ", tier <n>" for a cluster kueue_aware ranked,
+// and Enqueued=True/AddedToSchedulerQueue unless Enqueued is already True. It
+// changes nothing and returns false when obj is already scheduled.
+func recordPlacement(obj client.Object, clusterName string, tier Tier) bool {
 	conds, assignment, ok := placementStatus(obj)
 	if !ok {
 		return false
@@ -307,12 +419,16 @@ func recordPlacement(obj client.Object, clusterName string) bool {
 		return false
 	}
 
+	message := "cluster " + clusterName
+	if tier != tierNone {
+		message += fmt.Sprintf(", tier %d", tier)
+	}
 	*assignment = &v2pb.AssignmentInfo{Cluster: clusterName}
 	utils.UpdateCondition(scheduled, utils.ConditionUpdateParams{
 		Status:     apipb.CONDITION_STATUS_TRUE,
 		Reason:     constants.ClusterMatched,
 		Generation: generation,
-		Message:    "cluster " + clusterName,
+		Message:    message,
 	})
 	markEnqueued(conds, generation)
 	return true
