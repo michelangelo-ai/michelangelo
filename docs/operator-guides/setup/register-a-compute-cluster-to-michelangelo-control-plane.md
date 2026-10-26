@@ -110,7 +110,8 @@ EOF
   - `kubectl --context ${COMPUTE_CONTEXT} -n default get secret ray-manager-token`
   - Verify the Secret has a `token` key: `kubectl --context ${COMPUTE_CONTEXT} -n default get secret ray-manager-token -o jsonpath='{.data.token}' | wc -c` (should be > 0)
 - Runtime contract in place: the credentials Secret sets both keys, and `AWS_ENDPOINT_URL` and `REGISTRY_ENDPOINT` are reachable from `default`:
-  - `helm test michelangelo-compute --kube-context ${COMPUTE_CONTEXT} --namespace michelangelo-compute --logs`
+  - `helm test michelangelo-compute --kube-context ${COMPUTE_CONTEXT} --namespace michelangelo-compute`
+  - If it fails, read the failed checks: `kubectl --context ${COMPUTE_CONTEXT} -n default logs michelangelo-compute-test-runtime-contract`
 - Cluster registered in control plane:
   - `kubectl --context ${CONTROL_PLANE_CONTEXT} -n ma-system get clusters`
 - Optional: Run a pipeline as in [Run a Pipeline on a Compute Cluster](../jobs/run-uniflow-pipeline-on-compute-cluster.md).

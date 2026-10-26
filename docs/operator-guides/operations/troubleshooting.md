@@ -79,7 +79,10 @@ kubectl --context <compute-context> get pods -l ray.io/cluster=<cluster-name>
 kubectl --context <compute-context> logs <head-pod-name>
 
 # Check the runtime contract: the credentials Secret and both endpoints, from namespace default
-helm test michelangelo-compute --kube-context <compute-context> --namespace michelangelo-compute --logs
+helm test michelangelo-compute --kube-context <compute-context> --namespace michelangelo-compute
+
+# If it fails, read the failed checks; the test pod stays in default until the next run
+kubectl --context <compute-context> -n default logs michelangelo-compute-test-runtime-contract
 
 # Verify the runtime objects are present on the compute cluster
 kubectl --context <compute-context> -n default get configmap michelangelo-config
@@ -88,7 +91,7 @@ kubectl --context <compute-context> -n default get secret <credentials-secret>  
 
 **Likely causes**:
 - The object-storage credentials Secret named by controllermgr's `logPersistence.credentialsSecret` is missing from `default` — the Ray log collector sidecar reads its keys directly, so the pod reports CreateContainerConfigError and `kubectl describe pod` names the Secret; task containers start without it but get no object-storage credentials (see [Object-storage credentials](../setup/install-compute-cluster-charts.md#object-storage-credentials))
-- `helm test` reports `FAIL:` for `AWS_ENDPOINT_URL` or `REGISTRY_ENDPOINT` — the value in `runtime.config` is wrong, or the endpoint is unreachable from `default` (see [Required Connectivity](../setup/network.md#required-connectivity))
+- The `helm test` pod's log reports `FAIL:` for `AWS_ENDPOINT_URL` or `REGISTRY_ENDPOINT` — the value in `runtime.config` is wrong, or the endpoint is unreachable from `default` (see [Required Connectivity](../setup/network.md#required-connectivity))
 - The `michelangelo-config` ConfigMap is missing or has the wrong `AWS_ENDPOINT_URL`
 - The container image cannot be pulled (wrong registry, missing imagePullSecret)
 - Insufficient CPU or memory quota on the compute cluster — check `kubectl --context <compute-context> describe nodes`

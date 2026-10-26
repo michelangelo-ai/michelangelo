@@ -179,7 +179,7 @@ Helm 3.13 renders `helm template` for Kubernetes 1.28 unless `--kube-version` is
 ## Verify with helm test
 
 ```bash
-helm test michelangelo-compute --kube-context "${COMPUTE_CONTEXT}" --namespace michelangelo-compute --logs
+helm test michelangelo-compute --kube-context "${COMPUTE_CONTEXT}" --namespace michelangelo-compute
 ```
 
 The test pod runs in `default`, where job pods run, and checks the runtime contract:
@@ -187,7 +187,9 @@ The test pod runs in `default`, where job pods run, and checks the runtime contr
 - The credentials Secret named by `runtime.objectStorageCredentials.name` exists and sets `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`. The test never prints the keys.
 - `AWS_ENDPOINT_URL` and `REGISTRY_ENDPOINT` from `michelangelo-config` are reachable. The test opens a TCP connection to each host and port; `http` and `https` URLs without a port use 80 and 443.
 
-Each check prints `ok:` or `FAIL:`. The test checks reachability only: it does not sign in to the object store. A failed test pod stays in `default` until the next run, so you can still read it with `kubectl --context "${COMPUTE_CONTEXT}" -n default logs michelangelo-compute-test-runtime-contract`.
+Each check prints `ok:` or `FAIL:` in the pod's log, and `helm test` fails if any check fails. The test checks reachability only: it does not sign in to the object store.
+
+Run it without `--logs`. Helm reads test pods from the release namespace, not from `default`, so `--logs` fails even when the test passes. A passing test pod is deleted. A failed one stays in `default` until the next run, so read its checks with `kubectl --context "${COMPUTE_CONTEXT}" -n default logs michelangelo-compute-test-runtime-contract`.
 
 ## Apply the operator CRDs first
 

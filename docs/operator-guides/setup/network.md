@@ -299,7 +299,9 @@ kubectl exec -it <task-pod> -n <compute-namespace> -- \
 On a compute cluster installed with the `michelangelo-compute` chart, `helm test` checks from namespace `default` that `AWS_ENDPOINT_URL` and `REGISTRY_ENDPOINT` are reachable and that the object-storage credentials Secret exists (see [Verify with helm test](install-compute-cluster-charts.md#verify-with-helm-test)):
 
 ```bash
-helm test michelangelo-compute --kube-context <compute-context> --namespace michelangelo-compute --logs
+helm test michelangelo-compute --kube-context <compute-context> --namespace michelangelo-compute
+# If it fails, read the failed checks; the test pod stays in default until the next run
+kubectl --context <compute-context> -n default logs michelangelo-compute-test-runtime-contract
 ```
 
 ---
