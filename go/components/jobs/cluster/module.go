@@ -16,6 +16,7 @@ import (
 // Module provides the cluster reconciler and scheduler.
 var Module = fx.Options(
 	fx.Provide(NewReconciler),
+	fx.Provide(NewClusterReadiness),
 	fx.Invoke(register),
 )
 

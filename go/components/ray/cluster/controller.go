@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"sync"
 	"time"
 
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
@@ -19,6 +20,7 @@ import (
 	api "github.com/michelangelo-ai/michelangelo/go/api"
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
+	maconfig "github.com/michelangelo-ai/michelangelo/go/base/config"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	jobsclient "github.com/michelangelo-ai/michelangelo/go/components/jobs/client"
 	jobscluster "github.com/michelangelo-ai/michelangelo/go/components/jobs/cluster"
@@ -57,6 +59,18 @@ type Reconciler struct {
 	schedulerQueue    scheduler.JobQueue                  // Queue for enqueuing jobs to scheduler
 	federatedClient   jobsclient.FederatedClient          // Client for creating clusters on remote K8s
 	clusterCache      jobscluster.RegisteredClustersCache // Cache for looking up assigned clusters
+	schedulerConfig   maconfig.SchedulerConfig            // Scheduler backend; re-placement is Kueue-only
+	clusterReadiness  jobscluster.ClusterReadiness        // Tri-state readiness of registered clusters
+	apiReader         client.Reader                       // Live reads, bypassing the manager's cache
+	clusterReader     client.Reader                       // Manager client, for listing Clusters
+	now               func() time.Time                    // Clock; time.Now when nil
+
+	// unpersisted holds the UIDs of RayClusters whose create may have
+	// reached their target without that being persisted (RFC 0f).
+	unpersisted sync.Map
+	// staleCacheBackoff holds each RayCluster's wait for the manager's cache
+	// to catch up with the live object.
+	staleCacheBackoff sync.Map
 }
 
 // NewReconciler constructs a Reconciler with required dependencies.
@@ -70,8 +84,9 @@ func NewReconciler(
 	schedulerQueue scheduler.JobQueue,
 	federatedClient jobsclient.FederatedClient,
 	clusterCache jobscluster.RegisteredClustersCache,
+	opts ...ReconcilerOption,
 ) *Reconciler {
-	return &Reconciler{
+	r := &Reconciler{
 		logger:            logger,
 		apiHandlerFactory: apiHandlerFactory,
 		env:               env,
@@ -79,6 +94,10 @@ func NewReconciler(
 		federatedClient:   federatedClient,
 		clusterCache:      clusterCache,
 	}
+	for _, opt := range opts {
+		opt(r)
+	}
+	return r
 }
 
 // Reconcile ensures the desired state of the Ray Cluster matches the actual state in the cluster.
@@ -118,10 +137,14 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	// Check for termination
 	if r.shouldTerminateCluster(&rayCluster) {
 		logger.Info("processing cluster termination")
-		err := r.processClusterTermination(ctx, &rayCluster, logger)
+		terminationRes, err := r.processClusterTermination(ctx, &rayCluster, logger)
 		if err != nil {
 			logger.Error(err, "cluster termination could not be processed")
 			return ctrl.Result{RequeueAfter: requeueAfter}, err
+		}
+		if !terminationRes.IsZero() {
+			logger.Info("cluster termination waiting for cleanup", "requeueAfter", terminationRes.RequeueAfter)
+			return terminationRes, nil
 		}
 		logger.Info("processed cluster termination")
 		return r.finalizeIfTerminal(ctx, &rayCluster, logger)
@@ -135,69 +158,21 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 
 	// Wait for scheduling
-	assignedCluster := r.getClusterIfScheduled(&rayCluster)
-	if assignedCluster == nil {
+	if !isScheduled(&rayCluster) {
 		logger.Info("cluster not yet scheduled, requeue for later")
 		return ctrl.Result{RequeueAfter: requeueAfter}, nil
 	}
 
-	// Create RayCluster if not launched
-	launched := jobsutils.GetCondition(&rayCluster.Status.StatusConditions, LaunchedCondition, rayCluster.Generation)
-	if launched.Status != apipb.CONDITION_STATUS_TRUE {
-		logger.Info("creating ray cluster via federated client", "assignedCluster", assignedCluster.Name)
-		err = r.federatedClient.CreateJobCluster(ctx, &rayCluster, assignedCluster)
-		if err != nil {
-			if apiErrors.IsAlreadyExists(err) {
-				logger.Info("cluster already exists, treating as launched")
-				// Continue to update launched condition
-			} else {
-				logger.Error(err, "failed to create ray cluster via federated client")
-				rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_FAILED
+	// Create RayCluster if not launched. The target's readiness is checked
+	// before its registration, so that a target this process has not seen
+	// yet is waited for.
+	if jobsutils.FindCondition(rayCluster.Status.StatusConditions, LaunchedCondition).GetStatus() != apipb.CONDITION_STATUS_TRUE {
+		return r.dispatch(ctx, &rayCluster, logger)
+	}
 
-				if err = jobsutils.UpdateStatusWithRetries(
-					ctx, r, &rayCluster,
-					func(obj client.Object) {
-						cluster := obj.(*v2pb.RayCluster)
-						cluster.Status.State = v2pb.RAY_CLUSTER_STATE_FAILED
-
-						// Set failed condition to trigger termination
-						succeededCond := jobsutils.GetCondition(&cluster.Status.StatusConditions, SucceededCondition, cluster.Generation)
-						jobsutils.UpdateCondition(succeededCond, jobsutils.ConditionUpdateParams{
-							Status:     apipb.CONDITION_STATUS_FALSE,
-							Generation: cluster.Generation,
-							Reason:     "ClusterCreationFailed",
-							Message:    err.Error(),
-						})
-					},
-					&metav1.UpdateOptions{},
-				); err != nil {
-					logger.Error(err, "failed to update status after creation failure")
-				}
-
-				return ctrl.Result{RequeueAfter: requeueAfter}, err
-			}
-		}
-
-		// Update LaunchedCondition to TRUE and set state to PROVISIONING
-		if err = jobsutils.UpdateStatusWithRetries(
-			ctx, r, &rayCluster,
-			func(obj client.Object) {
-				cluster := obj.(*v2pb.RayCluster)
-				cluster.Status.State = v2pb.RAY_CLUSTER_STATE_PROVISIONING
-
-				launchedCond := jobsutils.GetCondition(&cluster.Status.StatusConditions, LaunchedCondition, cluster.Generation)
-				jobsutils.UpdateCondition(launchedCond, jobsutils.ConditionUpdateParams{
-					Status:     apipb.CONDITION_STATUS_TRUE,
-					Generation: cluster.Generation,
-					Reason:     "ClusterCreated",
-				})
-			},
-			&metav1.UpdateOptions{},
-		); err != nil {
-			logger.Error(err, "failed to update launched condition")
-			return ctrl.Result{RequeueAfter: requeueAfter}, err
-		}
-		logger.Info("cluster creation initiated")
+	assignedCluster := r.getClusterIfScheduled(&rayCluster)
+	if assignedCluster == nil {
+		logger.Info("assigned cluster not registered, requeue for later")
 		return ctrl.Result{RequeueAfter: requeueAfter}, nil
 	}
 
@@ -255,6 +230,8 @@ func (r *Reconciler) Register(mgr ctrl.Manager) error {
 		return err
 	}
 	r.Handler = handler
+	r.apiReader = mgr.GetAPIReader()
+	r.clusterReader = mgr.GetClient()
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v2pb.RayCluster{}). // Watch for changes in RayCluster custom resources
@@ -273,31 +250,32 @@ func (r *Reconciler) shouldTerminateCluster(cluster *v2pb.RayCluster) bool {
 	return success.Status != apipb.CONDITION_STATUS_UNKNOWN
 }
 
-// processClusterTermination handles the full termination flow for a cluster
+// processClusterTermination handles the full termination flow for a cluster. A
+// non-zero result means cleanup is waiting and the cluster must not be finalized yet.
 func (r *Reconciler) processClusterTermination(
 	ctx context.Context,
 	cluster *v2pb.RayCluster,
 	log logr.Logger,
-) error {
+) (ctrl.Result, error) {
 	// Step 1: Set succeeded condition if required
 	err := r.setClusterSuccessConditionIfRequired(ctx, cluster, log)
 	if err != nil {
-		return fmt.Errorf("could not set succeeded condition: %w", err)
+		return ctrl.Result{}, fmt.Errorf("could not set succeeded condition: %w", err)
 	}
 
 	// Step 2: Set killing condition if required
 	err = r.setClusterKillIfRequired(ctx, cluster, log)
 	if err != nil {
-		return fmt.Errorf("could not set killing condition: %w", err)
+		return ctrl.Result{}, fmt.Errorf("could not set killing condition: %w", err)
 	}
 
 	// Step 3: Cleanup cluster resources
-	err = r.cleanupCluster(ctx, cluster, log)
+	res, err := r.cleanupCluster(ctx, cluster, log)
 	if err != nil {
-		return fmt.Errorf("could not perform cleanup: %w", err)
+		return ctrl.Result{}, fmt.Errorf("could not perform cleanup: %w", err)
 	}
 
-	return nil
+	return res, nil
 }
 
 // setClusterSuccessConditionIfRequired sets the succeeded condition based on termination type
@@ -374,16 +352,26 @@ func (r *Reconciler) setClusterKillIfRequired(
 	return nil
 }
 
-// cleanupCluster performs cleanup of cluster resources
+// cleanupCluster performs cleanup of cluster resources. A non-zero result means
+// it is waiting to remove what a create may have left on the target.
 func (r *Reconciler) cleanupCluster(
 	ctx context.Context,
 	cluster *v2pb.RayCluster,
 	log logr.Logger,
-) error {
+) (ctrl.Result, error) {
 	killing := jobsutils.GetCondition(&cluster.Status.StatusConditions, KillingCondition, cluster.Generation)
 	if killing.Status != apipb.CONDITION_STATUS_TRUE {
-		return nil
+		return ctrl.Result{}, nil
 	}
+
+	// A cluster that never launched may still exist on its target after an
+	// ambiguous create. This runs before the target's registration is
+	// checked, so that a target this process has not seen yet is waited for.
+	res, done, err := r.cleanupUnlaunched(ctx, cluster, log)
+	if err != nil || !done {
+		return res, err
+	}
+	r.forget(cluster.UID)
 
 	assignedCluster := r.getClusterIfScheduled(cluster)
 
@@ -407,9 +395,9 @@ func (r *Reconciler) cleanupCluster(
 				FieldManager: "cleanupClusterNotScheduled",
 			}); err != nil {
 			log.Error(err, "could not update the cluster status")
-			return err
+			return ctrl.Result{}, err
 		}
-		return nil
+		return ctrl.Result{}, nil
 	}
 
 	// Cluster scheduled but not launched yet
@@ -433,19 +421,19 @@ func (r *Reconciler) cleanupCluster(
 				FieldManager: "cleanupClusterNotLaunched",
 			}); err != nil {
 			log.Error(err, "could not update the cluster status")
-			return err
+			return ctrl.Result{}, err
 		}
-		return nil
+		return ctrl.Result{}, nil
 	}
 
 	// Cluster launched, delete via federated client
-	err := r.federatedClient.DeleteJobCluster(ctx, cluster, assignedCluster)
+	err = r.federatedClient.DeleteJobCluster(ctx, cluster, assignedCluster)
 	if err != nil {
 		if apiErrors.IsNotFound(err) {
 			log.Info("cluster already deleted")
 			// Still update status to terminated
 		} else {
-			return fmt.Errorf("could not delete cluster: %w", err)
+			return ctrl.Result{}, fmt.Errorf("could not delete cluster: %w", err)
 		}
 	}
 
@@ -468,11 +456,11 @@ func (r *Reconciler) cleanupCluster(
 			FieldManager: "cleanupClusterDeleted",
 		}); err != nil {
 		log.Error(err, "could not update the cluster status")
-		return err
+		return ctrl.Result{}, err
 	}
 
 	log.Info("cluster cleaned up successfully")
-	return nil
+	return ctrl.Result{}, nil
 }
 
 // enqueueIfRequired enqueues the cluster to the scheduler queue if not already enqueued
@@ -547,17 +535,16 @@ func (r *Reconciler) enqueueIfRequired(
 
 // getClusterIfScheduled returns the assigned cluster if the RayCluster has been scheduled
 func (r *Reconciler) getClusterIfScheduled(cluster *v2pb.RayCluster) *v2pb.Cluster {
-	isScheduled := jobsutils.IsJobScheduled(cluster.Status.StatusConditions, cluster.Generation)
-	if !isScheduled {
+	if !isScheduled(cluster) {
 		return nil
 	}
+	return r.clusterCache.GetCluster(cluster.Status.Assignment.Cluster)
+}
 
-	if cluster.Status.Assignment == nil || cluster.Status.Assignment.Cluster == "" {
-		return nil
-	}
-
-	assignedCluster := r.clusterCache.GetCluster(cluster.Status.Assignment.Cluster)
-	return assignedCluster
+// isScheduled reports whether the RayCluster is scheduled and assigned to a cluster.
+func isScheduled(cluster *v2pb.RayCluster) bool {
+	return jobsutils.IsJobScheduled(cluster.Status.StatusConditions, cluster.Generation) &&
+		cluster.Status.Assignment.GetCluster() != ""
 }
 
 // getClusterStatus retrieves the current status of a RayCluster resource from the federated cluster

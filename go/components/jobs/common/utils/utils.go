@@ -157,6 +157,21 @@ func IsRetriableError(err error) bool {
 func UpdateStatusWithRetries(ctx context.Context, handler api.Handler, job client.Object,
 	applyUpdates func(job client.Object), opts *metav1.UpdateOptions,
 ) error {
+	_, err := UpdateStatusIfWithRetries(ctx, handler, job, func(latestJob client.Object) bool {
+		applyUpdates(latestJob)
+		return true
+	}, opts)
+	return err
+}
+
+// UpdateStatusIfWithRetries is UpdateStatusWithRetries for a guarded update:
+// applyUpdates mutates the freshly read job and returns false to write
+// nothing. Each retry re-reads the job and re-evaluates the guard. It reports
+// whether the status was written.
+func UpdateStatusIfWithRetries(ctx context.Context, handler api.Handler, job client.Object,
+	applyUpdates func(job client.Object) bool, opts *metav1.UpdateOptions,
+) (bool, error) {
+	written := false
 	if err := retry.OnError(retry.DefaultRetry, IsRetriableError, func() error {
 		var latestJob client.Object
 
@@ -176,17 +191,23 @@ func UpdateStatusWithRetries(ctx context.Context, handler api.Handler, job clien
 		if err := handler.Get(ctx, job.GetNamespace(), job.GetName(), &metav1.GetOptions{}, latestJob); err != nil {
 			return err
 		}
-		applyUpdates(latestJob)
-		return handler.UpdateStatus(ctx, latestJob, opts)
+		if !applyUpdates(latestJob) {
+			return nil
+		}
+		if err := handler.UpdateStatus(ctx, latestJob, opts); err != nil {
+			return err
+		}
+		written = true
+		return nil
 	}); err != nil {
 		// If we exhaust all retries on a re-triable error, then return a special wrapped error to callers to indicate this.
 		if IsRetriableError(err) {
-			return fmt.Errorf("%w err: %v", ErrStatusUpdate, err)
+			return false, fmt.Errorf("%w err: %v", ErrStatusUpdate, err)
 		}
-		return err
+		return false, err
 	}
 
-	return nil
+	return written, nil
 }
 
 // IsRegionalCluster returns true if the cluster is regional

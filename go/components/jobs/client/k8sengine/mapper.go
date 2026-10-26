@@ -13,6 +13,7 @@ import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"go.uber.org/config"
 	"go.uber.org/fx"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -73,6 +74,17 @@ func mapLabels(_ map[string]string, queueName string) map[string]string {
 		return nil
 	}
 	return map[string]string{constants.KueueQueueNameLabelKey: queueName}
+}
+
+// ownerAnnotations identify the global object that owns a compute-side
+// object. Compute-side names drop the global namespace (every object lands in
+// RayLocalNamespace), so ns1/foo and ns2/foo share a name there: deletes match
+// ma/owner-uid before removing an object by name.
+func ownerAnnotations(owner metav1.Object) map[string]string {
+	return map[string]string{
+		constants.OwnerAnnotationKey:    owner.GetNamespace() + "/" + owner.GetName(),
+		constants.OwnerUIDAnnotationKey: string(owner.GetUID()),
+	}
 }
 
 // kueueQueueName resolves the LocalQueue for a job dispatched to cluster, or

@@ -60,7 +60,8 @@ func (m Mapper) mapRay(rayJob *v2pb.RayJob, jobClusterObject runtime.Object, clu
 			// RayJobs target an existing RayCluster via ClusterSelector, so
 			// they are never Kueue-queued themselves (Kueue admits the
 			// cluster); no queue label is resolved here.
-			Labels: mapLabels(rayJob.GetLabels(), ""),
+			Labels:      mapLabels(rayJob.GetLabels(), ""),
+			Annotations: ownerAnnotations(rayJob),
 		},
 		Spec: rayv1.RayJobSpec{
 			ClusterSelector: map[string]string{
@@ -160,9 +161,10 @@ func (m Mapper) mapRayCluster(rayCluster *v2pb.RayCluster, cluster *v2pb.Cluster
 			APIVersion: RayAPIVersion,
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      rayCluster.Name,
-			Namespace: RayLocalNamespace,
-			Labels:    mapLabels(rayCluster.GetLabels(), queueName),
+			Name:        rayCluster.Name,
+			Namespace:   RayLocalNamespace,
+			Labels:      mapLabels(rayCluster.GetLabels(), queueName),
+			Annotations: ownerAnnotations(rayCluster),
 		},
 		Spec: rayv1.RayClusterSpec{
 			HeadGroupSpec:    headGroupSpec,

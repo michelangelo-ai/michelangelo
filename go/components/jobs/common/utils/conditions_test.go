@@ -212,3 +212,17 @@ func TestUpdateConditions(t *testing.T) {
 		})
 	}
 }
+
+func TestFindCondition(t *testing.T) {
+	launched := &apipb.Condition{Type: constants.LaunchedCondition, Status: apipb.CONDITION_STATUS_TRUE}
+	conditions := []*apipb.Condition{
+		{Type: constants.EnqueuedCondition, Status: apipb.CONDITION_STATUS_TRUE},
+		launched,
+	}
+
+	require.Same(t, launched, FindCondition(conditions, constants.LaunchedCondition))
+	require.Nil(t, FindCondition(conditions, constants.QueuedCondition))
+	// Unlike GetCondition, an absent condition is not added.
+	require.Len(t, conditions, 2)
+	require.Nil(t, FindCondition(nil, constants.QueuedCondition))
+}

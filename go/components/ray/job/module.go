@@ -28,6 +28,7 @@ func register(
 	restConfig.QPS = conf.QPS
 	restConfig.Burst = conf.Burst
 
+	jobsclient.RegisterDispatchMetrics()
 	return NewReconciler(
 		logger,
 		mgr.GetClient(),
