@@ -299,8 +299,28 @@ func clientFor(t *testing.T, cfg *rest.Config, invalidate bool) *Client {
 	return &Client{factory: factory, helper: NewHelper(), mapper: permissiveMapper(t), logger: zap.NewNop()}
 }
 
-func shortContext(t *testing.T) context.Context {
-	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+// Deadlines for the tests that drive real requests. Under load a TLS
+// handshake with a local server can take hundreds of milliseconds, so no case
+// may depend on one finishing quickly.
+const (
+	// answerDeadline only stops a hung test: the server answers these
+	// requests.
+	answerDeadline = 10 * time.Second
+	// noConnDeadline ends a request that never gets a connection. The request
+	// is unreached whether the deadline or the failure ends it.
+	noConnDeadline = 300 * time.Millisecond
+	// stallDeadline ends a request the server read and never answered. It has
+	// to outlast connecting and writing the request.
+	stallDeadline = 2 * time.Second
+)
+
+// testContext returns a context that ends after d, or after answerDeadline
+// when d is zero.
+func testContext(t *testing.T, d time.Duration) context.Context {
+	if d == 0 {
+		d = answerDeadline
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), d)
 	t.Cleanup(cancel)
 	return ctx
 }
@@ -313,12 +333,15 @@ func TestCreateJobCluster_ClassifiesRealRequests(t *testing.T) {
 		config     func(t *testing.T) *rest.Config
 		want       DispatchClass
 		invalidate bool
+		deadline   time.Duration // answerDeadline when zero
 	}{
-		{name: "listener accepts TCP but never completes TLS", config: silentTLSListener, want: DispatchUnreached},
-		{name: "connection refused", config: refusedConfig, want: DispatchUnreached},
-		{name: "DNS failure", config: func(*testing.T) *rest.Config { return &rest.Config{Host: "https://compute-a.invalid"} }, want: DispatchUnreached},
+		{name: "listener accepts TCP but never completes TLS", config: silentTLSListener, want: DispatchUnreached, deadline: noConnDeadline},
+		{name: "connection refused", config: refusedConfig, want: DispatchUnreached, deadline: noConnDeadline},
+		{name: "DNS failure", config: func(*testing.T) *rest.Config { return &rest.Config{Host: "https://compute-a.invalid"} }, want: DispatchUnreached, deadline: noConnDeadline},
+		// The handshake has to finish before it can fail, so this case gets the
+		// full deadline.
 		{name: "x509 failure invalidates", config: untrustedTLSServer, want: DispatchUnreached, invalidate: true},
-		{name: "server reads the full request then stalls", config: stallingServer, want: DispatchAmbiguous},
+		{name: "server reads the full request then stalls", config: stallingServer, want: DispatchAmbiguous, deadline: stallDeadline},
 		{name: "already exists", config: func(t *testing.T) *rest.Config {
 			return statusServer(t, http.StatusConflict, metav1.StatusReasonAlreadyExists, "exists")
 		}, want: DispatchAlreadyExists},
@@ -362,7 +385,7 @@ func TestCreateJobCluster_ClassifiesRealRequests(t *testing.T) {
 			c := clientFor(t, tt.config(t), tt.invalidate)
 			rc := &v2pb.RayCluster{ObjectMeta: metav1.ObjectMeta{Name: "rc", Namespace: "ns1"}}
 
-			err := c.CreateJobCluster(shortContext(t), rc, dispatchTestCluster)
+			err := c.CreateJobCluster(testContext(t, tt.deadline), rc, dispatchTestCluster)
 
 			require.Error(t, err)
 			assert.Equal(t, tt.want, ClassifyDispatchError(err), "error: %v", err)
@@ -392,10 +415,12 @@ func TestCreateJobCluster_ConnectBound(t *testing.T) {
 // TestCreateJobCluster_ConnectBoundStopsAtConnection: once a connection is
 // obtained the bound no longer applies, so a slow answer is not cut by it.
 func TestCreateJobCluster_ConnectBoundStopsAtConnection(t *testing.T) {
-	withConnectBound(t, 100*time.Millisecond)
+	// The bound has to outlast the handshake; the answer comes after it.
+	const bound = time.Second
+	withConnectBound(t, bound)
 	server := h2Server(t, func(w http.ResponseWriter, r *http.Request) {
 		_, _ = io.Copy(io.Discard, r.Body)
-		time.Sleep(300 * time.Millisecond)
+		time.Sleep(bound + 250*time.Millisecond)
 		writeStatus(w, http.StatusServiceUnavailable, metav1.StatusReasonServiceUnavailable, "unavailable")
 	})
 	c := clientFor(t, trustingConfig(server), false)
@@ -520,12 +545,13 @@ func TestCreateJob_OwnerReferenceGetClassifiesLikeACreate(t *testing.T) {
 		want        DispatchClass
 		wantPrefix  string
 		wantConnect bool
+		deadline    time.Duration // answerDeadline when zero
 	}{
 		{name: "GET gets no connection", config: silentTLSListener, want: DispatchUnreached, wantPrefix: "get remote ray cluster for owner ref: ", wantConnect: true},
 		{name: "GET answered 404", config: func(t *testing.T) *rest.Config {
 			return statusServer(t, http.StatusNotFound, metav1.StatusReasonNotFound, "not found")
 		}, want: DispatchRejected, wantPrefix: "get remote ray cluster for owner ref: "},
-		{name: "GET read then stalls", config: stallingServer, want: DispatchAmbiguous, wantPrefix: "get remote ray cluster for owner ref: "},
+		{name: "GET read then stalls", config: stallingServer, want: DispatchAmbiguous, wantPrefix: "get remote ray cluster for owner ref: ", deadline: stallDeadline},
 		{name: "GET succeeds, create answered 503", config: func(t *testing.T) *rest.Config {
 			return trustingConfig(h2Server(t, func(w http.ResponseWriter, r *http.Request) {
 				if answerGet(w, r) {
@@ -537,16 +563,17 @@ func TestCreateJob_OwnerReferenceGetClassifiesLikeACreate(t *testing.T) {
 		}, want: DispatchRejected, wantPrefix: "create ray job err:"},
 		{name: "GET succeeds, create read then stalls", config: func(t *testing.T) *rest.Config {
 			return trustingConfig(stallingH2Server(t, answerGet))
-		}, want: DispatchAmbiguous, wantPrefix: "create ray job err:"},
+		}, want: DispatchAmbiguous, wantPrefix: "create ray job err:", deadline: stallDeadline},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			withConnectBound(t, 100*time.Millisecond)
+			if tt.wantConnect {
+				// Only a case that never connects may cut the handshake short.
+				withConnectBound(t, 100*time.Millisecond)
+			}
 			c := clientFor(t, tt.config(t), false)
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-			t.Cleanup(cancel)
 
-			err := c.CreateJob(ctx, rayJob, rayCluster, dispatchTestCluster)
+			err := c.CreateJob(testContext(t, tt.deadline), rayJob, rayCluster, dispatchTestCluster)
 
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), tt.wantPrefix)
