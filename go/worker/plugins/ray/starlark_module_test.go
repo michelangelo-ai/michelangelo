@@ -14,6 +14,8 @@ import (
 	"github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"github.com/stretchr/testify/mock"
+	tmpworkflow "go.temporal.io/sdk/workflow"
+	cadworkflow "go.uber.org/cadence/workflow"
 	"go.uber.org/yarpc/yarpcerrors"
 )
 
@@ -32,6 +34,14 @@ func (r *Test) SetupTest() {
 			"ray": Plugin,
 		},
 	})
+	// This suite covers the workflow executions that reached create_cluster before the provisioning budget
+	// (provisioning_test.go covers the others): their wait for the cluster stays the single readiness sensor.
+	r.env.Cadence.GetTestWorkflowEnvironment().
+		OnGetVersion(provisioningBudgetChangeID, cadworkflow.DefaultVersion, provisioningBudgetVersion).
+		Return(cadworkflow.DefaultVersion).Maybe()
+	r.env.Temporal.GetTestWorkflowEnvironment().
+		OnGetVersion(provisioningBudgetChangeID, tmpworkflow.DefaultVersion, provisioningBudgetVersion).
+		Return(tmpworkflow.DefaultVersion).Maybe()
 }
 
 func (r *Test) TearDownTest() {

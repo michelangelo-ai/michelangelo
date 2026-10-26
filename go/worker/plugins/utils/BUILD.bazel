@@ -1,15 +1,33 @@
-load("@io_bazel_rules_go//go:def.bzl", "go_library")
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "go_default_library",
-    srcs = ["utils.go"],
+    srcs = [
+        "utils.go",
+        "version.go",
+    ],
     importpath = "github.com/michelangelo-ai/michelangelo/go/worker/plugins/utils",
     visibility = ["//visibility:public"],
     deps = [
         "@com_github_cadence_workflow_starlark_worker//star:go_default_library",
         "@com_github_cadence_workflow_starlark_worker//workflow:go_default_library",
         "@com_github_json_iterator_go//:go_default_library",
+        "@io_temporal_go_sdk//workflow:go_default_library",
         "@net_starlark_go//starlark:go_default_library",
+        "@org_uber_go_cadence//workflow:go_default_library",
         "@org_uber_go_yarpc//yarpcerrors:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["version_test.go"],
+    embed = [":go_default_library"],
+    deps = [
+        "@com_github_stretchr_testify//require:go_default_library",
+        "@io_temporal_go_sdk//testsuite:go_default_library",
+        "@io_temporal_go_sdk//workflow:go_default_library",
+        "@org_uber_go_cadence//testsuite:go_default_library",
+        "@org_uber_go_cadence//workflow:go_default_library",
     ],
 )

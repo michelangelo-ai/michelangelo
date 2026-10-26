@@ -18,6 +18,8 @@ go_library(
         "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
         "@io_k8s_client_go//util/retry:go_default_library",
         "@io_k8s_sigs_controller_runtime//pkg/log:go_default_library",
+        "@io_temporal_go_sdk//activity:go_default_library",
+        "@io_temporal_go_sdk//temporal:go_default_library",
         "@org_uber_go_fx//:go_default_library",
         "@org_uber_go_yarpc//:go_default_library",
         "@org_uber_go_yarpc//yarpcerrors:go_default_library",
@@ -27,16 +29,24 @@ go_library(
 
 go_test(
     name = "go_default_test",
-    srcs = ["ray_activities_test.go"],
+    srcs = [
+        "ray_activities_test.go",
+        "ray_sensors_test.go",
+    ],
     embed = [":go_default_library"],
     deps = [
+        "//go/worker/plugins/utils:go_default_library",
         "//proto/api/v2:go_default_library",
         "//proto/api/v2:go_michelangelo_v2_gomock_library",
         "@com_github_cadence_workflow_starlark_worker//service:go_default_library",
         "@com_github_cadence_workflow_starlark_worker//test/types:go_default_library",
         "@com_github_golang_mock//gomock:go_default_library",
         "@com_github_stretchr_testify//assert:go_default_library",
+        "@com_github_stretchr_testify//require:go_default_library",
         "@com_github_stretchr_testify//suite:go_default_library",
         "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
+        "@io_temporal_go_sdk//temporal:go_default_library",
+        "@org_uber_go_cadence//:go_default_library",
+        "@org_uber_go_yarpc//yarpcerrors:go_default_library",
     ],
 )

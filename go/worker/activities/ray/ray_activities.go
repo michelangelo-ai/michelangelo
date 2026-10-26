@@ -7,6 +7,8 @@ import (
 	"github.com/cadence-workflow/starlark-worker/activity"
 	"github.com/cadence-workflow/starlark-worker/workflow"
 	"github.com/gogo/protobuf/proto"
+	tmpactivity "go.temporal.io/sdk/activity"
+	"go.temporal.io/sdk/temporal"
 	"go.uber.org/yarpc"
 	"go.uber.org/yarpc/yarpcerrors"
 	"go.uber.org/zap"
@@ -241,6 +243,140 @@ func (r *activities) SensorRayClusterReadiness(ctx context.Context, request v2pb
 
 	// Return retry-able error.
 	return nil, workflow.NewCustomError(ctx, yarpcerrors.CodeFailedPrecondition.String(), status)
+}
+
+// SensorRayClusterProvisioningResponse DTO
+type SensorRayClusterProvisioningResponse struct {
+	RayCluster *v2pb.RayCluster `json:"ray_cluster,omitempty"`
+	// JobURL is the RayCluster's URL.
+	JobURL string `json:"job_url,omitempty"`
+	// Ready is true when the RayCluster is READY and false when it is SUSPENDED.
+	Ready bool `json:"ready,omitempty"`
+}
+
+// SensorRayClusterProvisioning monitors a Ray cluster until it is READY or SUSPENDED.
+//
+// It is the budgeted half of create_cluster's provisioning wait: the workflow retries it within the remaining
+// provisioning budget and hands a SUSPENDED cluster to SensorRayClusterAdmission, which spends no budget.
+//
+// Params:
+// - ctx: The context for the operation.
+// - request: Request containing the cluster name and namespace.
+//
+// Returns:
+// - *SensorRayClusterProvisioningResponse: The cluster, when it is READY or SUSPENDED.
+// - error: Non-retryable when the cluster is FAILED or TERMINATED, retryable in any other state.
+func (r *activities) SensorRayClusterProvisioning(ctx context.Context, request v2pb.GetRayClusterRequest) (*SensorRayClusterProvisioningResponse, error) {
+	logger := activity.GetLogger(ctx)
+	logger.Info("activity-start", zap.Any("request", request))
+	rayCluster, err := r.senseRayCluster(ctx, request, provisioningOutcome)
+	if err != nil {
+		return nil, err
+	}
+	return &SensorRayClusterProvisioningResponse{
+		RayCluster: rayCluster,
+		JobURL:     rayCluster.Status.JobUrl,
+		Ready:      rayCluster.Status.State == v2pb.RAY_CLUSTER_STATE_READY,
+	}, nil
+}
+
+// SensorRayClusterAdmission monitors a SUSPENDED Ray cluster until Kueue admits it.
+//
+// Params:
+// - ctx: The context for the operation.
+// - request: Request containing the cluster name and namespace.
+//
+// Returns:
+// - *v2pb.GetRayClusterResponse: The cluster, once it is in a state other than SUSPENDED, FAILED or TERMINATED.
+// - error: Non-retryable when the cluster is FAILED or TERMINATED, retryable while it is SUSPENDED.
+func (r *activities) SensorRayClusterAdmission(ctx context.Context, request v2pb.GetRayClusterRequest) (*v2pb.GetRayClusterResponse, error) {
+	logger := activity.GetLogger(ctx)
+	logger.Info("activity-start", zap.Any("request", request))
+	rayCluster, err := r.senseRayCluster(ctx, request, admissionOutcome)
+	if err != nil {
+		return nil, err
+	}
+	return &v2pb.GetRayClusterResponse{RayCluster: rayCluster}, nil
+}
+
+// sensorOutcome is what a RayCluster sensor activity reports for the observed cluster state.
+type sensorOutcome int
+
+const (
+	// sensorPending: the cluster may still reach the awaited state. The activity fails retryably, so its retry
+	// policy polls again.
+	sensorPending sensorOutcome = iota
+	// sensorDone: the cluster is in the awaited state. The activity succeeds.
+	sensorDone
+	// sensorTerminal: the cluster is FAILED or TERMINATED and will never reach the awaited state. The activity
+	// fails non-retryably.
+	sensorTerminal
+)
+
+// provisioningOutcome maps a state for SensorRayClusterProvisioning: READY ends provisioning and SUSPENDED
+// ends its budgeted part; every other live state is still provisioning.
+func provisioningOutcome(state v2pb.RayClusterState) sensorOutcome {
+	switch {
+	case hasClusterTerminalCondition(state):
+		return sensorTerminal
+	case state == v2pb.RAY_CLUSTER_STATE_READY, state == v2pb.RAY_CLUSTER_STATE_SUSPENDED:
+		return sensorDone
+	default:
+		return sensorPending
+	}
+}
+
+// admissionOutcome maps a state for SensorRayClusterAdmission: any live state other than SUSPENDED ends the
+// wait for admission.
+func admissionOutcome(state v2pb.RayClusterState) sensorOutcome {
+	switch {
+	case hasClusterTerminalCondition(state):
+		return sensorTerminal
+	case state == v2pb.RAY_CLUSTER_STATE_SUSPENDED:
+		return sensorPending
+	default:
+		return sensorDone
+	}
+}
+
+// senseRayCluster reads a Ray cluster and maps its state to the result of a sensor activity: the cluster when
+// the outcome is sensorDone, a retryable error when it is sensorPending or the read fails, and a non-retryable
+// error when it is sensorTerminal.
+func (r *activities) senseRayCluster(ctx context.Context, request v2pb.GetRayClusterRequest, outcome func(v2pb.RayClusterState) sensorOutcome) (*v2pb.RayCluster, error) {
+	logger := activity.GetLogger(ctx)
+	ctx = runnertoken.WithNamespace(ctx, request.Namespace)
+	getRayClusterResponse, err := r.rayClusterService.GetRayCluster(ctx, &request)
+	if err != nil {
+		logger.Error("activity-error", zap.Any("error", err.Error()))
+		return nil, workflow.NewCustomError(ctx, err.Error())
+	}
+	if getRayClusterResponse.RayCluster == nil {
+		logger.Error("activity-error", zap.Any("error", "ray cluster not found in response"))
+		return nil, workflow.NewCustomError(ctx, "Failed to retrieve ray cluster from ray.io")
+	}
+	rayCluster := getRayClusterResponse.RayCluster
+	status := rayCluster.Status
+
+	switch outcome(status.State) {
+	case sensorTerminal:
+		return nil, nonRetryableError(ctx, yarpcerrors.CodeInternal.String(), status)
+	case sensorPending:
+		return nil, workflow.NewCustomError(ctx, yarpcerrors.CodeFailedPrecondition.String(), status)
+	default:
+		return rayCluster, nil
+	}
+}
+
+// nonRetryableError returns an activity error that the activity's retry policy does not retry, on either
+// workflow engine. On Cadence it is a CustomError whose reason is one of the policy's non-retriable reasons. On
+// Temporal a starlark-worker CustomError reaches the server as a retryable failure of type
+// "TemporalCustomError", whatever its reason, so the error is a non-retryable ApplicationError instead, with the
+// reason as its type and message.
+func nonRetryableError(ctx context.Context, reason string, details ...interface{}) error {
+	if tmpactivity.IsActivity(ctx) {
+		return temporal.NewNonRetryableApplicationError(reason, reason, nil, details...)
+	}
+	return workflow.NewCustomError(ctx, reason, details...)
 }
 
 // TerminateCluster terminates a Ray cluster with the provided parameters.
