@@ -217,6 +217,14 @@ ray_rule='  - apiGroups:
       - update
       - patch
       - delete'
+pods_rule='  - apiGroups:
+      - ""
+    resources:
+      - pods
+    verbs:
+      - get
+      - list
+      - watch'
 spark_rule='  - apiGroups:
       - sparkoperator.k8s.io
     resources:
@@ -266,14 +274,14 @@ assert_identity() {
 
 identity_output="$(template --show-only templates/rbac/ray-manager.yaml)"
 assert_identity "$identity_output" ray-manager
-assert_contains "$identity_output" $'rules:\n'"$ray_rule"$'\n'"$localqueues_rule"$'\n---'
+assert_contains "$identity_output" $'rules:\n'"$ray_rule"$'\n'"$pods_rule"$'\n'"$localqueues_rule"$'\n---'
 assert_contains "$identity_output" $'rules:\n'"$clusterqueues_rule"$'\n---'
 
 spark_grant_output="$(template --show-only templates/rbac/ray-manager.yaml --set rayManager.grants.spark=true)"
-assert_contains "$spark_grant_output" $'rules:\n'"$ray_rule"$'\n'"$spark_rule"$'\n'"$localqueues_rule"$'\n---'
+assert_contains "$spark_grant_output" $'rules:\n'"$ray_rule"$'\n'"$pods_rule"$'\n'"$spark_rule"$'\n'"$localqueues_rule"$'\n---'
 
 no_kueue_output="$(template --show-only templates/rbac/ray-manager.yaml --set rayManager.grants.kueueRead=false)"
-assert_contains "$no_kueue_output" $'rules:\n'"$ray_rule"$'\n---'
+assert_contains "$no_kueue_output" $'rules:\n'"$ray_rule"$'\n'"$pods_rule"$'\n---'
 assert_not_contains "$no_kueue_output" clusterqueues
 
 no_token_objects="$(objects "$(template --show-only templates/rbac/ray-manager.yaml --set rayManager.tokenSecret=false)")"

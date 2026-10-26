@@ -49,6 +49,17 @@ rules:
       - update
       - patch
       - delete
+  {{- /* Read-only: the control plane watches the pods of the Ray clusters it
+  creates, for container and scheduling errors. KubeRay creates and deletes
+  them. */}}
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+    verbs:
+      - get
+      - list
+      - watch
   {{- if .Values.rayManager.grants.spark }}
   - apiGroups:
       - sparkoperator.k8s.io
