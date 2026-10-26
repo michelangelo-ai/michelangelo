@@ -13,6 +13,9 @@ NAMESPACE=michelangelo-compute
 # The chart's kubeVersion floor, pinned because each Helm version renders with
 # a different default.
 KUBE_VERSION=1.29.0
+# Sets the runtime settings that have no default. Every render uses it unless
+# VALUES_FILE is cleared.
+VALUES_FILE="$CHART_DIR/examples/values-minimal.yaml"
 # Archives written to charts/ by helm dependency build, with their sha256.
 DEPENDENCIES=(
   "kuberay-operator-1.7.1.tgz fd057c207a6be038f2fe1475abb87f43a8c091b77f1f563b4e8547a2404b5bc8"
@@ -65,6 +68,7 @@ template() {
   "$HELM" template "$RELEASE" "$CHART_DIR" \
     --namespace "$NAMESPACE" \
     --kube-version "$KUBE_VERSION" \
+    ${VALUES_FILE:+--values "$VALUES_FILE"} \
     "$@"
 }
 
@@ -78,7 +82,7 @@ render() {
 }
 
 validate_profile() {
-  "$HELM" lint --strict "$CHART_DIR" --namespace "$NAMESPACE" "$@"
+  "$HELM" lint --strict "$CHART_DIR" --namespace "$NAMESPACE" --values "$VALUES_FILE" "$@"
   render "$@"
 }
 
@@ -295,6 +299,53 @@ custom_name_output="$(template --show-only templates/rbac/ray-manager.yaml --set
 assert_identity "$custom_name_output" michelangelo-control-plane
 assert_not_contains "$(objects "$custom_name_output")" ray-manager
 
+# Runtime contract. examples/values-minimal.yaml sets the three required
+# settings and the Secret name, with create false.
+assert_object "$default_objects" 'ConfigMap default michelangelo-config'
+assert_not_contains "$default_objects" 'Secret default michelangelo-object-storage-credentials'
+assert_object "$default_objects" 'Pod default michelangelo-compute-test-runtime-contract'
+
+# runtime.config renders verbatim with sorted keys and every value a string.
+runtime_config_values=(
+  --set runtime.config.MA_FILE_SYSTEM_S3_SCHEME=http
+  --set runtime.config.MA_RETRIES=3
+  --set runtime.config.MA_TRACKING_ENABLED=true
+)
+validate_profile "${runtime_config_values[@]}"
+config_output="$(template --show-only templates/runtime/configmap.yaml "${runtime_config_values[@]}")"
+assert_contains "$config_output" 'data:
+  AWS_ENDPOINT_URL: "https://object-storage.example.com"
+  MA_FILE_SYSTEM: "s3://michelangelo"
+  MA_FILE_SYSTEM_S3_SCHEME: "http"
+  MA_RETRIES: "3"
+  MA_TRACKING_ENABLED: "true"
+  REGISTRY_ENDPOINT: "michelangelo-apiserver.example.com:15566"'
+
+credentials_values=(
+  --set runtime.objectStorageCredentials.create=true
+  --set runtime.objectStorageCredentials.accessKeyId=test-access-key-id
+  --set runtime.objectStorageCredentials.secretAccessKey=test-secret-access-key
+)
+validate_profile "${credentials_values[@]}"
+credentials_output="$(template --show-only templates/runtime/secret.yaml "${credentials_values[@]}")"
+assert_object "$(objects "$credentials_output")" 'Secret default michelangelo-object-storage-credentials'
+assert_contains "$credentials_output" $'  annotations:\n    helm.sh/resource-policy: keep\n'
+assert_contains "$credentials_output" 'type: Opaque
+stringData:
+  AWS_ACCESS_KEY_ID: "test-access-key-id"
+  AWS_SECRET_ACCESS_KEY: "test-secret-access-key"'
+
+test_pod_output="$(template --show-only templates/tests/test-runtime-contract.yaml)"
+assert_contains "$test_pod_output" $'  annotations:\n    helm.sh/hook: test\n    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded\n'
+assert_contains "$test_pod_output" $'\n  automountServiceAccountToken: false\n'
+# busybox runs as root, so runAsNonRoot needs a non-root user to start.
+assert_contains "$test_pod_output" $'\n    runAsNonRoot: true\n    runAsUser: 65534\n    runAsGroup: 65534\n'
+assert_contains "$test_pod_output" $'\n      image: "busybox:1.36"\n'
+assert_contains "$test_pod_output" $'      envFrom:\n        - configMapRef:\n            name: michelangelo-config\n'
+assert_contains "$test_pod_output" $'      secret:\n        secretName: "michelangelo-object-storage-credentials"\n        optional: true'
+test_image_output="$(template --show-only templates/tests/test-runtime-contract.yaml --set tests.image=registry.example.com/busybox:1.36)"
+assert_contains "$test_image_output" $'\n      image: "registry.example.com/busybox:1.36"\n'
+
 # The Spark invariants no longer apply once the subchart is disabled.
 spark_disabled_values=(
   --set spark-operator.enabled=false
@@ -348,6 +399,33 @@ expect_failure "non-boolean subchart toggle" "spark-operator.enabled" \
 expect_failure "Kubernetes older than the chart's kubeVersion" ">=1.29.0-0" \
   --kube-version 1.28.0
 
+# Without examples/values-minimal.yaml, the defaults leave the runtime settings
+# unset.
+VALUES_FILE='' expect_failure "chart defaults alone" "runtime.config.MA_FILE_SYSTEM must be set"
+expect_failure "runtime.config without MA_FILE_SYSTEM" "runtime.config.MA_FILE_SYSTEM must be set" \
+  --set-json 'runtime.config={"AWS_ENDPOINT_URL":"https://object-storage.example.com","REGISTRY_ENDPOINT":"michelangelo-apiserver.example.com:15566"}'
+expect_failure "runtime.config without AWS_ENDPOINT_URL" "runtime.config.AWS_ENDPOINT_URL must be set" \
+  --set-json 'runtime.config={"MA_FILE_SYSTEM":"s3://michelangelo","REGISTRY_ENDPOINT":"michelangelo-apiserver.example.com:15566"}'
+expect_failure "runtime.config without REGISTRY_ENDPOINT" "runtime.config.REGISTRY_ENDPOINT must be set" \
+  --set-json 'runtime.config={"MA_FILE_SYSTEM":"s3://michelangelo","AWS_ENDPOINT_URL":"https://object-storage.example.com"}'
+expect_failure "empty runtime.config.REGISTRY_ENDPOINT" "runtime.config.REGISTRY_ENDPOINT must be set" \
+  --set runtime.config.REGISTRY_ENDPOINT=
+expect_failure "runtime.config with AWS_ACCESS_KEY_ID" "runtime.config.AWS_ACCESS_KEY_ID must not be set" \
+  --set runtime.config.AWS_ACCESS_KEY_ID=test-access-key-id
+expect_failure "runtime.config with AWS_SECRET_ACCESS_KEY" "runtime.config.AWS_SECRET_ACCESS_KEY must not be set" \
+  --set runtime.config.AWS_SECRET_ACCESS_KEY=test-secret-access-key
+expect_failure "non-scalar runtime.config value" "runtime.config.MA_NON_SCALAR" \
+  --set-json 'runtime.config.MA_NON_SCALAR={"nested":"value"}'
+expect_failure "credentials Secret without a name" "runtime.objectStorageCredentials.name must be set" \
+  --set runtime.objectStorageCredentials.name=
+expect_failure "created credentials Secret without secretAccessKey" \
+  "runtime.objectStorageCredentials.secretAccessKey must be set when" \
+  --set runtime.objectStorageCredentials.create=true \
+  --set runtime.objectStorageCredentials.accessKeyId=test-access-key-id
+expect_failure "external credentials Secret with accessKeyId" \
+  "runtime.objectStorageCredentials.accessKeyId must be empty when" \
+  --set runtime.objectStorageCredentials.accessKeyId=test-access-key-id
+
 if [[ "${SKIP_PACKAGE:-false}" != "true" ]]; then
   package_dir="$(mktemp -d)"
   trap 'rm -rf "$package_dir"' EXIT
@@ -355,6 +433,7 @@ if [[ "${SKIP_PACKAGE:-false}" != "true" ]]; then
   chart_version="$(awk '$1 == "version:" {gsub(/"/, "", $2); print $2; exit}' "$CHART_DIR/Chart.yaml")"
   package_contents="$(tar tzf "$package_dir/michelangelo-compute-$chart_version.tgz")"
   assert_contains "$package_contents" 'michelangelo-compute/values.schema.json'
+  assert_contains "$package_contents" 'michelangelo-compute/examples/values-minimal.yaml'
   assert_contains "$package_contents" 'michelangelo-compute/charts/kuberay-operator/Chart.yaml'
   assert_contains "$package_contents" 'michelangelo-compute/charts/kuberay-operator/crds/ray.io_rayclusters.yaml'
   assert_contains "$package_contents" 'michelangelo-compute/charts/spark-operator/Chart.yaml'

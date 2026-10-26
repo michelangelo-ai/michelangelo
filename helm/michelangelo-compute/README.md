@@ -11,14 +11,27 @@ Install one release per cluster, named `michelangelo-compute`, in namespace
 plane creates RayClusters and SparkApplications in namespace `default`. The
 chart requires Kubernetes 1.29 or later.
 
+Every release must set the values in `examples/values-minimal.yaml`: the
+storage root, the object-storage endpoint and the model-registry endpoint, each
+reachable from this cluster, and the name of the object-storage credentials
+Secret. Copy that file to `values-compute.yaml` and replace its placeholders.
+
 ```bash
 helm repo add kuberay https://ray-project.github.io/kuberay-helm/
 helm repo add spark-operator https://kubeflow.github.io/spark-operator
 helm dependency build helm/michelangelo-compute
 helm install michelangelo-compute helm/michelangelo-compute \
   --namespace michelangelo-compute \
-  --create-namespace
+  --create-namespace \
+  --values values-compute.yaml
+helm test michelangelo-compute --namespace michelangelo-compute
 ```
+
+`helm test` checks from namespace `default` that the credentials Secret sets
+both keys and that both endpoints are reachable. Its pod runs outside the
+release namespace, so `helm test --logs` cannot read it. A failed test pod
+stays in `default` until the next run:
+`kubectl --namespace default logs michelangelo-compute-test-runtime-contract`.
 
 `helm dependency build` needs both repositories added, even though `Chart.lock`
 pins the versions. Helm 3.13 renders `helm template` for Kubernetes 1.28 unless
@@ -41,6 +54,16 @@ Prometheus Operator CRDs (`monitoring.coreos.com/v1`).
 
 ## Enforced values
 
+Rendering always fails if:
+
+- `runtime.config` lacks `MA_FILE_SYSTEM`, `AWS_ENDPOINT_URL` or
+  `REGISTRY_ENDPOINT`, or sets `AWS_ACCESS_KEY_ID` or `AWS_SECRET_ACCESS_KEY`.
+  The credentials belong in the Secret.
+- `runtime.objectStorageCredentials.name` is empty. It must match
+  controllermgr's `logPersistence.credentialsSecret`.
+- `runtime.objectStorageCredentials.accessKeyId` and `secretAccessKey` are not
+  both set with `create: true`, or not both empty with `create: false`.
+
 While the Spark Operator is enabled, rendering fails if:
 
 - `spark-operator.spark.serviceAccount.name` is not `spark-operator-spark`. The
@@ -48,8 +71,8 @@ While the Spark Operator is enabled, rendering fails if:
 - `spark-operator.spark.jobNamespaces` does not contain `default`. The operator
   ignores SparkApplications in unlisted namespaces.
 
-`values.schema.json` rejects unknown top-level keys and non-boolean `enabled`
-toggles.
+`values.schema.json` rejects unknown top-level keys, non-boolean `enabled`
+toggles, and `runtime.config` values that are not strings, numbers or booleans.
 
 ## Development
 

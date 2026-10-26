@@ -1,0 +1,11 @@
+# The values every michelangelo-compute release must set. Replace the
+# placeholders with endpoints reachable from this cluster.
+runtime:
+  config:
+    MA_FILE_SYSTEM: s3://michelangelo
+    AWS_ENDPOINT_URL: https://object-storage.example.com
+    REGISTRY_ENDPOINT: michelangelo-apiserver.example.com:15566
+  objectStorageCredentials:
+    # controllermgr's logPersistence.credentialsSecret. Create it in namespace
+    # default with keys AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY.
+    name: michelangelo-object-storage-credentials

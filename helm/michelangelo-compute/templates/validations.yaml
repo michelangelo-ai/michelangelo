@@ -14,3 +14,29 @@ that subchart is enabled. This file renders to empty YAML when all checks pass.
 {{- fail "spark-operator.spark.jobNamespaces must contain default because the control plane creates every SparkApplication there" -}}
 {{- end -}}
 {{- end -}}
+
+{{- /* Runtime contract: every pod the control plane creates in default reads michelangelo-config and the credentials Secret. */ -}}
+{{- $config := .Values.runtime.config -}}
+{{- range $key := list "MA_FILE_SYSTEM" "AWS_ENDPOINT_URL" "REGISTRY_ENDPOINT" -}}
+{{- if or (not (hasKey $config $key)) (eq (toString (index $config $key)) "") -}}
+{{- fail (printf "runtime.config.%s must be set because it names something reachable from this cluster, so no default can be right" $key) -}}
+{{- end -}}
+{{- end -}}
+{{- range $key := list "AWS_ACCESS_KEY_ID" "AWS_SECRET_ACCESS_KEY" -}}
+{{- if hasKey $config $key -}}
+{{- fail (printf "runtime.config.%s must not be set because the credentials belong in the Secret named by runtime.objectStorageCredentials.name" $key) -}}
+{{- end -}}
+{{- end -}}
+{{- $credentials := .Values.runtime.objectStorageCredentials -}}
+{{- if eq (toString $credentials.name) "" -}}
+{{- fail "runtime.objectStorageCredentials.name must be set to controllermgr's logPersistence.credentialsSecret because every pod the control plane creates reads that Secret" -}}
+{{- end -}}
+{{- range $key := list "accessKeyId" "secretAccessKey" -}}
+{{- $value := toString (index $credentials $key) -}}
+{{- if and $credentials.create (eq $value "") -}}
+{{- fail (printf "runtime.objectStorageCredentials.%s must be set when runtime.objectStorageCredentials.create is true because the chart renders the Secret from it" $key) -}}
+{{- end -}}
+{{- if and (not $credentials.create) (ne $value "") -}}
+{{- fail (printf "runtime.objectStorageCredentials.%s must be empty when runtime.objectStorageCredentials.create is false because keys enter Helm values only when the chart creates the Secret" $key) -}}
+{{- end -}}
+{{- end -}}
