@@ -72,45 +72,6 @@ func TestStartWorkflow(t *testing.T) {
 	}
 }
 
-func TestStartWorkflowRejectsStartPaused(t *testing.T) {
-	client := &CadenceClient{Client: &cadencemocks.Client{}}
-	_, err := client.StartWorkflow(
-		context.Background(),
-		clientInterface.StartWorkflowOptions{StartPaused: true},
-		"testWorkflow",
-	)
-
-	assert.EqualError(t, err, "starting a paused workflow is not supported by Cadence")
-}
-
-func TestStartWorkflowRejectsCatchUpFrom(t *testing.T) {
-	client := &CadenceClient{Client: &cadencemocks.Client{}}
-	_, err := client.StartWorkflow(
-		context.Background(),
-		clientInterface.StartWorkflowOptions{CatchUpFrom: time.Now().Add(-time.Hour)},
-		"testWorkflow",
-	)
-
-	assert.EqualError(t, err, "catch-up (spec.catchup) is not supported by the Cadence cron provider")
-}
-
-// The legacy Cadence cron workflow cannot honour a window. Refusing it is better than
-// starting a schedule that silently ignores the dates in its spec.
-func TestStartWorkflowRejectsScheduleWindow(t *testing.T) {
-	client := &CadenceClient{Client: &cadencemocks.Client{}}
-
-	for name, options := range map[string]clientInterface.StartWorkflowOptions{
-		"start only": {ScheduleStartAt: time.Now().Add(time.Hour)},
-		"end only":   {ScheduleEndAt: time.Now().Add(48 * time.Hour)},
-	} {
-		t.Run(name, func(t *testing.T) {
-			_, err := client.StartWorkflow(context.Background(), options, "testWorkflow")
-			assert.ErrorContains(t, err, "schedule window")
-			assert.ErrorContains(t, err, "not supported by the Cadence cron provider")
-		})
-	}
-}
-
 func TestGetWorkflowExecutionInfo(t *testing.T) {
 	workflowID := "testWorkflowID"
 	runID := "testRunID"
@@ -772,50 +733,281 @@ func TestGetWorkflowExecutionHistory(t *testing.T) {
 	}
 }
 
-func TestDeleteTrigger(t *testing.T) {
-	workflowID := "testWorkflowID"
-	runID := "testRunID"
+func scheduleMocks() (*cadencemocks.Client, *cadencemocks.ScheduleClient) {
+	mockClient := &cadencemocks.Client{}
+	mockScheduleClient := &cadencemocks.ScheduleClient{}
+	mockClient.On("ScheduleClient").Return(mockScheduleClient)
+	return mockClient, mockScheduleClient
+}
+
+func encodedInput(t *testing.T, args ...interface{}) []byte {
+	t.Helper()
+	input, err := encoded.GetDefaultDataConverter().ToData(args...)
+	require.NoError(t, err)
+	return input
+}
+
+func TestStartWorkflowCreatesSchedule(t *testing.T) {
+	now := time.Now()
+	start := now.Add(-3 * time.Hour).UTC()
+	end := now.Add(24 * time.Hour).UTC()
+	pastEnd := now.Add(-time.Hour).UTC()
+	notFound := &shared.EntityNotExistsError{Message: "schedule not found"}
+	alreadyExists := &shared.BadRequestError{Message: "schedule already exists"}
 
 	testCases := []struct {
-		name     string
-		runID    string
-		mockFunc func(mockClient *cadencemocks.Client)
-		errMsg   string
+		name       string
+		options    clientInterface.StartWorkflowOptions
+		mockFunc   func(sc *cadencemocks.ScheduleClient)
+		errMsg     string
+		catchUpErr bool
 	}{
 		{
-			name:  "DeleteTrigger Succeeded",
-			runID: runID,
-			mockFunc: func(mockClient *cadencemocks.Client) {
-				mockClient.On("TerminateWorkflow", mock.Anything, workflowID, runID, "trigger killed", mock.Anything).Return(nil)
+			name: "window, policies, paused state and input are carried onto the schedule",
+			options: clientInterface.StartWorkflowOptions{
+				ID:                              "ns.trigger",
+				TaskList:                        "trigger_run",
+				ExecutionStartToCloseTimeout:    24 * time.Hour,
+				DecisionTaskStartToCloseTimeout: 30 * time.Second,
+				CronSchedule:                    "0 * * * *",
+				StartPaused:                     true,
+				ScheduleStartAt:                 start,
+				ScheduleEndAt:                   end,
+				OverlapPolicy:                   clientInterface.OverlapPolicyBuffer,
+				CatchUpPolicy:                   clientInterface.CatchUpPolicyAll,
 			},
-			errMsg: "",
+			mockFunc: func(sc *cadencemocks.ScheduleClient) {
+				sc.On("Create", mock.Anything, mock.MatchedBy(func(req *cadenceClient.CreateScheduleRequest) bool {
+					action := req.Action.StartWorkflow
+					return req.ScheduleID == "ns.trigger-schedule" &&
+						req.Spec.CronExpression == "0 * * * *" &&
+						req.Spec.StartTime.Equal(start) && req.Spec.EndTime.Equal(end) &&
+						action.WorkflowType == "trigger.CronTrigger" &&
+						action.TaskList == "trigger_run" &&
+						action.WorkflowIDPrefix == "ns.trigger" &&
+						action.ExecutionStartToCloseTimeout == 24*time.Hour &&
+						action.DecisionTaskStartToCloseTimeout == 30*time.Second &&
+						string(action.Input) == string(encodedInput(t, "arg1")) &&
+						req.Policies.OverlapPolicy == cadenceClient.ScheduleOverlapPolicyBuffer &&
+						req.Policies.CatchUpPolicy == cadenceClient.ScheduleCatchUpPolicyAll &&
+						req.State != nil && req.State.Paused
+				})).Return("ns.trigger-schedule", nil)
+				// No Backfill expectation: a paused schedule takes no catch-up.
+			},
 		},
 		{
-			name:     "DeleteTrigger - no open execution, idempotent",
-			runID:    "",
-			mockFunc: func(mockClient *cadencemocks.Client) {},
-			errMsg:   "",
+			name: "defaults are SkipNew, Skip and a 10s decision task timeout",
+			options: clientInterface.StartWorkflowOptions{
+				ID:                           "ns.trigger",
+				TaskList:                     "trigger_run",
+				ExecutionStartToCloseTimeout: time.Hour,
+				CronSchedule:                 "0 0 * * *",
+			},
+			mockFunc: func(sc *cadencemocks.ScheduleClient) {
+				sc.On("Create", mock.Anything, mock.MatchedBy(func(req *cadenceClient.CreateScheduleRequest) bool {
+					return req.Spec.StartTime.IsZero() && req.Spec.EndTime.IsZero() &&
+						req.Action.StartWorkflow.DecisionTaskStartToCloseTimeout == 10*time.Second &&
+						req.Policies.OverlapPolicy == cadenceClient.ScheduleOverlapPolicySkipNew &&
+						req.Policies.CatchUpPolicy == cadenceClient.ScheduleCatchUpPolicySkip &&
+						req.State == nil
+				})).Return("ns.trigger-schedule", nil)
+			},
 		},
 		{
-			name:  "DeleteTrigger Failed",
-			runID: runID,
-			mockFunc: func(mockClient *cadencemocks.Client) {
-				mockClient.On("TerminateWorkflow", mock.Anything, workflowID, runID, "trigger killed", mock.Anything).Return(fmt.Errorf("terminate error"))
+			name: "existing schedule is adopted when create fails",
+			options: clientInterface.StartWorkflowOptions{
+				ID: "ns.trigger", TaskList: "trigger_run", CronSchedule: "0 0 * * *",
 			},
-			errMsg: "terminate error",
+			mockFunc: func(sc *cadencemocks.ScheduleClient) {
+				sc.On("Create", mock.Anything, mock.Anything).Return("", alreadyExists)
+				sc.On("Describe", mock.Anything, "ns.trigger-schedule").Return(&cadenceClient.DescribeScheduleResponse{}, nil)
+			},
+		},
+		{
+			name: "existing schedule is paused when the start asks for it",
+			options: clientInterface.StartWorkflowOptions{
+				ID: "ns.trigger", TaskList: "trigger_run", CronSchedule: "0 0 * * *", StartPaused: true,
+			},
+			mockFunc: func(sc *cadencemocks.ScheduleClient) {
+				sc.On("Create", mock.Anything, mock.Anything).Return("", alreadyExists)
+				sc.On("Describe", mock.Anything, "ns.trigger-schedule").Return(&cadenceClient.DescribeScheduleResponse{}, nil)
+				sc.On("Pause", mock.Anything, "ns.trigger-schedule", "paused by michelangelo").Return(nil)
+			},
+		},
+		{
+			name: "create failure with no schedule behind it is an error",
+			options: clientInterface.StartWorkflowOptions{
+				ID: "ns.trigger", TaskList: "trigger_run", CronSchedule: "0 0 * * *",
+			},
+			mockFunc: func(sc *cadencemocks.ScheduleClient) {
+				sc.On("Create", mock.Anything, mock.Anything).Return("", fmt.Errorf("frontend unavailable"))
+				sc.On("Describe", mock.Anything, "ns.trigger-schedule").Return(nil, notFound)
+			},
+			errMsg: "failed to create Cadence schedule ns.trigger-schedule: frontend unavailable",
+		},
+		{
+			name: "catch-up backfills the missed window with the Buffer overlap policy",
+			options: clientInterface.StartWorkflowOptions{
+				ID: "ns.trigger", TaskList: "trigger_run", CronSchedule: "0 * * * *",
+				ScheduleStartAt: start, CatchUpFrom: start,
+			},
+			mockFunc: func(sc *cadencemocks.ScheduleClient) {
+				sc.On("Create", mock.Anything, mock.Anything).Return("ns.trigger-schedule", nil)
+				sc.On("Backfill", mock.Anything, "ns.trigger-schedule", mock.MatchedBy(func(req *cadenceClient.BackfillRequest) bool {
+					return req.StartTime.Equal(start) && req.EndTime.After(now.Add(-time.Second)) &&
+						req.OverlapPolicy == cadenceClient.ScheduleOverlapPolicyBuffer
+				})).Return(nil)
+			},
+		},
+		{
+			name: "catch-up stops at a schedule end that already passed",
+			options: clientInterface.StartWorkflowOptions{
+				ID: "ns.trigger", TaskList: "trigger_run", CronSchedule: "0 * * * *",
+				ScheduleStartAt: start, ScheduleEndAt: pastEnd, CatchUpFrom: start,
+			},
+			mockFunc: func(sc *cadencemocks.ScheduleClient) {
+				sc.On("Create", mock.Anything, mock.Anything).Return("ns.trigger-schedule", nil)
+				sc.On("Backfill", mock.Anything, "ns.trigger-schedule", mock.MatchedBy(func(req *cadenceClient.BackfillRequest) bool {
+					return req.StartTime.Equal(start) && req.EndTime.Equal(pastEnd)
+				})).Return(nil)
+			},
+		},
+		{
+			name: "catch-up failure leaves the schedule live and reports CatchUpError",
+			options: clientInterface.StartWorkflowOptions{
+				ID: "ns.trigger", TaskList: "trigger_run", CronSchedule: "0 * * * *",
+				ScheduleStartAt: start, CatchUpFrom: start,
+			},
+			mockFunc: func(sc *cadencemocks.ScheduleClient) {
+				sc.On("Create", mock.Anything, mock.Anything).Return("ns.trigger-schedule", nil)
+				sc.On("Backfill", mock.Anything, "ns.trigger-schedule", mock.Anything).Return(fmt.Errorf("backfill rejected"))
+			},
+			errMsg:     "backfill rejected",
+			catchUpErr: true,
 		},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			mockClient := &cadencemocks.Client{}
-			testCase.mockFunc(mockClient)
-			client := &CadenceClient{
-				Client: mockClient,
+			mockClient, mockScheduleClient := scheduleMocks()
+			testCase.mockFunc(mockScheduleClient)
+			client := &CadenceClient{Client: mockClient}
+
+			exec, err := client.StartWorkflow(context.Background(), testCase.options, "trigger.CronTrigger", "arg1")
+
+			if testCase.catchUpErr {
+				var catchUpErr *clientInterface.CatchUpError
+				require.ErrorAs(t, err, &catchUpErr)
+				assert.Equal(t, "ns.trigger-schedule", catchUpErr.ScheduleID)
+				assert.True(t, catchUpErr.CatchUpFrom.Equal(start))
+				require.NotNil(t, exec, "a live schedule must be returned alongside CatchUpError")
+				assert.Equal(t, "ns.trigger-schedule", exec.ID)
+			} else if testCase.errMsg != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), testCase.errMsg)
+				assert.Nil(t, exec)
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, exec)
+				assert.Equal(t, "ns.trigger-schedule", exec.ID)
+				assert.Empty(t, exec.RunID, "schedules have no run ID")
 			}
-			err := client.DeleteTrigger(context.Background(), workflowID, testCase.runID)
+			mockScheduleClient.AssertExpectations(t)
+		})
+	}
+}
+
+func TestStartWorkflowWithoutCronDoesNotTouchSchedules(t *testing.T) {
+	mockClient := &cadencemocks.Client{}
+	mockClient.On("StartWorkflow", mock.Anything, mock.MatchedBy(func(opts cadenceClient.StartWorkflowOptions) bool {
+		return opts.ID == "ns.backfill" && opts.CronSchedule == ""
+	}), "trigger.BackfillTrigger", mock.Anything).Return(&cadenceworkflow.Execution{ID: "ns.backfill", RunID: "run-1"}, nil)
+	client := &CadenceClient{Client: mockClient}
+
+	exec, err := client.StartWorkflow(context.Background(), clientInterface.StartWorkflowOptions{
+		ID: "ns.backfill", TaskList: "trigger_run",
+	}, "trigger.BackfillTrigger", "arg1")
+
+	require.NoError(t, err)
+	assert.Equal(t, "run-1", exec.RunID)
+	mockClient.AssertNotCalled(t, "ScheduleClient")
+}
+
+func TestStartWorkflowWithoutCronWhenAlreadyStarted(t *testing.T) {
+	runID := "run-0"
+	testCases := []struct {
+		name     string
+		startErr error
+		wantRun  string
+		wantErr  bool
+	}{
+		{
+			name:     "returns the open execution like the Temporal client",
+			startErr: &shared.WorkflowExecutionAlreadyStartedError{RunId: &runID},
+			wantRun:  "run-0",
+		},
+		{
+			name:     "already-started without a run ID is still an error",
+			startErr: &shared.WorkflowExecutionAlreadyStartedError{},
+			wantErr:  true,
+		},
+		{
+			name:     "other errors propagate",
+			startErr: &shared.BadRequestError{Message: "bad"},
+			wantErr:  true,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockClient := &cadencemocks.Client{}
+			mockClient.On("StartWorkflow", mock.Anything, mock.Anything, "trigger.BackfillTrigger", mock.Anything).
+				Return(nil, tc.startErr)
+			client := &CadenceClient{Client: mockClient}
+
+			exec, err := client.StartWorkflow(context.Background(), clientInterface.StartWorkflowOptions{
+				ID: "ns.backfill", TaskList: "trigger_run",
+			}, "trigger.BackfillTrigger", "arg1")
+
+			if tc.wantErr {
+				require.Error(t, err)
+				assert.Nil(t, exec)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, "ns.backfill", exec.ID)
+			assert.Equal(t, tc.wantRun, exec.RunID)
+		})
+	}
+}
+
+func TestPauseTrigger(t *testing.T) {
+	testCases := []struct {
+		name     string
+		pauseErr error
+		errMsg   string
+	}{
+		{name: "pauses the schedule"},
+		{
+			name:     "missing schedule explains the legacy cron workflow",
+			pauseErr: &shared.EntityNotExistsError{Message: "schedule not found"},
+			errMsg:   "must be recreated",
+		},
+		{
+			name:     "other errors are passed through",
+			pauseErr: fmt.Errorf("frontend unavailable"),
+			errMsg:   "pause trigger ns.trigger: frontend unavailable",
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			mockClient, mockScheduleClient := scheduleMocks()
+			mockScheduleClient.On("Pause", mock.Anything, "ns.trigger-schedule", "paused by michelangelo").Return(testCase.pauseErr)
+			client := &CadenceClient{Client: mockClient}
+
+			err := client.PauseTrigger(context.Background(), "ns.trigger")
+
 			if testCase.errMsg != "" {
-				assert.Error(t, err)
+				require.Error(t, err)
 				assert.Contains(t, err.Error(), testCase.errMsg)
 			} else {
 				assert.NoError(t, err)
@@ -824,48 +1016,287 @@ func TestDeleteTrigger(t *testing.T) {
 	}
 }
 
-func TestPauseTrigger(t *testing.T) {
-	workflowID := "testWorkflowID"
-	client := &CadenceClient{
-		Client: &cadencemocks.Client{},
+func TestUnpauseTrigger(t *testing.T) {
+	testCases := []struct {
+		name       string
+		unpauseErr error
+		errMsg     string
+	}{
+		{name: "unpauses the schedule with its configured catch-up policy"},
+		{
+			name:       "missing schedule explains the legacy cron workflow",
+			unpauseErr: &shared.EntityNotExistsError{Message: "schedule not found"},
+			errMsg:     "must be recreated",
+		},
 	}
-	err := client.PauseTrigger(context.Background(), workflowID)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "not supported")
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			mockClient, mockScheduleClient := scheduleMocks()
+			mockScheduleClient.On("Unpause", mock.Anything, "ns.trigger-schedule", "unpaused by michelangelo",
+				cadenceClient.ScheduleCatchUpPolicyUnspecified).Return(testCase.unpauseErr)
+			client := &CadenceClient{Client: mockClient}
+
+			err := client.UnpauseTrigger(context.Background(), "ns.trigger")
+
+			if testCase.errMsg != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), testCase.errMsg)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
 }
 
-func TestUnpauseTrigger(t *testing.T) {
-	workflowID := "testWorkflowID"
-	client := &CadenceClient{
-		Client: &cadencemocks.Client{},
+func TestDeleteTrigger(t *testing.T) {
+	workflowID := "ns.trigger"
+	scheduleID := "ns.trigger-schedule"
+	runID := "legacy-run"
+
+	testCases := []struct {
+		name     string
+		runID    string
+		mockFunc func(mockClient *cadencemocks.Client, sc *cadencemocks.ScheduleClient)
+		errMsg   string
+	}{
+		{
+			name:  "deletes the schedule; nothing to terminate",
+			runID: "",
+			mockFunc: func(_ *cadencemocks.Client, sc *cadencemocks.ScheduleClient) {
+				sc.On("Delete", mock.Anything, scheduleID).Return(nil)
+			},
+		},
+		{
+			name:  "deletes the schedule and terminates a legacy cron run",
+			runID: runID,
+			mockFunc: func(mockClient *cadencemocks.Client, sc *cadencemocks.ScheduleClient) {
+				sc.On("Delete", mock.Anything, scheduleID).Return(nil)
+				mockClient.On("TerminateWorkflow", mock.Anything, workflowID, runID, "trigger killed", mock.Anything).Return(nil)
+			},
+		},
+		{
+			name:  "a legacy trigger has no schedule; its run is still terminated",
+			runID: runID,
+			mockFunc: func(mockClient *cadencemocks.Client, sc *cadencemocks.ScheduleClient) {
+				sc.On("Delete", mock.Anything, scheduleID).Return(&shared.EntityNotExistsError{Message: "schedule not found"})
+				mockClient.On("TerminateWorkflow", mock.Anything, workflowID, runID, "trigger killed", mock.Anything).Return(nil)
+			},
+		},
+		{
+			name:  "an already-completed run is not an error",
+			runID: runID,
+			mockFunc: func(mockClient *cadencemocks.Client, sc *cadencemocks.ScheduleClient) {
+				sc.On("Delete", mock.Anything, scheduleID).Return(nil)
+				mockClient.On("TerminateWorkflow", mock.Anything, workflowID, runID, "trigger killed", mock.Anything).
+					Return(&shared.WorkflowExecutionAlreadyCompletedError{Message: "already completed"})
+			},
+		},
+		{
+			name:  "schedule delete failure is surfaced",
+			runID: runID,
+			mockFunc: func(_ *cadencemocks.Client, sc *cadencemocks.ScheduleClient) {
+				sc.On("Delete", mock.Anything, scheduleID).Return(fmt.Errorf("frontend unavailable"))
+			},
+			errMsg: "delete Cadence schedule ns.trigger-schedule: frontend unavailable",
+		},
+		{
+			name:  "terminate failure is surfaced",
+			runID: runID,
+			mockFunc: func(mockClient *cadencemocks.Client, sc *cadencemocks.ScheduleClient) {
+				sc.On("Delete", mock.Anything, scheduleID).Return(nil)
+				mockClient.On("TerminateWorkflow", mock.Anything, workflowID, runID, "trigger killed", mock.Anything).Return(fmt.Errorf("terminate error"))
+			},
+			errMsg: "terminate error",
+		},
 	}
-	err := client.UnpauseTrigger(context.Background(), workflowID)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "not supported")
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			mockClient, mockScheduleClient := scheduleMocks()
+			testCase.mockFunc(mockClient, mockScheduleClient)
+			client := &CadenceClient{Client: mockClient}
+
+			err := client.DeleteTrigger(context.Background(), workflowID, testCase.runID)
+
+			if testCase.errMsg != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), testCase.errMsg)
+			} else {
+				assert.NoError(t, err)
+			}
+			mockClient.AssertExpectations(t)
+			mockScheduleClient.AssertExpectations(t)
+		})
+	}
 }
 
 func TestUpdateTrigger(t *testing.T) {
-	workflowID := "testWorkflowID"
-	newCronSchedule := "0 6 * * *"
-	client := &CadenceClient{
-		Client: &cadencemocks.Client{},
+	scheduleID := "ns.trigger-schedule"
+	newCron := "0 6 * * *"
+	newArgs := []interface{}{"new-input"}
+	pausedTrue, pausedFalse := true, false
+
+	// runMutate applies the mutate callback UpdateTrigger passed to a describe-shaped
+	// ScheduleUpdate and returns the result, so the test can see what would be sent.
+	runMutate := func(t *testing.T, args mock.Arguments, withAction bool) (*cadenceClient.ScheduleUpdate, error) {
+		t.Helper()
+		mutate, ok := args.Get(2).(func(*cadenceClient.ScheduleUpdate) error)
+		require.True(t, ok, "mutate callback has the ScheduleClient.Update signature")
+		update := &cadenceClient.ScheduleUpdate{Spec: &cadenceClient.ScheduleSpec{CronExpression: "0 0 * * *"}}
+		if withAction {
+			update.Action = &cadenceClient.ScheduleActionDescription{
+				StartWorkflow: &cadenceClient.ScheduleStartWorkflowActionDescription{Input: []byte("old-input")},
+			}
+		}
+		return update, mutate(update)
 	}
-	err := client.UpdateTrigger(context.Background(), workflowID, newCronSchedule, nil, nil)
-	assert.NoError(t, err)
+
+	t.Run("cron and args are changed in one schedule update", func(t *testing.T) {
+		mockClient, sc := scheduleMocks()
+		var applied *cadenceClient.ScheduleUpdate
+		sc.On("Update", mock.Anything, scheduleID, mock.Anything).Run(func(args mock.Arguments) {
+			update, err := runMutate(t, args, true)
+			require.NoError(t, err)
+			applied = update
+		}).Return(nil)
+		client := &CadenceClient{Client: mockClient}
+
+		require.NoError(t, client.UpdateTrigger(context.Background(), "ns.trigger", newCron, nil, newArgs))
+
+		require.NotNil(t, applied)
+		assert.Equal(t, newCron, applied.Spec.CronExpression)
+		assert.Equal(t, encodedInput(t, "new-input"), applied.Action.StartWorkflow.Input)
+		sc.AssertNotCalled(t, "Pause", mock.Anything, mock.Anything, mock.Anything)
+		sc.AssertNotCalled(t, "Unpause", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("args only leaves the cron untouched", func(t *testing.T) {
+		mockClient, sc := scheduleMocks()
+		sc.On("Update", mock.Anything, scheduleID, mock.Anything).Run(func(args mock.Arguments) {
+			update, err := runMutate(t, args, true)
+			require.NoError(t, err)
+			assert.Equal(t, "0 0 * * *", update.Spec.CronExpression)
+			assert.Equal(t, encodedInput(t, "new-input"), update.Action.StartWorkflow.Input)
+		}).Return(nil)
+		client := &CadenceClient{Client: mockClient}
+
+		require.NoError(t, client.UpdateTrigger(context.Background(), "ns.trigger", "", nil, newArgs))
+		sc.AssertExpectations(t)
+	})
+
+	t.Run("pause happens before the spec change", func(t *testing.T) {
+		mockClient, sc := scheduleMocks()
+		var order []string
+		sc.On("Pause", mock.Anything, scheduleID, "paused by michelangelo").Run(func(mock.Arguments) {
+			order = append(order, "pause")
+		}).Return(nil)
+		sc.On("Update", mock.Anything, scheduleID, mock.Anything).Run(func(args mock.Arguments) {
+			_, err := runMutate(t, args, true)
+			require.NoError(t, err)
+			order = append(order, "update")
+		}).Return(nil)
+		client := &CadenceClient{Client: mockClient}
+
+		require.NoError(t, client.UpdateTrigger(context.Background(), "ns.trigger", newCron, &pausedTrue, nil))
+		assert.Equal(t, []string{"pause", "update"}, order)
+	})
+
+	t.Run("unpause happens after the spec change", func(t *testing.T) {
+		mockClient, sc := scheduleMocks()
+		var order []string
+		sc.On("Update", mock.Anything, scheduleID, mock.Anything).Run(func(args mock.Arguments) {
+			_, err := runMutate(t, args, true)
+			require.NoError(t, err)
+			order = append(order, "update")
+		}).Return(nil)
+		sc.On("Unpause", mock.Anything, scheduleID, "unpaused by michelangelo", cadenceClient.ScheduleCatchUpPolicyUnspecified).
+			Run(func(mock.Arguments) { order = append(order, "unpause") }).Return(nil)
+		client := &CadenceClient{Client: mockClient}
+
+		require.NoError(t, client.UpdateTrigger(context.Background(), "ns.trigger", "", &pausedFalse, newArgs))
+		assert.Equal(t, []string{"update", "unpause"}, order)
+	})
+
+	t.Run("paused state alone needs no schedule update", func(t *testing.T) {
+		mockClient, sc := scheduleMocks()
+		sc.On("Pause", mock.Anything, scheduleID, "paused by michelangelo").Return(nil)
+		client := &CadenceClient{Client: mockClient}
+
+		require.NoError(t, client.UpdateTrigger(context.Background(), "ns.trigger", "", &pausedTrue, nil))
+		sc.AssertNotCalled(t, "Update", mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("nothing to change is a no-op", func(t *testing.T) {
+		mockClient, sc := scheduleMocks()
+		client := &CadenceClient{Client: mockClient}
+
+		require.NoError(t, client.UpdateTrigger(context.Background(), "ns.trigger", "", nil, nil))
+		sc.AssertNotCalled(t, "Update", mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("a schedule without a start-workflow action cannot take new args", func(t *testing.T) {
+		mockClient, sc := scheduleMocks()
+		sc.On("Update", mock.Anything, scheduleID, mock.Anything).Return(func(_ context.Context, _ string, mutate func(*cadenceClient.ScheduleUpdate) error) error {
+			return mutate(&cadenceClient.ScheduleUpdate{Spec: &cadenceClient.ScheduleSpec{CronExpression: "0 0 * * *"}})
+		})
+		client := &CadenceClient{Client: mockClient}
+
+		err := client.UpdateTrigger(context.Background(), "ns.trigger", "", nil, newArgs)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "no start-workflow action")
+	})
+
+	t.Run("missing schedule explains the legacy cron workflow", func(t *testing.T) {
+		mockClient, sc := scheduleMocks()
+		sc.On("Update", mock.Anything, scheduleID, mock.Anything).Return(&shared.EntityNotExistsError{Message: "schedule not found"})
+		client := &CadenceClient{Client: mockClient}
+
+		err := client.UpdateTrigger(context.Background(), "ns.trigger", newCron, nil, nil)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "update trigger ns.trigger")
+		assert.Contains(t, err.Error(), "must be recreated")
+	})
+
+	t.Run("pause failure stops before the spec change", func(t *testing.T) {
+		mockClient, sc := scheduleMocks()
+		sc.On("Pause", mock.Anything, scheduleID, "paused by michelangelo").Return(fmt.Errorf("frontend unavailable"))
+		client := &CadenceClient{Client: mockClient}
+
+		err := client.UpdateTrigger(context.Background(), "ns.trigger", newCron, &pausedTrue, nil)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "pause trigger ns.trigger: frontend unavailable")
+		sc.AssertNotCalled(t, "Update", mock.Anything, mock.Anything, mock.Anything)
+	})
 }
 
-func TestUpdateTriggerRejectsPauseForCadence(t *testing.T) {
-	client := &CadenceClient{Client: &cadencemocks.Client{}}
+func TestCatchUpEnd(t *testing.T) {
+	now := time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC)
+	assert.Equal(t, now, catchUpEnd(time.Time{}, now), "no schedule end bounds the replay at now")
+	assert.Equal(t, now, catchUpEnd(now.Add(time.Hour), now), "a future schedule end does not shorten the replay")
+	assert.Equal(t, now.Add(-time.Hour), catchUpEnd(now.Add(-time.Hour), now), "a past schedule end bounds the replay")
+}
 
-	paused := true
-	err := client.UpdateTrigger(context.Background(), "testWorkflowID", "", &paused, nil)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "PauseTrigger not supported")
-
-	paused = false
-	err = client.UpdateTrigger(context.Background(), "testWorkflowID", "", &paused, nil)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "UnpauseTrigger not supported")
+func TestMapPolicies(t *testing.T) {
+	overlap := map[clientInterface.OverlapPolicy]cadenceClient.ScheduleOverlapPolicy{
+		clientInterface.OverlapPolicyUnspecified:       cadenceClient.ScheduleOverlapPolicySkipNew,
+		clientInterface.OverlapPolicySkipNew:           cadenceClient.ScheduleOverlapPolicySkipNew,
+		clientInterface.OverlapPolicyBuffer:            cadenceClient.ScheduleOverlapPolicyBuffer,
+		clientInterface.OverlapPolicyConcurrent:        cadenceClient.ScheduleOverlapPolicyConcurrent,
+		clientInterface.OverlapPolicyCancelPrevious:    cadenceClient.ScheduleOverlapPolicyCancelPrevious,
+		clientInterface.OverlapPolicyTerminatePrevious: cadenceClient.ScheduleOverlapPolicyTerminatePrevious,
+	}
+	for in, want := range overlap {
+		assert.Equal(t, want, mapOverlapPolicy(in), "overlap policy %d", in)
+	}
+	catchUp := map[clientInterface.CatchUpPolicy]cadenceClient.ScheduleCatchUpPolicy{
+		clientInterface.CatchUpPolicyUnspecified: cadenceClient.ScheduleCatchUpPolicySkip,
+		clientInterface.CatchUpPolicySkip:        cadenceClient.ScheduleCatchUpPolicySkip,
+		clientInterface.CatchUpPolicyOne:         cadenceClient.ScheduleCatchUpPolicyOne,
+		clientInterface.CatchUpPolicyAll:         cadenceClient.ScheduleCatchUpPolicyAll,
+	}
+	for in, want := range catchUp {
+		assert.Equal(t, want, mapCatchUpPolicy(in), "catch-up policy %d", in)
+	}
 }
 
 // Mock implementation of cadence history iterator

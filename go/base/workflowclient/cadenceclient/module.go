@@ -4,11 +4,13 @@ import (
 	"crypto/tls"
 
 	"go.uber.org/fx"
+	"go.uber.org/zap"
 
 	baseconfig "github.com/michelangelo-ai/michelangelo/go/base/config"
 	clientInterface "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
 	workflowfx "github.com/michelangelo-ai/michelangelo/go/worker/workflowfx"
 	cadenceClient "go.uber.org/cadence/client"
+	"go.uber.org/cadence/encoded"
 )
 
 var Module = fx.Options(
@@ -18,6 +20,7 @@ var Module = fx.Options(
 type CadenceClientIn struct {
 	fx.In
 	Config    baseconfig.WorkflowClientConfig
+	Logger    *zap.Logger `optional:"true"`
 	TLSConfig *tls.Config `optional:"true"`
 }
 
@@ -52,13 +55,20 @@ func NewCadenceClient(in CadenceClientIn) (CadenceClientOut, error) {
 	if err != nil {
 		return CadenceClientOut{}, err
 	}
-	client := cadenceClient.NewClient(workflowServiceClient, in.Config.Domain, &cadenceClient.Options{})
+	// The same converter is handed to the client and kept on CadenceClient: schedule
+	// actions carry pre-encoded input, which must match what a direct start would encode.
+	dataConverter := encoded.GetDefaultDataConverter()
+	client := cadenceClient.NewClient(workflowServiceClient, in.Config.Domain, &cadenceClient.Options{
+		DataConverter: dataConverter,
+	})
 
 	return CadenceClientOut{
 		CadenceClient: &CadenceClient{
-			Client:   client,
-			Provider: "cadence",
-			Domain:   in.Config.Domain,
+			Client:        client,
+			Provider:      "cadence",
+			Domain:        in.Config.Domain,
+			Logger:        in.Logger,
+			DataConverter: dataConverter,
 		},
 	}, nil
 }

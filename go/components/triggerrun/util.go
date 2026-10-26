@@ -42,7 +42,8 @@ type CreateTriggerRequest struct {
 //  1. Look up the open run ID for the workflow
 //  2. Call DeleteTrigger with the workflow ID and run ID for engine-specific cleanup:
 //     - Temporal: deletes the associated schedule, then terminates the running execution
-//     - Cadence: terminates the workflow directly (schedule is embedded in the workflow)
+//     - Cadence: deletes the associated schedule, then terminates the open run of a
+//     legacy cron workflow (a trigger started before schedule support), if any
 //
 // Returns State=KILLED on success. If no workflow is running, returns KILLED
 // without error (idempotent behavior).
