@@ -6,7 +6,9 @@ last_verified: 2026-10-26
 
 Actions are the buttons and menu items that do something to a record: delete a pipeline, retry a run, open an "Update" form. You configure them as `ActionConfigSchema` objects on an entity (`PhaseEntityConfig.actions`) or on a table (`TableConfig.actions`). A separate `CreateActionConfig` (`PhaseEntityConfig.createAction`) adds a page-level "Create …" button.
 
-All the types on this page are exported from `@michelangelo-ai/core` (`export * from '#core/components/actions/types'`). Inside `packages/core`, the config files import them from `#core/components/actions/types`.
+This page is for contributors adding or changing record actions in Michelangelo AI Studio. It assumes you've read the [Entity Configuration Reference](./entity-configuration-reference.md).
+
+The types on this page are exported from `@michelangelo-ai/core`. The examples use the `#core/...` aliases that code inside `packages/core` uses; from an app, import from `@michelangelo-ai/core`.
 
 ## Where Actions Render
 
@@ -69,6 +71,7 @@ Shape 2 type-checks with a mutation, but neither the row menu nor the header but
 Rules are evaluated in order. The **first** rule whose `condition` is `true` disables the action, and its `message` is shown as a tooltip on hover. The condition is usually a function interpolation over the record:
 
 ```typescript
+// isRetryable is a helper you write for your own record type.
 disabled: [
   {
     condition: interpolate(({ data }) => !isRetryable(data)),
@@ -88,7 +91,7 @@ disabled: [
 | `mutationName`            | `string`             | RPC handler name, e.g. `'DeletePipeline'`, `'UpdateDeployment'`                     | ✅ Required |
 | `clientOptions`           | `MutationOptions`    | `onSuccess(data)` / `onError(error)` callbacks                                      | Optional    |
 | `successOperations`       | `SuccessOperation[]` | Side effects to run, **in order**, after the mutation succeeds                       | Optional    |
-| `middleware`              | `MiddlewareSchema`   | Reshapes the record before the request is sent (`operations` with `source`, `destination`, `default`, `transformation`; plus `scaffold`) | Optional    |
+| `middleware`              | `MiddlewareSchema`   | Reshapes the record before the request is sent (`operations` with `source`, `destination`, `default`, `transformation`; plus `scaffold`). See `MiddlewareSchema` in `packages/core/hooks/use-schema-middleware/types.ts` for the full surface | Optional    |
 
 ### `RouteActionConfig`
 
@@ -176,6 +179,8 @@ import { interpolate } from '#core/interpolation/interpolate';
 
 import type { ActionConfigSchema } from '#core/components/actions/types';
 
+// pipelineName, hasNoTriggers, CreatePipelineRunForm and RunTriggerForm are
+// defined elsewhere in the source file.
 export const PIPELINE_DELETE_ACTION: ActionConfigSchema<object> = {
   display: { label: 'Delete', icon: 'trashCan' },
   hierarchy: ActionHierarchy.TERTIARY,

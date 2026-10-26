@@ -4,13 +4,14 @@ last_verified: 2026-10-26
 
 # Detail View Configuration Reference
 
-A detail view is the page you reach by clicking a record in an entity's list, at
-`/<projectId>/<phase>/<entity>/<entityId>/<entityTab>`. It has two parts:
+A detail view is the page you reach by clicking a record in an entity's list, at `/<projectId>/<phase>/<entity>/<entityId>/<entityTab>`. It has two parts:
 
 - **A header**: the record's name, the entity's [actions](./action-configuration-reference.md), and a row of metadata items
 - **Tabs (pages)**: each tab is a table, an execution (step) view, or a custom React component
 
 You configure it with a `DetailViewConfig` in the entity's `views` array.
+
+This page is for contributors adding or changing detail pages in Michelangelo AI Studio. It assumes you've read the [Entity Configuration Reference](./entity-configuration-reference.md).
 
 ## DetailViewConfig Interface
 
@@ -80,11 +81,12 @@ A list of steps (tasks) with states, such as a pipeline run's steps. The page co
 
 `TASK_STATE` (exported from `@michelangelo-ai/core`) has five values: `ERROR`, `PENDING`, `RUNNING`, `SUCCESS` and `SKIPPED`.
 
-Adapted from the `ExecutionDetailViewSchema` doc comment:
+A minimal sketch, adapted from the `ExecutionDetailViewSchema` doc comment:
 
 ```typescript
 import { TASK_STATE } from '#core/components/views/execution/constants';
 
+// Real configs compare against the generated step-state enum, as in the example below.
 stateBuilder: (step) => {
   if (step.state === 'SUCCEEDED') return TASK_STATE.SUCCESS;
   if (step.state === 'FAILED') return TASK_STATE.ERROR;
@@ -114,6 +116,8 @@ Trimmed from `config/entities/run/detail.ts` (custom and execution pages) and `c
 ```typescript
 import { CellType } from '#core/components/cell/constants';
 import { TASK_STATE } from '#core/components/views/execution/constants';
+// RunInfoPage, SHARED_RUN_CELL_CONFIG and PipelineRunStepState are defined in
+// neighboring files of the source tree.
 import { RunInfoPage } from './run-info-page';
 import { SHARED_RUN_CELL_CONFIG } from './shared';
 import { PipelineRunStepState } from './types';

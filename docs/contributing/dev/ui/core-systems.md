@@ -161,6 +161,7 @@ Config types usually get interpolation through `DeepInterpolatable<T>`, which ma
 
 ```typescript
 // From: config/entities/deployment/deployment.ts
+// DeploymentRecord is the deployment entity's record type, defined in that file's package.
 modal: {
   type: 'confirm',
   header: {

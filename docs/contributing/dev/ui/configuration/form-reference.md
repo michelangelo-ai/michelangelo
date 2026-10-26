@@ -6,6 +6,8 @@ last_verified: 2026-10-26
 
 Forms in Michelangelo AI UI are **React components**, not configuration objects. You build a form by putting field components inside `Form` (or `FormDialog`, for a form in a modal) and arranging them with layout components. Every form in the app works this way, including the "Create deployment", "Create target" and "Run pipeline" forms. Form state is managed by [React Final Form](https://final-form.org/react).
 
+This page is for contributors building forms for actions and custom detail pages in Michelangelo AI Studio. It assumes you've read the [Action Configuration Reference](./action-configuration-reference.md).
+
 Forms usually appear in two places:
 
 - A **custom action modal** or a **`createAction`** component (see [Action Configuration Reference](./action-configuration-reference.md))
@@ -15,6 +17,17 @@ Forms usually appear in two places:
 - `Form`, `FormDialog`, the field and layout components, and the hooks below are all exported from `@michelangelo-ai/core`.
 - The validators (`required`, `combineValidators`, …) are **not** exported from the package.
 - Inside `packages/core`, import everything from `#core/components/form/...`, as the config files do. The examples on this page follow that style.
+
+A minimal form:
+
+```tsx
+import { Form, StringField, SubmitButton } from '@michelangelo-ai/core';
+
+<Form onSubmit={(values) => console.log(values)}>
+  <StringField name="metadata.name" label="Name" required />
+  <SubmitButton>Save</SubmitButton>
+</Form>
+```
 
 ## Form
 
@@ -37,13 +50,13 @@ A `Form` inside a modal `Dialog`, with a submit button, a Cancel button and a `F
 | `isOpen`        | `boolean`                     | Whether the dialog is shown                                  | ✅ Required |
 | `onDismiss`     | `() => void`                  | Called on Cancel, on close, and **after a successful submit** | ✅ Required |
 | `heading`       | `string`                      | Dialog title                                                 | ✅ Required |
-| `onSubmit`      | Same as `Form`                | Called with the form values                                  | ✅ Required |
+| `onSubmit`      | Same as `Form`                | Called with the form values. Resolving, even with `{ [FORM_ERROR]: … }`, closes the dialog; to keep it open and show an error, throw | ✅ Required |
 | `initialValues` | Same as `Form`                | Starting values                                              | `undefined` |
 | `children`      | `React.ReactNode`             | Fields and layout components                                 | ✅ Required |
 | `size`          | `Size` from `baseui/dialog`   | Dialog size                                                  | `SIZE.large` |
 | `submitLabel`   | `string`                      | Submit button label                                          | `'Submit'` |
 
-If `onSubmit` resolves, the dialog calls `onDismiss` and closes. If it throws, the dialog stays open and shows the error in the `FormErrorBanner`. You don't need to catch errors from `mutateAsync` yourself.
+If `onSubmit` resolves, the dialog calls `onDismiss` and closes. If it throws, the dialog stays open and shows the error in the `FormErrorBanner`. Unlike `Form`, a `FormDialog` closes on any resolved `onSubmit`, even one that returns `{ [FORM_ERROR]: … }`, so throw to report an error. You don't need to catch errors from `mutateAsync` yourself.
 
 ## Field Props Shared by Every Field (`BaseFieldProps`)
 
@@ -62,7 +75,7 @@ If `onSubmit` resolves, the dialog calls `onDismiss` and closes. If it throws, t
 | `labelEndEnhancer` | `React.ReactNode`             | Content at the far right of the label row, such as a button |
 | `parse`            | `(value: InputValue) => T`    | Transforms the input value before it's stored in form state |
 | `format`           | `(value: T) => InputValue`    | Transforms the stored value for display in the input |
-| `validate`         | `(value: unknown) => string \| undefined` | Returns an error message, or `undefined` when valid. Runs on each change once the field is touched |
+| `validate`         | `(value: unknown) => string \| undefined` | Returns an error message, or `undefined` when valid. Runs on every change; its error is shown once the field is touched |
 
 **`required` already validates.** Every field component passes `required` to `useField`, which prepends `required()` to your `validate`. So `required` alone is enough. Adding `validate={required()}`, or `required()` inside `combineValidators`, runs the same check twice. It's harmless, but redundant.
 
@@ -123,7 +136,7 @@ Compose validators with `combineValidators(...validators)` from `#core/component
 | `FormBanner`     | `title?`, `kind?: 'info' \| 'warning'` (default `'info'`), `dismissible?` (default `false`; once dismissed it stays hidden while mounted), `content?` (strings render as Markdown) | An inline notice |
 | `FormStep`       | `name` (required), `description?` (Markdown) | A section with a heading (`name`) and optional description above its fields |
 | `ArrayFormRow`   | `FormRow` props, plus the array props below and `addLabel?` (default `"Add more"`) | One row per array item |
-| `ArrayFormGroup` | `FormGroup` props except `title` and `endEnhancer`, plus the array props below, `groupLabel?` (titles groups "Address 1", "Address 2", …) and `addLabel?` (default ``` `Add ${groupLabel.toLowerCase()}` ```, or `"Add more"`) | One group per array item |
+| `ArrayFormGroup` | `FormGroup` props except `title` and `endEnhancer`, plus the array props below, `groupLabel?` (titles groups "Address 1", "Address 2", …) and `addLabel?` (default `` `Add ${groupLabel.toLowerCase()}` ``, or `"Add more"`) | One group per array item |
 
 **Array layout props** (`ArrayLayoutProps`, shared by `ArrayFormRow` and `ArrayFormGroup`):
 
@@ -190,6 +203,8 @@ import { FormRow } from '#core/components/form/layout/form-row/form-row';
 import { combineValidators } from '#core/components/form/validation/combine-validators';
 import { maxLength, min, regex } from '#core/components/form/validation/validators';
 
+// onClose comes from the component's props; handleCreate, initialValues and
+// BACKEND_TYPE_OPTIONS are defined elsewhere in the source file.
 <FormDialog
   isOpen
   onDismiss={onClose}
@@ -233,15 +248,6 @@ import { maxLength, min, regex } from '#core/components/form/validation/validato
 
 The real file also repeats `required()` inside each `validate`; it's dropped here because `required` already adds it. `K8S_NAME_MAX_LENGTH`, `K8S_NAME_PATTERN` and `K8S_NAME_RULES_MESSAGE` come from `#core/utils/crd-utils`.
 
-## Internal: Declarative Forms
-
-`packages/core` also contains a declarative form layer: `FormConfig` (`fields` + `layout`), `LayoutItemList`, `ConfigDrivenForm` and `FormProvider` for custom renderers. **It isn't a supported surface.**
-- None of it is exported from `@michelangelo-ai/core`.
-- Only the sandbox view (`components/views/sandbox/`) and tests use it.
-- No production form uses it.
-
-The `FieldConfigExtensions` interface in `config-types.ts` is declared for module augmentation, but nothing reads it, so augmenting it has no effect. Some form pieces exist only for this layer and aren't exported either: `MapField`, `FormGrid`, `FormNote` and the conditional layout (`layout/condition/`).
-
 ## Source Files
 
 **Type definitions:**
@@ -262,8 +268,20 @@ The `FieldConfigExtensions` interface in `config-types.ts` is declared for modul
 - [javascript/packages/core/config/entities/deployment/deployment-form.tsx](https://github.com/michelangelo-ai/michelangelo/blob/main/javascript/packages/core/config/entities/deployment/deployment-form.tsx) - one form shared by create and update, with `readOnly` in update mode
 - [javascript/packages/core/config/entities/pipeline/create-pipeline-run-form.tsx](https://github.com/michelangelo-ai/michelangelo/blob/main/javascript/packages/core/config/entities/pipeline/create-pipeline-run-form.tsx) - custom action modal
 
+## Unsupported: Declarative Forms
+
+This section is for contributors working on `packages/core`; it isn't part of the supported API.
+
+`packages/core` also contains a declarative form layer: `FormConfig` (`fields` + `layout`), `LayoutItemList`, `ConfigDrivenForm` and `FormProvider` for custom renderers. **It isn't a supported surface.**
+- None of it is exported from `@michelangelo-ai/core`.
+- Only the sandbox view (`components/views/sandbox/`) and tests use it.
+- No production form uses it.
+
+The `FieldConfigExtensions` interface in `config-types.ts` is declared for module augmentation, but nothing reads it, so augmenting it has no effect. Some form pieces exist only for this layer and aren't exported either: `MapField`, `FormGrid`, `FormNote` and the conditional layout (`layout/condition/`).
+
 ## Related Documentation
 
 - [Action Configuration Reference](./action-configuration-reference.md) - Opening a form from a custom modal or `createAction`
 - [Detail View Configuration Reference](./detail-view-configuration-reference.md) - Custom pages that host read-only forms
+- [Cell Type Reference](./cell-type-reference.md) - Cells that render values in tables and detail headers
 - [UI Components](../ui-components.md) - Other shared components
