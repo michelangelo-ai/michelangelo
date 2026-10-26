@@ -12,6 +12,7 @@ Register an existing compute Kubernetes cluster with the Michelangelo AI control
 
 ### What gets configured
 - RBAC for `ray-manager` ServiceAccount in `default` namespace
+- For a Kueue-managed cluster: read access to Kueue LocalQueues and ClusterQueues for `ray-manager`
 - Storage configuration in compute cluster:
   - `michelangelo-config` ConfigMap (S3 endpoint/credentials)
   - `aws-credentials` Secret
@@ -58,6 +59,8 @@ kubectl --context "${COMPUTE_CONTEXT}" create secret generic aws-credentials \
 Apply the manifest from the Appendix below using your preferred method (e.g., `kubectl --context "${COMPUTE_CONTEXT}" apply -f -` with the manifest piped from a heredoc, or save it to a file first).
 
 This creates `ServiceAccount ray-manager` and grants permissions on `rayclusters` and `rayjobs`.
+
+If the cluster will be Kueue-managed (`schedulerType: SCHEDULER_TYPE_KUEUE`), also apply [Kueue read access](#kueue-read-access-kueue-managed-clusters).
 
 ### 3) Create a token Secret for the `ray-manager` ServiceAccount
 
@@ -159,6 +162,9 @@ EOF
 ### Verification
 - RBAC present:
   - `kubectl --context ${COMPUTE_CONTEXT} -n default get sa ray-manager`
+  - Kueue-managed clusters only, each should print `yes`:
+    - `kubectl --context ${COMPUTE_CONTEXT} auth can-i watch localqueues.kueue.x-k8s.io -n default --as=system:serviceaccount:default:ray-manager`
+    - `kubectl --context ${COMPUTE_CONTEXT} auth can-i watch clusterqueues.kueue.x-k8s.io --as=system:serviceaccount:default:ray-manager`
 - Token Secret present and populated:
   - `kubectl --context ${COMPUTE_CONTEXT} -n default get secret ray-manager-token`
   - Verify the Secret has a `token` key: `kubectl --context ${COMPUTE_CONTEXT} -n default get secret ray-manager-token -o jsonpath='{.data.token}' | wc -c` (should be > 0)
@@ -211,4 +217,56 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
   name: ray-manager
+```
+
+#### Kueue read access (Kueue-managed clusters)
+
+On a Kueue-managed cluster the control plane reads Kueue's queues as `ray-manager`: LocalQueues in `default`, for the check that a job's LocalQueue exists before it is dispatched (without this access every job waits with `KueueQueueCheckFailed`), and ClusterQueues, for Kueue-aware placement. It needs `get`, `list` and `watch` on those two resources and nothing else in `kueue.x-k8s.io`. LocalQueue access is a Role in `default`, because that is the only namespace the control plane dispatches into; ClusterQueues are cluster-scoped, so their access is a ClusterRole, named `ray-manager-clusterqueues` to keep it apart from the `ray-manager` ClusterRole above.
+
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ray-manager
+  namespace: default
+rules:
+- apiGroups: ["kueue.x-k8s.io"]
+  resources: ["localqueues"]
+  verbs: ["get","list","watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ray-manager
+  namespace: default
+subjects:
+- kind: ServiceAccount
+  name: ray-manager
+  namespace: default
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: ray-manager
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ray-manager-clusterqueues
+rules:
+- apiGroups: ["kueue.x-k8s.io"]
+  resources: ["clusterqueues"]
+  verbs: ["get","list","watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ray-manager-clusterqueues
+subjects:
+- kind: ServiceAccount
+  name: ray-manager
+  namespace: default
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: ray-manager-clusterqueues
 ```
