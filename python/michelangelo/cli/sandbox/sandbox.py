@@ -57,6 +57,11 @@ _compute_namespace = "michelangelo-compute"
 # a copy on each compute cluster.
 _compute_credentials_secret = "minio-credentials"
 
+# Pod of the chart's helm test. It runs in namespace default, where jobs read the
+# runtime contract, so helm test --logs, which reads the release namespace, cannot
+# read it. A failed pod stays in default until the next test.
+_compute_test_pod = f"{_compute_release}-test-runtime-contract"
+
 # Oldest Kubernetes version the chart supports (kubeVersion in its Chart.yaml).
 _compute_min_kube_version = (1, 29)
 
@@ -2089,23 +2094,47 @@ def _install_compute_chart(context: str, target: str, exclude: list[str]):
 
 
 def _test_compute_chart(context: str, exclude: list[str]):
-    """Run the michelangelo-compute chart tests on a cluster."""
+    """Run the michelangelo-compute chart tests on a cluster.
+
+    On failure, print the test pod's log from namespace default and exit.
+    """
     if "apiserver" in exclude:
         print(
             "Skipping the michelangelo-compute chart tests: they check "
             "REGISTRY_ENDPOINT, and --exclude apiserver leaves it unserved."
         )
         return
-    _exec(
-        "helm",
-        "test",
-        _compute_release,
-        "--kube-context",
-        context,
-        "-n",
-        _compute_namespace,
-        "--logs",
-    )
+    try:
+        _exec(
+            "helm",
+            "test",
+            _compute_release,
+            "--kube-context",
+            context,
+            "-n",
+            _compute_namespace,
+            raise_error=True,
+        )
+    except subprocess.CalledProcessError:
+        # Best effort: a test that failed before its pod started has no log.
+        subprocess.run(
+            [
+                "kubectl",
+                "--context",
+                context,
+                "-n",
+                "default",
+                "logs",
+                f"pod/{_compute_test_pod}",
+            ],
+            check=False,
+        )
+        _err_exit(
+            f"The michelangelo-compute chart test failed on {context}. The test "
+            "pod's log above, if any, names each failed check. The pod stays in "
+            f"namespace default until the next test: kubectl --context {context} "
+            f"-n default logs {_compute_test_pod}"
+        )
 
 
 def _create_compute_cluster(cluster_name: str, exclude: Optional[list[str]] = None):

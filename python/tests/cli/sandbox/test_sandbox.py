@@ -693,7 +693,6 @@ class ComputeChartTest(TestCase):
                     "k3d-test-cluster",
                     "-n",
                     "michelangelo-compute",
-                    "--logs",
                 ),
             ],
         )
@@ -945,8 +944,35 @@ class ComputeChartTest(TestCase):
             "k3d-test-cluster",
             "-n",
             "michelangelo-compute",
-            "--logs",
+            raise_error=True,
         )
+
+    def test_failed_chart_tests_print_the_test_pod_log(self):
+        """A failed test prints its pod's log from default, which --logs cannot read."""
+        failure = subprocess.CalledProcessError(1, "helm")
+        with (
+            patch.object(sandbox, "_exec", side_effect=failure),
+            patch.object(sandbox.subprocess, "run") as mock_run,
+            patch.object(sandbox, "_err_exit", side_effect=SystemExit(1)) as mock_err,
+            self.assertRaises(SystemExit),
+        ):
+            sandbox._test_compute_chart("k3d-test-cluster", [])
+
+        mock_run.assert_called_once_with(
+            [
+                "kubectl",
+                "--context",
+                "k3d-test-cluster",
+                "-n",
+                "default",
+                "logs",
+                "pod/michelangelo-compute-test-runtime-contract",
+            ],
+            check=False,
+        )
+        message = mock_err.call_args[0][0]
+        self.assertIn("k3d-test-cluster", message)
+        self.assertIn("michelangelo-compute-test-runtime-contract", message)
 
     def test_chart_tests_skipped_without_apiserver(self):
         """The chart tests reach the apiserver, so --exclude apiserver skips them."""
@@ -1103,19 +1129,17 @@ class DeployServicesObjectStoreTest(TestCase):
             patch("michelangelo.cli.sandbox.sandbox._create_bucket_setup"),
             patch("michelangelo.cli.sandbox.sandbox._import_log_persistence_images"),
             patch("michelangelo.cli.sandbox.sandbox._ensure_credentials_secret"),
-            patch("michelangelo.cli.sandbox.sandbox._sync_config_from_secret"),
             patch("michelangelo.cli.sandbox.sandbox._assert_command"),
             patch(
                 "michelangelo.cli.sandbox.sandbox.subprocess.check_output",
                 return_value=b"",
             ),
-            patch("michelangelo.cli.sandbox.sandbox._create_kuberay_operator"),
-            patch("michelangelo.cli.sandbox.sandbox._create_spark_operator"),
+            patch("michelangelo.cli.sandbox.sandbox._install_compute_chart"),
             patch("michelangelo.cli.sandbox.sandbox._kube_wait"),
             patch("michelangelo.cli.sandbox.sandbox._deploy_app_services"),
+            patch("michelangelo.cli.sandbox.sandbox._test_compute_chart"),
             patch("michelangelo.cli.sandbox.sandbox._create_cadence_domain"),
             patch("michelangelo.cli.sandbox.sandbox._create_compute_cluster_crd"),
-            patch("michelangelo.cli.sandbox.sandbox._apply_compute_cluster_rbac"),
             patch("michelangelo.cli.sandbox.sandbox._create_compute_cluster_secrets"),
         ):
             sandbox._deploy_services(ns)
