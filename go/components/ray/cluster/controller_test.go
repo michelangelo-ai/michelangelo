@@ -6,9 +6,18 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-logr/logr"
+	"github.com/go-logr/zapr"
 	"github.com/golang/mock/gomock"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/uber-go/tally"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
@@ -21,13 +30,24 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	kubescheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
+	"sigs.k8s.io/controller-runtime/pkg/config"
+	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 
+	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
+	"github.com/michelangelo-ai/michelangelo/go/api/handler/handlermocks"
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
+	"github.com/michelangelo-ai/michelangelo/go/base/env"
+	"github.com/michelangelo-ai/michelangelo/go/components/controllerutil"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/client/clientmocks"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/cluster"
+	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/constants"
 	matypes "github.com/michelangelo-ai/michelangelo/go/components/jobs/common/types"
 )
 
@@ -478,7 +498,13 @@ func TestReconcilerReconcile(t *testing.T) {
 			},
 		},
 		{
-			name: "Cluster launched - monitoring ready state",
+			// The federated watcher normally moves a launched cluster to READY. A
+			// cluster whose KubeRay events were missed (an informer rebuilt across
+			// the transition, a failed handler write, or a KubeRay object created
+			// before its labels existed) must still get there: Reconcile re-reads
+			// the remote object every _safetyNetPeriod and applies it the same way
+			// the watcher does.
+			name: "Launched cluster converges to READY from the compute cluster",
 			setup: func() []client.Object {
 				objects := make([]client.Object, 0)
 				cluster := &v2pb.RayCluster{
@@ -502,6 +528,83 @@ func TestReconcilerReconcile(t *testing.T) {
 							{
 								Type:   LaunchedCondition,
 								Status: apipb.CONDITION_STATUS_TRUE,
+								Reason: "ClusterCreated",
+							},
+						},
+						Assignment: &v2pb.AssignmentInfo{
+							Cluster: assignedCluster,
+						},
+					},
+				}
+				objects = append(objects, cluster)
+				return objects
+			},
+			setupMocks: func(mfc *clientmocks.MockFederatedClient, mcc *mockClusterCache, msq *mockSchedulerQueue) {
+				mcc.addCluster(assignedCluster, &v2pb.Cluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: assignedCluster,
+					},
+				})
+				mfc.EXPECT().GetJobClusterStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(
+					&matypes.JobClusterStatus{
+						Ray: &v2pb.RayClusterStatus{
+							State:  v2pb.RAY_CLUSTER_STATE_READY,
+							LogUrl: "http://logs.test/" + rayClusterName,
+						},
+					}, nil)
+			},
+			expectedState:   v2pb.RAY_CLUSTER_STATE_READY,
+			expectedMessage: "",
+			errorAssertion:  require.NoError,
+			postCheck: func(res ctrl.Result) {
+				assert.Equal(t, _safetyNetPeriod, res.RequeueAfter,
+					"a launched cluster must be re-checked after the safety-net period")
+			},
+			verifyConditions: func(t *testing.T, cluster *v2pb.RayCluster) {
+				var launchedCond *apipb.Condition
+				for _, cond := range cluster.Status.StatusConditions {
+					if cond.Type == LaunchedCondition {
+						launchedCond = cond
+					}
+					// A cluster that was never suspended must not grow a Queued
+					// condition when it becomes ready.
+					assert.NotEqual(t, QueuedCondition, cond.Type,
+						"never-suspended cluster must not grow a Queued condition")
+				}
+				require.NotNil(t, launchedCond)
+				assert.Equal(t, "ClusterReady", launchedCond.Reason)
+				assert.Equal(t, "http://logs.test/"+rayClusterName, cluster.Status.LogUrl)
+			},
+		},
+		{
+			// A ready cluster still has to be looked at: the safety net is also
+			// what notices that its KubeRay object is gone. Nothing changes here,
+			// but the cluster must be scheduled for the next check.
+			name: "Ready cluster is re-checked after the safety-net period",
+			setup: func() []client.Object {
+				objects := make([]client.Object, 0)
+				cluster := &v2pb.RayCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       rayClusterName,
+						Namespace:  testNamespace,
+						Generation: 1,
+					},
+					Spec: createRayClusterSpec(),
+					Status: v2pb.RayClusterStatus{
+						State: v2pb.RAY_CLUSTER_STATE_READY,
+						StatusConditions: []*apipb.Condition{
+							{
+								Type:   EnqueuedCondition,
+								Status: apipb.CONDITION_STATUS_TRUE,
+							},
+							{
+								Type:   ScheduledCondition,
+								Status: apipb.CONDITION_STATUS_TRUE,
+							},
+							{
+								Type:   LaunchedCondition,
+								Status: apipb.CONDITION_STATUS_TRUE,
+								Reason: "ClusterReady",
 							},
 						},
 						Assignment: &v2pb.AssignmentInfo{
@@ -527,19 +630,78 @@ func TestReconcilerReconcile(t *testing.T) {
 			expectedMessage: "",
 			errorAssertion:  require.NoError,
 			postCheck: func(res ctrl.Result) {
-				assert.Equal(t, time.Duration(0), res.RequeueAfter)
+				assert.Equal(t, _safetyNetPeriod, res.RequeueAfter)
 			},
 			verifyConditions: func(t *testing.T, cluster *v2pb.RayCluster) {
-				// A cluster that was never suspended must not grow a Queued
-				// condition when it becomes ready.
 				for _, cond := range cluster.Status.StatusConditions {
-					assert.NotEqual(t, QueuedCondition, cond.Type,
-						"never-suspended cluster must not grow a Queued condition")
+					if cond.Type == LaunchedCondition {
+						assert.Equal(t, int64(0), cond.LastUpdatedTimestamp,
+							"an observation that changes nothing must not be written")
+					}
 				}
 			},
 		},
 		{
-			name: "Cluster launched - failed state",
+			// A compute cluster that cannot be reached is not evidence that the
+			// cluster is gone. Leave the status alone and try again next period.
+			name: "Remote status error leaves the cluster alone and retries",
+			setup: func() []client.Object {
+				objects := make([]client.Object, 0)
+				cluster := &v2pb.RayCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       rayClusterName,
+						Namespace:  testNamespace,
+						Generation: 1,
+					},
+					Spec: createRayClusterSpec(),
+					Status: v2pb.RayClusterStatus{
+						State: v2pb.RAY_CLUSTER_STATE_READY,
+						StatusConditions: []*apipb.Condition{
+							{
+								Type:   EnqueuedCondition,
+								Status: apipb.CONDITION_STATUS_TRUE,
+							},
+							{
+								Type:   ScheduledCondition,
+								Status: apipb.CONDITION_STATUS_TRUE,
+							},
+							{
+								Type:   LaunchedCondition,
+								Status: apipb.CONDITION_STATUS_TRUE,
+							},
+						},
+						Assignment: &v2pb.AssignmentInfo{
+							Cluster: assignedCluster,
+						},
+					},
+				}
+				objects = append(objects, cluster)
+				return objects
+			},
+			setupMocks: func(mfc *clientmocks.MockFederatedClient, mcc *mockClusterCache, msq *mockSchedulerQueue) {
+				mcc.addCluster(assignedCluster, &v2pb.Cluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: assignedCluster,
+					},
+				})
+				mfc.EXPECT().GetJobClusterStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(
+					nil, fmt.Errorf("get client for cluster err: connection refused"))
+			},
+			expectedState:   v2pb.RAY_CLUSTER_STATE_READY,
+			expectedMessage: "",
+			errorAssertion:  require.NoError,
+			postCheck: func(res ctrl.Result) {
+				assert.Equal(t, _safetyNetPeriod, res.RequeueAfter)
+			},
+			verifyConditions: func(t *testing.T, cluster *v2pb.RayCluster) {
+				for _, cond := range cluster.Status.StatusConditions {
+					assert.NotEqual(t, SucceededCondition, cond.Type,
+						"an unreachable compute cluster must not fail the cluster")
+				}
+			},
+		},
+		{
+			name: "Cluster missing on remote compute cluster is marked failed and immutable",
 			setup: func() []client.Object {
 				objects := make([]client.Object, 0)
 				cluster := &v2pb.RayCluster{
@@ -579,34 +741,44 @@ func TestReconcilerReconcile(t *testing.T) {
 						Name: assignedCluster,
 					},
 				})
+				// The RayCluster has vanished from the remote compute cluster.
 				mfc.EXPECT().GetJobClusterStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(
-					&matypes.JobClusterStatus{
-						Ray: &v2pb.RayClusterStatus{State: v2pb.RAY_CLUSTER_STATE_FAILED},
-					}, nil)
+					nil, apiErrors.NewNotFound(
+						schema.GroupResource{Group: "ray.io", Resource: "rayclusters"}, rayClusterName))
 			},
 			expectedState:   v2pb.RAY_CLUSTER_STATE_FAILED,
 			expectedMessage: "",
 			errorAssertion:  require.NoError,
 			postCheck: func(res ctrl.Result) {
-				assert.Equal(t, requeueAfter, res.RequeueAfter)
+				// Terminal condition: the controller must not requeue.
+				assert.Equal(t, time.Duration(0), res.RequeueAfter)
 			},
 			verifyConditions: func(t *testing.T, cluster *v2pb.RayCluster) {
-				// Verify SucceededCondition is FALSE
-				var succeededCond *apipb.Condition
+				var succeededCond, killedCond *apipb.Condition
 				for _, cond := range cluster.Status.StatusConditions {
-					if cond.Type == SucceededCondition {
+					switch cond.Type {
+					case SucceededCondition:
 						succeededCond = cond
-						break
+					case KilledCondition:
+						killedCond = cond
 					}
 				}
-				assert.NotNil(t, succeededCond, "SucceededCondition should exist")
-				assert.Equal(t, apipb.CONDITION_STATUS_FALSE, succeededCond.Status)
-				assert.False(t, utils.IsImmutable(cluster),
-					"cluster should not be immutable yet - this is a transient state on the way to termination")
+				require.NotNil(t, succeededCond, "SucceededCondition should exist")
+				assert.Equal(t, apipb.CONDITION_STATUS_FALSE, succeededCond.Status,
+					"SucceededCondition should be FALSE for a failed cluster")
+				require.NotNil(t, killedCond, "KilledCondition should exist")
+				assert.Equal(t, apipb.CONDITION_STATUS_TRUE, killedCond.Status,
+					"KilledCondition should be TRUE for a terminal cluster")
+				assert.True(t, utils.IsImmutable(cluster),
+					"cluster should be marked immutable so reconciliation stops")
 			},
 		},
 		{
-			name: "Cluster launched - suspended state keeps monitoring",
+			// A 404 from something in front of the compute cluster's API server --
+			// a proxy or an ingress answering in plain text -- reads as NotFound,
+			// but says nothing about the RayCluster. Recording the cluster as gone
+			// is final, so this must be treated as any other remote error.
+			name: "A 404 that is not the API server's leaves the cluster alone",
 			setup: func() []client.Object {
 				objects := make([]client.Object, 0)
 				cluster := &v2pb.RayCluster{
@@ -617,7 +789,7 @@ func TestReconcilerReconcile(t *testing.T) {
 					},
 					Spec: createRayClusterSpec(),
 					Status: v2pb.RayClusterStatus{
-						State: v2pb.RAY_CLUSTER_STATE_PROVISIONING,
+						State: v2pb.RAY_CLUSTER_STATE_READY,
 						StatusConditions: []*apipb.Condition{
 							{
 								Type:   EnqueuedCondition,
@@ -646,114 +818,22 @@ func TestReconcilerReconcile(t *testing.T) {
 						Name: assignedCluster,
 					},
 				})
-				// Suspension (e.g. Kueue admission gating) is non-terminal: even
-				// with a terminal-looking pod error attached, a suspended cluster
-				// must keep being monitored rather than be marked failed.
 				mfc.EXPECT().GetJobClusterStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(
-					&matypes.JobClusterStatus{
-						Ray: &v2pb.RayClusterStatus{
-							State: v2pb.RAY_CLUSTER_STATE_SUSPENDED,
-							PodErrors: []*v2pb.PodErrors{
-								{
-									Name:   "HeadPodReady",
-									Reason: "HeadPodNotFound",
-								},
-							},
-						},
-						Reason: "ClusterSuspended",
-					}, nil)
-			},
-			expectedState:   v2pb.RAY_CLUSTER_STATE_SUSPENDED,
-			expectedMessage: "",
-			errorAssertion:  require.NoError,
-			postCheck: func(res ctrl.Result) {
-				assert.Equal(t, requeueAfter, res.RequeueAfter)
-			},
-			verifyConditions: func(t *testing.T, cluster *v2pb.RayCluster) {
-				var queuedCond *apipb.Condition
-				for _, cond := range cluster.Status.StatusConditions {
-					if cond.Type == SucceededCondition {
-						assert.NotEqual(t, apipb.CONDITION_STATUS_FALSE, cond.Status,
-							"suspended cluster must not be marked failed")
-					}
-					if cond.Type == QueuedCondition {
-						queuedCond = cond
-					}
-				}
-				// The wait for admission is surfaced as a Queued condition.
-				assert.NotNil(t, queuedCond, "QueuedCondition should exist while suspended")
-				assert.Equal(t, apipb.CONDITION_STATUS_TRUE, queuedCond.Status)
-				assert.Equal(t, "AwaitingAdmission", queuedCond.Reason)
-				assert.Equal(t, "ClusterSuspended", queuedCond.Message)
-			},
-		},
-		{
-			name: "Cluster admitted after suspension - Queued condition flips",
-			setup: func() []client.Object {
-				objects := make([]client.Object, 0)
-				cluster := &v2pb.RayCluster{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:       rayClusterName,
-						Namespace:  testNamespace,
-						Generation: 1,
-					},
-					Spec: createRayClusterSpec(),
-					Status: v2pb.RayClusterStatus{
-						State: v2pb.RAY_CLUSTER_STATE_SUSPENDED,
-						StatusConditions: []*apipb.Condition{
-							{
-								Type:   EnqueuedCondition,
-								Status: apipb.CONDITION_STATUS_TRUE,
-							},
-							{
-								Type:   ScheduledCondition,
-								Status: apipb.CONDITION_STATUS_TRUE,
-							},
-							{
-								Type:   LaunchedCondition,
-								Status: apipb.CONDITION_STATUS_TRUE,
-							},
-							{
-								Type:   QueuedCondition,
-								Status: apipb.CONDITION_STATUS_TRUE,
-								Reason: "AwaitingAdmission",
-							},
-						},
-						Assignment: &v2pb.AssignmentInfo{
-							Cluster: assignedCluster,
-						},
-					},
-				}
-				objects = append(objects, cluster)
-				return objects
-			},
-			setupMocks: func(mfc *clientmocks.MockFederatedClient, mcc *mockClusterCache, msq *mockSchedulerQueue) {
-				mcc.addCluster(assignedCluster, &v2pb.Cluster{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: assignedCluster,
-					},
-				})
-				mfc.EXPECT().GetJobClusterStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(
-					&matypes.JobClusterStatus{
-						Ray: &v2pb.RayClusterStatus{State: v2pb.RAY_CLUSTER_STATE_READY},
-					}, nil)
+					nil, apiErrors.NewGenericServerResponse(404, "get",
+						schema.GroupResource{Group: "ray.io", Resource: "rayclusters"}, rayClusterName, "page not found", 0, true))
 			},
 			expectedState:   v2pb.RAY_CLUSTER_STATE_READY,
 			expectedMessage: "",
 			errorAssertion:  require.NoError,
 			postCheck: func(res ctrl.Result) {
-				assert.Equal(t, time.Duration(0), res.RequeueAfter)
+				assert.Equal(t, _safetyNetPeriod, res.RequeueAfter)
 			},
 			verifyConditions: func(t *testing.T, cluster *v2pb.RayCluster) {
-				var queuedCond *apipb.Condition
 				for _, cond := range cluster.Status.StatusConditions {
-					if cond.Type == QueuedCondition {
-						queuedCond = cond
-					}
+					assert.NotEqual(t, SucceededCondition, cond.Type,
+						"a 404 that is not the API server's must not fail the cluster")
 				}
-				assert.NotNil(t, queuedCond, "QueuedCondition should still exist after admission")
-				assert.Equal(t, apipb.CONDITION_STATUS_FALSE, queuedCond.Status)
-				assert.Equal(t, "ClusterAdmitted", queuedCond.Reason)
+				assert.False(t, utils.IsImmutable(cluster))
 			},
 		},
 		{
@@ -1128,366 +1208,6 @@ func TestReconcilerReconcile(t *testing.T) {
 					"cluster should be marked immutable once fully terminated")
 			},
 		},
-		{
-			name: "Cluster UNKNOWN with terminal pod errors escalated to FAILED",
-			setup: func() []client.Object {
-				objects := make([]client.Object, 0)
-				cluster := &v2pb.RayCluster{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:       rayClusterName,
-						Namespace:  testNamespace,
-						Generation: 1,
-					},
-					Spec: createRayClusterSpec(),
-					Status: v2pb.RayClusterStatus{
-						State: v2pb.RAY_CLUSTER_STATE_PROVISIONING,
-						StatusConditions: []*apipb.Condition{
-							{
-								Type:   EnqueuedCondition,
-								Status: apipb.CONDITION_STATUS_TRUE,
-							},
-							{
-								Type:   ScheduledCondition,
-								Status: apipb.CONDITION_STATUS_TRUE,
-							},
-							{
-								Type:   LaunchedCondition,
-								Status: apipb.CONDITION_STATUS_TRUE,
-							},
-						},
-						Assignment: &v2pb.AssignmentInfo{
-							Cluster: assignedCluster,
-						},
-					},
-				}
-				objects = append(objects, cluster)
-				return objects
-			},
-			setupMocks: func(mfc *clientmocks.MockFederatedClient, mcc *mockClusterCache, msq *mockSchedulerQueue) {
-				mcc.addCluster(assignedCluster, &v2pb.Cluster{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: assignedCluster,
-					},
-				})
-				mfc.EXPECT().GetJobClusterStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(
-					&matypes.JobClusterStatus{
-						Ray: &v2pb.RayClusterStatus{
-							State: v2pb.RAY_CLUSTER_STATE_UNKNOWN,
-							PodErrors: []*v2pb.PodErrors{
-								{
-									Name:    "HeadPodReady",
-									Reason:  "CrashLoopBackOff",
-									Message: "container ray-head is crashing",
-								},
-							},
-						},
-						Reason: "CrashLoopBackOff",
-					}, nil)
-			},
-			expectedState:   v2pb.RAY_CLUSTER_STATE_FAILED,
-			expectedMessage: "",
-			errorAssertion:  require.NoError,
-			postCheck: func(res ctrl.Result) {
-				assert.Equal(t, requeueAfter, res.RequeueAfter)
-			},
-			verifyConditions: func(t *testing.T, cluster *v2pb.RayCluster) {
-				var succeededCond *apipb.Condition
-				for _, cond := range cluster.Status.StatusConditions {
-					if cond.Type == SucceededCondition {
-						succeededCond = cond
-						break
-					}
-				}
-				assert.NotNil(t, succeededCond, "SucceededCondition should exist")
-				assert.Equal(t, apipb.CONDITION_STATUS_FALSE, succeededCond.Status)
-				assert.Equal(t, "CrashLoopBackOff", succeededCond.Reason)
-				assert.Len(t, cluster.Status.PodErrors, 1)
-				assert.Equal(t, "CrashLoopBackOff", cluster.Status.PodErrors[0].Reason)
-				assert.False(t, utils.IsImmutable(cluster),
-					"cluster should not be immutable yet - this is a transient state on the way to termination")
-			},
-		},
-		{
-			name: "Cluster UNKNOWN with non-terminal pod errors populates PodErrors but stays UNKNOWN",
-			setup: func() []client.Object {
-				objects := make([]client.Object, 0)
-				cluster := &v2pb.RayCluster{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:       rayClusterName,
-						Namespace:  testNamespace,
-						Generation: 1,
-					},
-					Spec: createRayClusterSpec(),
-					Status: v2pb.RayClusterStatus{
-						State: v2pb.RAY_CLUSTER_STATE_PROVISIONING,
-						StatusConditions: []*apipb.Condition{
-							{
-								Type:   EnqueuedCondition,
-								Status: apipb.CONDITION_STATUS_TRUE,
-							},
-							{
-								Type:   ScheduledCondition,
-								Status: apipb.CONDITION_STATUS_TRUE,
-							},
-							{
-								Type:   LaunchedCondition,
-								Status: apipb.CONDITION_STATUS_TRUE,
-							},
-						},
-						Assignment: &v2pb.AssignmentInfo{
-							Cluster: assignedCluster,
-						},
-					},
-				}
-				objects = append(objects, cluster)
-				return objects
-			},
-			setupMocks: func(mfc *clientmocks.MockFederatedClient, mcc *mockClusterCache, msq *mockSchedulerQueue) {
-				mcc.addCluster(assignedCluster, &v2pb.Cluster{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: assignedCluster,
-					},
-				})
-				mfc.EXPECT().GetJobClusterStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(
-					&matypes.JobClusterStatus{
-						Ray: &v2pb.RayClusterStatus{
-							State: v2pb.RAY_CLUSTER_STATE_UNKNOWN,
-							PodErrors: []*v2pb.PodErrors{
-								{
-									Name:    "HeadPodReady",
-									Reason:  "ContainersNotReady",
-									Message: "containers with unready status: [head]",
-								},
-							},
-						},
-						Reason: "ContainersNotReady",
-					}, nil)
-			},
-			expectedState:   v2pb.RAY_CLUSTER_STATE_UNKNOWN,
-			expectedMessage: "",
-			errorAssertion:  require.NoError,
-			postCheck: func(res ctrl.Result) {
-				assert.Equal(t, requeueAfter, res.RequeueAfter)
-			},
-			verifyConditions: func(t *testing.T, cluster *v2pb.RayCluster) {
-				assert.Len(t, cluster.Status.PodErrors, 1)
-				assert.Equal(t, "ContainersNotReady", cluster.Status.PodErrors[0].Reason)
-			},
-		},
-		{
-			// A freshly-created RayCluster whose head pod has not been scheduled
-			// yet reports HeadPodReady=False / HeadPodNotFound. This must be
-			// treated as transient (keep monitoring), not terminal: otherwise the
-			// controller races KubeRay and tears the cluster down before the head
-			// pod ever exists.
-			name: "Cluster UNKNOWN with HeadPodNotFound stays UNKNOWN (head pod not yet scheduled)",
-			setup: func() []client.Object {
-				objects := make([]client.Object, 0)
-				cluster := &v2pb.RayCluster{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:       rayClusterName,
-						Namespace:  testNamespace,
-						Generation: 1,
-					},
-					Spec: createRayClusterSpec(),
-					Status: v2pb.RayClusterStatus{
-						State: v2pb.RAY_CLUSTER_STATE_PROVISIONING,
-						StatusConditions: []*apipb.Condition{
-							{
-								Type:   EnqueuedCondition,
-								Status: apipb.CONDITION_STATUS_TRUE,
-							},
-							{
-								Type:   ScheduledCondition,
-								Status: apipb.CONDITION_STATUS_TRUE,
-							},
-							{
-								Type:   LaunchedCondition,
-								Status: apipb.CONDITION_STATUS_TRUE,
-							},
-						},
-						Assignment: &v2pb.AssignmentInfo{
-							Cluster: assignedCluster,
-						},
-					},
-				}
-				objects = append(objects, cluster)
-				return objects
-			},
-			setupMocks: func(mfc *clientmocks.MockFederatedClient, mcc *mockClusterCache, msq *mockSchedulerQueue) {
-				mcc.addCluster(assignedCluster, &v2pb.Cluster{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: assignedCluster,
-					},
-				})
-				mfc.EXPECT().GetJobClusterStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(
-					&matypes.JobClusterStatus{
-						Ray: &v2pb.RayClusterStatus{
-							State: v2pb.RAY_CLUSTER_STATE_UNKNOWN,
-							PodErrors: []*v2pb.PodErrors{
-								{
-									Name:    "HeadPodReady",
-									Reason:  "HeadPodNotFound",
-									Message: "Head Pod not found",
-								},
-							},
-						},
-						Reason: "HeadPodNotFound",
-					}, nil)
-			},
-			expectedState:   v2pb.RAY_CLUSTER_STATE_UNKNOWN,
-			expectedMessage: "",
-			errorAssertion:  require.NoError,
-			postCheck: func(res ctrl.Result) {
-				assert.Equal(t, requeueAfter, res.RequeueAfter)
-			},
-			verifyConditions: func(t *testing.T, cluster *v2pb.RayCluster) {
-				assert.Len(t, cluster.Status.PodErrors, 1)
-				assert.Equal(t, "HeadPodNotFound", cluster.Status.PodErrors[0].Reason)
-				for _, cond := range cluster.Status.StatusConditions {
-					if cond.Type == SucceededCondition {
-						assert.NotEqual(t, apipb.CONDITION_STATUS_FALSE, cond.Status,
-							"SucceededCondition must not be marked FALSE for a transient HeadPodNotFound")
-					}
-				}
-			},
-		},
-		{
-			name: "Cluster UNKNOWN without terminal pod errors continues monitoring",
-			setup: func() []client.Object {
-				objects := make([]client.Object, 0)
-				cluster := &v2pb.RayCluster{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:       rayClusterName,
-						Namespace:  testNamespace,
-						Generation: 1,
-					},
-					Spec: createRayClusterSpec(),
-					Status: v2pb.RayClusterStatus{
-						State: v2pb.RAY_CLUSTER_STATE_PROVISIONING,
-						StatusConditions: []*apipb.Condition{
-							{
-								Type:   EnqueuedCondition,
-								Status: apipb.CONDITION_STATUS_TRUE,
-							},
-							{
-								Type:   ScheduledCondition,
-								Status: apipb.CONDITION_STATUS_TRUE,
-							},
-							{
-								Type:   LaunchedCondition,
-								Status: apipb.CONDITION_STATUS_TRUE,
-							},
-						},
-						Assignment: &v2pb.AssignmentInfo{
-							Cluster: assignedCluster,
-						},
-					},
-				}
-				objects = append(objects, cluster)
-				return objects
-			},
-			setupMocks: func(mfc *clientmocks.MockFederatedClient, mcc *mockClusterCache, msq *mockSchedulerQueue) {
-				mcc.addCluster(assignedCluster, &v2pb.Cluster{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: assignedCluster,
-					},
-				})
-				mfc.EXPECT().GetJobClusterStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(
-					&matypes.JobClusterStatus{
-						Ray: &v2pb.RayClusterStatus{
-							State: v2pb.RAY_CLUSTER_STATE_UNKNOWN,
-						},
-					}, nil)
-			},
-			expectedState:   v2pb.RAY_CLUSTER_STATE_UNKNOWN,
-			expectedMessage: "",
-			errorAssertion:  require.NoError,
-			postCheck: func(res ctrl.Result) {
-				assert.Equal(t, requeueAfter, res.RequeueAfter)
-			},
-			verifyConditions: func(t *testing.T, cluster *v2pb.RayCluster) {
-				for _, cond := range cluster.Status.StatusConditions {
-					if cond.Type == SucceededCondition {
-						assert.Equal(t, apipb.CONDITION_STATUS_UNKNOWN, cond.Status,
-							"SucceededCondition should stay UNKNOWN when no terminal errors")
-					}
-				}
-			},
-		},
-		{
-			name: "Cluster missing on remote compute cluster is marked failed and immutable",
-			setup: func() []client.Object {
-				objects := make([]client.Object, 0)
-				cluster := &v2pb.RayCluster{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:       rayClusterName,
-						Namespace:  testNamespace,
-						Generation: 1,
-					},
-					Spec: createRayClusterSpec(),
-					Status: v2pb.RayClusterStatus{
-						State: v2pb.RAY_CLUSTER_STATE_PROVISIONING,
-						StatusConditions: []*apipb.Condition{
-							{
-								Type:   EnqueuedCondition,
-								Status: apipb.CONDITION_STATUS_TRUE,
-							},
-							{
-								Type:   ScheduledCondition,
-								Status: apipb.CONDITION_STATUS_TRUE,
-							},
-							{
-								Type:   LaunchedCondition,
-								Status: apipb.CONDITION_STATUS_TRUE,
-							},
-						},
-						Assignment: &v2pb.AssignmentInfo{
-							Cluster: assignedCluster,
-						},
-					},
-				}
-				objects = append(objects, cluster)
-				return objects
-			},
-			setupMocks: func(mfc *clientmocks.MockFederatedClient, mcc *mockClusterCache, msq *mockSchedulerQueue) {
-				mcc.addCluster(assignedCluster, &v2pb.Cluster{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: assignedCluster,
-					},
-				})
-				// The RayCluster has vanished from the remote compute cluster.
-				mfc.EXPECT().GetJobClusterStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(
-					nil, apiErrors.NewNotFound(
-						schema.GroupResource{Group: "ray.io", Resource: "rayclusters"}, rayClusterName))
-			},
-			expectedState:   v2pb.RAY_CLUSTER_STATE_FAILED,
-			expectedMessage: "",
-			errorAssertion:  require.NoError,
-			postCheck: func(res ctrl.Result) {
-				// Terminal condition: the controller must not requeue.
-				assert.Equal(t, time.Duration(0), res.RequeueAfter)
-			},
-			verifyConditions: func(t *testing.T, cluster *v2pb.RayCluster) {
-				var succeededCond, killedCond *apipb.Condition
-				for _, cond := range cluster.Status.StatusConditions {
-					switch cond.Type {
-					case SucceededCondition:
-						succeededCond = cond
-					case KilledCondition:
-						killedCond = cond
-					}
-				}
-				require.NotNil(t, succeededCond, "SucceededCondition should exist")
-				assert.Equal(t, apipb.CONDITION_STATUS_FALSE, succeededCond.Status,
-					"SucceededCondition should be FALSE for a failed cluster")
-				require.NotNil(t, killedCond, "KilledCondition should exist")
-				assert.Equal(t, apipb.CONDITION_STATUS_TRUE, killedCond.Status,
-					"KilledCondition should be TRUE for a terminal cluster")
-				assert.True(t, utils.IsImmutable(cluster),
-					"cluster should be marked immutable so reconciliation stops")
-			},
-		},
 	}
 
 	for _, tc := range tests {
@@ -1605,4 +1325,308 @@ func TestReconcilerReconcile_KillConvergesToImmutable(t *testing.T) {
 	assert.Equal(t, v2pb.RAY_CLUSTER_STATE_TERMINATED, afterSecond.Status.State)
 	assert.True(t, utils.IsImmutable(&afterSecond),
 		"cluster should be marked immutable once fully terminated")
+}
+
+// TestSafetyNetDoesNotRewindANewerWrite: the safety net reads the cluster before
+// it asks the compute cluster, so a watcher handler can write a newer
+// observation in between. Here KubeRay reports the cluster ready while
+// GetJobClusterStatus's answer, from just before, still says it is coming up.
+// Written over the handler's, that answer would take a READY cluster back to
+// UNKNOWN. The conflict is covered in both shapes: the API handler's gRPC
+// FailedPrecondition, and a Kubernetes conflict as it is.
+func TestSafetyNetDoesNotRewindANewerWrite(t *testing.T) {
+	handlers := []struct {
+		name       string
+		newHandler func(client.Client) api.Handler
+	}{
+		{name: "api handler", newHandler: apiHandler.NewFakeAPIHandler},
+		{name: "kubernetes errors", newHandler: func(c client.Client) api.Handler { return &mockAPIHandler{Client: c} }},
+	}
+	for _, h := range handlers {
+		t.Run(h.name, func(t *testing.T) {
+			r := setupWatcherTest(t, provisioningCluster())
+			store := r.Handler.(*mockAPIHandler).Client
+			r.Handler = h.newHandler(store)
+			comingUp := observedAs(t, r, newKubeRayCluster(rayClusterName, ""))
+			withSafetyNet(t, r).EXPECT().GetJobClusterStatus(gomock.Any(), gomock.Any(), gomock.Any()).
+				DoAndReturn(func(context.Context, runtime.Object, *v2pb.Cluster) (*matypes.JobClusterStatus, error) {
+					r.rayClusterEventHandler(newKubeRayCluster(rayClusterName, rayv1.Ready))
+					return comingUp, nil
+				})
+
+			res := reconcile(t, r)
+
+			assert.Equal(t, _safetyNetPeriod, res.RequeueAfter, "the cluster should still be looked at again")
+			var updated v2pb.RayCluster
+			require.NoError(t, store.Get(context.Background(),
+				types.NamespacedName{Name: rayClusterName, Namespace: testNamespace}, &updated))
+			assert.Equal(t, v2pb.RAY_CLUSTER_STATE_READY, updated.Status.State,
+				"an observation older than the cluster's last write must not be written over it")
+		})
+	}
+}
+
+// TestSafetyNetRetriesAFailedWrite: only a conflict means a handler has written
+// a newer observation since the safety net read the cluster. A write that fails
+// for any other reason -- etcd timing out, a proxy that could not reach the API
+// server -- says nothing of the sort, so it is logged as an error and goes back
+// to controller-runtime to be retried with backoff, not left unseen until the
+// next period.
+func TestSafetyNetRetriesAFailedWrite(t *testing.T) {
+	tests := []struct {
+		name     string
+		writeErr error
+	}{
+		{name: "etcd timed out", writeErr: status.Error(codes.Unavailable, "etcdserver: request timed out")},
+		{name: "proxy could not reach the API server", writeErr: status.Error(codes.Unavailable, "code:unavailable message:proxy forward failed")},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := setupWatcherTest(t, provisioningCluster())
+			store := r.Handler.(*mockAPIHandler).Client.(client.WithWatch)
+			r.Handler = &mockAPIHandler{Client: interceptor.NewClient(store, interceptor.Funcs{
+				SubResourceUpdate: func(context.Context, client.Client, string, client.Object, ...client.SubResourceUpdateOption) error {
+					return tt.writeErr
+				},
+			})}
+			withSafetyNet(t, r).EXPECT().GetJobClusterStatus(gomock.Any(), gomock.Any(), gomock.Any()).
+				Return(observedAs(t, r, newKubeRayCluster(rayClusterName, rayv1.Ready)), nil)
+			observed, logs := observer.New(zapcore.DebugLevel)
+			ctx := log.IntoContext(context.Background(), zapr.NewLogger(zap.New(observed)))
+
+			_, err := r.Reconcile(ctx, ctrl.Request{
+				NamespacedName: types.NamespacedName{Name: rayClusterName, Namespace: testNamespace},
+			})
+
+			require.Error(t, err, "a write that failed should go back to controller-runtime to be retried")
+			assert.ErrorIs(t, err, tt.writeErr)
+			assert.Equal(t, 1, logs.FilterMessage("failed to update ray cluster status").
+				FilterLevelExact(zapcore.ErrorLevel).Len(), "a write that failed should be logged as an error")
+		})
+	}
+}
+
+// TestSafetyNetBoundsTheRemoteCall: the federated client sets no request
+// timeout and the controller runs a single worker, so the safety net's call to
+// a compute cluster that has stopped answering must not hold up Reconcile, and
+// every cluster queued behind it, for good. Running out of time is an ordinary
+// remote error.
+func TestSafetyNetBoundsTheRemoteCall(t *testing.T) {
+	r := setupWatcherTest(t, provisioningCluster())
+	withSafetyNet(t, r).EXPECT().GetJobClusterStatus(gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(ctx context.Context, _ runtime.Object, _ *v2pb.Cluster) (*matypes.JobClusterStatus, error) {
+			deadline, ok := ctx.Deadline()
+			require.True(t, ok, "the call to the compute cluster should have a deadline")
+			assert.LessOrEqual(t, time.Until(deadline), 30*time.Second)
+			return nil, fmt.Errorf("get ray cluster: %w", context.DeadlineExceeded)
+		})
+
+	res := reconcile(t, r)
+
+	assert.Equal(t, _safetyNetPeriod, res.RequeueAfter)
+	updated := getUpdatedCluster(t, r)
+	assert.Equal(t, v2pb.RAY_CLUSTER_STATE_PROVISIONING, updated.Status.State,
+		"a compute cluster that did not answer in time says nothing about the cluster")
+	assert.Nil(t, findCondition(updated.Status.StatusConditions, SucceededCondition))
+}
+
+// TestReconcileLeavesAClusterFrozenSinceItsRead: Reconcile decides on its read
+// of the cluster, but the KubeRay delete handler can record an external delete,
+// and freeze the cluster, between that read and Reconcile's write. A frozen
+// record is final. Neither the termination branch, with the outcome from the
+// Termination spec and Killing=TRUE, nor the safety net, with its own record of
+// the vanished object, may write over it.
+func TestReconcileLeavesAClusterFrozenSinceItsRead(t *testing.T) {
+	readyCluster := func() *v2pb.RayCluster {
+		cluster := provisioningCluster()
+		cluster.Status.State = v2pb.RAY_CLUSTER_STATE_READY
+		return cluster
+	}
+	// deleteExternally runs the KubeRay delete handler for a delete nobody
+	// asked for, and returns the status it froze the cluster with.
+	deleteExternally := func(t *testing.T, r *Reconciler, store client.Client) v2pb.RayClusterStatus {
+		r.rayClusterDeleteEventHandler(newKubeRayCluster(rayClusterName, rayv1.Ready))
+		var frozen v2pb.RayCluster
+		require.NoError(t, store.Get(context.Background(),
+			types.NamespacedName{Name: rayClusterName, Namespace: testNamespace}, &frozen))
+		require.True(t, utils.IsImmutable(&frozen), "the delete handler should have frozen the cluster")
+		return frozen.Status
+	}
+	assertFrozenAs := func(t *testing.T, store client.Client, frozen v2pb.RayClusterStatus) {
+		var updated v2pb.RayCluster
+		require.NoError(t, store.Get(context.Background(),
+			types.NamespacedName{Name: rayClusterName, Namespace: testNamespace}, &updated))
+		assert.Equal(t, frozen, updated.Status, "nothing may be written over a frozen cluster")
+		killingCond := findCondition(updated.Status.StatusConditions, KillingCondition)
+		require.NotNil(t, killingCond)
+		assert.Equal(t, apipb.CONDITION_STATUS_FALSE, killingCond.Status, "a frozen cluster must not be put back into Killing")
+		for _, condType := range []string{SucceededCondition, KilledCondition} {
+			cond := findCondition(updated.Status.StatusConditions, condType)
+			require.NotNil(t, cond)
+			assert.Equal(t, constants.ClusterKilled, cond.Reason, "the delete handler's %s must stand", condType)
+		}
+	}
+
+	t.Run("termination", func(t *testing.T) {
+		cluster := readyCluster()
+		cluster.Spec.Termination = &v2pb.TerminationSpec{Type: v2pb.TERMINATION_TYPE_SUCCEEDED, Reason: "completed"}
+		scheme := runtime.NewScheme()
+		require.NoError(t, kubescheme.AddToScheme(scheme))
+		require.NoError(t, v2pb.AddToScheme(scheme))
+		var (
+			r      *Reconciler
+			frozen v2pb.RayClusterStatus
+			gets   int
+		)
+		store := fake.NewClientBuilder().WithScheme(scheme).WithObjects(cluster).WithStatusSubresource(cluster).
+			WithInterceptorFuncs(interceptor.Funcs{
+				Get: func(ctx context.Context, c client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+					gets++
+					if gets == 2 {
+						// Reconcile has read the cluster and is about to write
+						// its first termination step.
+						frozen = deleteExternally(t, r, c)
+					}
+					return c.Get(ctx, key, obj, opts...)
+				},
+			}).
+			Build()
+		r = &Reconciler{
+			Handler:      &mockAPIHandler{Client: store},
+			logger:       logr.Discard(),
+			mapper:       newTestMapper(),
+			metricsScope: tally.NoopScope,
+		}
+		// No expectations: nothing is left on the compute cluster to delete.
+		withSafetyNet(t, r)
+
+		reconcile(t, r)
+
+		assertFrozenAs(t, store, frozen)
+	})
+
+	t.Run("cluster gone from the compute cluster", func(t *testing.T) {
+		r := setupWatcherTest(t, readyCluster())
+		store := r.Handler.(*mockAPIHandler).Client
+		var frozen v2pb.RayClusterStatus
+		withSafetyNet(t, r).EXPECT().GetJobClusterStatus(gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(context.Context, runtime.Object, *v2pb.Cluster) (*matypes.JobClusterStatus, error) {
+				frozen = deleteExternally(t, r, store)
+				return nil, apiErrors.NewNotFound(schema.GroupResource{Group: "ray.io", Resource: "rayclusters"}, rayClusterName)
+			})
+
+		reconcile(t, r)
+
+		assertFrozenAs(t, store, frozen)
+	})
+}
+
+// TestSafetyNetLeavesAClusterReplacedSinceItsRead: the cluster can be deleted
+// and a same-named one created while the safety net asks the compute cluster
+// about it. The KubeRay object it then finds gone was the predecessor's, so
+// recording that must not fail, and freeze, a cluster that has not launched.
+func TestSafetyNetLeavesAClusterReplacedSinceItsRead(t *testing.T) {
+	r := setupWatcherTest(t, provisioningCluster())
+	store := r.Handler.(*mockAPIHandler).Client
+	withSafetyNet(t, r).EXPECT().GetJobClusterStatus(gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(ctx context.Context, _ runtime.Object, _ *v2pb.Cluster) (*matypes.JobClusterStatus, error) {
+			require.NoError(t, store.Delete(ctx, provisioningCluster()))
+			require.NoError(t, store.Create(ctx, unlaunchedCluster()))
+			return nil, apiErrors.NewNotFound(schema.GroupResource{Group: "ray.io", Resource: "rayclusters"}, rayClusterName)
+		})
+
+	reconcile(t, r)
+
+	assertNothingRecorded(t, getUpdatedCluster(t, r))
+}
+
+// capturingManager is a manager that is never started; it records the runnables
+// added to it instead of running them.
+type capturingManager struct {
+	ctrl.Manager
+	runnables []manager.Runnable
+}
+
+func (m *capturingManager) Add(runnable manager.Runnable) error {
+	m.runnables = append(m.runnables, runnable)
+	return nil
+}
+
+func newCapturingManager(t *testing.T) *capturingManager {
+	t.Helper()
+	scheme := runtime.NewScheme()
+	require.NoError(t, v2pb.AddToScheme(scheme))
+	mgr, err := ctrl.NewManager(&rest.Config{}, ctrl.Options{
+		Scheme: scheme,
+		Logger: logr.Discard(),
+		// Every Register in this test binary names its controller "raycluster".
+		Controller: config.Controller{SkipNameValidation: ptr.To(true)},
+	})
+	require.NoError(t, err)
+	return &capturingManager{Manager: mgr}
+}
+
+// TestRegisterRunsWatcherOnLeader checks that the federated watcher is run by the
+// manager as a leader-only runnable -- started on the leader once the caches have
+// synced -- and that it stops with the manager instead of outliving it.
+func TestRegisterRunsWatcherOnLeader(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	factory := handlermocks.NewMockFactory(mockCtrl)
+	factory.EXPECT().GetAPIHandler(gomock.Any()).Return(&mockAPIHandler{}, nil)
+	r := NewReconciler(logr.Discard(), factory, env.Context{}, &mockSchedulerQueue{},
+		clientmocks.NewMockFederatedClient(mockCtrl), newMockClusterCache(), newTestMapper(), tally.NoopScope)
+	mgr := newCapturingManager(t)
+
+	require.NoError(t, r.Register(mgr))
+
+	var runWatcher controllerutil.LeaderOnlyRunnable
+	for _, runnable := range mgr.runnables {
+		if fn, ok := runnable.(controllerutil.LeaderOnlyRunnable); ok {
+			runWatcher = fn
+		}
+	}
+	require.NotNil(t, runWatcher, "the watcher should be added to the manager as a leader-only runnable")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	stopped := make(chan error, 1)
+	go func() { stopped <- runWatcher.Start(ctx) }()
+	select {
+	case <-stopped:
+		t.Fatal("the watcher should run until the manager stops")
+	case <-time.After(50 * time.Millisecond):
+	}
+	cancel()
+	select {
+	case err := <-stopped:
+		assert.NoError(t, err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("the watcher should stop when the manager cancels its context")
+	}
+}
+
+// TestRegisterRequiresMapper checks that a Reconciler without a mapper fails at
+// startup rather than on the first KubeRay event.
+func TestRegisterRequiresMapper(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	r := NewReconciler(logr.Discard(), handlermocks.NewMockFactory(mockCtrl), env.Context{}, &mockSchedulerQueue{},
+		clientmocks.NewMockFederatedClient(mockCtrl), newMockClusterCache(), nil, tally.NoopScope)
+	mgr := newCapturingManager(t)
+
+	assert.Error(t, r.Register(mgr))
+	assert.Empty(t, mgr.runnables, "nothing should be started for a reconciler that cannot run")
+}
+
+// TestNewReconcilerToleratesNilScope checks that a nil metrics scope only
+// disables metrics.
+func TestNewReconcilerToleratesNilScope(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	factory := handlermocks.NewMockFactory(mockCtrl)
+	factory.EXPECT().GetAPIHandler(gomock.Any()).Return(&mockAPIHandler{}, nil)
+	r := NewReconciler(logr.Discard(), factory, env.Context{}, &mockSchedulerQueue{},
+		clientmocks.NewMockFederatedClient(mockCtrl), newMockClusterCache(), newTestMapper(), nil)
+	mgr := newCapturingManager(t)
+
+	assert.NotPanics(t, func() {
+		assert.NoError(t, r.Register(mgr))
+	})
 }
