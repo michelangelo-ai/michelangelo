@@ -1,0 +1,13 @@
+{{ .Release.Name }} installed {{ .Chart.Name }} {{ .Chart.Version }} in namespace {{ .Release.Namespace }}.
+
+Operators:
+{{- if index .Values "kuberay-operator" "enabled" }}
+  - KubeRay operator: installed
+{{- else }}
+  - KubeRay operator: not installed (kuberay-operator.enabled=false)
+{{- end }}
+{{- if index .Values "spark-operator" "enabled" }}
+  - Spark Operator: installed
+{{- else }}
+  - Spark Operator: not installed (spark-operator.enabled=false)
+{{- end }}

@@ -1,0 +1,16 @@
+{{/*
+Fail fast on values that break what the control plane relies on. Every message
+starts with the values path it rejects. Checks for a subchart apply only while
+that subchart is enabled. This file renders to empty YAML when all checks pass.
+*/}}
+
+{{- /* Spark Operator: the control plane creates every SparkApplication in default, with this driver ServiceAccount. */ -}}
+{{- $sparkOperator := index .Values "spark-operator" -}}
+{{- if $sparkOperator.enabled -}}
+{{- if ne (toString $sparkOperator.spark.serviceAccount.name) "spark-operator-spark" -}}
+{{- fail "spark-operator.spark.serviceAccount.name must be spark-operator-spark because the control plane sets this driver ServiceAccount on every SparkApplication" -}}
+{{- end -}}
+{{- if not (has "default" $sparkOperator.spark.jobNamespaces) -}}
+{{- fail "spark-operator.spark.jobNamespaces must contain default because the control plane creates every SparkApplication there" -}}
+{{- end -}}
+{{- end -}}

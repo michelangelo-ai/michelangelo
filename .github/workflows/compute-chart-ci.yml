@@ -1,0 +1,79 @@
+name: Compute charts
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/scripts/validate-compute-charts.sh'
+      - '.github/workflows/compute-chart-ci.yml'
+      - '.github/workflows/release.yaml'
+      - 'helm/michelangelo-compute/**'
+      - 'helm/michelangelo-compute-queues/**'
+      - 'scripts/version-bump.sh'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/scripts/validate-compute-charts.sh'
+      - '.github/workflows/compute-chart-ci.yml'
+      - '.github/workflows/release.yaml'
+      - 'helm/michelangelo-compute/**'
+      - 'helm/michelangelo-compute-queues/**'
+      - 'scripts/version-bump.sh'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Helm ${{ matrix.helm-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        helm-version:
+          - '3.13.0'
+          - '3.15.0'
+          - '4.1.0'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Helm
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: ${{ matrix.helm-version }}
+
+      # helm dependency build resolves the HTTP repositories in Chart.lock only
+      # when they have been added.
+      - name: Add Helm repositories
+        run: |
+          helm repo add kuberay https://ray-project.github.io/kuberay-helm/
+          helm repo add spark-operator https://kubeflow.github.io/spark-operator
+
+      - name: Build dependencies
+        run: helm dependency build helm/michelangelo-compute
+
+      - name: Install kubeconform
+        run: |
+          archive=/tmp/kubeconform-linux-amd64.tar.gz
+          curl --fail --location --silent --show-error \
+            --output "$archive" \
+            https://github.com/yannh/kubeconform/releases/download/v0.8.0/kubeconform-linux-amd64.tar.gz
+          echo "9bc2bffbf71f261128533edaf912153948b7ff238f9a531ae6d34466ec287883  $archive" | sha256sum --check
+          tar --extract --gzip --file "$archive" --directory /tmp kubeconform
+          sudo install --mode 0755 /tmp/kubeconform /usr/local/bin/kubeconform
+          kubeconform -v
+
+      - name: Validate
+        run: bash .github/scripts/validate-compute-charts.sh
+
+      - name: Check shell
+        run: shellcheck .github/scripts/validate-compute-charts.sh
+
+      - name: Check workflow
+        if: matrix.helm-version == '3.13.0'
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 .github/workflows/compute-chart-ci.yml
