@@ -117,7 +117,12 @@ controllermgr:
       mapper:
         logPersistence:
           enabled: true
-          # storageEndpoint defaults to objectStorage.endpoint (objectstore:9091) — no override needed
+          # storageEndpoint defaults to objectStorage.endpoint (objectstore:9091).
+          # `ma sandbox create --create-compute-cluster` points it at the object
+          # store's NodePort, which compute clusters can reach.
+          # The Secret the michelangelo-compute chart names on every sandbox
+          # cluster; `ma sandbox` creates it on the control plane.
+          credentialsSecret: minio-credentials
           bucket: ray-history
           pathPrefix: log
           s3DisableSSL: true

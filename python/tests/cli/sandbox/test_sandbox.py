@@ -1,9 +1,14 @@
 """Unit tests for sandbox module."""
 
 import argparse
+import base64
+import json
+import os
 import subprocess
 from unittest import TestCase
 from unittest.mock import Mock, patch
+
+import yaml
 
 from michelangelo.cli.sandbox import sandbox
 
@@ -14,30 +19,28 @@ class CreateFunctionTest(TestCase):
     @patch("michelangelo.cli.sandbox.sandbox._import_log_persistence_images")
     @patch("michelangelo.cli.sandbox.sandbox._kube_wait")
     @patch("michelangelo.cli.sandbox.sandbox._create_cadence_domain")
-    @patch("michelangelo.cli.sandbox.sandbox._create_spark_operator")
-    @patch("michelangelo.cli.sandbox.sandbox._create_kuberay_operator")
+    @patch("michelangelo.cli.sandbox.sandbox._test_compute_chart")
+    @patch("michelangelo.cli.sandbox.sandbox._install_compute_chart")
     @patch("michelangelo.cli.sandbox.sandbox.subprocess.check_output")
     @patch("michelangelo.cli.sandbox.sandbox._assert_command")
     @patch("michelangelo.cli.sandbox.sandbox._kube_create")
     @patch("michelangelo.cli.sandbox.sandbox._exec")
     @patch("michelangelo.cli.sandbox.sandbox.tempfile.NamedTemporaryFile")
     @patch("michelangelo.cli.sandbox.sandbox._create_compute_cluster_secrets")
-    @patch("michelangelo.cli.sandbox.sandbox._apply_compute_cluster_rbac")
     @patch("michelangelo.cli.sandbox.sandbox._create_compute_cluster_crd")
     @patch("michelangelo.cli.sandbox.sandbox._create_compute_cluster")
     def test_create_with_dedicated_compute_cluster(
         self,
         mock_create_compute_cluster,
         mock_create_crd,
-        mock_apply_rbac,
         mock_create_secrets,
         mock_tempfile,
         mock_exec,
         mock_kube_create,
         mock_assert_command,
         mock_check_output,
-        mock_create_kuberay,
-        mock_create_spark,
+        mock_install_chart,
+        mock_test_chart,
         mock_create_cadence_domain,
         mock_kube_wait,
         mock_import_images,
@@ -67,38 +70,53 @@ class CreateFunctionTest(TestCase):
 
         # Verify dedicated compute cluster functions were called with the
         # compute cluster name
-        mock_create_compute_cluster.assert_called_once_with("test-compute-cluster")
+        mock_create_compute_cluster.assert_called_once_with("test-compute-cluster", [])
         mock_create_crd.assert_called_once_with("test-compute-cluster")
-        mock_apply_rbac.assert_called_once_with("test-compute-cluster")
         mock_create_secrets.assert_called_once_with("test-compute-cluster")
+
+        # The control plane gets the compute chart in this mode too
+        mock_install_chart.assert_called_once_with(
+            "k3d-michelangelo-sandbox", "control-plane", []
+        )
+        mock_test_chart.assert_called_once_with("k3d-michelangelo-sandbox", [])
+
+        # Ray log collectors on the compute cluster write to the MinIO NodePort
+        control_plane_install = next(
+            c[0]
+            for c in mock_exec.call_args_list
+            if c[0][:4] == ("helm", "upgrade", "--install", "michelangelo")
+        )
+        self.assertIn(
+            "controllermgr.jobs.k8sengine.mapper.logPersistence.storageEndpoint="
+            "k3d-michelangelo-sandbox-agent-0:30007",
+            control_plane_install,
+        )
 
     @patch("michelangelo.cli.sandbox.sandbox._import_log_persistence_images")
     @patch("michelangelo.cli.sandbox.sandbox._kube_wait")
     @patch("michelangelo.cli.sandbox.sandbox._create_cadence_domain")
-    @patch("michelangelo.cli.sandbox.sandbox._create_spark_operator")
-    @patch("michelangelo.cli.sandbox.sandbox._create_kuberay_operator")
+    @patch("michelangelo.cli.sandbox.sandbox._test_compute_chart")
+    @patch("michelangelo.cli.sandbox.sandbox._install_compute_chart")
     @patch("michelangelo.cli.sandbox.sandbox.subprocess.check_output")
     @patch("michelangelo.cli.sandbox.sandbox._assert_command")
     @patch("michelangelo.cli.sandbox.sandbox._kube_create")
     @patch("michelangelo.cli.sandbox.sandbox._exec")
     @patch("michelangelo.cli.sandbox.sandbox.tempfile.NamedTemporaryFile")
     @patch("michelangelo.cli.sandbox.sandbox._create_compute_cluster_secrets")
-    @patch("michelangelo.cli.sandbox.sandbox._apply_compute_cluster_rbac")
     @patch("michelangelo.cli.sandbox.sandbox._create_compute_cluster_crd")
     @patch("michelangelo.cli.sandbox.sandbox._create_compute_cluster")
     def test_create_without_dedicated_compute_cluster(
         self,
         mock_create_compute_cluster,
         mock_create_crd,
-        mock_apply_rbac,
         mock_create_secrets,
         mock_tempfile,
         mock_exec,
         mock_kube_create,
         mock_assert_command,
         mock_check_output,
-        mock_create_kuberay,
-        mock_create_spark,
+        mock_install_chart,
+        mock_test_chart,
         mock_create_cadence_domain,
         mock_kube_wait,
         mock_import_images,
@@ -123,45 +141,70 @@ class CreateFunctionTest(TestCase):
         mock_registry_file.__enter__ = Mock(return_value=mock_registry_file)
         mock_registry_file.__exit__ = Mock(return_value=False)
         mock_tempfile.return_value = mock_registry_file
+        calls = Mock()
+        calls.attach_mock(mock_install_chart, "install_chart")
+        calls.attach_mock(mock_exec, "exec")
+        calls.attach_mock(mock_test_chart, "test_chart")
 
         sandbox._create(ns)
 
         # Verify dedicated compute cluster was NOT created
         mock_create_compute_cluster.assert_not_called()
 
-        # Verify control plane cluster CRD/RBAC/secrets were created with
+        # Verify control plane cluster CRD/secrets were created with
         # sandbox cluster name
         mock_create_crd.assert_called_once_with("michelangelo-sandbox")
-        mock_apply_rbac.assert_called_once_with("michelangelo-sandbox")
         mock_create_secrets.assert_called_once_with("michelangelo-sandbox")
+
+        # The chart replaces the operator installs and the hand-built
+        # michelangelo-config ConfigMap, and the control plane's MinIO
+        # endpoint keeps its default
+        mock_install_chart.assert_called_once_with(
+            "k3d-michelangelo-sandbox", "control-plane", []
+        )
+        exec_args = [str(a) for c in mock_exec.call_args_list for a in c[0]]
+        self.assertFalse(
+            [a for a in exec_args if "michelangelo-config" in a or "rbac-ray" in a]
+        )
+        self.assertFalse([a for a in exec_args if "storageEndpoint" in a])
+
+        # Chart first (the controllers need its CRDs), then the control plane,
+        # then the chart tests, which reach the apiserver
+        names = [c[0] for c in calls.mock_calls]
+        control_plane_install = next(
+            i
+            for i, c in enumerate(calls.mock_calls)
+            if c[0] == "exec"
+            and c[1][:4] == ("helm", "upgrade", "--install", "michelangelo")
+        )
+        self.assertLess(names.index("install_chart"), control_plane_install)
+        self.assertLess(control_plane_install, names.index("test_chart"))
 
     @patch("michelangelo.cli.sandbox.sandbox._import_log_persistence_images")
     @patch("michelangelo.cli.sandbox.sandbox._kube_wait")
     @patch("michelangelo.cli.sandbox.sandbox._create_cadence_domain")
-    @patch("michelangelo.cli.sandbox.sandbox._create_spark_operator")
-    @patch("michelangelo.cli.sandbox.sandbox._create_kuberay_operator")
+    @patch("michelangelo.cli.sandbox.sandbox._test_compute_chart")
+    @patch("michelangelo.cli.sandbox.sandbox._install_compute_chart")
     @patch("michelangelo.cli.sandbox.sandbox.subprocess.check_output")
     @patch("michelangelo.cli.sandbox.sandbox._assert_command")
     @patch("michelangelo.cli.sandbox.sandbox._kube_create")
     @patch("michelangelo.cli.sandbox.sandbox._exec")
     @patch("michelangelo.cli.sandbox.sandbox.tempfile.NamedTemporaryFile")
     @patch("michelangelo.cli.sandbox.sandbox._create_compute_cluster_secrets")
-    @patch("michelangelo.cli.sandbox.sandbox._apply_compute_cluster_rbac")
     @patch("michelangelo.cli.sandbox.sandbox._create_compute_cluster_crd")
     @patch("michelangelo.cli.sandbox.sandbox._create_compute_cluster")
     def test_create_without_ray_imports_history_server_images(
         self,
         mock_create_compute_cluster,
         mock_create_crd,
-        mock_apply_rbac,
         mock_create_secrets,
         mock_tempfile,
         mock_exec,
         mock_kube_create,
         mock_assert_command,
         mock_check_output,
-        mock_create_kuberay,
-        mock_create_spark,
+        mock_install_chart,
+        mock_test_chart,
         mock_create_cadence_domain,
         mock_kube_wait,
         mock_import_images,
@@ -185,7 +228,9 @@ class CreateFunctionTest(TestCase):
 
         sandbox._create(ns)
 
-        mock_create_kuberay.assert_not_called()
+        mock_install_chart.assert_called_once_with(
+            "k3d-michelangelo-sandbox", "control-plane", ["ray"]
+        )
         mock_import_images.assert_called_once_with()
 
 
@@ -194,17 +239,19 @@ class ComputeClusterSetupTest(TestCase):
 
     @patch("michelangelo.cli.sandbox.sandbox._create_aws_credentials_in_cluster")
     @patch("michelangelo.cli.sandbox.sandbox._create_config_in_compute_cluster")
+    @patch("michelangelo.cli.sandbox.sandbox._install_compute_chart")
     @patch("michelangelo.cli.sandbox.sandbox._exec")
     def test_create_compute_cluster_success(
         self,
         mock_exec,
+        mock_install_chart,
         mock_create_config,
         mock_create_aws_creds,
     ):
         """Test successful creation of compute cluster."""
         cluster_name = "test-compute-cluster"
 
-        sandbox._create_compute_cluster(cluster_name)
+        sandbox._create_compute_cluster(cluster_name, ["spark"])
 
         # Verify k3d cluster creation was called
         k3d_calls = [c for c in mock_exec.call_args_list if c[0][0] == "k3d"]
@@ -216,13 +263,26 @@ class ComputeClusterSetupTest(TestCase):
         self.assertIn("create", k3d_call_args)
         self.assertIn(cluster_name, k3d_call_args)
 
-        # Verify helm install for kuberay was called
-        helm_calls = [c for c in mock_exec.call_args_list if c[0][0] == "helm"]
-        self.assertEqual(len(helm_calls), 1)
+        # The chart replaces the KubeRay install, the michelangelo-config
+        # ConfigMap, the aws-credentials Secret and rbac-ray.yaml
+        mock_install_chart.assert_called_once_with(
+            f"k3d-{cluster_name}", "compute-cluster", ["spark"]
+        )
+        self.assertEqual(len(mock_exec.call_args_list), 1)
+        mock_create_config.assert_not_called()
+        mock_create_aws_creds.assert_not_called()
 
-        # Verify all setup functions were called
-        mock_create_config.assert_called_once_with(cluster_name)
-        mock_create_aws_creds.assert_called_once_with(cluster_name)
+    @patch("michelangelo.cli.sandbox.sandbox._install_compute_chart")
+    @patch("michelangelo.cli.sandbox.sandbox._exec")
+    def test_create_compute_cluster_defaults_to_no_exclusions(
+        self, mock_exec, mock_install_chart
+    ):
+        """Without exclusions the compute cluster gets both operators."""
+        sandbox._create_compute_cluster("test-compute-cluster")
+
+        mock_install_chart.assert_called_once_with(
+            "k3d-test-compute-cluster", "compute-cluster", []
+        )
 
     @patch("michelangelo.cli.sandbox.sandbox._exec")
     def test_create_config_success(self, mock_exec):
@@ -347,36 +407,60 @@ contexts:
   name: test-context
 current-context: test-context
 """
-        # Mock both check_output calls (kubeconfig and kubectl create token)
-        mock_check_output.side_effect = [
-            kubeconfig_yaml.encode(),
-            b"test-token-value",
-        ]
+        mock_check_output.return_value = kubeconfig_yaml.encode()
+        applied = []
+
+        def fake_exec(*args, **kwargs):
+            if "ray-manager-token" in args:
+                return base64.b64encode(b"test-token-value").decode()
+            with open(args[args.index("-f") + 1]) as f:
+                applied.append((args[:3], yaml.safe_load(f)))
+            return None
+
+        mock_exec.side_effect = fake_exec
 
         sandbox._create_compute_cluster_secrets(cluster_name)
 
-        # Verify check_output was called twice (kubeconfig and token)
-        self.assertEqual(mock_check_output.call_count, 2)
+        # Only the kubeconfig comes from check_output; the token comes from the
+        # chart's ray-manager-token Secret on the compute cluster
+        mock_check_output.assert_called_once_with(
+            ["k3d", "kubeconfig", "get", cluster_name]
+        )
+        self.assertIn(
+            ("kubectl", "--context", "k3d-test-cluster"),
+            [c[0][:3] for c in mock_exec.call_args_list],
+        )
 
-        # Verify kubectl apply was called multiple times (CA secret and token secret)
-        self.assertGreaterEqual(mock_exec.call_count, 2)
-
-    @patch("michelangelo.cli.sandbox.sandbox._exec")
-    def test_apply_rbac_success(self, mock_exec):
-        """Test successful RBAC application."""
-        cluster_name = "test-cluster"
-
-        sandbox._apply_compute_cluster_rbac(cluster_name)
-
-        # Verify kubectl apply was called
-        mock_exec.assert_called_once()
-        call_args = mock_exec.call_args[0]
-
-        self.assertEqual(call_args[0], "kubectl")
-        self.assertIn("--context", call_args)
-        self.assertIn(f"k3d-{cluster_name}", call_args)
-        self.assertIn("apply", call_args)
-        self.assertIn("-f", call_args)
+        # Both Secrets are applied to the control plane
+        self.assertEqual(
+            applied,
+            [
+                (
+                    ("kubectl", "--context", "k3d-michelangelo-sandbox"),
+                    {
+                        "apiVersion": "v1",
+                        "kind": "Secret",
+                        "metadata": {
+                            "name": "cluster-test-cluster-ca-data",
+                            "namespace": "default",
+                        },
+                        "stringData": {"cadata": "testCAdata"},
+                    },
+                ),
+                (
+                    ("kubectl", "--context", "k3d-michelangelo-sandbox"),
+                    {
+                        "apiVersion": "v1",
+                        "kind": "Secret",
+                        "metadata": {
+                            "name": "cluster-test-cluster-client-token",
+                            "namespace": "default",
+                        },
+                        "stringData": {"token": "test-token-value"},
+                    },
+                ),
+            ],
+        )
 
     @patch("michelangelo.cli.sandbox.sandbox._exec")
     @patch("michelangelo.cli.sandbox.sandbox.subprocess.check_output")
@@ -472,6 +556,512 @@ current-context: test-context
         self.assertTrue(skip_message_found, "Skip message should be printed")
 
 
+# helm show crds output: every subchart's CRDs, each file after a "---" line.
+_CRDS_OUTPUT = """---
+# Source: kuberay-operator/crds/ray.io_rayclusters.yaml
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: rayclusters.ray.io
+spec:
+  group: ray.io
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: sparkapplications.sparkoperator.k8s.io
+spec:
+  group: sparkoperator.k8s.io
+"""
+
+_HELM_REPOS = (
+    b"kuberay\thttps://ray-project.github.io/kuberay-helm\n"
+    b"spark-operator\thttps://kubeflow.github.io/spark-operator\n"
+)
+
+
+def _b64(value: str) -> str:
+    return base64.b64encode(value.encode()).decode()
+
+
+class ComputeChartTest(TestCase):
+    """Tests for installing the michelangelo-compute chart on a cluster."""
+
+    def setUp(self):
+        """Start with no recorded commands and a supported cluster."""
+        self.calls = []
+        self.files = {}
+        self.server_version = {
+            "major": "1",
+            "minor": "31",
+            "gitVersion": "v1.31.5+k3s1",
+        }
+        self.helm_repos = _HELM_REPOS
+
+    def _fake_exec(self, *args, **kwargs):
+        """Record each command, keep the files it reads, answer the reads."""
+        args = list(args)
+        if "-f" in args:
+            i = args.index("-f") + 1
+            path = args[i]
+            with open(path) as f:
+                self.files[args[0]] = (path, os.stat(path).st_mode & 0o777, f.read())
+            args[i] = "<file>"
+        self.calls.append(tuple(args))
+        if "version" in args:
+            return json.dumps({"serverVersion": self.server_version})
+        if args[:3] == ["helm", "show", "crds"]:
+            return _CRDS_OUTPUT
+        if "minio-credentials" in args:
+            return f"{_b64('test-access-key')} {_b64('test-secret-key')}"
+        return None
+
+    def _install(self, target="compute-cluster", exclude=()):
+        with (
+            patch.object(sandbox, "_exec", side_effect=self._fake_exec),
+            patch.object(
+                sandbox.subprocess, "check_output", return_value=self.helm_repos
+            ),
+        ):
+            sandbox._install_compute_chart("k3d-test-cluster", target, list(exclude))
+
+    def test_compute_cluster_install_order(self):
+        """Preflight, CRDs, install, legacy RBAC delete, then the chart tests."""
+        self._install()
+
+        chart = str(sandbox._compute_chart_dir)
+        self.assertEqual(
+            self.calls,
+            [
+                ("kubectl", "--context", "k3d-test-cluster", "version", "-o", "json"),
+                ("helm", "dependency", "build", chart),
+                ("helm", "show", "crds", chart),
+                (
+                    "kubectl",
+                    "--context",
+                    "k3d-test-cluster",
+                    "apply",
+                    "--server-side",
+                    "--force-conflicts",
+                    "-f",
+                    "<file>",
+                ),
+                (
+                    "kubectl",
+                    "--context",
+                    "k3d-michelangelo-sandbox",
+                    "-n",
+                    "default",
+                    "get",
+                    "secret",
+                    "minio-credentials",
+                    "-o",
+                    "jsonpath={.data.AWS_ACCESS_KEY_ID} {.data.AWS_SECRET_ACCESS_KEY}",
+                ),
+                (
+                    "helm",
+                    "upgrade",
+                    "--install",
+                    "michelangelo-compute",
+                    chart,
+                    "--kube-context",
+                    "k3d-test-cluster",
+                    "-n",
+                    "michelangelo-compute",
+                    "--create-namespace",
+                    "-f",
+                    "<file>",
+                    "--wait",
+                    "--timeout",
+                    "20m",
+                ),
+                (
+                    "kubectl",
+                    "--context",
+                    "k3d-test-cluster",
+                    "delete",
+                    "clusterrolebinding/ray-manager-binding",
+                    "clusterrole/ray-manager",
+                    "--ignore-not-found",
+                ),
+                (
+                    "helm",
+                    "test",
+                    "michelangelo-compute",
+                    "--kube-context",
+                    "k3d-test-cluster",
+                    "-n",
+                    "michelangelo-compute",
+                ),
+            ],
+        )
+
+    def test_control_plane_install_leaves_chart_tests_to_caller(self):
+        """The control plane is tested once its apiserver is up."""
+        self._install(target="control-plane")
+
+        self.assertEqual(
+            [c[:2] for c in self.calls],
+            [
+                ("kubectl", "--context"),
+                ("helm", "dependency"),
+                ("helm", "show"),
+                ("kubectl", "--context"),
+                ("helm", "upgrade"),
+                ("kubectl", "--context"),
+            ],
+        )
+        self.assertEqual(self.calls[-1][3], "delete")
+
+    def test_missing_operator_repos_are_added(self):
+        """The operator repos are added before the dependency build."""
+        self.helm_repos = b"temporal\thttps://go.temporal.io/helm-charts\n"
+
+        self._install()
+
+        self.assertEqual(
+            self.calls[1:4],
+            [
+                (
+                    "helm",
+                    "repo",
+                    "add",
+                    "kuberay",
+                    "https://ray-project.github.io/kuberay-helm",
+                ),
+                (
+                    "helm",
+                    "repo",
+                    "add",
+                    "spark-operator",
+                    "https://kubeflow.github.io/spark-operator",
+                ),
+                ("helm", "dependency", "build", str(sandbox._compute_chart_dir)),
+            ],
+        )
+
+    def test_values_file_is_private_and_removed(self):
+        """The values file holds the keys: owner-only, deleted after install."""
+        self._install()
+
+        path, mode, content = self.files["helm"]
+        self.assertEqual(mode, 0o600)
+        self.assertFalse(os.path.exists(path))
+        credentials = yaml.safe_load(content)["runtime"]["objectStorageCredentials"]
+        self.assertEqual(credentials["accessKeyId"], "test-access-key")
+
+    def test_crds_of_enabled_operators_are_applied(self):
+        """CRDs are filtered by the API group of each enabled operator."""
+        cases = {
+            (): ["rayclusters.ray.io", "sparkapplications.sparkoperator.k8s.io"],
+            ("spark",): ["rayclusters.ray.io"],
+            ("ray",): ["sparkapplications.sparkoperator.k8s.io"],
+        }
+        for exclude, names in cases.items():
+            with self.subTest(exclude=exclude):
+                self.files = {}
+
+                self._install(exclude=exclude)
+
+                _, _, content = self.files["kubectl"]
+                self.assertEqual(
+                    [d["metadata"]["name"] for d in yaml.safe_load_all(content) if d],
+                    names,
+                )
+
+    def test_no_crds_applied_without_operators(self):
+        """With both operators excluded no CRDs are read or applied."""
+        self._install(exclude=("ray", "spark"))
+
+        self.assertNotIn(("helm", "show", "crds"), [c[:3] for c in self.calls])
+        self.assertNotIn("kubectl", self.files)
+
+    def test_preflight_rejects_old_kubernetes(self):
+        """An old cluster fails with an actionable error before any install."""
+        self.server_version = {
+            "major": "1",
+            "minor": "28",
+            "gitVersion": "v1.28.9+k3s1",
+        }
+
+        with (
+            patch.object(sandbox, "_err_exit", side_effect=SystemExit(1)) as mock_err,
+            self.assertRaises(SystemExit),
+        ):
+            self._install()
+
+        message = mock_err.call_args[0][0]
+        for part in [
+            "k3d-test-cluster",
+            "v1.28.9+k3s1",
+            "1.29 or newer",
+            "Upgrade k3d",
+            "ma sandbox delete && ma sandbox create",
+        ]:
+            self.assertIn(part, message)
+        self.assertEqual(len(self.calls), 1)
+
+    def test_preflight_accepts_supported_versions(self):
+        """Kubernetes 1.29 and newer pass, including provider '+' suffixes."""
+        for minor in ["29", "29+", "33"]:
+            self.server_version = {"major": "1", "minor": minor}
+            with (
+                self.subTest(minor=minor),
+                patch.object(sandbox, "_exec", side_effect=self._fake_exec),
+                patch.object(sandbox, "_err_exit") as mock_err,
+            ):
+                sandbox._check_kube_version("k3d-test-cluster")
+
+                mock_err.assert_not_called()
+
+    def test_control_plane_values(self):
+        """The control plane uses in-cluster endpoints and its own Secret."""
+        with patch.object(sandbox, "_exec") as mock_exec:
+            values = sandbox._compute_values("control-plane", [])
+
+        mock_exec.assert_not_called()
+        self.assertEqual(
+            values,
+            {
+                "runtime": {
+                    "config": {
+                        "MA_FILE_SYSTEM": "s3://default",
+                        "MA_FILE_SYSTEM_S3_SCHEME": "http",
+                        "AWS_ENDPOINT_URL": "http://objectstore:9091",
+                        "REGISTRY_ENDPOINT": "michelangelo-apiserver:15566",
+                    },
+                    "objectStorageCredentials": {
+                        "name": "minio-credentials",
+                        "create": False,
+                    },
+                },
+            },
+        )
+
+    def test_compute_cluster_values(self):
+        """A compute cluster uses NodePorts and a copy of the control plane keys."""
+        with patch.object(sandbox, "_exec", side_effect=self._fake_exec):
+            values = sandbox._compute_values("compute-cluster", [])
+
+        self.assertEqual(
+            self.calls[0][:3], ("kubectl", "--context", "k3d-michelangelo-sandbox")
+        )
+        self.assertEqual(
+            values,
+            {
+                "runtime": {
+                    "config": {
+                        "MA_FILE_SYSTEM": "s3://default",
+                        "MA_FILE_SYSTEM_S3_SCHEME": "http",
+                        "AWS_ENDPOINT_URL": (
+                            "http://k3d-michelangelo-sandbox-agent-0:30007"
+                        ),
+                        "REGISTRY_ENDPOINT": "k3d-michelangelo-sandbox-agent-0:30009",
+                    },
+                    "objectStorageCredentials": {
+                        "name": "minio-credentials",
+                        "create": True,
+                        "accessKeyId": "test-access-key",
+                        "secretAccessKey": "test-secret-key",
+                    },
+                },
+            },
+        )
+
+    def test_exclude_disables_subcharts_on_every_cluster(self):
+        """--exclude ray|spark turns the subchart off; operators default on."""
+        cases = {
+            (): {},
+            ("ray",): {"kuberay-operator": {"enabled": False}},
+            ("spark",): {"spark-operator": {"enabled": False}},
+            ("ray", "spark", "grafana"): {
+                "kuberay-operator": {"enabled": False},
+                "spark-operator": {"enabled": False},
+            },
+        }
+        for target in ["control-plane", "compute-cluster"]:
+            for exclude, toggles in cases.items():
+                with (
+                    self.subTest(target=target, exclude=exclude),
+                    patch.object(sandbox, "_exec", side_effect=self._fake_exec),
+                ):
+                    values = sandbox._compute_values(target, list(exclude))
+
+                    values.pop("runtime")
+                    self.assertEqual(values, toggles)
+
+    @patch("michelangelo.cli.sandbox.sandbox.time.sleep")
+    def test_token_is_polled_until_set(self, mock_sleep):
+        """The token is read once Kubernetes fills in ray-manager-token."""
+        with patch.object(
+            sandbox, "_exec", side_effect=["", "", _b64("test-token")]
+        ) as mock_exec:
+            token = sandbox._read_ray_manager_token("test-cluster")
+
+        self.assertEqual(token, "test-token")
+        self.assertEqual(mock_exec.call_count, 3)
+        self.assertEqual(mock_sleep.call_count, 2)
+        mock_exec.assert_called_with(
+            "kubectl",
+            "--context",
+            "k3d-test-cluster",
+            "-n",
+            "default",
+            "get",
+            "secret",
+            "ray-manager-token",
+            "-o",
+            "jsonpath={.data.token}",
+            capture_output=True,
+        )
+
+    @patch("michelangelo.cli.sandbox.sandbox.time.sleep")
+    def test_token_polling_times_out(self, mock_sleep):
+        """An empty token after 60 seconds is an error naming the Secret."""
+        with (
+            patch.object(sandbox, "_exec", return_value="") as mock_exec,
+            patch.object(sandbox, "_err_exit", side_effect=SystemExit(1)) as mock_err,
+            self.assertRaises(SystemExit),
+        ):
+            sandbox._read_ray_manager_token("test-cluster")
+
+        self.assertEqual(mock_exec.call_count, 30)
+        self.assertEqual(sum(c[0][0] for c in mock_sleep.call_args_list), 60)
+        self.assertIn("ray-manager-token", mock_err.call_args[0][0])
+        self.assertIn("k3d-test-cluster", mock_err.call_args[0][0])
+
+    def test_chart_tests_run_on_the_given_cluster(self):
+        """The chart tests run against the release on the given context."""
+        with patch.object(sandbox, "_exec") as mock_exec:
+            sandbox._test_compute_chart("k3d-test-cluster", [])
+
+        mock_exec.assert_called_once_with(
+            "helm",
+            "test",
+            "michelangelo-compute",
+            "--kube-context",
+            "k3d-test-cluster",
+            "-n",
+            "michelangelo-compute",
+            raise_error=True,
+        )
+
+    def test_failed_chart_tests_print_the_test_pod_log(self):
+        """A failed test prints its pod's log from default, which --logs cannot read."""
+        failure = subprocess.CalledProcessError(1, "helm")
+        with (
+            patch.object(sandbox, "_exec", side_effect=failure),
+            patch.object(sandbox.subprocess, "run") as mock_run,
+            patch.object(sandbox, "_err_exit", side_effect=SystemExit(1)) as mock_err,
+            self.assertRaises(SystemExit),
+        ):
+            sandbox._test_compute_chart("k3d-test-cluster", [])
+
+        mock_run.assert_called_once_with(
+            [
+                "kubectl",
+                "--context",
+                "k3d-test-cluster",
+                "-n",
+                "default",
+                "logs",
+                "pod/michelangelo-compute-test-runtime-contract",
+            ],
+            check=False,
+        )
+        message = mock_err.call_args[0][0]
+        self.assertIn("k3d-test-cluster", message)
+        self.assertIn("michelangelo-compute-test-runtime-contract", message)
+
+    def test_chart_tests_skipped_without_apiserver(self):
+        """The chart tests reach the apiserver, so --exclude apiserver skips them."""
+        with patch.object(sandbox, "_exec") as mock_exec:
+            sandbox._test_compute_chart("k3d-test-cluster", ["apiserver"])
+
+        mock_exec.assert_not_called()
+
+
+class BuildHelmSetArgsTest(TestCase):
+    """Tests for the control plane's helm --set arguments."""
+
+    _storage_endpoint_flag = (
+        "controllermgr.jobs.k8sengine.mapper.logPersistence.storageEndpoint="
+        "k3d-michelangelo-sandbox-agent-0:30007"
+    )
+
+    def test_compute_cluster_points_log_storage_at_minio_nodeport(self):
+        """With a compute cluster, the collectors use the MinIO NodePort."""
+        ns = argparse.Namespace(
+            workflow="cadence",
+            exclude=[],
+            helm_set=["controllermgr.foo=bar"],
+            create_compute_cluster=True,
+        )
+
+        args = sandbox._build_helm_set_args(ns)
+
+        i = args.index(self._storage_endpoint_flag)
+        self.assertEqual(args[i - 1], "--set")
+        # Caller --set flags come later, so they still override it
+        self.assertLess(i, args.index("controllermgr.foo=bar"))
+
+    def test_control_plane_keeps_default_log_storage(self):
+        """Without a compute cluster (or in sync) the default endpoint stays."""
+        for ns in [
+            argparse.Namespace(
+                workflow="cadence",
+                exclude=[],
+                helm_set=[],
+                create_compute_cluster=False,
+            ),
+            argparse.Namespace(workflow="cadence", exclude=[], helm_set=[]),
+        ]:
+            with self.subTest(ns=ns):
+                args = sandbox._build_helm_set_args(ns)
+
+                self.assertFalse([a for a in args if "storageEndpoint" in a])
+
+
+# The optional Secret comes first, so on a key both set the ConfigMap wins.
+_CREDENTIALS_ENV_FROM = [
+    {"secretRef": {"name": sandbox._compute_credentials_secret, "optional": True}},
+    {"configMapRef": {"name": "michelangelo-config"}},
+]
+
+
+class CredentialsSecretEnvFromTest(TestCase):
+    """Tests for the sandbox workloads that read the credentials Secret."""
+
+    def test_model_sync_reads_the_secret_before_the_config_map(self):
+        """The DaemonSet _apply_model_sync renders lists the Secret first."""
+        with (
+            patch.object(sandbox.subprocess, "run") as mock_run,
+            patch.object(sandbox, "_exec"),
+        ):
+            mock_run.return_value = Mock(stdout="")
+            sandbox._apply_model_sync("test-is", context="k3d-test-cluster")
+
+        applied = [
+            doc
+            for c in mock_run.call_args_list
+            for doc in yaml.safe_load_all(c.kwargs.get("input") or "")
+            if doc
+        ]
+        (daemon_set,) = [doc for doc in applied if doc["kind"] == "DaemonSet"]
+        (container,) = daemon_set["spec"]["template"]["spec"]["containers"]
+        self.assertEqual(container["envFrom"], _CREDENTIALS_ENV_FROM)
+
+    def test_demo_spark_application_reads_the_secret_before_the_config_map(self):
+        """Driver and executor of the demo SparkApplication list the Secret first."""
+        with open(sandbox._dir / "resources" / "spark-app.yaml") as f:
+            app = yaml.safe_load(f)
+
+        for role in ["driver", "executor"]:
+            with self.subTest(role=role):
+                self.assertEqual(app["spec"][role]["envFrom"], _CREDENTIALS_ENV_FROM)
+
+
 class ArgumentParsingTest(TestCase):
     """Tests for CLI argument parsing."""
 
@@ -539,19 +1129,17 @@ class DeployServicesObjectStoreTest(TestCase):
             patch("michelangelo.cli.sandbox.sandbox._create_bucket_setup"),
             patch("michelangelo.cli.sandbox.sandbox._import_log_persistence_images"),
             patch("michelangelo.cli.sandbox.sandbox._ensure_credentials_secret"),
-            patch("michelangelo.cli.sandbox.sandbox._sync_config_from_secret"),
             patch("michelangelo.cli.sandbox.sandbox._assert_command"),
             patch(
                 "michelangelo.cli.sandbox.sandbox.subprocess.check_output",
                 return_value=b"",
             ),
-            patch("michelangelo.cli.sandbox.sandbox._create_kuberay_operator"),
-            patch("michelangelo.cli.sandbox.sandbox._create_spark_operator"),
+            patch("michelangelo.cli.sandbox.sandbox._install_compute_chart"),
             patch("michelangelo.cli.sandbox.sandbox._kube_wait"),
             patch("michelangelo.cli.sandbox.sandbox._deploy_app_services"),
+            patch("michelangelo.cli.sandbox.sandbox._test_compute_chart"),
             patch("michelangelo.cli.sandbox.sandbox._create_cadence_domain"),
             patch("michelangelo.cli.sandbox.sandbox._create_compute_cluster_crd"),
-            patch("michelangelo.cli.sandbox.sandbox._apply_compute_cluster_rbac"),
             patch("michelangelo.cli.sandbox.sandbox._create_compute_cluster_secrets"),
         ):
             sandbox._deploy_services(ns)

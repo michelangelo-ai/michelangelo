@@ -36,7 +36,13 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
+        # The control plane's michelangelo-config carries no credentials, so they
+        # come from minio-credentials. Optional: a cluster without that Secret still
+        # starts the daemon. On a key both set, the last source (the ConfigMap) wins.
         envFrom:
+        - secretRef:
+            name: minio-credentials
+            optional: true
         - configMapRef:
             name: michelangelo-config
         volumeMounts:
