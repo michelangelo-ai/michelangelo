@@ -449,6 +449,9 @@ controllermgr:
   # When enabled, the controllermgr injects a "collector" container into every
   # RayCluster head + worker pod to stream logs into S3-compatible storage.
   # The History Server can then replay the Ray Dashboard for torn-down clusters.
+  # It injects the same collector into every Spark driver and executor pod too,
+  # where it collects nothing yet: it reads from a raylet, which a Spark pod
+  # does not run. Spark log persistence is not implemented.
   #
   # The sidecar is the official upstream release -- see images.kuberayCollector
   # (quay.io/kuberay/collector:v1.7.1); Michelangelo no longer builds its own.
@@ -461,12 +464,26 @@ controllermgr:
     # Job admission backend. Mirrors the Go config path: jobs.scheduler
     scheduler:
       # "default": the in-process scheduler assigns and dispatches directly.
-      # "kueue": jobs headed for compute clusters marked with
-      # scheduler_type: SCHEDULER_TYPE_KUEUE are validated against their
-      # project's Kueue LocalQueue before dispatch, and the dispatched
-      # RayCluster carries the kueue.x-k8s.io/queue-name label so Kueue on the
-      # compute cluster gang-admits it. Clusters without the marker behave
-      # exactly as "default".
+      # "kueue": in addition, a job headed for a compute cluster marked with
+      # scheduler_type: SCHEDULER_TYPE_KUEUE is checked against its project's
+      # Kueue LocalQueue there before dispatch, and fails with
+      # KueueQueueNotFound while that LocalQueue is missing.
+      # Only that check follows this setting. The kueue.x-k8s.io/queue-name
+      # label follows the cluster's marker whatever the backend: the RayCluster
+      # or SparkApplication dispatched to a marked cluster carries it, naming
+      # the LocalQueue resolved by the kueue settings below. Kueue on the
+      # compute cluster gang-admits a labeled RayCluster in its default
+      # configuration. It admits a SparkApplication only with Kueue 0.17+, the
+      # SparkApplicationIntegration feature gate and
+      # sparkoperator.k8s.io/sparkapplication in integrations.frameworks, and
+      # Spark Operator 2.4.0+ watching the "default" namespace. Without the
+      # Kueue ones the label is inert, and a Spark job starts at once, outside
+      # any quota. Without a Spark Operator watching "default" its
+      # SparkApplication is created but never runs, and the SparkJob gets no
+      # outcome; on a cluster that does not serve the SparkApplication API at
+      # all, the SparkJob fails at launch with an error that says so. Jobs
+      # headed for clusters without the marker are neither checked nor
+      # labeled. See docs/operator-guides/jobs/kueue-scheduler-backend.md.
       backend: default
       kueue:
         # LocalQueue naming convention; "{project}" is replaced with the

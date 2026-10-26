@@ -7,7 +7,7 @@ Register an existing compute Kubernetes cluster with the Michelangelo AI control
 - KubeRay operator installed in the compute cluster (`ray-system` namespace)
 - Michelangelo AI control plane running
 - Access to object storage (S3/MinIO) used by the control plane
-- RBAC manifest for service account with permissions to run Ray Jobs / Ray Clusters and to read their pods.
+- RBAC manifest for service account with permissions to run Ray Jobs / Ray Clusters and Spark applications, and to read pods.
 - Network connectivity between control plane and compute cluster (control plane must be able to reach compute cluster API server)
 
 ### What gets configured
@@ -53,15 +53,15 @@ kubectl --context "${COMPUTE_CONTEXT}" create secret generic aws-credentials \
   --from-literal=AWS_SECRET_ACCESS_KEY=michelangeloadmin
 ```
 
-### 2) Apply RBAC for Ray management in the compute cluster
+### 2) Apply RBAC for Ray and Spark management in the compute cluster
 
 Apply the manifest from the Appendix below using your preferred method (e.g., `kubectl --context "${COMPUTE_CONTEXT}" apply -f -` with the manifest piped from a heredoc, or save it to a file first).
 
-This creates `ServiceAccount ray-manager`, grants permissions on `rayclusters` and `rayjobs`, and grants read-only access (`get`, `list`, `watch`) to `pods`. The control plane watches the compute cluster with this ServiceAccount's token, and the pod watch is what surfaces per-pod failures (`ImagePullBackOff`, `CrashLoopBackOff`, unschedulable pods) into the Michelangelo RayCluster status. Michelangelo never creates or deletes pods directly; KubeRay owns them.
+This creates `ServiceAccount ray-manager`, grants permissions on `rayclusters` and `rayjobs` and on the Spark Operator's `sparkapplications` (which the control plane creates, reads, deletes and watches for every SparkJob it runs on this cluster), and grants read-only access (`get`, `list`, `watch`) to `pods`. The control plane watches the compute cluster with this ServiceAccount's token, and the pod watch is what surfaces per-pod failures (`ImagePullBackOff`, `CrashLoopBackOff`, unschedulable pods) into the Michelangelo RayCluster status. Michelangelo never creates or deletes pods directly; KubeRay owns them. The manifest also grants `get` on Kueue's `localqueues`, which the [Kueue backend](../jobs/kueue-scheduler-backend.md) reads before it dispatches a job to a Kueue-managed cluster.
 
-**Upgrading an existing installation**: re-apply this manifest on every registered compute cluster before upgrading the control plane's controllermgr. Earlier versions of the manifest did not grant access to `pods`; without it the pod watch is denied and retried forever, and per-pod failures never reach the RayCluster status. controllermgr reports no error of its own; the only trace is client-go's reflector logging `failed to list *v1.Pod: pods is forbidden` on every retry.
+**Upgrading an existing installation**: re-apply this manifest on every registered compute cluster before upgrading the control plane's controllermgr. Earlier versions of the manifest did not grant access to `pods`; without it the pod watch is denied and retried forever, and per-pod failures never reach the RayCluster status. controllermgr reports no error of its own; the only trace is client-go's reflector logging `failed to list *v1.Pod: pods is forbidden` on every retry. Nor did they grant access to `sparkapplications` or `localqueues`. Without `sparkapplications`, every SparkJob dispatched to the cluster fails at once: the create is refused, an authorization failure is not retried, and the SparkJob records `Succeeded=False` with reason `SparkApplicationCreationFailed`. Without `localqueues`, the [Kueue backend](../jobs/kueue-scheduler-backend.md) cannot check a job's LocalQueue on a Kueue-managed cluster, so it dispatches no job there: each one is held with `Enqueued=False` and reason `KueueQueueCheckFailed`, and checked again later.
 
-**Sharing a compute cluster between control planes**: each control plane labels the Ray objects it creates with `ma/control-plane-env`, taken from the `RUNTIME_ENVIRONMENT` environment variable of its controllermgr, and only watches objects that carry its own value. If more than one control plane (for example staging and production) uses this compute cluster, set a distinct, non-empty `RUNTIME_ENVIRONMENT` on each one's controllermgr. Left unset, they all use the empty value, see each other's objects, and can write status onto each other's RayClusters and RayJobs that have the same project and name. The value must be a valid Kubernetes label value (at most 63 characters: letters, digits, `-`, `_` and `.`, starting and ending with a letter or digit), or controllermgr fails at startup.
+**Sharing a compute cluster between control planes**: each control plane labels the Ray and Spark objects it creates with `ma/control-plane-env`, taken from the `RUNTIME_ENVIRONMENT` environment variable of its controllermgr, and only watches objects that carry its own value. If more than one control plane (for example staging and production) uses this compute cluster, set a distinct, non-empty `RUNTIME_ENVIRONMENT` on each one's controllermgr. Left unset, they all use the empty value, see each other's objects, and can write status onto each other's RayClusters and RayJobs that have the same project and name. SparkJobs are not exposed to that: a SparkJob takes status only from an application labelled with its own UID (`ma/job-uid`). Whatever the value, though, every SparkApplication lands in the compute cluster's `default` namespace under its SparkJob's name, so two SparkJobs with the same name collide there even when they come from different control planes (see [What the control plane creates](../jobs/kueue-scheduler-backend.md#what-the-control-plane-creates)). The value must be a valid Kubernetes label value (at most 63 characters: letters, digits, `-`, `_` and `.`, starting and ending with a letter or digit), or controllermgr fails at startup.
 
 ### 3) Create a token Secret for the `ray-manager` ServiceAccount
 
@@ -183,7 +183,7 @@ EOF
 
 ### Appendix
 
-#### Ray RBAC Manifest
+#### RBAC Manifest
 
 The RBAC manifest below should be applied to the compute cluster:
 
@@ -211,6 +211,19 @@ rules:
 - apiGroups: [""]
   resources: ["pods"]
   verbs: ["get","list","watch"]
+# The federated client creates, reads and deletes the SparkApplication it
+# projects for each SparkJob, and the SparkApplication watcher lists and watches
+# them.
+- apiGroups: ["sparkoperator.k8s.io"]
+  resources: ["sparkapplications"]
+  verbs: ["create","get","list","watch","delete"]
+# With jobs.scheduler.backend kueue, the control plane checks that a job's
+# LocalQueue exists on a Kueue-managed cluster before it dispatches the job
+# there. Without this the check is refused, and no job is dispatched to the
+# cluster.
+- apiGroups: ["kueue.x-k8s.io"]
+  resources: ["localqueues"]
+  verbs: ["get"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
