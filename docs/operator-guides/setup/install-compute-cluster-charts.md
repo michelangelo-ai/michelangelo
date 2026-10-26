@@ -47,6 +47,7 @@ Helm creates the operators' CRDs, which the subcharts ship in `crds/`, at the fi
 | Object | API group | Resources | Verbs | Enabled by |
 |---|---|---|---|---|
 | Role `ray-manager` in `default` | `ray.io` | `rayclusters`, `rayjobs` | create, get, list, watch, update, patch, delete | Always |
+| Same Role | core (`""`) | `pods` | get, list, watch | Always (the control plane's pod watch) |
 | Same Role | `sparkoperator.k8s.io` | `sparkapplications` | Same as `ray.io` | `rayManager.grants.spark` (federated Spark dispatch) |
 | Same Role | `kueue.x-k8s.io` | `localqueues` | get, list, watch | `rayManager.grants.kueueRead` |
 | ClusterRole `ray-manager-clusterqueues` | `kueue.x-k8s.io` | `clusterqueues` | get, list, watch | `rayManager.grants.kueueRead` |
