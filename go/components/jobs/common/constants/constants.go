@@ -37,6 +37,8 @@ const (
 // condition reasons
 const (
 	AddedToSchedulerQueue             string = "AddedToSchedulerQueue"
+	ClusterMatched                    string = "ClusterMatched"
+	NoClustersFoundForAssignment      string = "NoClustersFoundForAssignment"
 	NoResourcePoolsFoundInCache       string = "NoResourcePoolsFoundInCache"
 	ResourcePoolMatchedBasedOnLoad    string = "ResourcePoolMatchedBasedOnLoad"
 	NoResourcePoolMatchedRequirements string = "NoResourcePoolMatchedRequirements"

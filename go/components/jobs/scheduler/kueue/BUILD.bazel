@@ -39,6 +39,7 @@ go_test(
     ],
     embed = [":go_default_library"],
     deps = [
+        "//go/api:go_default_library",
         "//go/api/handler:go_default_library",
         "//go/base/config:go_default_library",
         "//go/components/jobs/cluster/clustermocks:go_default_library",
@@ -61,6 +62,7 @@ go_test(
         "@io_k8s_apimachinery//pkg/runtime/schema:go_default_library",
         "@io_k8s_client_go//kubernetes/scheme:go_default_library",
         "@io_k8s_client_go//rest/fake:go_default_library",
+        "@io_k8s_sigs_controller_runtime//pkg/client:go_default_library",
         "@io_k8s_sigs_controller_runtime//pkg/client/fake:go_default_library",
     ],
 )
