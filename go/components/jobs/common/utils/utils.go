@@ -19,15 +19,16 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// IsTerminationInfoSet return true if a valid termination spec is set
+// IsTerminationInfoSet return true if a valid termination spec is set.
+// A nil RayCluster or SparkJob has none set.
 func IsTerminationInfoSet(
 	cluster runtime.Object,
 ) (bool, error) {
-	switch cluster.(type) {
+	switch j := cluster.(type) {
 	case *v2pb.RayCluster:
-		return cluster.(*v2pb.RayCluster).Spec.GetTermination().GetType() != v2pb.TERMINATION_TYPE_INVALID, nil
+		return j.GetSpec().Termination.GetType() != v2pb.TERMINATION_TYPE_INVALID, nil
 	case *v2pb.SparkJob:
-		panic("not implemented")
+		return j.GetSpec().Termination.GetType() != v2pb.TERMINATION_TYPE_INVALID, nil
 	default:
 		return false, fmt.Errorf("invalid job type")
 	}

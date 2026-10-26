@@ -32,7 +32,10 @@ type BatchJob interface {
 	GetLabels() map[string]string
 	// GetAnnotations returns all Labels which attached to job.
 	GetAnnotations() map[string]string
-	// GetResourceRequirement returns the resource requirements bucketed by ResourceSKU for the job
+	// GetResourceRequirement returns the resource requirements bucketed by ResourceSKU for the job.
+	// Nothing in the scheduler calls it today: ClusterOnlyAssignmentStrategy, the only strategy this
+	// package provides, chooses a cluster from the job's affinity and the registered clusters alone,
+	// so placement does not depend on how large the job is.
 	GetResourceRequirement() (map[string]v1.ResourceList, error)
 	// GetUserName returns the username of the user who submitted the job.
 	GetUserName() string
@@ -302,6 +305,10 @@ func (s BatchSparkJob) GetAnnotations() map[string]string {
 // GetResourceRequirement returns the resource requirement for the spark job by adding up the driver and executor(s)
 // resources, returned as a map with a single key (DefaultCPU)
 func (s BatchSparkJob) GetResourceRequirement() (map[string]v1.ResourceList, error) {
+	if s.SparkJob == nil {
+		return map[string]v1.ResourceList{}, nil
+	}
+
 	driverResources, err := utils.ConvertToResourceList(s.Spec.GetDriver().GetPod().GetResource())
 	if err != nil {
 		return nil, err

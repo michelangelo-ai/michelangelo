@@ -256,6 +256,8 @@ func TestFetchLatestRayCluster(t *testing.T) {
 		name      string
 		job       matypes.SchedulableJob
 		wantError bool
+		// wantErrMsg, when set, is text the error must contain.
+		wantErrMsg string
 	}{
 		{
 			name: "fetch ray cluster successfully",
@@ -289,7 +291,8 @@ func TestFetchLatestRayCluster(t *testing.T) {
 				Generation: 1,
 				JobType:    matypes.JobType(99), // Invalid job type
 			}),
-			wantError: true,
+			wantError:  true,
+			wantErrMsg: "unrecognized job type 99",
 		},
 	}
 
@@ -318,6 +321,9 @@ func TestFetchLatestRayCluster(t *testing.T) {
 			err = sc.fetchLatestJob(context.Background(), tt.job, &latest)
 			if tt.wantError {
 				require.Error(t, err)
+				if tt.wantErrMsg != "" {
+					assert.Contains(t, err.Error(), tt.wantErrMsg)
+				}
 			} else {
 				require.NoError(t, err)
 				require.Equal(t, tt.job.GetNamespace(), latest.GetNamespace())
@@ -461,4 +467,189 @@ func setupMockClusterCache(g *gomock.Controller) *clustermocks.MockRegisteredClu
 	mockClusterCache.EXPECT().GetCluster(gomock.Any()).Return(testCluster).AnyTimes()
 
 	return mockClusterCache
+}
+
+// TestSparkJobAssignment drives assignJob with a *v2pb.SparkJob and asserts the
+// scheduled condition is persisted on the SparkJob. Previously a Spark job
+// reaching the no-match status update panicked on a bare RayCluster type
+// assertion.
+func TestSparkJobAssignment(t *testing.T) {
+	tests := []struct {
+		name           string
+		sparkJob       *v2pb.SparkJob
+		setupMock      func(g *gomock.Controller) *frameworkmocks.MockAssignmentEngine
+		wantCondition  *apipb.Condition
+		wantAssignment *v2pb.AssignmentInfo
+		wantErr        bool
+	}{
+		{
+			name: "no clusters found for assignment",
+			sparkJob: &v2pb.SparkJob{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-spark-job",
+					Namespace: "test-namespace",
+				},
+			},
+			setupMock: func(g *gomock.Controller) *frameworkmocks.MockAssignmentEngine {
+				mockEngine := frameworkmocks.NewMockAssignmentEngine(g)
+				mockEngine.EXPECT().Select(gomock.Any(), gomock.Any()).Return(
+					nil,
+					false,
+					"NoClustersFoundForAssignment",
+					nil,
+				)
+				return mockEngine
+			},
+			wantCondition: &apipb.Condition{
+				Status: apipb.CONDITION_STATUS_FALSE,
+				Reason: "NoClustersFoundForAssignment",
+			},
+			wantAssignment: nil,
+		},
+		{
+			name: "no cluster matched job requirements",
+			sparkJob: &v2pb.SparkJob{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-spark-job",
+					Namespace: "test-namespace",
+				},
+			},
+			setupMock: func(g *gomock.Controller) *frameworkmocks.MockAssignmentEngine {
+				mockEngine := frameworkmocks.NewMockAssignmentEngine(g)
+				mockEngine.EXPECT().Select(gomock.Any(), gomock.Any()).Return(
+					nil,
+					true,
+					"NoClusterMatchedRequirements",
+					nil,
+				)
+				return mockEngine
+			},
+			wantCondition: &apipb.Condition{
+				Status: apipb.CONDITION_STATUS_FALSE,
+				Reason: "NoClusterMatchedRequirements",
+			},
+			wantAssignment: nil,
+		},
+		{
+			name: "successful spark job assignment",
+			sparkJob: &v2pb.SparkJob{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-spark-job",
+					Namespace: "test-namespace",
+				},
+			},
+			setupMock: func(g *gomock.Controller) *frameworkmocks.MockAssignmentEngine {
+				mockEngine := frameworkmocks.NewMockAssignmentEngine(g)
+				mockEngine.EXPECT().Select(gomock.Any(), gomock.Any()).Return(
+					&v2pb.AssignmentInfo{
+						ResourcePool: "test-pool",
+						Cluster:      "test-cluster",
+					},
+					true,
+					"ClusterMatched",
+					nil,
+				)
+				return mockEngine
+			},
+			wantCondition: &apipb.Condition{
+				Status: apipb.CONDITION_STATUS_TRUE,
+				Reason: "ClusterMatched",
+			},
+			wantAssignment: &v2pb.AssignmentInfo{
+				ResourcePool: "test-pool",
+				Cluster:      "test-cluster",
+			},
+		},
+		{
+			name: "spark job already scheduled is skipped",
+			sparkJob: &v2pb.SparkJob{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-spark-job",
+					Namespace: "test-namespace",
+				},
+				Status: v2pb.SparkJobStatus{
+					StatusConditions: []*apipb.Condition{
+						{
+							Type:   constants.ScheduledCondition,
+							Status: apipb.CONDITION_STATUS_TRUE,
+							Reason: "ClusterMatched",
+						},
+					},
+					Assignment: &v2pb.AssignmentInfo{
+						ResourcePool: "test-pool",
+						Cluster:      "test-cluster",
+					},
+				},
+			},
+			setupMock: func(g *gomock.Controller) *frameworkmocks.MockAssignmentEngine {
+				// No expectation: a job that is already scheduled must not be
+				// selected for again.
+				return frameworkmocks.NewMockAssignmentEngine(g)
+			},
+			wantCondition: &apipb.Condition{
+				Status: apipb.CONDITION_STATUS_TRUE,
+				Reason: "ClusterMatched",
+			},
+			wantAssignment: &v2pb.AssignmentInfo{
+				ResourcePool: "test-pool",
+				Cluster:      "test-cluster",
+			},
+		},
+		{
+			name: "assignment engine error",
+			sparkJob: &v2pb.SparkJob{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-spark-job",
+					Namespace: "test-namespace",
+				},
+			},
+			setupMock: func(g *gomock.Controller) *frameworkmocks.MockAssignmentEngine {
+				mockEngine := frameworkmocks.NewMockAssignmentEngine(g)
+				mockEngine.EXPECT().Select(gomock.Any(), gomock.Any()).Return(
+					nil,
+					false,
+					"",
+					errors.New("assignment engine error"),
+				)
+				return mockEngine
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := gomock.NewController(t)
+			defer g.Finish()
+
+			batchJob := framework.BatchSparkJob{SparkJob: tt.sparkJob}
+			mockEngine := tt.setupMock(g)
+			scheduler := setupTestScheduler(t, batchJob, mockEngine)
+
+			err := scheduler.assignJob(context.Background(), batchJob)
+
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+
+			// retrieve spark job object
+			var sparkJob v2pb.SparkJob
+			err = scheduler.Get(context.Background(), batchJob.GetNamespace(), batchJob.GetName(), &metav1.GetOptions{}, &sparkJob)
+			require.NoError(t, err)
+
+			// retrieve scheduler condition
+			actualCondition := utils.GetCondition(&sparkJob.Status.StatusConditions, constants.ScheduledCondition, sparkJob.Generation)
+			require.NotNil(t, actualCondition)
+			require.Equal(t, tt.wantCondition.Status, actualCondition.Status)
+			require.Equal(t, tt.wantCondition.Reason, actualCondition.Reason)
+			// The scheduler records a reason code and nothing else: the reason
+			// string Select returns is dropped in getAssignmentInfoForJob, so no
+			// row sets a Message and the persisted one stays empty.
+			require.Equal(t, tt.wantCondition.Message, actualCondition.Message)
+			require.Equal(t, tt.wantAssignment, sparkJob.Status.Assignment)
+		})
+	}
 }
