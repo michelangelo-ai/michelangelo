@@ -202,8 +202,7 @@ func (r *Reconciler) rayJobEventHandler(obj interface{}) {
 		// Re-check on the fresh copy: a conflict means another writer got in
 		// first and may have frozen, deleted or finished the job, or replaced it
 		// with an unlaunched one of the same name.
-		if utils.IsImmutable(&current) || current.GetDeletionTimestamp() != nil ||
-			isTerminalRayJobState(current.Status.State) || !isLaunched(&current) {
+		if !acceptsEventWrites(&current) || !isLaunched(&current) {
 			return nil
 		}
 		current.Status.State = mapped.State
@@ -217,10 +216,26 @@ func (r *Reconciler) rayJobEventHandler(obj interface{}) {
 	}
 }
 
+// acceptsEventWrites reports whether a KubeRay event may still change the job's
+// status: the job is not frozen, being deleted or terminal. Every handler write
+// checks it again on the job it re-fetches, together with the guard that let its
+// event through, because a conflict means another writer may have changed any of
+// them.
+func acceptsEventWrites(job *v2pb.RayJob) bool {
+	return !utils.IsImmutable(job) && job.GetDeletionTimestamp() == nil &&
+		!isTerminalRayJobState(job.Status.State)
+}
+
 // isLaunched reports whether Reconcile has recorded the job's launch.
 func isLaunched(job *v2pb.RayJob) bool {
 	launched := jobsutils.GetCondition(&job.Status.StatusConditions, constants.LaunchedCondition, job.Generation)
 	return launched.Status == apipb.CONDITION_STATUS_TRUE
+}
+
+// isKilling reports whether a kill of the job is in progress.
+func isKilling(job *v2pb.RayJob) bool {
+	killing := jobsutils.GetCondition(&job.Status.StatusConditions, constants.KillingCondition, job.Generation)
+	return killing.Status == apipb.CONDITION_STATUS_TRUE
 }
 
 // rayJobDeleteEventHandler handles delete events for KubeRay RayJob resources.
@@ -280,21 +295,22 @@ func (r *Reconciler) rayJobDeleteEventHandler(obj interface{}) {
 		log.Info("skipping delete event for ray job that already reached a terminal state", "state", rayJob.Status.State)
 		return
 	}
+	if rayJob.GetDeletionTimestamp() != nil {
+		log.V(1).Info("skipping delete event for ray job being deleted")
+		return
+	}
 
-	killing := jobsutils.GetCondition(&rayJob.Status.StatusConditions, constants.KillingCondition, rayJob.Generation)
-
-	if killing.Status != apipb.CONDITION_STATUS_TRUE {
+	if !isKilling(&rayJob) {
 		// An unlaunched job has no KubeRay RayJob of its own, so the deleted object
 		// belongs to something else, e.g. an earlier job with the same name.
-		launched := jobsutils.GetCondition(&rayJob.Status.StatusConditions, constants.LaunchedCondition, rayJob.Generation)
-		if launched.Status != apipb.CONDITION_STATUS_TRUE {
+		if !isLaunched(&rayJob) {
 			log.V(1).Info("skipping delete event for ray job that was not launched")
 			return
 		}
 
 		// Job was deleted externally without going through the controller.
 		// wrote records whether the last attempt wrote the status: a retry after
-		// a conflict may instead find the job already terminal.
+		// a conflict may instead find the job changed and leave it alone.
 		wrote := false
 		if err = retry.OnError(retry.DefaultBackoff, isRetriableWriteError, func() error {
 			wrote = false
@@ -302,8 +318,10 @@ func (r *Reconciler) rayJobDeleteEventHandler(obj interface{}) {
 			if getErr := r.Get(ctx, types.NamespacedName{Namespace: projectName, Name: local.Name}, &current); getErr != nil {
 				return getErr
 			}
-			// Re-check on the fresh copy: another writer may have finished the job.
-			if utils.IsImmutable(&current) || isTerminalRayJobState(current.Status.State) {
+			// Re-check on the fresh copy, launch included: another writer may have
+			// frozen, deleted or finished the job, or replaced it with an unlaunched
+			// one of the same name, which a delayed delete event must not fail.
+			if !acceptsEventWrites(&current) || !isLaunched(&current) {
 				return nil
 			}
 			markRayJobGone(&current, string(local.Status.JobStatus))
@@ -315,9 +333,9 @@ func (r *Reconciler) rayJobDeleteEventHandler(obj interface{}) {
 			return
 		}
 		if !wrote {
-			// Another writer recorded the terminal state first. It stands, and the
-			// reconcile that its write triggers freezes it.
-			log.V(1).Info("skipping: ray job reached a terminal state concurrently")
+			// Another writer changed the job first. Its record stands, and a
+			// terminal one is frozen by the reconcile that its write triggers.
+			log.V(1).Info("skipping: ray job changed concurrently")
 			return
 		}
 		if err = r.markImmutableIfTerminal(ctx, &rayJob); err != nil {
@@ -337,8 +355,9 @@ func (r *Reconciler) rayJobDeleteEventHandler(obj interface{}) {
 		if getErr := r.Get(ctx, types.NamespacedName{Namespace: projectName, Name: local.Name}, &current); getErr != nil {
 			return getErr
 		}
-		// Re-check on the fresh copy: another writer may have finished the job.
-		if utils.IsImmutable(&current) || isTerminalRayJobState(current.Status.State) {
+		// Re-check on the fresh copy: another writer may have frozen, deleted or
+		// finished the job, or replaced it with one that is not being killed.
+		if !acceptsEventWrites(&current) || !isKilling(&current) {
 			return nil
 		}
 		killingCond := jobsutils.GetCondition(&current.Status.StatusConditions, constants.KillingCondition, current.Generation)
@@ -360,7 +379,7 @@ func (r *Reconciler) rayJobDeleteEventHandler(obj interface{}) {
 		return
 	}
 	if !wrote {
-		log.V(1).Info("skipping: ray job reached a terminal state concurrently")
+		log.V(1).Info("skipping: ray job changed concurrently")
 		return
 	}
 	if err = r.markImmutableIfTerminal(ctx, &rayJob); err != nil {

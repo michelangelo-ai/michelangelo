@@ -1896,6 +1896,17 @@ func setupJobWatcherTestWithConcurrentWriter(t *testing.T, global *v2pb.RayJob, 
 // for a concurrent writer that applies concurrentUpdate to the stored job.
 func setupJobWatcherTestWithConcurrentUpdate(t *testing.T, global *v2pb.RayJob, concurrentUpdate func(stored *v2pb.RayJob)) (*Reconciler, *int, *observer.ObservedLogs) {
 	t.Helper()
+	return setupJobWatcherTestWithConcurrentWrite(t, global, func(ctx context.Context, c client.Client, stored *v2pb.RayJob) error {
+		concurrentUpdate(stored)
+		return c.Status().Update(ctx, stored)
+	})
+}
+
+// setupJobWatcherTestWithConcurrentWrite is setupJobWatcherTestWithConcurrentWriter
+// for a concurrent writer that changes the stored job through concurrentWrite,
+// which may also freeze or delete it.
+func setupJobWatcherTestWithConcurrentWrite(t *testing.T, global *v2pb.RayJob, concurrentWrite func(ctx context.Context, c client.Client, stored *v2pb.RayJob) error) (*Reconciler, *int, *observer.ObservedLogs) {
+	t.Helper()
 
 	statusWrites := 0
 	fakeClient := fake.NewClientBuilder().
@@ -1912,8 +1923,7 @@ func setupJobWatcherTestWithConcurrentUpdate(t *testing.T, global *v2pb.RayJob, 
 				if err := c.Get(ctx, client.ObjectKeyFromObject(obj), &stored); err != nil {
 					return err
 				}
-				concurrentUpdate(&stored)
-				if err := c.SubResource(subResource).Update(ctx, &stored); err != nil {
+				if err := concurrentWrite(ctx, c, &stored); err != nil {
 					return err
 				}
 				return apiErrors.NewConflict(schema.GroupResource{Group: "michelangelo.api", Resource: "rayjobs"},
@@ -2000,46 +2010,121 @@ func TestJobWatcherHandlersRecheckGuardsAfterConflict(t *testing.T) {
 	}
 }
 
-// TestRayJobEventHandlerRechecksLaunchAfterConflict covers a status write that
-// conflicts because the job was replaced by an unlaunched one of the same name.
-// The retry must leave the new job alone, as an event that found it so would.
-func TestRayJobEventHandlerRechecksLaunchAfterConflict(t *testing.T) {
-	global := &v2pb.RayJob{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:       rayJobName,
-			Namespace:  testNamespace,
-			Generation: 1,
-		},
-		Status: v2pb.RayJobStatus{
-			State: v2pb.RAY_JOB_STATE_INITIALIZING,
-			StatusConditions: []*apipb.Condition{
-				{
-					Type:   constants.LaunchedCondition,
-					Status: apipb.CONDITION_STATUS_TRUE,
-				},
+// TestJobWatcherWritesRecheckEveryGuardAfterConflict covers watcher writes that
+// conflict because another writer froze or deleted the job, or replaced it with
+// an unlaunched one of the same name. Each retry must check, on the job it
+// re-fetches, every guard that let its event through, and leave the job as an
+// event that found it so would. Otherwise a delayed delete event fails a
+// replacement job before it launches.
+func TestJobWatcherWritesRecheckEveryGuardAfterConflict(t *testing.T) {
+	newGlobal := func(conditions ...*apipb.Condition) *v2pb.RayJob {
+		return &v2pb.RayJob{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:       rayJobName,
+				Namespace:  testNamespace,
+				Generation: 1,
+				// A delete then marks the job as being deleted rather than removing it.
+				Finalizers: []string{"test-finalizer"},
 			},
+			Status: v2pb.RayJobStatus{
+				State: v2pb.RAY_JOB_STATE_RUNNING,
+				StatusConditions: append([]*apipb.Condition{
+					{
+						Type:   constants.LaunchedCondition,
+						Status: apipb.CONDITION_STATUS_TRUE,
+					},
+				}, conditions...),
+			},
+		}
+	}
+	newLocal := func() *rayv1.RayJob {
+		return &rayv1.RayJob{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   rayJobName,
+				Labels: map[string]string{constants.ProjectNameLabelKey: testNamespace},
+			},
+			Status: rayv1.RayJobStatus{
+				JobStatus:           rayv1.JobStatusSucceeded,
+				JobDeploymentStatus: rayv1.JobDeploymentStatusComplete,
+			},
+		}
+	}
+
+	events := []struct {
+		name   string
+		global func() *v2pb.RayJob
+		event  func(r *Reconciler)
+	}{
+		{
+			name:   "status update",
+			global: func() *v2pb.RayJob { return newGlobal() },
+			event:  func(r *Reconciler) { r.rayJobEventHandler(newLocal()) },
+		},
+		{
+			name:   "external delete",
+			global: func() *v2pb.RayJob { return newGlobal() },
+			event:  func(r *Reconciler) { r.rayJobDeleteEventHandler(newLocal()) },
+		},
+		{
+			name: "delete during a kill",
+			global: func() *v2pb.RayJob {
+				return newGlobal(&apipb.Condition{
+					Type:   constants.KillingCondition,
+					Status: apipb.CONDITION_STATUS_TRUE,
+				})
+			},
+			event: func(r *Reconciler) { r.rayJobDeleteEventHandler(newLocal()) },
 		},
 	}
-	r, statusWrites, _ := setupJobWatcherTestWithConcurrentUpdate(t, global, func(stored *v2pb.RayJob) {
-		stored.Status = v2pb.RayJobStatus{}
-	})
-
-	r.rayJobEventHandler(&rayv1.RayJob{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:   rayJobName,
-			Labels: map[string]string{constants.ProjectNameLabelKey: testNamespace},
+	changes := []struct {
+		name      string
+		write     func(ctx context.Context, c client.Client, stored *v2pb.RayJob) error
+		wantState v2pb.RayJobState
+	}{
+		{
+			name: "frozen",
+			write: func(ctx context.Context, c client.Client, stored *v2pb.RayJob) error {
+				utils.MarkImmutable(stored)
+				return c.Update(ctx, stored)
+			},
+			wantState: v2pb.RAY_JOB_STATE_RUNNING,
 		},
-		Status: rayv1.RayJobStatus{
-			JobStatus:           rayv1.JobStatusRunning,
-			JobDeploymentStatus: rayv1.JobDeploymentStatusRunning,
+		{
+			name: "deleted",
+			write: func(ctx context.Context, c client.Client, stored *v2pb.RayJob) error {
+				return c.Delete(ctx, stored)
+			},
+			wantState: v2pb.RAY_JOB_STATE_RUNNING,
 		},
-	})
+		{
+			name: "replaced by an unlaunched job",
+			write: func(ctx context.Context, c client.Client, stored *v2pb.RayJob) error {
+				stored.Status = v2pb.RayJobStatus{}
+				return c.Status().Update(ctx, stored)
+			},
+			wantState: v2pb.RAY_JOB_STATE_INVALID,
+		},
+	}
 
-	var updated v2pb.RayJob
-	require.NoError(t, r.Get(context.Background(),
-		types.NamespacedName{Namespace: testNamespace, Name: rayJobName}, &updated))
-	assert.Equal(t, 1, *statusWrites, "the retry must not write to a job that has not launched")
-	assert.Equal(t, v2pb.RAY_JOB_STATE_INVALID, updated.Status.State)
+	for _, ev := range events {
+		for _, ch := range changes {
+			t.Run(ev.name+" after the job was "+ch.name, func(t *testing.T) {
+				r, statusWrites, logs := setupJobWatcherTestWithConcurrentWrite(t, ev.global(), ch.write)
+
+				ev.event(r)
+
+				var updated v2pb.RayJob
+				require.NoError(t, r.Get(context.Background(),
+					types.NamespacedName{Namespace: testNamespace, Name: rayJobName}, &updated))
+				assert.Equal(t, 1, *statusWrites, "the retry must leave the job as the other writer left it")
+				assert.Equal(t, ch.wantState, updated.Status.State)
+				killed := jobsutils.GetCondition(&updated.Status.StatusConditions, constants.KilledCondition, updated.Generation)
+				assert.NotEqual(t, apipb.CONDITION_STATUS_TRUE, killed.Status,
+					"a job the delete event no longer applies to must not be reported as killed")
+				assert.Empty(t, errorLogs(logs))
+			})
+		}
+	}
 }
 
 // TestRayJobDeleteEventHandlerLogsConcurrentSkip covers a delete whose status
@@ -2098,7 +2183,7 @@ func TestRayJobDeleteEventHandlerLogsConcurrentSkip(t *testing.T) {
 			})
 
 			require.Equal(t, 1, *statusWrites, "the retry must not write over a job that turned terminal")
-			skipped := logs.FilterMessage("skipping: ray job reached a terminal state concurrently").All()
+			skipped := logs.FilterMessage("skipping: ray job changed concurrently").All()
 			require.Len(t, skipped, 1, "the handler must report that it skipped")
 			assert.Equal(t, zapcore.DebugLevel, skipped[0].Level, "a lost race is routine and logged at V(1)")
 			assert.Zero(t, logs.FilterMessage(tt.successLog).Len(),
@@ -2493,6 +2578,12 @@ func TestJobWatcherHandlersSkipWithoutWriting(t *testing.T) {
 		}
 		return global
 	}
+	beingDeleted := func() *v2pb.RayJob {
+		global := newGlobal()
+		global.DeletionTimestamp = &metav1.Time{Time: time.Now()}
+		global.Finalizers = []string{"test-finalizer"}
+		return global
+	}
 
 	tests := []struct {
 		name   string
@@ -2517,14 +2608,14 @@ func TestJobWatcherHandlersSkipWithoutWriting(t *testing.T) {
 			event:  func(r *Reconciler) { r.rayJobUpdateEventHandler(nil, newLocal(rayv1.JobStatusRunning)) },
 		},
 		{
-			name: "status update for a job being deleted",
-			global: func() *v2pb.RayJob {
-				global := newGlobal()
-				global.DeletionTimestamp = &metav1.Time{Time: time.Now()}
-				global.Finalizers = []string{"test-finalizer"}
-				return global
-			},
-			event: func(r *Reconciler) { r.rayJobEventHandler(newLocal(rayv1.JobStatusSucceeded)) },
+			name:   "status update for a job being deleted",
+			global: beingDeleted,
+			event:  func(r *Reconciler) { r.rayJobEventHandler(newLocal(rayv1.JobStatusSucceeded)) },
+		},
+		{
+			name:   "delete for a job being deleted",
+			global: beingDeleted,
+			event:  func(r *Reconciler) { r.rayJobDeleteEventHandler(newLocal(rayv1.JobStatusRunning)) },
 		},
 		{
 			name:   "status update without a project label",
