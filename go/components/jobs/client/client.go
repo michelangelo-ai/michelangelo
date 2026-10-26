@@ -311,6 +311,10 @@ func (c *Client) DeleteSecret(
 	return c.helper.DeleteResource(ctx, cs.CoreV1, string(corev1.ResourceSecrets), localNamespace, secrets.GetKubeSecretName(localName), opts)
 }
 
+// JobStatusNotFound is the JobStatus GetJobStatus reports when the compute
+// cluster's API server says the KubeRay RayJob is gone. KubeRay never reports it.
+const JobStatusNotFound = "Unknown"
+
 // GetJobStatus retrieves the status of a Ray job from a remote cluster
 func (c *Client) GetJobStatus(
 	ctx context.Context,
@@ -337,10 +341,15 @@ func (c *Client) GetJobStatus(
 			rayV1Job,
 		)
 		if err != nil {
-			if apierrors.IsNotFound(err) {
+			// Only the API server's own NotFound means the RayJob is gone. A proxy
+			// or ingress in front of the compute cluster can answer 404 itself,
+			// which client-go also reports as NotFound but flags as an unexpected
+			// server response; reporting that as missing would fail a job that
+			// may still be running.
+			if apierrors.IsNotFound(err) && !apierrors.IsUnexpectedServerError(err) {
 				return &matypes.JobStatus{
 					Ray: &v2pb.RayJobStatus{
-						JobStatus: "Unknown",
+						JobStatus: JobStatusNotFound,
 						State:     v2pb.RAY_JOB_STATE_FAILED,
 						Message:   "Resource not found in compute cluster",
 					},
@@ -537,7 +546,7 @@ func (c *Client) Watcher(watcherParams []*WatcherParams, cluster *v2pb.Cluster) 
 	// Add appropriate client for each watcherParams
 	for _, wp := range watcherParams {
 		switch wp.ResourceName {
-		case constants.KubeRayResource:
+		case constants.KubeRayResource, constants.KubeRayJobResource:
 			wp.Client = clientSet.Ray
 		case corev1.ResourcePods.String(), corev1.ResourceConfigMaps.String():
 			wp.Client = clientSet.CoreV1
