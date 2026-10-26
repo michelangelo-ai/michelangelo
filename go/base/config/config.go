@@ -97,10 +97,14 @@ type KueueConfig struct {
 // SchedulerConfig selects and configures the job scheduler backend.
 type SchedulerConfig struct {
 	// Backend is the scheduler backend: "default" (or empty) for the
-	// built-in immediate-admission queue, "kueue" for Kueue-managed
-	// admission.
+	// built-in queue, which checks nothing before dispatch, "kueue" to also
+	// check that a job bound for a Kueue-managed cluster has its LocalQueue
+	// there before the job is queued.
 	Backend string `yaml:"backend"`
-	// Kueue holds Kueue backend settings; ignored unless Backend is "kueue".
+	// Kueue holds the Kueue settings. The LocalQueue names they resolve are
+	// used whatever the backend: the k8s engine labels every job it dispatches
+	// to a Kueue-managed cluster with its LocalQueue. APIVersion is read only
+	// by the "kueue" backend's check.
 	Kueue KueueConfig `yaml:"kueue"`
 }
 
