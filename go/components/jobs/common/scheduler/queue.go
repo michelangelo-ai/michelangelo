@@ -108,6 +108,12 @@ func (cq *channelQueue) Length() int {
 	return len(cq.q) + len(cq.processing)
 }
 
+// getKey returns the dedupe key for a job. Two different kinds of job can share
+// a namespace and a name, so JobType is part of the key; it is the integer and
+// not JobType.ToString(), which returns "" for RayCluster and would alias it with
+// every unknown type. "/" is a safe separator: a Kubernetes namespace or object
+// name is DNS-1123 and cannot contain one.
 func (cq *channelQueue) getKey(obj types.SchedulableJob) string {
-	return obj.GetNamespace() + obj.GetName() + strconv.FormatInt(obj.GetGeneration(), 10)
+	return strconv.Itoa(int(obj.GetJobType())) + "/" + obj.GetNamespace() + "/" +
+		obj.GetName() + "/" + strconv.FormatInt(obj.GetGeneration(), 10)
 }

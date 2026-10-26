@@ -136,10 +136,10 @@ func TestQueueDuplicates(t *testing.T) {
 				Name:       "job-1",
 				Namespace:  "test-ns",
 				Generation: 1,
-				JobType:    types.SparkJob,
+				JobType:    types.RayJob,
 			}),
 			expectedPushError: types.ErrJobAlreadyExists,
-			msg:               "duplicate error - job type doesn't matter",
+			msg:               "duplicate error - same job type, namespace, name and generation",
 		},
 		{
 			job: types.NewSchedulableJob(types.SchedulableJobParams{
@@ -175,4 +175,112 @@ func TestQueueDuplicates(t *testing.T) {
 	}
 
 	require.Equal(t, expectedEntries, q.dirty)
+}
+
+// TestQueueGetKey covers the two ways the dedupe key aliased distinct jobs before
+// it carried the job type and separators, the pairs a differently built
+// key could still alias, and that a genuine duplicate is still rejected.
+func TestQueueGetKey(t *testing.T) {
+	t.Run("job type disambiguates", func(t *testing.T) {
+		q := New().Queue
+		ctx := context.Background()
+
+		require.NoError(t, q.Add(ctx, types.NewSchedulableJob(types.SchedulableJobParams{
+			Name:       "job-1",
+			Namespace:  "test-ns",
+			Generation: 1,
+			JobType:    types.SparkJob,
+		})))
+		require.NoError(t, q.Add(ctx, types.NewSchedulableJob(types.SchedulableJobParams{
+			Name:       "job-1",
+			Namespace:  "test-ns",
+			Generation: 1,
+			JobType:    types.RayCluster,
+		})))
+
+		require.Equal(t, 2, q.Length())
+	})
+
+	t.Run("the namespace and name boundary is unambiguous", func(t *testing.T) {
+		q := New().Queue
+		ctx := context.Background()
+
+		require.NoError(t, q.Add(ctx, types.NewSchedulableJob(types.SchedulableJobParams{
+			Name:       "c",
+			Namespace:  "ab",
+			Generation: 1,
+			JobType:    types.RayCluster,
+		})))
+		require.NoError(t, q.Add(ctx, types.NewSchedulableJob(types.SchedulableJobParams{
+			Name:       "bc",
+			Namespace:  "a",
+			Generation: 1,
+			JobType:    types.RayCluster,
+		})))
+
+		require.Equal(t, 2, q.Length())
+	})
+
+	t.Run("jobs that differ only at a boundary the key could blur get distinct entries", func(t *testing.T) {
+		job := func(jobType types.JobType, name string, generation int64) types.SchedulableJob {
+			return types.NewSchedulableJob(types.SchedulableJobParams{
+				Name:       name,
+				Namespace:  "test-ns",
+				Generation: generation,
+				JobType:    jobType,
+			})
+		}
+
+		tests := []struct {
+			name string
+			a, b types.SchedulableJob
+		}{
+			{
+				// JobType.ToString() is "" for RayCluster and for every type it does
+				// not know, so a key built from it would alias them.
+				name: "RayCluster and an unknown job type",
+				a:    job(types.RayCluster, "job-1", 1),
+				b:    job(types.JobType(99), "job-1", 1),
+			},
+			{
+				name: "RayCluster and an unset job type",
+				a:    job(types.RayCluster, "job-1", 1),
+				b:    job(types.JobType(0), "job-1", 1),
+			},
+			{
+				// Without a separator between them, "foo" and 11 read the same as
+				// "foo1" and 1.
+				name: "the name and generation boundary",
+				a:    job(types.RayCluster, "foo", 11),
+				b:    job(types.RayCluster, "foo1", 1),
+			},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				q := New().Queue
+				ctx := context.Background()
+
+				require.NoError(t, q.Add(ctx, tt.a))
+				require.NoError(t, q.Add(ctx, tt.b))
+
+				require.Equal(t, 2, q.Length())
+			})
+		}
+	})
+
+	t.Run("an identical job is still a duplicate", func(t *testing.T) {
+		q := New().Queue
+		ctx := context.Background()
+
+		job := types.NewSchedulableJob(types.SchedulableJobParams{
+			Name:       "job-1",
+			Namespace:  "test-ns",
+			Generation: 1,
+			JobType:    types.SparkJob,
+		})
+
+		require.NoError(t, q.Add(ctx, job))
+		require.ErrorIs(t, q.Add(ctx, job), types.ErrJobAlreadyExists)
+		require.Equal(t, 1, q.Length())
+	})
 }

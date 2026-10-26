@@ -743,3 +743,97 @@ func TestUpdateStatusWithBackoff(t *testing.T) {
 		assert.Equal(t, 6, *attempts)
 	})
 }
+
+func TestIsTerminationInfoSet(t *testing.T) {
+	tests := []struct {
+		name    string
+		job     runtime.Object
+		want    bool
+		wantErr bool
+	}{
+		{
+			name: "ray cluster with a termination type set",
+			job: &v2pb.RayCluster{
+				Spec: v2pb.RayClusterSpec{
+					Termination: &v2pb.TerminationSpec{Type: v2pb.TERMINATION_TYPE_SUCCEEDED},
+				},
+			},
+			want: true,
+		},
+		{
+			name: "ray cluster with an invalid termination type",
+			job: &v2pb.RayCluster{
+				Spec: v2pb.RayClusterSpec{
+					Termination: &v2pb.TerminationSpec{Type: v2pb.TERMINATION_TYPE_INVALID},
+				},
+			},
+			want: false,
+		},
+		{
+			name: "ray cluster with no termination spec",
+			job:  &v2pb.RayCluster{},
+			want: false,
+		},
+		{
+			name: "nil ray cluster",
+			job:  (*v2pb.RayCluster)(nil),
+			want: false,
+		},
+		{
+			name: "spark job with a termination type set",
+			job: &v2pb.SparkJob{
+				Spec: v2pb.SparkJobSpec{
+					Termination: &v2pb.TerminationSpec{Type: v2pb.TERMINATION_TYPE_SUCCEEDED},
+				},
+			},
+			want: true,
+		},
+		{
+			name: "spark job terminated with a failure",
+			job: &v2pb.SparkJob{
+				Spec: v2pb.SparkJobSpec{
+					Termination: &v2pb.TerminationSpec{Type: v2pb.TERMINATION_TYPE_FAILED},
+				},
+			},
+			want: true,
+		},
+		{
+			name: "spark job with an invalid termination type",
+			job: &v2pb.SparkJob{
+				Spec: v2pb.SparkJobSpec{
+					Termination: &v2pb.TerminationSpec{Type: v2pb.TERMINATION_TYPE_INVALID},
+				},
+			},
+			want: false,
+		},
+		{
+			name: "spark job with no termination spec",
+			job:  &v2pb.SparkJob{},
+			want: false,
+		},
+		{
+			name: "nil spark job",
+			job:  (*v2pb.SparkJob)(nil),
+			want: false,
+		},
+		{
+			name:    "unsupported job type",
+			job:     &v2pb.RayJob{},
+			want:    false,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := IsTerminationInfoSet(tt.job)
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.False(t, got)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
