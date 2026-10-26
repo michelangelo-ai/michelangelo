@@ -137,6 +137,11 @@ const (
 
 // Generic constants
 const (
+	// CollectorContainerName is the log-collector sidecar michelangelo appends
+	// to every ray pod template. It is the one container name the control
+	// plane chooses, which makes it the only reliable way to tell michelangelo's
+	// own sidecar apart from the job author's containers.
+	CollectorContainerName     string = "collector"
 	HeadContainerName          string = "ray-head"
 	KubeRayResource            string = "rayclusters"
 	KubeRayJobResource         string = "rayjobs"
