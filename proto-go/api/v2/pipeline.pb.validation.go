@@ -140,6 +140,25 @@ func (this *PipelineManifest) Validate(prefix string) error {
 			}
 		}
 	}
+	{
+		v := this.GetInterpreterPin()
+		n := `interpreter_pin`
+		var i interface{}
+		if reflect.ValueOf(v).Kind() == reflect.Ptr {
+			i = reflect.ValueOf(v).Interface()
+			if reflect.ValueOf(v).IsNil() {
+				i = nil
+			}
+		} else {
+			i = reflect.ValueOf(&v).Interface()
+		}
+		validate, hasValidate := i.(interface{ Validate(string) error })
+		if hasValidate {
+			if err := validate.Validate(prefix + n + "."); err != nil {
+				return err
+			}
+		}
+	}
 	// Call extension validation if registered
 	if pipelineManifestValidateExt != nil {
 		if err := pipelineManifestValidateExt(this, prefix); err != nil {
@@ -152,6 +171,25 @@ func (this *PipelineManifest) Validate(prefix string) error {
 // RegisterPipelineManifestValidateExt registers an extension validation function
 func RegisterPipelineManifestValidateExt(f func(*PipelineManifest, string) error) {
 	pipelineManifestValidateExt = f
+}
+
+// interpreterPinValidateExt is an extension hook for additional validation logic
+var interpreterPinValidateExt func(*InterpreterPin, string) error
+
+func (this *InterpreterPin) Validate(prefix string) error {
+
+	// Call extension validation if registered
+	if interpreterPinValidateExt != nil {
+		if err := interpreterPinValidateExt(this, prefix); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// RegisterInterpreterPinValidateExt registers an extension validation function
+func RegisterInterpreterPinValidateExt(f func(*InterpreterPin, string) error) {
+	interpreterPinValidateExt = f
 }
 
 // pipelineSpecValidateExt is an extension hook for additional validation logic

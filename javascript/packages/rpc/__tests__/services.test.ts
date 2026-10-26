@@ -1,6 +1,10 @@
+import { create, isMessage } from '@bufbuild/protobuf';
+import { anyPack, anyUnpack } from '@bufbuild/protobuf/wkt';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { DeclarativeWorkflowSchema } from '../gen/michelangelo/api/v2/declarative_pb';
 import { request } from '../request';
+import { typeRegistry } from '../services';
 
 // Bypass the /config.json fetch — we only care about the RPC transport layer.
 vi.mock('../runtime-config', () => ({
@@ -319,5 +323,19 @@ describe('Timestamp/Duration fields', () => {
       startTimestamp: '2023-11-14T22:13:20Z',
       trigger: { intervalSchedule: { interval: '3600s' } },
     });
+  });
+});
+
+describe('declarative type registry', () => {
+  it('unpacks a DeclarativeWorkflow Any through the shared registry', () => {
+    const wf = create(DeclarativeWorkflowSchema, { schemaVersion: 'v1alpha1' });
+    const packed = anyPack(DeclarativeWorkflowSchema, wf);
+    expect(packed.typeUrl).toBe('type.googleapis.com/michelangelo.api.v2.DeclarativeWorkflow');
+    const out = anyUnpack(packed, typeRegistry);
+    expect(out).toBeDefined();
+    expect(isMessage(out, DeclarativeWorkflowSchema)).toBe(true);
+    if (isMessage(out, DeclarativeWorkflowSchema)) {
+      expect(out.schemaVersion).toBe('v1alpha1');
+    }
   });
 });
