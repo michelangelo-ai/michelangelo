@@ -11,6 +11,28 @@
 # -----------------------------------------------------------------------------
 
 # -----------------------------------------------------------------------------
+# Control-plane identity — the ServiceAccount the control plane authenticates
+# as, with a Role in namespace default and read access to Kueue ClusterQueues.
+# -----------------------------------------------------------------------------
+rayManager:
+  # Render the identity objects. Deleting the ServiceAccount (false, or an
+  # uninstall) invalidates the token the control plane registered.
+  create: true
+  # Names the ServiceAccount, Role and RoleBinding. The token Secret is
+  # <name>-token; the ClusterRole and ClusterRoleBinding are
+  # <name>-clusterqueues.
+  name: ray-manager
+  # Render <name>-token (type kubernetes.io/service-account-token), which
+  # registration reads. The token does not expire: to rotate it, delete the
+  # Secret and run helm upgrade.
+  tokenSecret: true
+  grants:
+    # Manage SparkApplications in default (federated Spark dispatch).
+    spark: false
+    # Read LocalQueues in default and ClusterQueues.
+    kueueRead: true
+
+# -----------------------------------------------------------------------------
 # KubeRay operator — upstream chart kuberay-operator 1.7.1.
 # Values under kuberay-operator are passed to the pinned upstream chart.
 # -----------------------------------------------------------------------------

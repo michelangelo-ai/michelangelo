@@ -3,10 +3,40 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
+    "rayManager",
     "kuberay-operator",
     "spark-operator"
   ],
   "properties": {
+    "rayManager": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["create", "name", "tokenSecret", "grants"],
+      "properties": {
+        "create": {
+          "type": "boolean"
+        },
+        "name": {
+          "type": "string"
+        },
+        "tokenSecret": {
+          "type": "boolean"
+        },
+        "grants": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["spark", "kueueRead"],
+          "properties": {
+            "spark": {
+              "type": "boolean"
+            },
+            "kueueRead": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
     "kuberay-operator": {
       "$ref": "#/definitions/subchart"
     },

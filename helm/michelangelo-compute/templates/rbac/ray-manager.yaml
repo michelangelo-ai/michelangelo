@@ -1,0 +1,136 @@
+{{- /*
+The identity the control plane authenticates as. Every call it makes to this
+cluster targets namespace default, so the grants are a Role there, plus read
+access to the cluster-scoped Kueue ClusterQueues.
+*/ -}}
+{{- if .Values.rayManager.create }}
+{{- $name := .Values.rayManager.name }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $name }}
+  namespace: default
+  labels:
+    {{- include "michelangelo-compute.labels" . | nindent 4 }}
+{{- if .Values.rayManager.tokenSecret }}
+---
+# Registration reads this token. It does not expire: deleting the Secret and
+# running helm upgrade issues a new one and invalidates the old one.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $name }}-token
+  namespace: default
+  labels:
+    {{- include "michelangelo-compute.labels" . | nindent 4 }}
+  annotations:
+    kubernetes.io/service-account.name: {{ $name }}
+type: kubernetes.io/service-account-token
+{{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $name }}
+  namespace: default
+  labels:
+    {{- include "michelangelo-compute.labels" . | nindent 4 }}
+rules:
+  - apiGroups:
+      - ray.io
+    resources:
+      - rayclusters
+      - rayjobs
+    verbs:
+      - create
+      - get
+      - list
+      - watch
+      - update
+      - patch
+      - delete
+  {{- /* Read-only: the control plane watches the pods of the Ray clusters it
+  creates, for container and scheduling errors. KubeRay creates and deletes
+  them. */}}
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+    verbs:
+      - get
+      - list
+      - watch
+  {{- if .Values.rayManager.grants.spark }}
+  - apiGroups:
+      - sparkoperator.k8s.io
+    resources:
+      - sparkapplications
+    verbs:
+      - create
+      - get
+      - list
+      - watch
+      - update
+      - patch
+      - delete
+  {{- end }}
+  {{- if .Values.rayManager.grants.kueueRead }}
+  - apiGroups:
+      - kueue.x-k8s.io
+    resources:
+      - localqueues
+    verbs:
+      - get
+      - list
+      - watch
+  {{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $name }}
+  namespace: default
+  labels:
+    {{- include "michelangelo-compute.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $name }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ $name }}
+    namespace: default
+{{- if .Values.rayManager.grants.kueueRead }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ $name }}-clusterqueues
+  labels:
+    {{- include "michelangelo-compute.labels" . | nindent 4 }}
+rules:
+  - apiGroups:
+      - kueue.x-k8s.io
+    resources:
+      - clusterqueues
+    verbs:
+      - get
+      - list
+      - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ $name }}-clusterqueues
+  labels:
+    {{- include "michelangelo-compute.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ $name }}-clusterqueues
+subjects:
+  - kind: ServiceAccount
+    name: {{ $name }}
+    namespace: default
+{{- end }}
+{{- end }}
