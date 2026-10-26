@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Render checks for helm/michelangelo-compute; run after helm dependency build.
-# HELM and KUBECONFORM select the binaries, so the same checks run on every
+# HELM, KUBECONFORM and YQ select the binaries, so the same checks run on every
 # supported Helm version.
 set -euo pipefail
 
@@ -8,6 +8,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 CHART_DIR="$REPO_ROOT/helm/michelangelo-compute"
 HELM="${HELM:-helm}"
 KUBECONFORM="${KUBECONFORM:-kubeconform}"
+YQ="${YQ:-yq}"
 RELEASE=michelangelo-compute
 NAMESPACE=michelangelo-compute
 # The chart's kubeVersion floor, pinned because each Helm version renders with
@@ -20,7 +21,17 @@ VALUES_FILE="$CHART_DIR/examples/values-minimal.yaml"
 DEPENDENCIES=(
   "kuberay-operator-1.7.1.tgz fd057c207a6be038f2fe1475abb87f43a8c091b77f1f563b4e8547a2404b5bc8"
   "spark-operator-2.5.2.tgz 762be5b8632ecfe12eb20fff54450ddae0427f09506422107c508a0d1d38655b"
+  "kueue-0.19.9.tgz 55d06494180f5a21ebd570e85faeb12cd550f14f806aa2da7017f1369a43e268"
 )
+# The four Kueue Configuration deltas, as yq assignments. values.yaml must
+# equal the pinned subchart's default with these applied; the values match
+# what templates/validations.yaml enforces.
+KUEUE_DELTAS='.managedJobsNamespaceSelector = {"matchLabels": {"kubernetes.io/metadata.name": "default"}}
+  | .integrations.frameworks = ["ray.io/raycluster"]
+  | .waitForPodsReady.timeout = "1h"
+  | .waitForPodsReady.recoveryTimeout = "0s"
+  | .waitForPodsReady.requeuingStrategy.backoffLimitCount = 2
+  | .resources.excludeResourcePrefixes = ["ephemeral-storage"]'
 CORE_SCHEMA_LOCATION='https://raw.githubusercontent.com/yannh/kubernetes-json-schema/c8f4e61c63bc529749125ac566bccc6986e08d45/{{ .NormalizedKubernetesVersion }}-standalone{{ .StrictSuffix }}/{{ .ResourceKind }}{{ .KindSuffix }}.json'
 CRD_SCHEMA_LOCATION='https://raw.githubusercontent.com/datreeio/CRDs-catalog/52b0261318acc7dd0b66e032759b1f218216b980/{{ .Group }}/{{ .ResourceKind }}_{{ .ResourceAPIVersion }}.json'
 
@@ -33,6 +44,14 @@ if ! command -v "$KUBECONFORM" >/dev/null 2>&1; then
   echo "Missing $KUBECONFORM; install kubeconform v0.8.0 or set KUBECONFORM" >&2
   exit 1
 fi
+
+if ! command -v "$YQ" >/dev/null 2>&1; then
+  echo "Missing $YQ; install yq v4.44.3 (mikefarah/yq) or set YQ" >&2
+  exit 1
+fi
+
+scratch_dir="$(mktemp -d)"
+trap 'rm -rf "$scratch_dir"' EXIT
 
 sha256() {
   if command -v sha256sum >/dev/null 2>&1; then
@@ -61,6 +80,22 @@ if grep -qiE 'crd|kubectl apply' "$CHART_DIR/templates/NOTES.txt"; then
   exit 1
 fi
 
+# The Kueue subchart replaces its Configuration wholesale, so values.yaml
+# carries upstream's default plus KUEUE_DELTAS. Compared as indented JSON with
+# sorted keys, comments and formatting never count as a difference; anything
+# else does, which catches upstream changes at every Kueue bump.
+kueue_configuration="$("$HELM" show values "$CHART_DIR" | "$YQ" '.kueue.managerConfig.controllerManagerConfigYaml')"
+upstream_kueue_configuration="$("$HELM" show values "$CHART_DIR/charts/kueue-0.19.9.tgz" | "$YQ" '.managerConfig.controllerManagerConfigYaml')"
+kueue_json="$("$YQ" -o=json -I=2 'sort_keys(..)' <<<"$kueue_configuration")"
+expected_kueue_json="$("$YQ" -o=json -I=2 "$KUEUE_DELTAS | sort_keys(..)" <<<"$upstream_kueue_configuration")"
+if [[ "$kueue_json" != "$expected_kueue_json" ]]; then
+  echo "kueue.managerConfig.controllerManagerConfigYaml must be kueue 0.19.9's default plus the four deltas:" >&2
+  diff -u --label "kueue 0.19.9 default plus the deltas" --label values.yaml \
+    <(echo "$expected_kueue_json") <(echo "$kueue_json") >&2 || true
+  exit 1
+fi
+echo "Kueue Configuration is kueue 0.19.9's default plus the four deltas"
+
 # Every helm template call gets the pinned --kube-version here. Profile
 # arguments also feed helm lint, which has no --kube-version on Helm 3.13, so
 # they must never carry it.
@@ -72,10 +107,14 @@ template() {
     "$@"
 }
 
+# Kueue renders its CRDs from templates, and neither schema location has a
+# CustomResourceDefinition schema, so that kind is skipped. The other
+# subcharts' CRDs are in crds/, which helm template does not render.
 render() {
   template "$@" | "$KUBECONFORM" \
     -strict \
     -summary \
+    -skip CustomResourceDefinition \
     -kubernetes-version "$KUBE_VERSION" \
     -schema-location "$CORE_SCHEMA_LOCATION" \
     -schema-location "$CRD_SCHEMA_LOCATION"
@@ -381,6 +420,75 @@ monitoring_objects="$(objects "$monitoring_output")"
 assert_in_release_namespace "$monitoring_objects" ServiceMonitor kuberay-operator
 assert_in_release_namespace "$monitoring_objects" PodMonitor michelangelo-compute-spark-operator-podmonitor
 
+# Kueue, from examples/values-kueue.yaml: values-minimal.yaml with Kueue on.
+# The rendered ConfigMap carries the Configuration with keys sorted.
+kueue_values=(--values "$CHART_DIR/examples/values-kueue.yaml")
+validate_profile "${kueue_values[@]}"
+kueue_objects="$(objects "$(template "${kueue_values[@]}")")"
+assert_in_release_namespace "$kueue_objects" Deployment michelangelo-compute-kueue-controller-manager
+assert_in_release_namespace "$kueue_objects" PodDisruptionBudget michelangelo-compute-kueue-manager-pdb
+assert_object_count "$kueue_objects" ServiceMonitor 0
+kueue_manager_output="$(template "${kueue_values[@]}" --show-only charts/kueue/templates/manager/manager.yaml)"
+assert_contains "$kueue_manager_output" $'spec:\n  replicas: 2\n'
+assert_not_contains "$kueue_manager_output" --feature-gates
+kueue_pdb_output="$(template "${kueue_values[@]}" --show-only charts/kueue/templates/manager/manager-pdb.yaml)"
+assert_contains "$kueue_pdb_output" $'\n  minAvailable: 1\n'
+kueue_config_output="$(template "${kueue_values[@]}" --show-only charts/kueue/templates/manager/manager-config.yaml)"
+assert_contains "$kueue_config_output" $'    integrations:\n      frameworks:\n      - ray.io/raycluster\n    internalCertManagement:\n'
+assert_contains "$kueue_config_output" $'    managedJobsNamespaceSelector:\n      matchLabels:\n        kubernetes.io/metadata.name: default\n    metrics:\n'
+assert_contains "$kueue_config_output" $'    resources:\n      excludeResourcePrefixes:\n      - ephemeral-storage\n    waitForPodsReady:\n      recoveryTimeout: 0s\n      requeuingStrategy:\n        backoffLimitCount: 2\n      timeout: 1h\n    webhook:\n'
+
+# Prints "<name> <failurePolicy> <namespaceSelector as JSON>" per webhook, with
+# - when the webhook sets no namespaceSelector.
+webhooks() {
+  "$YQ" --no-doc '.webhooks[] | .name + " " + .failurePolicy + " " + ((.namespaceSelector | @json) // "-")' <<<"$1"
+}
+
+# Only the webhooks for Kueue's own cluster-scoped kinds have no namespace
+# selector; every job webhook selects namespace default. With their
+# integrations off, the pod, deployment and statefulset webhooks are Ignore.
+default_selector='{"matchLabels":{"kubernetes.io/metadata.name":"default"}}'
+kueue_webhooks="$(webhooks "$(template "${kueue_values[@]}" --show-only charts/kueue/templates/webhook/manifests.yaml)")"
+unscoped_webhooks="$(awk -v selector="$default_selector" '
+  $3 != selector && $1 !~ /^[mv](clusterqueue|cohort|resourceflavor|workload)[.]kb[.]io$/
+' <<<"$kueue_webhooks")"
+if [[ -n "$unscoped_webhooks" ]]; then
+  printf 'Expected every Kueue job webhook to select namespace default:\n%s\n' "$unscoped_webhooks" >&2
+  exit 1
+fi
+for kind in pod deployment statefulset; do
+  assert_contains "$kueue_webhooks" "m$kind.kb.io Ignore $default_selector"
+  assert_contains "$kueue_webhooks" "v$kind.kb.io Ignore $default_selector"
+done
+
+# Writes the chart's Kueue Configuration with the yq expression applied and
+# prints the file, for --set-file.
+kueue_configuration_with() {
+  local file
+
+  file="$(mktemp "$scratch_dir/kueue-configuration.XXXXXX")"
+  "$YQ" "$1" <<<"$kueue_configuration" >"$file"
+  echo "$file"
+}
+
+spark_kueue_configuration="$(kueue_configuration_with '.integrations.frameworks += ["sparkoperator.k8s.io/sparkapplication"]')"
+spark_kueue_values=(
+  "${kueue_values[@]}"
+  --set-file "kueue.managerConfig.controllerManagerConfigYaml=$spark_kueue_configuration"
+  --set-json 'kueue.controllerManager.featureGates=[{"name":"SparkApplicationIntegration","enabled":true}]'
+)
+validate_profile "${spark_kueue_values[@]}"
+spark_kueue_manager_output="$(template "${spark_kueue_values[@]}" --show-only charts/kueue/templates/manager/manager.yaml)"
+assert_contains "$spark_kueue_manager_output" $'\n        - --feature-gates=SparkApplicationIntegration=true\n'
+
+# The Kueue invariants no longer apply once the subchart is disabled, so even
+# upstream's default Configuration renders.
+upstream_kueue_configuration_file="$scratch_dir/upstream-kueue-configuration.yaml"
+echo "$upstream_kueue_configuration" >"$upstream_kueue_configuration_file"
+kueue_disabled_values=(--set-file "kueue.managerConfig.controllerManagerConfigYaml=$upstream_kueue_configuration_file")
+validate_profile "${kueue_disabled_values[@]}"
+assert_not_contains "$(objects "$(template "${kueue_disabled_values[@]}")")" kueue
+
 expect_failure "Spark driver ServiceAccount" \
   "spark-operator.spark.serviceAccount.name must be spark-operator-spark" \
   --set spark-operator.spark.serviceAccount.name=other
@@ -390,6 +498,27 @@ expect_failure "Spark job namespaces without default" \
 expect_failure "Spark job namespaces set to all namespaces" \
   "spark-operator.spark.jobNamespaces must contain default" \
   --set-json 'spark-operator.spark.jobNamespaces=[""]'
+expect_failure "Kueue without the namespace selector" \
+  "kueue.managerConfig.controllerManagerConfigYaml must set managedJobsNamespaceSelector" \
+  "${kueue_values[@]}" --set-file "kueue.managerConfig.controllerManagerConfigYaml=$(kueue_configuration_with 'del(.managedJobsNamespaceSelector)')"
+expect_failure "Kueue with the pod framework" \
+  "kueue.managerConfig.controllerManagerConfigYaml must set integrations.frameworks" \
+  "${kueue_values[@]}" --set-file "kueue.managerConfig.controllerManagerConfigYaml=$(kueue_configuration_with '.integrations.frameworks += ["pod"]')"
+expect_failure "Kueue waitForPodsReady timeout of 30m" \
+  "kueue.managerConfig.controllerManagerConfigYaml must set waitForPodsReady.timeout to 1h" \
+  "${kueue_values[@]}" --set-file "kueue.managerConfig.controllerManagerConfigYaml=$(kueue_configuration_with '.waitForPodsReady.timeout = "30m"')"
+expect_failure "Kueue waitForPodsReady recoveryTimeout of 3m" \
+  "kueue.managerConfig.controllerManagerConfigYaml must set waitForPodsReady.recoveryTimeout to 0s" \
+  "${kueue_values[@]}" --set-file "kueue.managerConfig.controllerManagerConfigYaml=$(kueue_configuration_with '.waitForPodsReady.recoveryTimeout = "3m"')"
+expect_failure "Kueue backoffLimitCount of 3" \
+  "kueue.managerConfig.controllerManagerConfigYaml must set waitForPodsReady.requeuingStrategy.backoffLimitCount to 2" \
+  "${kueue_values[@]}" --set-file "kueue.managerConfig.controllerManagerConfigYaml=$(kueue_configuration_with '.waitForPodsReady.requeuingStrategy.backoffLimitCount = 3')"
+expect_failure "Kueue excluding GPUs from quota" \
+  "kueue.managerConfig.controllerManagerConfigYaml must set resources.excludeResourcePrefixes to [ephemeral-storage]" \
+  "${kueue_values[@]}" --set-file "kueue.managerConfig.controllerManagerConfigYaml=$(kueue_configuration_with '.resources.excludeResourcePrefixes += ["nvidia.com/gpu"]')"
+expect_failure "Kueue Spark framework without its feature gate" \
+  "kueue.controllerManager.featureGates must enable SparkApplicationIntegration" \
+  "${kueue_values[@]}" --set-file "kueue.managerConfig.controllerManagerConfigYaml=$spark_kueue_configuration"
 expect_failure "unknown top-level value" "unknownComputeValue" \
   --set unknownComputeValue=true
 expect_failure "unknown rayManager value" "unknownIdentityValue" \
@@ -427,17 +556,18 @@ expect_failure "external credentials Secret with accessKeyId" \
   --set runtime.objectStorageCredentials.accessKeyId=test-access-key-id
 
 if [[ "${SKIP_PACKAGE:-false}" != "true" ]]; then
-  package_dir="$(mktemp -d)"
-  trap 'rm -rf "$package_dir"' EXIT
-  "$HELM" package "$CHART_DIR" --destination "$package_dir" >/dev/null
+  "$HELM" package "$CHART_DIR" --destination "$scratch_dir" >/dev/null
   chart_version="$(awk '$1 == "version:" {gsub(/"/, "", $2); print $2; exit}' "$CHART_DIR/Chart.yaml")"
-  package_contents="$(tar tzf "$package_dir/michelangelo-compute-$chart_version.tgz")"
+  package_contents="$(tar tzf "$scratch_dir/michelangelo-compute-$chart_version.tgz")"
   assert_contains "$package_contents" 'michelangelo-compute/values.schema.json'
   assert_contains "$package_contents" 'michelangelo-compute/examples/values-minimal.yaml'
+  assert_contains "$package_contents" 'michelangelo-compute/examples/values-kueue.yaml'
   assert_contains "$package_contents" 'michelangelo-compute/charts/kuberay-operator/Chart.yaml'
   assert_contains "$package_contents" 'michelangelo-compute/charts/kuberay-operator/crds/ray.io_rayclusters.yaml'
   assert_contains "$package_contents" 'michelangelo-compute/charts/spark-operator/Chart.yaml'
   assert_contains "$package_contents" 'michelangelo-compute/charts/spark-operator/crds/sparkoperator.k8s.io_sparkapplications.yaml'
+  # Kueue is disabled by default, but the published chart must still bundle it.
+  assert_contains "$package_contents" 'michelangelo-compute/charts/kueue/Chart.yaml'
 fi
 
 echo "Validated $CHART_DIR"

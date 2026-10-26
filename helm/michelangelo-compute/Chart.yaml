@@ -15,6 +15,10 @@ dependencies:
     version: "2.5.2"
     repository: https://kubeflow.github.io/spark-operator
     condition: spark-operator.enabled
+  - name: kueue
+    version: "0.19.9"
+    repository: oci://registry.k8s.io/kueue/charts
+    condition: kueue.enabled
 
 home: https://github.com/michelangelo-ai/michelangelo
 icon: https://raw.githubusercontent.com/michelangelo-ai/michelangelo/main/website/static/img/michelangelo-logo-color.svg
@@ -23,10 +27,12 @@ sources:
   - https://github.com/michelangelo-ai/michelangelo/tree/main/helm/michelangelo-compute
   - https://github.com/ray-project/kuberay
   - https://github.com/kubeflow/spark-operator
+  - https://github.com/kubernetes-sigs/kueue
 keywords:
   - compute
   - ray
   - spark
+  - kueue
   - michelangelo
 maintainers:
   - name: Michelangelo Maintainers
