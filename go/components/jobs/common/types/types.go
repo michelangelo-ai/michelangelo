@@ -119,6 +119,6 @@ type JobStatus struct {
 	// Ray holds the status for Ray jobs
 	Ray *v2pb.RayJobStatus
 
-	// Spark holds the status for Spark jobs (future support)
-	// Spark *v2pb.SparkJobStatus
+	// Spark holds the status for Spark jobs
+	Spark *v2pb.SparkJobStatus
 }

@@ -8,12 +8,14 @@ import (
 
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/secrets"
 	"github.com/michelangelo-ai/michelangelo/go/components/ray/kuberay"
+	"github.com/michelangelo-ai/michelangelo/go/components/spark/sparkoperator"
 )
 
 const _serviceName = "michelangelo-controllermgr"
@@ -72,12 +74,29 @@ func (f *factory) GetClientSetForCluster(c *v2pb.Cluster) (*ClientSet, error) {
 
 	cfg, err := f.getClientCfg(c, key)
 	if err != nil {
-		return nil, fmt.Errorf("client cfg err:%v", err)
+		if apierrors.IsNotFound(err) {
+			// A missing credentials secret is kept as text only. Its NotFound
+			// would otherwise pass through the federated client's wraps to
+			// callers that read NotFound as "the object on the member cluster
+			// is gone": the SparkJob probe would record the application as
+			// deleted, termination would take it as already deleted and leave
+			// it running, and Ray's DeleteJobCluster caller would mark the
+			// RayCluster terminated.
+			return nil, fmt.Errorf("client cfg err:%v", err)
+		}
+		// Any other error keeps its chain, so that a secret read the host API
+		// server timed out or failed stays recognisable as transient.
+		return nil, fmt.Errorf("client cfg err:%w", err)
 	}
 
 	ray, err := kuberay.NewRestClient(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("kuberay client err:%w", err)
+	}
+
+	spark, err := sparkoperator.NewRestClient(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("sparkoperator client err:%w", err)
 	}
 
 	core, err := kubernetes.NewForConfig(cfg)
@@ -87,6 +106,7 @@ func (f *factory) GetClientSetForCluster(c *v2pb.Cluster) (*ClientSet, error) {
 
 	cs := &ClientSet{
 		Ray:    ray,
+		Spark:  spark,
 		CoreV1: core.CoreV1().RESTClient(),
 	}
 	f.clients.Store(key, cs)

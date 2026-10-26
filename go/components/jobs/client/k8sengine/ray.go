@@ -61,7 +61,7 @@ func (m Mapper) mapRay(rayJob *v2pb.RayJob, jobClusterObject runtime.Object, clu
 			// RayJobs target an existing RayCluster via ClusterSelector, so
 			// they are never Kueue-queued themselves (Kueue admits the
 			// cluster); no queue label is resolved here.
-			Labels: m.objectLabels(rayJob.GetNamespace(), ""),
+			Labels: m.objectLabels(rayJob.GetNamespace(), constants.MAOwnerServiceLabelValue, ""),
 		},
 		Spec: rayv1.RayJobSpec{
 			ClusterSelector: map[string]string{
@@ -158,7 +158,7 @@ func (m Mapper) mapRayCluster(rayCluster *v2pb.RayCluster, cluster *v2pb.Cluster
 	// KubeRay copies a group template's labels onto the pods it creates but adds
 	// nothing of Michelangelo's own, so the pod watch only sees head and worker
 	// pods if the control-plane labels are on the templates.
-	podLabels := m.controlPlaneLabels(rayCluster.GetNamespace())
+	podLabels := m.controlPlaneLabels(rayCluster.GetNamespace(), constants.MAOwnerServiceLabelValue)
 	addPodTemplateLabels(&headGroupSpec.Template, podLabels)
 	for i := range workerGroupSpecs {
 		addPodTemplateLabels(&workerGroupSpecs[i].Template, podLabels)
@@ -172,7 +172,7 @@ func (m Mapper) mapRayCluster(rayCluster *v2pb.RayCluster, cluster *v2pb.Cluster
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      rayCluster.Name,
 			Namespace: RayLocalNamespace,
-			Labels:    m.objectLabels(rayCluster.GetNamespace(), queueName),
+			Labels:    m.objectLabels(rayCluster.GetNamespace(), constants.MAOwnerServiceLabelValue, queueName),
 		},
 		Spec: rayv1.RayClusterSpec{
 			HeadGroupSpec:    headGroupSpec,

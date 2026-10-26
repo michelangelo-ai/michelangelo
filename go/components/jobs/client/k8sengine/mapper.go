@@ -11,6 +11,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/constants"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/types"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/utils"
+	sparkv1beta2 "github.com/michelangelo-ai/michelangelo/go/thirdparty/k8s-crds/apis/sparkoperator.k8s.io/v1beta2"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"go.uber.org/config"
@@ -92,9 +93,14 @@ func NewMapper(logPersistence LogPersistenceConfig, scheduler maconfig.Scheduler
 // would let a caller forge ma/project-name and point this control plane's
 // writes at another tenant's namespace. Every value below is therefore resolved
 // here — namespace is the CR's own, which is bound by authorization.
-func (m Mapper) controlPlaneLabels(namespace string) map[string]string {
+//
+// owner is the ma/owner-service value identifying which control-plane watch
+// owns the object: constants.MAOwnerServiceLabelValue for Ray,
+// constants.MAOwnerSparkLabelValue for Spark. Keeping them distinct is what
+// keeps the two watches isolated from each other.
+func (m Mapper) controlPlaneLabels(namespace, owner string) map[string]string {
 	return map[string]string{
-		constants.OwnerServiceLabelKey:  constants.MAOwnerServiceLabelValue,
+		constants.OwnerServiceLabelKey:  owner,
 		constants.JobControlPlaneEnvKey: m.Env.RuntimeEnvironment,
 		constants.ProjectNameLabelKey:   namespace,
 	}
@@ -104,8 +110,8 @@ func (m Mapper) controlPlaneLabels(namespace string) map[string]string {
 // the target cluster is Kueue-managed. It belongs on the workload object only —
 // stamping it on pod templates too would expose the pods to Kueue's pod
 // integration as separately admissible workloads.
-func (m Mapper) objectLabels(namespace, queueName string) map[string]string {
-	labels := m.controlPlaneLabels(namespace)
+func (m Mapper) objectLabels(namespace, owner, queueName string) map[string]string {
+	labels := m.controlPlaneLabels(namespace, owner)
 	if queueName != "" {
 		labels[constants.KueueQueueNameLabelKey] = queueName
 	}
@@ -144,7 +150,14 @@ func (m Mapper) MapGlobalJobToLocal(jobObject runtime.Object, jobClusterObject r
 		}
 		return localJob, nil
 	case *v2pb.SparkJob:
-		return nil, fmt.Errorf("spark job mapping not implemented: %T", jobObject)
+		// Unlike Ray, where the scheduled unit is the RayCluster and the RayJob
+		// rides along, a Spark job is itself the scheduled and admitted unit, so
+		// it carries the cluster-shaped labelling that mapRayCluster applies.
+		localJob, err := m.mapSparkJob(obj, cluster)
+		if err != nil {
+			return nil, fmt.Errorf("map spark job: %w", err)
+		}
+		return localJob, nil
 	default:
 		return nil, fmt.Errorf("unsupported job object type: %T", jobObject)
 	}
@@ -179,8 +192,8 @@ func (m Mapper) GetLocalName(obj runtime.Object) (namespace, name string) {
 		namespace = RayLocalNamespace
 		name = job.Name
 	case *v2pb.SparkJob:
-		// Not implemented yet; return empty
-		return "", ""
+		namespace = SparkLocalNamespace
+		name = job.Name
 	}
 	return
 }
@@ -248,6 +261,10 @@ func (m Mapper) MapLocalJobStatusToGlobal(localJobObject runtime.Object) (*types
 		v2Status := convertRayV1JobStatusToGlobal(obj)
 		return &types.JobStatus{
 			Ray: v2Status,
+		}, nil
+	case *sparkv1beta2.SparkApplication:
+		return &types.JobStatus{
+			Spark: convertSparkApplicationStatusToGlobal(obj),
 		}, nil
 	default:
 		return nil, fmt.Errorf("unsupported job object type: %T", localJobObject)

@@ -9,6 +9,7 @@ import (
 
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/constants"
 	"github.com/michelangelo-ai/michelangelo/go/components/ray/kuberay"
+	"github.com/michelangelo-ai/michelangelo/go/components/spark/sparkoperator"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -135,7 +136,17 @@ func (d defaultHelper) Watcher(params []*WatcherParams) ([]*ResourceWatcher, err
 		switch p.ResourceName {
 		// For CRDs, we need a list and watch with our custom scheme
 		case constants.KubeSparkResource:
-			return nil, fmt.Errorf("Spark job is not supported")
+			// A nil client would only fail once the informer runs, with a panic in
+			// the reflector's own goroutine that nothing recovers.
+			if p.Client == nil {
+				return nil, fmt.Errorf("watcher for %s has no client", p.ResourceName)
+			}
+			lw = d.NewFilteredListWatchFromClient(
+				p.Client,
+				p.ResourceName,
+				p.Namespace,
+				sparkoperator.ParameterCodec,
+				listOptionsFunc)
 		case constants.KubeRayResource, constants.KubeRayJobResource:
 			lw = d.NewFilteredListWatchFromClient(
 				p.Client,
