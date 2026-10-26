@@ -3,6 +3,8 @@ helm test: checks the runtime contract from namespace default, where the
 control plane creates its pods. The Secret is an optional volume, so a missing
 Secret fails the script with a message naming it instead of leaving the pod in
 CreateContainerConfigError. The script never prints the Secret's values.
+helm test --logs reads test pods from the release namespace, so it cannot read
+this one. A failed pod stays in default until the next run, for kubectl logs.
 */ -}}
 {{- $credentialsSecret := .Values.runtime.objectStorageCredentials.name }}
 apiVersion: v1

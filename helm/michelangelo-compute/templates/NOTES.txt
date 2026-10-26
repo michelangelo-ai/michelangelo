@@ -44,3 +44,7 @@ Runtime contract, read by every pod the control plane creates in namespace defau
 To check from namespace default that the Secret sets both keys and that AWS_ENDPOINT_URL
 and REGISTRY_ENDPOINT are reachable:
   helm test {{ .Release.Name }} --namespace {{ .Release.Namespace }}
+
+The test pod runs in namespace default, so helm test --logs cannot read it. A failed
+test pod stays there until the next run:
+  kubectl --namespace default logs {{ include "michelangelo-compute.fullname" . }}-test-runtime-contract

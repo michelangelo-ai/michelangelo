@@ -28,7 +28,10 @@ helm test michelangelo-compute --namespace michelangelo-compute
 ```
 
 `helm test` checks from namespace `default` that the credentials Secret sets
-both keys and that both endpoints are reachable.
+both keys and that both endpoints are reachable. Its pod runs outside the
+release namespace, so `helm test --logs` cannot read it. A failed test pod
+stays in `default` until the next run:
+`kubectl --namespace default logs michelangelo-compute-test-runtime-contract`.
 
 `helm dependency build` needs both repositories added, even though `Chart.lock`
 pins the versions. Helm 3.13 renders `helm template` for Kubernetes 1.28 unless
