@@ -585,12 +585,36 @@ def _b64(value: str) -> str:
     return base64.b64encode(value.encode()).decode()
 
 
+def _kube_object(owner="", data=None):
+    """A resource as kubectl get -o json prints it; `owner` is its Helm release."""
+    obj = {"metadata": {"name": "test"}}
+    if owner:
+        obj["metadata"]["annotations"] = {"meta.helm.sh/release-name": owner}
+    if data is not None:
+        obj["data"] = data
+    return obj
+
+
+# michelangelo-config as earlier sandboxes applied it on the control plane
+# (resources/michelangelo-config.yaml), plus a key added by hand.
+_HAND_BUILT_CONFIG = {
+    "MA_FILE_SYSTEM": "s3://default",
+    "MA_FILE_SYSTEM_S3_SCHEME": "http",
+    "AWS_ACCESS_KEY_ID": "michelangeloadmin",
+    "AWS_SECRET_ACCESS_KEY": "michelangeloadmin",
+    "AWS_ENDPOINT_URL": "http://minio:9091",
+    "REGISTRY_ENDPOINT": "michelangelo-apiserver:15566",
+    "MA_EXTRA_SETTING": "kept",
+}
+
+
 class ComputeChartTest(TestCase):
     """Tests for installing the michelangelo-compute chart on a cluster."""
 
     def setUp(self):
-        """Start with no recorded commands and a supported cluster."""
+        """Start with no recorded commands and a new, supported cluster."""
         self.calls = []
+        self.reads = []
         self.files = {}
         self.server_version = {
             "major": "1",
@@ -598,6 +622,21 @@ class ComputeChartTest(TestCase):
             "gitVersion": "v1.31.5+k3s1",
         }
         self.helm_repos = _HELM_REPOS
+        # Installed Helm releases as (release, namespace), and resources by
+        # "kind/name". The fakes below read and change them.
+        self.releases = set()
+        self.objects = {}
+
+    def _given_earlier_sandbox(self):
+        """Leave what an earlier sandbox's create installed by hand."""
+        self.releases = {
+            ("kuberay-operator", "ray-system"),
+            ("spark-operator", "spark-operator"),
+        }
+        self.objects = {
+            "serviceaccount/ray-manager": _kube_object(),
+            "configmap/michelangelo-config": _kube_object(data=_HAND_BUILT_CONFIG),
+        }
 
     def _fake_exec(self, *args, **kwargs):
         """Record each command, keep the files it reads, answer the reads."""
@@ -609,6 +648,7 @@ class ComputeChartTest(TestCase):
                 self.files[args[0]] = (path, os.stat(path).st_mode & 0o777, f.read())
             args[i] = "<file>"
         self.calls.append(tuple(args))
+        self._apply_to_cluster(args)
         if "version" in args:
             return json.dumps({"serverVersion": self.server_version})
         if args[:3] == ["helm", "show", "crds"]:
@@ -617,14 +657,50 @@ class ComputeChartTest(TestCase):
             return f"{_b64('test-access-key')} {_b64('test-secret-key')}"
         return None
 
+    def _apply_to_cluster(self, args):
+        """Change the cluster state the way the recorded command would."""
+        if args[:2] == ["helm", "uninstall"]:
+            self.releases.remove((args[2], args[args.index("-n") + 1]))
+        for verb, field in [("label", "labels"), ("annotate", "annotations")]:
+            if verb in args:
+                rest = args[args.index(verb) + 1 :]
+                pairs = dict(a.split("=", 1) for a in rest if "=" in a)
+                for resource in rest:
+                    if "=" not in resource and not resource.startswith("-"):
+                        metadata = self.objects[resource]["metadata"]
+                        metadata.setdefault(field, {}).update(pairs)
+        if "delete" in args and "configmap" in args:
+            del self.objects[f"configmap/{args[-1]}"]
+        if args[:3] == ["helm", "upgrade", "--install"]:
+            # The release renders michelangelo-config from runtime.config.
+            self.objects["configmap/michelangelo-config"] = _kube_object(
+                owner="michelangelo-compute", data=self._values()["runtime"]["config"]
+            )
+
+    def _fake_run(self, args, **kwargs):
+        """Answer the reads that tolerate a missing release or resource."""
+        self.reads.append(tuple(args))
+        if args[:2] == ["helm", "status"]:
+            found = (args[2], args[args.index("-n") + 1]) in self.releases
+            return subprocess.CompletedProcess(args, 0 if found else 1, "", "")
+        obj = self.objects.get(args[args.index("get") + 1])
+        if obj is None:
+            return subprocess.CompletedProcess(args, 1, "", "NotFound")
+        return subprocess.CompletedProcess(args, 0, json.dumps(obj), "")
+
     def _install(self, target="compute-cluster", exclude=()):
         with (
             patch.object(sandbox, "_exec", side_effect=self._fake_exec),
+            patch.object(sandbox.subprocess, "run", side_effect=self._fake_run),
             patch.object(
                 sandbox.subprocess, "check_output", return_value=self.helm_repos
             ),
         ):
             sandbox._install_compute_chart("k3d-test-cluster", target, list(exclude))
+
+    def _values(self) -> dict:
+        """Return the values file the last install passed to helm."""
+        return yaml.safe_load(self.files["helm"][2])
 
     def test_compute_cluster_install_order(self):
         """Preflight, CRDs, install, legacy RBAC delete, then the chart tests."""
@@ -981,6 +1057,295 @@ class ComputeChartTest(TestCase):
 
         mock_exec.assert_not_called()
 
+    def test_earlier_sandbox_migration_order(self):
+        """Replace and adopt before the CRDs; delete the ConfigMap after them."""
+        self._given_earlier_sandbox()
+
+        self._install()
+
+        chart = str(sandbox._compute_chart_dir)
+        self.assertEqual(
+            self.calls,
+            [
+                ("kubectl", "--context", "k3d-test-cluster", "version", "-o", "json"),
+                ("helm", "dependency", "build", chart),
+                (
+                    "helm",
+                    "uninstall",
+                    "kuberay-operator",
+                    "--kube-context",
+                    "k3d-test-cluster",
+                    "-n",
+                    "ray-system",
+                    "--wait",
+                ),
+                (
+                    "helm",
+                    "uninstall",
+                    "spark-operator",
+                    "--kube-context",
+                    "k3d-test-cluster",
+                    "-n",
+                    "spark-operator",
+                    "--wait",
+                ),
+                (
+                    "kubectl",
+                    "--context",
+                    "k3d-test-cluster",
+                    "-n",
+                    "default",
+                    "label",
+                    "--overwrite",
+                    "serviceaccount/ray-manager",
+                    "app.kubernetes.io/managed-by=Helm",
+                ),
+                (
+                    "kubectl",
+                    "--context",
+                    "k3d-test-cluster",
+                    "-n",
+                    "default",
+                    "annotate",
+                    "--overwrite",
+                    "serviceaccount/ray-manager",
+                    "meta.helm.sh/release-name=michelangelo-compute",
+                    "meta.helm.sh/release-namespace=michelangelo-compute",
+                ),
+                ("helm", "show", "crds", chart),
+                (
+                    "kubectl",
+                    "--context",
+                    "k3d-test-cluster",
+                    "apply",
+                    "--server-side",
+                    "--force-conflicts",
+                    "-f",
+                    "<file>",
+                ),
+                (
+                    "kubectl",
+                    "--context",
+                    "k3d-michelangelo-sandbox",
+                    "-n",
+                    "default",
+                    "get",
+                    "secret",
+                    "minio-credentials",
+                    "-o",
+                    "jsonpath={.data.AWS_ACCESS_KEY_ID} {.data.AWS_SECRET_ACCESS_KEY}",
+                ),
+                (
+                    "kubectl",
+                    "--context",
+                    "k3d-test-cluster",
+                    "-n",
+                    "default",
+                    "delete",
+                    "configmap",
+                    "michelangelo-config",
+                ),
+                (
+                    "helm",
+                    "upgrade",
+                    "--install",
+                    "michelangelo-compute",
+                    chart,
+                    "--kube-context",
+                    "k3d-test-cluster",
+                    "-n",
+                    "michelangelo-compute",
+                    "--create-namespace",
+                    "-f",
+                    "<file>",
+                    "--wait",
+                    "--timeout",
+                    "20m",
+                ),
+                (
+                    "kubectl",
+                    "--context",
+                    "k3d-test-cluster",
+                    "delete",
+                    "clusterrolebinding/ray-manager-binding",
+                    "clusterrole/ray-manager",
+                    "--ignore-not-found",
+                ),
+                (
+                    "helm",
+                    "test",
+                    "michelangelo-compute",
+                    "--kube-context",
+                    "k3d-test-cluster",
+                    "-n",
+                    "michelangelo-compute",
+                ),
+            ],
+        )
+
+    def test_migration_reads_name_the_cluster(self):
+        """Every read of a release or resource passes the cluster's context."""
+        self._given_earlier_sandbox()
+
+        self._install()
+
+        self.assertTrue(self.reads)
+        for read in self.reads:
+            with self.subTest(read=read):
+                flag = "--kube-context" if read[0] == "helm" else "--context"
+                self.assertEqual(read[read.index(flag) + 1], "k3d-test-cluster")
+
+    def test_second_run_only_installs_and_deletes_legacy_rbac(self):
+        """A migrated cluster gets no uninstall, adoption or ConfigMap delete."""
+        self._given_earlier_sandbox()
+        self._install()
+        self.calls = []
+
+        self._install()
+
+        changes = [
+            c
+            for c in self.calls
+            if {"uninstall", "label", "annotate", "delete"} & set(c)
+        ]
+        self.assertEqual(
+            changes,
+            [
+                (
+                    "kubectl",
+                    "--context",
+                    "k3d-test-cluster",
+                    "delete",
+                    "clusterrolebinding/ray-manager-binding",
+                    "clusterrole/ray-manager",
+                    "--ignore-not-found",
+                ),
+            ],
+        )
+        self.assertIn(
+            ("helm", "upgrade", "--install", "michelangelo-compute"),
+            [c[:4] for c in self.calls],
+        )
+
+    def test_chart_owned_config_map_is_kept(self):
+        """The release's own ConfigMap is neither deleted nor carried over."""
+        for target in ["control-plane", "compute-cluster"]:
+            with self.subTest(target=target):
+                self.calls = []
+                self.objects = {
+                    "configmap/michelangelo-config": _kube_object(
+                        owner="michelangelo-compute",
+                        data={"MA_EXTRA_SETTING": "dropped"},
+                    ),
+                }
+
+                self._install(target=target)
+
+                self.assertNotIn("configmap", [a for c in self.calls for a in c])
+                self.assertNotIn(
+                    "MA_EXTRA_SETTING", self._values()["runtime"]["config"]
+                )
+
+    def test_standalone_operators_replaced_unless_excluded(self):
+        """An enabled operator's release is uninstalled; an excluded one's kept."""
+        cases = {
+            (): set(),
+            ("ray",): {("kuberay-operator", "ray-system")},
+            ("spark",): {("spark-operator", "spark-operator")},
+            ("ray", "spark"): {
+                ("kuberay-operator", "ray-system"),
+                ("spark-operator", "spark-operator"),
+            },
+        }
+        for exclude, kept in cases.items():
+            with self.subTest(exclude=exclude):
+                self._given_earlier_sandbox()
+                self.calls = []
+
+                self._install(exclude=exclude)
+
+                self.assertEqual(self.releases, kept)
+                uninstalled = {
+                    (c[2], c[c.index("-n") + 1]) for c in self.calls if "uninstall" in c
+                }
+                self.assertEqual(
+                    uninstalled,
+                    {
+                        ("kuberay-operator", "ray-system"),
+                        ("spark-operator", "spark-operator"),
+                    }
+                    - kept,
+                )
+
+    def test_hand_built_identity_and_kueue_grants_are_adopted(self):
+        """The ServiceAccount, token and the four Kueue grants get Helm metadata."""
+        adopted = [
+            "serviceaccount/ray-manager",
+            "secret/ray-manager-token",
+            "role/ray-manager",
+            "rolebinding/ray-manager",
+            "clusterrole/ray-manager-clusterqueues",
+            "clusterrolebinding/ray-manager-clusterqueues",
+        ]
+        self.objects = {resource: _kube_object() for resource in adopted}
+
+        self._install()
+
+        label, annotate = [c for c in self.calls if {"label", "annotate"} & set(c)]
+        self.assertEqual(label[7:-1], tuple(adopted))
+        self.assertEqual(annotate[7:-2], tuple(adopted))
+        for resource in adopted:
+            with self.subTest(resource=resource):
+                metadata = self.objects[resource]["metadata"]
+                self.assertEqual(
+                    metadata["annotations"],
+                    {
+                        "meta.helm.sh/release-name": "michelangelo-compute",
+                        "meta.helm.sh/release-namespace": "michelangelo-compute",
+                    },
+                )
+                self.assertEqual(
+                    metadata["labels"], {"app.kubernetes.io/managed-by": "Helm"}
+                )
+        # Metadata only: nothing else touches them.
+        for resource in adopted:
+            self.assertEqual(
+                [c for c in self.calls if resource in c], [label, annotate]
+            )
+
+    def test_only_unowned_resources_are_adopted(self):
+        """Owned and absent resources are left out of the adoption."""
+        self.objects = {
+            "serviceaccount/ray-manager": _kube_object(owner="michelangelo-compute"),
+            "secret/ray-manager-token": _kube_object(),
+            "rolebinding/ray-manager": _kube_object(),
+        }
+
+        self._install()
+
+        label = next(c for c in self.calls if "label" in c)
+        self.assertEqual(
+            label[7:-1], ("secret/ray-manager-token", "rolebinding/ray-manager")
+        )
+
+    def test_hand_built_config_map_keys_carry_over(self):
+        """Its keys reach runtime.config without credentials; the sandbox's win."""
+        self._given_earlier_sandbox()
+
+        self._install()
+
+        agent = "k3d-michelangelo-sandbox-agent-0"
+        self.assertEqual(
+            self._values()["runtime"]["config"],
+            {
+                "MA_FILE_SYSTEM": "s3://default",
+                "MA_FILE_SYSTEM_S3_SCHEME": "http",
+                "AWS_ENDPOINT_URL": f"http://{agent}:30007",
+                "REGISTRY_ENDPOINT": f"{agent}:30009",
+                "MA_EXTRA_SETTING": "kept",
+            },
+        )
+
 
 class BuildHelmSetArgsTest(TestCase):
     """Tests for the control plane's helm --set arguments."""
@@ -1006,8 +1371,32 @@ class BuildHelmSetArgsTest(TestCase):
         # Caller --set flags come later, so they still override it
         self.assertLess(i, args.index("controllermgr.foo=bar"))
 
+    def test_control_plane_names_the_credentials_secret(self):
+        """Both create and sync name minio-credentials, ahead of caller --set flags."""
+        flag = (
+            "controllermgr.jobs.k8sengine.mapper.logPersistence.credentialsSecret="
+            "minio-credentials"
+        )
+        for ns in [
+            argparse.Namespace(
+                workflow="cadence",
+                exclude=[],
+                helm_set=["controllermgr.foo=bar"],
+                create_compute_cluster=False,
+            ),
+            argparse.Namespace(
+                workflow="cadence", exclude=[], helm_set=["controllermgr.foo=bar"]
+            ),
+        ]:
+            with self.subTest(ns=ns):
+                args = sandbox._build_helm_set_args(ns)
+
+                i = args.index(flag)
+                self.assertEqual(args[i - 1], "--set")
+                self.assertLess(i, args.index("controllermgr.foo=bar"))
+
     def test_control_plane_keeps_default_log_storage(self):
-        """Without a compute cluster (or in sync) the default endpoint stays."""
+        """Without a compute cluster, in create or sync, the default endpoint stays."""
         for ns in [
             argparse.Namespace(
                 workflow="cadence",
@@ -1021,6 +1410,210 @@ class BuildHelmSetArgsTest(TestCase):
                 args = sandbox._build_helm_set_args(ns)
 
                 self.assertFalse([a for a in args if "storageEndpoint" in a])
+
+
+class SyncTest(TestCase):
+    """Tests for sync on a reused sandbox: the chart on every cluster."""
+
+    _credentials_secret_flag = (
+        "controllermgr.jobs.k8sengine.mapper.logPersistence.credentialsSecret="
+        "minio-credentials"
+    )
+    _storage_endpoint_flag = (
+        "controllermgr.jobs.k8sengine.mapper.logPersistence.storageEndpoint="
+        "k3d-michelangelo-sandbox-agent-0:30007"
+    )
+    # sync upgrades a healthy release and reinstalls a broken one.
+    _helm_installs = (("helm", "upgrade"), ("helm", "install"))
+
+    def setUp(self):
+        """A healthy single-cluster sandbox: the control plane registers itself."""
+        self.log = []
+        self.release_deployed = True
+        self.cluster_crs_returncode = 0
+        self.registered = ["michelangelo-sandbox"]
+        self.contexts = ["k3d-michelangelo-sandbox"]
+        self.k3d_clusters = {"michelangelo-sandbox"}
+
+    def _given_compute_cluster(self):
+        """Add compute-0, as create --create-compute-cluster leaves it."""
+        self.registered = ["michelangelo-compute-0", "michelangelo-sandbox"]
+        self.contexts = ["k3d-michelangelo-compute-0", "k3d-michelangelo-sandbox"]
+        self.k3d_clusters = {"michelangelo-compute-0", "michelangelo-sandbox"}
+
+    def _fake_run(self, args, **kwargs):
+        """Log each command and answer it from the sandbox state."""
+        self.log.append(("run", tuple(args)))
+        if args[:3] == ["k3d", "cluster", "get"]:
+            found = args[3] in self.k3d_clusters
+            return subprocess.CompletedProcess(args, 0 if found else 1, b"", b"")
+        if "clusters.michelangelo.api" in args:
+            return subprocess.CompletedProcess(
+                args, self.cluster_crs_returncode, " ".join(self.registered), ""
+            )
+        if args[:3] == ["kubectl", "config", "get-contexts"]:
+            return subprocess.CompletedProcess(args, 0, "\n".join(self.contexts), "")
+        if args[:3] == ["helm", "status", "michelangelo"]:
+            if self.release_deployed:
+                return subprocess.CompletedProcess(
+                    args, 0, '{"info":{"status":"deployed"}}', ""
+                )
+            return subprocess.CompletedProcess(args, 1, "", "release: not found")
+        return subprocess.CompletedProcess(args, 0, "", "")
+
+    def _recorder(self, name):
+        """Return a fake that logs its calls under `name`."""
+
+        def record(*args, **kwargs):
+            self.log.append((name, args))
+
+        return record
+
+    def _sync(self, *flags):
+        p = argparse.ArgumentParser()
+        sandbox.init_arguments(p)
+        ns = p.parse_args(["sync", *flags])
+        with (
+            patch.object(sandbox.subprocess, "run", side_effect=self._fake_run),
+            patch.object(sandbox, "_exec", side_effect=self._recorder("exec")),
+            patch.object(
+                sandbox,
+                "_install_compute_chart",
+                side_effect=self._recorder("install"),
+            ),
+            patch.object(
+                sandbox, "_test_compute_chart", side_effect=self._recorder("test")
+            ),
+            patch.object(sandbox, "_helm_wait", side_effect=self._recorder("wait")),
+            patch.object(sandbox, "_ensure_mysql_running"),
+            patch.object(sandbox, "_ensure_object_store_running"),
+            patch.object(sandbox, "_refresh_mysql_schema"),
+            patch.object(sandbox, "_ensure_credentials_secret"),
+            patch.object(sandbox, "_helm_ensure_repos"),
+            patch.object(sandbox, "_helm_delete_services"),
+            patch.object(sandbox, "_helm_adopt_orphaned_resources"),
+        ):
+            sandbox._sync(ns)
+
+    def _calls(self, name):
+        return [args for kind, args in self.log if kind == name]
+
+    def _michelangelo_install(self):
+        """Return the helm upgrade (or reinstall) of the michelangelo release."""
+        return next(
+            args
+            for args in self._calls("exec")
+            if args[:2] in self._helm_installs and args[2] == "michelangelo"
+        )
+
+    def _steps(self):
+        """Name the logged calls whose order matters."""
+        steps = []
+        for kind, args in self.log:
+            if kind in ("install", "test"):
+                steps.append(f"{kind} {args[0]}")
+            elif kind == "wait":
+                steps.append("wait")
+            elif kind == "exec" and args[:2] in self._helm_installs:
+                steps.append(" ".join(args[:3]))
+            elif kind == "run" and args[:3] == ("kubectl", "rollout", "status"):
+                steps.append(f"rollout status {args[3]}")
+        return steps
+
+    def test_single_cluster_sync_installs_the_chart_once(self):
+        """The control plane's own Cluster CR does not make it a compute cluster."""
+        self._sync()
+
+        self.assertEqual(
+            self._calls("install"), [("k3d-michelangelo-sandbox", "control-plane", [])]
+        )
+        install = self._michelangelo_install()
+        self.assertIn(self._credentials_secret_flag, install)
+        self.assertNotIn(self._storage_endpoint_flag, install)
+
+    def test_compute_mode_sync_installs_on_every_cluster(self):
+        """compute-0 gets compute values; collectors write to the MinIO NodePort."""
+        self._given_compute_cluster()
+
+        self._sync("--exclude", "spark")
+
+        self.assertEqual(
+            self._calls("install"),
+            [
+                ("k3d-michelangelo-sandbox", "control-plane", ["spark"]),
+                ("k3d-michelangelo-compute-0", "compute-cluster", ["spark"]),
+            ],
+        )
+        install = self._michelangelo_install()
+        for flag in [self._credentials_secret_flag, self._storage_endpoint_flag]:
+            with self.subTest(flag=flag):
+                self.assertEqual(install[install.index(flag) - 1], "--set")
+
+    def test_chart_tests_follow_the_apiserver_rollout(self):
+        """The control plane is tested once the apiserver is back, then compute-0."""
+        self._given_compute_cluster()
+
+        self._sync()
+
+        self.assertEqual(
+            self._steps(),
+            [
+                "install k3d-michelangelo-sandbox",
+                "helm upgrade michelangelo",
+                "rollout status deployment/michelangelo-apiserver",
+                "rollout status deployment/michelangelo-controllermgr",
+                "rollout status deployment/michelangelo-worker",
+                "wait",
+                "test k3d-michelangelo-sandbox",
+                "install k3d-michelangelo-compute-0",
+            ],
+        )
+
+    def test_reinstalled_release_is_tested_after_the_wait(self):
+        """Without a healthy release the chart tests follow the reinstall's wait."""
+        self._given_compute_cluster()
+        self.release_deployed = False
+
+        self._sync()
+
+        self.assertEqual(
+            self._steps(),
+            [
+                "install k3d-michelangelo-sandbox",
+                "helm install michelangelo",
+                "wait",
+                "test k3d-michelangelo-sandbox",
+                "install k3d-michelangelo-compute-0",
+            ],
+        )
+        install = self._michelangelo_install()
+        self.assertIn(self._credentials_secret_flag, install)
+        self.assertIn(self._storage_endpoint_flag, install)
+
+    def test_discovery_needs_a_context_and_a_k3d_cluster(self):
+        """Without a k3d-<name> context or a k3d cluster, a registration is skipped."""
+        self.registered = ["michelangelo-sandbox", "a", "b", "c"]
+        self.contexts = ["k3d-michelangelo-sandbox", "k3d-a", "k3d-b"]
+        self.k3d_clusters = {"michelangelo-sandbox", "a", "c"}
+
+        with patch.object(sandbox.subprocess, "run", side_effect=self._fake_run):
+            clusters = sandbox._registered_compute_clusters()
+
+        self.assertEqual(clusters, ["a"])
+        self.assertEqual(
+            self.log[0][1][:3], ("kubectl", "--context", "k3d-michelangelo-sandbox")
+        )
+
+    def test_discovery_without_cluster_crs(self):
+        """If the Cluster CRs cannot be read, no compute cluster is found."""
+        self._given_compute_cluster()
+        self.cluster_crs_returncode = 1
+
+        with patch.object(sandbox.subprocess, "run", side_effect=self._fake_run):
+            clusters = sandbox._registered_compute_clusters()
+
+        self.assertEqual(clusters, [])
+        self.assertEqual(len(self.log), 1)
 
 
 # The optional Secret comes first, so on a key both set the ConfigMap wins.

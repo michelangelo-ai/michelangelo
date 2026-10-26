@@ -77,6 +77,26 @@ _compute_operators = {
     "spark": ("spark-operator", "sparkoperator.k8s.io"),
 }
 
+# --exclude value → (release, namespace) of the standalone operator install of
+# earlier sandboxes. The chart replaces it unless that operator is excluded.
+_compute_replaced_releases = {
+    "ray": ("kuberay-operator", "ray-system"),
+    "spark": ("spark-operator", "spark-operator"),
+}
+
+# Objects that earlier sandboxes or the compute-cluster registration guide
+# created by hand under the names the chart renders. The chart adopts them:
+# recreating the ServiceAccount or its token Secret would invalidate the token
+# the control plane holds. The last four are the guide's Kueue read grants.
+_compute_adopted_resources = [
+    "serviceaccount/ray-manager",
+    "secret/ray-manager-token",
+    "role/ray-manager",
+    "rolebinding/ray-manager",
+    "clusterrole/ray-manager-clusterqueues",
+    "clusterrolebinding/ray-manager-clusterqueues",
+]
+
 # Targets of _compute_values. A compute cluster reaches the control plane's
 # object store and apiserver through NodePorts on the control plane's agent node.
 _compute_target_control_plane = "control-plane"
@@ -436,10 +456,12 @@ def _create(ns: argparse.Namespace):
 def _sync(ns: argparse.Namespace):
     """Restart only Michelangelo app services in an existing cluster.
 
-    Infrastructure (MySQL, Cadence, MinIO, Grafana, Prometheus, kuberay,
-    spark-operator) is left running as-is.  Only the Michelangelo application
-    pods (apiserver, envoy, ui) are restarted so that a new image/config is
-    picked up quickly without touching the long-initializing infra.
+    Infrastructure (MySQL, Cadence, MinIO, Grafana, Prometheus) is left
+    running as-is.  Only the Michelangelo application pods (apiserver, envoy,
+    ui) are restarted so that a new image/config is picked up quickly without
+    touching the long-initializing infra.  The michelangelo-compute chart is
+    upgraded on the control plane and on every registered compute cluster,
+    taking over what earlier sandboxes installed by hand.
 
     If the cluster does not exist, falls back to a full ``create``.  When the
     cluster already exists the k3d cluster creation and ``k3d image import``
@@ -489,7 +511,17 @@ def _sync(ns: argparse.Namespace):
 
     _ensure_credentials_secret()
     _helm_ensure_repos()
-    helm_args = _build_helm_set_args(ns)
+
+    # As in create, the control plane gets the chart before the michelangelo
+    # release. Compute clusters get it once the apiserver is back, as their
+    # chart tests reach it.
+    control_plane_context = f"k3d-{_michelangelo_sandbox_kube_cluster_name}"
+    compute_clusters = _registered_compute_clusters()
+    _install_compute_chart(
+        control_plane_context, _compute_target_control_plane, ns.exclude
+    )
+
+    helm_args = _build_helm_set_args(ns, has_compute_clusters=bool(compute_clusters))
 
     # Check if there is a healthy deployed release we can upgrade.
     status_result = subprocess.run(
@@ -573,6 +605,56 @@ def _sync(ns: argparse.Namespace):
         )
 
     _helm_wait(ns)
+
+    # The chart tests reach the apiserver, which is only now up again.
+    _test_compute_chart(control_plane_context, ns.exclude)
+    for name in compute_clusters:
+        _install_compute_chart(
+            f"k3d-{name}", _compute_target_compute_cluster, ns.exclude
+        )
+
+
+def _registered_compute_clusters() -> list[str]:
+    """Return the dedicated compute clusters registered on the control plane.
+
+    These are the k3d clusters with a Cluster CR on the control plane and a
+    k3d-<name> context. Without a dedicated compute cluster the control plane
+    registers itself; it is not one of them.
+    """
+    clusters = subprocess.run(
+        [
+            "kubectl",
+            "--context",
+            f"k3d-{_michelangelo_sandbox_kube_cluster_name}",
+            "-n",
+            "ma-system",
+            "get",
+            "clusters.michelangelo.api",
+            "-o",
+            "jsonpath={.items[*].metadata.name}",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if clusters.returncode != 0:
+        return []  # e.g. no Cluster CRD yet, so nothing is registered
+    contexts = subprocess.run(
+        ["kubectl", "config", "get-contexts", "-o", "name"],
+        capture_output=True,
+        text=True,
+    ).stdout.split()
+    compute_clusters = []
+    for name in clusters.stdout.split():
+        if name == _michelangelo_sandbox_kube_cluster_name:
+            continue
+        if f"k3d-{name}" not in contexts:
+            continue
+        k3d_cluster = subprocess.run(
+            ["k3d", "cluster", "get", name], capture_output=True
+        )
+        if k3d_cluster.returncode == 0:
+            compute_clusters.append(name)
+    return compute_clusters
 
 
 def _manifest_pod_image(manifest: str, name: str) -> str:
@@ -914,8 +996,14 @@ def _helm_wait(ns: argparse.Namespace):
     )
 
 
-def _build_helm_set_args(ns: argparse.Namespace) -> list[str]:
-    """Convert sandbox CLI flags to Helm --set arguments for the control plane."""
+def _build_helm_set_args(
+    ns: argparse.Namespace, has_compute_clusters: bool = False
+) -> list[str]:
+    """Convert sandbox CLI flags to Helm --set arguments for the control plane.
+
+    sync sets has_compute_clusters when it finds dedicated compute clusters;
+    create reads --create-compute-cluster instead.
+    """
     args = []
 
     # Workflow engine — cadence is the default in values-k3d.yaml.
@@ -976,10 +1064,19 @@ def _build_helm_set_args(ns: argparse.Namespace) -> list[str]:
     if "ui" in getattr(ns, "exclude", []):
         args += ["--set", "envoy.enabled=false"]
 
+    # Ray and Spark pods get their object-storage keys from the Secret the
+    # michelangelo-compute chart names on every cluster. values-k3d.yaml sets
+    # it too; the flag also pins it for sync's --reuse-values upgrade.
+    args += [
+        "--set",
+        "controllermgr.jobs.k8sengine.mapper.logPersistence.credentialsSecret="
+        f"{_compute_credentials_secret}",
+    ]
+
     # Ray log collectors on a compute cluster cannot resolve objectstore:9091.
     # The control plane's agent node serves the object store on NodePort 30007,
     # resolvable from both clusters on the k3d network.
-    if getattr(ns, "create_compute_cluster", False):
+    if has_compute_clusters or getattr(ns, "create_compute_cluster", False):
         args += [
             "--set",
             "controllermgr.jobs.k8sengine.mapper.logPersistence.storageEndpoint="
@@ -2046,21 +2143,154 @@ def _compute_values(target: str, exclude: list[str]) -> dict:
     return values
 
 
+def _helm_release_exists(context: str, release: str, namespace: str) -> bool:
+    """Return whether the release is installed in the namespace."""
+    result = subprocess.run(
+        ["helm", "status", release, "--kube-context", context, "-n", namespace],
+        capture_output=True,
+        text=True,
+    )
+    return result.returncode == 0
+
+
+def _unowned_compute_object(context: str, resource: str) -> Optional[dict]:
+    """Return a resource that the michelangelo-compute release does not own.
+
+    Namespaced resources are read in default; cluster-scoped kinds ignore the
+    namespace.
+
+    Returns:
+        The resource, or None if it is absent or the release owns it.
+    """
+    result = subprocess.run(
+        [
+            "kubectl",
+            "--context",
+            context,
+            "-n",
+            "default",
+            "get",
+            resource,
+            "-o",
+            "json",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return None  # absent: nothing to hand over
+    obj = json.loads(result.stdout)
+    annotations = obj["metadata"].get("annotations") or {}
+    if annotations.get("meta.helm.sh/release-name") == _compute_release:
+        return None
+    return obj
+
+
+def _migrate_to_compute_chart(context: str, exclude: list[str]) -> Optional[dict]:
+    """Hand what earlier sandboxes installed on a cluster over to the chart.
+
+    Each step applies only to an object the michelangelo-compute release does
+    not own, so on a migrated cluster this does nothing.
+
+    Returns:
+        The non-credential keys of a hand-built michelangelo-config ConfigMap,
+        for runtime.config, or None if there is no such ConfigMap. The caller
+        deletes it just before the install.
+    """
+    # Two releases owning the same objects would delete them with either one,
+    # so the standalone release goes first. Helm never deletes CRDs, so
+    # existing RayClusters and SparkApplications wait for the chart's operator.
+    for svc, (release, namespace) in _compute_replaced_releases.items():
+        if svc not in exclude and _helm_release_exists(context, release, namespace):
+            _exec(
+                "helm",
+                "uninstall",
+                release,
+                "--kube-context",
+                context,
+                "-n",
+                namespace,
+                "--wait",
+            )
+
+    adopted = [
+        resource
+        for resource in _compute_adopted_resources
+        if _unowned_compute_object(context, resource) is not None
+    ]
+    if adopted:
+        # Metadata only, so tokens issued for the ServiceAccount stay valid.
+        # The release annotations, which the next run checks, are set last.
+        _exec(
+            "kubectl",
+            "--context",
+            context,
+            "-n",
+            "default",
+            "label",
+            "--overwrite",
+            *adopted,
+            "app.kubernetes.io/managed-by=Helm",
+        )
+        _exec(
+            "kubectl",
+            "--context",
+            context,
+            "-n",
+            "default",
+            "annotate",
+            "--overwrite",
+            *adopted,
+            f"meta.helm.sh/release-name={_compute_release}",
+            f"meta.helm.sh/release-namespace={_compute_namespace}",
+        )
+
+    config_map = _unowned_compute_object(context, "configmap/michelangelo-config")
+    if config_map is None:
+        return None
+    # The chart keeps the credentials in the runtime contract's Secret.
+    return {
+        key: value
+        for key, value in (config_map.get("data") or {}).items()
+        if key not in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY")
+    }
+
+
 def _install_compute_chart(context: str, target: str, exclude: list[str]):
     """Install or upgrade the michelangelo-compute chart on a cluster.
 
+    What earlier sandboxes installed by hand is migrated to the chart first.
     The chart tests check the runtime contract's endpoints, so a compute
     cluster is tested right after install, while the control plane is tested
     by the caller once its apiserver is up.
     """
     _check_kube_version(context)
     _build_compute_chart()
+    legacy_config = _migrate_to_compute_chart(context, exclude)
     _apply_compute_crds(context, exclude)
+    values = _compute_values(target, exclude)
+    if legacy_config is not None:
+        # The keys the sandbox sets win over the hand-built ones.
+        values["runtime"]["config"] = {**legacy_config, **values["runtime"]["config"]}
     # mkstemp creates the file readable by its owner only: it can hold the
     # object-storage keys. It is removed when the block exits.
     with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as values_file:
-        yaml.safe_dump(_compute_values(target, exclude), values_file)
+        yaml.safe_dump(values, values_file)
         values_file.flush()
+        if legacy_config is not None:
+            # Adopting the ConfigMap would keep its credential keys, as Helm
+            # leaves keys it never rendered. Pods that start before the
+            # install recreates it wait for it.
+            _exec(
+                "kubectl",
+                "--context",
+                context,
+                "-n",
+                "default",
+                "delete",
+                "configmap",
+                "michelangelo-config",
+            )
         _exec(
             "helm",
             "upgrade",
