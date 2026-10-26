@@ -67,6 +67,7 @@ Michelangelo's Helm charts live in `helm/michelangelo/` for the control plane an
 | `helm/michelangelo-llm-gateway/examples/values-gcp-standard.yaml` | Standard GKE Workload Identity placement overlay |
 | `helm/michelangelo-llm-gateway/README.md` | LLM gateway installation, security, and release guide |
 | `helm/michelangelo-compute/values.yaml` | Compute cluster chart defaults; the settings every install must provide are in `examples/values-minimal.yaml` |
+| `helm/michelangelo-compute-queues/values.yaml` | Kueue queue objects chart defaults, for Kueue-managed compute clusters; the settings every install must provide, including `quota`, are in `examples/values-minimal.yaml` |
 
 See the [Platform Setup guide](../../operator-guides/setup/platform-setup.md) for Helm configuration details.
 

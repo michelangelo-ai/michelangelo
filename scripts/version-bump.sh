@@ -12,12 +12,14 @@ VERSION_FILES=(
   "helm/michelangelo/Chart.yaml"
   "helm/michelangelo-llm-gateway/Chart.yaml"
   "helm/michelangelo-compute/Chart.yaml"
+  "helm/michelangelo-compute-queues/Chart.yaml"
 )
 
 # Charts whose appVersion is also the platform version.
 APP_VERSION_FILES=(
   "helm/michelangelo/Chart.yaml"
   "helm/michelangelo-compute/Chart.yaml"
+  "helm/michelangelo-compute-queues/Chart.yaml"
 )
 
 usage() {

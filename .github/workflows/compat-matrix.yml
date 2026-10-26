@@ -113,6 +113,21 @@ jobs:
             --debug \
             > /dev/null
 
+      # The queues chart has no dependencies.
+      - name: Lint compute queues chart
+        run: |
+          helm lint helm/michelangelo-compute-queues \
+            -f helm/michelangelo-compute-queues/examples/values-minimal.yaml
+
+      # Same kubeVersion floor as the compute chart.
+      - name: Template compute queues chart
+        run: |
+          helm template michelangelo-compute-queues helm/michelangelo-compute-queues \
+            -f helm/michelangelo-compute-queues/examples/values-minimal.yaml \
+            --kube-version 1.29.0 \
+            --debug \
+            > /dev/null
+
   summary:
     name: Compatibility Summary
     runs-on: ubuntu-latest

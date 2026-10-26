@@ -1,0 +1,27 @@
+apiVersion: v2
+name: michelangelo-compute-queues
+description: Creates the Kueue queue objects of a Michelangelo compute cluster
+type: application
+version: 0.12.0
+appVersion: "0.12.0"
+kubeVersion: ">=1.29.0-0"
+
+home: https://github.com/michelangelo-ai/michelangelo
+icon: https://raw.githubusercontent.com/michelangelo-ai/michelangelo/main/website/static/img/michelangelo-logo-color.svg
+sources:
+  - https://github.com/michelangelo-ai/michelangelo
+  - https://github.com/michelangelo-ai/michelangelo/tree/main/helm/michelangelo-compute-queues
+  - https://github.com/kubernetes-sigs/kueue
+keywords:
+  - compute
+  - kueue
+  - michelangelo
+maintainers:
+  - name: Michelangelo Maintainers
+    email: maintainers@michelangelo-ai.org
+    url: https://github.com/michelangelo-ai/michelangelo
+annotations:
+  artifacthub.io/category: machine-learning
+  artifacthub.io/license: Apache-2.0
+  artifacthub.io/prerelease: "true"
+  org.opencontainers.image.source: https://github.com/michelangelo-ai/michelangelo

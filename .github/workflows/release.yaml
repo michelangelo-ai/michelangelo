@@ -211,6 +211,9 @@ jobs:
           helm package helm/michelangelo-compute \
             --version ${{ steps.version.outputs.VERSION }} \
             --app-version ${{ steps.version.outputs.VERSION }}
+          helm package helm/michelangelo-compute-queues \
+            --version ${{ steps.version.outputs.VERSION }} \
+            --app-version ${{ steps.version.outputs.VERSION }}
 
       - name: Push charts to OCI registry
         run: |
@@ -219,6 +222,9 @@ jobs:
             oci://ghcr.io/michelangelo-ai/michelangelo/charts
           helm push \
             michelangelo-compute-${{ steps.version.outputs.VERSION }}.tgz \
+            oci://ghcr.io/michelangelo-ai/michelangelo/charts
+          helm push \
+            michelangelo-compute-queues-${{ steps.version.outputs.VERSION }}.tgz \
             oci://ghcr.io/michelangelo-ai/michelangelo/charts
 
   llm-gateway-helm-publish:
