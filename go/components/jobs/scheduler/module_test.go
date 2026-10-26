@@ -110,11 +110,17 @@ func TestProvideKueueBackend(t *testing.T) {
 	require.NoError(t, err)
 	got := &v2pb.RayCluster{}
 	require.NoError(t, handler.Get(context.Background(), rc.Namespace, rc.Name, &metav1.GetOptions{}, got))
-	require.Len(t, got.Status.StatusConditions, 1)
+	require.Len(t, got.Status.StatusConditions, 2)
 	scheduled := got.Status.StatusConditions[0]
 	assert.Equal(t, constants.ScheduledCondition, scheduled.Type)
 	assert.Equal(t, apipb.CONDITION_STATUS_FALSE, scheduled.Status)
 	assert.Equal(t, constants.NoClustersFoundForAssignment, scheduled.Reason)
+	// The job waits in the queue for a target. Under this backend the queue
+	// is the only writer of Enqueued.
+	enqueued := got.Status.StatusConditions[1]
+	assert.Equal(t, constants.EnqueuedCondition, enqueued.Type)
+	assert.Equal(t, apipb.CONDITION_STATUS_TRUE, enqueued.Status)
+	assert.Equal(t, constants.AddedToSchedulerQueue, enqueued.Reason)
 }
 
 func TestProvideUnknownBackend(t *testing.T) {

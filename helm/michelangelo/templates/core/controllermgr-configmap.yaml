@@ -88,7 +88,7 @@ data:
       scheduler:
         backend: {{ dig "scheduler" "backend" "default" .Values.controllermgr.jobs | quote }}
         {{- $kueue := dig "scheduler" "kueue" dict .Values.controllermgr.jobs }}
-        {{- if or $kueue.localQueueTemplate $kueue.apiVersion $kueue.localQueueOverrides $kueue.trustProjectLabel }}
+        {{- if or $kueue.localQueueTemplate $kueue.apiVersion $kueue.localQueueOverrides $kueue.trustProjectLabel $kueue.admissionTimeout }}
         kueue:
           {{- with $kueue.localQueueTemplate }}
           localQueueTemplate: {{ . | quote }}
@@ -104,6 +104,9 @@ data:
           {{- end }}
           {{- if $kueue.trustProjectLabel }}
           trustProjectLabel: true
+          {{- end }}
+          {{- with $kueue.admissionTimeout }}
+          admissionTimeout: {{ . | quote }}
           {{- end }}
         {{- end }}
       {{- with .Values.controllermgr.jobs.k8sengine.mapper.logPersistence }}

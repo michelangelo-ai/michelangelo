@@ -3,6 +3,7 @@ package config
 import (
 	"bytes"
 	"flag"
+	"fmt"
 	"text/template"
 	"time"
 
@@ -97,7 +98,18 @@ type KueueConfig struct {
 	// the label, so it is only trustworthy in deployments whose admission
 	// path stamps it and overwrites any client-supplied value.
 	TrustProjectLabel bool `yaml:"trustProjectLabel"`
+	// AdmissionTimeout bounds a RayCluster's wait for admission, counted
+	// from its creation and again from each eviction: the time before its
+	// dispatch under the Kueue backend, and the time Kueue holds it
+	// suspended under either backend. A RayCluster that waits longer fails
+	// with AdmissionTimeout. Absent or zero means DefaultAdmissionTimeout; a
+	// negative value is a startup error.
+	AdmissionTimeout time.Duration `yaml:"admissionTimeout"`
 }
+
+// DefaultAdmissionTimeout is the admission bound when
+// jobs.scheduler.kueue.admissionTimeout is absent or zero.
+const DefaultAdmissionTimeout = 24 * time.Hour
 
 // SchedulerConfig selects and configures the job scheduler backend.
 type SchedulerConfig struct {
@@ -187,11 +199,20 @@ func GetWorkflowClientConfig(provider config.Provider) (WorkflowClientConfig, er
 	return workflowClientConfig, err
 }
 
-// GetSchedulerConfig parses the configuration file and returns the job scheduler configuration
+// GetSchedulerConfig parses the configuration file and returns the job scheduler configuration.
+// An absent or zero admission timeout is DefaultAdmissionTimeout; a negative one is an error.
 func GetSchedulerConfig(provider config.Provider) (SchedulerConfig, error) {
 	schedulerConfig := SchedulerConfig{}
-	err := provider.Get(_schedulerConfigKey).Populate(&schedulerConfig)
-	return schedulerConfig, err
+	if err := provider.Get(_schedulerConfigKey).Populate(&schedulerConfig); err != nil {
+		return schedulerConfig, err
+	}
+	switch timeout := schedulerConfig.Kueue.AdmissionTimeout; {
+	case timeout < 0:
+		return SchedulerConfig{}, fmt.Errorf("%s.kueue.admissionTimeout must not be negative, got %s", _schedulerConfigKey, timeout)
+	case timeout == 0:
+		schedulerConfig.Kueue.AdmissionTimeout = DefaultAdmissionTimeout
+	}
+	return schedulerConfig, nil
 }
 
 // GetMySQLConfig parses the configuration file and returns the MySQL configuration.

@@ -2,9 +2,11 @@ package config
 
 import (
 	"strings"
+	"time"
 
 	envfx "github.com/michelangelo-ai/michelangelo/go/base/env"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/config"
 
 	"os"
@@ -254,6 +256,7 @@ jobs:
         some-project: custom-queue
       apiVersion: v1beta1
       trustProjectLabel: true
+      admissionTimeout: 2m
 `
 	provider, err := config.NewYAML(config.Source(strings.NewReader(yamlStr)))
 	assert.NoError(t, err)
@@ -264,6 +267,7 @@ jobs:
 	assert.Equal(t, map[string]string{"some-project": "custom-queue"}, conf.Kueue.LocalQueueOverrides)
 	assert.Equal(t, "v1beta1", conf.Kueue.APIVersion)
 	assert.True(t, conf.Kueue.TrustProjectLabel)
+	assert.Equal(t, 2*time.Minute, conf.Kueue.AdmissionTimeout)
 
 	// Absent key: zero-value config selects the default backend.
 	providerEmpty, err := config.NewYAML(config.Source(strings.NewReader("foo: bar")))
@@ -272,4 +276,39 @@ jobs:
 	assert.NoError(t, err)
 	assert.Equal(t, "", conf.Backend)
 	assert.False(t, conf.Kueue.TrustProjectLabel)
+	assert.Equal(t, DefaultAdmissionTimeout, conf.Kueue.AdmissionTimeout)
+}
+
+func TestGetSchedulerConfigAdmissionTimeout(t *testing.T) {
+	tests := []struct {
+		name    string
+		yaml    string
+		want    time.Duration
+		wantErr string
+	}{
+		{name: "absent", yaml: "jobs: {scheduler: {backend: kueue}}", want: 24 * time.Hour},
+		{name: "zero", yaml: "jobs: {scheduler: {kueue: {admissionTimeout: 0s}}}", want: 24 * time.Hour},
+		{name: "set", yaml: "jobs: {scheduler: {kueue: {admissionTimeout: 90m}}}", want: 90 * time.Minute},
+		{name: "quoted, as the Helm chart renders it", yaml: `jobs: {scheduler: {kueue: {admissionTimeout: "2m"}}}`, want: 2 * time.Minute},
+		{
+			name:    "negative",
+			yaml:    "jobs: {scheduler: {kueue: {admissionTimeout: -1h}}}",
+			wantErr: "jobs.scheduler.kueue.admissionTimeout must not be negative, got -1h0m0s",
+		},
+		{name: "not a duration", yaml: `jobs: {scheduler: {kueue: {admissionTimeout: "3600"}}}`, wantErr: "into time.Duration"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			provider, err := config.NewYAML(config.Source(strings.NewReader(tt.yaml)))
+			require.NoError(t, err)
+			conf, err := GetSchedulerConfig(provider)
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, conf.Kueue.AdmissionTimeout)
+		})
+	}
 }
