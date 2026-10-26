@@ -1757,7 +1757,7 @@ class KueueDemoTest(TestCase):
             patch.object(sandbox, "_helm_ensure_repos"),
             patch.object(sandbox, "_helm_wait"),
             patch.object(sandbox, "_ensure_mysql_running"),
-            patch.object(sandbox, "_ensure_minio_running"),
+            patch.object(sandbox, "_ensure_object_store_running"),
             patch.object(sandbox, "_refresh_mysql_schema"),
             patch.object(sandbox, "_ensure_credentials_secret"),
         ):
