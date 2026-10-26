@@ -77,17 +77,18 @@ func mapLabels(_ map[string]string, queueName string) map[string]string {
 
 // kueueQueueName resolves the LocalQueue for a job dispatched to cluster, or
 // "" when the cluster is not Kueue-managed. The inputs are trusted: the
-// cluster's scheduler_type is operator-set, the project identity is the
-// control-plane-stamped label or the job's authorization-bound namespace,
-// and the mapping comes from jobs.scheduler.kueue config.
+// cluster's scheduler_type is operator-set, the project identity is the job's
+// authorization-bound namespace (the ma/project-name label counts only when
+// jobs.scheduler.kueue.trustProjectLabel is set), and the mapping comes from
+// jobs.scheduler.kueue config.
 func (m Mapper) kueueQueueName(labels map[string]string, namespace string, cluster *v2pb.Cluster) (string, error) {
 	spec := cluster.GetSpec()
 	if spec.GetSchedulerType() != v2pb.SCHEDULER_TYPE_KUEUE {
 		return "", nil
 	}
-	project := utils.ProjectNameForJob(labels, namespace)
+	project := utils.ProjectNameForJob(labels, namespace, m.Scheduler.Kueue.TrustProjectLabel)
 	if project == "" {
-		return "", fmt.Errorf("kueue-managed cluster %q: job has neither a %s label nor a namespace to resolve a LocalQueue from",
+		return "", fmt.Errorf("kueue-managed cluster %q: job has no project identity (a namespace, or a trusted %s label) to resolve a LocalQueue from",
 			cluster.GetName(), constants.ProjectNameLabelKey)
 	}
 	return utils.ResolveLocalQueueName(m.Scheduler.Kueue, project), nil

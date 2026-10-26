@@ -674,7 +674,8 @@ func TestMapRayClusterKueueLabels(t *testing.T) {
 	m := Mapper{Scheduler: maconfig.SchedulerConfig{}}
 	rc := &v2pb.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "rc-1",
+			Name:      "rc-1",
+			Namespace: "proj-ns",
 			Labels: map[string]string{
 				"ma/project-name":               "proj1",
 				"michelangelo/cluster-affinity": "cluster-a",
@@ -696,11 +697,25 @@ func TestMapRayClusterKueueLabels(t *testing.T) {
 		assert.Nil(t, obj.(*rayv1.RayCluster).Labels)
 	})
 
-	t.Run("kueue cluster: resolved queue label only", func(t *testing.T) {
+	t.Run("kueue cluster, untrusted project label: queue resolves from the namespace", func(t *testing.T) {
 		kueueCluster := &v2pb.Cluster{
 			Spec: v2pb.ClusterSpec{SchedulerType: v2pb.SCHEDULER_TYPE_KUEUE},
 		}
 		obj, err := m.MapGlobalJobClusterToLocal(rc, kueueCluster)
+		require.NoError(t, err)
+		assert.Equal(t,
+			map[string]string{"kueue.x-k8s.io/queue-name": "ma-proj-ns"},
+			obj.(*rayv1.RayCluster).Labels)
+	})
+
+	t.Run("kueue cluster, trusted project label: queue resolves from the label", func(t *testing.T) {
+		trusted := Mapper{Scheduler: maconfig.SchedulerConfig{
+			Kueue: maconfig.KueueConfig{TrustProjectLabel: true},
+		}}
+		kueueCluster := &v2pb.Cluster{
+			Spec: v2pb.ClusterSpec{SchedulerType: v2pb.SCHEDULER_TYPE_KUEUE},
+		}
+		obj, err := trusted.MapGlobalJobClusterToLocal(rc, kueueCluster)
 		require.NoError(t, err)
 		assert.Equal(t,
 			map[string]string{"kueue.x-k8s.io/queue-name": "ma-proj1"},

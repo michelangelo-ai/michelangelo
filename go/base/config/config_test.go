@@ -253,6 +253,7 @@ jobs:
       localQueueOverrides:
         some-project: custom-queue
       apiVersion: v1beta1
+      trustProjectLabel: true
 `
 	provider, err := config.NewYAML(config.Source(strings.NewReader(yamlStr)))
 	assert.NoError(t, err)
@@ -262,6 +263,7 @@ jobs:
 	assert.Equal(t, "ma-{project}", conf.Kueue.LocalQueueTemplate)
 	assert.Equal(t, map[string]string{"some-project": "custom-queue"}, conf.Kueue.LocalQueueOverrides)
 	assert.Equal(t, "v1beta1", conf.Kueue.APIVersion)
+	assert.True(t, conf.Kueue.TrustProjectLabel)
 
 	// Absent key: zero-value config selects the default backend.
 	providerEmpty, err := config.NewYAML(config.Source(strings.NewReader("foo: bar")))
@@ -269,4 +271,5 @@ jobs:
 	conf, err = GetSchedulerConfig(providerEmpty)
 	assert.NoError(t, err)
 	assert.Equal(t, "", conf.Backend)
+	assert.False(t, conf.Kueue.TrustProjectLabel)
 }

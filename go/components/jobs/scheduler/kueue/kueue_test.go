@@ -150,7 +150,7 @@ func TestEnqueueValidatesAndDelegatesWhenQueueExists(t *testing.T) {
 	clusters.EXPECT().GetCluster("kueue-a").Return(target)
 
 	queues := kueuemocks.NewMockLocalQueues(g)
-	queues.EXPECT().Exists(gomock.Any(), target, "default", "ma-proj1").Return(true, nil)
+	queues.EXPECT().Exists(gomock.Any(), target, "default", "ma-proj-ns").Return(true, nil)
 
 	q, delegate, _ := setup(t, rc, strategy, clusters, queues, maconfig.SchedulerConfig{Backend: "kueue"})
 	require.NoError(t, q.Enqueue(context.Background(), schedulableJob(rc)))
@@ -169,7 +169,7 @@ func TestEnqueueUsesExistingAssignmentWithoutStrategy(t *testing.T) {
 	clusters.EXPECT().GetCluster("kueue-a").Return(target)
 
 	queues := kueuemocks.NewMockLocalQueues(g)
-	queues.EXPECT().Exists(gomock.Any(), target, "default", "ma-proj1").Return(true, nil)
+	queues.EXPECT().Exists(gomock.Any(), target, "default", "ma-proj-ns").Return(true, nil)
 
 	q, delegate, _ := setup(t, rc, strategy, clusters, queues, maconfig.SchedulerConfig{Backend: "kueue"})
 	require.NoError(t, q.Enqueue(context.Background(), schedulableJob(rc)))
@@ -191,7 +191,7 @@ func TestEnqueueQueueResolutionUsesOverrides(t *testing.T) {
 	cfg := maconfig.SchedulerConfig{
 		Backend: "kueue",
 		Kueue: maconfig.KueueConfig{
-			LocalQueueOverrides: map[string]string{"proj1": "custom-queue"},
+			LocalQueueOverrides: map[string]string{"proj-ns": "custom-queue"},
 		},
 	}
 	q, delegate, _ := setup(t, rc, strategy, clusters, queues, cfg)
@@ -209,7 +209,7 @@ func TestEnqueueQueueNotFound(t *testing.T) {
 	clusters.EXPECT().GetCluster("kueue-a").Return(target)
 
 	queues := kueuemocks.NewMockLocalQueues(g)
-	queues.EXPECT().Exists(gomock.Any(), target, "default", "ma-proj1").Return(false, nil)
+	queues.EXPECT().Exists(gomock.Any(), target, "default", "ma-proj-ns").Return(false, nil)
 
 	q, delegate, readBack := setup(t, rc, strategy, clusters, queues, maconfig.SchedulerConfig{Backend: "kueue"})
 	err := q.Enqueue(context.Background(), schedulableJob(rc))
@@ -222,7 +222,7 @@ func TestEnqueueQueueNotFound(t *testing.T) {
 	require.NotNil(t, cond)
 	assert.Equal(t, apipb.CONDITION_STATUS_FALSE, cond.Status)
 	assert.Equal(t, constants.KueueQueueNotFound, cond.Reason)
-	assert.Contains(t, cond.Message, "ma-proj1")
+	assert.Contains(t, cond.Message, "ma-proj-ns")
 }
 
 func TestEnqueueQueueCheckFailed(t *testing.T) {
@@ -235,7 +235,7 @@ func TestEnqueueQueueCheckFailed(t *testing.T) {
 	clusters.EXPECT().GetCluster("kueue-a").Return(target)
 
 	queues := kueuemocks.NewMockLocalQueues(g)
-	queues.EXPECT().Exists(gomock.Any(), target, "default", "ma-proj1").
+	queues.EXPECT().Exists(gomock.Any(), target, "default", "ma-proj-ns").
 		Return(false, errors.New("cluster unreachable"))
 
 	q, delegate, readBack := setup(t, rc, strategy, clusters, queues, maconfig.SchedulerConfig{Backend: "kueue"})
@@ -265,6 +265,42 @@ func TestEnqueueMissingProjectLabelFallsBackToNamespace(t *testing.T) {
 	q, delegate, _ := setup(t, rc, strategy, clusters, queues, maconfig.SchedulerConfig{Backend: "kueue"})
 	require.NoError(t, q.Enqueue(context.Background(), schedulableJob(rc)))
 	assert.Equal(t, 1, delegate.calls)
+}
+
+func TestEnqueueQueueIdentity(t *testing.T) {
+	tests := []struct {
+		name       string
+		labels     map[string]string
+		trustLabel bool
+		wantQueue  string
+	}{
+		{name: "label set, untrusted: namespace", labels: projectLabels(), trustLabel: false, wantQueue: "ma-proj-ns"},
+		{name: "label set, trusted: label", labels: projectLabels(), trustLabel: true, wantQueue: "ma-proj1"},
+		{name: "label unset, untrusted: namespace", labels: nil, trustLabel: false, wantQueue: "ma-proj-ns"},
+		{name: "label unset, trusted: namespace", labels: nil, trustLabel: true, wantQueue: "ma-proj-ns"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := gomock.NewController(t)
+			rc := testRayCluster(tt.labels, "kueue-a")
+
+			strategy := frameworkmocks.NewMockAssignmentEngine(g)
+			target := kueueCluster("kueue-a")
+			clusters := clustermocks.NewMockRegisteredClustersCache(g)
+			clusters.EXPECT().GetCluster("kueue-a").Return(target)
+
+			queues := kueuemocks.NewMockLocalQueues(g)
+			queues.EXPECT().Exists(gomock.Any(), target, "default", tt.wantQueue).Return(true, nil)
+
+			cfg := maconfig.SchedulerConfig{
+				Backend: "kueue",
+				Kueue:   maconfig.KueueConfig{TrustProjectLabel: tt.trustLabel},
+			}
+			q, delegate, _ := setup(t, rc, strategy, clusters, queues, cfg)
+			require.NoError(t, q.Enqueue(context.Background(), schedulableJob(rc)))
+			assert.Equal(t, 1, delegate.calls)
+		})
+	}
 }
 
 func TestEnqueueDelegateErrorPropagates(t *testing.T) {

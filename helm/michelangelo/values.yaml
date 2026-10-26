@@ -478,6 +478,10 @@ controllermgr:
         apiVersion: ""
         # Per-project LocalQueue overrides, e.g. {team-a: shared-queue}.
         localQueueOverrides: {}
+        # A job's project (and so its LocalQueue) is its namespace. Set true
+        # to honor the ma/project-name label instead, only if your admission
+        # path stamps that label and overwrites any client-supplied value.
+        trustProjectLabel: false
     k8sengine:
       mapper:
         logPersistence:
