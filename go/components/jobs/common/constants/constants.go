@@ -92,6 +92,17 @@ const (
 	JobControlPlaneEnvKey string = "ma/control-plane-env"
 	UserLabelKey          string = "ma/user"
 	OwnerServiceLabelKey  string = "ma/owner-service"
+
+	// JobUIDLabelKey carries the UID of the global job CR that a projected
+	// member-cluster object belongs to. Only the SparkApplications the k8s
+	// engine projects carry it today, and only the federated client and the
+	// Spark watcher read it. Names in a member cluster are not unique across
+	// projects, so this is how those two tell a job's own application from a
+	// same-named one another job left behind or someone created outside
+	// Michelangelo. An object is the job's own only when the label equals the
+	// job's UID and that UID is not empty: one without the label, or with an
+	// empty one, is not.
+	JobUIDLabelKey string = "ma/job-uid"
 )
 
 // Ray label keys

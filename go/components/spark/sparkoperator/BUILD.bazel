@@ -1,0 +1,29 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "rest_client.go",
+        "scheme.go",
+    ],
+    importpath = "github.com/michelangelo-ai/michelangelo/go/components/spark/sparkoperator",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go/thirdparty/k8s-crds/apis/sparkoperator.k8s.io/v1beta2:go_default_library",
+        "@io_k8s_apimachinery//pkg/runtime:go_default_library",
+        "@io_k8s_apimachinery//pkg/runtime/serializer:go_default_library",
+        "@io_k8s_apimachinery//pkg/util/runtime:go_default_library",
+        "@io_k8s_client_go//rest:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["rest_client_test.go"],
+    embed = [":go_default_library"],
+    deps = [
+        "@com_github_stretchr_testify//require:go_default_library",
+        "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
+        "@io_k8s_client_go//rest:go_default_library",
+    ],
+)

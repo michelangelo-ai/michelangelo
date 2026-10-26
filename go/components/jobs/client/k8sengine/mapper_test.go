@@ -160,10 +160,11 @@ func TestMapper_MapGlobalJobToLocal(t *testing.T) {
 			expectErrSubstr: "expected *v2pb.RayCluster",
 		},
 		{
-			name:            "unsupported job type (spark) -> error",
-			jobObject:       &v2pb.SparkJob{},
-			clusterObject:   nil,
-			expectErrSubstr: "spark job mapping not implemented",
+			// Spark needs no job-cluster object: the job is itself the
+			// scheduled unit. The full projection is asserted in spark_test.go.
+			name:          "spark job without cluster -> job mapped",
+			jobObject:     &v2pb.SparkJob{},
+			clusterObject: nil,
 		},
 		{
 			name:            "nil job object -> error",
@@ -375,10 +376,10 @@ func TestMapper_GetLocalName(t *testing.T) {
 			expName: "ray-1",
 		},
 		{
-			name:    "spark job -> empty namespace and name",
+			name:    "spark job -> returns namespace and name",
 			obj:     &v2pb.SparkJob{ObjectMeta: metav1.ObjectMeta{Name: "spark-1"}},
-			expNS:   "",
-			expName: "",
+			expNS:   SparkLocalNamespace,
+			expName: "spark-1",
 		},
 		{
 			name:    "unknown type -> empty namespace and name",
@@ -694,15 +695,15 @@ func TestControlPlaneLabels(t *testing.T) {
 			"ma/owner-service":     "michelangelo-ray",
 			"ma/control-plane-env": "staging",
 			"ma/project-name":      "proj1",
-		}, m.controlPlaneLabels("proj1"))
+		}, m.controlPlaneLabels("proj1", "michelangelo-ray"))
 	})
 
 	t.Run("no queue: no queue label", func(t *testing.T) {
-		assert.NotContains(t, m.objectLabels("proj1", ""), "kueue.x-k8s.io/queue-name")
+		assert.NotContains(t, m.objectLabels("proj1", "michelangelo-ray", ""), "kueue.x-k8s.io/queue-name")
 	})
 
 	t.Run("queue set: resolved queue label is added", func(t *testing.T) {
-		assert.Equal(t, "ma-proj1", m.objectLabels("proj1", "ma-proj1")["kueue.x-k8s.io/queue-name"])
+		assert.Equal(t, "ma-proj1", m.objectLabels("proj1", "michelangelo-ray", "ma-proj1")["kueue.x-k8s.io/queue-name"])
 	})
 }
 
