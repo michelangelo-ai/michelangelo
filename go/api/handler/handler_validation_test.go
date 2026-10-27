@@ -154,6 +154,20 @@ func TestInvalidKeyReturnsInvalidArgument(t *testing.T) {
 			wantMsg: "failed to delete API object. namespace: , name: job01: " + emptyNS,
 		},
 		{
+			name: "create neither name nor generateName",
+			call: func(h *apiHandler) error {
+				return h.Create(ctx, rayJob("default", ""), &metav1.CreateOptions{})
+			},
+			wantMsg: "failed to create API object. namespace: default, name: : name or generateName is required",
+		},
+		{
+			name: "create name with slash",
+			call: func(h *apiHandler) error {
+				return h.Create(ctx, rayJob("default", "a/b"), &metav1.CreateOptions{})
+			},
+			wantMsg: badName + ` "a/b"`,
+		},
+		{
 			name: "create empty namespace",
 			call: func(h *apiHandler) error {
 				return h.Create(ctx, rayJob("", "job01"), &metav1.CreateOptions{})
@@ -200,6 +214,48 @@ func TestDeleteInvalidKeyReturnsInvalidArgument(t *testing.T) {
 				h.conf.EnableMetadataStorage = metadataStorage
 
 				err := h.Delete(context.Background(), rayJob(tt.namespace, tt.objName), &metav1.DeleteOptions{})
+				require.Error(t, err)
+				s, ok := status.FromError(err)
+				require.True(t, ok, "want a gRPC status error, got %T: %v", err, err)
+				assert.Equal(t, codes.InvalidArgument, s.Code())
+				assert.Contains(t, s.Message(), tt.wantMsg)
+				assert.Zero(t, rec.calls, "the k8s layer must not be reached")
+			})
+		}
+	}
+}
+
+// Create must validate the key before it branches on metadata storage, so the async path rejects bad keys too.
+func TestCreateInvalidKeyReturnsInvalidArgument(t *testing.T) {
+	tests := []struct {
+		name         string
+		namespace    string
+		objName      string
+		generateName string
+		wantMsg      string
+	}{
+		{
+			name:      "neither name nor generateName",
+			namespace: "default",
+			wantMsg:   "failed to create API object. namespace: default, name: : name or generateName is required",
+		},
+		{name: "name with slash", namespace: "default", objName: "a/b", wantMsg: `invalid resource name "a/b"`},
+		{
+			name:         "generateName with empty namespace",
+			namespace:    "",
+			generateName: "gen-",
+			wantMsg:      "an empty namespace may not be set during creation",
+		},
+	}
+	for _, metadataStorage := range []bool{false, true} {
+		for _, tt := range tests {
+			t.Run(fmt.Sprintf("metadataStorage=%v/%s", metadataStorage, tt.name), func(t *testing.T) {
+				h, rec := newRecordingHandler(t, true, nil)
+				h.conf.EnableMetadataStorage = metadataStorage
+
+				obj := rayJob(tt.namespace, tt.objName)
+				obj.GenerateName = tt.generateName
+				err := h.Create(context.Background(), obj, &metav1.CreateOptions{})
 				require.Error(t, err)
 				s, ok := status.FromError(err)
 				require.True(t, ok, "want a gRPC status error, got %T: %v", err, err)
@@ -260,6 +316,14 @@ func TestValidKeysAreUnaffected(t *testing.T) {
 	}
 	require.NoError(t, h.Create(ctx, generated, &metav1.CreateOptions{}))
 	assert.NotEmpty(t, generated.Name)
+
+	// a name with no generateName is a valid create.
+	named := &v2pb.RayJob{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "named-job"},
+		Spec:       v2pb.RayJobSpec{JobId: "named"},
+	}
+	require.NoError(t, h.Create(ctx, named, &metav1.CreateOptions{}))
+	assert.Equal(t, "named-job", named.Name)
 
 	// get, update and delete on an existing object.
 	got := &v2pb.RayJob{}

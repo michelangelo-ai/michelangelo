@@ -88,6 +88,10 @@ func (handler *apiHandler) Create(ctx context.Context, obj ctrlRTClient.Object, 
 		return status.Error(codes.InvalidArgument, err.Error())
 	}
 
+	if err := handler.validateCreateKey(obj, objMeta); err != nil {
+		return err
+	}
+
 	if metadataErr := handler.handleMetadataStorageForCreate(ctx, obj, objMeta); metadataErr != nil {
 		return metadataErr
 	}
@@ -96,12 +100,6 @@ func (handler *apiHandler) Create(ctx context.Context, obj ctrlRTClient.Object, 
 
 	_, err = checkDryRun(opts.DryRun)
 	if err != nil {
-		return err
-	}
-
-	// The name is not checked here: an empty name is valid when generateName is set.
-	if err := handler.validateNamespace(obj, "create", objMeta.GetNamespace(), objMeta.GetName(),
-		"an empty namespace may not be set during creation"); err != nil {
 		return err
 	}
 
@@ -491,6 +489,26 @@ func (handler *apiHandler) validateObjectKey(obj runtime.Object, apiAction strin
 	}
 	return handler.validateNamespace(obj, apiAction, namespace, name,
 		"an empty namespace may not be set when a resource name is provided")
+}
+
+// validateCreateKey returns an InvalidArgument status error when a create request has neither a name nor a
+// generateName, when a provided name is not a valid path segment, or when the namespace is empty for a namespaced
+// kind. An empty name is valid when generateName is set, so the name is only checked when it is provided.
+// Running this before the metadata-storage branch keeps the rejection independent of whether metadata storage is on.
+func (handler *apiHandler) validateCreateKey(obj runtime.Object, objMeta metav1.Object) error {
+	namespace, name := objMeta.GetNamespace(), objMeta.GetName()
+	if name == "" && objMeta.GetGenerateName() == "" {
+		return status.Errorf(codes.InvalidArgument, "%v: name or generateName is required",
+			apiErrMsg("create", namespace, name))
+	}
+	if name != "" {
+		if msgs := validationpath.IsValidPathSegmentName(name); len(msgs) != 0 {
+			return status.Errorf(codes.InvalidArgument, "%v: invalid resource name %q: %v",
+				apiErrMsg("create", namespace, name), name, msgs)
+		}
+	}
+	return handler.validateNamespace(obj, "create", namespace, name,
+		"an empty namespace may not be set during creation")
 }
 
 // validateNamespace returns an InvalidArgument status error when the namespace is empty and the object's kind is
