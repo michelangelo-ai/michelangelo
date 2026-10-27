@@ -10,7 +10,6 @@ from logging import getLogger
 from types import MethodType
 from typing import Optional
 
-from google.protobuf.json_format import MessageToDict
 from google.protobuf.message import Message
 from grpc import Channel
 
@@ -188,13 +187,10 @@ def generate_kill(crd: CRD, channel: Channel, parser: Optional[ArgumentParser] =
             return response
 
         # Verify the kill flag was set
-        response_dict = MessageToDict(response, preserving_proto_field_name=True)
+        # Read the flag off the proto: rendering the response to a dict fails
+        # on an Any the client cannot resolve, after the kill was applied.
         resource_name = _self.name
-        if (
-            resource_name in response_dict
-            and "spec" in response_dict[resource_name]
-            and response_dict[resource_name]["spec"].get("kill") is True
-        ):
+        if getattr(response, resource_name).spec.kill:
             _LOG.info("Kill operation successfully set spec.kill=true")
         else:
             _LOG.error("Kill operation failed: spec.kill not set to true in response")
