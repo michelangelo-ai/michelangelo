@@ -461,6 +461,7 @@ def _sync(ns: argparse.Namespace):
             "--reuse-values",
             *helm_args,
         )
+        _ensure_cadence_domain(ns)
         # Force-restart app deployments so they always pick up the latest
         # configmap values (helm upgrade only restarts pods when the pod
         # template spec changes, but values-only changes may not alter it).
@@ -518,8 +519,22 @@ def _sync(ns: argparse.Namespace):
             "--dependency-update",
             *helm_args,
         )
+        _ensure_cadence_domain(ns)
 
     _helm_wait(ns)
+
+
+def _ensure_cadence_domain(ns: argparse.Namespace):
+    """Register the Cadence domain if the workflow engine is Cadence.
+
+    Cadence's domains live in the ``cadence`` MySQL database, which is not
+    part of the helm release and can be recreated empty (e.g. when the MySQL
+    data directory is reinitialised). The michelangelo-worker exits at startup
+    with "Domain default does not exist" in that case, so this must run before
+    the rollout waits that depend on the worker becoming ready.
+    """
+    if ns.workflow == "cadence":
+        _create_cadence_domain([])
 
 
 def _refresh_mysql_schema():

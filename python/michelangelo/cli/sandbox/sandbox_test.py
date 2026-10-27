@@ -193,3 +193,82 @@ class SnapshotRestoreTest(TestCase):
         ):
             sandbox._snapshot_restore(argparse.Namespace(timestamp="does-not-exist"))
         mock_err.assert_called_once()
+
+
+class EnsureCadenceDomainTest(TestCase):
+    """Test cases for `_ensure_cadence_domain`."""
+
+    def test_registers_domain_for_cadence(self):
+        """The cadence engine gets its domain registered."""
+        with patch.object(sandbox, "_create_cadence_domain") as mock_create:
+            sandbox._ensure_cadence_domain(argparse.Namespace(workflow="cadence"))
+        mock_create.assert_called_once()
+
+    def test_skips_registration_for_temporal(self):
+        """Temporal has no Cadence domain to register."""
+        with patch.object(sandbox, "_create_cadence_domain") as mock_create:
+            sandbox._ensure_cadence_domain(argparse.Namespace(workflow="temporal"))
+        mock_create.assert_not_called()
+
+
+class CreateCadenceDomainTest(TestCase):
+    """Test cases for `_create_cadence_domain` idempotency."""
+
+    def test_already_registered_domain_is_not_an_error(self):
+        """A domain that already exists is skipped without retrying or exiting."""
+        with (
+            patch.object(sandbox, "_exec"),
+            patch.object(sandbox.subprocess, "run") as mock_run,
+            patch.object(sandbox.time, "sleep") as mock_sleep,
+        ):
+            mock_run.return_value = Mock(
+                returncode=1, stdout="", stderr="Domain already exists"
+            )
+            sandbox._create_cadence_domain([])
+
+        mock_run.assert_called_once()
+        mock_sleep.assert_not_called()
+
+
+class SyncCadenceDomainTest(TestCase):
+    """Test cases for domain registration in `ma sandbox sync`."""
+
+    def _run_sync(self, helm_status_stdout: str) -> Mock:
+        """Run `_sync` against a mocked cluster, returning an ordered call log."""
+        calls = Mock()
+        run_results = {
+            "cluster": Mock(returncode=0, stdout=""),
+            "status": Mock(returncode=0, stdout=helm_status_stdout),
+        }
+
+        def fake_run(args, **_):
+            return run_results[
+                "status" if args[:2] == ["helm", "status"] else "cluster"
+            ]
+
+        with (
+            patch.object(sandbox.subprocess, "run", side_effect=fake_run),
+            patch.object(sandbox, "_exec"),
+            patch.object(sandbox, "_refresh_mysql_schema"),
+            patch.object(sandbox, "_ensure_credentials_secret"),
+            patch.object(sandbox, "_helm_ensure_repos"),
+            patch.object(sandbox, "_build_helm_set_args", return_value=[]),
+            patch.object(sandbox, "_helm_delete_services"),
+            patch.object(sandbox, "_helm_adopt_orphaned_resources"),
+            patch.object(sandbox, "_ensure_cadence_domain", calls.ensure),
+            patch.object(sandbox, "_helm_wait", calls.wait),
+        ):
+            sandbox._sync(argparse.Namespace(workflow="cadence"))
+        return calls
+
+    def test_domain_registered_before_waiting_after_upgrade(self):
+        """A healthy release upgrade registers the domain before the wait."""
+        calls = self._run_sync('{"info":{"status":"deployed"}}')
+        names = [c[0] for c in calls.mock_calls]
+        self.assertEqual(names, ["ensure", "wait"])
+
+    def test_domain_registered_before_waiting_after_reinstall(self):
+        """A failed release is reinstalled and still gets the domain registered."""
+        calls = self._run_sync('{"info":{"status":"failed"}}')
+        names = [c[0] for c in calls.mock_calls]
+        self.assertEqual(names, ["ensure", "wait"])
