@@ -30,7 +30,7 @@ go/
     ├── inferenceserver/
     │   └── backends/       # Interface + registry + implementations
     └── jobs/
-        └── scheduler/      # Job scheduler, framework/ and kueue/ subpackages
+        └── scheduler/      # Job scheduler and its framework/ subpackage
 ```
 
 - `cmd/` packages should be thin: they wire dependencies and call into `components/`.

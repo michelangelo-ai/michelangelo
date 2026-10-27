@@ -503,4 +503,5 @@ Create a new `Revision` whenever you have a new training run or a new artifact â
 * See working examples in [`python/examples/model_manager/`](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/model_manager)
 * Learn about [model training](./train-and-register-a-model.md) to prepare models for packaging
 * Learn about [data preparation](../getting-started/prepare-your-data.md) for your training pipeline
+* Continue to [Push Models and Artifacts](./push-models-and-artifacts.md) to upload a packaged model and register it from task code with `push()`
 * Continue to [Deploy a Model](./deploy-a-model.md) to put your registered model into serving

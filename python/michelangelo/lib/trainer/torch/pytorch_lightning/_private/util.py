@@ -552,6 +552,7 @@ def _resolve_callbacks(
     per_node_callback_kwargs: dict[str, Any] | None = None,
     strategy: Strategy | None = None,
     training_observer: TrainingObserver | None = None,
+    upload_async: bool = False,
 ) -> tuple[list[Callback], bool]:
     """Build callback list for the Lightning Trainer.
 
@@ -567,6 +568,9 @@ def _resolve_callbacks(
         strategy: The resolved strategy; DeepSpeed, FSDP and FSDP2 strategies select
             per-node reporting.
         training_observer: Optional observer passed to the Ray report callback.
+        upload_async: Whether the data-parallel reporting callback should upload
+            epoch-end checkpoints asynchronously. Ignored (with a warning) when the
+            per-node reporting callback is used.
 
     Returns:
         A tuple of the resolved callback list and whether it contains a
@@ -642,6 +646,11 @@ def _resolve_callbacks(
         or _is_model_parallel_strategy(strategy)
     )
     if _use_per_node:
+        if upload_async:
+            _logger.warning(
+                "upload_async=True is ignored with per-node (model-parallel) "
+                "checkpoint reporting; checkpoints are uploaded synchronously."
+            )
         per_node_callback_kwargs = per_node_callback_kwargs or {}
         resolved_callbacks.append(
             RayTrainReportPerNodeCallback(
@@ -650,7 +659,9 @@ def _resolve_callbacks(
         )
     else:
         resolved_callbacks.append(
-            RayTrainReportCallback(training_observer=training_observer)
+            RayTrainReportCallback(
+                training_observer=training_observer, upload_async=upload_async
+            )
         )
 
     return resolved_callbacks, has_model_checkpoint
@@ -903,6 +914,7 @@ def _train_loop_per_worker(train_loop_config):
     # setting lightning_trainer_kwargs["max_epochs"]; we apply this as a default below.
     num_epochs = train_loop_config["num_epochs"]
     num_shuffle_batches = train_loop_config["num_shuffle_batches"]
+    prefetch_batches = train_loop_config.get("prefetch_batches", 1)
     drop_last = train_loop_config.get("drop_last", False)
 
     create_model_fn = train_loop_config["create_model_fn"]
@@ -925,6 +937,7 @@ def _train_loop_per_worker(train_loop_config):
         train_dataloader = train_dataset_shard.iter_torch_batches(
             batch_size=batch_size,
             collate_fn=collate_fn_to_torch,
+            prefetch_batches=prefetch_batches,
             drop_last=drop_last,
             local_shuffle_buffer_size=None
             if num_shuffle_batches == 0
@@ -933,6 +946,7 @@ def _train_loop_per_worker(train_loop_config):
         val_dataloader = val_dataset_shard.iter_torch_batches(
             batch_size=batch_size,
             collate_fn=collate_fn_to_torch,
+            prefetch_batches=prefetch_batches,
         )
 
     model = create_model_fn(**create_model_fn_kwargs)
@@ -1003,6 +1017,7 @@ def _train_loop_per_worker(train_loop_config):
         trainer_kwargs.pop(CALLBACK_REPORT_PER_NODE, None),
         strategy,
         training_observer=train_loop_config.get("training_observer"),
+        upload_async=bool(train_loop_config.get("upload_async", False)),
     )
     profiler, profiler_logs_path, upload_profiler_results = _resolve_profiler(
         trainer_kwargs.pop("profiler", None),

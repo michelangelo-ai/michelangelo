@@ -57,10 +57,6 @@ func (m Mapper) mapRay(rayJob *v2pb.RayJob, jobClusterObject runtime.Object, clu
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      rayJob.Name,
 			Namespace: RayLocalNamespace,
-			// RayJobs target an existing RayCluster via ClusterSelector, so
-			// they are never Kueue-queued themselves (Kueue admits the
-			// cluster); no queue label is resolved here.
-			Labels: mapLabels(rayJob.GetLabels(), ""),
 		},
 		Spec: rayv1.RayJobSpec{
 			ClusterSelector: map[string]string{
@@ -138,7 +134,7 @@ func buildSubmitterPodTemplate(head corev1.PodTemplateSpec) *corev1.PodTemplateS
 	}
 }
 
-func (m Mapper) mapRayCluster(rayCluster *v2pb.RayCluster, cluster *v2pb.Cluster) (runtime.Object, error) {
+func (m Mapper) mapRayCluster(rayCluster *v2pb.RayCluster) (runtime.Object, error) {
 	workerGroupSpecs := getWorkerGroupSpecs(rayCluster.GetName(), rayCluster.GetSpec().Workers)
 	headGroupSpec := getHeadGroupSpec(rayCluster.GetSpec().Head)
 
@@ -149,11 +145,6 @@ func (m Mapper) mapRayCluster(rayCluster *v2pb.RayCluster, cluster *v2pb.Cluster
 		}
 	}
 
-	queueName, err := m.kueueQueueName(rayCluster.GetLabels(), rayCluster.GetNamespace(), cluster)
-	if err != nil {
-		return nil, err
-	}
-
 	rayV1Cluster := &rayv1.RayCluster{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       RayClusterKind,
@@ -162,7 +153,6 @@ func (m Mapper) mapRayCluster(rayCluster *v2pb.RayCluster, cluster *v2pb.Cluster
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      rayCluster.Name,
 			Namespace: RayLocalNamespace,
-			Labels:    mapLabels(rayCluster.GetLabels(), queueName),
 		},
 		Spec: rayv1.RayClusterSpec{
 			HeadGroupSpec:    headGroupSpec,

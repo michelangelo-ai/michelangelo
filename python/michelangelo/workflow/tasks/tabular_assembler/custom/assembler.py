@@ -25,6 +25,9 @@ from michelangelo.lib.shared.utils.model_metadata import (
 from michelangelo.workflow.tasks.tabular_assembler._private.data.fuse import (
     fuse_sample_data,
 )
+from michelangelo.workflow.tasks.tabular_assembler._private.file import (
+    ensure_model_directory,
+)
 from michelangelo.workflow.tasks.tabular_assembler._private.model_class.resolve import (
     resolve_model_class,
 )
@@ -55,7 +58,8 @@ def custom_assembler(
     ``CustomTritonPackager`` only understands locally-resident model
     artifacts, so ``raw_model.path`` (and, in the native-transform case,
     ``native_transform_model.path``) are downloaded via ``storage_backend``
-    to a local temporary directory before packaging; the produced packages
+    to a local temporary directory before packaging (a raw model saved as a
+    single file is wrapped into a directory first); the produced packages
     are then uploaded back through ``storage_backend`` and their returned
     URIs become the resulting ``ModelArtifact.path`` values.
 
@@ -135,7 +139,11 @@ def custom_assembler(
         else:
             local_model_dir = os.path.join(temp_dir, "raw_model")
             storage_backend.download(raw_model.path, local_model_dir)
-            package_model_path = local_model_dir
+            # A trainer that saves a single checkpoint file leaves a file here.
+            package_model_path = ensure_model_directory(
+                local_model_dir,
+                file_name=os.path.basename(raw_model.path.rstrip("/")),
+            )
             model_schema = raw_model.metadata.schema
             sample_data = raw_model.metadata.sample_data
 

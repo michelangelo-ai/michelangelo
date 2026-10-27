@@ -94,7 +94,7 @@ rules:
     resources:
       - projects
       - models
-      - modelfamilies
+      - modelfamilys
       - pipelines
       - pipelineruns
       - revisions
@@ -105,12 +105,14 @@ rules:
       - sparkjobs
       - triggerruns
       - deployments
+      - cachedoutputs
+      - evaluationreports
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   - apiGroups: ["michelangelo.api"]
     resources:
       - projects/status
       - models/status
-      - modelfamilies/status
+      - modelfamilys/status
       - pipelines/status
       - pipelineruns/status
       - revisions/status
@@ -121,6 +123,8 @@ rules:
       - sparkjobs/status
       - triggerruns/status
       - deployments/status
+      - cachedoutputs/status
+      - evaluationreports/status
     verbs: ["get", "update", "patch"]
   - apiGroups: ["ray.io"]
     resources: ["rayclusters", "rayjobs"]

@@ -528,6 +528,7 @@ The `ma sandbox` commands manage a local K3d development environment. For prereq
 |---------|-------------|
 | `ma sandbox create` | Create a K3d cluster with all Michelangelo AI services |
 | `ma sandbox create --workflow temporal` | Create with Temporal instead of Cadence |
+| `ma sandbox create --object-store seaweedfs` | Create with SeaweedFS instead of MinIO |
 | `ma sandbox create --exclude ui` | Create without specific services |
 | `ma sandbox create --create-compute-cluster` | Create with a Ray compute cluster |
 | `ma sandbox create --compute-cluster-name <name>` | Name the compute cluster created by `--create-compute-cluster` (default: `michelangelo-compute-0`) |
@@ -542,7 +543,6 @@ The `ma sandbox` commands manage a local K3d development environment. For prereq
 | `ma sandbox demo pipeline` | Create demo pipeline resources |
 | `ma sandbox demo inference` | Create demo inference server resources |
 | `ma sandbox demo inference-multicluster` | Create a multi-cluster inference server demo |
-| `ma sandbox demo kueue [--compute-cluster-name <name>]` | Install Kueue on a registered compute cluster, create the demo ClusterQueue and LocalQueue, and set the cluster's `scheduler_type`. Defaults to the sandbox cluster itself (`michelangelo-sandbox`). See the [Kueue scheduler backend guide](../../operator-guides/jobs/kueue-scheduler-backend.md). |
 | `ma sandbox snapshot create` | Save all Michelangelo AI resources (CRDs) in the cluster to disk |
 | `ma sandbox snapshot restore <timestamp>` | Restore a snapshot into the cluster. `<timestamp>` is required: the bare timestamp (e.g. `20260807-170000`) or the full path printed by `snapshot create`. |
 

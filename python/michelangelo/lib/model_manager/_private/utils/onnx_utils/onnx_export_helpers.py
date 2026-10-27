@@ -209,10 +209,28 @@ def onnx_export_input_preserver(
     Used to keep every ONNX graph input alive even when the traced module
     doesn't otherwise use all of them (the exporter can otherwise prune an
     unused input from the graph).
+
+    Floating-point inputs are passed through :func:`torch.nan_to_num` before
+    the multiply. Without it, ``NaN * 0`` is NaN and the sum spans the whole
+    batch, so a NaN in any input row would turn the output this term is added
+    to into NaN for every row. Non-floating-point tensors are used as-is.
+    Complex-valued inputs are not sanitized, so NaN or infinity in a complex
+    input still yields NaN.
+
+    Args:
+        input_tensors: The tensors that must remain live graph inputs.
+        ref_dtype: Dtype of the returned scalar.
+        ref_device: Device of the returned scalar.
+
+    Returns:
+        A scalar tensor of ``ref_dtype`` on ``ref_device``. It is always zero
+        for real-valued inputs, including when an input contains NaN or
+        infinity.
     """
     acc = torch.zeros((), dtype=ref_dtype, device=ref_device)
     for tensor in input_tensors:
-        acc = acc + (tensor * 0).sum().to(dtype=ref_dtype)
+        finite = torch.nan_to_num(tensor) if tensor.is_floating_point() else tensor
+        acc = acc + (finite * 0).sum().to(dtype=ref_dtype)
     return acc
 
 

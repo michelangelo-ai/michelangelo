@@ -97,7 +97,15 @@ message Trigger {
   // batch policy used by the trigger to kick off pipeline_runs
   BatchPolicy batch_policy = 3;
 
-  // defines an upper bound on how many pipelines may run in parallel
+  // Upper bound on how many pipeline runs a single execution of this trigger starts in
+  // parallel across parameters_map. Unset or 0 selects batch_policy batching instead,
+  // which starts runs sequentially.
+  //
+  // Scoped to one execution, not to the trigger as a whole: two overlapping executions
+  // could each start up to this many. They are not expected to overlap in practice -
+  // the schedule skips an occurrence whose predecessor is still running, and a catch-up
+  // backfill (see TriggerRunSpec.catchup) replays missed occurrences one at a time,
+  // in chronological order, so peak parallelism stays at this bound.
   int32 max_concurrency = 5;
 
   // proxy_user is the service account identity for pipeline runs spawned by this
@@ -141,13 +149,19 @@ message TriggerRunSpec {
   // When set to true, this will terminate the trigger run and any associated pipeline runs.
   bool kill = 5 [deprecated = true];
 
-  // Start time for backfilling pipeline runs. When specified, triggers pipeline runs
-  // starting from this timestamp. Used in conjunction with end_timestamp to define
-  // a time window for backfilling multiple runs.
+  // Start of the schedule's active window. Maps to the workflow engine's StartAt.
+  // Occurrences before this time are never fired unless catchup is true, in which
+  // case the missed occurrences between start_timestamp and now are replayed once.
+  // A start in the future leaves the schedule idle until then.
+  //
+  // Compatibility: when both start_timestamp and end_timestamp are set and catchup
+  // is false, the TriggerRun keeps today's behavior and runs as a one-shot backfill
+  // over [start_timestamp, end_timestamp]. New specs should set catchup explicitly.
   google.protobuf.Timestamp start_timestamp = 6;
 
-  // When specified along with start_timestamp, allows backfilling pipeline runs
-  // for a time window between start_timestamp and end_timestamp
+  // End of the schedule's active window, half-open: occurrences at or after this
+  // time are not fired. Maps to the workflow engine's EndAt. Must be after
+  // start_timestamp when both are set.
   google.protobuf.Timestamp end_timestamp = 7;
 
   // Source trigger name from the pipeline manifest's triggers map that this TriggerRun executes.
@@ -181,6 +195,24 @@ message TriggerRunSpec {
   // - RESUME: Resume paused recurring triggers to allow new executions
   // Note: PAUSE and RESUME are only applicable to cron and interval triggers.
   TriggerRunAction action = 11;
+
+  // When true and start_timestamp is in the past, every occurrence in
+  // [start_timestamp, min(now, end_timestamp)) is fired once, in chronological
+  // order, via the workflow engine's schedule backfill, and the schedule then
+  // keeps firing on its normal cadence until end_timestamp (if set). Each replayed
+  // run carries the logical timestamp of the occurrence it stands for, not the time
+  // it actually executes. Applies to cron and interval triggers alike; rejected on
+  // BatchRerun.
+  //
+  // Catch-up is bounded by occurrence count, not by wall-clock age: a window that
+  // expands to more occurrences than the controller's limit is rejected rather than
+  // silently clamped, so a mistyped year on a frequent cron cannot enqueue thousands
+  // of runs. Ignored when the trigger is created paused, since a paused schedule
+  // takes no actions.
+  //
+  // Requires an engine with schedule backfill (Temporal Schedules, Cadence
+  // Schedules). Rejected on the legacy Cadence cron provider.
+  bool catchup = 12;
 }
 
 // BatchRerun defines configuration for rerunning multiple failed pipeline runs.

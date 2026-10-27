@@ -49,6 +49,15 @@ func (c *CadenceClient) StartWorkflow(ctx context.Context, options clientInterfa
 	if options.StartPaused {
 		return nil, fmt.Errorf("starting a paused workflow is not supported by Cadence")
 	}
+	// The legacy Cadence cron workflow has neither a schedule window nor a schedule
+	// backfill. Fail loudly rather than starting a trigger that silently ignores its
+	// spec; Cadence Schedules (go.uber.org/cadence >= v1.4.0) will carry both.
+	if !options.CatchUpFrom.IsZero() {
+		return nil, fmt.Errorf("catch-up (spec.catchup) is not supported by the Cadence cron provider")
+	}
+	if !options.ScheduleStartAt.IsZero() || !options.ScheduleEndAt.IsZero() {
+		return nil, fmt.Errorf("a schedule window (spec.start_timestamp / spec.end_timestamp) is not supported by the Cadence cron provider")
+	}
 
 	cadenceOptions := cadenceClient.StartWorkflowOptions{
 		ID:                              options.ID,

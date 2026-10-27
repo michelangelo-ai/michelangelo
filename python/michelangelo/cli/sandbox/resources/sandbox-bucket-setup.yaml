@@ -16,7 +16,7 @@ spec:
             - "/scripts/bucket-setup.sh"
           env:
             - name: "AWS_ENDPOINT_URL"
-              value: "http://minio:9091"
+              value: "http://objectstore:9091"
             - name: "BUCKET_NAMES"
               value: "logs,default,deploy-models,michelangelo"
             - name: "PUBLIC"
@@ -136,7 +136,7 @@ data:
 
     # Validate required environment variables
     readonly REQUIRED_ENV_VARS=(
-        # Example: "http://minio:9000"
+        # Example: "http://objectstore:9000"
         "AWS_ENDPOINT_URL"
 
         # Example: "logs,default"

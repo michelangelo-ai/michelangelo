@@ -1,6 +1,6 @@
 ---
 sidebar_label: image_spec
-title: michelangelo.uniflow.core.image_spec
+title: uniflow.core.image_spec
 ---
 
 Container image specifications for Uniflow tasks.
@@ -11,8 +11,8 @@ their runtime environment independently from the default workflow container.
 
 **Example**:
 
-Specifying a custom container image:
-
+  Specifying a custom container image:
+  
 ```python
 from michelangelo.uniflow.core.image_spec import ImageSpec
 from michelangelo.uniflow.core.decorator import task
@@ -59,3 +59,4 @@ The container image name/tag to use for task execution
 #### recipe
 
 Build recipe/target for reproducible image builds
+

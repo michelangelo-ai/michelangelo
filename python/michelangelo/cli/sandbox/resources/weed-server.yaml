@@ -1,0 +1,59 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    app: seaweedfs
+  name: seaweedfs
+spec:
+  containers:
+    - name: seaweedfs
+      image: chrislusf/seaweedfs:4.47
+      imagePullPolicy: IfNotPresent
+      command:
+        - /bin/sh
+        - -c
+      args:
+        - >
+          weed server -dir=/data
+          -master.port=9333 -volume.port=8080 -filer.port=8888
+          -s3 -s3.port=9091
+      # With no -s3.config, SeaweedFS creates an admin identity from these env
+      # vars. They come from object-storage-credentials, the Secret every client
+      # uses, so server and clients can never diverge.
+      env:
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: "object-storage-credentials"
+              key: "AWS_ACCESS_KEY_ID"
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: "object-storage-credentials"
+              key: "AWS_SECRET_ACCESS_KEY"
+      volumeMounts:
+        - mountPath: /data
+          name: data-volume
+  volumes:
+    - name: data-volume
+      hostPath:
+        path: /shared/objectstore-data
+        type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: objectstore
+  labels:
+    app: objectstore
+spec:
+  type: NodePort
+  ports:
+    - port: 9090
+      nodePort: 30008
+      name: "9090"
+    - port: 9091
+      nodePort: 30007
+      name: "9091"
+  selector:
+    app: seaweedfs

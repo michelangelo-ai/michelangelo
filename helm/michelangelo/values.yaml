@@ -47,13 +47,17 @@ metadataStorage:
 # -----------------------------------------------------------------------------
 objectStorage:
   # REQUIRED. S3-compatible endpoint.
-  # Examples: "s3.amazonaws.com", "storage.googleapis.com", "minio:9000"
+  # Examples: "s3.amazonaws.com", "storage.googleapis.com", "minio:9000",
+  # or a self-hosted SeaweedFS S3 gateway (default port 8333), e.g.
+  # "<seaweedfs-s3-service>.<namespace>.svc.cluster.local:8333" (the Service
+  # name comes from your SeaweedFS release; check `kubectl get svc`).
   endpoint: ""
 
-  # TLS. Set false only for in-cluster MinIO without TLS termination.
+  # TLS. Set false only for an in-cluster object store without TLS termination
+  # (e.g. a self-hosted MinIO or SeaweedFS instance).
   secure: true
 
-  # AWS region. Used by S3, GCS HMAC, and MinIO. The chart sets AWS_REGION
+  # AWS region. Used by S3, GCS HMAC, MinIO, and SeaweedFS. The chart sets AWS_REGION
   # in every service that talks to object storage.
   region: us-east-1
 
@@ -454,26 +458,6 @@ controllermgr:
   # {pathPrefix}/cluster-history/raycluster/{namespace}/{cluster}/{session}/{node}/
   # Ref: https://github.com/ray-project/kuberay/tree/master/historyserver
   jobs:
-    # Job admission backend. Mirrors the Go config path: jobs.scheduler
-    scheduler:
-      # "default": the in-process scheduler assigns and dispatches directly.
-      # "kueue": jobs headed for compute clusters marked with
-      # scheduler_type: SCHEDULER_TYPE_KUEUE are validated against their
-      # project's Kueue LocalQueue before dispatch, and the dispatched
-      # RayCluster carries the kueue.x-k8s.io/queue-name label so Kueue on the
-      # compute cluster gang-admits it. Clusters without the marker behave
-      # exactly as "default".
-      backend: default
-      kueue:
-        # LocalQueue naming convention; "{project}" is replaced with the
-        # job's project. Empty uses the built-in default "ma-{project}".
-        localQueueTemplate: ""
-        # kueue.x-k8s.io API version on the compute clusters, for the
-        # LocalQueue existence check. Empty uses the built-in default
-        # "v1beta2" (Kueue v0.15+); set "v1beta1" for older Kueue releases.
-        apiVersion: ""
-        # Per-project LocalQueue overrides, e.g. {team-a: shared-queue}.
-        localQueueOverrides: {}
     k8sengine:
       mapper:
         logPersistence:
@@ -498,7 +482,7 @@ controllermgr:
           # Secret (michelangelo.objectStorageSecretName) when empty.
           credentialsSecret: ""
 
-          # Set S3DISABLE_SSL=true on the collector. Enable for in-cluster MinIO; disable for OCI/S3.
+          # Set S3DISABLE_SSL=true on the collector. Enable for an in-cluster object store (MinIO, SeaweedFS); disable for OCI/S3.
           s3DisableSSL: true
 
           # RAY_DASHBOARD_AGGREGATOR_AGENT_EXPOSABLE_EVENT_TYPES on every Ray
@@ -514,8 +498,11 @@ controllermgr:
           # Empty string disables log_url emission.
           # Example (History Server deep link, live or replayed dashboard; see values-k3d.yaml):
           #   "http://localhost:3001/enter_cluster/{{.RayLocalNamespace}}/raycluster/{{.ClusterName}}/#/overview"
-          # Example (object-storage console, raw files only):
+          # Example (MinIO console, raw files only):
           #   "http://localhost:9090/browser/{{.Bucket}}/{{.PathPrefix}}/cluster-history/raycluster/{{.RayLocalNamespace}}/{{.ClusterName}}/"
+          # SeaweedFS has no equivalent bucket-browser URL in the sandbox (its
+          # all-in-one mode ships no UI); use the History Server link above, or
+          # your SeaweedFS filer UI URL if you run one.
           logURLFormat: ""
 
   resources: {}

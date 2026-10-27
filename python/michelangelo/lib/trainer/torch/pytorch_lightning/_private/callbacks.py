@@ -2,14 +2,26 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import shutil
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import ray
 import ray.train.lightning
 from ray.train import Checkpoint
+
+try:
+    # Native async checkpoint upload; only present in newer Ray releases.
+    from ray.train import CheckpointUploadMode
+
+    _NATIVE_ASYNC_UPLOAD_AVAILABLE = True
+except ImportError:  # Older Ray: no native async upload.
+    CheckpointUploadMode = None  # type: ignore[assignment,misc]
+    _NATIVE_ASYNC_UPLOAD_AVAILABLE = False
+
+_logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from michelangelo.lib.trainer.torch.pytorch_lightning.schema import (
@@ -23,15 +35,49 @@ class RayTrainReportCallback(ray.train.lightning.RayTrainReportCallback):
     Follows the upstream :class:`ray.train.lightning.RayTrainReportCallback`
     implementation but forces only rank zero to report the checkpoint.
 
+    When ``upload_async`` is enabled and the installed Ray supports it, the
+    epoch-end checkpoint is reported with
+    ``ray.train.CheckpointUploadMode.ASYNC``: Ray Train uploads it on a
+    background thread to the run's storage location, deletes the local copy
+    afterwards, and flushes pending uploads before the training session ends.
+    The upload therefore needs neither a cross-worker barrier nor a local
+    cleanup here, and upload failures are raised by Ray Train instead of being
+    swallowed. Otherwise the checkpoint is uploaded synchronously.
+
     Reference:
         https://docs.ray.io/en/latest/_modules/ray/train/lightning/_lightning_utils.html#RayTrainReportCallback.
     """
 
-    def __init__(self, training_observer: TrainingObserver | None = None) -> None:
+    # Class-level default so subclasses and test doubles that skip ``__init__``
+    # behave synchronously.
+    _use_native_async: bool = False
+
+    def __init__(
+        self,
+        training_observer: TrainingObserver | None = None,
+        upload_async: bool = False,
+    ) -> None:
+        """Initialize the callback.
+
+        Args:
+            training_observer: Optional observer notified on checkpoint saves.
+            upload_async: Upload the epoch-end checkpoint in the background
+                using Ray Train's native async upload. If the installed Ray does
+                not provide ``ray.train.CheckpointUploadMode``, a warning is
+                logged and the synchronous default is used.
+        """
         super().__init__()
         self.world_rank = ray.train.get_context().get_world_rank()
         self.local_rank = ray.train.get_context().get_local_rank()
         self._training_observer = training_observer
+        self._use_native_async = bool(upload_async) and _NATIVE_ASYNC_UPLOAD_AVAILABLE
+        if upload_async and not _NATIVE_ASYNC_UPLOAD_AVAILABLE:
+            _logger.warning(
+                "upload_async=True but this Ray version (%s) has no "
+                "ray.train.CheckpointUploadMode; falling back to synchronous "
+                "checkpoint upload.",
+                getattr(ray, "__version__", "unknown"),
+            )
 
     def on_train_epoch_end(self, trainer, pl_module) -> None:
         # Creates a checkpoint dir with fixed name
@@ -53,10 +99,19 @@ class RayTrainReportCallback(ray.train.lightning.RayTrainReportCallback):
         # Report to train session
         checkpoint = Checkpoint.from_directory(tmpdir)
 
+        report_kwargs: dict[str, Any] = {}
+        if self._use_native_async:
+            # Ray uploads in the background and removes the local directory
+            # once the upload completes.
+            report_kwargs = {
+                "checkpoint_upload_mode": CheckpointUploadMode.ASYNC,
+                "delete_local_checkpoint_after_upload": True,
+            }
+
         if self.world_rank == 0:
-            ray.train.report(metrics=metrics, checkpoint=checkpoint)
+            ray.train.report(metrics=metrics, checkpoint=checkpoint, **report_kwargs)
         else:
-            ray.train.report(metrics=metrics, checkpoint=None)
+            ray.train.report(metrics=metrics, checkpoint=None, **report_kwargs)
 
         if self._training_observer is not None:
             self._training_observer.on_checkpoint_saved(
@@ -65,6 +120,14 @@ class RayTrainReportCallback(ray.train.lightning.RayTrainReportCallback):
                 metrics=metrics,
                 checkpoint_path=ckpt_path,
             )
+
+        if self._use_native_async:
+            # Ray flushes pending uploads itself and deletes rank 0's local
+            # directory after upload, so no barrier or rmtree is needed there.
+            # Other ranks attach no checkpoint, so drop their (empty) directory.
+            if self.world_rank != 0 and self.local_rank == 0:
+                shutil.rmtree(tmpdir, ignore_errors=True)
+            return
 
         # Add a barrier to ensure all workers finished reporting here
         trainer.strategy.barrier()

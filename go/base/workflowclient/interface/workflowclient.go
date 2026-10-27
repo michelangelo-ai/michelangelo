@@ -2,6 +2,7 @@ package clientinterface
 
 import (
 	"context"
+	"fmt"
 	"time"
 )
 
@@ -13,7 +14,44 @@ type StartWorkflowOptions struct {
 	CronSchedule                    string
 	// StartPaused creates a recurring schedule without allowing its first action to fire.
 	StartPaused bool
+	// ScheduleStartAt is the start of a recurring schedule's active window. Occurrences
+	// before it are never fired by the schedule itself. Zero means active from creation.
+	ScheduleStartAt time.Time
+	// ScheduleEndAt is the end of a recurring schedule's active window. Occurrences at or
+	// after it are not fired. Zero means the schedule has no end.
+	ScheduleEndAt time.Time
+	// CatchUpFrom replays the schedule's missed occurrences from this time up to
+	// min(now, ScheduleEndAt), one action per occurrence, in chronological order. Zero
+	// means no catch-up. Ignored when StartPaused is set, since a paused schedule takes
+	// no actions.
+	CatchUpFrom time.Time
 }
+
+// CatchUpError reports that a recurring schedule was created and is firing forward, but
+// its catch-up backfill did not run.
+//
+// It is deliberately distinct from a start failure. The schedule exists and is live, so a
+// caller that treats this as a failed start would leave a running schedule behind a
+// TriggerRun frozen in a terminal state, with nothing left to reconcile the two. Callers
+// should keep the trigger running and surface the missed catch-up instead.
+//
+// The gap is not recovered automatically. Backfill carries no request ID, so a failure is
+// ambiguous - the server may already have taken the actions - and re-issuing it could
+// replay every occurrence twice, producing duplicate runs for the same period. Closing the
+// gap is left to an operator, who can see the range from the error and decide.
+type CatchUpError struct {
+	ScheduleID string
+	// CatchUpFrom is the start of the window that was not replayed.
+	CatchUpFrom time.Time
+	Err         error
+}
+
+func (e *CatchUpError) Error() string {
+	return fmt.Sprintf("schedule %s is live but catch-up from %s did not run: %v",
+		e.ScheduleID, e.CatchUpFrom.UTC().Format(time.RFC3339), e.Err)
+}
+
+func (e *CatchUpError) Unwrap() error { return e.Err }
 
 type WorkflowExecutionStatus int32
 

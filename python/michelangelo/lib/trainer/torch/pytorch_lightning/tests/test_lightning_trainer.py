@@ -55,6 +55,49 @@ class TestLightningTrainerParam:
         assert param.incremental_training_spec is None
         assert param.initial_weights_path is None
 
+    def test_prefetch_and_upload_async_defaults(self):
+        """New options default to Ray Data's prefetch and synchronous upload."""
+        param = _make_param()
+        assert param.prefetch_batches == 1
+        assert param.upload_async is False
+
+    @pytest.mark.parametrize("value", [-1, True, 1.5, "2", None])
+    def test_invalid_prefetch_batches_rejected(self, value):
+        """``prefetch_batches`` must be an integer >= 0 (bool is rejected)."""
+        with pytest.raises(ValueError, match="prefetch_batches"):
+            _make_param(prefetch_batches=value)
+
+    @pytest.mark.parametrize("value", [0, 1, 8])
+    def test_valid_prefetch_batches_accepted(self, value):
+        """Zero and positive integers are accepted."""
+        assert _make_param(prefetch_batches=value).prefetch_batches == value
+
+    @pytest.mark.parametrize("value", [1, 0, "true", None])
+    def test_invalid_upload_async_rejected(self, value):
+        """``upload_async`` must be a real ``bool``."""
+        with pytest.raises(ValueError, match="upload_async"):
+            _make_param(upload_async=value)
+
+    def test_new_fields_are_last(self):
+        """The new options are the final dataclass fields (positional safety)."""
+        import dataclasses
+
+        names = [f.name for f in dataclasses.fields(LightningTrainerParam)]
+        assert names[-3:] == ["prefetch_batches", "upload_async", "drop_last"]
+
+    def test_prefetch_and_upload_async_reach_loop_config(self):
+        """The new options are forwarded to workers via ``train_loop_config``."""
+        param = _make_param(prefetch_batches=6, upload_async=True)
+        with patch(
+            "michelangelo.lib.trainer.torch.pytorch_lightning."
+            "lightning_trainer.TorchTrainer.__init__",
+            return_value=None,
+        ) as mock_super:
+            LightningTrainer(trainer_param=param)
+        loop_cfg = mock_super.call_args.kwargs["train_loop_config"]
+        assert loop_cfg["prefetch_batches"] == 6
+        assert loop_cfg["upload_async"] is True
+
     def test_training_observer_defaults_to_none(self):
         """``training_observer`` defaults to ``None`` when omitted."""
         param = _make_param()

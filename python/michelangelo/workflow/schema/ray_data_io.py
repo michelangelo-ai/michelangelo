@@ -144,6 +144,13 @@ class BatchIterConfig:
         collate_fn: Dotted import path to a collate function. When set,
             the function is resolved at training time via ``get_module_attr``
             and passed as ``collate_fn`` to ``iter_torch_batches``.
+        prefetch_batches: Number of batches Ray Data fetches, formats and
+            collates ahead of the training step on a background thread pool,
+            overlapping data preparation and host-to-device transfer with
+            compute. Forwarded as ``prefetch_batches`` to
+            ``iter_torch_batches`` for both the training and validation
+            iterators. Must be ``>= 0``; ``0`` disables prefetching. Defaults
+            to ``1``, which is the Ray Data default.
         drop_last: Whether to drop the last incomplete batch of each epoch.
             Forwarded as ``drop_last`` to the training ``iter_torch_batches``
             iterator only; the validation iterator is unaffected. When a
@@ -153,22 +160,35 @@ class BatchIterConfig:
             Defaults to ``False`` (keep the partial batch).
 
     Raises:
-        ConfigurationError: If ``drop_last`` is not a bool.
+        ConfigurationError: If ``prefetch_batches`` is not an integer or is
+            negative, or if ``drop_last`` is not a bool.
 
     Example:
-        >>> BatchIterConfig(  # doctest: +NORMALIZE_WHITESPACE
-        ...     batch_size=64, drop_last=True)
-        BatchIterConfig(batch_size=64, num_shuffle_batches=0, collate_fn=None,
-                        drop_last=True)
+        >>> config = BatchIterConfig(batch_size=64, prefetch_batches=4)
+        >>> config.prefetch_batches
+        4
+        >>> BatchIterConfig(batch_size=64, drop_last=True).drop_last
+        True
     """
 
     batch_size: int
     num_shuffle_batches: int = 0
     collate_fn: str | None = None
+    # Appended last so positional construction is unaffected.
+    prefetch_batches: int = 1
     drop_last: bool = False
 
     def __post_init__(self) -> None:
-        """Validate that ``drop_last`` is a bool."""
+        """Validate ``prefetch_batches`` (int >= 0) and ``drop_last`` (bool)."""
+        if (
+            isinstance(self.prefetch_batches, bool)
+            or not isinstance(self.prefetch_batches, int)
+            or self.prefetch_batches < 0
+        ):
+            raise ConfigurationError(
+                f"prefetch_batches must be an integer >= 0, got "
+                f"{self.prefetch_batches!r}. Use 0 to disable prefetching."
+            )
         if not isinstance(self.drop_last, bool):
             raise ConfigurationError(
                 f"BatchIterConfig.drop_last must be a bool, got {self.drop_last!r}."

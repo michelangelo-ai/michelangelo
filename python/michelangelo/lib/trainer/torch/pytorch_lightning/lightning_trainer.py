@@ -95,10 +95,22 @@ class LightningTrainerParam:
         batch_size: Per-worker training batch size.
         num_shuffle_batches: Number of batches kept in the Ray Data local shuffle
             buffer. ``0`` disables shuffling.
+        prefetch_batches: Number of batches Ray Data fetches, formats and
+            collates ahead of the training step in ``iter_torch_batches``
+            (applied to both the training and validation iterators). ``0``
+            disables prefetching; the default ``1`` is the Ray Data default.
+        upload_async: When ``True``, the data-parallel epoch-end checkpoint is
+            uploaded in the background by Ray Train rather than blocking
+            training. Requires a Ray version that provides
+            ``ray.train.CheckpointUploadMode``; on older Ray a warning is
+            logged and the synchronous default is used. Ignored by the
+            per-node (model-parallel) reporting callback. Defaults to ``False``.
         num_epochs: Deprecated; prefer ``lightning_trainer_kwargs={"max_epochs": N}``.
         data_collate_fn: Optional custom collate function passed to
             ``Dataset.iter_torch_batches``; defaults to Ray Data's column-tensor
-            output.
+            output. See ``pinned_literal_eval_data_collate_function`` in
+            ``michelangelo.lib.trainer.torch.data_collate_functions`` for a variant
+            that returns tensors in pinned memory.
         lightning_trainer_kwargs: Extra keyword arguments forwarded to
             ``pytorch_lightning.Trainer(...)``. ``limit_train_batches`` and
             ``limit_val_batches`` are also applied to the matching Ray Dataset, and
@@ -154,6 +166,8 @@ class LightningTrainerParam:
             ``False``.
 
     Raises:
+        ValueError: At construction, if ``prefetch_batches`` is not an integer
+            ``>= 0`` or ``upload_async`` is not a ``bool``.
         UserInputError: At construction, if ``train_data`` or ``val_data`` is
             ``None`` without a file-backed ``custom_dataloader``.
     """
@@ -177,10 +191,25 @@ class LightningTrainerParam:
     experiment_store: ExperimentStore | None = None
     profiler_sink: Callable | None = None
     custom_dataloader: CustomDataloaderParam | None = None
-    drop_last: bool = False  # Appended last so positional construction is unaffected.
+    # prefetch_batches, upload_async and drop_last are appended last so
+    # positional construction is unaffected.
+    prefetch_batches: int = 1  # Ray Data default; 0 disables prefetching.
+    upload_async: bool = False
+    drop_last: bool = False
 
     def __post_init__(self):
-        """Apply default ``num_epochs``, warn on deprecated fields, validate data."""
+        """Validate new options, apply default ``num_epochs``, warn on deprecated fields."""
+        if (
+            isinstance(self.prefetch_batches, bool)
+            or not isinstance(self.prefetch_batches, int)
+            or self.prefetch_batches < 0
+        ):
+            raise ValueError(
+                f"prefetch_batches must be an integer >= 0, got "
+                f"{self.prefetch_batches!r}. Use 0 to disable prefetching."
+            )
+        if not isinstance(self.upload_async, bool):
+            raise ValueError(f"upload_async must be a bool, got {self.upload_async!r}.")
         file_backed = (
             self.custom_dataloader is not None and self.custom_dataloader.file_backed
         )

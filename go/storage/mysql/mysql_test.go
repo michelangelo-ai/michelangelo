@@ -312,6 +312,42 @@ func TestBuildLabelCriterionSQL(t *testing.T) {
 	require.Equal(t, []interface{}{"env", "prod"}, params)
 }
 
+func TestBuildLabelCriterionSQL_NullOperators(t *testing.T) {
+	cases := []struct {
+		name       string
+		op         apipb.CriterionOperator
+		wantSQL    string
+		wantParams []interface{}
+	}{
+		{
+			name:       "is_null matches objects without the label",
+			op:         apipb.CRITERION_OPERATOR_IS_NULL,
+			wantSQL:    " `uid` NOT IN (SELECT `obj_uid` FROM pipeline_run_labels WHERE `key`= ? )",
+			wantParams: []interface{}{"pipelinerun.michelangelo/triggered-by"},
+		},
+		{
+			name:       "is_not_null matches objects with the label",
+			op:         apipb.CRITERION_OPERATOR_IS_NOT_NULL,
+			wantSQL:    " `uid` in (SELECT `obj_uid` FROM pipeline_run_labels WHERE `key`= ? AND `value` IS NOT NULL  )",
+			wantParams: []interface{}{"pipelinerun.michelangelo/triggered-by"},
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			op := &apipb.CriterionOperation{
+				Criterion: []*apipb.Criterion{{
+					FieldName: "pipeline_run.metadata.labels.pipelinerun.michelangelo/triggered-by",
+					Operator:  c.op,
+				}},
+			}
+			queryStrs, params, err := buildLabelCriterionSQL(op, "pipeline_run")
+			require.NoError(t, err)
+			require.Equal(t, []string{c.wantSQL}, queryStrs)
+			require.Equal(t, c.wantParams, params)
+		})
+	}
+}
+
 func TestBuildLabelCriterionSQL_SkipsNonLabel(t *testing.T) {
 	op := &apipb.CriterionOperation{
 		Criterion: []*apipb.Criterion{

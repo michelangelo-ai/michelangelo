@@ -322,6 +322,28 @@ class TestCheckpointConfig(TestCase):
         """save_every_n_steps=None (default) does not raise."""
         CheckpointConfig(save_every_n_steps=None)
 
+    def test_upload_async_defaults_false(self):
+        """upload_async is opt-in and defaults to False."""
+        self.assertFalse(CheckpointConfig().upload_async)
+
+    def test_upload_async_true_stored(self):
+        """upload_async=True is stored."""
+        self.assertTrue(CheckpointConfig(upload_async=True).upload_async)
+
+    def test_upload_async_non_bool_raises(self):
+        """A non-bool upload_async raises ConfigurationError."""
+        for bad in ("yes", 1, None):
+            with self.subTest(value=bad), self.assertRaises(ConfigurationError):
+                CheckpointConfig(upload_async=bad)
+
+    def test_codec_roundtrip(self):
+        """CheckpointConfig round-trips through the UniFlow DataclassCodec."""
+        from michelangelo.uniflow.core.codec import DataclassCodec
+
+        codec = DataclassCodec()
+        cfg = CheckpointConfig(num_to_keep=2, upload_async=True)
+        self.assertEqual(codec.decode(codec.encode(cfg)), cfg)
+
 
 # ---------------------------------------------------------------------------
 # LightningTrainerKwargs

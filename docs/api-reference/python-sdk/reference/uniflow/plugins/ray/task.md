@@ -1,6 +1,6 @@
 ---
 sidebar_label: task
-title: michelangelo.uniflow.plugins.ray.task
+title: uniflow.plugins.ray.task
 ---
 
 Ray task configuration and execution for Uniflow workflows.
@@ -46,29 +46,6 @@ while worker nodes perform distributed computation.
 - `breakpoint` - If True, enables breakpoint debugging for the task.
 - `runtime_env` - Runtime environment configuration dict for Ray
   (packages, env vars, etc.).
-
-All fields default to `None` (unset); the Starlark orchestration function
-supplies defaults for anything you don't specify.
-
-**Example**:
-
-```python
-from michelangelo.uniflow.core.decorator import task
-from michelangelo.uniflow.plugins.ray.task import RayTask
-
-@task(
-    config=RayTask(
-        head_cpu=2,
-        head_memory="4Gi",
-        worker_cpu=4,
-        worker_memory="8Gi",
-        worker_instances=2,
-    )
-)
-def process_batch(data_path: str) -> dict:
-    # Runs inside a Ray cluster sized per the config above
-    return {"status": "complete"}
-```
 
 #### get\_binding
 
@@ -118,3 +95,4 @@ def post_run()
 Shut down the Ray cluster after task execution.
 
 Ensures proper cleanup of Ray resources by shutting down the Ray runtime.
+

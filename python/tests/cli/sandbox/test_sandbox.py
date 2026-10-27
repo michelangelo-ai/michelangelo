@@ -46,6 +46,7 @@ class CreateFunctionTest(TestCase):
         # Setup namespace with create_compute_cluster=True
         ns = argparse.Namespace(
             workflow="cadence",
+            object_store="minio",
             exclude=[],
             include_experimental=[],
             create_compute_cluster=True,
@@ -106,6 +107,7 @@ class CreateFunctionTest(TestCase):
         # Setup namespace with create_compute_cluster=False
         ns = argparse.Namespace(
             workflow="cadence",
+            object_store="minio",
             exclude=[],
             include_experimental=[],
             create_compute_cluster=False,
@@ -167,6 +169,7 @@ class CreateFunctionTest(TestCase):
         """With --exclude ray, the History Server images are still imported."""
         ns = argparse.Namespace(
             workflow="cadence",
+            object_store="minio",
             exclude=["ray"],
             include_experimental=[],
             create_compute_cluster=False,
@@ -498,6 +501,75 @@ class ArgumentParsingTest(TestCase):
         ns = self._parse(["create"])
         self.assertEqual(ns.helm_set, [])
 
+    def test_create_object_store_defaults_to_minio(self):
+        """`ma sandbox create` without --object-store should default to minio."""
+        ns = self._parse(["create"])
+        self.assertEqual(ns.object_store, "minio")
+
+    def test_sync_object_store_defaults_to_minio(self):
+        """`ma sandbox sync` without --object-store should default to minio."""
+        ns = self._parse(["sync"])
+        self.assertEqual(ns.object_store, "minio")
+
+    def test_create_accepts_object_store_seaweedfs(self):
+        """`ma sandbox create --object-store seaweedfs` parses through."""
+        ns = self._parse(["create", "--object-store", "seaweedfs"])
+        self.assertEqual(ns.object_store, "seaweedfs")
+
+    def test_create_rejects_unknown_object_store(self):
+        """An unsupported --object-store value is rejected by argparse."""
+        with self.assertRaises(SystemExit):
+            self._parse(["create", "--object-store", "ceph"])
+
+
+class DeployServicesObjectStoreTest(TestCase):
+    """Tests for `_deploy_services`'s object-store resource selection."""
+
+    def _run_deploy_services(self, object_store):
+        ns = argparse.Namespace(
+            workflow="cadence",
+            object_store=object_store,
+            exclude=[],
+            include_experimental=[],
+            create_compute_cluster=False,
+            compute_cluster_name="test-compute-cluster",
+        )
+        with (
+            patch("michelangelo.cli.sandbox.sandbox._kube_apply") as mock_kube_apply,
+            patch("michelangelo.cli.sandbox.sandbox._create_bucket_setup"),
+            patch("michelangelo.cli.sandbox.sandbox._import_log_persistence_images"),
+            patch("michelangelo.cli.sandbox.sandbox._ensure_credentials_secret"),
+            patch("michelangelo.cli.sandbox.sandbox._sync_config_from_secret"),
+            patch("michelangelo.cli.sandbox.sandbox._assert_command"),
+            patch(
+                "michelangelo.cli.sandbox.sandbox.subprocess.check_output",
+                return_value=b"",
+            ),
+            patch("michelangelo.cli.sandbox.sandbox._create_kuberay_operator"),
+            patch("michelangelo.cli.sandbox.sandbox._create_spark_operator"),
+            patch("michelangelo.cli.sandbox.sandbox._kube_wait"),
+            patch("michelangelo.cli.sandbox.sandbox._deploy_app_services"),
+            patch("michelangelo.cli.sandbox.sandbox._create_cadence_domain"),
+            patch("michelangelo.cli.sandbox.sandbox._create_compute_cluster_crd"),
+            patch("michelangelo.cli.sandbox.sandbox._apply_compute_cluster_rbac"),
+            patch("michelangelo.cli.sandbox.sandbox._create_compute_cluster_secrets"),
+        ):
+            sandbox._deploy_services(ns)
+        applied = {call.args[0].name for call in mock_kube_apply.call_args_list}
+        return applied
+
+    def test_default_object_store_applies_minio_yaml(self):
+        """object_store="minio" (default) applies minio.yaml only."""
+        applied = self._run_deploy_services("minio")
+        self.assertIn("minio.yaml", applied)
+        self.assertNotIn("weed-server.yaml", applied)
+
+    def test_seaweedfs_object_store_applies_weed_server_yaml(self):
+        """object_store="seaweedfs" applies weed-server.yaml only."""
+        applied = self._run_deploy_services("seaweedfs")
+        self.assertIn("weed-server.yaml", applied)
+        self.assertNotIn("minio.yaml", applied)
+
 
 class K3dImageImportTest(TestCase):
     """Tests for _k3d_import_image."""
@@ -611,6 +683,25 @@ class TestEnsurePodRunning:
         _, apply = self._run("Running|ghcr.io/old/mysql:arm64-only\n")
 
         apply.assert_called_once()
+
+
+class TestEnsureObjectStoreRunning:
+    """_ensure_object_store_running checks only the selected backend's pod."""
+
+    def _run(self, object_store):
+        from michelangelo.cli.sandbox.sandbox import _ensure_object_store_running
+
+        with patch("michelangelo.cli.sandbox.sandbox._ensure_pod_running") as ensure:
+            _ensure_object_store_running(argparse.Namespace(object_store=object_store))
+        return ensure
+
+    def test_minio_backend_checks_minio_pod(self):
+        """The default backend checks the minio pod from minio.yaml."""
+        self._run("minio").assert_called_once_with("minio", "minio.yaml")
+
+    def test_seaweedfs_backend_checks_seaweedfs_pod(self):
+        """SeaweedFS must not recreate a minio pod, which would steal the Service."""
+        self._run("seaweedfs").assert_called_once_with("seaweedfs", "weed-server.yaml")
 
 
 class TestManifestPodImage:

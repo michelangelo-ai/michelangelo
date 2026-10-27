@@ -130,7 +130,12 @@ jobs:
           GOARCH: ${{ matrix.arch }}
           CGO_ENABLED: '0'
           BIN: ${{ github.workspace }}/${{ matrix.service }}-${{ matrix.os }}-${{ matrix.arch }}
-        run: go build -o "$BIN" ./cmd/${{ matrix.service }}
+        # kubernetes_protomessage_one_more_release: k8s.io/api v0.35.x gates
+        # gogo-protobuf ProtoMessage() on core types behind this build tag.
+        # Without it, binaries that embed k8s core types in proto-generated
+        # CRD types hit runtime JSON marshaling failures.  Temporary bridge
+        # until k8s 1.36 removes the tag.
+        run: go build -tags kubernetes_protomessage_one_more_release -o "$BIN" ./cmd/${{ matrix.service }}
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@v7
