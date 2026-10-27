@@ -127,10 +127,14 @@ def generate_kill(
         # fetched resource and the request field are distinct Python classes
         # for the same proto.
         resource_name = _self.name
-        current_source = getattr(current_resource, resource_name, None)
-        if current_source is None or not current_source.HasField("spec"):
+        current_source = getattr(current_resource, resource_name)
+        if not current_source.HasField("spec"):
             _LOG.error("Missing required spec field in the resource structure")
-            raise ValueError(f"Cannot set kill flag on {resource_name}")
+            raise ValueError(
+                f"Cannot set kill flag on {resource_name} {_namespace}/{_name}: "
+                "the fetched resource has no spec. Inspect it with "
+                f"`ma {resource_name} get --namespace={_namespace} --name={_name}`."
+            )
 
         request_input = input_class()
         target = getattr(request_input, resource_name)
@@ -168,13 +172,15 @@ def generate_kill(
 
         # Read the flag off the proto: rendering the response to a dict fails
         # on an Any the client cannot resolve, after the kill was applied.
-        resource_name = _self.name
         if getattr(response, resource_name).spec.kill:
             _LOG.info("Kill operation successfully set spec.kill=true")
         else:
             _LOG.error("Kill operation failed: spec.kill not set to true in response")
             raise RuntimeError(
-                f"Kill operation failed for {resource_name}: spec.kill not properly set"
+                f"Kill operation failed for {resource_name} {_namespace}/{_name}: "
+                "the Update response does not have spec.kill set. Check its "
+                f"state with `ma {resource_name} get --namespace={_namespace} "
+                f"--name={_name}`."
             )
 
         _LOG.info("Kill operation completed (%r): %r", type(response), response)

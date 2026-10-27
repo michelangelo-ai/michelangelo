@@ -9,10 +9,14 @@ from unittest import TestCase
 from unittest.mock import MagicMock, Mock, patch
 
 from michelangelo.cli.mactl.crd import CRD
+from michelangelo.cli.mactl.plugins.entity.pipeline.kill_test import (
+    _reflection_built,
+)
 from michelangelo.cli.mactl.plugins.entity.trigger_run.kill import (
     add_function_signature,
     generate_kill,
 )
+from michelangelo.gen.api.v2 import trigger_run_svc_pb2
 
 
 def _get_response(has_spec: bool = True) -> MagicMock:
@@ -165,3 +169,52 @@ class TriggerRunKillDryRunTest(TestCase):
             mock_crd.kill(mock_crd, namespace="ns", name="run", yes=True, dry_run=False)
 
         self.assertIn("Cannot set kill flag", str(ctx.exception))
+
+
+class TriggerRunKillProtoCopyTest(TestCase):
+    """kill_func must copy the fetched TriggerRun into the request faithfully.
+
+    The fetched resource is built in its own descriptor pool, as it is at
+    runtime, so it is a distinct class from the Update request field. A field
+    this client does not know must still reach the server: the old dict round
+    trip dropped such fields silently.
+    """
+
+    # Field 999 (length-delimited) carrying b"abc"; absent from TriggerRun.
+    unknown_field = b"\xba\x3e\x03abc"
+
+    def test_fetched_resource_reaches_the_update_request_intact(self):
+        """Known and unknown fields survive; spec.kill is set and verified."""
+        fetched = _reflection_built(trigger_run_svc_pb2.GetTriggerRunResponse)()
+        fetched.trigger_run.metadata.name = "run"
+        fetched.trigger_run.metadata.namespace = "ns"
+        fetched.trigger_run.spec.kill = False
+        fetched.trigger_run.MergeFromString(self.unknown_field)
+
+        updated = _reflection_built(trigger_run_svc_pb2.UpdateTriggerRunResponse)()
+        updated.trigger_run.spec.kill = True
+
+        mock_crd = _make_crd_mock()
+        mock_crd._extract_method_info = Mock(
+            return_value=(
+                "UpdateTriggerRun",
+                trigger_run_svc_pb2.UpdateTriggerRunRequest,
+                trigger_run_svc_pb2.UpdateTriggerRunResponse,
+            )
+        )
+        mock_crd.get = Mock(return_value=fetched)
+        stub = Mock(return_value=updated)
+        mock_channel = Mock()
+        mock_channel.unary_unary.return_value = stub
+
+        generate_kill(mock_crd, mock_channel)
+        result = mock_crd.kill(
+            mock_crd, namespace="ns", name="run", yes=True, dry_run=False
+        )
+
+        sent = stub.call_args[0][0].trigger_run
+        self.assertTrue(sent.spec.kill)
+        self.assertEqual(sent.metadata.name, "run")
+        self.assertEqual(sent.metadata.namespace, "ns")
+        self.assertIn(self.unknown_field, sent.SerializeToString())
+        self.assertIs(result, updated)
