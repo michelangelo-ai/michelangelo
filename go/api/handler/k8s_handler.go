@@ -32,7 +32,7 @@ func (k *K8sHandlerImpl) Create(ctx context.Context, obj ctrlRTClient.Object, op
 }
 
 // IsObjectNamespaced reports whether the object's kind is namespaced, by delegating to the controller-runtime client.
-// It is not part of the K8sHandler interface; apiHandler discovers it with a type assertion (see namespaceScoper).
+// It is not part of the K8sHandler interface; it implements the optional namespaceScoper capability (see interfaces.go).
 func (k *K8sHandlerImpl) IsObjectNamespaced(obj runtime.Object) (bool, error) {
 	return k.client.IsObjectNamespaced(obj)
 }

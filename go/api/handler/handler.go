@@ -465,32 +465,6 @@ func getCRTListOptions(namespace string, opts *metav1.ListOptions) (*ctrlRTClien
 		Raw:           opts}, nil
 }
 
-func apiErrMsg(apiAction string, namespace string, name string) string {
-	return fmt.Sprintf("failed to %v API object. namespace: %v, name: %v", apiAction, namespace, name)
-}
-
-// namespaceScoper is implemented by a K8sHandler that can report whether an object's kind is namespaced.
-type namespaceScoper interface {
-	IsObjectNamespaced(obj runtime.Object) (bool, error)
-}
-
-// validateObjectKey returns an InvalidArgument status error when the name is empty or is not a valid path segment,
-// or when the namespace is empty for a namespaced kind. The k8s client refuses to build a request for these keys
-// with a plain fmt.Errorf that carries no error type or gRPC code, so surfaceGrpcError would map it to Unknown.
-// The name rules are the ones client-go applies in rest.Request.Name.
-func (handler *apiHandler) validateObjectKey(obj runtime.Object, apiAction string, namespace string, name string) error {
-	if name == "" {
-		return status.Errorf(codes.InvalidArgument, "%v: resource name may not be empty",
-			apiErrMsg(apiAction, namespace, name))
-	}
-	if msgs := validationpath.IsValidPathSegmentName(name); len(msgs) != 0 {
-		return status.Errorf(codes.InvalidArgument, "%v: invalid resource name %q: %v",
-			apiErrMsg(apiAction, namespace, name), name, msgs)
-	}
-	return handler.validateNamespace(obj, apiAction, namespace, name,
-		"an empty namespace may not be set when a resource name is provided")
-}
-
 // validateCreateKey returns an InvalidArgument status error when a create request has neither a name nor a
 // generateName, when a provided name is not a valid path segment, or when the namespace is empty for a namespaced
 // kind. An empty name is valid when generateName is set, so the name is only checked when it is provided.
@@ -511,6 +485,23 @@ func (handler *apiHandler) validateCreateKey(obj runtime.Object, objMeta metav1.
 		"an empty namespace may not be set during creation")
 }
 
+// validateObjectKey returns an InvalidArgument status error when the name is empty or is not a valid path segment,
+// or when the namespace is empty for a namespaced kind. The k8s client refuses to build a request for these keys
+// with a plain fmt.Errorf that carries no error type or gRPC code, so surfaceGrpcError would map it to Unknown.
+// The name rules are the ones client-go applies in rest.Request.Name.
+func (handler *apiHandler) validateObjectKey(obj runtime.Object, apiAction string, namespace string, name string) error {
+	if name == "" {
+		return status.Errorf(codes.InvalidArgument, "%v: resource name may not be empty",
+			apiErrMsg(apiAction, namespace, name))
+	}
+	if msgs := validationpath.IsValidPathSegmentName(name); len(msgs) != 0 {
+		return status.Errorf(codes.InvalidArgument, "%v: invalid resource name %q: %v",
+			apiErrMsg(apiAction, namespace, name), name, msgs)
+	}
+	return handler.validateNamespace(obj, apiAction, namespace, name,
+		"an empty namespace may not be set when a resource name is provided")
+}
+
 // validateNamespace returns an InvalidArgument status error when the namespace is empty and the object's kind is
 // namespaced. When the scope cannot be determined, or the kind is cluster-scoped, it returns nil and leaves the
 // request to the k8s client, so an empty namespace on a cluster-scoped kind keeps working.
@@ -527,6 +518,10 @@ func (handler *apiHandler) validateNamespace(obj runtime.Object, apiAction strin
 		return nil
 	}
 	return status.Errorf(codes.InvalidArgument, "%v: %v", apiErrMsg(apiAction, namespace, name), reason)
+}
+
+func apiErrMsg(apiAction string, namespace string, name string) string {
+	return fmt.Sprintf("failed to %v API object. namespace: %v, name: %v", apiAction, namespace, name)
 }
 
 func surfaceGrpcError(err error, apiAction string, namespace string, name string) error {

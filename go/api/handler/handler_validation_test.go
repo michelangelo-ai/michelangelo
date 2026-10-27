@@ -22,65 +22,6 @@ import (
 	ctrlRTClient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// recordingK8sHandler counts the calls that reach the k8s layer and lets a test choose the answer to the scope query.
-type recordingK8sHandler struct {
-	K8sHandler
-	calls         int
-	namespaced    bool
-	namespacedErr error
-}
-
-func (r *recordingK8sHandler) IsObjectNamespaced(runtime.Object) (bool, error) {
-	return r.namespaced, r.namespacedErr
-}
-
-func (r *recordingK8sHandler) Create(ctx context.Context, obj ctrlRTClient.Object, opts *metav1.CreateOptions) error {
-	r.calls++
-	return r.K8sHandler.Create(ctx, obj, opts)
-}
-
-func (r *recordingK8sHandler) Get(ctx context.Context, namespace, name string, obj ctrlRTClient.Object) error {
-	r.calls++
-	return r.K8sHandler.Get(ctx, namespace, name, obj)
-}
-
-func (r *recordingK8sHandler) Update(ctx context.Context, obj ctrlRTClient.Object, opts *metav1.UpdateOptions) error {
-	r.calls++
-	return r.K8sHandler.Update(ctx, obj, opts)
-}
-
-func (r *recordingK8sHandler) UpdateStatus(ctx context.Context, obj ctrlRTClient.Object, opts *metav1.UpdateOptions) error {
-	r.calls++
-	return r.K8sHandler.UpdateStatus(ctx, obj, opts)
-}
-
-func (r *recordingK8sHandler) Delete(ctx context.Context, obj ctrlRTClient.Object, opts *metav1.DeleteOptions) error {
-	r.calls++
-	return r.K8sHandler.Delete(ctx, obj, opts)
-}
-
-func newRecordingHandler(t *testing.T, namespaced bool, namespacedErr error) (*apiHandler, *recordingK8sHandler) {
-	client, err := setupK8s()
-	require.NoError(t, err)
-	rec := &recordingK8sHandler{K8sHandler: NewK8sHandler(client), namespaced: namespaced, namespacedErr: namespacedErr}
-	return &apiHandler{
-		conf:              storage.MetadataStorageConfig{EnableMetadataStorage: false},
-		logger:            zapr.NewLogger(zap.NewNop()),
-		metrics:           tally.NoopScope,
-		k8sHandler:        rec,
-		metadataHandler:   NewMetadataHandler(nil, nil, zapr.NewLogger(zap.NewNop())),
-		blobHandler:       NewBlobHandler(nil),
-		validationHandler: NewValidationHandler(),
-	}, rec
-}
-
-func rayJob(namespace, name string) *v2pb.RayJob {
-	return &v2pb.RayJob{
-		ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name},
-		Spec:       v2pb.RayJobSpec{JobId: "job"},
-	}
-}
-
 func TestInvalidKeyReturnsInvalidArgument(t *testing.T) {
 	ctx := context.Background()
 	const (
@@ -379,5 +320,64 @@ func TestSurfaceGrpcErrorMapping(t *testing.T) {
 				assert.Contains(t, s.Message(), tt.wantMsg)
 			}
 		})
+	}
+}
+
+// recordingK8sHandler counts the calls that reach the k8s layer and lets a test choose the answer to the scope query.
+type recordingK8sHandler struct {
+	K8sHandler
+	calls         int
+	namespaced    bool
+	namespacedErr error
+}
+
+func (r *recordingK8sHandler) IsObjectNamespaced(runtime.Object) (bool, error) {
+	return r.namespaced, r.namespacedErr
+}
+
+func (r *recordingK8sHandler) Create(ctx context.Context, obj ctrlRTClient.Object, opts *metav1.CreateOptions) error {
+	r.calls++
+	return r.K8sHandler.Create(ctx, obj, opts)
+}
+
+func (r *recordingK8sHandler) Get(ctx context.Context, namespace, name string, obj ctrlRTClient.Object) error {
+	r.calls++
+	return r.K8sHandler.Get(ctx, namespace, name, obj)
+}
+
+func (r *recordingK8sHandler) Update(ctx context.Context, obj ctrlRTClient.Object, opts *metav1.UpdateOptions) error {
+	r.calls++
+	return r.K8sHandler.Update(ctx, obj, opts)
+}
+
+func (r *recordingK8sHandler) UpdateStatus(ctx context.Context, obj ctrlRTClient.Object, opts *metav1.UpdateOptions) error {
+	r.calls++
+	return r.K8sHandler.UpdateStatus(ctx, obj, opts)
+}
+
+func (r *recordingK8sHandler) Delete(ctx context.Context, obj ctrlRTClient.Object, opts *metav1.DeleteOptions) error {
+	r.calls++
+	return r.K8sHandler.Delete(ctx, obj, opts)
+}
+
+func newRecordingHandler(t *testing.T, namespaced bool, namespacedErr error) (*apiHandler, *recordingK8sHandler) {
+	client, err := setupK8s()
+	require.NoError(t, err)
+	rec := &recordingK8sHandler{K8sHandler: NewK8sHandler(client), namespaced: namespaced, namespacedErr: namespacedErr}
+	return &apiHandler{
+		conf:              storage.MetadataStorageConfig{EnableMetadataStorage: false},
+		logger:            zapr.NewLogger(zap.NewNop()),
+		metrics:           tally.NoopScope,
+		k8sHandler:        rec,
+		metadataHandler:   NewMetadataHandler(nil, nil, zapr.NewLogger(zap.NewNop())),
+		blobHandler:       NewBlobHandler(nil),
+		validationHandler: NewValidationHandler(),
+	}, rec
+}
+
+func rayJob(namespace, name string) *v2pb.RayJob {
+	return &v2pb.RayJob{
+		ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name},
+		Spec:       v2pb.RayJobSpec{JobId: "job"},
 	}
 }
