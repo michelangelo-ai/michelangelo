@@ -8,6 +8,8 @@ user-invocable: true
 
 Full teardown and recreation of the local Michelangelo sandbox. Use when `ma sandbox sync` or `ma sandbox health` can't recover the cluster.
 
+A cluster whose containers have merely exited (after a reboot or a Docker restart) is stopped, not broken. Resume it with `bash .claude/skills/ma-sandbox-scripts/start.sh`, which keeps all state, instead of resetting.
+
 ## Step 1: Delete the cluster
 
 ```bash

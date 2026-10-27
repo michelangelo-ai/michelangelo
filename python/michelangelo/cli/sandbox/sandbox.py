@@ -2,6 +2,7 @@
 
 import argparse
 import base64
+import json
 import shutil
 import string
 import subprocess
@@ -371,6 +372,26 @@ def _create(ns: argparse.Namespace):
     _deploy_services(ns)
 
 
+def _helm_release_upgradable() -> bool:
+    """Whether the michelangelo release can be upgraded in place.
+
+    A release is upgradable when it is `deployed`, or when an earlier upgrade
+    left it `failed` (revision > 1). A failed first install has nothing to
+    preserve, and a missing release has nothing to upgrade; both are
+    reinstalled from scratch.
+    """
+    result = subprocess.run(
+        ["helm", "status", "michelangelo", "-o", "json"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return False
+    release = json.loads(result.stdout)
+    status = release["info"]["status"]
+    return status == "deployed" or (status == "failed" and release["version"] > 1)
+
+
 def _sync(ns: argparse.Namespace):
     """Restart only Michelangelo app services in an existing cluster.
 
@@ -429,17 +450,7 @@ def _sync(ns: argparse.Namespace):
     _helm_ensure_repos()
     helm_args = _build_helm_set_args(ns)
 
-    # Check if there is a healthy deployed release we can upgrade.
-    status_result = subprocess.run(
-        ["helm", "status", "michelangelo", "-o", "json"],
-        capture_output=True,
-        text=True,
-    )
-    release_healthy = (
-        status_result.returncode == 0 and '"status":"deployed"' in status_result.stdout
-    )
-
-    if release_healthy:
+    if _helm_release_upgradable():
         # Healthy release: upgrade in-place, keeping infra running.
         _exec(
             "helm",
@@ -450,6 +461,10 @@ def _sync(ns: argparse.Namespace):
             str(_chart_dir / "values-k3d.yaml"),
             "--dependency-update",
             "--reuse-values",
+            # Helm applies server-side; fields last written by `kubectl set image`
+            # or `kubectl apply` belong to other managers and make the upgrade
+            # fail with a conflict. The chart is the source of truth in a sandbox.
+            "--force-conflicts",
             *helm_args,
         )
         # Force-restart app deployments so they always pick up the latest

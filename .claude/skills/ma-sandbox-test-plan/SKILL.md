@@ -5,10 +5,21 @@ description: >-
   Use when the user asks to verify a change or generate evidence that a feature works.
 argument-hint: <description of what changed>
 user-invocable: true
+allowed-tools:
+  - Bash(bash .claude/skills/ma-sandbox-scripts/check-backend.sh)
+  - Bash(bash .claude/skills/ma-sandbox-scripts/find-vite-port.sh)
+  - Bash(bash .claude/skills/ma-sandbox-scripts/set_log_level.sh *)
+  - Bash(bash .claude/skills/ma-sandbox-scripts/capture_service_logs.sh *)
+  - Bash(kubectl get *)
+  - Bash(kubectl logs *)
 ---
 
 A pipeline that gates on failure at every stage. The output of each stage IS the evidence —
 don't summarize it away. See `.claude/skills/ma-sandbox-references/evidence-quality.md` for what makes evidence good vs. hollow.
+
+## How to run commands
+
+Invoke this skill before running its scripts, and use the literal `bash .claude/skills/ma-sandbox-scripts/<script>.sh <args>` form from the repo root, one command per call. See `.claude/skills/ma-sandbox-references/running-commands.md`.
 
 ## Prerequisites
 
@@ -27,8 +38,10 @@ running the skill — end this session and start a new one, then re-invoke `/ma-
 ## Stage 0: Detect stack
 
 ```bash
-CHANGED_FILES=$(git diff --name-only origin/main...HEAD)
+git diff --name-only origin/main
 ```
+
+This lists committed and uncommitted changes to tracked files; also check `git status --short` for untracked files. Call the output `$CHANGED_FILES` below.
 
 Categorize by path prefix: `go/` → Go, `javascript/` → JS, `python/` → Python. Mixed changes run every
 applicable stage below, once per stack, each gated independently — a Go build failure doesn't block
@@ -64,28 +77,27 @@ Only reached for stacks whose Stage 1–2 passed.
 
 **Go backend:**
 ```bash
-bash $(git rev-parse --show-toplevel)/.claude/skills/ma-sandbox-scripts/check-backend.sh
+bash .claude/skills/ma-sandbox-scripts/check-backend.sh
 ```
+It prints one line per affected service: a service is affected when a changed file (committed since the merge-base with `origin/main`, or uncommitted) is in a package its binary depends on, not only under `go/cmd/`. Act on each line:
+
 | Output | Action |
 |--------|--------|
-| `clean` | No local Go changes deployed — skip Go integration scenarios (Stage 4 Go section), note this in "Known gaps" |
-| `deployed <service>` | Enable debug logging before capturing any evidence: `bash $(git rev-parse --show-toplevel)/.claude/skills/ma-sandbox-scripts/set_log_level.sh <service> debug` |
-| `needs-deploy <service>` | **Stop and respond**: "You have local changes to `<service>` that aren't deployed. Run `/ma-sandbox-deploy` first, then re-run `/ma-sandbox-test-plan`." Do not proceed for this stack. |
+| `clean` | No Go service is affected — skip Go integration scenarios (Stage 4 Go section), note this in "Known gaps" |
+| `deployed <service>` | Enable debug logging before capturing any evidence: `bash .claude/skills/ma-sandbox-scripts/set_log_level.sh <service> debug` |
+| `needs-deploy <service>` | **Stop and respond**: "You have local changes to `<service>` that aren't deployed. Run `/ma-sandbox-deploy` first (it drops and recreates the sandbox MySQL database), then re-run `/ma-sandbox-test-plan`." Do not proceed for this stack. |
 
 **JavaScript UI:**
 ```bash
-VITE_INFO=$(bash $(git rev-parse --show-toplevel)/.claude/skills/ma-sandbox-scripts/find-vite-port.sh)
-VITE_PORT=$(echo "$VITE_INFO" | awk '{print $1}')
-VITE_PID=$(echo "$VITE_INFO" | awk '{print $2}')
-VITE_MODE=$(echo "$VITE_INFO" | awk '{print $3}')  # "existing" or "started"
+bash .claude/skills/ma-sandbox-scripts/find-vite-port.sh
 ```
-- Exit 0 → use `$VITE_PORT` in place of `5173` in all URLs below. Record `$VITE_MODE`/`$VITE_PID` for cleanup.
+- Exit 0 → stdout is `<port> <pid> <started|existing>`. Use the port in place of `5173` in all URLs below, and keep the pid and mode (`started` or `existing`) for cleanup.
 - Non-zero exit → **stop immediately and report the failure.** Do not fall back to guessing a port via curl/lsof — a successful response doesn't confirm which branch is being served.
 - If the Go backend is *also* deployed (Stage 3 said `deployed <service>`), use the full sandbox at `http://localhost:8090` instead of Vite, and skip straight to Stage 4.
 
 **Python:**
 ```bash
-poetry run ma sandbox health
+python/.venv/bin/ma sandbox health
 ```
 Confirm the services relevant to the change are running.
 
@@ -101,7 +113,7 @@ For each controller/reconcile path touched by the diff:
    conventions; prefer creating a new entity over disturbing shared demo state, per evidence principle 7).
 2. Capture logs scoped to that resource:
    ```bash
-   bash $(git rev-parse --show-toplevel)/.claude/skills/ma-sandbox-scripts/capture_service_logs.sh <service> --resource <test-name>
+   bash .claude/skills/ma-sandbox-scripts/capture_service_logs.sh <service> --resource <test-name>
    ```
 3. Verify state independently via `kubectl get`/`kubectl describe` — don't rely on logs alone.
 4. Show the full lifecycle: creation, intermediate phase transitions, terminal state, and (if the diff
@@ -111,10 +123,11 @@ For each controller/reconcile path touched by the diff:
 
 1. **Playwright setup.** Use whichever Playwright MCP server is connected in this session — check `/mcp`
    if unsure which name it registered under. None connected → stop and report the command from
-   Prerequisites above; don't guess or fall back to a non-MCP browser tool. Clean up stale screenshots:
-   `rm -rf tmp/ma-sandbox-test-plan && mkdir -p tmp/ma-sandbox-test-plan` (repo-root `tmp/` is
-   already gitignored — screenshots are run evidence, not `.claude/` config, and shouldn't sit in a
-   dot-prefixed directory Finder hides by default)
+   Prerequisites above; don't guess or fall back to a non-MCP browser tool. Save screenshots under the repo-root `tmp/ma-sandbox-test-plan/`, using an
+   absolute path (relative paths resolve against the Playwright server's working directory and the file
+   vanishes) and `ls` the file afterwards to confirm it exists. Use a distinct filename per state so
+   earlier runs are never overwritten or deleted. `tmp/` is already gitignored — screenshots are run
+   evidence, not `.claude/` config, and shouldn't sit in a dot-prefixed directory Finder hides by default
 2. **Derive the route.** Read `.claude/skills/ma-sandbox-references/routes.md` for the phase/entity keyword tables and resolution
    algorithm. Resolve phase and entity as independent signals, then combine. No matching row → stop and
    report, don't guess.
@@ -150,6 +163,6 @@ Build/lint/unit-test results from stages 1–2 are gates, not evidence — don't
 - **If Vite was started by this run** (`$VITE_MODE` = `started`): ask "I started a Vite dev server (PID
   `$VITE_PID`) for this session. Kill it now?" If yes: `kill "$VITE_PID"`. If `$VITE_MODE` = `existing`,
   leave it alone.
-- **If log level was changed in Stage 3:** ask whether to revert — `bash $(git rev-parse --show-toplevel)/.claude/skills/ma-sandbox-scripts/set_log_level.sh <service> info`.
+- **If log level was changed in Stage 3:** ask whether to revert — `bash .claude/skills/ma-sandbox-scripts/set_log_level.sh <service> info`.
 - **Test CRs left in the cluster:** list them in the report. Don't auto-delete — the user may want to
   inspect them further or reuse them for a follow-up run.

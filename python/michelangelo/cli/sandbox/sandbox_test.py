@@ -1,6 +1,7 @@
 """Scenario-level tests for `ma sandbox snapshot`."""
 
 import argparse
+import json
 import tempfile
 from pathlib import Path
 from unittest import TestCase
@@ -193,3 +194,35 @@ class SnapshotRestoreTest(TestCase):
         ):
             sandbox._snapshot_restore(argparse.Namespace(timestamp="does-not-exist"))
         mock_err.assert_called_once()
+
+
+class HelmReleaseUpgradableTest(TestCase):
+    """Test cases for the in-place upgrade check used by `ma sandbox sync`."""
+
+    def _upgradable(self, returncode: int, status: str = "", version: int = 1):
+        stdout = json.dumps({"version": version, "info": {"status": status}})
+        with patch.object(sandbox.subprocess, "run") as mock_run:
+            mock_run.return_value = Mock(returncode=returncode, stdout=stdout)
+            return sandbox._helm_release_upgradable()
+
+    def test_deployed_release_is_upgradable(self):
+        """A `deployed` release is upgraded in place."""
+        self.assertTrue(self._upgradable(0, "deployed", version=1))
+
+    def test_failed_upgrade_is_upgradable(self):
+        """A release left `failed` by an upgrade (revision > 1) is upgraded in place."""
+        self.assertTrue(self._upgradable(0, "failed", version=3))
+
+    def test_failed_first_install_is_reinstalled(self):
+        """A `failed` first install has nothing to preserve."""
+        self.assertFalse(self._upgradable(0, "failed", version=1))
+
+    def test_other_statuses_are_reinstalled(self):
+        """Pending and uninstalled releases are not upgraded in place."""
+        for status in ("pending-install", "pending-upgrade", "uninstalled"):
+            with self.subTest(status=status):
+                self.assertFalse(self._upgradable(0, status, version=2))
+
+    def test_missing_release_is_not_upgradable(self):
+        """`helm status` failing means there is no release to upgrade."""
+        self.assertFalse(self._upgradable(1))

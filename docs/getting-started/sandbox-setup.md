@@ -39,7 +39,7 @@ Before you begin, make sure you have the following installed. Install commands b
 | **Poetry** | `curl -sSL https://install.python-poetry.org \| python3 -` | same as macOS | `poetry --version` |
 | **temporal** *(Temporal only)* | `brew install temporal` | [official guide](https://docs.temporal.io/cli#install) | `temporal --version` |
 
-> **Python version note:** Python 3.11 or 3.12 is strongly recommended. Python 3.13+ may fail during `poetry install` because pre-built wheels for some ML dependencies are not yet available for newer interpreter versions.
+> **Python version note:** Use Python 3.12 (3.10 and 3.11 also work). `poetry install` fails on Python 3.13+ because some ML dependencies, such as `onnxruntime` 1.19.2, have no wheel for it. If `python3` is 3.13, point Poetry at another interpreter with `poetry env use <path-to-python3.12>` before installing.
 
 > **Docker daemon note:** `docker info` (the verify command above) requires the Docker daemon to be running — unlike `docker --version`, which only checks the binary. If `docker info` fails, start Docker Desktop or Colima before continuing.
 
@@ -194,6 +194,8 @@ ma sandbox sync
 ```
 
 Redeploys services into an existing cluster, skipping cluster creation and image import. Use this to recover from a partially failed `create` — for example, if operator deployments timed out but the cluster itself was created successfully.
+
+> **Warning:** `sync` drops and recreates the MySQL `michelangelo` database before it redeploys. Data that exists only in metadata storage (for example PipelineRuns already pruned from etcd) is lost.
 
 If `ma sandbox create` fails and you see `Failed to create cluster ... already exists` when you try again, run `ma sandbox sync` instead. See [Recovering from a failed create](#recovering-from-a-failed-create) below.
 
