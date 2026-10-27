@@ -264,6 +264,10 @@ func (handler *apiHandler) Delete(ctx context.Context, obj ctrlRTClient.Object,
 		return status.Error(codes.InvalidArgument, err.Error())
 	}
 
+	if err := handler.validateObjectKey(obj, "delete", objMeta.GetNamespace(), objMeta.GetName()); err != nil {
+		return err
+	}
+
 	dryRun, err := checkDryRun(opts.DryRun)
 	if err != nil {
 		return err
@@ -271,9 +275,6 @@ func (handler *apiHandler) Delete(ctx context.Context, obj ctrlRTClient.Object,
 
 	// Delete the object in K8s/ETCD
 	if !storage.EnableMetadataStorage(&handler.conf) {
-		if err := handler.validateObjectKey(obj, "delete", objMeta.GetNamespace(), objMeta.GetName()); err != nil {
-			return err
-		}
 		err = handler.k8sHandler.Delete(ctx, obj, opts)
 		return surfaceGrpcError(err, "delete", objMeta.GetNamespace(), objMeta.GetName())
 	}

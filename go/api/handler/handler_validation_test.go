@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/go-logr/zapr"
@@ -171,6 +172,42 @@ func TestInvalidKeyReturnsInvalidArgument(t *testing.T) {
 			assert.Contains(t, s.Message(), tt.wantMsg)
 			assert.Zero(t, rec.calls, "the k8s layer must not be reached")
 		})
+	}
+}
+
+// Delete must validate the key before it branches on metadata storage, so the async path rejects bad keys too.
+func TestDeleteInvalidKeyReturnsInvalidArgument(t *testing.T) {
+	tests := []struct {
+		name      string
+		namespace string
+		objName   string
+		wantMsg   string
+	}{
+		{name: "empty name", namespace: "default", objName: "", wantMsg: "resource name may not be empty"},
+		{name: "name with slash", namespace: "default", objName: "a/b", wantMsg: `invalid resource name "a/b"`},
+		{name: "name dot dot", namespace: "default", objName: "..", wantMsg: `invalid resource name ".."`},
+		{
+			name:      "empty namespace",
+			namespace: "",
+			objName:   "job01",
+			wantMsg:   "an empty namespace may not be set when a resource name is provided",
+		},
+	}
+	for _, metadataStorage := range []bool{false, true} {
+		for _, tt := range tests {
+			t.Run(fmt.Sprintf("metadataStorage=%v/%s", metadataStorage, tt.name), func(t *testing.T) {
+				h, rec := newRecordingHandler(t, true, nil)
+				h.conf.EnableMetadataStorage = metadataStorage
+
+				err := h.Delete(context.Background(), rayJob(tt.namespace, tt.objName), &metav1.DeleteOptions{})
+				require.Error(t, err)
+				s, ok := status.FromError(err)
+				require.True(t, ok, "want a gRPC status error, got %T: %v", err, err)
+				assert.Equal(t, codes.InvalidArgument, s.Code())
+				assert.Contains(t, s.Message(), tt.wantMsg)
+				assert.Zero(t, rec.calls, "the k8s layer must not be reached")
+			})
+		}
 	}
 }
 
