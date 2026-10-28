@@ -428,6 +428,15 @@ func TestBeforeCreateSpecRules(t *testing.T) {
 			wantErr: `contains no occurrence of cron "0 9 * * *"`,
 		},
 		{
+			name: "backfill window on a cron that never fires is rejected",
+			run: newRun("run", v2.TriggerRunSpec{
+				Trigger:        cronSpec("0 0 30 2 *"),
+				StartTimestamp: ts(jan10.AddDate(-20, 0, 0)),
+				EndTimestamp:   ts(jan10),
+			}),
+			wantErr: `contains no occurrence of cron "0 0 30 2 *"`,
+		},
+		{
 			name: "backfill window with an occurrence is accepted",
 			run: newRun("run", v2.TriggerRunSpec{
 				Trigger:        cronSpec("0 9 * * *"),

@@ -347,7 +347,8 @@ func validateWindowRules(run *v2.TriggerRun, now time.Time) error {
 // catchup). It runs once, at the revision it was created with, so auto_flip
 // has nothing to flip; and its window must contain at least one occurrence,
 // counted the way the backfill worker enumerates them, or it would start
-// nothing and end SUCCEEDED.
+// nothing and end SUCCEEDED. Only the existence of an occurrence is checked
+// here; the occurrences themselves are never materialized in the request path.
 func validateBackfillWindow(spec *v2.TriggerRunSpec) error {
 	if spec.AutoFlip {
 		return status.Error(codes.InvalidArgument,
@@ -364,11 +365,11 @@ func validateBackfillWindow(spec *v2.TriggerRunSpec) error {
 		return nil
 	}
 	cronExpr := cronSchedule.GetCron()
-	occurrences, err := triggerrun.BackfillRunTimestamps(startAt, endAt, cronExpr)
+	hasRun, err := triggerrun.BackfillWindowHasRun(startAt, endAt, cronExpr)
 	if err != nil {
 		return status.Error(codes.InvalidArgument, err.Error())
 	}
-	if len(occurrences) == 0 {
+	if !hasRun {
 		return status.Errorf(codes.InvalidArgument,
 			"the backfill window [%s, %s] contains no occurrence of cron %q; widen the window or change the schedule",
 			startAt.UTC().Format(time.RFC3339), endAt.UTC().Format(time.RFC3339), cronExpr)

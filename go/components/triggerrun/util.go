@@ -451,7 +451,9 @@ func resumeWorkflow(ctx context.Context, triggerRun *v2pb.TriggerRun, log logr.L
 // over [start, end] runs: every occurrence after start up to and including end,
 // plus start itself when it falls exactly on the schedule. This is the
 // enumeration the backfill worker executes, so a caller that validates a window
-// ahead of time counts exactly the runs that would be created.
+// ahead of time counts exactly the runs that would be created. A caller that
+// only needs to know whether the window runs at all should use
+// BackfillWindowHasRun, which does not build the slice.
 //
 // Known limitation: whether start itself is an occurrence is derived from the
 // gap between the next two occurrences, so an irregular schedule such as
@@ -462,15 +464,45 @@ func BackfillRunTimestamps(start, end time.Time, cronExpr string) ([]time.Time, 
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse cron schedule %q: %w", cronExpr, err)
 	}
-	var runs []time.Time
-	next := schedule.Next(start)
-	previous := next.Add(-schedule.Next(next).Sub(next))
-	if previous.Equal(start) {
-		runs = append(runs, start)
+	first, ok := firstBackfillRun(schedule, start, end)
+	if !ok {
+		return nil, nil
 	}
-	for !next.After(end) {
+	runs := []time.Time{first}
+	for next := schedule.Next(first); !next.IsZero() && !next.After(end); next = schedule.Next(next) {
 		runs = append(runs, next)
-		next = schedule.Next(next)
 	}
 	return runs, nil
+}
+
+// BackfillWindowHasRun reports whether a backfill over [start, end] on cronExpr
+// would run at least once, counted the same way as BackfillRunTimestamps. It
+// looks at most two occurrences ahead of start, so it is safe to call in a
+// request path for a window of any size.
+func BackfillWindowHasRun(start, end time.Time, cronExpr string) (bool, error) {
+	schedule, err := cron.ParseStandard(cronExpr)
+	if err != nil {
+		return false, fmt.Errorf("failed to parse cron schedule %q: %w", cronExpr, err)
+	}
+	_, ok := firstBackfillRun(schedule, start, end)
+	return ok, nil
+}
+
+// firstBackfillRun returns the first occurrence a backfill over [start, end]
+// runs: start itself when it falls exactly on the schedule, otherwise the first
+// occurrence after start unless that is after end. cron.Schedule.Next reports
+// a schedule that never fires again (such as "0 0 30 2 *") as the zero time;
+// that is treated as no occurrence rather than iterated on.
+func firstBackfillRun(schedule cron.Schedule, start, end time.Time) (time.Time, bool) {
+	next := schedule.Next(start)
+	if next.IsZero() {
+		return time.Time{}, false
+	}
+	if after := schedule.Next(next); !after.IsZero() && next.Add(-after.Sub(next)).Equal(start) {
+		return start, true
+	}
+	if next.After(end) {
+		return time.Time{}, false
+	}
+	return next, true
 }
