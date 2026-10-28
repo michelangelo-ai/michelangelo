@@ -681,17 +681,23 @@ func (r *Reconciler) Register(mgr ctrl.Manager) error {
 //
 // The selection is made using GetTriggerType which examines the TriggerRun spec to determine
 // whether it's a batch rerun, backfill, interval, or cron trigger. The default is CronTrigger
-// if the type cannot be determined.
+// if the type cannot be determined. A type whose Runner was never registered gets
+// unsupportedTriggerRunner, which fails the run with a message naming the gap.
 func (r *Reconciler) getRunner(tr *v2pb.TriggerRun) Runner {
 	triggerType := GetTriggerType(tr)
+	var runner Runner
 	switch triggerType {
 	case TriggerTypeInterval:
-		return r.intervalTrigger
+		runner = r.intervalTrigger
 	case TriggerTypeBackfill:
-		return r.backfillTrigger
+		runner = r.backfillTrigger
 	case TriggerTypeBatchRerun:
-		return r.batchRerunTrigger
+		runner = r.batchRerunTrigger
 	default:
-		return r.cronTrigger
+		runner = r.cronTrigger
 	}
+	if runner == nil {
+		return unsupportedTriggerRunner{triggerType: triggerType}
+	}
+	return runner
 }

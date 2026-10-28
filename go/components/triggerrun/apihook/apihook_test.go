@@ -377,17 +377,23 @@ func TestBeforeCreateSpecRules(t *testing.T) {
 		{
 			name:    "trigger without a schedule is rejected",
 			run:     newRun("run", v2.TriggerRunSpec{}),
-			wantErr: "spec.trigger.cron_schedule is required",
+			wantErr: "spec.trigger must set one of cron_schedule, interval_schedule or batch_rerun",
 		},
 		{
-			name:    "interval_schedule is rejected until a runner is registered",
-			run:     newRun("run", v2.TriggerRunSpec{Trigger: intervalSpec(time.Hour)}),
-			wantErr: "spec.trigger.interval_schedule is not supported yet",
+			name: "interval_schedule is accepted; whether a runner exists is the controller's call",
+			run:  newRun("run", v2.TriggerRunSpec{Trigger: intervalSpec(time.Hour)}),
 		},
 		{
-			name:    "batch_rerun is rejected until a runner is registered",
-			run:     newRun("run", v2.TriggerRunSpec{Trigger: batchRerunSpec()}),
-			wantErr: "spec.trigger.batch_rerun is not supported yet",
+			name: "batch_rerun is accepted; whether a runner exists is the controller's call",
+			run:  newRun("run", v2.TriggerRunSpec{Trigger: batchRerunSpec()}),
+		},
+		{
+			name: "closed window on an interval_schedule is left to the backfill worker",
+			run: newRun("run", v2.TriggerRunSpec{
+				Trigger:        intervalSpec(time.Hour),
+				StartTimestamp: ts(jan10),
+				EndTimestamp:   ts(jan11),
+			}),
 		},
 		{
 			name:    "unparsable cron is rejected",
@@ -524,7 +530,7 @@ func TestBeforeUpdateSpecRules(t *testing.T) {
 
 	t.Run("deprecated kill flag bypasses the structural rules", func(t *testing.T) {
 		require.NoError(t, update(newRun("run", v2.TriggerRunSpec{
-			Trigger: intervalSpec(time.Hour),
+			Trigger: cronSpec("every day"),
 			Kill:    true,
 		})))
 	})

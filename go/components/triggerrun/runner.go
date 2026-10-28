@@ -2,6 +2,7 @@ package triggerrun
 
 import (
 	"context"
+	"fmt"
 
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
@@ -86,4 +87,50 @@ type Runner interface {
 	//
 	// Returns current TriggerRunStatus. Does not change the state unless action was applied.
 	Update(ctx context.Context, triggerRun *v2pb.TriggerRun, action v2pb.TriggerRunAction) (v2pb.TriggerRunStatus, bool, error)
+}
+
+// unwiredTriggerTypesIssue tracks the trigger types that have no Runner yet.
+const unwiredTriggerTypesIssue = "https://github.com/michelangelo-ai/michelangelo/issues/548"
+
+// unsupportedTriggerRunner is the Runner for a trigger type that has no
+// implementation registered (interval and batch rerun today, see
+// unwiredTriggerTypesIssue). The API accepts those specs because they are valid
+// shapes; this runner fails the TriggerRun with a message naming the gap instead
+// of letting the reconciler call a nil Runner. Kill succeeds, since nothing is
+// running to stop.
+type unsupportedTriggerRunner struct {
+	triggerType string
+}
+
+func (r unsupportedTriggerRunner) err() error {
+	return fmt.Errorf("trigger type %q is not supported yet: no runner is registered for it (%s)",
+		r.triggerType, unwiredTriggerTypesIssue)
+}
+
+func (r unsupportedTriggerRunner) failed() v2pb.TriggerRunStatus {
+	return v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_FAILED, ErrorMessage: r.err().Error()}
+}
+
+func (r unsupportedTriggerRunner) Run(context.Context, *v2pb.TriggerRun) (v2pb.TriggerRunStatus, error) {
+	return r.failed(), r.err()
+}
+
+func (r unsupportedTriggerRunner) Kill(context.Context, *v2pb.TriggerRun) (v2pb.TriggerRunStatus, error) {
+	return v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_KILLED}, nil
+}
+
+func (r unsupportedTriggerRunner) Pause(context.Context, *v2pb.TriggerRun) (v2pb.TriggerRunStatus, error) {
+	return r.failed(), r.err()
+}
+
+func (r unsupportedTriggerRunner) Resume(context.Context, *v2pb.TriggerRun) (v2pb.TriggerRunStatus, error) {
+	return r.failed(), r.err()
+}
+
+func (r unsupportedTriggerRunner) GetStatus(context.Context, *v2pb.TriggerRun) (v2pb.TriggerRunStatus, error) {
+	return r.failed(), r.err()
+}
+
+func (r unsupportedTriggerRunner) Update(context.Context, *v2pb.TriggerRun, v2pb.TriggerRunAction) (v2pb.TriggerRunStatus, bool, error) {
+	return r.failed(), false, r.err()
 }

@@ -21,10 +21,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation"
 )
 
-// unwiredTriggerTypesIssue tracks the trigger types the controller has no
-// runner registered for yet.
-const unwiredTriggerTypesIssue = "https://github.com/michelangelo-ai/michelangelo/issues/548"
-
 // RegisterTriggerRunAPIHook registers the API hook that validates and defaults
 // the TriggerRun spec on create and update, refuses to delete a TriggerRun that
 // is still live, defaults the environment label on creation, stamps the owning
@@ -69,7 +65,6 @@ func (a apiHook) BeforeCreate(ctx context.Context, request *v2.CreateTriggerRunR
 	if pipelineRef == nil || pipelineRef.GetName() == "" {
 		return nil
 	}
-	// pipelineRef.Namespace was defaulted to the TriggerRun's namespace by validateSpec.
 	pipeline := &v2.Pipeline{}
 	if err := a.apiHandler.Get(ctx, pipelineRef.GetNamespace(), pipelineRef.GetName(), &metav1.GetOptions{}, pipeline); err != nil {
 		if utils.IsNotFoundError(err) {
@@ -256,22 +251,17 @@ func validateSpec(run *v2.TriggerRun) error {
 	return validateTrigger(run.Spec.Trigger)
 }
 
-// validateTrigger accepts only a trigger the controller has a runner for and
-// whose schedule the controller and worker can parse. interval_schedule and
-// batch_rerun have no runner registered yet (see unwiredTriggerTypesIssue);
-// dispatching them would dereference a nil Runner on the first reconcile.
+// validateTrigger accepts a trigger whose shape the controller and worker can
+// read: one of the trigger types must be set, and a cron expression must parse.
+// Whether a runner is registered for the type is the controller's decision, not
+// the API's; a type without one fails at reconcile with a message naming it.
 func validateTrigger(trigger *v2.Trigger) error {
-	switch {
-	case trigger.GetBatchRerun() != nil:
-		return status.Errorf(codes.InvalidArgument,
-			"spec.trigger.batch_rerun is not supported yet: no runner is registered for it (%s)", unwiredTriggerTypesIssue)
-	case trigger.GetIntervalSchedule() != nil:
-		return status.Errorf(codes.InvalidArgument,
-			"spec.trigger.interval_schedule is not supported yet: no runner is registered for it (%s)", unwiredTriggerTypesIssue)
+	if trigger.GetBatchRerun() != nil || trigger.GetIntervalSchedule() != nil {
+		return nil
 	}
 	cronSchedule := trigger.GetCronSchedule()
 	if cronSchedule == nil {
-		return status.Error(codes.InvalidArgument, "spec.trigger.cron_schedule is required")
+		return status.Error(codes.InvalidArgument, "spec.trigger must set one of cron_schedule, interval_schedule or batch_rerun")
 	}
 	if _, err := cron.ParseStandard(cronSchedule.GetCron()); err != nil {
 		return status.Errorf(codes.InvalidArgument, "invalid spec.trigger.cron_schedule.cron %q: %v", cronSchedule.GetCron(), err)
@@ -312,7 +302,13 @@ func validateBackfillWindow(spec *v2.TriggerRunSpec) error {
 	if err != nil {
 		return err
 	}
-	cronExpr := spec.Trigger.GetCronSchedule().GetCron()
+	cronSchedule := spec.Trigger.GetCronSchedule()
+	if cronSchedule == nil {
+		// Only a cron window can be counted ahead of time; the backfill worker
+		// reports the other schedule kinds itself.
+		return nil
+	}
+	cronExpr := cronSchedule.GetCron()
 	occurrences, err := triggerrun.BackfillRunTimestamps(startAt, endAt, cronExpr)
 	if err != nil {
 		return status.Error(codes.InvalidArgument, err.Error())

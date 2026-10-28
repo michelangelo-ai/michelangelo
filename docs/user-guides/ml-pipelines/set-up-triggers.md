@@ -181,7 +181,7 @@ The API server validates a TriggerRun when it is created and when it is updated,
 
 On create and update:
 
-- `spec.trigger` must set `cron_schedule`, and the cron expression must parse (5 fields, or a descriptor such as `@every 1h`). `interval_schedule` and `batch_rerun` are not accepted until a runner is registered for them.
+- `spec.trigger` must set one of `cron_schedule`, `interval_schedule` or `batch_rerun`, and a cron expression must parse (5 fields, or a descriptor such as `@every 1h`). `interval_schedule` and `batch_rerun` have no runner yet: the API accepts them and the controller moves the TriggerRun to `FAILED` with a message pointing at the tracking issue ([#548](https://github.com/michelangelo-ai/michelangelo/issues/548)).
 - `end_timestamp` must be after `start_timestamp`, and `catchup` is not accepted on a `batch_rerun` trigger.
 - An empty `spec.pipeline.namespace` or `spec.revision.namespace` defaults to the TriggerRun's namespace.
 

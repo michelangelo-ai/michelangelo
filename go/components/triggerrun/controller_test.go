@@ -139,6 +139,27 @@ func TestReconcile(t *testing.T) {
 			expectRequeue:  true,
 		},
 		{
+			name:    "first time enable of a trigger type with no runner fails with a message",
+			request: ctrl.Request{NamespacedName: types.NamespacedName{Namespace: _namespace, Name: _triggerRun.Name}},
+			initialObject: func() v2pb.TriggerRun {
+				tr := _triggerRun.DeepCopy()
+				tr.Spec.Trigger.TriggerType = &v2pb.Trigger_IntervalSchedule{IntervalSchedule: &v2pb.IntervalSchedule{}}
+				return *tr
+			}(),
+			initialStatus: v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_INVALID},
+			cronRunnerProvider: func() Runner {
+				// The cron runner must not be consulted for an interval trigger.
+				return &MockRunner{}
+			},
+			expectErr:      false,
+			expectedErrStr: "",
+			expectedStatus: v2pb.TriggerRunStatus{
+				State:        v2pb.TRIGGER_RUN_STATE_FAILED,
+				ErrorMessage: `trigger type "interval" is not supported yet: no runner is registered for it (` + unwiredTriggerTypesIssue + `)`,
+			},
+			expectRequeue: true,
+		},
+		{
 			name:          "first time enable succeeded",
 			request:       ctrl.Request{NamespacedName: types.NamespacedName{Namespace: _namespace, Name: _triggerRun.Name}},
 			initialObject: _triggerRun,
@@ -548,6 +569,28 @@ func TestGetRunner(t *testing.T) {
 		runnerType string
 		triggerRun v2pb.TriggerRun
 	}{
+		{
+			name:       "interval trigger with no runner registered",
+			runnerType: "triggerrun.unsupportedTriggerRunner",
+			triggerRun: v2pb.TriggerRun{
+				Spec: v2pb.TriggerRunSpec{
+					Trigger: &v2pb.Trigger{
+						TriggerType: &v2pb.Trigger_IntervalSchedule{IntervalSchedule: &v2pb.IntervalSchedule{}},
+					},
+				},
+			},
+		},
+		{
+			name:       "batch rerun trigger with no runner registered",
+			runnerType: "triggerrun.unsupportedTriggerRunner",
+			triggerRun: v2pb.TriggerRun{
+				Spec: v2pb.TriggerRunSpec{
+					Trigger: &v2pb.Trigger{
+						TriggerType: &v2pb.Trigger_BatchRerun{BatchRerun: &v2pb.BatchRerun{}},
+					},
+				},
+			},
+		},
 		{
 			name:       "cron trigger",
 			runnerType: "*triggerrun.cronTrigger",
