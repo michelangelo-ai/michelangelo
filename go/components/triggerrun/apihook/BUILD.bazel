@@ -2,11 +2,7 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "go_default_library",
-    srcs = [
-        "apihook.go",
-        "delete_guard.go",
-        "spec_validation.go",
-    ],
+    srcs = ["apihook.go"],
     importpath = "github.com/michelangelo-ai/michelangelo/go/components/triggerrun/apihook",
     visibility = ["//visibility:public"],
     deps = [
@@ -28,12 +24,7 @@ go_library(
 
 go_test(
     name = "go_default_test",
-    srcs = [
-        "apihook_test.go",
-        "delete_guard_test.go",
-        "schedule_window_test.go",
-        "spec_validation_test.go",
-    ],
+    srcs = ["apihook_test.go"],
     embed = [":go_default_library"],
     deps = [
         "//go/api:go_default_library",
