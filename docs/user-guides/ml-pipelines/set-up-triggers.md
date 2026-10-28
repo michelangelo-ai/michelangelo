@@ -181,9 +181,8 @@ The API server validates a TriggerRun when it is created and when it is updated,
 
 On create and update:
 
-- `spec.trigger` must set one of `cron_schedule`, `interval_schedule` or `batch_rerun`, and a cron expression must parse (5 fields, or a descriptor such as `@every 1h`). `interval_schedule` and `batch_rerun` have no runner wired yet ([#548](https://github.com/michelangelo-ai/michelangelo/issues/548)): the API accepts them, but such a TriggerRun does not start.
-- `end_timestamp` must be after `start_timestamp`, and `catchup` is not accepted on a `batch_rerun` trigger.
-- An empty `spec.pipeline.namespace` or `spec.revision.namespace` defaults to the TriggerRun's namespace.
+- `spec.trigger` must set `cron_schedule`, and the cron expression must parse (5 fields, or a descriptor such as `@every 1h`). `interval_schedule` and `batch_rerun` are rejected as not supported yet: no runner is wired for them ([#548](https://github.com/michelangelo-ai/michelangelo/issues/548)).
+- `end_timestamp` must be after `start_timestamp`.
 
 On create, and on an update that changes the trigger's shape (its type, `start_timestamp`/`end_timestamp`, `catchup`, `auto_flip` or the cron expression):
 

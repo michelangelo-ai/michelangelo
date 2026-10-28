@@ -377,23 +377,17 @@ func TestBeforeCreateSpecRules(t *testing.T) {
 		{
 			name:    "trigger without a schedule is rejected",
 			run:     newRun("run", v2.TriggerRunSpec{}),
-			wantErr: "spec.trigger must set one of cron_schedule, interval_schedule or batch_rerun",
+			wantErr: "spec.trigger.cron_schedule is required",
 		},
 		{
-			name: "interval_schedule is accepted; whether a runner exists is the controller's call",
-			run:  newRun("run", v2.TriggerRunSpec{Trigger: intervalSpec(time.Hour)}),
+			name:    "interval_schedule is rejected until a runner is wired",
+			run:     newRun("run", v2.TriggerRunSpec{Trigger: intervalSpec(time.Hour)}),
+			wantErr: "spec.trigger.interval_schedule is not supported yet",
 		},
 		{
-			name: "batch_rerun is accepted; whether a runner exists is the controller's call",
-			run:  newRun("run", v2.TriggerRunSpec{Trigger: batchRerunSpec()}),
-		},
-		{
-			name: "closed window on an interval_schedule is left to the backfill worker",
-			run: newRun("run", v2.TriggerRunSpec{
-				Trigger:        intervalSpec(time.Hour),
-				StartTimestamp: ts(jan10),
-				EndTimestamp:   ts(jan11),
-			}),
+			name:    "batch_rerun is rejected until a runner is wired",
+			run:     newRun("run", v2.TriggerRunSpec{Trigger: batchRerunSpec()}),
+			wantErr: "spec.trigger.batch_rerun is not supported yet",
 		},
 		{
 			name:    "unparsable cron is rejected",
@@ -503,27 +497,6 @@ func TestValidateBackfillWindowUnparsableCron(t *testing.T) {
 	require.ErrorContains(t, err, "failed to parse cron schedule")
 }
 
-func TestBeforeCreateDefaultsReferenceNamespaces(t *testing.T) {
-	mc := gomock.NewController(t)
-	defer mc.Finish()
-
-	mockAPI := apimocks.NewMockHandler(mc)
-	mockAPI.EXPECT().
-		Get(gomock.Any(), "test-ns", "test-pipeline", gomock.Any(), gomock.Any()).
-		Return(status.Error(codes.NotFound, "not found"))
-
-	h := apiHook{logger: zaptest.NewLogger(t), apiHandler: mockAPI, scheme: testScheme(t)}
-	run := newRun("run", v2.TriggerRunSpec{
-		Trigger:  cronSpec("0 9 * * *"),
-		Pipeline: &api.ResourceIdentifier{Name: "test-pipeline"},
-		Revision: &api.ResourceIdentifier{Name: "test-revision", Namespace: "other-ns"},
-	})
-
-	require.NoError(t, h.BeforeCreate(context.Background(), &v2.CreateTriggerRunRequest{TriggerRun: run}))
-	require.Equal(t, "test-ns", run.Spec.Pipeline.Namespace, "empty pipeline namespace defaults to the TriggerRun's")
-	require.Equal(t, "other-ns", run.Spec.Revision.Namespace, "an explicit namespace is kept")
-}
-
 // updateAgainst returns a BeforeUpdate caller whose stored copy of the object is
 // stored, or NotFound when stored is nil.
 func updateAgainst(t *testing.T, stored *v2.TriggerRun) func(*v2.TriggerRun) error {
@@ -586,7 +559,6 @@ func TestBeforeUpdateSpecRules(t *testing.T) {
 		run := newRun(strings.Repeat("a", 64), spec)
 		run.Spec.Action = v2.TRIGGER_RUN_ACTION_PAUSE
 		require.NoError(t, updateAgainst(t, stored)(run))
-		require.Equal(t, "test-ns", run.Spec.Pipeline.Namespace, "defaults are applied on update too")
 	})
 
 	t.Run("an object that no longer exists is left to the update", func(t *testing.T) {
@@ -744,14 +716,6 @@ func TestBeforeCreateScheduleWindowRules(t *testing.T) {
 				EndTimestamp:   ts(past),
 			},
 			wantErr: "end_timestamp must be after start_timestamp",
-		},
-		{
-			name: "catchup on a BatchRerun trigger is rejected",
-			spec: v2.TriggerRunSpec{
-				Trigger: &v2.Trigger{TriggerType: &v2.Trigger_BatchRerun{BatchRerun: &v2.BatchRerun{}}},
-				Catchup: true,
-			},
-			wantErr: "catchup does not apply to a BatchRerun trigger",
 		},
 		{
 			name: "legacy backfill window entirely in the past is accepted",

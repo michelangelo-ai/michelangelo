@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gogo/protobuf/proto"
 	pbtypes "github.com/gogo/protobuf/types"
 	"github.com/robfig/cron"
 	"go.uber.org/zap"
@@ -65,8 +66,13 @@ func (a apiHook) BeforeCreate(ctx context.Context, request *v2.CreateTriggerRunR
 	if pipelineRef == nil || pipelineRef.GetName() == "" {
 		return nil
 	}
+	namespace := pipelineRef.GetNamespace()
+	if namespace == "" {
+		namespace = request.TriggerRun.GetNamespace()
+	}
+
 	pipeline := &v2.Pipeline{}
-	if err := a.apiHandler.Get(ctx, pipelineRef.GetNamespace(), pipelineRef.GetName(), &metav1.GetOptions{}, pipeline); err != nil {
+	if err := a.apiHandler.Get(ctx, namespace, pipelineRef.GetName(), &metav1.GetOptions{}, pipeline); err != nil {
 		if utils.IsNotFoundError(err) {
 			return nil
 		}
@@ -87,9 +93,9 @@ func (a apiHook) BeforeCreate(ctx context.Context, request *v2.CreateTriggerRunR
 	return cascadedelete.StampOwnerRefOnCreate(ctx, a.logger, a.scheme, request.TriggerRun, pipeline)
 }
 
-// BeforeUpdate re-applies the defaults and the structural rules (validateSpec).
-// The window rules are re-checked only when the update changes the trigger's
-// shape (see triggerShape) compared with the stored object: an update that
+// BeforeUpdate re-applies the structural rules (validateSpec). The window rules
+// are re-checked only when the update changes the trigger's shape (see
+// sameTriggerShape) compared with the stored object: an update that
 // keeps the shape is accepted, so an object created before a rule existed, or
 // whose window has since moved into the past, can still be edited; an update
 // that turns a cron trigger into a backfill, or moves a backfill window, must
@@ -111,7 +117,7 @@ func (a apiHook) BeforeUpdate(ctx context.Context, request *v2.UpdateTriggerRunR
 		}
 		return err
 	}
-	if shapeOf(stored) == shapeOf(run) {
+	if sameTriggerShape(&stored.Spec, &run.Spec) {
 		return nil
 	}
 	return validateWindowRules(run, time.Now())
@@ -211,9 +217,6 @@ func validateScheduleWindow(spec *v2.TriggerRunSpec) error {
 	if !startAt.IsZero() && !endAt.IsZero() && !endAt.After(startAt) {
 		return status.Error(codes.InvalidArgument, "end_timestamp must be after start_timestamp")
 	}
-	if spec.Catchup && spec.Trigger.GetBatchRerun() != nil {
-		return status.Error(codes.InvalidArgument, "catchup does not apply to a BatchRerun trigger")
-	}
 	return nil
 }
 
@@ -241,34 +244,16 @@ func validateBackfillWindowIsPast(spec *v2.TriggerRunSpec, now time.Time) error 
 	return nil
 }
 
-// triggerShape is the part of a TriggerRun that decides which runner handles it
-// and what a backfill window contains. An update that changes it is held to the
-// window rules again; one that keeps it is not.
-type triggerShape struct {
-	triggerType       string
-	startAt, endAt    string
-	catchup, autoFlip bool
-	cron              string
-}
-
-func shapeOf(run *v2.TriggerRun) triggerShape {
-	spec := &run.Spec
-	return triggerShape{
-		triggerType: triggerrun.GetTriggerType(run),
-		startAt:     timestampKey(spec.StartTimestamp),
-		endAt:       timestampKey(spec.EndTimestamp),
-		catchup:     spec.Catchup,
-		autoFlip:    spec.AutoFlip,
-		cron:        spec.Trigger.GetCronSchedule().GetCron(),
-	}
-}
-
-// timestampKey distinguishes an unset timestamp from one set to the epoch.
-func timestampKey(ts *pbtypes.Timestamp) string {
-	if ts == nil {
-		return ""
-	}
-	return ts.String()
+// sameTriggerShape reports whether two specs select the same runner and, for a
+// backfill, the same window: the trigger itself (type and cron expression),
+// both timestamps, catchup and auto_flip. An update that changes any of them
+// is held to the window rules again; one that keeps them is not.
+func sameTriggerShape(a, b *v2.TriggerRunSpec) bool {
+	return proto.Equal(a.Trigger, b.Trigger) &&
+		proto.Equal(a.StartTimestamp, b.StartTimestamp) &&
+		proto.Equal(a.EndTimestamp, b.EndTimestamp) &&
+		a.Catchup == b.Catchup &&
+		a.AutoFlip == b.AutoFlip
 }
 
 // isKillRequest reports whether spec asks the controller to stop the trigger,
@@ -277,39 +262,31 @@ func isKillRequest(spec *v2.TriggerRunSpec) bool {
 	return spec.Action == v2.TRIGGER_RUN_ACTION_KILL || spec.Kill
 }
 
-// defaultSpec resolves a pipeline or revision reference without a namespace in
-// the TriggerRun's own namespace. The worker copies both references verbatim
-// onto each PipelineRun, with no fallback of its own.
-func defaultSpec(run *v2.TriggerRun) {
-	if pipeline := run.Spec.Pipeline; pipeline != nil && pipeline.Namespace == "" {
-		pipeline.Namespace = run.Namespace
-	}
-	if revision := run.Spec.Revision; revision != nil && revision.Namespace == "" {
-		revision.Namespace = run.Namespace
-	}
-}
-
-// validateSpec applies the defaults and the clock-independent rules that hold
-// for the whole life of a TriggerRun, on create and on every update that is
-// not a kill.
+// validateSpec applies the clock-independent rules that hold for the whole life
+// of a TriggerRun, on create and on every update that is not a kill.
 func validateSpec(run *v2.TriggerRun) error {
-	defaultSpec(run)
-	if err := validateScheduleWindow(&run.Spec); err != nil {
+	if err := validateTrigger(run.Spec.Trigger); err != nil {
 		return err
 	}
-	return validateTrigger(run.Spec.Trigger)
+	return validateScheduleWindow(&run.Spec)
 }
 
-// validateTrigger accepts a trigger whose shape the controller and worker can
-// read: one of the trigger types must be set, and a cron expression must parse.
-// Which types have a runner wired is the controller's concern, not the API's.
+// validateTrigger accepts a trigger the controller can run today: a
+// cron_schedule whose expression parses. interval_schedule and batch_rerun have
+// no runner wired yet (#548); accepting them would persist a TriggerRun that
+// never starts, so they are refused until one exists.
 func validateTrigger(trigger *v2.Trigger) error {
-	if trigger.GetBatchRerun() != nil || trigger.GetIntervalSchedule() != nil {
-		return nil
+	switch {
+	case trigger.GetIntervalSchedule() != nil:
+		return status.Error(codes.InvalidArgument,
+			"spec.trigger.interval_schedule is not supported yet: no runner is registered for it (#548)")
+	case trigger.GetBatchRerun() != nil:
+		return status.Error(codes.InvalidArgument,
+			"spec.trigger.batch_rerun is not supported yet: no runner is registered for it (#548)")
 	}
 	cronSchedule := trigger.GetCronSchedule()
 	if cronSchedule == nil {
-		return status.Error(codes.InvalidArgument, "spec.trigger must set one of cron_schedule, interval_schedule or batch_rerun")
+		return status.Error(codes.InvalidArgument, "spec.trigger.cron_schedule is required")
 	}
 	if _, err := cron.ParseStandard(cronSchedule.GetCron()); err != nil {
 		return status.Errorf(codes.InvalidArgument, "invalid spec.trigger.cron_schedule.cron %q: %v", cronSchedule.GetCron(), err)
@@ -358,13 +335,7 @@ func validateBackfillWindow(spec *v2.TriggerRunSpec) error {
 	if err != nil {
 		return err
 	}
-	cronSchedule := spec.Trigger.GetCronSchedule()
-	if cronSchedule == nil {
-		// Only a cron window can be counted ahead of time; the backfill worker
-		// reports the other schedule kinds itself.
-		return nil
-	}
-	cronExpr := cronSchedule.GetCron()
+	cronExpr := spec.Trigger.GetCronSchedule().GetCron()
 	hasRun, err := triggerrun.BackfillWindowHasRun(startAt, endAt, cronExpr)
 	if err != nil {
 		return status.Error(codes.InvalidArgument, err.Error())
