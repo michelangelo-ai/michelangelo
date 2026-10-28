@@ -11,6 +11,7 @@ go_library(
         "//go/cascadedelete:go_default_library",
         "//go/components/triggerrun:go_default_library",
         "//proto/api/v2:go_default_library",
+        "@com_github_gogo_protobuf//proto:go_default_library",
         "@com_github_gogo_protobuf//types:go_default_library",
         "@com_github_robfig_cron//:go_default_library",
         "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
