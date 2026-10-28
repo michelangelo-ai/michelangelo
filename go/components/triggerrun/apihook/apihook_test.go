@@ -515,28 +515,47 @@ func TestBeforeCreateDefaultsReferenceNamespaces(t *testing.T) {
 	require.Equal(t, "other-ns", run.Spec.Revision.Namespace, "an explicit namespace is kept")
 }
 
-func TestBeforeUpdateSpecRules(t *testing.T) {
-	h := apiHook{}
-	update := func(run *v2.TriggerRun) error {
+// updateAgainst returns a BeforeUpdate caller whose stored copy of the object is
+// stored, or NotFound when stored is nil.
+func updateAgainst(t *testing.T, stored *v2.TriggerRun) func(*v2.TriggerRun) error {
+	t.Helper()
+	mc := gomock.NewController(t)
+	t.Cleanup(mc.Finish)
+	mockAPI := apimocks.NewMockHandler(mc)
+	mockAPI.EXPECT().
+		Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, _, _ string, _ *metav1.GetOptions, obj *v2.TriggerRun) error {
+			if stored == nil {
+				return status.Error(codes.NotFound, "not found")
+			}
+			*obj = *stored
+			return nil
+		}).AnyTimes()
+	h := apiHook{logger: zaptest.NewLogger(t), apiHandler: mockAPI}
+	return func(run *v2.TriggerRun) error {
 		return h.BeforeUpdate(context.Background(), &v2.UpdateTriggerRunRequest{TriggerRun: run})
 	}
+}
+
+func TestBeforeUpdateSpecRules(t *testing.T) {
+	storedCron := newRun("run", v2.TriggerRunSpec{Trigger: cronSpec("0 9 * * *")})
 
 	t.Run("kill action bypasses the structural rules", func(t *testing.T) {
-		require.NoError(t, update(newRun("run", v2.TriggerRunSpec{
+		require.NoError(t, updateAgainst(t, storedCron)(newRun("run", v2.TriggerRunSpec{
 			Trigger: cronSpec("every day"),
 			Action:  v2.TRIGGER_RUN_ACTION_KILL,
 		})))
 	})
 
 	t.Run("deprecated kill flag bypasses the structural rules", func(t *testing.T) {
-		require.NoError(t, update(newRun("run", v2.TriggerRunSpec{
+		require.NoError(t, updateAgainst(t, storedCron)(newRun("run", v2.TriggerRunSpec{
 			Trigger: cronSpec("every day"),
 			Kill:    true,
 		})))
 	})
 
 	t.Run("other updates still apply the structural rules", func(t *testing.T) {
-		err := update(newRun("run", v2.TriggerRunSpec{
+		err := updateAgainst(t, storedCron)(newRun("run", v2.TriggerRunSpec{
 			Trigger: cronSpec("every day"),
 			Action:  v2.TRIGGER_RUN_ACTION_PAUSE,
 		}))
@@ -544,19 +563,135 @@ func TestBeforeUpdateSpecRules(t *testing.T) {
 		require.ErrorContains(t, err, "invalid spec.trigger.cron_schedule.cron")
 	})
 
-	t.Run("creation-only rules are not re-checked", func(t *testing.T) {
+	t.Run("an update that keeps the trigger's shape is not held to the window rules", func(t *testing.T) {
 		// A 64-character name, an empty backfill window and auto_flip on it are all
-		// rejected at creation; an existing object with them must stay updatable.
-		run := newRun(strings.Repeat("a", 64), v2.TriggerRunSpec{
+		// rejected at creation; an existing object with them must stay editable.
+		spec := v2.TriggerRunSpec{
 			Trigger:        cronSpec("0 9 * * *"),
 			StartTimestamp: ts(jan10.Add(10 * time.Hour)),
 			EndTimestamp:   ts(jan10.Add(11 * time.Hour)),
 			AutoFlip:       true,
 			Pipeline:       &api.ResourceIdentifier{Name: "test-pipeline"},
-		})
-		require.NoError(t, update(run))
+		}
+		stored := newRun(strings.Repeat("a", 64), spec)
+		run := newRun(strings.Repeat("a", 64), spec)
+		run.Spec.Action = v2.TRIGGER_RUN_ACTION_PAUSE
+		require.NoError(t, updateAgainst(t, stored)(run))
 		require.Equal(t, "test-ns", run.Spec.Pipeline.Namespace, "defaults are applied on update too")
 	})
+
+	t.Run("an object that no longer exists is left to the update", func(t *testing.T) {
+		require.NoError(t, updateAgainst(t, nil)(newRun("run", v2.TriggerRunSpec{
+			Trigger:        cronSpec("0 9 * * *"),
+			StartTimestamp: ts(jan10),
+			EndTimestamp:   ts(jan11),
+			AutoFlip:       true,
+		})))
+	})
+
+	t.Run("a lookup error is returned", func(t *testing.T) {
+		mc := gomock.NewController(t)
+		defer mc.Finish()
+		lookupErr := errors.New("internal error")
+		mockAPI := apimocks.NewMockHandler(mc)
+		mockAPI.EXPECT().
+			Get(gomock.Any(), "test-ns", "run", gomock.Any(), gomock.Any()).
+			Return(lookupErr)
+		h := apiHook{logger: zaptest.NewLogger(t), apiHandler: mockAPI}
+		err := h.BeforeUpdate(context.Background(), &v2.UpdateTriggerRunRequest{TriggerRun: storedCron})
+		require.ErrorIs(t, err, lookupErr)
+	})
+}
+
+// An update that changes the trigger's shape (type, window, catchup, auto_flip
+// or cron) must satisfy the window rules, or UpdateTriggerRun would be a way
+// around them: a cron trigger with no window passes every create check, and a
+// later update could turn it into a future-dated backfill.
+func TestBeforeUpdateShapeChangeReappliesWindowRules(t *testing.T) {
+	now := time.Now()
+	cronNoWindow := func() *v2.TriggerRun {
+		return newRun("run", v2.TriggerRunSpec{Trigger: cronSpec("0 * * * *")})
+	}
+	pastBackfill := func() *v2.TriggerRun {
+		return newRun("run", v2.TriggerRunSpec{
+			Trigger:        cronSpec("0 * * * *"),
+			StartTimestamp: ts(jan10),
+			EndTimestamp:   ts(jan11),
+		})
+	}
+	futureWindow := func(r *v2.TriggerRun) {
+		r.Spec.StartTimestamp = ts(now.Add(-time.Hour))
+		r.Spec.EndTimestamp = ts(now.Add(24 * time.Hour))
+	}
+
+	tests := []struct {
+		name    string
+		stored  *v2.TriggerRun
+		update  func(*v2.TriggerRun)
+		wantErr string
+	}{
+		{
+			name:    "adding a future-dated window to a cron trigger is rejected",
+			stored:  cronNoWindow(),
+			update:  futureWindow,
+			wantErr: "must lie entirely in the past",
+		},
+		{
+			name:   "adding a window with no cron occurrence is rejected",
+			stored: cronNoWindow(),
+			update: func(r *v2.TriggerRun) {
+				r.Spec.Trigger = cronSpec("0 0 29 2 *")
+				r.Spec.StartTimestamp, r.Spec.EndTimestamp = ts(jan10), ts(jan11)
+			},
+			wantErr: "contains no occurrence of cron",
+		},
+		{
+			name:   "adding a past window with occurrences is accepted",
+			stored: cronNoWindow(),
+			update: func(r *v2.TriggerRun) { r.Spec.StartTimestamp, r.Spec.EndTimestamp = ts(jan10), ts(jan11) },
+		},
+		{
+			name:   "adding a future window with catchup is accepted",
+			stored: cronNoWindow(),
+			update: func(r *v2.TriggerRun) { futureWindow(r); r.Spec.Catchup = true },
+		},
+		{
+			name:    "setting auto_flip on an existing backfill is rejected",
+			stored:  pastBackfill(),
+			update:  func(r *v2.TriggerRun) { r.Spec.AutoFlip = true },
+			wantErr: "auto_flip cannot be set on a backfill window",
+		},
+		{
+			name:    "moving a backfill window into the future is rejected",
+			stored:  pastBackfill(),
+			update:  func(r *v2.TriggerRun) { r.Spec.EndTimestamp = ts(now.Add(24 * time.Hour)) },
+			wantErr: "must lie entirely in the past",
+		},
+		{
+			name:    "changing the cron of a backfill to one with no occurrence is rejected",
+			stored:  pastBackfill(),
+			update:  func(r *v2.TriggerRun) { r.Spec.Trigger = cronSpec("0 0 29 2 *") },
+			wantErr: "contains no occurrence of cron",
+		},
+		{
+			name:   "a kill that also changes the shape is accepted",
+			stored: cronNoWindow(),
+			update: func(r *v2.TriggerRun) { futureWindow(r); r.Spec.Action = v2.TRIGGER_RUN_ACTION_KILL },
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			run := newRun(tt.stored.Name, tt.stored.Spec)
+			tt.update(run)
+			err := updateAgainst(t, tt.stored)(run)
+			if tt.wantErr == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.Equal(t, codes.InvalidArgument, status.Code(err))
+			require.ErrorContains(t, err, tt.wantErr)
+		})
+	}
 }
 
 func ts(t time.Time) *pbtypes.Timestamp {
@@ -719,25 +854,23 @@ func TestScheduleWindowInvalidTimestamps(t *testing.T) {
 // clock-independent rules still apply.
 func TestBeforeUpdateScheduleWindowRules(t *testing.T) {
 	now := time.Now()
-	h := apiHook{}
+	update := updateAgainst(t, nil)
 
 	t.Run("kill on a legacy backfill whose end is in the future is accepted", func(t *testing.T) {
-		request := &v2.UpdateTriggerRunRequest{TriggerRun: &v2.TriggerRun{Spec: v2.TriggerRunSpec{
+		require.NoError(t, update(newRun("run", v2.TriggerRunSpec{
 			Trigger:        cronSpec("0 * * * *"),
 			StartTimestamp: ts(now.Add(-24 * time.Hour)),
 			EndTimestamp:   ts(now.Add(24 * time.Hour)),
 			Action:         v2.TRIGGER_RUN_ACTION_KILL,
-		}}}
-		require.NoError(t, h.BeforeUpdate(context.Background(), request))
+		})))
 	})
 
 	t.Run("end before start is still rejected", func(t *testing.T) {
-		request := &v2.UpdateTriggerRunRequest{TriggerRun: &v2.TriggerRun{Spec: v2.TriggerRunSpec{
+		err := update(newRun("run", v2.TriggerRunSpec{
 			Trigger:        cronSpec("0 * * * *"),
 			StartTimestamp: ts(now),
 			EndTimestamp:   ts(now.Add(-time.Hour)),
-		}}}
-		err := h.BeforeUpdate(context.Background(), request)
+		}))
 		require.Error(t, err)
 		require.Equal(t, codes.InvalidArgument, status.Code(err))
 	})

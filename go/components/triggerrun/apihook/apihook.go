@@ -87,15 +87,34 @@ func (a apiHook) BeforeCreate(ctx context.Context, request *v2.CreateTriggerRunR
 	return cascadedelete.StampOwnerRefOnCreate(ctx, a.logger, a.scheme, request.TriggerRun, pipeline)
 }
 
-// BeforeUpdate re-applies the defaults and the structural rules (validateSpec)
-// and nothing else: the creation-only rules are skipped so an object that already
-// exists can always be updated, and a kill skips the structural rules too, so an
-// object created before a rule existed can always be stopped.
-func (a apiHook) BeforeUpdate(_ context.Context, request *v2.UpdateTriggerRunRequest) error {
-	if isKillRequest(&request.TriggerRun.Spec) {
+// BeforeUpdate re-applies the defaults and the structural rules (validateSpec).
+// The window rules are re-checked only when the update changes the trigger's
+// shape (see triggerShape) compared with the stored object: an update that
+// keeps the shape is accepted, so an object created before a rule existed, or
+// whose window has since moved into the past, can still be edited; an update
+// that turns a cron trigger into a backfill, or moves a backfill window, must
+// satisfy the same rules as a create, or UpdateTriggerRun would be a way around
+// them. A kill skips every rule, so any object can always be stopped.
+func (a apiHook) BeforeUpdate(ctx context.Context, request *v2.UpdateTriggerRunRequest) error {
+	run := request.TriggerRun
+	if isKillRequest(&run.Spec) {
 		return nil
 	}
-	return validateSpec(request.TriggerRun)
+	if err := validateSpec(run); err != nil {
+		return err
+	}
+	stored := &v2.TriggerRun{}
+	if err := a.apiHandler.Get(ctx, run.Namespace, run.Name, &metav1.GetOptions{}, stored); err != nil {
+		if utils.IsNotFoundError(err) {
+			// The update itself reports NotFound.
+			return nil
+		}
+		return err
+	}
+	if shapeOf(stored) == shapeOf(run) {
+		return nil
+	}
+	return validateWindowRules(run, time.Now())
 }
 
 // BeforeDelete refuses to delete a TriggerRun that is still live. Deleting it
@@ -222,6 +241,36 @@ func validateBackfillWindowIsPast(spec *v2.TriggerRunSpec, now time.Time) error 
 	return nil
 }
 
+// triggerShape is the part of a TriggerRun that decides which runner handles it
+// and what a backfill window contains. An update that changes it is held to the
+// window rules again; one that keeps it is not.
+type triggerShape struct {
+	triggerType       string
+	startAt, endAt    string
+	catchup, autoFlip bool
+	cron              string
+}
+
+func shapeOf(run *v2.TriggerRun) triggerShape {
+	spec := &run.Spec
+	return triggerShape{
+		triggerType: triggerrun.GetTriggerType(run),
+		startAt:     timestampKey(spec.StartTimestamp),
+		endAt:       timestampKey(spec.EndTimestamp),
+		catchup:     spec.Catchup,
+		autoFlip:    spec.AutoFlip,
+		cron:        spec.Trigger.GetCronSchedule().GetCron(),
+	}
+}
+
+// timestampKey distinguishes an unset timestamp from one set to the epoch.
+func timestampKey(ts *pbtypes.Timestamp) string {
+	if ts == nil {
+		return ""
+	}
+	return ts.String()
+}
+
 // isKillRequest reports whether spec asks the controller to stop the trigger,
 // through spec.action or the deprecated spec.kill flag.
 func isKillRequest(spec *v2.TriggerRunSpec) bool {
@@ -253,8 +302,7 @@ func validateSpec(run *v2.TriggerRun) error {
 
 // validateTrigger accepts a trigger whose shape the controller and worker can
 // read: one of the trigger types must be set, and a cron expression must parse.
-// Whether a runner is registered for the type is the controller's decision, not
-// the API's; a type without one fails at reconcile with a message naming it.
+// Which types have a runner wired is the controller's concern, not the API's.
 func validateTrigger(trigger *v2.Trigger) error {
 	if trigger.GetBatchRerun() != nil || trigger.GetIntervalSchedule() != nil {
 		return nil
@@ -269,18 +317,25 @@ func validateTrigger(trigger *v2.Trigger) error {
 	return nil
 }
 
-// validateOnCreate applies the rules that are only checked when the object is
-// created. They are not re-checked on update, so an object created before a
-// rule existed, or whose window has since moved into the past, can still be
-// updated and killed.
+// validateOnCreate applies the rules checked when the object is created: the
+// name rule, which cannot change afterwards, and the window rules, which an
+// update re-checks only when it changes the trigger's shape (see BeforeUpdate).
 func validateOnCreate(run *v2.TriggerRun, now time.Time) error {
-	if err := validateBackfillWindowIsPast(&run.Spec, now); err != nil {
-		return err
-	}
 	if errs := validation.IsValidLabelValue(run.Name); len(errs) > 0 {
 		return status.Errorf(codes.InvalidArgument,
 			"metadata.name %q is stamped as the %s label on every PipelineRun this trigger starts and must be a valid label value: %s",
 			run.Name, triggerrun.TriggeredByLabel, strings.Join(errs, "; "))
+	}
+	return validateWindowRules(run, now)
+}
+
+// validateWindowRules holds a backfill window to what the one-shot backfill
+// runner can execute: it must lie in the past (validateBackfillWindowIsPast)
+// and, when the spec selects that runner, be a window it can enumerate
+// (validateBackfillWindow).
+func validateWindowRules(run *v2.TriggerRun, now time.Time) error {
+	if err := validateBackfillWindowIsPast(&run.Spec, now); err != nil {
+		return err
 	}
 	if triggerrun.GetTriggerType(run) != triggerrun.TriggerTypeBackfill {
 		return nil

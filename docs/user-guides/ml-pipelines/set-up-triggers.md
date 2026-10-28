@@ -181,17 +181,17 @@ The API server validates a TriggerRun when it is created and when it is updated,
 
 On create and update:
 
-- `spec.trigger` must set one of `cron_schedule`, `interval_schedule` or `batch_rerun`, and a cron expression must parse (5 fields, or a descriptor such as `@every 1h`). `interval_schedule` and `batch_rerun` have no runner yet: the API accepts them and the controller moves the TriggerRun to `FAILED` with a message pointing at the tracking issue ([#548](https://github.com/michelangelo-ai/michelangelo/issues/548)).
+- `spec.trigger` must set one of `cron_schedule`, `interval_schedule` or `batch_rerun`, and a cron expression must parse (5 fields, or a descriptor such as `@every 1h`). `interval_schedule` and `batch_rerun` have no runner wired yet ([#548](https://github.com/michelangelo-ai/michelangelo/issues/548)): the API accepts them, but such a TriggerRun does not start.
 - `end_timestamp` must be after `start_timestamp`, and `catchup` is not accepted on a `batch_rerun` trigger.
 - An empty `spec.pipeline.namespace` or `spec.revision.namespace` defaults to the TriggerRun's namespace.
 
-On create only:
+On create, and on an update that changes the trigger's shape (its type, `start_timestamp`/`end_timestamp`, `catchup`, `auto_flip` or the cron expression):
 
 - A backfill window (both timestamps, no `catchup`) must lie entirely in the past and contain at least one cron occurrence.
 - `auto_flip` cannot be set on a backfill window.
 - `metadata.name` must be a valid label value (at most 63 characters): it is stamped as the `pipelinerun.michelangelo/triggered-by` label on every pipeline run the trigger starts.
 
-A kill (`spec.action: TRIGGER_RUN_ACTION_KILL`) is never refused by these rules, so a trigger created before a rule existed can always be stopped.
+An update that keeps the shape (a pause, a notification change, the controller's own bookkeeping) is accepted even when the object would not pass those rules today, so an existing trigger can always be edited; an update that turns a cron trigger into a backfill, or moves a backfill window, is held to the same rules as a create. A kill (`spec.action: TRIGGER_RUN_ACTION_KILL`) is never refused by these rules, so a trigger created before a rule existed can always be stopped.
 
 ## Advanced Configuration
 
