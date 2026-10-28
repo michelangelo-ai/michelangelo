@@ -8,6 +8,7 @@ last_verified: 2026-10-14
 
 * How to configure cron-based recurring triggers to run your pipeline on a schedule
 * How to configure backfill triggers to reprocess historical time windows
+* How to limit a cron trigger to a time window and replay missed runs with `catchup` (Temporal only)
 * How to define triggers directly in your pipeline manifest using `trigger_map` for declarative, versionable configuration
 * How to create trigger runs from a pipeline's registered trigger configuration using `ma trigger_run create`
 * How to monitor your triggers and pipeline runs through the UI
@@ -134,7 +135,7 @@ Once your trigger is registered, the system starts executing pipeline runs on sc
 
 A backfill trigger lets you run your pipeline over a historical time window — for example, reprocessing data from the past week. The setup follows the same steps as a cron trigger, with one addition: you specify a start and end timestamp that defines the time range to backfill.
 
-The system looks at your cron schedule and creates a pipeline run for each cron cycle that falls within that window. Both boundaries are **inclusive**, so if a scheduled time lands exactly on the start or end timestamp, it will still trigger a run.
+The system looks at your cron schedule and creates a pipeline run for each cron cycle that falls within that window. Both boundaries are **inclusive**, so if a scheduled time lands exactly on the start or end timestamp, it will still trigger a run. This applies when both timestamps are set and `catchup` is omitted or false; to bound a recurring schedule instead, see [Schedule Window and Catch-Up](#schedule-window-and-catch-up).
 
 Here's a complete backfill example:
 
@@ -174,6 +175,78 @@ spec:
 In this example, the cron schedule is "daily at 9 AM" and the window covers January 1-7. That means the system creates **7 pipeline runs** — one for each day at 9:00 AM. If you also have `parameters_map` entries, the total is multiplied (7 days x 2 parameter sets = 14 runs).
 
 > **Tip:** Make sure your time window actually includes at least one cron cycle. For example, if your cron runs weekly on Saturdays (`"0 9 * * 6"`), a window from Monday to Friday won't generate any runs!
+
+## Schedule Window and Catch-Up
+
+A cron trigger can also run only inside a time window, and can replay the occurrences it missed before it was created. Both use the same `start_timestamp` and `end_timestamp` fields as a backfill, plus `catchup`. Which one you get depends on the combination:
+
+| Spec | What runs | What the timestamps mean |
+| :---- | :---- | :---- |
+| Both timestamps set, `catchup` omitted or false | One-shot backfill ([previous section](#setting-up-a-backfill-trigger)) | The backfill range, both ends inclusive |
+| Any other combination on a cron trigger | Recurring cron schedule | The schedule's active window, described below |
+
+> **Important: this needs the Temporal workflow engine.** Only the Temporal client supports a schedule window and catch-up. **Cadence is the default** in both the Helm chart (`workflow.engine: cadence`) and the sandbox, and it rejects both, so the TriggerRun goes to `FAILED` (see [Troubleshooting](#troubleshooting)). To try this locally, create the sandbox with `ma sandbox create --workflow temporal`. On Cadence, a cron TriggerRun that sets only one of `start_timestamp` or `end_timestamp` now fails the same way; before catch-up support was added, the timestamp was silently ignored. A backfill (both timestamps, no `catchup`) still works on Cadence.
+
+### Window Fields
+
+| Field | Meaning on a recurring cron trigger |
+| :---- | :---- |
+| `start_timestamp` | Start of the active window. Occurrences before it don't fire unless `catchup` is true. A start in the future leaves the schedule idle until then. |
+| `end_timestamp` | End of the window, **half-open**: an occurrence at or after this time doesn't fire. Must be after `start_timestamp`. Omit it for a schedule with no end. |
+| `catchup` | When true and `start_timestamp` is in the past, every occurrence in `[start_timestamp, min(now, end_timestamp))` fires once, oldest first. The schedule then continues on its normal cadence until `end_timestamp`, if set. It has no effect without a `start_timestamp` or when the start is in the future. |
+
+Replayed occurrences run **one at a time, in chronological order**, so a catch-up never has more than `max_concurrency` pipeline runs in flight.
+
+Each replayed run carries the date of the occurrence it stands for, not the date it actually runs. Date parameters such as `DS` (`YYYY-MM-DD`, UTC) come from that occurrence, so a 20-day catch-up of a daily cron covers 20 different days instead of running today's date 20 times. That's the reason to use `catchup` instead of starting the runs by hand.
+
+### Example: Catch Up Since the 1st, Then Keep Running
+
+This trigger replays every daily 9:00 AM run since October 1, then keeps running daily with no end date. The shape is the same as the backfill example, with `catchup: true` and no `end_timestamp`:
+
+```yaml
+apiVersion: michelangelo.api/v2
+kind: TriggerRun
+metadata:
+  name: training-pipeline-daily-catchup
+  namespace: ml-team                    # Your project name
+spec:
+  pipeline:
+    name: training-pipeline
+    namespace: ml-team
+  revision:
+    name: rev-2024-03-01
+    namespace: ml-team
+
+  # Start of the window, in the past; no end_timestamp, so the schedule never ends
+  start_timestamp: "2026-10-01T09:00:00Z"
+  catchup: true                         # Requires the Temporal engine
+
+  trigger:
+    cron_schedule:
+      cron: "0 9 * * *"         # Daily at 9:00 AM
+
+    max_concurrency: 2
+
+  actor:
+    name: "your-username"
+```
+
+`ma trigger_run create` and the pipeline's `triggerMap` don't carry these fields, so write the TriggerRun YAML yourself and apply it:
+
+```bash
+ma trigger_run apply --file=training-pipeline-daily-catchup.yaml
+```
+
+### Catch-Up Limit
+
+A catch-up that would replay **more than 500 occurrences** is rejected, not trimmed. The TriggerRun goes to `FAILED` and nothing is scheduled. The limit counts occurrences, not time, so a daily cron can catch up more than a year, while an hourly cron can catch up about 20 days.
+
+To go back further, move `start_timestamp` later, or split the range across several TriggerRuns of at most 500 occurrences each. Give every TriggerRun except the last an `end_timestamp` equal to the next one's `start_timestamp`. Because the end is half-open, an occurrence on the shared boundary runs once, not twice.
+
+### Caveats
+
+- **A trigger created paused skips catch-up.** If you create the TriggerRun with `action: TRIGGER_RUN_ACTION_PAUSE`, the replay doesn't run, and resuming the trigger later doesn't request it again.
+- **A failed replay doesn't fail the trigger.** The schedule is already live and firing forward, so the TriggerRun stays `RUNNING` and its error message reads `schedule <id> is live but catch-up from <time> did not run: <reason>`. Look for it in `ma trigger_run get`; it stays there until the trigger is next paused or resumed. The missed range isn't replayed automatically, because the replay may already have partly run and retrying it could create duplicate runs. Check which runs exist before covering the range with another TriggerRun.
 
 ## Advanced Configuration
 
@@ -369,6 +442,10 @@ Running into issues? Here are a few common things to check:
 - **CLI command failing?** Double-check that your sandbox is running and your project exists. See the [Prerequisites](#prerequisites) section above.
 - **Cron not firing when you expect?** Verify your cron expression is correct — the 5-field format can be tricky. [crontab.guru](https://crontab.guru/) is a handy tool for testing expressions.
 - **Pipeline runs not showing up in the UI?** Check the trigger state with `ma trigger_run get`. If the trigger is in a `FAILED` state, the output will include details about what went wrong.
+- **`FAILED` with `end_timestamp … must be after start_timestamp …`?** On a recurring window the end must be later than the start. The TriggerRun is accepted at create and fails when the controller starts it, so create a new one with a corrected window.
+- **`FAILED` with `catch-up from … would replay more than 500 occurrences of "…"; narrow the window or split it across several TriggerRuns`?** See [Catch-Up Limit](#catch-up-limit).
+- **`FAILED` with `catch-up (spec.catchup) is not supported by the Cadence cron provider` or `a schedule window (spec.start_timestamp / spec.end_timestamp) is not supported by the Cadence cron provider`?** Your deployment runs Cadence. Switch to Temporal, or remove the fields. For a one-off historical range, set both timestamps without `catchup` to get a [backfill](#setting-up-a-backfill-trigger).
+- **`RUNNING` but the error message says `schedule … is live but catch-up from … did not run: …`?** The schedule is running forward but the replay failed. See [Caveats](#caveats).
 
 ## Coming Soon
 

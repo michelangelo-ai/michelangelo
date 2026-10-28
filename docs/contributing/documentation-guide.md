@@ -246,6 +246,8 @@ This catches:
 - [ ] Internal links use relative paths with `.md` extension
 - [ ] Images are in `docs/images/` or co-located
 - [ ] `bun run build` passes without errors
+- [ ] If the page describes code behaviour, re-check it against current `main` right before merging: `git fetch && git log <your-base>..origin/main -- <paths you cite>`. Any commit listed may have changed what you documented.
+  A docs PR checked against a base that's hours old can still be wrong at merge time.
 
 ## Submitting Changes
 
