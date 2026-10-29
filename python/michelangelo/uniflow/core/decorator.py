@@ -41,7 +41,7 @@ from typing import Callable, Generic, Optional, TypeVar
 import fsspec
 
 from michelangelo.uniflow.core.codec import encoder
-from michelangelo.uniflow.core.failure import FailureLowering, WorkflowFailure
+from michelangelo.uniflow.core.failure import WorkflowFailure
 from michelangelo.uniflow.core.image_spec import ImageSpec
 from michelangelo.uniflow.core.io_registry import IORegistry, default_io
 from michelangelo.uniflow.core.ref import Ref, ref, unref
@@ -434,8 +434,6 @@ def task(
 
 def workflow(
     on_failure: Optional[Callable[[WorkflowFailure], object]] = None,
-    *,
-    _failure_lowering: Optional[FailureLowering] = None,
 ) -> Callable[[Callable[P, R]], Callable[P, R]]:
     """Decorator for defining a Uniflow workflow.
 
@@ -445,7 +443,6 @@ def workflow(
 
     Args:
         on_failure: Callback receiving the workflow failure after execution fails.
-        _failure_lowering: Optional backend implementation for remote workflows.
 
     Returns:
         A decorator that marks a function as a workflow.
@@ -528,7 +525,7 @@ def workflow(
 
         fn._uf_workflow = True
         wrapper._uf_on_failure = on_failure
-        wrapper._uf_failure_lowering = _failure_lowering
+        wrapper._uf_failure_lowering = None
         return wrapper
 
     return decorator

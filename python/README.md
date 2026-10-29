@@ -112,7 +112,9 @@ exception type.
 Local runs execute the callback in Python. Remote builds require a backend that
 can lower it to Starlark; the OSS SDK does not provide `std.catch` and rejects
 remote builds with `on_failure` if no backend is configured. Workflows without
-`on_failure` are unchanged.
+`on_failure` are unchanged. Backend integrations can attach a `FailureLowering`
+using `michelangelo.uniflow.core.failure.bind_workflow_failure_backend` without
+exposing backend configuration in the workflow decorator.
 
 Want to use Spark instead of Ray? Just swap the task config:
 

@@ -8,7 +8,11 @@ from unittest.mock import patch
 from michelangelo.uniflow.core.build import build
 from michelangelo.uniflow.core.context import _local_run
 from michelangelo.uniflow.core.decorator import workflow
-from michelangelo.uniflow.core.failure import FailureEntrypoint, WorkflowFailure
+from michelangelo.uniflow.core.failure import (
+    FailureEntrypoint,
+    WorkflowFailure,
+    bind_workflow_failure_backend,
+)
 
 
 def report_workflow_failure(failure: WorkflowFailure) -> str:
@@ -42,10 +46,13 @@ def lower_failure(workflow_file, workflow_function, handler_file, handler_functi
     )
 
 
-@workflow(on_failure=report_workflow_failure, _failure_lowering=lower_failure)
+@workflow(on_failure=report_workflow_failure)
 def handled_workflow_with_backend():
-    """Exercise a workflow with its backend supplied at decoration time."""
+    """Exercise a workflow with a bound backend."""
     return "ok"
+
+
+bind_workflow_failure_backend(handled_workflow_with_backend, lower_failure)
 
 
 class TestWorkflowFailure(unittest.TestCase):
@@ -73,10 +80,22 @@ class TestWorkflowFailure(unittest.TestCase):
             {"main_file": package.main_file, "main_function": package.main_function},
         )
 
-    def test_handled_workflow_uses_decorator_backend(self):
-        """A decorator-provided backend also reaches direct build calls."""
+    def test_handled_workflow_uses_bound_backend(self):
+        """A bound backend also reaches direct build calls."""
         package = build(handled_workflow_with_backend)
         self.assertEqual(package.main_function, "__failure_entrypoint")
+
+    def test_backend_binding_preserves_workflow_identity(self):
+        """Backend integration must not wrap or replace the typed workflow."""
+        self.assertIs(
+            bind_workflow_failure_backend(handled_workflow_with_backend, lower_failure),
+            handled_workflow_with_backend,
+        )
+
+    def test_backend_binding_requires_handled_workflow(self):
+        """Backend integration does not modify undecorated workflows."""
+        with self.assertRaisesRegex(ValueError, "requires @workflow"):
+            bind_workflow_failure_backend(lambda: None, lower_failure)
 
     def test_local_run_uses_python_handler_without_remote_backend(self):
         """Local execution should not require a Starlark failure backend."""

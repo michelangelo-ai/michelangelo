@@ -1,7 +1,7 @@
 """Failure values and backend extension for workflow failure handlers."""
 
 from dataclasses import dataclass
-from typing import Callable
+from typing import Callable, TypeVar
 
 
 @dataclass(frozen=True)
@@ -29,3 +29,22 @@ class FailureEntrypoint:
 
 
 FailureLowering = Callable[[str, str, str, str], FailureEntrypoint]
+
+WorkflowFunction = TypeVar("WorkflowFunction", bound=Callable)
+
+
+def bind_workflow_failure_backend(
+    workflow_fn: WorkflowFunction, lowering: FailureLowering
+) -> WorkflowFunction:
+    """Attach a remote failure backend to a handled workflow.
+
+    Backend integrations use this hook; workflow authors only supply on_failure.
+    The decorated function and its Python signature are preserved.
+    """
+    if getattr(workflow_fn, "_uf_on_failure", None) is None:
+        raise ValueError("failure backend requires @workflow(on_failure=...)")
+    if not callable(lowering):
+        raise TypeError("failure backend must be callable")
+
+    workflow_fn._uf_failure_lowering = lowering
+    return workflow_fn
