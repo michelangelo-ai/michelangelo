@@ -3,6 +3,7 @@
 import json
 import os
 import unittest
+from inspect import signature
 from unittest.mock import patch
 
 from michelangelo.uniflow.core.build import build
@@ -93,9 +94,19 @@ class TestWorkflowFailure(unittest.TestCase):
         )
 
     def test_backend_binding_requires_handled_workflow(self):
-        """Backend integration does not modify undecorated workflows."""
-        with self.assertRaisesRegex(ValueError, "requires @workflow"):
-            bind_workflow_failure_backend(lambda: None, lower_failure)
+        """Backend integration requires a workflow with an on_failure handler."""
+
+        @workflow()
+        def unhandled_workflow():
+            return "ok"
+
+        for workflow_fn in (lambda: None, unhandled_workflow):
+            with self.assertRaisesRegex(ValueError, "requires @workflow"):
+                bind_workflow_failure_backend(workflow_fn, lower_failure)
+
+    def test_workflow_decorator_exposes_only_user_options(self):
+        """Backend wiring must not appear in the public decorator signature."""
+        self.assertEqual(list(signature(workflow).parameters), ["on_failure"])
 
     def test_local_run_uses_python_handler_without_remote_backend(self):
         """Local execution should not require a Starlark failure backend."""
