@@ -115,6 +115,15 @@ jobs:
             --set temporal.server.config.persistence.visibility.sql.password=root \
             2>/dev/null
 
+      - name: Template — native GCS storage enabled (existingSecret)
+        run: |
+          helm template michelangelo helm/michelangelo \
+            -f helm/michelangelo/values-k3d.yaml \
+            --set gcsStorage.enabled=true \
+            --set gcsStorage.existingSecret=my-gcs-secret \
+            --debug \
+            | grep 'gcs-credentials'
+
       - name: Template — monitoring enabled (ServiceMonitor renders with CRDs present)
         run: |
           helm template michelangelo helm/michelangelo \

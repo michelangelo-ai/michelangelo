@@ -34,7 +34,7 @@ You also need the following infrastructure reachable from the cluster **before**
 | Component | What the chart needs | Examples |
 |-----------|---------------------|----------|
 | Metadata storage | A reachable MySQL or PostgreSQL endpoint, plus credentials (root password OR an existing Kubernetes Secret) | RDS, Cloud SQL, an in-cluster pod |
-| Object storage | An S3-compatible endpoint and access keys (or an existing Secret) | S3, GCS, MinIO, SeaweedFS |
+| Object storage | An S3-compatible endpoint and access keys (or an existing Secret). Native `gs://` support for the worker and controller manager is optional, see [Use native GCS storage](#use-native-gcs-storage) | S3, GCS (HMAC), MinIO, SeaweedFS |
 | Workflow engine | A Cadence or Temporal frontend address — or enable a bundled subchart (see [Self-contained install](#self-contained-install-with-cadence-or-temporal)) | Managed Cadence/Temporal, in-cluster install |
 
 ## Quick start
@@ -126,6 +126,31 @@ metadataStorage:
 objectStorage:
   existingSecret: my-s3-secret       # must contain keys: accessKeyId, secretAccessKey
 ```
+
+### Use native GCS storage
+
+The worker and controller manager can read `gs://` paths (read-only; writes are not supported) through a native GCS backend. It is additive: `objectStorage` is still required today (`objectStorage.endpoint` and the object-storage Secret), so supply those values even for a GCS-only install.
+
+```yaml
+gcsStorage:
+  enabled: true
+```
+
+- **Application Default Credentials / workload identity (recommended).** `enabled: true` alone is enough once workload identity is set up: annotate the Kubernetes ServiceAccount (`serviceAccount.annotations`, `iam.gke.io/gcp-service-account`) and grant the Google service account a storage role through an IAM binding. The chart uses a single ServiceAccount for all of its pods, so this binding applies to every component (apiserver, UI, Envoy, controller manager, worker), not only the worker and controller manager. Grant the Google service account only the storage permissions it needs.
+- **Service account key.** Create the Secret first, then reference it with `gcsStorage.existingSecret`. Only the `credentials.json` key is mounted, at `/etc/gcs/credentials.json`:
+
+  ```bash
+  kubectl create secret generic my-gcs-secret --from-file=credentials.json=./key.json
+  ```
+
+  ```yaml
+  gcsStorage:
+    enabled: true
+    existingSecret: my-gcs-secret
+  ```
+
+- **Emulators and public buckets.** `gcsStorage.anonymous: true` disables authentication and cannot be combined with `existingSecret`. A non-`https://` `gcsStorage.endpoint` is accepted only together with `anonymous: true`.
+- **Not supported yet.** Serving models from `gs://` ([#2348](https://github.com/michelangelo-ai/michelangelo/issues/2348)).
 
 ### Enable monitoring resources
 
@@ -303,6 +328,10 @@ Most commonly set values. See `helm/michelangelo/values.yaml` for the complete l
 | `objectStorage.accessKeyId` | yes¹ | — | S3 access key ID |
 | `objectStorage.secretAccessKey` | yes¹ | — | S3 secret access key |
 | `objectStorage.existingSecret` | no | — | Secret containing `accessKeyId`/`secretAccessKey` |
+| `gcsStorage.enabled` | no | `false` | Render native GCS (`gs://`) client configuration for the worker and controller manager |
+| `gcsStorage.existingSecret` | no | `""` | Secret with a `credentials.json` key (service account JSON); empty uses Application Default Credentials |
+| `gcsStorage.endpoint` | no | `""` | Custom storage endpoint; must start with `https://` unless `anonymous` is `true` |
+| `gcsStorage.anonymous` | no | `false` | Disable authentication (public buckets and emulators only) |
 | `workflow.engine` | no | `cadence` | `cadence` or `temporal` |
 | `workflow.endpoint` | yes | — | `host:port` of workflow frontend |
 | `apiserver.tls.enabled` | no | `false` | Enable TLS on the apiserver gRPC port |

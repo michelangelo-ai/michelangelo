@@ -100,6 +100,23 @@ in different namespaces don't collide; matches design §"Credentials Idempotency
 {{- end -}}
 
 {{/*
+GCS native backend helpers. Use `default dict` so an explicit
+`gcsStorage: null` in a values file renders as "disabled" instead of crashing.
+`michelangelo.gcsEnabled` renders "true" or "" (use with `if include ...`).
+`michelangelo.gcsExistingSecret` renders the Secret name only while GCS is
+enabled; it is empty otherwise, so the mount and credentialsFile stay in sync.
+*/}}
+{{- define "michelangelo.gcsEnabled" -}}
+{{- if (default dict .Values.gcsStorage).enabled -}}true{{- end -}}
+{{- end -}}
+
+{{- define "michelangelo.gcsExistingSecret" -}}
+{{- if include "michelangelo.gcsEnabled" . -}}
+{{- (default dict .Values.gcsStorage).existingSecret | default "" -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
 Schema-init volume name (used by apiserver Deployment + ConfigMap).
 */}}
 {{- define "michelangelo.schemaInitConfigMapName" -}}

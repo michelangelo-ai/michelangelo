@@ -23,3 +23,13 @@ This file renders to empty YAML when all checks pass.
 {{- if and .Values.worker.runnerToken.enabled (ne $authMode "k8s-rbac") -}}
 {{- fail "worker.runnerToken.enabled=true has no effect unless apiserver.auth.mode=k8s-rbac — in dummy mode the apiserver accepts every request regardless, so the worker would mint tokens nobody validates. See docs/operator-guides/setup/authentication.md." -}}
 {{- end -}}
+{{- $gcs := default dict .Values.gcsStorage -}}
+{{- if and $gcs.enabled (hasKey $gcs "anonymous") (not (kindIs "invalid" $gcs.anonymous)) (not (kindIs "bool" $gcs.anonymous)) -}}
+{{- fail (printf "gcsStorage.anonymous must be a boolean (true or false), got %s %q — with --set-string the value is a non-empty string, which Helm treats as true. Use --set gcsStorage.anonymous=true|false. See helm/michelangelo/README.md." (kindOf $gcs.anonymous) (toString $gcs.anonymous)) -}}
+{{- end -}}
+{{- if and $gcs.enabled $gcs.anonymous $gcs.existingSecret -}}
+{{- fail "gcsStorage.anonymous and gcsStorage.existingSecret cannot both be set — anonymous access sends no credentials, so the Secret would be unused. Unset one of them. See helm/michelangelo/README.md." -}}
+{{- end -}}
+{{- if and $gcs.enabled $gcs.endpoint (not $gcs.anonymous) (not (hasPrefix "https://" $gcs.endpoint)) -}}
+{{- fail "gcsStorage.endpoint must start with https:// unless gcsStorage.anonymous=true — plain-http endpoints are for emulators only and must not receive credentials. See helm/michelangelo/README.md." -}}
+{{- end -}}

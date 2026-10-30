@@ -58,6 +58,7 @@ These capabilities are shipped and available in the current release. Individual 
 **Infrastructure & Compute**
 - Compute cluster registration
 - Storage management via any S3-compatible object store
+- Native GCS storage for the worker and controller manager (`gs://` blobstore backend, configurable in the chart). Serving models from `gs://` is not supported yet ([#2348](https://github.com/michelangelo-ai/michelangelo/issues/2348))
 
 **Automation & Self-Healing**
 - Revision-gated state transitions
@@ -104,7 +105,6 @@ These are capabilities we intend to build. Items closer to the top of each secti
 - Guardrail policies (input/output safety filtering, bias detection)
 
 **Infrastructure & Compute**
-- GCS storage support
 - Resource pool selection
 - Vector dataset management for embedding and RAG/similarity search
 

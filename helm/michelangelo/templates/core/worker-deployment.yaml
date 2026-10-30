@@ -13,6 +13,8 @@ spec:
       {{- include "michelangelo.componentSelectorLabels" (dict "context" . "component" "worker") | nindent 6 }}
   template:
     metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/core/worker-configmap.yaml") . | sha256sum }}
       labels:
         {{- include "michelangelo.componentSelectorLabels" (dict "context" . "component" "worker") | nindent 8 }}
     spec:
@@ -39,6 +41,11 @@ spec:
           volumeMounts:
             - name: worker-config
               mountPath: /config
+            {{- if include "michelangelo.gcsExistingSecret" . }}
+            - name: gcs-credentials
+              mountPath: /etc/gcs
+              readOnly: true
+            {{- end }}
           {{- with (or .Values.worker.resources .Values.resources) }}
           resources:
             {{- toYaml . | nindent 12 }}
@@ -47,6 +54,15 @@ spec:
         - name: worker-config
           configMap:
             name: {{ include "michelangelo.componentFullname" (dict "context" . "component" "worker-config") }}
+        {{- if include "michelangelo.gcsExistingSecret" . }}
+        - name: gcs-credentials
+          secret:
+            secretName: {{ include "michelangelo.gcsExistingSecret" . | quote }}
+            # Project only the credentials key so no other Secret keys reach the pod.
+            items:
+              - key: credentials.json
+                path: credentials.json
+        {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
