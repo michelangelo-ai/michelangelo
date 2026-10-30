@@ -4,6 +4,7 @@ go_library(
     name = "go_default_library",
     srcs = [
         "constants.go",
+        "credentials.go",
         "mapper.go",
         "module.go",
         "nvidia_gpu.go",
@@ -29,6 +30,7 @@ go_library(
 go_test(
     name = "go_default_test",
     srcs = [
+        "credentials_test.go",
         "mapper_test.go",
         "nvidia_gpu_test.go",
         "ray_collector_test.go",
