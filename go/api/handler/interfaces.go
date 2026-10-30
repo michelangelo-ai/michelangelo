@@ -5,6 +5,7 @@ import (
 
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	ctrlRTClient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -133,4 +134,11 @@ type ValidationHandler interface {
 	// ValidateDelete validates whether an object can be safely deleted.
 	// This may check for dependencies, finalizers, or business constraints.
 	ValidateDelete(obj ctrlRTClient.Object) error
+}
+
+// namespaceScoper is an optional capability of a K8sHandler: it reports whether an object's kind is namespaced.
+// It is deliberately not part of K8sHandler, so existing implementations keep compiling. validateNamespace discovers
+// it with a type assertion and skips the namespace check when the handler does not implement it.
+type namespaceScoper interface {
+	IsObjectNamespaced(obj runtime.Object) (bool, error)
 }
