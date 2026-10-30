@@ -1,3 +1,5 @@
+{{- $auth := include "michelangelo.authValues" . | fromJson -}}
+{{- $runnerToken := include "michelangelo.runnerTokenValues" . | fromJson -}}
 {{- /*
 The worker's grant for runner tokens: create on the serviceaccounts/token
 subresource, restricted by resourceNames to the michelangelo-runner
@@ -10,8 +12,8 @@ worker cannot mint a token for a namespace the chart didn't declare, even
 if something else in the cluster happens to create a ServiceAccount with
 that same name.
 */ -}}
-{{- if and .Values.worker.runnerToken.enabled .Values.serviceAccount.create }}
-{{- range $ns := .Values.apiserver.auth.runnerProjects }}
+{{- if and $runnerToken.enabled .Values.serviceAccount.create }}
+{{- range $ns := $auth.runnerProjects }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
