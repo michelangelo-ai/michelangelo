@@ -126,9 +126,12 @@ RUN mkdir -p ${SPARK_HOME}/conf && \
 # Install OpenJDK 11 (multi-arch compatible and open-source)
 RUN apt-get update && apt-get install -y openjdk-11-jdk
 
-# Set JAVA_HOME and update PATH
-ENV JAVA_HOME=/usr/lib/jvm/java-11-openjdk-arm64
+# Set JAVA_HOME and update PATH. The JDK directory name carries the arch, so
+# point a fixed path at whichever one this build got (works on arm64 and amd64).
+RUN ln -sfn "$(dirname "$(dirname "$(readlink -f "$(command -v java)")")")" /usr/lib/jvm/java-home
+ENV JAVA_HOME=/usr/lib/jvm/java-home
 ENV PATH="${JAVA_HOME}/bin:${PATH}"
+RUN "${JAVA_HOME}/bin/java" -version
 
 # Set working directory
 WORKDIR /app

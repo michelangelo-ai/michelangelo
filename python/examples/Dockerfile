@@ -87,13 +87,13 @@ RUN mkdir -p ${SPARK_HOME}/conf && \
 ### Install Java
 ###
 
-# Detect JAVA_HOME at build time so the image works on both arm64 and amd64.
-RUN JAVA_HOME=$(dirname $(dirname $(readlink -f $(which java)))) && \
-    echo "JAVA_HOME=${JAVA_HOME}" >> /etc/environment && \
-    echo "export JAVA_HOME=${JAVA_HOME}" >> /etc/profile.d/java.sh
-ARG TARGETARCH=amd64
-ENV JAVA_HOME=/usr/lib/jvm/java-11-openjdk-${TARGETARCH}
+# openjdk-11-jdk installs to /usr/lib/jvm/java-11-openjdk-<arch>. Point a fixed
+# path at whichever JDK this build got, so JAVA_HOME is right on arm64 and amd64
+# without relying on TARGETARCH (unset outside BuildKit) or sourcing a file.
+RUN ln -sfn "$(dirname "$(dirname "$(readlink -f "$(command -v java)")")")" /usr/lib/jvm/java-home
+ENV JAVA_HOME=/usr/lib/jvm/java-home
 ENV PATH="${JAVA_HOME}/bin:${PATH}"
+RUN "${JAVA_HOME}/bin/java" -version
 
 # Set working directory
 WORKDIR /app
