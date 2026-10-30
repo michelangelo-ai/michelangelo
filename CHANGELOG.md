@@ -2,6 +2,293 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### ⚠ Breaking Changes
+
+- **trainer:** Support "string" column dtype and reject unknown dtypes (#2256) — support "string" column dtype and reject unknown dtypes (#2256)
+
+- **scheduler:** Revert unreviewed Kueue code from #1985, keep proto (#2343) — revert unreviewed Kueue code from #1985, keep proto (#2343)
+
+
+### Bug Fixes
+
+
+- **model_fuser:** Implement native-transform Hydra reconstruction for the raw package (#2190)
+
+
+- **ci:** Drop libssl3 from apiserver/worker/controllermgr (CVE-2026-84782) (#2235)
+
+
+- **ui:** Bump pcre2 to resolve CVE-2026-103111 (#2233)
+
+
+- **go:** Use static control-plane log messages (#2236)
+
+
+- **evaluator:** Sample embedding metrics uniformly and compute under DDP (#2226)
+
+
+- **trainer:** Apply limit_*_batches to the Ray datasets (#2245)
+
+
+- **trainer:** Add order-preserving list form for model column specs (#2252)
+
+
+- **helm:** Align llm-gateway chart version with 0.12.0 release (#2261)
+
+
+- **go:** Stop revision-pinned runs inheriting platform annotations (#2249)
+
+
+- **go:** Preserve existing annotations when re-snapshotting a revision (#2250)
+
+
+- **worker:** Don't discard the real sensor error in createCluster (#2177)
+
+
+- **trainer:** Reject orphan strategy_kwargs and callback_kwargs (#2274)
+
+
+- **ci:** Unblock nightly build and integration tests (#2270)
+
+
+- **trainer:** Support "string" column dtype and reject unknown dtypes (#2256) [**BREAKING**]
+
+
+- **tabular_assembler:** Accept a single-file raw model in the custom assembler (#2298)
+
+
+- **model_manager:** Keep ONNX input preserver finite when an input has NaN (#2297)
+
+
+- **storage:** Skip MySQL full upsert when object version is unchanged (#2286)
+
+
+- **helm:** Block compromised LiteLLM 1.107.0 (#2300)
+
+
+- **storage:** Treat label IS_NULL criterion as label not set (#2302)
+
+
+- **helm:** Grant modelfamilys and missing CRDs in watchNamespace Role (#2308)
+
+
+- **scheduler:** Revert unreviewed Kueue code from #1985, keep proto (#2343) [**BREAKING**]
+
+
+- **go:** Adopt the running execution when a Cadence start is retried (#2309)
+
+
+- **python:** Stop ma kill failing with 'Can not find message descriptor' (#2211)
+
+
+- **python:** Apply objectstore Service on sandbox sync, keep minio alias (#2314)
+
+
+- **api:** Redact sensitive headers in API request logs (#2346)
+
+
+- **helm:** Render when apiserver.auth / worker.runnerToken are absent (--reuse-values upgrades) (#2351)
+
+
+### CI/CD
+
+
+- Bump docker/metadata-action from 5 to 6 (#2229)
+
+
+- Bump github/codeql-action from 3 to 4 (#2227)
+
+
+- Bump marocchino/sticky-pull-request-comment from 2.9.4 to 3.0.5 (#2228)
+
+
+- Bump actions/checkout from 4 to 7 (#2262)
+
+
+- Bump azure/setup-helm from 4.3.1 to 5.0.1 (#2263)
+
+
+- **integration-test:** Serialize runs on the shared sandbox runner (#2287)
+
+
+- Fix broken apidiff invocation in api-surface-check.yml (#2176)
+
+
+### Documentation
+
+
+- **api-reference:** Fix RST roles in 4 SDK modules and add their reference pages (#2205)
+
+
+- **user-guides:** Fix non-existent CLI flag and 15 TypeError appendix samples (#2145)
+
+
+- **reference:** Replace non-existent Ray↔Spark auto-conversion with the real pattern (#2207)
+
+
+- Remove duplicated v0.11.0 section from CHANGELOG.md (#2244)
+
+
+- **cli:** Bring the CLI reference up to date with ma (get/apply flags, list filters, trigger_run create, sandbox sync/snapshot/kueue) (#2246)
+
+
+- Correct stale internal READMEs and rule docs (#2277)
+
+
+- **user-guides:** Verify and stamp user and getting-started guides (#2278)
+
+
+- **contributing:** Verify and stamp contributing guides (#2279)
+
+
+- **operator-guides:** Verify, correct, and stamp operator guides (#2280)
+
+
+- **contributing:** Update UI core-systems for transcoder RPC; verify stale contributing pages (#2281)
+
+
+- Correct stale internal READMEs (#2276)
+
+
+- Document apiserver.auth.mode, worker.runnerToken and TriggerRun cascade-cancel; SECURITY.md 0.12.x (#2299)
+
+
+- **api-reference:** Make the Python SDK reference regenerate cleanly from source (#2301)
+
+
+- **operator-guides:** Extend the deployment and inference server controllers (#2304)
+
+
+- Push models and artifacts, and extend the pusher (plugins, registry clients, storage, sinks) (#2303)
+
+
+- **helm:** Document SeaweedFS as an object-storage option (#2315)
+
+
+- **ui:** Reference pages for detail views, actions and forms (#2341)
+
+
+### Features
+
+
+- **helm:** Generate grpc_json_transcoder services list from proto descriptors (#1814)
+
+
+- **helm:** Add LiteLLM gateway wrapper chart (#1808)
+
+
+- **proto:** Validate content for revisioned_in annotation (#1809)
+
+
+- **raycluster:** Tolerate the NVIDIA GPU taint for GPU clusters (#2182)
+
+
+- **sandbox:** Serve the Ray Dashboard from the History Server and deep-link logUrl to it (#2220)
+
+
+- **go:** Add pluggable bearer-token auth for apiserver and worker (#2199)
+
+
+- **ui:** Add missing PipelineRun columns to trigger's Triggered Runs tab (#2180)
+
+
+- **auth:** Add k8s.io/apiserver adapters for main's Authenticator/Auth contract (#1988)
+
+
+- Cascade-cancel child PipelineRuns on TriggerRun kill/delete (#2272)
+
+
+- **auth:** Add an OIDC token authenticator on the upstream contract (#1989)
+
+
+- **auth:** Authorize through Kubernetes RBAC via SubjectAccessReview (#1990)
+
+
+- **trainer:** Add write concurrency and streaming buffer settings (#2265)
+
+
+- **worker:** Mint per-project runner tokens for outbound RPCs (#1991)
+
+
+- **trainer:** Add custom dataloader factory for the Lightning trainer (#2269)
+
+
+- **trainer:** Add pinned-memory collate function (#2295)
+
+
+- **go:** Schedule window (start/end timestamps) and spec.catchup for cron triggers (#2047)
+
+
+- **trainer:** Add Ray Data prefetch and async checkpoint upload (#2296)
+
+
+- **trainer:** Add drop_last to BatchIterConfig (#2294)
+
+
+- **helm,docs:** Expose k8s-rbac auth in the chart and correct the authentication guide (#1992)
+
+
+- **go:** TriggerRun API hook: spec validation and delete guard (#2142)
+
+
+- **helm:** Expose the native GCS backend in the chart (#1921)
+
+
+### Miscellaneous
+
+
+- Merge release/v0.12 back to main (#2232)
+
+
+- **docker:** Remove dead ui.Dockerfile (#2238)
+
+
+- Revert "fix: Revert name reflection" (#2108)
+
+
+- **go:** Bump golang.org/x/crypto 0.55.0 -> 0.56.0 (#2175)
+
+
+- **examples:** Remove nomic_ai from core, now in michelangelo-examples (#2266)
+
+
+- Gate each cluster's rollout on per-replica readiness (#2206)
+
+
+- **go:** Bump rules_go to 0.64.2 and Go SDK to 1.26.9 (#2264)
+
+
+- **npm:** Update testing-library, react-router compat, test tooling (#2267)
+
+
+- **deps:** Bump k8s.io client libraries from v0.34.8 to v0.35.5 (#2260)
+
+
+- Add opt-in SeaweedFS object-store backend (--object-store) (#2189)
+
+
+- Bump version to 0.13.0-rc.1 (#2352)
+
+
+### Refactoring
+
+
+- **rpc:** Extract the schema walker from Any packing (#2208)
+
+
+- **rpc:** Exchange proto3 JSON with Envoy instead of protobuf-es messages (#1818)
+
+
+- **worker:** Make runner-token middleware opt-in via RunnerTokenModule (#2285)
+
+
+### Testing
+
+
+- **trainer:** Stop asserting dict key order through protobuf Struct (#2259)
+
 ## [0.12.0] - 2026-10-05
 
 
