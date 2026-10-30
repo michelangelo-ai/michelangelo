@@ -639,6 +639,9 @@ func convertRayV1JobStatusToGlobal(rayV1Job *rayv1.RayJob) *v2pb.RayJobStatus {
 	globalJobStatus.JobDeploymentStatus = string(rayV1Job.Status.JobDeploymentStatus)
 	globalJobStatus.State = mapV1RayJobStatusToMAState(rayV1Job.Status.JobStatus, rayV1Job.Status.JobDeploymentStatus)
 	globalJobStatus.Message = rayV1Job.Status.Message
+	globalJobStatus.JobId = rayV1Job.Status.JobId
+	globalJobStatus.RayClusterName = rayV1Job.Status.RayClusterName
+	globalJobStatus.DashboardUrl = rayV1Job.Status.DashboardURL
 
 	return globalJobStatus
 }
