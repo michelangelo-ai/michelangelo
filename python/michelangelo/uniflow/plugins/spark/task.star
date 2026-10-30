@@ -1,5 +1,5 @@
 load("@plugin", "json", "os", "time", "workflow")
-load("../../commons.star", "CACHE_OPERATION_GET", "CACHE_OPERATION_PUT", "DEFAULT_RETRY_ATTEMPTS", "TASK_STATE_SKIPPED", "TASK_STATE_SUCCEEDED", "TIME_FOMART", "build_spark_crd_job", "execute_spark_crd_job", "get_cache_enabled", "get_cache_keys", "get_cached_output", "get_job_log_url", "get_pythonpath", "get_result_url", "get_task_image", "get_task_name", "io_read_json", "process_terminated_job", "report_progress", "resource_dict", COMMONS_ENV = "ENV")
+load("../../commons.star", "CACHE_OPERATION_GET", "CACHE_OPERATION_PUT", "DEFAULT_RETRY_ATTEMPTS", "TASK_STATE_SKIPPED", "TASK_STATE_SUCCEEDED", "TIME_FOMART", "build_spark_crd_job", "execute_spark_crd_job", "get_cache_enabled", "get_cache_keys", "get_cached_output", "get_job_log_url", "get_pythonpath", "get_result_url", "get_spark_main_file", "get_task_image", "get_task_name", "io_read_json", "process_terminated_job", "report_progress", "resource_dict", COMMONS_ENV = "ENV")
 
 SPARK_ENV = {
     "PYTHONPATH": get_pythonpath(),
@@ -97,7 +97,7 @@ def spark_task(
 
         spark_job = build_spark_crd_job(
             image = get_task_image(task_name),
-            main_file = "local:///app/michelangelo/uniflow/core/run_task.py",
+            main_file = get_spark_main_file(task_name),
             main_class = "org.apache.spark.deploy.PythonRunner",
             # TODO: andrii: set --overrides
             main_args = ["--task", task_path, "--args", _args, "--kwargs", _kwargs, "--result-url", result_url],

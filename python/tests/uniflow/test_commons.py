@@ -116,6 +116,56 @@ class TestGetJobLogUrl(unittest.TestCase):
         self.assertEqual(self.get_job_log_url("https://logs.example.com/spark", ""), "")
 
 
+def _commons_constant(name):
+    """Return the literal value of a top-level constant in commons.star."""
+    tree = ast.parse(COMMONS_PATH.read_text(), filename=str(COMMONS_PATH))
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and any(
+            isinstance(t, ast.Name) and t.id == name for t in node.targets
+        ):
+            return ast.literal_eval(node.value)
+    raise KeyError(name)
+
+
+class TestGetSparkMainFile(unittest.TestCase):
+    """Tests for get_spark_main_file()."""
+
+    default = _commons_constant("DEFAULT_SPARK_MAIN_FILE")
+
+    def _get(self, environ, task_name="preprocess"):
+        globals_ = dict(
+            _base_globals(),
+            os=SimpleNamespace(environ=environ),
+            DEFAULT_SPARK_MAIN_FILE=self.default,
+        )
+        fn = _load_commons_functions("get_spark_main_file", globals_=globals_)
+        return fn["get_spark_main_file"](task_name)
+
+    def test_default_path_unchanged(self):
+        """With nothing set, the /app layout path is used as before."""
+        self.assertEqual(
+            self._get({}), "local:///app/michelangelo/uniflow/core/run_task.py"
+        )
+
+    def test_global_override(self):
+        """UF_SPARK_MAIN_FILE applies to every Spark task."""
+        venv = "local:///app/.venv/lib/python3.11/site-packages/michelangelo/uniflow/core/run_task.py"
+        self.assertEqual(self._get({"UF_SPARK_MAIN_FILE": venv}), venv)
+
+    def test_per_task_override_wins(self):
+        """UF_SPARK_MAIN_FILE_<task> takes precedence over the global setting."""
+        environ = {
+            "UF_SPARK_MAIN_FILE": "local:///global/run_task.py",
+            "UF_SPARK_MAIN_FILE_preprocess": "local:///task/run_task.py",
+        }
+        self.assertEqual(self._get(environ), "local:///task/run_task.py")
+        self.assertEqual(self._get(environ, "train"), "local:///global/run_task.py")
+
+    def test_empty_falls_back_to_default(self):
+        """An empty value does not produce an empty mainApplicationFile."""
+        self.assertEqual(self._get({"UF_SPARK_MAIN_FILE": ""}), self.default)
+
+
 class TestBuildSparkCrdJob(unittest.TestCase):
     """Tests for build_spark_crd_job(), shared by spark_task and scala_task."""
 
