@@ -1,3 +1,4 @@
+{{- $auth := include "michelangelo.authValues" . | fromJson -}}
 {{- /*
 In k8s-rbac auth mode the apiserver validates bearer tokens with
 TokenReview and authorizes requests with SubjectAccessReview. Both are
@@ -5,7 +6,7 @@ cluster-scoped APIs, so the platform ServiceAccount needs the built-in
 system:auth-delegator ClusterRole regardless of whether the chart runs in
 cluster-wide or watchNamespace mode.
 */ -}}
-{{- if and .Values.serviceAccount.create (eq .Values.apiserver.auth.mode "k8s-rbac") }}
+{{- if and .Values.serviceAccount.create (eq $auth.mode "k8s-rbac") }}
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:

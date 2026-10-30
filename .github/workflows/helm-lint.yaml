@@ -124,6 +124,17 @@ jobs:
             --debug \
             | grep 'gcs-credentials'
 
+      - name: Template — upgrade from a release without apiserver.auth / worker.runnerToken (--reuse-values)
+        run: |
+          # `helm upgrade --reuse-values` keeps the old release's values, so the
+          # newer auth/runnerToken defaults are absent. The chart must still render.
+          helm template michelangelo helm/michelangelo \
+            -f helm/michelangelo/values-k3d.yaml \
+            --set apiserver.auth=null \
+            --set worker.runnerToken=null \
+            --debug \
+            > /dev/null
+
       - name: Template — monitoring enabled (ServiceMonitor renders with CRDs present)
         run: |
           helm template michelangelo helm/michelangelo \

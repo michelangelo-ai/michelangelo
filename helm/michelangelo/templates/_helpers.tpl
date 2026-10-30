@@ -132,3 +132,50 @@ dict of {repository, tag, Chart}, e.g.:
 {{- define "michelangelo.image" -}}
 {{- printf "%s:%s" .repository (.tag | default .Chart.AppVersion) -}}
 {{- end -}}
+
+{{/*
+apiserver.auth with the chart defaults filled in for any missing key, as JSON
+(use: {{ $auth := include "michelangelo.authValues" . | fromJson }}).
+
+A release deployed before apiserver.auth existed, upgraded with
+`helm upgrade --reuse-values`, keeps its old values and never sees the new
+defaults in values.yaml, so .Values.apiserver.auth is nil and a direct
+.Values.apiserver.auth.mode lookup fails the render. Booleans use dig so an
+explicit false is preserved. Keep these defaults in sync with values.yaml.
+*/}}
+{{- define "michelangelo.authValues" -}}
+{{- $a := default dict .Values.apiserver.auth -}}
+{{- $o := default dict $a.oidc -}}
+{{- $sa := default dict $a.serviceAccounts -}}
+{{- $c := default dict $a.sarCache -}}
+{{- dict
+  "mode" (default "dummy" $a.mode)
+  "runnerProjects" (default list $a.runnerProjects)
+  "oidc" (dict
+    "issuerUrl" (default "" $o.issuerUrl)
+    "audiences" (default list $o.audiences)
+    "usernameClaim" (default "email" $o.usernameClaim)
+    "usernamePrefix" (default "" $o.usernamePrefix)
+    "allowUnverifiedEmail" (dig "allowUnverifiedEmail" false $o)
+    "groupsClaim" (default "groups" $o.groupsClaim)
+    "groupsPrefix" (default "" $o.groupsPrefix)
+    "supportedSigningAlgs" (default list $o.supportedSigningAlgs)
+    "clockSkewLeeway" (default "30s" $o.clockSkewLeeway))
+  "serviceAccounts" (dict
+    "enabled" (dig "enabled" true $sa)
+    "audiences" (default list $sa.audiences))
+  "sarCache" (dict
+    "allowTTL" (default "10s" $c.allowTTL)
+    "denyTTL" (default "10s" $c.denyTTL))
+  | toJson -}}
+{{- end -}}
+
+{{/*
+worker.runnerToken with nil-safety for the same --reuse-values upgrade case
+(use: {{ $runnerToken := include "michelangelo.runnerTokenValues" . | fromJson }}).
+Only the keys the templates read are returned.
+*/}}
+{{- define "michelangelo.runnerTokenValues" -}}
+{{- $r := default dict .Values.worker.runnerToken -}}
+{{- dict "enabled" (dig "enabled" false $r) "audiences" (default list $r.audiences) "ttl" (default "" $r.ttl) | toJson -}}
+{{- end -}}

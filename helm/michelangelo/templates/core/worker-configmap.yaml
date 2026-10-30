@@ -1,3 +1,4 @@
+{{- $runnerToken := include "michelangelo.runnerTokenValues" . | fromJson -}}
 {{- if .Values.worker.enabled }}
 apiVersion: v1
 kind: ConfigMap
@@ -11,16 +12,16 @@ data:
     worker:
       address: {{ include "michelangelo.componentFullname" (dict "context" . "component" "apiserver") }}:{{ .Values.apiserver.port }}
       maApiServiceName: ma-apiserver
-      {{- if .Values.worker.runnerToken.enabled }}
+      {{- if $runnerToken.enabled }}
       runnerToken:
         enabled: true
-        {{- with .Values.worker.runnerToken.audiences }}
+        {{- with $runnerToken.audiences }}
         audiences:
           {{- range . }}
           - {{ . | quote }}
           {{- end }}
         {{- end }}
-        {{- with .Values.worker.runnerToken.ttl }}
+        {{- with $runnerToken.ttl }}
         ttl: {{ . }}
         {{- end }}
       {{- end }}
