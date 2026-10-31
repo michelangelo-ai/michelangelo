@@ -49,11 +49,8 @@ export const CreatePipelineRunForm = ({
   const pipelineName = isPipelineRevision(record)
     ? record.spec.baseResource.name
     : (record?.metadata?.name ?? '');
-  const {
-    revision,
-    isLoading: revisionLoading,
-    errorMessage: revisionError,
-  } = useTargetRevision(record);
+  const targetRevision = useTargetRevision(record);
+  const { revision } = targetRevision;
 
   const createPipelineRunMutation = useStudioMutation<PipelineRun, PipelineRun>({
     mutationName: 'CreatePipelineRun',
@@ -63,7 +60,7 @@ export const CreatePipelineRunForm = ({
     if (createPipelineRunMutation.isPending) {
       return;
     }
-    assertRevisionResolved({ isLoading: revisionLoading, errorMessage: revisionError });
+    assertRevisionResolved(targetRevision);
 
     const payload = buildPayload(values, projectId);
     await createPipelineRunMutation.mutateAsync({

@@ -50,7 +50,7 @@ export function RevisionSelector({
   const selected =
     revisions.find((revision) => revision.spec.revisionId === selectedRevisionId) ??
     revisions.find(isLatest) ??
-    revisions[0];
+    (selectedRevisionId ? undefined : revisions[0]);
 
   if (!selected) return null;
 

@@ -35,11 +35,8 @@ export const RunTriggerForm = ({
   const pipelineName = isPipelineRevision(record)
     ? record.spec.baseResource.name
     : (record?.metadata?.name ?? '');
-  const {
-    revision,
-    isLoading: revisionLoading,
-    errorMessage: revisionError,
-  } = useTargetRevision(record);
+  const targetRevision = useTargetRevision(record);
+  const { revision } = targetRevision;
 
   const { data, isLoading } = useStudioQuery<{ pipeline: Pipeline }>({
     queryName: 'GetPipeline',
@@ -65,7 +62,7 @@ export const RunTriggerForm = ({
     if (createTriggerRunMutation.isPending) {
       return;
     }
-    assertRevisionResolved({ isLoading: revisionLoading, errorMessage: revisionError });
+    assertRevisionResolved(targetRevision);
 
     const sourceTrigger = triggerMap[values.sourceTriggerName];
     if (!sourceTrigger) {

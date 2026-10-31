@@ -21,6 +21,7 @@ import type { Pipeline, PipelineRevision } from './types';
 export function useTargetRevision(record: Pipeline | PipelineRevision | undefined): {
   revision: RevisionRef | undefined;
   isLoading: boolean;
+  isError: boolean;
   errorMessage: string | undefined;
 } {
   const revisionRecord = isPipelineRevision(record) ? record : undefined;
@@ -32,8 +33,8 @@ export function useTargetRevision(record: Pipeline | PipelineRevision | undefine
   }>({
     queryName: 'ListRevision',
     serviceOptions: {
-      namespace: record?.metadata.namespace,
-      listOptionsExt: buildRevisionListOptions('pipeline', record?.metadata.name ?? ''),
+      namespace: record?.metadata?.namespace,
+      listOptionsExt: buildRevisionListOptions('pipeline', record?.metadata?.name ?? ''),
     },
     clientOptions: { enabled: needsFallback },
   });
@@ -45,10 +46,12 @@ export function useTargetRevision(record: Pipeline | PipelineRevision | undefine
         namespace: revisionRecord.metadata.namespace,
       },
       isLoading: false,
+      isError: false,
       errorMessage: undefined,
     };
   }
-  if (pointerRef) return { revision: pointerRef, isLoading: false, errorMessage: undefined };
+  if (pointerRef)
+    return { revision: pointerRef, isLoading: false, isError: false, errorMessage: undefined };
 
   const latest = needsFallback ? fallbackQuery.data?.revisionList?.items?.[0] : undefined;
   return {
@@ -56,6 +59,7 @@ export function useTargetRevision(record: Pipeline | PipelineRevision | undefine
       ? { name: latest.metadata.name, namespace: latest.metadata.namespace }
       : undefined,
     isLoading: needsFallback && fallbackQuery.isLoading,
+    isError: needsFallback && fallbackQuery.isError,
     errorMessage: needsFallback ? fallbackQuery.error?.message : undefined,
   };
 }
@@ -66,13 +70,15 @@ export function useTargetRevision(record: Pipeline | PipelineRevision | undefine
  */
 export function assertRevisionResolved({
   isLoading,
+  isError,
   errorMessage,
 }: {
   isLoading: boolean;
+  isError: boolean;
   errorMessage: string | undefined;
 }): void {
-  if (errorMessage) {
-    throw new Error(`Could not load the pipeline's latest revision. ${errorMessage}`);
+  if (isError) {
+    throw new Error(`Could not load the pipeline's latest revision. ${errorMessage ?? ''}`.trim());
   }
   if (isLoading) {
     throw new Error("Still loading the pipeline's latest revision. Try again in a moment.");
