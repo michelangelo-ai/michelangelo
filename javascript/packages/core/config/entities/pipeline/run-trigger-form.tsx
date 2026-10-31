@@ -11,7 +11,7 @@ import { getDateFromEpochSeconds } from '#core/utils/time-utils';
 import { formatTriggerSchedule } from './format-trigger-schedule';
 import { RunTriggerFields } from './run-trigger-fields';
 import { isPipelineRevision } from './types';
-import { useTargetRevision } from './use-target-revision';
+import { assertRevisionResolved, useTargetRevision } from './use-target-revision';
 
 import type { ActionComponentProps } from '#core/components/actions/types';
 import type { SelectOption } from '#core/components/form/fields/select/types';
@@ -35,7 +35,11 @@ export const RunTriggerForm = ({
   const pipelineName = isPipelineRevision(record)
     ? record.spec.baseResource.name
     : (record?.metadata?.name ?? '');
-  const revision = useTargetRevision(record);
+  const {
+    revision,
+    isLoading: revisionLoading,
+    errorMessage: revisionError,
+  } = useTargetRevision(record);
 
   const { data, isLoading } = useStudioQuery<{ pipeline: Pipeline }>({
     queryName: 'GetPipeline',
@@ -61,6 +65,7 @@ export const RunTriggerForm = ({
     if (createTriggerRunMutation.isPending) {
       return;
     }
+    assertRevisionResolved({ isLoading: revisionLoading, errorMessage: revisionError });
 
     const sourceTrigger = triggerMap[values.sourceTriggerName];
     if (!sourceTrigger) {
