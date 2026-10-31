@@ -41,8 +41,47 @@ func TestProviderGetClusterClientAuth(t *testing.T) {
 		},
 	}
 
+	tlsSecret := &corev1.Secret{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "tls-secret",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"tls.crt": []byte("fake-cert-data"),
+			"tls.key": []byte("fake-key-data"),
+		},
+	}
+
 	// Create fake Kubernetes clientset with the secrets
-	fakeClientSet := fakek8sclient.NewSimpleClientset(caSecret, tokenSecret)
+	fakeClientSet := fakek8sclient.NewSimpleClientset(caSecret, tokenSecret, tlsSecret)
+
+	// kubernetesCluster returns a Kubernetes cluster that names its secrets with the given
+	// tags and annotations.
+	kubernetesCluster := func(caTag, tokenTag string, annotations map[string]string) *v2pb.Cluster {
+		return &v2pb.Cluster{
+			ObjectMeta: v1.ObjectMeta{
+				Name:        "test-cluster",
+				Namespace:   "default",
+				Annotations: annotations,
+			},
+			Spec: v2pb.ClusterSpec{
+				Cluster: &v2pb.ClusterSpec_Kubernetes{
+					Kubernetes: &v2pb.KubernetesSpec{
+						Rest: &v2pb.ConnectionSpec{
+							Host:      "https://k8s-cluster.example.com",
+							Port:      "443",
+							CaDataTag: caTag,
+							TokenTag:  tokenTag,
+						},
+					},
+				},
+			},
+		}
+	}
+	clientCertAnnotations := map[string]string{
+		ClientCertTagAnnotation: "tls-secret",
+		ClientKeyTagAnnotation:  "tls-secret",
+	}
 
 	tests := []struct {
 		name          string
@@ -134,6 +173,51 @@ func TestProviderGetClusterClientAuth(t *testing.T) {
 			},
 			expectedError: true,
 		},
+		{
+			name:    "client certificate and key without a token",
+			cluster: kubernetesCluster("ca-secret", "", clientCertAnnotations),
+			expectAuth: ClientAuth{
+				CertificateAuthorityData: "fake-ca-data",
+				ClientCertificateData:    "fake-cert-data",
+				ClientKeyData:            "fake-key-data",
+			},
+		},
+		{
+			name:    "client certificate and key with a token",
+			cluster: kubernetesCluster("ca-secret", "token-secret", clientCertAnnotations),
+			expectAuth: ClientAuth{
+				CertificateAuthorityData: "fake-ca-data",
+				ClientCertificateData:    "fake-cert-data",
+				ClientKeyData:            "fake-key-data",
+				ClientTokenData:          "fake-token-data",
+			},
+		},
+		{
+			name: "client certificate without a key",
+			cluster: kubernetesCluster("ca-secret", "", map[string]string{
+				ClientCertTagAnnotation: "tls-secret",
+			}),
+			expectedError: true,
+			errorContains: "must set both",
+		},
+		{
+			name: "client key secret without tls.key",
+			cluster: kubernetesCluster("ca-secret", "", map[string]string{
+				ClientCertTagAnnotation: "tls-secret",
+				ClientKeyTagAnnotation:  "ca-secret",
+			}),
+			expectedError: true,
+			errorContains: "secret ca-secret has no tls.key",
+		},
+		{
+			name: "missing client certificate secret",
+			cluster: kubernetesCluster("ca-secret", "", map[string]string{
+				ClientCertTagAnnotation: "missing-tls-secret",
+				ClientKeyTagAnnotation:  "tls-secret",
+			}),
+			expectedError: true,
+			errorContains: "failed to get tls.crt",
+		},
 	}
 
 	for _, tt := range tests {
@@ -144,6 +228,7 @@ func TestProviderGetClusterClientAuth(t *testing.T) {
 			auth, err := provider.GetClusterClientAuth(context.Background(), tt.cluster)
 			if tt.expectedError {
 				require.Error(t, err)
+				require.ErrorContains(t, err, tt.errorContains)
 				require.Equal(t, ClientAuth{}, auth)
 			} else {
 				require.NoError(t, err)
