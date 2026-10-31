@@ -737,4 +737,58 @@ describe('CreatePipelineRunForm', () => {
       expect(submitted[0].spec.resume).toBeUndefined();
     });
   });
+
+  it('falls back to the most recently updated revision when the pipeline has no latest pointer', async () => {
+    const user = userEvent.setup();
+    const fallbackRevision = {
+      name: 'pipeline-test-pipeline-5c4d3e2f1a0b',
+      namespace: 'ma-dev-test',
+    };
+    const mockRequest = createQueryMockRouter({
+      CreatePipelineRun: {},
+      ListRevision: {
+        revisionList: {
+          items: [
+            { metadata: fallbackRevision },
+            { metadata: { name: 'pipeline-test-pipeline-older', namespace: 'ma-dev-test' } },
+          ],
+        },
+      },
+    });
+    const record = {
+      metadata: { name: 'test-pipeline', namespace: 'ma-dev-test' },
+      spec: { owner: { name: 'test-owner' } },
+    };
+
+    render(
+      <CreatePipelineRunForm record={record} onClose={vi.fn()} />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getIconProviderWrapper(),
+        getErrorProviderWrapper(),
+        getInterpolationProviderWrapper(),
+        getRouterWrapper({ location: '/ma-dev-test/train/pipelines' }),
+        getServiceProviderWrapper({ request: mockRequest }),
+      ])
+    );
+
+    const dialog = await screen.findByRole('dialog', { name: 'Start new pipeline run' });
+    await waitFor(() => {
+      expect(within(dialog).getByRole('textbox', { name: 'Revision ID' })).toHaveValue(
+        fallbackRevision.name
+      );
+    });
+    await selectEnvironment(user, dialog, 'Development');
+    await user.click(within(dialog).getByRole('button', { name: 'Run' }));
+
+    await waitFor(() => {
+      expect(mockRequest).toHaveBeenCalledWith(
+        'CreatePipelineRun',
+        expect.objectContaining({
+          spec: expect.objectContaining({ revision: fallbackRevision }) as Record<string, unknown>,
+        }),
+        {}
+      );
+    });
+  });
 });

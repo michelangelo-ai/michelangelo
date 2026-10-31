@@ -559,4 +559,54 @@ describe('RunTriggerForm', () => {
       )
     ).toBeInTheDocument();
   });
+
+  it('falls back to the most recently updated revision when the pipeline has no latest pointer', async () => {
+    const user = userEvent.setup();
+    const cronTrigger = { cronSchedule: { cron: '0 2 * * *' } };
+    const fallbackRevision = {
+      name: 'pipeline-test-pipeline-5c4d3e2f1a0b',
+      namespace: 'ma-dev-test',
+    };
+    const request = createQueryMockRouter({
+      GetPipeline: buildPipelineResponse({ nightly: cronTrigger }),
+      CreateTriggerRun: {},
+      ListRevision: { revisionList: { items: [{ metadata: fallbackRevision }] } },
+    });
+    const record = {
+      metadata: { name: 'test-pipeline', namespace: 'ma-dev-test' },
+      spec: { owner: { name: 'test-owner' } },
+    };
+
+    render(
+      <RunTriggerForm record={record} onClose={vi.fn()} />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getIconProviderWrapper(),
+        getErrorProviderWrapper(),
+        getInterpolationProviderWrapper(),
+        getRouterWrapper({ location: '/ma-dev-test/train/pipelines' }),
+        getServiceProviderWrapper({ request }),
+      ])
+    );
+
+    const dialog = await screen.findByRole('dialog', { name: 'Run trigger' });
+    await waitFor(() => {
+      expect(within(dialog).getByRole('textbox', { name: 'Revision ID' })).toHaveValue(
+        fallbackRevision.name
+      );
+    });
+    await user.click(within(dialog).getByRole('combobox', { name: 'Trigger *' }));
+    await user.click(await screen.findByRole('option', { name: 'nightly — cron 0 2 * * *' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Run' }));
+
+    await waitFor(() => {
+      expect(request).toHaveBeenCalledWith(
+        'CreateTriggerRun',
+        expect.objectContaining({
+          spec: expect.objectContaining({ revision: fallbackRevision }) as Record<string, unknown>,
+        }),
+        {}
+      );
+    });
+  });
 });
