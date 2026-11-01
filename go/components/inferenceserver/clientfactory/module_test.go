@@ -27,7 +27,7 @@ func TestNewSecretProviderSelection(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			provider, err := newSecretProvider(kubeClient, tt.cfg)
+			provider, err := newSecretProvider(kubeClient, tt.cfg, zap.NewNop())
 			if tt.expectErr != "" {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tt.expectErr)

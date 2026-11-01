@@ -18,7 +18,7 @@ var Module = fx.Options(
 )
 
 func newClientFactory(kubeClient client.Client, cfg secrets.Config, logger *zap.Logger) (ClientFactory, error) {
-	provider, err := newSecretProvider(kubeClient, cfg)
+	provider, err := newSecretProvider(kubeClient, cfg, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -32,12 +32,12 @@ func newClientFactory(kubeClient client.Client, cfg secrets.Config, logger *zap.
 // newSecretProvider returns the SecretProvider selected by
 // `secrets.provider`: the sample control-plane provider by default, or the
 // External Secrets Operator backed provider when configured as "eso".
-func newSecretProvider(kubeClient client.Client, cfg secrets.Config) (secrets.SecretProvider, error) {
+func newSecretProvider(kubeClient client.Client, cfg secrets.Config, logger *zap.Logger) (secrets.SecretProvider, error) {
 	switch cfg.Provider {
 	case "", secrets.ProviderSample:
 		return secrets.NewProvider(kubeClient), nil
 	case secrets.ProviderESO:
-		return secrets.NewESOProvider(kubeClient, cfg.ESO), nil
+		return secrets.NewESOProvider(kubeClient, cfg.ESO, logger), nil
 	default:
 		return nil, fmt.Errorf(
 			"unknown secrets.provider %q: must be %q or %q",

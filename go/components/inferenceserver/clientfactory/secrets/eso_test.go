@@ -6,6 +6,9 @@ import (
 
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -64,7 +67,7 @@ func TestESOProviderGetClientAuth(t *testing.T) {
 		credentialSecret("ca-secret", "ma-secrets", map[string][]byte{caDataKey: []byte("fake-ca")}),
 		credentialSecret("token-secret", "ma-secrets", map[string][]byte{tokenKey: []byte("fake-token")}),
 	)
-	provider := NewESOProvider(kubeClient, ESOConfig{Namespace: "ma-secrets"})
+	provider := NewESOProvider(kubeClient, ESOConfig{Namespace: "ma-secrets"}, nil)
 
 	auth, err := provider.GetClientAuth(context.Background(), clusterTarget("ca-secret", "token-secret"))
 	require.NoError(t, err)
@@ -79,15 +82,26 @@ func TestESOProviderDefaultNamespace(t *testing.T) {
 		credentialSecret("ca-secret", secretsNamespace, map[string][]byte{caDataKey: []byte("fake-ca")}),
 		credentialSecret("token-secret", secretsNamespace, map[string][]byte{tokenKey: []byte("fake-token")}),
 	)
-	provider := NewESOProvider(kubeClient, ESOConfig{})
+	provider := NewESOProvider(kubeClient, ESOConfig{}, nil)
 
 	auth, err := provider.GetClientAuth(context.Background(), clusterTarget("ca-secret", "token-secret"))
 	require.NoError(t, err)
 	require.Equal(t, "fake-ca", auth.CertificateAuthorityData)
 }
 
+func TestESOProviderDefaultNamespaceWarns(t *testing.T) {
+	core, logs := observer.New(zapcore.WarnLevel)
+	NewESOProvider(newFakeClient(true), ESOConfig{}, zap.New(core))
+	require.Equal(t, 1, logs.Len())
+	require.Contains(t, logs.All()[0].Message, "secrets.eso.namespace")
+
+	core, logs = observer.New(zapcore.WarnLevel)
+	NewESOProvider(newFakeClient(true), ESOConfig{Namespace: "ma-secrets"}, zap.New(core))
+	require.Equal(t, 0, logs.Len())
+}
+
 func TestESOProviderOperatorAbsent(t *testing.T) {
-	provider := NewESOProvider(newFakeClient(false), ESOConfig{})
+	provider := NewESOProvider(newFakeClient(false), ESOConfig{}, nil)
 
 	_, err := provider.GetClientAuth(context.Background(), clusterTarget("ca-secret", "token-secret"))
 	require.Error(t, err)
@@ -95,7 +109,7 @@ func TestESOProviderOperatorAbsent(t *testing.T) {
 }
 
 func TestESOProviderMissingSecretGuidance(t *testing.T) {
-	provider := NewESOProvider(newFakeClient(true), ESOConfig{Namespace: "ma-secrets"})
+	provider := NewESOProvider(newFakeClient(true), ESOConfig{Namespace: "ma-secrets"}, nil)
 
 	_, err := provider.GetClientAuth(context.Background(), clusterTarget("missing-ca", "missing-token"))
 	require.Error(t, err)
@@ -111,7 +125,7 @@ func TestESOProviderMissingDataKey(t *testing.T) {
 		credentialSecret("ca-secret", "ma-secrets", map[string][]byte{"not-cadata": []byte("fake-ca")}),
 		credentialSecret("token-secret", "ma-secrets", map[string][]byte{tokenKey: []byte("fake-token")}),
 	)
-	provider := NewESOProvider(kubeClient, ESOConfig{Namespace: "ma-secrets"})
+	provider := NewESOProvider(kubeClient, ESOConfig{Namespace: "ma-secrets"}, nil)
 
 	_, err := provider.GetClientAuth(context.Background(), clusterTarget("ca-secret", "token-secret"))
 	require.Error(t, err)
@@ -125,7 +139,7 @@ func TestESOProviderEmptyDataKey(t *testing.T) {
 		credentialSecret("ca-secret", "ma-secrets", map[string][]byte{caDataKey: []byte("")}),
 		credentialSecret("token-secret", "ma-secrets", map[string][]byte{tokenKey: []byte("fake-token")}),
 	)
-	provider := NewESOProvider(kubeClient, ESOConfig{Namespace: "ma-secrets"})
+	provider := NewESOProvider(kubeClient, ESOConfig{Namespace: "ma-secrets"}, nil)
 
 	_, err := provider.GetClientAuth(context.Background(), clusterTarget("ca-secret", "token-secret"))
 	require.Error(t, err)
@@ -133,7 +147,7 @@ func TestESOProviderEmptyDataKey(t *testing.T) {
 }
 
 func TestESOProviderNoKubernetesSpec(t *testing.T) {
-	provider := NewESOProvider(newFakeClient(true), ESOConfig{})
+	provider := NewESOProvider(newFakeClient(true), ESOConfig{}, nil)
 
 	_, err := provider.GetClientAuth(context.Background(), &v2pb.ClusterTarget{ClusterId: "test-cluster"})
 	require.Error(t, err)
@@ -141,7 +155,7 @@ func TestESOProviderNoKubernetesSpec(t *testing.T) {
 }
 
 func TestESOProviderEmptySecretName(t *testing.T) {
-	provider := NewESOProvider(newFakeClient(true), ESOConfig{})
+	provider := NewESOProvider(newFakeClient(true), ESOConfig{}, nil)
 
 	_, err := provider.GetClientAuth(context.Background(), clusterTarget("", ""))
 	require.Error(t, err)
@@ -170,7 +184,7 @@ func TestESOProviderCachesOperatorCheck(t *testing.T) {
 			credentialSecret("token-secret", secretsNamespace, map[string][]byte{tokenKey: []byte("fake-token")}),
 		).
 		Build()
-	provider := NewESOProvider(kubeClient, ESOConfig{})
+	provider := NewESOProvider(kubeClient, ESOConfig{}, nil)
 
 	_, err := provider.GetClientAuth(context.Background(), clusterTarget("ca-secret", "token-secret"))
 	require.NoError(t, err)
@@ -200,7 +214,7 @@ func TestESOProviderFailedOperatorCheckNotCached(t *testing.T) {
 			credentialSecret("token-secret", secretsNamespace, map[string][]byte{tokenKey: []byte("fake-token")}),
 		).
 		Build()
-	provider := NewESOProvider(kubeClient, ESOConfig{})
+	provider := NewESOProvider(kubeClient, ESOConfig{}, nil)
 
 	// The operator is not installed yet, so this must fail.
 	_, err := provider.GetClientAuth(context.Background(), clusterTarget("ca-secret", "token-secret"))

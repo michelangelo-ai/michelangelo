@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync/atomic"
 
+	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -76,10 +77,16 @@ type ESOProvider struct {
 
 // NewESOProvider returns a SecretProvider backed by External Secrets
 // Operator managed Secrets.
-func NewESOProvider(kubeClient client.Client, cfg ESOConfig) *ESOProvider {
+// The logger may be nil.
+func NewESOProvider(kubeClient client.Client, cfg ESOConfig, logger *zap.Logger) *ESOProvider {
 	namespace := cfg.Namespace
 	if namespace == "" {
 		namespace = secretsNamespace
+		if logger != nil {
+			logger.Warn("secrets.eso.namespace is not set; falling back to the default namespace for operator-synced Secrets. "+
+				"Set secrets.eso.namespace explicitly to avoid reading credentials from the wrong namespace",
+				zap.String("namespace", secretsNamespace))
+		}
 	}
 	return &ESOProvider{kubeClient: kubeClient, namespace: namespace}
 }
@@ -90,6 +97,10 @@ func (p *ESOProvider) ensureOperator() error {
 	if p.operatorVerified.Load() {
 		return nil
 	}
+	// A client.Client exposes a RESTMapper but not a discovery client, so the
+	// ExternalSecret kind is resolved through the mapper. The jobs provider
+	// only has a kubernetes.Interface and performs the equivalent check via
+	// discovery.
 	_, err := p.kubeClient.RESTMapper().RESTMapping(schema.GroupKind{Group: esoAPIGroup, Kind: "ExternalSecret"})
 	if err != nil {
 		if meta.IsNoMatchError(err) {

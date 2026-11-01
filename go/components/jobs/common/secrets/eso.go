@@ -18,6 +18,13 @@ import (
 // CRDs. Its presence is how the provider verifies the operator is installed.
 const esoAPIGroup = "external-secrets.io"
 
+// esoKind is the kind the provider requires the operator to serve within
+// esoAPIGroup.
+const esoKind = "ExternalSecret"
+
+// defaultNamespace is used when secrets.eso.namespace is not configured.
+const defaultNamespace = "default"
+
 var _ SecretProvider = (*ESOProvider)(nil)
 
 // ESOProvider implements SecretProvider on top of the External Secrets
@@ -48,7 +55,12 @@ type ESOProvider struct {
 func NewESOProvider(clientSet kubernetes.Interface, cfg ESOConfig, logger *zap.Logger) *ESOProvider {
 	namespace := cfg.Namespace
 	if namespace == "" {
-		namespace = "default"
+		namespace = defaultNamespace
+		if logger != nil {
+			logger.Warn("secrets.eso.namespace is not set; falling back to the default namespace for operator-synced Secrets. "+
+				"Set secrets.eso.namespace explicitly to avoid reading credentials from the wrong namespace",
+				zap.String("namespace", defaultNamespace))
+		}
 	}
 	return &ESOProvider{
 		k8sClusterClient: clientSet,
@@ -63,18 +75,36 @@ func (p *ESOProvider) ensureOperator() error {
 	if p.operatorVerified.Load() {
 		return nil
 	}
+	// The kubernetes.Interface exposes discovery rather than a RESTMapper,
+	// so the ExternalSecret kind is looked up by listing the resources
+	// served by each version of the external-secrets.io group. This checks
+	// the same thing as the inference server provider's RESTMapper lookup.
 	groups, err := p.k8sClusterClient.Discovery().ServerGroups()
 	if err != nil {
-		return fmt.Errorf("failed to discover API groups while checking for the external secrets operator: %w", err)
+		return fmt.Errorf("failed to check for the external secrets operator: %w", err)
 	}
 	for _, group := range groups.Groups {
-		if group.Name == esoAPIGroup {
-			p.operatorVerified.Store(true)
-			return nil
+		if group.Name != esoAPIGroup {
+			continue
+		}
+		for _, version := range group.Versions {
+			resources, err := p.k8sClusterClient.Discovery().ServerResourcesForGroupVersion(version.GroupVersion)
+			if err != nil {
+				if k8serrors.IsNotFound(err) {
+					continue
+				}
+				return fmt.Errorf("failed to check for the external secrets operator: %w", err)
+			}
+			for _, resource := range resources.APIResources {
+				if resource.Kind == esoKind {
+					p.operatorVerified.Store(true)
+					return nil
+				}
+			}
 		}
 	}
 	return fmt.Errorf(
-		"secrets provider is configured as %q but the %s API group is not registered: "+
+		"secrets provider is configured as %q but the ExternalSecret kind (%s) is not registered: "+
 			"the external secrets operator does not appear to be installed in this cluster; "+
 			"install it or set secrets.provider to %q", ProviderESO, esoAPIGroup, ProviderSample)
 }

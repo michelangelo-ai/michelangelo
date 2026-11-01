@@ -7,6 +7,9 @@ import (
 
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -16,6 +19,14 @@ import (
 	k8stesting "k8s.io/client-go/testing"
 )
 
+// esoResourceList reports the ExternalSecret kind as served by the operator.
+func esoResourceList() *v1.APIResourceList {
+	return &v1.APIResourceList{
+		GroupVersion: esoAPIGroup + "/v1beta1",
+		APIResources: []v1.APIResource{{Name: "externalsecrets", Kind: esoKind}},
+	}
+}
+
 // newFakeClientSetWithESO returns a fake clientset whose discovery reports
 // the external-secrets.io API group as present (operator installed).
 func newFakeClientSetWithESO(t *testing.T, objects ...runtime.Object) kubernetes.Interface {
@@ -24,7 +35,7 @@ func newFakeClientSetWithESO(t *testing.T, objects ...runtime.Object) kubernetes
 	discovery, ok := fakeClientSet.Discovery().(*fakediscovery.FakeDiscovery)
 	require.True(t, ok)
 	discovery.Resources = []*v1.APIResourceList{
-		{GroupVersion: esoAPIGroup + "/v1beta1"},
+		esoResourceList(),
 	}
 	return fakeClientSet
 }
@@ -79,6 +90,39 @@ func TestESOProviderDefaultNamespace(t *testing.T) {
 	auth, err := provider.GetClusterClientAuth(context.Background(), kubeCluster("ca-secret", "token-secret"))
 	require.NoError(t, err)
 	require.Equal(t, "fake-ca-data", auth.CertificateAuthorityData)
+}
+
+func TestESOProviderDefaultNamespaceWarns(t *testing.T) {
+	core, logs := observer.New(zapcore.WarnLevel)
+	NewESOProvider(newFakeClientSetWithESO(t), ESOConfig{}, zap.New(core))
+	require.Equal(t, 1, logs.Len())
+	require.Contains(t, logs.All()[0].Message, "secrets.eso.namespace")
+
+	core, logs = observer.New(zapcore.WarnLevel)
+	NewESOProvider(newFakeClientSetWithESO(t), ESOConfig{Namespace: "ma-secrets"}, zap.New(core))
+	require.Equal(t, 0, logs.Len())
+}
+
+func TestESOProviderEmptySecretName(t *testing.T) {
+	provider := NewESOProvider(newFakeClientSetWithESO(t), ESOConfig{}, nil)
+
+	_, err := provider.GetClusterClientAuth(context.Background(), kubeCluster("", ""))
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "empty secret name")
+}
+
+// A group that is registered but does not serve ExternalSecret must not
+// count as the operator being installed.
+func TestESOProviderGroupWithoutExternalSecretKind(t *testing.T) {
+	fakeClientSet := fakek8sclient.NewSimpleClientset()
+	discovery, ok := fakeClientSet.Discovery().(*fakediscovery.FakeDiscovery)
+	require.True(t, ok)
+	discovery.Resources = []*v1.APIResourceList{{GroupVersion: esoAPIGroup + "/v1beta1"}}
+	provider := NewESOProvider(fakeClientSet, ESOConfig{}, nil)
+
+	_, err := provider.GetClusterClientAuth(context.Background(), kubeCluster("ca-secret", "token-secret"))
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "ExternalSecret kind")
 }
 
 func TestESOProviderOperatorAbsent(t *testing.T) {
@@ -245,7 +289,7 @@ func TestESOProviderFailedOperatorCheckNotCached(t *testing.T) {
 	// present.
 	discovery, ok := fakeClientSet.Discovery().(*fakediscovery.FakeDiscovery)
 	require.True(t, ok)
-	discovery.Resources = []*v1.APIResourceList{{GroupVersion: esoAPIGroup + "/v1beta1"}}
+	discovery.Resources = []*v1.APIResourceList{esoResourceList()}
 
 	_, err = provider.GetClusterClientAuth(context.Background(), kubeCluster("ca-secret", "token-secret"))
 	require.NoError(t, err)
