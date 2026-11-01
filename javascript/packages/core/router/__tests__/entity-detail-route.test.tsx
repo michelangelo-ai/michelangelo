@@ -327,6 +327,16 @@ describe('EntityDetailRoute', () => {
       expect(
         within(screen.getByRole('button', { name: /Select revision/ })).queryByText('Latest')
       ).not.toBeInTheDocument();
+      expect(screen.getByText(/Current search:/)).toHaveTextContent(
+        'revisionId=3f2a1b9c0d4e5f6a7b8c'
+      );
+
+      // Picking the latest Revision again returns to the bare URL rather than pinning it.
+      await user.click(screen.getByRole('button', { name: /Select revision/ }));
+      await user.click(await screen.findByRole('option', { name: /Revision aaaaaaaaaaaa/ }));
+      await waitFor(() => {
+        expect(screen.getByText(/Current search:/)).not.toHaveTextContent('revisionId=');
+      });
     });
 
     test('renders the latest revision for a bare entity URL', async () => {
