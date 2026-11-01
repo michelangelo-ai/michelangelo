@@ -693,7 +693,7 @@ spec:
       # Use init container to wait for MySQL to be ready
       initContainers:
         - name: wait-for-mysql
-          image: mysql:8
+          image: mysql:8.0
           command:
             - /bin/bash
             - -c
@@ -726,7 +726,7 @@ spec:
       
       containers:
         - name: schema-init
-          image: mysql:8
+          image: mysql:8.0
           command:
             - /bin/bash
             - -c
