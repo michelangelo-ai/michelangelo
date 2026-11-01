@@ -14,6 +14,8 @@ import type { Pipeline, PipelineRevision } from './types';
  * default-branch commits, so a Pipeline without one falls back to its most recently
  * updated Revision, matching the detail page.
  *
+ * `isLoading` covers background refetches too, so cached data never pins a stale revision.
+ *
  * While that lookup is loading or has failed, `revision` is undefined for a reason a run must
  * not proceed past: callers pass the result to `assertRevisionResolved` before submitting so a
  * run is never created unpinned because of a slow or failed lookup.
@@ -58,7 +60,6 @@ export function useTargetRevision(record: Pipeline | PipelineRevision | undefine
     revision: latest
       ? { name: latest.metadata.name, namespace: latest.metadata.namespace }
       : undefined,
-    // isFetching, not isLoading: cached data can be stale while a background refetch runs.
     isLoading: needsFallback && fallbackQuery.isFetching,
     isError: needsFallback && fallbackQuery.isError,
     errorMessage: needsFallback ? fallbackQuery.error?.message : undefined,
