@@ -58,7 +58,8 @@ export function useTargetRevision(record: Pipeline | PipelineRevision | undefine
     revision: latest
       ? { name: latest.metadata.name, namespace: latest.metadata.namespace }
       : undefined,
-    isLoading: needsFallback && fallbackQuery.isLoading,
+    // isFetching, not isLoading: cached data can be stale while a background refetch runs.
+    isLoading: needsFallback && fallbackQuery.isFetching,
     isError: needsFallback && fallbackQuery.isError,
     errorMessage: needsFallback ? fallbackQuery.error?.message : undefined,
   };
