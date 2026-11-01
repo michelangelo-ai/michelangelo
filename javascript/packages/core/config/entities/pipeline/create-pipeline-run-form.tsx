@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { Field } from 'react-final-form';
 
 import { FormDialog } from '#core/components/form/components/form-dialog/form-dialog';
@@ -72,19 +73,29 @@ export const CreatePipelineRunForm = ({
     });
   };
 
-  const initialValues: PipelineRunFormValues = {
-    metadata: {
-      name: `run${generateSuffix({ withDate: true })}`,
-      namespace: projectId,
-    },
-    spec: {
-      pipeline: {
-        name: pipelineName,
+  // Stable across refetch re-renders: a fresh object (and run-name suffix) each render would
+  // make react-final-form reinitialize and discard what the user has typed.
+  const revisionName = revision?.name;
+  const revisionNamespace = revision?.namespace;
+  const initialValues = useMemo<PipelineRunFormValues>(
+    () => ({
+      metadata: {
+        name: `run${generateSuffix({ withDate: true })}`,
         namespace: projectId,
       },
-      revision,
-    },
-  };
+      spec: {
+        pipeline: {
+          name: pipelineName,
+          namespace: projectId,
+        },
+        revision:
+          revisionName === undefined || revisionNamespace === undefined
+            ? undefined
+            : { name: revisionName, namespace: revisionNamespace },
+      },
+    }),
+    [projectId, pipelineName, revisionName, revisionNamespace]
+  );
 
   return (
     <FormDialog<PipelineRunFormValues>
