@@ -129,7 +129,7 @@ Running workflows in remote mode requires a docker container that contains code 
 
 ### Useful URLs
 - **Cadence** (workflow status): http://localhost:8088/domains/default/workflows
-- **MinIO** (object storage): http://localhost:9090/browser/default
+- **Object storage** (SeaweedFS Filer by default): http://localhost:9090/buckets/default/ (with `--object-store minio`, the MinIO Console is at http://localhost:9090/browser/default)
 - **Ray Dashboard**: http://localhost:8265
 
 ### Accessing Ray Dashboard for failed tasks

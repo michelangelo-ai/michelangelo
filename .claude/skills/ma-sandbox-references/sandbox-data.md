@@ -75,7 +75,7 @@ Navigate to the relevant list page, use the "Create" or "Run" action to create a
 | Vite dev server (frontend only, mocks) | http://localhost:5173 |
 | Cadence Web | http://localhost:8088 |
 | Temporal Web | http://localhost:8080 |
-| MinIO Console (only with `--object-store minio`) | http://localhost:9090 |
+| Object store UI (SeaweedFS Filer by default; MinIO Console with `--object-store minio`) | http://localhost:9090 |
 | Grafana | http://localhost:3000 |
 | Ray Dashboard | http://localhost:8265 |
 
