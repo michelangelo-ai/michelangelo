@@ -193,3 +193,46 @@ class SnapshotRestoreTest(TestCase):
         ):
             sandbox._snapshot_restore(argparse.Namespace(timestamp="does-not-exist"))
         mock_err.assert_called_once()
+
+
+class EnsureObjectstoreServiceTest(TestCase):
+    """Test cases for the generated `objectstore` Service."""
+
+    def _render(self, object_store):
+        """Run _ensure_objectstore_service and return the applied manifests."""
+        captured = {}
+
+        def fake_apply(path, context=None):
+            captured["docs"] = list(yaml.safe_load_all(Path(path).read_text()))
+
+        with (
+            patch.object(sandbox.subprocess, "run") as mock_run,
+            patch.object(sandbox, "_kube_apply", side_effect=fake_apply),
+        ):
+            mock_run.return_value = Mock(stdout="", returncode=0)
+            sandbox._ensure_objectstore_service(
+                argparse.Namespace(object_store=object_store)
+            )
+        return {doc["metadata"]["name"]: doc for doc in captured["docs"]}
+
+    def test_seaweedfs_routes_9090_to_filer_ui(self):
+        """SeaweedFS: 9090 targets the filer (8888); S3 port 9091 is unchanged."""
+        docs = self._render("seaweedfs")
+        svc = docs["objectstore"]
+        ports = {p["port"]: p for p in svc["spec"]["ports"]}
+        self.assertEqual(svc["spec"]["selector"], {"app": "seaweedfs"})
+        self.assertEqual(ports[9090]["targetPort"], 8888)
+        self.assertEqual(ports[9090]["nodePort"], 30008)
+        self.assertNotIn("targetPort", ports[9091])
+        self.assertEqual(ports[9091]["nodePort"], 30007)
+        # The ClusterIP `minio` alias keeps plain pass-through ports.
+        for p in docs["minio"]["spec"]["ports"]:
+            self.assertNotIn("targetPort", p)
+
+    def test_minio_keeps_9090_console(self):
+        """MinIO: no targetPort override, so 9090 stays the MinIO Console."""
+        svc = self._render("minio")["objectstore"]
+        self.assertEqual(svc["spec"]["selector"], {"app": "minio"})
+        for p in svc["spec"]["ports"]:
+            self.assertNotIn("targetPort", p)
+        self.assertEqual([p["port"] for p in svc["spec"]["ports"]], [9090, 9091])

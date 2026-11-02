@@ -127,7 +127,7 @@ ma sandbox demo pipeline
 
 ### Choosing an object storage backend
 
-`ma sandbox create` defaults to **MinIO**. Pass `--object-store seaweedfs` to run [SeaweedFS](https://github.com/seaweedfs/seaweedfs) instead — both are S3-compatible, so pipelines that read/write via `objectStorage.endpoint` work identically against either backend. SeaweedFS's sandbox deployment runs its lightweight all-in-one mode (no admin/browsing UI); it's intended for exercising the S3 API path, not for browsing objects interactively.
+`ma sandbox create` defaults to **MinIO**. Pass `--object-store seaweedfs` to run [SeaweedFS](https://github.com/seaweedfs/seaweedfs) instead — both are S3-compatible, so pipelines that read/write via `objectStorage.endpoint` work identically against either backend. On host port `9090`, MinIO serves its Console (`michelangeloadmin` / `michelangeloadmin`), while SeaweedFS serves the **SeaweedFS Filer** web UI at http://localhost:9090, where you can browse buckets and objects. The filer UI is oriented toward browsing, but it also allows uploads and deletes. It has **no authentication**; the port is bound to `localhost` only, so keep it that way and do not expose it on a shared network. Host port `9091` is the S3 API for both backends.
 
 Whichever backend you pick, in-cluster clients reach it at `objectstore:9091` (the `objectstore` Service). Each backend keeps its own data (`/shared/minio-data` for MinIO, `/shared/objectstore-data` for SeaweedFS), so switching backends starts with an empty store; to switch, run `ma sandbox delete` and `ma sandbox create --object-store <backend>`.
 
