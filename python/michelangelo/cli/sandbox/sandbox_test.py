@@ -238,16 +238,29 @@ class EnsureObjectstoreServiceTest(TestCase):
         self.assertEqual([p["port"] for p in svc["spec"]["ports"]], [9090, 9091])
 
 
-def _fake_kubectl(svc_selector="", pods=(), minio_svc_type=""):
-    """Build a subprocess.run fake answering the object-store detection calls."""
+def _fake_kubectl(svc_selector="", pods=(), minio_svc_type="", fail=()):
+    """Build a subprocess.run fake answering the object-store detection calls.
+
+    Lookups use `--ignore-not-found=true`, so an absent object is a successful
+    empty result. Names in `fail` ("objectstore", "minio-svc", or a Pod name)
+    make that lookup exit nonzero instead.
+    """
+
+    def answer(key, stdout):
+        if key in fail:
+            return Mock(stdout="", stderr="connection refused", returncode=1)
+        return Mock(stdout=stdout, stderr="", returncode=0)
 
     def fake_run(args, **kwargs):
+        if "--ignore-not-found=true" not in args:
+            raise AssertionError(f"lookup without --ignore-not-found: {args}")
         if args[:4] == ["kubectl", "get", "svc", "objectstore"]:
-            return Mock(stdout=svc_selector, returncode=0 if svc_selector else 1)
+            return answer("objectstore", svc_selector)
         if args[:4] == ["kubectl", "get", "svc", "minio"]:
-            return Mock(stdout=minio_svc_type, returncode=0 if minio_svc_type else 1)
+            return answer("minio-svc", minio_svc_type)
         if args[:3] == ["kubectl", "get", "pod"]:
-            return Mock(stdout="", returncode=0 if args[3] in pods else 1)
+            name = args[3]
+            return answer(name, f"pod/{name}" if name in pods else "")
         raise AssertionError(f"unexpected command: {args}")
 
     return fake_run
@@ -286,11 +299,60 @@ class ResolveObjectStoreTest(TestCase):
             result = sandbox._resolve_object_store(ns, cluster_exists)
         return result, mock_run
 
-    def test_flag_wins_without_probing_the_cluster(self):
-        """An explicit flag is returned as is and nothing is detected."""
-        result, mock_run = self._resolve("minio", True)
-        self.assertEqual(result, "minio")
-        mock_run.assert_not_called()
+    def test_flag_on_new_sandbox_skips_probing(self):
+        """`create` returns an explicit flag as is and reads nothing."""
+        for flag in ("minio", "seaweedfs"):
+            result, mock_run = self._resolve(flag, False)
+            self.assertEqual(result, flag)
+            mock_run.assert_not_called()
+
+    def test_flag_matching_selector_is_accepted(self):
+        """An explicit flag that matches the Service selector passes."""
+        fake = _fake_kubectl(svc_selector="minio", pods=("minio",))
+        self.assertEqual(self._resolve("minio", True, fake)[0], "minio")
+
+    def test_flag_without_selector_is_accepted(self):
+        """No `objectstore` Service yet: the explicit flag wins."""
+        self.assertEqual(self._resolve("minio", True, _fake_kubectl())[0], "minio")
+
+    def test_flag_conflicting_with_selector_is_refused(self):
+        """Selector minio with its Pod gone still refuses --object-store seaweedfs."""
+        fake = _fake_kubectl(svc_selector="minio", pods=())
+        with self.assertRaises(SystemExit) as ctx:
+            self._resolve("seaweedfs", True, fake)
+        message = str(ctx.exception)
+        self.assertIn("runs the minio object store", message)
+        self.assertIn("--object-store minio", message)
+        self.assertIn("ma sandbox delete", message)
+
+    def test_flag_with_failed_selector_lookup_exits(self):
+        """An explicit flag does not skip the fail-closed selector lookup."""
+        fake = _fake_kubectl(fail=("objectstore",))
+        with self.assertRaises(SystemExit) as ctx:
+            self._resolve("seaweedfs", True, fake)
+        self.assertIn("Nothing was changed", str(ctx.exception))
+
+    def test_failed_selector_lookup_exits_without_fallback(self):
+        """A kubectl failure on the selector is not read as "no Service"."""
+        fake = _fake_kubectl(pods=("minio",), fail=("objectstore",))
+        with self.assertRaises(SystemExit) as ctx:
+            self._resolve(None, True, fake)
+        message = str(ctx.exception)
+        self.assertIn("Could not read the object-store state", message)
+        self.assertIn("connection refused", message)
+
+    def test_failed_pod_lookup_exits(self):
+        """A kubectl failure on a Pod lookup is not read as "Pod absent"."""
+        fake = _fake_kubectl(fail=("minio",))
+        with self.assertRaises(SystemExit) as ctx:
+            self._resolve(None, True, fake)
+        self.assertIn("Could not read the object-store state", str(ctx.exception))
+
+    def test_failed_legacy_service_lookup_exits(self):
+        """A kubectl failure on the legacy `minio` Service lookup exits too."""
+        fake = _fake_kubectl(fail=("minio-svc",))
+        with self.assertRaises(SystemExit):
+            self._resolve(None, True, fake)
 
     def test_no_cluster_defaults_to_seaweedfs(self):
         """A new sandbox gets SeaweedFS and nothing is detected."""
@@ -335,8 +397,51 @@ class ResolveObjectStoreTest(TestCase):
         self.assertIn("ma sandbox delete", str(ctx.exception))
 
     def test_nothing_found_defaults_to_seaweedfs(self):
-        """An existing cluster with no object store gets SeaweedFS."""
-        self.assertEqual(self._resolve(None, True, _fake_kubectl())[0], "seaweedfs")
+        """Empty successful lookups mean absent and walk the full fallback order."""
+        result, mock_run = self._resolve(None, True, _fake_kubectl())
+        self.assertEqual(result, "seaweedfs")
+        looked_up = [c.args[0][2:4] for c in mock_run.call_args_list]
+        self.assertEqual(
+            looked_up,
+            [
+                ["svc", "objectstore"],
+                ["pod", "minio"],
+                ["pod", "seaweedfs"],
+                ["svc", "minio"],
+            ],
+        )
+
+
+class PodExistsTest(TestCase):
+    """Test cases for `_pod_exists` and `_check_object_store_backend`."""
+
+    def test_present_and_absent(self):
+        """Output means present; an empty successful result means absent."""
+        fake = _fake_kubectl(pods=("minio",))
+        with patch.object(sandbox.subprocess, "run", side_effect=fake):
+            self.assertTrue(sandbox._pod_exists("minio"))
+            self.assertFalse(sandbox._pod_exists("seaweedfs"))
+
+    def test_lookup_failure_exits(self):
+        """A nonzero kubectl exit is unknown, not absent."""
+        fake = _fake_kubectl(fail=("minio",))
+        with (
+            patch.object(sandbox.subprocess, "run", side_effect=fake),
+            self.assertRaises(SystemExit),
+        ):
+            sandbox._pod_exists("minio")
+
+    def test_check_backend_exits_when_pod_lookup_fails(self):
+        """The mismatch check does not pass when it cannot see the Pods."""
+        fake = _fake_kubectl(fail=("minio",))
+        with (
+            patch.object(sandbox.subprocess, "run", side_effect=fake),
+            self.assertRaises(SystemExit) as ctx,
+        ):
+            sandbox._check_object_store_backend(
+                argparse.Namespace(object_store="seaweedfs")
+            )
+        self.assertIn("Could not read the object-store state", str(ctx.exception))
 
 
 class ObjectStoreWarningTest(TestCase):
@@ -412,3 +517,41 @@ class ObjectStoreSyncCreateFlowTest(TestCase):
         ):
             sandbox._sync(ns)
         create.assert_called_once_with(ns)
+
+    def test_sync_without_cluster_creates_without_kubectl_lookups(self):
+        """No cluster: `_create` resolves seaweedfs and no kubectl lookup runs."""
+        ns = argparse.Namespace(object_store=None, exclude=[], workflow="cadence")
+        with (
+            patch.object(sandbox.subprocess, "run", return_value=Mock(returncode=1)),
+            patch.object(sandbox, "_exec"),
+            patch.object(sandbox, "_helm_chart_ports", return_value=[]),
+            patch.object(sandbox, "_deploy_services") as deploy,
+            patch.object(sandbox, "_kubectl_output") as lookup,
+        ):
+            sandbox._sync(ns)
+        self.assertEqual(ns.object_store, "seaweedfs")
+        deploy.assert_called_once_with(ns)
+        lookup.assert_not_called()
+
+    def test_sync_lookup_failure_stops_before_service_change(self):
+        """A failed lookup exits before MySQL or the `objectstore` Service."""
+        ns = argparse.Namespace(object_store=None)
+        fake = _fake_kubectl(fail=("objectstore",))
+
+        def fake_run(args, **kwargs):
+            if args[:3] == ["k3d", "cluster", "get"]:
+                return Mock(returncode=0)
+            return fake(args, **kwargs)
+
+        with (
+            patch.object(sandbox.subprocess, "run", side_effect=fake_run),
+            patch.object(sandbox, "_exec"),
+            patch.object(sandbox, "_ensure_mysql_running") as mysql,
+            patch.object(sandbox, "_ensure_objectstore_service") as service,
+            patch.object(sandbox, "_ensure_object_store_running") as running,
+            self.assertRaises(SystemExit),
+        ):
+            sandbox._sync(ns)
+        mysql.assert_not_called()
+        service.assert_not_called()
+        running.assert_not_called()

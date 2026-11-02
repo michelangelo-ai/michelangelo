@@ -110,7 +110,9 @@ Running workflows in remote mode requires a docker container that contains code 
    k3d image import examples:latest -c michelangelo-sandbox
    ```
 
-3. Create default bucket at http://localhost:9090/buckets (login: michelangeloadmin/michelangeloadmin)
+3. Check that the `default` bucket exists. `ma sandbox create` creates it for you, so there is nothing to do unless it is missing:
+   - SeaweedFS (the default backend): open the Filer at http://localhost:9090/buckets/default/ (no login).
+   - MinIO (`--object-store minio`): open the MinIO Console at http://localhost:9090/browser/default (login: `michelangeloadmin` / `michelangeloadmin`), and create the bucket there if it is missing.
 
 4. Create default domain if not exists:
    ```bash

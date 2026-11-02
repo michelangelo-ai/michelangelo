@@ -648,42 +648,72 @@ def _ensure_objectstore_service(ns: argparse.Namespace):
 
 
 def _kubectl_output(*args: str) -> str:
-    """Return stripped stdout of a kubectl command, or "" if it fails."""
-    result = subprocess.run(
-        ["kubectl", *args], capture_output=True, text=True, check=False
-    )
+    """Return stripped stdout of a read-only kubectl lookup.
+
+    Callers pass `--ignore-not-found=true`, so an empty result means the
+    object is absent. A nonzero exit means the cluster state is unknown; the
+    sync stops here, before the `objectstore` Service is touched, rather than
+    guessing a backend and possibly repointing the Service away from live
+    data.
+    """
+    cmd = ["kubectl", *args]
+    result = subprocess.run(cmd, capture_output=True, text=True, check=False)
     if result.returncode != 0:
-        return ""
+        detail = (result.stderr or "").strip() or f"exit code {result.returncode}"
+        sys.exit(
+            f"Could not read the object-store state from the cluster "
+            f"(`{' '.join(cmd)}` failed: {detail}). Nothing was changed. Check "
+            f"that kubectl can reach the sandbox cluster and re-run the command."
+        )
     return (result.stdout or "").strip()
 
 
 def _pod_exists(name: str) -> bool:
-    return (
-        subprocess.run(
-            ["kubectl", "get", "pod", name], capture_output=True, check=False
-        ).returncode
-        == 0
+    """Return whether the Pod exists; exit if the lookup itself fails."""
+    return bool(
+        _kubectl_output("get", "pod", name, "--ignore-not-found=true", "-o", "name")
+    )
+
+
+def _exit_backend_mismatch(running: str, requested: str):
+    """Refuse to sync a cluster that runs `running` with `requested`."""
+    sys.exit(
+        f"This cluster runs the {running} object store but --object-store is "
+        f"{requested}. Pass --object-store {running} to sync it, or run "
+        f"`ma sandbox delete` and `ma sandbox create --object-store {requested}` "
+        f"to switch (data is not carried over)."
     )
 
 
 def _resolve_object_store(ns: argparse.Namespace, cluster_exists: bool) -> str:
     """Pick the object-store backend for this create/sync.
 
-    Order: an explicit --object-store wins. A new sandbox (create, or sync with
-    no cluster) gets seaweedfs. Sync on an existing cluster keeps the backend
-    it already runs, detected from the `objectstore` Service selector (it
-    survives a Pod deletion), then from which Pod exists, then from a legacy
-    NodePort `minio` Service (pre-rename clusters); otherwise seaweedfs.
+    A new sandbox (create, or sync with no cluster) uses an explicit
+    --object-store, else seaweedfs, without reading the cluster. On an
+    existing cluster the `objectstore` Service selector is read first (it
+    survives a Pod deletion): an explicit flag that conflicts with it is
+    refused, otherwise the flag wins. Without a flag the backend the cluster
+    already runs is kept, detected from that selector, then from which Pod
+    exists, then from a legacy NodePort `minio` Service (pre-rename
+    clusters); otherwise seaweedfs. Any failed lookup exits instead of being
+    treated as "absent".
     """
     explicit = getattr(ns, "object_store", None)
-    if explicit:
-        return explicit
     if not cluster_exists:
-        return "seaweedfs"
+        return explicit or "seaweedfs"
 
     selector = _kubectl_output(
-        "get", "svc", "objectstore", "-o", "jsonpath={.spec.selector.app}"
+        "get",
+        "svc",
+        "objectstore",
+        "--ignore-not-found=true",
+        "-o",
+        "jsonpath={.spec.selector.app}",
     )
+    if explicit:
+        if selector in ("minio", "seaweedfs") and selector != explicit:
+            _exit_backend_mismatch(selector, explicit)
+        return explicit
     if selector in ("minio", "seaweedfs"):
         return selector
 
@@ -700,7 +730,9 @@ def _resolve_object_store(ns: argparse.Namespace, cluster_exists: bool) -> str:
     if has_seaweedfs:
         return "seaweedfs"
 
-    legacy_type = _kubectl_output("get", "svc", "minio", "-o", "jsonpath={.spec.type}")
+    legacy_type = _kubectl_output(
+        "get", "svc", "minio", "--ignore-not-found=true", "-o", "jsonpath={.spec.type}"
+    )
     if legacy_type == "NodePort":
         return "minio"
     return "seaweedfs"
@@ -728,20 +760,10 @@ def _check_object_store_backend(ns: argparse.Namespace):
     switching on a live cluster would leave two pods and an empty store.
     """
     other = "minio" if ns.object_store == "seaweedfs" else "seaweedfs"
-    exists = (
-        subprocess.run(
-            ["kubectl", "get", "pod", other], capture_output=True, check=False
-        ).returncode
-        == 0
-    )
-    if exists:
-        flag = "minio" if other == "seaweedfs" else "seaweedfs"
-        sys.exit(
-            f"This cluster runs the {other} object store but --object-store is "
-            f"{ns.object_store}. Pass --object-store {other} to sync it, or run "
-            f"`ma sandbox delete` and `ma sandbox create --object-store {flag}` "
-            f"to switch (data is not carried over)."
-        )
+    # _pod_exists exits if the lookup fails, so an unreadable cluster is never
+    # mistaken for one without the other backend's Pod.
+    if _pod_exists(other):
+        _exit_backend_mismatch(other, ns.object_store)
 
 
 def _ensure_object_store_running(ns: argparse.Namespace):
