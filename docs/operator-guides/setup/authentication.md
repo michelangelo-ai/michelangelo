@@ -1,5 +1,6 @@
 ---
 last_verified: 2026-10-15
+sidebar_position: 2
 ---
 
 # Authentication & Identity
@@ -298,6 +299,7 @@ Do not allow users or services to directly access etcd or object storage (S3/Min
 
 ## What's Next
 
+- **Keeping the UI working under `k8s-rbac`**: Front it with an auth proxy — see [UI Authentication](./ui-authentication.md)
 - **Network configuration**: Set up Ingress, TLS, and Envoy CORS rules in the [Network & Ingress guide](./network.md)
 - **Compliance**: Configure audit logging and data-residency controls for SOC 2, GDPR, or HIPAA in the [Compliance guide](../operations/compliance.md)
 - **Monitoring**: Set up Prometheus scraping and alerting for the control plane in the [Monitoring guide](../operations/monitoring.md)
