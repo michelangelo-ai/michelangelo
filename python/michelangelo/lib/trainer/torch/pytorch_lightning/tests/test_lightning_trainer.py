@@ -84,12 +84,40 @@ class TestLightningTrainerParam:
         import dataclasses
 
         names = [f.name for f in dataclasses.fields(LightningTrainerParam)]
-        assert names[-4:] == [
+        assert names[-5:] == [
             "prefetch_batches",
             "upload_async",
             "drop_last",
             "val_batch_size",
+            "random_seed",
         ]
+
+    def test_random_seed_defaults_to_none(self):
+        """Seeding is opt-in."""
+        assert _make_param().random_seed is None
+
+    @pytest.mark.parametrize("value", [0, 1, 42, 2**32 - 1])
+    def test_valid_random_seed_accepted(self, value):
+        """Non-negative integers are accepted."""
+        assert _make_param(random_seed=value).random_seed == value
+
+    @pytest.mark.parametrize("value", [-1, 2**32, True, False, 1.5, "7", [1]])
+    def test_invalid_random_seed_rejected(self, value):
+        """Negative numbers, booleans, floats and strings are rejected."""
+        with pytest.raises(ValueError, match="random_seed"):
+            _make_param(random_seed=value)
+
+    @pytest.mark.parametrize("value", [None, 7])
+    def test_random_seed_reaches_loop_config(self, value):
+        """``random_seed`` is forwarded to workers via ``train_loop_config``."""
+        param = _make_param(random_seed=value)
+        with patch(
+            "michelangelo.lib.trainer.torch.pytorch_lightning."
+            "lightning_trainer.TorchTrainer.__init__",
+            return_value=None,
+        ) as mock_super:
+            LightningTrainer(trainer_param=param)
+        assert mock_super.call_args.kwargs["train_loop_config"]["random_seed"] == value
 
     def test_prefetch_and_upload_async_reach_loop_config(self):
         """The new options are forwarded to workers via ``train_loop_config``."""

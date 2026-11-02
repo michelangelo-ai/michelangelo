@@ -897,6 +897,12 @@ def _train_loop_per_worker(train_loop_config):
     the Lightning Trainer, handles checkpoint restoration from a previous run,
     and calls trainer.fit.
     """
+    # Seed before any dataloader or model is created so weight init, dropout
+    # and dataloader-worker RNGs all see the seed.
+    random_seed = train_loop_config.get("random_seed")
+    if random_seed is not None:
+        pl.seed_everything(random_seed, workers=True)
+
     if torch.cuda.is_available():
         _logger.info(
             "CUDA is available with torch, training on GPU with CUDA version: %s",
