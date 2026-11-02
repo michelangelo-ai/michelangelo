@@ -36,6 +36,14 @@ export interface FetchTransportOptions {
   baseUrl: string;
   /** Additional headers to send with every request, merged over the static defaults. */
   headers?: Record<string, string>;
+  /**
+   * `fetch()`'s `credentials` mode. Leave unset for the default (`'same-origin'`):
+   * cookies are only sent when `baseUrl` is the same origin as the page. Set to
+   * `'include'` when an auth proxy in front of the API server (e.g. oauth2-proxy)
+   * authenticates callers via a cross-origin session cookie; the proxy's CORS
+   * policy must also allow credentials, or the browser will discard the response.
+   */
+  credentials?: RequestCredentials;
 }
 
 export interface FetchTransport {

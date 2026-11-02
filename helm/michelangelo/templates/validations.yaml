@@ -35,3 +35,6 @@ This file renders to empty YAML when all checks pass.
 {{- if and $gcs.enabled $gcs.endpoint (not $gcs.anonymous) (not (hasPrefix "https://" $gcs.endpoint)) -}}
 {{- fail "gcsStorage.endpoint must start with https:// unless gcsStorage.anonymous=true — plain-http endpoints are for emulators only and must not receive credentials. See helm/michelangelo/README.md." -}}
 {{- end -}}
+{{- if and .Values.envoy.corsAllowCredentials (not .Values.envoy.corsOrigins) -}}
+{{- fail "envoy.corsAllowCredentials=true requires an explicit envoy.corsOrigins regex. Leaving corsOrigins unset defaults to \".*\", which Envoy's CORS filter reflects as the exact caller's Origin on every request — combined with allow_credentials this would let any origin make authenticated, credentialed calls. See docs/operator-guides/setup/ui-authentication.md." -}}
+{{- end -}}
