@@ -93,6 +93,10 @@ class LightningTrainerParam:
         val_data: Validation Ray Dataset. May be ``None`` only when
             ``custom_dataloader`` is file-backed.
         batch_size: Per-worker training batch size.
+        val_batch_size: Per-worker validation batch size. ``None`` (the default)
+            reuses ``batch_size``. Must be ``>= 1`` when set. Applies to the Ray Data
+            validation iterator only; a ``custom_dataloader`` owns its own batch
+            sizes and does not receive it.
         num_shuffle_batches: Number of batches kept in the Ray Data local shuffle
             buffer. ``0`` disables shuffling.
         prefetch_batches: Number of batches Ray Data fetches, formats and
@@ -191,14 +195,23 @@ class LightningTrainerParam:
     experiment_store: ExperimentStore | None = None
     profiler_sink: Callable | None = None
     custom_dataloader: CustomDataloaderParam | None = None
-    # prefetch_batches, upload_async and drop_last are appended last so
-    # positional construction is unaffected.
+    # prefetch_batches, upload_async, drop_last and val_batch_size are appended
+    # last so positional construction is unaffected.
     prefetch_batches: int = 1  # Ray Data default; 0 disables prefetching.
     upload_async: bool = False
     drop_last: bool = False
+    val_batch_size: int | None = None  # Defaults to batch_size when unset.
 
     def __post_init__(self):
-        """Validate new options, apply default ``num_epochs``, warn on deprecated fields."""
+        """Validate new options, apply default ``num_epochs``, warn on deprecated fields.
+
+        Raises:
+            UserInputError: If ``train_data`` or ``val_data`` is missing and
+                ``custom_dataloader`` is not file-backed.
+            ValueError: If ``prefetch_batches`` is not an integer ``>= 0``,
+                ``upload_async`` is not a bool, or ``val_batch_size`` is neither
+                ``None`` nor an integer ``>= 1``.
+        """
         if (
             isinstance(self.prefetch_batches, bool)
             or not isinstance(self.prefetch_batches, int)
@@ -210,6 +223,16 @@ class LightningTrainerParam:
             )
         if not isinstance(self.upload_async, bool):
             raise ValueError(f"upload_async must be a bool, got {self.upload_async!r}.")
+        if self.val_batch_size is not None and (
+            isinstance(self.val_batch_size, bool)
+            or not isinstance(self.val_batch_size, int)
+            or self.val_batch_size < 1
+        ):
+            raise ValueError(
+                f"val_batch_size must be an integer >= 1 or None, got "
+                f"{self.val_batch_size!r}. Use None to reuse batch_size for "
+                "validation."
+            )
         file_backed = (
             self.custom_dataloader is not None and self.custom_dataloader.file_backed
         )
@@ -277,7 +300,7 @@ class LightningTrainer(TorchTrainer):
         val_data, val_limit = _apply_batch_limit(
             val_data,
             trainer_kwargs.get("limit_val_batches") if cap_datasets else None,
-            trainer_param.batch_size,
+            trainer_param.val_batch_size or trainer_param.batch_size,
             num_workers,
             "val",
         )
