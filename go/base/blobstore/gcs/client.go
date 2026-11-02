@@ -4,15 +4,22 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
 	"strings"
 	"sync"
 
 	"cloud.google.com/go/storage"
 	"google.golang.org/api/option"
+	htransport "google.golang.org/api/transport/http"
 
 	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
 )
+
+// maxRedirects matches net/http.Client's built-in redirect cap. Installing a
+// custom CheckRedirect (below) disables that built-in cap, so it has to be
+// reproduced explicitly or a misbehaving endpoint could redirect forever.
+const maxRedirects = 10
 
 var _ blobstore.BlobStoreClient = (*gcsBlobClient)(nil)
 
@@ -52,12 +59,55 @@ func (c *gcsBlobClient) ensureClient() (*storage.Client, error) {
 		if c.config.Endpoint != "" {
 			opts = append(opts, option.WithEndpoint(c.config.Endpoint))
 		}
-		c.client, c.initErr = storage.NewClient(context.Background(), opts...)
+
+		// Build the authenticated HTTP client ourselves, the same way
+		// storage.NewClient would internally, so a CheckRedirect policy can be
+		// installed on it. Without this, a configured endpoint that answers a
+		// read with an https -> http redirect would have the bearer token
+		// replayed onto the plaintext hop: net/http's default client re-invokes
+		// the same RoundTripper (which unconditionally sets the Authorization
+		// header) on every redirect it follows, with no scheme check of its own.
+		hc, ep, err := htransport.NewClient(context.Background(), opts...)
+		if err != nil {
+			c.initErr = fmt.Errorf("failed to create authenticated http client: %w", err)
+			return
+		}
+		hc.CheckRedirect = refuseInsecureRedirect
+
+		clientOpts := []option.ClientOption{option.WithHTTPClient(hc)}
+		if ep != "" {
+			// WithHTTPClient supplies the transport only, not the base URL storage
+			// requests are built against — ep is whatever opts (including
+			// WithEndpoint, if the caller set one) resolved to, so a configured
+			// endpoint still reaches storage.NewClient. When no endpoint was
+			// configured, ep comes back empty and storage.NewClient falls back to
+			// its own default (the real GCS API), which is what config.Endpoint =
+			// "" is supposed to mean.
+			clientOpts = append(clientOpts, option.WithEndpoint(ep))
+		}
+
+		c.client, c.initErr = storage.NewClient(context.Background(), clientOpts...)
 	})
 	if c.initErr != nil {
 		return nil, fmt.Errorf("failed to create gcs client: %w", c.initErr)
 	}
 	return c.client, nil
+}
+
+// refuseInsecureRedirect is an http.Client.CheckRedirect policy that follows
+// redirects the same way net/http's default (a nil CheckRedirect) does, except
+// it refuses a hop from https to http — the one case where this client's bearer
+// token would otherwise be sent in cleartext.
+func refuseInsecureRedirect(req *http.Request, via []*http.Request) error {
+	if len(via) >= maxRedirects {
+		return fmt.Errorf("stopped after %d redirects", maxRedirects)
+	}
+	last := via[len(via)-1]
+	if last.URL.Scheme == "https" && req.URL.Scheme != "https" {
+		return fmt.Errorf("refusing to follow %s -> %s redirect from %s to %s: credentials would be sent in cleartext",
+			last.URL.Scheme, req.URL.Scheme, last.URL, req.URL)
+	}
+	return nil
 }
 
 // Get retrieves the content of a blob from Google Cloud Storage.
