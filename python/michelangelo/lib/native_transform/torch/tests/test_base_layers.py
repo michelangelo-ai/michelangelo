@@ -1406,6 +1406,61 @@ class TestPadOrCrop1D:
             outputs["o2"], torch.tensor([6, 7, 8, 9], dtype=torch.int64)
         )
 
+    @pytest.mark.parametrize("align", ["left", "right"])
+    def test_traced_graph_has_no_baked_cpu_device(self, align: str) -> None:
+        """A CPU trace must not bake a ``cpu`` device literal into the graph.
+
+        This string match is a heuristic; the ``meta``-device test below is the
+        stronger check.
+        """
+        layer = PadOrCrop1D(
+            input_cols=["x"], output_cols=["y"], max_length=4, align=align
+        )
+        example = {"x": torch.tensor([[1.0, 2.0, 3.0]])}
+        traced = torch.jit.trace(layer, (example,), strict=False)
+        assert 'device=torch.device("cpu")' not in traced.code
+
+    @pytest.mark.parametrize("align", ["left", "right"])
+    def test_cpu_traced_module_runs_on_meta_device(self, align: str) -> None:
+        """A CPU-traced module runs on a non-CPU device (``meta`` proxies CUDA)."""
+        layer = PadOrCrop1D(
+            input_cols=["x"], output_cols=["y"], max_length=4, align=align
+        )
+        example = {"x": torch.tensor([[1.0, 2.0, 3.0]])}
+        traced = torch.jit.trace(layer, (example,), strict=False)
+        out = traced({"x": torch.empty(2, 6, device="meta")})["y"]
+        assert out.device.type == "meta"
+        assert out.shape == (2, 4)
+
+    @pytest.mark.parametrize(
+        ("row", "expected"),
+        [
+            # Short content: left-padded with pad_value.
+            ([1, 2], [-1, -1, 1, 2]),
+            # Content longer than max_length: keeps the last max_length elements.
+            ([1, 2, 3, 4, 5, 6], [3, 4, 5, 6]),
+            # Trailing sentinels are stripped before cropping.
+            ([1, 2, 3, 4, 5, INT32_SENTINEL, INT32_SENTINEL], [2, 3, 4, 5]),
+            # All-sentinel row becomes all padding.
+            ([INT32_SENTINEL] * 3, [-1, -1, -1, -1]),
+        ],
+    )
+    def test_right_align_values(self, row: list[int], expected: list[int]) -> None:
+        """Right alignment keeps the last real elements, eager and traced."""
+        layer = PadOrCrop1D(
+            input_cols=["x"],
+            output_cols=["y"],
+            max_length=4,
+            pad_value=-1,
+            dtype=torch.int64,
+            align="right",
+        )
+        x = torch.tensor([row], dtype=torch.int32)
+        want = torch.tensor([expected], dtype=torch.int64)
+        torch.testing.assert_close(layer({"x": x})["y"], want)
+        traced = torch.jit.trace(layer, ({"x": x},), strict=False)
+        torch.testing.assert_close(traced({"x": x})["y"], want)
+
 
 class TestScale:
     """Scalar multiplication."""

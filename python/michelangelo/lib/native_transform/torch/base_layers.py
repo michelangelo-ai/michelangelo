@@ -1166,17 +1166,21 @@ class PadOrCrop1D(TorchTransformBaseLayer):
             # Gather the last ``max_length`` elements of the *real* content
             # (everything up to and including the last non-sentinel position),
             # left-padding when the content is shorter than ``max_length``.
-            positions = torch.arange(
-                stacked_input.size(-1), device=stacked_input.device
+            # Allocate the index tensors on the input's device via ``new_empty``
+            # and fill them with ``arange(out=...)``, the same principle as
+            # ``Constant``. ``device=stacked_input.device`` would bake the
+            # trace-time device literal into the graph, breaking a CPU-traced
+            # module served on GPU.
+            positions = stacked_input.new_empty(
+                stacked_input.size(-1), dtype=torch.long
             )
+            torch.arange(stacked_input.size(-1), out=positions)
+            out_positions = stacked_input.new_empty(self.max_length, dtype=torch.long)
+            torch.arange(self.max_length, out=out_positions)
             content_length = torch.where(
                 sentinel_mask, torch.zeros_like(positions), positions + 1
             ).amax(dim=-1, keepdim=True)
-            source_index = (
-                torch.arange(self.max_length, device=stacked_input.device)
-                + content_length
-                - self.max_length
-            )
+            source_index = out_positions + content_length - self.max_length
             gathered = torch.gather(stacked_input, -1, source_index.clamp(min=0))
             output_tensor = torch.where(source_index >= 0, gathered, replacement).to(
                 output_dtype
