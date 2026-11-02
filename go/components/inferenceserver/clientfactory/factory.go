@@ -2,8 +2,10 @@ package clientfactory
 
 import (
 	"context"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/hex"
 	"fmt"
 	"net/http"
 	"sync"
@@ -33,17 +35,40 @@ var _ ClientFactory = &remoteClientFactory{}
 
 // remoteClientFactory builds and caches Kubernetes clients for ClusterTargets.
 //
-// All three client types are cached keyed by the connection tuple (cluster_id + host + port)
-// so a steady-state reconcile does not rebuild a TLS transport on every actor invocation.
+// All three client types are cached keyed by the connection tuple (cluster_id + host + port),
+// but a cache hit still requires the current credentials to match a fingerprint recorded
+// alongside the cached client (see authFingerprint) — the SecretProvider is consulted on every
+// lookup, so a rotated token or CA bundle is picked up on the next call instead of lingering
+// until a restart, while a steady-state reconcile with unchanged credentials still avoids
+// rebuilding the TLS transport.
 type remoteClientFactory struct {
 	secretProvider secrets.SecretProvider
 	scheme         *runtime.Scheme
 	logger         *zap.Logger
 
-	kubeClients    sync.Map // key string → client.Client
-	httpClients    sync.Map // key string → *http.Client
-	dynamicClients sync.Map // key string → dynamic.Interface
+	kubeClients    sync.Map // key string → cachedKubeClient
+	httpClients    sync.Map // key string → cachedHTTPClient
+	dynamicClients sync.Map // key string → cachedDynamicClient
 	mu             sync.Mutex
+}
+
+// cachedKubeClient pairs a built client.Client with the fingerprint of the credentials
+// used to build it, so a later lookup can tell whether those credentials are still current.
+type cachedKubeClient struct {
+	fingerprint string
+	client      client.Client
+}
+
+// cachedHTTPClient is the *http.Client analogue of cachedKubeClient.
+type cachedHTTPClient struct {
+	fingerprint string
+	client      *http.Client
+}
+
+// cachedDynamicClient is the dynamic.Interface analogue of cachedKubeClient.
+type cachedDynamicClient struct {
+	fingerprint string
+	client      dynamic.Interface
 }
 
 // NewRemoteClientFactory constructs a ClientFactory.
@@ -73,21 +98,30 @@ func (f *remoteClientFactory) GetClient(ctx context.Context, cluster *v2pb.Clust
 	}
 
 	key := cacheKey(cluster)
+	auth, err := f.secretProvider.GetClientAuth(ctx, cluster)
+	if err != nil {
+		return nil, fmt.Errorf("get client auth for cluster %q: %w", cluster.GetClusterId(), err)
+	}
+	fingerprint := authFingerprint(auth)
+
 	if cached, ok := f.kubeClients.Load(key); ok {
-		return cached.(client.Client), nil
+		if entry := cached.(cachedKubeClient); entry.fingerprint == fingerprint {
+			return entry.client, nil
+		}
 	}
 
-	// Building a kube client requires hitting the SecretProvider and constructing TLS
-	// state. Guard with a mutex so concurrent reconciles for the same cluster don't
-	// duplicate work.
+	// Building a kube client requires constructing TLS state. Guard with a mutex so
+	// concurrent reconciles for the same cluster don't duplicate work.
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
 	if cached, ok := f.kubeClients.Load(key); ok {
-		return cached.(client.Client), nil
+		if entry := cached.(cachedKubeClient); entry.fingerprint == fingerprint {
+			return entry.client, nil
+		}
 	}
 
-	cfg, err := f.buildRESTConfig(ctx, cluster)
+	cfg, err := f.buildRESTConfig(cluster, auth)
 	if err != nil {
 		return nil, fmt.Errorf("build REST config for cluster %q: %w", cluster.GetClusterId(), err)
 	}
@@ -97,7 +131,7 @@ func (f *remoteClientFactory) GetClient(ctx context.Context, cluster *v2pb.Clust
 		return nil, fmt.Errorf("create kube client for cluster %q: %w", cluster.GetClusterId(), err)
 	}
 
-	f.kubeClients.Store(key, kubeClient)
+	f.kubeClients.Store(key, cachedKubeClient{fingerprint: fingerprint, client: kubeClient})
 	f.logger.Info("Built kube client for cluster",
 		zap.String("cluster_id", cluster.GetClusterId()),
 		zap.String("host", cluster.GetKubernetes().GetHost()))
@@ -112,20 +146,25 @@ func (f *remoteClientFactory) GetHTTPClient(ctx context.Context, cluster *v2pb.C
 	}
 
 	key := cacheKey(cluster)
+	auth, err := f.secretProvider.GetClientAuth(ctx, cluster)
+	if err != nil {
+		return nil, fmt.Errorf("get client auth for cluster %q: %w", cluster.GetClusterId(), err)
+	}
+	fingerprint := authFingerprint(auth)
+
 	if cached, ok := f.httpClients.Load(key); ok {
-		return cached.(*http.Client), nil
+		if entry := cached.(cachedHTTPClient); entry.fingerprint == fingerprint {
+			return entry.client, nil
+		}
 	}
 
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
 	if cached, ok := f.httpClients.Load(key); ok {
-		return cached.(*http.Client), nil
-	}
-
-	auth, err := f.secretProvider.GetClientAuth(ctx, cluster)
-	if err != nil {
-		return nil, fmt.Errorf("get client auth for cluster %q: %w", cluster.GetClusterId(), err)
+		if entry := cached.(cachedHTTPClient); entry.fingerprint == fingerprint {
+			return entry.client, nil
+		}
 	}
 
 	caPool := x509.NewCertPool()
@@ -146,7 +185,7 @@ func (f *remoteClientFactory) GetHTTPClient(ctx context.Context, cluster *v2pb.C
 		Timeout: httpClientTimeout,
 	}
 
-	f.httpClients.Store(key, httpClient)
+	f.httpClients.Store(key, cachedHTTPClient{fingerprint: fingerprint, client: httpClient})
 	f.logger.Info("Built HTTP client for cluster",
 		zap.String("cluster_id", cluster.GetClusterId()),
 		zap.String("host", cluster.GetKubernetes().GetHost()))
@@ -161,18 +200,28 @@ func (f *remoteClientFactory) GetDynamicClient(ctx context.Context, cluster *v2p
 	}
 
 	key := cacheKey(cluster)
+	auth, err := f.secretProvider.GetClientAuth(ctx, cluster)
+	if err != nil {
+		return nil, fmt.Errorf("get client auth for cluster %q: %w", cluster.GetClusterId(), err)
+	}
+	fingerprint := authFingerprint(auth)
+
 	if cached, ok := f.dynamicClients.Load(key); ok {
-		return cached.(dynamic.Interface), nil
+		if entry := cached.(cachedDynamicClient); entry.fingerprint == fingerprint {
+			return entry.client, nil
+		}
 	}
 
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
 	if cached, ok := f.dynamicClients.Load(key); ok {
-		return cached.(dynamic.Interface), nil
+		if entry := cached.(cachedDynamicClient); entry.fingerprint == fingerprint {
+			return entry.client, nil
+		}
 	}
 
-	cfg, err := f.buildRESTConfig(ctx, cluster)
+	cfg, err := f.buildRESTConfig(cluster, auth)
 	if err != nil {
 		return nil, fmt.Errorf("build REST config for cluster %q: %w", cluster.GetClusterId(), err)
 	}
@@ -182,21 +231,16 @@ func (f *remoteClientFactory) GetDynamicClient(ctx context.Context, cluster *v2p
 		return nil, fmt.Errorf("create dynamic client for cluster %q: %w", cluster.GetClusterId(), err)
 	}
 
-	f.dynamicClients.Store(key, dynamicClient)
+	f.dynamicClients.Store(key, cachedDynamicClient{fingerprint: fingerprint, client: dynamicClient})
 	f.logger.Info("Built dynamic client for cluster",
 		zap.String("cluster_id", cluster.GetClusterId()),
 		zap.String("host", cluster.GetKubernetes().GetHost()))
 	return dynamicClient, nil
 }
 
-// buildRESTConfig assembles a *rest.Config for a cluster from the connection spec
-// and credentials retrieved from the SecretProvider.
-func (f *remoteClientFactory) buildRESTConfig(ctx context.Context, cluster *v2pb.ClusterTarget) (*rest.Config, error) {
-	auth, err := f.secretProvider.GetClientAuth(ctx, cluster)
-	if err != nil {
-		return nil, fmt.Errorf("get client auth: %w", err)
-	}
-
+// buildRESTConfig assembles a *rest.Config for a cluster from the connection spec and the
+// given, already-retrieved credentials.
+func (f *remoteClientFactory) buildRESTConfig(cluster *v2pb.ClusterTarget, auth secrets.ClientAuth) (*rest.Config, error) {
 	server := fmt.Sprintf("%s:%s", cluster.GetKubernetes().GetHost(), cluster.GetKubernetes().GetPort())
 
 	// Build a kubeconfig in-memory and resolve it through clientcmd, which handles
@@ -241,6 +285,14 @@ func cacheKey(cluster *v2pb.ClusterTarget) string {
 		cluster.GetKubernetes().GetHost(),
 		cluster.GetKubernetes().GetPort(),
 	)
+}
+
+// authFingerprint hashes the credentials in auth so a cached client can be compared
+// against the SecretProvider's current answer without holding the raw token in the
+// cache map or doing a byte-for-byte comparison on every lookup.
+func authFingerprint(auth secrets.ClientAuth) string {
+	sum := sha256.Sum256([]byte(auth.CertificateAuthorityData + "\x00" + auth.ClientTokenData))
+	return hex.EncodeToString(sum[:])
 }
 
 // bearerTokenRoundTripper injects a bearer Authorization header on every request.
