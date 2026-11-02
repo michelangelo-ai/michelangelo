@@ -43,7 +43,7 @@ The sandbox is split into two tiers managed by different tools:
 
 | Tier | Tool | What it owns |
 |---|---|---|
-| **Infrastructure** | `sandbox.py` (`ma sandbox`) | MySQL, MinIO, Temporal (when `--workflow temporal`), Prometheus, Grafana, MLflow, Fluent Bit, KubeRay, Spark Operator, k3d cluster lifecycle |
+| **Infrastructure** | `sandbox.py` (`ma sandbox`) | MySQL, SeaweedFS (or MinIO with `--object-store minio`), Temporal (when `--workflow temporal`), Prometheus, Grafana, MLflow, Fluent Bit, KubeRay, Spark Operator, k3d cluster lifecycle |
 | **Control plane + Cadence** | Helm (`helm/michelangelo`) | apiserver, envoy, UI, worker, controllermgr, Cadence subchart (when `--workflow cadence`), CRDs, RBAC |
 
 After `ma sandbox create`, the control plane is managed as a Helm release named `michelangelo`:

@@ -236,3 +236,179 @@ class EnsureObjectstoreServiceTest(TestCase):
         for p in svc["spec"]["ports"]:
             self.assertNotIn("targetPort", p)
         self.assertEqual([p["port"] for p in svc["spec"]["ports"]], [9090, 9091])
+
+
+def _fake_kubectl(svc_selector="", pods=(), minio_svc_type=""):
+    """Build a subprocess.run fake answering the object-store detection calls."""
+
+    def fake_run(args, **kwargs):
+        if args[:4] == ["kubectl", "get", "svc", "objectstore"]:
+            return Mock(stdout=svc_selector, returncode=0 if svc_selector else 1)
+        if args[:4] == ["kubectl", "get", "svc", "minio"]:
+            return Mock(stdout=minio_svc_type, returncode=0 if minio_svc_type else 1)
+        if args[:3] == ["kubectl", "get", "pod"]:
+            return Mock(stdout="", returncode=0 if args[3] in pods else 1)
+        raise AssertionError(f"unexpected command: {args}")
+
+    return fake_run
+
+
+class ObjectStoreArgumentsTest(TestCase):
+    """`--object-store` has no static default so the backend can be resolved."""
+
+    def _parse(self, *argv):
+        parser = argparse.ArgumentParser()
+        sandbox.init_arguments(parser)
+        return parser.parse_args(list(argv))
+
+    def test_create_default_is_none(self):
+        """`create` without the flag leaves the backend unresolved."""
+        self.assertIsNone(self._parse("create").object_store)
+
+    def test_sync_default_is_none(self):
+        """`sync` without the flag leaves the backend unresolved."""
+        self.assertIsNone(self._parse("sync").object_store)
+
+    def test_explicit_values_are_accepted(self):
+        """Both backends are still accepted explicitly."""
+        for action in ("create", "sync"):
+            for backend in ("minio", "seaweedfs"):
+                ns = self._parse(action, "--object-store", backend)
+                self.assertEqual(ns.object_store, backend)
+
+
+class ResolveObjectStoreTest(TestCase):
+    """Test cases for `_resolve_object_store`."""
+
+    def _resolve(self, flag, cluster_exists, fake=None):
+        ns = argparse.Namespace(object_store=flag)
+        with patch.object(sandbox.subprocess, "run", side_effect=fake) as mock_run:
+            result = sandbox._resolve_object_store(ns, cluster_exists)
+        return result, mock_run
+
+    def test_flag_wins_without_probing_the_cluster(self):
+        """An explicit flag is returned as is and nothing is detected."""
+        result, mock_run = self._resolve("minio", True)
+        self.assertEqual(result, "minio")
+        mock_run.assert_not_called()
+
+    def test_no_cluster_defaults_to_seaweedfs(self):
+        """A new sandbox gets SeaweedFS and nothing is detected."""
+        result, mock_run = self._resolve(None, False)
+        self.assertEqual(result, "seaweedfs")
+        mock_run.assert_not_called()
+
+    def test_service_selector_is_used_first(self):
+        """The Service selector wins even when the Pod is gone."""
+        fake = _fake_kubectl(svc_selector="minio", pods=())
+        self.assertEqual(self._resolve(None, True, fake)[0], "minio")
+        fake = _fake_kubectl(svc_selector="seaweedfs", pods=("minio",))
+        self.assertEqual(self._resolve(None, True, fake)[0], "seaweedfs")
+
+    def test_pod_fallback(self):
+        """Without a Service selector the existing Pod decides."""
+        fake = _fake_kubectl(pods=("minio",))
+        self.assertEqual(self._resolve(None, True, fake)[0], "minio")
+        fake = _fake_kubectl(pods=("seaweedfs",))
+        self.assertEqual(self._resolve(None, True, fake)[0], "seaweedfs")
+
+    def test_unknown_selector_value_falls_through_to_pods(self):
+        """A selector that names neither backend is ignored."""
+        fake = _fake_kubectl(svc_selector="other", pods=("minio",))
+        self.assertEqual(self._resolve(None, True, fake)[0], "minio")
+
+    def test_legacy_nodeport_service_means_minio(self):
+        """A pre-rename NodePort `minio` Service identifies a MinIO cluster."""
+        fake = _fake_kubectl(minio_svc_type="NodePort")
+        self.assertEqual(self._resolve(None, True, fake)[0], "minio")
+
+    def test_clusterip_minio_service_is_not_legacy(self):
+        """The ClusterIP alias is not evidence of a MinIO backend."""
+        fake = _fake_kubectl(minio_svc_type="ClusterIP")
+        self.assertEqual(self._resolve(None, True, fake)[0], "seaweedfs")
+
+    def test_both_pods_present_exits(self):
+        """Two backend Pods and no hint is refused with recreate guidance."""
+        fake = _fake_kubectl(pods=("minio", "seaweedfs"))
+        with self.assertRaises(SystemExit) as ctx:
+            self._resolve(None, True, fake)
+        self.assertIn("ma sandbox delete", str(ctx.exception))
+
+    def test_nothing_found_defaults_to_seaweedfs(self):
+        """An existing cluster with no object store gets SeaweedFS."""
+        self.assertEqual(self._resolve(None, True, _fake_kubectl())[0], "seaweedfs")
+
+
+class ObjectStoreWarningTest(TestCase):
+    """Test cases for the MinIO deprecation notice."""
+
+    def test_minio_prints_notice(self):
+        """The notice is printed once for minio and names the migration steps."""
+        with patch("builtins.print") as mock_print:
+            sandbox._warn_if_minio("minio")
+        mock_print.assert_called_once()
+        message = mock_print.call_args.args[0]
+        self.assertIn("deprecated", message)
+        self.assertIn("ma sandbox delete", message)
+        self.assertIn("NOT carried over", message)
+        self.assertNotIn("localhost:9090", message)
+
+    def test_seaweedfs_prints_nothing(self):
+        """SeaweedFS gets no notice."""
+        with patch("builtins.print") as mock_print:
+            sandbox._warn_if_minio("seaweedfs")
+        mock_print.assert_not_called()
+
+
+class ObjectStoreSyncCreateFlowTest(TestCase):
+    """`create` and `sync` resolve the backend at the right point."""
+
+    def test_create_resolves_seaweedfs_and_warns_for_minio_flag(self):
+        """`create` with no flag resolves to seaweedfs without a notice."""
+        ns = argparse.Namespace(object_store=None, exclude=[], workflow="cadence")
+        with (
+            patch.object(sandbox, "_exec"),
+            patch.object(sandbox, "_helm_chart_ports", return_value=[]),
+            patch.object(sandbox, "_deploy_services") as deploy,
+            patch.object(sandbox, "_warn_if_minio") as warn,
+        ):
+            sandbox._create(ns)
+        self.assertEqual(ns.object_store, "seaweedfs")
+        warn.assert_called_once_with("seaweedfs")
+        deploy.assert_called_once_with(ns)
+
+    def test_sync_detects_backend_before_mysql_step(self):
+        """Detection and the mismatch check run before `_ensure_mysql_running`."""
+        ns = argparse.Namespace(object_store=None)
+        calls = []
+
+        def record(name, result=None):
+            return Mock(side_effect=lambda *a, **k: calls.append(name) or result)
+
+        stop = RuntimeError("stop after the MySQL step")
+        with (
+            patch.object(sandbox.subprocess, "run", return_value=Mock(returncode=0)),
+            patch.object(sandbox, "_exec"),
+            patch.object(
+                sandbox,
+                "_resolve_object_store",
+                new=record("resolve", "minio"),
+            ),
+            patch.object(sandbox, "_check_object_store_backend", new=record("check")),
+            patch.object(sandbox, "_warn_if_minio", new=record("warn")),
+            patch.object(sandbox, "_ensure_mysql_running", side_effect=stop),
+            self.assertRaises(RuntimeError),
+        ):
+            sandbox._sync(ns)
+        self.assertEqual(ns.object_store, "minio")
+        self.assertEqual(calls, ["resolve", "check", "warn"])
+
+    def test_sync_without_cluster_falls_back_to_create(self):
+        """No cluster means a full create, which resolves to seaweedfs."""
+        ns = argparse.Namespace(object_store=None)
+        with (
+            patch.object(sandbox.subprocess, "run", return_value=Mock(returncode=1)),
+            patch.object(sandbox, "_create") as create,
+        ):
+            sandbox._sync(ns)
+        create.assert_called_once_with(ns)

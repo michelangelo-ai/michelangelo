@@ -18,11 +18,12 @@ set -euo pipefail
 
 NAMESPACE="${MA_NAMESPACE:-ma-dev-test}"
 MINIO_ENDPOINT="${MINIO_ENDPOINT:-http://localhost:9091}"
-# Read credentials from the minio-credentials k8s Secret so the script
-# automatically picks up whatever the sandbox VM is configured with.
+# Read credentials from the object-storage-credentials k8s Secret (falling back
+# to minio-credentials on older clusters) so the script automatically picks up
+# whatever the sandbox VM is configured with.
 # Falls back to michelangeloadmin for local dev where the Secret has defaults.
-MINIO_ACCESS_KEY="${MINIO_ACCESS_KEY:-$(kubectl get secret minio-credentials -o jsonpath='{.data.AWS_ACCESS_KEY_ID}' 2>/dev/null | base64 -d || echo michelangeloadmin)}"
-MINIO_SECRET_KEY="${MINIO_SECRET_KEY:-$(kubectl get secret minio-credentials -o jsonpath='{.data.AWS_SECRET_ACCESS_KEY}' 2>/dev/null | base64 -d || echo michelangeloadmin)}"
+MINIO_ACCESS_KEY="${MINIO_ACCESS_KEY:-$(kubectl get secret object-storage-credentials -o jsonpath='{.data.AWS_ACCESS_KEY_ID}' 2>/dev/null | base64 -d || kubectl get secret minio-credentials -o jsonpath='{.data.AWS_ACCESS_KEY_ID}' 2>/dev/null | base64 -d || echo michelangeloadmin)}"
+MINIO_SECRET_KEY="${MINIO_SECRET_KEY:-$(kubectl get secret object-storage-credentials -o jsonpath='{.data.AWS_SECRET_ACCESS_KEY}' 2>/dev/null | base64 -d || kubectl get secret minio-credentials -o jsonpath='{.data.AWS_SECRET_ACCESS_KEY}' 2>/dev/null | base64 -d || echo michelangeloadmin)}"
 POLL_INTERVAL="${POLL_INTERVAL:-30}"
 TIMEOUT="${TIMEOUT:-1800}"
 
