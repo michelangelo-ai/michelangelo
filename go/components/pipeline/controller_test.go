@@ -2,9 +2,11 @@ package pipeline
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -167,6 +169,87 @@ func TestReconcile_RevisionOwnedByPipeline(t *testing.T) {
 	assert.Equal(t, "Pipeline", owner.Kind)
 	assert.Equal(t, "test-pipeline", owner.Name)
 	assert.Equal(t, types.UID("pipeline-uid"), owner.UID)
+}
+
+// Once the Revision controller marks a revision immutable, re-reconciling the same
+// commit must neither fail nor rewrite it.
+func TestReconcile_ImmutableRevisionIsNotResnapshotted(t *testing.T) {
+	pipeline := &v2pb.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pipeline",
+			Namespace: "test-namespace",
+		},
+		Spec: v2pb.PipelineSpec{
+			Commit: &v2pb.CommitInfo{
+				GitRef: "abc123456789",
+				Branch: "main",
+			},
+		},
+	}
+	existing := &v2pb.Revision{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        "pipeline-test-pipeline-abc123456789",
+			Namespace:   "test-namespace",
+			Annotations: map[string]string{api.ImmutableAnnotation: "true"},
+		},
+		Spec: v2pb.RevisionSpec{RevisionId: "original"},
+		Status: v2pb.RevisionStatus{
+			State: v2pb.REVISION_STATE_READY,
+		},
+	}
+
+	reconciler := setUpReconciler(t, []client.Object{pipeline, existing}, env.Context{}, Config{RevisioningEnabled: true})
+	_, err := reconciler.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{Name: "test-pipeline", Namespace: "test-namespace"}})
+	require.NoError(t, err)
+
+	rev := &v2pb.Revision{}
+	require.NoError(t, reconciler.Get(context.Background(), "test-namespace", "pipeline-test-pipeline-abc123456789", &metav1.GetOptions{}, rev))
+	assert.Equal(t, "original", rev.Spec.RevisionId, "an immutable revision must not be rewritten")
+	assert.Nil(t, rev.Spec.Content)
+}
+
+// A failed lookup of the existing revision is surfaced so the reconcile retries,
+// rather than blindly upserting.
+func TestReconcile_RevisionLookupErrorIsReturned(t *testing.T) {
+	pipeline := &v2pb.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pipeline",
+			Namespace: "test-namespace",
+		},
+		Spec: v2pb.PipelineSpec{
+			Commit: &v2pb.CommitInfo{
+				GitRef: "abc123456789",
+				Branch: "main",
+			},
+		},
+	}
+
+	scheme := runtime.NewScheme()
+	require.NoError(t, v2pb.AddToScheme(scheme))
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(pipeline).
+		WithStatusSubresource(pipeline).
+		WithInterceptorFuncs(interceptor.Funcs{
+			Get: func(ctx context.Context, c client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+				if _, ok := obj.(*v2pb.Revision); ok {
+					return errors.New("etcd unavailable")
+				}
+				return c.Get(ctx, key, obj, opts...)
+			},
+		}).
+		Build()
+	handler := apiHandler.NewFakeAPIHandler(k8sClient)
+	reconciler := &Reconciler{
+		Handler:         handler,
+		logger:          zaptest.NewLogger(t),
+		revisionManager: revision.NewManager(handler, zaptest.NewLogger(t)),
+		config:          Config{RevisioningEnabled: true},
+		scheme:          scheme,
+	}
+
+	_, err := reconciler.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{Name: "test-pipeline", Namespace: "test-namespace"}})
+	require.ErrorContains(t, err, "get revision test-namespace/pipeline-test-pipeline-abc123456789")
 }
 
 func TestReconcile_RevisioningEnabled_NoCommit(t *testing.T) {

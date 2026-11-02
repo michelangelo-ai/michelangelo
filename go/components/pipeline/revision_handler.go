@@ -92,6 +92,10 @@ func revisionStateFromPipeline(state v2pb.PipelineState) (v2pb.RevisionState, ct
 	switch state {
 	case v2pb.PIPELINE_STATE_READY:
 		return v2pb.REVISION_STATE_READY, ctrl.Result{}
+	// PIPELINE_STATE_INVALID is the proto zero value, so it can also mean "no status
+	// yet", and ERROR is terminal: the revision then becomes immutable. That is safe
+	// in practice because the pipeline controller only snapshots a revision once the
+	// Pipeline is READY, so a revision never observes a Pipeline that has no status.
 	case v2pb.PIPELINE_STATE_ERROR, v2pb.PIPELINE_STATE_INVALID:
 		return v2pb.REVISION_STATE_ERROR, ctrl.Result{}
 	case v2pb.PIPELINE_STATE_CREATED:

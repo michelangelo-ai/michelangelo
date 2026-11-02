@@ -149,9 +149,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 
 	// Snapshot a Revision CR on every successful READY reconcile when revisioning
-	// is enabled. UpsertRevision deduplicates immutable revisions, so repeated
-	// calls for the same commit are safe. Status is already persisted above, so
-	// a snapshot error requeues only this step without affecting the READY state.
+	// is enabled. snapshotRevision skips a commit whose revision is already
+	// immutable, so repeated calls for the same commit are safe. Status is already
+	// persisted above, so a snapshot error requeues only this step without
+	// affecting the READY state.
 	if err == nil && r.config.RevisioningEnabled && pipeline.Status.State == v2pb.PIPELINE_STATE_READY {
 		if snapshotErr := r.snapshotRevision(ctx, pipeline); snapshotErr != nil {
 			logger.Error("failed to snapshot pipeline revision", zap.Error(snapshotErr))
@@ -219,6 +220,24 @@ func (r *Reconciler) snapshotRevision(ctx context.Context, pipeline *v2pb.Pipeli
 		return nil
 	}
 
+	// The Revision controller marks a revision immutable once it reaches READY or
+	// ERROR, and its content is fixed per commit from then on. A later reconcile of
+	// the same commit (status update, resync, controller restart, re-apply) has
+	// nothing to write, and UpsertRevision would reject it as an immutable-to-mutable
+	// update, so skip it.
+	name := formatRevisionName(pipeline)
+	existing := &v2pb.Revision{}
+	if err := r.Get(ctx, pipeline.Namespace, name, &metav1.GetOptions{}, existing); err == nil {
+		if utils.IsImmutable(existing) {
+			r.logger.Debug("skipping revision snapshot: revision is immutable",
+				zap.String("namespace", pipeline.Namespace),
+				zap.String("name", name))
+			return nil
+		}
+	} else if !utils.IsNotFoundError(err) {
+		return fmt.Errorf("get revision %s/%s: %w", pipeline.Namespace, name, err)
+	}
+
 	content, err := pbtypes.MarshalAny(pipeline)
 	if err != nil {
 		return fmt.Errorf("marshal pipeline content: %w", err)
@@ -230,7 +249,7 @@ func (r *Reconciler) snapshotRevision(ctx context.Context, pipeline *v2pb.Pipeli
 			Kind:       "Revision",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      formatRevisionName(pipeline),
+			Name:      name,
 			Namespace: pipeline.Namespace,
 			Labels: map[string]string{
 				api.PipelineTypeLabelName: pipeline.Spec.GetType().String(),
