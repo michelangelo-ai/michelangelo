@@ -135,5 +135,6 @@ You usually don't need these — they're for developers debugging Kubernetes net
 | `michelangelo-cadence-web` | 8088 | Cadence Web UI |
 | `michelangelo-temporal-frontend` | 7233 | Temporal frontend (gRPC) |
 | `michelangelo-temporal-web` | 8080 | Temporal Web UI |
-| `objectstore` (alias `minio`) | 9090 / 9091 | Console or Filer UI / S3 API |
+| `objectstore` | 9090 / 9091 | Console or Filer UI / S3 API |
+| `minio` (alias of `objectstore`) | 9091 | S3 API only, for backward compatibility (under SeaweedFS its 9090 reaches nothing) |
 | `mysql` | 3306 | MySQL |

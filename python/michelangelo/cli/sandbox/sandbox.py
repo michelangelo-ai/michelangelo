@@ -588,7 +588,8 @@ def _ensure_objectstore_service(ns: argparse.Namespace):
     needs. Port 9090 is the MinIO Console, or the SeaweedFS filer UI (Pod port
     8888) under SeaweedFS. A ClusterIP `minio` alias (no NodePorts) is kept so
     configs that still say `minio:9091` (older ConfigMaps, custom configs) keep
-    resolving.
+    resolving. Under SeaweedFS only the alias's 9091 is useful; its 9090 has no
+    targetPort override and reaches nothing.
     """
     pod = "seaweedfs" if ns.object_store == "seaweedfs" else "minio"
     legacy_type = subprocess.run(
