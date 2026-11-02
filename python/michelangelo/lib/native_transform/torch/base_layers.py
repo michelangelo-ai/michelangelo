@@ -435,9 +435,17 @@ class Divide(TorchTransformBaseLayer):
 
 
 class LogTransform(TorchTransformBaseLayer):
-    """Apply a logarithmic transform with an offset and output clamping.
+    """Apply a logarithmic transform with an offset and input clamping.
 
-    Computes ``log(x + add_constant)`` and clamps the result to ``[1.0, 1e20]``.
+    Computes ``log(clamp(x + add_constant, min=1.0, max=1e20))``, which is
+    equivalent to ``log(max(x + add_constant, 1))`` with an upper cap.
+
+    Note:
+        The input to the logarithm is clamped to ``[1.0, 1e20]``, so the output
+        lies in ``[0.0, ~46.05]`` (``log(1e20)``). Any finite or infinite
+        element with ``x + add_constant <= 1`` maps to ``0.0``, and values with
+        ``x + add_constant`` above ``1`` keep their true logarithm. NaN inputs
+        (or a NaN ``add_constant``) propagate to NaN output.
 
     Args:
         input_cols: Column names of the input tensors.
@@ -484,11 +492,13 @@ class LogTransform(TorchTransformBaseLayer):
             inputs: Mapping from column name to tensor.
 
         Returns:
-            A mapping from each output column to its transformed, clamped tensor.
+            A mapping from each output column to its transformed tensor, with
+            values in ``[0.0, log(1e20)]``.
         """
         stacked_inputs = format_inputs(self.input_cols, inputs)
-        stacked_outputs = torch.log(stacked_inputs + self.add_constant)
-        stacked_outputs = torch.clamp(stacked_outputs, min=1.0, max=1e20)
+        stacked_outputs = torch.log(
+            torch.clamp(stacked_inputs + self.add_constant, min=1.0, max=1e20)
+        )
         return format_outputs(self.output_cols, stacked_outputs)
 
 

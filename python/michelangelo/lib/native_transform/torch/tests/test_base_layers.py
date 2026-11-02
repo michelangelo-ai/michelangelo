@@ -394,35 +394,83 @@ class TestDivide:
 
 
 class TestLogTransform:
-    """Logarithmic transform with offset and clamping."""
+    """Logarithmic transform with the input clamped to ``[1.0, 1e20]``."""
+
+    @staticmethod
+    def _run(values: list[float], **kwargs) -> torch.Tensor:
+        layer = LogTransform(
+            input_cols=["feature"], output_cols=["log_feature"], **kwargs
+        )
+        return layer({"feature": torch.tensor(values)})["log_feature"]
 
     def test_forward_basic(self) -> None:
-        """log(x + 1) is clamped to ``[1.0, 1e20]``."""
-        layer = LogTransform(input_cols=["feature"], output_cols=["log_feature"])
-        inputs = {"feature": torch.tensor([0.0, 1.0, 9.0])}
-        expected = torch.clamp(
-            torch.log(torch.tensor([1.0, 2.0, 10.0])), min=1.0, max=1e20
+        """log(x + 1) is returned unclamped for ``x + 1 >= 1``."""
+        torch.testing.assert_close(
+            self._run([0.0, 1.0, 9.0]),
+            torch.log(torch.tensor([1.0, 2.0, 10.0])),
         )
-        torch.testing.assert_close(layer(inputs)["log_feature"], expected)
 
     def test_forward_custom_add_constant(self) -> None:
         """A custom ``add_constant`` shifts the input before the log."""
-        layer = LogTransform(
-            input_cols=["feature"], output_cols=["log_feature"], add_constant=10.0
+        torch.testing.assert_close(
+            self._run([0.0, 90.0], add_constant=10.0),
+            torch.log(torch.tensor([10.0, 100.0])),
         )
-        inputs = {"feature": torch.tensor([0.0, 90.0])}
-        expected = torch.clamp(
-            torch.log(torch.tensor([10.0, 100.0])), min=1.0, max=1e20
-        )
-        torch.testing.assert_close(layer(inputs)["log_feature"], expected)
 
     def test_forward_clamping_min(self) -> None:
-        """Results below 1.0 are clamped up to 1.0."""
-        layer = LogTransform(
-            input_cols=["feature"], output_cols=["log_feature"], add_constant=0.1
+        """Inputs with ``x + c <= 1`` map to 0.0 (the input clamp floor)."""
+        torch.testing.assert_close(
+            self._run([0.0], add_constant=0.1), torch.tensor([0.0])
         )
-        inputs = {"feature": torch.tensor([0.0])}
-        torch.testing.assert_close(layer(inputs)["log_feature"], torch.tensor([1.0]))
+
+    def test_negative_input_is_not_nan(self) -> None:
+        """Negative ``x + c`` maps to 0.0 instead of NaN."""
+        result = self._run([-5.0, -1.0, 0.0])
+        assert not torch.isnan(result).any()
+        torch.testing.assert_close(result, torch.zeros(3))
+
+    def test_nan_input_propagates(self) -> None:
+        """NaN inputs are not sanitised: NaN in gives NaN out."""
+        result = self._run([float("nan"), 2.0])
+        assert torch.isnan(result[0])
+        assert not torch.isnan(result[1])
+
+    def test_small_add_constant_gives_zero(self) -> None:
+        """``add_constant=0.1`` maps small inputs to 0.0."""
+        torch.testing.assert_close(
+            self._run([0.0, 0.5, 0.9], add_constant=0.1), torch.zeros(3)
+        )
+
+    def test_zero_add_constant_zero_input(self) -> None:
+        """``add_constant=0`` with ``x=0`` gives 0.0, not ``-inf``."""
+        torch.testing.assert_close(
+            self._run([0.0], add_constant=0.0), torch.tensor([0.0])
+        )
+
+    def test_large_input_clamps_at_log_1e20(self) -> None:
+        """Very large inputs saturate at ``log(1e20)``."""
+        result = self._run([1e25, float("inf")])
+        torch.testing.assert_close(
+            result, torch.full((2,), torch.log(torch.tensor(1e20)).item())
+        )
+
+    def test_values_between_one_and_e_keep_true_log(self) -> None:
+        """``x + c`` in ``(1, e)`` keeps its true log instead of collapsing to 1.0."""
+        values = [0.5, 1.0, 1.5]
+        result = self._run(values)
+        torch.testing.assert_close(result, torch.log(torch.tensor(values) + 1.0))
+        assert result.max() < 1.0
+
+    def test_torchscript_parity(self) -> None:
+        """Scripted and traced modules match eager output."""
+        layer = LogTransform(input_cols=["feature"], output_cols=["log_feature"])
+        inputs = {"feature": torch.tensor([-5.0, 0.0, 0.5, 2.0, 1e25])}
+        eager = layer(inputs)["log_feature"]
+        scripted = torch.jit.script(layer)(inputs)["log_feature"]
+        # strict=False: the layer returns a dict, which strict tracing rejects.
+        traced = torch.jit.trace(layer, (inputs,), strict=False)(inputs)["log_feature"]
+        torch.testing.assert_close(scripted, eager)
+        torch.testing.assert_close(traced, eager)
 
     def test_mismatched_columns_raises(self) -> None:
         """Unequal input/output column counts raise ``ValueError``."""
