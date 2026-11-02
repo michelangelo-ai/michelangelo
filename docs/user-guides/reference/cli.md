@@ -528,14 +528,14 @@ The `ma sandbox` commands manage a local K3d development environment. For prereq
 |---------|-------------|
 | `ma sandbox create` | Create a K3d cluster with all Michelangelo AI services |
 | `ma sandbox create --workflow temporal` | Create with Temporal instead of Cadence |
-| `ma sandbox create --object-store seaweedfs` | Create with SeaweedFS instead of MinIO |
+| `ma sandbox create --object-store minio` | Create with MinIO (deprecated) instead of the default SeaweedFS |
 | `ma sandbox create --exclude ui` | Create without specific services |
 | `ma sandbox create --create-compute-cluster` | Create with a Ray compute cluster |
 | `ma sandbox create --compute-cluster-name <name>` | Name the compute cluster created by `--create-compute-cluster` (default: `michelangelo-compute-0`) |
 | `ma sandbox create --wait-timeout <seconds>` | Seconds to wait for pods to become ready (default: 600) |
 | `ma sandbox create --include-experimental <service>` | Also deploy experimental services (currently `mlflow`) |
 | `ma sandbox create --set KEY=VALUE` | Pass a value through to `helm upgrade`/`helm install`. Repeatable. |
-| `ma sandbox sync` | Redeploy services into an existing cluster, skipping cluster creation and image import. Falls back to a full `create` if the cluster doesn't exist. Accepts `--exclude`, `--workflow`, `--wait-timeout`, `--include-experimental`, and `--set`. |
+| `ma sandbox sync` | Redeploy services into an existing cluster, skipping cluster creation and image import. Falls back to a full `create` if the cluster doesn't exist. Accepts `--exclude`, `--workflow`, `--object-store`, `--wait-timeout`, `--include-experimental`, and `--set`. An existing cluster keeps its object-store backend; `--object-store` must match it. |
 | `ma sandbox delete` | Tear down the cluster and all resources |
 | `ma sandbox delete --compute-cluster-name <name>` | Name of the compute cluster to delete along with the sandbox, if it exists (default: `michelangelo-compute-0`). Use it when you passed a custom name to `create --compute-cluster-name`. |
 | `ma sandbox start` | Start a stopped cluster |

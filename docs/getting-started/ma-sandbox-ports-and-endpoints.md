@@ -45,7 +45,7 @@ These mappings are created automatically by `ma sandbox create`:
 | Cadence Frontend (gRPC) | 7833 | 30002 | `michelangelo-cadence` | 7833 | Cadence SDK and client connections |
 | Cadence Frontend (TChannel) | 7933 | 30003 | `michelangelo-cadence` | 7933 | Cadence internal RPC |
 | MySQL | 3306 | 30001 | `mysql` | 3306 | Metadata storage for the workflow engine |
-| MinIO (S3 API) | 9091 | 30007 | `minio` | 9091 | S3-compatible object storage endpoint |
+| Object store (S3 API; SeaweedFS by default, or MinIO) | 9091 | 30007 | `objectstore` | 9091 | S3-compatible object storage endpoint |
 | Object store UI | 9090 | 30008 | `objectstore` | 9090 (MinIO Console) / 8888 (SeaweedFS Filer) | Web UI for browsing buckets; the SeaweedFS filer UI has no authentication and also allows uploads and deletes |
 | Grafana | 3000 | 30012 | `grafana` | 3000 | Dashboards (skipped with `--exclude grafana`) |
 | Prometheus | 9092 | 30015 | `prometheus` | 9090 | Metrics (skipped with `--exclude prometheus`) |
@@ -54,7 +54,7 @@ These mappings are created automatically by `ma sandbox create`:
 
 ### Temporal workflow engine
 
-When you pass `--workflow temporal`, the sandbox swaps the Cadence-specific mappings for Temporal ones at cluster-create time. The Cadence Web port is not exposed; everything else above (UI, API Server, MinIO, MySQL, Grafana, Prometheus, MLflow) stays the same.
+When you pass `--workflow temporal`, the sandbox swaps the Cadence-specific mappings for Temporal ones at cluster-create time. The Cadence Web port is not exposed; everything else above (UI, API Server, object store, MySQL, Grafana, Prometheus, MLflow) stays the same.
 
 | Service | Host port | NodePort | In-cluster service | What it's for |
 |---|---:|---:|---|---|
