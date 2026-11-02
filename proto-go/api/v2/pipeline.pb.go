@@ -3233,9 +3233,15 @@ spec:
             properties:
               commit:
                 properties:
+                  author:
+                    type: string
                   branch:
                     type: string
                   gitRef:
+                    type: string
+                  message:
+                    type: string
+                  url:
                     type: string
                 type: object
               description:

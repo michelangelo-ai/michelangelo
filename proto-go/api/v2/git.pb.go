@@ -26,8 +26,11 @@ var _ = math.Inf
 const _ = proto.GoGoProtoPackageIsVersion3 // please upgrade the proto package
 
 type CommitInfo struct {
-	GitRef string `protobuf:"bytes,1,opt,name=git_ref,json=gitRef,proto3" json:"gitRef,omitempty"`
-	Branch string `protobuf:"bytes,2,opt,name=branch,proto3" json:"branch,omitempty"`
+	GitRef  string `protobuf:"bytes,1,opt,name=git_ref,json=gitRef,proto3" json:"gitRef,omitempty"`
+	Branch  string `protobuf:"bytes,2,opt,name=branch,proto3" json:"branch,omitempty"`
+	Message string `protobuf:"bytes,3,opt,name=message,proto3" json:"message,omitempty"`
+	Author  string `protobuf:"bytes,4,opt,name=author,proto3" json:"author,omitempty"`
+	Url     string `protobuf:"bytes,5,opt,name=url,proto3" json:"url,omitempty"`
 }
 
 func (m *CommitInfo) Reset()      { *m = CommitInfo{} }
@@ -76,6 +79,27 @@ func (m *CommitInfo) GetBranch() string {
 	return ""
 }
 
+func (m *CommitInfo) GetMessage() string {
+	if m != nil {
+		return m.Message
+	}
+	return ""
+}
+
+func (m *CommitInfo) GetAuthor() string {
+	if m != nil {
+		return m.Author
+	}
+	return ""
+}
+
+func (m *CommitInfo) GetUrl() string {
+	if m != nil {
+		return m.Url
+	}
+	return ""
+}
+
 func init() {
 	proto.RegisterType((*CommitInfo)(nil), "michelangelo.api.v2.CommitInfo")
 }
@@ -83,30 +107,36 @@ func init() {
 func init() { proto.RegisterFile("michelangelo/api/v2/git.proto", fileDescriptor_b9f6b5f22391047b) }
 
 var fileDescriptor_b9f6b5f22391047b = []byte{
-	// 206 bytes of a gzipped FileDescriptorProto
+	// 253 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0x92, 0xcd, 0xcd, 0x4c, 0xce,
 	0x48, 0xcd, 0x49, 0xcc, 0x4b, 0x4f, 0xcd, 0xc9, 0xd7, 0x4f, 0x2c, 0xc8, 0xd4, 0x2f, 0x33, 0xd2,
 	0x4f, 0xcf, 0x2c, 0xd1, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0x12, 0x46, 0x96, 0xd6, 0x4b, 0x2c,
 	0xc8, 0xd4, 0x2b, 0x33, 0x92, 0x92, 0xc3, 0xd0, 0x93, 0x5f, 0x50, 0x92, 0x99, 0x9f, 0x57, 0x0c,
-	0xd1, 0xa4, 0xe4, 0xcf, 0xc5, 0xe5, 0x9c, 0x9f, 0x9b, 0x9b, 0x59, 0xe2, 0x99, 0x97, 0x96, 0x2f,
-	0xa4, 0xc0, 0xc5, 0x9e, 0x9e, 0x59, 0x12, 0x5f, 0x94, 0x9a, 0x26, 0xc1, 0xa8, 0xc0, 0xa8, 0xc1,
-	0xe9, 0xc4, 0x7e, 0xe9, 0x05, 0x13, 0xf3, 0x06, 0x36, 0xc6, 0x20, 0xb6, 0xf4, 0xcc, 0x92, 0xa0,
-	0xd4, 0x34, 0x21, 0x79, 0x2e, 0xb6, 0xa4, 0xa2, 0xc4, 0xbc, 0xe4, 0x0c, 0x09, 0x26, 0x34, 0x05,
-	0x10, 0x61, 0x27, 0x93, 0x0b, 0x0f, 0xe5, 0x18, 0x6e, 0x3c, 0x94, 0x63, 0xf8, 0xf0, 0x50, 0x8e,
-	0xb1, 0xe1, 0x91, 0x1c, 0xe3, 0x89, 0x47, 0x72, 0x8c, 0x17, 0x1e, 0xc9, 0x31, 0x3e, 0x78, 0x24,
-	0xc7, 0xf8, 0xe2, 0x91, 0x1c, 0xc3, 0x87, 0x47, 0x72, 0x8c, 0x13, 0x1e, 0xcb, 0x31, 0x5c, 0x78,
-	0x2c, 0xc7, 0x70, 0xe3, 0xb1, 0x1c, 0x43, 0x14, 0x53, 0x99, 0x51, 0x12, 0x1b, 0xd8, 0x35, 0xc6,
-	0x80, 0x00, 0x00, 0x00, 0xff, 0xff, 0xf1, 0xbf, 0x1f, 0x99, 0xe3, 0x00, 0x00, 0x00,
+	0xd1, 0xa4, 0x34, 0x99, 0x91, 0x8b, 0xcb, 0x39, 0x3f, 0x37, 0x37, 0xb3, 0xc4, 0x33, 0x2f, 0x2d,
+	0x5f, 0x48, 0x81, 0x8b, 0x3d, 0x3d, 0xb3, 0x24, 0xbe, 0x28, 0x35, 0x4d, 0x82, 0x51, 0x81, 0x51,
+	0x83, 0xd3, 0x89, 0xfd, 0xd2, 0x0b, 0x26, 0xe6, 0x0d, 0x6c, 0x8c, 0x41, 0x6c, 0xe9, 0x99, 0x25,
+	0x41, 0xa9, 0x69, 0x42, 0xf2, 0x5c, 0x6c, 0x49, 0x45, 0x89, 0x79, 0xc9, 0x19, 0x12, 0x4c, 0x68,
+	0x0a, 0x20, 0xc2, 0x42, 0x12, 0x5c, 0xec, 0xb9, 0xa9, 0xc5, 0xc5, 0x89, 0xe9, 0xa9, 0x12, 0xcc,
+	0x20, 0x15, 0x41, 0x30, 0xae, 0x90, 0x18, 0x17, 0x5b, 0x62, 0x69, 0x49, 0x46, 0x7e, 0x91, 0x04,
+	0x0b, 0x58, 0x02, 0xca, 0x13, 0x12, 0xe0, 0x62, 0x2e, 0x2d, 0xca, 0x91, 0x60, 0x05, 0x0b, 0x82,
+	0x98, 0x4e, 0x26, 0x17, 0x1e, 0xca, 0x31, 0xdc, 0x78, 0x28, 0xc7, 0xf0, 0xe1, 0xa1, 0x1c, 0x63,
+	0xc3, 0x23, 0x39, 0xc6, 0x13, 0x8f, 0xe4, 0x18, 0x2f, 0x3c, 0x92, 0x63, 0x7c, 0xf0, 0x48, 0x8e,
+	0xf1, 0xc5, 0x23, 0x39, 0x86, 0x0f, 0x8f, 0xe4, 0x18, 0x27, 0x3c, 0x96, 0x63, 0xb8, 0xf0, 0x58,
+	0x8e, 0xe1, 0xc6, 0x63, 0x39, 0x86, 0x28, 0xa6, 0x32, 0xa3, 0x24, 0x36, 0xb0, 0x97, 0x8c, 0x01,
+	0x01, 0x00, 0x00, 0xff, 0xff, 0xc8, 0x0e, 0xcc, 0xb8, 0x28, 0x01, 0x00, 0x00,
 }
 
 func (this *CommitInfo) GoString() string {
 	if this == nil {
 		return "nil"
 	}
-	s := make([]string, 0, 6)
+	s := make([]string, 0, 9)
 	s = append(s, "&v2.CommitInfo{")
 	s = append(s, "GitRef: "+fmt.Sprintf("%#v", this.GitRef)+",\n")
 	s = append(s, "Branch: "+fmt.Sprintf("%#v", this.Branch)+",\n")
+	s = append(s, "Message: "+fmt.Sprintf("%#v", this.Message)+",\n")
+	s = append(s, "Author: "+fmt.Sprintf("%#v", this.Author)+",\n")
+	s = append(s, "Url: "+fmt.Sprintf("%#v", this.Url)+",\n")
 	s = append(s, "}")
 	return strings.Join(s, "")
 }
@@ -138,6 +168,27 @@ func (m *CommitInfo) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
+	if len(m.Url) > 0 {
+		i -= len(m.Url)
+		copy(dAtA[i:], m.Url)
+		i = encodeVarintGit(dAtA, i, uint64(len(m.Url)))
+		i--
+		dAtA[i] = 0x2a
+	}
+	if len(m.Author) > 0 {
+		i -= len(m.Author)
+		copy(dAtA[i:], m.Author)
+		i = encodeVarintGit(dAtA, i, uint64(len(m.Author)))
+		i--
+		dAtA[i] = 0x22
+	}
+	if len(m.Message) > 0 {
+		i -= len(m.Message)
+		copy(dAtA[i:], m.Message)
+		i = encodeVarintGit(dAtA, i, uint64(len(m.Message)))
+		i--
+		dAtA[i] = 0x1a
+	}
 	if len(m.Branch) > 0 {
 		i -= len(m.Branch)
 		copy(dAtA[i:], m.Branch)
@@ -180,6 +231,18 @@ func (m *CommitInfo) Size() (n int) {
 	if l > 0 {
 		n += 1 + l + sovGit(uint64(l))
 	}
+	l = len(m.Message)
+	if l > 0 {
+		n += 1 + l + sovGit(uint64(l))
+	}
+	l = len(m.Author)
+	if l > 0 {
+		n += 1 + l + sovGit(uint64(l))
+	}
+	l = len(m.Url)
+	if l > 0 {
+		n += 1 + l + sovGit(uint64(l))
+	}
 	return n
 }
 
@@ -196,6 +259,9 @@ func (this *CommitInfo) String() string {
 	s := strings.Join([]string{`&CommitInfo{`,
 		`GitRef:` + fmt.Sprintf("%v", this.GitRef) + `,`,
 		`Branch:` + fmt.Sprintf("%v", this.Branch) + `,`,
+		`Message:` + fmt.Sprintf("%v", this.Message) + `,`,
+		`Author:` + fmt.Sprintf("%v", this.Author) + `,`,
+		`Url:` + fmt.Sprintf("%v", this.Url) + `,`,
 		`}`,
 	}, "")
 	return s
@@ -300,6 +366,102 @@ func (m *CommitInfo) Unmarshal(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.Branch = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Message", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowGit
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthGit
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthGit
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Message = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Author", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowGit
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthGit
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthGit
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Author = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 5:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Url", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowGit
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthGit
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthGit
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Url = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex

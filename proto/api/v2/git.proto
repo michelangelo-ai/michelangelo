@@ -30,4 +30,13 @@ message CommitInfo {
 
   // Git branch name
   string branch = 2 [(michelangelo.api.validation) = {required: true}];
+
+  // Commit message, verbatim (subject and body).
+  string message = 3;
+
+  // Who authored or applied the commit, e.g. an email address.
+  string author = 4;
+
+  // Web URL of the commit in the hosting git service.
+  string url = 5;
 }
