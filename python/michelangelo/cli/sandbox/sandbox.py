@@ -585,8 +585,10 @@ def _ensure_objectstore_service(ns: argparse.Namespace):
     Applied on every create and sync, so clusters created before the Service
     was renamed from `minio` get it too. A legacy NodePort `minio` Service is
     removed first because it holds NodePorts 30007/30008, which `objectstore`
-    needs. A ClusterIP `minio` alias (no NodePorts) is kept so configs that
-    still say `minio:9091` (older ConfigMaps, custom configs) keep resolving.
+    needs. Port 9090 is the MinIO Console, or the SeaweedFS filer UI (Pod port
+    8888) under SeaweedFS. A ClusterIP `minio` alias (no NodePorts) is kept so
+    configs that still say `minio:9091` (older ConfigMaps, custom configs) keep
+    resolving.
     """
     pod = "seaweedfs" if ns.object_store == "seaweedfs" else "minio"
     legacy_type = subprocess.run(
@@ -604,15 +606,22 @@ def _ensure_objectstore_service(ns: argparse.Namespace):
     with open(_dir / "resources" / "objectstore-service.yaml") as f:
         service = yaml.safe_load(f)
     service["spec"]["selector"] = {"app": pod}
+    alias_ports = [
+        {"port": p["port"], "name": p["name"]} for p in service["spec"]["ports"]
+    ]
+    if pod == "seaweedfs":
+        # Nothing listens on 9090 in the SeaweedFS Pod, so send it to the filer
+        # web UI (8888) instead of leaving host port 9090 dead.
+        for port in service["spec"]["ports"]:
+            if port["port"] == 9090:
+                port["targetPort"] = 8888
     alias = {
         "apiVersion": "v1",
         "kind": "Service",
         "metadata": {"name": "minio", "labels": {"app": "objectstore"}},
         "spec": {
             "type": "ClusterIP",
-            "ports": [
-                {"port": p["port"], "name": p["name"]} for p in service["spec"]["ports"]
-            ],
+            "ports": alias_ports,
             "selector": {"app": pod},
         },
     }

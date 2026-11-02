@@ -11,6 +11,8 @@ metadata:
 spec:
   type: NodePort
   ports:
+    # 9090: MinIO Console; under seaweedfs `ma sandbox` sets targetPort 8888
+    # (the filer web UI) because nothing listens on Pod port 9090.
     - port: 9090
       nodePort: 30008
       name: "9090"
