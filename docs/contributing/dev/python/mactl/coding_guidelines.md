@@ -1,5 +1,5 @@
 ---
-last_verified: 2026-10-14
+last_verified: 2026-11-03
 ---
 
 # Mactl Coding Guidelines
@@ -31,10 +31,12 @@ python/michelangelo/cli/mactl/plugins/entity/{entity_type}/{feature}_test.py
 
 ```
 # Don't put mactl plugin tests in generic or separate test directories
-python/tests/uniflow/core/test_{feature}.py                                  # Too generic
-python/tests/mactl/test_{feature}.py                                         # Separated from code
-python/michelangelo/cli/mactl/plugins/entity/{entity_type}/tests/{feature}_test.py  # Plugins use co-location, not tests/
-python/michelangelo/cli/{feature}_test.py                                    # Wrong level
+python/tests/uniflow/core/test_{feature}.py   # Too generic
+python/tests/mactl/test_{feature}.py          # Separated from code
+python/michelangelo/cli/{feature}_test.py     # Wrong level
+
+# Plugins use co-location, not a tests/ subfolder
+python/michelangelo/cli/mactl/plugins/entity/{entity_type}/tests/{feature}_test.py
 ```
 
 ### Benefits of Co-located Tests
