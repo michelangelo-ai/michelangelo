@@ -43,6 +43,7 @@ export const FormDialog = <FieldValues extends FormData = FormData>({
   onSubmit,
   initialValues,
   submitLabel = 'Submit',
+  submitDisabled,
   submitDisabledReason,
   children,
 }: FormDialogProps<FieldValues>) => {
@@ -71,7 +72,11 @@ export const FormDialog = <FieldValues extends FormData = FormData>({
           placement={PLACEMENT.topCenter}
           buttonDock={{
             primaryAction: (
-              <SubmitButton formId={formId} disabledReason={submitDisabledReason}>
+              <SubmitButton
+                formId={formId}
+                disabled={submitDisabled}
+                disabledReason={submitDisabledReason}
+              >
                 {submitLabel}
               </SubmitButton>
             ),

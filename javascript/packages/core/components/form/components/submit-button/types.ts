@@ -11,7 +11,7 @@ export interface SubmitButtonProps extends Omit<ButtonProps, 'type'> {
   formId?: string;
 
   /**
-   * Disables the button and shows this text in a tooltip explaining why.
+   * Tooltip text explaining why the button is disabled. Display only: pair it with `disabled`.
    */
   disabledReason?: string;
 }

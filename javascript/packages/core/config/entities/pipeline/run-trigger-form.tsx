@@ -37,6 +37,7 @@ export const RunTriggerForm = ({
     : (record?.metadata?.name ?? '');
   const targetRevision = useTargetRevision(record);
   const { revision } = targetRevision;
+  const submitDisabledReason = getSubmitDisabledReason(targetRevision);
 
   const { data, isLoading } = useStudioQuery<{ pipeline: Pipeline }>({
     queryName: 'GetPipeline',
@@ -99,7 +100,8 @@ export const RunTriggerForm = ({
       heading="Run trigger"
       onSubmit={handleRunSubmit}
       submitLabel="Run"
-      submitDisabledReason={getSubmitDisabledReason(targetRevision)}
+      submitDisabled={!!submitDisabledReason}
+      submitDisabledReason={submitDisabledReason}
     >
       <StringField name="pipelineName" label="Pipeline" initialValue={pipelineName} readOnly />
       <StringField

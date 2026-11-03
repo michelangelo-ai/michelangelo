@@ -52,6 +52,7 @@ export const CreatePipelineRunForm = ({
     : (record?.metadata?.name ?? '');
   const targetRevision = useTargetRevision(record);
   const { revision } = targetRevision;
+  const submitDisabledReason = getSubmitDisabledReason(targetRevision);
 
   const createPipelineRunMutation = useStudioMutation<PipelineRun, PipelineRun>({
     mutationName: 'CreatePipelineRun',
@@ -103,7 +104,8 @@ export const CreatePipelineRunForm = ({
       heading="Start new pipeline run"
       onSubmit={handleRunSubmit}
       submitLabel={'Run'}
-      submitDisabledReason={getSubmitDisabledReason(targetRevision)}
+      submitDisabled={!!submitDisabledReason}
+      submitDisabledReason={submitDisabledReason}
       initialValues={initialValues}
     >
       <StringField name="spec.pipeline.name" label="Pipeline to run" readOnly />

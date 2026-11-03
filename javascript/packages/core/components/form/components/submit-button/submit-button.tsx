@@ -52,7 +52,7 @@ export const SubmitButton: React.FC<SubmitButtonProps> = ({
       type="submit"
       kind={kind}
       form={formId}
-      disabled={!!disabledReason || disabled}
+      disabled={disabled}
       isLoading={submitting}
       overrides={mergeOverrides(
         {
