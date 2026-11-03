@@ -1,6 +1,6 @@
 module github.com/michelangelo-ai/michelangelo/proto-go
 
-go 1.26.9
+go 1.26.10
 
 replace github.com/michelangelo-ai/michelangelo/go => ../go
 
