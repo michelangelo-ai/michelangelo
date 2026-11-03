@@ -10,7 +10,7 @@ This document outlines coding best practices when developing features for the Mi
 
 ### Where to Place Tests
 
-When adding features to mactl, follow this test file organization:
+The general Python rule (see [Testing Strategy](../../../testing.md)) is that tests live in a `tests/` folder inside the package under test, in `*_test.py` files. mactl plugins are the one documented exception: their tests stay co-located with the code. When adding features to mactl, follow this test file organization:
 
 #### ✅ **Correct Test Locations**
 
@@ -30,10 +30,11 @@ python/michelangelo/cli/mactl/plugins/entity/{entity_type}/{feature}_test.py
 #### ❌ **Avoid These Locations**
 
 ```
-# Don't put mactl tests in generic test directories
-python/tests/uniflow/core/test_{feature}.py        # Too generic
-python/tests/mactl/test_{feature}.py                # Separated from code
-python/michelangelo/cli/{feature}_test.py           # Wrong level
+# Don't put mactl plugin tests in generic or separate test directories
+python/tests/uniflow/core/test_{feature}.py                                  # Too generic
+python/tests/mactl/test_{feature}.py                                         # Separated from code
+python/michelangelo/cli/mactl/plugins/entity/{entity_type}/tests/{feature}_test.py  # Plugins use co-location, not tests/
+python/michelangelo/cli/{feature}_test.py                                    # Wrong level
 ```
 
 ### Benefits of Co-located Tests
@@ -42,6 +43,8 @@ python/michelangelo/cli/{feature}_test.py           # Wrong level
 - **Maintainability**: Easier to find and update tests when changing features
 - **Modularity**: Each plugin maintains its own test suite
 - **Clear ownership**: Plugin developers own both code and tests
+
+Test fixtures that are not tests themselves (such as the fixture plugins in `python/michelangelo/cli/mactl/test/plugin_test/`) are excluded from the built wheel through the `exclude` list in `python/pyproject.toml`.
 
 ## Exception Handling Best Practices
 
