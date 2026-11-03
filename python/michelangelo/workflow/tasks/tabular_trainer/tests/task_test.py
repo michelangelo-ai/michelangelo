@@ -407,6 +407,16 @@ class TestTrainTabularLightning(TestCase):
         kwargs = self._run_and_get_param_kwargs(config)
         self.assertEqual(kwargs["prefetch_batches"], 8)
 
+    def test_random_seed_defaults_to_none(self):
+        """Without opt-in, no seed reaches LightningTrainerParam."""
+        kwargs = self._run_and_get_param_kwargs(make_tabular_config())
+        self.assertIsNone(kwargs["random_seed"])
+
+    def test_random_seed_forwarded(self):
+        """LightningTrainerConfig.random_seed reaches LightningTrainerParam."""
+        kwargs = self._run_and_get_param_kwargs(make_tabular_config(random_seed=1234))
+        self.assertEqual(kwargs["random_seed"], 1234)
+
     def test_checkpoint_upload_async_forwarded(self):
         """CheckpointConfig.upload_async reaches LightningTrainerParam."""
         config = make_tabular_config(

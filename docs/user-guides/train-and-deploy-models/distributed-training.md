@@ -151,6 +151,9 @@ def train(train_dv: DatasetVariable, val_dv: DatasetVariable):
 | `profiler_sink` | `None` | Ships profiler output to an experiment tracker |
 | `custom_dataloader` | `None` | Replaces the Ray Data dataloaders with your own factory — see [Custom dataloaders](#custom-dataloaders) |
 | `drop_last` | `False` | Drop the last incomplete training batch of each epoch (validation unaffected). With a fractional `limit_train_batches`, the fraction is applied to the count of full batches |
+| `random_seed` | `None` | Seeds each worker with `pytorch_lightning.seed_everything`; an integer in `0..2**32 - 1` |
+
+`random_seed` calls `pytorch_lightning.seed_everything(random_seed, workers=True)` on every worker before the dataloaders and model are created, so weight initialisation and dropout are seeded. Every worker uses the same seed, so dropout masks are the same on different data shards. `workers=True` also seeds torch `DataLoader` workers in a `custom_dataloader`; Ray Data batches are unaffected. It does not control shuffle order or non-deterministic CUDA kernels. A future shuffle seed should be derived from this field rather than added as another option. Out-of-range values, booleans and non-integers are rejected.
 
 :::warning
 `num_epochs` is deprecated and logs a warning when set. Use `lightning_trainer_kwargs={"max_epochs": N}` instead.

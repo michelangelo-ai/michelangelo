@@ -471,6 +471,7 @@ def _train_lightning(
         prefetch_batches=prefetch_batches,
         upload_async=config.checkpoint_config.upload_async,
         drop_last=drop_last,
+        random_seed=config.random_seed,
         data_collate_fn=data_collate_fn,
         lightning_trainer_kwargs=lightning_trainer_kwargs,
         transfer_learning_spec=None,

@@ -478,7 +478,8 @@ class CheckpointConfig:
             steps. Must be ``>= 1`` when set. Currently gated — raises
             ``NotImplementedError`` in the dispatcher.
         random_seed: Optional shuffle seed for chunk-based mid-epoch reads.
-            Currently gated with ``save_every_n_steps``.
+            Currently gated with ``save_every_n_steps``. Unrelated to the
+            trainer-level ``LightningTrainerConfig.random_seed``.
         upload_async: When ``True``, upload the epoch-end checkpoint on a
             background thread managed by Ray Train instead of blocking
             training until the upload finishes. Ray removes the local
@@ -741,6 +742,19 @@ class LightningTrainerConfig:
         transfer_learning_spec: Transfer-learning spec config. Setting this
             raises ``NotImplementedError`` until the spec builder is ported.
         incremental_training_mode: Incremental training mode config.
+        random_seed: Optional integer seed in ``0..2**32 - 1`` (the range
+            Lightning accepts). When set, every training worker calls
+            ``pytorch_lightning.seed_everything(random_seed, workers=True)``
+            before building the dataloaders and the model. Every worker uses
+            the same seed, so dropout masks are the same across data shards.
+            Unrelated to ``checkpoint_config.random_seed``, which is reserved
+            for chunk-based mid-epoch reads. Defaults to ``None`` (no
+            seeding).
+
+    Raises:
+        ConfigurationError: If a column spec has an empty or duplicate name,
+            or if ``random_seed`` is neither ``None`` nor an integer in
+            ``0..2**32 - 1``.
 
     Example:
         >>> from michelangelo.workflow.schema.tabular_trainer import (
@@ -769,16 +783,28 @@ class LightningTrainerConfig:
     experiment_tracker: ExperimentTrackerConfig | None = None
     transfer_learning_spec: TransferLearningSpecConfig | None = None
     incremental_training_mode: IncrementalTrainingModeConfig | None = None
+    random_seed: int | None = None
 
     def __post_init__(self) -> None:
-        """Validate column specs at construction time.
+        """Validate column specs and ``random_seed`` at construction time.
 
         Raises:
             ConfigurationError: If a column spec has an empty or duplicate
-                name, or an entry that is not a ``ColumnConfig``.
+                name, or an entry that is not a ``ColumnConfig``, or if
+                ``random_seed`` is neither ``None`` nor an integer in
+                ``0..2**32 - 1``.
         """
         for field_name in ("input_columns", "output_columns", "labels"):
             normalize_columns(getattr(self, field_name), field_name)
+        if self.random_seed is not None and (
+            isinstance(self.random_seed, bool)
+            or not isinstance(self.random_seed, int)
+            or not 0 <= self.random_seed <= 2**32 - 1
+        ):
+            raise ConfigurationError(
+                f"random_seed must be None or an integer in 0..{2**32 - 1}, "
+                f"got {self.random_seed!r}. Use None to disable seeding."
+            )
 
 
 @dataclass
