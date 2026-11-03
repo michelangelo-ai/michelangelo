@@ -187,9 +187,7 @@ func TestReconcile_ImmutableRevisionIsNotResnapshotted(t *testing.T) {
 			},
 		},
 	}
-	// The revision was snapshotted from the full SHA; the pipeline now carries its
-	// 12-character prefix, which names the same commit.
-	existing := immutableRevision("pipeline-test-pipeline-abc123456789", "abc123456789deadbeef")
+	existing := immutableRevision("pipeline-test-pipeline-abc123456789", "abc123456789")
 
 	reconciler := setUpReconciler(t, []client.Object{pipeline, existing}, env.Context{}, Config{RevisioningEnabled: true})
 	_, err := reconciler.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{Name: "test-pipeline", Namespace: "test-namespace"}})
@@ -197,7 +195,7 @@ func TestReconcile_ImmutableRevisionIsNotResnapshotted(t *testing.T) {
 
 	rev := &v2pb.Revision{}
 	require.NoError(t, reconciler.Get(context.Background(), "test-namespace", "pipeline-test-pipeline-abc123456789", &metav1.GetOptions{}, rev))
-	assert.Equal(t, "abc123456789deadbeef", rev.Spec.RevisionId, "an immutable revision must not be rewritten")
+	assert.Equal(t, "abc123456789", rev.Spec.RevisionId, "an immutable revision must not be rewritten")
 	assert.Equal(t, existing.Spec.Content.Value, rev.Spec.Content.Value)
 }
 
@@ -348,17 +346,15 @@ func TestSameCommitRef(t *testing.T) {
 		want bool
 	}{
 		{"abc123456789", "abc123456789", true},
-		{"abc123456789", "ABC123456789deadbeef", true},
-		{"abc123456789deadbeef", "abc123456789", true},
-		{"abc123456789aaaa", "abc123456789ffff", false},
+		{" abc123456789 ", "abc123456789", true},
+		// Refs are not resolved, so a shared prefix is not the same commit, whether
+		// the refs look like abbreviated SHAs or are branch names.
+		{"abc123456789", "abc123456789deadbeef", false},
+		{"abcdefabcdef", "abcdefabcdef0", false},
+		{"feature/abc123", "feature/abc123-long", false},
+		{"main", "Main", false},
 		{"", "abc123456789", false},
 		{"", "", true},
-		// Branch names must match exactly: distinct branches can share a prefix.
-		{"feature/abc123", "feature/abc123-long", false},
-		{"feature/abc123", "feature/abc123", true},
-		{"main", "Main", false},
-		// Too short to be a commit ID, so no prefix matching.
-		{"abc12", "abc123456789", false},
 	}
 	for _, tc := range cases {
 		assert.Equalf(t, tc.want, sameCommitRef(tc.a, tc.b), "sameCommitRef(%q, %q)", tc.a, tc.b)

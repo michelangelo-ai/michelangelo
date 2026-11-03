@@ -203,18 +203,11 @@ func formatRevisionName(pipeline *v2pb.Pipeline) string {
 	return ""
 }
 
-// sameCommitRef reports whether two git refs name the same commit. A revision may
-// have been snapshotted from an abbreviated SHA and re-applied with the full one
-// (or the reverse), so for commit IDs a prefix of the other counts as the same
-// commit. Other refs, such as branch names, must match exactly: distinct branches
-// can share a prefix.
+// sameCommitRef reports whether two git refs are the same ref. A ref is not resolved
+// to a commit here and may be a branch name, so refs are compared exactly: a ref that
+// merely shares a prefix (an abbreviated SHA or another branch) is not the same commit.
 func sameCommitRef(a, b string) bool {
-	a, b = strings.TrimSpace(a), strings.TrimSpace(b)
-	if isCommitID(a) && isCommitID(b) {
-		a, b = strings.ToLower(a), strings.ToLower(b)
-		return strings.HasPrefix(a, b) || strings.HasPrefix(b, a)
-	}
-	return a == b
+	return strings.TrimSpace(a) == strings.TrimSpace(b)
 }
 
 // snapshotMatchesSpec reports whether the Pipeline a revision snapshotted has the same
@@ -228,20 +221,6 @@ func snapshotMatchesSpec(rev *v2pb.Revision, pipeline *v2pb.Pipeline) (bool, err
 	snapshotted, current := snapshot.Spec, pipeline.Spec
 	snapshotted.Commit, current.Commit = nil, nil
 	return gogoproto.Equal(&snapshotted, &current), nil
-}
-
-// isCommitID reports whether ref looks like an abbreviated (at least 7 characters,
-// git's default) or full hexadecimal commit ID.
-func isCommitID(ref string) bool {
-	if len(ref) < 7 || len(ref) > 64 {
-		return false
-	}
-	for _, c := range ref {
-		if !('0' <= c && c <= '9' || 'a' <= c && c <= 'f' || 'A' <= c && c <= 'F') {
-			return false
-		}
-	}
-	return true
 }
 
 // isTerminatedState checks if a pipeline state is terminal.
