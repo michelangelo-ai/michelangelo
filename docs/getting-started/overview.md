@@ -56,7 +56,7 @@ If you're coming from other ML platforms, here's how familiar concepts map to Mi
 | **Data Preparation** | Pandas, Spark notebooks | **MA Studio Data Prep** or **Uniflow tasks** with Ray/Spark * |
 | **Experiment Tracking** | MLflow, Weights & Biases | **Model Registry** with automatic versioning |
 | **Model Training** | Custom scripts, Kubeflow Pipelines | **MA Studio Training** (UI) or **CanvasFlex/Uniflow workflows** (code) |
-| **Hyperparameter Tuning** | Optuna, Ray Tune | **Uniflow tasks** with hand-written sweeps * |
+| **Hyperparameter Tuning** | Optuna, Ray Tune | **Uniflow tasks** with the Ray Tune helper (`michelangelo.lib.tuner`) * |
 | **Model Storage** | S3 buckets, model registries | **Michelangelo AI Model Registry** with metadata & plugin storage |
 | **Batch Inference** | Airflow + custom scripts | **Uniflow tasks** with Ray for offline inference * |
 | **Online Serving** | TorchServe, TensorFlow Serving | **Deployment to inference server** with Triton Inference Server * |
