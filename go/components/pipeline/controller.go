@@ -20,6 +20,7 @@ import (
 
 	"go.uber.org/zap"
 
+	gogoproto "github.com/gogo/protobuf/proto"
 	pbtypes "github.com/gogo/protobuf/types"
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
@@ -216,6 +217,19 @@ func sameCommitRef(a, b string) bool {
 	return a == b
 }
 
+// snapshotMatchesSpec reports whether the Pipeline a revision snapshotted has the same
+// spec as pipeline. The commit is compared separately (by ref), and its metadata may
+// differ for the same commit, so it is ignored here.
+func snapshotMatchesSpec(rev *v2pb.Revision, pipeline *v2pb.Pipeline) (bool, error) {
+	snapshot := &v2pb.Pipeline{}
+	if err := pbtypes.UnmarshalAny(rev.Spec.Content, snapshot); err != nil {
+		return false, fmt.Errorf("decode snapshotted pipeline: %w", err)
+	}
+	snapshotted, current := snapshot.Spec, pipeline.Spec
+	snapshotted.Commit, current.Commit = nil, nil
+	return gogoproto.Equal(&snapshotted, &current), nil
+}
+
 // isCommitID reports whether ref looks like an abbreviated (at least 7 characters,
 // git's default) or full hexadecimal commit ID.
 func isCommitID(ref string) bool {
@@ -271,6 +285,16 @@ func (r *Reconciler) snapshotRevision(ctx context.Context, pipeline *v2pb.Pipeli
 			if existing.Spec.RevisionId == "" || existing.Spec.Content == nil {
 				return fmt.Errorf("revision %s/%s is immutable but has no recorded commit or snapshotted content",
 					pipeline.Namespace, name)
+			}
+			// A ref that is not a commit ID (e.g. a branch name) keeps the same revision
+			// name when the spec changes. Skip only when the snapshot still matches.
+			matches, err := snapshotMatchesSpec(existing, pipeline)
+			if err != nil {
+				return fmt.Errorf("revision %s/%s: %w", pipeline.Namespace, name, err)
+			}
+			if !matches {
+				return fmt.Errorf("revision %s/%s is immutable and snapshotted a different spec for ref %q: apply the change as a new commit",
+					pipeline.Namespace, name, pipeline.Spec.Commit.GitRef)
 			}
 			r.logger.Debug("skipping revision snapshot: revision is immutable",
 				zap.String("namespace", pipeline.Namespace),

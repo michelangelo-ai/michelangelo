@@ -285,6 +285,63 @@ func TestReconcile_MalformedImmutableRevisionIsReported(t *testing.T) {
 	}
 }
 
+// A ref that is not a commit ID (here a branch name) keeps the same revision name when
+// the spec changes; the frozen snapshot must not silently stand in for the new spec.
+func TestReconcile_ImmutableRevisionWithChangedSpecIsReported(t *testing.T) {
+	pipeline := &v2pb.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pipeline",
+			Namespace: "test-namespace",
+		},
+		Spec: v2pb.PipelineSpec{
+			Description: "new",
+			Commit: &v2pb.CommitInfo{
+				GitRef: "main",
+				Branch: "main",
+			},
+		},
+	}
+	existing := immutableRevision("pipeline-test-pipeline-main", "main")
+	existing.Spec.Content = mustSnapshot(&v2pb.Pipeline{Spec: v2pb.PipelineSpec{
+		Description: "old",
+		Commit:      &v2pb.CommitInfo{GitRef: "main", Branch: "main"},
+	}})
+
+	reconciler := setUpReconciler(t, []client.Object{pipeline, existing}, env.Context{}, Config{RevisioningEnabled: true})
+	_, err := reconciler.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{Name: "test-pipeline", Namespace: "test-namespace"}})
+	require.ErrorContains(t, err, "snapshotted a different spec")
+}
+
+// Commit metadata may differ for the same commit; only the rest of the spec decides.
+func TestSnapshotMatchesSpec(t *testing.T) {
+	pipeline := &v2pb.Pipeline{Spec: v2pb.PipelineSpec{
+		Description: "same",
+		Commit:      &v2pb.CommitInfo{GitRef: "abc123456789", Branch: "main"},
+	}}
+	rev := immutableRevision("pipeline-test-pipeline-abc123456789", "abc123456789")
+	rev.Spec.Content = mustSnapshot(&v2pb.Pipeline{Spec: v2pb.PipelineSpec{
+		Description: "same",
+		Commit:      &v2pb.CommitInfo{GitRef: "abc123456789deadbeef", Branch: "release"},
+	}})
+
+	matches, err := snapshotMatchesSpec(rev, pipeline)
+	require.NoError(t, err)
+	assert.True(t, matches)
+	assert.Equal(t, "abc123456789", pipeline.Spec.Commit.GitRef, "the caller's pipeline must not be modified")
+
+	rev.Spec.Content = &pbtypes.Any{TypeUrl: "type.googleapis.com/unknown", Value: []byte("x")}
+	_, err = snapshotMatchesSpec(rev, pipeline)
+	require.ErrorContains(t, err, "decode snapshotted pipeline")
+}
+
+func mustSnapshot(pipeline *v2pb.Pipeline) *pbtypes.Any {
+	content, err := pbtypes.MarshalAny(pipeline)
+	if err != nil {
+		panic(err)
+	}
+	return content
+}
+
 func TestSameCommitRef(t *testing.T) {
 	cases := []struct {
 		a, b string
@@ -317,7 +374,7 @@ func immutableRevision(name, revisionID string) *v2pb.Revision {
 		},
 		Spec: v2pb.RevisionSpec{
 			RevisionId: revisionID,
-			Content:    &pbtypes.Any{TypeUrl: "type.googleapis.com/michelangelo.api.v2.Pipeline", Value: []byte("snapshot")},
+			Content:    mustSnapshot(&v2pb.Pipeline{Spec: v2pb.PipelineSpec{Commit: &v2pb.CommitInfo{GitRef: revisionID}}}),
 		},
 		Status: v2pb.RevisionStatus{
 			State: v2pb.REVISION_STATE_READY,
