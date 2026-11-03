@@ -202,6 +202,17 @@ func formatRevisionName(pipeline *v2pb.Pipeline) string {
 	return ""
 }
 
+// sameCommitRef reports whether two git refs name the same commit. A revision may
+// have been snapshotted from an abbreviated SHA and re-applied with the full one
+// (or the reverse), so a ref that is a prefix of the other counts as the same commit.
+func sameCommitRef(a, b string) bool {
+	a, b = strings.ToLower(strings.TrimSpace(a)), strings.ToLower(strings.TrimSpace(b))
+	if a == "" || b == "" {
+		return a == b
+	}
+	return strings.HasPrefix(a, b) || strings.HasPrefix(b, a)
+}
+
 // isTerminatedState checks if a pipeline state is terminal.
 //
 // Terminal states (READY, ERROR) indicate the pipeline has reached a final
@@ -224,11 +235,16 @@ func (r *Reconciler) snapshotRevision(ctx context.Context, pipeline *v2pb.Pipeli
 	// ERROR, and its content is fixed per commit from then on. A later reconcile of
 	// the same commit (status update, resync, controller restart, re-apply) has
 	// nothing to write, and UpsertRevision would reject it as an immutable-to-mutable
-	// update, so skip it.
+	// update, so skip it. The name keeps only a 12-character ref prefix, so a
+	// different commit sharing that prefix is reported instead of skipped.
 	name := formatRevisionName(pipeline)
 	existing := &v2pb.Revision{}
 	if err := r.Get(ctx, pipeline.Namespace, name, &metav1.GetOptions{}, existing); err == nil {
 		if utils.IsImmutable(existing) {
+			if !sameCommitRef(existing.Spec.RevisionId, pipeline.Spec.Commit.GitRef) {
+				return fmt.Errorf("revision %s/%s already holds commit %q, cannot snapshot commit %q: git refs collide on the revision name",
+					pipeline.Namespace, name, existing.Spec.RevisionId, pipeline.Spec.Commit.GitRef)
+			}
 			r.logger.Debug("skipping revision snapshot: revision is immutable",
 				zap.String("namespace", pipeline.Namespace),
 				zap.String("name", name))
