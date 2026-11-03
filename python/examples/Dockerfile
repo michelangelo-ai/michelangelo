@@ -86,7 +86,7 @@ RUN curl -L -o ${SPARK_HOME}/jars/hadoop-aws-3.5.0.jar https://repo1.maven.org/m
 
 RUN mkdir -p ${SPARK_HOME}/conf && \
     echo "spark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem" >> ${SPARK_HOME}/conf/spark-defaults.conf && \
-    echo "spark.hadoop.fs.s3a.aws.credentials.provider=com.amazonaws.auth.DefaultAWSCredentialsProviderChain" >> ${SPARK_HOME}/conf/spark-defaults.conf
+    echo "spark.hadoop.fs.s3a.aws.credentials.provider=software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider" >> ${SPARK_HOME}/conf/spark-defaults.conf
 
 
 ###
