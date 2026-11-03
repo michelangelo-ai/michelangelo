@@ -584,7 +584,14 @@ describe('RunTriggerForm', () => {
     const request = createQueryMockRouter({
       GetPipeline: buildPipelineResponse({ nightly: cronTrigger }),
       CreateTriggerRun: {},
-      ListRevision: { revisionList: { items: [{ metadata: fallbackRevision }] } },
+      ListRevision: {
+        revisionList: {
+          items: [
+            { metadata: fallbackRevision },
+            { metadata: { name: 'pipeline-test-pipeline-older', namespace: 'ma-dev-test' } },
+          ],
+        },
+      },
     });
     const record = {
       metadata: { name: 'test-pipeline', namespace: 'ma-dev-test' },
