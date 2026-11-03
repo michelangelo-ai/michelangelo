@@ -8,7 +8,7 @@ require (
 	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/coreos/go-oidc/v3 v3.20.0
 	github.com/dave/dst v0.27.3
-	github.com/go-jose/go-jose/v4 v4.1.4
+	github.com/go-jose/go-jose/v4 v4.1.6
 	github.com/go-logr/logr v1.4.3
 	github.com/go-logr/zapr v1.3.0
 	github.com/go-sql-driver/mysql v1.9.3
@@ -40,7 +40,7 @@ require (
 	go.uber.org/fx v1.22.0
 	go.uber.org/yarpc v1.88.0
 	go.uber.org/zap v1.27.0
-	golang.org/x/tools v0.48.0
+	golang.org/x/tools v0.49.0
 	google.golang.org/api v0.287.1
 	google.golang.org/genproto v0.0.0-20260519071638-aa98bba5eb94
 	google.golang.org/grpc v1.83.2
@@ -105,7 +105,7 @@ require (
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/jonboulle/clockwork v0.5.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
-	github.com/klauspost/compress v1.18.0 // indirect
+	github.com/klauspost/compress v1.18.7 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.9 // indirect
 	github.com/mailru/easyjson v0.9.0 // indirect
 	github.com/marusama/semaphore/v2 v2.5.0 // indirect
@@ -156,17 +156,17 @@ require (
 	go.uber.org/thriftrw v1.32.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
-	golang.org/x/crypto v0.56.0 // indirect
+	golang.org/x/crypto v0.57.0 // indirect
 	golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56 // indirect
 	golang.org/x/exp/typeparams v0.0.0-20221208152030-732eee02a75a // indirect
 	golang.org/x/lint v0.0.0-20210508222113-6edffad5e616 // indirect
-	golang.org/x/mod v0.38.0 // indirect
-	golang.org/x/net v0.58.0 // indirect
+	golang.org/x/mod v0.41.0 // indirect
+	golang.org/x/net v0.60.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
-	golang.org/x/sync v0.22.0 // indirect
-	golang.org/x/sys v0.47.0 // indirect
-	golang.org/x/term v0.45.0 // indirect
-	golang.org/x/text v0.41.0 // indirect
+	golang.org/x/sync v0.23.0 // indirect
+	golang.org/x/sys v0.48.0 // indirect
+	golang.org/x/term v0.46.0 // indirect
+	golang.org/x/text v0.42.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 	golang.org/x/tools/go/expect v0.1.1-deprecated // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
