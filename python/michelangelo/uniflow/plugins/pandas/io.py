@@ -37,21 +37,22 @@ class PandasIO(IO["pd.DataFrame"]):
     Args:
         storage_options: Optional fsspec storage options forwarded to
             ``fsspec.core.url_to_fs``. Use this to pass credentials or
-            endpoint overrides for remote filesystems (e.g.
-            ``{"key": "...", "secret": "..."}`` for S3).
+            endpoint overrides for remote filesystems, for example S3
+            credentials as ``{"key": "...", "secret": "..."}``.
 
-    Example::
+    Example:
+    ```python
+    import pandas as pd
+    from michelangelo.uniflow.plugins.pandas import PandasIO
 
-        import pandas as pd
-        from michelangelo.uniflow.plugins.pandas import PandasIO
+    io = PandasIO()
+    df = pd.DataFrame([{"x": 1}, {"x": 2}])
+    io.write("/tmp/mydata", df)
+    loaded = io.read("/tmp/mydata", None)
+    assert len(loaded) == 2
+    ```
 
-        io = PandasIO()
-        df = pd.DataFrame([{"x": 1}, {"x": 2}])
-        io.write("/tmp/mydata", df)
-        loaded = io.read("/tmp/mydata", None)
-        assert len(loaded) == 2
-
-    .. note::
+    Note:
         ``PandasIO`` writes a **directory** of ``part-*.parquet`` files, not a
         single file. This differs from ``LocalFileSink`` (workflow pusher),
         which writes a single ``data.parquet`` via ``pandas.DataFrame.to_parquet()``.
