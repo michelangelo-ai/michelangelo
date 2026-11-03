@@ -204,13 +204,30 @@ func formatRevisionName(pipeline *v2pb.Pipeline) string {
 
 // sameCommitRef reports whether two git refs name the same commit. A revision may
 // have been snapshotted from an abbreviated SHA and re-applied with the full one
-// (or the reverse), so a ref that is a prefix of the other counts as the same commit.
+// (or the reverse), so for commit IDs a prefix of the other counts as the same
+// commit. Other refs, such as branch names, must match exactly: distinct branches
+// can share a prefix.
 func sameCommitRef(a, b string) bool {
-	a, b = strings.ToLower(strings.TrimSpace(a)), strings.ToLower(strings.TrimSpace(b))
-	if a == "" || b == "" {
-		return a == b
+	a, b = strings.TrimSpace(a), strings.TrimSpace(b)
+	if isCommitID(a) && isCommitID(b) {
+		a, b = strings.ToLower(a), strings.ToLower(b)
+		return strings.HasPrefix(a, b) || strings.HasPrefix(b, a)
 	}
-	return strings.HasPrefix(a, b) || strings.HasPrefix(b, a)
+	return a == b
+}
+
+// isCommitID reports whether ref looks like an abbreviated (at least 7 characters,
+// git's default) or full hexadecimal commit ID.
+func isCommitID(ref string) bool {
+	if len(ref) < 7 || len(ref) > 64 {
+		return false
+	}
+	for _, c := range ref {
+		if !('0' <= c && c <= '9' || 'a' <= c && c <= 'f' || 'A' <= c && c <= 'F') {
+			return false
+		}
+	}
+	return true
 }
 
 // isTerminatedState checks if a pipeline state is terminal.

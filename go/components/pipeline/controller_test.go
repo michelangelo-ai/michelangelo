@@ -296,6 +296,12 @@ func TestSameCommitRef(t *testing.T) {
 		{"abc123456789aaaa", "abc123456789ffff", false},
 		{"", "abc123456789", false},
 		{"", "", true},
+		// Branch names must match exactly: distinct branches can share a prefix.
+		{"feature/abc123", "feature/abc123-long", false},
+		{"feature/abc123", "feature/abc123", true},
+		{"main", "Main", false},
+		// Too short to be a commit ID, so no prefix matching.
+		{"abc12", "abc123456789", false},
 	}
 	for _, tc := range cases {
 		assert.Equalf(t, tc.want, sameCommitRef(tc.a, tc.b), "sameCommitRef(%q, %q)", tc.a, tc.b)
