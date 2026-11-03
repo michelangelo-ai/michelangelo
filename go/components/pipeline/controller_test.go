@@ -8,6 +8,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
+	pbtypes "github.com/gogo/protobuf/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -197,7 +198,7 @@ func TestReconcile_ImmutableRevisionIsNotResnapshotted(t *testing.T) {
 	rev := &v2pb.Revision{}
 	require.NoError(t, reconciler.Get(context.Background(), "test-namespace", "pipeline-test-pipeline-abc123456789", &metav1.GetOptions{}, rev))
 	assert.Equal(t, "abc123456789deadbeef", rev.Spec.RevisionId, "an immutable revision must not be rewritten")
-	assert.Nil(t, rev.Spec.Content)
+	assert.Equal(t, existing.Spec.Content.Value, rev.Spec.Content.Value)
 }
 
 // A different commit whose ref shares the 12-character prefix maps to the same
@@ -252,29 +253,36 @@ func TestReconcile_MutableRevisionNameCollisionIsReported(t *testing.T) {
 	rev := &v2pb.Revision{}
 	require.NoError(t, reconciler.Get(context.Background(), "test-namespace", "pipeline-test-pipeline-abc123456789", &metav1.GetOptions{}, rev))
 	assert.Equal(t, "abc123456789ffff0000", rev.Spec.RevisionId, "the other commit's revision must not be overwritten")
-	assert.Nil(t, rev.Spec.Content)
+	assert.Equal(t, existing.Spec.Content.Value, rev.Spec.Content.Value)
 }
 
-// A revision without a recorded commit cannot be compared; an immutable one is
-// still skipped rather than reported as a collision.
-func TestReconcile_ImmutableRevisionWithoutCommitIsSkipped(t *testing.T) {
-	pipeline := &v2pb.Pipeline{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-pipeline",
-			Namespace: "test-namespace",
-		},
-		Spec: v2pb.PipelineSpec{
-			Commit: &v2pb.CommitInfo{
-				GitRef: "abc123456789",
-				Branch: "main",
-			},
-		},
-	}
-	existing := immutableRevision("pipeline-test-pipeline-abc123456789", "")
+// An immutable revision without a recorded commit or snapshotted content cannot be
+// repaired and would fail every run resolving it, so it is reported, not skipped.
+func TestReconcile_MalformedImmutableRevisionIsReported(t *testing.T) {
+	withoutCommit := immutableRevision("pipeline-test-pipeline-abc123456789", "")
+	withoutContent := immutableRevision("pipeline-test-pipeline-abc123456789", "abc123456789")
+	withoutContent.Spec.Content = nil
 
-	reconciler := setUpReconciler(t, []client.Object{pipeline, existing}, env.Context{}, Config{RevisioningEnabled: true})
-	_, err := reconciler.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{Name: "test-pipeline", Namespace: "test-namespace"}})
-	require.NoError(t, err)
+	for name, existing := range map[string]*v2pb.Revision{"no commit": withoutCommit, "no content": withoutContent} {
+		t.Run(name, func(t *testing.T) {
+			pipeline := &v2pb.Pipeline{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pipeline",
+					Namespace: "test-namespace",
+				},
+				Spec: v2pb.PipelineSpec{
+					Commit: &v2pb.CommitInfo{
+						GitRef: "abc123456789",
+						Branch: "main",
+					},
+				},
+			}
+
+			reconciler := setUpReconciler(t, []client.Object{pipeline, existing}, env.Context{}, Config{RevisioningEnabled: true})
+			_, err := reconciler.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{Name: "test-pipeline", Namespace: "test-namespace"}})
+			require.ErrorContains(t, err, "no recorded commit or snapshotted content")
+		})
+	}
 }
 
 func TestSameCommitRef(t *testing.T) {
@@ -301,7 +309,10 @@ func immutableRevision(name, revisionID string) *v2pb.Revision {
 			Namespace:   "test-namespace",
 			Annotations: map[string]string{api.ImmutableAnnotation: "true"},
 		},
-		Spec: v2pb.RevisionSpec{RevisionId: revisionID},
+		Spec: v2pb.RevisionSpec{
+			RevisionId: revisionID,
+			Content:    &pbtypes.Any{TypeUrl: "type.googleapis.com/michelangelo.api.v2.Pipeline", Value: []byte("snapshot")},
+		},
 		Status: v2pb.RevisionStatus{
 			State: v2pb.REVISION_STATE_READY,
 		},

@@ -233,14 +233,16 @@ func (r *Reconciler) snapshotRevision(ctx context.Context, pipeline *v2pb.Pipeli
 
 	// The name keeps only a 12-character ref prefix, so a different commit sharing that
 	// prefix maps to the same revision. Report it rather than overwrite (mutable) or
-	// skip (immutable) the other commit's revision. A revision without a recorded
-	// commit cannot be compared and is treated as this one.
+	// skip (immutable) the other commit's revision. A mutable revision without a
+	// recorded commit cannot be compared; the upsert below fills it in.
 	//
 	// The Revision controller marks a revision immutable once it reaches READY or
 	// ERROR, and its content is fixed per commit from then on. A later reconcile of
 	// the same commit (status update, resync, controller restart, re-apply) has
 	// nothing to write, and UpsertRevision would reject it as an immutable-to-mutable
-	// update, so skip it.
+	// update, so skip it. An immutable revision without a recorded commit or
+	// snapshotted content cannot be repaired and would fail every run resolving it,
+	// so it is reported instead.
 	name := formatRevisionName(pipeline)
 	existing := &v2pb.Revision{}
 	if err := r.Get(ctx, pipeline.Namespace, name, &metav1.GetOptions{}, existing); err == nil {
@@ -249,6 +251,10 @@ func (r *Reconciler) snapshotRevision(ctx context.Context, pipeline *v2pb.Pipeli
 				pipeline.Namespace, name, existing.Spec.RevisionId, pipeline.Spec.Commit.GitRef)
 		}
 		if utils.IsImmutable(existing) {
+			if existing.Spec.RevisionId == "" || existing.Spec.Content == nil {
+				return fmt.Errorf("revision %s/%s is immutable but has no recorded commit or snapshotted content",
+					pipeline.Namespace, name)
+			}
 			r.logger.Debug("skipping revision snapshot: revision is immutable",
 				zap.String("namespace", pipeline.Namespace),
 				zap.String("name", name))
