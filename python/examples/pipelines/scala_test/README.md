@@ -13,19 +13,18 @@ Unlike `SparkTask`, the task's Python function body does no work itself —
 | File | Description |
 |---|---|
 | `src/ScalaTest.scala` | Spark job: sums 1..5 and asserts the result is 15 |
-| `build.sh` | Compiles the JAR with Scala 2.12 (see Prerequisites) |
+| `build.sh` | Compiles the JAR with Scala 2.13 (see Prerequisites) |
 | `scala_step.py` | `scala_test` task, wraps the JAR in a `ScalaSparkTask` |
 | `scala_test.py` | Workflow entry point |
 
 ## Prerequisites
 
-- `brew install scala@2.12` — Spark 3.5.x is built against Scala 2.12; a
+- `brew install scala@2.13` — Spark 4.x is built against Scala 2.13; a
   Scala 3 compiler produces a stdlib-incompatible JAR
   (`NoSuchMethodError: ScalaRunTime$.wrapRefArray`).
-- Java 11 on `PATH`/`JAVA_HOME` for both `scalac` and `spark-submit`
-  (`brew install openjdk@11`) — Scala 3's compiler needs a Java 17+ JVM to
-  *run*, but can target Java 17-21 bytecode only, so this example is built
-  and run under Java 11 to keep both scalac and Spark's JVM version simple.
+- Java 17 on `PATH`/`JAVA_HOME` for both `scalac` and `spark-submit`
+  (`brew install openjdk@17`) — Spark 4.x requires Java 17 or newer, so this
+  example is built and run under Java 17.
 - PySpark installed in the project venv (already true for `python/.venv`;
   provides both the `pyspark` jars used at compile time and the
   `spark-submit` binary used at run time).
@@ -43,8 +42,8 @@ Produces `target/ScalaTest.jar`.
 
 ```bash
 cd michelangelo-ai/michelangelo/python
-JAVA_HOME=/opt/homebrew/opt/openjdk@11 \
-PATH="$(pwd)/.venv/bin:/opt/homebrew/opt/openjdk@11/bin:$PATH" \
+JAVA_HOME=/opt/homebrew/opt/openjdk@17 \
+PATH="$(pwd)/.venv/bin:/opt/homebrew/opt/openjdk@17/bin:$PATH" \
 PYTHONPATH=. .venv/bin/python3 examples/pipelines/scala_test/scala_test.py
 ```
 

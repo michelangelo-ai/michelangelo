@@ -61,6 +61,9 @@ def _setup_chronon_environment():
     """
     print("🔧 Setting up Chronon environment...")
 
+    # NOTE: the Chronon jar below (spark_uber_2.12 0.0.23) is built for Scala 2.12,
+    # while Spark 4.x is Scala 2.13 only. Chronon on Spark 4 is unverified, so this
+    # example is not expected to work until a compatible Chronon jar is confirmed.
     # First try to find JAR in data/ folder
     script_dir = os.path.dirname(os.path.abspath(__file__))
     local_jar_path = os.path.join(script_dir, "data", "chronon-spark.jar")
@@ -80,36 +83,12 @@ def _setup_chronon_environment():
             urllib.request.urlretrieve(jar_url, jar_path)
             print(f"✅ Downloaded to {jar_path}")
 
-    # Set up S3 dependencies
-    print("🔧 Setting up S3 dependencies...")
-    s3_deps_dir = "/tmp/spark-s3-deps"
-    os.makedirs(s3_deps_dir, exist_ok=True)
-
-    hadoop_aws_jar = f"{s3_deps_dir}/hadoop-aws-3.3.4.jar"
-    aws_sdk_jar = f"{s3_deps_dir}/aws-java-sdk-bundle-1.12.367.jar"
-
-    # Download S3 JARs if not present
-    if not os.path.exists(hadoop_aws_jar):
-        print("📥 Downloading Hadoop AWS JAR...")
-        urllib.request.urlretrieve(
-            "https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/3.3.4/hadoop-aws-3.3.4.jar",
-            hadoop_aws_jar,
-        )
-
-    if not os.path.exists(aws_sdk_jar):
-        print("📥 Downloading AWS SDK JAR...")
-        urllib.request.urlretrieve(
-            "https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/1.12.367/aws-java-sdk-bundle-1.12.367.jar",
-            aws_sdk_jar,
-        )
-
     # Set up environment directories
     os.makedirs("/tmp/spark", exist_ok=True)
     os.makedirs("/tmp/chronon_data", exist_ok=True)
     os.makedirs("/tmp/chronon_features", exist_ok=True)
 
     print("✅ Chronon environment ready")
-    print("✅ S3 dependencies ready")
     return jar_path
 
 
@@ -161,10 +140,9 @@ def compute_chronon_features_with_spark(
     spark = None
     if True:  # Always create new session with correct configurations
         # Create Spark session with Chronon JAR + S3 support
-        # Include S3 JARs for proper S3 connectivity
-        hadoop_aws_jar = "/tmp/spark-s3-deps/hadoop-aws-3.3.4.jar"
-        aws_sdk_jar = "/tmp/spark-s3-deps/aws-java-sdk-bundle-1.12.367.jar"
-        all_jars = f"{jar_path},{hadoop_aws_jar},{aws_sdk_jar}"
+        # S3A support comes from the hadoop-aws / AWS SDK jars baked into the
+        # image (matching its Hadoop version); do not add other versions here.
+        all_jars = jar_path
 
         spark = (
             SparkSession.builder.appName("ChronoAmazonBooks")

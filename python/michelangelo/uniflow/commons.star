@@ -478,7 +478,7 @@ def build_spark_crd_job(
                 "spark.peloton.driver.docker.image": image,
                 "spark.peloton.executor.docker.image": image,
                 "spark.peloton.usecrets.enable": "true",
-                "spark.sql.optimizer.excludedRules": "org.apache.spark.sql.catalyst.optimizer.MergeScalarSubqueries",
+                "spark.sql.optimizer.excludedRules": "org.apache.spark.sql.catalyst.optimizer.MergeScalarSubqueries,org.apache.spark.sql.catalyst.optimizer.MergeSubplans",
                 "spark.sql.adaptive.enabled": "false",
                 "spark.driver.extraJavaOptions": "-Dcontainer.log.enableTerraBlobIntegration=true",
                 "spark.executor.extraJavaOptions": "-Dcontainer.log.enableTerraBlobIntegration=true",
@@ -490,7 +490,7 @@ def build_spark_crd_job(
             "scheduling": {
                 "preemptible": preemptible,
             },
-            "sparkVersion": "3.5.5",
+            "sparkVersion": "4.2.0",
         },
     }
 

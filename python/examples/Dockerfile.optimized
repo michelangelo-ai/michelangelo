@@ -7,7 +7,7 @@
 # Stage 1: Spark Downloader (with fallback logic)
 # =============================================================================
 FROM alpine:latest as spark-downloader
-ARG SPARK_VERSION=3.5.5
+ARG SPARK_VERSION=4.2.0
 ARG HADOOP_VERSION=3
 
 # Install curl for downloading
@@ -65,7 +65,8 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Set Python version
-ENV PYTHON_VERSION=3.9.18
+# Spark/PySpark 4.2 requires Python >= 3.10; 3.11 matches the integration-test runner.
+ENV PYTHON_VERSION=3.11.17
 
 # Download and install Python from source
 RUN wget https://www.python.org/ftp/python/$PYTHON_VERSION/Python-$PYTHON_VERSION.tgz && \
@@ -77,9 +78,9 @@ RUN wget https://www.python.org/ftp/python/$PYTHON_VERSION/Python-$PYTHON_VERSIO
     cd .. && \
     rm -rf Python-$PYTHON_VERSION*
 
-# Ensure python3.9 is the default
-RUN ln -sf /usr/local/bin/python3.9 /usr/bin/python3 && \
-    ln -sf /usr/local/bin/python3.9 /usr/bin/python
+# Ensure python3.11 is the default
+RUN ln -sf /usr/local/bin/python3.11 /usr/bin/python3 && \
+    ln -sf /usr/local/bin/python3.11 /usr/bin/python
 
 # Install pip and Poetry
 RUN python --version
@@ -90,7 +91,8 @@ RUN poetry --version
 # --------------------------
 # 3. Install Spark (optimized with multi-stage)
 # --------------------------
-ENV SPARK_VERSION=3.5.5
+# Must match the pyspark pin in pyproject.toml (python >= 3.10 branch).
+ENV SPARK_VERSION=4.2.0
 ENV HADOOP_VERSION=3
 ENV SPARK_HOME=/opt/spark
 
@@ -112,9 +114,13 @@ ENV PATH="${SPARK_HOME}/bin:${SPARK_HOME}/sbin:${PATH}"
 # Create JAR directory if needed
 RUN mkdir -p ${SPARK_HOME}/jars
 
-# Download hadoop-aws and aws-java-sdk-bundle JARs for S3 support
-RUN curl -L -o ${SPARK_HOME}/jars/hadoop-aws-3.3.4.jar https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/3.3.4/hadoop-aws-3.3.4.jar && \
-    curl -L -o ${SPARK_HOME}/jars/aws-java-sdk-bundle-1.11.1026.jar https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/1.11.1026/aws-java-sdk-bundle-1.11.1026.jar
+# Download hadoop-aws and the AWS SDK JARs for S3 support. Versions must match the
+# Hadoop client bundled with SPARK_VERSION (Spark 4.2.0 ships hadoop-client-*-3.5.0);
+# taken from hadoop-project 3.5.0's POM (aws-java-sdk-v2.version,
+# amazon-s3-analyticsaccelerator-s3.version). Hadoop 3.4+ uses AWS SDK v2.
+RUN curl -L -o ${SPARK_HOME}/jars/hadoop-aws-3.5.0.jar https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/3.5.0/hadoop-aws-3.5.0.jar && \
+    curl -L -o ${SPARK_HOME}/jars/bundle-2.35.4.jar https://repo1.maven.org/maven2/software/amazon/awssdk/bundle/2.35.4/bundle-2.35.4.jar && \
+    curl -L -o ${SPARK_HOME}/jars/analyticsaccelerator-s3-1.3.1.jar https://repo1.maven.org/maven2/software/amazon/s3/analyticsaccelerator/analyticsaccelerator-s3/1.3.1/analyticsaccelerator-s3-1.3.1.jar
 
 RUN mkdir -p ${SPARK_HOME}/conf && \
     echo "spark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem" >> ${SPARK_HOME}/conf/spark-defaults.conf && \
@@ -123,11 +129,11 @@ RUN mkdir -p ${SPARK_HOME}/conf && \
 ###
 ### Install Java
 ###
-# Install OpenJDK 11 (multi-arch compatible and open-source)
-RUN apt-get update && apt-get install -y openjdk-11-jdk
+# Install OpenJDK 17 (multi-arch compatible and open-source; required by Spark 4)
+RUN apt-get update && apt-get install -y openjdk-17-jdk
 
 # Set JAVA_HOME and update PATH
-ENV JAVA_HOME=/usr/lib/jvm/java-11-openjdk-arm64
+ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-arm64
 ENV PATH="${JAVA_HOME}/bin:${PATH}"
 
 # Set working directory
