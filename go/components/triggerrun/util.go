@@ -7,6 +7,7 @@ import (
 
 	"github.com/cenkalti/backoff"
 	"github.com/go-logr/logr"
+	"github.com/robfig/cron"
 	uberconfig "go.uber.org/config"
 
 	"github.com/michelangelo-ai/michelangelo/go/base/config"
@@ -316,15 +317,17 @@ func getWorkflowURL(configProvider uberconfig.Provider, executionID string, runI
 	return workflowConfig.BuildWorkflowUrl(executionID, runID)
 }
 
+// IsTerminalState reports whether state is one a TriggerRun never leaves:
+// FAILED, KILLED or SUCCEEDED.
+func IsTerminalState(state v2pb.TriggerRunState) bool {
+	return state == v2pb.TRIGGER_RUN_STATE_FAILED ||
+		state == v2pb.TRIGGER_RUN_STATE_KILLED ||
+		state == v2pb.TRIGGER_RUN_STATE_SUCCEEDED
+}
+
 // isTerminateState checks if a TriggerRun is in a terminal state.
-//
-// Terminal states are SUCCEEDED, FAILED, or KILLED. Once a TriggerRun reaches
-// a terminal state, it should be marked immutable and no further reconciliation
-// is required.
-//
-// Returns true if the TriggerRun is in a terminal state, false otherwise.
 func isTerminateState(tr *v2pb.TriggerRun) bool {
-	return tr.Status.State == v2pb.TRIGGER_RUN_STATE_FAILED || tr.Status.State == v2pb.TRIGGER_RUN_STATE_KILLED || tr.Status.State == v2pb.TRIGGER_RUN_STATE_SUCCEEDED
+	return IsTerminalState(tr.Status.State)
 }
 
 // GetTriggerType determines the trigger type from a TriggerRun specification.
@@ -442,4 +445,64 @@ func resumeWorkflow(ctx context.Context, triggerRun *v2pb.TriggerRun, log logr.L
 	triggerRun.Status.State = v2pb.TRIGGER_RUN_STATE_RUNNING
 	triggerRun.Status.ErrorMessage = ""
 	return triggerRun.Status, nil
+}
+
+// BackfillRunTimestamps enumerates the occurrences of cronExpr that a backfill
+// over [start, end] runs: every occurrence after start up to and including end,
+// plus start itself when it falls exactly on the schedule. This is the
+// enumeration the backfill worker executes, so a caller that validates a window
+// ahead of time counts exactly the runs that would be created. A caller that
+// only needs to know whether the window runs at all should use
+// BackfillWindowHasRun, which does not build the slice.
+//
+// Known limitation: whether start itself is an occurrence is derived from the
+// gap between the next two occurrences, so an irregular schedule such as
+// "0 9 * * 1,3,6" can be mis-detected at start. The occurrences after start are
+// always exact.
+func BackfillRunTimestamps(start, end time.Time, cronExpr string) ([]time.Time, error) {
+	schedule, err := cron.ParseStandard(cronExpr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse cron schedule %q: %w", cronExpr, err)
+	}
+	first, ok := firstBackfillRun(schedule, start, end)
+	if !ok {
+		return nil, nil
+	}
+	runs := []time.Time{first}
+	for next := schedule.Next(first); !next.IsZero() && !next.After(end); next = schedule.Next(next) {
+		runs = append(runs, next)
+	}
+	return runs, nil
+}
+
+// BackfillWindowHasRun reports whether a backfill over [start, end] on cronExpr
+// would run at least once, counted the same way as BackfillRunTimestamps. It
+// looks at most two occurrences ahead of start, so it is safe to call in a
+// request path for a window of any size.
+func BackfillWindowHasRun(start, end time.Time, cronExpr string) (bool, error) {
+	schedule, err := cron.ParseStandard(cronExpr)
+	if err != nil {
+		return false, fmt.Errorf("failed to parse cron schedule %q: %w", cronExpr, err)
+	}
+	_, ok := firstBackfillRun(schedule, start, end)
+	return ok, nil
+}
+
+// firstBackfillRun returns the first occurrence a backfill over [start, end]
+// runs: start itself when it falls exactly on the schedule, otherwise the first
+// occurrence after start unless that is after end. cron.Schedule.Next reports
+// a schedule that never fires again (such as "0 0 30 2 *") as the zero time;
+// that is treated as no occurrence rather than iterated on.
+func firstBackfillRun(schedule cron.Schedule, start, end time.Time) (time.Time, bool) {
+	next := schedule.Next(start)
+	if next.IsZero() {
+		return time.Time{}, false
+	}
+	if after := schedule.Next(next); !after.IsZero() && next.Add(-after.Sub(next)).Equal(start) {
+		return start, true
+	}
+	if next.After(end) {
+		return time.Time{}, false
+	}
+	return next, true
 }

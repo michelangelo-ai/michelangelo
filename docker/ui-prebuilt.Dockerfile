@@ -4,16 +4,14 @@
 # "docker" entry.
 FROM nginx:alpine@sha256:62ff2089abf5a9ed33bd232895bef5e22f7bb4b200675cec49a5ebc48e3d4ac8
 
-# CVE-2026-93990 (libexpat XML injection via malformed UTF-16, HIGH): fixed
-# in Alpine's own package repo (libexpat 2.8.5-r0) but not yet picked up by
-# an upstream nginx:alpine rebuild -- upgrade explicitly rather than wait.
-RUN apk add --no-cache --upgrade libexpat
-
-# CVE-2026-103111 (pcre2 out-of-bounds write via crafted regex, HIGH): fixed
-# in Alpine's own package repo (pcre2 10.49-r0) but not yet picked up by an
-# upstream nginx:alpine rebuild (base is digest-pinned, see comment above) --
-# upgrade explicitly rather than wait, same pattern as the libexpat fix above.
-RUN apk add --no-cache --upgrade pcre2
+# Upgrade every installed Alpine package rather than a named list. The base is
+# pinned by digest (see above), so it only moves when Dependabot bumps it, while
+# Alpine publishes fixes for nginx's transitive libraries (brotli-libs, curl,
+# libcurl, libexpat, libx11, pcre2, tiff, ...) continuously. A named list needs
+# a new Dockerfile edit for every CVE scan finding (#2162, #2233); upgrading
+# everything clears them all at build time. Exact -rN versions are deliberately
+# not pinned, since they stop resolving once Alpine moves on.
+RUN apk upgrade --no-cache
 
 # Copy pre-built UI assets
 COPY javascript/app/dist /usr/share/nginx/html

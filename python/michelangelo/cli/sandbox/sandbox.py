@@ -40,8 +40,8 @@ _values_k3d_path = _chart_dir / "values-k3d.yaml"
 # These are raw YAML resources deployed by _deploy_services() directly.
 _infra_ports = [
     "3306:30001",  # MySQL
-    "9091:30007",  # MinIO
-    "9090:30008",  # MinIO Console
+    "9091:30007",  # object store S3 API (SeaweedFS or MinIO)
+    "9090:30008",  # object store UI (MinIO Console or SeaweedFS Filer)
     "3000:30012",  # Grafana
     "9092:30015",  # Prometheus
     "5001:30013",  # MLflow Tracking Server
@@ -176,8 +176,12 @@ def init_arguments(p: argparse.ArgumentParser):
     create_p.add_argument(
         "--object-store",
         choices=["minio", "seaweedfs"],
-        default="minio",
-        help="Choose object storage backend: minio or seaweedfs (default: minio).",
+        default=None,
+        help=(
+            "Choose object storage backend: minio or seaweedfs. New sandboxes "
+            "default to seaweedfs; an existing sandbox keeps its backend. "
+            "minio is deprecated."
+        ),
     )
     create_p.add_argument(
         "--wait-timeout",
@@ -241,8 +245,12 @@ def init_arguments(p: argparse.ArgumentParser):
     sync_p.add_argument(
         "--object-store",
         choices=["minio", "seaweedfs"],
-        default="minio",
-        help="Choose object storage backend: minio or seaweedfs (default: minio).",
+        default=None,
+        help=(
+            "Choose object storage backend: minio or seaweedfs. New sandboxes "
+            "default to seaweedfs; an existing sandbox keeps its backend. "
+            "minio is deprecated."
+        ),
     )
     sync_p.add_argument(
         "--wait-timeout",
@@ -348,6 +356,8 @@ def run(ns: argparse.Namespace):
 
 def _create(ns: argparse.Namespace):
     assert ns
+    ns.object_store = _resolve_object_store(ns, cluster_exists=False)
+    _warn_if_minio(ns.object_store)
     infra_ports = [
         p for p in _infra_ports if _infra_port_owner.get(p) not in ns.exclude
     ]
@@ -374,8 +384,8 @@ def _create(ns: argparse.Namespace):
 def _sync(ns: argparse.Namespace):
     """Restart only Michelangelo app services in an existing cluster.
 
-    Infrastructure (MySQL, Cadence, MinIO, Grafana, Prometheus, kuberay,
-    spark-operator) is left running as-is.  Only the Michelangelo application
+    Infrastructure (MySQL, Cadence, the object store, Grafana, Prometheus,
+    kuberay, spark-operator) is left running as-is.  Only the Michelangelo application
     pods (apiserver, envoy, ui) are restarted so that a new image/config is
     picked up quickly without touching the long-initializing infra.
 
@@ -419,10 +429,15 @@ def _sync(ns: argparse.Namespace):
     )
 
     # Upgrade or install the control plane via Helm.
-    # Infrastructure (mysql, cadence, minio, grafana, prometheus) is left running.
+    # Infrastructure (mysql, cadence, object store, grafana, prometheus) is left
+    # running.
 
-    _ensure_mysql_running()
+    # Resolve and check the backend first so a refusal happens before any
+    # slower step.
+    ns.object_store = _resolve_object_store(ns, cluster_exists=True)
     _check_object_store_backend(ns)
+    _warn_if_minio(ns.object_store)
+    _ensure_mysql_running()
     _ensure_objectstore_service(ns)
     _ensure_object_store_running(ns)
     _refresh_mysql_schema()
@@ -585,8 +600,11 @@ def _ensure_objectstore_service(ns: argparse.Namespace):
     Applied on every create and sync, so clusters created before the Service
     was renamed from `minio` get it too. A legacy NodePort `minio` Service is
     removed first because it holds NodePorts 30007/30008, which `objectstore`
-    needs. A ClusterIP `minio` alias (no NodePorts) is kept so configs that
-    still say `minio:9091` (older ConfigMaps, custom configs) keep resolving.
+    needs. Port 9090 is the MinIO Console, or the SeaweedFS filer UI (Pod port
+    8888) under SeaweedFS. A ClusterIP `minio` alias (no NodePorts) is kept so
+    configs that still say `minio:9091` (older ConfigMaps, custom configs) keep
+    resolving. Under SeaweedFS only the alias's 9091 is useful; its 9090 has no
+    targetPort override and reaches nothing.
     """
     pod = "seaweedfs" if ns.object_store == "seaweedfs" else "minio"
     legacy_type = subprocess.run(
@@ -604,15 +622,22 @@ def _ensure_objectstore_service(ns: argparse.Namespace):
     with open(_dir / "resources" / "objectstore-service.yaml") as f:
         service = yaml.safe_load(f)
     service["spec"]["selector"] = {"app": pod}
+    alias_ports = [
+        {"port": p["port"], "name": p["name"]} for p in service["spec"]["ports"]
+    ]
+    if pod == "seaweedfs":
+        # Nothing listens on 9090 in the SeaweedFS Pod, so send it to the filer
+        # web UI (8888) instead of leaving host port 9090 dead.
+        for port in service["spec"]["ports"]:
+            if port["port"] == 9090:
+                port["targetPort"] = 8888
     alias = {
         "apiVersion": "v1",
         "kind": "Service",
         "metadata": {"name": "minio", "labels": {"app": "objectstore"}},
         "spec": {
             "type": "ClusterIP",
-            "ports": [
-                {"port": p["port"], "name": p["name"]} for p in service["spec"]["ports"]
-            ],
+            "ports": alias_ports,
             "selector": {"app": pod},
         },
     }
@@ -622,6 +647,112 @@ def _ensure_objectstore_service(ns: argparse.Namespace):
         _kube_apply(rendered)
 
 
+def _kubectl_output(*args: str) -> str:
+    """Return stripped stdout of a read-only kubectl lookup.
+
+    Callers pass `--ignore-not-found=true`, so an empty result means the
+    object is absent. A nonzero exit means the cluster state is unknown; the
+    sync stops here, before the `objectstore` Service is touched, rather than
+    guessing a backend and possibly repointing the Service away from live
+    data.
+    """
+    cmd = ["kubectl", *args]
+    result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    if result.returncode != 0:
+        detail = (result.stderr or "").strip() or f"exit code {result.returncode}"
+        sys.exit(
+            f"Could not read the object-store state from the cluster "
+            f"(`{' '.join(cmd)}` failed: {detail}). Nothing was changed. Check "
+            f"that kubectl can reach the sandbox cluster and re-run the command."
+        )
+    return (result.stdout or "").strip()
+
+
+def _pod_exists(name: str) -> bool:
+    """Return whether the Pod exists; exit if the lookup itself fails."""
+    return bool(
+        _kubectl_output("get", "pod", name, "--ignore-not-found=true", "-o", "name")
+    )
+
+
+def _exit_backend_mismatch(running: str, requested: str):
+    """Refuse to sync a cluster that runs `running` with `requested`."""
+    sys.exit(
+        f"This cluster runs the {running} object store but --object-store is "
+        f"{requested}. Pass --object-store {running} to sync it, or run "
+        f"`ma sandbox delete` and `ma sandbox create --object-store {requested}` "
+        f"to switch (data is not carried over)."
+    )
+
+
+def _resolve_object_store(ns: argparse.Namespace, cluster_exists: bool) -> str:
+    """Pick the object-store backend for this create/sync.
+
+    A new sandbox (create, or sync with no cluster) uses an explicit
+    --object-store, else seaweedfs, without reading the cluster. On an
+    existing cluster the `objectstore` Service selector is read first (it
+    survives a Pod deletion): an explicit flag that conflicts with it is
+    refused, otherwise the flag wins. Without a flag the backend the cluster
+    already runs is kept, detected from that selector, then from which Pod
+    exists, then from a legacy NodePort `minio` Service (pre-rename
+    clusters); otherwise seaweedfs. Any failed lookup exits instead of being
+    treated as "absent".
+    """
+    explicit = getattr(ns, "object_store", None)
+    if not cluster_exists:
+        return explicit or "seaweedfs"
+
+    selector = _kubectl_output(
+        "get",
+        "svc",
+        "objectstore",
+        "--ignore-not-found=true",
+        "-o",
+        "jsonpath={.spec.selector.app}",
+    )
+    if explicit:
+        if selector in ("minio", "seaweedfs") and selector != explicit:
+            _exit_backend_mismatch(selector, explicit)
+        return explicit
+    if selector in ("minio", "seaweedfs"):
+        return selector
+
+    has_minio = _pod_exists("minio")
+    has_seaweedfs = _pod_exists("seaweedfs")
+    if has_minio and has_seaweedfs:
+        sys.exit(
+            "This cluster has both a minio and a seaweedfs object-store pod. "
+            "Run `ma sandbox delete` and `ma sandbox create` to start clean "
+            "(data is not carried over)."
+        )
+    if has_minio:
+        return "minio"
+    if has_seaweedfs:
+        return "seaweedfs"
+
+    legacy_type = _kubectl_output(
+        "get", "svc", "minio", "--ignore-not-found=true", "-o", "jsonpath={.spec.type}"
+    )
+    if legacy_type == "NodePort":
+        return "minio"
+    return "seaweedfs"
+
+
+def _warn_if_minio(object_store: str):
+    """Print the MinIO deprecation notice when the resolved backend is minio."""
+    if object_store != "minio":
+        return
+    print(
+        "This sandbox uses MinIO, which is deprecated as a sandbox object "
+        "store and will be removed in a future release. New sandboxes use "
+        "SeaweedFS (S3 API unchanged at objectstore:9091). To move: run "
+        "'ma sandbox delete' and then 'ma sandbox create'. Objects are NOT "
+        "carried over, because each backend keeps its own data directory "
+        "(/shared/minio-data vs /shared/objectstore-data). Re-run your "
+        "pipelines, or copy objects first with any S3 client."
+    )
+
+
 def _check_object_store_backend(ns: argparse.Namespace):
     """Refuse to sync onto a cluster that runs the other object-store backend.
 
@@ -629,20 +760,10 @@ def _check_object_store_backend(ns: argparse.Namespace):
     switching on a live cluster would leave two pods and an empty store.
     """
     other = "minio" if ns.object_store == "seaweedfs" else "seaweedfs"
-    exists = (
-        subprocess.run(
-            ["kubectl", "get", "pod", other], capture_output=True, check=False
-        ).returncode
-        == 0
-    )
-    if exists:
-        flag = "minio" if other == "seaweedfs" else "seaweedfs"
-        sys.exit(
-            f"This cluster runs the {other} object store but --object-store is "
-            f"{ns.object_store}. Pass --object-store {other} to sync it, or run "
-            f"`ma sandbox delete` and `ma sandbox create --object-store {flag}` "
-            f"to switch (data is not carried over)."
-        )
+    # _pod_exists exits if the lookup fails, so an unreadable cluster is never
+    # mistaken for one without the other backend's Pod.
+    if _pod_exists(other):
+        _exit_backend_mismatch(other, ns.object_store)
 
 
 def _ensure_object_store_running(ns: argparse.Namespace):
@@ -1047,15 +1168,12 @@ def _deploy_services(ns: argparse.Namespace):
 
     if ns.object_store == "seaweedfs":
         resources.append("weed-server.yaml")
-        # SeaweedFS's all-in-one server mode has no MinIO-console-equivalent
-        # admin UI on port 9090, so no console link is printed for this
-        # backend. This is intentional, not a gap: the sandbox intentionally
-        # stays on the lightweight single-Pod `weed server` all-in-one mode
-        # for fast spin-up/teardown, rather than SeaweedFS's full
-        # master/volume/filer/admin topology. A real admin UI/file browser
-        # requires running SeaweedFS's official Helm chart separately
-        # (https://seaweedfs.github.io/seaweedfs/helm, `admin.enabled`) —
-        # not available through this sandbox CLI today.
+        # The objectstore Service points host port 9090 at the SeaweedFS filer
+        # UI, which has no authentication, so no console link with
+        # credentials is printed for this backend. The sandbox stays on the
+        # lightweight single-Pod `weed server` all-in-one mode for fast
+        # spin-up/teardown, rather than SeaweedFS's full
+        # master/volume/filer/admin topology.
     else:
         resources.append("minio.yaml")
         links.append(
@@ -1066,7 +1184,7 @@ def _deploy_services(ns: argparse.Namespace):
             )
         )
 
-    # KubeRay History Server (core resource, deployed alongside MinIO)
+    # KubeRay History Server (core resource, deployed alongside the object store)
     resources.append("history-server.yaml")
     links.append(
         (

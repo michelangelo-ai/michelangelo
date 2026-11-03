@@ -5,8 +5,8 @@ import (
 	"time"
 
 	pbtypes "github.com/gogo/protobuf/types"
+	"github.com/michelangelo-ai/michelangelo/go/components/triggerrun"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
-	"github.com/robfig/cron"
 )
 
 type BackfillParameterGenerator struct{}
@@ -153,27 +153,9 @@ func calculateBackfillRunTimestamps(triggerRun *v2pb.TriggerRun) ([]time.Time, e
 	if err != nil {
 		return nil, err
 	}
-	var (
-		cronExp               string
-		backfillRunTimestamps []time.Time
-	)
-	if triggerRun.Spec.Trigger.GetCronSchedule() != nil {
-		cronExp = triggerRun.Spec.Trigger.GetCronSchedule().Cron
-	} else {
+	cronSchedule := triggerRun.Spec.Trigger.GetCronSchedule()
+	if cronSchedule == nil {
 		return nil, fmt.Errorf("cron and interval schedule cannot be empty")
 	}
-	cronSchedule, err := cron.ParseStandard(cronExp)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse cron schedule in original trigger run: %w", err)
-	}
-	nextRunTimestamp := cronSchedule.Next(startTimestamp)
-	previousOneRunTimestamp := nextRunTimestamp.Add(-cronSchedule.Next(nextRunTimestamp).Sub(nextRunTimestamp))
-	if previousOneRunTimestamp.Equal(startTimestamp) {
-		backfillRunTimestamps = append(backfillRunTimestamps, startTimestamp)
-	}
-	for nextRunTimestamp.Compare(endTimestamp) <= 0 {
-		backfillRunTimestamps = append(backfillRunTimestamps, nextRunTimestamp)
-		nextRunTimestamp = cronSchedule.Next(nextRunTimestamp)
-	}
-	return backfillRunTimestamps, nil
+	return triggerrun.BackfillRunTimestamps(startTimestamp, endTimestamp, cronSchedule.Cron)
 }

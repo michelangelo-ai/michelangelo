@@ -85,6 +85,28 @@ func TestGetHeaders(t *testing.T) {
 	assert.Equal(t, "12345678", resultHeaders["test"])
 }
 
+func TestGetHeadersRedactsSensitiveHeaders(t *testing.T) {
+	ctx := setHeadersOnCtx(context.Background(), t, map[string]string{
+		"authorization":       "Bearer secret-jwt",
+		"Proxy-Authorization": "Basic abc",
+		"cookie":              "session=abc",
+		"x-auth-token":        "abc",
+		"x-api-key":           "abc",
+		"email":               "test@uber.com",
+		":authority":          "michelangelo-apiserver",
+	})
+	headers := GetHeaders(ctx)
+
+	for _, name := range []string{"authorization", "proxy-authorization", "cookie", "x-auth-token", "x-api-key"} {
+		assert.Equal(t, redactedHeaderValue, headers[name], name)
+	}
+	assert.Equal(t, "test@uber.com", headers["email"])
+	assert.Equal(t, "michelangelo-apiserver", headers[":authority"])
+	for _, v := range headers {
+		assert.NotContains(t, v, "secret-jwt")
+	}
+}
+
 func setHeadersOnCtx(ctx context.Context, t *testing.T, h map[string]string) context.Context {
 	ctx, inbound := encoding.NewInboundCall(ctx)
 	headers := transport.NewHeaders()

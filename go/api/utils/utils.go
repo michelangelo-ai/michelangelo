@@ -119,14 +119,46 @@ func IsNotFoundError(err error) bool {
 	return false
 }
 
-// GetHeaders gets yarpc headers from context
+// redactedHeaderValue replaces the value of sensitive headers returned by GetHeaders.
+const redactedHeaderValue = "[REDACTED]"
+
+// sensitiveHeaderNames are headers whose values must never be logged.
+var sensitiveHeaderNames = map[string]struct{}{
+	"authorization":       {},
+	"proxy-authorization": {},
+	"cookie":              {},
+	"set-cookie":          {},
+}
+
+// sensitiveHeaderSubstrings mark a header as sensitive when its name contains any of them.
+var sensitiveHeaderSubstrings = []string{"token", "secret", "password", "api-key", "apikey"}
+
+// GetHeaders gets yarpc headers from context, with sensitive header values
+// (credentials such as the Authorization bearer token) redacted so the result
+// is safe to log.
 func GetHeaders(ctx context.Context) map[string]string {
 	headers := map[string]string{}
 	call := yarpc.CallFromContext(ctx)
 	headerNames := call.HeaderNames()
 	for _, headerName := range headerNames {
 		headerValue := call.Header(headerName)
+		if isSensitiveHeader(headerName) {
+			headerValue = redactedHeaderValue
+		}
 		headers[headerName] = headerValue
 	}
 	return headers
+}
+
+func isSensitiveHeader(name string) bool {
+	name = strings.ToLower(name)
+	if _, ok := sensitiveHeaderNames[name]; ok {
+		return true
+	}
+	for _, s := range sensitiveHeaderSubstrings {
+		if strings.Contains(name, s) {
+			return true
+		}
+	}
+	return false
 }

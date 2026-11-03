@@ -91,15 +91,18 @@ jobs:
           poetry install --no-interaction -E dev -E example
 
       # Sync restarts only Michelangelo app services (apiserver, envoy, ui, worker,
-      # controllermgr). Infrastructure (MySQL, Cadence, MinIO, Grafana, Prometheus)
-      # is kept running between runs — no re-init overhead.
+      # controllermgr). Infrastructure (MySQL, Cadence, the object store, Grafana,
+      # Prometheus) is kept running between runs — no re-init overhead. The object
+      # store is pinned to SeaweedFS; a runner cluster created with MinIO must be
+      # recreated once (`ma sandbox delete`) before this step passes.
       - name: Sync sandbox
         run: |
           $HOME/.local/bin/poetry run ma sandbox sync --workflow cadence \
+            --object-store seaweedfs \
             --set apiserver.metadataStorage.enable=true \
             --set controllermgr.metadataStorage.enable=true \
             --set controllermgr.jobs.k8sengine.mapper.logPersistence.enabled=false \
-            --set objectStorage.existingSecret=minio-credentials
+            --set objectStorage.existingSecret=object-storage-credentials
 
       # The task image is named in the example pipeline files (examples:main). To test a branch
       # build of the examples image, point the bert_cola pipeline at that tag and pull it onto

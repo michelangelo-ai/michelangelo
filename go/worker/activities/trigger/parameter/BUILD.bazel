@@ -13,7 +13,6 @@ go_library(
         "//go/components/triggerrun:go_default_library",
         "//proto/api/v2:go_default_library",
         "@com_github_gogo_protobuf//types:go_default_library",
-        "@com_github_robfig_cron//:go_default_library",
     ],
 )
 
