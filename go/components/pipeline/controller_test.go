@@ -226,6 +226,57 @@ func TestReconcile_ImmutableRevisionNameCollisionIsReported(t *testing.T) {
 	assert.Equal(t, "abc123456789ffff0000", rev.Spec.RevisionId, "the existing revision must not be rewritten")
 }
 
+// A mutable revision of a different commit with the same name prefix (still within
+// the window before the Revision controller freezes it) must not be overwritten.
+func TestReconcile_MutableRevisionNameCollisionIsReported(t *testing.T) {
+	pipeline := &v2pb.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pipeline",
+			Namespace: "test-namespace",
+		},
+		Spec: v2pb.PipelineSpec{
+			Commit: &v2pb.CommitInfo{
+				GitRef: "abc123456789aaaa1111",
+				Branch: "main",
+			},
+		},
+	}
+	existing := immutableRevision("pipeline-test-pipeline-abc123456789", "abc123456789ffff0000")
+	existing.Annotations = nil
+	existing.Status = v2pb.RevisionStatus{}
+
+	reconciler := setUpReconciler(t, []client.Object{pipeline, existing}, env.Context{}, Config{RevisioningEnabled: true})
+	_, err := reconciler.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{Name: "test-pipeline", Namespace: "test-namespace"}})
+	require.ErrorContains(t, err, "git refs collide")
+
+	rev := &v2pb.Revision{}
+	require.NoError(t, reconciler.Get(context.Background(), "test-namespace", "pipeline-test-pipeline-abc123456789", &metav1.GetOptions{}, rev))
+	assert.Equal(t, "abc123456789ffff0000", rev.Spec.RevisionId, "the other commit's revision must not be overwritten")
+	assert.Nil(t, rev.Spec.Content)
+}
+
+// A revision without a recorded commit cannot be compared; an immutable one is
+// still skipped rather than reported as a collision.
+func TestReconcile_ImmutableRevisionWithoutCommitIsSkipped(t *testing.T) {
+	pipeline := &v2pb.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pipeline",
+			Namespace: "test-namespace",
+		},
+		Spec: v2pb.PipelineSpec{
+			Commit: &v2pb.CommitInfo{
+				GitRef: "abc123456789",
+				Branch: "main",
+			},
+		},
+	}
+	existing := immutableRevision("pipeline-test-pipeline-abc123456789", "")
+
+	reconciler := setUpReconciler(t, []client.Object{pipeline, existing}, env.Context{}, Config{RevisioningEnabled: true})
+	_, err := reconciler.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{Name: "test-pipeline", Namespace: "test-namespace"}})
+	require.NoError(t, err)
+}
+
 func TestSameCommitRef(t *testing.T) {
 	cases := []struct {
 		a, b string

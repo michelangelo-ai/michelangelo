@@ -231,20 +231,24 @@ func (r *Reconciler) snapshotRevision(ctx context.Context, pipeline *v2pb.Pipeli
 		return nil
 	}
 
+	// The name keeps only a 12-character ref prefix, so a different commit sharing that
+	// prefix maps to the same revision. Report it rather than overwrite (mutable) or
+	// skip (immutable) the other commit's revision. A revision without a recorded
+	// commit cannot be compared and is treated as this one.
+	//
 	// The Revision controller marks a revision immutable once it reaches READY or
 	// ERROR, and its content is fixed per commit from then on. A later reconcile of
 	// the same commit (status update, resync, controller restart, re-apply) has
 	// nothing to write, and UpsertRevision would reject it as an immutable-to-mutable
-	// update, so skip it. The name keeps only a 12-character ref prefix, so a
-	// different commit sharing that prefix is reported instead of skipped.
+	// update, so skip it.
 	name := formatRevisionName(pipeline)
 	existing := &v2pb.Revision{}
 	if err := r.Get(ctx, pipeline.Namespace, name, &metav1.GetOptions{}, existing); err == nil {
+		if existing.Spec.RevisionId != "" && !sameCommitRef(existing.Spec.RevisionId, pipeline.Spec.Commit.GitRef) {
+			return fmt.Errorf("revision %s/%s already holds commit %q, cannot snapshot commit %q: git refs collide on the revision name",
+				pipeline.Namespace, name, existing.Spec.RevisionId, pipeline.Spec.Commit.GitRef)
+		}
 		if utils.IsImmutable(existing) {
-			if !sameCommitRef(existing.Spec.RevisionId, pipeline.Spec.Commit.GitRef) {
-				return fmt.Errorf("revision %s/%s already holds commit %q, cannot snapshot commit %q: git refs collide on the revision name",
-					pipeline.Namespace, name, existing.Spec.RevisionId, pipeline.Spec.Commit.GitRef)
-			}
 			r.logger.Debug("skipping revision snapshot: revision is immutable",
 				zap.String("namespace", pipeline.Namespace),
 				zap.String("name", name))
