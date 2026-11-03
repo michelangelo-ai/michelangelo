@@ -19,7 +19,7 @@ import { ENVIRONMENT_LABEL_KEY } from '#core/utils/environment-utils';
 import { generateSuffix } from '#core/utils/name-utils';
 import { ResumeRunFields } from './resume-run-fields';
 import { isPipelineRevision } from './types';
-import { assertRevisionResolved, useTargetRevision } from './use-target-revision';
+import { getSubmitDisabledReason, useTargetRevision } from './use-target-revision';
 
 import type { ActionComponentProps } from '#core/components/actions/types';
 import type {
@@ -61,7 +61,6 @@ export const CreatePipelineRunForm = ({
     if (createPipelineRunMutation.isPending) {
       return;
     }
-    assertRevisionResolved(targetRevision);
 
     const payload = buildPayload(values, projectId);
     await createPipelineRunMutation.mutateAsync({
@@ -104,6 +103,7 @@ export const CreatePipelineRunForm = ({
       heading="Start new pipeline run"
       onSubmit={handleRunSubmit}
       submitLabel={'Run'}
+      submitDisabledReason={getSubmitDisabledReason(targetRevision)}
       initialValues={initialValues}
     >
       <StringField name="spec.pipeline.name" label="Pipeline to run" readOnly />

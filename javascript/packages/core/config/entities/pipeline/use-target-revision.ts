@@ -17,8 +17,8 @@ import type { Pipeline, PipelineRevision } from './types';
  * `isLoading` covers background refetches too, so cached data never pins a stale revision.
  *
  * While that lookup is loading or has failed, `revision` is undefined for a reason a run must
- * not proceed past: callers pass the result to `assertRevisionResolved` before submitting so a
- * run is never created unpinned because of a slow or failed lookup.
+ * not proceed past: callers pass the result to `getSubmitDisabledReason` and disable submit,
+ * so a run is never created unpinned because of a slow or failed lookup.
  */
 export function useTargetRevision(record: Pipeline | PipelineRevision | undefined): {
   revision: RevisionRef | undefined;
@@ -26,9 +26,10 @@ export function useTargetRevision(record: Pipeline | PipelineRevision | undefine
   isError: boolean;
   errorMessage: string | undefined;
 } {
-  const revisionRecord = isPipelineRevision(record) ? record : undefined;
-  const pointerRef = revisionRecord ? undefined : getLatestRevisionRef(record);
-  const needsFallback = !!record && !revisionRecord && !pointerRef;
+  const revisionRef: RevisionRef | undefined = isPipelineRevision(record)
+    ? { name: record.metadata.name, namespace: record.metadata.namespace }
+    : getLatestRevisionRef(record);
+  const needsFallback = !!record && !revisionRef;
 
   const fallbackQuery = useStudioQuery<{
     revisionList?: { items?: { metadata: { name: string; namespace: string } }[] };
@@ -36,30 +37,16 @@ export function useTargetRevision(record: Pipeline | PipelineRevision | undefine
     queryName: 'ListRevision',
     serviceOptions: {
       namespace: record?.metadata?.namespace,
-      listOptionsExt: buildRevisionListOptions('pipeline', record?.metadata?.name ?? ''),
+      listOptionsExt: buildRevisionListOptions('pipeline', record?.metadata?.name ?? '', 1),
     },
     clientOptions: { enabled: needsFallback },
   });
 
-  if (revisionRecord) {
-    return {
-      revision: {
-        name: revisionRecord.metadata.name,
-        namespace: revisionRecord.metadata.namespace,
-      },
-      isLoading: false,
-      isError: false,
-      errorMessage: undefined,
-    };
-  }
-  if (pointerRef)
-    return { revision: pointerRef, isLoading: false, isError: false, errorMessage: undefined };
-
   const latest = needsFallback ? fallbackQuery.data?.revisionList?.items?.[0] : undefined;
   return {
-    revision: latest
-      ? { name: latest.metadata.name, namespace: latest.metadata.namespace }
-      : undefined,
+    revision:
+      revisionRef ??
+      (latest ? { name: latest.metadata.name, namespace: latest.metadata.namespace } : undefined),
     isLoading: needsFallback && fallbackQuery.isFetching,
     isError: needsFallback && fallbackQuery.isError,
     errorMessage: needsFallback ? fallbackQuery.error?.message : undefined,
@@ -67,22 +54,19 @@ export function useTargetRevision(record: Pipeline | PipelineRevision | undefine
 }
 
 /**
- * Throws while the target revision lookup is loading or failed. `FormDialog` renders errors
- * thrown from `onSubmit` in the dialog, so the user sees why Run did nothing.
+ * Why submit must stay disabled while the target revision lookup is loading or failed, or
+ * undefined once a run can go ahead. Shown as the submit button's tooltip.
  */
-export function assertRevisionResolved({
+export function getSubmitDisabledReason({
   isLoading,
   isError,
   errorMessage,
-}: {
-  isLoading: boolean;
-  isError: boolean;
-  errorMessage: string | undefined;
-}): void {
+}: ReturnType<typeof useTargetRevision>): string | undefined {
   if (isError) {
-    throw new Error(`Could not load the pipeline's latest revision. ${errorMessage ?? ''}`.trim());
+    return `Could not load the pipeline's latest revision. ${errorMessage ?? ''}`.trim();
   }
   if (isLoading) {
-    throw new Error("Still loading the pipeline's latest revision. Try again in a moment.");
+    return "Loading the pipeline's latest revision…";
   }
+  return undefined;
 }

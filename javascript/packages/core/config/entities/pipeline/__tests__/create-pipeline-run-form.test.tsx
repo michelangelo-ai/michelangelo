@@ -833,7 +833,7 @@ describe('CreatePipelineRunForm', () => {
     });
   });
 
-  it('blocks submission and shows an error when the revision lookup fails', async () => {
+  it('disables submit with the error as tooltip when the revision lookup fails', async () => {
     const user = userEvent.setup();
     const router = createQueryMockRouter({
       ListRevision: { revisionList: { items: [] } },
@@ -863,20 +863,16 @@ describe('CreatePipelineRunForm', () => {
     );
 
     const dialog = await screen.findByRole('dialog', { name: 'Start new pipeline run' });
-    await selectEnvironment(user, dialog, 'Development');
-    await user.click(within(dialog).getByRole('button', { name: 'Run' }));
-
+    const runButton = within(dialog).getByRole('button', { name: 'Run' });
+    expect(runButton).toBeDisabled();
+    await user.hover(runButton.parentElement!);
     expect(
-      await within(dialog).findByText(/Could not load the pipeline's latest revision\./)
+      await screen.findByText(/Could not load the pipeline's latest revision\./)
     ).toBeInTheDocument();
-    expect(request).not.toHaveBeenCalledWith(
-      'CreatePipelineRun',
-      expect.anything(),
-      expect.anything()
-    );
+    expect(request.mock.calls.map(([name]) => name)).not.toContain('CreatePipelineRun');
   });
 
-  it('blocks submission while the revision lookup is still loading', async () => {
+  it('disables submit while the revision lookup is still loading', async () => {
     const user = userEvent.setup();
     const router = createQueryMockRouter({
       ListRevision: { revisionList: { items: [] } },
@@ -904,16 +900,10 @@ describe('CreatePipelineRunForm', () => {
     );
 
     const dialog = await screen.findByRole('dialog', { name: 'Start new pipeline run' });
-    await selectEnvironment(user, dialog, 'Development');
-    await user.click(within(dialog).getByRole('button', { name: 'Run' }));
-
-    expect(
-      await within(dialog).findByText(/Still loading the pipeline's latest revision/)
-    ).toBeInTheDocument();
-    expect(request).not.toHaveBeenCalledWith(
-      'CreatePipelineRun',
-      expect.anything(),
-      expect.anything()
-    );
+    const runButton = within(dialog).getByRole('button', { name: 'Run' });
+    expect(runButton).toBeDisabled();
+    await user.hover(runButton.parentElement!);
+    expect(await screen.findByText(/Loading the pipeline's latest revision/)).toBeInTheDocument();
+    expect(request.mock.calls.map(([name]) => name)).not.toContain('CreatePipelineRun');
   });
 });

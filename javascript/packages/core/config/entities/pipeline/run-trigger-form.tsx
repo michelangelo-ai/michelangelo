@@ -11,7 +11,7 @@ import { getDateFromEpochSeconds } from '#core/utils/time-utils';
 import { formatTriggerSchedule } from './format-trigger-schedule';
 import { RunTriggerFields } from './run-trigger-fields';
 import { isPipelineRevision } from './types';
-import { assertRevisionResolved, useTargetRevision } from './use-target-revision';
+import { getSubmitDisabledReason, useTargetRevision } from './use-target-revision';
 
 import type { ActionComponentProps } from '#core/components/actions/types';
 import type { SelectOption } from '#core/components/form/fields/select/types';
@@ -62,7 +62,6 @@ export const RunTriggerForm = ({
     if (createTriggerRunMutation.isPending) {
       return;
     }
-    assertRevisionResolved(targetRevision);
 
     const sourceTrigger = triggerMap[values.sourceTriggerName];
     if (!sourceTrigger) {
@@ -100,6 +99,7 @@ export const RunTriggerForm = ({
       heading="Run trigger"
       onSubmit={handleRunSubmit}
       submitLabel="Run"
+      submitDisabledReason={getSubmitDisabledReason(targetRevision)}
     >
       <StringField name="pipelineName" label="Pipeline" initialValue={pipelineName} readOnly />
       <StringField

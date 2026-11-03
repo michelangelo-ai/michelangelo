@@ -2,6 +2,7 @@ import { Button } from 'baseui/button';
 import { KIND } from 'baseui/button';
 // eslint-disable-next-line baseui/no-deep-imports
 import { mergeOverrides } from 'baseui/helpers/overrides';
+import { StatefulTooltip } from 'baseui/tooltip';
 
 import { useFormState } from '#core/components/form/hooks/use-form-state';
 
@@ -40,17 +41,18 @@ export const SubmitButton: React.FC<SubmitButtonProps> = ({
   formId,
   kind = KIND.primary,
   disabled,
+  disabledReason,
   overrides,
   ...rest
 }) => {
   const { submitting } = useFormState({ submitting: true });
 
-  return (
+  const button = (
     <Button
       type="submit"
       kind={kind}
       form={formId}
-      disabled={disabled}
+      disabled={!!disabledReason || disabled}
       isLoading={submitting}
       overrides={mergeOverrides(
         {
@@ -66,5 +68,14 @@ export const SubmitButton: React.FC<SubmitButtonProps> = ({
     >
       {children}
     </Button>
+  );
+
+  if (!disabledReason) return button;
+
+  // A disabled button swallows pointer events, so the tooltip hangs off a wrapper.
+  return (
+    <StatefulTooltip content={disabledReason}>
+      <span>{button}</span>
+    </StatefulTooltip>
   );
 };

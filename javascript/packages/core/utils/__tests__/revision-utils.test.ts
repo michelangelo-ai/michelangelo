@@ -30,4 +30,12 @@ describe('revision-utils', () => {
     ]);
     expect(options.orderBy).toEqual([{ field: 'metadata.update_timestamp', dir: 2 }]);
   });
+
+  test('buildRevisionListOptions caps the page size only when asked', () => {
+    expect(buildRevisionListOptions('pipeline', 'my-pipeline')).not.toHaveProperty('pagination');
+    expect(buildRevisionListOptions('pipeline', 'my-pipeline', 1).pagination).toEqual({
+      offset: 0,
+      limit: 1,
+    });
+  });
 });

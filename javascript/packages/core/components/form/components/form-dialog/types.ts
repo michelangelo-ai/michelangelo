@@ -8,4 +8,6 @@ export interface FormDialogProps<FieldValues extends FormData = FormData>
   heading: string;
   size?: DialogSize;
   submitLabel?: string;
+  /** Disables the submit button, with this text as its tooltip. */
+  submitDisabledReason?: string;
 }

@@ -51,9 +51,9 @@ const CRITERION_OPERATOR_EQUAL = 1;
 /**
  * `ListRevision` options selecting every Revision of one entity, most recently updated first.
  * Shared so the detail page's fallback lookup and the revision selector issue the same request
- * and hit the same query cache entry.
+ * and hit the same query cache entry. Pass `limit` when only the newest few are needed.
  */
-export function buildRevisionListOptions(service: string, entityId: string) {
+export function buildRevisionListOptions(service: string, entityId: string, limit?: number) {
   return {
     operation: {
       criterion: [
@@ -70,5 +70,6 @@ export function buildRevisionListOptions(service: string, entityId: string) {
       ],
     },
     orderBy: [{ field: 'metadata.update_timestamp', dir: SORT_ORDER_DESC }],
+    ...(limit && { pagination: { offset: 0, limit } }),
   };
 }

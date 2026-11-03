@@ -624,7 +624,7 @@ describe('RunTriggerForm', () => {
     });
   });
 
-  it('blocks submission and shows an error when the revision lookup fails', async () => {
+  it('disables submit with the error as tooltip when the revision lookup fails', async () => {
     const user = userEvent.setup();
     const router = createQueryMockRouter({
       ListRevision: { revisionList: { items: [] } },
@@ -657,19 +657,16 @@ describe('RunTriggerForm', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Run trigger' });
     await user.click(within(dialog).getByRole('combobox', { name: 'Trigger *' }));
     await user.click(await screen.findByRole('option', { name: 'nightly — cron 0 2 * * *' }));
-    await user.click(within(dialog).getByRole('button', { name: 'Run' }));
-
+    const runButton = within(dialog).getByRole('button', { name: 'Run' });
+    expect(runButton).toBeDisabled();
+    await user.hover(runButton.parentElement!);
     expect(
-      await within(dialog).findByText(/Could not load the pipeline's latest revision\./)
+      await screen.findByText(/Could not load the pipeline's latest revision\./)
     ).toBeInTheDocument();
-    expect(request).not.toHaveBeenCalledWith(
-      'CreateTriggerRun',
-      expect.anything(),
-      expect.anything()
-    );
+    expect(request.mock.calls.map(([name]) => name)).not.toContain('CreateTriggerRun');
   });
 
-  it('blocks submission while the revision lookup is still loading', async () => {
+  it('disables submit while the revision lookup is still loading', async () => {
     const user = userEvent.setup();
     const router = createQueryMockRouter({
       ListRevision: { revisionList: { items: [] } },
@@ -700,15 +697,10 @@ describe('RunTriggerForm', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Run trigger' });
     await user.click(within(dialog).getByRole('combobox', { name: 'Trigger *' }));
     await user.click(await screen.findByRole('option', { name: 'nightly — cron 0 2 * * *' }));
-    await user.click(within(dialog).getByRole('button', { name: 'Run' }));
-
-    expect(
-      await within(dialog).findByText(/Still loading the pipeline's latest revision/)
-    ).toBeInTheDocument();
-    expect(request).not.toHaveBeenCalledWith(
-      'CreateTriggerRun',
-      expect.anything(),
-      expect.anything()
-    );
+    const runButton = within(dialog).getByRole('button', { name: 'Run' });
+    expect(runButton).toBeDisabled();
+    await user.hover(runButton.parentElement!);
+    expect(await screen.findByText(/Loading the pipeline's latest revision/)).toBeInTheDocument();
+    expect(request.mock.calls.map(([name]) => name)).not.toContain('CreateTriggerRun');
   });
 });
