@@ -35,7 +35,6 @@ const (
 
 var _ ClientFactory = &remoteClientFactory{}
 
-// idleConnectionsCloser is implemented by *http.Client and by transports that pool connections.
 type idleConnectionsCloser interface {
 	CloseIdleConnections()
 }
@@ -46,8 +45,8 @@ type idleConnectionsCloser interface {
 // so a steady-state reconcile does not rebuild a TLS transport on every lookup.
 //
 // Each lookup re-reads the cluster's credentials and reuses the cached client only if they are
-// unchanged. A SecretProvider error, or an empty token or CA, fails the lookup rather than
-// serving a client built from credentials that may have been revoked.
+// unchanged. A SecretProvider error fails the lookup rather than serving a client built from
+// credentials that may have been revoked.
 type remoteClientFactory struct {
 	secretProvider secrets.SecretProvider
 	scheme         *runtime.Scheme
@@ -71,15 +70,18 @@ type clientCache[T any] struct {
 
 // lookup returns the client cached under key if it was built from auth.
 func (c *clientCache[T]) lookup(key string, auth secrets.ClientAuth) (T, bool) {
+	var zero T
 	entry, ok := c.entries.Load(key)
-	if !ok || entry.(cachedClient[T]).auth != auth {
-		var zero T
+	if !ok {
 		return zero, false
 	}
-	return entry.(cachedClient[T]).client, true
+	cached := entry.(cachedClient[T])
+	if cached.auth != auth {
+		return zero, false
+	}
+	return cached.client, true
 }
 
-// swap caches entry under key and returns the entry it replaced, if any.
 func (c *clientCache[T]) swap(key string, entry cachedClient[T]) (cachedClient[T], bool) {
 	previous, replaced := c.entries.Swap(key, entry)
 	if !replaced {
@@ -184,16 +186,17 @@ func getOrBuild[T any](
 	}
 
 	closeIdleConnections(previous.client)
-	f.logger.Info("Rebuilt client for cluster after its credentials changed", append(fields,
+	fields = append(fields,
 		zap.Bool("token_changed", previous.auth.ClientTokenData != auth.ClientTokenData),
 		zap.Bool("ca_changed", previous.auth.CertificateAuthorityData != auth.CertificateAuthorityData),
-	)...)
+	)
+	f.logger.Info("Rebuilt client for cluster after its credentials changed", fields...)
 	return built, nil
 }
 
-// currentAuth returns the cluster's credentials from the SecretProvider, rejecting an empty
-// token or CA. A Secret can be briefly empty while it is being rotated, and building from it
-// would replace a working client with an unauthenticated one that trusts the system roots.
+// currentAuth returns the cluster's credentials, rejecting an empty token or CA. A client built
+// from either would send no token or trust the system roots, and would replace the cached client
+// that still works.
 func (f *remoteClientFactory) currentAuth(
 	ctx context.Context,
 	cluster *v2pb.ClusterTarget,
@@ -213,9 +216,9 @@ func (f *remoteClientFactory) currentAuth(
 	return auth, nil
 }
 
-// closeIdleConnections releases a replaced client's pooled connections. Only *http.Client
-// implements idleConnectionsCloser; kube and dynamic clients share client-go's transport cache,
-// which must not be closed.
+// closeIdleConnections closes a replaced *http.Client's idle connections. Kube and dynamic
+// clients have no such method: their transport comes from client-go's shared TLS cache, which
+// other clients still use.
 func closeIdleConnections(replaced any) {
 	if closer, ok := replaced.(idleConnectionsCloser); ok {
 		closer.CloseIdleConnections()

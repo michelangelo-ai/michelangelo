@@ -135,7 +135,7 @@ func (rc *remoteCluster) target(t *testing.T) *v2pb.ClusterTarget {
 	}
 }
 
-// auth returns credentials that the server trusts, with the given token.
+// auth returns credentials whose CA trusts rc's server, carrying the given token.
 func (rc *remoteCluster) auth(token string) secrets.ClientAuth {
 	return secrets.ClientAuth{CertificateAuthorityData: rc.caPEM, ClientTokenData: token}
 }
@@ -182,42 +182,71 @@ func getHTTP(httpClient *http.Client, rawURL string) error {
 	return err
 }
 
-func getConfigMap(ctx context.Context, factory ClientFactory, target *v2pb.ClusterTarget) error {
-	dynamicClient, err := factory.GetDynamicClient(ctx, target)
+func getViaHTTPClient(factory ClientFactory, rc *remoteCluster, target *v2pb.ClusterTarget) error {
+	httpClient, err := factory.GetHTTPClient(context.Background(), target)
+	if err != nil {
+		return err
+	}
+	return getHTTP(httpClient, rc.server.URL)
+}
+
+func getConfigMap(factory ClientFactory, _ *remoteCluster, target *v2pb.ClusterTarget) error {
+	dynamicClient, err := factory.GetDynamicClient(context.Background(), target)
 	if err != nil {
 		return err
 	}
 	configMaps := schema.GroupVersionResource{Version: "v1", Resource: "configmaps"}
-	_, err = dynamicClient.Resource(configMaps).Namespace("default").Get(ctx, "cm", metav1.GetOptions{})
+	_, err = dynamicClient.Resource(configMaps).Namespace("default").
+		Get(context.Background(), "cm", metav1.GetOptions{})
 	return err
 }
 
 type getter func(ClientFactory, context.Context, *v2pb.ClusterTarget) (any, error)
 
-// getters returns the client as `any` holding nil, rather than a nil `any`, on error, so
-// assertions check what callers actually receive.
 var getters = map[string]getter{
 	"GetClient": func(f ClientFactory, ctx context.Context, c *v2pb.ClusterTarget) (any, error) {
 		kubeClient, err := f.GetClient(ctx, c)
-		if kubeClient == nil {
-			return nil, err
-		}
 		return kubeClient, err
 	},
 	"GetHTTPClient": func(f ClientFactory, ctx context.Context, c *v2pb.ClusterTarget) (any, error) {
 		httpClient, err := f.GetHTTPClient(ctx, c)
-		if httpClient == nil {
-			return nil, err
-		}
 		return httpClient, err
 	},
 	"GetDynamicClient": func(f ClientFactory, ctx context.Context, c *v2pb.ClusterTarget) (any, error) {
 		dynamicClient, err := f.GetDynamicClient(ctx, c)
-		if dynamicClient == nil {
-			return nil, err
-		}
 		return dynamicClient, err
 	},
+}
+
+var clientKinds = map[string]string{
+	"GetClient":        "kube",
+	"GetHTTPClient":    "HTTP",
+	"GetDynamicClient": "dynamic",
+}
+
+// rotations returns credentials that differ from rc.auth("token-a") in the token, the CA, or both.
+func rotations(t *testing.T, rc *remoteCluster) map[string]struct {
+	auth         secrets.ClientAuth
+	tokenChanged bool
+	caChanged    bool
+} {
+	otherCA := unrelatedCAPEM(t)
+	return map[string]struct {
+		auth         secrets.ClientAuth
+		tokenChanged bool
+		caChanged    bool
+	}{
+		"token": {auth: rc.auth("token-b"), tokenChanged: true},
+		"CA": {
+			auth:      secrets.ClientAuth{CertificateAuthorityData: otherCA, ClientTokenData: "token-a"},
+			caChanged: true,
+		},
+		"token and CA": {
+			auth:         secrets.ClientAuth{CertificateAuthorityData: otherCA, ClientTokenData: "token-b"},
+			tokenChanged: true,
+			caChanged:    true,
+		},
+	}
 }
 
 func newTestFactory(provider secrets.SecretProvider) ClientFactory {
@@ -246,22 +275,10 @@ func TestRemoteClientFactory_UnchangedCredentials_ReusesClient(t *testing.T) {
 	}
 }
 
-func TestRemoteClientFactory_RotatedCredentials_RebuildsClientAndLogsWhatChanged(t *testing.T) {
+func TestRemoteClientFactory_RotatedCredentials_RebuildsClientOnce(t *testing.T) {
 	rc := newRemoteCluster(t)
-	otherCA := unrelatedCAPEM(t)
 
-	rotations := map[string]struct {
-		auth         secrets.ClientAuth
-		tokenChanged bool
-		caChanged    bool
-	}{
-		"token": {auth: rc.auth("token-b"), tokenChanged: true},
-		"CA": {
-			auth:      secrets.ClientAuth{CertificateAuthorityData: otherCA, ClientTokenData: "token-a"},
-			caChanged: true,
-		},
-	}
-	for rotated, rotation := range rotations {
+	for rotated, rotation := range rotations(t, rc) {
 		for name, get := range getters {
 			t.Run(rotated+"/"+name, func(t *testing.T) {
 				provider := &fakeSecretProvider{auth: rc.auth("token-a")}
@@ -272,39 +289,58 @@ func TestRemoteClientFactory_RotatedCredentials_RebuildsClientAndLogsWhatChanged
 				provider.set(rotation.auth, nil)
 				after, err := get(factory, context.Background(), rc.target(t))
 				require.NoError(t, err)
+				again, err := get(factory, context.Background(), rc.target(t))
+				require.NoError(t, err)
 
 				assert.NotSame(t, before, after)
+				assert.Same(t, after, again)
 				assert.Equal(t, 1, logs.FilterMessage(builtMessage).Len())
 				rebuilt := logs.FilterMessage(rebuiltMessage).AllUntimed()
 				require.Len(t, rebuilt, 1)
-				fields := rebuilt[0].ContextMap()
-				assert.Equal(t, rotation.tokenChanged, fields["token_changed"])
-				assert.Equal(t, rotation.caChanged, fields["ca_changed"])
-				assert.Equal(t, "remote-token", fields["token_secret"])
-				assert.Equal(t, "remote-ca", fields["ca_secret"])
-				for _, entry := range logs.AllUntimed() {
-					logged := entry.Message + fmt.Sprint(entry.ContextMap())
-					for _, secret := range []string{"token-a", "token-b", rc.caPEM, otherCA} {
-						assert.NotContains(t, logged, secret)
-					}
-				}
+				assert.Equal(t, clientKinds[name], rebuilt[0].ContextMap()["client"])
 			})
 		}
 	}
 }
 
+func TestRemoteClientFactory_RotatedCredentials_LogsWhatChangedWithoutSecretValues(t *testing.T) {
+	rc := newRemoteCluster(t)
+
+	for rotated, rotation := range rotations(t, rc) {
+		t.Run(rotated, func(t *testing.T) {
+			provider := &fakeSecretProvider{auth: rc.auth("token-a")}
+			factory, logs := newObservedFactory(provider)
+
+			_, err := factory.GetHTTPClient(context.Background(), rc.target(t))
+			require.NoError(t, err)
+			provider.set(rotation.auth, nil)
+			_, err = factory.GetHTTPClient(context.Background(), rc.target(t))
+			require.NoError(t, err)
+
+			rebuilt := logs.FilterMessage(rebuiltMessage).AllUntimed()
+			require.Len(t, rebuilt, 1)
+			fields := rebuilt[0].ContextMap()
+			assert.Equal(t, rotation.tokenChanged, fields["token_changed"])
+			assert.Equal(t, rotation.caChanged, fields["ca_changed"])
+			assert.Equal(t, "remote-token", fields["token_secret"])
+			assert.Equal(t, "remote-ca", fields["ca_secret"])
+			secretValues := []string{
+				"token-a", "token-b", rc.caPEM, rotation.auth.CertificateAuthorityData,
+			}
+			for _, entry := range logs.AllUntimed() {
+				logged := entry.Message + fmt.Sprint(entry.ContextMap())
+				for _, value := range secretValues {
+					assert.NotContains(t, logged, value)
+				}
+			}
+		})
+	}
+}
+
 func TestRemoteClientFactory_RotatedToken_SendsNewToken(t *testing.T) {
 	requests := map[string]func(ClientFactory, *remoteCluster, *v2pb.ClusterTarget) error{
-		"GetHTTPClient": func(factory ClientFactory, rc *remoteCluster, target *v2pb.ClusterTarget) error {
-			httpClient, err := factory.GetHTTPClient(context.Background(), target)
-			if err != nil {
-				return err
-			}
-			return getHTTP(httpClient, rc.server.URL)
-		},
-		"GetDynamicClient": func(factory ClientFactory, _ *remoteCluster, target *v2pb.ClusterTarget) error {
-			return getConfigMap(context.Background(), factory, target)
-		},
+		"GetHTTPClient":    getViaHTTPClient,
+		"GetDynamicClient": getConfigMap,
 	}
 
 	for name, request := range requests {
@@ -329,33 +365,37 @@ func TestRemoteClientFactory_GetHTTPClient_RotatedCA_TrustsNewCA(t *testing.T) {
 	}
 	factory := newTestFactory(provider)
 
-	httpClient, err := factory.GetHTTPClient(context.Background(), rc.target(t))
-	require.NoError(t, err)
 	var unknownAuthority x509.UnknownAuthorityError
-	require.ErrorAs(t, getHTTP(httpClient, rc.server.URL), &unknownAuthority)
+	require.ErrorAs(t, getViaHTTPClient(factory, rc, rc.target(t)), &unknownAuthority)
 
 	provider.set(rc.auth("token-a"), nil)
-	httpClient, err = factory.GetHTTPClient(context.Background(), rc.target(t))
-	require.NoError(t, err)
 
-	assert.NoError(t, getHTTP(httpClient, rc.server.URL))
+	assert.NoError(t, getViaHTTPClient(factory, rc, rc.target(t)))
 }
 
-func TestRemoteClientFactory_GetHTTPClient_RotatedToken_ClosesReplacedIdleConnections(t *testing.T) {
-	rc := newRemoteCluster(t)
-	provider := &fakeSecretProvider{auth: rc.auth("token-a")}
-	factory := newTestFactory(provider)
+func TestRemoteClientFactory_GetHTTPClient_RotatedCredentials_ClosesReplacedIdleConnections(t *testing.T) {
+	for rotated, rotationFor := range map[string]func(*testing.T, *remoteCluster) secrets.ClientAuth{
+		"token": func(_ *testing.T, rc *remoteCluster) secrets.ClientAuth { return rc.auth("token-b") },
+		"CA": func(t *testing.T, _ *remoteCluster) secrets.ClientAuth {
+			return secrets.ClientAuth{CertificateAuthorityData: unrelatedCAPEM(t), ClientTokenData: "token-a"}
+		},
+	} {
+		t.Run(rotated, func(t *testing.T) {
+			rc := newRemoteCluster(t)
+			provider := &fakeSecretProvider{auth: rc.auth("token-a")}
+			factory := newTestFactory(provider)
 
-	httpClient, err := factory.GetHTTPClient(context.Background(), rc.target(t))
-	require.NoError(t, err)
-	require.NoError(t, getHTTP(httpClient, rc.server.URL))
-	require.Zero(t, rc.closedConnections())
+			require.NoError(t, getViaHTTPClient(factory, rc, rc.target(t)))
+			require.Zero(t, rc.closedConnections())
 
-	provider.set(rc.auth("token-b"), nil)
-	_, err = factory.GetHTTPClient(context.Background(), rc.target(t))
-	require.NoError(t, err)
+			provider.set(rotationFor(t, rc), nil)
+			_, err := factory.GetHTTPClient(context.Background(), rc.target(t))
+			require.NoError(t, err)
 
-	assert.Eventually(t, func() bool { return rc.closedConnections() == 1 }, 5*time.Second, 10*time.Millisecond)
+			assert.Eventually(t, func() bool { return rc.closedConnections() == 1 },
+				5*time.Second, 10*time.Millisecond)
+		})
+	}
 }
 
 func TestRemoteClientFactory_GetHTTPClient_SetsIdleConnTimeout(t *testing.T) {
@@ -372,53 +412,67 @@ func TestRemoteClientFactory_GetHTTPClient_SetsIdleConnTimeout(t *testing.T) {
 	assert.Equal(t, httpIdleConnTimeout, transport.IdleConnTimeout)
 }
 
-func TestRemoteClientFactory_SecretProviderError_ReturnsErrorAndKeepsCache(t *testing.T) {
+func TestRemoteClientFactory_UnusableCredentials_ReturnsErrorAndKeepsCache(t *testing.T) {
 	rc := newRemoteCluster(t)
+	providerErr := errors.New("token secret not found")
 
-	for name, get := range getters {
-		t.Run(name, func(t *testing.T) {
-			provider := &fakeSecretProvider{auth: rc.auth("token-a")}
-			factory := newTestFactory(provider)
-			cached, err := get(factory, context.Background(), rc.target(t))
-			require.NoError(t, err)
-
-			provider.set(secrets.ClientAuth{}, errors.New("token secret not found"))
-			failed, err := get(factory, context.Background(), rc.target(t))
-			assert.ErrorContains(t, err, "token secret not found")
-			assert.Nil(t, failed)
-
-			provider.set(rc.auth("token-a"), nil)
-			recovered, err := get(factory, context.Background(), rc.target(t))
-			require.NoError(t, err)
-			assert.Same(t, cached, recovered)
-		})
-	}
-}
-
-func TestRemoteClientFactory_EmptyCredentials_ReturnsErrorAndKeepsCache(t *testing.T) {
-	rc := newRemoteCluster(t)
-
-	empties := map[string]struct {
-		auth secrets.ClientAuth
-		want string
+	tests := map[string]struct {
+		breakCredentials func(*fakeSecretProvider)
+		want             string
 	}{
-		"token": {auth: rc.auth(""), want: `token from secret "remote-token" is empty`},
-		"CA": {
-			auth: secrets.ClientAuth{ClientTokenData: "token-a"},
+		"provider error": {
+			breakCredentials: func(p *fakeSecretProvider) { p.set(secrets.ClientAuth{}, providerErr) },
+			want:             "token secret not found",
+		},
+		"empty token": {
+			breakCredentials: func(p *fakeSecretProvider) { p.set(rc.auth(""), nil) },
+			want:             `token from secret "remote-token" is empty`,
+		},
+		"empty CA": {
+			breakCredentials: func(p *fakeSecretProvider) {
+				p.set(secrets.ClientAuth{ClientTokenData: "token-a"}, nil)
+			},
 			want: `CA certificate from secret "remote-ca" is empty`,
 		},
+		"invalid CA": {
+			breakCredentials: func(p *fakeSecretProvider) {
+				p.set(secrets.ClientAuth{CertificateAuthorityData: "not a certificate", ClientTokenData: "token-b"}, nil)
+			},
+			want: "create ",
+		},
+		"provider error on the re-read under the lock": {
+			breakCredentials: func(p *fakeSecretProvider) {
+				p.queue(authResult{auth: rc.auth("token-b")}, authResult{err: providerErr})
+			},
+			want: "re-read client auth",
+		},
+		"empty token on the re-read under the lock": {
+			breakCredentials: func(p *fakeSecretProvider) {
+				p.queue(authResult{auth: rc.auth("token-b")}, authResult{auth: rc.auth("")})
+			},
+			want: `re-read client auth for cluster "remote": token from secret "remote-token" is empty`,
+		},
+		"empty CA on the re-read under the lock": {
+			breakCredentials: func(p *fakeSecretProvider) {
+				p.queue(
+					authResult{auth: rc.auth("token-b")},
+					authResult{auth: secrets.ClientAuth{ClientTokenData: "token-b"}},
+				)
+			},
+			want: `re-read client auth for cluster "remote": CA certificate from secret "remote-ca" is empty`,
+		},
 	}
-	for emptied, empty := range empties {
+	for caseName, tt := range tests {
 		for name, get := range getters {
-			t.Run(emptied+"/"+name, func(t *testing.T) {
+			t.Run(caseName+"/"+name, func(t *testing.T) {
 				provider := &fakeSecretProvider{auth: rc.auth("token-a")}
 				factory := newTestFactory(provider)
 				cached, err := get(factory, context.Background(), rc.target(t))
 				require.NoError(t, err)
 
-				provider.set(empty.auth, nil)
+				tt.breakCredentials(provider)
 				failed, err := get(factory, context.Background(), rc.target(t))
-				assert.ErrorContains(t, err, empty.want)
+				assert.ErrorContains(t, err, tt.want)
 				assert.Nil(t, failed)
 
 				provider.set(rc.auth("token-a"), nil)
@@ -427,27 +481,6 @@ func TestRemoteClientFactory_EmptyCredentials_ReturnsErrorAndKeepsCache(t *testi
 				assert.Same(t, cached, recovered)
 			})
 		}
-	}
-}
-
-func TestRemoteClientFactory_FailedRebuild_ReturnsErrorWithoutCachingIt(t *testing.T) {
-	rc := newRemoteCluster(t)
-	invalidCA := secrets.ClientAuth{CertificateAuthorityData: "not a certificate", ClientTokenData: "token-b"}
-
-	for name, get := range getters {
-		t.Run(name, func(t *testing.T) {
-			provider := &fakeSecretProvider{auth: rc.auth("token-a")}
-			factory := newTestFactory(provider)
-			_, err := get(factory, context.Background(), rc.target(t))
-			require.NoError(t, err)
-
-			provider.set(invalidCA, nil)
-			for range 2 {
-				failed, err := get(factory, context.Background(), rc.target(t))
-				assert.Error(t, err)
-				assert.Nil(t, failed)
-			}
-		})
 	}
 }
 
@@ -496,37 +529,14 @@ func TestRemoteClientFactory_StaleCredentialsAfterRotation_KeepsNewerClient(t *t
 	}
 }
 
-func TestRemoteClientFactory_ReReadUnderLockFails_ReturnsError(t *testing.T) {
-	rc := newRemoteCluster(t)
-
-	for name, get := range getters {
-		t.Run(name, func(t *testing.T) {
-			provider := &fakeSecretProvider{auth: rc.auth("token-a")}
-			factory := newTestFactory(provider)
-			_, err := get(factory, context.Background(), rc.target(t))
-			require.NoError(t, err)
-
-			provider.queue(
-				authResult{auth: rc.auth("token-b")},
-				authResult{err: errors.New("token secret not found")},
-			)
-			failed, err := get(factory, context.Background(), rc.target(t))
-
-			assert.ErrorContains(t, err, "re-read client auth")
-			assert.ErrorContains(t, err, "token secret not found")
-			assert.Nil(t, failed)
-		})
-	}
-}
-
 func TestRemoteClientFactory_SameClusterIDOnDifferentEndpoints_UsesSeparateClients(t *testing.T) {
 	first := newRemoteCluster(t)
 	second := newRemoteCluster(t)
 	require.Equal(t, first.caPEM, second.caPEM)
 	factory := newTestFactory(&fakeSecretProvider{auth: first.auth("token-a")})
 
-	require.NoError(t, getConfigMap(context.Background(), factory, first.target(t)))
-	require.NoError(t, getConfigMap(context.Background(), factory, second.target(t)))
+	require.NoError(t, getConfigMap(factory, first, first.target(t)))
+	require.NoError(t, getConfigMap(factory, second, second.target(t)))
 
 	assert.Equal(t, []string{"token-a"}, first.receivedTokens())
 	assert.Equal(t, []string{"token-a"}, second.receivedTokens())
