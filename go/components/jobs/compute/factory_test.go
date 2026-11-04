@@ -382,3 +382,29 @@ func TestGetClientSetForCluster_ConcurrentLookups_ShareOneClientSet(t *testing.T
 		assert.Same(t, results[0], cs)
 	}
 }
+
+// blockingSecretProvider blocks every read until its context is done, like a cache read
+// waiting on a Secret informer that never syncs.
+type blockingSecretProvider struct {
+	secrets.SecretProvider
+}
+
+func (blockingSecretProvider) GetClusterClientAuth(
+	ctx context.Context,
+	_ *v2pb.Cluster,
+) (secrets.ClientAuth, error) {
+	<-ctx.Done()
+	return secrets.ClientAuth{}, ctx.Err()
+}
+
+func TestGetClientSetForCluster_BlockedCredentialRead_ReturnsDeadlineError(t *testing.T) {
+	rc := newRemoteCluster(t)
+	f := &factory{
+		secretProvider:        blockingSecretProvider{},
+		credentialReadTimeout: 10 * time.Millisecond,
+	}
+
+	_, err := f.GetClientSetForCluster(rc.cluster(t, "remote", _caSecretName, _tokenSecretName))
+
+	assert.ErrorIs(t, err, context.DeadlineExceeded)
+}

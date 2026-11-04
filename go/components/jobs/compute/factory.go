@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 
@@ -16,7 +17,14 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/components/ray/kuberay"
 )
 
-const _serviceName = "michelangelo-controllermgr"
+const (
+	_serviceName = "michelangelo-controllermgr"
+
+	// _credentialReadTimeout bounds each SecretProvider read. A read served from an informer
+	// cache waits for the informer to sync, which never happens if the controller cannot list
+	// Secrets, and the second read in GetClientSetForCluster runs while f.m is held.
+	_credentialReadTimeout = 10 * time.Second
+)
 
 // Factory is the interface to get a REST client
 // to a cluster. Consumers are expected to write
@@ -40,8 +48,9 @@ type ClientSet struct {
 // controller restart. If the SecretProvider returns an error, the lookup fails instead of
 // falling back to a ClientSet built from credentials that may have been revoked.
 type factory struct {
-	clients        sync.Map // cache key string → cachedClientSet
-	secretProvider secrets.SecretProvider
+	clients               sync.Map // cache key string → cachedClientSet
+	secretProvider        secrets.SecretProvider
+	credentialReadTimeout time.Duration
 
 	m sync.Mutex
 }
@@ -55,7 +64,8 @@ type cachedClientSet struct {
 // NewClientSetFactory provides constructor for the factory
 func NewClientSetFactory(secretProvider secrets.SecretProvider) Factory {
 	return &factory{
-		secretProvider: secretProvider,
+		secretProvider:        secretProvider,
+		credentialReadTimeout: _credentialReadTimeout,
 	}
 }
 
@@ -110,7 +120,10 @@ func (f *factory) load(key string, auth secrets.ClientAuth) (*ClientSet, bool) {
 }
 
 func (f *factory) getClusterClientAuth(c *v2pb.Cluster) (secrets.ClientAuth, error) {
-	auth, err := f.secretProvider.GetClusterClientAuth(context.Background(), c)
+	ctx, cancel := context.WithTimeout(context.Background(), f.credentialReadTimeout)
+	defer cancel()
+
+	auth, err := f.secretProvider.GetClusterClientAuth(ctx, c)
 	if err != nil {
 		return secrets.ClientAuth{}, fmt.Errorf(
 			"get client auth for cluster %s/%s: %w", c.GetNamespace(), c.GetName(), err)
