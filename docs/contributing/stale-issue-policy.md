@@ -60,7 +60,7 @@ A maintainer reviews [open `stale` issues](https://github.com/michelangelo-ai/mi
 Keep these in mind:
 
 - Adding or removing a label restarts an issue's clock. A script that relabels old issues in bulk hides every issue it touches from the bot for 180 days and clears any `stale` label on them. Label new issues as they arrive instead of backfilling old ones.
-- Each untriaged `stale` issue costs the bot about 2 operations per run, out of a budget of 400, and a run that hits the budget stops without resuming. Around 200 untriaged stale issues, the newest issues would stop being checked.
+- Each untriaged `stale` issue costs the bot about 2 operations per run, out of a budget of 400, and a run that hits the budget stops without resuming. Around 200 untriaged stale issues, the newest issues would stop being checked. Granting the workflow `actions: write` would let runs resume, at the cost of a broader token. Don't grant `actions: read` alone: the bot could then read its saved progress but never replace it.
 - A failed label or comment call doesn't turn the run red. Check the run's annotations now and then.
 
 ## Running the Bot Manually
