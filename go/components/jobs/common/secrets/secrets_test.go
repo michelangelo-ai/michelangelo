@@ -9,7 +9,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	fakek8sclient "k8s.io/client-go/kubernetes/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 func TestGetKubeSecretName(t *testing.T) {
@@ -41,8 +41,8 @@ func TestProviderGetClusterClientAuth(t *testing.T) {
 		},
 	}
 
-	// Create fake Kubernetes clientset with the secrets
-	fakeClientSet := fakek8sclient.NewSimpleClientset(caSecret, tokenSecret)
+	// Create fake Kubernetes client with the secrets
+	fakeClient := fake.NewClientBuilder().WithObjects(caSecret, tokenSecret).Build()
 
 	tests := []struct {
 		name          string
@@ -139,7 +139,7 @@ func TestProviderGetClusterClientAuth(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			provider := Provider{
-				k8sClusterClient: fakeClientSet,
+				kubeClient: fakeClient,
 			}
 			auth, err := provider.GetClusterClientAuth(context.Background(), tt.cluster)
 			if tt.expectedError {
