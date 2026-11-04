@@ -11,7 +11,7 @@ import { getDateFromEpochSeconds } from '#core/utils/time-utils';
 import { formatTriggerSchedule } from './format-trigger-schedule';
 import { RunTriggerFields } from './run-trigger-fields';
 import { isPipelineRevision } from './types';
-import { useTargetRevision } from './use-target-revision';
+import { getSubmitDisabledReason, useTargetRevision } from './use-target-revision';
 
 import type { ActionComponentProps } from '#core/components/actions/types';
 import type { SelectOption } from '#core/components/form/fields/select/types';
@@ -35,7 +35,9 @@ export const RunTriggerForm = ({
   const pipelineName = isPipelineRevision(record)
     ? record.spec.baseResource.name
     : (record?.metadata?.name ?? '');
-  const revision = useTargetRevision(record);
+  const targetRevision = useTargetRevision(record);
+  const { revision } = targetRevision;
+  const submitDisabledReason = getSubmitDisabledReason(targetRevision);
 
   const { data, isLoading } = useStudioQuery<{ pipeline: Pipeline }>({
     queryName: 'GetPipeline',
@@ -98,6 +100,8 @@ export const RunTriggerForm = ({
       heading="Run trigger"
       onSubmit={handleRunSubmit}
       submitLabel="Run"
+      submitDisabled={!!submitDisabledReason}
+      submitDisabledReason={submitDisabledReason}
     >
       <StringField name="pipelineName" label="Pipeline" initialValue={pipelineName} readOnly />
       <StringField
