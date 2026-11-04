@@ -21,6 +21,7 @@ import (
 	"reflect"
 	"time"
 
+	pbtypes "github.com/gogo/protobuf/types"
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -419,6 +420,11 @@ func (t *pipelineRunDrainTarget) ForceKill(ctx context.Context) error {
 // storage); always it clears the drain-counted token and removes the drain
 // finalizer.
 func (t *pipelineRunDrainTarget) CompleteDrain(ctx context.Context) error {
+	// A run already terminal when the drain started skips Progress and MarkKilled, so
+	// record its EndTime here before it is marked immutable and evicted. No-op otherwise.
+	if err := t.r.updatePipelineRunStatus(ctx, t.run, t.run.DeepCopy()); err != nil {
+		return err
+	}
 	if t.r.metadataStorageEnabled {
 		utils.MarkImmutable(t.run)
 	}
@@ -484,6 +490,9 @@ func (r *Reconciler) markImmutableIfExpired(ctx context.Context, logger *zap.Log
 //
 // Returns an error if the status update fails.
 func (r *Reconciler) updatePipelineRunStatus(ctx context.Context, pipelineRun *v2pb.PipelineRun, originalPipelineRun *v2pb.PipelineRun) error {
+	// Every status write goes through here (reconcile and cascade-delete drain), so
+	// EndTime is kept in line with the state on all paths.
+	syncEndTime(pipelineRun)
 	if !reflect.DeepEqual(pipelineRun.Status, originalPipelineRun.Status) {
 		if err := r.UpdateStatus(ctx, pipelineRun, &metav1.UpdateOptions{}); err != nil {
 			return fmt.Errorf("update status for pipeline run %q: %w", pipelineRun.Name, err)
@@ -543,6 +552,37 @@ func isTerminalState(state v2pb.PipelineRunState) bool {
 	return state == v2pb.PIPELINE_RUN_STATE_SUCCEEDED ||
 		state == v2pb.PIPELINE_RUN_STATE_FAILED ||
 		state == v2pb.PIPELINE_RUN_STATE_KILLED
+}
+
+// syncEndTime keeps Status.EndTime in line with the run state. A terminal run without one
+// is stamped with its latest step end time (falling back to now), so runs that finished
+// before EndTime was recorded pick up their real end time on the next reconcile. A rerun
+// that takes the run out of a terminal state clears it.
+func syncEndTime(pipelineRun *v2pb.PipelineRun) {
+	if !isTerminalState(pipelineRun.Status.State) {
+		pipelineRun.Status.EndTime = nil
+		return
+	}
+	if pipelineRun.Status.EndTime != nil {
+		return
+	}
+	endTime := latestStepEndTime(pipelineRun.Status.Steps)
+	if endTime == nil {
+		endTime = pbtypes.TimestampNow()
+	}
+	pipelineRun.Status.EndTime = endTime
+}
+
+// latestStepEndTime returns the latest EndTime across steps, or nil if no step has one.
+func latestStepEndTime(steps []*v2pb.PipelineRunStepInfo) *pbtypes.Timestamp {
+	var latest *pbtypes.Timestamp
+	for _, step := range steps {
+		endTime := step.GetEndTime()
+		if endTime != nil && (latest == nil || latest.Compare(endTime) < 0) {
+			latest = endTime
+		}
+	}
+	return latest
 }
 
 // emitPipelineRunMetrics emits metrics for completed pipeline runs

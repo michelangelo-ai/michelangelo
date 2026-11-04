@@ -1067,6 +1067,11 @@ func TestReconcile(t *testing.T) {
 			require.Equal(t, testCase.expectedPipelineRunStatus.WorkflowId, pipelineRun.Status.WorkflowId)
 			require.Equal(t, testCase.expectedPipelineRunStatus.WorkflowRunId, pipelineRun.Status.WorkflowRunId)
 			require.Equal(t, testCase.expectedErrorMessage, pipelineRun.Status.ErrorMessage)
+			if isTerminalState(pipelineRun.Status.State) {
+				require.NotNil(t, pipelineRun.Status.EndTime)
+			} else {
+				require.Nil(t, pipelineRun.Status.EndTime)
+			}
 			for i, step := range pipelineRun.Status.Steps {
 				require.Equal(t, testCase.expectedSteps[i].Name, step.Name)
 				require.Equal(t, testCase.expectedSteps[i].State, step.State)
@@ -1130,6 +1135,59 @@ func createMockConfigProvider() uberconfig.Provider {
 
 	provider, _ := uberconfig.NewStaticProvider(configMap)
 	return provider
+}
+
+func TestSyncEndTime(t *testing.T) {
+	earlier := &pbtypes.Timestamp{Seconds: 1000}
+	later := &pbtypes.Timestamp{Seconds: 2000}
+	existing := &pbtypes.Timestamp{Seconds: 500}
+	steps := []*v2pb.PipelineRunStepInfo{
+		{Name: "a", EndTime: later},
+		{Name: "b"},
+		{Name: "c", EndTime: earlier},
+	}
+
+	tests := []struct {
+		name    string
+		status  v2pb.PipelineRunStatus
+		want    *pbtypes.Timestamp
+		wantNow bool
+	}{
+		{
+			name:   "terminal run takes the latest step end time",
+			status: v2pb.PipelineRunStatus{State: v2pb.PIPELINE_RUN_STATE_SUCCEEDED, Steps: steps},
+			want:   later,
+		},
+		{
+			name:   "terminal run keeps an existing end time",
+			status: v2pb.PipelineRunStatus{State: v2pb.PIPELINE_RUN_STATE_FAILED, EndTime: existing, Steps: steps},
+			want:   existing,
+		},
+		{
+			name:    "terminal run without step end times falls back to now",
+			status:  v2pb.PipelineRunStatus{State: v2pb.PIPELINE_RUN_STATE_KILLED, Steps: []*v2pb.PipelineRunStepInfo{{Name: "a"}}},
+			wantNow: true,
+		},
+		{
+			name:   "rerun back to running clears the end time",
+			status: v2pb.PipelineRunStatus{State: v2pb.PIPELINE_RUN_STATE_RUNNING, EndTime: existing, Steps: steps},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			run := &v2pb.PipelineRun{Status: tt.status}
+			before := time.Now().Add(-time.Second)
+
+			syncEndTime(run)
+
+			if tt.wantNow {
+				require.NotNil(t, run.Status.EndTime)
+				require.True(t, time.Unix(run.Status.EndTime.Seconds, 0).After(before))
+				return
+			}
+			require.Equal(t, tt.want, run.Status.EndTime)
+		})
+	}
 }
 
 func TestMarkImmutableIfExpired(t *testing.T) {
