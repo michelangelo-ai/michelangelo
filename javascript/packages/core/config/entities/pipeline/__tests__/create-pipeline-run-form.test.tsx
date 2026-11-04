@@ -50,6 +50,7 @@ describe('CreatePipelineRunForm', () => {
     const user = userEvent.setup();
     const mockResponse = { pipelineRun: { metadata: { name: 'created-run' } } };
     const mockRequest = createQueryMockRouter({
+      ListRevision: { revisionList: { items: [] } },
       CreatePipelineRun: mockResponse,
     });
 
@@ -97,7 +98,10 @@ describe('CreatePipelineRunForm', () => {
 
   it('uses the run to the record when it is the Revision being viewed', async () => {
     const user = userEvent.setup();
-    const mockRequest = createQueryMockRouter({ CreatePipelineRun: {} });
+    const mockRequest = createQueryMockRouter({
+      ListRevision: { revisionList: { items: [] } },
+      CreatePipelineRun: {},
+    });
     const record = {
       metadata: { name: 'pipeline-test-pipeline-3f2a1b9c0d4e', namespace: 'ma-dev-test' },
       spec: {
@@ -142,7 +146,10 @@ describe('CreatePipelineRunForm', () => {
 
   it('uses the latest revision when the URL names none', async () => {
     const user = userEvent.setup();
-    const mockRequest = createQueryMockRouter({ CreatePipelineRun: {} });
+    const mockRequest = createQueryMockRouter({
+      ListRevision: { revisionList: { items: [] } },
+      CreatePipelineRun: {},
+    });
     const latestRevision = {
       name: 'pipeline-test-pipeline-9a8b7c6d5e4f',
       namespace: 'ma-dev-test',
@@ -188,7 +195,10 @@ describe('CreatePipelineRunForm', () => {
 
   it('leaves notifications empty when the toggle is left off', async () => {
     const user = userEvent.setup();
-    const mockRequest = createQueryMockRouter({ CreatePipelineRun: {} });
+    const mockRequest = createQueryMockRouter({
+      ListRevision: { revisionList: { items: [] } },
+      CreatePipelineRun: {},
+    });
 
     render(
       <FormWrapper />,
@@ -219,7 +229,10 @@ describe('CreatePipelineRunForm', () => {
 
   it('submits an email notification covering every event type once opted in', async () => {
     const user = userEvent.setup();
-    const mockRequest = createQueryMockRouter({ CreatePipelineRun: {} });
+    const mockRequest = createQueryMockRouter({
+      ListRevision: { revisionList: { items: [] } },
+      CreatePipelineRun: {},
+    });
 
     render(
       <FormWrapper />,
@@ -276,7 +289,10 @@ describe('CreatePipelineRunForm', () => {
 
   it('submits both an email and a Slack notification when both are filled in', async () => {
     const user = userEvent.setup();
-    const mockRequest = createQueryMockRouter({ CreatePipelineRun: {} });
+    const mockRequest = createQueryMockRouter({
+      ListRevision: { revisionList: { items: [] } },
+      CreatePipelineRun: {},
+    });
 
     render(
       <FormWrapper />,
@@ -329,7 +345,10 @@ describe('CreatePipelineRunForm', () => {
 
   it('omits a destination type left blank even when the toggle is on', async () => {
     const user = userEvent.setup();
-    const mockRequest = createQueryMockRouter({ CreatePipelineRun: {} });
+    const mockRequest = createQueryMockRouter({
+      ListRevision: { revisionList: { items: [] } },
+      CreatePipelineRun: {},
+    });
 
     render(
       <FormWrapper />,
@@ -368,6 +387,7 @@ describe('CreatePipelineRunForm', () => {
     const user = userEvent.setup();
     const mockError = new Error('Test error');
     const mockRequest = createQueryMockRouter({
+      ListRevision: { revisionList: { items: [] } },
       CreatePipelineRun: mockError,
     });
 
@@ -394,7 +414,10 @@ describe('CreatePipelineRunForm', () => {
 
   it('includes description in payload when filled in', async () => {
     const user = userEvent.setup();
-    const mockRequest = createQueryMockRouter({ CreatePipelineRun: {} });
+    const mockRequest = createQueryMockRouter({
+      ListRevision: { revisionList: { items: [] } },
+      CreatePipelineRun: {},
+    });
 
     render(
       <FormWrapper />,
@@ -438,7 +461,12 @@ describe('CreatePipelineRunForm', () => {
         getErrorProviderWrapper(),
         getInterpolationProviderWrapper(),
         getRouterWrapper({ location: '/ma-dev-test/train/pipelines' }),
-        getServiceProviderWrapper({ request: createQueryMockRouter({ CreatePipelineRun: {} }) }),
+        getServiceProviderWrapper({
+          request: createQueryMockRouter({
+            ListRevision: { revisionList: { items: [] } },
+            CreatePipelineRun: {},
+          }),
+        }),
       ])
     );
 
@@ -457,7 +485,12 @@ describe('CreatePipelineRunForm', () => {
         getErrorProviderWrapper(),
         getInterpolationProviderWrapper(),
         getRouterWrapper({ location: '/ma-dev-test/train/pipelines' }),
-        getServiceProviderWrapper({ request: createQueryMockRouter({ CreatePipelineRun: {} }) }),
+        getServiceProviderWrapper({
+          request: createQueryMockRouter({
+            ListRevision: { revisionList: { items: [] } },
+            CreatePipelineRun: {},
+          }),
+        }),
       ])
     );
 
@@ -469,7 +502,10 @@ describe('CreatePipelineRunForm', () => {
 
   it('submits the selected environment as a metadata label', async () => {
     const user = userEvent.setup();
-    const mockRequest = createQueryMockRouter({ CreatePipelineRun: {} });
+    const mockRequest = createQueryMockRouter({
+      ListRevision: { revisionList: { items: [] } },
+      CreatePipelineRun: {},
+    });
 
     render(
       <FormWrapper />,
@@ -594,6 +630,7 @@ describe('CreatePipelineRunForm', () => {
       const user = userEvent.setup();
       renderForm(
         createQueryMockRouter({
+          ListRevision: { revisionList: { items: [] } },
           CreatePipelineRun: {},
           ListPipelineRun: runListResponse,
           GetPipelineRun: sourceRunResponse,
@@ -614,6 +651,7 @@ describe('CreatePipelineRunForm', () => {
       const user = userEvent.setup();
       renderForm(
         createQueryMockRouter({
+          ListRevision: { revisionList: { items: [] } },
           CreatePipelineRun: {},
           ListPipelineRun: runListResponse,
           GetPipelineRun: sourceRunResponse,
@@ -641,6 +679,7 @@ describe('CreatePipelineRunForm', () => {
     it('submits resumeFrom using step displayName, not the task path', async () => {
       const user = userEvent.setup();
       const mockRequest = createQueryMockRouter({
+        ListRevision: { revisionList: { items: [] } },
         CreatePipelineRun: {},
         ListPipelineRun: runListResponse,
         GetPipelineRun: sourceRunResponse,
@@ -678,6 +717,7 @@ describe('CreatePipelineRunForm', () => {
     it('submits resume without resumeFrom when no step is picked', async () => {
       const user = userEvent.setup();
       const mockRequest = createQueryMockRouter({
+        ListRevision: { revisionList: { items: [] } },
         CreatePipelineRun: {},
         ListPipelineRun: runListResponse,
         GetPipelineRun: sourceRunResponse,
@@ -706,6 +746,7 @@ describe('CreatePipelineRunForm', () => {
     it('omits the resume spec entirely when the group is opened but nothing is chosen', async () => {
       const user = userEvent.setup();
       const router = createQueryMockRouter({
+        ListRevision: { revisionList: { items: [] } },
         CreatePipelineRun: {},
         ListPipelineRun: runListResponse,
         GetPipelineRun: sourceRunResponse,
@@ -736,5 +777,133 @@ describe('CreatePipelineRunForm', () => {
       });
       expect(submitted[0].spec.resume).toBeUndefined();
     });
+  });
+
+  it('falls back to the most recently updated revision when the pipeline has no latest pointer', async () => {
+    const user = userEvent.setup();
+    const fallbackRevision = {
+      name: 'pipeline-test-pipeline-5c4d3e2f1a0b',
+      namespace: 'ma-dev-test',
+    };
+    const mockRequest = createQueryMockRouter({
+      CreatePipelineRun: {},
+      ListRevision: {
+        revisionList: {
+          items: [
+            { metadata: fallbackRevision },
+            { metadata: { name: 'pipeline-test-pipeline-older', namespace: 'ma-dev-test' } },
+          ],
+        },
+      },
+    });
+    const record = {
+      metadata: { name: 'test-pipeline', namespace: 'ma-dev-test' },
+      spec: { owner: { name: 'test-owner' } },
+    };
+
+    render(
+      <CreatePipelineRunForm record={record} onClose={vi.fn()} />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getIconProviderWrapper(),
+        getErrorProviderWrapper(),
+        getInterpolationProviderWrapper(),
+        getRouterWrapper({ location: '/ma-dev-test/train/pipelines' }),
+        getServiceProviderWrapper({ request: mockRequest }),
+      ])
+    );
+
+    const dialog = await screen.findByRole('dialog', { name: 'Start new pipeline run' });
+    await waitFor(() => {
+      expect(within(dialog).getByRole('textbox', { name: 'Revision ID' })).toHaveValue(
+        fallbackRevision.name
+      );
+    });
+    await selectEnvironment(user, dialog, 'Development');
+    await user.click(within(dialog).getByRole('button', { name: 'Run' }));
+
+    await waitFor(() => {
+      expect(mockRequest).toHaveBeenCalledWith(
+        'CreatePipelineRun',
+        expect.objectContaining({
+          spec: expect.objectContaining({ revision: fallbackRevision }) as Record<string, unknown>,
+        }),
+        {}
+      );
+    });
+  });
+
+  it('disables submit with the error as tooltip when the revision lookup fails', async () => {
+    const user = userEvent.setup();
+    const router = createQueryMockRouter({
+      ListRevision: { revisionList: { items: [] } },
+      CreatePipelineRun: {},
+    });
+    const request = vi.fn(
+      (name: string, args: unknown, headers?: Record<string, string>): Promise<unknown> =>
+        name === 'ListRevision'
+          ? Promise.reject(new Error('lookup failed'))
+          : router(name, args, headers)
+    );
+    const record = {
+      metadata: { name: 'test-pipeline', namespace: 'ma-dev-test' },
+      spec: { owner: { name: 'test-owner' } },
+    };
+
+    render(
+      <CreatePipelineRunForm record={record} onClose={vi.fn()} />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getIconProviderWrapper(),
+        getErrorProviderWrapper(),
+        getInterpolationProviderWrapper(),
+        getRouterWrapper({ location: '/ma-dev-test/train/pipelines' }),
+        getServiceProviderWrapper({ request }),
+      ])
+    );
+
+    const dialog = await screen.findByRole('dialog', { name: 'Start new pipeline run' });
+    const runButton = within(dialog).getByRole('button', { name: 'Run' });
+    expect(runButton).toBeDisabled();
+    await user.hover(runButton.parentElement!);
+    expect(
+      await screen.findByText(/Could not load the pipeline's latest revision\./)
+    ).toBeInTheDocument();
+    expect(request.mock.calls.map(([name]) => name)).not.toContain('CreatePipelineRun');
+  });
+
+  it('disables submit while the revision lookup is still loading', async () => {
+    const user = userEvent.setup();
+    const router = createQueryMockRouter({
+      ListRevision: { revisionList: { items: [] } },
+      CreatePipelineRun: {},
+    });
+    const request = vi.fn(
+      (name: string, args: unknown, headers?: Record<string, string>): Promise<unknown> =>
+        name === 'ListRevision' ? new Promise<never>(() => undefined) : router(name, args, headers)
+    );
+    const record = {
+      metadata: { name: 'test-pipeline', namespace: 'ma-dev-test' },
+      spec: { owner: { name: 'test-owner' } },
+    };
+
+    render(
+      <CreatePipelineRunForm record={record} onClose={vi.fn()} />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getIconProviderWrapper(),
+        getErrorProviderWrapper(),
+        getInterpolationProviderWrapper(),
+        getRouterWrapper({ location: '/ma-dev-test/train/pipelines' }),
+        getServiceProviderWrapper({ request }),
+      ])
+    );
+
+    const dialog = await screen.findByRole('dialog', { name: 'Start new pipeline run' });
+    const runButton = within(dialog).getByRole('button', { name: 'Run' });
+    expect(runButton).toBeDisabled();
+    await user.hover(runButton.parentElement!);
+    expect(await screen.findByText(/Loading the pipeline's latest revision/)).toBeInTheDocument();
+    expect(request.mock.calls.map(([name]) => name)).not.toContain('CreatePipelineRun');
   });
 });

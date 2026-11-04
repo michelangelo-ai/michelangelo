@@ -1,5 +1,5 @@
 import { useStudioQuery } from '#core/hooks/use-studio-query';
-import { buildRevisionName } from '#core/utils/revision-utils';
+import { buildRevisionListOptions, buildRevisionName } from '#core/utils/revision-utils';
 import { capitalizeFirstLetter } from '#core/utils/string-utils';
 
 /**
@@ -9,8 +9,10 @@ import { capitalizeFirstLetter } from '#core/utils/string-utils';
  * Revision itself instead — not just its wrapped `spec.content` — so configs can read the
  * Revision's own identity (e.g. `metadata.name`) the same way list rows for that entity already
  * do: the Revision `?revisionId=` names, or else the one the entity's `status.latestRevision`
- * points at. The live entity is always loaded for a revisioned entity, even when the URL names
- * the Revision, so the page can tell which Revision is the latest.
+ * points at. The controller only sets that pointer for default-branch (`main`/`master`)
+ * commits, so an entity with none falls back to its most recently updated Revision. The live
+ * entity is always loaded for a revisioned entity, even when the URL names the Revision, so the
+ * page can tell which Revision is the latest.
  */
 export function useEntityRecord({
   service,
@@ -54,23 +56,47 @@ export function useEntityRecord({
     ? revisionedRecord?.status?.latestRevision?.name
     : undefined;
 
-  const revisionName = revisionNameFromUrl ?? revisionNameFromEntity;
+  // No explicit or pointed-at Revision: the entity has no default-branch Revision, so look up
+  // its Revisions and render the most recently updated one rather than erroring.
+  const needsFallbackRevision =
+    revisioned && !!entityQuery.data && !revisionNameFromUrl && !revisionNameFromEntity;
+  const fallbackQuery = useStudioQuery<{
+    revisionList?: { items?: { metadata: { name: string } }[] };
+  }>({
+    queryName: 'ListRevision',
+    serviceOptions: {
+      namespace: projectId,
+      listOptionsExt: buildRevisionListOptions(service, entityId),
+    },
+    clientOptions: { enabled: needsFallbackRevision },
+  });
+  // The revision selector issues this same request, so the query's state is only this hook's
+  // concern while the fallback is actually in use.
+  const fallbackRevisionName = needsFallbackRevision
+    ? fallbackQuery.data?.revisionList?.items?.[0]?.metadata.name
+    : undefined;
+  const fallbackLoading = needsFallbackRevision && fallbackQuery.isLoading;
+  const fallbackError = needsFallbackRevision ? fallbackQuery.error?.message : undefined;
+
+  const revisionName = revisionNameFromUrl ?? revisionNameFromEntity ?? fallbackRevisionName;
   const revisionQuery = useStudioQuery<{ revision?: Record<string, unknown> }>({
     queryName: 'GetRevision',
     serviceOptions: { namespace: projectId, name: revisionName },
     clientOptions: { enabled: !!revisionName },
   });
 
-  // The entity loaded but carries no `status.latestRevision`, so the revision query was never
-  // enabled and neither query errors. A revisioned entity has nothing to render in that state.
-  const hasNoRevisionToRender = revisioned && !!entityQuery.data && !revisionName;
+  // The fallback lookup finished and found no Revision at all, so the revision query was never
+  // enabled and no query errors. A revisioned entity has nothing to render in that state.
+  const hasNoRevisionToRender =
+    needsFallbackRevision && !!fallbackQuery.data && !fallbackRevisionName;
 
   return {
     record: revisioned ? revisionQuery.data?.revision : entityRecord,
     latestRevisionName: revisionNameFromEntity,
-    loading: entityQuery.isLoading || revisionQuery.isLoading,
+    loading: entityQuery.isLoading || fallbackLoading || revisionQuery.isLoading,
     errorMessage:
       entityQuery.error?.message ??
+      fallbackError ??
       revisionQuery.error?.message ??
       (hasNoRevisionToRender ? 'No revision found.' : undefined),
   };

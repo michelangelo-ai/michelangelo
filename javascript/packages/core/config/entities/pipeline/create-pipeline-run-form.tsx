@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { Field } from 'react-final-form';
 
 import { FormDialog } from '#core/components/form/components/form-dialog/form-dialog';
@@ -18,7 +19,7 @@ import { ENVIRONMENT_LABEL_KEY } from '#core/utils/environment-utils';
 import { generateSuffix } from '#core/utils/name-utils';
 import { ResumeRunFields } from './resume-run-fields';
 import { isPipelineRevision } from './types';
-import { useTargetRevision } from './use-target-revision';
+import { getSubmitDisabledReason, useTargetRevision } from './use-target-revision';
 
 import type { ActionComponentProps } from '#core/components/actions/types';
 import type {
@@ -49,7 +50,9 @@ export const CreatePipelineRunForm = ({
   const pipelineName = isPipelineRevision(record)
     ? record.spec.baseResource.name
     : (record?.metadata?.name ?? '');
-  const revision = useTargetRevision(record);
+  const targetRevision = useTargetRevision(record);
+  const { revision } = targetRevision;
+  const submitDisabledReason = getSubmitDisabledReason(targetRevision);
 
   const createPipelineRunMutation = useStudioMutation<PipelineRun, PipelineRun>({
     mutationName: 'CreatePipelineRun',
@@ -70,19 +73,29 @@ export const CreatePipelineRunForm = ({
     });
   };
 
-  const initialValues: PipelineRunFormValues = {
-    metadata: {
-      name: `run${generateSuffix({ withDate: true })}`,
-      namespace: projectId,
-    },
-    spec: {
-      pipeline: {
-        name: pipelineName,
+  // Stable across refetch re-renders: a fresh object (and run-name suffix) each render would
+  // make react-final-form reinitialize and discard what the user has typed.
+  const revisionName = revision?.name;
+  const revisionNamespace = revision?.namespace;
+  const initialValues = useMemo<PipelineRunFormValues>(
+    () => ({
+      metadata: {
+        name: `run${generateSuffix({ withDate: true })}`,
         namespace: projectId,
       },
-      revision,
-    },
-  };
+      spec: {
+        pipeline: {
+          name: pipelineName,
+          namespace: projectId,
+        },
+        revision:
+          revisionName === undefined || revisionNamespace === undefined
+            ? undefined
+            : { name: revisionName, namespace: revisionNamespace },
+      },
+    }),
+    [projectId, pipelineName, revisionName, revisionNamespace]
+  );
 
   return (
     <FormDialog<PipelineRunFormValues>
@@ -91,6 +104,8 @@ export const CreatePipelineRunForm = ({
       heading="Start new pipeline run"
       onSubmit={handleRunSubmit}
       submitLabel={'Run'}
+      submitDisabled={!!submitDisabledReason}
+      submitDisabledReason={submitDisabledReason}
       initialValues={initialValues}
     >
       <StringField name="spec.pipeline.name" label="Pipeline to run" readOnly />
