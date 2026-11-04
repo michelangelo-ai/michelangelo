@@ -403,6 +403,23 @@ func TestMapper_MapLocalJobStatusToGlobal(t *testing.T) {
 	}
 }
 
+func TestMapper_MapLocalJobStatusToGlobal_CopiesKubeRayIdentifiers(t *testing.T) {
+	r := &rayv1.RayJob{}
+	r.Status.JobStatus = rayv1.JobStatusRunning
+	r.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusRunning
+	r.Status.JobId = "rayjob-abc-xyz12"
+	r.Status.RayClusterName = "rayjob-abc-raycluster-k8x2p"
+	r.Status.DashboardURL = "rayjob-abc-raycluster-k8x2p-head-svc.ns.svc.cluster.local:8265"
+
+	js, err := Mapper{}.MapLocalJobStatusToGlobal(r)
+	require.NoError(t, err)
+	require.NotNil(t, js.Ray)
+	assert.Equal(t, "rayjob-abc-xyz12", js.Ray.JobId)
+	assert.Equal(t, "rayjob-abc-raycluster-k8x2p", js.Ray.RayClusterName)
+	assert.Equal(t, "rayjob-abc-raycluster-k8x2p-head-svc.ns.svc.cluster.local:8265", js.Ray.DashboardUrl)
+	assert.Equal(t, string(rayv1.JobDeploymentStatusRunning), js.Ray.JobDeploymentStatus)
+}
+
 func TestMapLocalClusterStatusToGlobal_WithConditions(t *testing.T) {
 	m := Mapper{}
 
