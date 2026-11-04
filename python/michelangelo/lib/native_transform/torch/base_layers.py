@@ -2,19 +2,17 @@
 
 TorchScript- and ONNX-exportable ``nn.Module`` transform layers that operate on a
 ``dict[str, torch.Tensor]`` in/out contract so the exact same transform runs at
-train and serve time. Every layer subclasses :class:`TorchTransformBaseLayer` and
-uses :func:`~michelangelo.lib.native_transform.torch.utils.format_inputs` /
-:func:`~michelangelo.lib.native_transform.torch.utils.format_outputs` to map its
+train and serve time. Every layer subclasses `TorchTransformBaseLayer` and
+uses `format_inputs` /
+`format_outputs` to map its
 declared input/output columns to and from a single stacked tensor.
 
-This module provides the foundation (stateless, elementwise) layers, plus
-structural layers (``Tile``, ``PadOrCrop1D``, ``Clip``, ``Scale``, ``CaseWhen``,
 This module provides the foundation (stateless, elementwise) layers, plus
 structural layers (``Tile``, ``PadOrCrop1D``, ``Clip``, ``Scale``, ``CaseWhen``,
 ``Compare``, ``TensorColFillNone``, etc.) and the ``IDHashTokenizer`` wrapper
 layer. Fitted-statistics layers (``MinMax``, ``Normalization``,
 ``Bucketization``) live in
-:mod:`~michelangelo.lib.native_transform.torch.stats_layers`.
+`michelangelo.lib.native_transform.torch.stats_layers`.
 """
 
 from __future__ import annotations
@@ -363,7 +361,7 @@ class Divide(TorchTransformBaseLayer):
             division.
         eps: Small value substituted for a zero denominator to avoid division by
             zero (default
-            :data:`~michelangelo.lib.native_transform.torch.constants.DEFAULT_EPSILON`).
+            `DEFAULT_EPSILON`).
         **kwargs: Additional base-layer options (e.g. ``name``).
 
     Raises:
@@ -386,7 +384,7 @@ class Divide(TorchTransformBaseLayer):
             output_cols: Column names of the quotient outputs.
             add_constant_to_divisor: Constant added to every denominator.
             eps: Small value substituted for a zero denominator (default
-                :data:`~michelangelo.lib.native_transform.torch.constants.DEFAULT_EPSILON`).
+                `DEFAULT_EPSILON`).
             **kwargs: Additional base-layer options (e.g. ``name``).
 
         Raises:
@@ -1354,7 +1352,7 @@ class IDHashTokenizer(TorchTransformBaseLayer):
     package if that changes.
 
     Composes the vocabulary-lookup core in
-    :class:`~michelangelo.lib.native_transform.torch.id_hash_tokenizer.IDHashTokenizer`
+    `michelangelo.lib.native_transform.torch.id_hash_tokenizer.IDHashTokenizer`
     into the ``dict[str, torch.Tensor]`` layer contract. Sentinel positions
     from upstream ragged-batch collation (``NaN`` for float inputs,
     ``INT32_SENTINEL`` for integer inputs) are automatically detected and
@@ -1363,14 +1361,14 @@ class IDHashTokenizer(TorchTransformBaseLayer):
     cast), and restored as ``INT32_SENTINEL`` in the output regardless of the
     input's original dtype.
 
-    .. note::
-        This is a different class from the one previously exported as
-        ``michelangelo.lib.native_transform.torch.IDHashTokenizer``: prior to
+    Note:
+        This is a different class from the one previously exported
+        as ``michelangelo.lib.native_transform.torch.IDHashTokenizer``: prior to
         this layer's addition, that top-level name referred to the bare
         lookup core above (a plain ``nn.Module`` taking and returning a
         single ``torch.Tensor``). That core is still available under its
         original name at
-        :mod:`michelangelo.lib.native_transform.torch.id_hash_tokenizer`; the
+        `michelangelo.lib.native_transform.torch.id_hash_tokenizer`; the
         top-level package name now refers to this layer instead, which
         composes the core into the dict-of-tensors transform-layer contract
         used throughout this package.

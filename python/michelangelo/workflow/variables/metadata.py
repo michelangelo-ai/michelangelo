@@ -37,20 +37,21 @@ class ModelMetadata:
     opening the artifact itself.
 
     Subclass to add provider-specific fields and extend ``to_registry_dict()``
-    to include them::
+    to include them:
+    ```python
+    @dataclass
+    class MyModelMetadata(ModelMetadata):
+        training_job_id: str | None = None
+        experiment_id: str | None = None
 
-        @dataclass
-        class MyModelMetadata(ModelMetadata):
-            training_job_id: str | None = None
-            experiment_id: str | None = None
-
-            def to_registry_dict(self) -> dict[str, str]:
-                result = super().to_registry_dict()
-                if self.training_job_id is not None:
-                    result["training_job_id"] = self.training_job_id
-                if self.experiment_id is not None:
-                    result["experiment_id"] = self.experiment_id
-                return result
+        def to_registry_dict(self) -> dict[str, str]:
+            result = super().to_registry_dict()
+            if self.training_job_id is not None:
+                result["training_job_id"] = self.training_job_id
+            if self.experiment_id is not None:
+                result["experiment_id"] = self.experiment_id
+            return result
+    ```
 
     Attributes:
         training_framework: Name of the training framework (e.g. ``"pytorch"``,
@@ -130,11 +131,13 @@ class ModelMetadata:
         output), never from unvalidated external input.
 
     Example:
-        >>> meta = ModelMetadata(training_framework="xgboost", deployable=True)
-        >>> meta.training_framework
-        'xgboost'
-        >>> meta.deployable
-        True
+    ```python
+    >>> meta = ModelMetadata(training_framework="xgboost", deployable=True)
+    >>> meta.training_framework
+    'xgboost'
+    >>> meta.deployable
+    True
+    ```
     """
 
     training_framework: str | None = None
@@ -261,17 +264,18 @@ class ModelMetadata:
         storage. Binary payload fields (``_schema``, ``_sample_data``,
         ``_transform_spec``, ``_feature_stats``, ``_hyperparameters``) are excluded.
 
-        Subclasses should override this method to include their own fields::
+        Subclasses should override this method to include their own fields:
+        ```python
+        @dataclass
+        class MyModelMetadata(ModelMetadata):
+            training_job_id: str | None = None
 
-            @dataclass
-            class MyModelMetadata(ModelMetadata):
-                training_job_id: str | None = None
-
-                def to_registry_dict(self) -> dict[str, str]:
-                    result = super().to_registry_dict()
-                    if self.training_job_id is not None:
-                        result["training_job_id"] = self.training_job_id
-                    return result
+            def to_registry_dict(self) -> dict[str, str]:
+                result = super().to_registry_dict()
+                if self.training_job_id is not None:
+                    result["training_job_id"] = self.training_job_id
+                return result
+        ```
 
         Returns:
             A ``dict[str, str]`` ready for ``ModelRegistryClient.register_model(
@@ -307,9 +311,11 @@ class DatasetMetadata:
             name.
 
     Example:
-        >>> meta = DatasetMetadata(derived_features=["scaled_amount"])
-        >>> meta.derived_features
-        ['scaled_amount']
+    ```python
+    >>> meta = DatasetMetadata(derived_features=["scaled_amount"])
+    >>> meta.derived_features
+    ['scaled_amount']
+    ```
     """
 
     derived_features: list[str] = field(default_factory=list)
