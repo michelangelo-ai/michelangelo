@@ -22,6 +22,15 @@ def label_set(value):
     return {part.strip().lower() for part in parts if part.strip()}
 
 
+def action_bool(value):
+    """Read a boolean input like actions/stale: only exactly 'true' or 'false' count."""
+    if value is True or value == "true":
+        return True
+    if value is False or value == "false":
+        return False
+    return None
+
+
 def check(stale_wf, unstale_wf, unstale_text, repo_labels):
     """Return a list of problems with the two workflows; empty means OK."""
     errors = []
@@ -72,11 +81,11 @@ def check(stale_wf, unstale_wf, unstale_text, repo_labels):
             "guarantee 'never closes an issue' broken: "
             "days-before-issue-close must be -1"
         )
-    # The issue-specific key overrides the general one, as in actions/stale.
-    milestones = cfg.get(
-        "exempt-all-issue-milestones", cfg.get("exempt-all-milestones")
-    )
-    if str(milestones).lower() != "true":
+    # As in actions/stale, the issue-specific key wins only if it reads as a boolean.
+    milestones = action_bool(cfg.get("exempt-all-issue-milestones"))
+    if milestones is None:
+        milestones = action_bool(cfg.get("exempt-all-milestones"))
+    if milestones is not True:
         errors.append(
             "guarantee 'milestones are exempt' broken: "
             "exempt-all-milestones must be true"
