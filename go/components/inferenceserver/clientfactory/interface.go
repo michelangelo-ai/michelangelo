@@ -15,7 +15,8 @@ import (
 )
 
 // ClientFactory returns Kubernetes API clients for a ClusterTarget. The clients are
-// built using credentials retrieved from the SecretProvider.
+// built using credentials retrieved from the SecretProvider, and are rebuilt when those
+// credentials change.
 type ClientFactory interface {
 	// GetClient returns a controller-runtime client for the given cluster.
 	GetClient(ctx context.Context, cluster *v2pb.ClusterTarget) (client.Client, error)

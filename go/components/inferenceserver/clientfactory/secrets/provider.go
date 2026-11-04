@@ -35,6 +35,10 @@ type ClientAuth struct {
 }
 
 // SecretProvider retrieves cluster authentication credentials for a ClusterTarget.
+//
+// GetClientAuth may be called on every client lookup so that rotated credentials are picked
+// up, so it should be served from memory (for example an informer cache) rather than a remote
+// call per request.
 type SecretProvider interface {
 	GetClientAuth(ctx context.Context, cluster *v2pb.ClusterTarget) (ClientAuth, error)
 }
