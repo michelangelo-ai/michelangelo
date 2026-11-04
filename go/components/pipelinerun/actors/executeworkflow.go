@@ -850,6 +850,7 @@ func mergePipelineRunStepInfo(oldStepInfo *v2.PipelineRunStepInfo, newStepInfo *
 	// If the latest attempt ID ALREADY exists in the old step info, update the driver URL
 	// If the latest attempt ID DOES NOT exist in the old step info, append the new attempt ID and driver URL
 
+	mergedStepInfo.AttemptDetails = oldStepInfo.AttemptDetails
 	if attemptIDAlreadyExists(oldStepInfo, newStepInfo) {
 		mergedStepInfo.AttemptIds = oldStepInfo.AttemptIds
 		mergedStepInfo.Resources = oldStepInfo.Resources
@@ -859,6 +860,17 @@ func mergePipelineRunStepInfo(oldStepInfo *v2.PipelineRunStepInfo, newStepInfo *
 	} else { // If the new attempt ID does not exist in the old step info, append the new driver URL to the old step info
 		mergedStepInfo.Resources = append(oldStepInfo.Resources, newStepInfo.Resources...)
 		mergedStepInfo.AttemptIds = append(oldStepInfo.AttemptIds, newStepInfo.AttemptIds...)
+		// A new task-level retry attempt started: oldStepInfo holds the final state of the
+		// previous attempt, so preserve it in AttemptDetails before it is overwritten.
+		if n := len(oldStepInfo.AttemptIds); n > 0 && len(newStepInfo.AttemptIds) > 0 {
+			snapshot := proto.Clone(oldStepInfo).(*v2.PipelineRunStepInfo)
+			// Clear nested attempt history to keep the structure flat.
+			snapshot.AttemptDetails = nil
+			mergedStepInfo.AttemptDetails = append(oldStepInfo.AttemptDetails, &v2.AttemptDetails{
+				AttemptId: oldStepInfo.AttemptIds[n-1],
+				StepInfo:  snapshot,
+			})
+		}
 	}
 	// Make sure we don't overwrite activity ID if it already exists
 	if oldStepInfo.ActivityId != "" {

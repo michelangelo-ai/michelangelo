@@ -3502,3 +3502,75 @@ func TestExecuteWorkflowStepRetryHistory(t *testing.T) {
 		require.Equal(t, v2.PIPELINE_RUN_STEP_STATE_RUNNING, executeStep.State)
 	})
 }
+
+func TestMergePipelineRunStepInfoTaskRetryAttemptDetails(t *testing.T) {
+	progress := func(attempt, state, log, msg string) *v2.PipelineRunStepInfo {
+		return getStepInfoFromTaskProgress(&TaskProgress{
+			TaskName:       "train",
+			TaskPath:       "nb-" + attempt,
+			TaskLog:        log,
+			TaskMessage:    msg,
+			TaskState:      state,
+			StartTime:      "2026-11-04 10:00:0" + attempt,
+			EndTime:        "2026-11-04 10:01:0" + attempt,
+			RetryAttemptID: attempt,
+		}, "test-ns")
+	}
+	// Replays the task progress sequence the same way constructPipelineRunStepInfo does.
+	replay := func(steps ...*v2.PipelineRunStepInfo) *v2.PipelineRunStepInfo {
+		merged := steps[0]
+		for _, s := range steps[1:] {
+			merged = mergePipelineRunStepInfo(merged, s)
+		}
+		return merged
+	}
+
+	t.Run("each retry snapshots the previous attempt", func(t *testing.T) {
+		merged := replay(
+			progress("1", pipelinerunutils.UniflowTaskStateRunning, "s3://logs/1", ""),
+			progress("1", pipelinerunutils.UniflowTaskStateFailed, "s3://logs/1", "attempt 1 failed"),
+			progress("2", pipelinerunutils.UniflowTaskStateRunning, "s3://logs/2", ""),
+			progress("2", pipelinerunutils.UniflowTaskStateFailed, "s3://logs/2", "attempt 2 failed"),
+			progress("3", pipelinerunutils.UniflowTaskStateRunning, "s3://logs/3", ""),
+			progress("3", pipelinerunutils.UniflowTaskStateFailed, "s3://logs/3", "attempt 3 failed"),
+		)
+
+		require.Equal(t, "nb-3", merged.Name)
+		require.Equal(t, v2.PIPELINE_RUN_STEP_STATE_FAILED, merged.State)
+		require.Equal(t, "attempt 3 failed", merged.Message)
+		require.Equal(t, []string{"1", "2", "3"}, merged.AttemptIds)
+		require.Len(t, merged.AttemptDetails, 2)
+		for i, want := range []struct{ id, name, log, msg string }{
+			{"1", "nb-1", "s3://logs/1", "attempt 1 failed"},
+			{"2", "nb-2", "s3://logs/2", "attempt 2 failed"},
+		} {
+			got := merged.AttemptDetails[i]
+			require.Equal(t, want.id, got.AttemptId)
+			require.Equal(t, want.name, got.StepInfo.Name)
+			require.Equal(t, v2.PIPELINE_RUN_STEP_STATE_FAILED, got.StepInfo.State)
+			require.Equal(t, want.log, got.StepInfo.LogUrl)
+			require.Equal(t, want.msg, got.StepInfo.Message)
+			require.NotNil(t, got.StepInfo.StartTime)
+			require.NotNil(t, got.StepInfo.EndTime)
+			require.Nil(t, got.StepInfo.AttemptDetails)
+		}
+	})
+
+	t.Run("updates within the same attempt do not add snapshots", func(t *testing.T) {
+		merged := replay(
+			progress("1", pipelinerunutils.UniflowTaskStatePending, "", ""),
+			progress("1", pipelinerunutils.UniflowTaskStateRunning, "s3://logs/1", ""),
+			progress("1", pipelinerunutils.UniflowTaskStateSucceeded, "s3://logs/1", ""),
+		)
+		require.Equal(t, []string{"1"}, merged.AttemptIds)
+		require.Empty(t, merged.AttemptDetails)
+	})
+
+	t.Run("steps without retry attempt IDs do not add snapshots", func(t *testing.T) {
+		merged := replay(
+			progress("", pipelinerunutils.UniflowTaskStateRunning, "s3://logs/a", ""),
+			progress("", pipelinerunutils.UniflowTaskStateFailed, "s3://logs/a", "failed"),
+		)
+		require.Empty(t, merged.AttemptDetails)
+	})
+}
