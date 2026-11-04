@@ -24,6 +24,8 @@ def label_set(value):
 
 def action_bool(value):
     """Read a boolean input like actions/stale: only exactly 'true' or 'false' count."""
+    if isinstance(value, str):
+        value = value.strip()  # core.getInput trims before the comparison
     if value is True or value == "true":
         return True
     if value is False or value == "false":
