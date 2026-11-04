@@ -31,6 +31,8 @@ var _ = codes.InvalidArgument
 var _ = status.Error
 var _ = strconv.Itoa
 
+var CommitInfoPattern0 = regexp.MustCompile("^((?i:https?)://[^\\s]+)?$")
+
 // commitInfoValidateExt is an extension hook for additional validation logic
 var commitInfoValidateExt func(*CommitInfo, string) error
 
@@ -48,6 +50,23 @@ func (this *CommitInfo) Validate(prefix string) error {
 		n := `branch`
 		if len(v) == 0 {
 			return status.Error(codes.InvalidArgument, prefix+n+" "+"cannot be empty")
+		}
+	}
+	{
+		v := this.Message
+		n := `message`
+		if !(len(v) <= 8192) {
+			return status.Error(codes.InvalidArgument, prefix+n+" "+"must be no more than 8192 bytes; truncate long commit messages before sending")
+		}
+	}
+	{
+		v := this.Url
+		n := `url`
+		if !CommitInfoPattern0.MatchString(v) {
+			return status.Error(codes.InvalidArgument, prefix+n+" "+"must be empty or an http(s) URL")
+		}
+		if !(len(v) <= 2048) {
+			return status.Error(codes.InvalidArgument, prefix+n+" "+"must be no more than 2048 characters long")
 		}
 	}
 	// Call extension validation if registered

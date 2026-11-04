@@ -32,11 +32,20 @@ message CommitInfo {
   string branch = 2 [(michelangelo.api.validation) = {required: true}];
 
   // Commit message, verbatim (subject and body).
-  string message = 3;
+  string message = 3 [(michelangelo.api.validation) = {
+    max_length: "8192",
+    msg: "must be no more than 8192 bytes; truncate long commit messages before sending"
+  }];
 
   // Who authored or applied the commit, e.g. an email address.
   string author = 4;
 
   // Web URL of the commit in the hosting git service.
-  string url = 5;
+  string url = 5 [
+    (michelangelo.api.validation) = {
+      pattern: "((?i:https?)://[^\\s]+)?",
+      msg: "must be empty or an http(s) URL"
+    },
+    (michelangelo.api.validation) = {max_length: "2048"}
+  ];
 }
