@@ -11,8 +11,10 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PYTHON_DIR="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
-SCALAC="${SCALAC:-/opt/homebrew/opt/scala@2.13/bin/scalac}"
-JAVA_HOME="${JAVA_HOME:-/opt/homebrew/opt/openjdk@17}"
+# Homebrew lives in /opt/homebrew on Apple Silicon and /usr/local on Intel.
+BREW_PREFIX="$(brew --prefix 2>/dev/null || echo /opt/homebrew)"
+SCALAC="${SCALAC:-${BREW_PREFIX}/opt/scala@2.13/bin/scalac}"
+JAVA_HOME="${JAVA_HOME:-${BREW_PREFIX}/opt/openjdk@17}"
 PYSPARK_PYTHON="${PYSPARK_PYTHON:-${PYTHON_DIR}/.venv/bin/python3}"
 
 if [[ ! -x "${SCALAC}" ]]; then

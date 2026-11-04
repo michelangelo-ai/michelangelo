@@ -42,8 +42,8 @@ Produces `target/ScalaTest.jar`.
 
 ```bash
 cd michelangelo-ai/michelangelo/python
-JAVA_HOME=/opt/homebrew/opt/openjdk@17 \
-PATH="$(pwd)/.venv/bin:/opt/homebrew/opt/openjdk@17/bin:$PATH" \
+JAVA_HOME="$(brew --prefix openjdk@17)" \
+PATH="$(pwd)/.venv/bin:$(brew --prefix openjdk@17)/bin:$PATH" \
 PYTHONPATH=. .venv/bin/python3 examples/pipelines/scala_test/scala_test.py
 ```
 
