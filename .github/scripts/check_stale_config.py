@@ -72,6 +72,15 @@ def check(stale_wf, unstale_wf, unstale_text, repo_labels):
             "guarantee 'never closes an issue' broken: "
             "days-before-issue-close must be -1"
         )
+    # The issue-specific key overrides the general one, as in actions/stale.
+    milestones = cfg.get(
+        "exempt-all-issue-milestones", cfg.get("exempt-all-milestones")
+    )
+    if str(milestones).lower() != "true":
+        errors.append(
+            "guarantee 'milestones are exempt' broken: "
+            "exempt-all-milestones must be true"
+        )
     if cfg.get("days-before-pr-stale") != -1 or cfg.get("days-before-pr-close") != -1:
         errors.append(
             "guarantee 'never touches a PR' broken: "

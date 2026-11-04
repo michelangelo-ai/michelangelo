@@ -85,7 +85,7 @@ The config check runs on every pull request that touches these files, and daily 
 - The two workflows refer to different `stale` labels.
 - An option that takes names, such as `exempt-issue-milestones`, is given `true`.
 - The comment's day count doesn't match `days-before-issue-stale`.
-- A change would let the bot close issues, touch pull requests, or post twice from overlapping runs.
+- A change would let the bot close issues, flag issues that have a milestone, touch pull requests, or post twice from overlapping runs.
 
 To add an exempt label, create it in the repo first, then add it to both workflows and to the table above. To change the timer, also update the number in the bot's comment, on this page, and in `CONTRIBUTING.md`.
 
