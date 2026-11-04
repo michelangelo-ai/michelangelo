@@ -2678,6 +2678,7 @@ func TestProcessManualRetrySpec(t *testing.T) {
 					WorkflowId:    "test-workflow-id",
 					WorkflowRunId: "current-run-id",
 					ErrorMessage:  "stale error from previous failed attempt",
+					EndTime:       &pbtypes.Timestamp{Seconds: 1000},
 					Steps: []*v2.PipelineRunStepInfo{
 						{
 							Name:  pipelinerunutils.ExecuteWorkflowStepName,
@@ -2840,6 +2841,7 @@ func TestProcessManualRetrySpec(t *testing.T) {
 			if testCase.expectedRunning {
 				require.Equal(t, v2.PIPELINE_RUN_STATE_RUNNING, testCase.pipelineRun.Status.State)
 				require.Empty(t, testCase.pipelineRun.Status.ErrorMessage, "stale error message from previous attempt must be cleared on retry")
+				require.Nil(t, testCase.pipelineRun.Status.EndTime, "previous attempt's end time must be cleared on retry")
 				executeStep := pipelinerunutils.GetStep(testCase.pipelineRun, pipelinerunutils.ExecuteWorkflowStepName)
 				if executeStep != nil {
 					require.Equal(t, v2.PIPELINE_RUN_STEP_STATE_RUNNING, executeStep.State)

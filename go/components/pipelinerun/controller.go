@@ -555,7 +555,7 @@ func isTerminalState(state v2pb.PipelineRunState) bool {
 }
 
 // syncEndTime keeps Status.EndTime in line with the run state. A terminal run without one
-// is stamped with its latest step end time (falling back to now), so runs that finished
+// is stamped with its final step's end time (falling back to now), so runs that finished
 // before EndTime was recorded pick up their real end time on the next reconcile. A rerun
 // that takes the run out of a terminal state clears it.
 func syncEndTime(pipelineRun *v2pb.PipelineRun) {
@@ -566,23 +566,29 @@ func syncEndTime(pipelineRun *v2pb.PipelineRun) {
 	if pipelineRun.Status.EndTime != nil {
 		return
 	}
-	endTime := latestStepEndTime(pipelineRun.Status.Steps)
+	endTime := finalStepEndTime(pipelineRun.Status.Steps)
 	if endTime == nil {
 		endTime = pbtypes.TimestampNow()
 	}
 	pipelineRun.Status.EndTime = endTime
 }
 
-// latestStepEndTime returns the latest EndTime across steps, or nil if no step has one.
-func latestStepEndTime(steps []*v2pb.PipelineRunStepInfo) *pbtypes.Timestamp {
-	var latest *pbtypes.Timestamp
-	for _, step := range steps {
-		endTime := step.GetEndTime()
-		if endTime != nil && (latest == nil || latest.Compare(endTime) < 0) {
-			latest = endTime
-		}
+// finalStepEndTime returns the last step's EndTime when that step has finished, or nil.
+// Steps are appended in execution order, so the last step is the one that ended the run.
+// An earlier step's EndTime, or a step an actor error left RUNNING (possibly with a stale
+// EndTime from a previous attempt), does not mark when the run ended.
+func finalStepEndTime(steps []*v2pb.PipelineRunStepInfo) *pbtypes.Timestamp {
+	if len(steps) == 0 {
+		return nil
 	}
-	return latest
+	last := steps[len(steps)-1]
+	switch last.GetState() {
+	case v2pb.PIPELINE_RUN_STEP_STATE_SUCCEEDED,
+		v2pb.PIPELINE_RUN_STEP_STATE_FAILED,
+		v2pb.PIPELINE_RUN_STEP_STATE_KILLED:
+		return last.GetEndTime()
+	}
+	return nil
 }
 
 // emitPipelineRunMetrics emits metrics for completed pipeline runs

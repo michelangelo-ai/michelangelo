@@ -1168,6 +1168,8 @@ func (a *ExecuteWorkflowActor) processManualRetrySpec(ctx context.Context, pipel
 	// Clear the stale error from the previous failed/killed attempt so it doesn't
 	// linger on the object through the retry and into a later SUCCEEDED state.
 	pipelineRun.Status.ErrorMessage = ""
+	// Clear the previous attempt's end time too, so the retry records its own.
+	pipelineRun.Status.EndTime = nil
 
 	// Preserve retry history before mutating step state, so the snapshot
 	// captures the terminal state (FAILED/KILLED) the user wants to inspect.

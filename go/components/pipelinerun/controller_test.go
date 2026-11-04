@@ -1138,14 +1138,10 @@ func createMockConfigProvider() uberconfig.Provider {
 }
 
 func TestSyncEndTime(t *testing.T) {
-	earlier := &pbtypes.Timestamp{Seconds: 1000}
-	later := &pbtypes.Timestamp{Seconds: 2000}
+	imageBuildEnd := &pbtypes.Timestamp{Seconds: 1000}
+	executeEnd := &pbtypes.Timestamp{Seconds: 2000}
 	existing := &pbtypes.Timestamp{Seconds: 500}
-	steps := []*v2pb.PipelineRunStepInfo{
-		{Name: "a", EndTime: later},
-		{Name: "b"},
-		{Name: "c", EndTime: earlier},
-	}
+	imageBuild := &v2pb.PipelineRunStepInfo{Name: "image", State: v2pb.PIPELINE_RUN_STEP_STATE_SUCCEEDED, EndTime: imageBuildEnd}
 
 	tests := []struct {
 		name    string
@@ -1154,23 +1150,42 @@ func TestSyncEndTime(t *testing.T) {
 		wantNow bool
 	}{
 		{
-			name:   "terminal run takes the latest step end time",
-			status: v2pb.PipelineRunStatus{State: v2pb.PIPELINE_RUN_STATE_SUCCEEDED, Steps: steps},
-			want:   later,
+			name: "terminal run takes the final step end time",
+			status: v2pb.PipelineRunStatus{State: v2pb.PIPELINE_RUN_STATE_FAILED, Steps: []*v2pb.PipelineRunStepInfo{
+				imageBuild,
+				{Name: "execute", State: v2pb.PIPELINE_RUN_STEP_STATE_FAILED, EndTime: executeEnd},
+			}},
+			want: executeEnd,
 		},
 		{
 			name:   "terminal run keeps an existing end time",
-			status: v2pb.PipelineRunStatus{State: v2pb.PIPELINE_RUN_STATE_FAILED, EndTime: existing, Steps: steps},
+			status: v2pb.PipelineRunStatus{State: v2pb.PIPELINE_RUN_STATE_SUCCEEDED, EndTime: existing, Steps: []*v2pb.PipelineRunStepInfo{imageBuild}},
 			want:   existing,
 		},
 		{
-			name:    "terminal run without step end times falls back to now",
-			status:  v2pb.PipelineRunStatus{State: v2pb.PIPELINE_RUN_STATE_KILLED, Steps: []*v2pb.PipelineRunStepInfo{{Name: "a"}}},
+			name: "final step left running by an actor error falls back to now, not an earlier step",
+			status: v2pb.PipelineRunStatus{State: v2pb.PIPELINE_RUN_STATE_FAILED, Steps: []*v2pb.PipelineRunStepInfo{
+				imageBuild,
+				{Name: "execute", State: v2pb.PIPELINE_RUN_STEP_STATE_RUNNING},
+			}},
+			wantNow: true,
+		},
+		{
+			name: "final step still running with a stale end time falls back to now",
+			status: v2pb.PipelineRunStatus{State: v2pb.PIPELINE_RUN_STATE_FAILED, Steps: []*v2pb.PipelineRunStepInfo{
+				imageBuild,
+				{Name: "execute", State: v2pb.PIPELINE_RUN_STEP_STATE_RUNNING, EndTime: executeEnd},
+			}},
+			wantNow: true,
+		},
+		{
+			name:    "terminal run without steps falls back to now",
+			status:  v2pb.PipelineRunStatus{State: v2pb.PIPELINE_RUN_STATE_KILLED},
 			wantNow: true,
 		},
 		{
 			name:   "rerun back to running clears the end time",
-			status: v2pb.PipelineRunStatus{State: v2pb.PIPELINE_RUN_STATE_RUNNING, EndTime: existing, Steps: steps},
+			status: v2pb.PipelineRunStatus{State: v2pb.PIPELINE_RUN_STATE_RUNNING, EndTime: existing, Steps: []*v2pb.PipelineRunStepInfo{imageBuild}},
 		},
 	}
 	for _, tt := range tests {

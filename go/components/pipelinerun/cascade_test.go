@@ -136,7 +136,7 @@ func TestCompleteDrain_RecordsEndTimeForAlreadyTerminalRun(t *testing.T) {
 		},
 		Status: v2.PipelineRunStatus{
 			State: v2.PIPELINE_RUN_STATE_SUCCEEDED,
-			Steps: []*v2.PipelineRunStepInfo{{Name: "execute", EndTime: stepEnd}},
+			Steps: []*v2.PipelineRunStepInfo{{Name: "execute", State: v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED, EndTime: stepEnd}},
 		},
 	}
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(run).WithStatusSubresource(run).Build()
