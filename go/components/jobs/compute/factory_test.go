@@ -87,6 +87,49 @@ func TestGetClientSetForCluster(t *testing.T) {
 		require.Contains(t, err.Error(), "get client auth for cluster")
 		require.Contains(t, err.Error(), "mock error")
 	})
+
+	t.Run("secret provider error on read under lock", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockProvider := secretsmocks.NewMockSecretProvider(ctrl)
+		gomock.InOrder(
+			mockProvider.EXPECT().
+				GetClusterClientAuth(gomock.Any(), &testCluster).
+				Return(secrets.ClientAuth{ClientTokenData: "token-a"}, nil),
+			mockProvider.EXPECT().
+				GetClusterClientAuth(gomock.Any(), &testCluster).
+				Return(secrets.ClientAuth{}, fmt.Errorf("mock error")),
+		)
+
+		f := NewClientSetFactory(mockProvider).(*factory)
+
+		_, err := f.GetClientSetForCluster(&testCluster)
+		require.ErrorContains(t, err, "mock error")
+		_, cached := f.clients.Load(getCacheKey(&testCluster))
+		assert.False(t, cached)
+	})
+
+	t.Run("malformed host", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		badCluster := testCluster.DeepCopy()
+		badCluster.Spec.GetKubernetes().GetRest().Host = "https://bad host"
+
+		mockProvider := secretsmocks.NewMockSecretProvider(ctrl)
+		mockProvider.EXPECT().
+			GetClusterClientAuth(gomock.Any(), badCluster).
+			Return(secrets.ClientAuth{ClientTokenData: "token-a"}, nil).
+			Times(2)
+
+		f := NewClientSetFactory(mockProvider).(*factory)
+
+		_, err := f.GetClientSetForCluster(badCluster)
+		require.ErrorContains(t, err, "host must be a URL")
+		_, cached := f.clients.Load(getCacheKey(badCluster))
+		assert.False(t, cached)
+	})
 }
 
 const (
