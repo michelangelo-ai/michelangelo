@@ -837,6 +837,9 @@ func (a *ExecuteWorkflowActor) constructPipelineRunStepInfo(ctx context.Context,
 	return orderedStepInfo, nil
 }
 
+// mergePipelineRunStepInfo merges the latest task progress for a task into its existing step info.
+// Attempt IDs and per-attempt driver URLs accumulate across retries, and when a new retry attempt
+// starts, the previous attempt is preserved in AttemptDetails.
 func mergePipelineRunStepInfo(oldStepInfo *v2.PipelineRunStepInfo, newStepInfo *v2.PipelineRunStepInfo) *v2.PipelineRunStepInfo {
 	mergedStepInfo := proto.Clone(newStepInfo).(*v2.PipelineRunStepInfo)
 
@@ -862,14 +865,8 @@ func mergePipelineRunStepInfo(oldStepInfo *v2.PipelineRunStepInfo, newStepInfo *
 		mergedStepInfo.AttemptIds = append(oldStepInfo.AttemptIds, newStepInfo.AttemptIds...)
 		// A new task-level retry attempt started: oldStepInfo holds the final state of the
 		// previous attempt, so preserve it in AttemptDetails before it is overwritten.
-		if n := len(oldStepInfo.AttemptIds); n > 0 && len(newStepInfo.AttemptIds) > 0 {
-			snapshot := proto.Clone(oldStepInfo).(*v2.PipelineRunStepInfo)
-			// Clear nested attempt history to keep the structure flat.
-			snapshot.AttemptDetails = nil
-			mergedStepInfo.AttemptDetails = append(oldStepInfo.AttemptDetails, &v2.AttemptDetails{
-				AttemptId: oldStepInfo.AttemptIds[n-1],
-				StepInfo:  snapshot,
-			})
+		if len(oldStepInfo.AttemptIds) > 0 && len(newStepInfo.AttemptIds) > 0 {
+			mergedStepInfo.AttemptDetails = append(oldStepInfo.AttemptDetails, taskAttemptSnapshot(oldStepInfo))
 		}
 	}
 	// Make sure we don't overwrite activity ID if it already exists
@@ -885,6 +882,28 @@ func mergePipelineRunStepInfo(oldStepInfo *v2.PipelineRunStepInfo, newStepInfo *
 	}
 
 	return mergedStepInfo
+}
+
+// taskAttemptSnapshot records the latest attempt of a task step for its retry history. It keeps only
+// the per-attempt metadata (state, timing, message, logs and that attempt's driver URL) and drops
+// inputs, outputs and the cumulative attempt lists, so the history stays small as retries add up.
+func taskAttemptSnapshot(step *v2.PipelineRunStepInfo) *v2.AttemptDetails {
+	attemptID := step.AttemptIds[len(step.AttemptIds)-1]
+	snapshot := &v2.PipelineRunStepInfo{
+		Name:        step.Name,
+		DisplayName: step.DisplayName,
+		State:       step.State,
+		Message:     step.Message,
+		LogUrl:      step.LogUrl,
+		StartTime:   step.StartTime,
+		EndTime:     step.EndTime,
+		ActivityId:  step.ActivityId,
+		AttemptIds:  []string{attemptID},
+	}
+	if n := len(step.Resources); n > 0 {
+		snapshot.Resources = []*v2.PipelineRunResource{step.Resources[n-1]}
+	}
+	return &v2.AttemptDetails{AttemptId: attemptID, StepInfo: snapshot}
 }
 
 func attemptIDAlreadyExists(oldStepInfo *v2.PipelineRunStepInfo, newStepInfo *v2.PipelineRunStepInfo) bool {

@@ -3511,6 +3511,7 @@ func TestMergePipelineRunStepInfoTaskRetryAttemptDetails(t *testing.T) {
 			TaskLog:        log,
 			TaskMessage:    msg,
 			TaskState:      state,
+			Input:          `{"kwargs": {"lr": 0.01}}`,
 			StartTime:      "2026-11-04 10:00:0" + attempt,
 			EndTime:        "2026-11-04 10:01:0" + attempt,
 			RetryAttemptID: attempt,
@@ -3552,6 +3553,12 @@ func TestMergePipelineRunStepInfoTaskRetryAttemptDetails(t *testing.T) {
 			require.Equal(t, want.msg, got.StepInfo.Message)
 			require.NotNil(t, got.StepInfo.StartTime)
 			require.NotNil(t, got.StepInfo.EndTime)
+			// Only this attempt's own metadata is kept, not the cumulative history or payloads.
+			require.Equal(t, []string{want.id}, got.StepInfo.AttemptIds)
+			require.Len(t, got.StepInfo.Resources, 1)
+			require.Equal(t, want.log, got.StepInfo.Resources[0].GetExternalResource().Url)
+			require.Nil(t, got.StepInfo.Input)
+			require.Nil(t, got.StepInfo.Output)
 			require.Nil(t, got.StepInfo.AttemptDetails)
 		}
 	})
