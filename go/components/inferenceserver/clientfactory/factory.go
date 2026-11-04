@@ -28,23 +28,26 @@ const (
 	// httpClientTimeout caps any single HTTP request issued through the factory.
 	httpClientTimeout = 30 * time.Second
 
-	// httpIdleConnTimeout closes pooled connections that sit unused, including ones a
-	// replaced HTTP client gets back from requests that were in flight when it was replaced.
+	// httpIdleConnTimeout closes idle connections that in-flight requests return to a replaced
+	// client.
 	httpIdleConnTimeout = 90 * time.Second
 )
 
 var _ ClientFactory = &remoteClientFactory{}
 
+// idleConnectionsCloser is implemented by *http.Client and by transports that pool connections.
+type idleConnectionsCloser interface {
+	CloseIdleConnections()
+}
+
 // remoteClientFactory builds and caches Kubernetes clients for ClusterTargets.
 //
 // All three client types are cached keyed by the connection tuple (cluster_id + host + port)
-// so a steady-state reconcile does not rebuild a TLS transport on every actor invocation.
+// so a steady-state reconcile does not rebuild a TLS transport on every lookup.
 //
-// Every lookup asks the SecretProvider for the cluster's current credentials and reuses the
-// cached client only if it was built from the same credentials. A rotated token or CA bundle
-// therefore takes effect on the next lookup, without a controller restart. If the
-// SecretProvider returns an error, the lookup fails instead of falling back to a client built
-// from credentials that may have been revoked.
+// Each lookup re-reads the cluster's credentials and reuses the cached client only if they are
+// unchanged. A SecretProvider error, or an empty token or CA, fails the lookup rather than
+// serving a client built from credentials that may have been revoked.
 type remoteClientFactory struct {
 	secretProvider secrets.SecretProvider
 	scheme         *runtime.Scheme
@@ -62,21 +65,27 @@ type cachedClient[T any] struct {
 	client T
 }
 
-// clientCache maps a cacheKey to the cachedClient built for it.
 type clientCache[T any] struct {
 	entries sync.Map
 }
 
-func (c *clientCache[T]) load(key string) (cachedClient[T], bool) {
+// lookup returns the client cached under key if it was built from auth.
+func (c *clientCache[T]) lookup(key string, auth secrets.ClientAuth) (T, bool) {
 	entry, ok := c.entries.Load(key)
-	if !ok {
-		return cachedClient[T]{}, false
+	if !ok || entry.(cachedClient[T]).auth != auth {
+		var zero T
+		return zero, false
 	}
-	return entry.(cachedClient[T]), true
+	return entry.(cachedClient[T]).client, true
 }
 
-func (c *clientCache[T]) store(key string, entry cachedClient[T]) {
-	c.entries.Store(key, entry)
+// swap caches entry under key and returns the entry it replaced, if any.
+func (c *clientCache[T]) swap(key string, entry cachedClient[T]) (cachedClient[T], bool) {
+	previous, replaced := c.entries.Swap(key, entry)
+	if !replaced {
+		return cachedClient[T]{}, false
+	}
+	return previous.(cachedClient[T]), true
 }
 
 // NewRemoteClientFactory constructs a ClientFactory.
@@ -117,7 +126,8 @@ func (f *remoteClientFactory) GetDynamicClient(ctx context.Context, cluster *v2p
 }
 
 // getOrBuild returns the client cached for the cluster if it was built from the cluster's
-// current credentials, and otherwise builds a new client and caches it in place of the old one.
+// current credentials. Otherwise it builds and caches a new client and closes the replaced
+// client's idle connections.
 func getOrBuild[T any](
 	ctx context.Context,
 	f *remoteClientFactory,
@@ -131,14 +141,13 @@ func getOrBuild[T any](
 		return zero, fmt.Errorf("cluster %q has no kubernetes connection spec", cluster.GetClusterId())
 	}
 
-	auth, err := f.secretProvider.GetClientAuth(ctx, cluster)
+	auth, err := f.currentAuth(ctx, cluster)
 	if err != nil {
 		return zero, fmt.Errorf("get client auth for cluster %q: %w", cluster.GetClusterId(), err)
 	}
-
 	key := cacheKey(cluster)
-	if cached, ok := cache.load(key); ok && cached.auth == auth {
-		return cached.client, nil
+	if cached, ok := cache.lookup(key, auth); ok {
+		return cached, nil
 	}
 
 	// One mutex serializes every client build across all clusters and client kinds, so
@@ -146,39 +155,71 @@ func getOrBuild[T any](
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	// Read the credentials again under the lock. A caller that read them just before a
-	// rotation would otherwise replace the newer client with one built from older credentials.
-	auth, err = f.secretProvider.GetClientAuth(ctx, cluster)
+	// Re-read under the lock so credentials read before a rotation can't replace a newer client.
+	auth, err = f.currentAuth(ctx, cluster)
 	if err != nil {
-		return zero, fmt.Errorf("get client auth for cluster %q: %w", cluster.GetClusterId(), err)
+		return zero, fmt.Errorf("re-read client auth for cluster %q: %w", cluster.GetClusterId(), err)
 	}
-
-	previous, hadPrevious := cache.load(key)
-	if hadPrevious && previous.auth == auth {
-		return previous.client, nil
+	if cached, ok := cache.lookup(key, auth); ok {
+		return cached, nil
 	}
 
 	built, err := build(cluster, auth)
 	if err != nil {
 		return zero, fmt.Errorf("create %s client for cluster %q: %w", kind, cluster.GetClusterId(), err)
 	}
-	cache.store(key, cachedClient[T]{auth: auth, client: built})
+	previous, replaced := cache.swap(key, cachedClient[T]{auth: auth, client: built})
 
 	fields := []zap.Field{
 		zap.String("client", kind),
 		zap.String("cluster_id", cluster.GetClusterId()),
 		zap.String("host", cluster.GetKubernetes().GetHost()),
+		zap.String("port", cluster.GetKubernetes().GetPort()),
+		zap.String("ca_secret", cluster.GetKubernetes().GetCaDataTag()),
+		zap.String("token_secret", cluster.GetKubernetes().GetTokenTag()),
 	}
-	if !hadPrevious {
+	if !replaced {
 		f.logger.Info("Built client for cluster", fields...)
 		return built, nil
 	}
 
-	if replaced, ok := any(previous.client).(interface{ CloseIdleConnections() }); ok {
-		replaced.CloseIdleConnections()
-	}
-	f.logger.Info("Rebuilt client for cluster after its credentials changed", fields...)
+	closeIdleConnections(previous.client)
+	f.logger.Info("Rebuilt client for cluster after its credentials changed", append(fields,
+		zap.Bool("token_changed", previous.auth.ClientTokenData != auth.ClientTokenData),
+		zap.Bool("ca_changed", previous.auth.CertificateAuthorityData != auth.CertificateAuthorityData),
+	)...)
 	return built, nil
+}
+
+// currentAuth returns the cluster's credentials from the SecretProvider, rejecting an empty
+// token or CA. A Secret can be briefly empty while it is being rotated, and building from it
+// would replace a working client with an unauthenticated one that trusts the system roots.
+func (f *remoteClientFactory) currentAuth(
+	ctx context.Context,
+	cluster *v2pb.ClusterTarget,
+) (secrets.ClientAuth, error) {
+	auth, err := f.secretProvider.GetClientAuth(ctx, cluster)
+	if err != nil {
+		return secrets.ClientAuth{}, err
+	}
+	if auth.ClientTokenData == "" {
+		return secrets.ClientAuth{}, fmt.Errorf("token from secret %q is empty",
+			cluster.GetKubernetes().GetTokenTag())
+	}
+	if auth.CertificateAuthorityData == "" {
+		return secrets.ClientAuth{}, fmt.Errorf("CA certificate from secret %q is empty",
+			cluster.GetKubernetes().GetCaDataTag())
+	}
+	return auth, nil
+}
+
+// closeIdleConnections releases a replaced client's pooled connections. Only *http.Client
+// implements idleConnectionsCloser; kube and dynamic clients share client-go's transport cache,
+// which must not be closed.
+func closeIdleConnections(replaced any) {
+	if closer, ok := replaced.(idleConnectionsCloser); ok {
+		closer.CloseIdleConnections()
+	}
 }
 
 func (f *remoteClientFactory) buildKubeClient(
@@ -192,10 +233,11 @@ func (f *remoteClientFactory) buildKubeClient(
 	return client.New(cfg, client.Options{Scheme: f.scheme})
 }
 
-func buildHTTPClient(_ *v2pb.ClusterTarget, auth secrets.ClientAuth) (*http.Client, error) {
+func buildHTTPClient(cluster *v2pb.ClusterTarget, auth secrets.ClientAuth) (*http.Client, error) {
 	caPool := x509.NewCertPool()
 	if !caPool.AppendCertsFromPEM([]byte(auth.CertificateAuthorityData)) {
-		return nil, fmt.Errorf("parse CA certificate: invalid PEM")
+		return nil, fmt.Errorf("parse CA certificate from secret %q: invalid PEM",
+			cluster.GetKubernetes().GetCaDataTag())
 	}
 
 	return &http.Client{
@@ -224,8 +266,6 @@ func buildDynamicClient(
 	return dynamic.NewForConfig(cfg)
 }
 
-// buildRESTConfig assembles a *rest.Config for a cluster from its connection spec and
-// credentials.
 func buildRESTConfig(cluster *v2pb.ClusterTarget, auth secrets.ClientAuth) (*rest.Config, error) {
 	server := fmt.Sprintf("%s:%s", cluster.GetKubernetes().GetHost(), cluster.GetKubernetes().GetPort())
 
@@ -287,10 +327,9 @@ func (rt *bearerTokenRoundTripper) RoundTrip(req *http.Request) (*http.Response,
 	return rt.rt.RoundTrip(clone)
 }
 
-// CloseIdleConnections forwards to the wrapped transport. http.Client.CloseIdleConnections
-// only reaches a transport that has this method, so without it the call would do nothing.
+// CloseIdleConnections lets http.Client.CloseIdleConnections reach the wrapped transport.
 func (rt *bearerTokenRoundTripper) CloseIdleConnections() {
-	if closer, ok := rt.rt.(interface{ CloseIdleConnections() }); ok {
+	if closer, ok := rt.rt.(idleConnectionsCloser); ok {
 		closer.CloseIdleConnections()
 	}
 }
