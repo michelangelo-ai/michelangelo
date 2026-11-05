@@ -22,7 +22,8 @@ const (
 
 	// _credentialReadTimeout bounds each SecretProvider read. A read served from an informer
 	// cache waits for the informer to sync, which never happens if the controller cannot list
-	// Secrets, and the second read in GetClientSetForCluster runs while f.m is held.
+	// Secrets. The second read in GetClientSetForCluster runs while f.m is held, so an unbounded
+	// read would block every other lookup.
 	_credentialReadTimeout = 10 * time.Second
 )
 
@@ -42,11 +43,9 @@ type ClientSet struct {
 	ComputeV1 rest.Interface
 }
 
-// factory caches one ClientSet per cluster. Every lookup asks the SecretProvider for the
-// cluster's current credentials and reuses the cached ClientSet only if it was built from the
-// same credentials, so a rotated token or CA bundle takes effect on the next lookup without a
-// controller restart. If the SecretProvider returns an error, the lookup fails instead of
-// falling back to a ClientSet built from credentials that may have been revoked.
+// factory caches one ClientSet per cluster and reuses it only while the SecretProvider returns
+// the credentials it was built from. A SecretProvider error fails the lookup rather than falling
+// back to a cached ClientSet whose credentials may have been revoked.
 type factory struct {
 	clients               sync.Map // cache key string → cachedClientSet
 	secretProvider        secrets.SecretProvider
@@ -82,13 +81,11 @@ func (f *factory) GetClientSetForCluster(c *v2pb.Cluster) (*ClientSet, error) {
 		return cs, nil
 	}
 
-	// protect creating new clients with a mutex because creating client is not
-	// guaranteed to be thread-safe
 	f.m.Lock()
 	defer f.m.Unlock()
 
-	// Read the credentials again under the lock. A caller that read them just before a
-	// rotation would otherwise replace the newer ClientSet with one built from older ones.
+	// Re-read under the lock so a caller holding pre-rotation credentials cannot replace a
+	// ClientSet built from newer ones.
 	auth, err = f.getClusterClientAuth(c)
 	if err != nil {
 		return nil, err
@@ -99,7 +96,8 @@ func (f *factory) GetClientSetForCluster(c *v2pb.Cluster) (*ClientSet, error) {
 
 	cs, err := newClientSet(getServerAddress(c), auth)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf(
+			"build client set for cluster %s/%s: %w", c.GetNamespace(), c.GetName(), err)
 	}
 	f.clients.Store(key, cachedClientSet{auth: auth, clientSet: cs})
 
@@ -112,8 +110,8 @@ func (f *factory) load(key string, auth secrets.ClientAuth) (*ClientSet, bool) {
 	if !ok {
 		return nil, false
 	}
-	cached := entry.(cachedClientSet)
-	if cached.auth != auth {
+	cached, ok := entry.(cachedClientSet)
+	if !ok || cached.auth != auth {
 		return nil, false
 	}
 	return cached.clientSet, true
@@ -135,17 +133,17 @@ func newClientSet(server string, auth secrets.ClientAuth) (*ClientSet, error) {
 	cfg, err := GetKubeClientConfigFromConfiguration(
 		_serviceName, server, metav1.NamespaceAll, &auth, true)
 	if err != nil {
-		return nil, fmt.Errorf("client cfg err:%w", err)
+		return nil, fmt.Errorf("build rest config: %w", err)
 	}
 
 	ray, err := kuberay.NewRestClient(cfg)
 	if err != nil {
-		return nil, fmt.Errorf("kuberay client err:%w", err)
+		return nil, fmt.Errorf("build kuberay client: %w", err)
 	}
 
 	core, err := kubernetes.NewForConfig(cfg)
 	if err != nil {
-		return nil, fmt.Errorf("core client err:%w", err)
+		return nil, fmt.Errorf("build core client: %w", err)
 	}
 
 	return &ClientSet{
@@ -154,9 +152,10 @@ func newClientSet(server string, auth secrets.ClientAuth) (*ClientSet, error) {
 	}, nil
 }
 
-// getCacheKey identifies a cluster by its Cluster object as well as its server address.
-// Two Cluster objects that point at the same API server may carry different credentials, so
-// keying on the address alone would make them rebuild each other's ClientSet on every lookup.
+// getCacheKey identifies a cluster by its namespace, name and server address. Two Cluster objects
+// that point at the same API server may carry different credentials, so they need separate
+// entries. The address is in the key so that a Cluster moved to another server gets a new
+// ClientSet.
 func getCacheKey(c *v2pb.Cluster) string {
 	return fmt.Sprintf("%s/%s@%s", c.GetNamespace(), c.GetName(), getServerAddress(c))
 }

@@ -6,11 +6,25 @@ import (
 
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/fx"
+	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
+
+func TestModule_WithKubeClient_ProvidesSecretProvider(t *testing.T) {
+	err := fx.ValidateApp(
+		Module,
+		fx.Supply(zap.NewNop()),
+		fx.Provide(func() client.Client { return fake.NewClientBuilder().Build() }),
+		fx.Invoke(func(SecretProvider) {}),
+	)
+	require.NoError(t, err)
+}
 
 func TestGetKubeSecretName(t *testing.T) {
 	jobName := "test-job"
@@ -41,7 +55,6 @@ func TestProviderGetClusterClientAuth(t *testing.T) {
 		},
 	}
 
-	// Create fake Kubernetes client with the secrets
 	fakeClient := fake.NewClientBuilder().WithObjects(caSecret, tokenSecret).Build()
 
 	tests := []struct {
@@ -49,6 +62,7 @@ func TestProviderGetClusterClientAuth(t *testing.T) {
 		cluster       *v2pb.Cluster
 		expectedError bool
 		errorContains string
+		notFound      bool
 		expectAuth    ClientAuth
 	}{
 		{
@@ -63,7 +77,24 @@ func TestProviderGetClusterClientAuth(t *testing.T) {
 				},
 			},
 			expectedError: true,
+			errorContains: "not supported",
 			expectAuth:    ClientAuth{},
+		},
+		{
+			name: "Kubernetes cluster spec without a rest connection",
+			cluster: &v2pb.Cluster{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "default",
+				},
+				Spec: v2pb.ClusterSpec{
+					Cluster: &v2pb.ClusterSpec_Kubernetes{
+						Kubernetes: &v2pb.KubernetesSpec{},
+					},
+				},
+			},
+			expectedError: true,
+			errorContains: "empty secret name for cadata",
 		},
 		{
 			name: "successfully configured Kubernetes cluster spec with secrets",
@@ -111,6 +142,8 @@ func TestProviderGetClusterClientAuth(t *testing.T) {
 				},
 			},
 			expectedError: true,
+			errorContains: "get cadata secret default/missing-ca-secret",
+			notFound:      true,
 		},
 		{
 			name: "Kubernetes cluster spec with missing token secret",
@@ -133,6 +166,8 @@ func TestProviderGetClusterClientAuth(t *testing.T) {
 				},
 			},
 			expectedError: true,
+			errorContains: "get token secret default/missing-token-secret",
+			notFound:      true,
 		},
 	}
 
@@ -143,12 +178,13 @@ func TestProviderGetClusterClientAuth(t *testing.T) {
 			}
 			auth, err := provider.GetClusterClientAuth(context.Background(), tt.cluster)
 			if tt.expectedError {
-				require.Error(t, err)
+				require.ErrorContains(t, err, tt.errorContains)
+				require.Equal(t, tt.notFound, apierrors.IsNotFound(err))
 				require.Equal(t, ClientAuth{}, auth)
-			} else {
-				require.NoError(t, err)
-				require.Equal(t, tt.expectAuth, auth)
+				return
 			}
+			require.NoError(t, err)
+			require.Equal(t, tt.expectAuth, auth)
 		})
 	}
 }

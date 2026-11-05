@@ -19,8 +19,8 @@ import (
 // SecretProvider defines the interface for secret management.
 //
 // GetClusterClientAuth is called on every compute client lookup so that rotated credentials
-// are picked up, so it should be served from memory (for example an informer cache) rather
-// than a remote call per request.
+// take effect. Implementations should serve it from memory (for example an informer cache)
+// rather than make a remote call per request.
 type SecretProvider interface {
 	GetClusterClientAuth(ctx context.Context, cluster *v2pb.Cluster) (ClientAuth, error)
 	GetSecretsForDataStore(ctx context.Context, jobObject runtime.Object, cluster *v2pb.Cluster) (map[string][]byte, error)
@@ -53,8 +53,8 @@ type ClientAuth struct {
 type Params struct {
 	fx.In
 
-	// KubeClient is expected to be the controller manager's client, whose reads are served
-	// from the shared informer cache.
+	// KubeClient should serve reads from an informer cache, since GetClusterClientAuth reads
+	// two Secrets on every compute client lookup.
 	KubeClient client.Client
 	Logger     *zap.Logger
 }
@@ -81,12 +81,16 @@ func GetKubeSecretName(jobName string) string {
 	return constants.SecretNamePrefix + jobName
 }
 
-// retrieveAndDecodeSecret retrieves and decodes a secret from the Kubernetes cluster
+// retrieveSecretData returns the value under dataKey in the named Secret in the default
+// namespace.
 func (p Provider) retrieveSecretData(ctx context.Context, secretName, dataKey string) (string, error) {
+	if secretName == "" {
+		return "", fmt.Errorf("empty secret name for %s", dataKey)
+	}
 	secret := &corev1.Secret{}
 	key := types.NamespacedName{Namespace: "default", Name: secretName}
 	if err := p.kubeClient.Get(ctx, key, secret); err != nil {
-		return "", fmt.Errorf("failed to get %s: %w", dataKey, err)
+		return "", fmt.Errorf("get %s secret %s: %w", dataKey, key, err)
 	}
 	return string(secret.Data[dataKey]), nil
 }
@@ -99,26 +103,24 @@ func (p Provider) GetClusterClientAuth(ctx context.Context, cluster *v2pb.Cluste
 	case *v2pb.ClusterSpec_Kubernetes:
 		kubeClusterSpec = cluster.Spec.GetKubernetes()
 	default:
-		return ClientAuth{}, fmt.Errorf("cluster type %s not supported", cluster.Spec.GetCluster())
+		return ClientAuth{}, fmt.Errorf("cluster type %T not supported", cluster.Spec.GetCluster())
 	}
 
 	conn := kubeClusterSpec.GetRest()
 
-	// Get the certificate authority data secret
-	caDataDecoded, err := p.retrieveSecretData(ctx, conn.GetCaDataTag(), "cadata")
+	caData, err := p.retrieveSecretData(ctx, conn.GetCaDataTag(), "cadata")
 	if err != nil {
 		return ClientAuth{}, err
 	}
 
-	// Get the Token secret
-	clientTokenDecoded, err := p.retrieveSecretData(ctx, conn.GetTokenTag(), "token")
+	token, err := p.retrieveSecretData(ctx, conn.GetTokenTag(), "token")
 	if err != nil {
 		return ClientAuth{}, err
 	}
 
 	clientAuth := ClientAuth{
-		CertificateAuthorityData: caDataDecoded,
-		ClientTokenData:          clientTokenDecoded,
+		CertificateAuthorityData: caData,
+		ClientTokenData:          token,
 	}
 	return clientAuth, nil
 }
