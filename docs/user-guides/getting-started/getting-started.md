@@ -365,6 +365,20 @@ def train_workflow(dataset_cols: str):
 
 **Important**: The override config **replaces** the original config entirely -- it does not merge fields. Specify all required fields in the override.
 
+### Container image
+
+Every task in a run uses the same container image. You choose it once per run, not per task:
+
+- **Remote run:** the `--image` flag ([Step 4](#run-with-remote-execution)).
+- **Registered pipeline:** the `michelangelo/uniflow-image` annotation in the pipeline manifest ([Step 5](#create-pipelineyaml)), used by both `ma pipeline run` and `ma pipeline dev-run`. The run fails at its Image Build step if the annotation is missing.
+- **Local run:** no image. Tasks run in your own Python environment.
+
+If one task needs extra dependencies, build them into the shared image.
+
+:::note
+`@uniflow.task()` also has an `image_spec=ImageSpec(...)` parameter for per-task images. The open-source Ray and Spark task runtimes don't accept the arguments it adds (`container_image` and `recipe`), so leave it unset.
+:::
+
 ## Complete example
 
 See the full California Housing PyTorch Lightning example at [`pytorch_train/`](https://github.com/michelangelo-ai/michelangelo-examples/tree/main/src/michelangelo_examples/california_housing/pipelines/pytorch_train) in the [michelangelo-examples](https://github.com/michelangelo-ai/michelangelo-examples) repo. This example demonstrates:
