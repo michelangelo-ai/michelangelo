@@ -796,6 +796,8 @@ func (a *ExecuteWorkflowActor) constructPipelineRunStepInfo(ctx context.Context,
 
 	// Construct PipelineRunStepInfo for each task
 	orderedStepInfo := []*v2.PipelineRunStepInfo{}
+	// Keyed by task name, so interleaved concurrent calls of the same task (e.g. batch_run or
+	// for-each with the same alias) share one step and can mix their retry attempts.
 	stepMap := make(map[string]*v2.PipelineRunStepInfo)
 	stepOrder := []string{}
 
