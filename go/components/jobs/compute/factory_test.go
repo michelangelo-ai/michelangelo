@@ -36,12 +36,8 @@ import (
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
-func TestNewClientSetFactory(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockProvider := secretsmocks.NewMockSecretProvider(ctrl)
-	f, ok := NewClientSetFactory(mockProvider).(*factory)
+func TestNewClientSetFactory_Default_UsesCredentialReadTimeout(t *testing.T) {
+	f, ok := NewClientSetFactory(nil).(*factory)
 	require.True(t, ok)
 	assert.Equal(t, _credentialReadTimeout, f.credentialReadTimeout)
 }
@@ -444,7 +440,8 @@ func (p *blockingSecretProvider) GetClusterClientAuth(
 		return p.auth, nil
 	}
 	<-ctx.Done()
-	return secrets.ClientAuth{}, apierrors.NewTimeoutError("failed waiting for Secret informer to sync", 0)
+	return secrets.ClientAuth{}, apierrors.NewTimeoutError(
+		"failed waiting for Secret informer to sync", 0)
 }
 
 // lookupWithin fails the test if GetClientSetForCluster does not return within limit.
@@ -470,8 +467,9 @@ func TestGetClientSetForCluster_BlockedCredentialRead_ReturnsTimeoutError(t *tes
 		secretProvider:        &blockingSecretProvider{},
 		credentialReadTimeout: 10 * time.Millisecond,
 	}
+	cluster := rc.cluster(t, "remote", _caSecretName, _tokenSecretName)
 
-	err := lookupWithin(t, f, rc.cluster(t, "remote", _caSecretName, _tokenSecretName), 5*time.Second)
+	err := lookupWithin(t, f, cluster, 5*time.Second)
 
 	assert.True(t, apierrors.IsTimeout(err), "got %v", err)
 }
@@ -481,19 +479,24 @@ func TestGetClientSetForCluster_BlockedReadUnderLock_ReturnsTimeoutErrorAndRelea
 ) {
 	rc := newRemoteCluster(t)
 	auth := secrets.ClientAuth{CertificateAuthorityData: rc.caPEM, ClientTokenData: "token-a"}
+	provider := &blockingSecretProvider{auth: auth, unblockedReads: 1}
 	f := &factory{
-		secretProvider:        &blockingSecretProvider{auth: auth, unblockedReads: 1},
+		secretProvider:        provider,
 		credentialReadTimeout: 10 * time.Millisecond,
 	}
+	cluster := rc.cluster(t, "remote", _caSecretName, _tokenSecretName)
 
-	err := lookupWithin(t, f, rc.cluster(t, "remote", _caSecretName, _tokenSecretName), 5*time.Second)
+	err := lookupWithin(t, f, cluster, 5*time.Second)
 
 	assert.True(t, apierrors.IsTimeout(err), "got %v", err)
+	assert.EqualValues(t, 2, provider.reads.Load())
 	require.True(t, f.m.TryLock())
 	f.m.Unlock()
 }
 
 func TestGetClientSetForCluster_ClusterMovedToNewServer_SendsToNewServer(t *testing.T) {
+	// httptest TLS servers share one certificate, so the credentials stay the same and only the
+	// server address changes.
 	oldServer := newRemoteCluster(t)
 	newServer := newRemoteCluster(t)
 	f, _ := newSecretBackedFactory(t,

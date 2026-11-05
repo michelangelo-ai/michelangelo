@@ -23,7 +23,7 @@ const (
 	// _credentialReadTimeout bounds each SecretProvider read. A read served from an informer
 	// cache waits for the informer to sync, which never happens if the controller cannot list
 	// Secrets. The second read in GetClientSetForCluster runs while f.m is held, so an unbounded
-	// read would block every other lookup.
+	// read would block every lookup that misses the cache.
 	_credentialReadTimeout = 10 * time.Second
 )
 
