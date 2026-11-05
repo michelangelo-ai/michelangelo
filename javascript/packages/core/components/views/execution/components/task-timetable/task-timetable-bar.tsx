@@ -10,10 +10,7 @@ export function TaskTimetableBar<TTaskRecord extends object>({
   if (row.startOffset === undefined || row.durationSeconds === undefined) return null;
 
   const offsetPercent = toPercent(row.startOffset, totalSeconds);
-  const widthPercent = Math.min(
-    toPercent(row.durationSeconds, totalSeconds),
-    100 - offsetPercent
-  );
+  const widthPercent = Math.min(toPercent(row.durationSeconds, totalSeconds), 100 - offsetPercent);
 
   // Point-in-time: no span (or shorter than 0.5s, which formats as "0s"). A min-width
   // bar would sit with its left edge on the tick and look like an off-center border

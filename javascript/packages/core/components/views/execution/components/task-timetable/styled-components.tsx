@@ -11,7 +11,6 @@ function barColorName(state: TaskState): string {
   return style.colorName ?? style.borderColorName;
 }
 
-
 /** Shared column layout so the axis header stays aligned with every task row. */
 const ROW_TEMPLATE = 'minmax(96px, 200px) 1fr 76px';
 

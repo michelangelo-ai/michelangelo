@@ -54,7 +54,9 @@ export function Execution<
   const viewOptions: { view: ExecutionView; label: string }[] = taskListHasTiming(taskList)
     ? [...EXECUTION_VIEW_OPTIONS]
     : [{ view: EXECUTION_VIEW.FLOW, label: 'Flow' }];
-  const activeView = viewOptions.some((option) => option.view === view) ? view : EXECUTION_VIEW.FLOW;
+  const activeView = viewOptions.some((option) => option.view === view)
+    ? view
+    : EXECUTION_VIEW.FLOW;
 
   return (
     <TaskContentStack>
