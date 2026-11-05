@@ -149,7 +149,6 @@ class CustomTritonPackagerTest(TestCase):
             "0/user_model.py",
             "config.pbtxt",
             "metadata/schema.yaml",
-            "metadata/type.yaml",
         ]
 
         expected_files = sorted(package_files + self.model_loader_files)
@@ -468,7 +467,6 @@ class CustomTritonPackagerTest(TestCase):
                 "0/user_model.py",
                 "config.pbtxt",
                 "metadata/schema.yaml",
-                "metadata/type.yaml",
             ]
 
             expected_files = sorted(package_files + self.model_loader_files)
@@ -544,7 +542,6 @@ class CustomTritonPackagerTest(TestCase):
                 "0/user_model.py",
                 "config.pbtxt",
                 "metadata/schema.yaml",
-                "metadata/type.yaml",
             ]
 
             expected_files = sorted(package_files + self.model_loader_files)
@@ -598,7 +595,6 @@ class CustomTritonPackagerTest(TestCase):
                 "0/user_model.py",
                 "config.pbtxt",
                 "metadata/schema.yaml",
-                "metadata/type.yaml",
             ]
 
             expected_files = sorted(package_files + self.model_loader_files)

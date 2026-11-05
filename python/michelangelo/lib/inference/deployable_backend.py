@@ -2,9 +2,13 @@
 
 A deployable package is what serving runs: a Triton model directory with a
 ``config.pbtxt`` and a ``0/`` version directory holding a TorchScript module,
-an ONNX graph, or a Python-backend model. Scoring it offline means batch
-predictions come from the same artifact as online ones, including a native
-transform fused into the graph.
+an ONNX graph, or a Python-backend PyTorch model. Scoring it offline means
+batch predictions come from the same artifact as online ones, including a
+native transform fused into the graph.
+
+Custom models are not scored from a deployable package: their package does not
+record whether ``predict`` takes a whole batch or one record, so they are
+scored from the raw package with :class:`~michelangelo.lib.inference.RawModelBackend`.
 """
 
 from __future__ import annotations
@@ -18,8 +22,6 @@ from michelangelo.lib.inference._invoke import (
     call_module,
     call_torchscript,
     name_outputs,
-    predict_custom,
-    read_batch_inference,
     to_torch_inputs,
 )
 
@@ -48,12 +50,16 @@ class DeployableModelBackend:
 
     Args:
         model: The result of ``load_deployable_model``: a TorchScript module,
-            an ONNX Runtime session, a PyTorch module, or a custom ``Model``.
+            an ONNX Runtime session, or a PyTorch module.
         schema: The model schema. Provides the input and output names, and the
             positional order of TorchScript arguments.
-        device: Device the PyTorch tensors go to.
-        batch_inference: For a custom ``Model``, whether ``predict`` takes the
-            whole batch instead of one record. Ignored for other models.
+        device: Device a PyTorch model and its inputs are moved to. The loader
+            loads PyTorch models on the CPU.
+
+    Raises:
+        ValueError: If ``model`` is a custom ``Model``, which is scored from
+            its raw package instead.
+        TypeError: If ``model`` is none of the supported kinds.
     """
 
     def __init__(
@@ -61,14 +67,20 @@ class DeployableModelBackend:
         model: Any,
         schema: ModelSchema | None = None,
         device: str = "cpu",
-        batch_inference: bool = False,
     ) -> None:
-        """Wrap ``model``."""
+        """Wrap ``model``, moving a PyTorch model to ``device``."""
+        self._kind = _kind_of(model)
+        if self._kind in ("torchscript", "module"):
+            model = model.to(device)
+            if self._kind == "torchscript" and device.startswith("cuda"):
+                import torch
+
+                # The TorchScript fuser can generate invalid CUDA code for
+                # large clamp constants, so use the precompiled kernels.
+                torch.jit.set_fusion_strategy([("STATIC", 0), ("DYNAMIC", 0)])
         self._model = model
         self._schema = schema
         self._device = device
-        self._batch_inference = batch_inference
-        self._kind = _kind_of(model)
 
     @property
     def input_names(self) -> list[str] | None:
@@ -95,8 +107,6 @@ class DeployableModelBackend:
         """
         if self._kind == "onnx":
             return self._predict_onnx(inputs)
-        if self._kind == "custom":
-            return predict_custom(self._model, inputs, self._batch_inference)
 
         import torch
 
@@ -125,7 +135,11 @@ def _kind_of(model: Any) -> str:
     from michelangelo.lib.model_manager.interface.custom_model import Model
 
     if isinstance(model, Model):
-        return "custom"
+        raise ValueError(
+            "Custom models are not scored from a deployable package, which does "
+            "not record whether predict takes a batch or one record. Score the "
+            "model's raw package instead."
+        )
     if hasattr(model, "get_inputs") and hasattr(model, "run"):
         return "onnx"
 
@@ -137,8 +151,7 @@ def _kind_of(model: Any) -> str:
         return "module"
     raise TypeError(
         f"DeployableModelBackend cannot score a {type(model).__name__}. It "
-        "takes a TorchScript module, an ONNX Runtime session, a torch.nn.Module "
-        "or a custom Model."
+        "takes a TorchScript module, an ONNX Runtime session or a torch.nn.Module."
     )
 
 
@@ -169,6 +182,10 @@ def create_deployable_backend(context: BackendContext) -> DeployableModelBackend
 
     Returns:
         The backend.
+
+    Raises:
+        ValueError: If the package holds a custom model, which is scored from
+            its raw package instead.
     """
     from michelangelo.lib.model_manager.serde.model import (
         load_deployable_model,
@@ -176,10 +193,5 @@ def create_deployable_backend(context: BackendContext) -> DeployableModelBackend
     )
 
     schema = context.schema or load_model_schema(context.model_path)
-    model = load_deployable_model(context.model_path, device=context.device)
-    return DeployableModelBackend(
-        model,
-        schema=schema,
-        device=context.device,
-        batch_inference=read_batch_inference(context.model_path),
-    )
+    model = load_deployable_model(context.model_path)
+    return DeployableModelBackend(model, schema=schema, device=context.device)

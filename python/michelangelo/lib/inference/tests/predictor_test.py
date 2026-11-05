@@ -272,6 +272,9 @@ def test_model_uri_is_downloaded_by_the_predictor_itself(tmp_path):
     torch.save(DictModel().state_dict(), pkg / "model" / "model.pt")
     (pkg / "defs" / "model_class.txt").write_text(f"{_FIX}.DictModel")
     (pkg / "metadata" / "type.yaml").write_text("type: torch\n")
+    (pkg / "metadata" / "schema.yaml").write_text(
+        "input_schema: []\nfeature_store_features_schema: []\noutput_schema: []\n"
+    )
     downloads = []
 
     class Remote(LocalStorageBackend):
@@ -353,3 +356,32 @@ def test_thread_pool_is_released_when_the_predictor_is_collected():
     gc.collect()
     with pytest.raises(RuntimeError):
         executor.submit(lambda: 1)
+
+
+def test_a_package_stored_as_one_archive_is_unpacked(tmp_path):
+    """A single tar file, as the pusher can upload a deployable, is unpacked."""
+    import shutil
+
+    from michelangelo.lib.artifact_manager.storage_backend import LocalStorageBackend
+    from michelangelo.lib.inference.predictor import _download_package
+
+    source = tmp_path / "source"
+    (source / "0").mkdir(parents=True)
+    (source / "config.pbtxt").write_text('backend: "pytorch"\n')
+    (source / "0" / "model.pt").write_text("weights")
+    archive = shutil.make_archive(str(tmp_path / "model"), "tar", source)
+    storage = LocalStorageBackend(str(tmp_path / "store"))
+    (tmp_path / "store").mkdir()
+    uri = storage.upload(archive, "m/deployable/model.tar")
+    work = tmp_path / "work"
+    work.mkdir()
+
+    package = _download_package(storage, uri, str(work))
+
+    assert sorted(p.name for p in (work / "package").iterdir()) == [
+        "0",
+        "config.pbtxt",
+    ]
+    assert package == str(work / "package")
+    assert (work / "package" / "0" / "model.pt").read_text() == "weights"
+    assert sorted(p.name for p in work.iterdir()) == ["package"]

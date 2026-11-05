@@ -4,14 +4,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, ClassVar, Dict, NamedTuple, Union  # noqa: UP035
 
+import numpy as np
 import torch
 
 from michelangelo.lib.model_manager.interface.custom_model import Model
 
 if TYPE_CHECKING:
     from pathlib import Path
-
-    import numpy as np
 
 
 class DictModel(torch.nn.Module):
@@ -165,6 +164,40 @@ def custom_deployable(root: Path, schema, batch: bool = False) -> str:
         model_class=f"{_FIX}.{RecordModel.__name__}",
         model_schema=schema,
         dest_model_path=str(root / "package"),
+        include_import_prefixes=[_PREFIX],
+    )
+
+
+def custom_raw(root: Path, schema, batch: bool = False) -> str:
+    """Package :class:`RecordModel` as a raw package with the custom packager.
+
+    Args:
+        root: Empty directory for the model files and the package.
+        schema: The model schema.
+        batch: The packager's ``custom_batch_processing``, recorded as
+            ``batch_inference`` in the package's ``metadata/type.yaml``.
+
+    Returns:
+        The package directory.
+    """
+    from michelangelo.lib.model_manager.packager.custom_triton.custom_triton_packager import (  # noqa: E501
+        CustomTritonPackager,
+    )
+
+    (root / "model").mkdir(parents=True, exist_ok=True)
+    packager = CustomTritonPackager(custom_batch_processing=batch)
+    return packager.create_raw_model_package(
+        str(root / "model"),
+        model_class=f"{_FIX}.{RecordModel.__name__}",
+        model_schema=schema,
+        # One record per call without batch processing, a batch with it.
+        sample_data=[
+            {
+                item.name: np.ones((1, 1) if batch else (1,))
+                for item in schema.input_schema
+            }
+        ],
+        dest_model_path=str(root / "raw_package"),
         include_import_prefixes=[_PREFIX],
     )
 

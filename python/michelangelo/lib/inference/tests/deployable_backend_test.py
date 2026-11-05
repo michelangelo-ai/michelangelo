@@ -20,7 +20,6 @@ from michelangelo.lib.inference.tests.fixtures import (
     DictModel,
     NamedTupleModel,
     PositionalModel,
-    RecordModel,
     custom_deployable,
     torch_deployable,
 )
@@ -94,27 +93,29 @@ def test_schema_comes_from_config_pbtxt_when_not_given(tmp_path):
     assert backend.output_names == ["y"]
 
 
-@pytest.mark.parametrize(
-    ("batch", "expected_calls"),
-    [(False, [(1,), (1,), (1,)]), (True, [(3, 1)])],
-    ids=["per-record", "batch"],
-)
-def test_custom_model_is_called_the_way_serving_calls_it(
-    tmp_path, batch, expected_calls
-):
-    """Without custom batch processing predict gets one record at a time."""
+def test_custom_deployable_is_rejected(tmp_path):
+    """A custom model is scored from its raw package, never its deployable."""
     schema = ModelSchema(
         input_schema=[ModelSchemaItem("a", DataType.FLOAT, [1])],
         output_schema=[ModelSchemaItem("response", DataType.FLOAT, [1])],
     )
-    backend = _backend(custom_deployable(tmp_path, schema, batch=batch))
-    RecordModel.calls.clear()
+    with pytest.raises(ValueError, match="raw package"):
+        _backend(custom_deployable(tmp_path, schema))
 
-    out = backend.predict({"a": np.array([[1.0], [2.0], [3.0]])})
 
-    assert RecordModel.calls == expected_calls
-    assert out["response"].shape == (3, 1)
-    assert out["response"].ravel().tolist() == [2.0, 3.0, 4.0]
+def test_torchscript_moves_to_cuda_with_the_fuser_disabled():
+    """On CUDA the module is moved and the fusion workaround is applied."""
+    from unittest.mock import MagicMock, patch
+
+    import torch
+
+    module = MagicMock(spec=torch.jit.ScriptModule)
+    with patch("torch.jit.set_fusion_strategy") as fusion:
+        backend = DeployableModelBackend(module, schema=_SCHEMA, device="cuda")
+
+    module.to.assert_called_once_with("cuda")
+    fusion.assert_called_once_with([("STATIC", 0), ("DYNAMIC", 0)])
+    assert backend._model is module.to.return_value
 
 
 def test_names_are_unknown_without_a_schema(tmp_path):

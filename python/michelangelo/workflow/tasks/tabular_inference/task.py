@@ -46,9 +46,12 @@ def tabular_inference(
     Ray actors, and the prediction columns are added to every row. Rows keep all
     input columns unless ``columns_to_keep`` is set.
 
-    A packaged model is always scored from its deployable package, the artifact
-    serving runs, so batch predictions match online ones. That includes a native
-    transform the assembler fused into the model.
+    A packaged model's training framework picks the package. PyTorch and
+    Lightning models are scored from the deployable package, the artifact
+    serving runs, so batch predictions match online ones, including a native
+    transform the assembler fused into the model. Custom models are scored from
+    the raw package. A model whose framework is missing or not supported is an
+    error.
 
     Args:
         config: Which models to run and how.
@@ -56,9 +59,9 @@ def tabular_inference(
             "validation": ...}``. ``None`` entries are passed through.
         model: The model to score with, used by every ``local_models`` entry that
             has no ``model`` reference: a ``ModelVariable`` (scored in-process) or
-            an ``AssembledModel`` (scored from its deployable package).
+            an ``AssembledModel`` (scored from the package its framework picks).
         storage_backend: Downloads model packages that are not local
-            directories: registry artifacts, and the deployable package of an
+            directories: registry artifacts, and the packages of an
             ``AssembledModel`` stored remotely. Not needed for an in-process
             ``ModelVariable`` or a local package directory.
         registry_client: Looks up ``local_models[i].model``. Required only when

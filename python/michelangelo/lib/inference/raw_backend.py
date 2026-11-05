@@ -4,8 +4,7 @@ A raw model is the trained model itself, not an exported serving bundle: a
 PyTorch ``nn.Module`` (plain, Lightning, or a transform fused with a
 predictor) or a custom ``Model`` from
 :mod:`michelangelo.lib.model_manager.interface.custom_model`. The task scores
-a model object passed in memory with it; packaged models go through the
-deployable backend.
+custom models' raw packages and model objects passed in memory with it.
 """
 
 from __future__ import annotations

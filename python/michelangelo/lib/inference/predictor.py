@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import os
+import shutil
 import tempfile
 import weakref
 from concurrent.futures import ThreadPoolExecutor
@@ -52,7 +54,8 @@ class Predictor:
         model_path: Local directory of the model package. It must be readable
             from the node this actor runs on. Exactly one of ``model_path``,
             ``model_uri`` and ``model`` is required.
-        model_uri: URI of the model package in ``storage_backend``. It is
+        model_uri: URI of the model package in ``storage_backend``: a
+            directory, or a single tar archive, which is unpacked. It is
             downloaded by the actor itself, so it works on any node.
         storage_backend: Downloads ``model_uri``. Required with ``model_uri``.
         model: An already loaded model, or a ``ray.ObjectRef`` to one, scored
@@ -109,12 +112,11 @@ class Predictor:
             # Downloaded here, not on the driver, so the package exists on the
             # node that runs this actor. Removed when the actor is collected.
             self._package_dir = tempfile.TemporaryDirectory(prefix="inference_model_")
-            storage_backend.download(model_uri, self._package_dir.name)
-            model_path = self._package_dir.name
+            model_path = _download_package(
+                storage_backend, model_uri, self._package_dir.name
+            )
         if model_path is not None:
-            from michelangelo.lib.model_manager.serde.model import load_model_schema
-
-            schema = schema or load_model_schema(model_path)
+            schema = schema or _stored_schema(model_path)
             self._backend = build_backend(
                 resolve_backend(model_path, backend),
                 BackendContext(model_path=model_path, schema=schema, device=device),
@@ -216,6 +218,50 @@ class Predictor:
                 pa.scalar(self._model_version, pa.string()), num_rows
             )
         return columns
+
+
+def _stored_schema(model_path: str) -> ModelSchema | None:
+    """The schema stored in a package, or ``None`` if it stores none.
+
+    A custom backend may be given a directory that is not a standard package,
+    so a missing schema is not an error here; the built-in backends raise for
+    it themselves.
+    """
+    if not any(
+        os.path.exists(os.path.join(model_path, name))
+        for name in (os.path.join("metadata", "schema.yaml"), "config.pbtxt")
+    ):
+        return None
+
+    from michelangelo.lib.model_manager.serde.model import load_model_schema
+
+    return load_model_schema(model_path)
+
+
+def _download_package(storage_backend: StorageBackend, uri: str, work_dir: str) -> str:
+    """Download a model package into ``work_dir`` and return its directory.
+
+    A package stored as a single archive, such as a deployable package pushed
+    as ``model.tar``, arrives as one file and is unpacked.
+
+    Args:
+        storage_backend: Downloads ``uri``.
+        uri: The package's URI: a directory, or a single archive file.
+        work_dir: An empty directory to download and unpack into.
+
+    Returns:
+        The package directory.
+    """
+    package_dir = os.path.join(work_dir, "package")
+    storage_backend.download(uri, package_dir)
+    if not os.path.isfile(package_dir):
+        return package_dir
+
+    archive = os.path.join(work_dir, "package.tar")
+    os.rename(package_dir, archive)
+    shutil.unpack_archive(archive, package_dir, "tar")
+    os.remove(archive)
+    return package_dir
 
 
 def _scalar_output_names(schema: ModelSchema | None) -> set[str]:

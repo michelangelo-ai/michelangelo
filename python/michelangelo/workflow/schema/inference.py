@@ -177,8 +177,9 @@ class OfflineInferenceConfig:
     """Scoring settings for one model in ``tabular_inference``.
 
     Attributes:
-        model: The registered model to load. Its deployable package is scored.
-            ``None`` scores the model passed to the task.
+        model: The registered model to load. Its ``training_framework``
+            label picks the package: deployable for PyTorch and Lightning, raw
+            for custom models. ``None`` scores the model passed to the task.
         input_columns: Columns fed to the model, in the order the model's
             input schema expects. ``None`` uses the model's input schema.
         batch_options: Ray processing options.
@@ -190,10 +191,11 @@ class OfflineInferenceConfig:
             evaluator, needs them, or they are dropped from the output.
         backend: Dotted path (``"package.module.factory"``) of a callable that
             takes a ``BackendContext`` and returns a ``ModelBackend``. It is
-            given the deployable package. ``None`` uses the built-in deployable
-            backend, which runs TorchScript, ONNX and Python-backend packages.
-            A custom backend loads from a model package, so it cannot score a
-            model object that was passed to the task in memory.
+            given the package the training framework picks. ``None`` uses the
+            built-in backend for that package: deployable (TorchScript, ONNX,
+            Python-backend PyTorch) or raw. A custom backend loads from a
+            model package, so it cannot score a model object that was passed
+            to the task in memory.
 
     Example:
         >>> cfg = OfflineInferenceConfig(columns_to_keep=["label"])

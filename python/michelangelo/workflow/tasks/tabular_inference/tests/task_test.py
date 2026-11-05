@@ -10,6 +10,7 @@ from michelangelo.lib.artifact_manager.storage_backend import LocalStorageBacken
 from michelangelo.lib.inference.tests.fixtures import (
     DictModel,
     PositionalModel,
+    custom_raw,
     torch_deployable,
 )
 from michelangelo.lib.model_manager.registry.client import InMemoryRegistryClient
@@ -32,6 +33,11 @@ from michelangelo.workflow.tasks.evaluator.task import evaluate
 from michelangelo.workflow.tasks.tabular_inference import tabular_inference
 from michelangelo.workflow.variables import DatasetVariable, ModelVariable
 from michelangelo.workflow.variables._private.utils.serialization import save_object
+from michelangelo.workflow.variables.metadata import (
+    TRAINING_FRAMEWORK_CUSTOM,
+    TRAINING_FRAMEWORK_PYTORCH,
+    ModelMetadata,
+)
 from michelangelo.workflow.variables.types import AssembledModel, ModelArtifact
 
 _SCHEMA = ModelSchema(
@@ -80,16 +86,27 @@ def _package(root):
     return torch_deployable(root, PositionalModel(), _SCHEMA)
 
 
-def _assembled(deployable_path, raw_path="s3://bucket/raw-is-never-read"):
-    """An assembler output.
+def _assembled(
+    deployable_path,
+    raw_path="s3://bucket/raw-is-never-read",
+    framework=TRAINING_FRAMEWORK_PYTORCH,
+):
+    """An assembler output, which records the framework on the raw model.
 
-    The raw path is a URI nothing can download, which proves the raw package is
-    not used.
+    The default raw path is a URI nothing can download, which proves a PyTorch
+    model is not scored from its raw package.
     """
     return AssembledModel(
-        raw_model=ModelArtifact(path=raw_path),
-        deployable_model=ModelArtifact(path=deployable_path),
+        raw_model=ModelArtifact(
+            path=raw_path, metadata=ModelMetadata(training_framework=framework)
+        ),
+        deployable_model=(
+            ModelArtifact(path=deployable_path) if deployable_path is not None else None
+        ),
     )
+
+
+_TORCH_LABELS = {"training_framework": TRAINING_FRAMEWORK_PYTORCH}
 
 
 def _config(**model_kwargs):
@@ -127,7 +144,7 @@ def test_scores_with_in_process_model_variable(ray_session, tmp_path, out_dir):
 
 
 def test_scores_with_assembled_model_deployable(ray_session, tmp_path, out_dir):
-    """An AssembledModel is scored from its deployable package, never its raw one."""
+    """A PyTorch AssembledModel is scored from its deployable package."""
     assembled = _assembled(_package(tmp_path / "pkg"))
 
     result = tabular_inference(
@@ -144,7 +161,10 @@ def test_scores_with_registry_resolved_model(ray_session, tmp_path, out_dir):
     uri = storage.upload(_package(tmp_path / "pkg"), "models/housing")
     registry = InMemoryRegistryClient()
     registry.register_model(
-        "housing", artifact_uri="s3://raw-is-never-read", deployable_artifact_uri=uri
+        "housing",
+        artifact_uri="s3://raw-is-never-read",
+        deployable_artifact_uri=uri,
+        labels=_TORCH_LABELS,
     )
 
     result = tabular_inference(
@@ -313,9 +333,9 @@ def test_registry_reference_needs_storage_backend():
 
 
 def test_registry_entry_without_deployable_is_rejected(tmp_path):
-    """A registered model with only a raw package is not scored from it."""
+    """A registered PyTorch model with only a raw package is not scored from it."""
     registry = InMemoryRegistryClient()
-    registry.register_model("m", artifact_uri="s3://bucket/raw")
+    registry.register_model("m", artifact_uri="s3://bucket/raw", labels=_TORCH_LABELS)
     with pytest.raises(ValueError, match="no deployable_artifact_uri"):
         tabular_inference(
             _config(model=ModelReference(name="m")),
@@ -325,16 +345,87 @@ def test_registry_entry_without_deployable_is_rejected(tmp_path):
         )
 
 
-@pytest.mark.parametrize(
-    "deployable", [None, ModelArtifact(path="")], ids=["missing", "empty-path"]
-)
+@pytest.mark.parametrize("deployable", [None, ""], ids=["missing", "empty-path"])
 def test_model_without_deployable_is_rejected(tmp_path, deployable):
-    """A model with only a raw package is never silently scored from it."""
-    assembled = AssembledModel(
-        raw_model=ModelArtifact(path=str(tmp_path)), deployable_model=deployable
-    )
+    """A PyTorch model with only a raw package is never silently scored from it."""
+    assembled = _assembled(deployable, raw_path=str(tmp_path))
     with pytest.raises(ValueError, match="no deployable package"):
         tabular_inference(_config(), {"train": None}, model=assembled)
+
+
+def test_custom_assembled_model_is_scored_from_its_raw_package(
+    ray_session, tmp_path, out_dir
+):
+    """A custom model uses the raw package, never the deployable."""
+    schema = ModelSchema(
+        input_schema=[ModelSchemaItem("a", DataType.FLOAT, [1])],
+        output_schema=[ModelSchemaItem("response", DataType.FLOAT, [1])],
+    )
+    assembled = _assembled(
+        "s3://bucket/deployable-is-never-read",
+        raw_path=custom_raw(tmp_path / "custom", schema),
+        framework=TRAINING_FRAMEWORK_CUSTOM,
+    )
+
+    result = tabular_inference(
+        _config(), {"train": _dataset_var(tmp_path)}, model=assembled
+    )
+
+    rows = _rows(result["train"])
+    assert [r["response"] for r in rows] == [r["a"] + 1 for r in rows]
+
+
+@pytest.mark.parametrize(
+    ("framework", "message"),
+    [(None, "no training framework"), ("xgboost", "'xgboost'.*not support")],
+    ids=["missing", "unsupported"],
+)
+def test_framework_must_be_known(tmp_path, framework, message):
+    """No framework, or one without a scoring path, is an error, not a guess."""
+    assembled = _assembled(str(tmp_path), raw_path=str(tmp_path), framework=framework)
+    with pytest.raises(ValueError, match=message):
+        tabular_inference(_config(), {"train": None}, model=assembled)
+
+    registry = InMemoryRegistryClient()
+    labels = {"training_framework": framework} if framework else {}
+    registry.register_model(
+        "m", artifact_uri="s3://r", deployable_artifact_uri="s3://d", labels=labels
+    )
+    with pytest.raises(ValueError, match=message):
+        tabular_inference(
+            _config(model=ModelReference(name="m")),
+            {"train": None},
+            storage_backend=LocalStorageBackend(str(tmp_path)),
+            registry_client=registry,
+        )
+
+
+def test_registry_deployable_pushed_as_a_tar_archive(ray_session, tmp_path, out_dir):
+    """A deployable uploaded as model.tar is unpacked on the worker and scored."""
+    import shutil
+
+    archive = shutil.make_archive(
+        str(tmp_path / "model"), "tar", _package(tmp_path / "pkg")
+    )
+    storage = LocalStorageBackend(base_dir=str(tmp_path / "store"))
+    (tmp_path / "store").mkdir()
+    uri = storage.upload(archive, "models/housing/deployable/model.tar")
+    registry = InMemoryRegistryClient()
+    registry.register_model(
+        "housing",
+        artifact_uri="s3://raw-is-never-read",
+        deployable_artifact_uri=uri,
+        labels=_TORCH_LABELS,
+    )
+
+    result = tabular_inference(
+        _config(model=ModelReference(name="housing")),
+        {"train": _dataset_var(tmp_path)},
+        storage_backend=storage,
+        registry_client=registry,
+    )
+
+    _assert_scored(result["train"])
 
 
 def test_unsupported_model_type_is_rejected():
@@ -380,7 +471,16 @@ def test_remote_sources_are_not_downloaded_on_the_driver(tmp_path):
     storage = Spy(base_dir=str(tmp_path))
     registry = InMemoryRegistryClient()
     registry.register_model(
-        "m", artifact_uri="s3://bucket/raw", deployable_artifact_uri="s3://bucket/m"
+        "m",
+        artifact_uri="s3://bucket/raw",
+        deployable_artifact_uri="s3://bucket/m",
+        labels=_TORCH_LABELS,
+    )
+    registry.register_model(
+        "c",
+        artifact_uri="s3://bucket/c-raw",
+        deployable_artifact_uri="s3://bucket/c",
+        labels={"training_framework": TRAINING_FRAMEWORK_CUSTOM},
     )
 
     from_registry = resolve_model_source(
@@ -406,6 +506,14 @@ def test_remote_sources_are_not_downloaded_on_the_driver(tmp_path):
     assert from_registry.storage_backend is storage
     assert from_assembled.uri == "s3://bucket/deployable"
     assert from_assembled.model_path is None
+    custom = resolve_model_source(
+        OfflineInferenceConfig(model=ModelReference(name="c")),
+        None,
+        0,
+        storage_backend=storage,
+        registry_client=registry,
+    )
+    assert custom.uri == "s3://bucket/c-raw"
 
 
 def test_dataset_already_loaded_as_pandas_is_rejected_clearly(tmp_path):

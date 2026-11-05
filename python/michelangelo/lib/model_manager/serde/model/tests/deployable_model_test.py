@@ -1,189 +1,253 @@
-"""Tests for loading deployable packages and their schemas."""
+"""Tests for the deployable model loader.
+
+Packages are built with the real packagers, so the tests check that the loader
+reads exactly what the packagers write.
+"""
 
 from __future__ import annotations
 
+import os
+from unittest import TestCase
 from unittest.mock import patch
 
-import pytest
+import numpy as np
+import torch
 
-from michelangelo.lib.model_manager._private.packager.template_renderer import (
-    TritonTemplateRenderer,
+from michelangelo.lib.model_manager._private.packager.torch_triton.tests.fixtures.simple_model import (  # noqa: E501
+    SimpleModel,
 )
-from michelangelo.lib.model_manager._private.packager.torch_triton.config_pbtxt import (
-    generate_config_pbtxt_content,
+from michelangelo.lib.model_manager.interface.custom_model import Model
+from michelangelo.lib.model_manager.packager.custom_triton.custom_triton_packager import (  # noqa: E501
+    CustomTritonPackager,
 )
-from michelangelo.lib.model_manager._private.serde.model.deployable_model_schema import (  # noqa: E501
-    load_deployable_model_schema,
-)
-from michelangelo.lib.model_manager._private.serde.model.triton_backend_type import (
-    get_deployable_backend_type,
+from michelangelo.lib.model_manager.packager.torch_triton.torch_triton_packager import (
+    TorchTritonPackager,
 )
 from michelangelo.lib.model_manager.schema import DataType, ModelSchema, ModelSchemaItem
-from michelangelo.lib.model_manager.serde.model import (
-    load_deployable_model,
-    load_model_schema,
-)
+from michelangelo.lib.model_manager.serde.model import load_deployable_model
 
+_FIXTURES = (
+    "michelangelo.lib.model_manager._private.packager.torch_triton.tests.fixtures"
+)
 _SCHEMA = ModelSchema(
-    input_schema=[
-        ModelSchemaItem("ids", DataType.LONG, [3]),
-        ModelSchemaItem("text", DataType.STRING, [1], optional=True),
-        ModelSchemaItem("grid", DataType.DOUBLE, [2, 4]),
-        ModelSchemaItem("unshaped", DataType.BOOLEAN, None),
-    ],
-    output_schema=[ModelSchemaItem("score", DataType.FLOAT, [1])],
+    input_schema=[ModelSchemaItem("x", DataType.FLOAT, [4])],
+    output_schema=[ModelSchemaItem("y", DataType.FLOAT, [2])],
+)
+_CUSTOM_CLASS = (
+    "michelangelo.lib.model_manager._private.packager.custom_triton.tests.fixtures."
+    "predict.Predict"
 )
 
 
-def _write_config(path, schema=_SCHEMA, backend="pytorch"):
-    """Write the config.pbtxt the torch packager would write."""
-    path.mkdir(parents=True, exist_ok=True)
-    (path / "config.pbtxt").write_text(
-        generate_config_pbtxt_content(
-            TritonTemplateRenderer(), "m", "1", schema, backend=backend
+def _torch_package(root: str, backend: str | None) -> tuple[str, torch.nn.Module]:
+    """Package a seeded SimpleModel with the torch packager."""
+    torch.manual_seed(0)
+    model = SimpleModel().eval()
+    source = os.path.join(root, "model.pt")
+    torch.save(model.state_dict(), source)
+    path = TorchTritonPackager().create_model_package(
+        source,
+        _SCHEMA,
+        dest_model_path=os.path.join(root, "package"),
+        model_class=f"{_FIXTURES}.simple_model.SimpleModel",
+        backend=backend,
+        sample_data=[{"x": torch.ones(1, 4)}],
+        include_import_prefixes=[_FIXTURES],
+    )
+    return path, model
+
+
+class LoadDeployableModelTest(TestCase):
+    """Loading each kind of deployable package."""
+
+    def setUp(self) -> None:
+        """Create a scratch directory."""
+        import tempfile
+
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = self._tmp.name
+        self.batch = torch.randn(3, 4)
+
+    def tearDown(self) -> None:
+        """Remove the scratch directory."""
+        self._tmp.cleanup()
+
+    def _expected(self, model: torch.nn.Module) -> np.ndarray:
+        with torch.no_grad():
+            return model(self.batch).numpy()
+
+    def test_pytorch_backend_loads_torchscript_on_cpu_in_eval_mode(self):
+        """A pytorch package gives the packaged TorchScript module."""
+        path, source = _torch_package(self.root, backend=None)
+
+        loaded = load_deployable_model(path)
+
+        self.assertIsInstance(loaded, torch.jit.ScriptModule)
+        self.assertFalse(loaded.training)
+        self.assertEqual({p.device.type for p in loaded.parameters()}, {"cpu"})
+        np.testing.assert_allclose(
+            loaded(self.batch).detach().numpy(), self._expected(source), rtol=1e-5
         )
-    )
-    return str(path)
+
+    def test_onnxruntime_backend_creates_a_session(self):
+        """An onnxruntime package gives a session that reproduces the model."""
+        path, source = _torch_package(self.root, backend="onnxruntime")
+
+        session = load_deployable_model(path)
+
+        name = session.get_inputs()[0].name
+        (out,) = session.run(None, {name: self.batch.numpy()})
+        np.testing.assert_allclose(out, self._expected(source), rtol=1e-5)
+
+    def test_python_backend_with_a_torch_class_loads_the_module(self):
+        """A python package of an nn.Module gives the module, on the CPU."""
+        path, source = _torch_package(self.root, backend="python")
+
+        loaded = load_deployable_model(path)
+
+        self.assertIsInstance(loaded, SimpleModel)
+        self.assertFalse(loaded.training)
+        with torch.no_grad():
+            np.testing.assert_allclose(
+                loaded(self.batch).numpy(), self._expected(source), rtol=1e-5
+            )
+
+    def test_python_backend_with_a_custom_class_loads_the_custom_model(self):
+        """A custom package gives a custom Model, decided by its class."""
+        os.makedirs(os.path.join(self.root, "src"))
+        path = CustomTritonPackager().create_model_package(
+            os.path.join(self.root, "src"),
+            model_class=_CUSTOM_CLASS,
+            model_schema=ModelSchema(
+                input_schema=[ModelSchemaItem("input", DataType.INT, [1])],
+                output_schema=[ModelSchemaItem("response", DataType.INT, [1])],
+            ),
+            dest_model_path=os.path.join(self.root, "package"),
+            include_import_prefixes=["michelangelo"],
+        )
+
+        loaded = load_deployable_model(path)
+
+        self.assertIsInstance(loaded, Model)
+        self.assertEqual(type(loaded).__name__, "Predict")
+
+    def test_missing_path_is_reported(self):
+        """A path that does not exist is a FileNotFoundError."""
+        with self.assertRaisesRegex(FileNotFoundError, "Model path not found"):
+            load_deployable_model(os.path.join(self.root, "nope"))
+
+    def test_missing_config_pbtxt_is_not_a_deployable_package(self):
+        """A directory without config.pbtxt is a ValueError."""
+        with self.assertRaisesRegex(ValueError, "Missing config.pbtxt"):
+            load_deployable_model(self.root)
+
+    def test_unknown_backend_is_rejected(self):
+        """A backend that is not a TritonBackendType is a ValueError."""
+        self._write_config('backend: "tensorrt"\n')
+        with self.assertRaisesRegex(ValueError, "Invalid backend type 'tensorrt'"):
+            load_deployable_model(self.root)
+
+    def test_supported_backend_without_a_loader_is_not_implemented(self):
+        """A supported backend that has no loader is NotImplementedError."""
+        self._write_config('backend: "pytorch"\n')
+        with (
+            patch(
+                "michelangelo.lib.model_manager.serde.model.deployable_model."
+                "get_deployable_backend_type",
+                return_value="tensorrt",
+            ),
+            self.assertRaisesRegex(NotImplementedError, "tensorrt"),
+        ):
+            load_deployable_model(self.root)
+
+    def test_missing_model_files_are_reported(self):
+        """Each backend names the file it expected under 0/."""
+        for backend, message in (
+            ("pytorch", "0/model.pt"),
+            ("onnxruntime", "0/model.onnx"),
+        ):
+            self._write_config(f'backend: "{backend}"\n')
+            with self.assertRaisesRegex(FileNotFoundError, message):
+                load_deployable_model(self.root)
+
+    def test_unreadable_torchscript_is_a_runtime_error(self):
+        """A model.pt that is not TorchScript is wrapped in a RuntimeError."""
+        self._write_config('backend: "pytorch"\n')
+        os.makedirs(os.path.join(self.root, "0"))
+        with open(os.path.join(self.root, "0", "model.pt"), "w") as f:
+            f.write("not a torchscript archive")
+        with self.assertRaisesRegex(RuntimeError, "Failed to load TorchScript"):
+            load_deployable_model(self.root)
+
+    def test_python_package_needs_a_model_class(self):
+        """A missing or empty model_class.txt is a ValueError."""
+        self._write_config('backend: "python"\n')
+        os.makedirs(os.path.join(self.root, "0"))
+        with self.assertRaisesRegex(ValueError, "Missing model_class.txt"):
+            load_deployable_model(self.root)
+        with open(os.path.join(self.root, "0", "model_class.txt"), "w") as f:
+            f.write("  \n")
+        with self.assertRaisesRegex(ValueError, "model_class.txt is empty"):
+            load_deployable_model(self.root)
+
+    def _write_config(self, content: str) -> None:
+        with open(os.path.join(self.root, "config.pbtxt"), "w") as f:
+            f.write(content)
 
 
-def test_schema_round_trips_through_config_pbtxt(tmp_path):
-    """Names, types, shapes and optional survive; no shape comes back as [-1]."""
-    schema = load_deployable_model_schema(_write_config(tmp_path))
+class OnnxProvidersTest(TestCase):
+    """The CUDA provider is requested only when a GPU is present."""
 
-    assert [
-        (i.name, i.data_type, i.shape, i.optional) for i in schema.input_schema
-    ] == [
-        ("ids", DataType.LONG, [3], None),
-        ("text", DataType.STRING, [1], True),
-        ("grid", DataType.DOUBLE, [2, 4], None),
-        ("unshaped", DataType.BOOLEAN, [-1], None),
-    ]
-    assert [(i.name, i.data_type, i.shape) for i in schema.output_schema] == [
-        ("score", DataType.FLOAT, [1])
-    ]
+    def _providers(self, available: list[str], cuda: bool) -> list[str]:
+        import tempfile
 
+        with tempfile.TemporaryDirectory() as root:
+            os.makedirs(os.path.join(root, "0"))
+            open(os.path.join(root, "0", "model.onnx"), "wb").close()
+            with open(os.path.join(root, "config.pbtxt"), "w") as f:
+                f.write('backend: "onnxruntime"\n')
+            with (
+                patch("onnxruntime.get_available_providers", return_value=available),
+                patch("onnxruntime.InferenceSession") as session,
+                patch("torch.cuda.is_available", return_value=cuda),
+            ):
+                load_deployable_model(root)
+        return session.call_args.kwargs["providers"]
 
-def test_schema_tolerates_missing_fields_and_sections(tmp_path):
-    """Unknown types, missing dims and a missing output section do not fail."""
-    (tmp_path / "config.pbtxt").write_text(
-        'backend: "python"\n'
-        "input: [\n"
-        '  { name: "a", data_type: TYPE_BF16 },\n'
-        "  { data_type: TYPE_FP32, dims: [ 1 ] }\n"
-        "]\n"
-    )
+    def test_gpu_build_on_a_cpu_machine_uses_only_cpu(self):
+        """A compiled-in CUDA provider is not requested without a GPU."""
+        self.assertEqual(
+            self._providers(["CUDAExecutionProvider", "CPUExecutionProvider"], False),
+            ["CPUExecutionProvider"],
+        )
 
-    schema = load_deployable_model_schema(str(tmp_path))
+    def test_gpu_present_requests_cuda_first(self):
+        """With a GPU and the provider, CUDA is tried before the CPU."""
+        self.assertEqual(
+            self._providers(["CUDAExecutionProvider", "CPUExecutionProvider"], True),
+            ["CUDAExecutionProvider", "CPUExecutionProvider"],
+        )
 
-    assert [(i.name, i.data_type, i.shape) for i in schema.input_schema] == [
-        ("a", DataType.UNKNOWN, None)
-    ]
-    assert schema.output_schema == []
+    def test_cpu_build_with_a_gpu_uses_only_cpu(self):
+        """Without the CUDA provider, a GPU does not matter."""
+        self.assertEqual(
+            self._providers(["CPUExecutionProvider"], True), ["CPUExecutionProvider"]
+        )
 
+    def test_no_torch_means_no_cuda(self):
+        """Without PyTorch installed, the session runs on the CPU."""
+        import builtins
 
-def test_schema_with_an_unterminated_section(tmp_path):
-    """A truncated file still yields the items it contains."""
-    (tmp_path / "config.pbtxt").write_text(
-        'input: [ { name: "a", data_type: TYPE_INT64, dims: [ 2 ] }'
-    )
+        real_import = builtins.__import__
 
-    schema = load_deployable_model_schema(str(tmp_path))
+        def no_torch(name, *args, **kwargs):
+            if name == "torch":
+                raise ImportError(name)
+            return real_import(name, *args, **kwargs)
 
-    assert [(i.name, i.shape) for i in schema.input_schema] == [("a", [2])]
+        from michelangelo.lib.model_manager._private.serde.model import (
+            onnx_deployable_model,
+        )
 
-
-def test_schema_needs_config_pbtxt(tmp_path):
-    """A directory without config.pbtxt is reported."""
-    with pytest.raises(FileNotFoundError, match="config.pbtxt"):
-        load_deployable_model_schema(str(tmp_path))
-
-
-def test_load_model_schema_falls_back_to_config_pbtxt(tmp_path):
-    """A torch deployable has no schema.yaml, so config.pbtxt is read."""
-    schema = load_model_schema(_write_config(tmp_path))
-
-    assert [i.name for i in schema.output_schema] == ["score"]
-
-
-def test_load_model_schema_without_either_file(tmp_path):
-    """A directory with neither file has no schema."""
-    assert load_model_schema(str(tmp_path)) is None
-
-
-@pytest.mark.parametrize(
-    ("content", "error", "match"),
-    [
-        (None, FileNotFoundError, "config.pbtxt not found"),
-        ("max_batch_size: 8\n", ValueError, "names no backend"),
-    ],
-    ids=["no-config", "no-backend"],
-)
-def test_backend_type_errors(tmp_path, content, error, match):
-    """A missing file or backend line is reported."""
-    if content is not None:
-        (tmp_path / "config.pbtxt").write_text(content)
-    with pytest.raises(error, match=match):
-        get_deployable_backend_type(str(tmp_path))
-
-
-def test_load_needs_a_package_directory(tmp_path):
-    """A path that does not exist is reported before anything else."""
-    with pytest.raises(FileNotFoundError, match="Model package not found"):
-        load_deployable_model(str(tmp_path / "nope"))
-
-
-def test_load_rejects_an_unsupported_backend(tmp_path):
-    """A backend without a loader names the supported ones."""
-    _write_config(tmp_path, backend="tensorrt")
-    with pytest.raises(NotImplementedError, match="'tensorrt'.*pytorch"):
-        load_deployable_model(str(tmp_path))
-
-
-@pytest.mark.parametrize("backend", ["pytorch", "onnxruntime"])
-def test_load_reports_a_missing_model_file(tmp_path, backend):
-    """The expected file under 0/ is named in the error."""
-    _write_config(tmp_path, backend=backend)
-    with pytest.raises(FileNotFoundError, match="Deployable model file not found"):
-        load_deployable_model(str(tmp_path))
-
-
-@pytest.mark.parametrize(
-    ("class_file", "match"),
-    [(None, "Missing model_class.txt"), ("  \n", "model_class.txt is empty")],
-    ids=["missing", "empty"],
-)
-def test_load_python_package_needs_a_model_class(tmp_path, class_file, match):
-    """A python package without a usable model_class.txt is reported."""
-    _write_config(tmp_path, backend="python")
-    (tmp_path / "0").mkdir()
-    if class_file is not None:
-        (tmp_path / "0" / "model_class.txt").write_text(class_file)
-    with pytest.raises(ValueError, match=match):
-        load_deployable_model(str(tmp_path))
-
-
-@pytest.mark.parametrize(
-    ("device", "available", "expected"),
-    [
-        ("cpu", ["CUDAExecutionProvider", "CPUExecutionProvider"], ["CPU"]),
-        ("cuda", ["CPUExecutionProvider"], ["CPU"]),
-        ("cuda", ["CUDAExecutionProvider", "CPUExecutionProvider"], ["CUDA", "CPU"]),
-    ],
-    ids=["cpu-requested", "no-cuda-provider", "cuda"],
-)
-def test_onnx_requests_cuda_only_when_asked_and_available(
-    tmp_path, device, available, expected
-):
-    """A GPU build on a CPU worker never asks for the CUDA provider."""
-    _write_config(tmp_path, backend="onnxruntime")
-    (tmp_path / "0").mkdir()
-    (tmp_path / "0" / "model.onnx").write_bytes(b"")
-    with (
-        patch("onnxruntime.get_available_providers", return_value=available),
-        patch("onnxruntime.InferenceSession") as session,
-    ):
-        load_deployable_model(str(tmp_path), device=device)
-
-    assert session.call_args.kwargs["providers"] == [
-        f"{name}ExecutionProvider" for name in expected
-    ]
+        with patch("builtins.__import__", side_effect=no_torch):
+            self.assertFalse(onnx_deployable_model._cuda_available())

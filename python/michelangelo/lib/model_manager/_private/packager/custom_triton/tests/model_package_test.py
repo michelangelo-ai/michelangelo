@@ -7,7 +7,6 @@ import tempfile
 from unittest import TestCase
 
 import numpy as np
-import yaml
 
 from michelangelo.lib.model_manager._private.packager.custom_triton import (
     generate_model_package_content,
@@ -72,30 +71,6 @@ class ModelPackageTest(TestCase):
             self.assertIsNotNone(re.fullmatch(r"dir://(?:/.+)*/model", model))
             self.assertIn("schema.yaml", content["metadata"])
             self.assertIn("name: input", content["metadata"]["schema.yaml"])
-            # Per-record by default, so type.yaml carries no batch_inference.
-            self.assertEqual(
-                yaml.safe_load(content["metadata"]["type.yaml"]),
-                {"type": "custom-python"},
-            )
-
-    def test_generate_model_package_content_records_batch_mode(self):
-        """It records custom_batch_processing as batch_inference in type.yaml."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            content = generate_model_package_content(
-                TritonTemplateRenderer(),
-                temp_dir,
-                "test_model_name",
-                "test_model_revision",
-                "michelangelo.lib.model_manager._private.packager.custom_triton.tests.fixtures.predict.Predict",
-                _model_schema(),
-                {"input": {"type": "int32", "shape": "[ 1 ]"}},
-                {"response": {"type": "int32", "shape": "[ 1 ]"}},
-                include_import_prefixes=["michelangelo"],
-                custom_batch_processing=True,
-            )
-
-            type_yaml = yaml.safe_load(content["metadata"]["type.yaml"])
-            self.assertTrue(type_yaml["batch_inference"])
 
     def test_generate_model_package_content_with_sample_data(self):
         """It writes sample_data.json with an added batch dimension."""

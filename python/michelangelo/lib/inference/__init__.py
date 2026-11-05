@@ -3,10 +3,10 @@
 ``lib.inference`` scores batches of named numpy columns with a pluggable
 :class:`ModelBackend`. The built-in :class:`DeployableModelBackend` scores the
 deployable package that serving runs (TorchScript, ONNX, or a Python-backend
-model), and :class:`RawModelBackend` scores a raw model (a PyTorch module or a
-custom ``Model``). Any other model runtime plugs in with a factory that takes a
-:class:`BackendContext` and returns an object with the same three members,
-selected by dotted path through ``OfflineInferenceConfig.backend``.
+PyTorch model), and :class:`RawModelBackend` scores a raw model (a PyTorch
+module or a custom ``Model``). Any other model runtime plugs in with a factory
+that takes a :class:`BackendContext` and returns an object with the same three
+members, selected by dotted path through ``OfflineInferenceConfig.backend``.
 
 Most users score datasets through the ``tabular_inference`` workflow task. To
 score a Ray dataset directly:

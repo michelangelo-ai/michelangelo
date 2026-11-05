@@ -5,7 +5,6 @@ from __future__ import annotations
 import numpy as np
 import pytest
 import torch
-import yaml
 
 from michelangelo.lib.inference import (
     BackendContext,
@@ -176,9 +175,10 @@ def test_create_raw_backend_prefers_context_schema(tmp_path):
 
 
 def test_create_raw_backend_without_stored_schema(tmp_path):
-    """A package with no schema file still loads, with unknown names."""
+    """A raw package always carries schema.yaml, so a missing one is an error."""
     path = _write_torch_package(tmp_path, None)
-    assert create_raw_backend(BackendContext(path)).output_names is None
+    with pytest.raises(ValueError, match="Unknown model package format"):
+        create_raw_backend(BackendContext(path))
 
 
 def test_create_raw_backend_from_custom_package(tmp_path):
@@ -226,30 +226,6 @@ def test_load_model_schema_round_trip(tmp_path):
     assert loaded.output_schema[0].shape == [1]
 
 
-def test_load_model_schema_missing_file_is_none(tmp_path):
-    """A package with no schema file yields ``None``."""
-    assert load_model_schema(str(tmp_path)) is None
-
-
-def test_load_model_schema_defaults_missing_sections(tmp_path):
-    """A schema file that omits sections still loads."""
-    (tmp_path / "metadata").mkdir()
-    (tmp_path / "metadata" / "schema.yaml").write_text(
-        yaml.safe_dump({"input_schema": [{"name": "a", "data_type": "float"}]})
-    )
-    loaded = load_model_schema(str(tmp_path))
-    assert loaded.output_schema == []
-    assert loaded.feature_store_features_schema == []
-
-
-def test_load_model_schema_rejects_non_mapping(tmp_path):
-    """A schema file that is not a mapping is an error."""
-    (tmp_path / "metadata").mkdir()
-    (tmp_path / "metadata" / "schema.yaml").write_text("- just\n- a list\n")
-    with pytest.raises(ValueError, match="mapping"):
-        load_model_schema(str(tmp_path))
-
-
 def test_read_only_inputs_are_scored_without_modifying_or_warning():
     """Read-only (Arrow-backed) arrays are copied for torch, not shared."""
     import warnings
@@ -263,3 +239,30 @@ def test_read_only_inputs_are_scored_without_modifying_or_warning():
         out = backend.predict(batch)
     np.testing.assert_allclose(out["y"], [12.0, 24.0])
     assert not batch["a"].flags.writeable
+
+
+@pytest.mark.parametrize(
+    ("batch", "expected_calls"),
+    [(False, [(1,), (1,), (1,)]), (True, [(3, 1)])],
+    ids=["per-record", "batch"],
+)
+def test_custom_raw_package_is_called_the_way_serving_calls_it(
+    tmp_path, batch, expected_calls
+):
+    """Predict gets one record at a time unless batch_inference is set."""
+    from michelangelo.lib.inference.tests.fixtures import RecordModel, custom_raw
+
+    schema = ModelSchema(
+        input_schema=[ModelSchemaItem("a", DataType.FLOAT, [1])],
+        output_schema=[ModelSchemaItem("response", DataType.FLOAT, [1])],
+    )
+    backend = create_raw_backend(
+        BackendContext(custom_raw(tmp_path, schema, batch=batch))
+    )
+    RecordModel.calls.clear()
+
+    out = backend.predict({"a": np.array([[1.0], [2.0], [3.0]])})
+
+    assert RecordModel.calls == expected_calls
+    assert out["response"].shape == (3, 1)
+    assert out["response"].ravel().tolist() == [2.0, 3.0, 4.0]

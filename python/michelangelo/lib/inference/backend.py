@@ -151,7 +151,6 @@ def resolve_backend(model_path: str, backend: str | None = None) -> BackendFacto
     if backend is not None:
         return _import_factory(backend)
 
-    # Checked first: a custom deployable package also has metadata/type.yaml.
     if os.path.exists(os.path.join(model_path, "config.pbtxt")):
         from michelangelo.lib.inference.deployable_backend import (
             create_deployable_backend,
