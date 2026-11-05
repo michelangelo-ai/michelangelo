@@ -1,14 +1,33 @@
-load("@io_bazel_rules_go//go:def.bzl", "go_library")
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "go_default_library",
-    srcs = ["utils.go"],
+    srcs = [
+        "conditions.go",
+        "utils.go",
+    ],
     importpath = "github.com/michelangelo-ai/michelangelo/go/components/pipelinerun/actors/utils",
     visibility = ["//visibility:public"],
     deps = [
         "//go/api:go_default_library",
+        "//go/api/utils:go_default_library",
+        "//go/base/conditions/utils:go_default_library",
         "//proto/api:go_default_library",
         "//proto/api/v2:go_default_library",
         "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["conditions_test.go"],
+    embed = [":go_default_library"],
+    deps = [
+        "//proto/api:go_default_library",
+        "//proto/api/v2:go_default_library",
+        "@com_github_stretchr_testify//require:go_default_library",
+        "@io_k8s_apimachinery//pkg/api/errors:go_default_library",
+        "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
+        "@io_k8s_apimachinery//pkg/runtime/schema:go_default_library",
     ],
 )
