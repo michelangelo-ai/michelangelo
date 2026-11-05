@@ -261,7 +261,8 @@ def assemble_output_table(
         if collisions:
             raise ValueError(
                 f"The output columns {collisions} already exist in the input "
-                "dataset. This can cause conflicts. Please check your input data."
+                "dataset, or a prediction has the same name as a metadata "
+                "column. Rename the input column or the model output."
             )
 
     output_arrays: dict[str, pa.Array | pa.ChunkedArray] = {
