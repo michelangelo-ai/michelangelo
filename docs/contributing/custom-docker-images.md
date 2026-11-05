@@ -1,3 +1,7 @@
+---
+last_verified: 2026-11-05
+---
+
 # Custom Docker Images for Feature Branches and Sandbox Testing
 
 > **Who is this for?** This guide is for **contributors** developing Michelangelo AI's core platform services (API server, controller manager, worker). If you're building ML pipelines using the Michelangelo AI SDK, you don't need custom Docker images — the default sandbox images work out of the box. See the [Sandbox Setup Guide](../getting-started/sandbox-setup.md) for getting started.
@@ -17,17 +21,17 @@ Use this option when you want a fast feedback loop or are not ready to push your
 
 - Docker with BuildKit enabled (Docker Desktop ≥ 4.x)
 - A sandbox cluster (create one with `ma sandbox create` — see [Sandbox Setup](../getting-started/sandbox-setup.md))
-- The bazel-managed Go 1.24 binary (downloaded automatically on the first `bazel build`):
+- The bazel-managed Go binary (Go 1.26.10, pinned by `go_sdk.download` in `MODULE.bazel`; downloaded automatically on the first `bazel build`):
   ```bash
   # macOS
-  find /private/var/tmp/_bazel_$(whoami) -name "go" -path "*/rules_go~~go_sdk~*/bin/go" 2>/dev/null | head -1
+  find /private/var/tmp/_bazel_$(whoami) -name "go" -path "*rules_go*go_sdk*/bin/go" 2>/dev/null | head -1
 
   # Linux
-  find ~/.cache/bazel -name "go" -path "*/rules_go~~go_sdk~*/bin/go" 2>/dev/null | head -1
+  find ~/.cache/bazel -name "go" -path "*rules_go*go_sdk*/bin/go" 2>/dev/null | head -1
   ```
   Set a shell variable for convenience:
   ```bash
-  export GOEXEC=$(find /private/var/tmp/_bazel_$(whoami) -name "go" -path "*/rules_go~~go_sdk~*/bin/go" 2>/dev/null | head -1)
+  export GOEXEC=$(find /private/var/tmp/_bazel_$(whoami) -name "go" -path "*rules_go*go_sdk*/bin/go" 2>/dev/null | head -1)
   # Linux: replace /private/var/tmp/_bazel_$(whoami) with ~/.cache/bazel
   ```
 
@@ -46,7 +50,7 @@ GOOS=linux GOARCH=$ARCH CGO_ENABLED=0 $GOEXEC build -o ../worker        ./cmd/wo
 wait && echo "All builds done"
 ```
 
-> **Why `CGO_ENABLED=0`?** The distroless base image has no C runtime. Disabling CGO produces a fully static binary that works without it.
+> **Why `CGO_ENABLED=0`?** It produces a fully static binary, like the Bazel-built binaries `docker/service.Dockerfile` is written for, so the binary doesn't depend on the libraries in the distroless base image (`gcr.io/distroless/base-nossl-debian12`).
 
 ### Step 2: Build the Docker images
 
@@ -93,9 +97,9 @@ kubectl set image deployment/michelangelo-worker        app=ghcr.io/michelangelo
 > **Note:** `kubectl set image` is ephemeral — running `ma sandbox sync` or `helm upgrade` will revert the images to the Helm defaults. For a durable override, pass `--set` flags when creating the sandbox:
 > ```bash
 > ma sandbox create \
->   --set images.apiserver=ghcr.io/michelangelo-ai/apiserver:local-dev \
->   --set images.controllermgr=ghcr.io/michelangelo-ai/controllermgr:local-dev \
->   --set images.worker=ghcr.io/michelangelo-ai/worker:local-dev
+>   --set images.apiserver.tag=local-dev \
+>   --set images.controllermgr.tag=local-dev \
+>   --set images.worker.tag=local-dev
 > ```
 
 ### Step 6: Verify
@@ -132,7 +136,7 @@ kubectl rollout status  deployment/michelangelo-worker
 
 ### Troubleshooting
 
-- **Pod stuck in `ImagePullBackOff`**: The default `pullPolicy` is `IfNotPresent`. If k3d can't find the image, make sure you ran `k3d image import` after building. Check with `k3d image ls -c michelangelo-sandbox | grep local-dev`.
+- **Pod stuck in `ImagePullBackOff`**: The default `pullPolicy` is `IfNotPresent`. If k3d can't find the image, make sure you ran `k3d image import` after building. Check that the node has it with `docker exec k3d-michelangelo-sandbox-server-0 crictl images | grep local-dev`.
 - **`exec format error`**: Architecture mismatch — you built for `arm64` but the k3d node is `amd64` (or vice versa). Rebuild with the correct `ARCH`.
 - **`fatal error: fault` or a `runtime.sigpanic` stack trace**: also an architecture mismatch, but one that emulation lets start before it dies. When binfmt emulation is registered (as it is under Colima), a mismatched binary launches and then faults inside the Go runtime instead of failing with `exec format error`. Verify by extracting the image's entrypoint and checking it against the node's architecture:
 
@@ -165,7 +169,7 @@ Use this option when your branch is ready to share, you need multi-arch images (
 
 ### Prerequisites
 
-- Push access to the repository (or a fork with GitHub Actions enabled)
+- Push access to the repository. The workflow pushes to `ghcr.io/michelangelo-ai/<service>`, which a fork's workflow token can't write to, so this option doesn't work from a fork
 - GHCR pull access from your k3d cluster (public images work automatically)
 
 ### 1) Create or switch to your feature branch
@@ -213,12 +217,12 @@ The sandbox deploys core services via the Helm chart at `helm/michelangelo/`. Ov
 ```bash
 cd python
 ma sandbox create \
-  --set images.apiserver=ghcr.io/michelangelo-ai/apiserver:my-feature-branch \
-  --set images.controllermgr=ghcr.io/michelangelo-ai/controllermgr:my-feature-branch \
-  --set images.worker=ghcr.io/michelangelo-ai/worker:my-feature-branch
+  --set images.apiserver.tag=my-feature-branch \
+  --set images.controllermgr.tag=my-feature-branch \
+  --set images.worker.tag=my-feature-branch
 ```
 
-Or, if the sandbox is already running, import and swap the images:
+Or, if the sandbox is already running, swap the images (the nodes pull them from GHCR):
 
 ```bash
 kubectl set image deployment/michelangelo-apiserver    apiserver=ghcr.io/michelangelo-ai/apiserver:my-feature-branch
