@@ -5,9 +5,9 @@ sidebar_label: "Examples"
 
 # Examples
 
-End-to-end ML pipeline examples covering training, inference, recommendation systems, and model packaging. Each example is a complete, working workflow you can run locally or on a Michelangelo AI cluster.
+End-to-end ML pipeline examples covering training, recommendation systems, inference, workflow orchestration, evaluation, and model packaging. Each example is a complete, working workflow you can run locally or on a Michelangelo AI cluster.
 
-Most examples live in [`python/examples/`](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples). Heavier examples with their own dependency footprint — currently the California Housing pipelines (XGBoost + Spark, and PyTorch Lightning) — live in the separate [`michelangelo-examples`](https://github.com/michelangelo-ai/michelangelo-examples) repo instead, to keep this core repo's dependencies lean.
+Most examples live in [`python/examples/`](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples). Heavier examples with their own dependency footprint (the California Housing pipelines, GPT fine-tuning, Nomic AI and MovieLens) live in the separate [`michelangelo-examples`](https://github.com/michelangelo-ai/michelangelo-examples) repo instead, to keep this core repo's dependencies lean.
 
 ## By Use Case
 
@@ -33,6 +33,18 @@ Most examples live in [`python/examples/`](https://github.com/michelangelo-ai/mi
 | Example | Description | Runtime | Difficulty |
 |---------|-------------|---------|------------|
 | [HuggingFace Batch Inference](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/llm_prediction) | Batch inference with two backends: HuggingFace Transformers (CPU/GPU) and vLLM (optimized GPU with tensor parallelism). Configurable sampling parameters (temperature, top-p, max tokens). | Ray | Intermediate |
+
+### Workflow Orchestration
+
+| Example | Description | Runtime | Difficulty |
+|---------|-------------|---------|------------|
+| [Uniflow Workflow Patterns](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/workflow_patterns) | One runnable file covering every core orchestration pattern: sequential tasks, if/else branching, for loops, `concurrent_run` fan-out and fan-in, `concurrent_batch_run`, and `DatasetVariable` hand-offs between tasks. Its README lists the Starlark restrictions that apply to workflow bodies in remote runs. Companion to [Workflow Patterns](../ml-pipelines/workflow-patterns.md). | Ray | Beginner |
+
+### Evaluation
+
+| Example | Description | Runtime | Difficulty |
+|---------|-------------|---------|------------|
+| [Evaluator Workflow](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/evaluator) | Runs the evaluator task on synthetic predictions: metrics declared in config (`torchmetrics`), results split per segment, and a `SanityCheck` threshold that fails the run when one segment regresses even though the aggregate passes. Set `BREAK_IT=1` to see the failure. Install with the `example` and `evaluator` extras. | Ray | Intermediate |
 
 ### Model Packaging
 
