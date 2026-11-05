@@ -195,19 +195,6 @@ def test_max_errored_blocks_must_be_a_non_negative_int(bad):
         TabularInferenceConfig(max_errored_blocks=bad)
 
 
-@pytest.mark.parametrize("bad", [0, -0.1, 1.5, True])
-def test_sampling_fractions_must_be_in_zero_one(bad):
-    """A fraction must be greater than 0 and at most 1."""
-    with pytest.raises(ConfigurationError, match=r"fractions\['train'\]"):
-        SamplingConfig(fractions={"train": bad})
-
-
-def test_sampling_agg_cols_must_not_be_empty():
-    """An empty grouping list is a mistake, not a request to group by nothing."""
-    with pytest.raises(ConfigurationError, match="agg_cols"):
-        SamplingConfig(agg_cols=[])
-
-
 def test_model_reference_validation():
     """An empty name or a negative revision is rejected."""
     with pytest.raises(ConfigurationError, match="name"):

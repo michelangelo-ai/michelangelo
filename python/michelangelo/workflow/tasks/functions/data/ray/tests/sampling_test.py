@@ -37,8 +37,19 @@ def _dataset():
         SamplingConfig(),
         SamplingConfig(fractions={"validation": 0.1}),
         SamplingConfig(fractions={"train": 1.0}),
+        SamplingConfig(fractions={"train": 0}),
+        SamplingConfig(fractions={"train": -0.1}),
+        SamplingConfig(fractions={"train": 1.5}),
     ],
-    ids=["no-config", "no-fractions", "other-dataset", "fraction-one"],
+    ids=[
+        "no-config",
+        "no-fractions",
+        "other-dataset",
+        "fraction-one",
+        "fraction-zero",
+        "negative",
+        "above-one",
+    ],
 )
 def test_unsampled_datasets_are_returned_as_they_are(config):
     """Nothing is added to the plan when the dataset keeps every row."""
@@ -95,3 +106,16 @@ def test_group_sampling_by_one_column():
 
     assert 0 < len(set(kept)) < 100
     assert all(kept.count(s) == 4 for s in set(kept))
+
+
+def test_empty_agg_cols_samples_at_random(ray_session):
+    """An empty grouping list is the same as none: seeded random sampling."""
+    grouped = SamplingConfig(fractions={"train": 0.25}, agg_cols=[])
+    plain = SamplingConfig(fractions={"train": 0.25})
+
+    def kept(config):
+        return sorted(
+            r["x"] for r in apply_sampling(_dataset(), config, "train").take_all()
+        )
+
+    assert kept(grouped) == kept(plain)

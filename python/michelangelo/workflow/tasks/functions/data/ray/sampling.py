@@ -63,10 +63,17 @@ def apply_sampling(
         dataset_name: The dataset's name, looked up in ``config.fractions``.
 
     Returns:
-        The sampled dataset, or ``dataset`` itself when it is not sampled.
+        The sampled dataset, or ``dataset`` itself when it is not sampled: when
+        its fraction is not strictly between ``0`` and ``1``.
     """
     fraction = (config.fractions or {}).get(dataset_name, 1.0) if config else 1.0
-    if fraction >= 1:
+    if not 0 < fraction < 1:
+        if fraction != 1:
+            _logger.info(
+                "Not sampling %s: fraction %s is not between 0 and 1",
+                dataset_name,
+                fraction,
+            )
         return dataset
 
     if config.agg_cols:
