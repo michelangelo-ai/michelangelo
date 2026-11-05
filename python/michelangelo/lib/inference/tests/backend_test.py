@@ -13,6 +13,7 @@ from michelangelo.lib.inference import (
     default_device,
     resolve_backend,
 )
+from michelangelo.lib.inference.deployable_backend import create_deployable_backend
 from michelangelo.lib.inference.raw_backend import create_raw_backend
 
 _FIX = "michelangelo.lib.inference.tests.fixtures"
@@ -84,18 +85,20 @@ def test_resolve_raw_package(tmp_path):
     assert resolve_backend(str(tmp_path)) is create_raw_backend
 
 
-@pytest.mark.parametrize("name", ["model.onnx", "model.pt"])
-def test_resolve_deployable_package_fails_loudly(tmp_path, name):
-    """A serving bundle is never silently scored as a raw model."""
-    (tmp_path / "0").mkdir()
-    (tmp_path / "0" / name).write_text("x")
-    with pytest.raises(ValueError, match="deployable"):
-        resolve_backend(str(tmp_path))
+@pytest.mark.parametrize("has_type_yaml", [False, True])
+def test_resolve_deployable_package(tmp_path, has_type_yaml):
+    """config.pbtxt wins, since a custom deployable also has metadata/type.yaml."""
+    (tmp_path / "config.pbtxt").write_text('backend: "python"\n')
+    if has_type_yaml:
+        (tmp_path / "metadata").mkdir()
+        (tmp_path / "metadata" / "type.yaml").write_text("type: custom-python\n")
+
+    assert resolve_backend(str(tmp_path)) is create_deployable_backend
 
 
 def test_resolve_non_package(tmp_path):
     """A directory with no package files is reported as such."""
-    with pytest.raises(FileNotFoundError, match="metadata/type.yaml"):
+    with pytest.raises(FileNotFoundError, match="config.pbtxt nor metadata/type.yaml"):
         resolve_backend(str(tmp_path))
     assert os.path.isdir(tmp_path)
 

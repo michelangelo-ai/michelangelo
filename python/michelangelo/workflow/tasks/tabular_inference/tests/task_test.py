@@ -5,11 +5,13 @@ from __future__ import annotations
 from unittest.mock import patch
 
 import pytest
-import torch
 
 from michelangelo.lib.artifact_manager.storage_backend import LocalStorageBackend
-from michelangelo.lib.inference.tests.fixtures import DictModel
-from michelangelo.lib.model_manager._private.schema.common.serde import schema_to_yaml
+from michelangelo.lib.inference.tests.fixtures import (
+    DictModel,
+    PositionalModel,
+    torch_deployable,
+)
 from michelangelo.lib.model_manager.registry.client import InMemoryRegistryClient
 from michelangelo.lib.model_manager.schema import DataType, ModelSchema, ModelSchemaItem
 from michelangelo.workflow.schema.evaluator import (
@@ -31,7 +33,6 @@ from michelangelo.workflow.variables import DatasetVariable, ModelVariable
 from michelangelo.workflow.variables._private.utils.serialization import save_object
 from michelangelo.workflow.variables.types import AssembledModel, ModelArtifact
 
-_FIX = "michelangelo.lib.inference.tests.fixtures"
 _SCHEMA = ModelSchema(
     input_schema=[
         ModelSchemaItem("a", DataType.FLOAT, [1]),
@@ -70,15 +71,24 @@ def _dataset_var(tmp_path, name="in", rows=None):
     return DatasetVariable(path=path)
 
 
-def _raw_package(root):
-    """A torch raw package on disk that scores ``2a + b``."""
-    for d in ("model", "defs", "metadata"):
-        (root / d).mkdir(parents=True)
-    torch.save(DictModel().state_dict(), root / "model" / "model.pt")
-    (root / "defs" / "model_class.txt").write_text(f"{_FIX}.DictModel")
-    (root / "metadata" / "type.yaml").write_text("type: torch\n")
-    (root / "metadata" / "schema.yaml").write_text(schema_to_yaml(_SCHEMA))
-    return str(root)
+def _package(root):
+    """A TorchScript deployable package that scores ``2a + b``.
+
+    Built by the real packager, as the assembler does.
+    """
+    return torch_deployable(root, PositionalModel(), _SCHEMA)
+
+
+def _assembled(deployable_path, raw_path="s3://bucket/raw-is-never-read"):
+    """An assembler output.
+
+    The raw path is a URI nothing can download, which proves the raw package is
+    not used.
+    """
+    return AssembledModel(
+        raw_model=ModelArtifact(path=raw_path),
+        deployable_model=ModelArtifact(path=deployable_path),
+    )
 
 
 def _config(**model_kwargs):
@@ -115,12 +125,9 @@ def test_scores_with_in_process_model_variable(ray_session, tmp_path, out_dir):
     _assert_scored(result["train"])
 
 
-def test_scores_with_assembled_model_without_deployable(ray_session, tmp_path, out_dir):
-    """An AssembledModel with no deployable package is scored from its raw package."""
-    assembled = AssembledModel(
-        raw_model=ModelArtifact(path=_raw_package(tmp_path / "pkg")),
-        deployable_model=None,
-    )
+def test_scores_with_assembled_model_deployable(ray_session, tmp_path, out_dir):
+    """An AssembledModel is scored from its deployable package, never its raw one."""
+    assembled = _assembled(_package(tmp_path / "pkg"))
 
     result = tabular_inference(
         _config(), {"train": _dataset_var(tmp_path)}, model=assembled
@@ -133,9 +140,11 @@ def test_scores_with_registry_resolved_model(ray_session, tmp_path, out_dir):
     """A registry reference is looked up, downloaded and scored, with metadata."""
     storage = LocalStorageBackend(base_dir=str(tmp_path / "store"))
     (tmp_path / "store").mkdir()
-    uri = storage.upload(_raw_package(tmp_path / "pkg"), "models/housing")
+    uri = storage.upload(_package(tmp_path / "pkg"), "models/housing")
     registry = InMemoryRegistryClient()
-    registry.register_model("housing", artifact_uri=uri)
+    registry.register_model(
+        "housing", artifact_uri="s3://raw-is-never-read", deployable_artifact_uri=uri
+    )
 
     result = tabular_inference(
         _config(model=ModelReference(name="housing")),
@@ -152,9 +161,7 @@ def test_scores_with_registry_resolved_model(ray_session, tmp_path, out_dir):
 
 def test_output_feeds_the_evaluator_unchanged(ray_session, tmp_path, out_dir):
     """The scored datasets go straight into evaluate(), prediction is a scalar."""
-    assembled = AssembledModel(
-        raw_model=ModelArtifact(path=_raw_package(tmp_path / "pkg"))
-    )
+    assembled = _assembled(_package(tmp_path / "pkg"))
     result = tabular_inference(
         _config(), {"test": _dataset_var(tmp_path)}, model=assembled
     )
@@ -177,9 +184,7 @@ def test_output_feeds_the_evaluator_unchanged(ray_session, tmp_path, out_dir):
 
 def test_none_dataset_is_passed_through(ray_session, tmp_path, out_dir):
     """A None dataset stays None and the others are scored."""
-    assembled = AssembledModel(
-        raw_model=ModelArtifact(path=_raw_package(tmp_path / "pkg"))
-    )
+    assembled = _assembled(_package(tmp_path / "pkg"))
     result = tabular_inference(
         _config(), {"train": _dataset_var(tmp_path), "test": None}, model=assembled
     )
@@ -199,9 +204,7 @@ def test_empty_dataset_is_returned_as_it_came(ray_session, tmp_path, out_dir):
     )
     pq.write_table(schema.empty_table(), str(empty_dir / "part-0.parquet"))
     empty_var = DatasetVariable(path=str(empty_dir))
-    assembled = AssembledModel(
-        raw_model=ModelArtifact(path=_raw_package(tmp_path / "pkg"))
-    )
+    assembled = _assembled(_package(tmp_path / "pkg"))
 
     result = tabular_inference(_config(), {"test": empty_var}, model=assembled)
 
@@ -219,9 +222,7 @@ def test_no_models_returns_datasets_unchanged():
 
 def test_write_config_is_applied(ray_session, tmp_path, out_dir):
     """write_config options reach the dataset write."""
-    assembled = AssembledModel(
-        raw_model=ModelArtifact(path=_raw_package(tmp_path / "pkg"))
-    )
+    assembled = _assembled(_package(tmp_path / "pkg"))
     config = _config()
     config.write_config = WriteConfig(max_rows_per_file=2)
 
@@ -279,11 +280,11 @@ def test_registry_reference_needs_storage_backend():
         )
 
 
-def test_registry_entry_without_artifact_is_rejected(tmp_path):
-    """A registered model with no artifact cannot be scored."""
+def test_registry_entry_without_deployable_is_rejected(tmp_path):
+    """A registered model with only a raw package is not scored from it."""
     registry = InMemoryRegistryClient()
-    registry.register_model("m", artifact_uri="")
-    with pytest.raises(ValueError, match="no artifact_uri"):
+    registry.register_model("m", artifact_uri="s3://bucket/raw")
+    with pytest.raises(ValueError, match="no deployable_artifact_uri"):
         tabular_inference(
             _config(model=ModelReference(name="m")),
             {"train": None},
@@ -292,20 +293,15 @@ def test_registry_entry_without_artifact_is_rejected(tmp_path):
         )
 
 
-def test_deployable_only_model_fails_loudly(tmp_path):
-    """A model that only has a deployable package is never silently scored raw."""
+@pytest.mark.parametrize(
+    "deployable", [None, ModelArtifact(path="")], ids=["missing", "empty-path"]
+)
+def test_model_without_deployable_is_rejected(tmp_path, deployable):
+    """A model with only a raw package is never silently scored from it."""
     assembled = AssembledModel(
-        raw_model=ModelArtifact(path=""),
-        deployable_model=ModelArtifact(path=str(tmp_path)),
+        raw_model=ModelArtifact(path=str(tmp_path)), deployable_model=deployable
     )
-    with pytest.raises(ValueError, match="only a deployable"):
-        tabular_inference(_config(), {"train": None}, model=assembled)
-
-
-def test_empty_raw_path_is_rejected():
-    """The assembler's empty placeholder artifact is not a package."""
-    assembled = AssembledModel(raw_model=ModelArtifact(path=""))
-    with pytest.raises(ValueError, match="no raw package path"):
+    with pytest.raises(ValueError, match="no deployable package"):
         tabular_inference(_config(), {"train": None}, model=assembled)
 
 
@@ -318,17 +314,17 @@ def test_unsupported_model_type_is_rejected():
 def test_remote_assembled_package_is_downloaded_by_the_workers(
     ray_session, tmp_path, out_dir
 ):
-    """A raw package recorded as a storage URI is fetched on the worker."""
+    """A deployable package recorded as a storage URI is fetched on the worker."""
     import shutil
 
-    package = _raw_package(tmp_path / "pkg")
+    package = _package(tmp_path / "pkg")
 
     class FakeRemote(LocalStorageBackend):
         def download(self, uri, local_path):
-            assert uri == "fake://bucket/raw"
+            assert uri == "fake://bucket/deployable"
             shutil.copytree(package, local_path, dirs_exist_ok=True)
 
-    assembled = AssembledModel(raw_model=ModelArtifact(path="fake://bucket/raw"))
+    assembled = _assembled("fake://bucket/deployable")
     result = tabular_inference(
         _config(),
         {"train": _dataset_var(tmp_path)},
@@ -351,7 +347,9 @@ def test_remote_sources_are_not_downloaded_on_the_driver(tmp_path):
 
     storage = Spy(base_dir=str(tmp_path))
     registry = InMemoryRegistryClient()
-    registry.register_model("m", artifact_uri="s3://bucket/m")
+    registry.register_model(
+        "m", artifact_uri="s3://bucket/raw", deployable_artifact_uri="s3://bucket/m"
+    )
 
     from_registry = resolve_model_source(
         OfflineInferenceConfig(model=ModelReference(name="m")),
@@ -362,7 +360,7 @@ def test_remote_sources_are_not_downloaded_on_the_driver(tmp_path):
     )
     from_assembled = resolve_model_source(
         OfflineInferenceConfig(),
-        AssembledModel(raw_model=ModelArtifact(path="s3://bucket/raw")),
+        _assembled("s3://bucket/deployable"),
         0,
         storage_backend=storage,
         registry_client=None,
@@ -374,7 +372,7 @@ def test_remote_sources_are_not_downloaded_on_the_driver(tmp_path):
         "1",
     )
     assert from_registry.storage_backend is storage
-    assert from_assembled.uri == "s3://bucket/raw"
+    assert from_assembled.uri == "s3://bucket/deployable"
     assert from_assembled.model_path is None
 
 
@@ -390,6 +388,6 @@ def test_dataset_already_loaded_as_pandas_is_rejected_clearly(tmp_path):
 
 def test_remote_assembled_package_needs_storage_backend():
     """A URI that is not a local directory names the missing argument."""
-    assembled = AssembledModel(raw_model=ModelArtifact(path="s3://bucket/raw"))
+    assembled = _assembled("s3://bucket/deployable")
     with pytest.raises(ValueError, match="storage_backend"):
         tabular_inference(_config(), {"train": None}, model=assembled)

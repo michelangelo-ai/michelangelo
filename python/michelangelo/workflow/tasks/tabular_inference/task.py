@@ -45,15 +45,19 @@ def tabular_inference(
     Ray actors, and the prediction columns are added to every row. Rows keep all
     input columns unless ``columns_to_keep`` is set.
 
+    A packaged model is always scored from its deployable package, the artifact
+    serving runs, so batch predictions match online ones. That includes a native
+    transform the assembler fused into the model.
+
     Args:
         config: Which models to run and how.
         datasets: Dataset name to dataset, for example ``{"train": ...,
             "validation": ...}``. ``None`` entries are passed through.
         model: The model to score with, used by every ``local_models`` entry that
             has no ``model`` reference: a ``ModelVariable`` (scored in-process) or
-            an ``AssembledModel`` (scored from its raw package).
+            an ``AssembledModel`` (scored from its deployable package).
         storage_backend: Downloads model packages that are not local
-            directories: registry artifacts, and the raw package of an
+            directories: registry artifacts, and the deployable package of an
             ``AssembledModel`` stored remotely. Not needed for an in-process
             ``ModelVariable`` or a local package directory.
         registry_client: Looks up ``local_models[i].model``. Required only when

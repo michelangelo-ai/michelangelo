@@ -1,14 +1,25 @@
-"""Backend that scores a raw model package.
+"""Backend that scores a raw model.
 
-A raw package holds the trained model itself, not an exported serving bundle:
-a PyTorch ``nn.Module`` (plain, Lightning, or a transform fused with a
+A raw model is the trained model itself, not an exported serving bundle: a
+PyTorch ``nn.Module`` (plain, Lightning, or a transform fused with a
 predictor) or a custom ``Model`` from
-:mod:`michelangelo.lib.model_manager.interface.custom_model`.
+:mod:`michelangelo.lib.model_manager.interface.custom_model`. The task scores
+a model object passed in memory with it; packaged models go through the
+deployable backend.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
+
+from michelangelo.lib.inference._invoke import (
+    DEFAULT_OUTPUT_NAME,
+    call_module,
+    name_outputs,
+    predict_custom,
+    read_batch_inference,
+    to_torch_inputs,
+)
 
 if TYPE_CHECKING:
     import numpy as np
@@ -18,25 +29,28 @@ if TYPE_CHECKING:
 
 __all__ = ["DEFAULT_OUTPUT_NAME", "RawModelBackend", "create_raw_backend"]
 
-#: Name given to a single unnamed output when the model has no output schema.
-DEFAULT_OUTPUT_NAME = "prediction"
-
 
 class RawModelBackend:
     """Scores batches with a loaded raw model.
 
     Args:
-        model: A PyTorch ``nn.Module`` taking a ``dict`` of tensors, or a custom
-            ``Model`` whose ``predict`` takes and returns numpy dicts.
+        model: A PyTorch ``nn.Module``, or a custom ``Model`` whose ``predict``
+            takes and returns numpy dicts.
         schema: The model schema. Provides the input and output names.
         device: Device for a PyTorch model. Ignored for custom models.
+        batch_inference: For a custom ``Model``, whether ``predict`` takes the
+            whole batch instead of one record. Ignored for PyTorch models.
 
     Raises:
         TypeError: If ``model`` is neither a custom ``Model`` nor an ``nn.Module``.
     """
 
     def __init__(
-        self, model: Any, schema: ModelSchema | None = None, device: str = "cpu"
+        self,
+        model: Any,
+        schema: ModelSchema | None = None,
+        device: str = "cpu",
+        batch_inference: bool = True,
     ) -> None:
         """Wrap ``model``, moving a PyTorch module to ``device``."""
         from michelangelo.lib.model_manager.interface.custom_model import Model
@@ -54,6 +68,7 @@ class RawModelBackend:
         self._model = model
         self._schema = schema
         self._device = device
+        self._batch_inference = batch_inference
 
     @property
     def input_names(self) -> list[str] | None:
@@ -84,45 +99,14 @@ class RawModelBackend:
                 the schema names.
         """
         if self._custom:
-            return self._model.predict(inputs)
+            return predict_custom(self._model, inputs, self._batch_inference)
 
         import torch
 
-        # Arrow zero-copy batches are read-only, which torch warns about and
-        # cannot safely share, so copy only those.
-        tensors = {
-            k: torch.as_tensor(
-                v if v.flags.writeable else v.copy(), device=self._device
-            )
-            for k, v in inputs.items()
-        }
+        tensors = to_torch_inputs(inputs, self._device)
         with torch.inference_mode():
-            output = self._model(tensors)
-        return self._name_outputs(output)
-
-    def _name_outputs(self, output: Any) -> dict[str, np.ndarray]:
-        """Convert a module's output to a dict of named numpy arrays."""
-        if isinstance(output, dict):
-            return {k: _to_numpy(v) for k, v in output.items()}
-
-        if isinstance(output, (tuple, list)):
-            values = list(output)
-            names = self.output_names or list(getattr(output, "_fields", ()))
-        else:
-            values = [output]
-            names = self.output_names or [DEFAULT_OUTPUT_NAME]
-
-        if len(names) != len(values):
-            raise ValueError(
-                f"The model returned {len(values)} output(s) but the schema "
-                f"names {len(names)}: {names}."
-            )
-        return {name: _to_numpy(value) for name, value in zip(names, values)}
-
-
-def _to_numpy(value: Any) -> np.ndarray:
-    """Convert a tensor to a numpy array on the CPU."""
-    return value.detach().cpu().numpy()
+            output = call_module(self._model, tensors)
+        return name_outputs(output, self.output_names)
 
 
 def create_raw_backend(context: BackendContext) -> RawModelBackend:
@@ -133,7 +117,8 @@ def create_raw_backend(context: BackendContext) -> RawModelBackend:
             ``None``, the schema stored in the package is used.
 
     Returns:
-        The backend.
+        The backend. A custom model is scored one record at a time unless the
+        package's ``metadata/type.yaml`` sets ``batch_inference``.
     """
     from michelangelo.lib.model_manager.serde.model import (
         load_model_schema,
@@ -142,4 +127,9 @@ def create_raw_backend(context: BackendContext) -> RawModelBackend:
 
     schema = context.schema or load_model_schema(context.model_path)
     model = load_raw_model(context.model_path)
-    return RawModelBackend(model, schema=schema, device=context.device)
+    return RawModelBackend(
+        model,
+        schema=schema,
+        device=context.device,
+        batch_inference=read_batch_inference(context.model_path),
+    )

@@ -28,6 +28,9 @@ from michelangelo.lib.model_manager._private.packager.custom_triton.model_py imp
 from michelangelo.lib.model_manager._private.packager.custom_triton.pickled_model_binary import (  # noqa: E501
     serialize_pickle_dependencies,
 )
+from michelangelo.lib.model_manager._private.packager.custom_triton.type_yaml import (
+    generate_type_yaml,
+)
 from michelangelo.lib.model_manager._private.packager.custom_triton.user_model_py import (  # noqa: E501
     generate_user_model_content,
 )
@@ -163,6 +166,10 @@ def generate_model_package_content(
         "config.pbtxt": config_pbtxt,
         "metadata": {
             "schema.yaml": schema_to_yaml(model_schema),
+            # Records whether predict takes a whole batch, which is otherwise
+            # only baked into the generated user_model.py. Offline inference
+            # reads it to call the model the way serving does.
+            "type.yaml": generate_type_yaml(custom_batch_processing),
         },
         "0": {
             "model.py": model_py,

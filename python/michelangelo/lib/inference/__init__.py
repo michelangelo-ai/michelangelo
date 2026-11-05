@@ -1,11 +1,12 @@
 """Batch model inference building blocks.
 
 ``lib.inference`` scores batches of named numpy columns with a pluggable
-:class:`ModelBackend`. The built-in :class:`RawModelBackend` scores raw model
-packages (PyTorch, Lightning, fused, or a custom ``Model``). Any other model
-runtime plugs in with a factory that takes a :class:`BackendContext` and returns
-an object with the same three members, selected by dotted path through
-``OfflineInferenceConfig.backend``.
+:class:`ModelBackend`. The built-in :class:`DeployableModelBackend` scores the
+deployable package that serving runs (TorchScript, ONNX, or a Python-backend
+model), and :class:`RawModelBackend` scores a raw model (a PyTorch module or a
+custom ``Model``). Any other model runtime plugs in with a factory that takes a
+:class:`BackendContext` and returns an object with the same three members,
+selected by dotted path through ``OfflineInferenceConfig.backend``.
 
 Most users score datasets through the ``tabular_inference`` workflow task. To
 score a Ray dataset directly:
@@ -31,6 +32,10 @@ from michelangelo.lib.inference.batch_inference import (
     ModelSource,
     batch_model_inference,
 )
+from michelangelo.lib.inference.deployable_backend import (
+    DeployableModelBackend,
+    create_deployable_backend,
+)
 from michelangelo.lib.inference.predictor import (
     MODEL_NAME_COLUMN,
     MODEL_VERSION_COLUMN,
@@ -43,12 +48,14 @@ __all__ = [
     "MODEL_VERSION_COLUMN",
     "BackendContext",
     "BackendFactory",
+    "DeployableModelBackend",
     "ModelBackend",
     "ModelSource",
     "Predictor",
     "RawModelBackend",
     "batch_model_inference",
     "build_backend",
+    "create_deployable_backend",
     "create_raw_backend",
     "default_device",
     "resolve_backend",

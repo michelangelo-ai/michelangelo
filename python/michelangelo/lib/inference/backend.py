@@ -135,38 +135,38 @@ def resolve_backend(model_path: str, backend: str | None = None) -> BackendFacto
     Args:
         model_path: Local directory of the model package.
         backend: Dotted path of a :data:`BackendFactory`. When ``None``, the
-            backend is chosen from the package layout.
+            backend is chosen from the package layout: a deployable package
+            (one with a ``config.pbtxt``) gets the deployable backend, and a
+            raw package (one with ``metadata/type.yaml`` and no
+            ``config.pbtxt``) gets the raw backend.
 
     Returns:
         A callable that builds the backend from a :class:`BackendContext`.
 
     Raises:
-        ValueError: If ``backend`` cannot be imported or is not callable, or
-            if the package is a deployable (serving) package, which has no
-            backend yet.
+        ValueError: If ``backend`` cannot be imported or is not callable.
         FileNotFoundError: If ``backend`` is ``None`` and ``model_path`` is not
             a model package.
     """
     if backend is not None:
         return _import_factory(backend)
 
+    # Checked first: a custom deployable package also has metadata/type.yaml.
+    if os.path.exists(os.path.join(model_path, "config.pbtxt")):
+        from michelangelo.lib.inference.deployable_backend import (
+            create_deployable_backend,
+        )
+
+        return create_deployable_backend
+
     if os.path.exists(os.path.join(model_path, "metadata", "type.yaml")):
         from michelangelo.lib.inference.raw_backend import create_raw_backend
 
         return create_raw_backend
 
-    if any(
-        os.path.exists(os.path.join(model_path, "0", name))
-        for name in ("model.onnx", "model.pt")
-    ):
-        raise ValueError(
-            f"{model_path!r} is a deployable model package, which the built-in "
-            "backends cannot score. Pass the raw model package, or set "
-            "'backend' to a factory that can load it."
-        )
-
     raise FileNotFoundError(
-        f"{model_path!r} is not a model package: metadata/type.yaml not found."
+        f"{model_path!r} is not a model package: neither config.pbtxt nor "
+        "metadata/type.yaml was found."
     )
 
 

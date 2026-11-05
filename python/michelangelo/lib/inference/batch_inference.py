@@ -36,7 +36,8 @@ class ModelSource:
         uri: URI of the model package in ``storage_backend``. Each worker
             downloads it, so it works on any node.
         storage_backend: Downloads ``uri``. Required with ``uri``.
-        model: An already loaded model, scored with the raw backend. It is
+        model: An already loaded PyTorch module or custom ``Model``, scored
+            with :class:`~michelangelo.lib.inference.RawModelBackend`. It is
             placed in the Ray object store once and shared by every worker.
         schema: The model schema. Defaults to the one stored in the package.
         name: Written to the ``model_name`` column when set.
