@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.13.0] - 2026-11-05
 
 ### ⚠ Breaking Changes
 
@@ -173,6 +173,9 @@ All notable changes to this project will be documented in this file.
 - Update CHANGELOG.md for v0.13.0-rc.1 (#2353)
 
 
+- Update CHANGELOG.md for v0.13.0-rc.2 (#2392)
+
+
 ### Features
 
 
@@ -276,6 +279,9 @@ All notable changes to this project will be documented in this file.
 
 
 - **release:** Cherry-pick #2363 and bump version to 0.13.0-rc.2 (#2390)
+
+
+- Release 0.13.0 (#2394)
 
 
 ### Refactoring
