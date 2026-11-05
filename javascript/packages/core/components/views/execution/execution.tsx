@@ -12,7 +12,7 @@ import { TaskStateIcon } from './components/task-state-icon';
 import { TaskTimetable } from './components/task-timetable/task-timetable';
 import { taskListHasTiming } from './components/task-timetable/utils/build-timetable';
 import { EXECUTION_VIEW, EXECUTION_VIEW_OPTIONS } from './constants';
-import { TaskContentStack } from './styled-components';
+import { OverviewHeader, TaskContentStack } from './styled-components';
 import { buildTaskList } from './utils/build-task-list';
 import { buildTaskMatrix } from './utils/build-task-matrix';
 import { determineExecutionState } from './utils/determine-execution-state';
@@ -60,15 +60,7 @@ export function Execution<
     <TaskContentStack>
       <Box
         title={
-          <div
-            className={css({
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: theme.sizing.scale500,
-              width: '100%',
-            })}
-          >
+          <OverviewHeader>
             <div
               className={css({ display: 'flex', alignItems: 'center', gap: theme.sizing.scale500 })}
             >
@@ -88,7 +80,7 @@ export function Execution<
                 ))}
               </SegmentedControl>
             ) : null}
-          </div>
+          </OverviewHeader>
         }
       >
         <TaskContentStack>

@@ -1,3 +1,4 @@
+import { handleScrollToTask } from '#core/components/views/execution/utils/scroll-to-task';
 import { TaskStateIcon } from '../task-state-icon';
 import {
   TimetableAxis,
@@ -14,7 +15,6 @@ import {
 import { TaskTimetableBar } from './task-timetable-bar';
 import { buildTimetable } from './utils/build-timetable';
 import { formatDuration } from './utils/format-duration';
-import { scrollToTimetableTask } from './utils/scroll-to-timetable-task';
 import { toPercent } from './utils/to-percent';
 
 import type { KeyboardEvent } from 'react';
@@ -53,7 +53,7 @@ export function TaskTimetable<TTaskRecord extends object = object>({
       </TimetableRowGrid>
 
       {rows.map((row, index) => {
-        const handleActivate = () => scrollToTimetableTask(row.task, row.ancestors);
+        const handleActivate = () => handleScrollToTask(row.task, row.ancestors);
 
         return (
           <TimetableRowGrid
