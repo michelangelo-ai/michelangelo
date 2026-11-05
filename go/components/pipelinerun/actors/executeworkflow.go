@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/gogo/protobuf/jsonpb"
@@ -864,8 +865,10 @@ func mergePipelineRunStepInfo(oldStepInfo *v2.PipelineRunStepInfo, newStepInfo *
 		mergedStepInfo.Resources = append(oldStepInfo.Resources, newStepInfo.Resources...)
 		mergedStepInfo.AttemptIds = append(oldStepInfo.AttemptIds, newStepInfo.AttemptIds...)
 		// A new task-level retry attempt started: oldStepInfo holds the final state of the
-		// previous attempt, so preserve it in AttemptDetails before it is overwritten.
-		if len(oldStepInfo.AttemptIds) > 0 && len(newStepInfo.AttemptIds) > 0 {
+		// previous attempt, so preserve it in AttemptDetails before it is overwritten. Retries only
+		// follow a failure; a new attempt ID after any other state is a separate call of the same task.
+		if len(oldStepInfo.AttemptIds) > 0 && len(newStepInfo.AttemptIds) > 0 &&
+			oldStepInfo.State == v2.PIPELINE_RUN_STEP_STATE_FAILED {
 			mergedStepInfo.AttemptDetails = append(oldStepInfo.AttemptDetails, taskAttemptSnapshot(oldStepInfo))
 		}
 	}
@@ -885,15 +888,17 @@ func mergePipelineRunStepInfo(oldStepInfo *v2.PipelineRunStepInfo, newStepInfo *
 }
 
 // taskAttemptSnapshot records the latest attempt of a task step for its retry history. It keeps only
-// the per-attempt metadata (state, timing, message, logs and that attempt's driver URL) and drops
+// the attempt's metadata (state, message, logs, end time and that attempt's driver URL) and drops
 // inputs, outputs and the cumulative attempt lists, so the history stays small as retries add up.
+// StartTime and ActivityId are copied from the step, so they are the task's first start time and
+// activity ID unless the plugin reports them per attempt.
 func taskAttemptSnapshot(step *v2.PipelineRunStepInfo) *v2.AttemptDetails {
 	attemptID := step.AttemptIds[len(step.AttemptIds)-1]
 	snapshot := &v2.PipelineRunStepInfo{
 		Name:        step.Name,
 		DisplayName: step.DisplayName,
 		State:       step.State,
-		Message:     step.Message,
+		Message:     truncateAttemptMessage(step.Message),
 		LogUrl:      step.LogUrl,
 		StartTime:   step.StartTime,
 		EndTime:     step.EndTime,
@@ -904,6 +909,24 @@ func taskAttemptSnapshot(step *v2.PipelineRunStepInfo) *v2.AttemptDetails {
 		snapshot.Resources = []*v2.PipelineRunResource{step.Resources[n-1]}
 	}
 	return &v2.AttemptDetails{AttemptId: attemptID, StepInfo: snapshot}
+}
+
+const (
+	// maxAttemptMessageHeadBytes and maxAttemptMessageTailBytes cap the message kept per attempt
+	// snapshot. The tail is longer because failure messages usually end with the log tail.
+	maxAttemptMessageHeadBytes = 1024
+	maxAttemptMessageTailBytes = 3072
+	attemptMessageTruncated    = "\n...[truncated]...\n"
+)
+
+// truncateAttemptMessage bounds a message by keeping its start and end, without splitting a UTF-8 character.
+func truncateAttemptMessage(msg string) string {
+	if len(msg) <= maxAttemptMessageHeadBytes+maxAttemptMessageTailBytes {
+		return msg
+	}
+	head := strings.ToValidUTF8(msg[:maxAttemptMessageHeadBytes], "")
+	tail := strings.ToValidUTF8(msg[len(msg)-maxAttemptMessageTailBytes:], "")
+	return head + attemptMessageTruncated + tail
 }
 
 func attemptIDAlreadyExists(oldStepInfo *v2.PipelineRunStepInfo, newStepInfo *v2.PipelineRunStepInfo) bool {

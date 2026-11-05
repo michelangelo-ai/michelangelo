@@ -404,6 +404,8 @@ message AttemptDetails {
   // - Resource links and cached outputs
   // - Sub-step hierarchy
   // This provides full historical context for debugging failed attempts.
+  // Task-level retry snapshots on a task step are smaller: they keep only that attempt's
+  // state, message, logs, timing and driver URL, without inputs, outputs or sub-steps.
   PipelineRunStepInfo step_info = 2;
 }
 

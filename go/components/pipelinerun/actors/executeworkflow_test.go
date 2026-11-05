@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"strings"
 	"testing"
+	"unicode/utf8"
 
 	pbtypes "github.com/gogo/protobuf/types"
 	"github.com/golang/mock/gomock"
@@ -3580,4 +3582,51 @@ func TestMergePipelineRunStepInfoTaskRetryAttemptDetails(t *testing.T) {
 		)
 		require.Empty(t, merged.AttemptDetails)
 	})
+
+	t.Run("an attempt after a step without attempt ID does not add a snapshot", func(t *testing.T) {
+		merged := replay(
+			progress("", pipelinerunutils.UniflowTaskStateFailed, "s3://logs/a", "failed"),
+			progress("1", pipelinerunutils.UniflowTaskStateRunning, "s3://logs/1", ""),
+		)
+		require.Equal(t, []string{"1"}, merged.AttemptIds)
+		require.Empty(t, merged.AttemptDetails)
+	})
+
+	t.Run("a second call of the same task does not snapshot a succeeded attempt", func(t *testing.T) {
+		merged := replay(
+			// Call A fails attempt 1 and succeeds on attempt 2.
+			progress("1", pipelinerunutils.UniflowTaskStateFailed, "s3://logs/a1", "a failed"),
+			progress("2", pipelinerunutils.UniflowTaskStateSucceeded, "s3://logs/a2", ""),
+			// Call B of the same task starts at attempt 1.
+			progress("1", pipelinerunutils.UniflowTaskStateRunning, "s3://logs/b1", ""),
+		)
+		require.Len(t, merged.AttemptDetails, 1)
+		require.Equal(t, "1", merged.AttemptDetails[0].AttemptId)
+		require.Equal(t, "s3://logs/a1", merged.AttemptDetails[0].StepInfo.LogUrl)
+	})
+
+	t.Run("long messages keep their start and end", func(t *testing.T) {
+		msg := "summary " + strings.Repeat("x", 10000) + " traceback"
+		merged := replay(
+			progress("1", pipelinerunutils.UniflowTaskStateFailed, "s3://logs/1", msg),
+			progress("2", pipelinerunutils.UniflowTaskStateRunning, "s3://logs/2", ""),
+		)
+		require.Len(t, merged.AttemptDetails, 1)
+		got := merged.AttemptDetails[0].StepInfo.Message
+		require.True(t, strings.HasPrefix(got, "summary "))
+		require.True(t, strings.HasSuffix(got, " traceback"))
+		require.Contains(t, got, "...[truncated]...")
+		require.LessOrEqual(t, len(got), maxAttemptMessageHeadBytes+maxAttemptMessageTailBytes+len(attemptMessageTruncated))
+	})
+}
+
+func TestTruncateAttemptMessage(t *testing.T) {
+	short := strings.Repeat("a", maxAttemptMessageHeadBytes+maxAttemptMessageTailBytes)
+	require.Equal(t, short, truncateAttemptMessage(short))
+
+	// A multi-byte character across the cut points is dropped instead of split.
+	long := strings.Repeat("a", maxAttemptMessageHeadBytes-1) + strings.Repeat("é", 5000)
+	got := truncateAttemptMessage(long)
+	require.True(t, utf8.ValidString(got))
+	require.Contains(t, got, attemptMessageTruncated)
 }
