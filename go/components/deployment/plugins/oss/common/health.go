@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"go.uber.org/zap"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory"
@@ -59,15 +60,16 @@ func GetModelStatusInCluster(
 func CheckModelStatusAllClusters(
 	ctx context.Context,
 	logger *zap.Logger,
+	kubeClient client.Reader,
 	deployment *v2pb.Deployment,
 	clientFactory clientfactory.ClientFactory,
 	backend backends.Backend,
 	inferenceServerName string,
 	modelName string,
 ) (bool, string, error) {
-	targets, err := ReadTargetClustersAnnotation(deployment)
+	targets, err := ResolveTargetClusters(ctx, kubeClient, deployment)
 	if err != nil {
-		return false, "", fmt.Errorf("read target clusters annotation: %w", err)
+		return false, "", fmt.Errorf("resolve target clusters: %w", err)
 	}
 	if len(targets) == 0 {
 		return false, "no target clusters in snapshot", nil

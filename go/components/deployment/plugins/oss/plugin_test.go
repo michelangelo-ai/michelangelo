@@ -7,8 +7,12 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
@@ -18,6 +22,14 @@ import (
 	"github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
+
+// newKubeClient returns a fake control-plane client holding the given objects.
+func newKubeClient(t *testing.T, objects ...client.Object) client.Client {
+	t.Helper()
+	scheme := runtime.NewScheme()
+	require.NoError(t, v2pb.AddToScheme(scheme))
+	return fake.NewClientBuilder().WithScheme(scheme).WithObjects(objects...).Build()
+}
 
 func createTestRegistry(mockBackend *backendsmocks.MockBackend) *backends.Registry {
 	registry := backends.NewRegistry()
@@ -379,6 +391,78 @@ func TestParseStage(t *testing.T) {
 	}
 }
 
+// withRenamedSecrets records a snapshot that names the remote cluster's v1 Secrets on the
+// deployment, and returns its InferenceServer, which now names the v2 Secrets.
+func withRenamedSecrets(t *testing.T, deployment *v2pb.Deployment) *v2pb.InferenceServer {
+	t.Helper()
+	remoteTarget := func(version string) *v2pb.ClusterTarget {
+		return &v2pb.ClusterTarget{
+			ClusterId: "remote",
+			Connection: &v2pb.ClusterTarget_Kubernetes{Kubernetes: &v2pb.ConnectionSpec{
+				Host:      "https://remote.example.com",
+				Port:      "443",
+				TokenTag:  "remote-token-" + version,
+				CaDataTag: "remote-ca-" + version,
+			}},
+		}
+	}
+	require.NoError(t, common.WriteTargetClustersAnnotation(deployment,
+		[]*v2pb.ClusterTarget{remoteTarget("v1")}))
+	return &v2pb.InferenceServer{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      deployment.Spec.GetInferenceServer().GetName(),
+			Namespace: deployment.Namespace,
+		},
+		Spec: v2pb.InferenceServerSpec{ClusterTargets: []*v2pb.ClusterTarget{remoteTarget("v2")}},
+	}
+}
+
+func TestGetState_SecretsRenamedSinceRollout_UsesInferenceServerConnection(t *testing.T) {
+	deployment := &v2pb.Deployment{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
+		Spec: v2pb.DeploymentSpec{
+			DesiredRevision: &api.ResourceIdentifier{Name: "model-v1"},
+			Target: &v2pb.DeploymentSpec_InferenceServer{
+				InferenceServer: &api.ResourceIdentifier{Name: "test-server"},
+			},
+		},
+		Status: v2pb.DeploymentStatus{CurrentRevision: &api.ResourceIdentifier{Name: "model-v1"}},
+	}
+	inferenceServer := withRenamedSecrets(t, deployment)
+
+	ctrl := gomock.NewController(t)
+	mockBackend := backendsmocks.NewMockBackend(ctrl)
+	mockBackend.EXPECT().GetModelStatus(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default", "model-v1").
+		Return(readyOnAllReplicas(), nil)
+	mockClientFactory := clientfactorymocks.NewMockClientFactory(ctrl)
+	mockClientFactory.EXPECT().GetClient(gomock.Any(), tokenTagMatcher("remote-token-v2")).Return(nil, nil)
+	mockClientFactory.EXPECT().GetHTTPClient(gomock.Any(), tokenTagMatcher("remote-token-v2")).Return(nil, nil)
+
+	plugin := &Plugin{
+		client:          newKubeClient(t, inferenceServer),
+		backendRegistry: createTestRegistry(mockBackend),
+		clientFactory:   mockClientFactory,
+		logger:          zap.NewNop(),
+	}
+
+	status, err := plugin.GetState(context.Background(), plugins.ObservabilityContext{}, deployment)
+
+	require.NoError(t, err)
+	assert.Equal(t, v2pb.DEPLOYMENT_STATE_HEALTHY, status.State)
+}
+
+// tokenTagMatcher matches a ClusterTarget argument by the name of its token Secret.
+type tokenTagMatcher string
+
+func (m tokenTagMatcher) Matches(x interface{}) bool {
+	target, ok := x.(*v2pb.ClusterTarget)
+	return ok && target.GetKubernetes().GetTokenTag() == string(m)
+}
+
+func (m tokenTagMatcher) String() string {
+	return "cluster target with token Secret " + string(m)
+}
+
 func TestGetState(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -557,6 +641,7 @@ func TestGetState(t *testing.T) {
 			mockClientFactory.EXPECT().GetHTTPClient(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 
 			plugin := &Plugin{
+				client:          newKubeClient(t),
 				backendRegistry: createTestRegistry(mockBackend),
 				clientFactory:   mockClientFactory,
 				logger:          zap.NewNop(),

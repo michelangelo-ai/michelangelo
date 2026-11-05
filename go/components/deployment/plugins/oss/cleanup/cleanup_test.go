@@ -7,8 +7,12 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/michelangelo-ai/michelangelo/go/components/common/routing"
 	"github.com/michelangelo-ai/michelangelo/go/components/common/routing/routingmocks"
@@ -38,6 +42,14 @@ func withSingleClusterAnnotation(t *testing.T, deployment *v2pb.Deployment, clus
 		t.Fatalf("seed target-clusters annotation: %v", err)
 	}
 	return deployment
+}
+
+// newKubeClient returns a fake control-plane client holding the given objects.
+func newKubeClient(t *testing.T, objects ...client.Object) client.Client {
+	t.Helper()
+	scheme := runtime.NewScheme()
+	require.NoError(t, v2pb.AddToScheme(scheme))
+	return fake.NewClientBuilder().WithScheme(scheme).WithObjects(objects...).Build()
 }
 
 func TestRetrieve(t *testing.T) {
@@ -204,6 +216,7 @@ func TestRetrieve(t *testing.T) {
 			tt.setupMocks(mockModelConfigProvider, rm)
 
 			actor := &CleanupActor{
+				Client:              newKubeClient(t),
 				ModelConfigProvider: mockModelConfigProvider,
 				RouteManager:        rm,
 				ClientFactory:       mockClientFactory,
@@ -340,6 +353,7 @@ func TestRun(t *testing.T) {
 			tt.setupMocks(mockModelConfigProvider, rm)
 
 			actor := &CleanupActor{
+				Client:              newKubeClient(t),
 				ModelConfigProvider: mockModelConfigProvider,
 				RouteManager:        rm,
 				ClientFactory:       mockClientFactory,
@@ -419,6 +433,7 @@ func TestRunUnloadsModelFromEveryCluster(t *testing.T) {
 		Return(nil)
 
 	actor := &CleanupActor{
+		Client:              newKubeClient(t),
 		ModelConfigProvider: mockModelConfigProvider,
 		RouteManager:        rm,
 		ClientFactory:       mockClientFactory,
@@ -429,6 +444,110 @@ func TestRunUnloadsModelFromEveryCluster(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Equal(t, api.CONDITION_STATUS_TRUE, condition.Status)
+}
+
+func TestCleanup_SecretsRenamedSinceRollout_UsesInferenceServerConnection(t *testing.T) {
+	isName := "test-server"
+	namespace := "default"
+	deploymentName := "test-deployment"
+	currentModel := "old-model"
+
+	remoteTarget := func(version string) *v2pb.ClusterTarget {
+		return &v2pb.ClusterTarget{
+			ClusterId: "remote",
+			Connection: &v2pb.ClusterTarget_Kubernetes{Kubernetes: &v2pb.ConnectionSpec{
+				Host:      "https://remote.example.com",
+				Port:      "443",
+				TokenTag:  "remote-token-" + version,
+				CaDataTag: "remote-ca-" + version,
+			}},
+		}
+	}
+	newFixture := func(t *testing.T) (*v2pb.Deployment, *v2pb.InferenceServer) {
+		deployment := &v2pb.Deployment{
+			ObjectMeta: metav1.ObjectMeta{Name: deploymentName, Namespace: namespace},
+			Spec: v2pb.DeploymentSpec{
+				Target: &v2pb.DeploymentSpec_InferenceServer{
+					InferenceServer: &api.ResourceIdentifier{Name: isName},
+				},
+			},
+			Status: v2pb.DeploymentStatus{CurrentRevision: &api.ResourceIdentifier{Name: currentModel}},
+		}
+		require.NoError(t, osscommon.WriteTargetClustersAnnotation(deployment,
+			[]*v2pb.ClusterTarget{remoteTarget("v1")}))
+		inferenceServer := &v2pb.InferenceServer{
+			ObjectMeta: metav1.ObjectMeta{Name: isName, Namespace: namespace},
+			Spec:       v2pb.InferenceServerSpec{ClusterTargets: []*v2pb.ClusterTarget{remoteTarget("v2")}},
+		}
+		return deployment, inferenceServer
+	}
+	renamed := tokenTagMatcher("remote-token-v2")
+
+	t.Run("retrieve", func(t *testing.T) {
+		deployment, inferenceServer := newFixture(t)
+		ctrl := gomock.NewController(t)
+		mockModelConfigProvider := modelconfigmocks.NewMockModelConfigProvider(ctrl)
+		rm := routingmocks.NewMockManager(ctrl)
+		mockClientFactory := clientfactorymocks.NewMockClientFactory(ctrl)
+		mockClientFactory.EXPECT().GetClient(gomock.Any(), renamed).Return(nil, nil)
+		mockClientFactory.EXPECT().GetDynamicClient(gomock.Any(), renamed).Return(nil, nil)
+		mockModelConfigProvider.EXPECT().
+			GetModelsFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), isName, namespace).
+			Return(nil, nil)
+		rm.EXPECT().RuleExists(gomock.Any(), gomock.Any(), gomock.Any(), namespace, gomock.Any()).
+			Return(false, nil).Times(2)
+		actor := NewCleanupPlugin(Params{
+			Client:              newKubeClient(t, inferenceServer),
+			ClientFactory:       mockClientFactory,
+			RouteManager:        rm,
+			ModelConfigProvider: mockModelConfigProvider,
+			Logger:              zap.NewNop(),
+		}).GetActors()[0]
+
+		condition, err := actor.Retrieve(context.Background(), deployment, &api.Condition{})
+
+		require.NoError(t, err)
+		assert.Equal(t, api.CONDITION_STATUS_TRUE, condition.Status)
+	})
+
+	t.Run("run", func(t *testing.T) {
+		deployment, inferenceServer := newFixture(t)
+		ctrl := gomock.NewController(t)
+		mockModelConfigProvider := modelconfigmocks.NewMockModelConfigProvider(ctrl)
+		rm := routingmocks.NewMockManager(ctrl)
+		mockClientFactory := clientfactorymocks.NewMockClientFactory(ctrl)
+		mockClientFactory.EXPECT().GetClient(gomock.Any(), renamed).Return(nil, nil)
+		mockClientFactory.EXPECT().GetDynamicClient(gomock.Any(), renamed).Return(nil, nil)
+		mockModelConfigProvider.EXPECT().
+			RemoveModelFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), isName, namespace, deploymentName, currentModel).
+			Return(nil)
+		rm.EXPECT().RemoveRules(gomock.Any(), gomock.Any(), gomock.Any(), namespace, gomock.Any()).
+			Return(nil).Times(2)
+		actor := NewCleanupPlugin(Params{
+			Client:              newKubeClient(t, inferenceServer),
+			ClientFactory:       mockClientFactory,
+			RouteManager:        rm,
+			ModelConfigProvider: mockModelConfigProvider,
+			Logger:              zap.NewNop(),
+		}).GetActors()[0]
+
+		condition, err := actor.Run(context.Background(), deployment, &api.Condition{})
+
+		require.NoError(t, err)
+		assert.Equal(t, api.CONDITION_STATUS_TRUE, condition.Status)
+	})
+}
+
+// tokenTagMatcher matches a ClusterTarget argument by the name of its token Secret.
+type tokenTagMatcher string
+
+func (m tokenTagMatcher) Matches(x interface{}) bool {
+	target, ok := x.(*v2pb.ClusterTarget)
+	return ok && target.GetKubernetes().GetTokenTag() == string(m)
+}
+
+func (m tokenTagMatcher) String() string {
+	return "cluster target with token Secret " + string(m)
 }
 
 // clusterTargetMatcher matches a ClusterTarget argument by cluster ID.
