@@ -81,6 +81,26 @@ class SetRayDataContextTest(TestCase):
         ctx = ray.data.DataContext.get_current()
         self.assertEqual(ctx.wait_for_min_actors_s, 30)
 
+    def test_max_errored_blocks_is_applied(self):
+        """An explicit errored-block budget is applied to the context."""
+        set_ray_data_context(max_errored_blocks=25)
+        ctx = ray.data.DataContext.get_current()
+        self.assertEqual(ctx.max_errored_blocks, 25)
+
+    def test_max_errored_blocks_default_untouched(self):
+        """Leaving the argument unset keeps Ray's fail-fast default."""
+        ctx = ray.data.DataContext.get_current()
+        default = ctx.max_errored_blocks
+        set_ray_data_context()
+        self.assertEqual(ctx.max_errored_blocks, default)
+
+    def test_negative_max_errored_blocks_is_rejected(self):
+        """A negative budget is an error, raised before the context changes."""
+        with self.assertRaisesRegex(ValueError, "max_errored_blocks must be >= 0"):
+            set_ray_data_context(max_errored_blocks=-1, min_block_size=1)
+        ctx = ray.data.DataContext.get_current()
+        self.assertNotEqual(ctx.target_min_block_size, 1)
+
     def test_max_blocks_in_streaming_gen_buffer_is_applied(self):
         """An explicit buffer size is applied to the context."""
         set_ray_data_context(max_blocks_in_streaming_gen_buffer=1)
