@@ -200,8 +200,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 }
 
 func (r *Reconciler) isClusterSpecSame(cachedObj *v2pb.Cluster, newObj *v2pb.Cluster) bool {
-	return cachedObj.Spec.GetKubernetes().GetRest().GetHost() == newObj.Spec.GetKubernetes().GetRest().GetHost() &&
-		cachedObj.Spec.GetKubernetes().GetRest().GetPort() == newObj.Spec.GetKubernetes().GetRest().GetPort() &&
+	cachedRest := cachedObj.Spec.GetKubernetes().GetRest()
+	newRest := newObj.Spec.GetKubernetes().GetRest()
+	return cachedRest.GetHost() == newRest.GetHost() &&
+		cachedRest.GetPort() == newRest.GetPort() &&
+		cachedRest.GetCaDataTag() == newRest.GetCaDataTag() &&
+		cachedRest.GetTokenTag() == newRest.GetTokenTag() &&
 		cachedObj.Spec.GetRegion() == newObj.Spec.GetRegion() &&
 		cachedObj.Spec.GetZone() == newObj.Spec.GetZone() &&
 		cachedObj.Spec.GetDc() == newObj.Spec.GetDc() &&

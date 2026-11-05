@@ -787,6 +787,66 @@ func TestIsClusterSpecSame(t *testing.T) {
 			expectedNewClusterIsSame: false,
 		},
 		{
+			name: "ca secret tag changed",
+			cachedObj: &v2pb.Cluster{
+				Spec: v2pb.ClusterSpec{
+					Cluster: &v2pb.ClusterSpec_Kubernetes{
+						Kubernetes: &v2pb.KubernetesSpec{
+							Rest: &v2pb.ConnectionSpec{
+								Host:      "https://host.docker.internal",
+								Port:      "6443",
+								CaDataTag: "ca-secret-v1",
+							},
+						},
+					},
+				},
+			},
+			newObj: &v2pb.Cluster{
+				Spec: v2pb.ClusterSpec{
+					Cluster: &v2pb.ClusterSpec_Kubernetes{
+						Kubernetes: &v2pb.KubernetesSpec{
+							Rest: &v2pb.ConnectionSpec{
+								Host:      "https://host.docker.internal",
+								Port:      "6443",
+								CaDataTag: "ca-secret-v2",
+							},
+						},
+					},
+				},
+			},
+			expectedNewClusterIsSame: false,
+		},
+		{
+			name: "token secret tag changed",
+			cachedObj: &v2pb.Cluster{
+				Spec: v2pb.ClusterSpec{
+					Cluster: &v2pb.ClusterSpec_Kubernetes{
+						Kubernetes: &v2pb.KubernetesSpec{
+							Rest: &v2pb.ConnectionSpec{
+								Host:     "https://host.docker.internal",
+								Port:     "6443",
+								TokenTag: "token-secret-v1",
+							},
+						},
+					},
+				},
+			},
+			newObj: &v2pb.Cluster{
+				Spec: v2pb.ClusterSpec{
+					Cluster: &v2pb.ClusterSpec_Kubernetes{
+						Kubernetes: &v2pb.KubernetesSpec{
+							Rest: &v2pb.ConnectionSpec{
+								Host:     "https://host.docker.internal",
+								Port:     "6443",
+								TokenTag: "token-secret-v2",
+							},
+						},
+					},
+				},
+			},
+			expectedNewClusterIsSame: false,
+		},
+		{
 			name: "nil kubernetes spec",
 			cachedObj: &v2pb.Cluster{
 				Spec: v2pb.ClusterSpec{
