@@ -26,7 +26,7 @@ Most examples live in [`python/examples/`](https://github.com/michelangelo-ai/mi
 
 | Example | Description | Runtime | Difficulty |
 |---------|-------------|---------|------------|
-| [Amazon Books Recommendation](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/amazon_books_qwen) | Dual-encoder recommendation system using Qwen-based architecture for Amazon Books. Demonstrates Chronon feature engineering on Spark and distributed Ray training. | Ray + Spark | Advanced |
+| [Amazon Books Recommendation](https://github.com/michelangelo-ai/michelangelo-examples/tree/main/src/michelangelo_examples/amazon_books_qwen/pipelines/train) | Dual-encoder recommendation system using Qwen-based architecture for Amazon Books. Demonstrates Chronon feature engineering on Spark and distributed Ray training. Lives in [michelangelo-examples](https://github.com/michelangelo-ai/michelangelo-examples). | Ray + Spark | Advanced |
 
 ### Inference
 

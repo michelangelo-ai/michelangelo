@@ -35,9 +35,6 @@ typing-extensions = ">=4.12.2"
 pyyaml = "^6.0.1"
 GitPython = ">=3.1.44"
 tomli = { version = "^2.0.1", python = "<3.11" }
-chronon-ai = "0.0.109"
-thrift = "0.13.0"
-sqlglot = "^27.29.0"
 
 ### Optional dependencies
 # For plugin
@@ -68,7 +65,6 @@ torch = { version = "2.7.0", optional = true }
 transformers = { version = "4.51.3", optional = true }
 comet_ml = { version = "^3.49.0", optional = true }
 deepspeed = { version = "^0.14.0", optional = true }
-kaggle = { version = "^1.6.17", optional = true }
 scikit-learn = { version = "^1.5.2", optional = true }
 
 # For the evaluator (michelangelo.lib.evaluator)
@@ -98,7 +94,7 @@ ma = 'michelangelo.cli.cli:main'
 dev = ["pytest", "pytest-cov", "coverage", "ruff", "jinja2", "pre-commit", "docker", "torch", "pandas", "numpy", "transformers", "pyarrow", "pytorch_lightning", "ray", "polars", "xgboost", "torchmetrics", "scikit-learn"]
 plugin = ["ray", "pyspark"]
 ray-polars = ["ray", "polars"]  # Polars fallback for PyArrow nested-data bug (ray-project/ray#61675)
-example = ["accelerate", "datasets", "numpy", "pandas", "pyarrow", "ray", "s3fs", "torch", "transformers", "pytorch_lightning", "kaggle", "scikit-learn", "chronon-ai", "thrift", "sqlglot", "pyspark", "ray", "mlflow", "boto3", "minio"]
+example = ["accelerate", "datasets", "numpy", "pandas", "pyarrow", "ray", "s3fs", "torch", "transformers", "pytorch_lightning", "scikit-learn", "pyspark", "ray", "mlflow", "boto3", "minio"]
 minio = ["minio"]
 vllm = ["accelerate", "datasets", "numpy", "pandas", "pyarrow", "ray", "s3fs", "torch", "transformers", "pytorch_lightning", "vllm", "setuptools"]
 mactl = []
