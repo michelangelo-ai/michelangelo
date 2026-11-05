@@ -1,1 +1,1 @@
-"""Tests for the shared Ray dataset write helpers."""
+"""Tests for the shared Ray Data helpers."""
