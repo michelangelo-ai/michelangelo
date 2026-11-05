@@ -11,6 +11,7 @@ import (
 	"github.com/cadence-workflow/starlark-worker/service"
 	"github.com/cadence-workflow/starlark-worker/test/types"
 	"github.com/golang/mock/gomock"
+	"github.com/michelangelo-ai/michelangelo/go/worker/runnertoken"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"github.com/stretchr/testify/suite"
 )
@@ -96,6 +97,20 @@ func (r *Suite) Test_ShouldOverrideCacheForRetry_NoRetryInfo() {
 	r.Require().NoError(val.Get(&res))
 	r.Require().False(res.HasOverride)
 	r.Require().NotEmpty(res.ActivityID)
+}
+
+func (r *Suite) Test_ShouldOverrideCacheForRetry_PropagatesNamespaceOnContext() {
+	r.mockPipelineRunService.EXPECT().GetPipelineRun(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, _ *v2pb.GetPipelineRunRequest, _ ...interface{}) (*v2pb.GetPipelineRunResponse, error) {
+			ns, ok := runnertoken.NamespaceFromContext(ctx)
+			r.Require().True(ok, "namespace must be set on the outbound ctx")
+			r.Require().Equal("project-ns", ns)
+			return &v2pb.GetPipelineRunResponse{PipelineRun: &v2pb.PipelineRun{}}, nil
+		})
+
+	request := ShouldOverrideCacheForRetryRequest{Namespace: "project-ns", TaskPath: "a.b.task_a", TaskName: "task_a"}
+	_, err := r.activitySuite.ExecuteActivity(Activities.ShouldOverrideCacheForRetry, request)
+	r.Require().NoError(err)
 }
 
 func (r *Suite) Test_ShouldOverrideCacheForRetry_RetryTarget_KeepsCacheOff() {
