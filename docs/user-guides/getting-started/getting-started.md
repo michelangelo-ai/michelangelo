@@ -308,7 +308,7 @@ Workflow functions compile to Starlark for production execution. This means some
 | `is` / `is not` | `==` / `!=` |
 | f-strings | `"{}".format(value)` |
 | Chained comparisons (`1 < x < 5`) | `1 < x and x < 5` |
-| Standard library calls | Built-in functions (e.g., `uniflow.time()`) |
+| Standard library calls | Uniflow built-ins, for example `uniflow_time()` from `michelangelo.uniflow.core.lib.time` (imported at module level; see [Backfill Pipelines](../ml-pipelines/backfill.md)) |
 
 These constraints only apply to workflow code. Task code runs in containers and can use any Python code.
 
@@ -364,6 +364,20 @@ def train_workflow(dataset_cols: str):
 ```
 
 **Important**: The override config **replaces** the original config entirely -- it does not merge fields. Specify all required fields in the override.
+
+### Container image
+
+Every task in a run uses the same container image. You choose it once per run, not per task:
+
+- **Remote run:** the `--image` flag ([Step 4](#run-with-remote-execution)).
+- **Registered pipeline:** the `michelangelo/uniflow-image` annotation in the pipeline manifest ([Step 5](#create-pipelineyaml)), used by both `ma pipeline run` and `ma pipeline dev-run`. The run fails at its Image Build step if the annotation is missing.
+- **Local run:** no image. Tasks run in your own Python environment.
+
+If one task needs extra dependencies, build them into the shared image.
+
+:::note
+`@uniflow.task()` also has an `image_spec=ImageSpec(...)` parameter for per-task images. The open-source Ray and Spark task runtimes don't accept the arguments it adds (`container_image` and `recipe`), so leave it unset.
+:::
 
 ## Complete example
 
