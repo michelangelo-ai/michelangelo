@@ -112,8 +112,7 @@ describe('Execution - timetable view', () => {
     expect(screen.queryByText('Duration')).not.toBeInTheDocument();
   });
 
-  it('should explain when no task carries timing information', async () => {
-    const user = userEvent.setup();
+  it('should not offer the timetable view when no task carries timing information', () => {
     render(
       <Execution
         schema={buildSchema()}
@@ -122,10 +121,7 @@ describe('Execution - timetable view', () => {
       buildWrapper([getRouterWrapper()])
     );
 
-    await user.click(screen.getByRole('option', { name: 'Timetable' }));
-
-    expect(
-      screen.getByText('No timing information is available for these tasks.')
-    ).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Timetable' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Flow' })).not.toBeInTheDocument();
   });
 });

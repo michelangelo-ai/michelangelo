@@ -32,6 +32,20 @@ const TICK_STEPS = [
 const MAX_TICK_INTERVALS = 5;
 
 /**
+ * True when at least one task in the tree has a usable start or end timestamp.
+ * Used to gate the timetable overview option — without timing there is nothing
+ * meaningful to plot.
+ */
+export function taskListHasTiming<TTaskRecord extends object = object>(
+  taskList: Task<TTaskRecord>[]
+): boolean {
+  return flattenTaskList(taskList).some(({ task }) => {
+    const { start, end } = resolveTaskTiming(task);
+    return start !== undefined || end !== undefined;
+  });
+}
+
+/**
  * Turns a hierarchical task list into a flat gantt model: one row per task,
  * subtasks included, positioned on a timeline shared by every row.
  *
@@ -54,6 +68,9 @@ export function buildTimetable<TTaskRecord extends object = object>(
   const spans = entries.flatMap(({ start, end }) =>
     start === undefined || end === undefined ? [] : [{ start, end }]
   );
+  // Pending / never-started tasks often omit timestamps entirely. When every
+  // entry is like that there is no axis to draw — surface hasTiming: false so
+  // the UI can hide the timetable rather than collapsing onto a zero-width span.
   if (!spans.length) {
     return {
       rows: entries.map(({ task, depth, ancestors }) => ({

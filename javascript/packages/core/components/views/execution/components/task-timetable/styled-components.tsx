@@ -1,9 +1,16 @@
 import { styled } from 'baseui';
 
-import { STATE_TO_ICON_MAP } from '#core/components/views/execution/constants';
+import { STATE_TO_STYLE_MAP } from '#core/components/views/execution/constants';
 import { ELLIPSIS_STYLES } from '#core/styles/constants';
 
 import type { TaskState } from '#core/components/views/execution/types';
+
+/** Solid fill for timetable bars/markers — prefer the style map's text color, else its border. */
+function barColorName(state: TaskState): string {
+  const style = STATE_TO_STYLE_MAP[state];
+  return style.colorName ?? style.borderColorName;
+}
+
 
 /** Shared column layout so the axis header stays aligned with every task row. */
 const ROW_TEMPLATE = 'minmax(96px, 200px) 1fr 76px';
@@ -74,7 +81,8 @@ export const TimetableAxisLabel = styled<'div', { $offsetPercent: number }>(
     position: 'absolute',
     top: 0,
     left: `${$offsetPercent}%`,
-    transform: $offsetPercent === 0 ? 'none' : 'translateX(-50%)',
+    // Center on the tick so labels line up with grid lines and zero-duration markers.
+    transform: 'translateX(-50%)',
     whiteSpace: 'nowrap',
   })
 );
@@ -86,8 +94,11 @@ export const TimetableGridLine = styled<'div', { $offsetPercent: number }>(
     top: 0,
     bottom: 0,
     left: `${$offsetPercent}%`,
+    // Center the 1px stroke on the tick — matches TimetableMarker, which is also
+    // centered on the timestamp. Without this, a 0s marker looks offset from the start line.
+    transform: 'translateX(-50%)',
     width: '1px',
-    backgroundColor: $theme.colors.borderOpaque,
+    backgroundColor: $theme.colors.contentInverseTertiary,
   })
 );
 
@@ -107,7 +118,7 @@ export const TimetableBar = styled<
   minWidth: '6px',
   height: BAR_HEIGHT,
   borderRadius: BAR_HEIGHT,
-  backgroundColor: $theme.colors[STATE_TO_ICON_MAP[$state].colorName],
+  backgroundColor: $theme.colors[barColorName($state)],
   ...($ongoing
     ? {
         backgroundImage:
@@ -127,7 +138,7 @@ export const TimetableMarker = styled<'div', { $state: TaskState; $offsetPercent
     width: BAR_HEIGHT,
     height: BAR_HEIGHT,
     borderRadius: '50%',
-    backgroundColor: $theme.colors[STATE_TO_ICON_MAP[$state].colorName],
+    backgroundColor: $theme.colors[barColorName($state)],
   })
 );
 
@@ -136,10 +147,4 @@ export const TimetableDuration = styled('div', ({ $theme }) => ({
   color: $theme.colors.contentSecondary,
   textAlign: 'right',
   fontVariantNumeric: 'tabular-nums',
-}));
-
-export const TimetableNote = styled('div', ({ $theme }) => ({
-  ...$theme.typography.ParagraphSmall,
-  color: $theme.colors.contentTertiary,
-  paddingBottom: $theme.sizing.scale300,
 }));

@@ -1,6 +1,6 @@
 import { createTask } from '#core/components/views/execution/components/task-details/__fixtures__/task-details-fixtures';
 import { TASK_STATE } from '../../../../constants';
-import { buildTicks, buildTimetable } from '../build-timetable';
+import { buildTicks, buildTimetable, taskListHasTiming } from '../build-timetable';
 
 describe('buildTimetable', () => {
   it('should position tasks relative to the earliest start', () => {
@@ -53,12 +53,25 @@ describe('buildTimetable', () => {
     expect(rows[1].ancestors).toEqual([parent]);
   });
 
-  it('should report missing timing instead of collapsing every task to zero', () => {
+  it('should report missing timing for never-started tasks instead of collapsing to zero', () => {
+    // Pending steps commonly have no timestamps until they actually run.
     const { rows, hasTiming, ticks } = buildTimetable([createTask(), createTask()]);
 
     expect(hasTiming).toBe(false);
     expect(ticks).toEqual([]);
     expect(rows.every((row) => row.startOffset === undefined)).toBe(true);
+  });
+});
+
+describe('taskListHasTiming', () => {
+  it('should be true when any task carries a timestamp', () => {
+    expect(
+      taskListHasTiming([createTask({ record: { startTime: '1000', endTime: '1010' } })])
+    ).toBe(true);
+  });
+
+  it('should be false when no task carries a timestamp', () => {
+    expect(taskListHasTiming([createTask(), createTask()])).toBe(false);
   });
 });
 

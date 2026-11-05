@@ -6,7 +6,6 @@ import {
   TimetableDuration,
   TimetableDurationLabel,
   TimetableGridLine,
-  TimetableNote,
   TimetableRowGrid,
   TimetableTaskCell,
   TimetableTaskName,
@@ -15,6 +14,7 @@ import {
 import { TaskTimetableBar } from './task-timetable-bar';
 import { buildTimetable } from './utils/build-timetable';
 import { formatDuration } from './utils/format-duration';
+import { scrollToTimetableTask } from './utils/scroll-to-timetable-task';
 import { toPercent } from './utils/to-percent';
 
 import type { KeyboardEvent } from 'react';
@@ -26,36 +26,34 @@ const NO_DURATION_LABEL = '—';
  * Gantt-style alternative to the task flow: every task in the tree, subtasks
  * included, becomes a row whose bar spans the time the task took on a timeline
  * shared by all rows. Rows are clickable and scroll to the matching task section.
+ *
+ * Callers should only mount this when `taskListHasTiming` is true — without
+ * timestamps there is no timeline to draw.
  */
 export function TaskTimetable<TTaskRecord extends object = object>({
   taskList,
-  onTaskClick,
 }: TaskTimetableProps<TTaskRecord>) {
-  const { rows, totalSeconds, ticks, hasTiming } = buildTimetable(taskList);
+  const { rows, totalSeconds, ticks } = buildTimetable(taskList);
 
   return (
     <div>
-      {hasTiming ? (
-        <TimetableRowGrid>
-          <TimetableColumnLabel>Task</TimetableColumnLabel>
-          <TimetableAxis>
-            {ticks.map((tick) => (
-              <TimetableAxisLabel
-                key={tick.offsetSeconds}
-                $offsetPercent={toPercent(tick.offsetSeconds, totalSeconds)}
-              >
-                {tick.label}
-              </TimetableAxisLabel>
-            ))}
-          </TimetableAxis>
-          <TimetableDurationLabel>Duration</TimetableDurationLabel>
-        </TimetableRowGrid>
-      ) : (
-        <TimetableNote>No timing information is available for these tasks.</TimetableNote>
-      )}
+      <TimetableRowGrid>
+        <TimetableColumnLabel>Task</TimetableColumnLabel>
+        <TimetableAxis>
+          {ticks.map((tick) => (
+            <TimetableAxisLabel
+              key={tick.offsetSeconds}
+              $offsetPercent={toPercent(tick.offsetSeconds, totalSeconds)}
+            >
+              {tick.label}
+            </TimetableAxisLabel>
+          ))}
+        </TimetableAxis>
+        <TimetableDurationLabel>Duration</TimetableDurationLabel>
+      </TimetableRowGrid>
 
       {rows.map((row, index) => {
-        const handleActivate = () => onTaskClick(row.task, row.ancestors);
+        const handleActivate = () => scrollToTimetableTask(row.task, row.ancestors);
 
         return (
           <TimetableRowGrid

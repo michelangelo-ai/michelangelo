@@ -10,6 +10,7 @@ import { TaskDetails } from './components/task-details/task-details';
 import { TaskFlow } from './components/task-flow';
 import { TaskStateIcon } from './components/task-state-icon';
 import { TaskTimetable } from './components/task-timetable/task-timetable';
+import { taskListHasTiming } from './components/task-timetable/utils/build-timetable';
 import { EXECUTION_VIEW, EXECUTION_VIEW_OPTIONS } from './constants';
 import { TaskContentStack } from './styled-components';
 import { buildTaskList } from './utils/build-task-list';
@@ -49,6 +50,11 @@ export function Execution<
   }
 
   const matrix = buildTaskMatrix(taskList);
+  // Timetable needs at least one timestamp; hide the option when none exist.
+  const viewOptions: { view: ExecutionView; label: string }[] = taskListHasTiming(taskList)
+    ? [...EXECUTION_VIEW_OPTIONS]
+    : [{ view: EXECUTION_VIEW.FLOW, label: 'Flow' }];
+  const activeView = viewOptions.some((option) => option.view === view) ? view : EXECUTION_VIEW.FLOW;
 
   return (
     <TaskContentStack>
@@ -69,22 +75,24 @@ export function Execution<
               <TaskStateIcon state={determineExecutionState(taskList)} />
               Overview
             </div>
-            <SegmentedControl
-              activeKey={view}
-              onChange={({ activeKey }) => {
-                // cast: segment keys are always EXECUTION_VIEW values, see EXECUTION_VIEW_OPTIONS
-                setView(activeKey as ExecutionView);
-              }}
-            >
-              {EXECUTION_VIEW_OPTIONS.map((option) => (
-                <Segment key={option.view} label={option.label} />
-              ))}
-            </SegmentedControl>
+            {viewOptions.length > 1 ? (
+              <SegmentedControl
+                activeKey={activeView}
+                onChange={({ activeKey }) => {
+                  // cast: segment keys are always EXECUTION_VIEW values, see EXECUTION_VIEW_OPTIONS
+                  setView(activeKey as ExecutionView);
+                }}
+              >
+                {viewOptions.map((option) => (
+                  <Segment key={option.view} label={option.label} />
+                ))}
+              </SegmentedControl>
+            ) : null}
           </div>
         }
       >
         <TaskContentStack>
-          {view === EXECUTION_VIEW.FLOW ? (
+          {activeView === EXECUTION_VIEW.FLOW ? (
             <TaskFlow
               matrix={matrix}
               onTaskClick={(clickedTask) => {
@@ -96,12 +104,7 @@ export function Execution<
               }}
             />
           ) : (
-            <TaskTimetable
-              taskList={taskList}
-              onTaskClick={(clickedTask, ancestors) => {
-                handleScrollToTask(clickedTask, ancestors);
-              }}
-            />
+            <TaskTimetable taskList={taskList} />
           )}
         </TaskContentStack>
       </Box>
