@@ -28,8 +28,8 @@ const (
 	// httpClientTimeout caps any single HTTP request issued through the factory.
 	httpClientTimeout = 30 * time.Second
 
-	// httpIdleConnTimeout closes idle connections that in-flight requests return to a replaced
-	// client.
+	// httpIdleConnTimeout closes the idle connections of a replaced client that a caller still
+	// holds and sends new requests through.
 	httpIdleConnTimeout = 90 * time.Second
 )
 
@@ -307,12 +307,16 @@ func buildRESTConfig(cluster *v2pb.ClusterTarget, auth secrets.ClientAuth) (*res
 	return rest.AddUserAgent(cfg, userAgent), nil
 }
 
-// cacheKey produces a stable cache key for a ClusterTarget.
+// cacheKey produces a stable cache key for a ClusterTarget. It includes the Secret names so that
+// two targets for one endpoint that reference different Secrets keep separate clients, instead of
+// evicting each other on every lookup.
 func cacheKey(cluster *v2pb.ClusterTarget) string {
-	return fmt.Sprintf("%s|%s:%s",
+	return fmt.Sprintf("%s|%s:%s|%s|%s",
 		cluster.GetClusterId(),
 		cluster.GetKubernetes().GetHost(),
 		cluster.GetKubernetes().GetPort(),
+		cluster.GetKubernetes().GetCaDataTag(),
+		cluster.GetKubernetes().GetTokenTag(),
 	)
 }
 

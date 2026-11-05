@@ -472,7 +472,10 @@ func TestRemoteClientFactory_UnusableCredentials_ReturnsErrorAndKeepsCache(t *te
 
 				tt.breakCredentials(provider)
 				failed, err := get(factory, context.Background(), rc.target(t))
-				assert.ErrorContains(t, err, tt.want)
+				require.ErrorContains(t, err, tt.want)
+				for _, secret := range []string{"token-a", "token-b", rc.caPEM, "not a certificate"} {
+					assert.NotContains(t, err.Error(), secret)
+				}
 				assert.Nil(t, failed)
 
 				provider.set(rc.auth("token-a"), nil)
@@ -540,6 +543,45 @@ func TestRemoteClientFactory_SameClusterIDOnDifferentEndpoints_UsesSeparateClien
 
 	assert.Equal(t, []string{"token-a"}, first.receivedTokens())
 	assert.Equal(t, []string{"token-a"}, second.receivedTokens())
+}
+
+// tokenPerSecretProvider returns, as each target's token, the name of its token Secret.
+type tokenPerSecretProvider struct {
+	caPEM string
+}
+
+func (p tokenPerSecretProvider) GetClientAuth(
+	_ context.Context, cluster *v2pb.ClusterTarget,
+) (secrets.ClientAuth, error) {
+	return secrets.ClientAuth{
+		CertificateAuthorityData: p.caPEM,
+		ClientTokenData:          cluster.GetKubernetes().GetTokenTag(),
+	}, nil
+}
+
+func TestRemoteClientFactory_SameEndpointWithDifferentSecrets_KeepsBothClients(t *testing.T) {
+	rc := newRemoteCluster(t)
+	current := rc.target(t)
+	renamed := rc.target(t)
+	renamed.GetKubernetes().TokenTag = "remote-token-v2"
+
+	for name, get := range getters {
+		t.Run(name, func(t *testing.T) {
+			factory, logs := newObservedFactory(tokenPerSecretProvider{caPEM: rc.caPEM})
+
+			first, err := get(factory, context.Background(), current)
+			require.NoError(t, err)
+			second, err := get(factory, context.Background(), renamed)
+			require.NoError(t, err)
+			again, err := get(factory, context.Background(), current)
+			require.NoError(t, err)
+
+			assert.NotSame(t, first, second)
+			assert.Same(t, first, again)
+			assert.Equal(t, 2, logs.FilterMessage(builtMessage).Len())
+			assert.Zero(t, logs.FilterMessage(rebuiltMessage).Len())
+		})
+	}
 }
 
 func TestRemoteClientFactory_ConcurrentLookups_BuildOneClient(t *testing.T) {
