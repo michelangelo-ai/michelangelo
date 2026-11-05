@@ -177,6 +177,36 @@ func (r *Suite) Test_ShouldOverrideCacheForRetry_Sibling_TurnsCacheOn() {
 	r.Require().True(res.UseCache)
 }
 
+func (r *Suite) Test_ShouldOverrideCacheForRetry_TargetMissingFromStatus_NoOverride() {
+	// After a reset, status.steps is rebuilt from the new run's progress, so a
+	// sibling can ask before the retry target has reported. The target can't be
+	// identified then; it must not be treated as a sibling (which would let it
+	// replay its cached output and skip execution).
+	pipelineRun := &v2pb.PipelineRun{
+		Spec: v2pb.PipelineRunSpec{
+			RetryInfo: &v2pb.RetryInfo{ActivityId: "act-1", WorkflowRunId: "old-run-id"},
+		},
+		Status: v2pb.PipelineRunStatus{
+			WorkflowRunId: testRunID,
+			Steps: []*v2pb.PipelineRunStepInfo{
+				{Name: "a.b.task_b", DisplayName: "task_b", ActivityId: "act-2"},
+			},
+		},
+	}
+	r.mockPipelineRunService.EXPECT().GetPipelineRun(gomock.Any(), gomock.Any()).Return(
+		&v2pb.GetPipelineRunResponse{PipelineRun: pipelineRun}, nil)
+
+	request := ShouldOverrideCacheForRetryRequest{Namespace: "default", TaskPath: "a.b.task_a", TaskName: "task_a"}
+	val, err := r.activitySuite.ExecuteActivity(Activities.ShouldOverrideCacheForRetry, request)
+	r.Require().NoError(err)
+
+	var res ShouldOverrideCacheForRetryResponse
+	r.Require().NoError(val.Get(&res))
+	r.Require().False(res.HasOverride)
+	r.Require().False(res.UseCache)
+	r.Require().NotEmpty(res.ActivityID)
+}
+
 func (r *Suite) Test_ShouldOverrideCacheForRetry_PendingRetry_NoOverride() {
 	// Retry requested but not yet processed: retryInfo.workflowRunId still equals
 	// status.workflowRunId, so the reset hasn't happened.

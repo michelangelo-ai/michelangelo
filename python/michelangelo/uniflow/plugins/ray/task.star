@@ -368,19 +368,24 @@ def report_ray_task_result(job, task_path, task_name, task_log_url, start_time_f
     end_time_seconds = time.time()
     end_time_formated_str = time.utc_format_seconds(TIME_FOMART, end_time_seconds)
 
-    cache_keys = get_cache_keys(task_path, task_name, args, kwargs, cache_version, CACHE_OPERATION_PUT)
-    created_cached_output = create_cached_output(
-        namespace = namespace,
-        cache_keys = cache_keys,
-        zone = "",
-        ttl_in_days = 0,
-        task_name = task_name,
-        result_json_url = result_url,
-    )
-    cached_output_name = created_cached_output.get("metadata", {}).get("name", "")
+    cached_output_name = ""
     input_str = json.dumps({"args": args, "kwargs": kwargs}) if (args or kwargs) else ""
 
     if job["status"]["state"] == "RAY_JOB_STATE_SUCCEEDED":
+        # Publish the cache record only for a successful job. A failed or killed job
+        # never writes result_url, so a record for it would point at nothing, and a
+        # later cache hit (e.g. a sibling replayed on a manual retry) would fail
+        # reading it instead of re-running the task.
+        cache_keys = get_cache_keys(task_path, task_name, args, kwargs, cache_version, CACHE_OPERATION_PUT)
+        created_cached_output = create_cached_output(
+            namespace = namespace,
+            cache_keys = cache_keys,
+            zone = "",
+            ttl_in_days = 0,
+            task_name = task_name,
+            result_json_url = result_url,
+        )
+        cached_output_name = created_cached_output.get("metadata", {}).get("name", "")
         report_progress(
             task_path = task_path,
             task_name = task_name,

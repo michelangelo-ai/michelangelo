@@ -320,6 +320,11 @@ class TestReportRayTaskResultLogURL(TestCase):
     def _report(self, job_state: str):
         """Run report_ray_task_result for a job state, returning (state, report)."""
         reports = []
+        self.created_cached_outputs = []
+
+        def _create_cached_output(**kwargs):
+            self.created_cached_outputs.append(kwargs)
+            return {"metadata": {"name": "cached-1"}}
 
         stubs = {
             "TIME_FOMART": "%Y-%m-%dT%H:%M:%S",
@@ -333,7 +338,7 @@ class TestReportRayTaskResultLogURL(TestCase):
                 utc_format_seconds=lambda fmt, seconds: "1970-01-01T00:00:00",
             ),
             "get_cache_keys": lambda *args: [],
-            "create_cached_output": lambda **kwargs: {"metadata": {"name": "cached-1"}},
+            "create_cached_output": _create_cached_output,
             "report_progress": lambda **kwargs: reports.append(kwargs),
         }
         (report_ray_task_result,) = _load_star_functions(
@@ -369,6 +374,26 @@ class TestReportRayTaskResultLogURL(TestCase):
 
         self.assertEqual(state, "KILLED")
         self.assertEqual(report["task_log"], self._LOG_URL)
+
+    def test_succeeded_publishes_cached_output(self):
+        """A successful job publishes its cache record and reports its name."""
+        _, report = self._report("RAY_JOB_STATE_SUCCEEDED")
+
+        self.assertEqual(len(self.created_cached_outputs), 1)
+        self.assertEqual(
+            self.created_cached_outputs[0]["result_json_url"],
+            "s3://bucket/result.json",
+        )
+        self.assertEqual(report["output"], "cached-1")
+
+    def test_failed_and_killed_do_not_publish_cached_output(self):
+        """No result is written on failure, so no cache record may point at it."""
+        for job_state in ("RAY_JOB_STATE_FAILED", "RAY_JOB_STATE_KILLED"):
+            with self.subTest(job_state=job_state):
+                _, report = self._report(job_state)
+
+                self.assertEqual(self.created_cached_outputs, [])
+                self.assertEqual(report["output"], "")
 
     def test_failed_reports_persisted_log_url(self):
         """A failed job's terminal report carries the CR log URL.

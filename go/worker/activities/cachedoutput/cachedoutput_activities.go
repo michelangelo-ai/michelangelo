@@ -115,8 +115,17 @@ func (r *activities) ShouldOverrideCacheForRetry(ctx context.Context, request Sh
 		return noOverride, nil
 	}
 
+	// After a reset, status.steps is rebuilt from the new run's progress, so a
+	// sibling that reports first can find a status without the target in it. The
+	// target can't be told apart from a sibling then, and guessing "sibling" would
+	// let the retried task replay its cached output and skip execution. Fall back
+	// to the env default (no override) instead: the worst case is a sibling
+	// re-running, which is what happened before this override existed.
 	target := findStepByActivityID(response.PipelineRun.Status.Steps, retryInfo.ActivityId)
-	isRetryTarget := target != nil && target.Name == request.TaskPath && target.DisplayName == request.TaskName
+	if target == nil {
+		return noOverride, nil
+	}
+	isRetryTarget := target.Name == request.TaskPath && target.DisplayName == request.TaskName
 
 	return &ShouldOverrideCacheForRetryResponse{
 		HasOverride: true,

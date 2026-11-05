@@ -93,19 +93,24 @@ def task_d(sleep_seconds: int, upstream_result: str, fail: bool = False) -> str:
 
 
 @uniflow.workflow()
-def retry_cache_workflow(fail_b: bool = False):
+def retry_cache_workflow(
+    fail_b: bool = False, fail_c: bool = False, fail_d: bool = False
+):
     """Run (task_a, task_b) concurrently, then (task_c, task_d) concurrently.
 
     task_c/task_d take result_a as an argument (a genuine data dependency on
     task_a); task_b takes no argument from task_a (an independent sibling).
+
+    fail_b, fail_c and fail_d force the matching task to fail, so a manual retry
+    of that task can be exercised.
     """
     future_a = concurrent_run(task_a, 10, False)
     future_b = concurrent_run(task_b, 60, fail_b)
     result_a = future_a.result()
     result_b = future_b.result()
 
-    future_c = concurrent_run(task_c, 10, result_a, False)
-    future_d = concurrent_run(task_d, 30, result_a, False)
+    future_c = concurrent_run(task_c, 10, result_a, fail_c)
+    future_d = concurrent_run(task_d, 30, result_a, fail_d)
     result_c = future_c.result()
     result_d = future_d.result()
 
