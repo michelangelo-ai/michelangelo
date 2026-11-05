@@ -21,6 +21,7 @@ from michelangelo.workflow.schema.ray_data_io import (
     RayDataContextConfig,
     WriteConfig,
 )
+from michelangelo.workflow.schema.sampling import SamplingConfig
 
 __all__ = [
     "BatchOptions",
@@ -29,6 +30,7 @@ __all__ = [
     "PaddingOptions",
     "ParquetReadConfig",
     "RayDataContextConfig",
+    "SamplingConfig",
     "TabularInferenceConfig",
     "WriteConfig",
 ]
@@ -93,11 +95,13 @@ class BatchOptions:
         max_tasks_in_flight_per_actor: Maximum queued tasks per actor in
             Ray's actor pool. ``None`` leaves Ray's default.
         max_restarts: Times Ray restarts a dead inference actor before failing
-            the job. ``None`` leaves Ray's default; ``-1`` restarts without
+            the job, so one crashed worker (an out-of-memory kill, a transient
+            GPU fault) does not fail a long run. ``None`` means ``3``; ``0``
+            fails the job on the first actor death; ``-1`` restarts without
             limit.
         max_task_retries: Times an in-flight block is resubmitted after its
             actor dies. Only effective when ``max_restarts`` is not ``0``.
-            ``None`` leaves Ray's default.
+            ``None`` means ``3``; ``-1`` retries without limit.
 
     Raises:
         ConfigurationError: If a size or count field is not positive, or a
@@ -218,10 +222,33 @@ class TabularInferenceConfig:
             ``model_name`` and ``model_version`` columns so the rows can be told
             apart; a model passed to the task directly has no name to record. An
             empty or ``None`` list returns the inputs unchanged.
+        sampling: Scores only a fraction of each dataset's rows. ``None`` scores
+            every row.
         parquet_read_config: kwargs forwarded to ``ray.data.read_parquet`` when
             loading the input datasets.
         write_config: Output write options for the scored datasets.
         ray_data_context: Ray Data block sizing and I/O retry tuning.
+        max_errored_blocks: How many Ray Data blocks may fail before the task
+            fails. ``None`` keeps Ray's default of ``0``, which fails on the
+            first errored block.
+
+            The budget applies to each dataset separately, because each one
+            runs as its own Ray Data execution, so a task scoring ``K``
+            datasets can drop up to ``K * max_errored_blocks`` blocks. A block
+            is usually one batch of about ``batch_options.batch_size`` rows,
+            but a failed read or write can drop a whole file.
+
+            Failed blocks are left out of the output with no placeholder rows,
+            and the dropped row count is not recorded, so only set this when
+            downstream tasks tolerate incomplete data. A worker that crashes is
+            restarted and its block retried (see ``BatchOptions.max_restarts``)
+            rather than counted here. It is a field of this config rather than
+            of ``ray_data_context``, which training and transform tasks share
+            and where dropping data is never acceptable.
+
+    Raises:
+        ConfigurationError: If ``max_errored_blocks`` is not ``None`` or an
+            integer of at least ``0``.
 
     Example:
         >>> TabularInferenceConfig(local_models=[OfflineInferenceConfig()])
@@ -230,6 +257,18 @@ class TabularInferenceConfig:
     """
 
     local_models: list[OfflineInferenceConfig] | None = None
+    sampling: SamplingConfig | None = None
     parquet_read_config: ParquetReadConfig | None = None
     write_config: WriteConfig | None = None
     ray_data_context: RayDataContextConfig | None = None
+    max_errored_blocks: int | None = None
+
+    def __post_init__(self) -> None:
+        """Validate ``max_errored_blocks``."""
+        value = self.max_errored_blocks
+        if value is None:
+            return
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise ConfigurationError(
+                f"max_errored_blocks must be an integer >= 0, got {value!r}."
+            )

@@ -22,6 +22,12 @@ __all__ = ["ModelSource", "batch_model_inference"]
 
 _logger = logging.getLogger(__name__)
 
+#: Restarts of a dead inference actor when ``BatchOptions.max_restarts`` is unset.
+DEFAULT_MAX_RESTARTS = 3
+#: Resubmissions of an in-flight block when ``BatchOptions.max_task_retries`` is
+#: unset.
+DEFAULT_MAX_TASK_RETRIES = 3
+
 
 @dataclass
 class ModelSource:
@@ -170,16 +176,26 @@ def _compute_strategy(options: BatchOptions) -> ray.data.ActorPoolStrategy:
 
 
 def _actor_options(options: BatchOptions) -> dict[str, int]:
-    """Ray actor options, passed only when set.
+    """Ray actor options.
 
-    A ``None`` value would override Ray's own default instead of keeping it, so
-    unset options are left out entirely. Ray restarts a dead actor without limit
-    and retries its in-flight block when ``max_restarts`` and ``max_task_retries``
-    are omitted.
+    Restarts and retries are bounded by default, so a crashed worker is
+    replaced and its block rerun a few times before the job fails, instead of
+    either failing at once or retrying forever. ``max_concurrency`` is passed
+    only when set, because a ``None`` would override Ray's actor default of
+    ``1`` instead of keeping it.
     """
-    candidates = {
-        "max_concurrency": options.max_concurrency,
-        "max_restarts": options.max_restarts,
-        "max_task_retries": options.max_task_retries,
+    actor_options = {
+        "max_restarts": (
+            DEFAULT_MAX_RESTARTS
+            if options.max_restarts is None
+            else options.max_restarts
+        ),
+        "max_task_retries": (
+            DEFAULT_MAX_TASK_RETRIES
+            if options.max_task_retries is None
+            else options.max_task_retries
+        ),
     }
-    return {k: v for k, v in candidates.items() if v is not None}
+    if options.max_concurrency is not None:
+        actor_options["max_concurrency"] = options.max_concurrency
+    return actor_options

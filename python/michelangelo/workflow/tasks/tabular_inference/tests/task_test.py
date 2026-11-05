@@ -24,6 +24,7 @@ from michelangelo.workflow.schema.inference import (
     BatchOptions,
     ModelReference,
     OfflineInferenceConfig,
+    SamplingConfig,
     TabularInferenceConfig,
 )
 from michelangelo.workflow.schema.ray_data_io import WriteConfig
@@ -233,6 +234,37 @@ def test_write_config_is_applied(ray_session, tmp_path, out_dir):
     parquet_files = list((out_dir).rglob("*.parquet"))
     assert len(parquet_files) >= 3
     assert len(_rows(result["train"])) == 6
+
+
+def test_sampling_scores_only_the_sampled_rows(ray_session, tmp_path, out_dir):
+    """Only the sampled fraction of a dataset is scored and written."""
+    rows = [{"a": float(i), "b": 10.0, "label": 10.0 + 2 * i} for i in range(200)]
+    config = _config()
+    config.sampling = SamplingConfig(fractions={"train": 0.25})
+
+    result = tabular_inference(
+        config,
+        {"train": _dataset_var(tmp_path, rows=rows)},
+        model=_assembled(_package(tmp_path / "pkg")),
+    )
+
+    scored = _rows(result["train"])
+    assert 0 < len(scored) < 200
+    assert [r["y"] for r in scored] == [r["label"] for r in scored]
+
+
+def test_max_errored_blocks_reaches_the_ray_data_context(ray_session):
+    """The task-level budget is applied to Ray Data before scoring."""
+    config = _config()
+    config.max_errored_blocks = 7
+    with patch(
+        "michelangelo.workflow.tasks.tabular_inference.task.set_ray_data_context"
+    ) as set_context:
+        tabular_inference(
+            config, {"train": None}, model=ModelVariable.create(DictModel())
+        )
+
+    assert set_context.call_args.kwargs["max_errored_blocks"] == 7
 
 
 def test_bad_write_config_fails_before_scoring(tmp_path):

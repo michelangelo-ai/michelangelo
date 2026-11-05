@@ -14,6 +14,7 @@ from michelangelo.workflow.schema.inference import (
     ModelReference,
     OfflineInferenceConfig,
     PaddingOptions,
+    SamplingConfig,
     TabularInferenceConfig,
 )
 from michelangelo.workflow.schema.ray_data_io import (
@@ -22,14 +23,16 @@ from michelangelo.workflow.schema.ray_data_io import (
     WriteConfig,
 )
 
-# Field names are a wire format shared with other implementations of this
-# schema, so a rename must show up as a test failure.
+# Field names are a wire format: they appear in serialized pipeline configs, so
+# a rename must show up as a test failure.
 _WIRE_FIELDS = {
     TabularInferenceConfig: {
         "local_models",
+        "sampling",
         "parquet_read_config",
         "write_config",
         "ray_data_context",
+        "max_errored_blocks",
     },
     OfflineInferenceConfig: {
         "model",
@@ -51,6 +54,7 @@ _WIRE_FIELDS = {
     },
     PaddingOptions: {"column_padding_values"},
     ModelReference: {"name", "revision_id"},
+    SamplingConfig: {"fractions", "agg_cols"},
 }
 
 _FULL_CONFIG = TabularInferenceConfig(
@@ -73,9 +77,11 @@ _FULL_CONFIG = TabularInferenceConfig(
             backend="pkg.module.factory",
         )
     ],
+    sampling=SamplingConfig(fractions={"train": 0.25}, agg_cols=["session"]),
     parquet_read_config=ParquetReadConfig(num_cpus=1),
     write_config=WriteConfig(max_rows_per_file=100),
     ray_data_context=RayDataContextConfig(min_block_size=1),
+    max_errored_blocks=0,
 )
 
 
@@ -102,6 +108,9 @@ def test_field_names_match_wire_format(cls):
         OfflineInferenceConfig(),
         TabularInferenceConfig(),
         TabularInferenceConfig(local_models=[]),
+        TabularInferenceConfig(max_errored_blocks=25),
+        SamplingConfig(),
+        SamplingConfig(fractions={"train": 1.0}),
     ],
 )
 def test_codec_roundtrip_leaf_values(value):
@@ -118,6 +127,10 @@ def test_codec_roundtrip_nested_config():
         name="housing", revision_id=2
     )
     assert decoded.local_models[0].batch_options.max_task_retries == 0
+    assert decoded.sampling == SamplingConfig(
+        fractions={"train": 0.25}, agg_cols=["session"]
+    )
+    assert decoded.max_errored_blocks == 0
 
 
 def test_defaults_are_unset():
@@ -137,7 +150,7 @@ def test_unknown_key_fails_loudly():
     with pytest.raises(TypeError):
         ModelReference(name="m", namespace="ns")
     with pytest.raises(TypeError):
-        TabularInferenceConfig(sampling=None)
+        TabularInferenceConfig(llm=None)
 
 
 def test_unknown_key_fails_through_codec():
@@ -173,6 +186,26 @@ def test_retry_fields_allow_zero_and_minus_one_only_down_to_minus_one(field_name
     assert getattr(BatchOptions(**{field_name: -1}), field_name) == -1
     with pytest.raises(ConfigurationError, match=field_name):
         BatchOptions(**{field_name: -2})
+
+
+@pytest.mark.parametrize("bad", [-1, 1.5, True, "3"])
+def test_max_errored_blocks_must_be_a_non_negative_int(bad):
+    """Zero is fail-fast; negatives, floats, bools and strings are rejected."""
+    with pytest.raises(ConfigurationError, match="max_errored_blocks"):
+        TabularInferenceConfig(max_errored_blocks=bad)
+
+
+@pytest.mark.parametrize("bad", [0, -0.1, 1.5, True])
+def test_sampling_fractions_must_be_in_zero_one(bad):
+    """A fraction must be greater than 0 and at most 1."""
+    with pytest.raises(ConfigurationError, match=r"fractions\['train'\]"):
+        SamplingConfig(fractions={"train": bad})
+
+
+def test_sampling_agg_cols_must_not_be_empty():
+    """An empty grouping list is a mistake, not a request to group by nothing."""
+    with pytest.raises(ConfigurationError, match="agg_cols"):
+        SamplingConfig(agg_cols=[])
 
 
 def test_model_reference_validation():

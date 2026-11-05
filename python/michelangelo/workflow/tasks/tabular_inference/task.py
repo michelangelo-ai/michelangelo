@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 from michelangelo.lib.inference import batch_model_inference
 from michelangelo.uniflow.plugins.ray.data_context import set_ray_data_context
 from michelangelo.uniflow.plugins.ray.parquet_io import parquet_read_config_to_kwargs
+from michelangelo.workflow.tasks.functions.data.ray.sampling import apply_sampling
 from michelangelo.workflow.tasks.functions.data.ray.write import (
     save_datasets,
     write_config_to_kwargs,
@@ -64,10 +65,10 @@ def tabular_inference(
             a ``local_models`` entry has a ``model`` reference.
 
     Returns:
-        A dict with the same keys as ``datasets``. Scored datasets are written
-        with ``config.write_config``. ``None`` and empty datasets are returned as
-        they came in. With no ``local_models``, ``datasets`` is returned
-        unchanged.
+        A dict with the same keys as ``datasets``. Scored datasets, sampled by
+        ``config.sampling`` when set, are written with ``config.write_config``.
+        ``None`` and empty datasets are returned as they came in. With no
+        ``local_models``, ``datasets`` is returned unchanged.
 
     Raises:
         ValueError: If a model cannot be resolved, or models produce different
@@ -91,6 +92,7 @@ def tabular_inference(
         max_blocks_in_streaming_gen_buffer=(
             rc.max_blocks_in_streaming_gen_buffer if rc else None
         ),
+        max_errored_blocks=config.max_errored_blocks,
     )
 
     # Fail on a bad write config before any scoring work is done.
@@ -126,7 +128,11 @@ def tabular_inference(
 
     scored = batch_model_inference(
         {
-            name: var.value if var is not None else None
+            name: (
+                apply_sampling(var.value, config.sampling, name)
+                if var is not None
+                else None
+            )
             for name, var in datasets.items()
         },
         list(zip(config.local_models, sources)),

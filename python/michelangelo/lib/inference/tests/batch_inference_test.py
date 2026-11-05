@@ -8,6 +8,10 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from michelangelo.lib.inference import ModelSource, batch_model_inference
+from michelangelo.lib.inference.batch_inference import (
+    DEFAULT_MAX_RESTARTS,
+    DEFAULT_MAX_TASK_RETRIES,
+)
 from michelangelo.lib.model_manager.schema import DataType, ModelSchema, ModelSchemaItem
 from michelangelo.workflow.schema.inference import (
     BatchOptions,
@@ -57,20 +61,33 @@ def test_every_batch_option_has_a_forwarding_check():
 @pytest.mark.parametrize("field", sorted(_FORWARDING))
 def test_each_batch_option_reaches_map_batches(field):
     """Every option reaches the Ray call (guards against dropped kwargs)."""
-    value = 0.5 if field == "num_gpus" else 3
+    # 5, not 3, so a forwarded value cannot be mistaken for the retry defaults.
+    value = 0.5 if field == "num_gpus" else 5
     config = OfflineInferenceConfig(batch_options=BatchOptions(**{field: value}))
     call, pool = _call(config)
     assert _FORWARDING[field](call, pool, value)
 
 
-def test_unset_actor_options_never_reach_ray():
-    """None must not override Ray's own defaults."""
+def test_unset_options_use_bounded_retries_and_ray_defaults():
+    """Restarts and retries default to 3; everything else keeps Ray's default."""
     call, pool = _call(OfflineInferenceConfig())
-    for key in ("max_concurrency", "max_restarts", "max_task_retries"):
-        assert key not in call.kwargs
+
+    assert call.kwargs["max_restarts"] == DEFAULT_MAX_RESTARTS == 3
+    assert call.kwargs["max_task_retries"] == DEFAULT_MAX_TASK_RETRIES == 3
+    # None would override Ray's actor default of 1 instead of keeping it.
+    assert "max_concurrency" not in call.kwargs
     # An explicit pool is always passed; with nothing set it carries no options.
     pool.assert_called_once_with()
     assert call.kwargs["compute"] is pool.return_value
+
+
+def test_unlimited_retries_are_forwarded():
+    """``-1`` asks Ray to restart and retry without limit."""
+    config = OfflineInferenceConfig(
+        batch_options=BatchOptions(max_restarts=-1, max_task_retries=-1)
+    )
+    call, _ = _call(config)
+    assert (call.kwargs["max_restarts"], call.kwargs["max_task_retries"]) == (-1, -1)
 
 
 def test_zero_is_forwarded_not_treated_as_unset():
