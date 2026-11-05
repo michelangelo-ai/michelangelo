@@ -308,7 +308,7 @@ Workflow functions compile to Starlark for production execution. This means some
 | `is` / `is not` | `==` / `!=` |
 | f-strings | `"{}".format(value)` |
 | Chained comparisons (`1 < x < 5`) | `1 < x and x < 5` |
-| Standard library calls | Built-in functions (e.g., `uniflow.time()`) |
+| Standard library calls | Uniflow built-ins, for example `uniflow_time()` from `michelangelo.uniflow.core.lib.time` (imported at module level; see [Backfill Pipelines](../ml-pipelines/backfill.md)) |
 
 These constraints only apply to workflow code. Task code runs in containers and can use any Python code.
 
