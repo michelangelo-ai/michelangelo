@@ -25,7 +25,12 @@ def pad_batch(
     Args:
         batch: Column name to numpy array, possibly ragged.
         column_padding_values: Pad value per column name. A column not listed is
-            padded with the sentinel for its dtype, not ``0``.
+            padded with the sentinel for its dtype, not ``0``: NaN for floats,
+            ``INT32_SENTINEL`` for int32 and int64, ``STRING_SENTINEL`` for
+            strings, ``BYTES_SENTINEL`` for bytes and ``BOOL_SENTINEL`` for
+            bools (see :mod:`michelangelo.lib.constants.sentinel`). int8, int16
+            and unsigned integers have no sentinel and need a pad value here, or
+            a cast to a wider dtype first.
 
     Returns:
         A new dict with the same keys, in the same order.
