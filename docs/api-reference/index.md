@@ -1,6 +1,7 @@
 ---
 sidebar_position: 0
 sidebar_label: Overview
+last_verified: 2026-11-05
 ---
 
 # API Reference
