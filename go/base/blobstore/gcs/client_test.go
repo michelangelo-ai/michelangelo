@@ -177,6 +177,126 @@ func TestGcsClient_Get_NotFoundAgainstFake(t *testing.T) {
 	}
 }
 
+func TestRefuseInsecureRedirect(t *testing.T) {
+	mustURL := func(t *testing.T, raw string) *http.Request {
+		t.Helper()
+		req, err := http.NewRequest(http.MethodGet, raw, nil)
+		if err != nil {
+			t.Fatalf("failed to build request for %s: %v", raw, err)
+		}
+		return req
+	}
+
+	tests := []struct {
+		name      string
+		via       []string // URLs of every request so far, oldest first
+		next      string   // URL of the proposed redirect target
+		expectErr bool
+	}{
+		{name: "https to https is allowed", via: []string{"https://a.example.com"}, next: "https://b.example.com", expectErr: false},
+		{name: "http to http is allowed (nothing to downgrade)", via: []string{"http://a.example.com"}, next: "http://b.example.com", expectErr: false},
+		{name: "http to https is allowed (upgrade)", via: []string{"http://a.example.com"}, next: "https://b.example.com", expectErr: false},
+		{name: "https to http is refused", via: []string{"https://a.example.com"}, next: "http://b.example.com", expectErr: true},
+		{
+			name:      "https to http is refused even after an intermediate https hop",
+			via:       []string{"https://a.example.com", "https://b.example.com"},
+			next:      "http://c.example.com",
+			expectErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			via := make([]*http.Request, len(tt.via))
+			for i, u := range tt.via {
+				via[i] = mustURL(t, u)
+			}
+			err := refuseInsecureRedirect(mustURL(t, tt.next), via)
+			if (err != nil) != tt.expectErr {
+				t.Errorf("expected error=%v, got %v", tt.expectErr, err)
+			}
+		})
+	}
+}
+
+func TestRefuseInsecureRedirect_CapsRedirectCount(t *testing.T) {
+	via := make([]*http.Request, maxRedirects)
+	for i := range via {
+		req, err := http.NewRequest(http.MethodGet, "https://a.example.com", nil)
+		if err != nil {
+			t.Fatalf("failed to build request: %v", err)
+		}
+		via[i] = req
+	}
+	next, err := http.NewRequest(http.MethodGet, "https://a.example.com", nil)
+	if err != nil {
+		t.Fatalf("failed to build request: %v", err)
+	}
+	if err := refuseInsecureRedirect(next, via); err == nil {
+		t.Error("expected an error after maxRedirects same-scheme hops, got nil")
+	}
+}
+
+// newRedirectingFakeGCSServer serves object content for requests whose path
+// ends in objectName, exactly like newFakeGCSServer, except the first request
+// to any path is answered with a 302 redirect to redirectTo instead of the
+// object content — simulating a storage endpoint that redirects reads
+// elsewhere. Only the first request redirects, so a legitimate one-hop
+// redirect still succeeds; a client that followed every GET as a redirect
+// loop would fail with "stopped after N redirects" instead.
+func newRedirectingFakeGCSServer(t *testing.T, objectName string, content []byte, redirectTo string) *httptest.Server {
+	t.Helper()
+	redirected := false
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !redirected {
+			redirected = true
+			// Preserve the original request's path and query on the redirect target,
+			// the same way a real storage endpoint would redirect a specific object
+			// read rather than bouncing every request to the target's root.
+			http.Redirect(w, r, redirectTo+r.URL.RequestURI(), http.StatusFound)
+			return
+		}
+		if strings.HasSuffix(r.URL.Path, "/"+objectName) || strings.HasSuffix(r.URL.Path, "%2F"+objectName) {
+			w.Header().Set("Content-Type", "application/octet-stream")
+			w.Header().Set("Content-Length", fmt.Sprintf("%d", len(content)))
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(content)
+			return
+		}
+		http.Error(w, "not found", http.StatusNotFound)
+	}))
+	t.Cleanup(server.Close)
+	return server
+}
+
+// TestGcsClient_Get_FollowsNonDowngradingRedirect proves the CheckRedirect
+// policy installed in ensureClient doesn't just refuse downgrades in
+// isolation (see TestRefuseInsecureRedirect) but is actually wired onto the
+// *http.Client storage.NewClient ends up using for real requests: a redirect
+// that doesn't downgrade the scheme must still be followed successfully.
+//
+// This only exercises the http -> http case: both fake servers here are
+// plain httptest.NewServer (no TLS), so this cannot reproduce the https ->
+// http downgrade itself end-to-end against the real storage/oauth2 stack —
+// doing so would need the client to trust an httptest.NewTLSServer
+// certificate, which the production code has no seam to inject. The refusal
+// behavior itself is covered directly, and exhaustively, by
+// TestRefuseInsecureRedirect above.
+func TestGcsClient_Get_FollowsNonDowngradingRedirect(t *testing.T) {
+	content := []byte("fake gcs object content, reached via redirect")
+	target := newFakeGCSServer(t, "model.json", content)
+	source := newRedirectingFakeGCSServer(t, "model.json", content, target.URL)
+
+	client := newGcsBlobClient(Config{Anonymous: true, Endpoint: source.URL})
+	data, err := client.Get(context.Background(), "gs://test-bucket/path/model.json")
+	if err != nil {
+		t.Fatalf("expected the non-downgrading redirect to be followed, got error: %v", err)
+	}
+	if string(data) != string(content) {
+		t.Errorf("expected content %q, got %q", content, data)
+	}
+}
+
 func TestNewClient_ProvidesBlobStoreClient(t *testing.T) {
 	out := newClient(Config{Anonymous: true})
 	if out.BlobStoreClient == nil {
