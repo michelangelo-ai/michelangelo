@@ -20,13 +20,15 @@ from michelangelo.lib.model_manager._private.schema.common.serde import (
 )
 from michelangelo.lib.model_manager._private.serde.model import (
     get_supported_deployable_backend_types,
-    load_deployable_model_schema,
 )
 from michelangelo.lib.model_manager._private.serde.model.triton_backend_type import (
     get_deployable_backend_type,
 )
 from michelangelo.lib.model_manager.schema import DataType, ModelSchema, ModelSchemaItem
-from michelangelo.lib.model_manager.serde.model import load_model_schema
+from michelangelo.lib.model_manager.serde.model import (
+    load_deployable_model_schema,
+    load_model_schema,
+)
 
 _RAW = ModelSchema(
     input_schema=[ModelSchemaItem("a", DataType.FLOAT, [1])],
