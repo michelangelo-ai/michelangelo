@@ -179,6 +179,7 @@ func TestReconcile_ImmutableRevisionIsNotResnapshotted(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-pipeline",
 			Namespace: "test-namespace",
+			UID:       "pipeline-uid",
 		},
 		Spec: v2pb.PipelineSpec{
 			Commit: &v2pb.CommitInfo{
@@ -188,6 +189,7 @@ func TestReconcile_ImmutableRevisionIsNotResnapshotted(t *testing.T) {
 		},
 	}
 	existing := immutableRevision("pipeline-test-pipeline-abc123456789", "abc123456789")
+	existing.OwnerReferences = []metav1.OwnerReference{pipelineControllerRef("pipeline-uid")}
 
 	reconciler := setUpReconciler(t, []client.Object{pipeline, existing}, env.Context{}, Config{RevisioningEnabled: true})
 	_, err := reconciler.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{Name: "test-pipeline", Namespace: "test-namespace"}})
@@ -197,6 +199,60 @@ func TestReconcile_ImmutableRevisionIsNotResnapshotted(t *testing.T) {
 	require.NoError(t, reconciler.Get(context.Background(), "test-namespace", "pipeline-test-pipeline-abc123456789", &metav1.GetOptions{}, rev))
 	assert.Equal(t, "abc123456789", rev.Spec.RevisionId, "an immutable revision must not be rewritten")
 	assert.Equal(t, existing.Spec.Content.Value, rev.Spec.Content.Value)
+}
+
+// Immutable revisions leave etcd, so they outlive a deleted Pipeline. A re-created
+// Pipeline of the same name (a new UID) must not reuse the old Pipeline's revision.
+func TestReconcile_ImmutableRevisionOfDeletedPipelineIsReported(t *testing.T) {
+	pipeline := &v2pb.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pipeline",
+			Namespace: "test-namespace",
+			UID:       "recreated-uid",
+		},
+		Spec: v2pb.PipelineSpec{
+			Commit: &v2pb.CommitInfo{GitRef: "abc123456789", Branch: "main"},
+		},
+	}
+	existing := immutableRevision("pipeline-test-pipeline-abc123456789", "abc123456789")
+	existing.OwnerReferences = []metav1.OwnerReference{pipelineControllerRef("deleted-uid")}
+
+	reconciler := setUpReconciler(t, []client.Object{pipeline, existing}, env.Context{}, Config{RevisioningEnabled: true})
+	_, err := reconciler.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{Name: "test-pipeline", Namespace: "test-namespace"}})
+	require.ErrorContains(t, err, "belongs to a different Pipeline (uid deleted-uid, current uid recreated-uid)")
+
+	rev := &v2pb.Revision{}
+	require.NoError(t, reconciler.Get(context.Background(), "test-namespace", "pipeline-test-pipeline-abc123456789", &metav1.GetOptions{}, rev))
+	assert.Equal(t, types.UID("deleted-uid"), metav1.GetControllerOf(rev).UID, "the existing revision must not be rewritten")
+}
+
+func TestOwnedByPipeline(t *testing.T) {
+	pipeline := &v2pb.Pipeline{ObjectMeta: metav1.ObjectMeta{UID: "pipeline-uid"}}
+
+	owned := &v2pb.Revision{ObjectMeta: metav1.ObjectMeta{OwnerReferences: []metav1.OwnerReference{pipelineControllerRef("pipeline-uid")}}}
+	assert.True(t, ownedByPipeline(owned, pipeline))
+
+	other := &v2pb.Revision{ObjectMeta: metav1.ObjectMeta{OwnerReferences: []metav1.OwnerReference{pipelineControllerRef("other-uid")}}}
+	assert.False(t, ownedByPipeline(other, pipeline))
+
+	// A revision written before ownerRefs were stamped is treated as owned.
+	assert.True(t, ownedByPipeline(&v2pb.Revision{}, pipeline))
+
+	// A non-controller ownerReference is not an ownership claim.
+	nonController := pipelineControllerRef("other-uid")
+	nonController.Controller = nil
+	assert.True(t, ownedByPipeline(&v2pb.Revision{ObjectMeta: metav1.ObjectMeta{OwnerReferences: []metav1.OwnerReference{nonController}}}, pipeline))
+}
+
+func pipelineControllerRef(uid types.UID) metav1.OwnerReference {
+	controller := true
+	return metav1.OwnerReference{
+		APIVersion: pipelineAPIVersion,
+		Kind:       pipelineKind,
+		Name:       "test-pipeline",
+		UID:        uid,
+		Controller: &controller,
+	}
 }
 
 // A different commit whose ref shares the 12-character prefix maps to the same

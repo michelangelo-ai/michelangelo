@@ -236,6 +236,14 @@ func comparableSpec(spec v2pb.PipelineSpec) v2pb.PipelineSpec {
 	return spec
 }
 
+// ownedByPipeline reports whether rev's controller ownerReference points at pipeline.
+// A revision without a controller ownerReference predates ownerRef stamping and is
+// treated as owned, so existing revisions keep reconciling.
+func ownedByPipeline(rev *v2pb.Revision, pipeline *v2pb.Pipeline) bool {
+	owner := metav1.GetControllerOf(rev)
+	return owner == nil || owner.UID == pipeline.UID
+}
+
 // isTerminatedState checks if a pipeline state is terminal.
 //
 // Terminal states (READY, ERROR) indicate the pipeline has reached a final
@@ -277,6 +285,13 @@ func (r *Reconciler) snapshotRevision(ctx context.Context, pipeline *v2pb.Pipeli
 			if existing.Spec.RevisionId == "" || existing.Spec.Content == nil {
 				return fmt.Errorf("revision %s/%s is immutable but has no recorded commit or snapshotted content",
 					pipeline.Namespace, name)
+			}
+			// Revisions are moved out of etcd once immutable, so deleting a Pipeline no
+			// longer cascades to them; a re-created Pipeline of the same name finds them.
+			// Do not reuse a revision snapshotted for a different Pipeline object.
+			if !ownedByPipeline(existing, pipeline) {
+				return fmt.Errorf("revision %s/%s is immutable and belongs to a different Pipeline (uid %s, current uid %s), e.g. a deleted Pipeline of the same name",
+					pipeline.Namespace, name, metav1.GetControllerOf(existing).UID, pipeline.UID)
 			}
 			// A ref that is not a commit ID (e.g. a branch name) keeps the same revision
 			// name when the spec changes. Skip only when the snapshot still matches.
