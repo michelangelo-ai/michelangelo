@@ -60,7 +60,11 @@ func getKubeConfigStruct(
 		},
 		AuthInfos: map[string]*api.AuthInfo{
 			serviceName: {
-				Token: auth.ClientTokenData,
+				// clientcmd ignores empty fields, so the provider may return a token,
+				// a client certificate and key, or both.
+				ClientCertificateData: []byte(auth.ClientCertificateData),
+				ClientKeyData:         []byte(auth.ClientKeyData),
+				Token:                 auth.ClientTokenData,
 			},
 		},
 		Contexts: map[string]*api.Context{
