@@ -5,6 +5,7 @@
 # gazelle:exclude tools/
 # gazelle:exclude proto-go/
 # gazelle:exclude javascript/node_modules/
+# gazelle:exclude .github/
 # gazelle:proto default
 # gazelle:go_naming_convention go_default_library
 # gazelle:go_naming_convention_external go_default_library
