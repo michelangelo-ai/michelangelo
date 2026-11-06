@@ -59,10 +59,13 @@ func TestRevisionHandler_Reconcile(t *testing.T) {
 			expectedState:  v2pb.REVISION_STATE_ERROR,
 		},
 		{
-			name:           "pipeline INVALID -> revision ERROR",
+			// INVALID is the proto zero value ("no status yet"), so it must not settle on the
+			// terminal ERROR state.
+			name:           "pipeline INVALID -> revision BUILDING with requeue",
 			initialObjects: []client.Object{pipelineWithState("test-namespace", v2pb.PIPELINE_STATE_INVALID)},
 			baseResource:   baseResource,
-			expectedState:  v2pb.REVISION_STATE_ERROR,
+			expectedState:  v2pb.REVISION_STATE_BUILDING,
+			expectedResult: ctrl.Result{RequeueAfter: reconcileInterval},
 		},
 		{
 			name:           "pipeline CREATED -> revision CREATED with requeue",
