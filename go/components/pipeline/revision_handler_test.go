@@ -162,6 +162,14 @@ func TestModule_ProvidesRevisionHandler(t *testing.T) {
 	assert.Equal(t, metav1.TypeMeta{APIVersion: pipelineAPIVersion, Kind: pipelineKind}, handlers[0].TypeMeta())
 }
 
+// TestModule_ProvidesRevisionHandler exercises revisionHandlerProvider on its own, because
+// Module also invokes register, which needs a real manager. This checks that Module
+// actually includes that provider, so dropping it from Module fails a test.
+func TestModule_IncludesRevisionHandlerProvider(t *testing.T) {
+	assert.Contains(t, Module.String(), revisionHandlerProvider.String())
+	assert.Contains(t, revisionHandlerProvider.String(), "newRevisionHandler")
+}
+
 func TestNewRevisionHandler_FactoryError(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	factory := handlermocks.NewMockFactory(mockCtrl)
