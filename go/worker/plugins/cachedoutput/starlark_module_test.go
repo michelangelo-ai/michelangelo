@@ -13,6 +13,7 @@ import (
 	"github.com/cadence-workflow/starlark-worker/service"
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/cachedoutput"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
+	"go.starlark.net/starlark"
 )
 
 type CachedOutputModuleTestSuite struct {
@@ -106,4 +107,53 @@ func (s *CachedOutputModuleTestSuite) TestQueryCachedOutputsError() {
 	var res any
 	err := s.env.Cadence.GetResult(&res)
 	require.Error(err)
+}
+
+func (s *CachedOutputModuleTestSuite) TestShouldOverrideCacheForRetry() {
+	kw := func(k string, v starlark.Value) starlark.Tuple { return starlark.Tuple{starlark.String(k), v} }
+	str := func(v string) starlark.Value { return starlark.String(v) }
+	valid := []starlark.Tuple{kw("namespace", str("default")), kw("task_path", str("a.b.task")), kw("task_name", str("task"))}
+
+	tests := []struct {
+		name   string
+		args   starlark.Tuple
+		kwargs []starlark.Tuple
+	}{
+		{name: "missing required args", kwargs: valid[:2]},
+		{name: "wrong type", kwargs: []starlark.Tuple{kw("namespace", str("default")), kw("task_path", starlark.MakeInt(1)), kw("task_name", str("task"))}},
+		{name: "unexpected kwarg", kwargs: append([]starlark.Tuple{kw("bogus", str("x"))}, valid...)},
+	}
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			s.SetupTest() // fresh workflow env per case
+			env := s.env.Cadence.GetTestWorkflowEnvironment()
+			env.RegisterActivity(cachedoutput.Activities.ShouldOverrideCacheForRetry)
+			// Arg-unpacking failures must surface before the activity is scheduled.
+			env.OnActivity(cachedoutput.Activities.ShouldOverrideCacheForRetry, mock.Anything, mock.Anything).Maybe().
+				Run(func(mock.Arguments) { s.Fail("activity must not run when args are invalid") }).
+				Return(&cachedoutput.ShouldOverrideCacheForRetryResponse{}, nil)
+
+			s.env.Cadence.ExecuteFunction("/test.star", "call_override", tt.args, tt.kwargs, nil)
+			var res any
+			s.Error(s.env.Cadence.GetResult(&res))
+		})
+	}
+
+	s.Run("success", func() {
+		s.SetupTest()
+		env := s.env.Cadence.GetTestWorkflowEnvironment()
+		env.RegisterActivity(cachedoutput.Activities.ShouldOverrideCacheForRetry)
+		var got cachedoutput.ShouldOverrideCacheForRetryRequest
+		env.OnActivity(cachedoutput.Activities.ShouldOverrideCacheForRetry, mock.Anything, mock.Anything).Once().
+			Run(func(args mock.Arguments) {
+				got = args.Get(1).(cachedoutput.ShouldOverrideCacheForRetryRequest)
+			}).
+			Return(&cachedoutput.ShouldOverrideCacheForRetryResponse{HasOverride: true, UseCache: true, ActivityID: "act-1"}, nil)
+
+		s.env.Cadence.ExecuteFunction("/test.star", "call_override", nil, valid, nil)
+		var res map[string]any
+		s.Require().NoError(s.env.Cadence.GetResult(&res))
+		s.Equal(cachedoutput.ShouldOverrideCacheForRetryRequest{Namespace: "default", TaskPath: "a.b.task", TaskName: "task"}, got)
+		s.Equal(map[string]any{"has_override": true, "use_cache": true, "activity_id": "act-1"}, res)
+	})
 }

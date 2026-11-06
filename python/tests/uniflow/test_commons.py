@@ -91,6 +91,83 @@ def _load_commons_function(name):
     return _load_commons_functions(name)[name]
 
 
+class TestGetCacheEnabled(unittest.TestCase):
+    """Tests for get_cache_enabled()."""
+
+    def _load(self, decision=None, environ=None):
+        self.backend = MagicMock(return_value=decision or {})
+        globals_ = _base_globals()
+        globals_.update(
+            {
+                "CACHE_ENABLED_ENV": "CACHE_ENABLED",
+                "CACHE_ENABLED_TRUE": "true",
+                "CACHE_ENABLED_FALSE": "false",
+                "os": SimpleNamespace(environ=dict(environ or {})),
+                "cachedoutput": SimpleNamespace(
+                    should_override_cache_for_retry=self.backend
+                ),
+            }
+        )
+        return _load_commons_functions("get_cache_enabled", globals_=globals_)[
+            "get_cache_enabled"
+        ]
+
+    def _call(self, get_cache_enabled, cache_enabled=False):
+        return get_cache_enabled(cache_enabled, "my_task", "ma-dev-test", "pkg.my_task")
+
+    def test_explicit_true_skips_the_backend(self):
+        """An explicit True is honored as-is and reports no decision activity."""
+        get_cache_enabled = self._load()
+
+        self.assertEqual(self._call(get_cache_enabled, True), (True, ""))
+        self.backend.assert_not_called()
+
+    def test_retry_override_wins_and_returns_its_activity(self):
+        """A live retry decision overrides the env and anchors on its activity."""
+        get_cache_enabled = self._load(
+            decision={"has_override": True, "use_cache": True, "activity_id": "7"},
+            environ={"CACHE_ENABLED": "false"},
+        )
+
+        self.assertEqual(self._call(get_cache_enabled), (True, "7"))
+        self.backend.assert_called_once_with(
+            namespace="ma-dev-test", task_path="pkg.my_task", task_name="my_task"
+        )
+
+    def test_retry_target_keeps_cache_off(self):
+        """The retried task itself gets use_cache False despite the env."""
+        get_cache_enabled = self._load(
+            decision={"has_override": True, "use_cache": False, "activity_id": "7"},
+            environ={"CACHE_ENABLED": "true"},
+        )
+
+        self.assertEqual(self._call(get_cache_enabled), (False, "7"))
+
+    def test_no_override_falls_back_to_task_env(self):
+        """Without a retry the per-task env wins over the global one."""
+        get_cache_enabled = self._load(
+            decision={"has_override": False, "activity_id": "7"},
+            environ={"CACHE_ENABLED": "true", "CACHE_ENABLED_my_task": "false"},
+        )
+
+        self.assertEqual(self._call(get_cache_enabled), (False, "7"))
+
+    def test_no_override_falls_back_to_global_env(self):
+        """Without a retry or per-task env, the global env decides."""
+        get_cache_enabled = self._load(
+            decision={"has_override": False, "activity_id": "7"},
+            environ={"CACHE_ENABLED": "true"},
+        )
+
+        self.assertEqual(self._call(get_cache_enabled), (True, "7"))
+
+    def test_no_override_and_no_env_defaults_off(self):
+        """A missing decision and env leave caching disabled."""
+        get_cache_enabled = self._load(decision={})
+
+        self.assertEqual(self._call(get_cache_enabled), (False, ""))
+
+
 class TestGetJobLogUrl(unittest.TestCase):
     """Tests for get_job_log_url()."""
 
@@ -351,7 +428,7 @@ class TestExecuteSparkCrdJob(unittest.TestCase):
         )
         self.execute = ns["execute_spark_crd_job"]
 
-    def _call(self, spark_crd_job):
+    def _call(self, spark_crd_job, **kwargs):
         return self.execute(
             namespace="ma-dev-test",
             task_name="my_task",
@@ -362,7 +439,16 @@ class TestExecuteSparkCrdJob(unittest.TestCase):
             total_retry_attempt=3,
             job_label="Spark",
             log_url_prefix="",
+            **kwargs,
         )
+
+    def _reported_first_activity_ids(self):
+        # Reports pass the anchor as first_activity_id (job created) or as
+        # activity_id (running / terminated); both must carry the same value.
+        return {
+            call.kwargs.get("first_activity_id") or call.kwargs.get("activity_id")
+            for call in self.globals_["report_progress"].call_args_list
+        }
 
     def test_job_creation_failure_raises(self):
         """A None sparkJob from create_job reports failure and raises."""
@@ -397,6 +483,47 @@ class TestExecuteSparkCrdJob(unittest.TestCase):
         self.assertEqual(spark.sensor_job.call_count, 2)
         self.globals_["atexit"].register.assert_called_once()
         self.globals_["atexit"].unregister.assert_called_once()
+
+    def test_cache_decision_activity_is_the_retry_anchor(self):
+        """When a cache decision ran, its activity id anchors every report."""
+        spark = self.globals_["spark"]
+        created_job = {"metadata": {"name": "uniflow-sp-abc"}, "status": {}}
+        terminated_job = {
+            "status": {
+                "statusConditions": [_condition("Succeeded", "CONDITION_STATUS_TRUE")]
+            }
+        }
+        spark.create_job = MagicMock(
+            return_value={"sparkJob": created_job, "activityId": "act-1"}
+        )
+        running_job = {"status": {"jobUrl": "https://driver.example.com"}}
+        spark.sensor_job = MagicMock(side_effect=[running_job, terminated_job])
+
+        self._call({"kind": "SparkJob"}, first_activity_id="decide-1")
+
+        self.assertEqual(self._reported_first_activity_ids(), {"decide-1"})
+        atexit_args = self.globals_["atexit"].register.call_args.args
+        self.assertIn("decide-1", atexit_args)
+        self.assertNotIn("act-1", atexit_args)
+
+    def test_job_creation_anchors_without_cache_decision(self):
+        """Without a cache decision the job creation activity is the anchor."""
+        spark = self.globals_["spark"]
+        created_job = {"metadata": {"name": "uniflow-sp-abc"}, "status": {}}
+        terminated_job = {
+            "status": {
+                "statusConditions": [_condition("Succeeded", "CONDITION_STATUS_TRUE")]
+            }
+        }
+        spark.create_job = MagicMock(
+            return_value={"sparkJob": created_job, "activityId": "act-1"}
+        )
+        running_job = {"status": {"jobUrl": "https://driver.example.com"}}
+        spark.sensor_job = MagicMock(side_effect=[running_job, terminated_job])
+
+        self._call({"kind": "SparkJob"})
+
+        self.assertEqual(self._reported_first_activity_ids(), {"act-1"})
 
     def test_failed_job_does_not_unregister_atexit_hook(self):
         """A job that ultimately fails leaves the atexit safety hook registered."""
