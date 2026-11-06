@@ -291,3 +291,28 @@ class TestAssembleOutputTable:
             [2.0, 3.0],
             [4.0, 5.0],
         ]
+
+
+class TestPredictionExtraCollision:
+    """``raise_on_collision`` also guards predictions against extra columns."""
+
+    def test_prediction_named_like_extra_column_is_rejected(self):
+        """A prediction would silently overwrite a same-named metadata column."""
+        table = pa.table({"a": [1, 2]})
+        extra = {"model_name": pa.array(["m", "m"])}
+        with pytest.raises(ValueError, match="model_name"):
+            assemble_output_table(
+                table,
+                {"model_name": np.array([1, 2])},
+                extra_columns=extra,
+                raise_on_collision=True,
+            )
+
+    def test_overwrite_still_allowed_without_the_flag(self):
+        """The default keeps the in-place overwrite the transform path relies on."""
+        table = pa.table({"a": [1, 2]})
+        extra = {"x": pa.array(["m", "m"])}
+        result = assemble_output_table(
+            table, {"x": np.array([1, 2])}, extra_columns=extra
+        )
+        assert result["x"].to_pylist() == ["m", "m"]
