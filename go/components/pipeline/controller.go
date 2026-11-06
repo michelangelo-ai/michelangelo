@@ -212,15 +212,28 @@ func sameCommitRef(a, b string) bool {
 
 // snapshotMatchesSpec reports whether the Pipeline a revision snapshotted has the same
 // spec as pipeline. The commit is compared separately (by ref), and its metadata may
-// differ for the same commit, so it is ignored here.
+// differ for the same commit, so it is ignored here. So are the fields `apply`
+// regenerates on every run (the uploaded tarball path and the owner), so re-applying
+// the same commit is a no-op instead of an error.
 func snapshotMatchesSpec(rev *v2pb.Revision, pipeline *v2pb.Pipeline) (bool, error) {
 	snapshot := &v2pb.Pipeline{}
 	if err := pbtypes.UnmarshalAny(rev.Spec.Content, snapshot); err != nil {
 		return false, fmt.Errorf("decode snapshotted pipeline: %w", err)
 	}
-	snapshotted, current := snapshot.Spec, pipeline.Spec
-	snapshotted.Commit, current.Commit = nil, nil
+	snapshotted, current := comparableSpec(snapshot.Spec), comparableSpec(pipeline.Spec)
 	return gogoproto.Equal(&snapshotted, &current), nil
+}
+
+// comparableSpec returns a copy of spec without the fields that vary between applies of
+// the same commit. The caller's spec is not modified.
+func comparableSpec(spec v2pb.PipelineSpec) v2pb.PipelineSpec {
+	spec.Commit, spec.Owner = nil, nil
+	if spec.Manifest != nil {
+		manifest := gogoproto.Clone(spec.Manifest).(*v2pb.PipelineManifest)
+		manifest.UniflowTar = ""
+		spec.Manifest = manifest
+	}
+	return spec
 }
 
 // isTerminatedState checks if a pipeline state is terminal.

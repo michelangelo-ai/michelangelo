@@ -332,6 +332,33 @@ func TestSnapshotMatchesSpec(t *testing.T) {
 	require.ErrorContains(t, err, "decode snapshotted pipeline")
 }
 
+// `apply` uploads a new tarball and records the caller as owner on every run, so neither
+// may make a re-apply of the same commit look like a different spec.
+func TestSnapshotMatchesSpecIgnoresApplyArtifacts(t *testing.T) {
+	spec := func(tar, owner, description string) v2pb.PipelineSpec {
+		return v2pb.PipelineSpec{
+			Description: description,
+			Owner:       &v2pb.UserInfo{Name: owner},
+			Manifest:    &v2pb.PipelineManifest{UniflowTar: tar},
+			Commit:      &v2pb.CommitInfo{GitRef: "abc123456789"},
+		}
+	}
+	rev := immutableRevision("pipeline-test-pipeline-abc123456789", "abc123456789")
+	rev.Spec.Content = mustSnapshot(&v2pb.Pipeline{Spec: spec("s3://bucket/first.tar", "alice", "same")})
+
+	reapplied := &v2pb.Pipeline{Spec: spec("s3://bucket/second.tar", "bob", "same")}
+	matches, err := snapshotMatchesSpec(rev, reapplied)
+	require.NoError(t, err)
+	assert.True(t, matches, "a new tarball path and owner alone must not count as a different spec")
+	assert.Equal(t, "s3://bucket/second.tar", reapplied.Spec.Manifest.UniflowTar, "the caller's pipeline must not be modified")
+	assert.Equal(t, "bob", reapplied.Spec.Owner.Name, "the caller's pipeline must not be modified")
+
+	changed := &v2pb.Pipeline{Spec: spec("s3://bucket/second.tar", "bob", "different")}
+	matches, err = snapshotMatchesSpec(rev, changed)
+	require.NoError(t, err)
+	assert.False(t, matches, "a real spec change must still be detected")
+}
+
 func mustSnapshot(pipeline *v2pb.Pipeline) *pbtypes.Any {
 	content, err := pbtypes.MarshalAny(pipeline)
 	if err != nil {
