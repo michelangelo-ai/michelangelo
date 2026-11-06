@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	pbtypes "github.com/gogo/protobuf/types"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -110,7 +111,7 @@ func TestInvariant_ImmutableBeforeFinalizerRemoval(t *testing.T) {
 		},
 		Status: v2.PipelineRunStatus{State: v2.PIPELINE_RUN_STATE_KILLED},
 	}
-	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(run).Build()
+	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(run).WithStatusSubresource(run).Build()
 	r := cascadeReconciler(t, c, scheme, true)
 
 	target := &pipelineRunDrainTarget{r: r, logger: r.logger, run: run.DeepCopy()}
@@ -120,6 +121,38 @@ func TestInvariant_ImmutableBeforeFinalizerRemoval(t *testing.T) {
 	// in-memory object reflects the single update.
 	assert.True(t, utils.IsImmutable(target.run), "must be marked immutable")
 	assert.False(t, ctrlutil.ContainsFinalizer(target.run, drainFinalizer), "drain finalizer must be removed")
+}
+
+// TestCompleteDrain_RecordsEndTimeForAlreadyTerminalRun: a run that was terminal before
+// the drain started skips Progress/MarkKilled, so CompleteDrain records its EndTime from
+// its steps before marking it immutable.
+func TestCompleteDrain_RecordsEndTimeForAlreadyTerminalRun(t *testing.T) {
+	scheme := newScheme(t)
+	stepEnd := &pbtypes.Timestamp{Seconds: 1000}
+	run := &v2.PipelineRun{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "run7", Namespace: "ns", UID: types.UID("r7"),
+			Finalizers: []string{drainFinalizer},
+		},
+		Status: v2.PipelineRunStatus{
+			State: v2.PIPELINE_RUN_STATE_SUCCEEDED,
+			Steps: []*v2.PipelineRunStepInfo{{Name: "execute", State: v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED, EndTime: stepEnd}},
+		},
+	}
+	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(run).WithStatusSubresource(run).Build()
+	r := cascadeReconciler(t, c, scheme, true)
+
+	target := &pipelineRunDrainTarget{r: r, logger: r.logger, run: run.DeepCopy()}
+	require.NoError(t, target.CompleteDrain(context.Background()))
+
+	assert.Equal(t, stepEnd, target.run.Status.EndTime)
+	persisted := &v2.PipelineRun{}
+	require.NoError(t, c.Get(context.Background(), client.ObjectKeyFromObject(run), persisted))
+	assert.Equal(t, stepEnd.Seconds, persisted.Status.GetEndTime().GetSeconds())
+	// The status write refreshes target.run's resourceVersion in place, so the follow-up
+	// metadata Update (immutable + finalizer removal) does not conflict.
+	assert.True(t, utils.IsImmutable(persisted), "must be marked immutable")
+	assert.False(t, ctrlutil.ContainsFinalizer(persisted, drainFinalizer), "drain finalizer must be removed")
 }
 
 // TestInvariant_MetadataStorageGuard: with metadata storage disabled, CompleteDrain
@@ -133,7 +166,7 @@ func TestInvariant_MetadataStorageGuard(t *testing.T) {
 		},
 		Status: v2.PipelineRunStatus{State: v2.PIPELINE_RUN_STATE_KILLED},
 	}
-	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(run).Build()
+	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(run).WithStatusSubresource(run).Build()
 	r := cascadeReconciler(t, c, scheme, false) // storage disabled
 
 	target := &pipelineRunDrainTarget{r: r, logger: r.logger, run: run.DeepCopy()}
@@ -178,6 +211,26 @@ func TestMarkKilled_NoToken(t *testing.T) {
 	require.NoError(t, target.MarkKilled(context.Background()))
 	assert.Equal(t, v2.PIPELINE_RUN_STATE_KILLED, target.run.Status.State)
 	assert.Empty(t, target.run.GetAnnotations()["cascade.michelangelo.uber.com/drain-counted"], "MarkKilled must not stamp the drain-counted token")
+}
+
+// TestMarkKilled_RecordsEndTime: a run killed by the drain path persists an EndTime
+// like any other terminal run.
+func TestMarkKilled_RecordsEndTime(t *testing.T) {
+	scheme := newScheme(t)
+	run := &v2.PipelineRun{
+		ObjectMeta: metav1.ObjectMeta{Name: "run6", Namespace: "ns", UID: types.UID("r6"), Finalizers: []string{drainFinalizer}},
+		Status:     v2.PipelineRunStatus{State: v2.PIPELINE_RUN_STATE_RUNNING},
+	}
+	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(run).WithStatusSubresource(run).Build()
+	r := cascadeReconciler(t, c, scheme, true)
+	target := &pipelineRunDrainTarget{r: r, logger: r.logger, run: run.DeepCopy()}
+
+	require.NoError(t, target.MarkKilled(context.Background()))
+
+	persisted := &v2.PipelineRun{}
+	require.NoError(t, c.Get(context.Background(), client.ObjectKeyFromObject(run), persisted))
+	assert.Equal(t, v2.PIPELINE_RUN_STATE_KILLED, persisted.Status.State)
+	assert.NotNil(t, persisted.Status.EndTime)
 }
 
 // TestIngesterFinalizerConstUnchanged guards against accidental edits to the
