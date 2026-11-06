@@ -9,6 +9,8 @@ exclude = [
     "michelangelo/**/*_test.py",
     "michelangelo/**/test_*.py",
     "michelangelo/**/conftest.py",
+    # Fixture plugins used only by michelangelo/cli/mactl/mactl_test.py.
+    "michelangelo/cli/mactl/test",
 ]
 packages = [
     { include = "michelangelo" },
