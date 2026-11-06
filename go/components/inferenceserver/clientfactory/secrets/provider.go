@@ -35,6 +35,9 @@ type ClientAuth struct {
 }
 
 // SecretProvider retrieves cluster authentication credentials for a ClusterTarget.
+//
+// GetClientAuth is called on every client lookup, so implementations should serve it from
+// memory (for example, an informer cache) rather than make a remote call.
 type SecretProvider interface {
 	GetClientAuth(ctx context.Context, cluster *v2pb.ClusterTarget) (ClientAuth, error)
 }
@@ -64,32 +67,34 @@ func (p *Provider) GetClientAuth(ctx context.Context, cluster *v2pb.ClusterTarge
 		return ClientAuth{}, fmt.Errorf("cluster %q has no kubernetes connection spec", cluster.GetClusterId())
 	}
 
-	caSecretName := cluster.GetKubernetes().GetCaDataTag()
-	caSecret, err := p.fetchSecret(ctx, caSecretName)
+	caData, err := p.fetchSecretValue(ctx, cluster.GetKubernetes().GetCaDataTag(), caDataKey)
 	if err != nil {
-		return ClientAuth{}, fmt.Errorf("CA secret for cluster %q: %w", cluster.GetClusterId(), err)
+		return ClientAuth{}, fmt.Errorf("CA secret: %w", err)
 	}
 
-	tokenSecretName := cluster.GetKubernetes().GetTokenTag()
-	tokenSecret, err := p.fetchSecret(ctx, tokenSecretName)
+	token, err := p.fetchSecretValue(ctx, cluster.GetKubernetes().GetTokenTag(), tokenKey)
 	if err != nil {
-		return ClientAuth{}, fmt.Errorf("token secret for cluster %q: %w", cluster.GetClusterId(), err)
+		return ClientAuth{}, fmt.Errorf("token secret: %w", err)
 	}
 
 	return ClientAuth{
-		CertificateAuthorityData: string(caSecret.Data[caDataKey]),
-		ClientTokenData:          string(tokenSecret.Data[tokenKey]),
+		CertificateAuthorityData: caData,
+		ClientTokenData:          token,
 	}, nil
 }
 
-func (p *Provider) fetchSecret(ctx context.Context, name string) (*corev1.Secret, error) {
+func (p *Provider) fetchSecretValue(ctx context.Context, name, dataKey string) (string, error) {
 	if name == "" {
-		return nil, fmt.Errorf("empty secret name")
+		return "", fmt.Errorf("empty secret name")
 	}
 	secret := &corev1.Secret{}
 	key := types.NamespacedName{Name: name, Namespace: secretsNamespace}
 	if err := p.kubeClient.Get(ctx, key, secret); err != nil {
-		return nil, fmt.Errorf("get secret %s/%s: %w", secretsNamespace, name, err)
+		return "", fmt.Errorf("get secret %s/%s: %w", secretsNamespace, name, err)
 	}
-	return secret, nil
+	value, ok := secret.Data[dataKey]
+	if !ok {
+		return "", fmt.Errorf("secret %s/%s has no %q key", secretsNamespace, name, dataKey)
+	}
+	return string(value), nil
 }

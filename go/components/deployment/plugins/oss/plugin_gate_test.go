@@ -249,6 +249,7 @@ func TestHealthCheckGate(t *testing.T) {
 				gate = metricgate.New(maconfig.MetricGateConfig{PrometheusURL: server.URL}, zap.NewNop())
 			}
 			plugin := &Plugin{
+				client:              newKubeClient(t),
 				backendRegistry:     createTestRegistry(mockBackend),
 				clientFactory:       mockClientFactory,
 				modelConfigProvider: mockConfig,
@@ -275,8 +276,33 @@ func TestHealthCheckGate(t *testing.T) {
 	}
 }
 
+func TestHealthCheckGate_SecretsRenamedSinceRollout_UsesInferenceServerConnection(t *testing.T) {
+	deployment := gateDeployment()
+	inferenceServer := withRenamedSecrets(t, deployment)
+
+	ctrl := gomock.NewController(t)
+	mockConfig := modelconfigmocks.NewMockModelConfigProvider(ctrl)
+	mockConfig.EXPECT().GetModelsFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), "test-server", "default").
+		Return(nil, nil)
+	mockClientFactory := clientfactorymocks.NewMockClientFactory(ctrl)
+	mockClientFactory.EXPECT().GetClient(gomock.Any(), tokenTagMatcher("remote-token-v2")).Return(nil, nil)
+
+	plugin := &Plugin{
+		client:              newKubeClient(t, inferenceServer),
+		backendRegistry:     createTestRegistry(backendsmocks.NewMockBackend(ctrl)),
+		clientFactory:       mockClientFactory,
+		modelConfigProvider: mockConfig,
+		logger:              zap.NewNop(),
+	}
+
+	healthy, err := plugin.HealthCheckGate(context.Background(), plugins.ObservabilityContext{}, deployment)
+
+	require.NoError(t, err)
+	assert.True(t, healthy)
+}
+
 func TestGetRollbackPlugin(t *testing.T) {
-	plugin := &Plugin{logger: zap.NewNop()}
+	plugin := &Plugin{client: newKubeClient(t), logger: zap.NewNop()}
 
 	t.Run("one rollback actor per placed cluster plus the completion marker", func(t *testing.T) {
 		deployment := withSingleClusterAnnotation(t, gateDeployment(), "test-cluster")

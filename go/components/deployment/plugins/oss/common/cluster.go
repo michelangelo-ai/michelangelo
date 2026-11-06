@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -13,8 +14,8 @@ import (
 )
 
 const (
-	// TargetClustersAnnotation is written by PlacementPrepActor and read by all downstream actors.
-	// The value is a JSON-encoded list of cluster targets from the InferenceServer.
+	// TargetClustersAnnotation is written by PlacementPrepActor and lists, as JSON, the
+	// InferenceServer cluster targets a rollout placed the Deployment in.
 	TargetClustersAnnotation = "deployment.michelangelo.ai/target-clusters"
 	// BackendTypeAnnotation records the InferenceServer's backend type, snapshotted by
 	// PlacementPrepActor next to the cluster set so every later actor talks to the same backend.
@@ -31,7 +32,7 @@ type clusterTargetAnnotation struct {
 }
 
 // FetchInferenceServer loads the InferenceServer referenced by the Deployment.
-func FetchInferenceServer(ctx context.Context, kubeClient client.Client, deployment *v2pb.Deployment) (*v2pb.InferenceServer, error) {
+func FetchInferenceServer(ctx context.Context, kubeClient client.Reader, deployment *v2pb.Deployment) (*v2pb.InferenceServer, error) {
 	isRef := deployment.Spec.GetInferenceServer()
 	if isRef == nil {
 		return nil, fmt.Errorf("deployment %s/%s has no inference server reference", deployment.Namespace, deployment.Name)
@@ -93,6 +94,43 @@ func ReadTargetClustersAnnotation(deployment *v2pb.Deployment) ([]*v2pb.ClusterT
 		})
 	}
 	return targets, nil
+}
+
+// ResolveTargetClusters returns the Deployment's cluster snapshot with each cluster's connection
+// taken from the InferenceServer as it is now, matched by cluster ID. The snapshot only decides
+// which clusters to visit: its Secret names go stale once credentials are rotated into a new
+// Secret and the old one is deleted. A cluster the InferenceServer no longer lists, a deleted
+// InferenceServer, or a Deployment with no InferenceServer reference keeps the snapshot
+// connection, so the cluster can still be reached.
+func ResolveTargetClusters(ctx context.Context, kubeClient client.Reader, deployment *v2pb.Deployment) ([]*v2pb.ClusterTarget, error) {
+	snapshot, err := ReadTargetClustersAnnotation(deployment)
+	if err != nil {
+		return nil, err
+	}
+	if len(snapshot) == 0 || deployment.Spec.GetInferenceServer() == nil {
+		return snapshot, nil
+	}
+
+	inferenceServer, err := FetchInferenceServer(ctx, kubeClient, deployment)
+	if apierrors.IsNotFound(err) {
+		return snapshot, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	live := make(map[string]*v2pb.ClusterTarget, len(inferenceServer.Spec.GetClusterTargets()))
+	for _, target := range inferenceServer.Spec.GetClusterTargets() {
+		live[target.GetClusterId()] = target
+	}
+	resolved := make([]*v2pb.ClusterTarget, 0, len(snapshot))
+	for _, target := range snapshot {
+		if current, ok := live[target.GetClusterId()]; ok {
+			target = current
+		}
+		resolved = append(resolved, target)
+	}
+	return resolved, nil
 }
 
 // WriteTargetClustersAnnotation serializes the cluster snapshot onto the Deployment.

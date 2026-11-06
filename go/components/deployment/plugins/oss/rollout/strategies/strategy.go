@@ -62,15 +62,15 @@ func GetActorsForStrategy(ctx context.Context, params Params, deployment *v2pb.D
 		zap.Duration("soakPeriod", params.Settings.SoakPeriod),
 		zap.Duration("modelLoadTimeout", params.Settings.ModelLoadTimeout))
 
-	return getClusterSequenceActors(params, deployment)
+	return getClusterSequenceActors(ctx, params, deployment)
 }
 
-// getClusterSequenceActors builds the per-cluster actor chain. The actor list is constructed
-// from the cluster snapshot annotation written by PlacementPrepActor.
-func getClusterSequenceActors(params Params, deployment *v2pb.Deployment) ([]conditionInterfaces.ConditionActor[*v2pb.Deployment], error) {
-	targets, err := osscommon.ReadTargetClustersAnnotation(deployment)
+// getClusterSequenceActors builds the per-cluster actor chain for the clusters, and in the order,
+// of the snapshot PlacementPrepActor wrote.
+func getClusterSequenceActors(ctx context.Context, params Params, deployment *v2pb.Deployment) ([]conditionInterfaces.ConditionActor[*v2pb.Deployment], error) {
+	targets, err := osscommon.ResolveTargetClusters(ctx, params.Client, deployment)
 	if err != nil {
-		return nil, fmt.Errorf("read target clusters annotation: %w", err)
+		return nil, fmt.Errorf("resolve target clusters: %w", err)
 	}
 	if len(targets) == 0 {
 		// Annotation absent or no healthy clusters yet. Return an empty list so
