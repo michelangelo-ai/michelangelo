@@ -86,6 +86,13 @@ func TestRevisionHandler_Reconcile(t *testing.T) {
 			expectedState:  v2pb.REVISION_STATE_READY,
 		},
 		{
+			// A READY Pipeline in another namespace must not be read or reported.
+			name:           "base pipeline in another namespace -> revision ERROR",
+			initialObjects: []client.Object{pipelineWithState("other-namespace", v2pb.PIPELINE_STATE_READY)},
+			baseResource:   &apipb.ResourceIdentifier{Name: "test-pipeline", Namespace: "other-namespace"},
+			expectedState:  v2pb.REVISION_STATE_ERROR,
+		},
+		{
 			name:          "missing base pipeline -> revision ERROR",
 			baseResource:  baseResource,
 			expectedState: v2pb.REVISION_STATE_ERROR,

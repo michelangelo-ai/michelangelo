@@ -63,6 +63,12 @@ func (h *RevisionHandler) Reconcile(ctx context.Context, rev *v2pb.Revision) (ct
 	if namespace == "" {
 		namespace = rev.Namespace
 	}
+	if namespace != rev.Namespace {
+		// Do not read a Pipeline outside the revision's own namespace with the controller's
+		// credentials. The snapshot producer always uses the Pipeline's own namespace.
+		rev.Status.State = v2pb.REVISION_STATE_ERROR
+		return ctrl.Result{}, nil
+	}
 	name := strings.TrimSpace(base.Name)
 
 	pipeline := &v2pb.Pipeline{}
