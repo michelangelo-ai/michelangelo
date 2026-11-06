@@ -11,6 +11,9 @@ func ConvertCommitInfoToHub(in *CommitInfo, out *v2.CommitInfo) error {
 	}
 	out.GitRef = in.GitRef
 	out.Branch = in.Branch
+	out.Message = in.Message
+	out.Author = in.Author
+	out.Url = in.Url
 	return nil
 }
 
@@ -20,5 +23,8 @@ func ConvertCommitInfoFromHub(in *v2.CommitInfo, out *CommitInfo) error {
 	}
 	out.GitRef = in.GitRef
 	out.Branch = in.Branch
+	out.Message = in.Message
+	out.Author = in.Author
+	out.Url = in.Url
 	return nil
 }
