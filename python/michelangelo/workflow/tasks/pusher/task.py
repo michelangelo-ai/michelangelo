@@ -46,8 +46,8 @@ def push(
             match ``PusherPluginConfig.name`` for each item in config.
         storage_backend: Backend used for artifact uploads. Required —
             pass a ``LocalStorageBackend``, ``MinioStorageBackend``, or any
-            :class:`~michelangelo.lib.artifact_manager.storage_backend.StorageBackend`
-            subclass. Raises :class:`ConfigurationError` when ``None``.
+            `StorageBackend`
+            subclass. Raises `ConfigurationError` when ``None``.
         registry_client: Registry client injected into plugins that require
             one (e.g. ``ModelPusherPlugin``). Pass ``None`` for plugins that
             don't need a registry, or when registry clients are specified
@@ -63,7 +63,7 @@ def push(
             Exceptions raised by the callback are logged and suppressed.
 
     Returns:
-        List of :class:`~michelangelo.workflow.variables.types.PusherResult`,
+        List of `PusherResult`,
         one per ``config.items`` entry processed. In ``fail_fast=True`` mode
         the list is shorter than ``config.items`` when a failure occurs.
 
@@ -75,30 +75,36 @@ def push(
         PusherPluginError: If a plugin's ``execute()`` raises and
             ``fail_fast=True``.
 
-    Example::
+    Example:
+    ```python
+    import tempfile
 
-        from michelangelo.lib.model_manager.registry.client import (
-            InMemoryRegistryClient,
-        )
-        from michelangelo.workflow.schema.pusher import (
-            ModelPluginConfig, PusherConfig, PusherPluginConfig,
-        )
-        from michelangelo.workflow.tasks.pusher import push
-        from michelangelo.workflow.variables.types import AssembledModel, ModelArtifact
+    from michelangelo.lib.artifact_manager.storage_backend import LocalStorageBackend
+    from michelangelo.lib.model_manager.registry.client import (
+        InMemoryRegistryClient,
+    )
+    from michelangelo.workflow.schema.pusher import (
+        ModelPluginConfig, PusherConfig, PusherPluginConfig,
+    )
+    from michelangelo.workflow.tasks.pusher import push
+    from michelangelo.workflow.variables.types import AssembledModel, ModelArtifact
 
-        result = push(
-            config=PusherConfig(items=[
-                PusherPluginConfig(
-                    name="clf",
-                    model_plugin=ModelPluginConfig(model_name="my-classifier"),
-                ),
-            ]),
-            artifacts={
-                "clf": AssembledModel(raw_model=ModelArtifact(path="/tmp/raw"))
-            },
-            registry_client=InMemoryRegistryClient(),
-        )
-        assert result[0].success
+    result = push(
+        config=PusherConfig(items=[
+            PusherPluginConfig(
+                name="clf",
+                model_plugin=ModelPluginConfig(model_name="my-classifier"),
+            ),
+        ]),
+        artifacts={
+            # path must point at an existing packaged model (file or directory)
+            "clf": AssembledModel(raw_model=ModelArtifact(path="/tmp/raw"))
+        },
+        storage_backend=LocalStorageBackend(tempfile.mkdtemp()),
+        registry_client=InMemoryRegistryClient(),
+    )
+    assert result[0].success
+    ```
     """
     # Importing pusher.plugins here guarantees default_registry is populated
     # with the three built-in plugins regardless of how push() was imported

@@ -1,3 +1,7 @@
+---
+last_verified: 2026-11-05
+---
+
 # Data Preparation Guide
 
 Learn how to prepare data in Uniflow for the ML pipeline on Michelangelo AI using Ray's distributed processing capabilities.
@@ -136,13 +140,18 @@ def use_prepared_data(datasets: dict):
 ## Integration with Trainer SDK
 
 ```py
+from michelangelo.lib.trainer.torch.pytorch_lightning import (
+    LightningTrainer,
+    LightningTrainerParam,
+)
+
 trainer_param = LightningTrainerParam(
     create_model_fn=create_model_function,
     create_model_fn_kwargs=model_config,
     train_data=train_dv.value,
     val_data=val_dv.value,
     batch_size=32,
-    num_epochs=10
+    lightning_trainer_kwargs={"max_epochs": 10},
 )
 
 trainer = LightningTrainer(trainer_param)
@@ -159,7 +168,7 @@ result = trainer.train(run_config, scaling_config)
 ## Next Steps
 
 * Continue to [Model Training guide](../train-and-deploy-models/train-and-register-a-model.md)
-* Check troubleshooting section
+* Check [Common Issues](#common-issues) below
 
 ## Common Issues
 

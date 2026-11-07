@@ -18,11 +18,41 @@ set -euo pipefail
 
 NAMESPACE="${MA_NAMESPACE:-ma-dev-test}"
 MINIO_ENDPOINT="${MINIO_ENDPOINT:-http://localhost:9091}"
-# Read credentials from the minio-credentials k8s Secret so the script
-# automatically picks up whatever the sandbox VM is configured with.
+# Read credentials from the k8s Secret the active object store reads, so the
+# script automatically picks up whatever the sandbox VM is configured with:
+# MinIO reads minio-credentials; SeaweedFS reads object-storage-credentials
+# (falling back to minio-credentials on older clusters). The backend comes from
+# the objectstore Service selector; if it cannot be read, SeaweedFS is assumed.
 # Falls back to michelangeloadmin for local dev where the Secret has defaults.
-MINIO_ACCESS_KEY="${MINIO_ACCESS_KEY:-$(kubectl get secret minio-credentials -o jsonpath='{.data.AWS_ACCESS_KEY_ID}' 2>/dev/null | base64 -d || echo michelangeloadmin)}"
-MINIO_SECRET_KEY="${MINIO_SECRET_KEY:-$(kubectl get secret minio-credentials -o jsonpath='{.data.AWS_SECRET_ACCESS_KEY}' 2>/dev/null | base64 -d || echo michelangeloadmin)}"
+
+# Print one decoded key of a Secret; fail if the Secret or key is missing.
+read_secret_key() {
+  local secret="$1" key="$2" value
+  value="$(kubectl get secret "$secret" -o jsonpath="{.data.${key}}" 2>/dev/null)" || return 1
+  [[ -n "$value" ]] || return 1
+  printf '%s' "$value" | base64 -d
+}
+
+OBJECTSTORE_BACKEND="$(kubectl get svc objectstore -o jsonpath='{.spec.selector.app}' 2>/dev/null || true)"
+if [[ "$OBJECTSTORE_BACKEND" == "minio" ]]; then
+  CREDENTIAL_SECRETS=(minio-credentials)
+else
+  CREDENTIAL_SECRETS=(object-storage-credentials minio-credentials)
+fi
+
+# Print a credential from the first Secret in CREDENTIAL_SECRETS that has it.
+read_credential() {
+  local key="$1" secret
+  for secret in "${CREDENTIAL_SECRETS[@]}"; do
+    if read_secret_key "$secret" "$key"; then
+      return 0
+    fi
+  done
+  echo michelangeloadmin
+}
+
+MINIO_ACCESS_KEY="${MINIO_ACCESS_KEY:-$(read_credential AWS_ACCESS_KEY_ID)}"
+MINIO_SECRET_KEY="${MINIO_SECRET_KEY:-$(read_credential AWS_SECRET_ACCESS_KEY)}"
 POLL_INTERVAL="${POLL_INTERVAL:-30}"
 TIMEOUT="${TIMEOUT:-1800}"
 

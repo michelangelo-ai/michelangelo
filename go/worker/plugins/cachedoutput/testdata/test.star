@@ -19,3 +19,6 @@ def test_query():
         limit = 1,
     )
     return response
+
+def call_override(*args, **kwargs):
+    return cachedoutput.should_override_cache_for_retry(*args, **kwargs)

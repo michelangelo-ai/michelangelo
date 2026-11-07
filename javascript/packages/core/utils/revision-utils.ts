@@ -1,3 +1,5 @@
+import { capitalizeFirstLetter } from '#core/utils/string-utils';
+
 import type { RevisionRef } from '#core/types/common/studio-types';
 
 /**
@@ -38,4 +40,36 @@ export function getLatestRevisionRef(record: unknown): RevisionRef | undefined {
   return latest?.name && latest.namespace
     ? { name: latest.name, namespace: latest.namespace }
     : undefined;
+}
+
+/** `SORT_ORDER_DESC` from `proto/api/list.proto` — protobuf-es encodes enums by number. */
+const SORT_ORDER_DESC = 2;
+
+/** `CRITERION_OPERATOR_EQUAL` from `proto/api/list.proto`. */
+const CRITERION_OPERATOR_EQUAL = 1;
+
+/**
+ * `ListRevision` options selecting every Revision of one entity, most recently updated first.
+ * Shared so the detail page's fallback lookup and the revision selector issue the same request
+ * and hit the same query cache entry. Pass `limit` when only the newest few are needed.
+ */
+export function buildRevisionListOptions(service: string, entityId: string, limit?: number) {
+  return {
+    operation: {
+      criterion: [
+        {
+          fieldName: 'revision.base_type',
+          operator: CRITERION_OPERATOR_EQUAL,
+          matchValue: capitalizeFirstLetter(service),
+        },
+        {
+          fieldName: 'revision.base_resource_name',
+          operator: CRITERION_OPERATOR_EQUAL,
+          matchValue: entityId,
+        },
+      ],
+    },
+    orderBy: [{ field: 'metadata.update_timestamp', dir: SORT_ORDER_DESC }],
+    ...(limit && { pagination: { offset: 0, limit } }),
+  };
 }

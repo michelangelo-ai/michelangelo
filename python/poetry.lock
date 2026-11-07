@@ -778,44 +778,6 @@ files = [
 typing-extensions = {version = ">=4.6.0", markers = "python_full_version < \"3.12.0\""}
 
 [[package]]
-name = "bleach"
-version = "6.2.0"
-description = "An easy safelist-based HTML-sanitizing tool."
-optional = true
-python-versions = ">=3.9"
-groups = ["main"]
-markers = "python_version == \"3.9\" and extra == \"example\""
-files = [
-    {file = "bleach-6.2.0-py3-none-any.whl", hash = "sha256:117d9c6097a7c3d22fd578fcd8d35ff1e125df6736f554da4e432fdd63f31e5e"},
-    {file = "bleach-6.2.0.tar.gz", hash = "sha256:123e894118b8a599fd80d3ec1a6d4cc7ce4e5882b1317a7e1ba69b56e95f991f"},
-]
-
-[package.dependencies]
-webencodings = "*"
-
-[package.extras]
-css = ["tinycss2 (>=1.1.0,<1.5)"]
-
-[[package]]
-name = "bleach"
-version = "6.4.0"
-description = "An easy safelist-based HTML-sanitizing tool."
-optional = true
-python-versions = ">=3.10"
-groups = ["main"]
-markers = "python_version >= \"3.10\" and extra == \"example\""
-files = [
-    {file = "bleach-6.4.0-py3-none-any.whl", hash = "sha256:4b6b6a54fff2e69a3dde9d21cc6301220bee3c3cb792187d11403fd795031081"},
-    {file = "bleach-6.4.0.tar.gz", hash = "sha256:4202482733d85cedd04e59fcb2f89f4e4c7c385a78d3c3c23c30446843a37452"},
-]
-
-[package.dependencies]
-webencodings = "*"
-
-[package.extras]
-css = ["tinycss2 (>=1.1.0)"]
-
-[[package]]
 name = "blinker"
 version = "1.9.0"
 description = "Fast, simple object-to-object and broadcast signaling"
@@ -1164,34 +1126,13 @@ files = [
 ]
 
 [[package]]
-name = "chronon-ai"
-version = "0.0.109"
-description = "Chronon python API library"
-optional = false
-python-versions = ">=3.7"
-groups = ["main"]
-markers = "extra == \"example\""
-files = [
-    {file = "chronon_ai-0.0.109-py3-none-any.whl", hash = "sha256:b9fdb1c976dc8ee352f1d91e13584cc8c2cf63177abd5050c455489191428e50"},
-    {file = "chronon_ai-0.0.109.tar.gz", hash = "sha256:8ec50f9ab4aff627167e66b64eb7685642d33ac207fb197f31760082449c5511"},
-]
-
-[package.dependencies]
-click = "*"
-sqlglot = "*"
-thrift = "<0.14"
-
-[package.extras]
-pip2compat = ["click (<8)"]
-
-[[package]]
 name = "click"
 version = "8.1.8"
 description = "Composable command line interface toolkit"
-optional = false
+optional = true
 python-versions = ">=3.7"
 groups = ["main"]
-markers = "python_version == \"3.9\" and (extra == \"vllm\" or extra == \"example\" or extra == \"trainer-mlflow\" or extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"evaluator\" or extra == \"trainer\" or extra == \"trainer-xgboost\")"
+markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"evaluator\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"trainer-mlflow\")"
 files = [
     {file = "click-8.1.8-py3-none-any.whl", hash = "sha256:63c132bbbed01578a06712a2d1f497bb62d9c1c0d329b7903a866228027263b2"},
     {file = "click-8.1.8.tar.gz", hash = "sha256:ed53c9d8990d83c2a27deae68e4ee337473f6330c040a31d4225c9574d16096a"},
@@ -1204,7 +1145,7 @@ colorama = {version = "*", markers = "platform_system == \"Windows\""}
 name = "click"
 version = "8.4.2"
 description = "Composable command line interface toolkit"
-optional = false
+optional = true
 python-versions = ">=3.10"
 groups = ["main"]
 markers = "python_version >= \"3.10\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"evaluator\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"trainer-mlflow\")"
@@ -1236,7 +1177,7 @@ description = "Cross-platform colored terminal text."
 optional = false
 python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*,!=3.5.*,!=3.6.*,>=2.7"
 groups = ["main"]
-markers = "python_version <= \"3.12\" and platform_system == \"Windows\" and sys_platform == \"win32\" and (extra == \"dev\" or extra == \"vllm\" or extra == \"example\" or extra == \"trainer\" or extra == \"trainer-deepspeed\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"evaluator\" or extra == \"trainer-xgboost\" or extra == \"trainer-mlflow\") or python_version == \"3.9\" and platform_system == \"Windows\" and (extra == \"dev\" or extra == \"vllm\" or extra == \"example\" or extra == \"trainer\" or extra == \"trainer-deepspeed\" or extra == \"trainer-mlflow\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"evaluator\" or extra == \"trainer-xgboost\") or platform_system == \"Windows\" and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-deepspeed\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"evaluator\" or extra == \"trainer-xgboost\" or extra == \"trainer-mlflow\") or sys_platform == \"win32\" and (extra == \"dev\" or extra == \"vllm\") and python_version <= \"3.12\" or sys_platform == \"win32\" and extra == \"dev\""
+markers = "python_version < \"3.12\" and platform_system == \"Windows\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"trainer-deepspeed\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"evaluator\" or extra == \"trainer-xgboost\" or extra == \"trainer-mlflow\") or python_version <= \"3.12\" and sys_platform == \"win32\" and (extra == \"dev\" or extra == \"vllm\") or python_version == \"3.9\" and platform_system == \"Windows\" and (extra == \"dev\" or extra == \"vllm\" or extra == \"example\" or extra == \"trainer\" or extra == \"trainer-deepspeed\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"evaluator\" or extra == \"trainer-xgboost\" or extra == \"trainer-mlflow\") or extra == \"dev\" and sys_platform == \"win32\" or platform_system == \"Windows\" and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"trainer-deepspeed\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"evaluator\" or extra == \"trainer-xgboost\" or extra == \"trainer-mlflow\")"
 files = [
     {file = "colorama-0.4.6-py2.py3-none-any.whl", hash = "sha256:4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6"},
     {file = "colorama-0.4.6.tar.gz", hash = "sha256:08695f5cb7ed6e0531a20572697297273c47b8cae5a63ffc6d6ed5c201be6e44"},
@@ -4529,76 +4470,6 @@ files = [
 
 [package.dependencies]
 referencing = ">=0.31.0"
-
-[[package]]
-name = "kaggle"
-version = "1.7.4.5"
-description = "Access Kaggle resources anywhere"
-optional = true
-python-versions = ">=3.7"
-groups = ["main"]
-markers = "python_version < \"3.11\" and extra == \"example\""
-files = [
-    {file = "kaggle-1.7.4.5-py3-none-any.whl", hash = "sha256:9732afb1c073f14acc7e49dfab98456f887d10b735bcd6348bc1340e92393882"},
-    {file = "kaggle-1.7.4.5.tar.gz", hash = "sha256:1d9821bd6a6a1470741c76d26495a18475b5a7bfe0c80b19191254b2735d41dd"},
-]
-
-[package.dependencies]
-bleach = "*"
-certifi = ">=14.5.14"
-charset-normalizer = "*"
-idna = "*"
-protobuf = "*"
-python-dateutil = ">=2.5.3"
-python-slugify = "*"
-requests = "*"
-setuptools = ">=21.0.0"
-six = ">=1.10"
-text-unidecode = "*"
-tqdm = "*"
-urllib3 = ">=1.15.1"
-webencodings = "*"
-
-[[package]]
-name = "kaggle"
-version = "1.8.4"
-description = "Access Kaggle resources anywhere"
-optional = true
-python-versions = ">=3.11"
-groups = ["main"]
-markers = "python_version >= \"3.11\" and extra == \"example\""
-files = [
-    {file = "kaggle-1.8.4-py3-none-any.whl", hash = "sha256:b9cb6da6e99ce8ef22f8e84e75da2c82f814c2e548bfa07f3db220c9aeeaa8ba"},
-    {file = "kaggle-1.8.4.tar.gz", hash = "sha256:d71137f98312581726047cadceb28992c53ef905fe38c6dd9d6d3bfc4e43c982"},
-]
-
-[package.dependencies]
-bleach = "*"
-kagglesdk = ">=0.1.15,<1.0"
-packaging = "*"
-protobuf = "*"
-python-dateutil = "*"
-python-slugify = "*"
-requests = "*"
-tqdm = "*"
-urllib3 = ">=1.15.1"
-
-[[package]]
-name = "kagglesdk"
-version = "0.1.30"
-description = "Bindings to access kaggle's external-facing APIs"
-optional = true
-python-versions = ">=3.11"
-groups = ["main"]
-markers = "python_version >= \"3.11\" and extra == \"example\""
-files = [
-    {file = "kagglesdk-0.1.30-py3-none-any.whl", hash = "sha256:dbd063e1805a5ef947a8c0a6e43b232eb01697f08baf3310bc3dde6dfe5a0193"},
-    {file = "kagglesdk-0.1.30.tar.gz", hash = "sha256:47c6643066d965b7898e960fddcde07e151bea1ae1c1c381e25a5a041edf881d"},
-]
-
-[package.dependencies]
-protobuf = "*"
-requests = "*"
 
 [[package]]
 name = "kiwisolver"
@@ -8532,7 +8403,7 @@ test = ["numpy"]
 name = "py4j"
 version = "0.10.9.7"
 description = "Enables Python programs to dynamically access arbitrary Java objects"
-optional = false
+optional = true
 python-versions = "*"
 groups = ["main"]
 markers = "extra == \"plugin\" or extra == \"example\""
@@ -9238,25 +9109,48 @@ dev = ["build", "flake8", "mypy", "pytest", "twine"]
 
 [[package]]
 name = "pyspark"
-version = "3.5.5"
+version = "4.0.4"
 description = "Apache Spark Python API"
-optional = false
-python-versions = ">=3.8"
+optional = true
+python-versions = ">=3.9"
 groups = ["main"]
-markers = "extra == \"plugin\" or extra == \"example\""
+markers = "python_version == \"3.9\" and (extra == \"plugin\" or extra == \"example\")"
 files = [
-    {file = "pyspark-3.5.5.tar.gz", hash = "sha256:6effc9ce98edf231f4d683fd14f7270629bf8458c628d6a2620ded4bb34f3cb9"},
+    {file = "pyspark-4.0.4.tar.gz", hash = "sha256:7e119366364d48e3cda1b1efd1ebc6cd672949500667c9cabbeef858daba700f"},
 ]
 
 [package.dependencies]
-py4j = "0.10.9.7"
+py4j = ">=0.10.9.7,<0.10.9.10"
 
 [package.extras]
-connect = ["googleapis-common-protos (>=1.56.4)", "grpcio (>=1.56.0)", "grpcio-status (>=1.56.0)", "numpy (>=1.15,<2)", "pandas (>=1.0.5)", "pyarrow (>=4.0.0)"]
-ml = ["numpy (>=1.15,<2)"]
-mllib = ["numpy (>=1.15,<2)"]
-pandas-on-spark = ["numpy (>=1.15,<2)", "pandas (>=1.0.5)", "pyarrow (>=4.0.0)"]
-sql = ["numpy (>=1.15,<2)", "pandas (>=1.0.5)", "pyarrow (>=4.0.0)"]
+connect = ["googleapis-common-protos (>=1.65.0)", "grpcio (>=1.67.0)", "grpcio-status (>=1.67.0)", "numpy (>=1.21)", "pandas (>=2.0.0)", "pyarrow (>=11.0.0)"]
+ml = ["numpy (>=1.21)"]
+mllib = ["numpy (>=1.21)"]
+pandas-on-spark = ["numpy (>=1.21)", "pandas (>=2.0.0)", "pyarrow (>=11.0.0)"]
+sql = ["numpy (>=1.21)", "pandas (>=2.0.0)", "pyarrow (>=11.0.0)"]
+
+[[package]]
+name = "pyspark"
+version = "4.2.0"
+description = "Apache Spark Python API"
+optional = true
+python-versions = ">=3.10"
+groups = ["main"]
+markers = "python_version >= \"3.10\" and (extra == \"plugin\" or extra == \"example\")"
+files = [
+    {file = "pyspark-4.2.0.tar.gz", hash = "sha256:5ad689d53570ee1674193fd4f9bda065f0db3be9363a27d2a3406cc457b70b61"},
+]
+
+[package.dependencies]
+py4j = ">=0.10.9.7,<0.10.9.10"
+
+[package.extras]
+connect = ["googleapis-common-protos (>=1.71.0)", "grpcio (>=1.76.0)", "grpcio-status (>=1.76.0)", "numpy (>=1.21)", "pandas (>=2.2.0)", "pyarrow (>=18.0.0)", "zstandard (>=0.25.0)"]
+ml = ["numpy (>=1.21)"]
+mllib = ["numpy (>=1.21)"]
+pandas-on-spark = ["numpy (>=1.21)", "pandas (>=2.2.0)", "pyarrow (>=18.0.0)"]
+pipelines = ["googleapis-common-protos (>=1.71.0)", "grpcio (>=1.76.0)", "grpcio-status (>=1.76.0)", "numpy (>=1.21)", "pandas (>=2.2.0)", "pyarrow (>=18.0.0)", "pyyaml (>=3.11)", "zstandard (>=0.25.0)"]
+sql = ["numpy (>=1.21)", "pandas (>=2.2.0)", "pyarrow (>=18.0.0)"]
 
 [[package]]
 name = "pytest"
@@ -9470,25 +9364,6 @@ files = [
     {file = "python_multipart-0.0.32-py3-none-any.whl", hash = "sha256:ff6d3f776f16878c894e52e107296ffc890e913c611b1a4ec6c44e2821fe2e23"},
     {file = "python_multipart-0.0.32.tar.gz", hash = "sha256:be54b7f3fa167bb83e4fcd936b887b708f4e57fe75911c02aebf53efaf8d938e"},
 ]
-
-[[package]]
-name = "python-slugify"
-version = "8.0.4"
-description = "A Python slugify application that also handles Unicode"
-optional = true
-python-versions = ">=3.7"
-groups = ["main"]
-markers = "extra == \"example\""
-files = [
-    {file = "python-slugify-8.0.4.tar.gz", hash = "sha256:59202371d1d05b54a9e7720c5e038f928f45daaffe41dd10822f3907b937c856"},
-    {file = "python_slugify-8.0.4-py2.py3-none-any.whl", hash = "sha256:276540b79961052b66b7d116620b36518847f52d5fd9e3a70164fc8c50faa6b8"},
-]
-
-[package.dependencies]
-text-unidecode = ">=1.3"
-
-[package.extras]
-unidecode = ["Unidecode (>=1.1.1)"]
 
 [[package]]
 name = "pytorch-lightning"
@@ -11684,7 +11559,7 @@ description = "Easily download, build, install, upgrade, and uninstall Python pa
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"evaluator\") or python_version == \"3.9\" and platform_system == \"Linux\" and platform_machine == \"x86_64\" and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"evaluator\" or extra == \"trainer-deepspeed\") or extra == \"vllm\" and python_version >= \"3.10\" or python_version == \"3.10\" and (extra == \"vllm\" or extra == \"example\") or python_version >= \"3.12\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"evaluator\" or extra == \"trainer-deepspeed\" or extra == \"trainer-comet\") or platform_system == \"Linux\" and platform_machine == \"x86_64\" and python_version >= \"3.10\" and (extra == \"vllm\" or extra == \"example\" or extra == \"dev\" or extra == \"trainer\" or extra == \"evaluator\" or extra == \"trainer-deepspeed\") or python_version == \"3.10\" and platform_system == \"Linux\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"evaluator\" or extra == \"trainer-deepspeed\") and platform_machine == \"x86_64\""
+markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"evaluator\") or platform_system == \"Linux\" and platform_machine == \"x86_64\" and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"evaluator\" or extra == \"trainer-deepspeed\") or python_version >= \"3.12\" and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\" or extra == \"trainer\" or extra == \"evaluator\" or extra == \"trainer-deepspeed\" or extra == \"trainer-comet\") or extra == \"vllm\""
 files = [
     {file = "setuptools-79.0.1-py3-none-any.whl", hash = "sha256:e147c0549f27767ba362f9da434eab9c5dc0045d5304feb602a0af001089fc51"},
     {file = "setuptools-79.0.1.tar.gz", hash = "sha256:128ce7b8f33c3079fd1b067ecbb4051a66e8526e7b65f6cec075dfc650ddfa88"},
@@ -11823,7 +11698,7 @@ files = [
 name = "six"
 version = "1.17.0"
 description = "Python 2 and 3 compatibility utilities"
-optional = false
+optional = true
 python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,>=2.7"
 groups = ["main"]
 markers = "extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"evaluator\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"trainer-mlflow\""
@@ -12010,23 +11885,6 @@ pymysql = ["pymysql"]
 sqlcipher = ["sqlcipher3_binary"]
 
 [[package]]
-name = "sqlglot"
-version = "27.29.0"
-description = "An easily customizable SQL parser and transpiler"
-optional = false
-python-versions = ">=3.9"
-groups = ["main"]
-markers = "extra == \"example\""
-files = [
-    {file = "sqlglot-27.29.0-py3-none-any.whl", hash = "sha256:9a5ea8ac61826a7763de10cad45a35f0aa9bfcf7b96ee74afb2314de9089e1cb"},
-    {file = "sqlglot-27.29.0.tar.gz", hash = "sha256:2270899694663acef94fa93497971837e6fadd712f4a98b32aee1e980bc82722"},
-]
-
-[package.extras]
-dev = ["duckdb (>=0.6)", "maturin (>=1.4,<2.0)", "mypy", "pandas", "pandas-stubs", "pdoc", "pre-commit", "pyperf", "python-dateutil", "pytz", "ruff (==0.7.2)", "types-python-dateutil", "types-pytz", "typing_extensions"]
-rs = ["sqlglotrs (==0.7.3)"]
-
-[[package]]
 name = "sqlparse"
 version = "0.5.5"
 description = "A non-validating SQL parser."
@@ -12102,19 +11960,6 @@ mpmath = ">=1.1.0,<1.4"
 dev = ["hypothesis (>=6.70.0)", "pytest (>=7.1.0)"]
 
 [[package]]
-name = "text-unidecode"
-version = "1.3"
-description = "The most basic Text::Unidecode port"
-optional = true
-python-versions = "*"
-groups = ["main"]
-markers = "extra == \"example\""
-files = [
-    {file = "text-unidecode-1.3.tar.gz", hash = "sha256:bad6603bb14d279193107714b288be206cac565dfa49aa5b105294dd5c4aab93"},
-    {file = "text_unidecode-1.3-py2.py3-none-any.whl", hash = "sha256:1311f10e8b895935241623731c2ba64f4c455287888b18189350b67134a822e8"},
-]
-
-[[package]]
 name = "threadpoolctl"
 version = "3.6.0"
 description = "threadpoolctl"
@@ -12126,26 +11971,6 @@ files = [
     {file = "threadpoolctl-3.6.0-py3-none-any.whl", hash = "sha256:43a0b8fd5a2928500110039e43a5eed8480b918967083ea48dc3ab9f13c4a7fb"},
     {file = "threadpoolctl-3.6.0.tar.gz", hash = "sha256:8ab8b4aa3491d812b623328249fab5302a68d2d71745c8a4c719a2fcaba9f44e"},
 ]
-
-[[package]]
-name = "thrift"
-version = "0.13.0"
-description = "Python bindings for the Apache Thrift RPC system"
-optional = false
-python-versions = "*"
-groups = ["main"]
-markers = "extra == \"example\""
-files = [
-    {file = "thrift-0.13.0.tar.gz", hash = "sha256:9af1c86bf73433afc6010ed376a6c6aca2b54099cc0d61895f640870a9ae7d89"},
-]
-
-[package.dependencies]
-six = ">=1.7.2"
-
-[package.extras]
-all = ["tornado (>=4.0)", "twisted"]
-tornado = ["tornado (>=4.0)"]
-twisted = ["twisted"]
 
 [[package]]
 name = "tiktoken"
@@ -13243,19 +13068,6 @@ files = [
 anyio = ">=3.0.0"
 
 [[package]]
-name = "webencodings"
-version = "0.5.1"
-description = "Character encoding aliases for legacy web content"
-optional = true
-python-versions = "*"
-groups = ["main"]
-markers = "extra == \"example\""
-files = [
-    {file = "webencodings-0.5.1-py2.py3-none-any.whl", hash = "sha256:a0af1213f3c2226497a97e2b3aa01a7e4bee4f403f95be16fc9acd2947514a78"},
-    {file = "webencodings-0.5.1.tar.gz", hash = "sha256:b36a1c245f2d304965eb4e0a82848379241dc04b865afcc4aab16748587e1923"},
-]
-
-[[package]]
 name = "websockets"
 version = "15.0.1"
 description = "An implementation of the WebSocket Protocol (RFC 6455 & 7692)"
@@ -14144,10 +13956,10 @@ type = ["pytest-mypy (>=1.0.1) ; platform_python_implementation != \"PyPy\""]
 [extras]
 dev = ["coverage", "docker", "jinja2", "numpy", "pandas", "polars", "pre-commit", "pyarrow", "pytest", "pytest-cov", "pytorch_lightning", "ray", "ray", "ruff", "scikit-learn", "torch", "torchmetrics", "transformers", "xgboost"]
 evaluator = ["numpy", "pandas", "pyarrow", "ray", "ray", "scikit-learn", "torch", "torchmetrics"]
-example = ["accelerate", "boto3", "chronon-ai", "datasets", "kaggle", "minio", "mlflow", "numpy", "pandas", "pyarrow", "pyspark", "pytorch_lightning", "ray", "ray", "ray", "ray", "s3fs", "scikit-learn", "sqlglot", "thrift", "torch", "transformers"]
+example = ["accelerate", "boto3", "datasets", "minio", "mlflow", "numpy", "pandas", "pyarrow", "pyspark", "pyspark", "pytorch_lightning", "ray", "ray", "ray", "ray", "s3fs", "scikit-learn", "torch", "transformers"]
 mactl = []
 minio = ["minio"]
-plugin = ["pyspark", "ray", "ray"]
+plugin = ["pyspark", "pyspark", "ray", "ray"]
 ray-polars = ["polars", "ray", "ray"]
 trainer = ["numpy", "pytorch_lightning", "ray", "ray", "torch", "transformers"]
 trainer-comet = ["comet_ml"]
@@ -14159,4 +13971,4 @@ vllm = ["accelerate", "datasets", "numpy", "pandas", "pyarrow", "pytorch_lightni
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.9.0"
-content-hash = "3ecef6c85cf158225b183b86703fe8ddf338f9d1c629ca212d2f72e858786daa"
+content-hash = "0820ec73278ea552901498278a7dc5aa5dae1562d53ce96aafd0cfc98a228c2d"

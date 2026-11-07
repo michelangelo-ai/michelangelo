@@ -25,7 +25,7 @@ Each step runs as an isolated, containerized task. Michelangelo AI handles data 
 
 * Python 3.9+
 * [Poetry](https://python-poetry.org/) installed
-* Java 17 with `JAVA_HOME` set — required for the Spark preprocessing step. Java 21 is not compatible with PySpark 3.5 + Hadoop 3.3 (`getSubject is not supported` error). On macOS: `brew install openjdk@17` then `export JAVA_HOME=$(brew --prefix openjdk@17)/libexec/openjdk.jdk/Contents/Home`
+* Java 17 with `JAVA_HOME` set — required for the Spark preprocessing step. Spark 4.x requires Java 17 or newer; Java 17 is the tested version. On macOS: `brew install openjdk@17` then `export JAVA_HOME=$(brew --prefix openjdk@17)/libexec/openjdk.jdk/Contents/Home`
 * For remote runs: Docker and access to a Kubernetes cluster (or use the [local sandbox](../../getting-started/sandbox-setup.md))
 * [Create a project](./project-management-for-ml-pipelines.md)
 
@@ -308,7 +308,7 @@ Workflow functions compile to Starlark for production execution. This means some
 | `is` / `is not` | `==` / `!=` |
 | f-strings | `"{}".format(value)` |
 | Chained comparisons (`1 < x < 5`) | `1 < x and x < 5` |
-| Standard library calls | Built-in functions (e.g., `uniflow.time()`) |
+| Standard library calls | Uniflow built-ins, for example `uniflow_time()` from `michelangelo.uniflow.core.lib.time` (imported at module level; see [Backfill Pipelines](../ml-pipelines/backfill.md)) |
 
 These constraints only apply to workflow code. Task code runs in containers and can use any Python code.
 
@@ -365,6 +365,20 @@ def train_workflow(dataset_cols: str):
 
 **Important**: The override config **replaces** the original config entirely -- it does not merge fields. Specify all required fields in the override.
 
+### Container image
+
+Every task in a run uses the same container image. You choose it once per run, not per task:
+
+- **Remote run:** the `--image` flag ([Step 4](#run-with-remote-execution)).
+- **Registered pipeline:** the `michelangelo/uniflow-image` annotation in the pipeline manifest ([Step 5](#create-pipelineyaml)), used by both `ma pipeline run` and `ma pipeline dev-run`. The run fails at its Image Build step if the annotation is missing.
+- **Local run:** no image. Tasks run in your own Python environment.
+
+If one task needs extra dependencies, build them into the shared image.
+
+:::note
+`@uniflow.task()` also has an `image_spec=ImageSpec(...)` parameter for per-task images. The open-source Ray and Spark task runtimes don't accept the arguments it adds (`container_image` and `recipe`), so leave it unset.
+:::
+
 ## Complete example
 
 See the full California Housing PyTorch Lightning example at [`pytorch_train/`](https://github.com/michelangelo-ai/michelangelo-examples/tree/main/src/michelangelo_examples/california_housing/pipelines/pytorch_train) in the [michelangelo-examples](https://github.com/michelangelo-ai/michelangelo-examples) repo. This example demonstrates:
@@ -387,4 +401,4 @@ See the full California Housing PyTorch Lightning example at [`pytorch_train/`](
 * **Out of memory during training?** Increase `head_memory` or `worker_memory` in your task config, or reduce your dataset size for local runs.
 * **Remote run fails to start?** Verify your Docker image exists and is accessible. Check that `--storage-url` points to a valid S3-compatible bucket.
 * **Workflow code errors with "not supported in Starlark"?** Move the unsupported syntax (imports, try-except, f-strings) into a task function. See [Workflow constraints](#workflow-constraints).
-* **Spark fails with `getSubject is not supported`?** Java 21 is incompatible with PySpark 3.5 + Hadoop 3.3. Switch to Java 17: `brew install openjdk@17` then `export JAVA_HOME=$(brew --prefix openjdk@17)/libexec/openjdk.jdk/Contents/Home`.
+* **Spark fails with `getSubject is not supported`?** Java 17 is the tested version for Spark 4.x. Switch to Java 17: `brew install openjdk@17` then `export JAVA_HOME=$(brew --prefix openjdk@17)/libexec/openjdk.jdk/Contents/Home`.

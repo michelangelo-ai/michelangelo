@@ -127,9 +127,11 @@ ma sandbox demo pipeline
 
 ### Choosing an object storage backend
 
-`ma sandbox create` defaults to **MinIO**. Pass `--object-store seaweedfs` to run [SeaweedFS](https://github.com/seaweedfs/seaweedfs) instead — both are S3-compatible, so pipelines that read/write via `objectStorage.endpoint` work identically against either backend. SeaweedFS's sandbox deployment runs its lightweight all-in-one mode (no admin/browsing UI); it's intended for exercising the S3 API path, not for browsing objects interactively.
+`ma sandbox create` defaults to [SeaweedFS](https://github.com/seaweedfs/seaweedfs). Pass `--object-store minio` to keep using MinIO for now; MinIO is deprecated as a sandbox object store and will be removed in a future release. Both are S3-compatible, so pipelines that read/write via `objectStorage.endpoint` work identically against either backend. On host port `9090`, SeaweedFS serves the **SeaweedFS Filer** web UI at http://localhost:9090, where you can browse buckets and objects, while MinIO serves its Console (`michelangeloadmin` / `michelangeloadmin`). The filer UI is oriented toward browsing, but it also allows uploads and deletes. It has **no authentication**; the port is bound to `localhost` only, so keep it that way and do not expose it on a shared network. Host port `9091` is the S3 API for both backends.
 
 Whichever backend you pick, in-cluster clients reach it at `objectstore:9091` (the `objectstore` Service). Each backend keeps its own data (`/shared/minio-data` for MinIO, `/shared/objectstore-data` for SeaweedFS), so switching backends starts with an empty store; to switch, run `ma sandbox delete` and `ma sandbox create --object-store <backend>`.
+
+**Existing sandboxes keep their backend.** `ma sandbox sync` with no `--object-store` flag detects the backend the cluster already runs (a MinIO sandbox stays on MinIO and prints a deprecation notice); the default only applies to new sandboxes. If you pass a flag that does not match the running backend, `sync` refuses.
 
 **Upgrading an existing sandbox:** earlier versions named this Service `minio`. `ma sandbox sync` now creates `objectstore`, keeps a `minio` alias so existing `minio:9091` endpoints still resolve, and refreshes the `michelangelo-config` ConfigMap. Update any custom config or `--environ AWS_ENDPOINT_URL=http://minio:9091` to `objectstore:9091`; the alias is only a compatibility bridge.
 
@@ -172,7 +174,7 @@ ma sandbox create [OPTIONS]
 | Flag | Description | Default |
 |------|-------------|---------|
 | `--workflow cadence\|temporal` | Choose workflow engine | `cadence` |
-| `--object-store minio\|seaweedfs` | Choose object storage backend | `minio` |
+| `--object-store minio\|seaweedfs` | Choose object storage backend (an existing sandbox keeps its backend) | `seaweedfs` for new sandboxes |
 | `--exclude [services]` | Exclude services: `apiserver`, `controllermgr`, `ui`, `worker`, `prometheus`, `grafana` | none |
 | `--create-compute-cluster` | Create an additional Ray compute cluster for distributed jobs | disabled |
 | `--compute-cluster-name <name>` | Custom name for the compute cluster | auto-generated |
@@ -197,7 +199,7 @@ ma sandbox create --exclude ui --create-compute-cluster
 ma sandbox sync
 ```
 
-Redeploys services into an existing cluster, skipping cluster creation and image import. Pass the same `--object-store` you created the cluster with; `sync` refuses to run if the cluster has the other backend. Use this to recover from a partially failed `create` — for example, if operator deployments timed out but the cluster itself was created successfully.
+Redeploys services into an existing cluster, skipping cluster creation and image import. With no `--object-store` flag, `sync` keeps the backend the cluster already runs; if you pass one, it must match, or `sync` refuses. Use this to recover from a partially failed `create` — for example, if operator deployments timed out but the cluster itself was created successfully.
 
 If `ma sandbox create` fails and you see `Failed to create cluster ... already exists` when you try again, run `ma sandbox sync` instead. See [Recovering from a failed create](#recovering-from-a-failed-create) below.
 

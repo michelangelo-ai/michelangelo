@@ -21,6 +21,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/base/revision"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
+	"go.uber.org/yarpc"
 	"go.uber.org/zap/zaptest"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -689,4 +690,40 @@ func setUpReconciler(t *testing.T, initialObjects []client.Object, env env.Conte
 		config:          cfg,
 		scheme:          scheme,
 	}
+}
+
+// capturingRevisionManager records the Revision a snapshot upserts.
+type capturingRevisionManager struct {
+	upserted *v2pb.Revision
+}
+
+func (m *capturingRevisionManager) UpsertRevision(_ context.Context, rev client.Object, _ revision.UpsertOpts, _ ...yarpc.CallOption) (bool, error) {
+	m.upserted = rev.(*v2pb.Revision)
+	return true, nil
+}
+
+// The snapshot copies the Pipeline's CommitInfo, including its commit metadata, onto the
+// Revision, so the metadata is fixed on the revision from creation.
+func TestSnapshotRevision_CopiesCommitMetadata(t *testing.T) {
+	commit := &v2pb.CommitInfo{
+		GitRef:  "abc123456789",
+		Branch:  "main",
+		Message: "Raise the retry budget\n\nThe extract fails about once a week.",
+		Author:  "jane@example.com",
+		Url:     "https://git.example.com/repo/-/commit/abc123456789",
+	}
+	pipeline := &v2pb.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pipeline",
+			Namespace: "test-namespace",
+		},
+		Spec: v2pb.PipelineSpec{Commit: commit},
+	}
+	reconciler := setUpReconciler(t, []client.Object{pipeline}, env.Context{}, Config{RevisioningEnabled: true})
+	manager := &capturingRevisionManager{}
+	reconciler.revisionManager = manager
+
+	require.NoError(t, reconciler.snapshotRevision(context.Background(), pipeline))
+	require.NotNil(t, manager.upserted)
+	assert.Equal(t, commit, manager.upserted.Spec.GitCommit)
 }

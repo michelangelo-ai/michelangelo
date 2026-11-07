@@ -43,7 +43,7 @@ The sandbox is split into two tiers managed by different tools:
 
 | Tier | Tool | What it owns |
 |---|---|---|
-| **Infrastructure** | `sandbox.py` (`ma sandbox`) | MySQL, MinIO, Temporal (when `--workflow temporal`), Prometheus, Grafana, MLflow, Fluent Bit, KubeRay, Spark Operator, k3d cluster lifecycle |
+| **Infrastructure** | `sandbox.py` (`ma sandbox`) | MySQL, SeaweedFS (or MinIO with `--object-store minio`), Temporal (when `--workflow temporal`), Prometheus, Grafana, MLflow, Fluent Bit, KubeRay, Spark Operator, k3d cluster lifecycle |
 | **Control plane + Cadence** | Helm (`helm/michelangelo`) | apiserver, envoy, UI, worker, controllermgr, Cadence subchart (when `--workflow cadence`), CRDs, RBAC |
 
 After `ma sandbox create`, the control plane is managed as a Helm release named `michelangelo`:
@@ -136,7 +136,7 @@ ma sandbox create \
 | Cadence gRPC frontend | localhost:7833 | Only when `--workflow cadence` — port-forwarded automatically (`svc/michelangelo-cadence-frontend`) |
 | Cadence TChannel (CLI) | localhost:7933 | Only when `--workflow cadence` — port-forwarded automatically; used by the `cadence` CLI |
 | Temporal Web | http://localhost:8080 | Only when `--workflow temporal` — port-forwarded automatically (`svc/temporaltest-web`) |
-| MinIO Console | http://localhost:9090 | michelangeloadmin / michelangeloadmin |
+| Object store UI | http://localhost:9090 | MinIO Console (michelangeloadmin / michelangeloadmin), or the SeaweedFS Filer UI with `--object-store seaweedfs` (no authentication; localhost only) |
 | Grafana | http://localhost:3000 | admin / admin |
 | Prometheus | http://localhost:9092 | |
 

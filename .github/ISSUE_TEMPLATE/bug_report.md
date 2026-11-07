@@ -25,7 +25,7 @@ What actually happened. Include any error messages, stack traces, or logs.
 **Environment**
 - OS: [e.g. Ubuntu 22.04, macOS 14]
 - Python version: [e.g. 3.10.12] (for Python SDK issues)
-- `ma` CLI version: [e.g. 0.5.0] (run `ma version`)
+- `ma` CLI version: [e.g. 0.12.0] (run `pip show michelangelo`; the `ma` CLI ships in the `michelangelo` package)
 - Helm chart version: [e.g. 0.5.0] (for deployment issues)
 - Kubernetes version: [e.g. 1.29] (for deployment issues)
 

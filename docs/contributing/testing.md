@@ -28,14 +28,24 @@ go test ./components/jobs/scheduler/...
 
 Use gomock to mock dependencies. See [Using Go Mocks in Unit Tests](use-go-mocks-in-unit-test.md) for patterns.
 
-**Python**: Unit tests live in `python/tests/` or next to the code they test as `*_test.py` files (the `mactl` plugins use the co-located style).
+**Python**: Unit tests live in a `tests/` folder inside the package they test (for example `python/michelangelo/lib/evaluator/tests/`). Name test files `*_test.py` and put an `__init__.py` in the `tests/` folder.
+
+There is one exception: `mactl` plugin entity folders keep tests co-located with the code as `{feature}_test.py` (for example `python/michelangelo/cli/mactl/plugins/entity/pipeline/apply_test.py`). See the [mactl coding guidelines](dev/python/mactl/coding_guidelines.md).
+
+`python/tests/` is reserved for tests that span several packages (cross-package and integration tests). Some package-level tests still live there today and are being migrated to the layout above ([#2379](https://github.com/michelangelo-ai/michelangelo/issues/2379)); put new tests in the package's `tests/` folder. Until the final migration stage, pytest still collects legacy `test_*.py` files as well as `*_test.py`, but new files should use `*_test.py`.
 
 ```bash
 cd python
 poetry run pytest
 
-# Run a specific test file
+# Run a specific test file (legacy location and name; being migrated, see #2379)
 poetry run pytest tests/uniflow/core/test_build.py
+
+# Run a mactl co-located test
+poetry run pytest michelangelo/cli/mactl/plugins/entity/pipeline/apply_test.py
+
+# Run all tests in one package
+poetry run pytest michelangelo/lib/evaluator/tests
 
 # With verbose output
 poetry run pytest -v

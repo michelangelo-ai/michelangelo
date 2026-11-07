@@ -190,7 +190,7 @@ class _TaskHarness:
                 utc_format_seconds=lambda fmt, seconds: "2026-01-01T00:00:00",
             ),
             "get_task_name": lambda task_path, alias: "test-task",
-            "get_cache_enabled": lambda cache_enabled, task_name: False,
+            "get_cache_enabled": lambda *_args: (False, ""),
             "get_result_url": lambda: "s3://bucket/result.json",
             "get_task_image": lambda task_name: "test-image",
             "execute_ray_task": execute_ray_task,
@@ -320,6 +320,11 @@ class TestReportRayTaskResultLogURL(TestCase):
     def _report(self, job_state: str):
         """Run report_ray_task_result for a job state, returning (state, report)."""
         reports = []
+        self.created_cached_outputs = []
+
+        def _create_cached_output(**kwargs):
+            self.created_cached_outputs.append(kwargs)
+            return {"metadata": {"name": "cached-1"}}
 
         stubs = {
             "TIME_FOMART": "%Y-%m-%dT%H:%M:%S",
@@ -333,7 +338,7 @@ class TestReportRayTaskResultLogURL(TestCase):
                 utc_format_seconds=lambda fmt, seconds: "1970-01-01T00:00:00",
             ),
             "get_cache_keys": lambda *args: [],
-            "create_cached_output": lambda **kwargs: {"metadata": {"name": "cached-1"}},
+            "create_cached_output": _create_cached_output,
             "report_progress": lambda **kwargs: reports.append(kwargs),
         }
         (report_ray_task_result,) = _load_star_functions(
@@ -369,6 +374,26 @@ class TestReportRayTaskResultLogURL(TestCase):
 
         self.assertEqual(state, "KILLED")
         self.assertEqual(report["task_log"], self._LOG_URL)
+
+    def test_succeeded_publishes_cached_output(self):
+        """A successful job publishes its cache record and reports its name."""
+        _, report = self._report("RAY_JOB_STATE_SUCCEEDED")
+
+        self.assertEqual(len(self.created_cached_outputs), 1)
+        self.assertEqual(
+            self.created_cached_outputs[0]["result_json_url"],
+            "s3://bucket/result.json",
+        )
+        self.assertEqual(report["output"], "cached-1")
+
+    def test_failed_and_killed_do_not_publish_cached_output(self):
+        """No result is written on failure, so no cache record may point at it."""
+        for job_state in ("RAY_JOB_STATE_FAILED", "RAY_JOB_STATE_KILLED"):
+            with self.subTest(job_state=job_state):
+                _, report = self._report(job_state)
+
+                self.assertEqual(self.created_cached_outputs, [])
+                self.assertEqual(report["output"], "")
 
     def test_failed_reports_persisted_log_url(self):
         """A failed job's terminal report carries the CR log URL.
@@ -481,3 +506,115 @@ class TestExecuteRayTaskLogURL(TestCase):
 
         logs = [report["task_log"] for report in reports]
         self.assertEqual([log for log in logs if log], ["http://dashboard:8265"] * 2)
+
+
+class TestExecuteRayTaskAnchor(TestCase):
+    """Tests that execute_ray_task reports the right retry reset anchor.
+
+    A manual retry resets the workflow to the step's first activity, so the
+    anchor must be the cache-decision activity when one ran (so the retried
+    task re-decides live) and only fall back to cluster creation otherwise.
+    """
+
+    _CLUSTER_ACTIVITY_ID = "create-cluster-7"
+
+    def _run(self, first_activity_id: str, job_state: str = "RAY_JOB_STATE_SUCCEEDED"):
+        reports = []
+        registered = []
+        terminated = []
+        cluster = {
+            "metadata": {"name": "ray-1", "namespace": "ma-dev-test"},
+            "status": {"jobUrl": "http://cluster"},
+        }
+        job = {"spec": {"jobId": "job-1"}, "status": {"state": job_state}}
+        ray = SimpleNamespace(
+            create_cluster=lambda spec, timeout_seconds: {
+                "rayCluster": cluster,
+                "activityId": self._CLUSTER_ACTIVITY_ID,
+            },
+            create_job=lambda entrypoint, ray_job_namespace, ray_job_name: job,
+            terminate_cluster=lambda *args: terminated.append(args),
+        )
+        atexit = SimpleNamespace(
+            register=lambda func, *args: registered.append((func, args)),
+            unregister=lambda func: None,
+        )
+        stubs = {
+            "DEFAULT_CREATE_CLUSTER_TIMEOUT_SECONDS": 1,
+            "TIME_FOMART": "%Y-%m-%dT%H:%M:%S",
+            "TASK_STATE_PENDING": "PENDING",
+            "TASK_STATE_RUNNING": "RUNNING",
+            "TASK_STATE_SUCCEEDED": "SUCCEEDED",
+            "TASK_STATE_FAILED": "FAILED",
+            "TASK_STATE_KILLED": "KILLED",
+            "CACHE_OPERATION_PUT": "PUT",
+            "json": json,
+            "ray": ray,
+            "atexit": atexit,
+            "time": SimpleNamespace(
+                time=lambda: 0.0,
+                utc_format_seconds=lambda fmt, seconds: "2026-01-01T00:00:00",
+            ),
+            "get_cache_keys": lambda *args: {"key": "k"},
+            "create_cached_output": lambda **kwargs: {"metadata": {"name": "co-1"}},
+            "report_progress": lambda **kwargs: reports.append(kwargs),
+        }
+        execute_ray_task, _, _, _ = _load_star_functions(
+            "execute_ray_task",
+            "report_ray_task_result",
+            "terminate_cluster",
+            "ray_job_entrypoint",
+            extra_globals=stubs,
+        )
+        result = execute_ray_task(
+            task_path="examples.demo.train",
+            task_name="train",
+            cluster={},
+            cluster_namespace="ma-dev-test",
+            runtime_env={},
+            start_time_formated_str="2026-01-01T00:00:00",
+            result_url="s3://bucket/result.json",
+            args=[1],
+            kwargs={"a": 2},
+            retry_attempt_id=1,
+            total_retry_attempt=1,
+            cache_version="run-1",
+            namespace="ma-dev-test",
+            first_activity_id=first_activity_id,
+        )
+        return result, reports, registered, terminated
+
+    def test_cache_decision_activity_is_the_anchor(self):
+        """When a cache decision ran, every report keeps its activity ID."""
+        result, reports, registered, terminated = self._run("decide-3")
+
+        self.assertEqual(result[0], "SUCCEEDED")
+        # (job_state, job, cluster_url, cluster_log_url): no CR logUrl here.
+        self.assertEqual(result[2:], ("http://cluster", ""))
+        self.assertEqual({r["first_activity_id"] for r in reports}, {"decide-3"})
+        self.assertEqual(
+            [r["task_state"] for r in reports], ["PENDING", "RUNNING", "SUCCEEDED"]
+        )
+        self.assertEqual(reports[-1]["output"], "co-1")
+        # The atexit fallback reporter must carry the same anchor.
+        self.assertEqual(registered[-1][1][-1], "decide-3")
+        self.assertEqual(terminated[-1][-1], "TERMINATION_TYPE_SUCCEEDED")
+
+    def test_falls_back_to_cluster_creation_without_decision(self):
+        """Explicit cache_enabled=True skips the decision, so creation anchors."""
+        _, reports, registered, _ = self._run("")
+
+        self.assertEqual(reports[0]["first_activity_id"], "")
+        self.assertEqual(
+            {r["first_activity_id"] for r in reports[1:]}, {self._CLUSTER_ACTIVITY_ID}
+        )
+        self.assertEqual(registered[-1][1][-1], self._CLUSTER_ACTIVITY_ID)
+
+    def test_failed_job_reports_failure_with_anchor(self):
+        """A failed job still reports with the anchor and terminates as failed."""
+        result, reports, _, terminated = self._run("decide-3", "RAY_JOB_STATE_FAILED")
+
+        self.assertEqual(result[0], "FAILED")
+        self.assertEqual(reports[-1]["task_state"], "FAILED")
+        self.assertEqual(reports[-1]["first_activity_id"], "decide-3")
+        self.assertEqual(terminated[-1][-1], "TERMINATION_TYPE_FAILED")
