@@ -351,6 +351,16 @@ envoy:
   # of ui.ingress.hosts[0].host.
   corsOrigins: ""
 
+  # Set to true only if the UI is fronted by an auth proxy (e.g. oauth2-proxy)
+  # that authenticates callers via a cross-origin session cookie shared with
+  # envoy's host — see docs/operator-guides/setup/ui-authentication.md.
+  # Requires corsOrigins above to name a specific origin: Envoy's CORS filter
+  # reflects the caller's actual Origin header on a match rather than sending
+  # a literal "*", so leaving corsOrigins at its wildcard default would let
+  # any origin make authenticated, credentialed calls. Enforced by a chart
+  # validation — see templates/validations.yaml.
+  corsAllowCredentials: false
+
   resources: {}
 
   service:
