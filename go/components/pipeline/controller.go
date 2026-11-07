@@ -20,6 +20,7 @@ import (
 
 	"go.uber.org/zap"
 
+	gogoproto "github.com/gogo/protobuf/proto"
 	pbtypes "github.com/gogo/protobuf/types"
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
@@ -149,9 +150,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 
 	// Snapshot a Revision CR on every successful READY reconcile when revisioning
-	// is enabled. UpsertRevision deduplicates immutable revisions, so repeated
-	// calls for the same commit are safe. Status is already persisted above, so
-	// a snapshot error requeues only this step without affecting the READY state.
+	// is enabled. snapshotRevision skips a commit whose revision is already
+	// immutable, so repeated calls for the same commit are safe. Status is already
+	// persisted above, so a snapshot error requeues only this step without
+	// affecting the READY state.
 	if err == nil && r.config.RevisioningEnabled && pipeline.Status.State == v2pb.PIPELINE_STATE_READY {
 		if snapshotErr := r.snapshotRevision(ctx, pipeline); snapshotErr != nil {
 			logger.Error("failed to snapshot pipeline revision", zap.Error(snapshotErr))
@@ -201,6 +203,47 @@ func formatRevisionName(pipeline *v2pb.Pipeline) string {
 	return ""
 }
 
+// sameCommitRef reports whether two git refs are the same ref. A ref is not resolved
+// to a commit here and may be a branch name, so refs are compared exactly: a ref that
+// merely shares a prefix (an abbreviated SHA or another branch) is not the same commit.
+func sameCommitRef(a, b string) bool {
+	return strings.TrimSpace(a) == strings.TrimSpace(b)
+}
+
+// snapshotMatchesSpec reports whether the Pipeline a revision snapshotted has the same
+// spec as pipeline. The commit is compared separately (by ref), and its metadata may
+// differ for the same commit, so it is ignored here. So are the fields `apply`
+// regenerates on every run (the uploaded tarball path and the owner), so re-applying
+// the same commit is a no-op instead of an error.
+func snapshotMatchesSpec(rev *v2pb.Revision, pipeline *v2pb.Pipeline) (bool, error) {
+	snapshot := &v2pb.Pipeline{}
+	if err := pbtypes.UnmarshalAny(rev.Spec.Content, snapshot); err != nil {
+		return false, fmt.Errorf("decode snapshotted pipeline: %w", err)
+	}
+	snapshotted, current := comparableSpec(snapshot.Spec), comparableSpec(pipeline.Spec)
+	return gogoproto.Equal(&snapshotted, &current), nil
+}
+
+// comparableSpec returns a copy of spec without the fields that vary between applies of
+// the same commit. The caller's spec is not modified.
+func comparableSpec(spec v2pb.PipelineSpec) v2pb.PipelineSpec {
+	spec.Commit, spec.Owner = nil, nil
+	if spec.Manifest != nil {
+		manifest := gogoproto.Clone(spec.Manifest).(*v2pb.PipelineManifest)
+		manifest.UniflowTar = ""
+		spec.Manifest = manifest
+	}
+	return spec
+}
+
+// ownedByPipeline reports whether rev's controller ownerReference points at pipeline.
+// A revision without a controller ownerReference predates ownerRef stamping and is
+// treated as owned, so existing revisions keep reconciling.
+func ownedByPipeline(rev *v2pb.Revision, pipeline *v2pb.Pipeline) bool {
+	owner := metav1.GetControllerOf(rev)
+	return owner == nil || owner.UID == pipeline.UID
+}
+
 // isTerminatedState checks if a pipeline state is terminal.
 //
 // Terminal states (READY, ERROR) indicate the pipeline has reached a final
@@ -219,6 +262,56 @@ func (r *Reconciler) snapshotRevision(ctx context.Context, pipeline *v2pb.Pipeli
 		return nil
 	}
 
+	// The name keeps only a 12-character ref prefix, so a different commit sharing that
+	// prefix maps to the same revision. Report it rather than overwrite (mutable) or
+	// skip (immutable) the other commit's revision. A mutable revision without a
+	// recorded commit cannot be compared; the upsert below fills it in.
+	//
+	// The Revision controller marks a revision immutable once it reaches READY or
+	// ERROR, and its content is fixed per commit from then on. A later reconcile of
+	// the same commit (status update, resync, controller restart, re-apply) has
+	// nothing to write, and UpsertRevision would reject it as an immutable-to-mutable
+	// update, so skip it. An immutable revision without a recorded commit or
+	// snapshotted content cannot be repaired and would fail every run resolving it,
+	// so it is reported instead.
+	name := formatRevisionName(pipeline)
+	existing := &v2pb.Revision{}
+	if err := r.Get(ctx, pipeline.Namespace, name, &metav1.GetOptions{}, existing); err == nil {
+		if existing.Spec.RevisionId != "" && !sameCommitRef(existing.Spec.RevisionId, pipeline.Spec.Commit.GitRef) {
+			return fmt.Errorf("revision %s/%s already holds commit %q, cannot snapshot commit %q: git refs collide on the revision name",
+				pipeline.Namespace, name, existing.Spec.RevisionId, pipeline.Spec.Commit.GitRef)
+		}
+		if utils.IsImmutable(existing) {
+			if existing.Spec.RevisionId == "" || existing.Spec.Content == nil {
+				return fmt.Errorf("revision %s/%s is immutable but has no recorded commit or snapshotted content",
+					pipeline.Namespace, name)
+			}
+			// Revisions are moved out of etcd once immutable, so deleting a Pipeline no
+			// longer cascades to them; a re-created Pipeline of the same name finds them.
+			// Do not reuse a revision snapshotted for a different Pipeline object.
+			if !ownedByPipeline(existing, pipeline) {
+				return fmt.Errorf("revision %s/%s is immutable and belongs to a different Pipeline (uid %s, current uid %s), e.g. a deleted Pipeline of the same name",
+					pipeline.Namespace, name, metav1.GetControllerOf(existing).UID, pipeline.UID)
+			}
+			// A ref that is not a commit ID (e.g. a branch name) keeps the same revision
+			// name when the spec changes. Skip only when the snapshot still matches.
+			matches, err := snapshotMatchesSpec(existing, pipeline)
+			if err != nil {
+				return fmt.Errorf("revision %s/%s: %w", pipeline.Namespace, name, err)
+			}
+			if !matches {
+				return fmt.Errorf("revision %s/%s is immutable and snapshotted a different spec for ref %q: apply the change as a new commit",
+					pipeline.Namespace, name, pipeline.Spec.Commit.GitRef)
+			}
+			r.logger.Debug("skipping revision snapshot: revision is immutable",
+				zap.String("namespace", pipeline.Namespace),
+				zap.String("name", name))
+			return nil
+		}
+	} else if !utils.IsNotFoundError(err) {
+		return fmt.Errorf("get revision %s/%s: %w", pipeline.Namespace, name, err)
+	}
+
 	content, err := pbtypes.MarshalAny(pipeline)
 	if err != nil {
 		return fmt.Errorf("marshal pipeline content: %w", err)
@@ -230,7 +323,7 @@ func (r *Reconciler) snapshotRevision(ctx context.Context, pipeline *v2pb.Pipeli
 			Kind:       "Revision",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      formatRevisionName(pipeline),
+			Name:      name,
 			Namespace: pipeline.Namespace,
 			Labels: map[string]string{
 				api.PipelineTypeLabelName: pipeline.Spec.GetType().String(),
