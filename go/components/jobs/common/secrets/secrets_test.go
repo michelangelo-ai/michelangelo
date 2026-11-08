@@ -42,7 +42,29 @@ func TestProviderGetClusterClientAuth(t *testing.T) {
 		},
 	}
 
-	fakeClient := fake.NewClientBuilder().WithObjects(caSecret, tokenSecret).Build()
+	emptyCASecret := &corev1.Secret{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "empty-ca-secret",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"cadata": {},
+		},
+	}
+
+	tokenSecretWithoutToken := &corev1.Secret{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "token-secret-without-token",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"cadata": []byte("fake-ca-data"),
+		},
+	}
+
+	fakeClient := fake.NewClientBuilder().
+		WithObjects(caSecret, tokenSecret, emptyCASecret, tokenSecretWithoutToken).
+		Build()
 
 	tests := []struct {
 		name           string
@@ -150,6 +172,46 @@ func TestProviderGetClusterClientAuth(t *testing.T) {
 			},
 			errorContains:  "get token secret default/missing-token-secret",
 			expectNotFound: true,
+		},
+		{
+			name: "Kubernetes cluster spec with an empty cadata value",
+			cluster: &v2pb.Cluster{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "default",
+				},
+				Spec: v2pb.ClusterSpec{
+					Cluster: &v2pb.ClusterSpec_Kubernetes{
+						Kubernetes: &v2pb.KubernetesSpec{
+							Rest: &v2pb.ConnectionSpec{
+								CaDataTag: "empty-ca-secret",
+								TokenTag:  "token-secret",
+							},
+						},
+					},
+				},
+			},
+			errorContains: `secret default/empty-ca-secret has no "cadata" data`,
+		},
+		{
+			name: "Kubernetes cluster spec with a token secret missing its token key",
+			cluster: &v2pb.Cluster{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "default",
+				},
+				Spec: v2pb.ClusterSpec{
+					Cluster: &v2pb.ClusterSpec_Kubernetes{
+						Kubernetes: &v2pb.KubernetesSpec{
+							Rest: &v2pb.ConnectionSpec{
+								CaDataTag: "ca-secret",
+								TokenTag:  "token-secret-without-token",
+							},
+						},
+					},
+				},
+			},
+			errorContains: `secret default/token-secret-without-token has no "token" data`,
 		},
 	}
 

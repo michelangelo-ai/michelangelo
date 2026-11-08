@@ -82,17 +82,23 @@ func GetKubeSecretName(jobName string) string {
 }
 
 // retrieveSecretData returns the value under dataKey in the named Secret in the default
-// namespace.
+// namespace. A missing or empty value is an error rather than an empty credential.
 func (p Provider) retrieveSecretData(ctx context.Context, secretName, dataKey string) (string, error) {
 	if secretName == "" {
 		return "", fmt.Errorf("empty secret name for %s", dataKey)
 	}
 	secret := &corev1.Secret{}
+	// TODO(#2393): make the credential Secret namespace configurable and align it with the cache scope and RBAC.
+	// TODO(#2415): restrict which Secrets this reader will resolve.
 	key := types.NamespacedName{Namespace: "default", Name: secretName}
 	if err := p.kubeClient.Get(ctx, key, secret); err != nil {
 		return "", fmt.Errorf("get %s secret %s: %w", dataKey, key, err)
 	}
-	return string(secret.Data[dataKey]), nil
+	value := secret.Data[dataKey]
+	if len(value) == 0 {
+		return "", fmt.Errorf("secret %s has no %q data", key, dataKey)
+	}
+	return string(value), nil
 }
 
 // GetClusterClientAuth retrieves the client authentication data for a given cluster

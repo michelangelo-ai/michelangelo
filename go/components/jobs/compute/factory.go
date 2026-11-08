@@ -22,8 +22,8 @@ const (
 
 	// _credentialReadTimeout bounds each SecretProvider read. A read served from an informer
 	// cache waits for the informer to sync, which never happens if the controller cannot list
-	// Secrets. The second read in GetClientSetForCluster runs while f.m is held, so an unbounded
-	// read would block every lookup that misses the cache.
+	// Secrets. The second read in GetClientSetForCluster runs while the cluster's lock is held, so
+	// an unbounded read would block every lookup of that cluster that misses the cache.
 	_credentialReadTimeout = 10 * time.Second
 )
 
@@ -48,10 +48,9 @@ type ClientSet struct {
 // back to a cached ClientSet whose credentials may have been revoked.
 type factory struct {
 	clients               sync.Map // cache key string → cachedClientSet
+	locks                 sync.Map // cache key string → *sync.Mutex
 	secretProvider        secrets.SecretProvider
 	credentialReadTimeout time.Duration
-
-	m sync.Mutex
 }
 
 // cachedClientSet is a ClientSet together with the credentials it was built from.
@@ -81,8 +80,9 @@ func (f *factory) GetClientSetForCluster(c *v2pb.Cluster) (*ClientSet, error) {
 		return cs, nil
 	}
 
-	f.m.Lock()
-	defer f.m.Unlock()
+	mu := f.lockFor(key)
+	mu.Lock()
+	defer mu.Unlock()
 
 	// Re-read under the lock so a caller holding pre-rotation credentials cannot replace a
 	// ClientSet built from newer ones.
@@ -99,9 +99,17 @@ func (f *factory) GetClientSetForCluster(c *v2pb.Cluster) (*ClientSet, error) {
 		return nil, fmt.Errorf(
 			"build client set for cluster %s/%s: %w", c.GetNamespace(), c.GetName(), err)
 	}
+	// TODO(#2415): close idle connections of the replaced ClientSet and evict entries for deleted clusters.
 	f.clients.Store(key, cachedClientSet{auth: auth, clientSet: cs})
 
 	return cs, nil
+}
+
+// lockFor returns the mutex that serializes ClientSet builds for one cache key, so a blocked
+// credential read for one cluster does not stall lookups for the others.
+func (f *factory) lockFor(key string) *sync.Mutex {
+	mu, _ := f.locks.LoadOrStore(key, &sync.Mutex{})
+	return mu.(*sync.Mutex)
 }
 
 // load returns the ClientSet cached under key if it was built from auth.
@@ -122,6 +130,7 @@ func (f *factory) getClusterClientAuth(c *v2pb.Cluster) (secrets.ClientAuth, err
 	defer cancel()
 
 	auth, err := f.secretProvider.GetClusterClientAuth(ctx, c)
+	// TODO(#2415): wrap with a sentinel (e.g. ErrCredentialsUnavailable) so callers can requeue instead of failing the job.
 	if err != nil {
 		return secrets.ClientAuth{}, fmt.Errorf(
 			"get client auth for cluster %s/%s: %w", c.GetNamespace(), c.GetName(), err)
