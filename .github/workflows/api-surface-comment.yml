@@ -45,7 +45,7 @@ jobs:
               go: {
                 title: 'Go API Surface Check (advisory)',
                 intro: 'Potentially breaking changes detected in exported Go API:',
-                maxChars: 60000,
+                maxChars: 50000,
               },
               proto: {
                 title: 'Proto Breaking Change Check (advisory)',
@@ -119,7 +119,12 @@ jobs:
               const clean = String(text).slice(0, maxChars).replace(/`{3,}/g, '``');
               return ['```', clean, '```'].join('\n');
             };
-            const heading = (h) => String(h || '').replace(/[^\w./@~+-]/g, '').slice(0, 300);
+            // Headings come from the artifact. The character set excludes '@' and backticks, and
+            // the heading is rendered as inline code, so it cannot mention anyone or autolink.
+            const heading = (h) => String(h || '').replace(/[^\w./~+-]/g, '').slice(0, 200);
+            // Keep each comment well under GitHub's 65536-character limit without cutting the
+            // acknowledgement note or footer: cap the number of sections and split the budget.
+            const MAX_SECTIONS = 50;
 
             const existing = await github.paginate(github.rest.issues.listComments, {
               owner, repo, issue_number: pr.number, per_page: 100,
@@ -128,12 +133,17 @@ jobs:
             for (const { kind, sections } of findings) {
               const cfg = KINDS[kind];
               const marker = `<!-- api-surface-check:${kind} -->`;
-              const blocks = sections.map((s) => {
+              const shown = sections.slice(0, MAX_SECTIONS);
+              const budget = Math.max(500, Math.floor(cfg.maxChars / Math.max(shown.length, 1)));
+              const blocks = shown.map((s) => {
                 const h = heading(s && s.heading);
-                const text = fenced(s && s.text, cfg.maxChars);
-                return h ? `**${h}**\n${text}` : text;
+                const text = fenced(s && s.text, budget);
+                return h ? `**\`${h}\`**\n${text}` : text;
               });
-              let body = [
+              if (sections.length > shown.length) {
+                blocks.push(`_${sections.length - shown.length} more not shown._`);
+              }
+              const body = [
                 marker,
                 `### ${cfg.title}`,
                 '',
@@ -146,9 +156,6 @@ jobs:
                 '',
                 '_This check is advisory and does not block merge._',
               ].join('\n');
-              if (body.length > 65000) {
-                body = body.slice(0, 65000) + '\n\n_(truncated)_';
-              }
 
               // Update the previous comment from this workflow instead of adding one per push.
               const previous = existing.find((c) =>
