@@ -4,9 +4,11 @@ on:
   pull_request:
     branches: [main, 'release/v*']
 
+# This workflow only reads the repository. Pull requests from forks run with a read-only
+# GITHUB_TOKEN, so it cannot post comments; each check uploads its findings as an artifact and
+# api-surface-comment.yml (workflow_run) posts them.
 permissions:
   contents: read
-  pull-requests: write
 
 jobs:
   # ---------------------------------------------------------------------------
@@ -41,7 +43,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: write
     steps:
       - name: Checkout PR head
         uses: actions/checkout@v7
@@ -86,7 +87,7 @@ jobs:
           # package's base export-data file (OLD) against its live head
           # import path (NEW); a package with no base export file is new in
           # this PR, so there's nothing to diff it against.
-          output=""
+          sections='[]'
           breaking=false
           pkgs=$(go list ./... 2>/dev/null || true)
           for pkg in $pkgs; do
@@ -95,57 +96,23 @@ jobs:
             [ -f "$base_export" ] || continue
             result=$(apidiff -incompatible "$base_export" "$pkg" 2>/dev/null || true)
             if [ -n "$result" ]; then
-              output="${output}\n**${pkg}**\n\`\`\`\n${result}\n\`\`\`\n"
+              sections=$(jq -c --arg heading "$pkg" --arg text "$result" \
+                '. + [{heading: $heading, text: $text}]' <<<"$sections")
               breaking=true
             fi
           done
           echo "breaking=$breaking" >> "$GITHUB_OUTPUT"
-          {
-            echo "APIDIFF_OUTPUT<<APIDIFF_EOF"
-            printf '%b' "$output"
-            echo "APIDIFF_EOF"
-          } >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/api-result"
+          jq -n --argjson sections "$sections" '{kind: "go", sections: $sections}' \
+            > "$RUNNER_TEMP/api-result/result.json"
 
-      - name: Check for acknowledged breaking changes
-        id: ack-check
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          commits=$(gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/commits \
-            --jq '.[].commit.message' 2>/dev/null || true)
-          if echo "$commits" | grep -q "BREAKING CHANGE:"; then
-            echo "acknowledged=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "acknowledged=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Post Go API diff comment
+      - name: Upload Go API diff result
         if: steps.apidiff.outputs.breaking == 'true'
-        uses: actions/github-script@v9
+        uses: actions/upload-artifact@v7
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const output = process.env.APIDIFF_OUTPUT || '(none)';
-            const ack = '${{ steps.ack-check.outputs.acknowledged }}' === 'true';
-            const ackNote = ack
-              ? '\n\n> **BREAKING CHANGE acknowledged** — a commit on this PR contains `BREAKING CHANGE:` in its message.'
-              : '\n\n> No `BREAKING CHANGE:` commit message found. If this is intentional, add `BREAKING CHANGE: <reason>` to a commit message.';
-            const body = [
-              '### Go API Surface Check (advisory)',
-              '',
-              'Potentially breaking changes detected in exported Go API:',
-              '',
-              output,
-              ackNote,
-              '',
-              '_This check is advisory and does not block merge._',
-            ].join('\n');
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.payload.pull_request.number,
-              body,
-            });
+          name: api-surface-go
+          path: ${{ runner.temp }}/api-result/result.json
+          retention-days: 3
 
   # ---------------------------------------------------------------------------
   # Proto breaking changes — buf breaking
@@ -157,7 +124,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: write
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -178,54 +144,18 @@ jobs:
           output=$(buf breaking --against ".git#branch=${{ github.base_ref }}" 2>&1 \
             | grep -v "imported file does not exist\|cannot find.*in this scope" || true)
           echo "HAS_OUTPUT=$([ -n "$output" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
-          {
-            echo "BUF_OUTPUT<<BUF_EOF"
-            echo "$output"
-            echo "BUF_EOF"
-          } >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/api-result"
+          printf '%s' "$output" \
+            | jq -Rs '{kind: "proto", sections: [{heading: "", text: .}]}' \
+            > "$RUNNER_TEMP/api-result/result.json"
 
-      - name: Check for acknowledged breaking changes
-        id: ack-check
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          commits=$(gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/commits \
-            --jq '.[].commit.message' 2>/dev/null || true)
-          if echo "$commits" | grep -q "BREAKING CHANGE:"; then
-            echo "acknowledged=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "acknowledged=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Post proto breaking change comment
+      - name: Upload proto breaking change result
         if: steps.buf-breaking.outputs.HAS_OUTPUT == 'true'
-        uses: actions/github-script@v9
+        uses: actions/upload-artifact@v7
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const output = process.env.BUF_OUTPUT || '(none)';
-            const ack = '${{ steps.ack-check.outputs.acknowledged }}' === 'true';
-            const ackNote = ack
-              ? '\n\n> **BREAKING CHANGE acknowledged** — a commit on this PR contains `BREAKING CHANGE:` in its message.'
-              : '\n\n> No `BREAKING CHANGE:` commit message found. If this is intentional, add `BREAKING CHANGE: <reason>` to a commit message.';
-            const body = [
-              '### Proto Breaking Change Check (advisory)',
-              '',
-              'buf detected potential breaking changes in proto definitions:',
-              '',
-              '```',
-              output.substring(0, 4000),
-              '```',
-              ackNote,
-              '',
-              '_This check is advisory and does not block merge._',
-            ].join('\n');
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.payload.pull_request.number,
-              body,
-            });
+          name: api-surface-proto
+          path: ${{ runner.temp }}/api-result/result.json
+          retention-days: 3
 
   # ---------------------------------------------------------------------------
   # Helm values — detect removed or renamed top-level keys
@@ -237,7 +167,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: write
     steps:
       - name: Checkout PR head
         uses: actions/checkout@v7
@@ -263,53 +192,15 @@ jobs:
           head_keys=$(yq 'keys | .[]' head/helm/michelangelo/values.yaml 2>/dev/null | sort || true)
           removed=$(comm -23 <(echo "$base_keys") <(echo "$head_keys") || true)
           echo "HAS_REMOVED=$([ -n "$removed" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
-          {
-            echo "REMOVED_KEYS<<HELM_EOF"
-            echo "$removed"
-            echo "HELM_EOF"
-          } >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/api-result"
+          printf '%s' "$removed" \
+            | jq -Rs '{kind: "helm", sections: [{heading: "", text: .}]}' \
+            > "$RUNNER_TEMP/api-result/result.json"
 
-      - name: Check for acknowledged breaking changes
-        id: ack-check
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          commits=$(gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/commits \
-            --jq '.[].commit.message' 2>/dev/null || true)
-          if echo "$commits" | grep -q "BREAKING CHANGE:"; then
-            echo "acknowledged=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "acknowledged=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Post Helm values diff comment
+      - name: Upload Helm values diff result
         if: steps.helm-diff.outputs.HAS_REMOVED == 'true'
-        uses: actions/github-script@v9
+        uses: actions/upload-artifact@v7
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const removed = process.env.REMOVED_KEYS || '(none)';
-            const ack = '${{ steps.ack-check.outputs.acknowledged }}' === 'true';
-            const ackNote = ack
-              ? '\n\n> **BREAKING CHANGE acknowledged** — a commit on this PR contains `BREAKING CHANGE:` in its message.'
-              : '\n\n> No `BREAKING CHANGE:` commit message found. If this is intentional, add `BREAKING CHANGE: <reason>` to a commit message.';
-            const body = [
-              '### Helm Values Key Diff (advisory)',
-              '',
-              'The following top-level keys were removed or renamed in `helm/michelangelo/values.yaml`:',
-              '',
-              '```',
-              removed,
-              '```',
-              '',
-              'Removing or renaming top-level Helm values is a breaking change for existing installations.',
-              ackNote,
-              '',
-              '_This check is advisory and does not block merge._',
-            ].join('\n');
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.payload.pull_request.number,
-              body,
-            });
+          name: api-surface-helm
+          path: ${{ runner.temp }}/api-result/result.json
+          retention-days: 3
