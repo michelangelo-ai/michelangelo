@@ -215,6 +215,32 @@ func TestResolveTargetClusters(t *testing.T) {
 			expected:   snapshot,
 		},
 		{
+			name:       "repeated cluster ID uses the server's first entry",
+			deployment: newDeployment(testISName),
+			seedIS: &v2pb.InferenceServer{
+				ObjectMeta: metav1.ObjectMeta{Name: testISName, Namespace: testNamespace},
+				Spec: v2pb.InferenceServerSpec{
+					ClusterTargets: []*v2pb.ClusterTarget{
+						newClusterTarget("c1", "https://c1", "443", "token-v2", "ca-v2"),
+						newClusterTarget("c1", "https://c1", "443", "token-v3", "ca-v3"),
+					},
+				},
+			},
+			expected: []*v2pb.ClusterTarget{
+				newClusterTarget("c1", "https://c1", "443", "token-v2", "ca-v2"),
+				newClusterTarget("c2", "https://c2", "443", "token-c2", "ca-c2"),
+			},
+		},
+		{
+			name:       "live target with no kubernetes connection keeps the snapshot",
+			deployment: newDeployment(testISName),
+			seedIS: &v2pb.InferenceServer{
+				ObjectMeta: metav1.ObjectMeta{Name: testISName, Namespace: testNamespace},
+				Spec:       v2pb.InferenceServerSpec{ClusterTargets: []*v2pb.ClusterTarget{{ClusterId: "c1"}}},
+			},
+			expected: snapshot,
+		},
+		{
 			name:       "inference server read failure",
 			deployment: newDeployment(testISName),
 			getErr:     errors.New("cache not synced"),
@@ -254,6 +280,17 @@ func TestResolveTargetClusters_NoSnapshot_SkipsInferenceServerRead(t *testing.T)
 
 	require.NoError(t, err)
 	assert.Nil(t, got)
+}
+
+func TestResolveTargetClusters_NilClient_KeepsSnapshot(t *testing.T) {
+	snapshot := []*v2pb.ClusterTarget{newClusterTarget("c1", "https://c1", "443", "token-v1", "ca-v1")}
+	deployment := newDeployment(testISName)
+	require.NoError(t, WriteTargetClustersAnnotation(deployment, snapshot))
+
+	got, err := ResolveTargetClusters(context.Background(), nil, deployment)
+
+	require.NoError(t, err)
+	assert.Equal(t, snapshot, got)
 }
 
 func TestWriteTargetClustersAnnotation(t *testing.T) {

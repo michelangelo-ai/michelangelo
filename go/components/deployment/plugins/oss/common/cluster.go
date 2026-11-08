@@ -100,14 +100,15 @@ func ReadTargetClustersAnnotation(deployment *v2pb.Deployment) ([]*v2pb.ClusterT
 // taken from the InferenceServer as it is now, matched by cluster ID. The snapshot only decides
 // which clusters to visit: its Secret names go stale once credentials are rotated into a new
 // Secret and the old one is deleted. A cluster the InferenceServer no longer lists, a deleted
-// InferenceServer, or a Deployment with no InferenceServer reference keeps the snapshot
-// connection, so the cluster can still be reached.
+// InferenceServer, a Deployment with no InferenceServer reference, or a nil kubeClient keeps the
+// snapshot connection, so the cluster can still be reached. A live target with no Kubernetes
+// connection is ignored, and if the InferenceServer repeats a cluster ID, its first entry wins.
 func ResolveTargetClusters(ctx context.Context, kubeClient client.Reader, deployment *v2pb.Deployment) ([]*v2pb.ClusterTarget, error) {
 	snapshot, err := ReadTargetClustersAnnotation(deployment)
 	if err != nil {
 		return nil, err
 	}
-	if len(snapshot) == 0 || deployment.Spec.GetInferenceServer() == nil {
+	if len(snapshot) == 0 || deployment.Spec.GetInferenceServer() == nil || kubeClient == nil {
 		return snapshot, nil
 	}
 
@@ -121,6 +122,9 @@ func ResolveTargetClusters(ctx context.Context, kubeClient client.Reader, deploy
 
 	live := make(map[string]*v2pb.ClusterTarget, len(inferenceServer.Spec.GetClusterTargets()))
 	for _, target := range inferenceServer.Spec.GetClusterTargets() {
+		if _, seen := live[target.GetClusterId()]; seen || target.GetKubernetes() == nil {
+			continue
+		}
 		live[target.GetClusterId()] = target
 	}
 	resolved := make([]*v2pb.ClusterTarget, 0, len(snapshot))

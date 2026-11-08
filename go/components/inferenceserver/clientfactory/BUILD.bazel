@@ -28,6 +28,7 @@ go_test(
     name = "go_default_test",
     srcs = ["factory_test.go"],
     embed = [":go_default_library"],
+    race = "on",
     deps = [
         "//go/components/inferenceserver/clientfactory/secrets:go_default_library",
         "//proto/api/v2:go_default_library",

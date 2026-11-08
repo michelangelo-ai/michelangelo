@@ -612,3 +612,106 @@ func TestRemoteClientFactory_ConcurrentLookups_BuildOneClient(t *testing.T) {
 		})
 	}
 }
+
+// blockingSecretProvider blocks the second read of one token Secret, the re-read a build makes
+// under its lock, until release is closed. blocked is closed once that read starts.
+type blockingSecretProvider struct {
+	caPEM        string
+	blockedToken string
+	blocked      chan struct{}
+	release      chan struct{}
+
+	mu    sync.Mutex
+	reads int
+}
+
+func (p *blockingSecretProvider) GetClientAuth(
+	_ context.Context, cluster *v2pb.ClusterTarget,
+) (secrets.ClientAuth, error) {
+	token := cluster.GetKubernetes().GetTokenTag()
+	auth := secrets.ClientAuth{CertificateAuthorityData: p.caPEM, ClientTokenData: token}
+	if token != p.blockedToken {
+		return auth, nil
+	}
+	p.mu.Lock()
+	p.reads++
+	reads := p.reads
+	p.mu.Unlock()
+	if reads == 2 {
+		close(p.blocked)
+		<-p.release
+	}
+	return auth, nil
+}
+
+func TestRemoteClientFactory_StalledSecretRead_DoesNotBlockOtherClusters(t *testing.T) {
+	rc := newRemoteCluster(t)
+	stalled := rc.target(t)
+	stalled.ClusterId = "stalled"
+	stalled.GetKubernetes().TokenTag = "token-stalled"
+	other := rc.target(t)
+	other.ClusterId = "other"
+	other.GetKubernetes().TokenTag = "token-other"
+
+	for name, get := range getters {
+		t.Run(name, func(t *testing.T) {
+			provider := &blockingSecretProvider{
+				caPEM:        rc.caPEM,
+				blockedToken: "token-stalled",
+				blocked:      make(chan struct{}),
+				release:      make(chan struct{}),
+			}
+			factory := newTestFactory(provider)
+			stalledDone := make(chan error, 1)
+			go func() {
+				_, err := get(factory, context.Background(), stalled)
+				stalledDone <- err
+			}()
+			<-provider.blocked
+
+			otherDone := make(chan error, 1)
+			go func() {
+				_, err := get(factory, context.Background(), other)
+				otherDone <- err
+			}()
+			select {
+			case err := <-otherDone:
+				require.NoError(t, err)
+			case <-time.After(5 * time.Second):
+				close(provider.release)
+				t.Fatal("lookup for another cluster waited for the stalled cluster's build")
+			}
+
+			close(provider.release)
+			require.NoError(t, <-stalledDone)
+		})
+	}
+}
+
+type secretProviderFunc func(context.Context, *v2pb.ClusterTarget) (secrets.ClientAuth, error)
+
+func (f secretProviderFunc) GetClientAuth(
+	ctx context.Context, cluster *v2pb.ClusterTarget,
+) (secrets.ClientAuth, error) {
+	return f(ctx, cluster)
+}
+
+func TestRemoteClientFactory_SecretRead_HasDeadline(t *testing.T) {
+	rc := newRemoteCluster(t)
+	var remaining []time.Duration
+	provider := secretProviderFunc(func(ctx context.Context, _ *v2pb.ClusterTarget) (secrets.ClientAuth, error) {
+		deadline, ok := ctx.Deadline()
+		if !ok {
+			return secrets.ClientAuth{}, errors.New("secret read has no deadline")
+		}
+		remaining = append(remaining, time.Until(deadline))
+		return rc.auth("token-a"), nil
+	})
+
+	require.NoError(t, getConfigMap(newTestFactory(provider), rc, rc.target(t)))
+
+	require.Len(t, remaining, 2)
+	for _, r := range remaining {
+		assert.LessOrEqual(t, r, secretReadTimeout)
+	}
+}

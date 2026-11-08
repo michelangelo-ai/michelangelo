@@ -13,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	"github.com/michelangelo-ai/michelangelo/go/components/common/routing"
 	"github.com/michelangelo-ai/michelangelo/go/components/common/routing/routingmocks"
@@ -446,7 +447,7 @@ func TestRunUnloadsModelFromEveryCluster(t *testing.T) {
 	assert.Equal(t, api.CONDITION_STATUS_TRUE, condition.Status)
 }
 
-func TestCleanup_SecretsRenamedSinceRollout_UsesInferenceServerConnection(t *testing.T) {
+func TestCleanup_TargetClusterConnection(t *testing.T) {
 	isName := "test-server"
 	namespace := "default"
 	deploymentName := "test-deployment"
@@ -463,7 +464,7 @@ func TestCleanup_SecretsRenamedSinceRollout_UsesInferenceServerConnection(t *tes
 			}},
 		}
 	}
-	newFixture := func(t *testing.T) (*v2pb.Deployment, *v2pb.InferenceServer) {
+	newDeployment := func(t *testing.T) *v2pb.Deployment {
 		deployment := &v2pb.Deployment{
 			ObjectMeta: metav1.ObjectMeta{Name: deploymentName, Namespace: namespace},
 			Spec: v2pb.DeploymentSpec{
@@ -475,67 +476,91 @@ func TestCleanup_SecretsRenamedSinceRollout_UsesInferenceServerConnection(t *tes
 		}
 		require.NoError(t, osscommon.WriteTargetClustersAnnotation(deployment,
 			[]*v2pb.ClusterTarget{remoteTarget("v1")}))
-		inferenceServer := &v2pb.InferenceServer{
-			ObjectMeta: metav1.ObjectMeta{Name: isName, Namespace: namespace},
-			Spec:       v2pb.InferenceServerSpec{ClusterTargets: []*v2pb.ClusterTarget{remoteTarget("v2")}},
-		}
-		return deployment, inferenceServer
+		return deployment
 	}
-	renamed := tokenTagMatcher("remote-token-v2")
+	renamedInferenceServer := &v2pb.InferenceServer{
+		ObjectMeta: metav1.ObjectMeta{Name: isName, Namespace: namespace},
+		Spec:       v2pb.InferenceServerSpec{ClusterTargets: []*v2pb.ClusterTarget{remoteTarget("v2")}},
+	}
 
-	t.Run("retrieve", func(t *testing.T) {
-		deployment, inferenceServer := newFixture(t)
-		ctrl := gomock.NewController(t)
-		mockModelConfigProvider := modelconfigmocks.NewMockModelConfigProvider(ctrl)
-		rm := routingmocks.NewMockManager(ctrl)
-		mockClientFactory := clientfactorymocks.NewMockClientFactory(ctrl)
-		mockClientFactory.EXPECT().GetClient(gomock.Any(), renamed).Return(nil, nil)
-		mockClientFactory.EXPECT().GetDynamicClient(gomock.Any(), renamed).Return(nil, nil)
-		mockModelConfigProvider.EXPECT().
-			GetModelsFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), isName, namespace).
-			Return(nil, nil)
-		rm.EXPECT().RuleExists(gomock.Any(), gomock.Any(), gomock.Any(), namespace, gomock.Any()).
-			Return(false, nil).Times(2)
-		actor := NewCleanupPlugin(Params{
-			Client:              newKubeClient(t, inferenceServer),
-			ClientFactory:       mockClientFactory,
-			RouteManager:        rm,
-			ModelConfigProvider: mockModelConfigProvider,
-			Logger:              zap.NewNop(),
-		}).GetActors()[0]
+	tests := []struct {
+		name       string
+		kubeClient func(t *testing.T) client.Client
+		wantToken  string
+	}{
+		{
+			name:       "secrets renamed since rollout uses the inference server connection",
+			kubeClient: func(t *testing.T) client.Client { return newKubeClient(t, renamedInferenceServer) },
+			wantToken:  "remote-token-v2",
+		},
+		{
+			name: "inference server read failure uses the recorded snapshot",
+			kubeClient: func(t *testing.T) client.Client {
+				scheme := runtime.NewScheme()
+				require.NoError(t, v2pb.AddToScheme(scheme))
+				return fake.NewClientBuilder().WithScheme(scheme).WithInterceptorFuncs(interceptor.Funcs{
+					Get: func(context.Context, client.WithWatch, client.ObjectKey, client.Object, ...client.GetOption) error {
+						return errors.New("cache not synced")
+					},
+				}).Build()
+			},
+			wantToken: "remote-token-v1",
+		},
+	}
 
-		condition, err := actor.Retrieve(context.Background(), deployment, &api.Condition{})
+	for _, tt := range tests {
+		t.Run(tt.name+"/retrieve", func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockModelConfigProvider := modelconfigmocks.NewMockModelConfigProvider(ctrl)
+			rm := routingmocks.NewMockManager(ctrl)
+			mockClientFactory := clientfactorymocks.NewMockClientFactory(ctrl)
+			mockClientFactory.EXPECT().GetClient(gomock.Any(), tokenTagMatcher(tt.wantToken)).Return(nil, nil)
+			mockClientFactory.EXPECT().GetDynamicClient(gomock.Any(), tokenTagMatcher(tt.wantToken)).Return(nil, nil)
+			mockModelConfigProvider.EXPECT().
+				GetModelsFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), isName, namespace).
+				Return(nil, nil)
+			rm.EXPECT().RuleExists(gomock.Any(), gomock.Any(), gomock.Any(), namespace, gomock.Any()).
+				Return(false, nil).Times(2)
+			actor := NewCleanupPlugin(Params{
+				Client:              tt.kubeClient(t),
+				ClientFactory:       mockClientFactory,
+				RouteManager:        rm,
+				ModelConfigProvider: mockModelConfigProvider,
+				Logger:              zap.NewNop(),
+			}).GetActors()[0]
 
-		require.NoError(t, err)
-		assert.Equal(t, api.CONDITION_STATUS_TRUE, condition.Status)
-	})
+			condition, err := actor.Retrieve(context.Background(), newDeployment(t), &api.Condition{})
 
-	t.Run("run", func(t *testing.T) {
-		deployment, inferenceServer := newFixture(t)
-		ctrl := gomock.NewController(t)
-		mockModelConfigProvider := modelconfigmocks.NewMockModelConfigProvider(ctrl)
-		rm := routingmocks.NewMockManager(ctrl)
-		mockClientFactory := clientfactorymocks.NewMockClientFactory(ctrl)
-		mockClientFactory.EXPECT().GetClient(gomock.Any(), renamed).Return(nil, nil)
-		mockClientFactory.EXPECT().GetDynamicClient(gomock.Any(), renamed).Return(nil, nil)
-		mockModelConfigProvider.EXPECT().
-			RemoveModelFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), isName, namespace, deploymentName, currentModel).
-			Return(nil)
-		rm.EXPECT().RemoveRules(gomock.Any(), gomock.Any(), gomock.Any(), namespace, gomock.Any()).
-			Return(nil).Times(2)
-		actor := NewCleanupPlugin(Params{
-			Client:              newKubeClient(t, inferenceServer),
-			ClientFactory:       mockClientFactory,
-			RouteManager:        rm,
-			ModelConfigProvider: mockModelConfigProvider,
-			Logger:              zap.NewNop(),
-		}).GetActors()[0]
+			require.NoError(t, err)
+			assert.Equal(t, api.CONDITION_STATUS_TRUE, condition.Status)
+		})
 
-		condition, err := actor.Run(context.Background(), deployment, &api.Condition{})
+		t.Run(tt.name+"/run", func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockModelConfigProvider := modelconfigmocks.NewMockModelConfigProvider(ctrl)
+			rm := routingmocks.NewMockManager(ctrl)
+			mockClientFactory := clientfactorymocks.NewMockClientFactory(ctrl)
+			mockClientFactory.EXPECT().GetClient(gomock.Any(), tokenTagMatcher(tt.wantToken)).Return(nil, nil)
+			mockClientFactory.EXPECT().GetDynamicClient(gomock.Any(), tokenTagMatcher(tt.wantToken)).Return(nil, nil)
+			mockModelConfigProvider.EXPECT().
+				RemoveModelFromConfig(gomock.Any(), gomock.Any(), gomock.Any(), isName, namespace, deploymentName, currentModel).
+				Return(nil)
+			rm.EXPECT().RemoveRules(gomock.Any(), gomock.Any(), gomock.Any(), namespace, gomock.Any()).
+				Return(nil).Times(2)
+			actor := NewCleanupPlugin(Params{
+				Client:              tt.kubeClient(t),
+				ClientFactory:       mockClientFactory,
+				RouteManager:        rm,
+				ModelConfigProvider: mockModelConfigProvider,
+				Logger:              zap.NewNop(),
+			}).GetActors()[0]
 
-		require.NoError(t, err)
-		assert.Equal(t, api.CONDITION_STATUS_TRUE, condition.Status)
-	})
+			condition, err := actor.Run(context.Background(), newDeployment(t), &api.Condition{})
+
+			require.NoError(t, err)
+			assert.Equal(t, api.CONDITION_STATUS_TRUE, condition.Status)
+		})
+	}
 }
 
 // tokenTagMatcher matches a ClusterTarget argument by the name of its token Secret.
