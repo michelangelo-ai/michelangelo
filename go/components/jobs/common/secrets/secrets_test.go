@@ -28,7 +28,7 @@ func TestProviderGetClusterClientAuth(t *testing.T) {
 			Namespace: "default",
 		},
 		Data: map[string][]byte{
-			"cadata": []byte("fake-ca-data"),
+			caDataKey: []byte("fake-ca-data"),
 		},
 	}
 
@@ -38,7 +38,7 @@ func TestProviderGetClusterClientAuth(t *testing.T) {
 			Namespace: "default",
 		},
 		Data: map[string][]byte{
-			"token": []byte("fake-token-data"),
+			tokenKey: []byte("fake-token-data"),
 		},
 	}
 
@@ -48,7 +48,7 @@ func TestProviderGetClusterClientAuth(t *testing.T) {
 			Namespace: "default",
 		},
 		Data: map[string][]byte{
-			"cadata": {},
+			caDataKey: {},
 		},
 	}
 
@@ -58,7 +58,7 @@ func TestProviderGetClusterClientAuth(t *testing.T) {
 			Namespace: "default",
 		},
 		Data: map[string][]byte{
-			"cadata": []byte("fake-ca-data"),
+			caDataKey: []byte("fake-ca-data"),
 		},
 	}
 
@@ -88,7 +88,7 @@ func TestProviderGetClusterClientAuth(t *testing.T) {
 			expectAuth:    ClientAuth{},
 		},
 		{
-			name: "Kubernetes cluster spec without a rest connection",
+			name: "Kubernetes cluster spec without a REST connection",
 			cluster: &v2pb.Cluster{
 				ObjectMeta: v1.ObjectMeta{
 					Name:      "test-cluster",
@@ -100,7 +100,7 @@ func TestProviderGetClusterClientAuth(t *testing.T) {
 					},
 				},
 			},
-			errorContains: "empty secret name for cadata",
+			errorContains: "empty cadata secret name",
 		},
 		{
 			name: "successfully configured Kubernetes cluster spec with secrets",
@@ -191,7 +191,7 @@ func TestProviderGetClusterClientAuth(t *testing.T) {
 					},
 				},
 			},
-			errorContains: `secret default/empty-ca-secret has no "cadata" data`,
+			errorContains: `secret default/empty-ca-secret key "cadata" is missing or empty`,
 		},
 		{
 			name: "Kubernetes cluster spec with a token secret missing its token key",
@@ -211,7 +211,7 @@ func TestProviderGetClusterClientAuth(t *testing.T) {
 					},
 				},
 			},
-			errorContains: `secret default/token-secret-without-token has no "token" data`,
+			errorContains: `secret default/token-secret-without-token key "token" is missing or empty`,
 		},
 	}
 

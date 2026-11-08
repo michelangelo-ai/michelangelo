@@ -279,6 +279,52 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		{
+			msg: "rotated token Secret replaces the cached cluster and keeps its status",
+			setupFunc: func(t *testing.T) (*Reconciler, tally.TestScope) {
+				gCtrl := gomock.NewController(t)
+				factory := computemocks.NewMockFactory(gCtrl)
+				helper := clientmocks.NewMockHelper(gCtrl)
+
+				r, apiHandler := setupReconciler(t, testParams{
+					gCtrl:   gCtrl,
+					factory: factory,
+					helper:  helper,
+				})
+
+				cachedCluster := _testCluster.DeepCopy()
+				cachedCluster.ObjectMeta.Finalizers = []string{_clusterDeleteFinalizer}
+				cachedCluster.Spec.GetKubernetes().Rest.TokenTag = "token-v1"
+				r.clusterDataMap.add(_testClusterName, &Data{
+					cachedObj: cachedCluster,
+					clusterStatus: &v2pb.ClusterStatus{
+						StatusConditions: []*apipb.Condition{
+							{Type: constants.ClusterReady, Status: apipb.CONDITION_STATUS_TRUE},
+						},
+					},
+				})
+
+				updatedCluster := _testCluster.DeepCopy()
+				updatedCluster.ObjectMeta.Finalizers = []string{_clusterDeleteFinalizer}
+				updatedCluster.Spec.GetKubernetes().Rest.TokenTag = "token-v2"
+
+				apiHandler.EXPECT().Get(gomock.Any(), constants.ClustersNamespace, _testClusterName,
+					gomock.Any(), gomock.Any()).DoAndReturn(
+					func(_ context.Context, _, _ string, _ *metav1.GetOptions, obj *v2pb.Cluster) error {
+						*obj = *updatedCluster
+						return nil
+					})
+
+				return r, r.metrics.MetricsScope.(tally.TestScope)
+			},
+			req: defaultReq,
+			assertClusterData: func(d *clusterMap) bool {
+				clusterData := d.get(_testClusterName)
+				return clusterData != nil &&
+					clusterData.cachedObj.Spec.GetKubernetes().GetRest().GetTokenTag() == "token-v2" &&
+					len(d.getClustersByFilter(ReadyClusters)) == 1
+			},
+		},
+		{
 			msg: "update cluster annotation should not update cluster",
 			setupFunc: func(t *testing.T) (*Reconciler, tally.TestScope) {
 				gCtrl := gomock.NewController(t)
@@ -787,7 +833,7 @@ func TestIsClusterSpecSame(t *testing.T) {
 			expectedNewClusterIsSame: false,
 		},
 		{
-			name: "ca secret tag changed",
+			name: "CA Secret tag changed",
 			cachedObj: &v2pb.Cluster{
 				Spec: v2pb.ClusterSpec{
 					Cluster: &v2pb.ClusterSpec_Kubernetes{
@@ -817,7 +863,7 @@ func TestIsClusterSpecSame(t *testing.T) {
 			expectedNewClusterIsSame: false,
 		},
 		{
-			name: "token secret tag changed",
+			name: "token Secret tag changed",
 			cachedObj: &v2pb.Cluster{
 				Spec: v2pb.ClusterSpec{
 					Cluster: &v2pb.ClusterSpec_Kubernetes{

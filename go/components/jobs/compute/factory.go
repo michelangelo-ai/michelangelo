@@ -9,6 +9,7 @@ import (
 
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 
+	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -50,6 +51,7 @@ type factory struct {
 	clients               sync.Map // cache key string → cachedClientSet
 	locks                 sync.Map // cache key string → *sync.Mutex
 	secretProvider        secrets.SecretProvider
+	logger                *zap.Logger
 	credentialReadTimeout time.Duration
 }
 
@@ -60,9 +62,10 @@ type cachedClientSet struct {
 }
 
 // NewClientSetFactory provides constructor for the factory
-func NewClientSetFactory(secretProvider secrets.SecretProvider) Factory {
+func NewClientSetFactory(secretProvider secrets.SecretProvider, logger *zap.Logger) Factory {
 	return &factory{
 		secretProvider:        secretProvider,
+		logger:                logger,
 		credentialReadTimeout: _credentialReadTimeout,
 	}
 }
@@ -99,10 +102,37 @@ func (f *factory) GetClientSetForCluster(c *v2pb.Cluster) (*ClientSet, error) {
 		return nil, fmt.Errorf(
 			"build client set for cluster %s/%s: %w", c.GetNamespace(), c.GetName(), err)
 	}
-	// TODO(#2415): close idle connections of the replaced ClientSet and evict entries for deleted clusters.
-	f.clients.Store(key, cachedClientSet{auth: auth, clientSet: cs})
-
+	// TODO(#2415): evict cache entries for deleted clusters.
+	previous, replaced := f.clients.Swap(key, cachedClientSet{auth: auth, clientSet: cs})
+	if !replaced {
+		f.logBuild(c, nil, auth)
+		return cs, nil
+	}
+	previousAuth := previous.(cachedClientSet).auth
+	f.logBuild(c, &previousAuth, auth)
 	return cs, nil
+}
+
+// logBuild records a ClientSet build and, for a rebuild, whether the token and the CA changed.
+// Secret values are never logged.
+func (f *factory) logBuild(c *v2pb.Cluster, previous *secrets.ClientAuth, auth secrets.ClientAuth) {
+	conn := c.Spec.GetKubernetes().GetRest()
+	fields := []zap.Field{
+		zap.String("namespace", c.GetNamespace()),
+		zap.String("cluster", c.GetName()),
+		zap.String("server", getServerAddress(c)),
+		zap.String("ca_secret", conn.GetCaDataTag()),
+		zap.String("token_secret", conn.GetTokenTag()),
+	}
+	if previous == nil {
+		f.logger.Info("Built client set for cluster", fields...)
+		return
+	}
+	fields = append(fields,
+		zap.Bool("token_changed", previous.ClientTokenData != auth.ClientTokenData),
+		zap.Bool("ca_changed", previous.CertificateAuthorityData != auth.CertificateAuthorityData),
+	)
+	f.logger.Info("Rebuilt client set for cluster after its credentials changed", fields...)
 }
 
 // lockFor returns the mutex that serializes ClientSet builds for one cache key, so a blocked
@@ -118,8 +148,8 @@ func (f *factory) load(key string, auth secrets.ClientAuth) (*ClientSet, bool) {
 	if !ok {
 		return nil, false
 	}
-	cached, ok := entry.(cachedClientSet)
-	if !ok || cached.auth != auth {
+	cached := entry.(cachedClientSet)
+	if cached.auth != auth {
 		return nil, false
 	}
 	return cached.clientSet, true
@@ -130,8 +160,9 @@ func (f *factory) getClusterClientAuth(c *v2pb.Cluster) (secrets.ClientAuth, err
 	defer cancel()
 
 	auth, err := f.secretProvider.GetClusterClientAuth(ctx, c)
-	// TODO(#2415): wrap with a sentinel (e.g. ErrCredentialsUnavailable) so callers can requeue instead of failing the job.
 	if err != nil {
+		// TODO(#2415): wrap with a sentinel (e.g. ErrCredentialsUnavailable) so callers can
+		// requeue instead of failing the job.
 		return secrets.ClientAuth{}, fmt.Errorf(
 			"get client auth for cluster %s/%s: %w", c.GetNamespace(), c.GetName(), err)
 	}
@@ -140,9 +171,11 @@ func (f *factory) getClusterClientAuth(c *v2pb.Cluster) (secrets.ClientAuth, err
 
 func newClientSet(server string, auth secrets.ClientAuth) (*ClientSet, error) {
 	cfg, err := GetKubeClientConfigFromConfiguration(
-		_serviceName, server, metav1.NamespaceAll, &auth, true)
+		_serviceName, server, metav1.NamespaceAll, &auth,
+		true, // useJSON
+	)
 	if err != nil {
-		return nil, fmt.Errorf("build rest config: %w", err)
+		return nil, fmt.Errorf("build REST config: %w", err)
 	}
 
 	ray, err := kuberay.NewRestClient(cfg)

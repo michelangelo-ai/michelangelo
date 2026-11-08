@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	gogoproto "github.com/gogo/protobuf/proto"
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	apiutils "github.com/michelangelo-ai/michelangelo/go/api/utils"
@@ -191,9 +192,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 
 	log.Info("Cluster controller observed an update", "cached_object", data.cachedObj, "new_object", &cluster)
-	// re-add
-	r.delCluster(&cluster)
-	r.addCluster(&cluster, log)
+	r.replaceCluster(&cluster, data)
 
 	reconcileSuccess = true
 	return ctrl.Result{}, nil
@@ -202,14 +201,20 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 func (r *Reconciler) isClusterSpecSame(cachedObj *v2pb.Cluster, newObj *v2pb.Cluster) bool {
 	cachedRest := cachedObj.Spec.GetKubernetes().GetRest()
 	newRest := newObj.Spec.GetKubernetes().GetRest()
-	return cachedRest.GetHost() == newRest.GetHost() &&
-		cachedRest.GetPort() == newRest.GetPort() &&
-		cachedRest.GetCaDataTag() == newRest.GetCaDataTag() &&
-		cachedRest.GetTokenTag() == newRest.GetTokenTag() &&
+	return gogoproto.Equal(cachedRest, newRest) &&
 		cachedObj.Spec.GetRegion() == newObj.Spec.GetRegion() &&
 		cachedObj.Spec.GetZone() == newObj.Spec.GetZone() &&
 		cachedObj.Spec.GetDc() == newObj.Spec.GetDc() &&
 		cachedObj.Spec.GetSla() == newObj.Spec.GetSla()
+}
+
+// replaceCluster swaps in the updated Cluster in one step, so a concurrent GetCluster never misses
+// it, and keeps the last sampled status until the next health check.
+func (r *Reconciler) replaceCluster(obj *v2pb.Cluster, previous *Data) {
+	r.clusterDataMap.add(obj.Name, &Data{
+		cachedObj:     obj.DeepCopy(),
+		clusterStatus: previous.GetClusterStatus(),
+	})
 }
 
 func (r *Reconciler) delCluster(obj *v2pb.Cluster) {

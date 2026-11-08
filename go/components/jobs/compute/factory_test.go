@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -38,7 +39,7 @@ import (
 )
 
 func TestNewClientSetFactory_Default_UsesCredentialReadTimeout(t *testing.T) {
-	f, ok := NewClientSetFactory(nil).(*factory)
+	f, ok := NewClientSetFactory(nil, zap.NewNop()).(*factory)
 	require.True(t, ok)
 	assert.Equal(t, _credentialReadTimeout, f.credentialReadTimeout)
 }
@@ -79,14 +80,14 @@ func TestGetClientSetForCluster(t *testing.T) {
 			GetClusterClientAuth(gomock.Any(), &testCluster).
 			Return(secrets.ClientAuth{}, errors.New("mock error"))
 
-		f := NewClientSetFactory(mockProvider)
+		f := NewClientSetFactory(mockProvider, zap.NewNop())
 
 		_, err := f.GetClientSetForCluster(&testCluster)
 		require.ErrorContains(t, err, "get client auth for cluster")
 		require.ErrorContains(t, err, "mock error")
 	})
 
-	t.Run("secret provider error on read under lock", func(t *testing.T) {
+	t.Run("SecretProvider error on the re-read under the lock", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
@@ -100,7 +101,7 @@ func TestGetClientSetForCluster(t *testing.T) {
 				Return(secrets.ClientAuth{}, errors.New("mock error")),
 		)
 
-		f := NewClientSetFactory(mockProvider).(*factory)
+		f := NewClientSetFactory(mockProvider, zap.NewNop()).(*factory)
 
 		_, err := f.GetClientSetForCluster(&testCluster)
 		require.ErrorContains(t, err, "mock error")
@@ -121,7 +122,7 @@ func TestGetClientSetForCluster(t *testing.T) {
 			Return(secrets.ClientAuth{ClientTokenData: "token-a"}, nil).
 			Times(2)
 
-		f := NewClientSetFactory(mockProvider).(*factory)
+		f := NewClientSetFactory(mockProvider, zap.NewNop()).(*factory)
 
 		_, err := f.GetClientSetForCluster(badCluster)
 		require.ErrorContains(t, err, "host must be a URL")
@@ -212,7 +213,7 @@ func newSecretBackedFactory(t *testing.T, objs ...client.Object) (Factory, clien
 	t.Helper()
 	kubeClient := fake.NewClientBuilder().WithObjects(objs...).Build()
 	params := secrets.Params{KubeClient: kubeClient, Logger: zap.NewNop()}
-	return NewClientSetFactory(secrets.New(params).SecretProvider), kubeClient
+	return NewClientSetFactory(secrets.New(params).SecretProvider, zap.NewNop()), kubeClient
 }
 
 func updateSecret(t *testing.T, kubeClient client.Client, secret *corev1.Secret) {
@@ -384,7 +385,7 @@ func TestGetClientSetForCluster_StaleCredentialsAfterRotation_KeepsNewerClientSe
 	older := secrets.ClientAuth{CertificateAuthorityData: rc.caPEM, ClientTokenData: "token-a"}
 	newer := secrets.ClientAuth{CertificateAuthorityData: rc.caPEM, ClientTokenData: "token-b"}
 	provider := &sequenceSecretProvider{auths: []secrets.ClientAuth{newer}}
-	f := NewClientSetFactory(provider)
+	f := NewClientSetFactory(provider, zap.NewNop())
 	cluster := rc.cluster(t, "remote", _caSecretName, _tokenSecretName)
 	cached, err := f.GetClientSetForCluster(cluster)
 	require.NoError(t, err)
@@ -466,6 +467,7 @@ func TestGetClientSetForCluster_BlockedCredentialRead_ReturnsTimeoutError(t *tes
 	rc := newRemoteCluster(t)
 	f := &factory{
 		secretProvider:        &blockingSecretProvider{},
+		logger:                zap.NewNop(),
 		credentialReadTimeout: 10 * time.Millisecond,
 	}
 	cluster := rc.cluster(t, "remote", _caSecretName, _tokenSecretName)
@@ -483,6 +485,7 @@ func TestGetClientSetForCluster_BlockedReadUnderLock_ReturnsTimeoutErrorAndRelea
 	provider := &blockingSecretProvider{auth: auth, unblockedReads: 1}
 	f := &factory{
 		secretProvider:        provider,
+		logger:                zap.NewNop(),
 		credentialReadTimeout: 10 * time.Millisecond,
 	}
 	cluster := rc.cluster(t, "remote", _caSecretName, _tokenSecretName)
@@ -532,7 +535,9 @@ func TestGetClientSetForCluster_StalledReadForOneCluster_ServesOtherClusters(t *
 		readStarted:    make(chan struct{}),
 		release:        make(chan struct{}),
 	}
-	f := &factory{secretProvider: provider, credentialReadTimeout: time.Minute}
+	release := sync.OnceFunc(func() { close(provider.release) })
+	t.Cleanup(release)
+	f := &factory{secretProvider: provider, logger: zap.NewNop(), credentialReadTimeout: time.Minute}
 	clusterA := rc.cluster(t, "remote-a", _caSecretName, _tokenSecretName)
 	clusterB := rc.cluster(t, "remote-b", _caSecretName, _tokenSecretName)
 
@@ -541,12 +546,16 @@ func TestGetClientSetForCluster_StalledReadForOneCluster_ServesOtherClusters(t *
 		_, err := f.GetClientSetForCluster(clusterA)
 		stalled <- err
 	}()
-	<-provider.readStarted
+	select {
+	case <-provider.readStarted:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the stalled cluster's build never re-read its credentials under the lock")
+	}
 
 	require.NoError(t, lookupWithin(t, f, clusterB, 5*time.Second))
 	require.NoError(t, lookupWithin(t, f, clusterB, 5*time.Second))
 
-	close(provider.release)
+	release()
 	assert.NoError(t, <-stalled)
 }
 
@@ -577,8 +586,13 @@ func TestGetClientSetForCluster_RotationDuringConcurrentLookups_EndsOnLatestToke
 		newCASecret(_caSecretName, rc.caPEM), newTokenSecret(_tokenSecretName, "token-0"))
 	cluster := rc.cluster(t, "remote", _caSecretName, _tokenSecretName)
 
+	const rotations = 5
 	stop := make(chan struct{})
-	var wg sync.WaitGroup
+	var (
+		wg   sync.WaitGroup
+		mu   sync.Mutex
+		seen = make(map[*ClientSet]struct{})
+	)
 	for range 8 {
 		wg.Add(1)
 		go func() {
@@ -589,12 +603,15 @@ func TestGetClientSetForCluster_RotationDuringConcurrentLookups_EndsOnLatestToke
 					return
 				default:
 				}
-				_, err := f.GetClientSetForCluster(cluster)
+				cs, err := f.GetClientSetForCluster(cluster)
 				assert.NoError(t, err)
+				mu.Lock()
+				seen[cs] = struct{}{}
+				mu.Unlock()
 			}
 		}()
 	}
-	for i := 1; i <= 5; i++ {
+	for i := 1; i <= rotations; i++ {
 		updateSecret(t, kubeClient, newTokenSecret(_tokenSecretName, fmt.Sprintf("token-%d", i)))
 	}
 	close(stop)
@@ -605,6 +622,9 @@ func TestGetClientSetForCluster_RotationDuringConcurrentLookups_EndsOnLatestToke
 	require.NoError(t, getConfigMap(cs))
 	tokens := rc.receivedTokens()
 	assert.Equal(t, "token-5", tokens[len(tokens)-1])
+	// One ClientSet per token at most: a duplicate build, or a stale read rebuilding an older
+	// token over a newer one, would hand out more.
+	assert.LessOrEqual(t, len(seen), rotations+1)
 }
 
 func TestGetClientSetForCluster_TokenSecretMissingKey_ReturnsErrorAndKeepsCache(t *testing.T) {
@@ -620,7 +640,7 @@ func TestGetClientSetForCluster_TokenSecretMissingKey_ReturnsErrorAndKeepsCache(
 		Data:       map[string][]byte{"wrong-key": []byte("token-b")},
 	})
 	cs, err := f.GetClientSetForCluster(cluster)
-	assert.ErrorContains(t, err, `has no "token" data`)
+	assert.ErrorContains(t, err, `key "token" is missing or empty`)
 	assert.Nil(t, cs)
 
 	updateSecret(t, kubeClient, newTokenSecret(_tokenSecretName, "token-a"))
@@ -650,7 +670,7 @@ func TestGetClientSetForCluster_ClusterMovedToNewServer_SendsToNewServer(t *test
 	assert.Equal(t, []string{"token-a"}, newServer.receivedTokens())
 }
 
-func TestGetClientSetForCluster_RotatedToInvalidCA_ReturnsErrorNotCachedClientSet(t *testing.T) {
+func TestGetClientSetForCluster_RotatedToInvalidCA_ReturnsErrorInsteadOfCachedClientSet(t *testing.T) {
 	rc := newRemoteCluster(t)
 	f, kubeClient := newSecretBackedFactory(t,
 		newCASecret(_caSecretName, rc.caPEM), newTokenSecret(_tokenSecretName, "token-a"))
@@ -663,4 +683,41 @@ func TestGetClientSetForCluster_RotatedToInvalidCA_ReturnsErrorNotCachedClientSe
 
 	assert.ErrorContains(t, err, "build client set for cluster")
 	assert.Nil(t, cs)
+}
+
+func TestGetClientSetForCluster_LogsBuildAndRebuildWithoutSecretValues(t *testing.T) {
+	rc := newRemoteCluster(t)
+	kubeClient := fake.NewClientBuilder().WithObjects(
+		newCASecret(_caSecretName, rc.caPEM), newTokenSecret(_tokenSecretName, "token-a")).Build()
+	provider := secrets.New(secrets.Params{KubeClient: kubeClient, Logger: zap.NewNop()}).SecretProvider
+	core, logs := observer.New(zap.InfoLevel)
+	f := NewClientSetFactory(provider, zap.New(core))
+	cluster := rc.cluster(t, "remote", _caSecretName, _tokenSecretName)
+
+	_, err := f.GetClientSetForCluster(cluster)
+	require.NoError(t, err)
+	_, err = f.GetClientSetForCluster(cluster)
+	require.NoError(t, err)
+	updateSecret(t, kubeClient, newTokenSecret(_tokenSecretName, "token-b"))
+	_, err = f.GetClientSetForCluster(cluster)
+	require.NoError(t, err)
+
+	entries := logs.AllUntimed()
+	require.Len(t, entries, 2)
+	assert.Equal(t, "Built client set for cluster", entries[0].Message)
+	assert.Equal(t, "Rebuilt client set for cluster after its credentials changed", entries[1].Message)
+	rebuilt := entries[1].ContextMap()
+	assert.Equal(t, "remote", rebuilt["cluster"])
+	assert.Equal(t, _tokenSecretName, rebuilt["token_secret"])
+	assert.Equal(t, _caSecretName, rebuilt["ca_secret"])
+	assert.Equal(t, true, rebuilt["token_changed"])
+	assert.Equal(t, false, rebuilt["ca_changed"])
+	for _, entry := range entries {
+		for _, value := range entry.ContextMap() {
+			text := fmt.Sprint(value)
+			for _, secret := range []string{"token-a", "token-b", rc.caPEM} {
+				assert.NotContains(t, text, secret)
+			}
+		}
+	}
 }

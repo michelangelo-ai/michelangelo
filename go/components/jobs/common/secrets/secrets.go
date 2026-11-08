@@ -16,6 +16,11 @@ import (
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
+const (
+	caDataKey = "cadata"
+	tokenKey  = "token"
+)
+
 // SecretProvider defines the interface for secret management.
 //
 // GetClusterClientAuth is called on every compute client lookup so that rotated credentials
@@ -85,10 +90,11 @@ func GetKubeSecretName(jobName string) string {
 // namespace. A missing or empty value is an error rather than an empty credential.
 func (p Provider) retrieveSecretData(ctx context.Context, secretName, dataKey string) (string, error) {
 	if secretName == "" {
-		return "", fmt.Errorf("empty secret name for %s", dataKey)
+		return "", fmt.Errorf("empty %s secret name", dataKey)
 	}
 	secret := &corev1.Secret{}
-	// TODO(#2393): make the credential Secret namespace configurable and align it with the cache scope and RBAC.
+	// TODO(#2393): make the credential Secret namespace configurable and align it with the
+	// cache scope and RBAC.
 	// TODO(#2415): restrict which Secrets this reader will resolve.
 	key := types.NamespacedName{Namespace: "default", Name: secretName}
 	if err := p.kubeClient.Get(ctx, key, secret); err != nil {
@@ -96,7 +102,7 @@ func (p Provider) retrieveSecretData(ctx context.Context, secretName, dataKey st
 	}
 	value := secret.Data[dataKey]
 	if len(value) == 0 {
-		return "", fmt.Errorf("secret %s has no %q data", key, dataKey)
+		return "", fmt.Errorf("secret %s key %q is missing or empty", key, dataKey)
 	}
 	return string(value), nil
 }
@@ -114,12 +120,12 @@ func (p Provider) GetClusterClientAuth(ctx context.Context, cluster *v2pb.Cluste
 
 	conn := kubeClusterSpec.GetRest()
 
-	caData, err := p.retrieveSecretData(ctx, conn.GetCaDataTag(), "cadata")
+	caData, err := p.retrieveSecretData(ctx, conn.GetCaDataTag(), caDataKey)
 	if err != nil {
 		return ClientAuth{}, err
 	}
 
-	token, err := p.retrieveSecretData(ctx, conn.GetTokenTag(), "token")
+	token, err := p.retrieveSecretData(ctx, conn.GetTokenTag(), tokenKey)
 	if err != nil {
 		return ClientAuth{}, err
 	}
