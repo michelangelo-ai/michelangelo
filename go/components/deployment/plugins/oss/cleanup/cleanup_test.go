@@ -487,6 +487,7 @@ func TestCleanup_TargetClusterConnection(t *testing.T) {
 		name       string
 		kubeClient func(t *testing.T) client.Client
 		wantToken  string
+		wantWarn   bool
 	}{
 		{
 			name:       "secrets renamed since rollout uses the inference server connection",
@@ -494,7 +495,7 @@ func TestCleanup_TargetClusterConnection(t *testing.T) {
 			wantToken:  "remote-token-v2",
 		},
 		{
-			name: "inference server read failure uses the recorded snapshot",
+			name: "inference server read failure uses the cluster snapshot",
 			kubeClient: func(t *testing.T) client.Client {
 				scheme := runtime.NewScheme()
 				require.NoError(t, v2pb.AddToScheme(scheme))
@@ -505,6 +506,7 @@ func TestCleanup_TargetClusterConnection(t *testing.T) {
 				}).Build()
 			},
 			wantToken: "remote-token-v1",
+			wantWarn:  true,
 		},
 	}
 
@@ -521,18 +523,20 @@ func TestCleanup_TargetClusterConnection(t *testing.T) {
 				Return(nil, nil)
 			rm.EXPECT().RuleExists(gomock.Any(), gomock.Any(), gomock.Any(), namespace, gomock.Any()).
 				Return(false, nil).Times(2)
+			core, logs := observer.New(zap.WarnLevel)
 			actor := NewCleanupPlugin(Params{
 				Client:              tt.kubeClient(t),
 				ClientFactory:       mockClientFactory,
 				RouteManager:        rm,
 				ModelConfigProvider: mockModelConfigProvider,
-				Logger:              zap.NewNop(),
+				Logger:              zap.New(core),
 			}).GetActors()[0]
 
 			condition, err := actor.Retrieve(context.Background(), newDeployment(t), &api.Condition{})
 
 			require.NoError(t, err)
 			assert.Equal(t, api.CONDITION_STATUS_TRUE, condition.Status)
+			assertSnapshotFallbackWarning(t, logs, tt.wantWarn)
 		})
 
 		t.Run(tt.name+"/run", func(t *testing.T) {
@@ -547,20 +551,34 @@ func TestCleanup_TargetClusterConnection(t *testing.T) {
 				Return(nil)
 			rm.EXPECT().RemoveRules(gomock.Any(), gomock.Any(), gomock.Any(), namespace, gomock.Any()).
 				Return(nil).Times(2)
+			core, logs := observer.New(zap.WarnLevel)
 			actor := NewCleanupPlugin(Params{
 				Client:              tt.kubeClient(t),
 				ClientFactory:       mockClientFactory,
 				RouteManager:        rm,
 				ModelConfigProvider: mockModelConfigProvider,
-				Logger:              zap.NewNop(),
+				Logger:              zap.New(core),
 			}).GetActors()[0]
 
 			condition, err := actor.Run(context.Background(), newDeployment(t), &api.Condition{})
 
 			require.NoError(t, err)
 			assert.Equal(t, api.CONDITION_STATUS_TRUE, condition.Status)
+			assertSnapshotFallbackWarning(t, logs, tt.wantWarn)
 		})
 	}
+}
+
+func assertSnapshotFallbackWarning(t *testing.T, logs *observer.ObservedLogs, want bool) {
+	t.Helper()
+	if !want {
+		assert.Zero(t, logs.Len())
+		return
+	}
+	require.Equal(t, 1, logs.Len())
+	fields := logs.All()[0].ContextMap()
+	assert.Equal(t, "test-server", fields["inference_server"])
+	assert.Contains(t, fields["error"], "cache not synced")
 }
 
 func TestCleanup_UnreadableSnapshot_ReportsWithoutClusterLookups(t *testing.T) {

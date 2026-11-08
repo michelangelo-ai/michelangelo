@@ -42,6 +42,7 @@ go_test(
     ],
     embed = [":go_default_library"],
     deps = [
+        "//go/base/conditions/interfaces:go_default_library",
         "//go/base/config:go_default_library",
         "//go/components/deployment/plugins:go_default_library",
         "//go/components/deployment/plugins/oss/common:go_default_library",

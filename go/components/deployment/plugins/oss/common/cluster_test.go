@@ -232,6 +232,23 @@ func TestResolveTargetClusters(t *testing.T) {
 			},
 		},
 		{
+			name:       "repeated cluster ID skips an earlier entry with no kubernetes connection",
+			deployment: newDeployment(testISName),
+			seedIS: &v2pb.InferenceServer{
+				ObjectMeta: metav1.ObjectMeta{Name: testISName, Namespace: testNamespace},
+				Spec: v2pb.InferenceServerSpec{
+					ClusterTargets: []*v2pb.ClusterTarget{
+						{ClusterId: "c1"},
+						newClusterTarget("c1", "https://c1", "443", "token-v2", "ca-v2"),
+					},
+				},
+			},
+			expected: []*v2pb.ClusterTarget{
+				newClusterTarget("c1", "https://c1", "443", "token-v2", "ca-v2"),
+				newClusterTarget("c2", "https://c2", "443", "token-c2", "ca-c2"),
+			},
+		},
+		{
 			name:       "live target with no kubernetes connection keeps the snapshot",
 			deployment: newDeployment(testISName),
 			seedIS: &v2pb.InferenceServer{

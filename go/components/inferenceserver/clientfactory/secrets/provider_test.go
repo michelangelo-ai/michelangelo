@@ -49,20 +49,27 @@ func TestProvider_GetClientAuth(t *testing.T) {
 				newSecret("remote-ca", map[string][]byte{"ca.crt": []byte("ca-pem")}),
 				newSecret("remote-token", map[string][]byte{tokenKey: []byte("token-a")}),
 			},
-			wantErr: `read CA: secret default/remote-ca has no "cadata" key`,
+			wantErr: `read CA: secret default/remote-ca key "cadata" is missing or empty`,
 		},
 		"token secret missing its key": {
 			secrets: []*corev1.Secret{
 				newSecret("remote-ca", map[string][]byte{caDataKey: []byte("ca-pem")}),
 				newSecret("remote-token", map[string][]byte{"tok": []byte("token-a")}),
 			},
-			wantErr: `read token: secret default/remote-token has no "token" key`,
+			wantErr: `read token: secret default/remote-token key "token" is missing or empty`,
 		},
 		"token secret not found": {
 			secrets: []*corev1.Secret{
 				newSecret("remote-ca", map[string][]byte{caDataKey: []byte("ca-pem")}),
 			},
 			wantErr: "read token: get secret default/remote-token",
+		},
+		"token secret with an empty value": {
+			secrets: []*corev1.Secret{
+				newSecret("remote-ca", map[string][]byte{caDataKey: []byte("ca-pem")}),
+				newSecret("remote-token", map[string][]byte{tokenKey: {}}),
+			},
+			wantErr: `read token: secret default/remote-token key "token" is missing or empty`,
 		},
 		"CA secret not found": {
 			secrets: []*corev1.Secret{

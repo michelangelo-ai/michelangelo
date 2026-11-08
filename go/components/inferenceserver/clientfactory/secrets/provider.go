@@ -92,9 +92,9 @@ func (p *Provider) fetchSecretValue(ctx context.Context, name, dataKey string) (
 	if err := p.kubeClient.Get(ctx, key, secret); err != nil {
 		return "", fmt.Errorf("get secret %s/%s: %w", secretsNamespace, name, err)
 	}
-	value, ok := secret.Data[dataKey]
-	if !ok {
-		return "", fmt.Errorf("secret %s/%s has no %q key", secretsNamespace, name, dataKey)
+	value := secret.Data[dataKey]
+	if len(value) == 0 {
+		return "", fmt.Errorf("secret %s/%s key %q is missing or empty", secretsNamespace, name, dataKey)
 	}
 	return string(value), nil
 }

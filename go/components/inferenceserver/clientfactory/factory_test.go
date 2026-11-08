@@ -613,8 +613,8 @@ func TestRemoteClientFactory_ConcurrentLookups_BuildOneClient(t *testing.T) {
 	}
 }
 
-// blockingSecretProvider blocks the second read of one token Secret, the re-read a build makes
-// under its lock, until release is closed. blocked is closed once that read starts.
+// blockingSecretProvider blocks the second read of one token Secret (the re-read a build makes
+// under its lock) until release is closed. blocked is closed once that read starts.
 type blockingSecretProvider struct {
 	caPEM        string
 	blockedToken string
@@ -661,6 +661,9 @@ func TestRemoteClientFactory_StalledSecretRead_DoesNotBlockOtherClusters(t *test
 				blocked:      make(chan struct{}),
 				release:      make(chan struct{}),
 			}
+			var releaseOnce sync.Once
+			releaseStalled := func() { releaseOnce.Do(func() { close(provider.release) }) }
+			t.Cleanup(releaseStalled)
 			factory := newTestFactory(provider)
 			stalledDone := make(chan error, 1)
 			go func() {
@@ -682,11 +685,10 @@ func TestRemoteClientFactory_StalledSecretRead_DoesNotBlockOtherClusters(t *test
 			case err := <-otherDone:
 				require.NoError(t, err)
 			case <-time.After(5 * time.Second):
-				close(provider.release)
 				t.Fatal("lookup for another cluster waited for the stalled cluster's build")
 			}
 
-			close(provider.release)
+			releaseStalled()
 			require.NoError(t, <-stalledDone)
 		})
 	}

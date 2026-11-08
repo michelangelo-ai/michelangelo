@@ -28,8 +28,8 @@ const (
 	// httpClientTimeout caps any single HTTP request issued through the factory.
 	httpClientTimeout = 30 * time.Second
 
-	// httpIdleConnTimeout closes, once idle, connections that a caller still holding a replaced
-	// client opens after closeIdleConnections has run.
+	// httpIdleConnTimeout bounds how long an idle connection stays open, so connections opened
+	// through a replaced client after closeIdleConnections has run are eventually closed.
 	httpIdleConnTimeout = 90 * time.Second
 
 	// secretReadTimeout bounds each SecretProvider read, which may run while the cluster's build
@@ -69,7 +69,7 @@ type cachedClient[T any] struct {
 }
 
 type clientCache[T any] struct {
-	entries sync.Map
+	entries sync.Map // cache key -> cachedClient[T]
 	locks   sync.Map // cache key -> *sync.Mutex
 }
 
@@ -139,8 +139,8 @@ func (f *remoteClientFactory) GetDynamicClient(ctx context.Context, cluster *v2p
 }
 
 // getOrBuild returns the client cached for the cluster if it was built from the cluster's
-// current credentials. Otherwise it builds and caches a new client and closes the idle
-// connections of the client it replaces under the same key.
+// current credentials. Otherwise it builds and caches a new client and, for HTTP clients, closes
+// the idle connections of the client it replaces under the same key.
 func getOrBuild[T any](
 	ctx context.Context,
 	f *remoteClientFactory,
@@ -163,8 +163,8 @@ func getOrBuild[T any](
 		return cached, nil
 	}
 
-	// Builds are serialized per client kind and cluster, so concurrent reconciles don't duplicate
-	// TLS setup and a stalled Secret read for one cluster doesn't block the others.
+	// Builds are serialized per client kind and cache key, so concurrent reconciles don't duplicate
+	// TLS setup and a stalled Secret read blocks only this key.
 	lock := cache.buildLock(key)
 	lock.Lock()
 	defer lock.Unlock()
@@ -192,8 +192,8 @@ func getOrBuild[T any](
 	return built, nil
 }
 
-// logBuild records a client build. A rebuild, which has the previous credentials, also reports
-// which of them changed. Secret values are never logged.
+// logBuild records a client build and, for a rebuild, whether the token and the CA changed.
+// Secret values are never logged.
 func (f *remoteClientFactory) logBuild(
 	kind string,
 	cluster *v2pb.ClusterTarget,
@@ -219,9 +219,10 @@ func (f *remoteClientFactory) logBuild(
 	f.logger.Info("Rebuilt client for cluster after its credentials changed", fields...)
 }
 
-// currentAuth returns the cluster's credentials, rejecting an empty token or CA. A client built
-// from an empty token would send no token, one built from an empty CA would trust the system
-// roots, and either would replace a cached client that still works.
+// currentAuth returns the cluster's credentials, rejecting an empty token or CA even when a
+// SecretProvider other than secrets.Provider returns one. A client built from an empty token would
+// send no token, one built from an empty CA would trust the system roots, and either would replace
+// a cached client that still works.
 func (f *remoteClientFactory) currentAuth(
 	ctx context.Context,
 	cluster *v2pb.ClusterTarget,
@@ -296,6 +297,7 @@ func buildDynamicClient(
 	return dynamic.NewForConfig(cfg)
 }
 
+// buildRESTConfig assembles a *rest.Config for a cluster from its connection spec and credentials.
 func buildRESTConfig(cluster *v2pb.ClusterTarget, auth secrets.ClientAuth) (*rest.Config, error) {
 	server := fmt.Sprintf("%s:%s", cluster.GetKubernetes().GetHost(), cluster.GetKubernetes().GetPort())
 

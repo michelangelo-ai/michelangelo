@@ -14,6 +14,7 @@ import (
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	maconfig "github.com/michelangelo-ai/michelangelo/go/base/config"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
@@ -314,6 +315,53 @@ func TestHealthCheckGate_InferenceServerReadFails_ReturnsError(t *testing.T) {
 
 	require.ErrorContains(t, err, "get inference server default/test-server: cache not synced")
 	assert.False(t, healthy)
+}
+
+func TestGetRolloutPlugin_SecretsRenamedSinceRollout_UsesInferenceServerConnection(t *testing.T) {
+	deployment := gateDeployment()
+	inferenceServer := withRenamedSecrets(t, deployment)
+	ctrl := gomock.NewController(t)
+	mockClientFactory := clientfactorymocks.NewMockClientFactory(ctrl)
+	mockClientFactory.EXPECT().GetDynamicClient(gomock.Any(), tokenTagMatcher("remote-token-v2")).
+		Return(nil, errors.New("stop after the client lookup"))
+	plugin := &Plugin{
+		client:        newKubeClient(t, inferenceServer),
+		clientFactory: mockClientFactory,
+		logger:        zap.NewNop(),
+	}
+
+	rolloutPlugin, err := plugin.GetRolloutPlugin(context.Background(), deployment)
+	require.NoError(t, err)
+	var trafficRouting conditionInterfaces.ConditionActor[*v2pb.Deployment]
+	for _, actor := range rolloutPlugin.GetActors() {
+		if actor.GetType() == "TrafficRoutingConfigured-remote" {
+			trafficRouting = actor
+		}
+	}
+	require.NotNil(t, trafficRouting)
+	condition, err := trafficRouting.Retrieve(context.Background(), deployment, &api.Condition{})
+
+	require.NoError(t, err)
+	assert.Equal(t, api.CONDITION_STATUS_FALSE, condition.Status)
+}
+
+func TestNewPlugin_CleanupUsesInferenceServerConnection(t *testing.T) {
+	deployment := gateDeployment()
+	inferenceServer := withRenamedSecrets(t, deployment)
+	ctrl := gomock.NewController(t)
+	mockClientFactory := clientfactorymocks.NewMockClientFactory(ctrl)
+	mockClientFactory.EXPECT().GetClient(gomock.Any(), tokenTagMatcher("remote-token-v2")).
+		Return(nil, errors.New("stop after the client lookup"))
+	plugin := NewPlugin(Params{
+		Client:        newKubeClient(t, inferenceServer),
+		ClientFactory: mockClientFactory,
+		Logger:        zap.NewNop(),
+	})
+
+	condition, err := plugin.GetCleanupPlugin().GetActors()[0].Retrieve(context.Background(), deployment, &api.Condition{})
+
+	require.NoError(t, err)
+	assert.Equal(t, api.CONDITION_STATUS_FALSE, condition.Status)
 }
 
 func TestGetRollbackPlugin(t *testing.T) {
