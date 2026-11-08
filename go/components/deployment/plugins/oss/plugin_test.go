@@ -13,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
@@ -23,12 +24,23 @@ import (
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
-// newKubeClient returns a fake control-plane client holding the given objects.
 func newKubeClient(t *testing.T, objects ...client.Object) client.Client {
 	t.Helper()
 	scheme := runtime.NewScheme()
 	require.NoError(t, v2pb.AddToScheme(scheme))
 	return fake.NewClientBuilder().WithScheme(scheme).WithObjects(objects...).Build()
+}
+
+// newFailingKubeClient returns a fake control-plane client whose every Get fails.
+func newFailingKubeClient(t *testing.T) client.Client {
+	t.Helper()
+	scheme := runtime.NewScheme()
+	require.NoError(t, v2pb.AddToScheme(scheme))
+	return fake.NewClientBuilder().WithScheme(scheme).WithInterceptorFuncs(interceptor.Funcs{
+		Get: func(context.Context, client.WithWatch, client.ObjectKey, client.Object, ...client.GetOption) error {
+			return errors.New("cache not synced")
+		},
+	}).Build()
 }
 
 func createTestRegistry(mockBackend *backendsmocks.MockBackend) *backends.Registry {
@@ -449,6 +461,20 @@ func TestGetState_SecretsRenamedSinceRollout_UsesInferenceServerConnection(t *te
 
 	require.NoError(t, err)
 	assert.Equal(t, v2pb.DEPLOYMENT_STATE_HEALTHY, status.State)
+}
+
+func TestGetState_InferenceServerReadFails_ReturnsError(t *testing.T) {
+	deployment := withSingleClusterAnnotation(t, gateDeployment(), "test-cluster")
+	ctrl := gomock.NewController(t)
+	plugin := &Plugin{
+		client:          newFailingKubeClient(t),
+		backendRegistry: createTestRegistry(backendsmocks.NewMockBackend(ctrl)),
+		logger:          zap.NewNop(),
+	}
+
+	_, err := plugin.GetState(context.Background(), plugins.ObservabilityContext{}, deployment)
+
+	require.ErrorContains(t, err, "resolve target clusters: get inference server default/test-server: cache not synced")
 }
 
 // tokenTagMatcher matches a ClusterTarget argument by the name of its token Secret.

@@ -220,7 +220,7 @@ var getters = map[string]getter{
 
 var clientKinds = map[string]string{
 	"GetClient":        "kube",
-	"GetHTTPClient":    "HTTP",
+	"GetHTTPClient":    "http",
 	"GetDynamicClient": "dynamic",
 }
 
@@ -438,7 +438,7 @@ func TestRemoteClientFactory_UnusableCredentials_ReturnsErrorAndKeepsCache(t *te
 			breakCredentials: func(p *fakeSecretProvider) {
 				p.set(secrets.ClientAuth{CertificateAuthorityData: "not a certificate", ClientTokenData: "token-b"}, nil)
 			},
-			want: "create ",
+			want: `create <kind> client for cluster "remote"`,
 		},
 		"provider error on the re-read under the lock": {
 			breakCredentials: func(p *fakeSecretProvider) {
@@ -472,7 +472,7 @@ func TestRemoteClientFactory_UnusableCredentials_ReturnsErrorAndKeepsCache(t *te
 
 				tt.breakCredentials(provider)
 				failed, err := get(factory, context.Background(), rc.target(t))
-				require.ErrorContains(t, err, tt.want)
+				require.ErrorContains(t, err, strings.ReplaceAll(tt.want, "<kind>", clientKinds[name]))
 				for _, secret := range []string{"token-a", "token-b", rc.caPEM, "not a certificate"} {
 					assert.NotContains(t, err.Error(), secret)
 				}
@@ -667,7 +667,11 @@ func TestRemoteClientFactory_StalledSecretRead_DoesNotBlockOtherClusters(t *test
 				_, err := get(factory, context.Background(), stalled)
 				stalledDone <- err
 			}()
-			<-provider.blocked
+			select {
+			case <-provider.blocked:
+			case <-time.After(5 * time.Second):
+				t.Fatal("the stalled cluster's build never re-read its credentials under the lock")
+			}
 
 			otherDone := make(chan error, 1)
 			go func() {
@@ -713,5 +717,6 @@ func TestRemoteClientFactory_SecretRead_HasDeadline(t *testing.T) {
 	require.Len(t, remaining, 2)
 	for _, r := range remaining {
 		assert.LessOrEqual(t, r, secretReadTimeout)
+		assert.Greater(t, r, secretReadTimeout-time.Second)
 	}
 }

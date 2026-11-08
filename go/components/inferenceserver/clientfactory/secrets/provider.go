@@ -69,12 +69,12 @@ func (p *Provider) GetClientAuth(ctx context.Context, cluster *v2pb.ClusterTarge
 
 	caData, err := p.fetchSecretValue(ctx, cluster.GetKubernetes().GetCaDataTag(), caDataKey)
 	if err != nil {
-		return ClientAuth{}, fmt.Errorf("CA secret: %w", err)
+		return ClientAuth{}, fmt.Errorf("read CA: %w", err)
 	}
 
 	token, err := p.fetchSecretValue(ctx, cluster.GetKubernetes().GetTokenTag(), tokenKey)
 	if err != nil {
-		return ClientAuth{}, fmt.Errorf("token secret: %w", err)
+		return ClientAuth{}, fmt.Errorf("read token: %w", err)
 	}
 
 	return ClientAuth{

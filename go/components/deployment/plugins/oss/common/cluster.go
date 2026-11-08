@@ -14,8 +14,9 @@ import (
 )
 
 const (
-	// TargetClustersAnnotation is written by PlacementPrepActor and lists, as JSON, the
-	// InferenceServer cluster targets a rollout placed the Deployment in.
+	// TargetClustersAnnotation is written by PlacementPrepActor and lists, as JSON, the clusters a
+	// rollout placed the Deployment in. Its Secret names go stale when credentials are rotated into
+	// a new Secret, so take connections from ResolveTargetClusters.
 	TargetClustersAnnotation = "deployment.michelangelo.ai/target-clusters"
 	// BackendTypeAnnotation records the InferenceServer's backend type, snapshotted by
 	// PlacementPrepActor next to the cluster set so every later actor talks to the same backend.
@@ -97,12 +98,12 @@ func ReadTargetClustersAnnotation(deployment *v2pb.Deployment) ([]*v2pb.ClusterT
 }
 
 // ResolveTargetClusters returns the Deployment's cluster snapshot with each cluster's connection
-// taken from the InferenceServer as it is now, matched by cluster ID. The snapshot only decides
-// which clusters to visit: its Secret names go stale once credentials are rotated into a new
-// Secret and the old one is deleted. A cluster the InferenceServer no longer lists, a deleted
-// InferenceServer, a Deployment with no InferenceServer reference, or a nil kubeClient keeps the
-// snapshot connection, so the cluster can still be reached. A live target with no Kubernetes
-// connection is ignored, and if the InferenceServer repeats a cluster ID, its first entry wins.
+// replaced by the InferenceServer's current one, matched by cluster ID. The snapshot decides which
+// clusters to visit; connections come from the InferenceServer because the snapshot's Secret names
+// go stale once credentials are rotated into a new Secret and the old one is deleted. A cluster
+// the InferenceServer cannot supply (not listed with a Kubernetes connection, InferenceServer
+// missing or not referenced, or a nil kubeClient) keeps its snapshot connection. Any other
+// InferenceServer read error is returned.
 func ResolveTargetClusters(ctx context.Context, kubeClient client.Reader, deployment *v2pb.Deployment) ([]*v2pb.ClusterTarget, error) {
 	snapshot, err := ReadTargetClustersAnnotation(deployment)
 	if err != nil {
@@ -120,21 +121,28 @@ func ResolveTargetClusters(ctx context.Context, kubeClient client.Reader, deploy
 		return nil, err
 	}
 
-	live := make(map[string]*v2pb.ClusterTarget, len(inferenceServer.Spec.GetClusterTargets()))
-	for _, target := range inferenceServer.Spec.GetClusterTargets() {
-		if _, seen := live[target.GetClusterId()]; seen || target.GetKubernetes() == nil {
+	return overlayLiveConnections(snapshot, inferenceServer.Spec.GetClusterTargets()), nil
+}
+
+// overlayLiveConnections replaces each snapshot target with the live target of the same cluster
+// ID, keeping the snapshot's membership and order. Live targets with no Kubernetes connection are
+// ignored, and of repeated cluster IDs the first entry with a Kubernetes connection wins.
+func overlayLiveConnections(snapshot, live []*v2pb.ClusterTarget) []*v2pb.ClusterTarget {
+	byClusterID := make(map[string]*v2pb.ClusterTarget, len(live))
+	for _, target := range live {
+		if _, seen := byClusterID[target.GetClusterId()]; seen || target.GetKubernetes() == nil {
 			continue
 		}
-		live[target.GetClusterId()] = target
+		byClusterID[target.GetClusterId()] = target
 	}
 	resolved := make([]*v2pb.ClusterTarget, 0, len(snapshot))
 	for _, target := range snapshot {
-		if current, ok := live[target.GetClusterId()]; ok {
+		if current, ok := byClusterID[target.GetClusterId()]; ok {
 			target = current
 		}
 		resolved = append(resolved, target)
 	}
-	return resolved, nil
+	return resolved
 }
 
 // WriteTargetClustersAnnotation serializes the cluster snapshot onto the Deployment.

@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -45,7 +46,6 @@ func withSingleClusterAnnotation(t *testing.T, deployment *v2pb.Deployment, clus
 	return deployment
 }
 
-// newKubeClient returns a fake control-plane client holding the given objects.
 func newKubeClient(t *testing.T, objects ...client.Object) client.Client {
 	t.Helper()
 	scheme := runtime.NewScheme()
@@ -559,6 +559,49 @@ func TestCleanup_TargetClusterConnection(t *testing.T) {
 
 			require.NoError(t, err)
 			assert.Equal(t, api.CONDITION_STATUS_TRUE, condition.Status)
+		})
+	}
+}
+
+func TestCleanup_UnreadableSnapshot_ReportsWithoutClusterLookups(t *testing.T) {
+	deployment := &v2pb.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        "test-deployment",
+			Namespace:   "default",
+			Annotations: map[string]string{osscommon.TargetClustersAnnotation: "{not json}"},
+		},
+		Spec: v2pb.DeploymentSpec{
+			Target: &v2pb.DeploymentSpec_InferenceServer{
+				InferenceServer: &api.ResourceIdentifier{Name: "test-server"},
+			},
+		},
+		Status: v2pb.DeploymentStatus{CurrentRevision: &api.ResourceIdentifier{Name: "old-model"}},
+	}
+	steps := map[string]func(*CleanupActor) (*api.Condition, error){
+		"retrieve": func(a *CleanupActor) (*api.Condition, error) {
+			return a.Retrieve(context.Background(), deployment, &api.Condition{})
+		},
+		"run": func(a *CleanupActor) (*api.Condition, error) {
+			return a.Run(context.Background(), deployment, &api.Condition{})
+		},
+	}
+
+	for name, step := range steps {
+		t.Run(name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			core, logs := observer.New(zap.WarnLevel)
+			actor := &CleanupActor{
+				Client:        newKubeClient(t),
+				ClientFactory: clientfactorymocks.NewMockClientFactory(ctrl),
+				Logger:        zap.New(core),
+			}
+
+			condition, err := step(actor)
+
+			require.NoError(t, err)
+			assert.Equal(t, api.CONDITION_STATUS_FALSE, condition.Status)
+			assert.Equal(t, "UnableToReadTargetClusters", condition.Message)
+			assert.Zero(t, logs.Len(), "an unreadable snapshot is not an InferenceServer read failure")
 		})
 	}
 }

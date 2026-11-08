@@ -55,7 +55,8 @@ func GetModelStatusInCluster(
 //   - (true, "", nil) when every replica in every cluster reports ready.
 //   - (false, summary, nil) when one or more clusters are reachable but not yet ready;
 //     summary lists the failing clusters with their replica states.
-//   - (false, "", err) when a per-cluster probe itself errored.
+//   - (false, "", err) when the cluster snapshot or the InferenceServer could not be read, or a
+//     per-cluster probe errored.
 //   - (false, "no target clusters in snapshot", nil) when the snapshot is missing or empty.
 func CheckModelStatusAllClusters(
 	ctx context.Context,

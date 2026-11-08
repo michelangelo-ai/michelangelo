@@ -12,7 +12,9 @@ import (
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	osscommon "github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
@@ -175,6 +177,30 @@ func TestGetActorsForStrategy_SecretsRenamedSinceSnapshot_UsesInferenceServerCon
 
 	require.NoError(t, err)
 	assert.Equal(t, apipb.CONDITION_STATUS_FALSE, condition.Status)
+}
+
+func TestGetActorsForStrategy_InferenceServerReadFails_ReturnsError(t *testing.T) {
+	deployment := &v2pb.Deployment{
+		ObjectMeta: metav1.ObjectMeta{Name: "dep", Namespace: "default"},
+		Spec: v2pb.DeploymentSpec{
+			DesiredRevision: &apipb.ResourceIdentifier{Name: "model-v2"},
+			Target: &v2pb.DeploymentSpec_InferenceServer{
+				InferenceServer: &apipb.ResourceIdentifier{Name: "test-server"},
+			},
+		},
+	}
+	require.NoError(t, osscommon.WriteTargetClustersAnnotation(deployment, []*v2pb.ClusterTarget{{ClusterId: "c1"}}))
+	scheme := runtime.NewScheme()
+	require.NoError(t, v2pb.AddToScheme(scheme))
+	kubeClient := fake.NewClientBuilder().WithScheme(scheme).WithInterceptorFuncs(interceptor.Funcs{
+		Get: func(context.Context, client.WithWatch, client.ObjectKey, client.Object, ...client.GetOption) error {
+			return errors.New("cache not synced")
+		},
+	}).Build()
+
+	_, err := GetActorsForStrategy(context.Background(), Params{Client: kubeClient, Logger: zap.NewNop()}, deployment)
+
+	require.ErrorContains(t, err, "resolve target clusters: get inference server default/test-server: cache not synced")
 }
 
 // tokenTagMatcher matches a ClusterTarget argument by the name of its token Secret.

@@ -65,8 +65,8 @@ func GetActorsForStrategy(ctx context.Context, params Params, deployment *v2pb.D
 	return getClusterSequenceActors(ctx, params, deployment)
 }
 
-// getClusterSequenceActors builds the per-cluster actor chain for the clusters, and in the order,
-// of the snapshot PlacementPrepActor wrote.
+// getClusterSequenceActors builds the per-cluster actor chain for the clusters in the snapshot
+// PlacementPrepActor wrote, in snapshot order.
 func getClusterSequenceActors(ctx context.Context, params Params, deployment *v2pb.Deployment) ([]conditionInterfaces.ConditionActor[*v2pb.Deployment], error) {
 	targets, err := osscommon.ResolveTargetClusters(ctx, params.Client, deployment)
 	if err != nil {

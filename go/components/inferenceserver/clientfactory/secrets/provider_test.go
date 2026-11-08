@@ -33,6 +33,7 @@ func clusterTarget() *v2pb.ClusterTarget {
 func TestProvider_GetClientAuth(t *testing.T) {
 	tests := map[string]struct {
 		secrets []*corev1.Secret
+		cluster *v2pb.ClusterTarget // clusterTarget() when nil
 		want    ClientAuth
 		wantErr string
 	}{
@@ -48,20 +49,36 @@ func TestProvider_GetClientAuth(t *testing.T) {
 				newSecret("remote-ca", map[string][]byte{"ca.crt": []byte("ca-pem")}),
 				newSecret("remote-token", map[string][]byte{tokenKey: []byte("token-a")}),
 			},
-			wantErr: `CA secret: secret default/remote-ca has no "cadata" key`,
+			wantErr: `read CA: secret default/remote-ca has no "cadata" key`,
 		},
 		"token secret missing its key": {
 			secrets: []*corev1.Secret{
 				newSecret("remote-ca", map[string][]byte{caDataKey: []byte("ca-pem")}),
 				newSecret("remote-token", map[string][]byte{"tok": []byte("token-a")}),
 			},
-			wantErr: `token secret: secret default/remote-token has no "token" key`,
+			wantErr: `read token: secret default/remote-token has no "token" key`,
 		},
 		"token secret not found": {
 			secrets: []*corev1.Secret{
 				newSecret("remote-ca", map[string][]byte{caDataKey: []byte("ca-pem")}),
 			},
-			wantErr: "token secret: get secret default/remote-token",
+			wantErr: "read token: get secret default/remote-token",
+		},
+		"CA secret not found": {
+			secrets: []*corev1.Secret{
+				newSecret("remote-token", map[string][]byte{tokenKey: []byte("token-a")}),
+			},
+			wantErr: "read CA: get secret default/remote-ca",
+		},
+		"empty token secret name": {
+			secrets: []*corev1.Secret{
+				newSecret("remote-ca", map[string][]byte{caDataKey: []byte("ca-pem")}),
+			},
+			cluster: &v2pb.ClusterTarget{
+				ClusterId:  "remote",
+				Connection: &v2pb.ClusterTarget_Kubernetes{Kubernetes: &v2pb.ConnectionSpec{CaDataTag: "remote-ca"}},
+			},
+			wantErr: "read token: empty secret name",
 		},
 	}
 
@@ -73,7 +90,11 @@ func TestProvider_GetClientAuth(t *testing.T) {
 			}
 			provider := NewProvider(builder.Build())
 
-			got, err := provider.GetClientAuth(context.Background(), clusterTarget())
+			cluster := tt.cluster
+			if cluster == nil {
+				cluster = clusterTarget()
+			}
+			got, err := provider.GetClientAuth(context.Background(), cluster)
 
 			if tt.wantErr != "" {
 				assert.ErrorContains(t, err, tt.wantErr)

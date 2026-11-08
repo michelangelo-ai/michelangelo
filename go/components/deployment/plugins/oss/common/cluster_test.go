@@ -196,7 +196,7 @@ func TestResolveTargetClusters(t *testing.T) {
 		wantErr    string
 	}{
 		{
-			name:       "live connection replaces the snapshot's for clusters the server lists",
+			name:       "live connection replaces the snapshot connection for clusters the inference server lists",
 			deployment: newDeployment(testISName),
 			seedIS:     liveIS,
 			expected: []*v2pb.ClusterTarget{
@@ -215,7 +215,7 @@ func TestResolveTargetClusters(t *testing.T) {
 			expected:   snapshot,
 		},
 		{
-			name:       "repeated cluster ID uses the server's first entry",
+			name:       "repeated cluster ID uses the inference server's first entry",
 			deployment: newDeployment(testISName),
 			seedIS: &v2pb.InferenceServer{
 				ObjectMeta: metav1.ObjectMeta{Name: testISName, Namespace: testNamespace},
@@ -276,7 +276,14 @@ func TestResolveTargetClusters(t *testing.T) {
 }
 
 func TestResolveTargetClusters_NoSnapshot_SkipsInferenceServerRead(t *testing.T) {
-	got, err := ResolveTargetClusters(context.Background(), nil, newDeployment(testISName))
+	kubeClient := fake.NewClientBuilder().WithScheme(newScheme(t)).WithInterceptorFuncs(interceptor.Funcs{
+		Get: func(context.Context, client.WithWatch, client.ObjectKey, client.Object, ...client.GetOption) error {
+			t.Error("read the InferenceServer for a Deployment with no cluster snapshot")
+			return nil
+		},
+	}).Build()
+
+	got, err := ResolveTargetClusters(context.Background(), kubeClient, newDeployment(testISName))
 
 	require.NoError(t, err)
 	assert.Nil(t, got)

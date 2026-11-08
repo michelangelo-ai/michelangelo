@@ -28,12 +28,12 @@ const (
 	// httpClientTimeout caps any single HTTP request issued through the factory.
 	httpClientTimeout = 30 * time.Second
 
-	// httpIdleConnTimeout closes the idle connections of a replaced client that a caller still
-	// holds and sends new requests through.
+	// httpIdleConnTimeout closes, once idle, connections that a caller still holding a replaced
+	// client opens after closeIdleConnections has run.
 	httpIdleConnTimeout = 90 * time.Second
 
-	// secretReadTimeout bounds each SecretProvider read, which runs while the cluster's build
-	// lock may be held.
+	// secretReadTimeout bounds each SecretProvider read, which may run while the cluster's build
+	// lock is held.
 	secretReadTimeout = 10 * time.Second
 )
 
@@ -45,8 +45,9 @@ type idleConnectionsCloser interface {
 
 // remoteClientFactory builds and caches Kubernetes clients for ClusterTargets.
 //
-// All three client types are cached keyed by the cluster ID, host, port and Secret names, so a
-// steady-state reconcile does not rebuild a TLS transport on every lookup.
+// Clients are cached per cacheKey, so a steady-state reconcile does not rebuild a TLS transport on
+// every lookup. A target whose Secret names change is cached under a new key, and the entry and
+// build lock for the old names stay until the controller restarts.
 //
 // Each lookup re-reads the cluster's credentials and reuses the cached client only if they are
 // unchanged. A SecretProvider error fails the lookup rather than serving a client built from
@@ -59,7 +60,6 @@ type remoteClientFactory struct {
 	kubeClients    clientCache[client.Client]
 	httpClients    clientCache[*http.Client]
 	dynamicClients clientCache[dynamic.Interface]
-	buildLocks     sync.Map // client kind + "|" + cache key -> *sync.Mutex
 }
 
 // cachedClient is a client together with the credentials it was built from.
@@ -70,6 +70,13 @@ type cachedClient[T any] struct {
 
 type clientCache[T any] struct {
 	entries sync.Map
+	locks   sync.Map // cache key -> *sync.Mutex
+}
+
+// buildLock returns the mutex that serializes builds of the client cached under key.
+func (c *clientCache[T]) buildLock(key string) *sync.Mutex {
+	lock, _ := c.locks.LoadOrStore(key, &sync.Mutex{})
+	return lock.(*sync.Mutex)
 }
 
 // lookup returns the client cached under key if it was built from auth.
@@ -122,7 +129,7 @@ func (f *remoteClientFactory) GetClient(ctx context.Context, cluster *v2pb.Clust
 // GetHTTPClient returns an HTTP client whose transport authenticates with a bearer
 // token over TLS validated against the cluster's CA.
 func (f *remoteClientFactory) GetHTTPClient(ctx context.Context, cluster *v2pb.ClusterTarget) (*http.Client, error) {
-	return getOrBuild(ctx, f, &f.httpClients, cluster, "HTTP", buildHTTPClient)
+	return getOrBuild(ctx, f, &f.httpClients, cluster, "http", buildHTTPClient)
 }
 
 // GetDynamicClient returns a dynamic.Interface for the given ClusterTarget. Use this for
@@ -132,8 +139,8 @@ func (f *remoteClientFactory) GetDynamicClient(ctx context.Context, cluster *v2p
 }
 
 // getOrBuild returns the client cached for the cluster if it was built from the cluster's
-// current credentials. Otherwise it builds and caches a new client and closes the replaced
-// client's idle connections.
+// current credentials. Otherwise it builds and caches a new client and closes the idle
+// connections of the client it replaces under the same key.
 func getOrBuild[T any](
 	ctx context.Context,
 	f *remoteClientFactory,
@@ -156,9 +163,9 @@ func getOrBuild[T any](
 		return cached, nil
 	}
 
-	// Builds of one client for one cluster are serialized, so concurrent reconciles don't
-	// duplicate TLS setup, while a stalled Secret read for one cluster doesn't block the others.
-	lock := f.buildLock(kind, key)
+	// Builds are serialized per client kind and cluster, so concurrent reconciles don't duplicate
+	// TLS setup and a stalled Secret read for one cluster doesn't block the others.
+	lock := cache.buildLock(key)
 	lock.Lock()
 	defer lock.Unlock()
 
@@ -176,7 +183,23 @@ func getOrBuild[T any](
 		return zero, fmt.Errorf("create %s client for cluster %q: %w", kind, cluster.GetClusterId(), err)
 	}
 	previous, replaced := cache.swap(key, cachedClient[T]{auth: auth, client: built})
+	if !replaced {
+		f.logBuild(kind, cluster, nil, auth)
+		return built, nil
+	}
+	closeIdleConnections(previous.client)
+	f.logBuild(kind, cluster, &previous.auth, auth)
+	return built, nil
+}
 
+// logBuild records a client build. A rebuild, which has the previous credentials, also reports
+// which of them changed. Secret values are never logged.
+func (f *remoteClientFactory) logBuild(
+	kind string,
+	cluster *v2pb.ClusterTarget,
+	previous *secrets.ClientAuth,
+	auth secrets.ClientAuth,
+) {
 	fields := []zap.Field{
 		zap.String("client", kind),
 		zap.String("cluster_id", cluster.GetClusterId()),
@@ -185,28 +208,20 @@ func getOrBuild[T any](
 		zap.String("ca_secret", cluster.GetKubernetes().GetCaDataTag()),
 		zap.String("token_secret", cluster.GetKubernetes().GetTokenTag()),
 	}
-	if !replaced {
+	if previous == nil {
 		f.logger.Info("Built client for cluster", fields...)
-		return built, nil
+		return
 	}
-
-	closeIdleConnections(previous.client)
 	fields = append(fields,
-		zap.Bool("token_changed", previous.auth.ClientTokenData != auth.ClientTokenData),
-		zap.Bool("ca_changed", previous.auth.CertificateAuthorityData != auth.CertificateAuthorityData),
+		zap.Bool("token_changed", previous.ClientTokenData != auth.ClientTokenData),
+		zap.Bool("ca_changed", previous.CertificateAuthorityData != auth.CertificateAuthorityData),
 	)
 	f.logger.Info("Rebuilt client for cluster after its credentials changed", fields...)
-	return built, nil
-}
-
-func (f *remoteClientFactory) buildLock(kind, key string) *sync.Mutex {
-	lock, _ := f.buildLocks.LoadOrStore(kind+"|"+key, &sync.Mutex{})
-	return lock.(*sync.Mutex)
 }
 
 // currentAuth returns the cluster's credentials, rejecting an empty token or CA. A client built
-// from either would send no token or trust the system roots, and would replace the cached client
-// that still works.
+// from an empty token would send no token, one built from an empty CA would trust the system
+// roots, and either would replace a cached client that still works.
 func (f *remoteClientFactory) currentAuth(
 	ctx context.Context,
 	cluster *v2pb.ClusterTarget,

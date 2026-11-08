@@ -148,14 +148,21 @@ func (a *CleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, condi
 }
 
 // targetClusters returns the clusters to clean up. If the InferenceServer cannot be read, it falls
-// back to the Deployment's recorded snapshot: the engine does not retry a FALSE cleanup condition,
+// back to the Deployment's cluster snapshot: the engine does not retry a FALSE cleanup condition,
 // so failing here on a transient read error would leave the finalizer in place.
 func (a *CleanupActor) targetClusters(ctx context.Context, deployment *v2pb.Deployment) ([]*v2pb.ClusterTarget, error) {
-	targets, err := common.ResolveTargetClusters(ctx, a.Client, deployment)
-	if err == nil {
-		return targets, nil
+	snapshot, err := common.ReadTargetClustersAnnotation(deployment)
+	if err != nil {
+		return nil, err
 	}
-	a.Logger.Warn("Could not resolve target clusters from the InferenceServer; using the recorded snapshot",
-		zap.String("deployment", deployment.GetName()), zap.Error(err))
-	return common.ReadTargetClustersAnnotation(deployment)
+	targets, err := common.ResolveTargetClusters(ctx, a.Client, deployment)
+	if err != nil {
+		a.Logger.Warn("Could not read the InferenceServer; using the Deployment's cluster snapshot",
+			zap.String("deployment", deployment.GetName()),
+			zap.String("namespace", deployment.GetNamespace()),
+			zap.String("inference_server", deployment.Spec.GetInferenceServer().GetName()),
+			zap.Error(err))
+		return snapshot, nil
+	}
+	return targets, nil
 }

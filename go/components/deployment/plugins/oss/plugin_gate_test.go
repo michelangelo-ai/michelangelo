@@ -301,6 +301,21 @@ func TestHealthCheckGate_SecretsRenamedSinceRollout_UsesInferenceServerConnectio
 	assert.True(t, healthy)
 }
 
+func TestHealthCheckGate_InferenceServerReadFails_ReturnsError(t *testing.T) {
+	deployment := withSingleClusterAnnotation(t, gateDeployment(), "test-cluster")
+	ctrl := gomock.NewController(t)
+	plugin := &Plugin{
+		client:          newFailingKubeClient(t),
+		backendRegistry: createTestRegistry(backendsmocks.NewMockBackend(ctrl)),
+		logger:          zap.NewNop(),
+	}
+
+	healthy, err := plugin.HealthCheckGate(context.Background(), plugins.ObservabilityContext{}, deployment)
+
+	require.ErrorContains(t, err, "get inference server default/test-server: cache not synced")
+	assert.False(t, healthy)
+}
+
 func TestGetRollbackPlugin(t *testing.T) {
 	plugin := &Plugin{client: newKubeClient(t), logger: zap.NewNop()}
 
@@ -323,6 +338,36 @@ func TestGetRollbackPlugin(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, rollbackPlugin.GetActors(), 1)
 		assert.Equal(t, common.ActorTypeRollback, rollbackPlugin.GetActors()[0].GetType())
+	})
+
+	t.Run("cluster actors use the inference server's current connection", func(t *testing.T) {
+		deployment := gateDeployment()
+		inferenceServer := withRenamedSecrets(t, deployment)
+		ctrl := gomock.NewController(t)
+		mockClientFactory := clientfactorymocks.NewMockClientFactory(ctrl)
+		mockClientFactory.EXPECT().GetClient(gomock.Any(), tokenTagMatcher("remote-token-v2")).
+			Return(nil, errors.New("stop after the client lookup"))
+		plugin := &Plugin{
+			client:        newKubeClient(t, inferenceServer),
+			clientFactory: mockClientFactory,
+			logger:        zap.NewNop(),
+		}
+
+		rollbackPlugin, err := plugin.GetRollbackPlugin(context.Background(), deployment)
+		require.NoError(t, err)
+		condition, err := rollbackPlugin.GetActors()[0].Retrieve(context.Background(), deployment, &api.Condition{})
+
+		require.NoError(t, err)
+		assert.Equal(t, api.CONDITION_STATUS_FALSE, condition.Status)
+	})
+
+	t.Run("an unreadable inference server is an error", func(t *testing.T) {
+		deployment := withSingleClusterAnnotation(t, gateDeployment(), "test-cluster")
+		plugin := &Plugin{client: newFailingKubeClient(t), logger: zap.NewNop()}
+
+		_, err := plugin.GetRollbackPlugin(context.Background(), deployment)
+
+		require.ErrorContains(t, err, "cache not synced")
 	})
 
 	t.Run("an unreadable placement snapshot is an error", func(t *testing.T) {
