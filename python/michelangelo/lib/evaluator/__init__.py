@@ -2,13 +2,15 @@
 
 Computes TorchMetrics metrics over a pandas DataFrame, gates the results
 against configured thresholds, and renders them into an ``EvaluationReport``.
-Usable on its own, without a Michelangelo pipeline; the evaluator workflow task
+Usable on its own, without a Michelangelo AI pipeline; the evaluator workflow task
 is one caller.
 
-Callers should import from the submodules directly::
+Callers should import from the submodules directly:
 
-    from michelangelo.lib.evaluator.evaluator import create_evaluator
-    from michelangelo.lib.evaluator.report_generator import build_combined_report
+```python
+from michelangelo.lib.evaluator.evaluator import create_evaluator
+from michelangelo.lib.evaluator.report_generator import build_combined_report
+```
 
 Submodules:
     ``evaluator``: the ``TorchMetricEvaluator`` entry point.

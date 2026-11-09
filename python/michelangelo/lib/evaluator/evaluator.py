@@ -1,6 +1,6 @@
-"""TorchMetrics-based evaluator driven by :class:`EvaluatorConfig`.
+"""TorchMetrics-based evaluator driven by `EvaluatorConfig`.
 
-:class:`TorchMetricEvaluator` groups the configured metrics into TorchMetrics
+`TorchMetricEvaluator` groups the configured metrics into TorchMetrics
 ``MetricCollection``s keyed by the data they need, then evaluates a pandas
 DataFrame against all of them in one pass.
 """
@@ -70,7 +70,7 @@ def _update_collection(
 
     Args:
         collection: The ``MetricCollection`` to update.
-        data: Tensors from :func:`extract_data_for_collection`.
+        data: Tensors from `extract_data_for_collection`.
         target_dtype: The collection's resolved target dtype; ``None`` when
             no targets tensor was extracted.
     """
@@ -143,7 +143,7 @@ class TorchMetricEvaluator:
         """Initialize the evaluator.
 
         Args:
-            config: An :class:`EvaluatorConfig`, a dict in the same shape, or a
+            config: An `EvaluatorConfig`, a dict in the same shape, or a
                 path to a YAML config file.
 
         Raises:
@@ -230,7 +230,7 @@ class TorchMetricEvaluator:
         """Compute every collection from its currently accumulated state.
 
         Use this when collections were updated incrementally rather than through
-        :meth:`evaluate`.
+        `evaluate`.
 
         Returns:
             Metric name -> computed value.
@@ -348,10 +348,10 @@ class TorchMetricEvaluator:
 def create_evaluator(
     config: EvaluatorConfig | dict[str, Any] | str | Path,
 ) -> TorchMetricEvaluator:
-    """Create a :class:`TorchMetricEvaluator`.
+    """Create a `TorchMetricEvaluator`.
 
     Args:
-        config: An :class:`EvaluatorConfig`, a dict in the same shape, or a path
+        config: An `EvaluatorConfig`, a dict in the same shape, or a path
             to a YAML config file.
 
     Returns:
