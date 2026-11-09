@@ -60,10 +60,12 @@ type rollbackMocks struct {
 	routeManager        *routingmocks.MockManager
 	backendRegistry     *backends.Registry
 	controlPlane        goapi.Handler
+	kubeClient          client.Client
 }
 
 func (m *rollbackMocks) params() Params {
 	return Params{
+		Client:              m.kubeClient,
 		ClientFactory:       m.factory,
 		APIHandler:          m.controlPlane,
 		BackendRegistry:     m.backendRegistry,
@@ -85,11 +87,16 @@ func (m *rollbackMocks) expectEntries(entries ...modelconfig.ModelConfigEntry) {
 		Return(entries, nil)
 }
 
-func newControlPlaneClient(t *testing.T, objects ...client.Object) goapi.Handler {
+func newKubeClient(t *testing.T, objects ...client.Object) client.Client {
 	t.Helper()
 	scheme := runtime.NewScheme()
 	require.NoError(t, v2pb.AddToScheme(scheme))
-	return handler.NewFakeAPIHandler(fake.NewClientBuilder().WithScheme(scheme).WithObjects(objects...).Build())
+	return fake.NewClientBuilder().WithScheme(scheme).WithObjects(objects...).Build()
+}
+
+func newControlPlaneClient(t *testing.T, objects ...client.Object) goapi.Handler {
+	t.Helper()
+	return handler.NewFakeAPIHandler(newKubeClient(t, objects...))
 }
 
 func previousModel() *v2pb.Model {
@@ -114,6 +121,7 @@ func newRollbackFixture(t *testing.T, clientErrs clientErrors) (*rollbackMocks, 
 		routeManager:        routingmocks.NewMockManager(ctrl),
 		backendRegistry:     backends.NewRegistry(),
 		controlPlane:        newControlPlaneClient(t, previousModel()),
+		kubeClient:          newKubeClient(t),
 	}
 	mocks.factory.EXPECT().GetClient(gomock.Any(), gomock.Any()).Return(client.Client(nil), clientErrs.getClient).AnyTimes()
 	mocks.factory.EXPECT().GetHTTPClient(gomock.Any(), gomock.Any()).Return((*http.Client)(nil), clientErrs.getHTTPClient).AnyTimes()
@@ -554,6 +562,33 @@ func TestNewRollbackPlugin(t *testing.T) {
 			types = append(types, actor.GetType())
 		}
 		assert.Equal(t, []string{"RollbackComplete-c1", "RollbackComplete-c2", "RollbackComplete"}, types)
+	})
+
+	t.Run("each cluster actor uses the inference server's current connection", func(t *testing.T) {
+		deployment := rollbackDeployment(testPrevious)
+		connection := func(tokenTag string) *v2pb.ClusterTarget {
+			return &v2pb.ClusterTarget{
+				ClusterId: "c1",
+				Connection: &v2pb.ClusterTarget_Kubernetes{Kubernetes: &v2pb.ConnectionSpec{
+					Host:     "https://c1.example.com",
+					Port:     "443",
+					TokenTag: tokenTag,
+				}},
+			}
+		}
+		require.NoError(t, osscommon.WriteTargetClustersAnnotation(deployment, []*v2pb.ClusterTarget{connection("token-v1")}))
+		params := mocks.params()
+		params.Client = newKubeClient(t, &v2pb.InferenceServer{
+			ObjectMeta: metav1.ObjectMeta{Name: testISName, Namespace: testNamespace},
+			Spec:       v2pb.InferenceServerSpec{ClusterTargets: []*v2pb.ClusterTarget{connection("token-v2")}},
+		})
+
+		plugin, err := NewRollbackPlugin(context.Background(), params, deployment)
+
+		require.NoError(t, err)
+		actor, ok := plugin.GetActors()[0].(*ClusterRollbackActor)
+		require.True(t, ok)
+		assert.Equal(t, "token-v2", actor.target.GetKubernetes().GetTokenTag())
 	})
 
 	t.Run("no placement yet leaves only the completion actor", func(t *testing.T) {

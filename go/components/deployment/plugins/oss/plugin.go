@@ -137,6 +137,7 @@ func (p *Plugin) GetRolloutPlugin(ctx context.Context, deployment *v2pb.Deployme
 // rollout reached to the previous stable revision.
 func (p *Plugin) GetRollbackPlugin(ctx context.Context, deployment *v2pb.Deployment) (conditionInterfaces.Plugin[*v2pb.Deployment], error) {
 	rollbackPlugin, err := rollback.NewRollbackPlugin(ctx, rollback.Params{
+		Client:              p.client,
 		ClientFactory:       p.clientFactory,
 		APIHandler:          p.apiHandler,
 		BackendRegistry:     p.backendRegistry,
@@ -264,7 +265,7 @@ func (p *Plugin) GetState(ctx context.Context, observability plugins.Observabili
 	healthy := false
 	var summaries []string
 	for _, model := range models {
-		ok, summary, err := common.CheckModelStatusAllClusters(ctx, p.logger, deployment, p.clientFactory, serverBackend, serverName, model)
+		ok, summary, err := common.CheckModelStatusAllClusters(ctx, p.logger, p.client, deployment, p.clientFactory, serverBackend, serverName, model)
 		if err != nil {
 			p.logger.Error("failed to check model status",
 				zap.Error(err),
@@ -328,9 +329,9 @@ func (p *Plugin) HealthCheckGate(ctx context.Context, observability plugins.Obse
 		return false, fmt.Errorf("get backend for inference server %s: %w", inferenceServer.GetName(), err)
 	}
 
-	targets, err := common.ReadTargetClustersAnnotation(deployment)
+	targets, err := common.ResolveTargetClusters(ctx, p.client, deployment)
 	if err != nil {
-		return false, fmt.Errorf("read target clusters for deployment %s/%s: %w", deployment.Namespace, deployment.Name, err)
+		return false, fmt.Errorf("resolve target clusters for deployment %s/%s: %w", deployment.Namespace, deployment.Name, err)
 	}
 	for _, target := range targets {
 		clusterID := target.GetClusterId()

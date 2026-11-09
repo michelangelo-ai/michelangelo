@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"go.uber.org/zap"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory"
@@ -54,20 +55,22 @@ func GetModelStatusInCluster(
 //   - (true, "", nil) when every replica in every cluster reports ready.
 //   - (false, summary, nil) when one or more clusters are reachable but not yet ready;
 //     summary lists the failing clusters with their replica states.
-//   - (false, "", err) when a per-cluster probe itself errored.
+//   - (false, "", err) when the cluster snapshot or the InferenceServer could not be read, or a
+//     per-cluster probe errored.
 //   - (false, "no target clusters in snapshot", nil) when the snapshot is missing or empty.
 func CheckModelStatusAllClusters(
 	ctx context.Context,
 	logger *zap.Logger,
+	kubeClient client.Reader,
 	deployment *v2pb.Deployment,
 	clientFactory clientfactory.ClientFactory,
 	backend backends.Backend,
 	inferenceServerName string,
 	modelName string,
 ) (bool, string, error) {
-	targets, err := ReadTargetClustersAnnotation(deployment)
+	targets, err := ResolveTargetClusters(ctx, kubeClient, deployment)
 	if err != nil {
-		return false, "", fmt.Errorf("read target clusters annotation: %w", err)
+		return false, "", fmt.Errorf("resolve target clusters: %w", err)
 	}
 	if len(targets) == 0 {
 		return false, "no target clusters in snapshot", nil
