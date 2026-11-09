@@ -249,15 +249,15 @@ A Python function decorated with `@uniflow.workflow()` that orchestrates one or 
 
 If you are coming to Michelangelo AI from another ML platform, the table below maps familiar concepts to their Michelangelo AI equivalents. This is a rough translation — the implementations differ in important ways, so follow the links to read the full definitions.
 
-| Concept | MLflow | Kubeflow | Ray | Airflow |
-|---|---|---|---|---|
-| Unit of computation | Step / Component | Pipeline Component | Remote function / Actor | Task / Operator |
-| Workflow definition | `mlflow.projects` | KFP Pipeline | Ray Workflow | DAG |
-| Experiment tracking | MLflow Experiment | Katib | Ray Tune | — |
-| Model versioning | MLflow Model Registry | — | — | — |
-| Online serving | MLflow Serving | KServe | Ray Serve | — |
-| Dataset passing between steps | `mlflow.log_artifact` | PipelineChannel | ObjectRef | XCom |
-| Scheduled runs | MLflow Projects (external scheduler) | Recurring Run | — | DAG schedule |
+| Concept | MLflow | Kubeflow | Ray | Airflow | Flyte |
+|---|---|---|---|---|---|
+| Unit of computation | Step / Component | Pipeline Component | Remote function / Actor | Task / Operator | Task (`@task`) |
+| Workflow definition | `mlflow.projects` | KFP Pipeline | Ray Workflow | DAG | Workflow (`@workflow`) |
+| Experiment tracking | MLflow Experiment | Katib | Ray Tune | — | — |
+| Model versioning | MLflow Model Registry | — | — | — | — |
+| Online serving | MLflow Serving | KServe | Ray Serve | — | — |
+| Dataset passing between steps | `mlflow.log_artifact` | PipelineChannel | ObjectRef | XCom | Typed task inputs/outputs (`FlyteFile`, `FlyteDirectory`, `StructuredDataset`) |
+| Scheduled runs | MLflow Projects (external scheduler) | Recurring Run | — | DAG schedule | Launch plan with a schedule |
 
 **In Michelangelo AI terms:**
 
