@@ -8,7 +8,7 @@ Michelangelo AI is split into a control plane and two runtime areas. In the cont
 
 ![Michelangelo AI system architecture: a control plane with the API server and controller managers above offline pipelines and online model serving](./images/ma-system-architecture.png)
 
-For how the server components connect to each other, see the [service architecture diagram](setup/platform-setup.md#michelangelo-ai-service-architecture-diagram) in Platform Setup.
+For the full overview, including the custom resources and which controller reconciles each one, see [System Architecture](../getting-started/architecture.md). For how the server components connect to each other, see the [service architecture diagram](setup/platform-setup.md#michelangelo-ai-service-architecture-diagram) in Platform Setup.
 
 ## Getting Started
 

@@ -85,6 +85,7 @@ See the [Sandbox Setup](https://michelangelo-ai.org/docs/getting-started/sandbox
 ## Contributing
 
 We welcome contributions to Michelangelo AI!  
+For a map of the repository and the system, see [ARCHITECTURE.md](ARCHITECTURE.md).  
 If you're interested in contributing, please read our [Contributing Guidelines](https://github.com/michelangelo-ai/michelangelo/blob/main/CONTRIBUTING.md) to get started.
 
 
