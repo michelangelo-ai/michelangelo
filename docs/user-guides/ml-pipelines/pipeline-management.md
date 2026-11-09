@@ -10,7 +10,7 @@ The **standard workflows** are a set of workflows provided and managed by Michel
 
 The **custom workflows** are completely user-defined and can be used for some exceptional use cases that are not supported by the standard workflows.
 
-The Michelangelo AI team manages the tooling for building and executing the custom workflows but does not manage the workflow definitions for the custom workflows. Pipelines with both standard and custom workflows can be executed and managed in MA Studio.
+The Michelangelo AI team manages the tooling for building and executing the custom workflows but does not manage the workflow definitions for the custom workflows. Pipelines with both standard and custom workflows can be executed and managed in [MA Studio](../../getting-started/glossary.md#ma-studio).
 
 ## What you'll learn
 

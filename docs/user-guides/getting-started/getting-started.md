@@ -12,7 +12,7 @@ dataset_cols
             └─▶ train()   # Ray task: trains a PyTorch Lightning model on the splits
 ```
 
-Each step runs as an isolated, containerized task. Michelangelo AI handles data passing between them, caches intermediate results, and retries on transient failures — your code stays plain Python.
+Each step runs as an isolated, containerized [task](../../getting-started/glossary.md#task). Michelangelo AI handles data passing between them, caches intermediate results, and retries on transient failures — your code stays plain Python.
 
 ## What you'll learn
 

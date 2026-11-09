@@ -6,8 +6,8 @@ last_verified: 2026-10-14
 
 ## What You'll Learn
 
-* How to configure cron-based recurring triggers to run your pipeline on a schedule
-* How to configure backfill triggers to reprocess historical time windows
+* How to configure [cron-based recurring triggers](../../getting-started/glossary.md#cron-trigger) to run your pipeline on a schedule
+* How to configure [backfill](../../getting-started/glossary.md#backfill) triggers to reprocess historical time windows
 * How to define triggers directly in your pipeline manifest using `trigger_map` for declarative, versionable configuration
 * How to create trigger runs from a pipeline's registered trigger configuration using `ma trigger_run create`
 * How to monitor your triggers and pipeline runs through the UI
