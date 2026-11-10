@@ -1,6 +1,7 @@
 ---
 sidebar_position: 4
 sidebar_label: Jobs
+last_verified: 2026-11-05
 ---
 
 # Jobs API Reference
