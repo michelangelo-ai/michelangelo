@@ -212,7 +212,10 @@ A cron trigger can also run only inside a time window, and can replay the occurr
 | `end_timestamp` | End of the window, **inclusive**: an occurrence exactly at this time still fires, and later ones don't. Must be after `start_timestamp`, or the API rejects the TriggerRun (see [What the API Rejects](#what-the-api-rejects)). Omit it for a schedule with no end. |
 | `catchup` | When true and `start_timestamp` is in the past, every occurrence in `[start_timestamp, min(now, end_timestamp)]` (both ends inclusive) fires once, oldest first. The schedule then continues on its normal cadence until `end_timestamp`, if set. It has no effect without a `start_timestamp` or when the start is in the future. |
 
-Replayed occurrences run **one at a time, in chronological order**, so a catch-up never has more than `max_concurrency` pipeline runs in flight.
+Replayed occurrences start **one at a time, in chronological order**: each occurrence's trigger workflow finishes before the next one begins. How far that limits overlapping pipeline runs depends on how the trigger executes runs:
+
+- **`max_concurrency` above 0:** the workflow waits for its pipeline runs to finish, so a catch-up never has more than `max_concurrency` pipeline runs in flight.
+- **`batch_policy` only:** the workflow creates its pipeline runs without waiting for them to finish, so runs from successive occurrences can overlap. Set `max_concurrency` if a catch-up must not run occurrences in parallel.
 
 Each replayed run carries the date of the occurrence it stands for, not the date it actually runs. Date parameters such as `DS` (`YYYY-MM-DD`, UTC) come from that occurrence, so a 20-day catch-up of a daily cron covers 20 different days instead of running today's date 20 times. That's the reason to use `catchup` instead of starting the runs by hand.
 
@@ -258,7 +261,7 @@ ma trigger_run apply --file=training-pipeline-daily-catchup.yaml
 
 A catch-up that would replay **more than 500 occurrences** is rejected, not trimmed. The TriggerRun goes to `FAILED` and nothing is scheduled. The limit counts occurrences, not time, so a daily cron can catch up more than a year, while an hourly cron can catch up about 20 days.
 
-To go back further, move `start_timestamp` later, or split the range across several TriggerRuns of at most 500 occurrences each. Give every TriggerRun except the last an `end_timestamp` equal to the next one's `start_timestamp`, and put that shared boundary **between occurrences**, for example midnight for a `0 9 * * *` cron. Both ends of a window are inclusive, so an occurrence that falls exactly on a shared boundary would run twice, once in each TriggerRun.
+To stay under the limit, move `start_timestamp` later, which shortens the range. To cover more than 500 occurrences, split the range across several TriggerRuns of at most 500 occurrences each. Give every TriggerRun except the last an `end_timestamp` equal to the next one's `start_timestamp`, and put that shared boundary **between occurrences**, for example midnight for a `0 9 * * *` cron. Both ends of a window are inclusive, so an occurrence that falls exactly on a shared boundary would run twice, once in each TriggerRun.
 
 ### Caveats
 
