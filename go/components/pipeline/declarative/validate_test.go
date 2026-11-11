@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gogo/protobuf/types"
 	v2 "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -74,4 +75,94 @@ func TestValidateStructural(t *testing.T) {
 			assert.ErrorAs(t, err, &e)
 		})
 	}
+}
+
+func withParams(w *v2.DeclarativeWorkflow, ps map[string]*v2.ParameterSpec) *v2.DeclarativeWorkflow {
+	w.Parameters = ps
+	return w
+}
+
+func TestValidateParameters(t *testing.T) {
+	big := float64(1<<53 - 1)
+	cases := []struct {
+		name string
+		spec *v2.ParameterSpec
+		want string // empty means accepted
+	}{
+		{"string ok", paramSpec(v2.PARAMETER_TYPE_STRING, strVal("x")), ""},
+		{"integer ok", paramSpec(v2.PARAMETER_TYPE_INTEGER, numVal(3)), ""},
+		{"integer max ok", paramSpec(v2.PARAMETER_TYPE_INTEGER, numVal(big)), ""},
+		{"integer negative ok", paramSpec(v2.PARAMETER_TYPE_INTEGER, numVal(-7)), ""},
+		{"number ok", paramSpec(v2.PARAMETER_TYPE_NUMBER, numVal(0.5)), ""},
+		{"number integral ok", paramSpec(v2.PARAMETER_TYPE_NUMBER, numVal(2)), ""},
+		{"boolean ok", paramSpec(v2.PARAMETER_TYPE_BOOLEAN, boolVal(true)), ""},
+		{"list ok", paramSpec(v2.PARAMETER_TYPE_LIST, listVal(numVal(1), strVal("a"))), ""},
+		{"dict ok", paramSpec(v2.PARAMETER_TYPE_DICT, structVal(map[string]*types.Value{"k": numVal(1)})), ""},
+		{"required ok", &v2.ParameterSpec{Type: v2.PARAMETER_TYPE_STRING, Required: true}, ""},
+		{"unspecified type", paramSpec(v2.PARAMETER_TYPE_UNSPECIFIED, strVal("x")), "type is not set"},
+		{"unknown type value", paramSpec(v2.ParameterType(99), strVal("x")), "type 99 is not a known ParameterType"},
+		{"neither default nor required", &v2.ParameterSpec{Type: v2.PARAMETER_TYPE_STRING}, "exactly one of default or required must be set"},
+		{"both default and required", &v2.ParameterSpec{Type: v2.PARAMETER_TYPE_STRING, Required: true, Default: strVal("x")}, "exactly one of default or required must be set"},
+		{"null default", paramSpec(v2.PARAMETER_TYPE_STRING, nullVal()), "default must not be null"},
+		{"empty value", paramSpec(v2.PARAMETER_TYPE_STRING, &types.Value{}), "default must not be null"},
+		{"string gets number", paramSpec(v2.PARAMETER_TYPE_STRING, numVal(1)), "default must be a string for type string"},
+		{"integer gets fraction", paramSpec(v2.PARAMETER_TYPE_INTEGER, numVal(1.5)), "default 1.5 is not an integer"},
+		{"integer too large", paramSpec(v2.PARAMETER_TYPE_INTEGER, numVal(big*2)), "default 18014398509481982 is outside ±9007199254740991"},
+		{"integer gets string", paramSpec(v2.PARAMETER_TYPE_INTEGER, strVal("1")), "default must be a number for type integer"},
+		{"number gets bool", paramSpec(v2.PARAMETER_TYPE_NUMBER, boolVal(true)), "default must be a number for type number"},
+		{"boolean gets string", paramSpec(v2.PARAMETER_TYPE_BOOLEAN, strVal("true")), "default must be a bool for type boolean"},
+		{"list gets struct", paramSpec(v2.PARAMETER_TYPE_LIST, structVal(nil)), "default must be a list for type list"},
+		{"dict gets list", paramSpec(v2.PARAMETER_TYPE_DICT, listVal()), "default must be a struct for type dict"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			w := withParams(diamond(), map[string]*v2.ParameterSpec{"p": c.spec})
+			err := Validate(w, Limits{})
+			if c.want == "" {
+				assert.NoError(t, err)
+				return
+			}
+			assert.EqualError(t, err, `parameter "p": `+c.want)
+		})
+	}
+}
+
+func TestValidateParameterName(t *testing.T) {
+	w := withParams(diamond(), map[string]*v2.ParameterSpec{"Bad": paramSpec(v2.PARAMETER_TYPE_STRING, strVal("x"))})
+	assert.EqualError(t, Validate(w, Limits{}), `parameter "Bad": name must match ^[a-z][a-z0-9_]{0,62}$`)
+}
+
+func TestValidateNilParameter(t *testing.T) {
+	w := withParams(diamond(), map[string]*v2.ParameterSpec{"p": nil})
+	assert.EqualError(t, Validate(w, Limits{}), `parameter "p": parameter is not set`)
+}
+
+func TestValidateParamReferences(t *testing.T) {
+	w := withParams(diamond(), map[string]*v2.ParameterSpec{"bucket": paramSpec(v2.PARAMETER_TYPE_STRING, strVal("b"))})
+	w.Tasks["extract"].Config.Fields["uri"] = strVal("gs://{{ params.bucket }}/in")
+	require.NoError(t, Validate(w, Limits{}))
+
+	w.Tasks["extract"].Config.Fields["uri"] = strVal("gs://{{ params.missing }}/in")
+	assert.EqualError(t, Validate(w, Limits{}), `task "extract": config.uri references undeclared parameter "missing"`)
+
+	w.Tasks["extract"].Config.Fields["uri"] = strVal("gs://{{ params.bucket")
+	assert.EqualError(t, Validate(w, Limits{}), `task "extract": config.uri unterminated "{{" in "gs://{{ params.bucket"`)
+
+	w.Tasks["extract"].Config.Fields["uri"] = strVal("ok")
+	w.Tasks["extract"].JobSpecs = &types.Struct{Fields: map[string]*types.Value{
+		"ray": structVal(map[string]*types.Value{"image": strVal("{{ params.nope }}")}),
+	}}
+	assert.EqualError(t, Validate(w, Limits{}), `task "extract": job_specs.ray.image references undeclared parameter "nope"`)
+
+	w.Tasks["extract"].JobSpecs = nil
+	w.Tasks["extract"].Config.Fields["args"] = listVal(strVal("--in={{ params.gone }}"))
+	assert.EqualError(t, Validate(w, Limits{}), `task "extract": config.args[0] references undeclared parameter "gone"`)
+}
+
+func TestValidateEmbeddedListParam(t *testing.T) {
+	w := withParams(diamond(), map[string]*v2.ParameterSpec{"xs": paramSpec(v2.PARAMETER_TYPE_LIST, listVal())})
+	w.Tasks["extract"].Config.Fields["a"] = strVal("{{ params.xs }}")
+	require.NoError(t, Validate(w, Limits{}))
+	w.Tasks["extract"].Config.Fields["a"] = strVal("x={{ params.xs }}")
+	assert.EqualError(t, Validate(w, Limits{}), `task "extract": config.a embeds parameter "xs" of type list; only string, integer, number, and boolean parameters can be embedded in a longer string`)
 }
