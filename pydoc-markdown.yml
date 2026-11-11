@@ -18,9 +18,17 @@ loaders:
       - workflow.tasks.pusher.exceptions
       - lib.trainer.torch.data_collate_functions
       - lib.trainer.torch.utils
+      - lib.trainer.xgboost.xgboost_trainer
       - lib.native_transform.torch.base_layers
       - lib.native_transform.torch.id_hash_tokenizer
       - lib.native_transform.torch.utils
+      - lib.evaluator.evaluator
+      - lib.evaluator.metrics
+      - lib.evaluator.config
+      - lib.evaluator.chart_data
+      - lib.evaluator.sanity
+      - lib.evaluator.report
+      - lib.evaluator.report_generator
       - workflow.variables.types
       - workflow.variables.metadata
 processors:

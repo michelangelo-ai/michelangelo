@@ -6,26 +6,28 @@ same shape as the PyTorch Lightning trainer in
 ``train()`` that returns a small result dict, and checkpointing handled by Ray
 Train's own report callback.
 
-Typical use::
+Typical use:
 
-    from michelangelo.lib.trainer.xgboost import (
-        XGBoostTrainer,
-        XGBoostTrainerParam,
-    )
+```python
+from michelangelo.lib.trainer.xgboost import (
+    XGBoostTrainer,
+    XGBoostTrainerParam,
+)
 
-    trainer = XGBoostTrainer(
-        trainer_param=XGBoostTrainerParam(
-            label_column="target",
-            train_data=train_ds,
-            val_data=val_ds,
-            params={"objective": "reg:squarederror", "eta": 0.1},
-            num_boost_round=50,
-        ),
-        run_config=ray.train.RunConfig(name="my_run", storage_path="/tmp/runs"),
-        scaling_config=ray.train.ScalingConfig(num_workers=2, use_gpu=False),
-    )
-    result = trainer.train()
-    print(result["checkpoint_path"])
+trainer = XGBoostTrainer(
+    trainer_param=XGBoostTrainerParam(
+        label_column="target",
+        train_data=train_ds,
+        val_data=val_ds,
+        params={"objective": "reg:squarederror", "eta": 0.1},
+        num_boost_round=50,
+    ),
+    run_config=ray.train.RunConfig(name="my_run", storage_path="/tmp/runs"),
+    scaling_config=ray.train.ScalingConfig(num_workers=2, use_gpu=False),
+)
+result = trainer.train()
+print(result["checkpoint_path"])
+```
 """
 
 from __future__ import annotations
@@ -48,7 +50,7 @@ VALIDATION_DATASET_KEY = "validation"
 
 @dataclass
 class XGBoostTrainerParam:
-    """Configuration for :class:`XGBoostTrainer`.
+    """Configuration for `XGBoostTrainer`.
 
     Attributes:
         label_column: Name of the target column. Must be present in
@@ -57,8 +59,8 @@ class XGBoostTrainerParam:
         val_data: Optional validation Ray Dataset. When omitted, training runs
             with the training set as its only eval set.
         params: XGBoost booster parameters, passed verbatim as the first
-            argument to ``xgboost.train`` (for example
-            ``{"objective": "reg:squarederror", "eta": 0.1}``).
+            argument to ``xgboost.train``. Typical keys are ``objective`` and
+            ``eta``.
         num_boost_round: Number of boosting rounds.
         feature_columns: Explicit feature column names. When ``None`` (the
             default), every column except ``label_column`` is used as a
@@ -108,7 +110,7 @@ def _train_loop_per_worker(config: dict[str, Any]) -> None:
 
     Args:
         config: The ``train_loop_config`` assembled by
-            :meth:`XGBoostTrainer.__init__`.
+            `XGBoostTrainer.__init__`.
     """
     import xgboost
     from ray.train.xgboost import RayTrainReportCallback
