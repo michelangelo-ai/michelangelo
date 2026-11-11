@@ -4,14 +4,10 @@
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/11481/badge)](https://www.bestpractices.dev/projects/11481)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/michelangelo-ai/michelangelo/badge)](https://scorecard.dev/viewer/?uri=github.com/michelangelo-ai/michelangelo)
 [![Docs](https://img.shields.io/badge/docs-michelangelo--ai.org-blue)](https://michelangelo-ai.org)
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/michelangelo-ai/michelangelo)
 
 # Michelangelo AI
 
 Michelangelo AI is an open-source platform designed to streamline the development, deployment, and monitoring of machine learning models at scale. It offers a comprehensive suite of tools and services that facilitate the entire machine learning lifecycle, from data management to model serving.
-
-:warning: **Beta Notice**
- This project is currently in beta. APIs and features may evolve, and breaking changes may occur as we continue to improve and stabilize the platform.
 
 **Open Source Initiative**
 
