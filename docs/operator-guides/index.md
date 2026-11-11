@@ -4,7 +4,7 @@ These guides cover deploying, configuring, and integrating Michelangelo AI in a 
 
 ## System Architecture
 
-Michelangelo AI is split into a control plane and two runtime areas. In the control plane, Michelangelo AI Studio and the CLI talk to the API server, and controller managers reconcile the resources it stores. Offline, the controllers run Uniflow and Canvas pipelines on Ray, Spark, and Kubernetes batch compute. Online, they deploy models to the inference service.
+Michelangelo AI is split into a [control plane](../getting-started/glossary.md#control-plane) and two runtime areas. In the control plane, Michelangelo AI Studio and the CLI talk to the [API server](../getting-started/glossary.md#api-server), and [controller managers](../getting-started/glossary.md#controller-manager) reconcile the resources it stores. Offline, the controllers run Uniflow and Canvas pipelines on Ray, Spark, and Kubernetes batch compute. Online, they deploy models to the inference service.
 
 ![Michelangelo AI system architecture: a control plane with the API server and controller managers above offline pipelines and online model serving](./images/ma-system-architecture.png)
 

@@ -17,7 +17,7 @@ Pick the approach that matches your workflow and expertise:
 - Need to **prototype rapidly** before investing in custom code
 
 **Quick Start**:
-1. Navigate to MA Studio (available at your Michelangelo AI deployment URL, or `http://localhost:8090` in the [local sandbox](./sandbox-setup.md))
+1. Navigate to [MA Studio](./glossary.md#ma-studio) (available at your Michelangelo AI deployment URL, or `http://localhost:8090` in the [local sandbox](./sandbox-setup.md))
 2. Create a new project and define your use case
 3. Prepare your dataset using the Data Prep interface
 4. Train a model using pre-built templates
@@ -34,8 +34,8 @@ Pick the approach that matches your workflow and expertise:
 
 **Quick Start**:
 1. Install Michelangelo AI SDK: `pip install michelangelo`
-2. Define your workflow using Uniflow decorators (`@uniflow.task`, `@uniflow.workflow`)
-3. Submit a dev-run to the Michelangelo AI API server (see [Sandbox Setup](./sandbox-setup.md))
+2. Define your workflow using [Uniflow](./glossary.md#uniflow) decorators (`@uniflow.task`, `@uniflow.workflow`)
+3. Submit a dev-run to the Michelangelo AI [API server](./glossary.md#api-server) (see [Sandbox Setup](./sandbox-setup.md))
 4. Monitor execution through the UI
 
 **Best for**: Custom architectures, multi-stage pipelines, A/B testing frameworks, feature engineering at scale

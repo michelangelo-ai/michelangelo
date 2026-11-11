@@ -27,7 +27,7 @@ From zero to a trained, deployed model.
 5. **[Prepare Your Data](../user-guides/getting-started/prepare-your-data.md)** — load, clean, and split datasets with Ray and Spark
 6. **[Train and Register a Model](../user-guides/train-and-deploy-models/train-and-register-a-model.md)** — train at scale and register artifacts
 7. **[Distributed Training with LightningTrainer](../user-guides/train-and-deploy-models/distributed-training.md)** — optional deep dive: strategies, warm starts, and auto-resume for larger runs
-8. **[Deploy a Model](../user-guides/train-and-deploy-models/deploy-a-model.md)** — bind a registered model to an inference server
+8. **[Deploy a Model](../user-guides/train-and-deploy-models/deploy-a-model.md)** — bind a registered model to an [inference server](./glossary.md#inference-server)
 9. **[Example Projects](../user-guides/examples/index.md)** — ten end-to-end workflows to adapt to your own use case
 
 **You're done when:** you've run a pipeline that trains a model, registered it, deployed it, and know which example is closest to your real workload.
@@ -42,10 +42,10 @@ From an empty Kubernetes cluster to a monitored production deployment. The first
 4. **[Authentication](../operator-guides/setup/authentication.md)** — identity provider and RBAC before opening to users
 5. **[Network & Ingress](../operator-guides/setup/network.md)** — Envoy, Ingress, TLS
 6. **[Helm Chart](../operator-guides/helm-chart.md)** — chart layout, values reference, migration phases
-7. **[Monitoring](../operator-guides/operations/monitoring.md)** — metrics, alerts, and dashboards for the control plane
+7. **[Monitoring](../operator-guides/operations/monitoring.md)** — metrics, alerts, and dashboards for the [control plane](./glossary.md#control-plane)
 8. **[Troubleshooting](../operator-guides/operations/troubleshooting.md)** — the failure modes you'll actually hit
 
-**You're done when:** the control plane is deployed, a compute cluster is registered, users authenticate through your IdP, and you have monitoring in place.
+**You're done when:** the control plane is deployed, a [compute cluster](./glossary.md#compute-cluster) is registered, users authenticate through your IdP, and you have monitoring in place.
 
 ## Contributor Track
 

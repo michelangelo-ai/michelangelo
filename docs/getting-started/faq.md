@@ -57,7 +57,7 @@ A: Not yet. A feature store (online and offline) is on the [roadmap](./roadmap.m
 
 **Q: What data formats are supported?**
 
-A: Parquet (recommended). CSV, JSON, Avro. For custom formats, use Uniflow tasks to handle data loading.
+A: Parquet (recommended). CSV, JSON, Avro. For custom formats, use [Uniflow](./glossary.md#uniflow) tasks to handle data loading.
 
 ## Training & Deployment
 

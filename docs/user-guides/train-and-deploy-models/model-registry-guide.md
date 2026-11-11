@@ -17,7 +17,7 @@ Michelangelo AI's model packager turns your trained model into self-contained, v
 * **Schema validation** -- input/output contracts enforced at packaging time
 * **Dependency bundling** -- auto-packages Python modules your model needs at inference time
 * **Built-in testing** -- raw packages are validated with sample data before they are written
-* **Triton compatibility** -- deployable packages work directly with NVIDIA Triton Inference Server
+* **Triton compatibility** -- deployable packages work directly with NVIDIA [Triton Inference Server](../../getting-started/glossary.md#triton-inference-server)
 
 ## Core Concepts
 
