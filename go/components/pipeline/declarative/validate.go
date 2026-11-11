@@ -42,7 +42,6 @@ func Validate(w *v2.DeclarativeWorkflow, lim Limits) error {
 	if err != nil {
 		return err
 	}
-	_ = g
 	if err := validateParameters(w); err != nil {
 		return err
 	}
@@ -51,6 +50,9 @@ func Validate(w *v2.DeclarativeWorkflow, lim Limits) error {
 		return err
 	}
 	if err := checkParamRefs(w, refs); err != nil {
+		return err
+	}
+	if err := checkTaskRefs(w, g, refs); err != nil {
 		return err
 	}
 	return nil
@@ -238,6 +240,31 @@ func checkParamRefs(w *v2.DeclarativeWorkflow, refs map[string][]taskRef) error 
 			}
 			if !tr.Ref.Whole && (spec.Type == v2.PARAMETER_TYPE_LIST || spec.Type == v2.PARAMETER_TYPE_DICT) {
 				return &Error{Task: n, Field: tr.Field, Msg: fmt.Sprintf("embeds parameter %q of type %s; only string, integer, number, and boolean parameters can be embedded in a longer string", tr.Ref.Name, typeName(spec.Type))}
+			}
+		}
+	}
+	return nil
+}
+
+func checkTaskRefs(w *v2.DeclarativeWorkflow, g *graph, refs map[string][]taskRef) error {
+	for _, n := range g.names {
+		var deps map[string]bool
+		for _, tr := range refs[n] {
+			if tr.Ref.Kind != refTaskOutput {
+				continue
+			}
+			target := tr.Ref.Name
+			if target == n {
+				return &Error{Task: n, Field: tr.Field, Msg: "references the task itself"}
+			}
+			if _, ok := w.Tasks[target]; !ok {
+				return &Error{Task: n, Field: tr.Field, Msg: fmt.Sprintf("references unknown task %q", target)}
+			}
+			if deps == nil {
+				deps = g.transitiveDeps(n)
+			}
+			if !deps[target] {
+				return &Error{Task: n, Field: tr.Field, Msg: fmt.Sprintf("references task %q that is not a dependency of %q", target, n)}
 			}
 		}
 	}

@@ -166,3 +166,19 @@ func TestValidateEmbeddedListParam(t *testing.T) {
 	w.Tasks["extract"].Config.Fields["a"] = strVal("x={{ params.xs }}")
 	assert.EqualError(t, Validate(w, Limits{}), `task "extract": config.a embeds parameter "xs" of type list; only string, integer, number, and boolean parameters can be embedded in a longer string`)
 }
+
+func TestValidateTaskOutputReferences(t *testing.T) {
+	w := diamond()
+	w.Tasks["publish"].Config.Fields["model"] = strVal("{{ tasks.train.output.model_uri }}")
+	w.Tasks["publish"].Config.Fields["raw"] = strVal("{{ tasks.extract.output }}")
+	require.NoError(t, Validate(w, Limits{}), "direct and transitive dependencies are both allowed")
+
+	w.Tasks["evaluate"].Config.Fields["model"] = strVal("{{ tasks.train.output }}")
+	assert.EqualError(t, Validate(w, Limits{}), `task "evaluate": config.model references task "train" that is not a dependency of "evaluate"`)
+
+	w.Tasks["evaluate"].Config.Fields["model"] = strVal("{{ tasks.evaluate.output }}")
+	assert.EqualError(t, Validate(w, Limits{}), `task "evaluate": config.model references the task itself`)
+
+	w.Tasks["evaluate"].Config.Fields["model"] = strVal("{{ tasks.ghost.output }}")
+	assert.EqualError(t, Validate(w, Limits{}), `task "evaluate": config.model references unknown task "ghost"`)
+}
