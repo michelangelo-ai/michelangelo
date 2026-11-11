@@ -1,0 +1,6 @@
+version: core-v1
+artifact: s3://x
+digest: sha256:ab
+task_types:
+  core/python:
+    config: {}

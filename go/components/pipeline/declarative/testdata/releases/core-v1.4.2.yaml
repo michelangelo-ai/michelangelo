@@ -1,0 +1,28 @@
+version: core-v1.4.2
+artifact: s3://ma-artifacts/interpreters/core-v1.4.2.tar.gz
+digest: sha256:9f2c0000000000000000000000000000000000000000000000000000000000aa
+task_types:
+  core/ray:
+    capabilities: [retry, cache]
+    config:
+      entry_point: {type: string, required: true}
+      args: {type: list}
+      epochs: {type: integer}
+      learning_rate: {type: number}
+      debug: {type: boolean}
+      extra: {type: dict}
+    job_specs:
+      ray:
+        head_cpu: {type: integer}
+        image: {type: string}
+  core/python:
+    capabilities: []
+    config:
+      entry_point: {type: string, required: true}
+      uri: {type: string}
+      args: {type: list}
+      model: {type: string}
+      raw: {type: string}
+      a: {type: string}
+    job_specs:
+      cpu: {type: integer}
