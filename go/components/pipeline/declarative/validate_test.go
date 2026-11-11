@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	gogoproto "github.com/gogo/protobuf/proto"
 	"github.com/gogo/protobuf/types"
 	v2 "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"github.com/stretchr/testify/assert"
@@ -181,4 +182,29 @@ func TestValidateTaskOutputReferences(t *testing.T) {
 
 	w.Tasks["evaluate"].Config.Fields["model"] = strVal("{{ tasks.ghost.output }}")
 	assert.EqualError(t, Validate(w, Limits{}), `task "evaluate": config.model references unknown task "ghost"`)
+}
+
+func FuzzValidate(f *testing.F) {
+	seeds := []*v2.DeclarativeWorkflow{diamond(), altShape(), diamondFailure(),
+		newWorkflow(map[string]*v2.DeclarativeTask{"a": task("core/python", "zz")}),
+		withParams(diamond(), map[string]*v2.ParameterSpec{"p": paramSpec(v2.PARAMETER_TYPE_INTEGER, numVal(1.5))}),
+	}
+	for _, s := range seeds {
+		b, err := gogoproto.Marshal(s)
+		if err != nil {
+			f.Fatal(err)
+		}
+		f.Add(b)
+	}
+	f.Fuzz(func(t *testing.T, b []byte) {
+		w := &v2.DeclarativeWorkflow{}
+		if err := gogoproto.Unmarshal(b, w); err != nil {
+			return
+		}
+		_ = Validate(w, Limits{})
+		if g, err := buildGraph(w); err == nil {
+			_, _ = Plan(w, "v", nil)
+			_ = g.levels()
+		}
+	})
 }
