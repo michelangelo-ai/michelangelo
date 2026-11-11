@@ -11,8 +11,7 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-// Release is one interpreter release file. The apiserver pins a pipeline to
-// one release and validates it against that release's task-type schemas.
+// Release is one interpreter release file.
 type Release struct {
 	Version   string               `json:"version"`
 	Artifact  string               `json:"artifact"`
@@ -49,9 +48,8 @@ type Field struct {
 
 var fieldTypes = map[string]bool{"string": true, "integer": true, "number": true, "boolean": true, "list": true, "dict": true}
 
-// UnmarshalJSON treats an object with a "type" key as a leaf and any other
-// object as a group of nested fields. A leaf with extra keys keeps them in
-// Fields, so checkSchema can report the mix with the field path.
+// UnmarshalJSON decodes an object with a "type" key as a leaf. It decodes any
+// other object as a group.
 func (f *Field) UnmarshalJSON(b []byte) error {
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal(b, &raw); err != nil {
@@ -117,7 +115,7 @@ func LoadReleases(dir string) (map[string]*Release, error) {
 	return out, nil
 }
 
-// ParseRelease decodes one release file. name is used in error text when the
+// ParseRelease decodes one release file. It uses name in error text when the
 // file has no version.
 func ParseRelease(name string, data []byte) (*Release, error) {
 	r := &Release{}
@@ -137,12 +135,12 @@ func ParseRelease(name string, data []byte) (*Release, error) {
 	case len(r.TaskTypes) == 0:
 		return nil, fmt.Errorf("release %q: task_types is empty", name)
 	}
-	typeNames := make([]string, 0, len(r.TaskTypes))
+	ttNames := make([]string, 0, len(r.TaskTypes))
 	for tn := range r.TaskTypes {
-		typeNames = append(typeNames, tn)
+		ttNames = append(ttNames, tn)
 	}
-	sort.Strings(typeNames)
-	for _, tn := range typeNames {
+	sort.Strings(ttNames)
+	for _, tn := range ttNames {
 		tt := r.TaskTypes[tn]
 		if tt == nil {
 			return nil, fmt.Errorf("release %q: task type %q is empty", name, tn)

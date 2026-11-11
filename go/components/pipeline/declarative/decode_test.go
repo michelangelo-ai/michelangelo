@@ -8,6 +8,7 @@ import (
 	v2 "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/encoding/protowire"
 )
 
 func TestDecodeRoundTrip(t *testing.T) {
@@ -36,8 +37,23 @@ func TestDecodeRejectsSchemaVersion(t *testing.T) {
 	assert.EqualError(t, err, `schema_version "v2" is not supported; use "v1alpha1"`)
 }
 
-// appendUnknown appends field number 2047, varint 1, to a serialized message.
-func appendUnknown(b []byte) []byte { return append(b, 0xF8, 0x7F, 0x01) }
+const (
+	unknownFieldNum        = 2047
+	workflowConfigFieldNum = 2
+	tasksFieldNum          = 4
+	mapKeyFieldNum         = 1
+	mapValueFieldNum       = 2
+)
+
+func appendUnknown(b []byte) []byte {
+	b = protowire.AppendTag(b, unknownFieldNum, protowire.VarintType)
+	return protowire.AppendVarint(b, 1)
+}
+
+func appendBytesField(b []byte, num protowire.Number, v []byte) []byte {
+	b = protowire.AppendTag(b, num, protowire.BytesType)
+	return protowire.AppendBytes(b, v)
+}
 
 func TestDecodeRejectsUnknownTopLevelField(t *testing.T) {
 	w := newWorkflow(map[string]*v2.DeclarativeTask{"a": task("core/python")})
@@ -50,8 +66,6 @@ func TestDecodeRejectsUnknownTopLevelField(t *testing.T) {
 }
 
 func TestDecodeRejectsUnknownNestedField(t *testing.T) {
-	// Serialize the task with an unknown field, then embed it by hand in a
-	// workflow so the unknown bytes survive. Map entry: key field 1, value field 2.
 	tk := task("core/python")
 	tkRaw, err := gogoproto.Marshal(tk)
 	require.NoError(t, err)
@@ -59,9 +73,9 @@ func TestDecodeRejectsUnknownNestedField(t *testing.T) {
 	w := &v2.DeclarativeWorkflow{SchemaVersion: SchemaVersion}
 	wRaw, err := gogoproto.Marshal(w)
 	require.NoError(t, err)
-	entry := append([]byte{0x0A, 0x01, 'a', 0x12, byte(len(tkRaw))}, tkRaw...)
-	wRaw = append(wRaw, 0x22, byte(len(entry)))
-	wRaw = append(wRaw, entry...)
+	entry := appendBytesField(nil, mapKeyFieldNum, []byte("a"))
+	entry = appendBytesField(entry, mapValueFieldNum, tkRaw)
+	wRaw = appendBytesField(wRaw, tasksFieldNum, entry)
 	m := &v2.PipelineManifest{Type: v2.PIPELINE_MANIFEST_TYPE_DECLARATIVE,
 		Content: &types.Any{TypeUrl: TypeURL, Value: wRaw}}
 	_, err = Decode(m)
@@ -76,8 +90,7 @@ func TestDecodeRejectsUnknownFieldInSettings(t *testing.T) {
 	w := &v2.DeclarativeWorkflow{SchemaVersion: SchemaVersion}
 	wRaw, err := gogoproto.Marshal(w)
 	require.NoError(t, err)
-	wRaw = append(wRaw, 0x12, byte(len(sRaw)))
-	wRaw = append(wRaw, sRaw...)
+	wRaw = appendBytesField(wRaw, workflowConfigFieldNum, sRaw)
 	m := &v2.PipelineManifest{Type: v2.PIPELINE_MANIFEST_TYPE_DECLARATIVE,
 		Content: &types.Any{TypeUrl: TypeURL, Value: wRaw}}
 	_, err = Decode(m)

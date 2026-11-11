@@ -17,9 +17,6 @@ type graph struct {
 	rdeps map[string][]string
 }
 
-// buildGraph checks task names and edges, then returns the dependency graph.
-// It reports an unknown dependency before it looks for cycles, so the author
-// sees the typo and not a misleading cycle.
 func buildGraph(w *v2.DeclarativeWorkflow) (*graph, error) {
 	g := &graph{deps: map[string][]string{}, rdeps: map[string][]string{}}
 	for name := range w.Tasks {
@@ -68,8 +65,6 @@ func buildGraph(w *v2.DeclarativeWorkflow) (*graph, error) {
 	return g, nil
 }
 
-// cycleMembers runs Kahn's algorithm and returns the sorted names that never
-// reach in-degree zero. Empty means acyclic.
 func (g *graph) cycleMembers() []string {
 	indeg := map[string]int{}
 	for _, n := range g.names {
@@ -105,8 +100,6 @@ func (g *graph) cycleMembers() []string {
 	return cyc
 }
 
-// levels returns the topological levels. Tasks in one level have no
-// dependency on each other. Names in a level are sorted.
 func (g *graph) levels() [][]string {
 	depth := map[string]int{}
 	var visit func(string) int
@@ -123,20 +116,19 @@ func (g *graph) levels() [][]string {
 		depth[n] = d
 		return d
 	}
-	max := -1
+	deepest := -1
 	for _, n := range g.names {
-		if d := visit(n); d > max {
-			max = d
+		if d := visit(n); d > deepest {
+			deepest = d
 		}
 	}
-	out := make([][]string, max+1)
+	out := make([][]string, deepest+1)
 	for _, n := range g.names {
 		out[depth[n]] = append(out[depth[n]], n)
 	}
 	return out
 }
 
-// transitiveDeps returns every task that task depends on, directly or not.
 func (g *graph) transitiveDeps(task string) map[string]bool {
 	out := map[string]bool{}
 	stack := append([]string{}, g.deps[task]...)

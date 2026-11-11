@@ -31,10 +31,14 @@ func manifestOf(t *testing.T, w *v2.DeclarativeWorkflow) *v2.PipelineManifest {
 	return &v2.PipelineManifest{Type: v2.PIPELINE_MANIFEST_TYPE_DECLARATIVE, Content: anyMsg}
 }
 
-func strVal(s string) *types.Value  { return &types.Value{Kind: &types.Value_StringValue{StringValue: s}} }
-func numVal(f float64) *types.Value { return &types.Value{Kind: &types.Value_NumberValue{NumberValue: f}} }
-func boolVal(b bool) *types.Value   { return &types.Value{Kind: &types.Value_BoolValue{BoolValue: b}} }
-func nullVal() *types.Value         { return &types.Value{Kind: &types.Value_NullValue{}} }
+func strVal(s string) *types.Value {
+	return &types.Value{Kind: &types.Value_StringValue{StringValue: s}}
+}
+func numVal(f float64) *types.Value {
+	return &types.Value{Kind: &types.Value_NumberValue{NumberValue: f}}
+}
+func boolVal(b bool) *types.Value { return &types.Value{Kind: &types.Value_BoolValue{BoolValue: b}} }
+func nullVal() *types.Value       { return &types.Value{Kind: &types.Value_NullValue{}} }
 func listVal(vs ...*types.Value) *types.Value {
 	return &types.Value{Kind: &types.Value_ListValue{ListValue: &types.ListValue{Values: vs}}}
 }

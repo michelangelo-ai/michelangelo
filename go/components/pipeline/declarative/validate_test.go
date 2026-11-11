@@ -88,7 +88,7 @@ func TestValidateParameters(t *testing.T) {
 	cases := []struct {
 		name string
 		spec *v2.ParameterSpec
-		want string // empty means accepted
+		want string
 	}{
 		{"string ok", paramSpec(v2.PARAMETER_TYPE_STRING, strVal("x")), ""},
 		{"integer ok", paramSpec(v2.PARAMETER_TYPE_INTEGER, numVal(3)), ""},

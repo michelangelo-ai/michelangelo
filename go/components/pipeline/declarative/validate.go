@@ -23,7 +23,7 @@ var typeNames = map[v2.ParameterType]string{
 func typeName(t v2.ParameterType) string { return typeNames[t] }
 
 // Validate runs the checks that need no task-type registry. It returns the
-// first failure in step order.
+// first failure.
 func Validate(w *v2.DeclarativeWorkflow, lim Limits) error {
 	lim = lim.withDefaults()
 	if w == nil {
@@ -52,10 +52,7 @@ func Validate(w *v2.DeclarativeWorkflow, lim Limits) error {
 	if err := checkParamRefs(w, refs); err != nil {
 		return err
 	}
-	if err := checkTaskRefs(w, g, refs); err != nil {
-		return err
-	}
-	return nil
+	return checkTaskRefs(w, g, refs)
 }
 
 func validateParameters(w *v2.DeclarativeWorkflow) error {
@@ -144,16 +141,12 @@ func checkIntegral(param, what string, f float64) error {
 	return nil
 }
 
-// taskRef is one reference found in a task's config or job_specs.
 type taskRef struct {
 	Task  string
 	Field string
 	Ref   ref
 }
 
-// collectRefs walks config and job_specs of every task, in sorted task order,
-// and returns the references per task. The first parse failure is returned
-// as an Error that names the task and the field.
 func collectRefs(w *v2.DeclarativeWorkflow) (map[string][]taskRef, error) {
 	out := map[string][]taskRef{}
 	names := make([]string, 0, len(w.Tasks))
@@ -188,8 +181,6 @@ func collectRefs(w *v2.DeclarativeWorkflow) (map[string][]taskRef, error) {
 	return out, nil
 }
 
-// walkStruct calls fn for every string leaf, with its dotted path. Keys are
-// visited in sorted order. List elements use [i].
 func walkStruct(prefix string, s *types.Struct, fn func(field, value string)) {
 	if s == nil {
 		return

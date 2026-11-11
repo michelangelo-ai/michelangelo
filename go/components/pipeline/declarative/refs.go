@@ -14,11 +14,9 @@ const (
 )
 
 type ref struct {
-	Kind refKind
-	Name string
-	Path []string
-	// Whole is true when the reference is the entire string, with no
-	// surrounding text or whitespace.
+	Kind  refKind
+	Name  string
+	Path  []string
 	Whole bool
 }
 
@@ -27,7 +25,6 @@ var (
 	refField = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 )
 
-// parseRefs finds every {{ ... }} reference in s, in order.
 func parseRefs(s string) ([]ref, error) {
 	var out []ref
 	rest := s

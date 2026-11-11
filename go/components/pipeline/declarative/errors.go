@@ -1,6 +1,4 @@
 // Package declarative decodes, validates, and plans a DeclarativeWorkflow.
-// It has no apiserver, Kubernetes, or storage imports. The apiserver hook
-// calls it; nothing in this package writes state.
 package declarative
 
 import (
@@ -8,8 +6,7 @@ import (
 	"strings"
 )
 
-// Error is one validation failure. The text names the task or parameter,
-// the field, and the release when they apply.
+// Error is one validation failure.
 type Error struct {
 	Task    string
 	Param   string

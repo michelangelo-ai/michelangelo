@@ -23,9 +23,8 @@ var (
 	descErr  error
 )
 
-// workflowDescriptor builds the DeclarativeWorkflow descriptor from the bytes
-// the gogo stubs register. The gogo stubs drop unknown fields at parse, so
-// strict decoding needs a descriptor the google.golang.org runtime can use.
+// The gogo stubs drop unknown fields at parse. Strict decoding needs a
+// descriptor that the google.golang.org runtime can read.
 func workflowDescriptor() (protoreflect.MessageDescriptor, error) {
 	descOnce.Do(func() {
 		gz := gogoproto.FileDescriptor(declarativeProtoFile)

@@ -52,9 +52,6 @@ func rejectUnknownFields(raw []byte) error {
 	return walkUnknown("DeclarativeWorkflow", dm)
 }
 
-// walkUnknown reports the first unknown field, depth first, fields in
-// declaration order, map keys sorted. google.protobuf.Struct and Value are
-// open by design and are not walked.
 func walkUnknown(path string, m protoreflect.Message) error {
 	if u := m.GetUnknown(); len(u) > 0 {
 		num, _, _ := protowire.ConsumeTag(u)

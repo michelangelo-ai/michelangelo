@@ -4,9 +4,7 @@ import (
 	v2 "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
-// Plan builds the dry-run explain-plan: topological levels, task count, and
-// the warnings the caller collected. It fails on a graph that does not
-// validate structurally.
+// Plan builds the dry-run explain plan. It fails when the task graph is not valid.
 func Plan(w *v2.DeclarativeWorkflow, interpreterVersion string, warnings []string) (*v2.ExplainPlan, error) {
 	if w == nil {
 		return nil, &Error{Msg: "workflow is not set"}

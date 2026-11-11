@@ -8,8 +8,8 @@ import (
 	v2 "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
-// ValidateAgainst runs the checks that need one release's task-type schemas.
-// Call Validate first; this function assumes a well-formed graph.
+// ValidateAgainst checks w against the task-type schemas of rel. Call Validate
+// first, because ValidateAgainst assumes a valid workflow.
 func ValidateAgainst(w *v2.DeclarativeWorkflow, rel *Release) error {
 	if rel == nil {
 		return &Error{Msg: "release is not set"}
@@ -56,12 +56,10 @@ type sectionChecker struct {
 	release  string
 }
 
-func (c *sectionChecker) errf(field, format string, args ...interface{}) error {
+func (c *sectionChecker) errf(field, format string, args ...any) error {
 	return &Error{Task: c.task, Field: field, Release: c.release, Msg: fmt.Sprintf(format, args...)}
 }
 
-// check validates one struct against one schema. prefix is "config" or
-// "job_specs" at the top and grows with each group.
 func (c *sectionChecker) check(prefix string, s *types.Struct, schema Schema) error {
 	var fields map[string]*types.Value
 	if s != nil {
@@ -158,7 +156,6 @@ func (c *sectionChecker) leaf(path string, v *types.Value, slot string) error {
 	return nil
 }
 
-// reference checks a string value that holds references against the slot.
 func (c *sectionChecker) reference(path string, refs []ref, slot string) error {
 	whole := len(refs) == 1 && refs[0].Whole
 	if !whole {
