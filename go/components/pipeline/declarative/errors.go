@@ -1,0 +1,54 @@
+// Package declarative decodes, validates, and plans a DeclarativeWorkflow.
+// It has no apiserver, Kubernetes, or storage imports. The apiserver hook
+// calls it; nothing in this package writes state.
+package declarative
+
+import (
+	"fmt"
+	"strings"
+)
+
+// Error is one validation failure. The text names the task or parameter,
+// the field, and the release when they apply.
+type Error struct {
+	Task    string
+	Param   string
+	Field   string
+	Release string
+	Msg     string
+}
+
+func (e *Error) Error() string {
+	var b strings.Builder
+	switch {
+	case e.Task != "":
+		fmt.Fprintf(&b, "task %q: ", e.Task)
+	case e.Param != "":
+		fmt.Fprintf(&b, "parameter %q: ", e.Param)
+	}
+	if e.Field != "" {
+		b.WriteString(e.Field)
+		b.WriteByte(' ')
+	}
+	b.WriteString(e.Msg)
+	if e.Release != "" {
+		b.WriteString(" in ")
+		b.WriteString(e.Release)
+	}
+	return b.String()
+}
+
+// Limits bounds a workflow. A zero field takes the default.
+type Limits struct {
+	MaxTasks int
+}
+
+// DefaultLimits returns the platform defaults.
+func DefaultLimits() Limits { return Limits{MaxTasks: 500} }
+
+func (l Limits) withDefaults() Limits {
+	if l.MaxTasks <= 0 {
+		l.MaxTasks = DefaultLimits().MaxTasks
+	}
+	return l
+}
