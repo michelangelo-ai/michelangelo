@@ -24,13 +24,15 @@ from michelangelo.workflow.schema.native_transform import (  # noqa: E402
     TabularNativeTransformConfig,
 )
 from michelangelo.workflow.schema.ray_data_io import RayDataContextConfig  # noqa: E402
+from michelangelo.workflow.tasks.functions.data.ray.write import (  # noqa: E402
+    save_datasets as _save_datasets,
+)
 from michelangelo.workflow.tasks.tabular_native_transform._private import (  # noqa: E402
     incremental_training,
 )
 from michelangelo.workflow.tasks.tabular_native_transform.task import (  # noqa: E402
     _create_transform_model,
     _load_transform_spec,
-    _save_datasets,
     _validate_datasets,
     tabular_native_transform,
 )
@@ -38,6 +40,7 @@ from michelangelo.workflow.variables import DatasetVariable  # noqa: E402
 from michelangelo.workflow.variables.types import NativeTransformResult  # noqa: E402
 
 _TASK = "michelangelo.workflow.tasks.tabular_native_transform.task"
+_WRITE = "michelangelo.workflow.tasks.functions.data.ray.write"
 
 _SIMPLE_SPEC = {
     "transform_specs": [
@@ -101,6 +104,7 @@ class TabularNativeTransformTaskTest(TestCase):
             object_store_memory_limit=None,
             wait_for_min_actors_s=None,
             max_blocks_in_streaming_gen_buffer=None,
+            preserve_order=None,
         )
 
     @patch(f"{_TASK}.set_ray_data_context")
@@ -116,6 +120,7 @@ class TabularNativeTransformTaskTest(TestCase):
                 object_store_memory_limit=4096,
                 wait_for_min_actors_s=30,
                 max_blocks_in_streaming_gen_buffer=1,
+                preserve_order=True,
             ),
         )
         tabular_native_transform(config, {"train": train})
@@ -126,6 +131,7 @@ class TabularNativeTransformTaskTest(TestCase):
             object_store_memory_limit=4096,
             wait_for_min_actors_s=30,
             max_blocks_in_streaming_gen_buffer=1,
+            preserve_order=True,
         )
 
     # -- early return ----------------------------------------------------
@@ -478,7 +484,7 @@ class TabularNativeTransformTaskTest(TestCase):
         tabular_native_transform(config, {"train": train})
         mock_save.assert_called_once_with()
 
-    @patch(f"{_TASK}.ray")
+    @patch(f"{_WRITE}.ray")
     @patch.object(DatasetVariable, "save_ray_dataset")
     @patch(f"{_TASK}.native_transform")
     def test_max_rows_per_file_below_ray_floor_raises(
@@ -503,7 +509,7 @@ class TabularNativeTransformTaskTest(TestCase):
         with self.assertRaises(ConfigurationError):
             tabular_native_transform(config, {"train": train})
 
-    @patch(f"{_TASK}.ray")
+    @patch(f"{_WRITE}.ray")
     @patch.object(DatasetVariable, "save_ray_dataset")
     @patch(f"{_TASK}.native_transform")
     def test_min_rows_per_file_below_ray_floor_raises(
