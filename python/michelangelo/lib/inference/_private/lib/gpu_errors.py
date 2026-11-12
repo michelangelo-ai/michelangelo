@@ -97,7 +97,7 @@ def _is_poisoned_context_error(exc: BaseException) -> bool:
     return from_gpu_stack and any(sig in text for sig in _POISONED_CONTEXT_SIGNATURES)
 
 
-def should_restart_worker(exc: BaseException) -> bool:
+def _should_restart_actor_for_gpu_error(exc: BaseException) -> bool:
     """Whether ``exc`` or an exception chained under it poisoned the CUDA context.
 
     Args:
