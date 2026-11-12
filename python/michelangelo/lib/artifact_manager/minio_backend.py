@@ -175,8 +175,7 @@ class MinioStorageBackend(StorageBackend):
         The HTTP client holds locks and sockets, so only the connection settings
         are kept and the client is rebuilt by ``__setstate__``. This lets the
         backend be shipped to remote workers, for example as an argument to a
-        Ray actor. The state includes the access and secret keys, so a pickled
-        backend must be treated as a credential.
+        Ray actor.
         """
         state = self.__dict__.copy()
         del state["_client"], state["_S3Error"]
