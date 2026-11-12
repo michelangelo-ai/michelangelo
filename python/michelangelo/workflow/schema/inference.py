@@ -36,10 +36,12 @@ __all__ = [
 ]
 
 
-def _require_positive(name: str, value: float | None) -> None:
-    """Raise ``ConfigurationError`` if ``value`` is set and not positive."""
-    if value is not None and value <= 0:
-        raise ConfigurationError(f"batch_options.{name} must be > 0, got {value!r}.")
+def _require_at_least(name: str, value: float | None, minimum: float) -> None:
+    """Raise ``ConfigurationError`` if ``value`` is set and below ``minimum``."""
+    if value is not None and value < minimum:
+        raise ConfigurationError(
+            f"batch_options.{name} must be >= {minimum}, got {value!r}."
+        )
 
 
 @dataclass
@@ -49,7 +51,7 @@ class ModelReference:
     Attributes:
         name: Model name in the model registry.
         revision_id: Revision of the model. ``None`` selects the latest
-            revision the registry reports.
+            registered version of the model.
 
     Raises:
         ConfigurationError: If ``name`` is empty or ``revision_id`` is negative.
@@ -83,13 +85,15 @@ class BatchOptions:
             choose, which depends on the Ray version, so set it explicitly for
             reproducible batching. Ray requires it whenever ``num_gpus`` is set.
         num_gpus: GPUs to reserve for each parallel map worker. Fractional
-            values are allowed, e.g. ``0.125``. ``None`` reserves none.
+            values are allowed, e.g. ``0.125``. ``0`` and ``None`` both reserve
+            none.
         concurrency: The number of workers in the actor pool. ``None`` lets Ray
             size the pool.
         num_cpus: CPUs to reserve for each parallel map worker. Values above
             ``1`` also enable a thread pool for the Arrow-to-NumPy conversion.
             Specifying both ``num_cpus`` and ``num_gpus`` is experimental in
-            Ray and may cause scheduling or stability issues.
+            Ray and may cause scheduling or stability issues. ``0`` and
+            ``None`` both reserve none.
         max_concurrency: Ray actor ``max_concurrency`` for the map workers.
             Only forwarded when set.
         max_tasks_in_flight_per_actor: Maximum queued tasks per actor in
@@ -104,8 +108,10 @@ class BatchOptions:
             ``None`` means ``3``; ``-1`` retries without limit.
 
     Raises:
-        ConfigurationError: If a size or count field is not positive, or a
-            retry field is below ``-1``.
+        ConfigurationError: If ``batch_size``, ``concurrency``,
+            ``max_concurrency`` or ``max_tasks_in_flight_per_actor`` is not
+            positive, ``num_gpus`` or ``num_cpus`` is negative, or a retry
+            field is below ``-1``.
 
     Example:
         >>> BatchOptions(batch_size=4096, num_gpus=0.25).batch_size
@@ -122,22 +128,18 @@ class BatchOptions:
     max_task_retries: int | None = None
 
     def __post_init__(self) -> None:
-        """Validate sizes and counts."""
+        """Validate sizes, resource reservations and retry counts."""
         for name in (
             "batch_size",
-            "num_gpus",
             "concurrency",
-            "num_cpus",
             "max_concurrency",
             "max_tasks_in_flight_per_actor",
         ):
-            _require_positive(name, getattr(self, name))
+            _require_at_least(name, getattr(self, name), 1)
+        for name in ("num_gpus", "num_cpus"):
+            _require_at_least(name, getattr(self, name), 0)
         for name in ("max_restarts", "max_task_retries"):
-            value = getattr(self, name)
-            if value is not None and value < -1:
-                raise ConfigurationError(
-                    f"batch_options.{name} must be >= -1, got {value!r}."
-                )
+            _require_at_least(name, getattr(self, name), -1)
 
 
 @dataclass
@@ -182,8 +184,11 @@ class OfflineInferenceConfig:
             for custom models. ``None`` scores the model passed to the task.
         input_columns: Columns fed to the model, in the order the model's
             input schema expects. ``None`` uses the model's input schema.
-        batch_options: Ray processing options.
-        padding_options: Padding values for ragged input columns.
+        batch_options: Ray processing options. An explicit ``None`` (for
+            example ``batch_options: null`` in a config file) is replaced by
+            the defaults.
+        padding_options: Padding values for ragged input columns. An explicit
+            ``None`` is replaced by the defaults.
         columns_to_keep: Restricts the output to exactly these input columns,
             plus the prediction and metadata columns, which are always kept.
             ``None`` keeps every input column. Label columns are not kept
@@ -209,6 +214,18 @@ class OfflineInferenceConfig:
     padding_options: PaddingOptions = field(default_factory=PaddingOptions)
     columns_to_keep: list[str] | None = None
     backend: str | None = None
+
+    def __post_init__(self) -> None:
+        """Replace an explicit ``None`` option group with its defaults.
+
+        The codec passes a ``null`` value through as ``None``, bypassing the
+        field default, and consumers read these two fields without a ``None``
+        check.
+        """
+        if self.batch_options is None:
+            self.batch_options = BatchOptions()
+        if self.padding_options is None:
+            self.padding_options = PaddingOptions()
 
 
 @dataclass

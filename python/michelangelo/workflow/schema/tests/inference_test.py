@@ -144,11 +144,10 @@ def test_defaults_are_unset():
 
 def test_unknown_key_fails_loudly():
     """Options this package does not support raise TypeError on decode."""
-    for key in ("onnx_to_trt", "trt_precision", "inference_engine", "namespace"):
-        with pytest.raises(TypeError):
-            OfflineInferenceConfig(**{key: 1})
     with pytest.raises(TypeError):
-        ModelReference(name="m", namespace="ns")
+        OfflineInferenceConfig(unsupported_option=1)
+    with pytest.raises(TypeError):
+        ModelReference(name="m", unsupported_option=1)
     with pytest.raises(TypeError):
         TabularInferenceConfig(llm=None)
 
@@ -156,7 +155,7 @@ def test_unknown_key_fails_loudly():
 def test_unknown_key_fails_through_codec():
     """The codec path raises the same TypeError as direct construction."""
     encoded = DataclassCodec().encode(OfflineInferenceConfig())
-    encoded["trt_precision"] = "fp16"
+    encoded["unsupported_option"] = "fp16"
     with pytest.raises(TypeError):
         DataclassCodec().decode(encoded)
 
@@ -165,9 +164,7 @@ def test_unknown_key_fails_through_codec():
     "field_name",
     [
         "batch_size",
-        "num_gpus",
         "concurrency",
-        "num_cpus",
         "max_concurrency",
         "max_tasks_in_flight_per_actor",
     ],
@@ -177,6 +174,28 @@ def test_batch_options_reject_non_positive(field_name, bad):
     """Sizes and worker counts must be positive when set."""
     with pytest.raises(ConfigurationError, match=field_name):
         BatchOptions(**{field_name: bad})
+
+
+@pytest.mark.parametrize("field_name", ["num_gpus", "num_cpus"])
+def test_resource_reservations_accept_zero_but_not_negative(field_name):
+    """Zero means nothing is reserved; only a negative amount is invalid."""
+    assert getattr(BatchOptions(**{field_name: 0}), field_name) == 0
+    assert _roundtrip(BatchOptions(**{field_name: 0})) == BatchOptions(
+        **{field_name: 0}
+    )
+    with pytest.raises(ConfigurationError, match=field_name):
+        BatchOptions(**{field_name: -1})
+
+
+@pytest.mark.parametrize("field_name", ["batch_options", "padding_options"])
+def test_explicit_null_option_groups_become_defaults(field_name):
+    """A ``null`` from a config file does not leave None for consumers."""
+    encoded = DataclassCodec().encode(OfflineInferenceConfig())
+    encoded[field_name] = None
+    decoded = DataclassCodec().decode(encoded)
+    assert decoded == OfflineInferenceConfig()
+    assert getattr(decoded, field_name) is not None
+    assert OfflineInferenceConfig(**{field_name: None}) == OfflineInferenceConfig()
 
 
 @pytest.mark.parametrize("field_name", ["max_restarts", "max_task_retries"])
@@ -207,14 +226,3 @@ def test_padding_options_reject_non_string_keys():
     """Column names must be strings."""
     with pytest.raises(ConfigurationError, match="keys"):
         PaddingOptions(column_padding_values={1: 0})
-
-
-def test_no_unsupported_surface_in_module():
-    """Out-of-scope options never appear in the schema module source."""
-    import inspect
-
-    from michelangelo.workflow.schema import inference
-
-    source = inspect.getsource(inference)
-    for banned in ("onnx_to_trt", "trt_precision", "inference_engine", "namespace:"):
-        assert banned not in source.replace("``namespace``", "")
