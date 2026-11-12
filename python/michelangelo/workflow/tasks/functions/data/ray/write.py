@@ -82,6 +82,11 @@ def write_config_to_kwargs(write_config: WriteConfig | None) -> dict:
     if write_config.concurrency is not None:
         write_kwargs["concurrency"] = write_config.concurrency
 
+    # ``write_parquet`` has no flat ``memory`` kwarg; Ray takes it through
+    # ``ray_remote_args``.
+    if write_config.memory is not None:
+        write_kwargs["ray_remote_args"] = {"memory": write_config.memory}
+
     return write_kwargs
 
 
@@ -93,7 +98,7 @@ def save_datasets(datasets: dict[str, DatasetVariable], **write_kwargs) -> None:
         **write_kwargs: Forwarded to ``DatasetVariable.save_ray_dataset()``
             and ultimately to ``ray.data.Dataset.write_parquet()``.
             Supported keys include ``max_rows_per_file``,
-            ``min_rows_per_file`` and ``concurrency``.
+            ``min_rows_per_file``, ``concurrency`` and ``ray_remote_args``.
     """
     for dataset_name, dataset_var in datasets.items():
         _logger.info("Saving dataset: %s", dataset_name)

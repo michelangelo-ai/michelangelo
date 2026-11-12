@@ -109,6 +109,7 @@ def tabular_native_transform(
         max_blocks_in_streaming_gen_buffer=(
             rc.max_blocks_in_streaming_gen_buffer if rc else None
         ),
+        preserve_order=rc.preserve_order if rc else None,
     )
 
     inc = config.incremental_training
