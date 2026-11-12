@@ -6,6 +6,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+pytest.importorskip("ray")
+
 from michelangelo.workflow.schema.exceptions import ConfigurationError
 from michelangelo.workflow.schema.ray_data_io import WriteConfig
 from michelangelo.workflow.tasks.functions.data.ray.write import (
