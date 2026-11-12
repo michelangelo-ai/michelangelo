@@ -25,12 +25,16 @@ from michelangelo.workflow.schema.inference import (
     BatchOptions,
     ModelReference,
     OfflineInferenceConfig,
+    RayDataContextConfig,
     SamplingConfig,
     TabularInferenceConfig,
 )
 from michelangelo.workflow.schema.ray_data_io import WriteConfig
 from michelangelo.workflow.tasks.evaluator.task import evaluate
 from michelangelo.workflow.tasks.tabular_inference import tabular_inference
+from michelangelo.workflow.tasks.tabular_inference._private.model_source import (
+    resolve_model_source,
+)
 from michelangelo.workflow.variables import DatasetVariable, ModelVariable
 from michelangelo.workflow.variables._private.utils.serialization import save_object
 from michelangelo.workflow.variables.metadata import (
@@ -137,7 +141,7 @@ def test_scores_with_in_process_model_variable(ray_session, tmp_path, out_dir):
     model.metadata._schema = save_object(_SCHEMA)
 
     result = tabular_inference(
-        _config(), {"train": _dataset_var(tmp_path)}, model=model
+        _config(), {"train": _dataset_var(tmp_path)}, assembled_model=model
     )
 
     _assert_scored(result["train"])
@@ -148,7 +152,7 @@ def test_scores_with_assembled_model_deployable(ray_session, tmp_path, out_dir):
     assembled = _assembled(_package(tmp_path / "pkg"))
 
     result = tabular_inference(
-        _config(), {"train": _dataset_var(tmp_path)}, model=assembled
+        _config(), {"train": _dataset_var(tmp_path)}, assembled_model=assembled
     )
 
     _assert_scored(result["train"])
@@ -184,7 +188,7 @@ def test_output_feeds_the_evaluator_unchanged(ray_session, tmp_path, out_dir):
     """The scored datasets go straight into evaluate(), prediction is a scalar."""
     assembled = _assembled(_package(tmp_path / "pkg"))
     result = tabular_inference(
-        _config(), {"test": _dataset_var(tmp_path)}, model=assembled
+        _config(), {"test": _dataset_var(tmp_path)}, assembled_model=assembled
     )
     config = EvaluatorConfig(
         metrics=[
@@ -207,7 +211,9 @@ def test_none_dataset_is_passed_through(ray_session, tmp_path, out_dir):
     """A None dataset stays None and the others are scored."""
     assembled = _assembled(_package(tmp_path / "pkg"))
     result = tabular_inference(
-        _config(), {"train": _dataset_var(tmp_path), "test": None}, model=assembled
+        _config(),
+        {"train": _dataset_var(tmp_path), "test": None},
+        assembled_model=assembled,
     )
     assert result["test"] is None
     _assert_scored(result["train"])
@@ -227,7 +233,9 @@ def test_empty_dataset_is_returned_as_it_came(ray_session, tmp_path, out_dir):
     empty_var = DatasetVariable(path=str(empty_dir))
     assembled = _assembled(_package(tmp_path / "pkg"))
 
-    result = tabular_inference(_config(), {"test": empty_var}, model=assembled)
+    result = tabular_inference(
+        _config(), {"test": empty_var}, assembled_model=assembled
+    )
 
     assert result["test"] is empty_var
 
@@ -248,7 +256,7 @@ def test_write_config_is_applied(ray_session, tmp_path, out_dir):
     config.write_config = WriteConfig(max_rows_per_file=2)
 
     result = tabular_inference(
-        config, {"train": _dataset_var(tmp_path)}, model=assembled
+        config, {"train": _dataset_var(tmp_path)}, assembled_model=assembled
     )
 
     parquet_files = list((out_dir).rglob("*.parquet"))
@@ -265,7 +273,7 @@ def test_sampling_scores_only_the_sampled_rows(ray_session, tmp_path, out_dir):
     result = tabular_inference(
         config,
         {"train": _dataset_var(tmp_path, rows=rows)},
-        model=_assembled(_package(tmp_path / "pkg")),
+        assembled_model=_assembled(_package(tmp_path / "pkg")),
     )
 
     scored = _rows(result["train"])
@@ -273,18 +281,20 @@ def test_sampling_scores_only_the_sampled_rows(ray_session, tmp_path, out_dir):
     assert [r["y"] for r in scored] == [r["label"] for r in scored]
 
 
-def test_max_errored_blocks_reaches_the_ray_data_context(ray_session):
-    """The task-level budget is applied to Ray Data before scoring."""
+def test_ray_data_context_options_reach_ray_data(ray_session):
+    """Task-level and context-level options are applied before scoring."""
     config = _config()
     config.max_errored_blocks = 7
+    config.ray_data_context = RayDataContextConfig(preserve_order=True)
     with patch(
         "michelangelo.workflow.tasks.tabular_inference.task.set_ray_data_context"
     ) as set_context:
         tabular_inference(
-            config, {"train": None}, model=ModelVariable.create(DictModel())
+            config, {"train": None}, assembled_model=ModelVariable.create(DictModel())
         )
 
     assert set_context.call_args.kwargs["max_errored_blocks"] == 7
+    assert set_context.call_args.kwargs["preserve_order"] is True
 
 
 def test_bad_write_config_fails_before_scoring(tmp_path):
@@ -299,7 +309,7 @@ def test_bad_write_config_fails_before_scoring(tmp_path):
     ):
         mock_ray.__version__ = "2.40.0"
         with pytest.raises(ConfigurationError, match="max_rows_per_file"):
-            tabular_inference(config, {"train": None}, model=object())
+            tabular_inference(config, {"train": None}, assembled_model=object())
     resolve.assert_not_called()
 
 
@@ -308,13 +318,15 @@ def test_bad_write_config_fails_before_scoring(tmp_path):
 
 def test_no_model_source_names_both_ways_to_fix(tmp_path):
     """Without a model argument or a registry reference the error says what to set."""
-    with pytest.raises(ValueError, match=r"local_models\[0\]\.model.*model argument"):
+    with pytest.raises(
+        ConfigurationError, match=r"local_models\[0\]\.model.*assembled_model"
+    ):
         tabular_inference(_config(), {"train": None})
 
 
 def test_registry_reference_needs_registry_client(tmp_path):
     """A reference without a client names the missing argument."""
-    with pytest.raises(ValueError, match="registry_client"):
+    with pytest.raises(ConfigurationError, match="registry_client"):
         tabular_inference(
             _config(model=ModelReference(name="m")),
             {"train": None},
@@ -324,7 +336,7 @@ def test_registry_reference_needs_registry_client(tmp_path):
 
 def test_registry_reference_needs_storage_backend():
     """A reference without a backend names the missing argument."""
-    with pytest.raises(ValueError, match="storage_backend"):
+    with pytest.raises(ConfigurationError, match="storage_backend"):
         tabular_inference(
             _config(model=ModelReference(name="m")),
             {"train": None},
@@ -336,7 +348,7 @@ def test_registry_entry_without_deployable_is_rejected(tmp_path):
     """A registered PyTorch model with only a raw package is not scored from it."""
     registry = InMemoryRegistryClient()
     registry.register_model("m", artifact_uri="s3://bucket/raw", labels=_TORCH_LABELS)
-    with pytest.raises(ValueError, match="no deployable_artifact_uri"):
+    with pytest.raises(ConfigurationError, match="no deployable_artifact_uri"):
         tabular_inference(
             _config(model=ModelReference(name="m")),
             {"train": None},
@@ -349,8 +361,8 @@ def test_registry_entry_without_deployable_is_rejected(tmp_path):
 def test_model_without_deployable_is_rejected(tmp_path, deployable):
     """A PyTorch model with only a raw package is never silently scored from it."""
     assembled = _assembled(deployable, raw_path=str(tmp_path))
-    with pytest.raises(ValueError, match="no deployable package"):
-        tabular_inference(_config(), {"train": None}, model=assembled)
+    with pytest.raises(ConfigurationError, match="no deployable package"):
+        tabular_inference(_config(), {"train": None}, assembled_model=assembled)
 
 
 def test_custom_assembled_model_is_scored_from_its_raw_package(
@@ -368,36 +380,51 @@ def test_custom_assembled_model_is_scored_from_its_raw_package(
     )
 
     result = tabular_inference(
-        _config(), {"train": _dataset_var(tmp_path)}, model=assembled
+        _config(), {"train": _dataset_var(tmp_path)}, assembled_model=assembled
     )
 
     rows = _rows(result["train"])
     assert [r["response"] for r in rows] == [r["a"] + 1 for r in rows]
 
 
-@pytest.mark.parametrize(
-    ("framework", "message"),
-    [(None, "no training framework"), ("xgboost", "'xgboost'.*not support")],
-    ids=["missing", "unsupported"],
-)
-def test_framework_must_be_known(tmp_path, framework, message):
-    """No framework, or one without a scoring path, is an error, not a guess."""
-    assembled = _assembled(str(tmp_path), raw_path=str(tmp_path), framework=framework)
-    with pytest.raises(ValueError, match=message):
-        tabular_inference(_config(), {"train": None}, model=assembled)
+@pytest.mark.parametrize("framework", [None, "xgboost"], ids=["missing", "unknown"])
+def test_other_assembled_frameworks_use_the_raw_package(tmp_path, framework):
+    """Only PyTorch and Lightning use the deployable package; the rest use raw."""
+    raw = tmp_path / "raw"
+    raw.mkdir()
+    assembled = _assembled(
+        "s3://bucket/deployable-is-never-used", raw_path=str(raw), framework=framework
+    )
 
+    source = resolve_model_source(
+        OfflineInferenceConfig(),
+        assembled,
+        0,
+        storage_backend=None,
+        registry_client=None,
+    )
+
+    assert source.model_path == str(raw)
+
+
+@pytest.mark.parametrize("framework", [None, "xgboost"], ids=["missing", "unknown"])
+def test_non_custom_registry_models_use_the_deployable_artifact(tmp_path, framework):
+    """Only a custom registered model uses the raw artifact."""
     registry = InMemoryRegistryClient()
     labels = {"training_framework": framework} if framework else {}
     registry.register_model(
         "m", artifact_uri="s3://r", deployable_artifact_uri="s3://d", labels=labels
     )
-    with pytest.raises(ValueError, match=message):
-        tabular_inference(
-            _config(model=ModelReference(name="m")),
-            {"train": None},
-            storage_backend=LocalStorageBackend(str(tmp_path)),
-            registry_client=registry,
-        )
+
+    source = resolve_model_source(
+        OfflineInferenceConfig(model=ModelReference(name="m")),
+        None,
+        0,
+        storage_backend=LocalStorageBackend(str(tmp_path)),
+        registry_client=registry,
+    )
+
+    assert source.uri == "s3://d"
 
 
 def test_registry_deployable_pushed_as_a_tar_archive(ray_session, tmp_path, out_dir):
@@ -431,7 +458,7 @@ def test_registry_deployable_pushed_as_a_tar_archive(ray_session, tmp_path, out_
 def test_unsupported_model_type_is_rejected():
     """Anything else passed as the model is a TypeError."""
     with pytest.raises(TypeError, match="ModelVariable or AssembledModel"):
-        tabular_inference(_config(), {"train": None}, model="nope")
+        tabular_inference(_config(), {"train": None}, assembled_model="nope")
 
 
 def test_remote_assembled_package_is_downloaded_by_the_workers(
@@ -451,7 +478,7 @@ def test_remote_assembled_package_is_downloaded_by_the_workers(
     result = tabular_inference(
         _config(),
         {"train": _dataset_var(tmp_path)},
-        model=assembled,
+        assembled_model=assembled,
         storage_backend=FakeRemote(base_dir=str(tmp_path)),
     )
 
@@ -460,9 +487,6 @@ def test_remote_assembled_package_is_downloaded_by_the_workers(
 
 def test_remote_sources_are_not_downloaded_on_the_driver(tmp_path):
     """Resolving a remote model records the URI and downloads nothing."""
-    from michelangelo.workflow.tasks.tabular_inference._private.model_source import (
-        resolve_model_source,
-    )
 
     class Spy(LocalStorageBackend):
         def download(self, uri, local_path):
@@ -523,11 +547,11 @@ def test_dataset_already_loaded_as_pandas_is_rejected_clearly(tmp_path):
     var = DatasetVariable.create(pd.DataFrame({"a": [1.0]}), path=str(tmp_path / "x"))
     model = ModelVariable.create(DictModel())
     with pytest.raises(TypeError, match=r"datasets\['train'\].*DataFrame"):
-        tabular_inference(_config(), {"train": var}, model=model)
+        tabular_inference(_config(), {"train": var}, assembled_model=model)
 
 
 def test_remote_assembled_package_needs_storage_backend():
     """A URI that is not a local directory names the missing argument."""
     assembled = _assembled("s3://bucket/deployable")
-    with pytest.raises(ValueError, match="storage_backend"):
-        tabular_inference(_config(), {"train": None}, model=assembled)
+    with pytest.raises(ConfigurationError, match="storage_backend"):
+        tabular_inference(_config(), {"train": None}, assembled_model=assembled)

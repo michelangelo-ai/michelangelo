@@ -7,7 +7,7 @@ columns added, in the form the evaluator task consumes.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from michelangelo.lib.inference import batch_model_inference
 from michelangelo.uniflow.plugins.ray.data_context import set_ray_data_context
@@ -26,6 +26,8 @@ if TYPE_CHECKING:
     from michelangelo.lib.artifact_manager.storage_backend import StorageBackend
     from michelangelo.lib.model_manager.registry.client import ModelRegistryClient
     from michelangelo.workflow.schema.inference import TabularInferenceConfig
+    from michelangelo.workflow.variables import ModelVariable
+    from michelangelo.workflow.variables.types import AssembledModel
 
 _logger = logging.getLogger(__name__)
 
@@ -35,7 +37,7 @@ __all__ = ["tabular_inference"]
 def tabular_inference(
     config: TabularInferenceConfig,
     datasets: dict[str, DatasetVariable | None],
-    model: Any = None,
+    assembled_model: ModelVariable | AssembledModel | None = None,
     *,
     storage_backend: StorageBackend | None = None,
     registry_client: ModelRegistryClient | None = None,
@@ -49,17 +51,20 @@ def tabular_inference(
     A packaged model's training framework picks the package. PyTorch and
     Lightning models are scored from the deployable package, the artifact
     serving runs, so batch predictions match online ones, including a native
-    transform the assembler fused into the model. Custom models are scored from
-    the raw package. A model whose framework is missing or not supported is an
-    error.
+    transform the assembler fused into the model. Any other framework, or none
+    recorded, is scored from the raw package, whose own metadata decides how it
+    loads. A registered model is scored from its raw artifact when its
+    ``training_framework`` label is ``custom``, and from its deployable
+    artifact otherwise.
 
     Args:
         config: Which models to run and how.
         datasets: Dataset name to dataset, for example ``{"train": ...,
             "validation": ...}``. ``None`` entries are passed through.
-        model: The model to score with, used by every ``local_models`` entry that
-            has no ``model`` reference: a ``ModelVariable`` (scored in-process) or
-            an ``AssembledModel`` (scored from the package its framework picks).
+        assembled_model: The model to score with, used by every ``local_models``
+            entry that has no ``model`` reference: a ``ModelVariable`` (scored
+            in-process) or an ``AssembledModel`` (scored from the package its
+            framework picks).
         storage_backend: Downloads model packages that are not local
             directories: registry artifacts, and the packages of an
             ``AssembledModel`` stored remotely. Not needed for an in-process
@@ -74,13 +79,15 @@ def tabular_inference(
         ``local_models``, ``datasets`` is returned unchanged.
 
     Raises:
-        ValueError: If a model cannot be resolved, or models produce different
-            output columns.
-        ConfigurationError: If ``config.write_config`` asks for an option the
-            installed Ray cannot do.
-        TypeError: If ``model`` is not a supported type, or a dataset is already
-            loaded as something other than a Ray Dataset.
+        ConfigurationError: If a model source cannot be resolved (none given, a
+            needed ``storage_backend`` or ``registry_client`` missing, or an
+            empty package path), or ``config.write_config`` asks for an option
+            the installed Ray cannot do.
+        ValueError: If models produce different output columns.
+        TypeError: If ``assembled_model`` is not a supported type, or a dataset
+            is already loaded as something other than a Ray Dataset.
     """
+    _logger.info("Starting tabular inference")
     if not config.local_models:
         _logger.warning("No local_models configured; returning datasets unchanged.")
         return datasets
@@ -95,6 +102,7 @@ def tabular_inference(
         max_blocks_in_streaming_gen_buffer=(
             rc.max_blocks_in_streaming_gen_buffer if rc else None
         ),
+        preserve_order=rc.preserve_order if rc else None,
         max_errored_blocks=config.max_errored_blocks,
     )
 
@@ -121,7 +129,7 @@ def tabular_inference(
     sources = [
         resolve_model_source(
             model_config,
-            model,
+            assembled_model,
             index,
             storage_backend=storage_backend,
             registry_client=registry_client,
@@ -150,5 +158,5 @@ def tabular_inference(
         results[name] = to_save[name] = DatasetVariable.create(scored[name])
 
     save_datasets(to_save, **write_kwargs)
-    _logger.info("Tabular inference completed for %d dataset(s)", len(to_save))
+    _logger.info("Tabular inference completed; scored %d dataset(s)", len(to_save))
     return results
