@@ -38,7 +38,7 @@ def pad_batch(
     Raises:
         ValueError: If a ragged column has a dtype with no default sentinel
             (int8, int16 and unsigned integers) and no pad value is given for
-            it. The message names the column.
+            it, or if a column is too irregular to pad to a uniform shape.
 
     Examples:
         >>> batch = {"x": np.array([[1, 2], [3]], dtype=object)}
@@ -53,13 +53,7 @@ def pad_batch(
             and len(arr) > 0
             and isinstance(arr[0], (list, np.ndarray))
         ):
-            try:
-                padded[col] = pad_ragged_tensor(arr, padding.get(col))
-            except ValueError as e:
-                raise ValueError(
-                    f"Cannot pad ragged column {col!r}: {e}. Give it a pad value "
-                    f"with column_padding_values[{col!r}]."
-                ) from e
+            padded[col] = pad_ragged_tensor(arr, padding.get(col))
         else:
             padded[col] = arr
     return padded
