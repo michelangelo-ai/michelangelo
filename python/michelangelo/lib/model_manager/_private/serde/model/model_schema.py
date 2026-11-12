@@ -17,6 +17,9 @@ from michelangelo.lib.model_manager.schema import (
     ModelSchemaItem,
 )
 
+# Triton data type name (``TYPE_FP32``) back to the schema data type.
+_TRITON_TYPE_TO_DATA_TYPE = {f"TYPE_{v}": k for k, v in DATA_TYPE_MAPPING.items()}
+
 _ITEM_PATTERN = re.compile(
     r'\{[^}]*?name\s*:\s*"([^"]+)"[^}]*?data_type\s*:\s*(\w+)'
     r"[^}]*?dims\s*:\s*\[\s*([^\]]*?)\s*\]",
@@ -83,7 +86,6 @@ def load_deployable_model_schema(model_path: str) -> ModelSchema:
 
 def _parse_io_section(section_name: str, content: str) -> list[ModelSchemaItem]:
     """Parse the ``input`` or ``output`` section of a ``config.pbtxt``."""
-    reverse_type_map = {f"TYPE_{v}": k for k, v in DATA_TYPE_MAPPING.items()}
     match = re.search(
         rf"{section_name}\s*:\s*\[((?:[^\[\]]|\[[^\]]*\])*)\]", content, re.DOTALL
     )
@@ -92,12 +94,11 @@ def _parse_io_section(section_name: str, content: str) -> list[ModelSchemaItem]:
 
     items = []
     for name, data_type, dims in _ITEM_PATTERN.findall(match.group(1)):
-        dims = dims.strip()
         items.append(
             ModelSchemaItem(
                 name=name,
-                data_type=reverse_type_map.get(data_type, DataType.FLOAT),
-                shape=[int(d) for d in dims.split(",") if d.strip()] if dims else [],
+                data_type=_TRITON_TYPE_TO_DATA_TYPE.get(data_type, DataType.FLOAT),
+                shape=[int(d) for d in dims.split(",") if d.strip()],
             )
         )
     return items
