@@ -3,7 +3,7 @@
 from michelangelo.workflow.schema.exceptions import ConfigurationError
 from michelangelo.workflow.schema.inference import (
     BatchOptions,
-    ModelReference,
+    ModelIdentifier,
     OfflineInferenceConfig,
     PaddingOptions,
     ParquetReadConfig,
@@ -16,7 +16,7 @@ from michelangelo.workflow.tasks.tabular_inference.task import tabular_inference
 __all__ = [
     "BatchOptions",
     "ConfigurationError",
-    "ModelReference",
+    "ModelIdentifier",
     "OfflineInferenceConfig",
     "PaddingOptions",
     "ParquetReadConfig",
