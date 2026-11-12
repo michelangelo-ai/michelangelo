@@ -11,7 +11,7 @@ from michelangelo.uniflow.core.codec import DataclassCodec
 from michelangelo.workflow.schema.exceptions import ConfigurationError
 from michelangelo.workflow.schema.inference import (
     BatchOptions,
-    ModelReference,
+    ModelIdentifier,
     OfflineInferenceConfig,
     PaddingOptions,
     SamplingConfig,
@@ -40,7 +40,6 @@ _WIRE_FIELDS = {
         "batch_options",
         "padding_options",
         "columns_to_keep",
-        "backend",
     },
     BatchOptions: {
         "batch_size",
@@ -53,14 +52,14 @@ _WIRE_FIELDS = {
         "max_task_retries",
     },
     PaddingOptions: {"column_padding_values"},
-    ModelReference: {"name", "revision_id"},
+    ModelIdentifier: {"name", "revision_id"},
     SamplingConfig: {"fractions", "agg_cols"},
 }
 
 _FULL_CONFIG = TabularInferenceConfig(
     local_models=[
         OfflineInferenceConfig(
-            model=ModelReference(name="housing", revision_id=2),
+            model=ModelIdentifier(name="housing", revision_id=2),
             input_columns=["a", "b"],
             batch_options=BatchOptions(
                 batch_size=1024,
@@ -74,7 +73,6 @@ _FULL_CONFIG = TabularInferenceConfig(
             ),
             padding_options=PaddingOptions(column_padding_values={"a": -1, "b": 0.0}),
             columns_to_keep=["label"],
-            backend="pkg.module.factory",
         )
     ],
     sampling=SamplingConfig(fractions={"train": 0.25}, agg_cols=["session"]),
@@ -99,8 +97,8 @@ def test_field_names_match_wire_format(cls):
 @pytest.mark.parametrize(
     "value",
     [
-        ModelReference(name="m"),
-        ModelReference(name="m", revision_id=0),
+        ModelIdentifier(name="m"),
+        ModelIdentifier(name="m", revision_id=0),
         BatchOptions(),
         BatchOptions(batch_size=8, num_gpus=0.125, max_restarts=-1),
         PaddingOptions(),
@@ -123,7 +121,7 @@ def test_codec_roundtrip_nested_config():
     encoded = DataclassCodec().encode(_FULL_CONFIG)
     assert json.dumps(encoded, default=str)
     decoded = _roundtrip(_FULL_CONFIG)
-    assert decoded.local_models[0].model == ModelReference(
+    assert decoded.local_models[0].model == ModelIdentifier(
         name="housing", revision_id=2
     )
     assert decoded.local_models[0].batch_options.max_task_retries == 0
@@ -137,8 +135,8 @@ def test_defaults_are_unset():
     """A bare config sets nothing, so the task decides every default."""
     cfg = OfflineInferenceConfig()
     assert cfg.model is None
-    assert cfg.batch_options == BatchOptions()
-    assert cfg.padding_options.column_padding_values is None
+    assert cfg.batch_options is None
+    assert cfg.padding_options is None
     assert TabularInferenceConfig().local_models is None
 
 
@@ -147,7 +145,7 @@ def test_unknown_key_fails_loudly():
     with pytest.raises(TypeError):
         OfflineInferenceConfig(unsupported_option=1)
     with pytest.raises(TypeError):
-        ModelReference(name="m", unsupported_option=1)
+        ModelIdentifier(name="m", unsupported_option=1)
     with pytest.raises(TypeError):
         TabularInferenceConfig(llm=None)
 
@@ -188,14 +186,13 @@ def test_resource_reservations_accept_zero_but_not_negative(field_name):
 
 
 @pytest.mark.parametrize("field_name", ["batch_options", "padding_options"])
-def test_explicit_null_option_groups_become_defaults(field_name):
-    """A ``null`` from a config file does not leave None for consumers."""
+def test_explicit_null_option_groups_stay_none(field_name):
+    """A ``null`` option group round-trips as ``None``; the task applies defaults."""
     encoded = DataclassCodec().encode(OfflineInferenceConfig())
     encoded[field_name] = None
     decoded = DataclassCodec().decode(encoded)
+    assert getattr(decoded, field_name) is None
     assert decoded == OfflineInferenceConfig()
-    assert getattr(decoded, field_name) is not None
-    assert OfflineInferenceConfig(**{field_name: None}) == OfflineInferenceConfig()
 
 
 @pytest.mark.parametrize("field_name", ["max_restarts", "max_task_retries"])
@@ -217,9 +214,9 @@ def test_max_errored_blocks_must_be_a_non_negative_int(bad):
 def test_model_reference_validation():
     """An empty name or a negative revision is rejected."""
     with pytest.raises(ConfigurationError, match="name"):
-        ModelReference(name="")
+        ModelIdentifier(name="")
     with pytest.raises(ConfigurationError, match="revision_id"):
-        ModelReference(name="m", revision_id=-1)
+        ModelIdentifier(name="m", revision_id=-1)
 
 
 def test_padding_options_reject_non_string_keys():

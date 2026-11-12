@@ -12,7 +12,7 @@ options this package does not support.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from michelangelo.workflow.schema.exceptions import ConfigurationError
@@ -25,7 +25,7 @@ from michelangelo.workflow.schema.sampling import SamplingConfig
 
 __all__ = [
     "BatchOptions",
-    "ModelReference",
+    "ModelIdentifier",
     "OfflineInferenceConfig",
     "PaddingOptions",
     "ParquetReadConfig",
@@ -45,7 +45,7 @@ def _require_at_least(name: str, value: float | None, minimum: float) -> None:
 
 
 @dataclass
-class ModelReference:
+class ModelIdentifier:
     """Identifies a registered model to score with.
 
     Attributes:
@@ -57,7 +57,7 @@ class ModelReference:
         ConfigurationError: If ``name`` is empty or ``revision_id`` is negative.
 
     Example:
-        >>> ModelReference(name="housing_model", revision_id=3).name
+        >>> ModelIdentifier(name="housing_model", revision_id=3).name
         'housing_model'
     """
 
@@ -184,48 +184,26 @@ class OfflineInferenceConfig:
             for custom models. ``None`` scores the model passed to the task.
         input_columns: Columns fed to the model, in the order the model's
             input schema expects. ``None`` uses the model's input schema.
-        batch_options: Ray processing options. An explicit ``None`` (for
-            example ``batch_options: null`` in a config file) is replaced by
-            the defaults.
-        padding_options: Padding values for ragged input columns. An explicit
-            ``None`` is replaced by the defaults.
+        batch_options: Ray processing options. ``None`` uses the defaults.
+        padding_options: Padding values for ragged input columns. ``None``
+            uses the defaults.
         columns_to_keep: Restricts the output to exactly these input columns,
             plus the prediction and metadata columns, which are always kept.
             ``None`` keeps every input column. Label columns are not kept
             automatically: list them here if a downstream task, such as the
             evaluator, needs them, or they are dropped from the output.
-        backend: Dotted path (``"package.module.factory"``) of a callable that
-            takes a ``BackendContext`` and returns a ``ModelBackend``. It is
-            given the package the training framework picks. ``None`` uses the
-            built-in backend for that package: deployable (TorchScript, ONNX,
-            Python-backend PyTorch) or raw. A custom backend loads from a
-            model package, so it cannot score a model object that was passed
-            to the task in memory.
 
     Example:
         >>> cfg = OfflineInferenceConfig(columns_to_keep=["label"])
-        >>> cfg.batch_options.batch_size is None
+        >>> cfg.batch_options is None
         True
     """
 
-    model: ModelReference | None = None
+    model: ModelIdentifier | None = None
     input_columns: list[str] | None = None
-    batch_options: BatchOptions = field(default_factory=BatchOptions)
-    padding_options: PaddingOptions = field(default_factory=PaddingOptions)
+    batch_options: BatchOptions | None = None
+    padding_options: PaddingOptions | None = None
     columns_to_keep: list[str] | None = None
-    backend: str | None = None
-
-    def __post_init__(self) -> None:
-        """Replace an explicit ``None`` option group with its defaults.
-
-        The codec passes a ``null`` value through as ``None``, bypassing the
-        field default, and consumers read these two fields without a ``None``
-        check.
-        """
-        if self.batch_options is None:
-            self.batch_options = BatchOptions()
-        if self.padding_options is None:
-            self.padding_options = PaddingOptions()
 
 
 @dataclass
