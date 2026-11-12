@@ -104,10 +104,25 @@ def test_named_tuple_uses_field_names_without_schema():
     assert set(out) == {"low", "high"}
 
 
-def test_dict_outputs_keep_their_keys():
-    """A dict output is converted key by key."""
-    out = RawModelBackend(DictOutputModel(), schema=_schema()).predict(_batch())
+def test_dict_outputs_keep_their_keys_without_a_schema():
+    """Without output names a dict output is converted key by key."""
+    out = RawModelBackend(DictOutputModel()).predict(_batch())
     np.testing.assert_allclose(out["double"], [2.0, 4.0])
+
+
+def test_dict_outputs_are_restricted_to_the_schema_names():
+    """Extra keys the schema does not name are dropped."""
+    out = RawModelBackend(
+        DictOutputModel(), schema=_schema(outputs=("double",))
+    ).predict(_batch())
+    assert list(out) == ["double"]
+
+
+def test_dict_output_missing_a_schema_name_is_an_error():
+    """A schema name the model did not return is reported by name."""
+    backend = RawModelBackend(DictOutputModel(), schema=_schema(outputs=("y",)))
+    with pytest.raises(ValueError, match=r"lack schema output\(s\) \['y'\]"):
+        backend.predict(_batch())
 
 
 def test_custom_model_is_called_with_numpy_dict():
@@ -115,6 +130,23 @@ def test_custom_model_is_called_with_numpy_dict():
     backend = RawModelBackend(EchoModel(), schema=_schema(("a",), ("response",)))
     out = backend.predict(_batch())
     np.testing.assert_array_equal(out["response"], _batch()["a"])
+
+
+def test_custom_model_is_called_once_per_record_by_default():
+    """Without ``batch_inference`` a custom model gets one record at a time."""
+    from michelangelo.lib.inference.tests.fixtures import RecordModel
+
+    RecordModel.calls.clear()
+    out = RawModelBackend(RecordModel()).predict({"a": np.array([[1.0], [2.0]])})
+
+    assert RecordModel.calls == [(1,), (1,)]
+    assert out["response"].tolist() == [[2.0], [3.0]]
+
+    RecordModel.calls.clear()
+    RawModelBackend(RecordModel(), batch_inference=True).predict(
+        {"a": np.array([[1.0], [2.0]])}
+    )
+    assert RecordModel.calls == [(2, 1)]
 
 
 def test_rejects_unsupported_model_type():

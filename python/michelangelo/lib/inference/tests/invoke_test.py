@@ -11,10 +11,12 @@ from michelangelo.lib.inference._invoke import (
     call_torchscript,
     name_outputs,
     read_batch_inference,
+    schema_names,
     to_torch_inputs,
 )
 from michelangelo.lib.inference.tests.fixtures import (
     DictModel,
+    Pair,
     PositionalModel,
     UnionDictModel,
 )
@@ -101,6 +103,30 @@ def test_name_outputs_reports_a_count_mismatch():
     """More outputs than schema names is an error that names both."""
     with pytest.raises(ValueError, match=r"returned 2 output\(s\) but the schema"):
         name_outputs((torch.ones(1), torch.ones(1)), ["only"])
+
+
+def test_name_outputs_restricts_a_namedtuple_to_the_schema_names():
+    """Fields the schema does not name are not returned."""
+    pair = Pair(low=torch.zeros(1), high=torch.ones(1))
+
+    assert list(name_outputs(pair, ["high"])) == ["high"]
+    assert list(name_outputs(pair, None)) == ["low", "high"]
+
+
+def test_name_outputs_falls_back_to_position_for_unmatched_fields():
+    """A NamedTuple whose fields are not the schema names binds by position."""
+    pair = Pair(low=torch.zeros(1), high=torch.ones(1))
+
+    out = name_outputs(pair, ["first", "second"])
+
+    assert out["first"].tolist() == [0.0]
+    assert out["second"].tolist() == [1.0]
+
+
+def test_schema_names_is_none_for_an_empty_schema():
+    """No items means the names are unknown."""
+    assert schema_names(None) is None
+    assert schema_names([]) is None
 
 
 @pytest.mark.parametrize(

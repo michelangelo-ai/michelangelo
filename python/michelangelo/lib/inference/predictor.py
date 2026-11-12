@@ -18,6 +18,7 @@ from michelangelo.lib._internal.utils.numpy_utils import (
     pad_batch,
     pyarrow_to_numpy,
 )
+from michelangelo.lib.inference._gpu_errors import should_restart_worker
 from michelangelo.lib.inference.backend import (
     BackendContext,
     build_backend,
@@ -128,6 +129,11 @@ class Predictor:
                 model = ray.get(model)
             self._backend = RawModelBackend(model, schema=schema, device=device)
 
+        if not input_columns and self._backend.input_names:
+            _logger.info(
+                "Inferred input_columns from model schema: %s",
+                self._backend.input_names,
+            )
         self._input_columns = input_columns
         self._model_name = model_name
         self._model_version = model_version
@@ -175,7 +181,7 @@ class Predictor:
         inputs = {k: _encode(v) for k, v in inputs.items()}
         inputs = {k: _add_feature_axis(v) for k, v in inputs.items()}
 
-        predictions = self._backend.predict(inputs)
+        predictions = self._predict(inputs)
         predictions = {k: _decode(v) for k, v in predictions.items()}
         predictions = {k: self._squeeze(k, v) for k, v in predictions.items()}
 
@@ -192,6 +198,26 @@ class Predictor:
             extra_columns=extra,
             raise_on_collision=True,
         )
+
+    def _predict(self, inputs: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+        """Score one batch, exiting the worker if the CUDA context is poisoned."""
+        try:
+            return self._backend.predict(inputs)
+        except Exception as e:
+            if should_restart_worker(e):
+                # Raising would fail the whole job, and retrying in this process
+                # cannot succeed. Exiting lets Ray restart the actor on a fresh
+                # CUDA context and resubmit the block.
+                _logger.critical(
+                    "Unrecoverable GPU error scoring %s; exiting the worker so "
+                    "Ray can restart the actor: %s",
+                    self._model_name or "model",
+                    e,
+                    exc_info=True,
+                )
+                logging.shutdown()
+                os._exit(1)
+            raise
 
     def _to_numpy(self, batch: pa.Table, columns: list[str]) -> dict[str, np.ndarray]:
         """Convert the model's input columns, in parallel when configured."""
@@ -278,23 +304,20 @@ def _scalar_output_names(schema: ModelSchema | None) -> set[str]:
 def _convert_strings(arr: np.ndarray, source: type, fn: Any) -> np.ndarray:
     """Apply ``fn`` to the ``source``-typed elements of an object array.
 
-    The array is returned untouched when it holds no ``source`` elements, so
-    object arrays of vectors pass through. Otherwise the result stays an object
-    array of the same shape: letting numpy infer a fixed-width string dtype would
-    strip trailing NUL bytes from binary values, widen every element to the
-    longest one, and turn non-string elements into text.
+    Numpy infers the result dtype, so a column of only strings collapses to a
+    fixed-width string array, which is what backends take for string tensors.
+    Elements that are not ``source``, such as ``None``, are kept. An array with
+    no ``source`` element, such as one of vectors, is returned untouched.
     """
     flat = arr.ravel()
     if not any(isinstance(x, source) for x in flat):
         return arr
-    out = np.empty(len(flat), dtype=object)
-    for i, x in enumerate(flat):
-        out[i] = fn(x) if isinstance(x, source) else x
-    return out.reshape(arr.shape)
+    converted = [fn(x) if isinstance(x, source) else x for x in flat]
+    return np.array(converted).reshape(arr.shape)
 
 
 def _encode(arr: np.ndarray) -> np.ndarray:
-    """Encode string columns as UTF-8 bytes, which backends expect."""
+    """Encode string columns as UTF-8 bytes (``S`` for an all-string column)."""
     if arr.dtype.kind == "U":
         return np.char.encode(arr, "utf-8")
     if arr.dtype.kind == "O":
@@ -303,7 +326,7 @@ def _encode(arr: np.ndarray) -> np.ndarray:
 
 
 def _decode(arr: np.ndarray) -> np.ndarray:
-    """Decode UTF-8 byte columns back to strings."""
+    """Decode UTF-8 byte columns back to strings (``U`` for an all-bytes column)."""
     if arr.dtype.kind == "S":
         return np.char.decode(arr, "utf-8")
     if arr.dtype.kind == "O":

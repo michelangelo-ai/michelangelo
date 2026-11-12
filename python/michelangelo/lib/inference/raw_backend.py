@@ -17,6 +17,7 @@ from michelangelo.lib.inference._invoke import (
     name_outputs,
     predict_custom,
     read_batch_inference,
+    schema_names,
     to_torch_inputs,
 )
 
@@ -38,7 +39,9 @@ class RawModelBackend:
         schema: The model schema. Provides the input and output names.
         device: Device for a PyTorch model. Ignored for custom models.
         batch_inference: For a custom ``Model``, whether ``predict`` takes the
-            whole batch instead of one record. Ignored for PyTorch models.
+            whole batch. By default it is called once per record, which is how a
+            custom model is packaged unless it opts into batching. Ignored for
+            PyTorch models.
 
     Raises:
         TypeError: If ``model`` is neither a custom ``Model`` nor an ``nn.Module``.
@@ -49,7 +52,7 @@ class RawModelBackend:
         model: Any,
         schema: ModelSchema | None = None,
         device: str = "cpu",
-        batch_inference: bool = True,
+        batch_inference: bool = False,
     ) -> None:
         """Wrap ``model``, moving a PyTorch module to ``device``."""
         from michelangelo.lib.model_manager.interface.custom_model import Model
@@ -72,16 +75,12 @@ class RawModelBackend:
     @property
     def input_names(self) -> list[str] | None:
         """Input column names from the schema, or ``None`` without a schema."""
-        if self._schema is None or not self._schema.input_schema:
-            return None
-        return [item.name for item in self._schema.input_schema]
+        return schema_names(self._schema.input_schema if self._schema else None)
 
     @property
     def output_names(self) -> list[str] | None:
         """Output column names from the schema, or ``None`` without a schema."""
-        if self._schema is None or not self._schema.output_schema:
-            return None
-        return [item.name for item in self._schema.output_schema]
+        return schema_names(self._schema.output_schema if self._schema else None)
 
     def predict(self, inputs: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
         """Score one batch.

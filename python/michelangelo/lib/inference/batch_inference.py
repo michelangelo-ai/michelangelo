@@ -44,7 +44,8 @@ class ModelSource:
         storage_backend: Downloads ``uri``. Required with ``uri``.
         model: An already loaded PyTorch module or custom ``Model``, scored
             with :class:`~michelangelo.lib.inference.RawModelBackend`. It is
-            placed in the Ray object store once and shared by every worker.
+            placed in the Ray object store once and shared by every worker. A
+            custom ``Model`` is called once per record.
         schema: The model schema. Defaults to the one stored in the package.
         name: Written to the ``model_name`` column when set.
         version: Written to the ``model_version`` column when set.
@@ -103,12 +104,27 @@ def batch_model_inference(
             _logger.warning("Dataset %s is empty; skipping inference.", name)
             results[name] = dataset
             continue
-        scored = [_score(dataset, config, source, refs) for config, source in models]
+        scored = []
+        for config, source in models:
+            _logger.info(
+                "Running model inference for %s on dataset %s.",
+                _describe(source),
+                name,
+            )
+            scored.append(_score(dataset, config, source, refs))
         results[name] = scored[0].union(*scored[1:]) if len(scored) > 1 else scored[0]
+    _logger.info("Model inference planned for all datasets.")
     return results
 
 
-def _check_outputs_match(models: list[tuple[OfflineInferenceConfig, ModelSource]]):
+def _describe(source: ModelSource) -> str:
+    """A short label for a model in log messages."""
+    return source.name or source.model_path or source.uri or "in-memory model"
+
+
+def _check_outputs_match(
+    models: list[tuple[OfflineInferenceConfig, ModelSource]],
+) -> None:
     """Reject models whose known output column names differ."""
     known = {
         frozenset(item.name for item in source.schema.output_schema)

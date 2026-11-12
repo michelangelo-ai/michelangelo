@@ -22,6 +22,7 @@ from michelangelo.lib.inference._invoke import (
     call_module,
     call_torchscript,
     name_outputs,
+    schema_names,
     to_torch_inputs,
 )
 
@@ -38,6 +39,9 @@ _ONNX_DTYPES = {
     "tensor(int32)": np.int32,
     "tensor(int64)": np.int64,
     "tensor(uint8)": np.uint8,
+    "tensor(uint16)": np.uint16,
+    "tensor(uint32)": np.uint32,
+    "tensor(uint64)": np.uint64,
     "tensor(float16)": np.float16,
     "tensor(float)": np.float32,
     "tensor(double)": np.float64,
@@ -72,7 +76,7 @@ class DeployableModelBackend:
         self._kind = _kind_of(model)
         if self._kind in ("torchscript", "module"):
             model = model.to(device)
-            if self._kind == "torchscript" and device.startswith("cuda"):
+            if device.startswith("cuda"):
                 import torch
 
                 # The TorchScript fuser can generate invalid CUDA code for
@@ -85,16 +89,12 @@ class DeployableModelBackend:
     @property
     def input_names(self) -> list[str] | None:
         """Input column names from the schema, or ``None`` without one."""
-        if self._schema is None or not self._schema.input_schema:
-            return None
-        return [item.name for item in self._schema.input_schema]
+        return schema_names(self._schema.input_schema if self._schema else None)
 
     @property
     def output_names(self) -> list[str] | None:
         """Output column names from the schema, or ``None`` without one."""
-        if self._schema is None or not self._schema.output_schema:
-            return None
-        return [item.name for item in self._schema.output_schema]
+        return schema_names(self._schema.output_schema if self._schema else None)
 
     def predict(self, inputs: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
         """Score one batch.
@@ -121,13 +121,20 @@ class DeployableModelBackend:
         return name_outputs(output, self.output_names)
 
     def _predict_onnx(self, inputs: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
-        """Run the ONNX Runtime session on the inputs the graph declares."""
+        """Run the ONNX Runtime session.
+
+        Feeds the schema's inputs and returns the schema's outputs, or the
+        graph's own inputs and outputs when there is no schema.
+        """
+        declared = {meta.name: meta.type for meta in self._model.get_inputs()}
         feeds = {
-            meta.name: _onnx_input(inputs[meta.name], _ONNX_DTYPES.get(meta.type))
-            for meta in self._model.get_inputs()
+            name: _onnx_input(inputs[name], _ONNX_DTYPES.get(declared.get(name)))
+            for name in self.input_names or declared
         }
-        names = [meta.name for meta in self._model.get_outputs()]
-        return dict(zip(names, self._model.run(names, feeds)))
+        output_names = self.output_names or [
+            meta.name for meta in self._model.get_outputs()
+        ]
+        return dict(zip(output_names, self._model.run(output_names, feeds)))
 
 
 def _kind_of(model: Any) -> str:
@@ -161,16 +168,18 @@ def _onnx_input(arr: np.ndarray, dtype: type | None) -> np.ndarray:
     Integer inputs get ``INT32_SENTINEL`` where the column holds NaN, which is
     how a null in a numeric list column arrives, instead of numpy's undefined
     NaN-to-integer cast. Exported transform layers only recognize that sentinel
-    as padding. String inputs are decoded to ``str``.
+    as padding. String inputs are decoded to ``str``. The result is C-contiguous
+    and writable: Arrow-backed arrays are read-only, which ONNX Runtime rejects.
     """
     if dtype is np.object_:
         flat = [x.decode("utf-8") if isinstance(x, bytes) else x for x in arr.ravel()]
         return np.array(flat, dtype=object).reshape(arr.shape)
-    if dtype is None or arr.dtype == dtype:
-        return np.ascontiguousarray(arr)
-    if np.issubdtype(dtype, np.integer) and np.issubdtype(arr.dtype, np.floating):
-        arr = np.where(np.isnan(arr), INT32_SENTINEL, arr)
-    return np.ascontiguousarray(arr.astype(dtype))
+    if dtype is not None and arr.dtype != dtype:
+        if np.issubdtype(dtype, np.integer) and np.issubdtype(arr.dtype, np.floating):
+            arr = np.where(np.isnan(arr), INT32_SENTINEL, arr)
+        arr = arr.astype(dtype)
+    arr = np.ascontiguousarray(arr)
+    return arr if arr.flags.writeable else arr.copy()
 
 
 def create_deployable_backend(context: BackendContext) -> DeployableModelBackend:

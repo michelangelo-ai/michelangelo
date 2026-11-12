@@ -7,10 +7,13 @@ do, so offline scores match what the deployed model returns.
 from __future__ import annotations
 
 import os
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import yaml
+
+if TYPE_CHECKING:
+    from michelangelo.lib.model_manager.schema import ModelSchemaItem
 
 #: Name given to a single unnamed output when the model has no output schema.
 DEFAULT_OUTPUT_NAME = "prediction"
@@ -103,28 +106,43 @@ def call_module(model: Any, inputs: dict[str, Any]) -> Any:
     return _invoke_model(model, inputs)
 
 
+def schema_names(items: list[ModelSchemaItem] | None) -> list[str] | None:
+    """Names of schema items, or ``None`` when the schema lists none."""
+    return [item.name for item in items] if items else None
+
+
 def name_outputs(output: Any, output_names: list[str] | None) -> dict[str, np.ndarray]:
     """Turn a model's output into named numpy arrays.
+
+    When ``output_names`` is given, only those outputs are returned, so a model
+    that returns more than its schema declares exposes just the declared ones.
 
     Args:
         output: A dict of tensors, a tuple (a ``NamedTuple`` is matched by
             field name), or a single tensor.
-        output_names: Output names from the schema, in schema order.
+        output_names: Output names from the schema, in schema order, or
+            ``None`` to return everything the model produced.
 
     Returns:
         Output name to array.
 
     Raises:
-        ValueError: If the model returned a different number of outputs than
-            the schema names.
+        ValueError: If a dict or ``NamedTuple`` output lacks a name the schema
+            lists, or a positional output has a different length than the
+            schema names.
     """
     if isinstance(output, dict):
-        return {k: _to_numpy(v) for k, v in output.items()}
+        missing = [n for n in output_names or () if n not in output]
+        if missing:
+            raise ValueError(
+                f"The model's outputs {list(output)} lack schema output(s) {missing}."
+            )
+        return {n: _to_numpy(output[n]) for n in output_names or output}
 
     if isinstance(output, (tuple, list)):
         fields = list(getattr(output, "_fields", ()))
-        if fields and (not output_names or set(fields) == set(output_names)):
-            return {name: _to_numpy(getattr(output, name)) for name in fields}
+        if fields and all(n in fields for n in output_names or ()):
+            return {n: _to_numpy(getattr(output, n)) for n in output_names or fields}
         values, names = list(output), output_names or fields
     else:
         values, names = [output], output_names or [DEFAULT_OUTPUT_NAME]

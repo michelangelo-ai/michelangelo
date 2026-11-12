@@ -118,6 +118,69 @@ def test_torchscript_moves_to_cuda_with_the_fuser_disabled():
     assert backend._model is module.to.return_value
 
 
+def test_pytorch_module_gets_the_cuda_fusion_workaround_too():
+    """The fuser setting applies to a plain module, not only TorchScript."""
+    from unittest.mock import patch
+
+    import torch
+
+    with patch("torch.jit.set_fusion_strategy") as fusion:
+        DeployableModelBackend(torch.nn.Identity(), device="cpu")
+        fusion.assert_not_called()
+        with patch.object(torch.nn.Identity, "to", lambda self, device: self):
+            DeployableModelBackend(torch.nn.Identity(), device="cuda:0")
+    fusion.assert_called_once_with([("STATIC", 0), ("DYNAMIC", 0)])
+
+
+class _Meta:
+    def __init__(self, name, type_="tensor(float)"):
+        self.name = name
+        self.type = type_
+
+
+class _FakeSession:
+    """Minimal ONNX Runtime session that records what it was fed."""
+
+    def __init__(self, inputs, outputs):
+        self._inputs, self._outputs = inputs, outputs
+        self.feeds = None
+        self.requested = None
+
+    def get_inputs(self):
+        return self._inputs
+
+    def get_outputs(self):
+        return self._outputs
+
+    def run(self, names, feeds):
+        self.requested, self.feeds = names, feeds
+        return [feeds[next(iter(feeds))] for _ in names]
+
+
+def test_onnx_feeds_schema_inputs_and_names_schema_outputs():
+    """With a schema, inputs and outputs follow it, not the graph."""
+    session = _FakeSession(
+        [_Meta("a"), _Meta("b"), _Meta("unused")], [_Meta("onnx::out")]
+    )
+    backend = DeployableModelBackend(session, schema=_SCHEMA)
+
+    out = backend.predict({**_INPUTS, "unused": _INPUTS["a"]})
+
+    assert list(session.feeds) == ["a", "b"]
+    assert session.requested == ["y"]
+    assert list(out) == ["y"]
+
+
+def test_onnx_without_a_schema_uses_the_graph_names():
+    """No schema falls back to the graph's declared inputs and outputs."""
+    session = _FakeSession([_Meta("a"), _Meta("b")], [_Meta("out")])
+
+    out = DeployableModelBackend(session).predict({**_INPUTS, "extra": _INPUTS["a"]})
+
+    assert list(session.feeds) == ["a", "b"]
+    assert list(out) == ["out"]
+
+
 def test_names_are_unknown_without_a_schema(tmp_path):
     """Without a schema the predictor falls back to every column."""
     path = torch_deployable(tmp_path, PositionalModel(), _SCHEMA)
@@ -130,7 +193,7 @@ def test_names_are_unknown_without_a_schema(tmp_path):
 
 
 def test_rejects_a_model_it_cannot_call():
-    """Only the four loaded-model kinds are accepted."""
+    """Only TorchScript, ONNX Runtime and torch modules are accepted."""
     with pytest.raises(TypeError, match="cannot score a str"):
         DeployableModelBackend("not a model")
 
@@ -148,6 +211,26 @@ def test_onnx_string_inputs_are_decoded():
     out = _onnx_input(np.array([[b"x"], ["y"]], dtype=object), np.object_)
 
     assert out.tolist() == [["x"], ["y"]]
+
+
+def test_onnx_read_only_inputs_are_copied():
+    """Arrow-backed arrays are read-only; ONNX Runtime gets a writable copy."""
+    arr = np.arange(4, dtype=np.float32)
+    arr.flags.writeable = False
+
+    for dtype in (np.float32, np.float64):
+        out = _onnx_input(arr, dtype)
+        assert out.flags.writeable
+        assert out.flags.c_contiguous
+
+
+def test_onnx_unsigned_integer_types_are_mapped():
+    """Unsigned tensors are cast to their declared width."""
+    from michelangelo.lib.inference.deployable_backend import _ONNX_DTYPES
+
+    assert _ONNX_DTYPES["tensor(uint16)"] is np.uint16
+    assert _ONNX_DTYPES["tensor(uint32)"] is np.uint32
+    assert _ONNX_DTYPES["tensor(uint64)"] is np.uint64
 
 
 def test_onnx_inputs_already_in_the_right_dtype_are_not_cast():

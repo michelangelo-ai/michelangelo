@@ -153,6 +153,30 @@ def test_multiple_models_are_unioned():
     assert out["train"] is first.union.return_value
 
 
+def test_progress_is_logged_per_model_and_dataset(caplog):
+    """Each model/dataset pair is announced, then the whole run is summarized."""
+    import logging
+
+    models = [
+        (OfflineInferenceConfig(), ModelSource(model_path="/m1", name="first")),
+        (OfflineInferenceConfig(), ModelSource(model_path="/m2")),
+    ]
+    with caplog.at_level(logging.INFO, logger="michelangelo.lib.inference"):
+        batch_model_inference({"train": _dataset()}, models)
+
+    assert "Running model inference for first on dataset train." in caplog.text
+    assert "Running model inference for /m2 on dataset train." in caplog.text
+    assert "Model inference planned for all datasets." in caplog.text
+
+
+def test_in_memory_and_remote_models_get_a_log_label():
+    """A source without a name or path is still described."""
+    from michelangelo.lib.inference.batch_inference import _describe
+
+    assert _describe(ModelSource(uri="s3://m")) == "s3://m"
+    assert _describe(ModelSource(model=object())) == "in-memory model"
+
+
 def _schema(name):
     return ModelSchema(output_schema=[ModelSchemaItem(name, DataType.FLOAT, [1])])
 

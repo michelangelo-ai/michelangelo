@@ -118,7 +118,7 @@ def test_string_columns_round_trip_with_none_and_empty():
     backend = EchoBackend({"text_out": "text"})
     p = _predictor(backend, schema=_schema(outputs=("text_out",)))
     out = p(_table(text=["abc", "", None, "é"]))
-    assert backend.seen["text"].dtype.kind in ("S", "O")
+    assert backend.seen["text"].dtype == object
     assert out["text_out"].to_pylist() == ["abc", "", None, "é"]
 
 
@@ -316,34 +316,107 @@ def test_object_array_of_vectors_passes_through_untouched():
     assert _decode(ragged) is ragged
 
 
-def test_binary_values_keep_trailing_nul_bytes():
-    """Fixed-width string inference must not strip trailing NULs from binary."""
+def test_all_string_object_columns_collapse_to_fixed_width_dtypes():
+    """Encoding gives ``S`` and decoding gives ``U``, as numpy infers them."""
     from michelangelo.lib.inference.predictor import _decode, _encode
 
-    raw = np.array([b"ab\x00", b"\x00\x00", b"c"], dtype=object)
-    assert _encode(raw) is raw
-    assert [x.encode() for x in _decode(np.array(["ab\x00"], dtype=object))] == [
-        b"ab\x00"
-    ]
-    encoded = _encode(np.array(["ab\x00", "é"], dtype=object))
-    assert list(encoded) == [b"ab\x00", "é".encode()]
+    encoded = _encode(np.array(["ab", "é"], dtype=object))
+    assert encoded.dtype.kind == "S"
+    assert encoded.tolist() == [b"ab", "é".encode()]
+    decoded = _decode(encoded.astype(object))
+    assert decoded.dtype.kind == "U"
+    assert decoded.tolist() == ["ab", "é"]
 
 
-def test_mixed_type_object_column_is_not_coerced_to_text():
-    """Only strings are encoded; other values keep their type."""
+def test_unicode_and_bytes_arrays_are_converted_vectorized():
+    """Fixed-width arrays convert directly, keeping their shape."""
+    from michelangelo.lib.inference.predictor import _decode, _encode
+
+    assert _encode(np.array([["a"], ["é"]])).tolist() == [[b"a"], ["é".encode()]]
+    assert _decode(np.array([[b"a"], [b"b"]])).tolist() == [["a"], ["b"]]
+
+
+def test_two_dimensional_object_columns_keep_their_shape():
+    """A column already given a feature axis is converted element by element."""
+    from michelangelo.lib.inference.predictor import _decode
+
+    decoded = _decode(np.array([[b"x"], [b"y"]], dtype=object))
+    assert decoded.shape == (2, 1)
+    assert decoded.tolist() == [["x"], ["y"]]
+
+
+def test_none_is_kept_among_strings():
+    """Nulls stay in an object array, so they reach Arrow as nulls."""
     from michelangelo.lib.inference.predictor import _encode
 
-    encoded = _encode(np.array(["a", 1, None], dtype=object))
-    assert list(encoded) == [b"a", 1, None]
+    encoded = _encode(np.array(["a", None], dtype=object))
     assert encoded.dtype == object
+    assert encoded.tolist() == [b"a", None]
 
 
-def test_one_long_string_does_not_widen_every_element():
-    """Encoding keeps an object array, so memory tracks the data size."""
-    from michelangelo.lib.inference.predictor import _encode
+def test_empty_object_columns_are_returned_unchanged():
+    """Zero elements give nothing to infer a dtype from."""
+    from michelangelo.lib.inference.predictor import _decode, _encode
 
-    column = np.array(["x" * 100_000] + ["y"] * 50, dtype=object)
-    assert _encode(column).dtype == object
+    empty = np.empty(0, dtype=object)
+    assert _encode(empty) is empty
+    assert _decode(empty) is empty
+
+
+def test_numeric_columns_are_neither_encoded_nor_decoded():
+    """Only string-like dtypes are converted."""
+    from michelangelo.lib.inference.predictor import _decode, _encode
+
+    arr = np.array([1.0, 2.0])
+    assert _encode(arr) is arr
+    assert _decode(arr) is arr
+
+
+def test_poisoned_cuda_context_exits_the_worker_so_ray_restarts_it():
+    """A fatal GPU error is logged and kills the process instead of raising."""
+    from unittest.mock import patch
+
+    class Poisoned(EchoBackend):
+        def predict(self, inputs):
+            raise RuntimeError("CUDA error: an illegal memory access was encountered")
+
+    p = _predictor(Poisoned({"y": "a"}))
+    exit_patch = patch("michelangelo.lib.inference.predictor.os._exit")
+    shutdown_patch = patch("michelangelo.lib.inference.predictor.logging.shutdown")
+    with exit_patch as exit_, shutdown_patch, pytest.raises(RuntimeError):
+        p(_table(a=[1.0]))
+
+    exit_.assert_called_once_with(1)
+
+
+def test_other_scoring_errors_propagate_without_exiting():
+    """Only a poisoned context exits; CUDA out-of-memory raises as usual."""
+    from unittest.mock import patch
+
+    class OutOfMemory(EchoBackend):
+        def predict(self, inputs):
+            raise RuntimeError("CUDA out of memory")
+
+    p = _predictor(OutOfMemory({"y": "a"}))
+    exit_patch = patch("michelangelo.lib.inference.predictor.os._exit")
+    with exit_patch as exit_, pytest.raises(RuntimeError, match="out of memory"):
+        p(_table(a=[1.0]))
+
+    exit_.assert_not_called()
+
+
+def test_inferred_input_columns_are_logged_once(caplog):
+    """Schema-derived input names are logged when the actor starts."""
+    import logging
+
+    with caplog.at_level(logging.INFO, logger="michelangelo.lib.inference.predictor"):
+        Predictor(model=DictModel(), schema=_schema())
+    assert "Inferred input_columns from model schema: ['a']" in caplog.text
+
+    caplog.clear()
+    with caplog.at_level(logging.INFO, logger="michelangelo.lib.inference.predictor"):
+        Predictor(model=DictModel(), schema=_schema(), input_columns=["a"])
+    assert "Inferred" not in caplog.text
 
 
 def test_thread_pool_is_released_when_the_predictor_is_collected():
