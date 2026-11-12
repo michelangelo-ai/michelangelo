@@ -50,8 +50,7 @@ class ParquetReadConfig:
     This is a curated subset of the full ``ray.data.read_parquet`` API —
     resource knobs and schema hints only. Fields that overlap with the
     tabular_trainer's own column management (``columns``, ``paths``) and
-    Ray-version-specific placement logic are intentionally omitted. OSS
-    pins a single Ray version so the internal ``<2.50`` branch is unused.
+    Ray-version-specific placement logic are intentionally omitted.
 
     Column projection is derived automatically from ``input_columns``,
     ``labels``, and ``metadata_columns`` — do not include ``columns`` here.
@@ -313,6 +312,7 @@ class RayDataContextConfig:
     object_store_memory_limit: int | None = None
     wait_for_min_actors_s: int | None = None
     max_blocks_in_streaming_gen_buffer: int | None = None
+    preserve_order: bool | None = None
 
     def __post_init__(self) -> None:
         """Validate ``max_blocks_in_streaming_gen_buffer``."""
@@ -346,19 +346,28 @@ class WriteConfig:
             per-task execution time (both reported by ``Dataset.stats()``),
             not from the number of available CPUs. ``None`` leaves the write
             stage uncapped.
+        memory: Heap memory in bytes to reserve per write task. Ray otherwise
+            assumes about zero bytes per write task, so the object-store
+            budget reserved for it is too small. When the real usage is much
+            higher, the executor throttles the other operators (for example an
+            upstream GPU predictor) to compensate instead of budgeting for the
+            write up front. Set it to the per-task memory observed in Ray
+            Data's high-memory warning or ``Dataset.stats()`` to avoid that
+            reactive throttling. ``None`` leaves Ray's default (about zero).
 
     Raises:
         ConfigurationError: If ``concurrency`` is set to something other than
             a positive integer.
 
     Example:
-        >>> WriteConfig(max_rows_per_file=1_000_000, concurrency=4)
-        WriteConfig(max_rows_per_file=1000000, min_rows_per_file=None, concurrency=4)
+        >>> WriteConfig(max_rows_per_file=1_000_000, memory=2 * 1024**3).memory
+        2147483648
     """
 
     max_rows_per_file: int | None = None
     min_rows_per_file: int | None = None
     concurrency: int | None = None
+    memory: int | None = None
 
     def __post_init__(self) -> None:
         """Validate ``concurrency``."""

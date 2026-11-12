@@ -30,14 +30,25 @@ class TestWriteConfigToKwargs:
         assert write_config_to_kwargs(WriteConfig()) == {}
 
     @patch(f"{_WRITE}.ray")
+    def test_memory_forwarded_via_ray_remote_args(self, mock_ray):
+        """Memory has no flat kwarg; it reaches Ray as a remote arg."""
+        mock_ray.__version__ = "2.51.0"
+        assert write_config_to_kwargs(WriteConfig(memory=1024)) == {
+            "ray_remote_args": {"memory": 1024}
+        }
+
+    @patch(f"{_WRITE}.ray")
     def test_all_options_forwarded_on_new_ray(self, mock_ray):
         """Every set option is forwarded when Ray is new enough."""
         mock_ray.__version__ = "2.51.0"
-        config = WriteConfig(max_rows_per_file=10, min_rows_per_file=2, concurrency=4)
+        config = WriteConfig(
+            max_rows_per_file=10, min_rows_per_file=2, concurrency=4, memory=512
+        )
         assert write_config_to_kwargs(config) == {
             "max_rows_per_file": 10,
             "min_rows_per_file": 2,
             "concurrency": 4,
+            "ray_remote_args": {"memory": 512},
         }
 
     @pytest.mark.parametrize(
