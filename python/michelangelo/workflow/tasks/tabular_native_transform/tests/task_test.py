@@ -104,6 +104,7 @@ class TabularNativeTransformTaskTest(TestCase):
             object_store_memory_limit=None,
             wait_for_min_actors_s=None,
             max_blocks_in_streaming_gen_buffer=None,
+            preserve_order=None,
         )
 
     @patch(f"{_TASK}.set_ray_data_context")
@@ -119,6 +120,7 @@ class TabularNativeTransformTaskTest(TestCase):
                 object_store_memory_limit=4096,
                 wait_for_min_actors_s=30,
                 max_blocks_in_streaming_gen_buffer=1,
+                preserve_order=True,
             ),
         )
         tabular_native_transform(config, {"train": train})
@@ -129,6 +131,7 @@ class TabularNativeTransformTaskTest(TestCase):
             object_store_memory_limit=4096,
             wait_for_min_actors_s=30,
             max_blocks_in_streaming_gen_buffer=1,
+            preserve_order=True,
         )
 
     # -- early return ----------------------------------------------------

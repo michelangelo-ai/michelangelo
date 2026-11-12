@@ -42,6 +42,7 @@ def set_ray_data_context(
     wait_for_min_actors_s: int | None = None,
     max_blocks_in_streaming_gen_buffer: int | None = None,
     max_errored_blocks: int | None = None,
+    preserve_order: bool | None = None,
 ) -> None:
     """Configure Ray ``DataContext`` with block sizes and retried I/O error patterns.
 
@@ -94,6 +95,10 @@ def set_ray_data_context(
             only set this when consumers tolerate incomplete output. ``None``
             keeps Ray's default of ``0``, which fails on the first errored
             block.
+        preserve_order: Sets ``DataContext.execution_options.preserve_order``.
+            When ``True``, the streaming executor emits blocks in input order
+            instead of completion order, which can reduce throughput. ``None``
+            keeps Ray's default (``False``).
 
     Raises:
         ValueError: If ``max_errored_blocks`` is negative.
@@ -156,11 +161,14 @@ def set_ray_data_context(
     if max_errored_blocks is not None:
         ctx.max_errored_blocks = max_errored_blocks
 
+    if preserve_order is not None:
+        ctx.execution_options.preserve_order = preserve_order
+
     _logger.info(
         "Ray data context set: target_min_block_size=%s MB, "
         "target_max_block_size=%s MB, object_store_memory_limit=%s, "
         "wait_for_min_actors_s=%s, max_blocks_in_streaming_gen_buffer=%s, "
-        "max_errored_blocks=%s, retried_io_errors=%s",
+        "max_errored_blocks=%s, preserve_order=%s, retried_io_errors=%s",
         f"{ctx.target_min_block_size / (1024 * 1024):.0f}"
         if ctx.target_min_block_size
         else "ray-default",
@@ -173,5 +181,6 @@ def set_ray_data_context(
         if max_blocks_in_streaming_gen_buffer is not None
         else None,
         getattr(ctx, "max_errored_blocks", None),
+        preserve_order,
         ctx.retried_io_errors,
     )
