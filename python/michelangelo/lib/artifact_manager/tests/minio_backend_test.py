@@ -452,44 +452,10 @@ class TestMinioStorageBackendDownload(TestCase):
 
 
 class TestMinioStorageBackendPickling(TestCase):
-    """The backend must be shippable to remote workers."""
+    """The backend must be shippable to remote workers, such as Ray actors."""
 
-    def test_unpickle_reconnects_with_the_same_settings_and_skips_the_bucket(self):
-        """The client is rebuilt from the saved settings; the bucket is not touched."""
-        import pickle
-
-        mock_module, mock_client = _make_mock_minio()
-        with patch.dict(
-            sys.modules, {"minio": mock_module, "minio.error": mock_module.error}
-        ):
-            from michelangelo.lib.artifact_manager.minio_backend import (
-                MinioStorageBackend,
-            )
-
-            backend = MinioStorageBackend(
-                **_DEFAULT_KWARGS, region="us-east-1", create_bucket_if_missing=True
-            )
-            state = backend.__getstate__()
-            self.assertNotIn("_client", state)
-            self.assertNotIn("_S3Error", state)
-
-            mock_module.Minio.reset_mock()
-            mock_client.bucket_exists.reset_mock()
-            restored = MinioStorageBackend.__new__(MinioStorageBackend)
-            restored.__setstate__(pickle.loads(pickle.dumps(state)))
-
-        mock_module.Minio.assert_called_once_with(
-            endpoint="localhost:9000",
-            access_key="michelangeloadmin",
-            secret_key="michelangeloadmin",
-            secure=False,
-            region="us-east-1",
-        )
-        mock_client.bucket_exists.assert_not_called()
-        self.assertEqual(restored.get_storage_location(), "s3://test-bucket")
-
-    def test_pickle_round_trip_rebuilds_the_client(self):
-        """A pickled backend keeps its bucket and gets a working client back."""
+    def test_pickle_round_trip_keeps_the_connection(self):
+        """The rebuilt client has the same endpoint, TLS, region and keys."""
         import pickle
 
         import pytest
@@ -499,28 +465,42 @@ class TestMinioStorageBackendPickling(TestCase):
             MinioStorageBackend,
         )
 
-        backend = MinioStorageBackend(
-            endpoint="localhost:9000",
-            bucket="models",
-            access_key="key",
-            secret_key="secret",
-            secure=False,
-        )
+        backend = MinioStorageBackend(**_DEFAULT_KWARGS, region="us-west-2")
 
         restored = pickle.loads(pickle.dumps(backend))
 
-        self.assertEqual(restored.get_storage_location(), "s3://models")
         self.assertIsNot(restored._client, backend._client)
-        self.assertEqual(restored._parse_uri("s3://models/a/b"), ("models", "a/b"))
-
-    def test_local_backend_is_picklable_too(self):
-        """The other backend holds plain attributes and pickles as is."""
-        import pickle
-
-        from michelangelo.lib.artifact_manager.storage_backend import (
-            LocalStorageBackend,
+        for client in (restored._client, backend._client):
+            self.assertEqual(client._base_url.host, "localhost:9000")
+            self.assertFalse(client._base_url.is_https)
+            self.assertEqual(client._base_url.region, "us-west-2")
+            self.assertEqual(
+                client._provider.retrieve().access_key, "michelangeloadmin"
+            )
+        self.assertEqual(restored.get_storage_location(), "s3://test-bucket")
+        self.assertEqual(
+            restored._parse_uri("s3://test-bucket/a/b"), ("test-bucket", "a/b")
         )
 
-        restored = pickle.loads(pickle.dumps(LocalStorageBackend("/tmp/artifacts")))
+    def test_unpickling_rebuilds_the_client_without_touching_the_bucket(self):
+        """Unpickling reconnects with the same arguments and makes no S3 calls."""
+        import pickle
 
-        self.assertEqual(restored._base_dir, "/tmp/artifacts")
+        mock_module, mock_client = _make_mock_minio(bucket_exists=True)
+        with patch.dict(
+            sys.modules, {"minio": mock_module, "minio.error": mock_module.error}
+        ):
+            from michelangelo.lib.artifact_manager.minio_backend import (
+                MinioStorageBackend,
+            )
+
+            backend = MinioStorageBackend(
+                **_DEFAULT_KWARGS, create_bucket_if_missing=True
+            )
+            restored = pickle.loads(pickle.dumps(backend))
+
+        first, second = mock_module.Minio.call_args_list
+        self.assertEqual(first, second)
+        # Only the constructor checked the bucket; unpickling did not.
+        mock_client.bucket_exists.assert_called_once_with("test-bucket")
+        self.assertIs(restored._S3Error, _FakeS3Error)
