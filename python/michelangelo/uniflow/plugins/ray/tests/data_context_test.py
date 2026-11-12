@@ -101,6 +101,21 @@ class SetRayDataContextTest(TestCase):
         ctx = ray.data.DataContext.get_current()
         self.assertNotEqual(ctx.target_min_block_size, 1)
 
+    def test_preserve_order_is_applied(self):
+        """An explicit preserve_order value is applied to the execution options."""
+        set_ray_data_context(preserve_order=True)
+        ctx = ray.data.DataContext.get_current()
+        self.assertTrue(ctx.execution_options.preserve_order)
+        set_ray_data_context(preserve_order=False)
+        self.assertFalse(ctx.execution_options.preserve_order)
+
+    def test_preserve_order_default_untouched(self):
+        """Leaving the argument unset keeps Ray's default ordering."""
+        ctx = ray.data.DataContext.get_current()
+        default = ctx.execution_options.preserve_order
+        set_ray_data_context()
+        self.assertEqual(ctx.execution_options.preserve_order, default)
+
     def test_max_blocks_in_streaming_gen_buffer_is_applied(self):
         """An explicit buffer size is applied to the context."""
         set_ray_data_context(max_blocks_in_streaming_gen_buffer=1)
