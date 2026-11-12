@@ -1,0 +1,168 @@
+name: API Surface Comment
+
+# Posts the findings of "API Surface Check" on the pull request. That workflow runs with a
+# read-only token on pull requests from forks, so it uploads its findings as artifacts and this
+# one, which runs from the default branch with a write-capable token, comments.
+#
+# The artifacts are untrusted: they come from a run that executed the PR's code. This workflow
+# never checks out or runs anything from the PR. It takes the PR identity from the triggering
+# run's event payload (never from an artifact), renders the comment from fixed text plus
+# sanitized, truncated artifact text, and computes the BREAKING CHANGE acknowledgement itself.
+on:
+  workflow_run:
+    workflows: ['API Surface Check']
+    types: [completed]
+
+permissions:
+  actions: read
+  pull-requests: write
+
+jobs:
+  comment:
+    name: Comment on PR
+    if: github.event.workflow_run.event == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download findings
+        # No findings means no artifacts, which is the common case.
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          pattern: api-surface-*
+          path: results
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Post or update comments
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const fs = require('fs');
+            const run = context.payload.workflow_run;
+            const { owner, repo } = context.repo;
+
+            const KINDS = {
+              go: {
+                title: 'Go API Surface Check (advisory)',
+                intro: 'Potentially breaking changes detected in exported Go API:',
+                maxChars: 50000,
+              },
+              proto: {
+                title: 'Proto Breaking Change Check (advisory)',
+                intro: 'buf detected potential breaking changes in proto definitions:',
+                maxChars: 4000,
+              },
+              helm: {
+                title: 'Helm Values Key Diff (advisory)',
+                intro: 'The following top-level keys were removed or renamed in `helm/michelangelo/values.yaml`:',
+                outro: 'Removing or renaming top-level Helm values is a breaking change for existing installations.',
+                maxChars: 4000,
+              },
+            };
+
+            // Read and validate the artifacts first. Nothing to do when there are none.
+            const findings = [];
+            for (const kind of Object.keys(KINDS)) {
+              const file = `results/api-surface-${kind}/result.json`;
+              if (!fs.existsSync(file)) continue;
+              let data;
+              try {
+                data = JSON.parse(fs.readFileSync(file, 'utf8'));
+              } catch (e) {
+                core.warning(`Ignoring unreadable ${file}: ${e.message}`);
+                continue;
+              }
+              if (data.kind !== kind || !Array.isArray(data.sections)) {
+                core.warning(`Ignoring ${file}: unexpected shape`);
+                continue;
+              }
+              findings.push({ kind, sections: data.sections });
+            }
+            if (findings.length === 0) {
+              core.info('No API surface findings to report.');
+              return;
+            }
+
+            // Identify the PR from the run's own event data. run.pull_requests is empty for
+            // forks, so look the PR up by head owner/branch and require the head SHA to match,
+            // which also skips runs for a commit that has since been superseded.
+            let pr = (run.pull_requests || [])[0];
+            if (!pr) {
+              const { data: prs } = await github.rest.pulls.list({
+                owner, repo, state: 'open',
+                head: `${run.head_repository.owner.login}:${run.head_branch}`,
+              });
+              pr = prs.find((p) => p.head.sha === run.head_sha);
+            }
+            if (!pr) {
+              core.info(`No open PR with head ${run.head_sha}; skipping.`);
+              return;
+            }
+            const { data: current } = await github.rest.pulls.get({
+              owner, repo, pull_number: pr.number,
+            });
+            if (current.state !== 'open' || current.head.sha !== run.head_sha) {
+              core.info(`PR #${pr.number} is closed or has a newer head; skipping.`);
+              return;
+            }
+
+            const commits = await github.paginate(github.rest.pulls.listCommits, {
+              owner, repo, pull_number: pr.number, per_page: 100,
+            });
+            const acknowledged = commits.some((c) => c.commit.message.includes('BREAKING CHANGE:'));
+            const ackNote = acknowledged
+              ? '> **BREAKING CHANGE acknowledged** — a commit on this PR contains `BREAKING CHANGE:` in its message.'
+              : '> No `BREAKING CHANGE:` commit message found. If this is intentional, add `BREAKING CHANGE: <reason>` to a commit message.';
+
+            const fenced = (text, maxChars) => {
+              // Cut the text and make sure it cannot close the code fence.
+              const clean = String(text).slice(0, maxChars).replace(/`{3,}/g, '``');
+              return ['```', clean, '```'].join('\n');
+            };
+            // Headings come from the artifact. The character set excludes '@' and backticks, and
+            // the heading is rendered as inline code, so it cannot mention anyone or autolink.
+            const heading = (h) => String(h || '').replace(/[^\w./~+-]/g, '').slice(0, 200);
+            // Keep each comment well under GitHub's 65536-character limit without cutting the
+            // acknowledgement note or footer: cap the number of sections and split the budget.
+            const MAX_SECTIONS = 50;
+
+            const existing = await github.paginate(github.rest.issues.listComments, {
+              owner, repo, issue_number: pr.number, per_page: 100,
+            });
+
+            for (const { kind, sections } of findings) {
+              const cfg = KINDS[kind];
+              const marker = `<!-- api-surface-check:${kind} -->`;
+              const shown = sections.slice(0, MAX_SECTIONS);
+              const budget = Math.max(500, Math.floor(cfg.maxChars / Math.max(shown.length, 1)));
+              const blocks = shown.map((s) => {
+                const h = heading(s && s.heading);
+                const text = fenced(s && s.text, budget);
+                return h ? `**\`${h}\`**\n${text}` : text;
+              });
+              if (sections.length > shown.length) {
+                blocks.push(`_${sections.length - shown.length} more not shown._`);
+              }
+              const body = [
+                marker,
+                `### ${cfg.title}`,
+                '',
+                cfg.intro,
+                '',
+                blocks.join('\n\n'),
+                '',
+                ...(cfg.outro ? [cfg.outro, ''] : []),
+                ackNote,
+                '',
+                '_This check is advisory and does not block merge._',
+              ].join('\n');
+
+              // Update the previous comment from this workflow instead of adding one per push.
+              const previous = existing.find((c) =>
+                c.user && c.user.login === 'github-actions[bot]' && c.body && c.body.includes(marker));
+              if (previous) {
+                await github.rest.issues.updateComment({ owner, repo, comment_id: previous.id, body });
+              } else {
+                await github.rest.issues.createComment({ owner, repo, issue_number: pr.number, body });
+              }
+            }
