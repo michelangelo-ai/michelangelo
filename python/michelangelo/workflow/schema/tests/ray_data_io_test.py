@@ -84,8 +84,11 @@ class TestParquetReadConfig(TestCase):
         codec = DataclassCodec()
         for cfg in (
             ParquetReadConfig(override_num_blocks_per_dataset={"train": 3, "val": 1}),
-            WriteConfig(max_rows_per_file=10, concurrency=4),
-            RayDataContextConfig(max_blocks_in_streaming_gen_buffer=1),
+            WriteConfig(max_rows_per_file=10, concurrency=4, memory=1024),
+            RayDataContextConfig(
+                max_blocks_in_streaming_gen_buffer=1, preserve_order=True
+            ),
+            RayDataContextConfig(preserve_order=False),
         ):
             with self.subTest(cfg=type(cfg).__name__):
                 self.assertEqual(codec.decode(codec.encode(cfg)), cfg)
@@ -120,9 +123,23 @@ class TestWriteConfig(TestCase):
             with self.subTest(bad=bad), self.assertRaises(ConfigurationError):
                 WriteConfig(concurrency=bad)
 
+    def test_memory_defaults_to_none_and_roundtrips(self):
+        """Write memory is unset by default and round-trips through asdict."""
+        self.assertIsNone(WriteConfig().memory)
+        cfg = WriteConfig(memory=2 * 1024**3)
+        self.assertEqual(cfg.memory, 2 * 1024**3)
+        self.assertEqual(WriteConfig(**dataclasses.asdict(cfg)), cfg)
+
 
 class TestRayDataContextConfig(TestCase):
     """Tests for the RayDataContextConfig dataclass."""
+
+    def test_preserve_order_defaults_to_none_and_roundtrips(self):
+        """preserve_order is unset by default; False is distinct from unset."""
+        self.assertIsNone(RayDataContextConfig().preserve_order)
+        cfg = RayDataContextConfig(preserve_order=False)
+        self.assertIs(cfg.preserve_order, False)
+        self.assertEqual(RayDataContextConfig(**dataclasses.asdict(cfg)), cfg)
 
     def test_buffer_setting_defaults_to_none(self):
         """The streaming buffer setting is unset by default."""
