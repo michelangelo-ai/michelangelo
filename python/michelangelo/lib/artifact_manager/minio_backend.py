@@ -157,16 +157,38 @@ class MinioStorageBackend(StorageBackend):
                 "Install it with: pip install 'michelangelo[minio]'"
             ) from exc
         self._bucket = bucket
+        self._connection = {
+            "endpoint": endpoint,
+            "access_key": access_key,
+            "secret_key": secret_key,
+            "secure": secure,
+            "region": region,
+        }
         self._S3Error = S3Error
-        self._client = Minio(
-            endpoint,
-            access_key=access_key,
-            secret_key=secret_key,
-            secure=secure,
-            region=region,
-        )
+        self._client = Minio(**self._connection)
         if create_bucket_if_missing:
             self._ensure_bucket()
+
+    def __getstate__(self) -> dict:
+        """Return the picklable state.
+
+        The HTTP client holds locks and sockets, so only the connection settings
+        are kept and the client is rebuilt by ``__setstate__``. This lets the
+        backend be shipped to remote workers, for example as an argument to a
+        Ray actor.
+        """
+        state = self.__dict__.copy()
+        del state["_client"], state["_S3Error"]
+        return state
+
+    def __setstate__(self, state: dict) -> None:
+        """Restore the state and reconnect the client."""
+        from minio import Minio
+        from minio.error import S3Error
+
+        self.__dict__.update(state)
+        self._S3Error = S3Error
+        self._client = Minio(**self._connection)
 
     def upload(self, local_path: str, destination_key: str) -> str:
         """Upload a local file or directory to the configured MinIO bucket.
