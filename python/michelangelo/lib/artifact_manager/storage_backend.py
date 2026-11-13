@@ -23,11 +23,11 @@ class StorageBackend(ABC):
 
             def upload(self, local_path: str, destination_key: str) -> str:
                 uri = f"s3://{self._bucket}/{destination_key}"
-                # boto3 upload logic here
+                # upload logic here
                 return uri
 
             def download(self, uri: str, local_path: str) -> None:
-                # boto3 download logic here
+                # download logic here
                 pass
     """
 
@@ -82,8 +82,8 @@ class StorageBackend(ABC):
             backend = LocalStorageBackend("/tmp/artifacts")
             print(backend.get_storage_location())  # "/tmp/artifacts"
 
-            minio = MinioStorageBackend(endpoint="...", bucket="my-bucket", ...)
-            print(minio.get_storage_location())  # "s3://my-bucket"
+            s3 = FsspecStorageBackend("s3://my-bucket", s3_storage_options(...))
+            print(s3.get_storage_location())  # "s3://my-bucket"
         """
         return None
 

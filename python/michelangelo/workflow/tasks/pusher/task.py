@@ -45,7 +45,7 @@ def push(
         artifacts: Mapping from artifact name to artifact value. Keys must
             match ``PusherPluginConfig.name`` for each item in config.
         storage_backend: Backend used for artifact uploads. Required —
-            pass a ``LocalStorageBackend``, ``MinioStorageBackend``, or any
+            pass a ``LocalStorageBackend``, ``FsspecStorageBackend``, or any
             `StorageBackend`
             subclass. Raises `ConfigurationError` when ``None``.
         registry_client: Registry client injected into plugins that require
@@ -119,7 +119,7 @@ def push(
     if storage_backend is None:
         raise ConfigurationError(
             "storage_backend is required. Pass a LocalStorageBackend, "
-            "MinioStorageBackend, or any StorageBackend subclass."
+            "FsspecStorageBackend, or any StorageBackend subclass."
         )
 
     results: list[PusherResult] = []

@@ -20,7 +20,7 @@ class S3SinkConfig:
     single-argument constructor pattern as ``LocalFileSink`` and ``HiveSink``.
 
     The ``storage_backend`` is required and must be an initialised
-    ``StorageBackend`` instance (e.g. ``MinioStorageBackend``). Credentials
+    ``StorageBackend`` instance (e.g. ``FsspecStorageBackend``). Credentials
     and connection details live on the backend, not in this config — keeping
     the config free of secrets.
 
@@ -35,7 +35,7 @@ class S3SinkConfig:
             determined by ``format``. Must be non-empty and must not start
             with ``/``. Trailing slashes are stripped automatically.
         storage_backend: Initialised ``StorageBackend`` (e.g.
-            ``MinioStorageBackend``) used for the upload. Required — there
+            ``FsspecStorageBackend``) used for the upload. Required — there
             is no default.
         format: Serialisation format — Parquet, CSV, or JSON Lines.
             Defaults to ``DatasetFormat.PARQUET``.
@@ -46,16 +46,23 @@ class S3SinkConfig:
 
     Example::
 
-        from michelangelo.lib.artifact_manager.minio_backend import MinioStorageBackend
+        import os
+
+        from michelangelo.lib.artifact_manager.fsspec_backend import (
+            FsspecStorageBackend,
+            s3_storage_options,
+        )
         from michelangelo.workflow.schema.sinks.s3 import S3SinkConfig
         from michelangelo.workflow.schema.pusher import DatasetFormat
 
-        backend = MinioStorageBackend(
-            endpoint="localhost:9000",
-            bucket="my-bucket",
-            access_key="michelangeloadmin",
-            secret_key="michelangeloadmin",
-            secure=False,
+        backend = FsspecStorageBackend(
+            "s3://my-bucket",
+            s3_storage_options(
+                "localhost:9091",
+                access_key=os.environ["AWS_ACCESS_KEY_ID"],
+                secret_key=os.environ["AWS_SECRET_ACCESS_KEY"],
+                secure=False,  # local sandbox only
+            ),
             create_bucket_if_missing=True,
         )
         cfg = S3SinkConfig(
@@ -85,5 +92,5 @@ class S3SinkConfig:
         if self.storage_backend is None:
             raise ValueError(
                 "storage_backend is required. Pass an initialised StorageBackend "
-                "instance (e.g. MinioStorageBackend) constructed inside the task body."
+                "instance (e.g. FsspecStorageBackend) constructed inside the task body."
             )

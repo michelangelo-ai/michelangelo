@@ -63,7 +63,7 @@ The three built-in plugins:
 
 ### Example
 
-This example follows [`python/examples/bert_cola/push.py`](https://github.com/michelangelo-ai/michelangelo/blob/main/python/examples/bert_cola/push.py), cut down to local storage. That file shows the full version, which switches to `MinioStorageBackend` when `AWS_ENDPOINT_URL` is set. It also switches to `APIRegistryClient` when `REGISTRY_ENDPOINT` is set.
+This example follows [`python/examples/bert_cola/push.py`](https://github.com/michelangelo-ai/michelangelo/blob/main/python/examples/bert_cola/push.py), cut down to local storage. That file shows the full version, which switches to `FsspecStorageBackend` (`s3://`) when `AWS_ENDPOINT_URL` is set. It also switches to `APIRegistryClient` when `REGISTRY_ENDPOINT` is set.
 
 ```python
 import tempfile
@@ -396,9 +396,10 @@ There is **no** `delete()` method, so cleanup is up to you.
 The built-in backends:
 
 - `LocalStorageBackend(base_dir)` returns absolute paths under `base_dir`.
-- `MinioStorageBackend(endpoint, bucket, access_key, secret_key, ...)` is in [`lib/artifact_manager/minio_backend.py`](https://github.com/michelangelo-ai/michelangelo/blob/main/python/michelangelo/lib/artifact_manager/minio_backend.py). It returns `s3://bucket/key` and rejects URIs that don't start with `s3://`.
+- `FsspecStorageBackend(base_uri, storage_options=None, *, create_bucket_if_missing=False, filesystem=None)` is in [`lib/artifact_manager/fsspec_backend.py`](https://github.com/michelangelo-ai/michelangelo/blob/main/python/michelangelo/lib/artifact_manager/fsspec_backend.py). It serves any [fsspec](https://filesystem-spec.readthedocs.io/) protocol: `s3://` (install `michelangelo[s3]`), `gs://` (install `michelangelo[gcs]`), `file://` and `memory://`. It returns `<base_uri>/<key>` and rejects URIs with another protocol. For S3-compatible servers, build `storage_options` with `s3_storage_options(endpoint, access_key=..., secret_key=..., secure=..., region=...)`, for example `FsspecStorageBackend("s3://my-bucket", s3_storage_options("localhost:9091", access_key=key, secret_key=secret, secure=False))`. Errors are raised as `OSError` subclasses (`FileNotFoundError`, `PermissionError`, ...).
+- `MinioStorageBackend(endpoint, bucket, access_key, secret_key, ...)` in `lib/artifact_manager/minio_backend.py` is **deprecated**. It is now a thin wrapper around `FsspecStorageBackend("s3://<bucket>", s3_storage_options(...))`, needs `s3fs` instead of the `minio` package, and emits a `DeprecationWarning`. Move to `FsspecStorageBackend`.
 
-**Minimal implementation.** The transfer logic is illustrative:
+**Minimal implementation.** You don't need a custom backend for any fsspec protocol, including `gs://`: use `FsspecStorageBackend`. The example below only shows the interface, and its transfer logic is illustrative:
 
 ```python
 from michelangelo.lib.artifact_manager.storage_backend import StorageBackend
@@ -421,7 +422,7 @@ class GCSStorageBackend(StorageBackend):
         return f"gs://{self._bucket}"
 ```
 
-**How to test it.** `lib/artifact_manager/tests/storage_backend_test.py` covers file and directory round trips, overwrites and nested keys for `LocalStorageBackend`. `minio_backend_test.py` in the same folder does the same for an object store.
+**How to test it.** `lib/artifact_manager/tests/storage_backend_test.py` covers file and directory round trips, overwrites and nested keys for `LocalStorageBackend`. `fsspec_backend_test.py` in the same folder does the same for `FsspecStorageBackend` with `memory://` and `file://`, and `s3_compat_integration_test.py` runs against a live S3-compatible server when `MA_TEST_S3_ENDPOINT` is set.
 
 **Gotchas.** Uploads are at-least-once. If a push fails after the first upload, orphan objects can be left behind. Because there's no `delete()`, use keys that are safe to overwrite: `ModelPusherPlugin` writes to fixed keys under `models/<model_name>/`, so a re-run with the same name overwrites the earlier files.
 
