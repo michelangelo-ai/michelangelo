@@ -1255,7 +1255,11 @@ func (m *mysqlMetadataStorage) fullUpsert(ctx context.Context, tx *sql.Tx, table
 	// Build indexed fields map
 	indexedFieldsMap := make(map[string]interface{})
 	for _, field := range indexedFields {
-		indexedFieldsMap[field.Key] = field.Value
+		value, err := indexedFieldSQLValue(field.Value)
+		if err != nil {
+			return status.Errorf(codes.InvalidArgument, "invalid value for indexed field %s: %v", field.Key, err)
+		}
+		indexedFieldsMap[field.Key] = value
 	}
 
 	// Determine primary key: use MetadataStoragePrimaryKeyAnnotation if set, else UID.
@@ -1305,6 +1309,31 @@ func (m *mysqlMetadataStorage) fullUpsert(ctx context.Context, tx *sql.Tx, table
 	}
 
 	return nil
+}
+
+// indexedFieldSQLValue converts an indexed field value into a type the MySQL driver accepts.
+// Generated GetIndexedKeyValuePairs passes timestamp fields through as their proto or K8s
+// types (e.g. PipelineRun status.end_time as *types.Timestamp, Deployment
+// deletion_requested_timestamp as *metav1.Time), which database/sql rejects as unsupported
+// structs. Nil timestamps become SQL NULL; other values are returned unchanged.
+func indexedFieldSQLValue(value interface{}) (interface{}, error) {
+	switch v := value.(type) {
+	case *gogotypes.Timestamp:
+		if v == nil {
+			return nil, nil
+		}
+		t, err := gogotypes.TimestampFromProto(v)
+		if err != nil {
+			return nil, err
+		}
+		return t.UTC(), nil
+	case *metav1.Time:
+		if v == nil {
+			return nil, nil
+		}
+		return v.Time.UTC(), nil
+	}
+	return value, nil
 }
 
 // directUpdateManagedLabels and directUpdateManagedAnnotations are the label and

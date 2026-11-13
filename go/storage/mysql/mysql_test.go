@@ -1,7 +1,9 @@
 package mysql
 
 import (
+	"database/sql/driver"
 	"testing"
+	"time"
 
 	gogotypes "github.com/gogo/protobuf/types"
 	"github.com/stretchr/testify/require"
@@ -687,6 +689,65 @@ func TestExtractMatchValue_EmptyStringWrapperFallsThrough(t *testing.T) {
 	v, err := extractMatchValue(any)
 	require.NoError(t, err)
 	require.Equal(t, "", v)
+}
+
+func TestIndexedFieldSQLValue(t *testing.T) {
+	ts := time.Date(2026, 11, 4, 11, 0, 38, 586000000, time.UTC)
+	protoTS, err := gogotypes.TimestampProto(ts)
+	require.NoError(t, err)
+	k8sTS := metav1.NewTime(ts)
+
+	tests := []struct {
+		name  string
+		value interface{}
+		want  interface{}
+	}{
+		{name: "proto timestamp becomes time.Time", value: protoTS, want: ts},
+		{name: "nil proto timestamp becomes NULL", value: (*gogotypes.Timestamp)(nil), want: nil},
+		{name: "k8s time becomes time.Time", value: &k8sTS, want: ts},
+		{name: "nil k8s time becomes NULL", value: (*metav1.Time)(nil), want: nil},
+		{name: "string is unchanged", value: "PIPELINE_RUN_STATE_SUCCEEDED", want: "PIPELINE_RUN_STATE_SUCCEEDED"},
+		{name: "nil is unchanged", value: nil, want: nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := indexedFieldSQLValue(tt.value)
+			require.NoError(t, err)
+			require.Equal(t, tt.want, got)
+			_, err = driver.DefaultParameterConverter.ConvertValue(got)
+			require.NoError(t, err, "converted value must be accepted by database/sql")
+		})
+	}
+
+	_, err = indexedFieldSQLValue(&gogotypes.Timestamp{Seconds: -1 << 62})
+	require.Error(t, err, "out-of-range timestamps are rejected")
+}
+
+// TestIndexedFieldSQLValue_PipelineRunEndTime guards the regression where a PipelineRun with
+// status.end_time set failed every MySQL upsert with "unsupported type types.Timestamp, a
+// struct": every indexed value must be accepted by database/sql after conversion.
+func TestIndexedFieldSQLValue_PipelineRunEndTime(t *testing.T) {
+	run := &v2pb.PipelineRun{
+		ObjectMeta: metav1.ObjectMeta{Name: "run", Namespace: "ns"},
+		Status: v2pb.PipelineRunStatus{
+			State:   v2pb.PIPELINE_RUN_STATE_SUCCEEDED,
+			EndTime: &gogotypes.Timestamp{Seconds: 1793790038, Nanos: 586000000},
+		},
+	}
+
+	for _, field := range run.GetIndexedKeyValuePairs() {
+		if field.Key == "end_time" {
+			_, err := driver.DefaultParameterConverter.ConvertValue(field.Value)
+			require.Error(t, err, "the raw proto timestamp is what the MySQL driver rejected")
+		}
+		value, err := indexedFieldSQLValue(field.Value)
+		require.NoError(t, err)
+		_, err = driver.DefaultParameterConverter.ConvertValue(value)
+		require.NoError(t, err, "indexed field %s", field.Key)
+		if field.Key == "end_time" {
+			require.Equal(t, time.Unix(1793790038, 586000000).UTC(), value)
+		}
+	}
 }
 
 func TestFullUpsert_StablePrimaryKey(t *testing.T) {
