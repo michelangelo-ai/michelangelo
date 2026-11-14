@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/go-logr/logr"
+	"github.com/michelangelo-ai/michelangelo/go/components/jobs/client/k8sengine"
 	constants "github.com/michelangelo-ai/michelangelo/go/components/jobs/common/constants"
 	"github.com/michelangelo-ai/michelangelo/go/components/spark/job"
 	sparkv1beta2 "github.com/michelangelo-ai/michelangelo/go/thirdparty/k8s-crds/apis/sparkoperator.k8s.io/v1beta2"
@@ -13,6 +14,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
+	k8sptr "k8s.io/utils/ptr"
 )
 
 // SparkClient implements the Spark job client interface for creating and managing
@@ -22,8 +24,9 @@ import (
 // SparkApplication custom resources. It handles the conversion from SparkJob
 // specifications to Spark Operator format and extracts status information.
 type SparkClient struct {
-	K8sClient      rest.Interface         // REST client for sparkoperator.k8s.io/v1beta2 API
-	ParameterCodec runtime.ParameterCodec // Codec for query parameter encoding
+	K8sClient         rest.Interface         // REST client for sparkoperator.k8s.io/v1beta2 API
+	ParameterCodec    runtime.ParameterCodec // Codec for query parameter encoding
+	CredentialsSecret string                 // Object-storage credentials Secret for driver/executor envFrom; empty for none
 }
 
 // Compile-time assertion that SparkClient implements job.Client interface.
@@ -185,6 +188,8 @@ func (r SparkClient) DeleteJob(ctx context.Context, log logr.Logger, job *v2pb.S
 // into the format required by the Spark Operator, including:
 //   - Resource requirements (CPU, memory, GPU)
 //   - Environment variables and config maps
+//   - The object-storage credentials Secret, ahead of the pod's own envFrom
+//     sources (see k8sengine.WithCredentialsSecret)
 //   - Service account configuration
 //
 // The serviceAccount parameter is optional and only set for driver pods.
@@ -207,23 +212,26 @@ func (r SparkClient) toSparkPodSpec(pod *v2pb.PodSpec, serviceAccount *string) s
 	// Convert envFrom fields
 	envFrom := make([]corev1.EnvFromSource, 0, len(pod.EnvFrom))
 	for _, ef := range pod.EnvFrom {
-		coreEnvFromSource := corev1.EnvFromSource{}
-		if ef.SecretRef != nil {
+		coreEnvFromSource := corev1.EnvFromSource{Prefix: ef.GetPrefix()}
+		if secretRef := ef.GetSecretRef(); secretRef != nil {
 			coreEnvFromSource.SecretRef = &corev1.SecretEnvSource{
 				LocalObjectReference: corev1.LocalObjectReference{
-					Name: ef.SecretRef.LocalObjectReference.Name,
+					Name: secretRef.GetLocalObjectReference().GetName(),
 				},
+				Optional: optionalSource(secretRef.GetOptional()),
 			}
 		}
-		if ef.ConfigMapRef != nil {
+		if configMapRef := ef.GetConfigMapRef(); configMapRef != nil {
 			coreEnvFromSource.ConfigMapRef = &corev1.ConfigMapEnvSource{
 				LocalObjectReference: corev1.LocalObjectReference{
-					Name: ef.ConfigMapRef.LocalObjectReference.Name,
+					Name: configMapRef.GetLocalObjectReference().GetName(),
 				},
+				Optional: optionalSource(configMapRef.GetOptional()),
 			}
 		}
 		envFrom = append(envFrom, coreEnvFromSource)
 	}
+	envFrom = k8sengine.WithCredentialsSecret(envFrom, r.CredentialsSecret)
 
 	return sparkv1beta2.SparkPodSpec{
 		Cores:  &(pod.Resource.Cpu),
@@ -236,4 +244,14 @@ func (r SparkClient) toSparkPodSpec(pod *v2pb.PodSpec, serviceAccount *string) s
 		EnvFrom:        envFrom,
 		ServiceAccount: serviceAccount,
 	}
+}
+
+// optionalSource converts the proto's optional flag to the *bool corev1 uses.
+// proto3 cannot tell an unset flag from false, and Kubernetes reads nil as
+// false, so only true is carried over.
+func optionalSource(optional bool) *bool {
+	if !optional {
+		return nil
+	}
+	return k8sptr.To(true)
 }
