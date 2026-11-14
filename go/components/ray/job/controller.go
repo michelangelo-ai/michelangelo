@@ -72,8 +72,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		if utils.IsNotFoundError(err) {
 			return ctrl.Result{}, nil
 		}
-		res.RequeueAfter = requeueAfter
-		return res, err
+		return ctrl.Result{}, err
 	}
 
 	// An immutable RayJob has reached a terminal state and is being moved to metadata
@@ -104,8 +103,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		err := r.Status().Update(ctx, &rayJob)
 		if err != nil {
 			logger.Error(err, "failed to update status")
-			res.RequeueAfter = requeueAfter
-			return res, err
+			return ctrl.Result{}, err
 		}
 	}
 
