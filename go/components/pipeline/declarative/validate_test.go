@@ -63,6 +63,11 @@ func TestValidateStructural(t *testing.T) {
 		{"cycle", newWorkflow(map[string]*v2.DeclarativeTask{
 			"a": task("core/python", "c"), "b": task("core/python", "a"), "c": task("core/python", "b"), "d": task("core/python"),
 		}), Limits{}, `tasks form a cycle: a, b, c`},
+		{"unknown when", func() *v2.DeclarativeWorkflow {
+			b := task("core/python")
+			b.DependsOn = []*v2.TaskDependency{{Task: "a", When: 99}}
+			return newWorkflow(map[string]*v2.DeclarativeTask{"a": task("core/python"), "b": b})
+		}(), Limits{}, `task "b": depends_on[0].when 99 is not a known outcome`},
 		{"unknown dependency before cycle", newWorkflow(map[string]*v2.DeclarativeTask{
 			"a": task("core/python", "b"), "b": task("core/python", "a", "zz"),
 		}), Limits{}, `task "b": depends_on names unknown task "zz"`},
@@ -207,4 +212,20 @@ func FuzzValidate(f *testing.F) {
 			_ = g.levels()
 		}
 	})
+}
+
+func TestValidateOutputRefNeedsSucceededPath(t *testing.T) {
+	gated := func(when v2.TaskDependency_Outcome) *v2.DeclarativeWorkflow {
+		w := diamond()
+		notify := task("core/python")
+		notify.DependsOn = []*v2.TaskDependency{{Task: "publish", When: when}}
+		notify.Config.Fields["model"] = strVal("{{ tasks.train.output.model_uri }}")
+		w.Tasks["notify"] = notify
+		return w
+	}
+	assert.NoError(t, Validate(gated(v2.OUTCOME_SUCCEEDED), Limits{}))
+	assert.EqualError(t, Validate(gated(v2.OUTCOME_FAILED), Limits{}),
+		`task "notify": config.model references task "train", which has no all-succeeded dependency path to "notify"`)
+	assert.EqualError(t, Validate(gated(v2.OUTCOME_COMPLETED), Limits{}),
+		`task "notify": config.model references task "train", which has no all-succeeded dependency path to "notify"`)
 }

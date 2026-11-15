@@ -239,7 +239,7 @@ func checkParamRefs(w *v2.DeclarativeWorkflow, refs map[string][]taskRef) error 
 
 func checkTaskRefs(w *v2.DeclarativeWorkflow, g *graph, refs map[string][]taskRef) error {
 	for _, n := range g.names {
-		var deps map[string]bool
+		var deps, okDeps map[string]bool
 		for _, tr := range refs[n] {
 			if tr.Ref.Kind != refTaskOutput {
 				continue
@@ -253,9 +253,13 @@ func checkTaskRefs(w *v2.DeclarativeWorkflow, g *graph, refs map[string][]taskRe
 			}
 			if deps == nil {
 				deps = g.transitiveDeps(n)
+				okDeps = g.succeededDeps(n)
 			}
 			if !deps[target] {
 				return &Error{Task: n, Field: tr.Field, Msg: fmt.Sprintf("references task %q that is not a dependency of %q", target, n)}
+			}
+			if !okDeps[target] {
+				return &Error{Task: n, Field: tr.Field, Msg: fmt.Sprintf("references task %q, which has no all-succeeded dependency path to %q", target, n)}
 			}
 		}
 	}

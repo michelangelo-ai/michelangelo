@@ -15,10 +15,12 @@ type graph struct {
 	names []string
 	deps  map[string][]string
 	rdeps map[string][]string
+	// okDeps holds only the edges that run when the dependency succeeded.
+	okDeps map[string][]string
 }
 
 func buildGraph(w *v2.DeclarativeWorkflow) (*graph, error) {
-	g := &graph{deps: map[string][]string{}, rdeps: map[string][]string{}}
+	g := &graph{deps: map[string][]string{}, rdeps: map[string][]string{}, okDeps: map[string][]string{}}
 	for name := range w.Tasks {
 		g.names = append(g.names, name)
 	}
@@ -47,12 +49,18 @@ func buildGraph(w *v2.DeclarativeWorkflow) (*graph, error) {
 			if _, ok := w.Tasks[d.Task]; !ok {
 				return nil, &Error{Task: name, Msg: fmt.Sprintf("depends_on names unknown task %q", d.Task)}
 			}
+			if _, ok := v2.TaskDependency_Outcome_name[int32(d.When)]; !ok {
+				return nil, &Error{Task: name, Msg: fmt.Sprintf("depends_on[%d].when %d is not a known outcome", i, d.When)}
+			}
 			if seen[d.Task] {
 				return nil, &Error{Task: name, Msg: fmt.Sprintf("depends_on names %q more than once", d.Task)}
 			}
 			seen[d.Task] = true
 			g.deps[name] = append(g.deps[name], d.Task)
 			g.rdeps[d.Task] = append(g.rdeps[d.Task], name)
+			if d.When == v2.OUTCOME_UNSPECIFIED || d.When == v2.OUTCOME_SUCCEEDED {
+				g.okDeps[name] = append(g.okDeps[name], d.Task)
+			}
 		}
 		sort.Strings(g.deps[name])
 	}
@@ -129,9 +137,14 @@ func (g *graph) levels() [][]string {
 	return out
 }
 
-func (g *graph) transitiveDeps(task string) map[string]bool {
+func (g *graph) transitiveDeps(task string) map[string]bool { return reach(g.deps, task) }
+
+// succeededDeps returns the tasks that must have succeeded before task runs.
+func (g *graph) succeededDeps(task string) map[string]bool { return reach(g.okDeps, task) }
+
+func reach(adj map[string][]string, task string) map[string]bool {
 	out := map[string]bool{}
-	stack := append([]string{}, g.deps[task]...)
+	stack := append([]string{}, adj[task]...)
 	for len(stack) > 0 {
 		n := stack[len(stack)-1]
 		stack = stack[:len(stack)-1]
@@ -139,7 +152,7 @@ func (g *graph) transitiveDeps(task string) map[string]bool {
 			continue
 		}
 		out[n] = true
-		stack = append(stack, g.deps[n]...)
+		stack = append(stack, adj[n]...)
 	}
 	return out
 }
