@@ -36,7 +36,7 @@ func TestValidateAgainstAccepts(t *testing.T) {
 	}}
 	w.Tasks["train"].Retry = &v2.RetryPolicy{MaxAttempts: 3}
 	require.NoError(t, Validate(w, Limits{}))
-	require.NoError(t, ValidateAgainst(w, loadRelease(t)))
+	require.NoError(t, ValidateAgainst(w, Limits{}, loadRelease(t)))
 }
 
 func TestValidateAgainstErrors(t *testing.T) {
@@ -116,7 +116,7 @@ func TestValidateAgainstErrors(t *testing.T) {
 			w := typedDiamond()
 			c.edit(w)
 			require.NoError(t, Validate(w, Limits{}), "fixture must pass Validate first")
-			err := ValidateAgainst(w, rel)
+			err := ValidateAgainst(w, Limits{}, rel)
 			if c.want == "" {
 				assert.NoError(t, err)
 				return
@@ -127,5 +127,31 @@ func TestValidateAgainstErrors(t *testing.T) {
 }
 
 func TestValidateAgainstNilRelease(t *testing.T) {
-	assert.EqualError(t, ValidateAgainst(typedDiamond(), nil), "release is not set")
+	assert.EqualError(t, ValidateAgainst(typedDiamond(), Limits{}, nil), "release is not set")
+}
+
+func TestValidateAgainstRejectsUnvalidatedInput(t *testing.T) {
+	rel := loadRelease(t)
+	undeclared := typedDiamond()
+	undeclared.Tasks["train"].Config.Fields["epochs"] = strVal("{{ params.nope }}")
+	nullGroup := typedDiamond()
+	nullGroup.Tasks["train"].JobSpecs = &types.Struct{Fields: map[string]*types.Value{"ray": nil}}
+	nilTypeRel := &Release{Version: "core-v0", TaskTypes: map[string]*TaskType{"core/python": nil, "core/ray": nil}}
+	cases := []struct {
+		name string
+		w    *v2.DeclarativeWorkflow
+		rel  *Release
+		want string
+	}{
+		{"nil workflow", nil, rel, "workflow is not set"},
+		{"nil task", newWorkflow(map[string]*v2.DeclarativeTask{"a": nil}), rel, `task "a": task is not set`},
+		{"undeclared parameter", undeclared, rel, `task "train": config.epochs references undeclared parameter "nope"`},
+		{"null group value", nullGroup, rel, `task "train": job_specs.ray must not be null in core-v1.4.2`},
+		{"nil task type", typedDiamond(), nilTypeRel, `task "evaluate": task_function "core/python" is not a task type in core-v0`},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.EqualError(t, ValidateAgainst(c.w, Limits{}, c.rel), c.want)
+		})
+	}
 }

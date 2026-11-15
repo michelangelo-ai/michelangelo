@@ -8,11 +8,14 @@ import (
 	v2 "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
-// ValidateAgainst checks w against the task-type schemas of rel. Call Validate
-// first, because ValidateAgainst assumes a valid workflow.
-func ValidateAgainst(w *v2.DeclarativeWorkflow, rel *Release) error {
+// ValidateAgainst runs Validate, then checks w against the task-type schemas
+// of rel.
+func ValidateAgainst(w *v2.DeclarativeWorkflow, lim Limits, rel *Release) error {
 	if rel == nil {
 		return &Error{Msg: "release is not set"}
+	}
+	if err := Validate(w, lim); err != nil {
+		return err
 	}
 	names := make([]string, 0, len(w.Tasks))
 	for n := range w.Tasks {
@@ -21,8 +24,8 @@ func ValidateAgainst(w *v2.DeclarativeWorkflow, rel *Release) error {
 	sort.Strings(names)
 	for _, n := range names {
 		t := w.Tasks[n]
-		tt, ok := rel.TaskTypes[t.TaskFunction]
-		if !ok {
+		tt := rel.TaskTypes[t.TaskFunction]
+		if tt == nil {
 			return &Error{Task: n, Release: rel.Version, Msg: fmt.Sprintf("task_function %q is not a task type", t.TaskFunction)}
 		}
 		if r := effectiveRetry(w, t); r != nil && r.MaxAttempts > 1 && !tt.HasCapability("retry") {
@@ -91,6 +94,9 @@ func (c *sectionChecker) check(prefix string, s *types.Struct, schema Schema) er
 		}
 		path := prefix + "." + k
 		if f.Type == "" {
+			if v == nil || v.Kind == nil {
+				return c.errf(path, "must not be null")
+			}
 			sv, ok := v.Kind.(*types.Value_StructValue)
 			if !ok {
 				return c.errf(path, "must be an object")
