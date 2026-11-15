@@ -60,7 +60,7 @@ func TestPlanGolden(t *testing.T) {
 func TestPlanRejectsCycle(t *testing.T) {
 	w := typed(newWorkflow(map[string]*v2.DeclarativeTask{"a": task("core/python", "b"), "b": task("core/python", "a")}))
 	_, err := Plan(w, Limits{}, loadRelease(t), nil)
-	assert.EqualError(t, err, "tasks form a cycle: a, b")
+	assert.EqualError(t, err, "tasks form a cycle: a -> b -> a")
 }
 
 func TestPlanCopiesWarnings(t *testing.T) {

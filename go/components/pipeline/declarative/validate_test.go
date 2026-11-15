@@ -62,7 +62,10 @@ func TestValidateStructural(t *testing.T) {
 		}(), Limits{}, `task "b": depends_on[0].task is not set`},
 		{"cycle", newWorkflow(map[string]*v2.DeclarativeTask{
 			"a": task("core/python", "c"), "b": task("core/python", "a"), "c": task("core/python", "b"), "d": task("core/python"),
-		}), Limits{}, `tasks form a cycle: a, b, c`},
+		}), Limits{}, `tasks form a cycle: a -> c -> b -> a`},
+		{"cycle with downstream tasks", newWorkflow(map[string]*v2.DeclarativeTask{
+			"a": task("core/python", "b"), "b": task("core/python", "a"), "c": task("core/python", "a"), "d": task("core/python", "c"),
+		}), Limits{}, `tasks form a cycle: a -> b -> a`},
 		{"unknown when", func() *v2.DeclarativeWorkflow {
 			b := task("core/python")
 			b.DependsOn = []*v2.TaskDependency{{Task: "a", When: 99}}

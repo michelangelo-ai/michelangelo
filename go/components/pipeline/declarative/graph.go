@@ -67,13 +67,15 @@ func buildGraph(w *v2.DeclarativeWorkflow) (*graph, error) {
 	for k := range g.rdeps {
 		sort.Strings(g.rdeps[k])
 	}
-	if cyc := g.cycleMembers(); len(cyc) > 0 {
-		return nil, &Error{Msg: "tasks form a cycle: " + strings.Join(cyc, ", ")}
+	if cyc := g.cyclePath(); len(cyc) > 0 {
+		return nil, &Error{Msg: "tasks form a cycle: " + strings.Join(cyc, " -> ")}
 	}
 	return g, nil
 }
 
-func (g *graph) cycleMembers() []string {
+// cyclePath returns one dependency cycle, first task repeated at the end, or
+// nil when the graph is acyclic.
+func (g *graph) cyclePath() []string {
 	indeg := map[string]int{}
 	for _, n := range g.names {
 		indeg[n] = len(g.deps[n])
@@ -99,13 +101,30 @@ func (g *graph) cycleMembers() []string {
 	if done == len(g.names) {
 		return nil
 	}
-	var cyc []string
+	// Every task left with indegree > 0 has a dependency that is also left, so
+	// a walk through left tasks must revisit one.
+	var start string
 	for _, n := range g.names {
 		if indeg[n] > 0 {
-			cyc = append(cyc, n)
+			start = n
+			break
 		}
 	}
-	return cyc
+	pos := map[string]int{}
+	var path []string
+	for n := start; ; {
+		if i, seen := pos[n]; seen {
+			return append(path[i:], n)
+		}
+		pos[n] = len(path)
+		path = append(path, n)
+		for _, d := range g.deps[n] {
+			if indeg[d] > 0 {
+				n = d
+				break
+			}
+		}
+	}
 }
 
 func (g *graph) levels() [][]string {
