@@ -23,7 +23,7 @@ describe('createFetchTransport', () => {
     const transport = createFetchTransport({ baseUrl: 'https://api.example.com' });
     await transport.callUnary('FooService', 'GetFoo', {});
 
-    const [, init] = mockFetch.mock.calls[0];
+    const [, init] = mockFetch.mock.calls[0] as [string, RequestInit];
     expect(init).not.toHaveProperty('credentials');
   });
 
@@ -36,7 +36,7 @@ describe('createFetchTransport', () => {
     });
     await transport.callUnary('FooService', 'GetFoo', {});
 
-    const [, init] = mockFetch.mock.calls[0];
+    const [, init] = mockFetch.mock.calls[0] as [string, RequestInit];
     expect(init).toMatchObject({ credentials: 'include' });
   });
 
@@ -49,9 +49,9 @@ describe('createFetchTransport', () => {
     });
     await transport.callUnary('FooService', 'GetFoo', {}, { 'X-Extra': 'value' });
 
-    const [, init] = mockFetch.mock.calls[0];
+    const [, init] = mockFetch.mock.calls[0] as [string, RequestInit];
     expect(init).toMatchObject({ credentials: 'include' });
-    expect((init as RequestInit).headers).toMatchObject({ 'X-Extra': 'value' });
+    expect(init.headers).toMatchObject({ 'X-Extra': 'value' });
   });
 
   it('still calls the expected URL and method with credentials configured', async () => {
