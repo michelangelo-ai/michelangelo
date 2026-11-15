@@ -1,6 +1,7 @@
 package declarative
 
 import (
+	"math"
 	"testing"
 
 	"github.com/gogo/protobuf/types"
@@ -100,6 +101,13 @@ func TestValidateAgainstErrors(t *testing.T) {
 			w.Tasks["publish"].Config.Fields["model"] = strVal("{{ tasks.train.output.model_uri }}")
 			w.Tasks["train"].Config.Fields["epochs"] = strVal("{{ tasks.extract.output.n }}")
 		}, ""},
+		{"NaN in number slot", func(w *v2.DeclarativeWorkflow) { w.Tasks["train"].Config.Fields["learning_rate"] = numVal(math.NaN()) },
+			`task "train": config.learning_rate must be finite in core-v1.4.2`},
+		{"+Inf in number slot", func(w *v2.DeclarativeWorkflow) { w.Tasks["train"].Config.Fields["learning_rate"] = numVal(math.Inf(1)) },
+			`task "train": config.learning_rate must be finite in core-v1.4.2`},
+		{"-Inf in number slot", func(w *v2.DeclarativeWorkflow) { w.Tasks["train"].Config.Fields["learning_rate"] = numVal(math.Inf(-1)) },
+			`task "train": config.learning_rate must be finite in core-v1.4.2`},
+		{"finite number slot", func(w *v2.DeclarativeWorkflow) { w.Tasks["train"].Config.Fields["learning_rate"] = numVal(-0.5) }, ""},
 		{"list element ref", func(w *v2.DeclarativeWorkflow) {
 			w.Parameters["xs"] = paramSpec(v2.PARAMETER_TYPE_LIST, listVal())
 			w.Tasks["train"].Config.Fields["args"] = listVal(strVal("{{ params.xs }}"))

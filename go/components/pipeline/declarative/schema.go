@@ -2,6 +2,7 @@ package declarative
 
 import (
 	"fmt"
+	"math"
 	"sort"
 
 	"github.com/gogo/protobuf/types"
@@ -148,8 +149,12 @@ func (c *sectionChecker) leaf(path string, v *types.Value, slot string) error {
 			return c.errf(path, "%s", err.(*Error).Msg)
 		}
 	case "number":
-		if _, ok := v.Kind.(*types.Value_NumberValue); !ok {
+		nv, ok := v.Kind.(*types.Value_NumberValue)
+		if !ok {
 			return c.errf(path, "must be a number")
+		}
+		if math.IsNaN(nv.NumberValue) || math.IsInf(nv.NumberValue, 0) {
+			return c.errf(path, "must be finite")
 		}
 	case "boolean":
 		if _, ok := v.Kind.(*types.Value_BoolValue); !ok {
