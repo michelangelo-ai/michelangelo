@@ -3,7 +3,7 @@ import type { RowCell } from '#core/components/row/types';
 import type { Accessor } from '#core/types/common/studio-types';
 import type { TaskBodySchema } from './components/task-details/renderers/types';
 import type { TaskListRendererProps } from './components/types';
-import type { TASK_STATE } from './constants';
+import type { EXECUTION_VIEW, TASK_STATE } from './constants';
 
 export type TaskState = (typeof TASK_STATE)[keyof typeof TASK_STATE];
 
@@ -216,3 +216,6 @@ export type ExecutionOverrides<TTaskRecord extends object = object> = {
   };
   taskList?: Task<TTaskRecord>[];
 };
+
+/** Overview representation currently selected in the execution view switch. */
+export type ExecutionView = (typeof EXECUTION_VIEW)[keyof typeof EXECUTION_VIEW];

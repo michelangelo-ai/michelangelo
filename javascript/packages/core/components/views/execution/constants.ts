@@ -37,3 +37,14 @@ export const STATE_TO_ICON_MAP = {
   [TASK_STATE.RUNNING]: { name: 'arrowCircular', colorName: 'contentAccent' },
   [TASK_STATE.SKIPPED]: { name: 'playerNext', colorName: 'contentNegative' },
 } as const;
+
+export const EXECUTION_VIEW = {
+  FLOW: 'FLOW',
+  TIMETABLE: 'TIMETABLE',
+} as const;
+
+/** Order in which the overview views are offered in the view switch. */
+export const EXECUTION_VIEW_OPTIONS = [
+  { view: EXECUTION_VIEW.FLOW, label: 'Flow' },
+  { view: EXECUTION_VIEW.TIMETABLE, label: 'Timetable' },
+] as const;
