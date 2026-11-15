@@ -259,7 +259,7 @@ func checkTaskRefs(w *v2.DeclarativeWorkflow, g *graph, refs map[string][]taskRe
 				return &Error{Task: n, Field: tr.Field, Msg: fmt.Sprintf("references task %q that is not a dependency of %q", target, n)}
 			}
 			if !okDeps[target] {
-				return &Error{Task: n, Field: tr.Field, Msg: fmt.Sprintf("references task %q, which has no all-succeeded dependency path to %q", target, n)}
+				return &Error{Task: n, Field: tr.Field, Msg: fmt.Sprintf("references task %q, which may not have succeeded when %q runs; add depends_on {task: %s, when: SUCCEEDED} to %q or to a task it depends on", target, n, target, n)}
 			}
 		}
 	}

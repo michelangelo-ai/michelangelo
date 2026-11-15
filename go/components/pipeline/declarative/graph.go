@@ -158,8 +158,20 @@ func (g *graph) levels() [][]string {
 
 func (g *graph) transitiveDeps(task string) map[string]bool { return reach(g.deps, task) }
 
-// succeededDeps returns the tasks that must have succeeded before task runs.
-func (g *graph) succeededDeps(task string) map[string]bool { return reach(g.okDeps, task) }
+// succeededDeps returns the tasks that have succeeded whenever task runs. A
+// skipped task satisfies no gate, so every transitive dependency of a running
+// task ran; each success edge out of those tasks proves its target succeeded.
+func (g *graph) succeededDeps(task string) map[string]bool {
+	out := map[string]bool{}
+	ran := g.transitiveDeps(task)
+	ran[task] = true
+	for m := range ran {
+		for _, d := range g.okDeps[m] {
+			out[d] = true
+		}
+	}
+	return out
+}
 
 func reach(adj map[string][]string, task string) map[string]bool {
 	out := map[string]bool{}

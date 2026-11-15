@@ -223,18 +223,28 @@ func FuzzValidate(f *testing.F) {
 	})
 }
 
-func TestValidateOutputRefNeedsSucceededPath(t *testing.T) {
-	gated := func(when v2.TaskDependency_Outcome) *v2.DeclarativeWorkflow {
-		w := diamond()
+func TestValidateOutputRefNeedsSucceededLastEdge(t *testing.T) {
+	const want = `task "notify": config.model references task "train", which may not have succeeded when "notify" runs; ` +
+		`add depends_on {task: train, when: SUCCEEDED} to "notify" or to a task it depends on`
+	notifyOn := func(w *v2.DeclarativeWorkflow, dep string, when v2.TaskDependency_Outcome) *v2.DeclarativeWorkflow {
 		notify := task("core/python")
-		notify.DependsOn = []*v2.TaskDependency{{Task: "publish", When: when}}
+		notify.DependsOn = []*v2.TaskDependency{{Task: dep, When: when}}
 		notify.Config.Fields["model"] = strVal("{{ tasks.train.output.model_uri }}")
 		w.Tasks["notify"] = notify
 		return w
 	}
-	assert.NoError(t, Validate(gated(v2.OUTCOME_SUCCEEDED), Limits{}))
-	assert.EqualError(t, Validate(gated(v2.OUTCOME_FAILED), Limits{}),
-		`task "notify": config.model references task "train", which has no all-succeeded dependency path to "notify"`)
-	assert.EqualError(t, Validate(gated(v2.OUTCOME_COMPLETED), Limits{}),
-		`task "notify": config.model references task "train", which has no all-succeeded dependency path to "notify"`)
+	for _, when := range []v2.TaskDependency_Outcome{v2.OUTCOME_UNSPECIFIED, v2.OUTCOME_SUCCEEDED, v2.OUTCOME_FAILED, v2.OUTCOME_COMPLETED} {
+		assert.NoError(t, Validate(notifyOn(diamond(), "publish", when), Limits{}), "publish ran, so train succeeded: when=%v", when)
+	}
+	assert.EqualError(t, Validate(notifyOn(diamond(), "train", v2.OUTCOME_FAILED), Limits{}), want)
+	assert.EqualError(t, Validate(notifyOn(diamond(), "train", v2.OUTCOME_COMPLETED), Limits{}), want)
+
+	twoHops := diamond()
+	twoHops.Tasks["publish"].DependsOn = []*v2.TaskDependency{{Task: "train", When: v2.OUTCOME_COMPLETED}, {Task: "evaluate"}}
+	assert.EqualError(t, Validate(notifyOn(twoHops, "publish", v2.OUTCOME_SUCCEEDED), Limits{}), want)
+
+	bothPaths := diamond()
+	bothPaths.Tasks["publish"].DependsOn = []*v2.TaskDependency{{Task: "train", When: v2.OUTCOME_COMPLETED}, {Task: "evaluate"}}
+	bothPaths.Tasks["evaluate"].DependsOn = append(bothPaths.Tasks["evaluate"].DependsOn, &v2.TaskDependency{Task: "train"})
+	assert.NoError(t, Validate(notifyOn(bothPaths, "publish", v2.OUTCOME_SUCCEEDED), Limits{}), "evaluate ran, so train succeeded")
 }
