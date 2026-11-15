@@ -16,13 +16,7 @@ func loadRelease(t *testing.T) *Release {
 	return rs["core-v1.4.2"]
 }
 
-func typedDiamond() *v2.DeclarativeWorkflow {
-	w := diamond()
-	for _, tk := range w.Tasks {
-		tk.Config.Fields["entry_point"] = strVal("main.py")
-	}
-	return w
-}
+func typedDiamond() *v2.DeclarativeWorkflow { return typed(diamond()) }
 
 func TestValidateAgainstAccepts(t *testing.T) {
 	w := typedDiamond()

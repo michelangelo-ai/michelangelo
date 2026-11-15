@@ -201,14 +201,20 @@ func FuzzValidate(f *testing.F) {
 		}
 		f.Add(b)
 	}
+	rels, err := LoadReleases("testdata/releases")
+	if err != nil {
+		f.Fatal(err)
+	}
+	rel := rels["core-v1.4.2"]
 	f.Fuzz(func(t *testing.T, b []byte) {
 		w := &v2.DeclarativeWorkflow{}
 		if err := gogoproto.Unmarshal(b, w); err != nil {
 			return
 		}
 		_ = Validate(w, Limits{})
+		_ = ValidateAgainst(w, Limits{}, rel)
+		_, _ = Plan(w, Limits{}, rel, nil)
 		if g, err := buildGraph(w); err == nil {
-			_, _ = Plan(w, "v", nil)
 			_ = g.levels()
 		}
 	})

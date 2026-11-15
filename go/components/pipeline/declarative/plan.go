@@ -4,20 +4,17 @@ import (
 	v2 "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
-// Plan builds the dry-run explain plan. It fails when the task graph is not valid.
-func Plan(w *v2.DeclarativeWorkflow, interpreterVersion string, warnings []string) (*v2.ExplainPlan, error) {
-	if w == nil {
-		return nil, &Error{Msg: "workflow is not set"}
-	}
-	if len(w.Tasks) == 0 {
-		return nil, &Error{Msg: "tasks must have at least one entry"}
+// Plan runs ValidateAgainst, then builds the dry-run explain plan for rel.
+func Plan(w *v2.DeclarativeWorkflow, lim Limits, rel *Release, warnings []string) (*v2.ExplainPlan, error) {
+	if err := ValidateAgainst(w, lim, rel); err != nil {
+		return nil, err
 	}
 	g, err := buildGraph(w)
 	if err != nil {
 		return nil, err
 	}
 	p := &v2.ExplainPlan{
-		InterpreterVersion: interpreterVersion,
+		InterpreterVersion: rel.Version,
 		TaskCount:          uint32(len(w.Tasks)),
 		Warnings:           append([]string(nil), warnings...),
 	}

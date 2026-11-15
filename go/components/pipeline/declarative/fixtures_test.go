@@ -16,6 +16,14 @@ func task(fn string, deps ...string) *v2.DeclarativeTask {
 	return t
 }
 
+// typed sets the entry_point that every testdata release task type requires.
+func typed(w *v2.DeclarativeWorkflow) *v2.DeclarativeWorkflow {
+	for _, tk := range w.Tasks {
+		tk.Config.Fields["entry_point"] = strVal("main.py")
+	}
+	return w
+}
+
 func newWorkflow(tasks map[string]*v2.DeclarativeTask) *v2.DeclarativeWorkflow {
 	return &v2.DeclarativeWorkflow{
 		SchemaVersion: SchemaVersion,
