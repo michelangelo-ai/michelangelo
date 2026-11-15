@@ -87,6 +87,20 @@ func (f *factory) GetClientSetForCluster(c *v2pb.Cluster) (*ClientSet, error) {
 	f.m.Lock()
 	defer f.m.Unlock()
 
+	// Re-fetch credentials now that the lock is held, instead of trusting the
+	// snapshot read above. Without this, a caller that read credentials just
+	// before a rotation can still win the lock after a caller with newer
+	// credentials has already built and stored a client, and would overwrite
+	// it with one built from the older snapshot. Re-reading here means the
+	// credentials observed before any Store are always at least as fresh as
+	// every earlier holder's, since SecretProvider reads inside the lock are
+	// strictly ordered by lock acquisition.
+	auth, err = f.secretProvider.GetClusterClientAuth(context.Background(), c)
+	if err != nil {
+		return nil, fmt.Errorf("client cfg err:%v", fmt.Errorf("failed to get cluster client auth: %w", err))
+	}
+	fingerprint = authFingerprint(auth)
+
 	// double check lock
 	if cached, ok := f.clients.Load(key); ok {
 		if entry := cached.(cachedClientSet); entry.fingerprint == fingerprint {

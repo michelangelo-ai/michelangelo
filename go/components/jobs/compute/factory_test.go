@@ -110,23 +110,58 @@ func TestGetClientSetForCluster(t *testing.T) {
 		mockProvider := secretsmocks.NewMockSecretProvider(ctrl)
 		f := NewClientSetFactory(mockProvider)
 
-		mockProvider.EXPECT().GetClusterClientAuth(gomock.Any(), &testCluster).Return(originalAuth, nil).Times(1)
+		// A cache miss re-reads credentials under the lock before building (see
+		// GetClientSetForCluster), so building costs two SecretProvider calls, not one.
+		mockProvider.EXPECT().GetClusterClientAuth(gomock.Any(), &testCluster).Return(originalAuth, nil).Times(2)
 		first, err := f.GetClientSetForCluster(&testCluster)
 		require.NoError(t, err)
 		require.NotNil(t, first)
 
 		// Same credentials on the next lookup: the SecretProvider is still consulted
-		// (so rotation is never missed), but the cached ClientSet is reused.
+		// (so rotation is never missed), but the cached ClientSet is reused — the lock-free
+		// fast path returns before ever reaching the lock, so this costs a single call.
 		mockProvider.EXPECT().GetClusterClientAuth(gomock.Any(), &testCluster).Return(originalAuth, nil).Times(1)
 		second, err := f.GetClientSetForCluster(&testCluster)
 		require.NoError(t, err)
 		assert.Same(t, first, second, "unchanged credentials should return the cached ClientSet")
 
 		// Credentials rotate: the factory must rebuild rather than keep serving the old ClientSet.
-		mockProvider.EXPECT().GetClusterClientAuth(gomock.Any(), &testCluster).Return(rotatedAuth, nil).Times(1)
+		mockProvider.EXPECT().GetClusterClientAuth(gomock.Any(), &testCluster).Return(rotatedAuth, nil).Times(2)
 		third, err := f.GetClientSetForCluster(&testCluster)
 		require.NoError(t, err)
 		assert.NotSame(t, first, third, "rotated credentials must produce a new ClientSet")
+	})
+
+	t.Run("uses the credentials re-read under the lock, not the pre-lock snapshot", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		caPEM := selfSignedCAPEM(t)
+		staleAuth := secrets.ClientAuth{CertificateAuthorityData: caPEM, ClientTokenData: "token-stale"}
+		freshAuth := secrets.ClientAuth{CertificateAuthorityData: caPEM, ClientTokenData: "token-fresh"}
+
+		mockProvider := secretsmocks.NewMockSecretProvider(ctrl)
+		f := NewClientSetFactory(mockProvider)
+
+		// Simulates a rotation landing between the lock-free read and the lock being
+		// acquired: the first call (before the lock) sees the stale value, the second
+		// (under the lock, right before deciding to build) sees the rotated value. The
+		// cache entry this produces must reflect the fresh value, proving the decision
+		// is made from the under-lock read and not the earlier snapshot — otherwise a
+		// slow caller could overwrite a client another goroutine already rebuilt with
+		// newer credentials with one built from these older ones (see #2383's fix of
+		// the same race in the inference-server client factory).
+		gomock.InOrder(
+			mockProvider.EXPECT().GetClusterClientAuth(gomock.Any(), &testCluster).Return(staleAuth, nil),
+			mockProvider.EXPECT().GetClusterClientAuth(gomock.Any(), &testCluster).Return(freshAuth, nil),
+		)
+		_, err := f.GetClientSetForCluster(&testCluster)
+		require.NoError(t, err)
+
+		cached, ok := f.(*factory).clients.Load("https://k8s-apiserver-kubernetes-batch01.phx5.uber.internal:80")
+		require.True(t, ok)
+		entry := cached.(cachedClientSet)
+		assert.Equal(t, authFingerprint(freshAuth), entry.fingerprint, "the cached entry must be keyed by the under-lock (fresh) credentials")
 	})
 }
 
