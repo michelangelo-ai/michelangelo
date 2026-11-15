@@ -155,3 +155,23 @@ func TestValidateAgainstRejectsUnvalidatedInput(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateAgainstRequiredInsideAbsentGroup(t *testing.T) {
+	rel, err := ParseRelease("core-v2.yaml", []byte(`version: core-v2
+artifact: s3://x
+digest: sha256:ab
+task_types:
+  core/python:
+    config:
+      entry_point: {type: string, required: true}
+      res:
+        cpu: {type: integer, required: true}
+        mem: {type: integer}
+`))
+	require.NoError(t, err)
+	w := newWorkflow(map[string]*v2.DeclarativeTask{"a": task("core/python")})
+	w.Tasks["a"].Config.Fields["entry_point"] = strVal("main.py")
+	assert.EqualError(t, ValidateAgainst(w, Limits{}, rel), `task "a": config.res field "cpu" is required by task type "core/python" in core-v2`)
+	w.Tasks["a"].Config.Fields["res"] = structVal(map[string]*types.Value{"cpu": numVal(2)})
+	assert.NoError(t, ValidateAgainst(w, Limits{}, rel))
+}

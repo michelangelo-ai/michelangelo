@@ -86,13 +86,18 @@ func (c *sectionChecker) check(prefix string, s *types.Struct, schema Schema) er
 	for _, k := range declared {
 		f := schema[k]
 		v, ok := fields[k]
+		path := prefix + "." + k
 		if !ok {
 			if f.Required {
 				return c.errf(prefix, "field %q is required by task type %q", k, c.typeName)
 			}
+			if f.Type == "" {
+				if err := c.check(path, nil, f.Fields); err != nil {
+					return err
+				}
+			}
 			continue
 		}
-		path := prefix + "." + k
 		if f.Type == "" {
 			if v == nil || v.Kind == nil {
 				return c.errf(path, "must not be null")
