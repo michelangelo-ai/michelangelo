@@ -45,8 +45,8 @@ from __future__ import annotations
 import errno
 import logging
 import os
-import shutil
 import tempfile
+import weakref
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any, NoReturn
 
@@ -187,6 +187,7 @@ class FsspecStorageBackend(StorageBackend):
         """
         if self._owns_filesystem and self._pid != os.getpid():
             _reset_fsspec_loop_after_fork()
+            _abandon_inherited_filesystem(self._filesystem)
             self._filesystem = _make_filesystem(self._protocol, self._storage_options)
             self._pid = os.getpid()
         return self._filesystem
@@ -223,7 +224,12 @@ class FsspecStorageBackend(StorageBackend):
         remote = self._to_fs_path(uri)
         if os.path.isdir(local_path):
             local_files, remote_files = [], []
-            for root, _dirs, files in os.walk(local_path):
+
+            def _raise(exc: OSError) -> None:
+                # os.walk skips unreadable directories silently by default.
+                raise exc
+
+            for root, _dirs, files in os.walk(local_path, onerror=_raise):
                 for filename in files:
                     file_path = os.path.join(root, filename)
                     rel_path = os.path.relpath(file_path, local_path)
@@ -281,12 +287,15 @@ class FsspecStorageBackend(StorageBackend):
     def _download_file(self, uri: str, remote: str, local_path: str) -> None:
         """Download to a temp file first, so a failure leaves no partial file."""
         _logger.debug("Downloading %s to '%s'.", uri, local_path)
-        tmp_fd, tmp_path = tempfile.mkstemp()
+        # Stage next to the destination so os.replace is atomic (same
+        # filesystem) and a failure never truncates an existing file.
+        dest_dir = os.path.dirname(os.path.abspath(local_path))
+        tmp_fd, tmp_path = tempfile.mkstemp(dir=dest_dir)
         os.close(tmp_fd)
         try:
             with self._errors("download", uri):
                 self._fs.get_file(remote, tmp_path)
-            shutil.copy2(tmp_path, local_path)
+            os.replace(tmp_path, local_path)
         finally:
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)
@@ -302,11 +311,24 @@ class FsspecStorageBackend(StorageBackend):
             raise FileNotFoundError(
                 errno.ENOENT, f"No object or directory found at {uri}."
             )
+        root = os.path.realpath(local_path)
         local_files = []
         for key in keys:
-            dest = os.path.join(local_path, *key[len(prefix) :].split("/"))
-            os.makedirs(os.path.dirname(dest), exist_ok=True)
+            parts = key[len(prefix) :].split("/")
+            dest = os.path.join(local_path, *parts)
+            # An object key may contain ".." (S3 allows it): never write
+            # outside the download directory.
+            if (
+                ".." in parts
+                or os.path.commonpath([root, os.path.realpath(dest)]) != root
+            ):
+                raise ValueError(
+                    f"Refusing to download {key!r} from {uri}: it would be "
+                    f"written outside {local_path!r}."
+                )
             local_files.append(dest)
+        for dest in local_files:
+            os.makedirs(os.path.dirname(dest), exist_ok=True)
         _logger.debug("Downloading %d object(s) from %s.", len(keys), uri)
         with self._errors("download", uri):
             self._fs.get(keys, local_files, **self._batch_kwargs())
@@ -490,6 +512,29 @@ def _make_filesystem(
         raise ConfigurationError(
             f"Unknown fsspec protocol {protocol!r}: {exc}"
         ) from exc
+
+
+# Filesystems inherited across a fork. Kept referenced so they are never
+# garbage-collected (and their session never closed) in the child.
+_inherited_filesystems: list[fsspec.AbstractFileSystem] = []
+
+
+def _abandon_inherited_filesystem(fs: fsspec.AbstractFileSystem) -> None:
+    """Make sure the child never closes the parent's connections.
+
+    s3fs registers ``weakref.finalize(fs, close_session, ...)``. Run in the
+    child, that closes sockets the child shares with the parent (the epoll
+    instance is shared through fork), and the parent's next request hangs
+    forever. Detach those finalizers and keep the object alive, so neither
+    garbage collection nor interpreter exit in the child closes anything.
+    """
+    _inherited_filesystems.append(fs)
+    registry = getattr(weakref.finalize, "_registry", None)  # CPython internal
+    if registry is None:
+        return
+    for finalizer in list(registry):
+        if finalizer.peek() is not None and finalizer.peek()[0] is fs:
+            finalizer.detach()
 
 
 def _reset_fsspec_loop_after_fork() -> None:

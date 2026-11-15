@@ -155,6 +155,14 @@ def test_init_missing_extra_raises_import_error_with_install_hint(
 ):
     """Init missing extra raises import error with install hint."""
     monkeypatch.setitem(sys.modules, module, None)
+    # fsspec caches imported classes; drop them so the import is retried.
+    # (``fsspec.registry`` the attribute is a mappingproxy, not the module.)
+    registry_module = sys.modules["fsspec.registry"]
+    monkeypatch.setattr(
+        registry_module,
+        "_registry",
+        {k: v for k, v in registry_module._registry.items() if k != protocol},
+    )
     with pytest.raises(ImportError, match=extra.replace("[", r"\[")):
         FsspecStorageBackend(f"{protocol}://bucket")
 
@@ -855,3 +863,71 @@ def test_fsspec_loop_reset_skipped_when_loop_never_started(monkeypatch):
     fsspec_backend._reset_fsspec_loop_after_fork()
 
     reset_lock.assert_not_called()
+
+
+def test_upload_directory_fails_when_a_subdirectory_is_unreadable(tmp_path):
+    """Upload directory fails when a subdirectory is unreadable."""
+    src = tmp_path / "model"
+    (src / "locked").mkdir(parents=True)
+    (src / "weights.bin").write_bytes(b"w")
+    (src / "locked" / "a.bin").write_bytes(b"a")
+    (src / "locked").chmod(0o000)
+    backend, fs = _s3_backend()
+    try:
+        if os.access(src / "locked", os.R_OK):
+            pytest.skip("directory permissions are not enforced (running as root)")
+        with pytest.raises(PermissionError):
+            backend.upload(str(src), "models/clf")
+    finally:
+        (src / "locked").chmod(0o755)
+
+    assert not any(call[0] == "put" for call in fs.calls)
+
+
+@pytest.mark.parametrize("name", ["../victim", "sub/../../victim", ".."])
+def test_download_directory_rejects_keys_escaping_the_destination(tmp_path, name):
+    """Download directory rejects keys escaping the destination."""
+    backend, fs = _s3_backend()
+    fs.info_result = {"type": "directory"}
+    fs.find_result = [f"bucket/models/clf/{name}"]
+    out = tmp_path / "out"
+
+    with pytest.raises(ValueError, match="outside"):
+        backend.download("s3://bucket/models/clf", str(out))
+
+    assert not (tmp_path / "victim").exists()
+    assert not out.exists()
+
+
+def test_failed_file_download_keeps_existing_destination(tmp_path):
+    """Failed file download keeps existing destination."""
+    backend, fs = _s3_backend()
+    fs.raise_on["get_file"] = ConnectionResetError("reset")
+    dest = tmp_path / "dest.bin"
+    dest.write_bytes(b"previous")
+
+    with pytest.raises(ConnectionResetError, match="download failed"):
+        backend.download("s3://bucket/models/f", str(dest))
+
+    assert dest.read_bytes() == b"previous"
+    assert [p.name for p in tmp_path.iterdir()] == ["dest.bin"]
+
+
+def test_abandoning_an_inherited_filesystem_detaches_its_finalizers():
+    """Abandoning an inherited filesystem detaches its finalizers."""
+    import gc
+    import weakref
+
+    class _Fs:
+        pass
+
+    fs = _Fs()
+    closed = []
+    weakref.finalize(fs, closed.append, "closed")
+
+    fsspec_backend._abandon_inherited_filesystem(fs)
+    # Drop our keep-alive reference too: only the detach can prevent the call.
+    fsspec_backend._inherited_filesystems.clear()
+    del fs
+    gc.collect()
+    assert closed == []

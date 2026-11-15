@@ -74,10 +74,27 @@ def factory(request) -> BackendFactory:
     return request.param
 
 
+def _cleanup_fs():
+    return FsspecStorageBackend(
+        "s3://cleanup",
+        s3_storage_options(
+            ENDPOINT, access_key=ACCESS_KEY, secret_key=SECRET_KEY, secure=SECURE
+        ),
+    )._fs
+
+
 @pytest.fixture
-def bucket() -> str:
-    """Bucket."""
-    return f"ma-compat-{uuid.uuid4().hex[:12]}"
+def bucket():
+    """Unique bucket name; the bucket and its ``-race`` twin are removed after."""
+    name = f"ma-compat-{uuid.uuid4().hex[:12]}"
+    yield name
+    fs = _cleanup_fs()
+    for b in (name, name + "-race"):
+        try:
+            if fs.exists(b):
+                fs.rm(b, recursive=True)
+        except Exception as exc:  # best effort: never fail a test on cleanup
+            warnings.warn(f"could not remove test bucket {b!r}: {exc}", stacklevel=2)
 
 
 @pytest.fixture
