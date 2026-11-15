@@ -2,6 +2,7 @@ package declarative
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -62,6 +63,9 @@ func (f *Field) UnmarshalJSON(b []byte) error {
 		}
 		if err := json.Unmarshal(b, &leaf); err != nil {
 			return err
+		}
+		if leaf.Type == "" {
+			return errors.New("type must be a non-empty string")
 		}
 		f.Type, f.Required = leaf.Type, leaf.Required
 		delete(raw, "type")

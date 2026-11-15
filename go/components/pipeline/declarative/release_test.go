@@ -45,6 +45,8 @@ func TestParseReleaseErrors(t *testing.T) {
 		{"no task types", "version: r\nartifact: a\ndigest: sha256:ab\n", `release "r": task_types is empty`},
 		{"unknown key", "version: r\nartifact: a\ndigest: sha256:ab\ntask_types: {}\nextra: 1\n", `release "r": error unmarshaling JSON: while decoding JSON: json: unknown field "extra"`},
 		{"leaf with children", "version: r\nartifact: a\ndigest: sha256:ab\ntask_types:\n  t:\n    config:\n      x: {type: string, y: {type: string}}\n", `release "r": task type "t" config field "x" mixes type with nested fields`},
+		{"empty type", "version: r\nartifact: a\ndigest: sha256:ab\ntask_types:\n  t:\n    config:\n      x: {type: \"\"}\n", `release "r": error unmarshaling JSON: while decoding JSON: type must be a non-empty string`},
+		{"null type", "version: r\nartifact: a\ndigest: sha256:ab\ntask_types:\n  t:\n    config:\n      x: {type: null}\n", `release "r": error unmarshaling JSON: while decoding JSON: type must be a non-empty string`},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
