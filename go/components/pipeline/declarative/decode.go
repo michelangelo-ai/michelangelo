@@ -87,21 +87,10 @@ func walkUnknown(path string, m protoreflect.Message) error {
 				}
 			}
 		case !fd.IsMap() && !fd.IsList() && fd.Kind() == protoreflect.MessageKind:
-			if isOpenType(fd.Message().FullName()) {
-				continue
-			}
 			if err := walkUnknown(child, m.Get(fd).Message()); err != nil {
 				return err
 			}
 		}
 	}
 	return nil
-}
-
-func isOpenType(n protoreflect.FullName) bool {
-	switch n {
-	case "google.protobuf.Struct", "google.protobuf.Value", "google.protobuf.ListValue":
-		return true
-	}
-	return false
 }

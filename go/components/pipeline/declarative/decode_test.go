@@ -43,6 +43,7 @@ const (
 	tasksFieldNum          = 4
 	mapKeyFieldNum         = 1
 	mapValueFieldNum       = 2
+	taskConfigFieldNum     = 2
 )
 
 func appendUnknown(b []byte) []byte {
@@ -95,4 +96,38 @@ func TestDecodeRejectsUnknownFieldInSettings(t *testing.T) {
 		Content: &types.Any{TypeUrl: TypeURL, Value: wRaw}}
 	_, err = Decode(m)
 	assert.EqualError(t, err, "DeclarativeWorkflow.workflow_config has unknown field number 2047")
+}
+
+func workflowWithTaskConfig(t *testing.T, cfgRaw []byte) *v2.PipelineManifest {
+	t.Helper()
+	tkRaw, err := gogoproto.Marshal(&v2.DeclarativeTask{TaskFunction: "core/python"})
+	require.NoError(t, err)
+	tkRaw = appendBytesField(tkRaw, taskConfigFieldNum, cfgRaw)
+	wRaw, err := gogoproto.Marshal(&v2.DeclarativeWorkflow{SchemaVersion: SchemaVersion})
+	require.NoError(t, err)
+	entry := appendBytesField(nil, mapKeyFieldNum, []byte("a"))
+	entry = appendBytesField(entry, mapValueFieldNum, tkRaw)
+	wRaw = appendBytesField(wRaw, tasksFieldNum, entry)
+	return &v2.PipelineManifest{Type: v2.PIPELINE_MANIFEST_TYPE_DECLARATIVE,
+		Content: &types.Any{TypeUrl: TypeURL, Value: wRaw}}
+}
+
+func TestDecodeRejectsUnknownFieldInsideConfig(t *testing.T) {
+	cfg := &types.Struct{Fields: map[string]*types.Value{"k": strVal("v")}}
+	cfgRaw, err := gogoproto.Marshal(cfg)
+	require.NoError(t, err)
+	_, err = Decode(workflowWithTaskConfig(t, appendUnknown(cfgRaw)))
+	assert.EqualError(t, err, "DeclarativeWorkflow.tasks[a].config has unknown field number 2047")
+}
+
+func TestDecodeAcceptsArbitraryConfigKeys(t *testing.T) {
+	cfg := &types.Struct{Fields: map[string]*types.Value{
+		"any_key": strVal("v"),
+		"nested":  structVal(map[string]*types.Value{"deep": listVal(numVal(1), boolVal(true), nullVal())}),
+	}}
+	cfgRaw, err := gogoproto.Marshal(cfg)
+	require.NoError(t, err)
+	w, err := Decode(workflowWithTaskConfig(t, cfgRaw))
+	require.NoError(t, err)
+	assert.True(t, gogoproto.Equal(cfg, w.Tasks["a"].Config))
 }
