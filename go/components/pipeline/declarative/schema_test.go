@@ -130,6 +130,9 @@ func TestValidateAgainstRejectsUnvalidatedInput(t *testing.T) {
 	undeclared.Tasks["train"].Config.Fields["epochs"] = strVal("{{ params.nope }}")
 	nullGroup := typedDiamond()
 	nullGroup.Tasks["train"].JobSpecs = &types.Struct{Fields: map[string]*types.Value{"ray": nil}}
+	jsonNullGroup := typedDiamond()
+	jsonNullGroup.Tasks["train"].JobSpecs = &types.Struct{Fields: map[string]*types.Value{"ray": nullVal()}}
+	nilFieldRel := &Release{Version: "core-v0", TaskTypes: map[string]*TaskType{"core/python": {Config: Schema{"entry_point": nil}}}}
 	nilTypeRel := &Release{Version: "core-v0", TaskTypes: map[string]*TaskType{"core/python": nil, "core/ray": nil}}
 	cases := []struct {
 		name string
@@ -141,6 +144,8 @@ func TestValidateAgainstRejectsUnvalidatedInput(t *testing.T) {
 		{"nil task", newWorkflow(map[string]*v2.DeclarativeTask{"a": nil}), rel, `task "a": task is not set`},
 		{"undeclared parameter", undeclared, rel, `task "train": config.epochs references undeclared parameter "nope"`},
 		{"null group value", nullGroup, rel, `task "train": job_specs.ray must not be null in core-v1.4.2`},
+		{"json null group value", jsonNullGroup, rel, `task "train": job_specs.ray must not be null in core-v1.4.2`},
+		{"nil schema field", typedDiamond(), nilFieldRel, `task "evaluate": config.entry_point has no schema in task type "core/python" in core-v0`},
 		{"nil task type", typedDiamond(), nilTypeRel, `task "evaluate": task_function "core/python" is not a task type in core-v0`},
 	}
 	for _, c := range cases {

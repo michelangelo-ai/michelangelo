@@ -87,6 +87,9 @@ func (c *sectionChecker) check(prefix string, s *types.Struct, schema Schema) er
 		f := schema[k]
 		v, ok := fields[k]
 		path := prefix + "." + k
+		if f == nil {
+			return c.errf(path, "has no schema in task type %q", c.typeName)
+		}
 		if !ok {
 			if f.Required {
 				return c.errf(prefix, "field %q is required by task type %q", k, c.typeName)
@@ -99,7 +102,7 @@ func (c *sectionChecker) check(prefix string, s *types.Struct, schema Schema) er
 			continue
 		}
 		if f.Type == "" {
-			if v == nil || v.Kind == nil {
+			if isNull(v) {
 				return c.errf(path, "must not be null")
 			}
 			sv, ok := v.Kind.(*types.Value_StructValue)
@@ -119,10 +122,7 @@ func (c *sectionChecker) check(prefix string, s *types.Struct, schema Schema) er
 }
 
 func (c *sectionChecker) leaf(path string, v *types.Value, slot string) error {
-	if v == nil || v.Kind == nil {
-		return c.errf(path, "must not be null")
-	}
-	if _, isNull := v.Kind.(*types.Value_NullValue); isNull {
+	if isNull(v) {
 		return c.errf(path, "must not be null")
 	}
 	if sv, ok := v.Kind.(*types.Value_StringValue); ok {
@@ -185,4 +185,12 @@ func (c *sectionChecker) reference(path string, refs []ref, slot string) error {
 		return nil
 	}
 	return c.errf(path, "references parameter %q of type %s; the slot type is %s", r.Name, pt, slot)
+}
+
+func isNull(v *types.Value) bool {
+	if v == nil || v.Kind == nil {
+		return true
+	}
+	_, null := v.Kind.(*types.Value_NullValue)
+	return null
 }

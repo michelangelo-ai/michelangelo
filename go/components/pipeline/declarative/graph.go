@@ -49,8 +49,10 @@ func buildGraph(w *v2.DeclarativeWorkflow) (*graph, error) {
 			if _, ok := w.Tasks[d.Task]; !ok {
 				return nil, &Error{Task: name, Msg: fmt.Sprintf("depends_on names unknown task %q", d.Task)}
 			}
-			if _, ok := v2.TaskDependency_Outcome_name[int32(d.When)]; !ok {
-				return nil, &Error{Task: name, Msg: fmt.Sprintf("depends_on[%d].when %d is not a known outcome", i, d.When)}
+			switch d.When {
+			case v2.OUTCOME_UNSPECIFIED, v2.OUTCOME_SUCCEEDED, v2.OUTCOME_FAILED, v2.OUTCOME_COMPLETED:
+			default:
+				return nil, &Error{Task: name, Msg: fmt.Sprintf("depends_on[%d].when %d is not a known outcome; use SUCCEEDED, FAILED, COMPLETED, or leave it unset", i, d.When)}
 			}
 			if seen[d.Task] {
 				return nil, &Error{Task: name, Msg: fmt.Sprintf("depends_on names %q more than once", d.Task)}
@@ -68,7 +70,7 @@ func buildGraph(w *v2.DeclarativeWorkflow) (*graph, error) {
 		sort.Strings(g.rdeps[k])
 	}
 	if cyc := g.cyclePath(); len(cyc) > 0 {
-		return nil, &Error{Msg: "tasks form a cycle: " + strings.Join(cyc, " -> ")}
+		return nil, &Error{Msg: "tasks form a depends_on cycle: " + strings.Join(cyc, " -> ")}
 	}
 	return g, nil
 }
