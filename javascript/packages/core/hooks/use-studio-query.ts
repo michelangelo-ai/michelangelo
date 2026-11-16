@@ -87,6 +87,12 @@ export const useStudioQuery = <TData>(args: {
   // A CR's namespace is the projectId, but the serviceOptions may provide a different namespace
   // to find the CR in an alternate namespace. e.g., "default" namespace for a new Project.
   const namespace = serviceOptions?.namespace ?? projectId;
+  // Header names are case-insensitive, but object spread only replaces exact keys. Lowercasing
+  // them (like the user identity headers) lets the identity headers replace a caller header of
+  // any case, instead of the request combining both values.
+  const requestHeaders = Object.fromEntries(
+    Object.entries(headers ?? {}).map(([name, value]) => [name.toLowerCase(), value])
+  );
 
   return useQuery<TData, ApplicationError, TData, [string, Record<string, unknown>]>({
     queryKey: [queryName, { ...serviceOptions, namespace }],
@@ -96,7 +102,7 @@ export const useStudioQuery = <TData>(args: {
         return (await request(
           queryName,
           { ...serviceOptions, namespace },
-          { ...headers, ...userHeaders }
+          { ...requestHeaders, ...userHeaders }
         )) as TData;
       } catch (error) {
         console.error('error', error);

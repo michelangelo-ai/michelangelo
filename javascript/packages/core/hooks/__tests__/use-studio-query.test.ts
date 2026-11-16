@@ -323,6 +323,31 @@ describe('useStudioQuery', () => {
       });
     });
 
+    test('keeps the user identity headers over headers of the same name in another case', async () => {
+      renderHook(
+        () =>
+          useStudioQuery({
+            queryName: 'GetDataset',
+            serviceOptions: {},
+            headers: { 'X-User-Email': 'someone-else@example.com', 'X-Test-Header': 'test-value' },
+          }),
+        buildWrapper([
+          getErrorProviderWrapper(),
+          getRouterWrapper({ location: '/ma-dev-test' }),
+          getServiceProviderWrapper({ request: mockRequest }),
+          getUserProviderWrapper({ name: 'Jane Doe', email: 'jane@example.com' }),
+        ])
+      );
+
+      await waitFor(() => {
+        expect(mockRequest).toHaveBeenCalledWith('GetDataset', expect.any(Object), {
+          'x-test-header': 'test-value',
+          'x-user-name': 'Jane Doe',
+          'x-user-email': 'jane@example.com',
+        });
+      });
+    });
+
     test('does not refetch when only the headers change, since they are not part of the query key', async () => {
       const { rerender } = renderHook(
         ({ headers }: { headers: Record<string, string> }) =>
