@@ -51,6 +51,23 @@ def get_task_image(task_name):
         fail("failed to get task image:", task_name)
     return task_image
 
+DEFAULT_SPARK_MAIN_FILE = "local:///app/michelangelo/uniflow/core/run_task.py"
+
+# Get the Spark mainApplicationFile (run_task.py) for the task. The path depends on
+# where the task image installs michelangelo (e.g. a venv's site-packages instead of
+# /app), so like the image it can be set globally or per task.
+# Args:
+#    task_name: the name of the task
+# Returns:
+#    main_file: the mainApplicationFile for the task's SparkApplication
+
+def get_spark_main_file(task_name):
+    global_main_file = os.environ.get("UF_SPARK_MAIN_FILE", DEFAULT_SPARK_MAIN_FILE)
+    main_file = os.environ.get("UF_SPARK_MAIN_FILE_" + task_name, global_main_file)
+    if main_file == "":
+        return DEFAULT_SPARK_MAIN_FILE
+    return main_file
+
 # Get the task name for the task.
 # Args:
 #    task_path: the path of the task
