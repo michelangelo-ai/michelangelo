@@ -97,7 +97,7 @@ jobs:
       #----------------------------------------------
       #  Upload the wheel file to the release
       #----------------------------------------------
-      - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+      - uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
         with:
           tag_name: ${{ github.ref_name }}
           prerelease: ${{ contains(github.ref_name, '-rc') }}
@@ -162,7 +162,7 @@ jobs:
           sha256sum ./* > checksums-sha256.txt
 
       - name: Attach binaries and checksums to release
-        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
         with:
           tag_name: ${{ github.ref_name }}
           prerelease: ${{ contains(github.ref_name, '-rc') }}
@@ -178,7 +178,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Install Helm
-        uses: azure/setup-helm@v5.0.1
+        uses: azure/setup-helm@v5.1.0
 
       - name: Log in to GHCR
         run: |
