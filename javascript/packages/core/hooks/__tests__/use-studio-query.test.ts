@@ -267,4 +267,85 @@ describe('useStudioQuery', () => {
       });
     });
   });
+
+  describe('headers', () => {
+    beforeEach(() => {
+      mockRequest.mockResolvedValue({});
+    });
+
+    test('sends headers with the request, alongside the user identity headers', async () => {
+      renderHook(
+        () =>
+          useStudioQuery({
+            queryName: 'GetDataset',
+            serviceOptions: {},
+            headers: { 'x-test-header': 'test-value' },
+          }),
+        buildWrapper([
+          getErrorProviderWrapper(),
+          getRouterWrapper({ location: '/ma-dev-test' }),
+          getServiceProviderWrapper({ request: mockRequest }),
+          getUserProviderWrapper({ name: 'Jane Doe', email: 'jane@example.com' }),
+        ])
+      );
+
+      await waitFor(() => {
+        expect(mockRequest).toHaveBeenCalledWith('GetDataset', expect.any(Object), {
+          'x-test-header': 'test-value',
+          'x-user-name': 'Jane Doe',
+          'x-user-email': 'jane@example.com',
+        });
+      });
+    });
+
+    test('keeps the user identity headers over headers of the same name', async () => {
+      renderHook(
+        () =>
+          useStudioQuery({
+            queryName: 'GetDataset',
+            serviceOptions: {},
+            headers: { 'x-user-email': 'someone-else@example.com' },
+          }),
+        buildWrapper([
+          getErrorProviderWrapper(),
+          getRouterWrapper({ location: '/ma-dev-test' }),
+          getServiceProviderWrapper({ request: mockRequest }),
+          getUserProviderWrapper({ name: 'Jane Doe', email: 'jane@example.com' }),
+        ])
+      );
+
+      await waitFor(() => {
+        expect(mockRequest).toHaveBeenCalledWith(
+          'GetDataset',
+          expect.any(Object),
+          expect.objectContaining({ 'x-user-email': 'jane@example.com' })
+        );
+      });
+    });
+
+    test('does not refetch when only the headers change, since they are not part of the query key', async () => {
+      const { rerender } = renderHook(
+        ({ headers }: { headers: Record<string, string> }) =>
+          useStudioQuery({ queryName: 'GetDataset', serviceOptions: {}, headers }),
+        {
+          initialProps: { headers: { 'x-test-header': 'test-value' } },
+          ...buildWrapper([
+            getErrorProviderWrapper(),
+            getRouterWrapper({ location: '/ma-dev-test' }),
+            getServiceProviderWrapper({ request: mockRequest }),
+          ]),
+        }
+      );
+
+      await waitFor(() => {
+        expect(mockRequest).toHaveBeenCalledTimes(1);
+      });
+
+      rerender({ headers: { 'x-test-header': 'other-value' } });
+
+      // A refetch would start right after the rerender; give it time to happen
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(mockRequest).toHaveBeenCalledTimes(1);
+    });
+  });
 });
