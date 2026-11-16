@@ -26,9 +26,9 @@ class S3Sink(DataSink):
     returned ``SinkResult.uri`` is the ``s3://`` URI produced by the backend's
     ``upload()`` method.
 
-    Works with any ``StorageBackend`` subclass — ``MinioStorageBackend`` for
-    MinIO and S3-compatible endpoints, or a custom implementation for GCS,
-    Azure Blob, HDFS, etc.
+    Works with any ``StorageBackend`` subclass — ``FsspecStorageBackend`` for
+    S3-compatible endpoints (``s3://``), GCS (``gs://``) and other fsspec
+    protocols, or a custom implementation.
 
     The backend is provided via ``S3SinkConfig.storage_backend``, keeping
     ``S3Sink`` consistent with the single-argument constructor pattern of
@@ -50,16 +50,23 @@ class S3Sink(DataSink):
 
     Example::
 
-        from michelangelo.lib.artifact_manager.minio_backend import MinioStorageBackend
+        import os
+
+        from michelangelo.lib.artifact_manager.fsspec_backend import (
+            FsspecStorageBackend,
+            s3_storage_options,
+        )
         from michelangelo.workflow.schema.sinks.s3 import S3SinkConfig
         from michelangelo.workflow.tasks.functions.sinks import S3Sink
 
-        backend = MinioStorageBackend(
-            endpoint="localhost:9000",
-            bucket="my-bucket",
-            access_key="michelangeloadmin",
-            secret_key="michelangeloadmin",
-            secure=False,
+        backend = FsspecStorageBackend(
+            "s3://my-bucket",
+            s3_storage_options(
+                "localhost:9091",
+                access_key=os.environ["AWS_ACCESS_KEY_ID"],
+                secret_key=os.environ["AWS_SECRET_ACCESS_KEY"],
+                secure=False,  # local sandbox only
+            ),
             create_bucket_if_missing=True,
         )
         sink = S3Sink(S3SinkConfig("datasets/california/v1", storage_backend=backend))

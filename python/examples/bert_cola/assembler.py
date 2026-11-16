@@ -49,7 +49,7 @@ _TOKENIZER_NAME = "bert-base-cased"
 def _resolve_storage_backend(tmp_prefix: str):
     """Select a storage backend based on environment configuration.
 
-    ``AWS_ENDPOINT_URL`` set -> MinIO/S3-compatible remote storage; unset ->
+    ``AWS_ENDPOINT_URL`` set -> S3-compatible remote storage; unset ->
     a local temp directory (development and CI).
     """
     s3_endpoint = os.environ.get("AWS_ENDPOINT_URL", "")
@@ -67,18 +67,23 @@ def _resolve_storage_backend(tmp_prefix: str):
             .removeprefix("s3://")
             .split("/")[0]
         )
-        from michelangelo.lib.artifact_manager.minio_backend import MinioStorageBackend
+        from michelangelo.lib.artifact_manager.fsspec_backend import (
+            FsspecStorageBackend,
+            s3_storage_options,
+        )
 
-        storage_backend = MinioStorageBackend(
-            endpoint=endpoint,
-            bucket=bucket,
-            access_key=os.environ.get("AWS_ACCESS_KEY_ID", ""),
-            secret_key=os.environ.get("AWS_SECRET_ACCESS_KEY", ""),
-            secure=parsed.scheme == "https",
+        storage_backend = FsspecStorageBackend(
+            f"s3://{bucket}",
+            s3_storage_options(
+                endpoint,
+                access_key=os.environ.get("AWS_ACCESS_KEY_ID", ""),
+                secret_key=os.environ.get("AWS_SECRET_ACCESS_KEY", ""),
+                secure=parsed.scheme == "https",
+            ),
             create_bucket_if_missing=True,
         )
         log.info(
-            "assembler: using MinioStorageBackend (remote) -> %s",
+            "assembler: using FsspecStorageBackend (remote) -> %s",
             storage_backend.get_storage_location(),
         )
         return storage_backend

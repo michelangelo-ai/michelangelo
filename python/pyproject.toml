@@ -57,7 +57,7 @@ datasets = { version = "3.2.0", optional = true }
 numpy = { version = "^1.26.0", optional = true }
 pandas = { version = "^2.2.0", optional = true }
 pyarrow = { version = "^19.0.0", optional = true }
-s3fs = { version = "2024.9.0", optional = true }
+s3fs = { version = ">=2024.9.0", optional = true }
 torch = { version = "2.7.0", optional = true }
 
 transformers = { version = "4.51.3", optional = true }
@@ -84,8 +84,9 @@ xgboost = {version = "2.1.4", optional = true }
 mlflow = { version = "^2.0.0", optional = true }
 boto3 = { version = "^1.40.0", optional = true }
 
-# For MinIO storage backend
-minio = { version = ">=7.2,<8", optional = true }
+# For FsspecStorageBackend (michelangelo.lib.artifact_manager): s3fs (above)
+# serves s3://, gcsfs serves gs://
+gcsfs = { version = ">=2024.9.0", optional = true }
 
 # For VLLM
 setuptools = { version = "79.0.1", optional = true }
@@ -98,11 +99,14 @@ ma = 'michelangelo.cli.cli:main'
 
 
 [tool.poetry.extras]
-dev = ["pytest", "pytest-cov", "coverage", "ruff", "jinja2", "pre-commit", "docker", "torch", "pandas", "numpy", "transformers", "pyarrow", "pytorch_lightning", "ray", "polars", "xgboost", "torchmetrics", "scikit-learn", "onnx", "onnxruntime", "onnxscript"]
+dev = ["pytest", "pytest-cov", "coverage", "ruff", "jinja2", "pre-commit", "docker", "torch", "pandas", "numpy", "transformers", "pyarrow", "pytorch_lightning", "ray", "polars", "xgboost", "torchmetrics", "scikit-learn", "onnx", "onnxruntime", "onnxscript", "s3fs"]
 plugin = ["ray", "pyspark"]
 ray-polars = ["ray", "polars"]  # Polars fallback for PyArrow nested-data bug (ray-project/ray#61675)
-example = ["accelerate", "datasets", "numpy", "pandas", "pyarrow", "ray", "s3fs", "torch", "transformers", "pytorch_lightning", "scikit-learn", "pyspark", "ray", "mlflow", "boto3", "minio", "onnx", "onnxscript", "jinja2"]
-minio = ["minio"]
+example = ["accelerate", "datasets", "numpy", "pandas", "pyarrow", "ray", "s3fs", "torch", "transformers", "pytorch_lightning", "scikit-learn", "pyspark", "ray", "mlflow", "boto3", "onnx", "onnxscript", "jinja2"]
+s3 = ["s3fs"]
+gcs = ["gcsfs"]
+# Deprecated alias of "s3": MinioStorageBackend now runs on s3fs.
+minio = ["s3fs"]
 vllm = ["accelerate", "datasets", "numpy", "pandas", "pyarrow", "ray", "s3fs", "torch", "transformers", "pytorch_lightning", "vllm", "setuptools"]
 mactl = []
 # `ray` is needed by the evaluator workflow task (michelangelo.workflow.tasks.evaluator),
