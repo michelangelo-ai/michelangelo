@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
@@ -14,6 +15,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"cloud.google.com/go/storage"
 )
 
 func TestGcsClient_Scheme(t *testing.T) {
@@ -67,6 +70,14 @@ func TestGcsClient_Get_NoObject(t *testing.T) {
 // fetched until a request is made, so this stays offline.
 func writeFakeServiceAccountKey(t *testing.T) string {
 	t.Helper()
+	return writeFakeServiceAccountKeyWithTokenURI(t, "https://oauth2.googleapis.com/token")
+}
+
+// writeFakeServiceAccountKeyWithTokenURI is writeFakeServiceAccountKey with a
+// caller-chosen token_uri, so a test can point the OAuth2 JWT-bearer grant at
+// a local fake token endpoint and inspect what is requested.
+func writeFakeServiceAccountKeyWithTokenURI(t *testing.T, tokenURI string) string {
+	t.Helper()
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatalf("failed to generate RSA key: %v", err)
@@ -81,7 +92,7 @@ func writeFakeServiceAccountKey(t *testing.T) string {
 		"project_id":   "test-project",
 		"private_key":  string(pemKey),
 		"client_email": "test@test-project.iam.gserviceaccount.com",
-		"token_uri":    "https://oauth2.googleapis.com/token",
+		"token_uri":    tokenURI,
 	}
 	data, err := json.Marshal(saKey)
 	if err != nil {
@@ -304,5 +315,73 @@ func TestNewClient_ProvidesBlobStoreClient(t *testing.T) {
 	}
 	if out.BlobStoreClient.Scheme() != "gs" {
 		t.Errorf("expected scheme gs, got %s", out.BlobStoreClient.Scheme())
+	}
+}
+
+// TestGcsClient_Get_RequestsStorageReadWriteScope proves the authenticated
+// HTTP client built in ensureClient requests an OAuth scope. storage.NewClient
+// adds default scopes itself, but ensureClient builds the transport with
+// htransport.NewClient directly, which adds none: without an explicit scope a
+// service account key sends a JWT-bearer grant with no scope claim, which
+// Google's token endpoint rejects. A fake token endpoint (via the key's
+// token_uri) captures the grant so its scope claim can be checked offline.
+func TestGcsClient_Get_RequestsStorageReadWriteScope(t *testing.T) {
+	const accessToken = "fake-access-token"
+	var gotScope string
+	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		// The assertion is a JWT: header.claims.signature, base64url-encoded.
+		parts := strings.Split(r.PostForm.Get("assertion"), ".")
+		if len(parts) != 3 {
+			http.Error(w, "malformed assertion", http.StatusBadRequest)
+			return
+		}
+		claimsJSON, err := base64.RawURLEncoding.DecodeString(parts[1])
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		var claims struct {
+			Scope string `json:"scope"`
+		}
+		if err := json.Unmarshal(claimsJSON, &claims); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		gotScope = claims.Scope
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprintf(w, `{"access_token":%q,"token_type":"Bearer","expires_in":3600}`, accessToken)
+	}))
+	t.Cleanup(tokenServer.Close)
+
+	content := []byte("fake gcs object content, read with a scoped token")
+	var gotAuth string
+	gcsServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		w.Header().Set("Content-Type", "application/octet-stream")
+		w.Header().Set("Content-Length", fmt.Sprintf("%d", len(content)))
+		_, _ = w.Write(content)
+	}))
+	t.Cleanup(gcsServer.Close)
+
+	client := newGcsBlobClient(Config{
+		CredentialsFile: writeFakeServiceAccountKeyWithTokenURI(t, tokenServer.URL),
+		Endpoint:        gcsServer.URL,
+	})
+	data, err := client.Get(context.Background(), "gs://test-bucket/path/model.json")
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if string(data) != string(content) {
+		t.Errorf("expected content %q, got %q", content, data)
+	}
+	if gotScope != storage.ScopeReadWrite {
+		t.Errorf("expected JWT grant scope %q, got %q", storage.ScopeReadWrite, gotScope)
+	}
+	if gotAuth != "Bearer "+accessToken {
+		t.Errorf("expected Authorization %q on the storage request, got %q", "Bearer "+accessToken, gotAuth)
 	}
 }

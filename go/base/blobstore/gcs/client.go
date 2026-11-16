@@ -49,7 +49,11 @@ func newGcsBlobClient(config Config) *gcsBlobClient {
 // triggers its construction.
 func (c *gcsBlobClient) ensureClient() (*storage.Client, error) {
 	c.once.Do(func() {
-		var opts []option.ClientOption
+		// storage.NewClient adds default OAuth scopes itself, but
+		// htransport.NewClient (used below) adds none, and service account
+		// credentials need one to obtain a token. ScopeReadWrite covers every
+		// object operation this blobstore performs. Ignored when Anonymous is set.
+		opts := []option.ClientOption{option.WithScopes(storage.ScopeReadWrite)}
 		if c.config.CredentialsFile != "" {
 			opts = append(opts, option.WithCredentialsFile(c.config.CredentialsFile))
 		}
