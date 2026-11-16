@@ -499,7 +499,9 @@ def _make_filesystem(
     if protocol == "file":
         options.setdefault("auto_mkdir", True)
     try:
-        return fsspec.filesystem(protocol, **options)
+        fs = fsspec.filesystem(protocol, **options)
+        _track_owned_filesystem(fs)
+        return fs
     except ImportError as exc:
         hint = _INSTALL_HINTS.get(
             protocol, f"install the fsspec implementation for {protocol!r}"
@@ -512,6 +514,37 @@ def _make_filesystem(
         raise ConfigurationError(
             f"Unknown fsspec protocol {protocol!r}: {exc}"
         ) from exc
+
+
+# Filesystems this module created, by id (weakly: they are not kept alive).
+# Keyed by id because fsspec filesystems compare equal by their arguments, so
+# a set would merge distinct instances.
+_owned_filesystems: dict[int, weakref.ref] = {}
+
+
+def _track_owned_filesystem(fs: fsspec.AbstractFileSystem) -> None:
+    key = id(fs)
+    _owned_filesystems[key] = weakref.ref(
+        fs, lambda _ref, key=key: _owned_filesystems.pop(key, None)
+    )
+
+
+def _abandon_owned_filesystems() -> None:
+    """Run in a forked child: abandon every filesystem inherited from the parent.
+
+    Doing this at fork time, not lazily when a backend is next used, covers
+    filesystems the child never touches but whose finalizers would still run
+    at child shutdown.
+    """
+    for ref in list(_owned_filesystems.values()):
+        fs = ref()
+        if fs is not None:
+            _abandon_inherited_filesystem(fs)
+    _owned_filesystems.clear()
+
+
+if hasattr(os, "register_at_fork"):  # not available on Windows
+    os.register_at_fork(after_in_child=_abandon_owned_filesystems)
 
 
 # Filesystems inherited across a fork. Kept referenced so they are never

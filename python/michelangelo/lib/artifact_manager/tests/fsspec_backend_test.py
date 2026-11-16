@@ -931,3 +931,48 @@ def test_abandoning_an_inherited_filesystem_detaches_its_finalizers():
     del fs
     gc.collect()
     assert closed == []
+
+
+def test_owned_filesystems_are_all_abandoned_at_fork_even_if_unused():
+    """Owned filesystems are all abandoned at fork even if unused in the child."""
+    import gc
+    import weakref
+
+    class _Fs:
+        pass
+
+    closed = []
+    fss = [_Fs(), _Fs()]
+    for i, fs in enumerate(fss):
+        fsspec_backend._track_owned_filesystem(fs)
+        weakref.finalize(fs, closed.append, i)
+
+    fsspec_backend._abandon_owned_filesystems()  # what the after-fork hook runs
+    fsspec_backend._inherited_filesystems.clear()
+    del fss, fs
+    gc.collect()
+
+    assert closed == []
+    assert fsspec_backend._owned_filesystems == {}
+
+
+def test_after_fork_hook_is_registered():
+    """The after-fork hook is registered where the platform supports it."""
+    if not hasattr(os, "register_at_fork"):
+        pytest.skip("os.register_at_fork is unavailable")
+
+    class _Fs:
+        pass
+
+    fs = _Fs()  # alive in the parent across the fork
+    fsspec_backend._track_owned_filesystem(fs)
+    assert fsspec_backend._owned_filesystems
+    pid = os.fork()
+    if pid == 0:
+        # In the child: the hook must have emptied the registry of anything
+        # tracked before the fork.
+        os._exit(0 if fsspec_backend._owned_filesystems == {} else 1)
+    _, status = os.waitpid(pid, 0)
+    assert os.waitstatus_to_exitcode(status) == 0
+    assert fsspec_backend._owned_filesystems  # the parent keeps its own
+    fsspec_backend._owned_filesystems.pop(id(fs), None)
