@@ -1344,6 +1344,11 @@ def _create_bucket_setup(bucket_names):
     print(f"📦 Created bucket setup job with buckets: {bucket_names_str}")
 
 
+# Pinned so `sandbox create` does not pick up whatever chart is latest at install time.
+# 2.5.2 is the release current sandboxes already run (controller image 2.5.2).
+_SPARK_OPERATOR_CHART_VERSION = "2.5.2"
+
+
 def _create_spark_operator(helm_existing_repos):
     if "spark-operator" not in helm_existing_repos:
         _exec(
@@ -1361,6 +1366,8 @@ def _create_spark_operator(helm_existing_repos):
         "--install",
         "spark-operator",
         "spark-operator/spark-operator",
+        "--version",
+        _SPARK_OPERATOR_CHART_VERSION,
         "--namespace",
         "spark-operator",
         "--create-namespace",

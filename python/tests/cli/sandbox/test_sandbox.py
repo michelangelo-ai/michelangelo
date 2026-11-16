@@ -585,6 +585,40 @@ class DeployServicesObjectStoreTest(TestCase):
         self.assertNotIn("minio.yaml", applied)
 
 
+class CreateSparkOperatorTest(TestCase):
+    """Tests for _create_spark_operator."""
+
+    @patch("michelangelo.cli.sandbox.sandbox._exec")
+    def test_installs_pinned_chart_version(self, mock_exec):
+        """The chart is installed at the pinned version, not the latest one."""
+        sandbox._create_spark_operator("spark-operator\thttps://example\n")
+
+        mock_exec.assert_called_once()
+        args = mock_exec.call_args.args
+        self.assertEqual(
+            args[:5],
+            (
+                "helm",
+                "upgrade",
+                "--install",
+                "spark-operator",
+                "spark-operator/spark-operator",
+            ),
+        )
+        self.assertEqual(args[args.index("--version") + 1], "2.5.2")
+
+    @patch("michelangelo.cli.sandbox.sandbox._exec")
+    def test_adds_repo_when_missing(self, mock_exec):
+        """The kubeflow repo is added and updated before the install."""
+        sandbox._create_spark_operator("")
+
+        calls = [c.args[:3] for c in mock_exec.call_args_list]
+        self.assertEqual(
+            calls[:2], [("helm", "repo", "add"), ("helm", "repo", "update")]
+        )
+        self.assertEqual(mock_exec.call_args_list[-1].args[:2], ("helm", "upgrade"))
+
+
 class K3dImageImportTest(TestCase):
     """Tests for _k3d_import_image."""
 

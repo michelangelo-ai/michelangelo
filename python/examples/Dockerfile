@@ -64,9 +64,14 @@ ENV SPARK_VERSION=4.2.0
 ENV HADOOP_VERSION=3
 ENV SPARK_HOME=/opt/spark
 
+# Spark and pyspark bundle ZooKeeper client jars that Michelangelo never uses (see the
+# script header). Remove them in the same RUN that installs them so no layer keeps them.
+COPY examples/remove_bundled_zookeeper_jars.sh /opt/remove_bundled_zookeeper_jars.sh
+
 RUN curl -L https://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz \
   | tar -xz -C /opt && \
-  ln -s /opt/spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION} ${SPARK_HOME}
+  ln -s /opt/spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION} ${SPARK_HOME} && \
+  bash /opt/remove_bundled_zookeeper_jars.sh ${SPARK_HOME}/jars
 
 ENV PATH="${SPARK_HOME}/bin:${SPARK_HOME}/sbin:${PATH}"
 
@@ -113,7 +118,7 @@ COPY . .
 RUN ls -alF ./
 
 RUN poetry config virtualenvs.create false
-RUN poetry install -E example
+RUN poetry install -E example && bash /opt/remove_bundled_zookeeper_jars.sh
 
 # `poetry install -E example` leaves out importlib-resources (a Python < 3.10 requirement of
 # matplotlib, pinned in poetry.lock) even though the lock lists it, so `import matplotlib.pyplot`

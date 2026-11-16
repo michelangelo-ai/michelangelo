@@ -99,11 +99,16 @@ ENV SPARK_HOME=/opt/spark
 # Copy the pre-downloaded Spark from the downloader stage
 COPY --from=spark-downloader /spark.tgz /tmp/spark.tgz
 
+# Spark and pyspark bundle ZooKeeper client jars that Michelangelo never uses (see the
+# script header). Remove them in the same RUN that installs them so no layer keeps them.
+COPY examples/remove_bundled_zookeeper_jars.sh /opt/remove_bundled_zookeeper_jars.sh
+
 # Extract Spark and set up symlink (much faster now!)
 RUN echo "Extracting pre-downloaded Spark..." && \
     tar -xz -C /opt -f /tmp/spark.tgz && \
     ln -s /opt/spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION} ${SPARK_HOME} && \
     rm /tmp/spark.tgz && \
+    bash /opt/remove_bundled_zookeeper_jars.sh ${SPARK_HOME}/jars && \
     echo "Spark installation completed in $(ls -ld ${SPARK_HOME} | awk '{print $9}')"
 
 ENV PATH="${SPARK_HOME}/bin:${SPARK_HOME}/sbin:${PATH}"
@@ -156,7 +161,7 @@ COPY . .
 RUN ls -alF ./
 
 RUN poetry config virtualenvs.create false
-RUN poetry install -E example
+RUN poetry install -E example && bash /opt/remove_bundled_zookeeper_jars.sh
 
 # Activate Poetry's virtual environment by default
 ENV PATH="/app/.venv/bin:$PATH"
