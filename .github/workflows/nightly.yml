@@ -44,7 +44,9 @@ jobs:
   python-nightly:
     needs: check-changes
     if: needs.check-changes.outputs.has_changes == 'true'
-    runs-on: ubuntu-latest
+    # Python 3.9 has no actions/python-versions build for Ubuntu 26.04 (the
+    # new ubuntu-latest). Pinned until CI moves to Python 3.11.
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     defaults:
