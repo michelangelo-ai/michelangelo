@@ -42,7 +42,9 @@ jobs:
         run: ./tools/bazel test //go/... //proto/... --build_tests_only
 
   python-build:
-    runs-on: ubuntu-latest
+    # Python 3.9 has no actions/python-versions build for Ubuntu 26.04 (the
+    # new ubuntu-latest). Pinned until CI moves to Python 3.11.
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: ./python
