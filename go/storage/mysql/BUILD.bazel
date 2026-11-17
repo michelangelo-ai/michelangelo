@@ -26,6 +26,7 @@ go_library(
 go_test(
     name = "go_default_test",
     srcs = [
+        "index_value_test.go",
         "mysql_integration_test.go",
         "mysql_test.go",
     ],
