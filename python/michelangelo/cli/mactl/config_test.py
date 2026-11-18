@@ -6,6 +6,7 @@ from unittest import TestCase
 from unittest.mock import mock_open, patch
 
 from michelangelo.cli.mactl.config import (
+    CLIENT_METADATA,
     DEFAULT_CHANNEL_OPTIONS,
     DEFAULT_CONFIG,
     PACKAGE_CONFIG_FILE,
@@ -15,6 +16,7 @@ from michelangelo.cli.mactl.config import (
     _load_toml_file,
     get_channel_options,
     load_config,
+    request_metadata,
     setup_minio_env,
 )
 
@@ -360,6 +362,38 @@ class DefaultConstantsTest(TestCase):
         self.assertEqual(PACKAGE_CONFIG_FILE.name, "config.toml")
         self.assertEqual(USER_CONFIG_FILE.name, "user_config.toml")
         self.assertEqual(PACKAGE_CONFIG_FILE.parent, USER_CONFIG_FILE.parent)
+
+
+class RequestMetadataTest(TestCase):
+    """Test cases for request_metadata function."""
+
+    def test_default_config_adds_client_name(self):
+        """Default config metadata plus x-client-name, in that order."""
+        self.assertEqual(
+            request_metadata(DEFAULT_CONFIG),
+            [
+                ("rpc-caller", "grpcurl"),
+                ("rpc-service", "ma-apiserver"),
+                ("rpc-encoding", "proto"),
+                ("x-client-name", "ma"),
+            ],
+        )
+
+    def test_config_cannot_override_client_name(self):
+        """A configured x-client-name is replaced, not sent twice."""
+        config = {"metadata": {"x-client-name": "other", "rpc-caller": "me"}}
+        result = request_metadata(config)
+        self.assertEqual(result, [("x-client-name", "ma"), ("rpc-caller", "me")])
+
+    def test_missing_metadata_section(self):
+        """Config without [metadata] still sends the client identity."""
+        self.assertEqual(request_metadata({}), list(CLIENT_METADATA.items()))
+
+    def test_does_not_modify_config(self):
+        """The config dict is left unchanged."""
+        config = {"metadata": {"rpc-caller": "me"}}
+        request_metadata(config)
+        self.assertEqual(config, {"metadata": {"rpc-caller": "me"}})
 
 
 class ChannelOptionsTest(TestCase):

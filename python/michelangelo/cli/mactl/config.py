@@ -18,6 +18,10 @@ _MA_DIR = Path.home() / ".ma"
 PACKAGE_CONFIG_FILE = _MA_DIR / "config.toml"
 USER_CONFIG_FILE = _MA_DIR / "user_config.toml"
 
+# Headers that identify this client on every RPC. Kept out of DEFAULT_CONFIG
+# so the [metadata] config table can't drop or override them.
+CLIENT_METADATA = {"x-client-name": "ma"}
+
 DEFAULT_CONFIG = {
     "address": "127.0.0.1:15566",
     "use_tls": False,
@@ -139,6 +143,15 @@ def load_config() -> dict:
 
     _LOG.info("MA command configuration loaded successfully: %r", config)
     return config
+
+
+def request_metadata(config: dict) -> list[tuple[str, str]]:
+    """Build the gRPC metadata sent on every call.
+
+    Configured ``[metadata]`` entries come first; ``CLIENT_METADATA`` is
+    applied last so a config entry with the same key can't override it.
+    """
+    return list({**config.get("metadata", {}), **CLIENT_METADATA}.items())
 
 
 def setup_minio_env() -> None:
