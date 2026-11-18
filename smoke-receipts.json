@@ -1,0 +1,129 @@
+{
+  "review_head": "447a6577612c7dc16ebcb7c460340020a3128c33",
+  "live_source_commit": "d3c293ff262151d471fcc6e1511a387ae7191d59",
+  "production_code_unchanged_since_live_run": true,
+  "post_smoke_changes": [
+    "python/michelangelo/uniflow/core/lib/buildkite/tests/test_buildkite.py"
+  ],
+  "go": {
+    "domain": "buildkite-oss",
+    "tasklist": "buildkite-oss-smoke",
+    "workflow_id": "buildkite-oss-go-20261118-143eb6c1",
+    "run_id": "09b5b97a-429b-4e34-861c-14e4a036ca83",
+    "source_commit": "d3c293ff262151d471fcc6e1511a387ae7191d59",
+    "terminal_event": "WorkflowExecutionCompleted",
+    "event_count": 47,
+    "activity_counts": {
+      "TriggerBuild": 3,
+      "GetBuild": 1,
+      "SensorGetBuild": 2,
+      "CancelBuild": 1
+    },
+    "mutation_retry_policies": "absent",
+    "worker_binary_sha256": "f5591039fd47057016dafcc3bf406da62d6693bc36a6bb3105a86e758ecc731d",
+    "result": {
+      "cancelled": {
+        "branch": "suhas.anumukonda/uniflow-buildkite",
+        "commit": "5cb2de6da52b773ff89e646d9e17cd3e0b083722",
+        "id": "01a1ed73-a80e-4cf8-b79c-743f3d17e7a5",
+        "number": 49598331,
+        "pipeline": "go-code-udj",
+        "state": "canceled",
+        "web_url": "https://buildkite.com/uber/go-code-udj/builds/49598331"
+      },
+      "invoked": {
+        "branch": "suhas.anumukonda/uniflow-buildkite",
+        "commit": "5cb2de6da52b773ff89e646d9e17cd3e0b083722",
+        "id": "01a1ed71-7c6c-46b3-9e95-c12b729f7977",
+        "number": 49598182,
+        "pipeline": "go-code-udj",
+        "state": "passed",
+        "web_url": "https://buildkite.com/uber/go-code-udj/builds/49598182"
+      },
+      "submitted": {
+        "branch": "suhas.anumukonda/uniflow-buildkite",
+        "commit": "5cb2de6da52b773ff89e646d9e17cd3e0b083722",
+        "id": "01a1ed6e-dcf8-4add-b1dc-f2e8c241c48b",
+        "number": 49597966,
+        "pipeline": "go-code-udj",
+        "state": "passed",
+        "web_url": "https://buildkite.com/uber/go-code-udj/builds/49597966"
+      }
+    }
+  },
+  "python": {
+    "runtime": "Python 3.12.16",
+    "execution": "standard local-run from an installed wheel, outside the source checkout",
+    "wheel": "michelangelo-0.13.0-py3-none-any.whl",
+    "wheel_sha256": "0ec1fcea517640497072259e242459b4617e0c628fd9e9669ecf3a13878bf1f7",
+    "result": {
+      "submitted": {
+        "id": "01a1ed67-bb74-4e39-a648-1037f52d7a7d",
+        "number": 49597323,
+        "pipeline": "go-code-udj",
+        "state": "passed",
+        "web_url": "https://buildkite.com/uber/go-code-udj/builds/49597323",
+        "branch": "suhas.anumukonda/uniflow-buildkite",
+        "commit": "5cb2de6da52b773ff89e646d9e17cd3e0b083722"
+      },
+      "invoked": {
+        "id": "01a1ed6a-3895-4df1-aa51-93f465e8a673",
+        "number": 49597585,
+        "pipeline": "go-code-udj",
+        "state": "passed",
+        "web_url": "https://buildkite.com/uber/go-code-udj/builds/49597585",
+        "branch": "suhas.anumukonda/uniflow-buildkite",
+        "commit": "5cb2de6da52b773ff89e646d9e17cd3e0b083722"
+      },
+      "cancelled": {
+        "id": "01a1ed6c-ddf2-4c78-a6dd-b51536525d3a",
+        "number": 49597813,
+        "pipeline": "go-code-udj",
+        "state": "canceled",
+        "web_url": "https://buildkite.com/uber/go-code-udj/builds/49597813",
+        "branch": "suhas.anumukonda/uniflow-buildkite",
+        "commit": "5cb2de6da52b773ff89e646d9e17cd3e0b083722"
+      }
+    }
+  },
+  "independent_buildkite_verification": {
+    "go": {
+      "cancelled": {
+        "number": 49598331,
+        "state": "canceled",
+        "url": "https://buildkite.com/uber/go-code-udj/builds/49598331"
+      },
+      "invoked": {
+        "number": 49598182,
+        "state": "passed",
+        "url": "https://buildkite.com/uber/go-code-udj/builds/49598182",
+        "smoke_marker": "Uniflow Buildkite plugin smoke: passed"
+      },
+      "submitted": {
+        "number": 49597966,
+        "state": "passed",
+        "url": "https://buildkite.com/uber/go-code-udj/builds/49597966",
+        "smoke_marker": "Uniflow Buildkite plugin smoke: passed"
+      }
+    },
+    "python": {
+      "submitted": {
+        "number": 49597323,
+        "state": "passed",
+        "url": "https://buildkite.com/uber/go-code-udj/builds/49597323",
+        "smoke_marker": "Uniflow Buildkite plugin smoke: passed"
+      },
+      "invoked": {
+        "number": 49597585,
+        "state": "passed",
+        "url": "https://buildkite.com/uber/go-code-udj/builds/49597585",
+        "smoke_marker": "Uniflow Buildkite plugin smoke: passed"
+      },
+      "cancelled": {
+        "number": 49597813,
+        "state": "canceled",
+        "url": "https://buildkite.com/uber/go-code-udj/builds/49597813"
+      }
+    }
+  }
+}
