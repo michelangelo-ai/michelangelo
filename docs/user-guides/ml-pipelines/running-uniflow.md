@@ -163,7 +163,10 @@ kubectl get pods -n ray-system
 kubectl logs michelangelo-worker
 kubectl describe pod michelangelo-worker
 
-# Delete and restart for partial pod failure
+# Delete and restart the object store for partial pod failure (SeaweedFS, the default)
+kubectl delete pod seaweedfs
+kubectl apply -f michelangelo/cli/sandbox/resources/weed-server.yaml
+# With --object-store minio, restart MinIO instead
 kubectl delete pod minio
 kubectl apply -f michelangelo/cli/sandbox/resources/minio.yaml
 
