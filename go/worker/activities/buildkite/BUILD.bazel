@@ -1,0 +1,45 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "buildkite.go",
+        "client.go",
+        "module.go",
+    ],
+    importpath = "github.com/michelangelo-ai/michelangelo/go/worker/activities/buildkite",
+    visibility = ["//visibility:public"],
+    deps = [
+        "@com_github_cadence_workflow_starlark_worker//activity:go_default_library",
+        "@com_github_cadence_workflow_starlark_worker//worker:go_default_library",
+        "@io_temporal_go_sdk//activity:go_default_library",
+        "@io_temporal_go_sdk//temporal:go_default_library",
+        "@org_uber_go_cadence//:go_default_library",
+        "@org_uber_go_fx//:go_default_library",
+        "@org_uber_go_yarpc//yarpcerrors:go_default_library",
+        "@org_uber_go_zap//:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["buildkite_test.go"],
+    embed = [":go_default_library"],
+    deps = [
+        "@com_github_cadence_workflow_starlark_worker//cadence:go_default_library",
+        "@com_github_cadence_workflow_starlark_worker//temporal:go_default_library",
+        "@com_github_cadence_workflow_starlark_worker//worker:go_default_library",
+        "@com_github_cadence_workflow_starlark_worker//workflow:go_default_library",
+        "@com_github_stretchr_testify//assert:go_default_library",
+        "@com_github_stretchr_testify//require:go_default_library",
+        "@io_temporal_go_sdk//temporal:go_default_library",
+        "@io_temporal_go_sdk//testsuite:go_default_library",
+        "@io_temporal_go_sdk//worker:go_default_library",
+        "@org_uber_go_cadence//:go_default_library",
+        "@org_uber_go_cadence//testsuite:go_default_library",
+        "@org_uber_go_cadence//worker:go_default_library",
+        "@org_uber_go_fx//:go_default_library",
+        "@org_uber_go_fx//fxtest:go_default_library",
+        "@org_uber_go_yarpc//yarpcerrors:go_default_library",
+    ],
+)

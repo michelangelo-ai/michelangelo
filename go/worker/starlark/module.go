@@ -7,6 +7,7 @@ import (
 	"github.com/cadence-workflow/starlark-worker/worker"
 	"go.uber.org/fx"
 
+	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/buildkite"
 	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/cachedoutput"
 	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/deployment"
 	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/model"
@@ -15,6 +16,11 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/spark"
 	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/storage"
 )
+
+// RegisterBuildkitePlugin adds the Buildkite plugin to the plugin registry.
+func RegisterBuildkitePlugin(registry map[string]service.IPlugin) {
+	registry[buildkite.Plugin.ID()] = buildkite.Plugin
+}
 
 // RegisterStoragePlugin adds the storage plugin to the plugin registry.
 func RegisterStoragePlugin(registry map[string]service.IPlugin) {
@@ -69,6 +75,7 @@ func CreateStarlarkService(registry map[string]service.IPlugin, workers []worker
 }
 
 var Module = fx.Options(
+	fx.Invoke(RegisterBuildkitePlugin),
 	fx.Invoke(RegisterStoragePlugin),
 	fx.Invoke(RegisterCachedOutputPlugin),
 	fx.Invoke(RegisterRayPlugin),
