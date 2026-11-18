@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"go.starlark.net/starlark"
+	enumspb "go.temporal.io/api/enums/v1"
 	"go.temporal.io/sdk/temporal"
 	"go.uber.org/cadence"
 	"go.uber.org/yarpc/yarpcerrors"
@@ -363,6 +364,78 @@ func TestTemporalTimeoutAndCancellationRequestCleanup(t *testing.T) {
 				"pipeline": "smoke-test", "build_number": 17, "timeout_seconds": 2,
 			})
 			require.Error(t, err)
+			if cancel {
+				assert.Contains(t, err.Error(), "canceled")
+				assert.NotContains(t, err.Error(), "deadline")
+			} else {
+				assert.Contains(t, err.Error(), "did not pass within 2 seconds")
+			}
 		})
 	}
+}
+
+func TestCadenceWaitDoesNotCancelBeforeDeadline(t *testing.T) {
+	for _, interval := range []int{7, 30} {
+		t.Run(fmt.Sprint(interval), func(t *testing.T) {
+			env := newEnvironment(t)
+			cad := env.Cadence.GetTestWorkflowEnvironment()
+			cad.RegisterActivity(buildkite.Activities.SensorGetBuild)
+			cad.RegisterActivity(buildkite.Activities.CancelBuild)
+			cad.OnActivity(buildkite.Activities.SensorGetBuild, mock.Anything, mock.Anything).
+				Return(nil, cadence.NewCustomError(buildkite.NotReadyReason, "pending"))
+			cad.OnActivity(buildkite.Activities.CancelBuild, mock.Anything, mock.Anything).
+				Once().Return(response("canceling"), nil)
+			started := cad.Now()
+			_, err := call(t, env, "wait_for_build", map[string]any{
+				"pipeline": "smoke-test", "build_number": 17,
+				"timeout_seconds": 20, "poll_interval": interval,
+			})
+			require.Error(t, err)
+			assert.GreaterOrEqual(t, cad.Now().Sub(started), 20*time.Second)
+			assert.Contains(t, errorDetails(t, err, yarpcerrors.CodeDeadlineExceeded.String()), "20 seconds")
+		})
+	}
+}
+
+func TestTemporalWaitDoesNotCancelBeforeDeadline(t *testing.T) {
+	for _, interval := range []int{7, 30} {
+		t.Run(fmt.Sprint(interval), func(t *testing.T) {
+			env := newEnvironment(t)
+			temp := env.Temporal.GetTestWorkflowEnvironment()
+			temp.RegisterActivity(buildkite.Activities.SensorGetBuild)
+			temp.RegisterActivity(buildkite.Activities.CancelBuild)
+			temp.OnActivity(buildkite.Activities.SensorGetBuild, mock.Anything, mock.Anything).
+				Return(nil, temporal.NewApplicationError("pending", buildkite.NotReadyReason))
+			temp.OnActivity(buildkite.Activities.CancelBuild, mock.Anything, mock.Anything).
+				Once().Return(response("canceling"), nil)
+			started := temp.Now()
+			_, err := callTemporal(t, env, "wait_for_build", map[string]any{
+				"pipeline": "smoke-test", "build_number": 17,
+				"timeout_seconds": 20, "poll_interval": interval,
+			})
+			require.Error(t, err)
+			assert.GreaterOrEqual(t, temp.Now().Sub(started), 20*time.Second)
+			assert.Contains(t, err.Error(), "did not pass within 20 seconds")
+		})
+	}
+}
+
+func TestTemporalQueueTimeoutCanRecoverWithinWaitBudget(t *testing.T) {
+	env := newEnvironment(t)
+	temp := env.Temporal.GetTestWorkflowEnvironment()
+	temp.RegisterActivity(buildkite.Activities.SensorGetBuild)
+	temp.OnActivity(buildkite.Activities.SensorGetBuild, mock.Anything, mock.Anything).
+		Once().After(70*time.Second).
+		Return(nil, temporal.NewTimeoutError(enumspb.TIMEOUT_TYPE_SCHEDULE_TO_START, nil))
+	temp.OnActivity(buildkite.Activities.SensorGetBuild, mock.Anything, mock.Anything).
+		Once().Return(response("passed"), nil)
+	started := temp.Now()
+	got, err := callTemporal(t, env, "wait_for_build", map[string]any{
+		"pipeline": "smoke-test", "build_number": 17,
+		"timeout_seconds": 300, "poll_interval": 1,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, *response("passed"), got)
+	assert.GreaterOrEqual(t, temp.Now().Sub(started), 70*time.Second)
+	assert.Less(t, temp.Now().Sub(started), 300*time.Second)
 }

@@ -77,6 +77,8 @@ HTTPS is required except for an explicitly configured loopback HTTP proxy.
 URLs containing credentials, queries, or fragments are rejected. Redirects
 are not followed, so credentials and mutations cannot be forwarded to a
 different endpoint.
+Loopback HTTP requests also bypass environment-configured forward proxies so
+credentials cannot be sent off-host over plaintext HTTP.
 
 No configuration is needed for workflows that do not use Buildkite: the
 stock worker registers the plugin but validates its configuration on first
@@ -128,6 +130,9 @@ the global UUID. Use **number**, not **id**, in subsequent operations. Missing
 optional response strings normalize to `""`. Raw environments, metadata,
 tokens, job lists, and response bodies are not returned. Responses larger than
 8 MiB and malformed snapshots are rejected.
+Status reads request `exclude_jobs=true` to avoid fetching large job lists that
+are not part of the result contract. Numbered reads and cancellations reject a
+response for a different build number.
 
 Pipeline slugs match `[a-z0-9][a-z0-9_-]*`. `env` and `metadata` accept string
 keys/values, an empty dictionary, or `None`. Wait budgets are integers from
@@ -135,14 +140,20 @@ keys/values, an empty dictionary, or `None`. Wait budgets are integers from
 
 ## Failures, timeouts, and cancellation
 
-- `creating`, `scheduled`, `running`, `failing`, `blocked`, and `canceling`
+- `creating`, `scheduled`, `waiting`, `running`, `failing`, `blocked`, and `canceling`
   are pending. Only `passed` completes a wait successfully.
+- Buildkite's independent `blocked` flag keeps a wait pending even if the
+  reported state is `passed` or `failed`. The seven-field public snapshot
+  remains unchanged; use `wait_for_build` for the completion guarantee.
 - `failed`, `canceled`, `skipped`, and `not_run` fail the wait immediately.
   Unknown states, malformed responses, and permanent API errors also fail
   immediately.
 - Only status polling retries transient transport errors, HTTP 408/429, and
   server errors. Remote polling is durable through Cadence/Temporal activity
   retries; no workflow thread sleeps on ordinary wall-clock time.
+  If a sensor retry policy stops before the next backoff would fit, a durable
+  timer keeps the remaining budget open rather than cancelling early. Activity
+  queue time is bounded by the overall wait budget.
 - Submission and cancellation are **not automatically retried**, including
   ambiguous transport failures. Buildkite does not deduplicate submissions.
   Inspect Buildkite before resubmitting after a lost acknowledgement.

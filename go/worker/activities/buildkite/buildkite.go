@@ -102,22 +102,43 @@ func (a *activities) TriggerBuild(ctx context.Context, req TriggerBuildRequest) 
 		Env      map[string]string `json:"env,omitempty"`
 		Metadata map[string]string `json:"meta_data,omitempty"`
 	}{req.Branch, req.Commit, req.Message, req.Env, req.Metadata}
-	return a.client.request(ctx, http.MethodPost, req.Pipeline, "", payload)
+	snapshot, err := a.client.request(ctx, http.MethodPost, req.Pipeline, "", payload)
+	return publicBuild(snapshot, err)
 }
 
 // GetBuild returns a snapshot, including terminal failure states.
 func (a *activities) GetBuild(ctx context.Context, req GetBuildRequest) (*BuildResponse, error) {
+	snapshot, err := a.getBuild(ctx, req)
+	return publicBuild(snapshot, err)
+}
+
+func (a *activities) getBuild(ctx context.Context, req GetBuildRequest) (*buildSnapshot, error) {
 	if err := req.Validate(); err != nil {
 		return nil, activityError(ctx, yarpcerrors.CodeInvalidArgument.String(), err.Error())
 	}
-	return a.client.request(ctx, http.MethodGet, req.Pipeline, "/"+strconv.FormatInt(req.BuildNumber, 10), nil)
+	snapshot, err := a.client.request(ctx, http.MethodGet, req.Pipeline,
+		"/"+strconv.FormatInt(req.BuildNumber, 10)+"?exclude_jobs=true", nil)
+	if err != nil {
+		return nil, err
+	}
+	if snapshot.build.Number != req.BuildNumber {
+		return nil, activityError(ctx, yarpcerrors.CodeInternal.String(), "Buildkite returned a different build number")
+	}
+	return snapshot, nil
 }
 
 // SensorGetBuild makes one status check. The workflow owns durable polling.
 func (a *activities) SensorGetBuild(ctx context.Context, req GetBuildRequest) (*BuildResponse, error) {
-	build, err := a.GetBuild(ctx, req)
+	snapshot, err := a.getBuild(ctx, req)
 	if err != nil {
 		return nil, err
+	}
+	build := snapshot.build
+	// A block step can report passed or failed while approval is outstanding.
+	// Do not treat either as terminal until the independent blocked flag clears.
+	if snapshot.blocked {
+		return nil, newActivityError(ctx, NotReadyReason,
+			fmt.Sprintf("build %s/%d is blocked", req.Pipeline, req.BuildNumber))
 	}
 	switch build.State {
 	case "passed":
@@ -126,7 +147,7 @@ func (a *activities) SensorGetBuild(ctx context.Context, req GetBuildRequest) (*
 		return nil, activityError(ctx, yarpcerrors.CodeInternal.String(),
 			fmt.Sprintf("build %s/%d ended with state %s: %s",
 				req.Pipeline, req.BuildNumber, build.State, build.WebURL))
-	case "creating", "scheduled", "running", "failing", "blocked", "canceling":
+	case "creating", "scheduled", "waiting", "running", "failing", "blocked", "canceling":
 		return nil, newActivityError(ctx, NotReadyReason,
 			fmt.Sprintf("build %s/%d is %s", req.Pipeline, req.BuildNumber, build.State))
 	default:
@@ -140,8 +161,22 @@ func (a *activities) CancelBuild(ctx context.Context, req CancelBuildRequest) (*
 	if err := req.Validate(); err != nil {
 		return nil, activityError(ctx, yarpcerrors.CodeInvalidArgument.String(), err.Error())
 	}
-	return a.client.request(ctx, http.MethodPut, req.Pipeline,
+	snapshot, err := a.client.request(ctx, http.MethodPut, req.Pipeline,
 		"/"+strconv.FormatInt(req.BuildNumber, 10)+"/cancel", nil)
+	if err != nil {
+		return nil, err
+	}
+	if snapshot.build.Number != req.BuildNumber {
+		return nil, activityError(ctx, yarpcerrors.CodeInternal.String(), "Buildkite returned a different build number")
+	}
+	return snapshot.build, nil
+}
+
+func publicBuild(snapshot *buildSnapshot, err error) (*BuildResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	return snapshot.build, nil
 }
 
 func validateSlug(value string) error {

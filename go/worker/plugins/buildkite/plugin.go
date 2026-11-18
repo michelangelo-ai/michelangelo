@@ -206,51 +206,67 @@ func executeBuild(ctx workflow.Context, activity interface{}, request interface{
 func waitForBuildRequest(ctx workflow.Context, req buildkite.GetBuildRequest, options waitOptions) (starlark.Value, error) {
 	timeout := time.Duration(options.timeoutSeconds) * time.Second
 	deadline := workflow.Now(ctx).Add(timeout)
-	policy := utils.DefaultSensorRetryPolicy
-	policy.InitialInterval = time.Duration(options.pollInterval) * time.Second
-	policy.MaximumInterval = policy.InitialInterval
-	policy.ExpirationInterval = timeout
-	sensorCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
-		ScheduleToStartTimeout: min(time.Minute, timeout),
-		StartToCloseTimeout:    min(35*time.Second, timeout),
-		ScheduleToCloseTimeout: timeout,
-		RetryPolicy:            &policy,
-	})
-	result, err := executeBuild(sensorCtx, buildkite.Activities.SensorGetBuild, req)
-	if err == nil && workflow.Now(ctx).Before(deadline) {
-		return result, nil
-	}
-	if err == nil {
-		err = newWorkflowError(ctx, yarpcerrors.CodeDeadlineExceeded.String(), "Buildkite wait deadline expired")
-	}
-	if shouldCancel(ctx, err) {
-		// Parent cancellation must not suppress the cleanup activity. Preserve
-		// the original sensor error even when best-effort cancellation fails.
-		cleanupCtx, cancel := workflow.NewDisconnectedContext(ctx)
-		defer cancel()
-		cleanupCtx = singleCallContext(cleanupCtx)
-		if _, cancelErr := executeBuild(cleanupCtx, buildkite.Activities.CancelBuild, buildkite.CancelBuildRequest(req)); cancelErr != nil {
-			workflow.GetLogger(ctx).Error("buildkite-cleanup-failed",
-				zap.String("pipeline", req.Pipeline), zap.Int64("build_number", req.BuildNumber), zap.Error(cancelErr))
+	poll := time.Duration(options.pollInterval) * time.Second
+	for remaining := timeout; remaining > 0; remaining = deadline.Sub(workflow.Now(ctx)) {
+		policy := utils.DefaultSensorRetryPolicy
+		policy.InitialInterval = poll
+		policy.MaximumInterval = poll
+		policy.ExpirationInterval = remaining
+		sensorCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+			// Queue availability consumes the overall wait budget. A separate,
+			// shorter queue timeout can be non-retryable on Temporal.
+			ScheduleToStartTimeout: remaining,
+			StartToCloseTimeout:    min(35*time.Second, remaining),
+			ScheduleToCloseTimeout: remaining,
+			RetryPolicy:            &policy,
+		})
+		result, err := executeBuild(sensorCtx, buildkite.Activities.SensorGetBuild, req)
+		if err == nil {
+			if workflow.Now(ctx).Before(deadline) {
+				return result, nil
+			}
+			break
 		}
-		if errorReason(err) != "" {
-			// Cadence can return the last retryable sensor error when its
-			// expiration is reached instead of a TimeoutError.
-			return nil, newWorkflowError(ctx, yarpcerrors.CodeDeadlineExceeded.String(),
-				fmt.Sprintf("build %s/%d did not pass within %d seconds",
-					req.Pipeline, req.BuildNumber, options.timeoutSeconds))
+		if workflow.IsCanceledError(ctx, err) {
+			return cancelWait(ctx, req, err)
+		}
+		if !retryableSensorError(err) {
+			return nil, err
+		}
+		remaining = deadline.Sub(workflow.Now(ctx))
+		if remaining > 0 {
+			// A retry policy may stop when its next backoff would cross the
+			// expiration time, before our actual deadline. Keep that remainder
+			// open using a durable timer rather than cancelling early.
+			if err := workflow.Sleep(ctx, min(poll, remaining)); err != nil {
+				return cancelWait(ctx, req, err)
+			}
 		}
 	}
-	return nil, err
+	return cancelWait(ctx, req, newWorkflowError(ctx, yarpcerrors.CodeDeadlineExceeded.String(),
+		fmt.Sprintf("build %s/%d did not pass within %d seconds",
+			req.Pipeline, req.BuildNumber, options.timeoutSeconds)))
 }
 
-func shouldCancel(ctx workflow.Context, err error) bool {
-	if workflow.IsCanceledError(ctx, err) || cadence.IsTimeoutError(err) || temporal.IsTimeoutError(err) {
+func cancelWait(ctx workflow.Context, req buildkite.GetBuildRequest, original error) (starlark.Value, error) {
+	// Parent cancellation must not suppress cleanup or be replaced by its error.
+	cleanupCtx, cancel := workflow.NewDisconnectedContext(ctx)
+	defer cancel()
+	cleanupCtx = singleCallContext(cleanupCtx)
+	if _, err := executeBuild(cleanupCtx, buildkite.Activities.CancelBuild, buildkite.CancelBuildRequest(req)); err != nil {
+		workflow.GetLogger(ctx).Error("buildkite-cleanup-failed",
+			zap.String("pipeline", req.Pipeline), zap.Int64("build_number", req.BuildNumber), zap.Error(err))
+	}
+	return nil, original
+}
+
+func retryableSensorError(err error) bool {
+	if cadence.IsTimeoutError(err) || temporal.IsTimeoutError(err) {
 		return true
 	}
 	switch errorReason(err) {
 	case buildkite.NotReadyReason, yarpcerrors.CodeUnavailable.String(), yarpcerrors.CodeDeadlineExceeded.String():
-		return true // a retryable sensor error exhausted its wait budget
+		return true
 	}
 	return false
 }

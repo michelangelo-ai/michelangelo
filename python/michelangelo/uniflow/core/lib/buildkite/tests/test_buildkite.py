@@ -150,7 +150,7 @@ def test_defaults_and_nullable_maps(opener: Mock, options: dict) -> None:
 @pytest.mark.parametrize(
     "function,method,suffix,state",
     [
-        (get_build, "GET", "/17", "failed"),
+        (get_build, "GET", "/17?exclude_jobs=true", "failed"),
         (cancel_build, "PUT", "/17/cancel", "canceling"),
     ],
 )
@@ -202,7 +202,15 @@ def test_invalid_arguments_have_no_side_effects(
 
 def test_wait_polls_pending_states(opener: Mock, clock: Clock) -> None:
     """Only passed completes; all documented nonterminal states keep polling."""
-    states = ["creating", "scheduled", "running", "failing", "blocked", "canceling"]
+    states = [
+        "creating",
+        "scheduled",
+        "waiting",
+        "running",
+        "failing",
+        "blocked",
+        "canceling",
+    ]
     opener.open.side_effect = [
         response(snapshot(state)) for state in [*states, "passed"]
     ]
@@ -396,13 +404,13 @@ def test_missing_optional_fields_normalize_to_empty_strings(opener: Mock) -> Non
     ],
 )
 def test_invalid_or_oversized_json_is_not_retried(
-    opener: Mock, body: bytes, message: str
+    opener: Mock, clock: Clock, body: bytes, message: str
 ) -> None:
     """Reject unsafe response bodies and release the response resource."""
     stream = io.BytesIO(body)
     opener.open.return_value = stream
     with pytest.raises(RuntimeError, match=message):
-        get_build("smoke-test", 17)
+        wait_for_build("smoke-test", 17)
     opener.open.assert_called_once()
     assert stream.closed
 
@@ -471,11 +479,98 @@ def test_redirect_is_not_followed(monkeypatch: pytest.MonkeyPatch) -> None:
     try:
         with pytest.raises(RuntimeError, match="HTTP 302"):
             get_build("smoke-test", 17)
-        assert paths == ["/v2/organizations/example/pipelines/smoke-test/builds/17"]
+        assert paths == [
+            "/v2/organizations/example/pipelines/smoke-test/builds/17?exclude_jobs=true"
+        ]
     finally:
         server.shutdown()
         server.server_close()
         thread.join(timeout=5)
+
+
+@pytest.mark.parametrize("state", ["passed", "failed"])
+def test_blocked_flag_takes_precedence_over_state(
+    opener: Mock, clock: Clock, state: str
+) -> None:
+    """A block's display state must not complete or fail the pending build."""
+    opener.open.side_effect = [
+        response({**snapshot(state), "blocked": True}),
+        response({**snapshot(), "blocked": False}),
+    ]
+    assert wait_for_build("smoke-test", 17, 60, 2) == expected()
+    assert clock.sleeps == [2]
+    assert opener.open.call_count == 2
+
+
+@pytest.mark.parametrize("function", [get_build, wait_for_build, cancel_build])
+def test_numbered_operations_reject_another_build(opener: Mock, function) -> None:
+    """Do not mistake a proxy's wrong resource for the requested build."""
+    opener.open.return_value = response(snapshot(number=18))
+    with pytest.raises(RuntimeError, match="different build number"):
+        function("smoke-test", 17)
+    opener.open.assert_called_once()
+
+
+def test_loopback_bypasses_forward_proxy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A loopback bearer request must not escape through HTTP_PROXY."""
+    proxy_requests: list[str] = []
+    origin_requests: list[str] = []
+    body = json.dumps(snapshot()).encode()
+
+    class Origin(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:  # noqa: N802 - standard-library handler API
+            origin_requests.append(self.headers.get("Authorization", ""))
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *_args) -> None:
+            pass
+
+    class Proxy(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:  # noqa: N802 - standard-library handler API
+            proxy_requests.append(self.path)
+            self.send_response(502)
+            self.end_headers()
+
+        def log_message(self, *_args) -> None:
+            pass
+
+    origin = ThreadingHTTPServer(("127.0.0.1", 0), Origin)
+    proxy = ThreadingHTTPServer(("127.0.0.1", 0), Proxy)
+    threads = [
+        threading.Thread(target=server.serve_forever, daemon=True)
+        for server in (origin, proxy)
+    ]
+    for thread in threads:
+        thread.start()
+    for name in [
+        "HTTP_PROXY",
+        "http_proxy",
+        "HTTPS_PROXY",
+        "https_proxy",
+        "ALL_PROXY",
+        "all_proxy",
+        "NO_PROXY",
+        "no_proxy",
+        "REQUEST_METHOD",
+    ]:
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("HTTP_PROXY", f"http://127.0.0.1:{proxy.server_port}")
+    monkeypatch.setenv("BUILDKITE_API_URL", f"http://127.0.0.1:{origin.server_port}/v2")
+    try:
+        assert get_build("smoke-test", 17) == expected()
+        assert origin_requests == ["Bearer test-token"]
+        assert proxy_requests == []
+    finally:
+        for server in (origin, proxy):
+            server.shutdown()
+            server.server_close()
+        for thread in threads:
+            thread.join(timeout=5)
 
 
 @workflow()

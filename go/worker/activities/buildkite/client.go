@@ -33,6 +33,12 @@ type client struct {
 	http         *http.Client
 }
 
+// buildSnapshot keeps completion metadata inside the activity boundary.
+type buildSnapshot struct {
+	build   *BuildResponse
+	blocked bool
+}
+
 func newClient() *client {
 	apiURL := os.Getenv("BUILDKITE_API_URL")
 	if apiURL == "" {
@@ -76,7 +82,7 @@ func (c *client) validate() error {
 	return nil
 }
 
-func (c *client) request(ctx context.Context, method, pipeline, suffix string, payload any) (*BuildResponse, error) {
+func (c *client) request(ctx context.Context, method, pipeline, suffix string, payload any) (*buildSnapshot, error) {
 	// Configuration is validated on use so installing this optional plugin does
 	// not prevent an otherwise unconfigured worker from starting.
 	if err := c.validate(); err != nil {
@@ -119,12 +125,13 @@ func (c *client) request(ctx context.Context, method, pipeline, suffix string, p
 		return nil, activityError(ctx, yarpcerrors.CodeInternal.String(), "Buildkite response exceeds 8 MiB")
 	}
 	var build struct {
-		ID     string  `json:"id"`
-		Number int64   `json:"number"`
-		State  string  `json:"state"`
-		WebURL *string `json:"web_url"`
-		Branch *string `json:"branch"`
-		Commit *string `json:"commit"`
+		ID      string  `json:"id"`
+		Number  int64   `json:"number"`
+		State   string  `json:"state"`
+		WebURL  *string `json:"web_url"`
+		Branch  *string `json:"branch"`
+		Commit  *string `json:"commit"`
+		Blocked bool    `json:"blocked"`
 	}
 	if err := json.Unmarshal(data, &build); err != nil {
 		return nil, activityError(ctx, yarpcerrors.CodeInternal.String(), "Buildkite returned invalid build JSON")
@@ -132,9 +139,12 @@ func (c *client) request(ctx context.Context, method, pipeline, suffix string, p
 	if build.ID == "" || build.Number <= 0 || build.State == "" {
 		return nil, activityError(ctx, yarpcerrors.CodeInternal.String(), "Buildkite returned an incomplete build")
 	}
-	return &BuildResponse{
-		ID: build.ID, Number: build.Number, Pipeline: pipeline, State: build.State,
-		WebURL: stringValue(build.WebURL), Branch: stringValue(build.Branch), Commit: stringValue(build.Commit),
+	return &buildSnapshot{
+		build: &BuildResponse{
+			ID: build.ID, Number: build.Number, Pipeline: pipeline, State: build.State,
+			WebURL: stringValue(build.WebURL), Branch: stringValue(build.Branch), Commit: stringValue(build.Commit),
+		},
+		blocked: build.Blocked,
 	}, nil
 }
 

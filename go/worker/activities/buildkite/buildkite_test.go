@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -113,6 +114,11 @@ func TestGetAndCancelSnapshots(t *testing.T) {
 			env, _ := activityEnvironment(t, func(w http.ResponseWriter, r *http.Request) {
 				assert.Equal(t, method, r.Method)
 				assert.Equal(t, "/v2/organizations/example/pipelines/smoke-test/builds"+suffix, r.URL.Path)
+				if method == http.MethodGet {
+					assert.Equal(t, "true", r.URL.Query().Get("exclude_jobs"))
+				} else {
+					assert.Empty(t, r.URL.RawQuery)
+				}
 				_, _ = io.WriteString(w, rawBuild(state))
 			})
 			value, err := env.ExecuteActivity(function, req)
@@ -126,7 +132,7 @@ func TestGetAndCancelSnapshots(t *testing.T) {
 
 func TestSensorStates(t *testing.T) {
 	for _, state := range []string{
-		"passed", "creating", "scheduled", "running", "failing", "blocked", "canceling",
+		"passed", "creating", "scheduled", "waiting", "running", "failing", "blocked", "canceling",
 		"failed", "canceled", "skipped", "not_run", "unknown",
 	} {
 		t.Run(state, func(t *testing.T) {
@@ -145,6 +151,53 @@ func TestSensorStates(t *testing.T) {
 			} else {
 				requireReason(t, err, NotReadyReason)
 			}
+		})
+	}
+}
+
+func TestSensorChecksBlockedBeforeReportedState(t *testing.T) {
+	for _, state := range []string{"passed", "failed"} {
+		for _, blocked := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/blocked=%t", state, blocked), func(t *testing.T) {
+				env, _ := activityEnvironment(t, func(w http.ResponseWriter, _ *http.Request) {
+					body := strings.TrimSuffix(rawBuild(state), "}")
+					_, _ = fmt.Fprintf(w, `%s,"blocked":%t}`, body, blocked)
+				})
+				value, err := env.ExecuteActivity(Activities.SensorGetBuild,
+					GetBuildRequest{Pipeline: "smoke-test", BuildNumber: 17})
+				switch {
+				case blocked:
+					requireReason(t, err, NotReadyReason)
+				case state == "failed":
+					requireReason(t, err, yarpcerrors.CodeInternal.String())
+				default:
+					require.NoError(t, err)
+					var got BuildResponse
+					require.NoError(t, value.Get(&got))
+					assert.Equal(t, expectedBuild("passed"), got)
+				}
+			})
+		}
+	}
+}
+
+func TestNumberedOperationsRejectAnotherBuild(t *testing.T) {
+	for _, operation := range []string{"get", "sensor", "cancel"} {
+		t.Run(operation, func(t *testing.T) {
+			env, _ := activityEnvironment(t, func(w http.ResponseWriter, _ *http.Request) {
+				_, _ = io.WriteString(w, rawBuild("passed"))
+			})
+			var method any = Activities.GetBuild
+			var request any = GetBuildRequest{Pipeline: "smoke-test", BuildNumber: 18}
+			switch operation {
+			case "sensor":
+				method = Activities.SensorGetBuild
+			case "cancel":
+				method = Activities.CancelBuild
+				request = CancelBuildRequest{Pipeline: "smoke-test", BuildNumber: 18}
+			}
+			_, err := env.ExecuteActivity(method, request)
+			requireReason(t, err, yarpcerrors.CodeInternal.String())
 		})
 	}
 }

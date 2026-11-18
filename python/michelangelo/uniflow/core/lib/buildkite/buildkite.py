@@ -9,12 +9,19 @@ import logging
 import os
 import time
 from contextlib import suppress
+from dataclasses import dataclass
 from http.client import HTTPException
 from ipaddress import ip_address
 from typing import Optional, TypedDict
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
-from urllib.request import HTTPRedirectHandler, Request, build_opener
+from urllib.request import (
+    BaseHandler,
+    HTTPRedirectHandler,
+    ProxyHandler,
+    Request,
+    build_opener,
+)
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
@@ -25,7 +32,7 @@ _REQUEST_TIMEOUT_SECONDS = 30
 _MAX_RESPONSE_BYTES = 8 << 20
 _MAX_BUILD_NUMBER = 2**63 - 1
 _PENDING_STATES = frozenset(
-    {"creating", "scheduled", "running", "failing", "blocked", "canceling"}
+    {"creating", "scheduled", "waiting", "running", "failing", "blocked", "canceling"}
 )
 _FAILED_STATES = frozenset({"failed", "canceled", "skipped", "not_run"})
 _logger = logging.getLogger(__name__)
@@ -79,6 +86,13 @@ class _BuildResult(BaseModel):
     web_url: str
     branch: str
     commit: str
+    blocked: bool = False
+
+
+@dataclass(frozen=True)
+class _Snapshot:
+    build: Build
+    blocked: bool
 
 
 class _APIError(RuntimeError):
@@ -138,7 +152,7 @@ def trigger_build(
         payload=request.model_dump(
             by_alias=True, exclude={"pipeline"}, exclude_none=True
         ),
-    )
+    ).build
 
 
 @star_plugin("buildkite.get_build")
@@ -153,7 +167,7 @@ def get_build(pipeline: str, build_number: int) -> Build:
         The compact build snapshot.
     """
     request = _BuildRequest(pipeline=pipeline, build_number=build_number)
-    return _get_build(request, _REQUEST_TIMEOUT_SECONDS)
+    return _get_build(request, _REQUEST_TIMEOUT_SECONDS).build
 
 
 @star_plugin("buildkite.wait_for_build")
@@ -200,21 +214,24 @@ def wait_for_build(
             if remaining <= 0:
                 raise expired()
             try:
-                result = _get_build(request, min(_REQUEST_TIMEOUT_SECONDS, remaining))
+                snapshot = _get_build(request, min(_REQUEST_TIMEOUT_SECONDS, remaining))
             except _APIError as error:
                 if not error.transient:
                     raise
             else:
                 if time.monotonic() >= deadline:
                     raise expired()
-                if result["state"] == "passed":
+                result = snapshot.build
+                if snapshot.blocked:
+                    pass
+                elif result["state"] == "passed":
                     return result
-                if result["state"] in _FAILED_STATES:
+                elif result["state"] in _FAILED_STATES:
                     raise RuntimeError(
                         f"build {pipeline}/{build_number} ended with state "
                         f"{result['state']}: {result['web_url']}"
                     )
-                if result["state"] not in _PENDING_STATES:
+                elif result["state"] not in _PENDING_STATES:
                     raise RuntimeError(
                         f"build {pipeline}/{build_number} has unknown state "
                         f"{result['state']}"
@@ -277,13 +294,24 @@ def cancel_build(pipeline: str, build_number: int) -> Build:
         The compact snapshot, not a guarantee of completed cancellation.
     """
     request = _BuildRequest(pipeline=pipeline, build_number=build_number)
-    return _request("PUT", request.pipeline, suffix=f"/{request.build_number}/cancel")
-
-
-def _get_build(request: _BuildRequest, timeout: float) -> Build:
-    return _request(
-        "GET", request.pipeline, suffix=f"/{request.build_number}", timeout=timeout
+    snapshot = _request(
+        "PUT", request.pipeline, suffix=f"/{request.build_number}/cancel"
     )
+    if snapshot.build["number"] != request.build_number:
+        raise RuntimeError("Buildkite returned a different build number")
+    return snapshot.build
+
+
+def _get_build(request: _BuildRequest, timeout: float) -> _Snapshot:
+    snapshot = _request(
+        "GET",
+        request.pipeline,
+        suffix=f"/{request.build_number}?exclude_jobs=true",
+        timeout=timeout,
+    )
+    if snapshot.build["number"] != request.build_number:
+        raise RuntimeError("Buildkite returned a different build number")
+    return snapshot
 
 
 def _endpoint() -> tuple[str, str, str]:
@@ -336,7 +364,7 @@ def _request(
     suffix: str = "",
     payload: Optional[dict[str, object]] = None,
     timeout: float = _REQUEST_TIMEOUT_SECONDS,
-) -> Build:
+) -> _Snapshot:
     api_url, organization, token = _endpoint()
     headers = {"Content-Type": "application/json", "Accept": "application/json"}
     if token:
@@ -347,8 +375,13 @@ def _request(
         headers=headers,
         method=method,
     )
+    handlers: list[BaseHandler] = [_NoRedirect()]
+    if urlsplit(api_url).scheme == "http":
+        # The endpoint validator permits plaintext only for loopback. Never
+        # let environment proxy discovery send this request off-host instead.
+        handlers.append(ProxyHandler({}))
     try:
-        with build_opener(_NoRedirect()).open(request, timeout=timeout) as response:
+        with build_opener(*handlers).open(request, timeout=timeout) as response:
             data = response.read(_MAX_RESPONSE_BYTES + 1)
     except HTTPError as error:
         status = error.code
@@ -377,6 +410,7 @@ def _request(
                 "id": raw.get("id"),
                 "number": raw.get("number"),
                 "state": raw.get("state"),
+                "blocked": False if raw.get("blocked") is None else raw["blocked"],
                 **{
                     key: "" if raw.get(key) is None else raw[key]
                     for key in ("web_url", "branch", "commit")
@@ -385,12 +419,15 @@ def _request(
         )
     except ValidationError:
         raise RuntimeError("Buildkite returned an incomplete build") from None
-    return Build(
-        id=result.id,
-        number=result.number,
-        pipeline=pipeline,
-        state=result.state,
-        web_url=result.web_url,
-        branch=result.branch,
-        commit=result.commit,
+    return _Snapshot(
+        build=Build(
+            id=result.id,
+            number=result.number,
+            pipeline=pipeline,
+            state=result.state,
+            web_url=result.web_url,
+            branch=result.branch,
+            commit=result.commit,
+        ),
+        blocked=result.blocked,
     )
