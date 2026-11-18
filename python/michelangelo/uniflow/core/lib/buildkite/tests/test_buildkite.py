@@ -3,7 +3,6 @@
 import io
 import json
 import threading
-import time
 from http.client import IncompleteRead
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from unittest.mock import Mock
@@ -101,8 +100,8 @@ def opener(monkeypatch: pytest.MonkeyPatch) -> Mock:
 def clock(monkeypatch: pytest.MonkeyPatch) -> Clock:
     """Replace the polling clock."""
     result = Clock()
-    monkeypatch.setattr(time, "monotonic", result.monotonic)
-    monkeypatch.setattr(time, "sleep", result.sleep)
+    # Leave the standard-library clock used by unrelated SDK threads untouched.
+    monkeypatch.setattr(plugin, "time", result)
     return result
 
 
