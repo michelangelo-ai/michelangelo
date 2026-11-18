@@ -456,7 +456,7 @@ def test_redirect_is_not_followed(monkeypatch: pytest.MonkeyPatch) -> None:
     paths: list[str] = []
 
     class Handler(BaseHTTPRequestHandler):
-        def do_GET(self) -> None:
+        def do_GET(self) -> None:  # noqa: N802 - required by BaseHTTPRequestHandler
             paths.append(self.path)
             self.send_response(302)
             self.send_header("Location", "/redirect-target")
