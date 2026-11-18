@@ -24,7 +24,11 @@ from grpc import (
 )
 
 from michelangelo.cli.mactl import config as _config
-from michelangelo.cli.mactl.config import load_config, setup_minio_env
+from michelangelo.cli.mactl.config import (
+    load_config,
+    request_metadata,
+    setup_minio_env,
+)
 from michelangelo.cli.mactl.crd import CRD, yaml_to_dict
 from michelangelo.cli.mactl.grpc_tools import list_services
 
@@ -34,7 +38,7 @@ _CONFIG = load_config()
 
 ADDRESS = _CONFIG["address"]
 USE_TLS: bool = _CONFIG["use_tls"]
-METADATA = list(_CONFIG["metadata"].items())
+METADATA = request_metadata(_CONFIG)
 
 METADATA_STUB = [*METADATA, ("ttl", "600")]
 

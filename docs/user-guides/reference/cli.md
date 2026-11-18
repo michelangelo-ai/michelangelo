@@ -653,6 +653,8 @@ Custom gRPC metadata headers are placed under the `[metadata]` section.
 - `rpc-service` - Target service name (example: `ma-apiserver`)
 - `rpc-encoding` - Protocol encoding format (example: `proto`)
 
+In addition to these, `ma` always sends `x-client-name: ma` so the API server can identify requests from the CLI. This header isn't configurable: an `x-client-name` entry under `[metadata]` is ignored.
+
 #### Custom plugins
 
 The `ma` CLI supports custom plugins to extend entity-specific commands and behavior. Plugin configuration is placed under the `[plugin]` section.
