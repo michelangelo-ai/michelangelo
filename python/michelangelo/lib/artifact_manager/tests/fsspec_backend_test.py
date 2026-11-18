@@ -667,22 +667,89 @@ def test_s3_options_rejects_bad_endpoint(endpoint, no_ambient_aws):
         s3_storage_options(endpoint)
 
 
+@pytest.fixture
+def fresh_path_style_hint(monkeypatch):
+    """Reset the once-per-process path-style hint."""
+    monkeypatch.setattr(fsspec_backend, "_path_style_hint_logged", False)
+
+
+def _hint_records(caplog):
+    return [r for r in caplog.records if "path_style=False" in r.getMessage()]
+
+
 @pytest.mark.parametrize(
-    ("endpoint", "style"),
+    "endpoint",
     [
-        ("s3.amazonaws.com", "virtual"),
-        ("s3.eu-west-1.amazonaws.com:443", "virtual"),
-        ("storage.googleapis.com", "virtual"),
-        ("oss-cn-hangzhou.aliyuncs.com", "virtual"),
-        ("localhost:9091", "path"),
-        ("objectstore:9091", "path"),
-        ("evilamazonaws.com", "path"),
+        "localhost:9091",
+        "objectstore:9091",
+        "s3.amazonaws.com",
+        "storage.googleapis.com",
+        "oss-cn-hangzhou.aliyuncs.com",
     ],
 )
-def test_s3_options_addressing_style_per_host(endpoint, style, no_ambient_aws):
-    """S3 options addressing style per host."""
+def test_s3_options_defaults_to_path_style_for_any_host(
+    endpoint, no_ambient_aws, fresh_path_style_hint
+):
+    """The addressing style no longer depends on the endpoint host."""
     opts = s3_storage_options(endpoint, access_key="a", secret_key="b")
-    assert opts["config_kwargs"]["s3"] == {"addressing_style": style}
+    assert opts["config_kwargs"]["s3"] == {"addressing_style": "path"}
+
+
+@pytest.mark.parametrize(
+    "endpoint", ["localhost:9091", "s3.eu-west-1.amazonaws.com:443"]
+)
+def test_s3_options_path_style_false_uses_virtual_host(
+    endpoint, no_ambient_aws, fresh_path_style_hint, caplog
+):
+    """path_style=False selects virtual-host addressing and logs no hint."""
+    caplog.set_level("WARNING", logger=fsspec_backend.__name__)
+    opts = s3_storage_options(
+        endpoint, access_key="a", secret_key="b", path_style=False
+    )
+    assert opts["config_kwargs"]["s3"] == {"addressing_style": "virtual"}
+    assert _hint_records(caplog) == []
+
+
+def test_s3_options_path_style_on_aws_host_logs_hint_once(
+    no_ambient_aws, fresh_path_style_hint, caplog
+):
+    """Path-style on an AWS or Aliyun host keeps path-style and hints once."""
+    caplog.set_level("WARNING", logger=fsspec_backend.__name__)
+    first = s3_storage_options(
+        "s3.eu-west-1.amazonaws.com:443",
+        access_key="a",
+        secret_key="b",
+        path_style=True,
+    )
+    second = s3_storage_options(
+        "oss-cn-hangzhou.aliyuncs.com", access_key="a", secret_key="b"
+    )
+
+    assert first["config_kwargs"]["s3"] == {"addressing_style": "path"}
+    assert second["config_kwargs"]["s3"] == {"addressing_style": "path"}
+    records = _hint_records(caplog)
+    assert len(records) == 1
+    assert records[0].levelname == "WARNING"
+    assert "s3.eu-west-1.amazonaws.com:443" in records[0].getMessage()
+
+
+@pytest.mark.parametrize(
+    "endpoint", ["localhost:9091", "evilamazonaws.com", "storage.googleapis.com"]
+)
+def test_s3_options_path_style_on_other_hosts_logs_no_hint(
+    endpoint, no_ambient_aws, fresh_path_style_hint, caplog
+):
+    """Hosts outside amazonaws.com / aliyuncs.com get no hint."""
+    caplog.set_level("WARNING", logger=fsspec_backend.__name__)
+    s3_storage_options(endpoint, access_key="a", secret_key="b")
+    assert _hint_records(caplog) == []
+
+
+@pytest.mark.parametrize("path_style", [True, False])
+def test_s3_options_no_endpoint_ignores_path_style(path_style, no_ambient_aws):
+    """Without an endpoint, botocore picks the addressing style."""
+    opts = s3_storage_options(access_key="a", secret_key="b", path_style=path_style)
+    assert "s3" not in opts["config_kwargs"]
 
 
 def test_s3_options_no_endpoint_uses_aws_defaults(no_ambient_aws):

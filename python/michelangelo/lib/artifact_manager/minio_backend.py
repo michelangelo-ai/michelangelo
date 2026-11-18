@@ -77,6 +77,11 @@ class MinioStorageBackend(FsspecStorageBackend):
     onto ``FsspecStorageBackend("s3://<bucket>", ...)``. Needs ``s3fs``
     (``pip install 'michelangelo[s3]'``); the ``minio`` package is not used.
 
+    The shim always uses path-style addressing (the ``s3_storage_options``
+    default). The old ``minio`` client switched AWS and Aliyun endpoints to
+    virtual-host addressing automatically; for those, migrate to
+    ``FsspecStorageBackend`` with ``s3_storage_options(..., path_style=False)``.
+
     Args:
         endpoint: Server address without the scheme, e.g. ``"localhost:9091"``.
         bucket: Target bucket name.

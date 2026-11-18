@@ -24,6 +24,11 @@ Production configuration
 - ``secure`` (in ``s3_storage_options``) defaults to ``True`` (TLS). Pass
   ``secure=False`` **only** for local sandbox servers where TLS is not
   configured, never in production.
+- ``path_style`` (in ``s3_storage_options``) defaults to ``True``
+  (path-style addressing), which suits MinIO, SeaweedFS and Ceph RGW. Pass
+  ``path_style=False`` for AWS S3 setups that require virtual-host
+  addressing and for Aliyun OSS. It applies only when an ``endpoint`` is
+  given.
 - ``create_bucket_if_missing`` defaults to ``False``. Enable it only for
   sandbox / dev environments where the bucket may not exist yet. Most
   production IAM policies do not grant ``s3:CreateBucket``.

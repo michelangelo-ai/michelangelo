@@ -119,7 +119,7 @@ def test_shim_defaults_secure_true_and_no_bucket_creation(spy):
 
     options = spy.call_args.kwargs
     assert options["client_kwargs"] == {"endpoint_url": "https://s3.amazonaws.com"}
-    assert options["config_kwargs"] == {"s3": {"addressing_style": "virtual"}}
+    assert options["config_kwargs"] == {"s3": {"addressing_style": "path"}}
     assert spy.fs.mkdirs == []
 
 
