@@ -2,17 +2,7 @@ import { isNil } from 'lodash';
 
 import { TimeZone } from '#core/types/time-types';
 
-/**
- * Forms accepted by {@link toEpochSeconds}:
- * - epoch seconds as a number or numeric string
- * - RFC 3339 string (proto3 JSON Timestamp)
- * - a `{ seconds, nanos }` protobuf Timestamp object
- *   (`nanos` is ignored; only whole seconds are used)
- */
-export type TimestampInput =
-  | string
-  | number
-  | { seconds?: string | number | null; nanos?: string | number | null };
+import type { TimestampInput } from './types';
 
 /**
  * Normalizes a timestamp to epoch seconds. Accepts epoch seconds, as a number or a numeric string
@@ -30,7 +20,7 @@ export function toEpochSeconds(timestamp: TimestampInput): number {
     if (isNil(seconds) || seconds === '') {
       return NaN;
     }
-    return toEpochSeconds(seconds);
+    return toEpochSeconds(typeof seconds === 'bigint' ? Number(seconds) : seconds);
   }
 
   const seconds = Number(timestamp);

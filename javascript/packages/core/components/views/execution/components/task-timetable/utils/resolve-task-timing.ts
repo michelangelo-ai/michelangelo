@@ -1,7 +1,8 @@
 import { isNil } from 'lodash';
 
-import { toEpochSeconds, type TimestampInput } from '#core/utils/time-utils';
+import { toEpochSeconds } from '#core/utils/time-utils';
 
+import type { TimestampInput } from '#core/utils/types';
 import type { Task } from '../../../types';
 import type { TaskTiming } from './types';
 

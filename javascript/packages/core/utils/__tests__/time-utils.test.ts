@@ -146,6 +146,7 @@ describe('time-utils', () => {
       ['a numeric string', '1704067200'],
       ['an RFC 3339 string', '2024-01-01T00:00:00Z'],
       ['a protobuf Timestamp object', { seconds: '1704067200', nanos: 1 }],
+      ['a protobuf Timestamp with bigint seconds', { seconds: 1704067200n, nanos: 1 }],
     ])('reads %s', (_label, timestamp) => {
       expect(toEpochSeconds(timestamp)).toBe(1704067200);
     });
