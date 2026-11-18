@@ -7,7 +7,7 @@ last_verified: 2026-10-14
 
 Serve a trained model from Michelangelo AI so applications can call it for predictions.
 
-By the end, you'll have a model running on an inference server and a working `curl` request to prove it. This guide assumes your platform operator has already set up the cluster and serving infrastructure — see [Next Steps](#next-steps) for the operator-facing setup docs.
+By the end, you'll have a model running on an [inference server](../../getting-started/glossary.md#inference-server) and a working `curl` request to prove it. This guide assumes your platform operator has already set up the cluster and serving infrastructure — see [Next Steps](#next-steps) for the operator-facing setup docs.
 
 :::note
 Studio's **Deploy & Predict** phase is on the roadmap. While the UI is in development, the `ma` CLI is the supported way to deploy. Everything you create here — `InferenceServer` and `Deployment` resources — will appear in Studio once the phase ships.
@@ -17,7 +17,7 @@ If you arrived from the Studio Deploy & Predict card, you're in the right place 
 
 ## What You'll Learn
 
-- How a deployment ties a registered model to an inference server
+- How a [deployment](../../getting-started/glossary.md#deployment) ties a registered model to an inference server
 - How to define an `InferenceServer` and a `Deployment` in YAML
 - How to apply both with the `ma` CLI
 - How to send a prediction request to verify the model is serving

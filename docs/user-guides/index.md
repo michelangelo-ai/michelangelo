@@ -22,7 +22,7 @@ New to Michelangelo AI? Follow this path:
 
 | Guide | Description |
 |-------|-------------|
-| [ML Pipelines Overview](./ml-pipelines/index.md) | Tasks, workflows, pipelines, and the Uniflow framework |
+| [ML Pipelines Overview](./ml-pipelines/index.md) | Tasks, workflows, pipelines, and the [Uniflow](../getting-started/glossary.md#uniflow) framework |
 | [Running Uniflow Pipelines](./ml-pipelines/running-uniflow.md) | Run pipelines locally and remotely |
 | [Pipeline Running Modes](./ml-pipelines/pipeline-running-modes.md) | Local Run, Remote Run, Pipeline Dev Run, and Pipeline Run |
 | [Workflow Patterns](./ml-pipelines/workflow-patterns.md) | Sequencing, branching, loops, parallelism, and sharing data between tasks |
