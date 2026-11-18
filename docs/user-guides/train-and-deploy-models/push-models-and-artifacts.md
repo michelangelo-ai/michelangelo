@@ -1,12 +1,12 @@
 ---
 sidebar_position: 2.5
 sidebar_label: "Push Models and Artifacts"
-last_verified: 2026-10-22
+last_verified: 2026-11-18
 ---
 
 # Push Models and Artifacts
 
-After a model is packaged (see the [Model Registry Guide](./model-registry-guide.md)), something has to upload its files to storage and record it in a registry. In Michelangelo AI that step is `push()`. The same call also writes datasets and evaluation reports to their destinations.
+After a model is packaged (see the [Model Registry Guide](./model-registry-guide.md)), something has to upload its files to storage and record it in a registry. In Michelangelo AI that step is `push()`. The same call also writes datasets and evaluation reports to their destinations. To produce an evaluation report in the first place, see [Evaluate Models and Read Reports](./evaluate-models-and-read-reports.md).
 
 This page has two halves:
 
@@ -560,6 +560,7 @@ class MLflowEvalReportSink(EvalReportSink):
 
 ## Next steps
 
+- [Evaluate Models and Read Reports](./evaluate-models-and-read-reports.md) for how the `EvaluationReport` you push is produced.
 - [Deploy a Model](./deploy-a-model.md) to serve a model you've registered.
 - [Model Registry (operator guide)](../../operator-guides/components/model-registry.md) for how registered models are stored and queried as `Model` resources.
 - [Pipeline Management](../ml-pipelines/pipeline-management.md) for running a pusher step as part of a pipeline.
