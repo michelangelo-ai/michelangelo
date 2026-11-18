@@ -2,21 +2,29 @@ import { isNil } from 'lodash';
 
 import { toEpochSeconds } from '#core/utils/time-utils';
 
+import type { TimestampInput } from '#core/utils/types';
 import type { Task } from '../../../types';
 import type { TaskTiming } from './types';
 
 /**
  * Reads the `startTime` and `endTime` of a task's raw record as epoch seconds.
  * Bounds that are absent or unparseable are left undefined.
+ *
+ * Supports `{ seconds, nanos }` protobuf Timestamp objects as well as
+ * epoch / RFC 3339 strings (see {@link toEpochSeconds}).
  */
 export function resolveTaskTiming<TTaskRecord extends object>(task: Task<TTaskRecord>): TaskTiming {
-  // cast: the record shape is schema-defined; execution schemas expose startTime/endTime strings
-  const { startTime, endTime } = task.record as { startTime?: string; endTime?: string };
+  // cast: the record shape is schema-defined; execution schemas expose startTime/endTime
+  // as strings or { seconds, nanos } Timestamp objects
+  const { startTime, endTime } = task.record as {
+    startTime?: TimestampInput;
+    endTime?: TimestampInput;
+  };
 
   return { start: toOptionalEpochSeconds(startTime), end: toOptionalEpochSeconds(endTime) };
 }
 
-function toOptionalEpochSeconds(timestamp?: string): number | undefined {
+function toOptionalEpochSeconds(timestamp?: TimestampInput): number | undefined {
   if (isNil(timestamp) || timestamp === '') {
     return undefined;
   }

@@ -19,4 +19,15 @@ describe('resolveTaskTiming', () => {
 
     expect(resolveTaskTiming(task)).toEqual({ start: undefined, end: undefined });
   });
+
+  it('should read protobuf Timestamp { seconds, nanos } objects', () => {
+    const task = createTask({
+      record: {
+        startTime: { seconds: '1670007850', nanos: 1 },
+        endTime: { seconds: 1670007910, nanos: 0 },
+      },
+    });
+
+    expect(resolveTaskTiming(task)).toEqual({ start: 1670007850, end: 1670007910 });
+  });
 });
