@@ -15,6 +15,8 @@ type Error struct {
 	Msg     string
 }
 
+// Error formats the failure as "task|parameter <name>: <field> <msg> in <release>",
+// leaving out the parts that are empty.
 func (e *Error) Error() string {
 	var b strings.Builder
 	switch {
@@ -43,6 +45,7 @@ type Limits struct {
 // DefaultLimits returns the platform defaults.
 func DefaultLimits() Limits { return Limits{MaxTasks: 500} }
 
+// withDefaults replaces each zero or negative limit with its default.
 func (l Limits) withDefaults() Limits {
 	if l.MaxTasks <= 0 {
 		l.MaxTasks = DefaultLimits().MaxTasks

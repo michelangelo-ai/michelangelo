@@ -20,6 +20,7 @@ var typeNames = map[v2.ParameterType]string{
 	v2.PARAMETER_TYPE_DICT:    "dict",
 }
 
+// typeName returns the schema type name of t, or "" for an unknown type.
 func typeName(t v2.ParameterType) string { return typeNames[t] }
 
 // Validate runs the checks that need no task-type registry. It returns the
@@ -55,6 +56,8 @@ func Validate(w *v2.DeclarativeWorkflow, lim Limits) error {
 	return checkTaskRefs(w, g, refs)
 }
 
+// validateParameters checks each parameter: name, type, exactly one of
+// default or required, and a default that fits the type.
 func validateParameters(w *v2.DeclarativeWorkflow) error {
 	names := make([]string, 0, len(w.Parameters))
 	for n := range w.Parameters {
@@ -87,6 +90,7 @@ func validateParameters(w *v2.DeclarativeWorkflow) error {
 	return nil
 }
 
+// checkDefault checks that the default value of a parameter fits its type.
 func checkDefault(name string, spec *v2.ParameterSpec) error {
 	d := spec.Default
 	tn := typeName(spec.Type)
@@ -131,6 +135,8 @@ func checkDefault(name string, spec *v2.ParameterSpec) error {
 	return nil
 }
 
+// checkIntegral checks that f is a whole number inside the range that a
+// float64 holds exactly. what names the value in the error.
 func checkIntegral(param, what string, f float64) error {
 	if f != math.Trunc(f) || math.IsInf(f, 0) || math.IsNaN(f) {
 		return &Error{Param: param, Msg: fmt.Sprintf("%s %v is not an integer", what, f)}
@@ -141,12 +147,15 @@ func checkIntegral(param, what string, f float64) error {
 	return nil
 }
 
+// taskRef is one reference found in a task, with the field that holds it.
 type taskRef struct {
 	Task  string
 	Field string
 	Ref   ref
 }
 
+// collectRefs parses the references in the config and job_specs of each
+// task and returns them by task name.
 func collectRefs(w *v2.DeclarativeWorkflow) (map[string][]taskRef, error) {
 	out := map[string][]taskRef{}
 	names := make([]string, 0, len(w.Tasks))
@@ -181,6 +190,8 @@ func collectRefs(w *v2.DeclarativeWorkflow) (map[string][]taskRef, error) {
 	return out, nil
 }
 
+// walkStruct calls fn for each string value in s, in sorted key order, with
+// its field path.
 func walkStruct(prefix string, s *types.Struct, fn func(field, value string)) {
 	if s == nil {
 		return
@@ -195,6 +206,7 @@ func walkStruct(prefix string, s *types.Struct, fn func(field, value string)) {
 	}
 }
 
+// walkValue calls fn for each string value in v and in the values nested in it.
 func walkValue(path string, v *types.Value, fn func(field, value string)) {
 	if v == nil {
 		return
@@ -214,6 +226,8 @@ func walkValue(path string, v *types.Value, fn func(field, value string)) {
 	}
 }
 
+// checkParamRefs checks that each parameter reference names a declared
+// parameter, and that a list or dict parameter is not embedded in a longer string.
 func checkParamRefs(w *v2.DeclarativeWorkflow, refs map[string][]taskRef) error {
 	names := make([]string, 0, len(refs))
 	for n := range refs {
@@ -237,6 +251,8 @@ func checkParamRefs(w *v2.DeclarativeWorkflow, refs map[string][]taskRef) error 
 	return nil
 }
 
+// checkTaskRefs checks that each task output reference names another task
+// that is a dependency and that has succeeded whenever the referencing task runs.
 func checkTaskRefs(w *v2.DeclarativeWorkflow, g *graph, refs map[string][]taskRef) error {
 	for _, n := range g.names {
 		var deps, okDeps map[string]bool

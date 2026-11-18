@@ -161,6 +161,8 @@ func ParseRelease(name string, data []byte) (*Release, error) {
 	return r, nil
 }
 
+// checkSchema checks that each field in s is a leaf with a known type or a
+// group of fields, never both. prefix names s in the error.
 func checkSchema(s Schema, prefix string) error {
 	keys := make([]string, 0, len(s))
 	for k := range s {

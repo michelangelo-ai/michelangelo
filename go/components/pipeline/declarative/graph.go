@@ -11,6 +11,8 @@ import (
 
 var taskNameRe = regexp.MustCompile(`^[a-z][a-z0-9_]{0,62}$`)
 
+// graph is the depends_on graph of a workflow. deps maps a task to the tasks
+// it depends on, and rdeps maps a task to the tasks that depend on it.
 type graph struct {
 	names []string
 	deps  map[string][]string
@@ -19,6 +21,8 @@ type graph struct {
 	okDeps map[string][]string
 }
 
+// buildGraph checks task names and depends_on edges, then builds the graph.
+// It rejects unknown, duplicate, and self edges, unknown when values, and cycles.
 func buildGraph(w *v2.DeclarativeWorkflow) (*graph, error) {
 	g := &graph{deps: map[string][]string{}, rdeps: map[string][]string{}, okDeps: map[string][]string{}}
 	for name := range w.Tasks {
@@ -129,6 +133,9 @@ func (g *graph) cyclePath() []string {
 	}
 }
 
+// levels groups tasks by depth: level 0 holds tasks with no dependencies, and
+// each other task sits one level below its deepest dependency. Tasks in one
+// level do not depend on each other.
 func (g *graph) levels() [][]string {
 	depth := map[string]int{}
 	var visit func(string) int
@@ -158,6 +165,7 @@ func (g *graph) levels() [][]string {
 	return out
 }
 
+// transitiveDeps returns every task that task depends on, directly or not.
 func (g *graph) transitiveDeps(task string) map[string]bool { return reach(g.deps, task) }
 
 // succeededDeps returns the tasks that have succeeded whenever task runs. A
@@ -175,6 +183,7 @@ func (g *graph) succeededDeps(task string) map[string]bool {
 	return out
 }
 
+// reach returns every node reachable from task along adj, without task itself.
 func reach(adj map[string][]string, task string) map[string]bool {
 	out := map[string]bool{}
 	stack := append([]string{}, adj[task]...)

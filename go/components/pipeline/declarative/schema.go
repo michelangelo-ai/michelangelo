@@ -43,6 +43,8 @@ func ValidateAgainst(w *v2.DeclarativeWorkflow, lim Limits, rel *Release) error 
 	return nil
 }
 
+// effectiveRetry returns the retry policy of t, or the workflow default when
+// t sets none.
 func effectiveRetry(w *v2.DeclarativeWorkflow, t *v2.DeclarativeTask) *v2.RetryPolicy {
 	if t.Retry != nil {
 		return t.Retry
@@ -53,6 +55,8 @@ func effectiveRetry(w *v2.DeclarativeWorkflow, t *v2.DeclarativeTask) *v2.RetryP
 	return nil
 }
 
+// sectionChecker checks the config or job_specs of one task against the
+// schema of its task type.
 type sectionChecker struct {
 	w        *v2.DeclarativeWorkflow
 	task     string
@@ -60,10 +64,14 @@ type sectionChecker struct {
 	release  string
 }
 
+// errf returns an Error for field, tagged with the task and the release.
 func (c *sectionChecker) errf(field, format string, args ...any) error {
 	return &Error{Task: c.task, Field: field, Release: c.release, Msg: fmt.Sprintf(format, args...)}
 }
 
+// check checks s against schema: unknown keys, missing required fields, and
+// each value against its slot type. A group that is absent is checked as
+// empty, so its required fields are reported as missing.
 func (c *sectionChecker) check(prefix string, s *types.Struct, schema Schema) error {
 	var fields map[string]*types.Value
 	if s != nil {
@@ -122,6 +130,8 @@ func (c *sectionChecker) check(prefix string, s *types.Struct, schema Schema) er
 	return nil
 }
 
+// leaf checks one value against its slot type. A string that holds
+// references is checked by reference instead.
 func (c *sectionChecker) leaf(path string, v *types.Value, slot string) error {
 	if isNull(v) {
 		return c.errf(path, "must not be null")
@@ -172,6 +182,10 @@ func (c *sectionChecker) leaf(path string, v *types.Value, slot string) error {
 	return nil
 }
 
+// reference checks that a string with references fits its slot. A reference
+// embedded in a longer string fits only a string slot. A whole parameter
+// reference must have the slot type, or integer for a number slot. A whole task
+// output reference fits any slot, because the output type is known only at run time.
 func (c *sectionChecker) reference(path string, refs []ref, slot string) error {
 	whole := len(refs) == 1 && refs[0].Whole
 	if !whole {
@@ -192,6 +206,7 @@ func (c *sectionChecker) reference(path string, refs []ref, slot string) error {
 	return c.errf(path, "references parameter %q of type %s; the slot type is %s", r.Name, pt, slot)
 }
 
+// isNull reports whether v is missing or holds a JSON null.
 func isNull(v *types.Value) bool {
 	if v == nil || v.Kind == nil {
 		return true

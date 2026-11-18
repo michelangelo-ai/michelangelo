@@ -40,6 +40,8 @@ func Decode(m *v2.PipelineManifest) (*v2.DeclarativeWorkflow, error) {
 	return w, nil
 }
 
+// rejectUnknownFields parses raw with dynamicpb, which keeps the unknown
+// fields that the gogo stubs drop, and returns an error for the first one.
 func rejectUnknownFields(raw []byte) error {
 	md, err := workflowDescriptor()
 	if err != nil {
@@ -52,6 +54,9 @@ func rejectUnknownFields(raw []byte) error {
 	return walkUnknown("DeclarativeWorkflow", dm)
 }
 
+// walkUnknown returns an error for the first unknown field in m or in any
+// message nested under it. path names m in the error. Map keys are visited in
+// sorted order so the reported field is stable.
 func walkUnknown(path string, m protoreflect.Message) error {
 	if u := m.GetUnknown(); len(u) > 0 {
 		num, _, _ := protowire.ConsumeTag(u)

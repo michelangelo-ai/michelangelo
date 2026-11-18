@@ -6,6 +6,7 @@ import (
 	"strings"
 )
 
+// refKind tells a parameter reference from a task output reference.
 type refKind int
 
 const (
@@ -13,6 +14,8 @@ const (
 	refTaskOutput
 )
 
+// ref is one parsed "{{ ... }}" reference. Path holds the fields after
+// "output". Whole is true when the reference is the full string value.
 type ref struct {
 	Kind  refKind
 	Name  string
@@ -25,6 +28,7 @@ var (
 	refField = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 )
 
+// parseRefs returns every "{{ ... }}" reference in s, in order.
 func parseRefs(s string) ([]ref, error) {
 	var out []ref
 	rest := s
@@ -48,6 +52,8 @@ func parseRefs(s string) ([]ref, error) {
 	}
 }
 
+// parseOneRef parses one "{{ ... }}" token as {{ params.NAME }} or
+// {{ tasks.NAME.output[.FIELD...] }}.
 func parseOneRef(token string) (ref, error) {
 	body := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(token, "{{"), "}}"))
 	switch {
