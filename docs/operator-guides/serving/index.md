@@ -100,6 +100,26 @@ judged, so another Deployment's model that is still loading on the same inferenc
 does not roll this Deployment back. The reason for the last failed gate is recorded on the
 Deployment in the `deployment.michelangelo.ai/health-gate-reason` annotation.
 
+A metric gate query that returns no samples does not fail the gate, because there is nothing
+to compare against the threshold. A result of only `NaN`, such as a ratio over zero requests,
+counts as no samples. The candidate is not judged on that query. The controller
+lists such queries in the `deployment.michelangelo.ai/metric-gate-no-data` annotation on the
+Deployment, as `<model>: <query>, <query>`, and logs them whenever the list changes. A query
+configured without a name appears by position, for example `query 2`. While the rollout is
+in progress, the controller removes the annotation once every query returns samples.
+
+Expect the annotation briefly at the start of a rollout, until the candidate is loaded and
+its metrics have been scraped. If it is still present once the Deployment reaches
+`RolloutComplete`, the listed queries returned no samples the last time the gate got an
+answer to every query, so the rollout finished without the metric gate judging the candidate
+on them. The usual cause is that the metrics are never collected, for example because
+nothing scrapes Triton's metrics port. The gate runs only during a rollout, so the annotation
+then stays as it is until the next rollout, even if the queries start returning samples.
+The controller also leaves the annotation unchanged when an evaluation stops at a breach,
+when a query fails, and during a rollback, which unloads the candidate. A query that fails
+on every evaluation therefore keeps the annotation from being updated at all; its failure is
+logged on every evaluation.
+
 A rollback starts when the gate fails, when the desired model changes mid-rollout, or when
 the rollout itself fails (a replica cannot load the model, or a load or canary exceeds its
 budget). Rollback is also per cluster:
@@ -124,7 +144,7 @@ The knobs live in the controller manager config (`go/cmd/controllermgr/config/ba
 | `deployment.rollback.modelLoadTimeout` | `15m` | Budget for the previous model to be `READY` again during a rollback |
 | `deployment.metricGate.prometheusURL` | unset | Enables the metric gate when set |
 | `deployment.metricGate.queries` | Triton failure ratio > 5% | PromQL templates (`{{.Model}}`, `{{.Deployment}}`, `{{.Namespace}}`, `{{.InferenceServer}}`) with a threshold and comparison |
-| `deployment.metricGate.failClosed` | `false` | Treat an unanswerable query as a breach |
+| `deployment.metricGate.failClosed` | `false` | Treat a query that fails (Prometheus is unreachable or returns an error) as a breach. A query that succeeds but returns no samples is not a breach under either setting |
 | `inferenceServer.triton.readinessProbe` | `model-aware` | `model-aware` requires every `serving` model to be loaded before a replica is ready; `server` uses Triton's server readiness; `none` disables the probe |
 | `inferenceServer.triton.probes.{startup,liveness,readiness}.{periodSeconds,timeoutSeconds,failureThreshold}` | built-in per probe | Overrides the Triton pod probe timing; zero keeps the built-in value. Changing a value restarts running Triton pods once |
 | `inferenceServer.triton.drain.{preStopSeconds,exitTimeoutSeconds}` | `10` / `30` | How a replaced Triton pod shuts down: `preStopSeconds` delays SIGTERM until the pod has left the Service endpoints, `exitTimeoutSeconds` is how long Triton waits for in-flight requests after SIGTERM. The pod's termination grace period is their sum plus 5s |

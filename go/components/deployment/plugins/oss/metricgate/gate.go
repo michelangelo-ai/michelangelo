@@ -13,6 +13,7 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"text/template"
@@ -70,7 +71,7 @@ func New(cfg maconfig.MetricGateConfig, logger *zap.Logger) *Gate {
 	if timeout <= 0 {
 		timeout = defaultTimeout
 	}
-	queries := cfg.Queries
+	queries := namedQueries(cfg.Queries)
 	if len(queries) == 0 {
 		queries = []maconfig.MetricGateQuery{DefaultQuery()}
 	}
@@ -86,6 +87,19 @@ func New(cfg maconfig.MetricGateConfig, logger *zap.Logger) *Gate {
 	}
 }
 
+// namedQueries copies the configured queries and names each unnamed one after its 1-based
+// position, so that logs, rollback reasons and Result.NoData identify it the same way.
+func namedQueries(configured []maconfig.MetricGateQuery) []maconfig.MetricGateQuery {
+	queries := make([]maconfig.MetricGateQuery, len(configured))
+	copy(queries, configured)
+	for i := range queries {
+		if queries[i].Name == "" {
+			queries[i].Name = fmt.Sprintf("query %d", i+1)
+		}
+	}
+	return queries
+}
+
 // DefaultQuery is the query used when none is configured: the model's inference failure
 // ratio over five minutes, breaching above five percent.
 func DefaultQuery() maconfig.MetricGateQuery {
@@ -97,40 +111,72 @@ func DefaultQuery() maconfig.MetricGateQuery {
 	}
 }
 
-// Evaluate runs every query for the model the deployment is rolling out. It returns healthy
-// when no sample breaches its threshold. reason describes the first breach. An unreachable
-// Prometheus counts as a breach only when the gate is configured to fail closed; otherwise it
-// is logged and skipped. A malformed query template is returned as err.
-func (g *Gate) Evaluate(ctx context.Context, deployment *v2pb.Deployment) (healthy bool, reason string, err error) {
+// Result is the outcome of one evaluation of the gate.
+type Result struct {
+	// Healthy is false when a sample breached its threshold or, if the gate fails closed, a
+	// query failed.
+	Healthy bool
+	// Reason describes what made the gate unhealthy. It is empty when Healthy is true.
+	Reason string
+	// Model is the model the queries were evaluated for. It is empty when the gate is
+	// disabled or the deployment names no model.
+	Model string
+	// NoData names the queries that returned no samples; a result of only NaN counts as none.
+	// Such a query cannot breach, so the model was not judged on it. The list covers every
+	// query only when Complete is true.
+	NoData []string
+	// Complete is true when every query was answered. It is false when the evaluation
+	// stopped at a breach or a query failed.
+	Complete bool
+}
+
+// Evaluate runs the queries in order for the model the deployment is rolling out and stops at
+// the first breach. The result is healthy when no sample breaches its threshold. A query that
+// returns no samples, or only NaN, does not breach; it is named in Result.NoData. A query
+// that fails counts as a breach only when the gate is configured to fail closed; otherwise it
+// is logged and skipped. A malformed query template is returned as an error.
+func (g *Gate) Evaluate(ctx context.Context, deployment *v2pb.Deployment) (Result, error) {
 	if g == nil {
-		return true, "", nil
+		return Result{Healthy: true, Complete: true}, nil
 	}
 	scope := scopeFor(deployment)
 	if scope.Model == "" {
-		return true, "", nil
+		return Result{Healthy: true, Complete: true}, nil
 	}
 
+	var noData []string
+	complete := true
 	for _, query := range g.queries {
 		expr, err := render(query, scope)
 		if err != nil {
-			return false, "", err
+			return Result{}, err
 		}
 		samples, err := g.query(ctx, expr)
 		if err != nil {
 			if g.failClosed {
-				return false, fmt.Sprintf("metric gate %q could not be evaluated and the gate fails closed: %v", query.Name, err), nil
+				reason := fmt.Sprintf("metric gate %q could not be evaluated and the gate fails closed: %v", query.Name, err)
+				return Result{Reason: reason, Model: scope.Model, NoData: noData}, nil
 			}
 			g.logger.Warn("metric gate query failed; skipping it because the gate fails open",
 				zap.String("query", query.Name), zap.String("deployment", deployment.GetName()), zap.Error(err))
+			complete = false
+			continue
+		}
+		if !slices.ContainsFunc(samples, isNumber) {
+			g.logger.Debug("metric gate query returned no samples",
+				zap.String("query", query.Name), zap.String("deployment", deployment.GetName()), zap.String("expr", expr))
+			noData = append(noData, query.Name)
 			continue
 		}
 		for _, sample := range samples {
 			if breaches(sample, query) {
-				return false, fmt.Sprintf("metric gate %q breached for model %s: %g %s %g", query.Name, scope.Model, sample, comparisonOf(query), query.Threshold), nil
+				reason := fmt.Sprintf("metric gate %q breached for model %s: %g %s %g",
+					query.Name, scope.Model, sample, comparisonOf(query), query.Threshold)
+				return Result{Reason: reason, Model: scope.Model, NoData: noData}, nil
 			}
 		}
 	}
-	return true, "", nil
+	return Result{Healthy: true, Model: scope.Model, NoData: noData, Complete: complete}, nil
 }
 
 // scopeFor names the model under evaluation: the candidate being rolled out, or the desired
@@ -160,8 +206,14 @@ func render(query maconfig.MetricGateQuery, scope QueryScope) (string, error) {
 	return out.String(), nil
 }
 
+// isNumber reports whether a sample can be compared against a threshold. NaN cannot: it is
+// what a ratio yields when its denominator is zero, for example before any traffic.
+func isNumber(sample float64) bool {
+	return !math.IsNaN(sample)
+}
+
 func breaches(sample float64, query maconfig.MetricGateQuery) bool {
-	if math.IsNaN(sample) {
+	if !isNumber(sample) {
 		return false
 	}
 	if comparisonOf(query) == ComparisonLess {

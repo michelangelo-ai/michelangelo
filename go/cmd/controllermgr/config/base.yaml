@@ -147,7 +147,9 @@ deployment:
     prometheusURL: ""
     timeout: 10s
     # failClosed treats an unreachable Prometheus as a gate failure. The default
-    # keeps rolling out and logs the outage instead.
+    # keeps rolling out and logs the outage instead. A query that returns no
+    # samples does not fail the gate under either setting; it is listed in the
+    # Deployment's deployment.michelangelo.ai/metric-gate-no-data annotation.
     failClosed: false
     # queries are Go templates over {{.Model}}, {{.Deployment}}, {{.Namespace}} and
     # {{.InferenceServer}}. A query breaches when any returned sample compares true

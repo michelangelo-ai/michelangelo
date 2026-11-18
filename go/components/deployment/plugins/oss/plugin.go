@@ -368,16 +368,61 @@ func (p *Plugin) HealthCheckGate(ctx context.Context, observability plugins.Obse
 		}
 	}
 
-	healthy, reason, err := p.metricGate.Evaluate(ctx, deployment)
+	return p.checkMetricGate(ctx, deployment)
+}
+
+// checkMetricGate evaluates the metric gate for the candidate. A breach is stored on the
+// deployment as the gate reason and a pass clears it. Queries that returned no samples are
+// listed in the no-data annotation.
+func (p *Plugin) checkMetricGate(ctx context.Context, deployment *v2pb.Deployment) (bool, error) {
+	result, err := p.metricGate.Evaluate(ctx, deployment)
 	if err != nil {
 		return false, fmt.Errorf("evaluate metric gate for deployment %s/%s: %w", deployment.Namespace, deployment.Name, err)
 	}
-	if !healthy {
-		p.recordGateReason(deployment, reason)
+	// The annotation is updated only when every query was answered: an incomplete evaluation
+	// does not know whether the unanswered queries return samples. It is also left alone
+	// during a rollback, because the candidate is being unloaded and a query that returns no
+	// samples then says nothing about the rollout.
+	if result.Complete && deployment.Status.Stage != v2pb.DEPLOYMENT_STAGE_ROLLBACK_IN_PROGRESS {
+		p.recordMetricGateNoData(deployment, result)
+	}
+	if !result.Healthy {
+		p.recordGateReason(deployment, result.Reason)
 		return false, nil
 	}
 	delete(deployment.Annotations, common.HealthGateReasonAnnotation)
 	return true, nil
+}
+
+// recordMetricGateNoData lists in MetricGateNoDataAnnotation the queries that returned no
+// samples for the candidate, or removes the annotation when there are none. The gate runs on
+// every reconcile, so the outcome is logged only when the annotation changes.
+func (p *Plugin) recordMetricGateNoData(deployment *v2pb.Deployment, result metricgate.Result) {
+	current := ""
+	if len(result.NoData) > 0 {
+		current = fmt.Sprintf("%s: %s", result.Model, strings.Join(result.NoData, ", "))
+	}
+	if current == deployment.Annotations[common.MetricGateNoDataAnnotation] {
+		return
+	}
+	fields := []zap.Field{
+		zap.String("operation", "health_check_gate"),
+		zap.String("namespace", deployment.Namespace),
+		zap.String("deployment", deployment.Name),
+		zap.String("inference_server", deployment.Spec.GetInferenceServer().GetName()),
+		zap.String("candidate", deployment.Status.GetCandidateRevision().GetName()),
+	}
+	if current == "" {
+		delete(deployment.Annotations, common.MetricGateNoDataAnnotation)
+		p.logger.Info("removed the metric gate no-data annotation", fields...)
+		return
+	}
+	p.logger.Info("metric gate queries returned no samples; the candidate was not judged on them",
+		append(fields, zap.Strings("queries", result.NoData))...)
+	if deployment.Annotations == nil {
+		deployment.Annotations = make(map[string]string)
+	}
+	deployment.Annotations[common.MetricGateNoDataAnnotation] = current
 }
 
 // recordGateReason logs a failed gate and stores the reason on the deployment.
