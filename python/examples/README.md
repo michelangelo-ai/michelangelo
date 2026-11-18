@@ -2,10 +2,10 @@ Example project showing various capabilities of the Michelangelo AI workflows.
 
 ## Project Structure
 
-- Dockerfile for task code distribution. Used for running workflows in remote mode.
-- BUILD.bazel defines project-level metadata and tasks.
-- commons directory contains reusable utility code.
-- Other directories represent concrete workflow use cases.
+- `Dockerfile`, `Dockerfile-vllm` and `Dockerfile.optimized` for task code distribution. Used for running workflows in remote mode.
+- `entrypoint.sh` is the image entrypoint (used by the Dockerfile).
+- `config/project.yaml` is the `Project` resource manifest (`ma-examples`).
+- Other directories represent concrete workflow use cases. Each has its own README with prerequisites and run instructions where applicable: `bert_cola`, `llm_prediction`, `evaluator`, `workflow_patterns`, `model_manager/*` and `pipelines/*`.
 
 ## Requirements
 
@@ -15,6 +15,7 @@ There are two environments that are provided for examples. Choose the one that s
     * Supports the following examples:
         * `bert_cola`
         * `hf_prediction`
+        * `workflow_patterns` and `evaluator` (the evaluator also needs the `evaluator` extra: `poetry install -E example -E evaluator`)
 2. `vllm`
      * Only supports machines with an AMD64 CPU with CUDA-compatible GPU
      * Supports the following examples:
@@ -31,7 +32,7 @@ Install dependencies depending on your environment:
 
 **Run workflows locally**
 
-Workflows run locally as an ordinary Python program. Just use relevant `py_binary` poetry run to a workflow in the local mode. Ex:
+Workflows run locally as an ordinary Python program. Run the workflow file with `poetry run python` from the `python/` directory (`PYTHONPATH="."` lets the `examples.*` imports resolve). Ex:
 
 ```
 $ PYTHONPATH="." poetry run python ./examples/bert_cola/bert_cola.py
@@ -48,13 +49,13 @@ For IDE users to access ray dashboard,
 
 **Prerequisite**
 
-setup sandbox, see /python/michelangelo/sandbox/README.md
+set up the sandbox, see [Sandbox ports and endpoints](../../docs/getting-started/ma-sandbox-ports-and-endpoints.md) and run:
 
     cd python
     poetry run ma sandbox create
 
-Create temporal sandbox
-    
+Or, to use Temporal instead of Cadence, create the sandbox with the Temporal workflow engine (use this *instead of* the command above):
+
     poetry run ma sandbox create --workflow temporal
 
 The create setup dependencies for Uniflow including
@@ -84,8 +85,6 @@ For `vllm` environment:
     cd python
     docker build -t vllm:latest -f ./examples/Dockerfile-vllm .
 
-Copy the build's `Revision ID`, we use it later.
-
 In order for Kubernetes to pull the image, push it to a registry that the cluster has access to. For example, push it to
 
 For `example` environment:
@@ -102,7 +101,7 @@ In your browser, open http://localhost:9090/buckets, click "Create Bucket" and c
 
 **Run workflows in the remote cluster**
 
-Use `.remote_run` Bazel target to run a workflow in the remote mode. Ex:
+Append `remote-run` to the workflow command to run it in remote mode. Ex:
 
     $ PYTHONPATH="." poetry run python ./examples/bert_cola/bert_cola.py remote-run --image docker.io/library/examples:latest --storage-url s3://default --yes
 
@@ -112,7 +111,7 @@ Use `.remote_run` Bazel target to run a workflow in the remote mode. Ex:
 
 <hr/>
 
-User `--workflow temporal` to run the workflow in Temporal mode.
+Use `--workflow temporal` to run the workflow in Temporal mode.
 
     $ PYTHONPATH="." poetry run python ./examples/bert_cola/bert_cola.py remote-run --image docker.io/library/examples:latest --storage-url s3://default --yes --workflow temporal
 

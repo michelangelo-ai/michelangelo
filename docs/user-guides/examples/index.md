@@ -1,4 +1,5 @@
 ---
+last_verified: 2026-11-18
 sidebar_position: 5
 sidebar_label: "Examples"
 ---
@@ -17,7 +18,7 @@ Most examples live in [`python/examples/`](https://github.com/michelangelo-ai/mi
 |---------|-------------|---------|------------|
 | [California Housing (XGBoost)](https://github.com/michelangelo-ai/michelangelo-examples/tree/main/src/michelangelo_examples/california_housing/pipelines/xgb_train) | Full pipeline — feature prep, Spark preprocessing, distributed XGBoost training, and pusher step that exports model + eval report to storage and registry. Lives in [michelangelo-examples](https://github.com/michelangelo-ai/michelangelo-examples). | Ray + Spark | Beginner |
 | [California Housing (PyTorch Lightning)](https://github.com/michelangelo-ai/michelangelo-examples/tree/main/src/michelangelo_examples/california_housing/pipelines/pytorch_train) | Same California Housing use case as the XGBoost variant, using `tabular_trainer`'s `train_tabular()` for distributed Ray Train instead. Also has a local-only runner for a quick, sandbox-free trial. Lives in [michelangelo-examples](https://github.com/michelangelo-ai/michelangelo-examples). | Ray + Spark | Beginner |
-| [BERT Text Classification](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/bert_cola) | Fine-tune BERT for linguistic acceptability classification on the CoLA benchmark (GLUE). Uses HuggingFace Transformers with distributed Ray training. | Ray | Intermediate |
+| [BERT Text Classification](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/bert_cola) | Fine-tune BERT (`bert-base-cased`) on a GLUE task: the CoLA linguistic acceptability benchmark, with SST-2 selected in the shipped entrypoint. Uses HuggingFace Transformers on Ray, then assembles and pushes the model. Runs as a one-epoch smoke test on a 1% data sample. | Ray | Intermediate |
 | [GPT Fine-tuning with LoRA](https://github.com/michelangelo-ai/michelangelo-examples/tree/main/src/michelangelo_examples/gpt_oss_20b_finetune/pipelines/train) | Parameter-efficient fine-tuning using LoRA (1.29% trainable params) on the Stanford Alpaca instruction-following dataset. Includes perplexity and generation quality evaluation. Lives in [michelangelo-examples](https://github.com/michelangelo-ai/michelangelo-examples). | Ray | Advanced |
 | [Nomic AI Embedding Training](https://github.com/michelangelo-ai/michelangelo-examples/tree/main/src/michelangelo_examples/nomic_ai/pipelines/train) | Train a long-context Nomic BERT model (2048 tokens) on WikiText using PyTorch Lightning with distributed Ray execution. Lives in [michelangelo-examples](https://github.com/michelangelo-ai/michelangelo-examples). | Ray | Intermediate |
 | [MovieLens Collaborative Filtering](https://github.com/michelangelo-ai/michelangelo-examples/tree/main/src/michelangelo_examples/movielens/pipelines/train) | Neural Collaborative Filtering on MovieLens-100k. Minimal smoke test for the `LightningTrainer` SDK — trains on CPU with a single Ray Train worker. Lives in [michelangelo-examples](https://github.com/michelangelo-ai/michelangelo-examples). | Ray | Beginner |
@@ -32,13 +33,15 @@ Most examples live in [`python/examples/`](https://github.com/michelangelo-ai/mi
 
 | Example | Description | Runtime | Difficulty |
 |---------|-------------|---------|------------|
-| [HuggingFace Batch Inference](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/llm_prediction) | Batch inference with two backends: HuggingFace Transformers (CPU/GPU) and vLLM (optimized GPU with tensor parallelism). Configurable sampling parameters (temperature, top-p, max tokens). | Ray | Intermediate |
+| [HuggingFace Batch Inference](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/llm_prediction) | Batch inference with two backends: HuggingFace Transformers (CPU/GPU) and vLLM (requires a CUDA GPU; tensor parallelism). Configurable sampling parameters (temperature, top-p, max tokens). | Ray | Intermediate |
 
 ### Workflow Orchestration
 
 | Example | Description | Runtime | Difficulty |
 |---------|-------------|---------|------------|
 | [Uniflow Workflow Patterns](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/workflow_patterns) | One runnable file covering every core orchestration pattern: sequential tasks, if/else branching, for loops, `concurrent_run` fan-out and fan-in, `concurrent_batch_run`, and `DatasetVariable` hand-offs between tasks. Its README lists the Starlark restrictions that apply to workflow bodies in remote runs. Companion to [Workflow Patterns](../ml-pipelines/workflow-patterns.md). | Ray | Beginner |
+| [Retry and Cache Test](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/pipelines/retry_cache_test) | Four-task workflow (`task_a`/`task_b` then `task_c`/`task_d`, run concurrently) for checking manual-retry cache behavior: retrying `task_a` invalidates the cache of tasks that consume its result, while the independent `task_b` keeps its cache hit. Companion to [Uniflow caching and pipeline run resume](../ml-pipelines/cache-and-pipelinerun-resume-form.md). | Ray | Intermediate |
+| [Scala Spark Task](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/pipelines/scala_test) | Minimal end-to-end example of the `ScalaSparkTask` plugin: runs a pre-compiled Scala Spark JAR as a single-task workflow. Needs Scala 2.13 and Java 17 to build the JAR. | Spark | Advanced |
 
 ### Evaluation
 
@@ -59,7 +62,7 @@ Most examples follow the same pattern:
 
 ```bash
 cd python
-poetry install --extras "trainer example"
+poetry install --extras "example"
 PYTHONPATH=. poetry run python examples/<example_dir>/<script>.py
 ```
 
