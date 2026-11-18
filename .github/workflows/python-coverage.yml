@@ -15,7 +15,9 @@ permissions:
 jobs:
   coverage:
     name: Check Coverage (Python 3.9)
-    runs-on: ubuntu-latest
+    # Python 3.9 has no actions/python-versions build for Ubuntu 26.04 (the
+    # new ubuntu-latest). Pinned until CI moves to Python 3.11.
+    runs-on: ubuntu-24.04
 
     defaults:
       run:

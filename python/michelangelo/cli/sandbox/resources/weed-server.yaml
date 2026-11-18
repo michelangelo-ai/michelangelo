@@ -12,9 +12,14 @@ spec:
       command:
         - /bin/sh
         - -c
+      # -volume.max: every S3 bucket (a SeaweedFS "collection") grows several
+      # volumes, and the default of 8 slots ran out after about four buckets
+      # (writes to later buckets failed with InternalError "No writable volumes
+      # and no free volumes left"). Volumes only use disk as data is written,
+      # so a higher cap costs nothing up front.
       args:
         - >
-          weed server -dir=/data
+          weed server -dir=/data -volume.max=200
           -master.port=9333 -volume.port=8080 -filer.port=8888
           -s3 -s3.port=9091
       # With no -s3.config, SeaweedFS creates an admin identity from these env

@@ -373,26 +373,16 @@ class TestGetStorageLocation(TestCase):
         backend = LocalStorageBackend(tempfile.mkdtemp())
         self.assertEqual(backend.get_storage_location(), backend._base_dir)
 
-    def test_minio_storage_backend_returns_s3_bucket_uri(self):
-        """MinioStorageBackend.get_storage_location() returns s3://{bucket}."""
-        import sys
-        from unittest.mock import MagicMock, patch
+    def test_fsspec_storage_backend_returns_base_uri(self):
+        """FsspecStorageBackend.get_storage_location() returns the base URI."""
+        from fsspec.implementations.memory import MemoryFileSystem
 
-        mock_minio = MagicMock()
-        mock_minio.error.S3Error = Exception
+        from michelangelo.lib.artifact_manager.fsspec_backend import (
+            FsspecStorageBackend,
+        )
 
-        with patch.dict(
-            sys.modules, {"minio": mock_minio, "minio.error": mock_minio.error}
-        ):
-            from michelangelo.lib.artifact_manager.minio_backend import (
-                MinioStorageBackend,
-            )
-
-            b = object.__new__(MinioStorageBackend)
-            b._bucket = "my-bucket"
-            b._client = MagicMock()
-            b._S3Error = Exception
-            self.assertEqual(b.get_storage_location(), "s3://my-bucket")
+        b = FsspecStorageBackend("s3://my-bucket/", filesystem=MemoryFileSystem())
+        self.assertEqual(b.get_storage_location(), "s3://my-bucket")
 
     def test_base_storage_backend_returns_none_by_default(self):
         """The default ABC implementation returns None."""

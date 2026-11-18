@@ -28,14 +28,14 @@ The execution flow is very similar across Ray and Spark:
 1. **Submit**
    Your pipeline or service submits a job request to Michelangelo AI.
 2. **Schedule & Assign**
-   Michelangelo AI chooses a compute cluster based on quotas, resource needs, and policies.
+   Michelangelo AI assigns the job to a registered compute cluster: the one named by the `michelangelo/cluster-affinity` label in the job's resource affinity selector, if that cluster is registered, otherwise the first registered cluster.
 3. **Materialize on Compute**
    The system creates the appropriate resources in the target cluster:
    * Ray: `RayCluster` + `RayJob`
    * Spark: `SparkApplication`
 4. **Execute the Workload**
    The job runs on the generated compute cluster.
-   Autoscaling brings up or down workers as needed.
+   For Ray, each worker group starts with its `min_instances` workers. Michelangelo AI doesn't enable the KubeRay autoscaler, so the group doesn't scale toward `max_instances` on its own.
 5. **Monitor & Complete**
    Michelangelo AI collects logs, metrics and job status.
    After completion, compute resources follow retention/TTL policies.
@@ -63,7 +63,7 @@ Michelangelo AI abstracts away most of the details. Users only provide the essen
 * The **container image** with your training code
 * The **entrypoint** (e.g., `python train.py`)
 * Desired **head/worker compute sizing**
-* Optional: min/max workers for autoscaling
+* Optional: min/max workers per worker group (`min_instances` sets the starting size; see step 4 above on autoscaling)
 
 ### **For Spark jobs**
 

@@ -178,6 +178,9 @@ def task(
 
         total_retry_attempt = retry_attempts + 1
         for retry_attempt_id in range(1, total_retry_attempt + 1):
+            # Each retry attempt reports its own start time.
+            if retry_attempt_id > 1:
+                start_time_formated_str = time.utc_format_seconds(TIME_FOMART, time.time())
             job_state, job, cluster_url, cluster_log_url = execute_ray_task(
                 task_path = task_path,
                 task_name = task_name,

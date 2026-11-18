@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	gogotypes "github.com/gogo/protobuf/types"
 	api "github.com/michelangelo-ai/michelangelo/go/api"
 	"github.com/michelangelo-ai/michelangelo/go/storage"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
@@ -1160,4 +1161,104 @@ func TestIntegration_FullUpsert_AfterDirectUpdateWritesNewVersion(t *testing.T) 
 	require.NoError(t, store.Upsert(ctx, newUpsertSkipModel(namespace, name, uid, "9", "second", nil), false, nil))
 	assert.Equal(t, "second", storedModelDescription(t, db, uid))
 	assert.Equal(t, uint64(9), storedResVersionIn(t, db, "model", namespace, name))
+}
+
+// TestIntegration_FullUpsert_TimestampIndexes checks that Timestamp-typed indexed
+// columns are written: PipelineRun.status.end_time (*types.Timestamp) and
+// Deployment.metadata.deletionTimestamp (*metav1.Time). Before toSQLIndexValue, a
+// non-nil value made the whole upsert fail with "unsupported type types.Timestamp, a
+// struct". Unlike the other tests in this file it does not fall back to localhost:
+// it only runs when MYSQL_HOST is set explicitly.
+func TestIntegration_FullUpsert_TimestampIndexes(t *testing.T) {
+	if os.Getenv("MYSQL_HOST") == "" {
+		t.Skip("skipping integration test: set MYSQL_HOST to run it")
+	}
+	db := openIntegrationDB(t)
+	store := newIntegrationStorage(t, db)
+	ctx := context.Background()
+
+	const namespace = "integration-test-ns"
+	// Fractional seconds are truncated, matching the DATETIME column precision.
+	endTime := time.Date(2026, 11, 16, 20, 11, 2, 677777253, time.UTC)
+	wantTime := endTime.Truncate(time.Second)
+
+	t.Run("PipelineRun end_time", func(t *testing.T) {
+		const (
+			name = "timestamp-index-run"
+			uid  = "timestamp-index-run-uid"
+		)
+		t.Cleanup(func() { cleanupTimestampIndexRow(t, db, "pipeline_run", namespace, name, uid) })
+
+		run := &v2pb.PipelineRun{
+			TypeMeta: metav1.TypeMeta{APIVersion: "michelangelo.api/v2", Kind: "PipelineRun"},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:              name,
+				Namespace:         namespace,
+				UID:               types.UID(uid),
+				ResourceVersion:   "1",
+				CreationTimestamp: metav1.Now(),
+			},
+			Status: v2pb.PipelineRunStatus{State: v2pb.PIPELINE_RUN_STATE_RUNNING},
+		}
+		require.NoError(t, store.Upsert(ctx, run, false, run.GetIndexedKeyValuePairs()))
+
+		var state string
+		var storedEnd sql.NullTime
+		query := "SELECT state, end_time FROM pipeline_run WHERE uid = ?"
+		require.NoError(t, db.QueryRowContext(ctx, query, uid).Scan(&state, &storedEnd))
+		assert.Equal(t, "PIPELINE_RUN_STATE_RUNNING", state)
+		assert.False(t, storedEnd.Valid, "a nil end_time must be stored as NULL")
+
+		protoEnd, err := gogotypes.TimestampProto(endTime)
+		require.NoError(t, err)
+		run.ResourceVersion = "2"
+		run.Status.State = v2pb.PIPELINE_RUN_STATE_SUCCEEDED
+		run.Status.EndTime = protoEnd
+		require.NoError(t, store.Upsert(ctx, run, false, run.GetIndexedKeyValuePairs()))
+
+		require.NoError(t, db.QueryRowContext(ctx, query, uid).Scan(&state, &storedEnd))
+		assert.Equal(t, "PIPELINE_RUN_STATE_SUCCEEDED", state)
+		require.True(t, storedEnd.Valid, "end_time must be written")
+		assert.True(t, wantTime.Equal(storedEnd.Time), "end_time = %v, want %v", storedEnd.Time, wantTime)
+		assert.Equal(t, uint64(2), storedResVersionIn(t, db, "pipeline_run", namespace, name))
+	})
+
+	t.Run("Deployment deletion_requested_timestamp", func(t *testing.T) {
+		const (
+			name = "timestamp-index-deployment"
+			uid  = "timestamp-index-deployment-uid"
+		)
+		t.Cleanup(func() { cleanupTimestampIndexRow(t, db, "deployment", namespace, name, uid) })
+
+		deletionTime := metav1.NewTime(endTime)
+		deployment := &v2pb.Deployment{
+			TypeMeta: metav1.TypeMeta{APIVersion: "michelangelo.api/v2", Kind: "Deployment"},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:              name,
+				Namespace:         namespace,
+				UID:               types.UID(uid),
+				ResourceVersion:   "1",
+				CreationTimestamp: metav1.Now(),
+				DeletionTimestamp: &deletionTime,
+			},
+		}
+		require.NoError(t, store.Upsert(ctx, deployment, false, deployment.GetIndexedKeyValuePairs()))
+
+		var stored sql.NullTime
+		require.NoError(t, db.QueryRowContext(ctx,
+			"SELECT deletion_requested_timestamp FROM deployment WHERE uid = ?", uid).Scan(&stored))
+		require.True(t, stored.Valid, "deletion_requested_timestamp must be written")
+		assert.True(t, wantTime.Equal(stored.Time), "deletion_requested_timestamp = %v, want %v", stored.Time, wantTime)
+	})
+}
+
+// cleanupTimestampIndexRow removes the main row and its label/annotation rows.
+func cleanupTimestampIndexRow(t *testing.T, db *sql.DB, table, namespace, name, uid string) {
+	t.Helper()
+	_, err := db.Exec(fmt.Sprintf("DELETE FROM %s WHERE namespace=? AND name=?", table), namespace, name)
+	require.NoError(t, err)
+	for _, child := range []string{table + "_labels", table + "_annotations"} {
+		_, err = db.Exec(fmt.Sprintf("DELETE FROM %s WHERE obj_uid=?", child), uid)
+		require.NoError(t, err)
+	}
 }

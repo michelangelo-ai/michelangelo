@@ -1,6 +1,7 @@
 ---
 sidebar_position: 2
 sidebar_label: Pipelines
+last_verified: 2026-11-05
 ---
 
 # Pipelines API Reference
@@ -283,13 +284,15 @@ List objects of type PipelineRun.
 
 TriggerRun Service defines the TriggerRun related methods, such as CRUD and list.
 
-A `TriggerRun` represents a single execution of a pipeline trigger. A trigger can be a cron schedule, an interval schedule, or a batch rerun of existing pipeline runs. One trigger run may spawn multiple pipeline runs. Trigger runs can be paused and resumed (for cron and interval types) or killed.
+A `TriggerRun` represents a single execution of a pipeline trigger. The proto defines three trigger types (a cron schedule, an interval schedule, and a batch rerun of existing pipeline runs), but only cron schedules run today: `CreateTriggerRun` rejects the other two (see [CreateTriggerRun](#createtriggerrun)). One trigger run may spawn multiple pipeline runs. A cron trigger run is paused, resumed or killed by updating its `spec.action` to `TRIGGER_RUN_ACTION_PAUSE`, `TRIGGER_RUN_ACTION_RESUME` or `TRIGGER_RUN_ACTION_KILL` with `UpdateTriggerRun`; there are no separate RPCs for these.
 
 ### CreateTriggerRun
 
 `CreateTriggerRun(CreateTriggerRunRequest) → CreateTriggerRunResponse`
 
 Create a new TriggerRun with the given spec.
+
+The API server validates the spec before saving it and returns `InvalidArgument` if it fails. For example, `spec.trigger.interval_schedule is not supported yet: no runner is registered for it (#548)` (and the same for `batch_rerun`), `spec.trigger.cron_schedule is required`, and `end_timestamp must be after start_timestamp`. [What the API Rejects](../../user-guides/ml-pipelines/set-up-triggers.md#what-the-api-rejects) lists every rule.
 
 **Request fields**
 
@@ -334,6 +337,8 @@ Get the specified TriggerRun.
 
 Update a TriggerRun with the given spec.
 
+An update re-checks the trigger and `end_timestamp` rules, and re-checks the backfill-window rules only when it changes the trigger, either timestamp, `catchup` or `auto_flip`. An update that sets `spec.action` to `TRIGGER_RUN_ACTION_KILL` skips every check, so a trigger run can always be stopped.
+
 **Request fields**
 
 | Field | Type | Required | Description |
@@ -355,6 +360,8 @@ Update a TriggerRun with the given spec.
 
 Delete a TriggerRun.
 
+Only a TriggerRun in a terminal state (`FAILED`, `KILLED` or `SUCCEEDED`) can be deleted. Deleting a live one returns `FailedPrecondition`: `TriggerRun <namespace>/<name> is <state> and cannot be deleted: only a FAILED, KILLED or SUCCEEDED TriggerRun can be deleted; set spec.action to TRIGGER_RUN_ACTION_KILL to stop it first`.
+
 **Request fields**
 
 | Field | Type | Required | Description |
@@ -374,6 +381,8 @@ This response has no fields.
 `DeleteTriggerRunCollection(DeleteTriggerRunCollectionRequest) → DeleteTriggerRunCollectionResponse`
 
 Delete collection of TriggerRun.
+
+The same rule as `DeleteTriggerRun` applies to every TriggerRun the request selects: if any of them is live, the whole request fails with `FailedPrecondition` and nothing is deleted.
 
 **Request fields**
 
@@ -417,7 +426,7 @@ List objects of type TriggerRun.
 
 Project Service defines the Project related methods, such as CRUD and list.
 
-A `Project` is a logical grouping of ML resources for a specific ML use case. It carries ownership information, resource retention policies, a Git repository reference, and lifecycle phase tracking (DEVELOPMENT, STAGING, PRODUCTION, DECOMMISSION). New pipeline and pipeline run creation is blocked on decommissioned projects.
+A `Project` is a logical grouping of ML resources for a specific ML use case. It carries ownership information, resource retention policies, a Git repository reference, and lifecycle phase tracking (DEVELOPMENT, STAGING, PRODUCTION, DECOMMISSION). The phase is a label only: the comment on `PROJECT_PHASE_DECOMMISSION` in `project.proto` says a decommissioned project can't create new pipelines or pipeline runs, but the API server doesn't enforce that today.
 
 ### CreateProject
 
