@@ -3,15 +3,36 @@ import { isNil } from 'lodash';
 import { TimeZone } from '#core/types/time-types';
 
 /**
+ * Forms accepted by {@link toEpochSeconds}:
+ * - epoch seconds as a number or numeric string
+ * - RFC 3339 string (proto3 JSON Timestamp)
+ * - a `{ seconds, nanos }` protobuf Timestamp object
+ *   (`nanos` is ignored; only whole seconds are used)
+ */
+export type TimestampInput =
+  | string
+  | number
+  | { seconds?: string | number | null; nanos?: string | number | null };
+
+/**
  * Normalizes a timestamp to epoch seconds. Accepts epoch seconds, as a number or a numeric string
- * (e.g. a timestamp label), or an RFC 3339 string, as a `google.protobuf.Timestamp` arrives in
- * proto3 JSON. Returns NaN when neither parses.
+ * (e.g. a timestamp label), an RFC 3339 string, or a `{ seconds, nanos }`
+ * `google.protobuf.Timestamp` object. Returns NaN when neither parses.
  *
  * @example
  * - toEpochSeconds('1720656638') -> 1720656638
  * - toEpochSeconds('2024-07-11T00:10:38Z') -> 1720656638
+ * - toEpochSeconds({ seconds: '1720656638', nanos: 1 }) -> 1720656638
  */
-export function toEpochSeconds(timestamp: string | number): number {
+export function toEpochSeconds(timestamp: TimestampInput): number {
+  if (typeof timestamp === 'object' && timestamp !== null) {
+    const { seconds } = timestamp;
+    if (isNil(seconds) || seconds === '') {
+      return NaN;
+    }
+    return toEpochSeconds(seconds);
+  }
+
   const seconds = Number(timestamp);
   return isNaN(seconds) ? Date.parse(String(timestamp)) / 1000 : seconds;
 }
@@ -40,7 +61,7 @@ export function durationToSeconds(duration?: string): number | undefined {
  * - timestampToString(1720656639, 'local') -> '2024/07/11 02:10:39 (GMT+2)'
  */
 export function timestampToString(
-  timestampRaw?: string | number,
+  timestampRaw?: TimestampInput,
   timeZone?: TimeZone
 ): string | null {
   if (isNil(timestampRaw)) {
@@ -108,8 +129,8 @@ export function getEpochSecondsFromDate(date: Date): number {
  * formatElapsedSeconds('1720656638', undefined) // null
  */
 export function formatElapsedSeconds(
-  startSeconds?: string | number,
-  endSeconds?: string | number
+  startSeconds?: TimestampInput,
+  endSeconds?: TimestampInput
 ): string | null {
   if (isNil(startSeconds) || isNil(endSeconds)) {
     return null;
