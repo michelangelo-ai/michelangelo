@@ -90,11 +90,10 @@ func New(cfg maconfig.MetricGateConfig, logger *zap.Logger) *Gate {
 // namedQueries copies the configured queries and names each unnamed one after its 1-based
 // position, so that logs, rollback reasons and Result.NoData identify it the same way.
 func namedQueries(configured []maconfig.MetricGateQuery) []maconfig.MetricGateQuery {
-	queries := make([]maconfig.MetricGateQuery, len(configured))
-	copy(queries, configured)
+	queries := slices.Clone(configured)
 	for i := range queries {
 		if queries[i].Name == "" {
-			queries[i].Name = fmt.Sprintf("query %d", i+1)
+			queries[i].Name = fmt.Sprintf("unnamed query %d", i+1)
 		}
 	}
 	return queries
@@ -116,67 +115,93 @@ type Result struct {
 	// Healthy is false when a sample breached its threshold or, if the gate fails closed, a
 	// query failed.
 	Healthy bool
-	// Reason describes what made the gate unhealthy. It is empty when Healthy is true.
+	// Reason describes the first thing that made the gate unhealthy. It is empty when Healthy
+	// is true.
 	Reason string
 	// Model is the model the queries were evaluated for. It is empty when the gate is
 	// disabled or the deployment names no model.
 	Model string
-	// NoData names the queries that returned no samples; a result of only NaN counts as none.
-	// Such a query cannot breach, so the model was not judged on it. The list covers every
-	// query only when Complete is true.
+	// NoData names the queries that returned no samples; a result of only NaN counts as no
+	// samples. Such a query cannot breach, so the model was not judged on it. When
+	// AllQueriesAnswered is false, the list may omit queries that were not answered.
 	NoData []string
-	// Complete is true when every query was answered. It is false when the evaluation
-	// stopped at a breach or a query failed.
-	Complete bool
+	// AllQueriesAnswered is false when a query failed, and true otherwise, including when
+	// the gate is disabled or the deployment names no model and so no query runs.
+	AllQueriesAnswered bool
 }
 
-// Evaluate runs the queries in order for the model the deployment is rolling out and stops at
-// the first breach. The result is healthy when no sample breaches its threshold. A query that
-// returns no samples, or only NaN, does not breach; it is named in Result.NoData. A query
-// that fails counts as a breach only when the gate is configured to fail closed; otherwise it
-// is logged and skipped. A malformed query template is returned as an error.
+// fail marks the result unhealthy. Only the first reason is kept.
+func (r *Result) fail(reason string) {
+	if !r.Healthy {
+		return
+	}
+	r.Healthy = false
+	r.Reason = reason
+}
+
+// Evaluate runs every query, in order, for the model the deployment is rolling out. The
+// result is healthy when no sample breaches its threshold. A breach does not stop the later
+// queries, so Result.NoData still covers them. A query that returns no samples, or only NaN,
+// does not breach; it is named in Result.NoData. A query that fails is logged and skipped,
+// unless the gate is configured to fail closed: then it makes the result unhealthy and ends
+// the evaluation. A malformed query template is returned as an error, unless an earlier
+// query already made the result unhealthy: that verdict is returned instead.
 func (g *Gate) Evaluate(ctx context.Context, deployment *v2pb.Deployment) (Result, error) {
 	if g == nil {
-		return Result{Healthy: true, Complete: true}, nil
+		return Result{Healthy: true, AllQueriesAnswered: true}, nil
 	}
 	scope := scopeFor(deployment)
 	if scope.Model == "" {
-		return Result{Healthy: true, Complete: true}, nil
+		return Result{Healthy: true, AllQueriesAnswered: true}, nil
 	}
 
-	var noData []string
-	complete := true
+	result := Result{Healthy: true, Model: scope.Model, AllQueriesAnswered: true}
 	for _, query := range g.queries {
 		expr, err := render(query, scope)
 		if err != nil {
+			if !result.Healthy {
+				result.AllQueriesAnswered = false
+				return result, nil
+			}
 			return Result{}, err
 		}
+		log := g.logger.With(
+			zap.String("query", query.Name),
+			zap.String("namespace", deployment.GetNamespace()),
+			zap.String("deployment", deployment.GetName()),
+			zap.String("model", scope.Model))
 		samples, err := g.query(ctx, expr)
 		if err != nil {
+			result.AllQueriesAnswered = false
 			if g.failClosed {
-				reason := fmt.Sprintf("metric gate %q could not be evaluated and the gate fails closed: %v", query.Name, err)
-				return Result{Reason: reason, Model: scope.Model, NoData: noData}, nil
+				result.fail(fmt.Sprintf("metric gate %q could not be evaluated and the gate fails closed: %v",
+					query.Name, err))
+				return result, nil
 			}
-			g.logger.Warn("metric gate query failed; skipping it because the gate fails open",
-				zap.String("query", query.Name), zap.String("deployment", deployment.GetName()), zap.Error(err))
-			complete = false
+			log.Warn("metric gate query failed; skipping it because the gate fails open", zap.Error(err))
 			continue
 		}
 		if !slices.ContainsFunc(samples, isNumber) {
-			g.logger.Debug("metric gate query returned no samples",
-				zap.String("query", query.Name), zap.String("deployment", deployment.GetName()), zap.String("expr", expr))
-			noData = append(noData, query.Name)
+			log.Debug("metric gate query returned no samples",
+				zap.String("expr", expr), zap.Int("nan_samples", len(samples)))
+			result.NoData = append(result.NoData, query.Name)
 			continue
 		}
-		for _, sample := range samples {
-			if breaches(sample, query) {
-				reason := fmt.Sprintf("metric gate %q breached for model %s: %g %s %g",
-					query.Name, scope.Model, sample, comparisonOf(query), query.Threshold)
-				return Result{Reason: reason, Model: scope.Model, NoData: noData}, nil
-			}
+		if sample, breached := firstBreach(samples, query); breached {
+			result.fail(fmt.Sprintf("metric gate %q breached for model %s: %g %s %g",
+				query.Name, scope.Model, sample, comparisonOf(query), query.Threshold))
 		}
 	}
-	return Result{Healthy: true, Model: scope.Model, NoData: noData, Complete: complete}, nil
+	return result, nil
+}
+
+func firstBreach(samples []float64, query maconfig.MetricGateQuery) (float64, bool) {
+	for _, sample := range samples {
+		if breaches(sample, query) {
+			return sample, true
+		}
+	}
+	return 0, false
 }
 
 // scopeFor names the model under evaluation: the candidate being rolled out, or the desired
@@ -207,7 +232,7 @@ func render(query maconfig.MetricGateQuery, scope QueryScope) (string, error) {
 }
 
 // isNumber reports whether a sample can be compared against a threshold. NaN cannot: it is
-// what a ratio yields when its denominator is zero, for example before any traffic.
+// what zero divided by zero yields, for example a failure ratio before any traffic.
 func isNumber(sample float64) bool {
 	return !math.IsNaN(sample)
 }

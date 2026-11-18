@@ -101,24 +101,34 @@ does not roll this Deployment back. The reason for the last failed gate is recor
 Deployment in the `deployment.michelangelo.ai/health-gate-reason` annotation.
 
 A metric gate query that returns no samples does not fail the gate, because there is nothing
-to compare against the threshold. A result of only `NaN`, such as a ratio over zero requests,
-counts as no samples. The candidate is not judged on that query. The controller
-lists such queries in the `deployment.michelangelo.ai/metric-gate-no-data` annotation on the
-Deployment, as `<model>: <query>, <query>`, and logs them whenever the list changes. A query
-configured without a name appears by position, for example `query 2`. While the rollout is
-in progress, the controller removes the annotation once every query returns samples.
+to compare against the threshold; the candidate is not judged on that query. A result of
+only `NaN`, such as a ratio over zero requests, counts as no samples. The controller lists
+such queries in the `deployment.michelangelo.ai/metric-gate-no-data` annotation on the
+Deployment and logs them whenever the list changes. The value is `<model>: <query>, <query>`,
+where `<model>` is the candidate the queries ran for; a value longer than 1024 bytes is cut
+short and ends in `...`. A query configured without a name appears by position, for example
+`unnamed query 2`. While the rollout is in progress, the controller removes the annotation
+once every query returns samples.
 
 Expect the annotation briefly at the start of a rollout, until the candidate is loaded and
-its metrics have been scraped. If it is still present once the Deployment reaches
-`RolloutComplete`, the listed queries returned no samples the last time the gate got an
-answer to every query, so the rollout finished without the metric gate judging the candidate
-on them. The usual cause is that the metrics are never collected, for example because
-nothing scrapes Triton's metrics port. The gate runs only during a rollout, so the annotation
-then stays as it is until the next rollout, even if the queries start returning samples.
-The controller also leaves the annotation unchanged when an evaluation stops at a breach,
-when a query fails, and during a rollback, which unloads the candidate. A query that fails
-on every evaluation therefore keeps the annotation from being updated at all; its failure is
-logged on every evaluation.
+its metrics have been scraped. A query that yields `NaN` without traffic stays listed until
+the candidate receives requests, and is listed again whenever traffic stops for longer than
+the query's range. For a failure ratio compared with `gt`, clamping the denominator with
+`clamp_min(..., 1)`, as the built-in query does, avoids that: the query then returns 0
+without traffic. Do not clamp a query compared with `lt`, such as a success ratio, because
+the 0 it returns without traffic breaches.
+
+If the annotation is still present once the Deployment reaches `RolloutComplete`, the listed
+queries returned no samples the last time every query was answered, so the metric gate was
+not judging the candidate on them when the rollout finished. The usual cause is that the
+metrics are never collected, for example because nothing scrapes Triton's metrics port.
+
+The gate runs only during a rollout, so after `RolloutComplete` the annotation stays
+unchanged until the next rollout, even if the queries start returning samples or the
+Deployment is retired. The controller also leaves it unchanged when a query fails and during
+a rollback, which unloads the candidate. A query that fails on every evaluation therefore
+keeps the annotation from being updated at all, so an annotation that names an earlier model
+can outlast a later rollout; the failure is logged on every evaluation.
 
 A rollback starts when the gate fails, when the desired model changes mid-rollout, or when
 the rollout itself fails (a replica cannot load the model, or a load or canary exceeds its

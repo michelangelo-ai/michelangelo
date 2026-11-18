@@ -274,9 +274,9 @@ type MetricGateConfig struct {
 	PrometheusURL string `yaml:"prometheusURL"`
 	// Timeout bounds each query. Zero uses the gate default.
 	Timeout time.Duration `yaml:"timeout"`
-	// FailClosed treats an unreachable Prometheus as a breach. Off by default, so an
-	// observability outage stalls nothing and is logged instead. A query that returns no
-	// samples is not a breach under either setting.
+	// FailClosed treats a query that fails (Prometheus is unreachable or returns an error) as
+	// a breach. Off by default, so an observability outage stalls nothing and is logged
+	// instead. A query that returns no samples is not a breach under either setting.
 	FailClosed bool `yaml:"failClosed"`
 	// Queries are evaluated in order. Empty uses the gate's built-in Triton failure-ratio
 	// query.
@@ -286,7 +286,8 @@ type MetricGateConfig struct {
 // MetricGateQuery is one PromQL expression with the threshold that marks a breach.
 type MetricGateQuery struct {
 	// Name identifies the query in logs, rollback reasons and the metric-gate-no-data
-	// annotation. An unnamed query is identified by its position, for example "query 2".
+	// annotation. An unnamed query is identified by its position, for example
+	// "unnamed query 2".
 	Name string `yaml:"name"`
 	// Expr is a Go template rendering a PromQL instant query. It may reference
 	// {{.Model}}, {{.Deployment}}, {{.Namespace}} and {{.InferenceServer}}.

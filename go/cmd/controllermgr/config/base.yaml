@@ -145,11 +145,15 @@ deployment:
     # bundled with the Temporal chart answers at
     # http://michelangelo-prometheus-server.default.svc:80.
     prometheusURL: ""
+    # timeout bounds each query. Every query runs on each evaluation, so keep
+    # timeout times the number of queries well under the controller's 60s
+    # reconcile timeout.
     timeout: 10s
-    # failClosed treats an unreachable Prometheus as a gate failure. The default
-    # keeps rolling out and logs the outage instead. A query that returns no
-    # samples does not fail the gate under either setting; it is listed in the
-    # Deployment's deployment.michelangelo.ai/metric-gate-no-data annotation.
+    # failClosed treats a query that fails (Prometheus is unreachable or returns an
+    # error) as a gate failure. The default keeps rolling out and logs the failure
+    # instead. A query that returns no samples does not fail the gate under either
+    # setting; it is listed in the Deployment's
+    # deployment.michelangelo.ai/metric-gate-no-data annotation.
     failClosed: false
     # queries are Go templates over {{.Model}}, {{.Deployment}}, {{.Namespace}} and
     # {{.InferenceServer}}. A query breaches when any returned sample compares true

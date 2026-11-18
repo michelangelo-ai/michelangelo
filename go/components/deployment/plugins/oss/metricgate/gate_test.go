@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	maconfig "github.com/michelangelo-ai/michelangelo/go/base/config"
@@ -64,7 +65,7 @@ func TestNew(t *testing.T) {
 	var gate *Gate
 	result, err := gate.Evaluate(context.Background(), testDeployment())
 	require.NoError(t, err)
-	assert.Equal(t, Result{Healthy: true, Complete: true}, result)
+	assert.Equal(t, Result{Healthy: true, AllQueriesAnswered: true}, result)
 }
 
 func TestEvaluate_DefaultQueryTargetsTheCandidate(t *testing.T) {
@@ -111,10 +112,28 @@ func TestEvaluate_Thresholds(t *testing.T) {
 			wantReason:  `"success" breached`,
 		},
 		{
-			name:        "NaN samples are ignored",
+			name:        "a breaching sample beside NaN breaches",
 			query:       maconfig.MetricGateQuery{Name: "errors", Expr: "up", Threshold: 0.05},
-			body:        vectorResponse("NaN"),
+			body:        vectorResponse("1", "NaN"),
+			wantHealthy: false,
+		},
+		{
+			name:        "+Inf above a gt threshold breaches",
+			query:       maconfig.MetricGateQuery{Name: "errors", Expr: "up", Threshold: 0.05},
+			body:        vectorResponse("+Inf"),
+			wantHealthy: false,
+		},
+		{
+			name:        "-Inf below a gt threshold passes",
+			query:       maconfig.MetricGateQuery{Name: "errors", Expr: "up", Threshold: 0.05},
+			body:        vectorResponse("-Inf"),
 			wantHealthy: true,
+		},
+		{
+			name:        "-Inf below an lt threshold breaches",
+			query:       maconfig.MetricGateQuery{Name: "success", Expr: "up", Threshold: 0.99, Comparison: "lt"},
+			body:        vectorResponse("-Inf"),
+			wantHealthy: false,
 		},
 		{
 			name:        "scalar results are read too",
@@ -133,6 +152,7 @@ func TestEvaluate_Thresholds(t *testing.T) {
 
 			require.NoError(t, err)
 			assert.Equal(t, tt.wantHealthy, result.Healthy, result.Reason)
+			assert.Empty(t, result.NoData, "a result with a number in it has samples")
 			if tt.wantReason != "" {
 				assert.Contains(t, result.Reason, tt.wantReason)
 			}
@@ -141,92 +161,114 @@ func TestEvaluate_Thresholds(t *testing.T) {
 }
 
 func TestEvaluate_NoData(t *testing.T) {
-	const emptyVector = `{"status":"success","data":{"resultType":"vector","result":[]}}`
+	emptyVector := vectorResponse()
 	query := func(name string) maconfig.MetricGateQuery {
 		return maconfig.MetricGateQuery{Name: name, Expr: name, Threshold: 0.5}
 	}
+	unnamed := func(expr string) maconfig.MetricGateQuery {
+		return maconfig.MetricGateQuery{Expr: expr, Threshold: 0.5}
+	}
+	below := func(name string) maconfig.MetricGateQuery {
+		return maconfig.MetricGateQuery{Name: name, Expr: name, Threshold: 0.5, Comparison: ComparisonLess}
+	}
 
 	tests := []struct {
-		name         string
-		queries      []maconfig.MetricGateQuery
-		bodies       map[string]string // response per expression; an unlisted expression returns one sample of 0
-		failing      []string          // expressions answered with HTTP 500
-		failClosed   bool
-		wantHealthy  bool
-		wantNoData   []string
-		wantComplete bool
+		name            string
+		queries         []maconfig.MetricGateQuery
+		bodies          map[string]string // response per expression; an unlisted expression returns one sample of 0
+		failing         []string          // expressions answered with HTTP 500
+		failClosed      bool
+		wantHealthy     bool
+		wantNoData      []string
+		wantAllAnswered bool
 	}{
 		{
-			name:         "an empty vector passes and is reported",
-			queries:      []maconfig.MetricGateQuery{query("errors")},
-			bodies:       map[string]string{"errors": emptyVector},
-			wantHealthy:  true,
-			wantNoData:   []string{"errors"},
-			wantComplete: true,
+			name:            "an empty vector passes and is reported",
+			queries:         []maconfig.MetricGateQuery{query("errors")},
+			bodies:          map[string]string{"errors": emptyVector},
+			wantHealthy:     true,
+			wantNoData:      []string{"errors"},
+			wantAllAnswered: true,
 		},
 		{
-			name:         "a null result passes and is reported",
-			queries:      []maconfig.MetricGateQuery{query("errors")},
-			bodies:       map[string]string{"errors": `{"status":"success","data":{"resultType":"vector","result":null}}`},
-			wantHealthy:  true,
-			wantNoData:   []string{"errors"},
-			wantComplete: true,
+			name:            "a null result passes and is reported",
+			queries:         []maconfig.MetricGateQuery{query("errors")},
+			bodies:          map[string]string{"errors": `{"status":"success","data":{"resultType":"vector","result":null}}`},
+			wantHealthy:     true,
+			wantNoData:      []string{"errors"},
+			wantAllAnswered: true,
 		},
 		{
-			name:         "a query that returns a sample is not reported",
-			queries:      []maconfig.MetricGateQuery{query("errors")},
-			wantHealthy:  true,
-			wantComplete: true,
+			name:            "a query that returns a sample is not reported",
+			queries:         []maconfig.MetricGateQuery{query("errors")},
+			wantHealthy:     true,
+			wantAllAnswered: true,
 		},
 		{
-			name:         "a result of only NaN passes and is reported",
-			queries:      []maconfig.MetricGateQuery{query("errors")},
-			bodies:       map[string]string{"errors": vectorResponse("NaN", "NaN")},
-			wantHealthy:  true,
-			wantNoData:   []string{"errors"},
-			wantComplete: true,
+			name:            "a result of only NaN passes and is reported",
+			queries:         []maconfig.MetricGateQuery{query("errors")},
+			bodies:          map[string]string{"errors": vectorResponse("NaN", "NaN")},
+			wantHealthy:     true,
+			wantNoData:      []string{"errors"},
+			wantAllAnswered: true,
 		},
 		{
-			name:         "NaN beside a comparable sample is not reported",
-			queries:      []maconfig.MetricGateQuery{query("errors")},
-			bodies:       map[string]string{"errors": vectorResponse("NaN", "0.1")},
-			wantHealthy:  true,
-			wantComplete: true,
+			name:            "NaN before a number is not reported",
+			queries:         []maconfig.MetricGateQuery{query("errors")},
+			bodies:          map[string]string{"errors": vectorResponse("NaN", "0.1")},
+			wantHealthy:     true,
+			wantAllAnswered: true,
 		},
 		{
-			name:         "every query that returns no samples is named, in order",
-			queries:      []maconfig.MetricGateQuery{query("first"), query("second"), query("third")},
-			bodies:       map[string]string{"first": emptyVector, "third": emptyVector},
-			wantHealthy:  true,
-			wantNoData:   []string{"first", "third"},
-			wantComplete: true,
+			name:            "NaN after a number is not reported",
+			queries:         []maconfig.MetricGateQuery{query("errors")},
+			bodies:          map[string]string{"errors": vectorResponse("0.1", "NaN")},
+			wantHealthy:     true,
+			wantAllAnswered: true,
 		},
 		{
-			name:         "failing closed does not turn no samples into a breach",
-			queries:      []maconfig.MetricGateQuery{query("errors")},
-			bodies:       map[string]string{"errors": emptyVector},
-			failClosed:   true,
-			wantHealthy:  true,
-			wantNoData:   []string{"errors"},
-			wantComplete: true,
+			name:            "an lt query that returns no samples is reported too",
+			queries:         []maconfig.MetricGateQuery{below("empty"), below("nan")},
+			bodies:          map[string]string{"empty": emptyVector, "nan": vectorResponse("NaN")},
+			wantHealthy:     true,
+			wantNoData:      []string{"empty", "nan"},
+			wantAllAnswered: true,
 		},
 		{
-			name:         "an unnamed query is reported by its position",
-			queries:      []maconfig.MetricGateQuery{query("first"), {Expr: "unnamed", Threshold: 0.5}},
-			bodies:       map[string]string{"unnamed": emptyVector},
-			wantHealthy:  true,
-			wantNoData:   []string{"query 2"},
-			wantComplete: true,
+			name:            "every query that returns no samples is named, in order",
+			queries:         []maconfig.MetricGateQuery{query("first"), query("second"), query("third")},
+			bodies:          map[string]string{"first": emptyVector, "third": emptyVector},
+			wantHealthy:     true,
+			wantNoData:      []string{"first", "third"},
+			wantAllAnswered: true,
 		},
 		{
-			name:        "a breach leaves the evaluation incomplete",
-			queries:     []maconfig.MetricGateQuery{query("first"), query("second"), query("third")},
-			bodies:      map[string]string{"first": emptyVector, "second": vectorResponse("1"), "third": emptyVector},
-			wantHealthy: false,
-			wantNoData:  []string{"first"},
+			name:            "a query that returns no samples does not breach when the gate fails closed",
+			queries:         []maconfig.MetricGateQuery{query("errors")},
+			bodies:          map[string]string{"errors": emptyVector},
+			failClosed:      true,
+			wantHealthy:     true,
+			wantNoData:      []string{"errors"},
+			wantAllAnswered: true,
 		},
 		{
-			name:        "a failed query that is skipped leaves the evaluation incomplete",
+			name:            "an unnamed query is reported by its position among all queries",
+			queries:         []maconfig.MetricGateQuery{unnamed("a"), query("named"), unnamed("c")},
+			bodies:          map[string]string{"a": emptyVector, "named": emptyVector, "c": emptyVector},
+			wantHealthy:     true,
+			wantNoData:      []string{"unnamed query 1", "named", "unnamed query 3"},
+			wantAllAnswered: true,
+		},
+		{
+			name:            "a breach does not stop later queries from being reported",
+			queries:         []maconfig.MetricGateQuery{query("first"), query("second"), query("third")},
+			bodies:          map[string]string{"first": emptyVector, "second": vectorResponse("1"), "third": emptyVector},
+			wantHealthy:     false,
+			wantNoData:      []string{"first", "third"},
+			wantAllAnswered: true,
+		},
+		{
+			name:        "a failed query that is skipped leaves a query unanswered",
 			queries:     []maconfig.MetricGateQuery{query("first"), query("second")},
 			bodies:      map[string]string{"first": emptyVector},
 			failing:     []string{"second"},
@@ -241,7 +283,7 @@ func TestEvaluate_NoData(t *testing.T) {
 			wantHealthy: false,
 		},
 		{
-			name:        "a failed query that fails closed leaves the evaluation incomplete",
+			name:        "a failed query leaves a query unanswered when the gate fails closed",
 			queries:     []maconfig.MetricGateQuery{query("first"), query("second")},
 			bodies:      map[string]string{"first": emptyVector},
 			failing:     []string{"second"},
@@ -273,10 +315,34 @@ func TestEvaluate_NoData(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, tt.wantHealthy, result.Healthy, result.Reason)
 			assert.Equal(t, tt.wantNoData, result.NoData)
-			assert.Equal(t, tt.wantComplete, result.Complete)
+			assert.Equal(t, tt.wantAllAnswered, result.AllQueriesAnswered)
 			assert.Equal(t, "model-v2", result.Model)
 		})
 	}
+}
+
+func TestEvaluate_QueryWithoutSamples_IsLoggedAtDebugWithItsExpression(t *testing.T) {
+	server := promServer(t, func(string) (int, string) { return http.StatusOK, vectorResponse("NaN") })
+	core, logs := observer.New(zap.DebugLevel)
+	gate := New(maconfig.MetricGateConfig{
+		PrometheusURL: server.URL,
+		Queries:       []maconfig.MetricGateQuery{{Name: "errors", Expr: `up{model="{{.Model}}"}`}},
+	}, zap.New(core))
+
+	_, err := gate.Evaluate(context.Background(), testDeployment())
+
+	require.NoError(t, err)
+	require.Equal(t, 1, logs.Len())
+	entry := logs.All()[0]
+	assert.Equal(t, zap.DebugLevel, entry.Level)
+	assert.Equal(t, map[string]interface{}{
+		"query":       "errors",
+		"namespace":   "ns",
+		"deployment":  "dep",
+		"model":       "model-v2",
+		"expr":        `up{model="model-v2"}`,
+		"nan_samples": int64(1),
+	}, entry.ContextMap())
 }
 
 func TestEvaluate_Model(t *testing.T) {
@@ -321,7 +387,7 @@ func TestEvaluate_UnnamedQuery_IsNamedByPositionInReasons(t *testing.T) {
 	result, err := gate.Evaluate(context.Background(), testDeployment())
 
 	require.NoError(t, err)
-	assert.Contains(t, result.Reason, `metric gate "query 1" breached`)
+	assert.Contains(t, result.Reason, `metric gate "unnamed query 1" breached`)
 	assert.Empty(t, queries[0].Name, "the caller's configuration must not be modified")
 }
 
@@ -350,7 +416,7 @@ func TestEvaluate_QueryFailures(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, tt.wantHealthy, result.Healthy)
 			assert.Empty(t, result.NoData, "a failed query is not one that returned no samples")
-			assert.False(t, result.Complete)
+			assert.False(t, result.AllQueriesAnswered)
 			if !tt.wantHealthy {
 				assert.Contains(t, result.Reason, "fails closed")
 			}
@@ -388,6 +454,39 @@ func TestEvaluate_TemplateErrors(t *testing.T) {
 	assert.Contains(t, err.Error(), `"broken"`)
 }
 
+func TestEvaluate_TemplateErrorAfterAQueryWithoutSamples_IsReturned(t *testing.T) {
+	server := promServer(t, func(string) (int, string) { return http.StatusOK, vectorResponse() })
+	gate := New(maconfig.MetricGateConfig{
+		PrometheusURL: server.URL,
+		Queries: []maconfig.MetricGateQuery{
+			{Name: "first", Expr: "up"},
+			{Name: "broken", Expr: "up{model={{.Nope}}}"},
+		},
+	}, zap.NewNop())
+
+	_, err := gate.Evaluate(context.Background(), testDeployment())
+
+	require.ErrorContains(t, err, `"broken"`)
+}
+
+func TestEvaluate_TemplateErrorAfterABreach_KeepsTheBreach(t *testing.T) {
+	server := promServer(t, func(string) (int, string) { return http.StatusOK, vectorResponse("1") })
+	gate := New(maconfig.MetricGateConfig{
+		PrometheusURL: server.URL,
+		Queries: []maconfig.MetricGateQuery{
+			{Name: "first", Expr: "up", Threshold: 0.5},
+			{Name: "broken", Expr: "up{model={{.Nope}}}"},
+		},
+	}, zap.NewNop())
+
+	result, err := gate.Evaluate(context.Background(), testDeployment())
+
+	require.NoError(t, err, "an error would keep the controller from rolling the candidate back")
+	assert.False(t, result.Healthy)
+	assert.Contains(t, result.Reason, `"first" breached`)
+	assert.False(t, result.AllQueriesAnswered)
+}
+
 func TestEvaluate_NoModelSkipsQueries(t *testing.T) {
 	server := promServer(t, func(string) (int, string) {
 		t.Fatal("prometheus must not be queried without a model")
@@ -398,17 +497,17 @@ func TestEvaluate_NoModelSkipsQueries(t *testing.T) {
 	result, err := gate.Evaluate(context.Background(), &v2pb.Deployment{})
 
 	require.NoError(t, err)
-	assert.Equal(t, Result{Healthy: true, Complete: true}, result)
+	assert.Equal(t, Result{Healthy: true, AllQueriesAnswered: true}, result)
 }
 
-func TestEvaluate_QueriesRunInOrderUntilTheFirstBreach(t *testing.T) {
+func TestEvaluate_EveryQueryRuns_AndTheReasonNamesTheFirstBreach(t *testing.T) {
 	var exprs []string
 	server := promServer(t, func(expr string) (int, string) {
 		exprs = append(exprs, expr)
-		if expr == "second" {
-			return http.StatusOK, vectorResponse("1")
+		if expr == "first" {
+			return http.StatusOK, vectorResponse("0")
 		}
-		return http.StatusOK, vectorResponse("0")
+		return http.StatusOK, vectorResponse("1")
 	})
 	gate := New(maconfig.MetricGateConfig{
 		PrometheusURL: server.URL,
@@ -424,5 +523,28 @@ func TestEvaluate_QueriesRunInOrderUntilTheFirstBreach(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, result.Healthy)
 	assert.Contains(t, result.Reason, `"second"`)
-	assert.Equal(t, []string{"first", "second"}, exprs)
+	assert.Equal(t, []string{"first", "second", "third"}, exprs)
+}
+
+func TestEvaluate_FailedQuery_EndsTheEvaluationWhenTheGateFailsClosed(t *testing.T) {
+	var exprs []string
+	server := promServer(t, func(expr string) (int, string) {
+		exprs = append(exprs, expr)
+		return http.StatusInternalServerError, "boom"
+	})
+	gate := New(maconfig.MetricGateConfig{
+		PrometheusURL: server.URL,
+		FailClosed:    true,
+		Queries: []maconfig.MetricGateQuery{
+			{Name: "first", Expr: "first", Threshold: 0.5},
+			{Name: "second", Expr: "second", Threshold: 0.5},
+		},
+	}, zap.NewNop())
+
+	result, err := gate.Evaluate(context.Background(), testDeployment())
+
+	require.NoError(t, err)
+	assert.False(t, result.Healthy)
+	assert.Contains(t, result.Reason, `"first"`)
+	assert.Equal(t, []string{"first"}, exprs)
 }

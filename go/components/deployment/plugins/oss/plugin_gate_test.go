@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -55,23 +56,35 @@ func prometheusServer(t *testing.T, answer func(expr string) (int, []string)) *h
 	t.Helper()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		status, values := answer(r.URL.Query().Get("query"))
-		samples := make([]string, 0, len(values))
+		entries := make([]string, 0, len(values))
 		for _, value := range values {
-			samples = append(samples, fmt.Sprintf(`{"metric":{},"value":[1700000000,"%s"]}`, value))
+			entries = append(entries, fmt.Sprintf(`{"metric":{},"value":[1700000000,"%s"]}`, value))
 		}
 		w.WriteHeader(status)
-		_, _ = fmt.Fprintf(w, `{"status":"success","data":{"resultType":"vector","result":[%s]}}`, strings.Join(samples, ","))
+		_, _ = fmt.Fprintf(w, `{"status":"success","data":{"resultType":"vector","result":[%s]}}`, strings.Join(entries, ","))
 	}))
 	t.Cleanup(server.Close)
 	return server
 }
 
-// samples answers every query with the given sample values.
-func samples(values ...string) func(string) (int, []string) {
+// everyQueryReturns answers every query with the given sample values.
+func everyQueryReturns(values ...string) func(string) (int, []string) {
 	return func(string) (int, []string) { return http.StatusOK, values }
 }
 
-// gateQuery is a metric gate query whose expression is its name and whose threshold is 0.5.
+// queriesReturn answers each query with the sample values listed for its expression, and a
+// query that is not listed with HTTP 500.
+func queriesReturn(values map[string][]string) func(string) (int, []string) {
+	return func(expr string) (int, []string) {
+		if answer, ok := values[expr]; ok {
+			return http.StatusOK, answer
+		}
+		return http.StatusInternalServerError, nil
+	}
+}
+
+// gateQuery is a metric gate query whose expression is its name, so that a test's Prometheus
+// can answer it by name.
 func gateQuery(name string) maconfig.MetricGateQuery {
 	return maconfig.MetricGateQuery{Name: name, Expr: name, Threshold: 0.5}
 }
@@ -103,7 +116,7 @@ func TestHealthCheckGate(t *testing.T) {
 		expectConfig(mc, []modelconfig.ModelConfigEntry{servingEntry(deploymentName, "model-v1")}, nil)
 		expectStatus(mb, "model-v1", readyOnAllReplicas(), nil)
 	}
-	withNoData := func(annotation string) func(*testing.T) *v2pb.Deployment {
+	withNoDataAnnotation := func(annotation string) func(*testing.T) *v2pb.Deployment {
 		return func(t *testing.T) *v2pb.Deployment {
 			dep := withSingleClusterAnnotation(t, gateDeployment(), "test-cluster")
 			dep.Annotations[common.MetricGateNoDataAnnotation] = annotation
@@ -117,6 +130,7 @@ func TestHealthCheckGate(t *testing.T) {
 		setupMocks    func(*backendsmocks.MockBackend, *modelconfigmocks.MockModelConfigProvider)
 		prometheus    func(expr string) (int, []string) // nil means no metric gate is configured
 		queries       []maconfig.MetricGateQuery        // empty uses the gate's default query
+		failClosed    bool
 		wantHealthy   bool
 		wantErr       bool
 		wantReasonSub string
@@ -231,11 +245,8 @@ func TestHealthCheckGate(t *testing.T) {
 			deployment: func(t *testing.T) *v2pb.Deployment {
 				return withSingleClusterAnnotation(t, gateDeployment(), "test-cluster")
 			},
-			setupMocks: func(mb *backendsmocks.MockBackend, mc *modelconfigmocks.MockModelConfigProvider) {
-				expectConfig(mc, []modelconfig.ModelConfigEntry{servingEntry(deploymentName, "model-v1")}, nil)
-				expectStatus(mb, "model-v1", readyOnAllReplicas(), nil)
-			},
-			prometheus:    samples("0.5"),
+			setupMocks:    readyModel,
+			prometheus:    everyQueryReturns("0.5"),
 			wantHealthy:   false,
 			wantReasonSub: "breached for model model-v2",
 		},
@@ -247,7 +258,7 @@ func TestHealthCheckGate(t *testing.T) {
 				return dep
 			},
 			setupMocks:  readyModel,
-			prometheus:  samples("0.001"),
+			prometheus:  everyQueryReturns("0.001"),
 			wantHealthy: true,
 		},
 		{
@@ -256,7 +267,7 @@ func TestHealthCheckGate(t *testing.T) {
 				return withSingleClusterAnnotation(t, gateDeployment(), "test-cluster")
 			},
 			setupMocks:  readyModel,
-			prometheus:  samples(),
+			prometheus:  everyQueryReturns(),
 			wantHealthy: true,
 			wantNoData:  "model-v2: triton-inference-failure-ratio",
 		},
@@ -269,7 +280,7 @@ func TestHealthCheckGate(t *testing.T) {
 				return dep
 			},
 			setupMocks:  readyModel,
-			prometheus:  samples(),
+			prometheus:  everyQueryReturns(),
 			wantHealthy: true,
 			wantNoData:  "model-desired: triton-inference-failure-ratio",
 		},
@@ -279,58 +290,94 @@ func TestHealthCheckGate(t *testing.T) {
 				return withSingleClusterAnnotation(t, gateDeployment(), "test-cluster")
 			},
 			setupMocks:  readyModel,
-			prometheus:  samples(),
+			prometheus:  everyQueryReturns(),
 			queries:     []maconfig.MetricGateQuery{gateQuery("first"), gateQuery("second")},
 			wantHealthy: true,
 			wantNoData:  "model-v2: first, second",
 		},
 		{
 			name:        "samples clear a stale no-data annotation",
-			deployment:  withNoData("model-v2: triton-inference-failure-ratio"),
+			deployment:  withNoDataAnnotation("model-v2: triton-inference-failure-ratio"),
 			setupMocks:  readyModel,
-			prometheus:  samples("0.001"),
+			prometheus:  everyQueryReturns("0.001"),
 			wantHealthy: true,
 		},
 		{
-			name: "a rollback leaves the no-data annotation untouched",
+			name: "a rollback leaves the no-data annotation unchanged when queries return no samples",
 			deployment: func(t *testing.T) *v2pb.Deployment {
-				dep := withNoData("model-v2: left by the rollout")(t)
+				dep := withNoDataAnnotation("model-v2: left by the rollout")(t)
 				dep.Status.Stage = v2pb.DEPLOYMENT_STAGE_ROLLBACK_IN_PROGRESS
 				return dep
 			},
 			setupMocks:  readyModel,
-			prometheus:  samples(),
+			prometheus:  everyQueryReturns(),
 			wantHealthy: true,
 			wantNoData:  "model-v2: left by the rollout",
 		},
 		{
-			name:       "a breach leaves the no-data annotation untouched, because later queries did not run",
-			deployment: withNoData("model-v2: left by an earlier evaluation"),
-			setupMocks: readyModel,
-			prometheus: func(expr string) (int, []string) {
-				if expr == "first" {
-					return http.StatusOK, []string{"1"}
-				}
-				return http.StatusOK, nil
+			name: "a rollback leaves the no-data annotation unchanged when queries return samples",
+			deployment: func(t *testing.T) *v2pb.Deployment {
+				dep := withNoDataAnnotation("model-v2: left by the rollout")(t)
+				dep.Status.Stage = v2pb.DEPLOYMENT_STAGE_ROLLBACK_IN_PROGRESS
+				return dep
 			},
+			setupMocks:  readyModel,
+			prometheus:  everyQueryReturns("0"),
+			wantHealthy: true,
+			wantNoData:  "model-v2: left by the rollout",
+		},
+		{
+			name:          "a breach on a query listed in the no-data annotation removes it from the list",
+			deployment:    withNoDataAnnotation("model-v2: first"),
+			setupMocks:    readyModel,
+			prometheus:    everyQueryReturns("1"),
+			queries:       []maconfig.MetricGateQuery{gateQuery("first")},
+			wantHealthy:   false,
+			wantReasonSub: `"first" breached`,
+		},
+		{
+			name: "a breach still lists the later queries that return no samples",
+			deployment: func(t *testing.T) *v2pb.Deployment {
+				return withSingleClusterAnnotation(t, gateDeployment(), "test-cluster")
+			},
+			setupMocks:    readyModel,
+			prometheus:    queriesReturn(map[string][]string{"first": {"1"}, "second": nil}),
 			queries:       []maconfig.MetricGateQuery{gateQuery("first"), gateQuery("second")},
 			wantHealthy:   false,
 			wantReasonSub: `"first" breached`,
+			wantNoData:    "model-v2: second",
+		},
+		{
+			name:        "a failed query that is skipped leaves the no-data annotation unchanged",
+			deployment:  withNoDataAnnotation("model-v2: left by an earlier evaluation"),
+			setupMocks:  readyModel,
+			prometheus:  queriesReturn(nil),
+			wantHealthy: true,
+			wantNoData:  "model-v2: left by an earlier evaluation",
+		},
+		{
+			name:          "a failed query leaves the no-data annotation unchanged when the gate fails closed",
+			deployment:    withNoDataAnnotation("model-v2: left by an earlier evaluation"),
+			setupMocks:    readyModel,
+			prometheus:    queriesReturn(map[string][]string{"first": nil}),
+			queries:       []maconfig.MetricGateQuery{gateQuery("first"), gateQuery("second")},
+			failClosed:    true,
+			wantHealthy:   false,
+			wantReasonSub: `"second" could not be evaluated`,
 			wantNoData:    "model-v2: left by an earlier evaluation",
 		},
 		{
-			name:       "a failed query that is skipped leaves the no-data annotation untouched",
-			deployment: withNoData("model-v2: left by an earlier evaluation"),
-			setupMocks: readyModel,
-			prometheus: func(string) (int, []string) {
-				return http.StatusInternalServerError, nil
-			},
+			name:        "a failed query keeps the other queries that return no samples off the annotation",
+			deployment:  withNoDataAnnotation("model-v2: left by an earlier evaluation"),
+			setupMocks:  readyModel,
+			prometheus:  queriesReturn(map[string][]string{"first": nil}),
+			queries:     []maconfig.MetricGateQuery{gateQuery("first"), gateQuery("second")},
 			wantHealthy: true,
 			wantNoData:  "model-v2: left by an earlier evaluation",
 		},
 		{
 			name:        "ready models without a metric gate pass and clear a stale no-data annotation",
-			deployment:  withNoData("model-v2: triton-inference-failure-ratio"),
+			deployment:  withNoDataAnnotation("model-v2: triton-inference-failure-ratio"),
 			setupMocks:  readyModel,
 			wantHealthy: true,
 		},
@@ -351,7 +398,11 @@ func TestHealthCheckGate(t *testing.T) {
 			var gate *metricgate.Gate
 			if tt.prometheus != nil {
 				server := prometheusServer(t, tt.prometheus)
-				gate = metricgate.New(maconfig.MetricGateConfig{PrometheusURL: server.URL, Queries: tt.queries}, zap.NewNop())
+				gate = metricgate.New(maconfig.MetricGateConfig{
+					PrometheusURL: server.URL,
+					FailClosed:    tt.failClosed,
+					Queries:       tt.queries,
+				}, zap.NewNop())
 			}
 			plugin := &Plugin{
 				client:              newKubeClient(t),
@@ -383,6 +434,10 @@ func TestHealthCheckGate(t *testing.T) {
 }
 
 func TestHealthCheckGate_MetricGateNoData_LogsOnlyWhenTheAnnotationChanges(t *testing.T) {
+	const (
+		reportedMessage = "metric gate queries returned no samples; the candidate was not judged on them"
+		removedMessage  = "removed the metric gate no-data annotation"
+	)
 	missing := []string{"first", "second"}
 	server := prometheusServer(t, func(expr string) (int, []string) {
 		if slices.Contains(missing, expr) {
@@ -409,9 +464,7 @@ func TestHealthCheckGate_MetricGateNoData_LogsOnlyWhenTheAnnotationChanges(t *te
 		require.NoError(t, err)
 		require.True(t, healthy)
 	}
-	reported := func() []observer.LoggedEntry {
-		return logs.FilterMessageSnippet("returned no samples").All()
-	}
+	reported := func() []observer.LoggedEntry { return logs.FilterMessage(reportedMessage).All() }
 
 	evaluate()
 	evaluate()
@@ -419,12 +472,13 @@ func TestHealthCheckGate_MetricGateNoData_LogsOnlyWhenTheAnnotationChanges(t *te
 	assert.Equal(t, "model-v2: first, second", deployment.Annotations[common.MetricGateNoDataAnnotation])
 	assert.Equal(t, zap.InfoLevel, reported()[0].Level)
 	assert.Equal(t, map[string]interface{}{
-		"operation":        "health_check_gate",
-		"namespace":        "default",
-		"deployment":       "test-deployment",
-		"inference_server": "test-server",
-		"candidate":        "model-v2",
-		"queries":          []interface{}{"first", "second"},
+		"operation":           "health_check_gate",
+		"namespace":           "default",
+		"deployment":          "test-deployment",
+		"inference_server":    "test-server",
+		"model":               "model-v2",
+		"previous_annotation": "",
+		"queries":             []interface{}{"first", "second"},
 	}, reported()[0].ContextMap())
 
 	missing = []string{"second"}
@@ -441,15 +495,64 @@ func TestHealthCheckGate_MetricGateNoData_LogsOnlyWhenTheAnnotationChanges(t *te
 	evaluate()
 	evaluate()
 	assert.NotContains(t, deployment.Annotations, common.MetricGateNoDataAnnotation)
-	removed := logs.FilterMessageSnippet("removed the metric gate no-data annotation").All()
+	removed := logs.FilterMessage(removedMessage).All()
 	require.Len(t, removed, 1)
 	assert.Equal(t, zap.InfoLevel, removed[0].Level)
-	assert.Equal(t, "test-deployment", removed[0].ContextMap()["deployment"])
-	assert.Equal(t, "model-v3", removed[0].ContextMap()["candidate"])
+	assert.Equal(t, map[string]interface{}{
+		"operation":           "health_check_gate",
+		"namespace":           "default",
+		"deployment":          "test-deployment",
+		"inference_server":    "test-server",
+		"model":               "model-v3",
+		"previous_annotation": "model-v3: second",
+	}, removed[0].ContextMap())
+	assert.Equal(t, 4, logs.Len(), "the gate itself logs nothing at Info")
+}
+
+func TestHealthCheckGate_MetricGateNoData_LogNamesTheModelInTheAnnotation(t *testing.T) {
+	server := prometheusServer(t, everyQueryReturns())
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	core, logs := observer.New(zap.InfoLevel)
+	plugin := &Plugin{
+		client:          newKubeClient(t),
+		backendRegistry: createTestRegistry(backendsmocks.NewMockBackend(ctrl)),
+		logger:          zap.New(core),
+		metricGate:      metricgate.New(maconfig.MetricGateConfig{PrometheusURL: server.URL}, zap.NewNop()),
+	}
+	deployment := gateDeployment()
+	deployment.Spec.DesiredRevision = &api.ResourceIdentifier{Name: "model-desired"}
+	deployment.Status.CandidateRevision = nil
+
+	_, err := plugin.HealthCheckGate(context.Background(), plugins.ObservabilityContext{}, deployment)
+
+	require.NoError(t, err)
+	require.Equal(t, 1, logs.Len())
+	assert.Equal(t, "model-desired", logs.All()[0].ContextMap()["model"])
+	assert.Contains(t, deployment.Annotations[common.MetricGateNoDataAnnotation], "model-desired: ")
+}
+
+func TestNoDataAnnotation(t *testing.T) {
+	long := strings.Repeat("é", maxNoDataAnnotationBytes)
+
+	assert.Empty(t, noDataAnnotation("model-v2", nil), "no listed query means no annotation")
+	assert.Equal(t, "model-v2: first, second", noDataAnnotation("model-v2", []string{"first", "second"}))
+
+	atCap := strings.Repeat("q", maxNoDataAnnotationBytes-len("m: "))
+	assert.Equal(t, "m: "+atCap, noDataAnnotation("m", []string{atCap}), "a value at the cap is kept whole")
+	overCap := noDataAnnotation("m", []string{atCap + "q"})
+	assert.Len(t, overCap, maxNoDataAnnotationBytes)
+	assert.True(t, strings.HasSuffix(overCap, "q..."))
+
+	capped := noDataAnnotation("model-v2", []string{long, "second"})
+	assert.LessOrEqual(t, len(capped), maxNoDataAnnotationBytes)
+	assert.True(t, strings.HasPrefix(capped, "model-v2: éé"))
+	assert.True(t, strings.HasSuffix(capped, "é..."), "the cut must not split a character")
+	assert.True(t, utf8.ValidString(capped))
 }
 
 func TestHealthCheckGate_MetricGateTemplateError_ReturnsError(t *testing.T) {
-	server := prometheusServer(t, samples("0"))
+	server := prometheusServer(t, everyQueryReturns("0"))
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	plugin := &Plugin{

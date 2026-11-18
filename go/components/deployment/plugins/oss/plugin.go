@@ -379,12 +379,12 @@ func (p *Plugin) checkMetricGate(ctx context.Context, deployment *v2pb.Deploymen
 	if err != nil {
 		return false, fmt.Errorf("evaluate metric gate for deployment %s/%s: %w", deployment.Namespace, deployment.Name, err)
 	}
-	// The annotation is updated only when every query was answered: an incomplete evaluation
-	// does not know whether the unanswered queries return samples. It is also left alone
-	// during a rollback, because the candidate is being unloaded and a query that returns no
-	// samples then says nothing about the rollout.
-	if result.Complete && deployment.Status.Stage != v2pb.DEPLOYMENT_STAGE_ROLLBACK_IN_PROGRESS {
-		p.recordMetricGateNoData(deployment, result)
+	// The no-data annotation is updated only when every query was answered: a query that
+	// failed may or may not return samples. It is also left unchanged during a rollback,
+	// because the candidate is being unloaded and a query that returns no samples then says
+	// nothing about the rollout.
+	if result.AllQueriesAnswered && deployment.Status.Stage != v2pb.DEPLOYMENT_STAGE_ROLLBACK_IN_PROGRESS {
+		p.recordMetricGateNoData(deployment, result.Model, result.NoData)
 	}
 	if !result.Healthy {
 		p.recordGateReason(deployment, result.Reason)
@@ -395,34 +395,52 @@ func (p *Plugin) checkMetricGate(ctx context.Context, deployment *v2pb.Deploymen
 }
 
 // recordMetricGateNoData lists in MetricGateNoDataAnnotation the queries that returned no
-// samples for the candidate, or removes the annotation when there are none. The gate runs on
-// every reconcile, so the outcome is logged only when the annotation changes.
-func (p *Plugin) recordMetricGateNoData(deployment *v2pb.Deployment, result metricgate.Result) {
-	current := ""
-	if len(result.NoData) > 0 {
-		current = fmt.Sprintf("%s: %s", result.Model, strings.Join(result.NoData, ", "))
-	}
-	if current == deployment.Annotations[common.MetricGateNoDataAnnotation] {
+// samples for the model, or removes the annotation when there are none. The gate runs on
+// every reconcile, so it logs only when the value differs from the one on the deployment.
+func (p *Plugin) recordMetricGateNoData(deployment *v2pb.Deployment, model string, queries []string) {
+	previous := deployment.Annotations[common.MetricGateNoDataAnnotation]
+	current := noDataAnnotation(model, queries)
+	if current == previous {
 		return
 	}
-	fields := []zap.Field{
+	logger := p.logger.With(
 		zap.String("operation", "health_check_gate"),
 		zap.String("namespace", deployment.Namespace),
 		zap.String("deployment", deployment.Name),
 		zap.String("inference_server", deployment.Spec.GetInferenceServer().GetName()),
-		zap.String("candidate", deployment.Status.GetCandidateRevision().GetName()),
-	}
+		zap.String("model", model),
+		zap.String("previous_annotation", previous))
 	if current == "" {
 		delete(deployment.Annotations, common.MetricGateNoDataAnnotation)
-		p.logger.Info("removed the metric gate no-data annotation", fields...)
+		logger.Info("removed the metric gate no-data annotation")
 		return
 	}
-	p.logger.Info("metric gate queries returned no samples; the candidate was not judged on them",
-		append(fields, zap.Strings("queries", result.NoData))...)
 	if deployment.Annotations == nil {
 		deployment.Annotations = make(map[string]string)
 	}
 	deployment.Annotations[common.MetricGateNoDataAnnotation] = current
+	logger.Info("metric gate queries returned no samples; the candidate was not judged on them",
+		zap.Strings("queries", queries))
+}
+
+// maxNoDataAnnotationBytes bounds the no-data annotation. Query and model names have no
+// length limit, and an object whose annotations exceed the API server's limit cannot be
+// updated at all.
+const maxNoDataAnnotationBytes = 1024
+
+// noDataAnnotation renders the value of MetricGateNoDataAnnotation: "<model>: <query>,
+// <query>", cut short with "..." when it is longer than maxNoDataAnnotationBytes, or empty
+// when no query is listed.
+func noDataAnnotation(model string, queries []string) string {
+	if len(queries) == 0 {
+		return ""
+	}
+	value := model + ": " + strings.Join(queries, ", ")
+	if len(value) <= maxNoDataAnnotationBytes {
+		return value
+	}
+	const ellipsis = "..."
+	return strings.ToValidUTF8(value[:maxNoDataAnnotationBytes-len(ellipsis)], "") + ellipsis
 }
 
 // recordGateReason logs a failed gate and stores the reason on the deployment.

@@ -6,8 +6,8 @@ package common
 const HealthGateReasonAnnotation = "deployment.michelangelo.ai/health-gate-reason"
 
 // MetricGateNoDataAnnotation lists, on the Deployment, the metric gate queries that returned
-// no samples or only NaN, as "<model>: <query>, <query>". Such a query cannot breach, so the
-// candidate was not judged on it. The value comes from the last evaluation during a rollout
-// in which every query was answered, and the annotation is removed once every query returns
-// samples.
+// no samples or only NaN, as "<model>: <query>, <query>", cut short with "..." when longer
+// than 1024 bytes. Such a query cannot breach, so the candidate was not judged on it. The
+// value comes from the most recent evaluation that answered every query, not counting
+// evaluations during a rollback. The annotation is removed once every query returns samples.
 const MetricGateNoDataAnnotation = "deployment.michelangelo.ai/metric-gate-no-data"
