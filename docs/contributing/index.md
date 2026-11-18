@@ -1,5 +1,5 @@
 ---
-last_verified: 2026-10-14
+last_verified: 2026-11-18
 ---
 
 # Contributing to Michelangelo AI
@@ -52,6 +52,8 @@ Understanding which directory owns which subsystem helps you find the right code
 3. **Go backend contributors**: read [Go Key Concepts and Terms](dev/go/key-concepts-and-terms.md) for the package map, key types, and patterns before making changes
 4. **Build from source** — follow [Building from Source](building-michelangelo-ai-from-source.md) to ensure your environment is working
 5. **Set up the sandbox** — `poetry run ma sandbox create` gives you a local Kubernetes cluster with all Michelangelo AI components running. Most integration tests and manual testing use this.
+
+6. **Sign the CLA** — you are prompted to sign the Contributor License Agreement when you open your first PR. See [Contributor License Agreement](pr-process.md#contributor-license-agreement-cla)
 
 ## Finding Work
 
