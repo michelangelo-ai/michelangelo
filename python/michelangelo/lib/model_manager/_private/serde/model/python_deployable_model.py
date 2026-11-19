@@ -16,9 +16,6 @@ from typing import TYPE_CHECKING
 from michelangelo.lib.model_manager._private.serde.loader.custom_model_loader import (
     load_custom_model,
 )
-from michelangelo.lib.model_manager._private.serde.loader.torch_deployable_model_loader import (  # noqa: E501
-    _load_torch_python_deployable_model,
-)
 from michelangelo.lib.model_manager._private.utils.loader_utils import (
     import_model_class,
 )
@@ -35,7 +32,7 @@ def _import_packaged_model_class(model_path: str) -> type:
     if not os.path.exists(model_class_path):
         raise ValueError(f"Missing model_class.txt in {version_dir}")
 
-    with open(model_class_path) as f:
+    with open(model_class_path, encoding="utf-8") as f:
         model_class_str = f.read().strip()
     if not model_class_str:
         raise ValueError(f"model_class.txt is empty in {version_dir}")
@@ -93,5 +90,10 @@ def load_python_deployable_model(model_path: str) -> torch.nn.Module | Model:
         ValueError: If ``0/model_class.txt`` is missing or empty.
     """
     if _is_torch_python_backend(model_path):
+        # Imported here so custom models and schema readers never import torch.
+        from michelangelo.lib.model_manager._private.serde.loader.torch_deployable_model_loader import (  # noqa: E501
+            _load_torch_python_deployable_model,
+        )
+
         return _load_torch_python_deployable_model(model_path)
     return _load_custom_python_deployable_model(model_path)
