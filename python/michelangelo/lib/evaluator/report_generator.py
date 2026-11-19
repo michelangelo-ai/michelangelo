@@ -1,6 +1,6 @@
 """Assemble evaluator output DataFrames into an ``EvaluationReport``.
 
-:func:`generate_evaluation_report` renders one dataset; :func:`build_combined_report`
+`generate_evaluation_report` renders one dataset; `build_combined_report`
 merges several, prefixing each dataset's name onto its segments so a single report
 can compare them.
 """

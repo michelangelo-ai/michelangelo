@@ -3,7 +3,7 @@
 Each function here turns a slice of the evaluator's output DataFrames into one
 ``Chart`` proto. ``report_generator`` assembles them into a report; nothing in
 this module reads or writes the report itself except
-:func:`create_default_evaluation_report`.
+`create_default_evaluation_report`.
 
 Two DataFrame shapes are consumed:
 

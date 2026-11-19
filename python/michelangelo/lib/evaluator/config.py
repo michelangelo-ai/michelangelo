@@ -1,4 +1,4 @@
-"""Load an :class:`EvaluatorConfig` from a plain dict or a YAML file.
+"""Load an `EvaluatorConfig` from a plain dict or a YAML file.
 
 Pipelines carry evaluator configuration as a proto ``Struct``, which arrives
 here as ordinary Python dicts. These loaders turn that into the typed schema
@@ -19,7 +19,7 @@ __all__ = ["load_config_from_dict", "load_config_from_yaml"]
 
 
 def load_config_from_dict(config_dict: dict[str, Any]) -> EvaluatorConfig:
-    """Build an :class:`EvaluatorConfig` from a nested dict.
+    """Build an `EvaluatorConfig` from a nested dict.
 
     Args:
         config_dict: Mapping with a ``metrics`` list. Each entry needs ``name``
@@ -56,11 +56,11 @@ def load_config_from_dict(config_dict: dict[str, Any]) -> EvaluatorConfig:
 
 
 def load_config_from_yaml(yaml_path: str) -> EvaluatorConfig:
-    """Build an :class:`EvaluatorConfig` from a YAML file.
+    """Build an `EvaluatorConfig` from a YAML file.
 
     Args:
         yaml_path: Path to a YAML document with the same shape
-            :func:`load_config_from_dict` expects.
+            `load_config_from_dict` expects.
 
     Returns:
         The parsed configuration.

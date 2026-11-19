@@ -60,11 +60,11 @@ _MAX_FAILURE_LINES = 20
 class FailureLogBudget:
     """Caps how many FAIL results get logged at INFO across one evaluator run.
 
-    :func:`format_failures` already caps the raised exception's message at 20
-    lines, but without this, :func:`run_sanity_checks` logs every breach at INFO
+    `format_failures` already caps the raised exception's message at 20
+    lines, but without this, `run_sanity_checks` logs every breach at INFO
     as it happens -- a metric broken globally is usually broken in every segment
     too, so a wide segmentation floods the task log long before the exception is
-    raised. Share one instance across every :func:`run_sanity_checks` call in a
+    raised. Share one instance across every `run_sanity_checks` call in a
     run so the cap is global, not per scope.
     """
 
@@ -124,7 +124,7 @@ class SanityCheckResult:
     Attributes:
         dataset: Dataset the metrics belong to.
         scope: :data:`GLOBAL_SCOPE`, or a label from
-            :func:`segment_scope_label`.
+            `segment_scope_label`.
         metric: Metric the check targets.
         operator: Comparison the value had to satisfy.
         threshold: Bound the value was compared against.
@@ -268,7 +268,7 @@ def run_sanity_checks(
     Args:
         dataset_name: Dataset these metrics belong to, e.g. ``"test"``.
         scope: :data:`GLOBAL_SCOPE`, or a label from
-            :func:`segment_scope_label`.
+            `segment_scope_label`.
         metrics: Metric name -> value for this scope. Segment rows carry their
             segment columns here too; extra keys are ignored.
         checks: All configured checks; those not targeting this dataset are
@@ -370,7 +370,7 @@ def verify_all_checks_ran(
 ) -> None:
     """Raise if a configured check never got a chance to run.
 
-    :func:`validate_sanity_checks` confirms the target dataset was *handed* to
+    `validate_sanity_checks` confirms the target dataset was *handed* to
     the task, but an optional split can still be skipped at runtime when it
     loads empty. A check whose dataset vanished that way would silently gate
     nothing, leaving the author believing they are protected.

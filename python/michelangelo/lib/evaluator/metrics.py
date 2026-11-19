@@ -86,12 +86,14 @@ def encode_categorical_column_to_tensor(
         The converted tensor.
 
     Example:
-        >>> encode_categorical_column_to_tensor(np.array(["a", "b", "a", "c"]))
-        tensor([0, 1, 0, 2])
-        >>> encode_categorical_column_to_tensor(
-        ...     np.array([1.0, 2.5]), torch.float, factorize_strings=False
-        ... )
-        tensor([1.0000, 2.5000])
+    ```python
+    >>> encode_categorical_column_to_tensor(np.array(["a", "b", "a", "c"]))
+    tensor([0, 1, 0, 2])
+    >>> encode_categorical_column_to_tensor(
+    ...     np.array([1.0, 2.5]), torch.float, factorize_strings=False
+    ... )
+    tensor([1.0000, 2.5000])
+    ```
     """
     # Arrow-backed columns (anything round-tripped through Ray) are not numpy
     # arrays and expose an ArrowDtype with no `.kind`, so coerce before probing.
@@ -209,10 +211,12 @@ def infer_task_type_from_path(metric_path: str) -> str:
         tag the class with ``_metric_type`` to override.
 
     Example:
-        >>> infer_task_type_from_path("torchmetrics.classification.Accuracy")
-        'classification'
-        >>> infer_task_type_from_path("torchmetrics.retrieval.RetrievalMAP")
-        'retrieval'
+    ```python
+    >>> infer_task_type_from_path("torchmetrics.classification.Accuracy")
+    'classification'
+    >>> infer_task_type_from_path("torchmetrics.retrieval.RetrievalMAP")
+    'retrieval'
+    ```
     """
     for token, task in (
         (".classification.", "classification"),

@@ -1,6 +1,6 @@
 """Compute the long-format ``chart_df`` that backs the evaluation report charts.
 
-:func:`compute_chart_data_for_group` runs over one group of rows -- a segment, a
+`compute_chart_data_for_group` runs over one group of rows -- a segment, a
 GLOBAL pass, or a whole dataset -- and emits one row per curve point. It returns
 a DataFrame rather than protos so it can run under a distributed ``map_groups``
 and be concatenated before the report is built.
@@ -441,11 +441,11 @@ def compute_chart_data_for_group(
 def chart_segment_labels(df: pd.DataFrame, segment_columns: list[str]) -> set[str]:
     """Build the chart_df-format segment labels for the rows of ``df``.
 
-    Mirrors the format :func:`compute_chart_data_for_group` writes into
+    Mirrors the format `compute_chart_data_for_group` writes into
     chart_df's ``segment`` column: ``str(value)`` for a single segment column,
     ``" / "``-joined str-cast values for several. Use this to derive the
     surviving-segment set from a metrics DataFrame so it can be handed to
-    :func:`filter_chart_df_by_segments`.
+    `filter_chart_df_by_segments`.
 
     Args:
         df: Frame holding the segment columns.
@@ -466,7 +466,7 @@ def filter_chart_df_by_segments(
 ) -> pd.DataFrame:
     """Keep only the chart_df rows whose ``segment`` is in ``segments``.
 
-    Pair with :func:`chart_segment_labels` to keep chart_df consistent with a
+    Pair with `chart_segment_labels` to keep chart_df consistent with a
     metrics DataFrame that has been row-filtered, e.g. by
     ``min_segment_row_count``.
 
@@ -487,7 +487,7 @@ def filter_small_segments(segment_df: pd.DataFrame, min_row_count: int) -> pd.Da
 
     Args:
         segment_df: Segment results carrying a ``_segment_row_count`` column.
-        min_row_count: Minimum rows a segment needs to survive. Values <= 0
+        min_row_count: Minimum rows a segment needs to survive. Values of 0 or less
             disable filtering.
 
     Returns:
@@ -526,7 +526,7 @@ def filter_ray_to_surviving_segments(
 ) -> Any:
     """Drop the Ray Dataset rows belonging to already-filtered-out segments.
 
-    Called after :func:`filter_small_segments` so the chart groupby does not
+    Called after `filter_small_segments` so the chart groupby does not
     waste work on segments ``min_segment_row_count`` already dropped. Keys are
     compared as strings, to match the ``"UNKNOWN"`` null-fill applied earlier.
 

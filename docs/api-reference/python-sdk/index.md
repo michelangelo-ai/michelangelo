@@ -13,10 +13,10 @@ Start here if you're authoring pipelines with the Python SDK.
 > for what a task, a workflow, and Uniflow actually are before diving into the raw
 > signatures below.
 
-Two modules referenced elsewhere in this reference, the XGBoost trainer and
-`LightningTrainer` itself, aren't in the current generator config and have no page
-yet; the **Trainer** section covers
-only the Torch collate-function and memory-estimation utilities so far.
+`LightningTrainer` itself isn't in the current generator config and has no page yet;
+the **Trainer** section covers the XGBoost trainer and the Torch collate-function and
+memory-estimation utilities. The FSDP2 strategy lives in a private module
+(`_private/model_parallel.py`) and is intentionally not documented as a public API.
 
 ## Uniflow — Tasks & Workflows
 
@@ -55,13 +55,28 @@ The pusher component for CanvasFlex template-driven workflows.
 
 ## Trainer
 
-PyTorch training utilities used with `LightningTrainer` (`LightningTrainer` itself
-isn't generated into this reference yet — see the note above).
+The XGBoost trainer, plus PyTorch training utilities used with `LightningTrainer`
+(`LightningTrainer` itself isn't generated into this reference yet — see the note above).
 
 | Module | Description |
 |--------|-------------|
+| [`lib.trainer.xgboost.xgboost_trainer`](reference/lib/trainer/xgboost/xgboost_trainer.md) | `XGBoostTrainer` and `XGBoostTrainerParam` for distributed XGBoost on Ray |
 | [`lib.trainer.torch.data_collate_functions`](reference/lib/trainer/torch/data_collate_functions.md) | Collate functions for data loading |
 | [`lib.trainer.torch.utils`](reference/lib/trainer/torch/utils.md) | Trainer utilities |
+
+## Evaluator
+
+Config-driven TorchMetrics evaluation, threshold gating, and report building.
+
+| Module | Description |
+|--------|-------------|
+| [`lib.evaluator.evaluator`](reference/lib/evaluator/evaluator.md) | `TorchMetricEvaluator` and `create_evaluator` |
+| [`lib.evaluator.metrics`](reference/lib/evaluator/metrics.md) | Metric instantiation, dtype resolution, tensor extraction |
+| [`lib.evaluator.config`](reference/lib/evaluator/config.md) | Load an `EvaluatorConfig` from a dict or YAML |
+| [`lib.evaluator.chart_data`](reference/lib/evaluator/chart_data.md) | ROC/PR curves, regression errors, segment filtering |
+| [`lib.evaluator.sanity`](reference/lib/evaluator/sanity.md) | Threshold gating that fails a run on a breached metric |
+| [`lib.evaluator.report`](reference/lib/evaluator/report.md) | `EvaluationReport` charts and tables |
+| [`lib.evaluator.report_generator`](reference/lib/evaluator/report_generator.md) | Build per-dataset and combined reports |
 
 ## Native Transform
 
@@ -88,7 +103,6 @@ This section is generated from source docstrings via `pydoc-markdown`, configure
 `pydoc-markdown.yml` at the repo root. If you're updating docstrings, regenerate the
 pages above by running `bun run docs:api` from the `website/` directory.
 
-`pydoc-markdown` isn't currently declared as a project dependency, so on a fresh
-checkout you need to install it yourself before the script succeeds. Install the
-version the committed pages were generated with, `pip install pydoc-markdown==4.8.2`;
-other versions can produce different output from the same docstrings.
+`pydoc-markdown` is pinned in `website/requirements-docs.txt`. On a fresh checkout,
+install it with `pip install -r website/requirements-docs.txt` before running the
+script; other versions can produce different output from the same docstrings.
