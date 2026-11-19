@@ -5,10 +5,8 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-import pyarrow as pa
-import pyarrow.compute as pc
-
 if TYPE_CHECKING:
+    import pyarrow as pa
     import ray.data
 
     from michelangelo.workflow.schema.sampling import SamplingConfig
@@ -38,16 +36,22 @@ def hash_sample_batch(
         The kept rows.
     """
     import pandas as pd
+    import pyarrow as pa
+    import pyarrow.compute as pc
 
-    if len(agg_cols) == 1:
-        keys = pc.cast(batch.column(agg_cols[0]), pa.string())
-    else:
-        keys = pc.binary_join_element_wise(
-            *[pc.cast(batch.column(c), pa.string()) for c in agg_cols], "|"
-        )
+    # Each column is cast to string so a value hashes the same whatever type
+    # a block infers for it, then hashed on its own: joining values with a
+    # separator would merge ("x|y", "z") with ("x", "y|z"), and a null would
+    # null the whole key.
+    keys = pd.DataFrame(
+        {
+            str(i): pc.cast(batch.column(c), pa.string()).to_pandas()
+            for i, c in enumerate(agg_cols)
+        }
+    )
     # PyArrow has no stable hash kernel. pandas' hash is stable across runs and
     # processes and returns uint64 values spread over [0, 2**64).
-    hashes = pd.util.hash_pandas_object(keys.to_pandas(), index=False)
+    hashes = pd.util.hash_pandas_object(keys, index=False)
     return batch.filter(pa.array(hashes < int(fraction * 2**64)))
 
 

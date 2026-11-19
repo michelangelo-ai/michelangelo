@@ -99,13 +99,42 @@ def test_group_sampling_is_independent_of_batching():
 
 
 def test_group_sampling_by_one_column():
-    """A single grouping column is hashed directly, without joining."""
+    """A single grouping column keeps whole groups too."""
     table = pa.Table.from_pylist(_ROWS)
 
     kept = hash_sample_batch(table, 0.5, ["session"]).column("session").to_pylist()
 
     assert 0 < len(set(kept)) < 100
     assert all(kept.count(s) == 4 for s in set(kept))
+
+
+def _kept_keys(rows, fraction=0.5):
+    table = pa.Table.from_pylist(rows)
+    kept = hash_sample_batch(table, fraction, ["a", "b"])
+    return set(zip(kept.column("a").to_pylist(), kept.column("b").to_pylist()))
+
+
+def test_separator_in_values_does_not_merge_groups():
+    """("x|y", "z") and ("x", "y|z") are different groups."""
+    pairs = [(f"k{i}|v", "w") for i in range(200)] + [
+        (f"k{i}", "v|w") for i in range(200)
+    ]
+    kept = _kept_keys([{"a": a, "b": b} for a, b in pairs])
+
+    joined_alike = [
+        ((f"k{i}|v", "w") in kept, (f"k{i}", "v|w") in kept) for i in range(200)
+    ]
+    assert any(left != right for left, right in joined_alike)
+
+
+def test_null_keys_are_sampled_by_their_other_columns():
+    """A null in one column does not drop or keep every such row together."""
+    rows = [{"a": None, "b": str(i)} for i in range(200)]
+
+    kept = _kept_keys(rows)
+
+    assert 0 < len(kept) < 200
+    assert _kept_keys(rows) == kept
 
 
 def test_empty_agg_cols_samples_at_random(ray_session):
