@@ -1,9 +1,9 @@
 """Find fields in a Triton ``config.pbtxt`` without a protobuf dependency.
 
 Only what the loaders need is read: a top-level string field, a top-level list
-of messages, and the scalar fields of one message. Text inside quoted strings
-and ``#`` comments is never matched, and fields can come in any order or on
-one line.
+of messages, and the scalar fields of one message. ``#`` comments are removed
+first, and text inside quoted strings is never matched, so fields can come in
+any order or on one line.
 """
 
 from __future__ import annotations
@@ -35,6 +35,26 @@ def _string_end(content: str, start: int) -> int:
     return len(content) - 1
 
 
+def _strip_comments(content: str) -> str:
+    """Remove ``#`` comments, keeping a ``#`` inside a quoted string."""
+    out = []
+    i = 0
+    while i < len(content):
+        char = content[i]
+        if char == '"':
+            end = _string_end(content, i)
+            out.append(content[i : end + 1])
+            i = end + 1
+            continue
+        if char == "#":
+            end = content.find("\n", i)
+            i = len(content) if end == -1 else end
+            continue
+        out.append(char)
+        i += 1
+    return "".join(out)
+
+
 def _top_level_fields(content: str) -> Iterator[tuple[str, int]]:
     """Yield ``(name, end)`` for each field name at nesting depth 0."""
     depth = 0
@@ -43,10 +63,6 @@ def _top_level_fields(content: str) -> Iterator[tuple[str, int]]:
         char = content[i]
         if char == '"':
             i = _string_end(content, i) + 1
-            continue
-        if char == "#":
-            end = content.find("\n", i)
-            i = len(content) if end == -1 else end + 1
             continue
         if char in "{[":
             depth += 1
@@ -90,6 +106,7 @@ def find_string_field(content: str, name: str) -> str | None:
     Returns:
         The unquoted value, or ``None`` if the field is not set.
     """
+    content = _strip_comments(content)
     for field, end in _top_level_fields(content):
         if field == name:
             match = _STRING_VALUE.match(content, end)
@@ -111,6 +128,7 @@ def find_messages(content: str, name: str) -> list[str]:
         The text inside each ``{ ... }`` message of the list, in order. Empty if
         the field is not set.
     """
+    content = _strip_comments(content)
     for field, end in _top_level_fields(content):
         if field != name:
             continue
@@ -121,7 +139,9 @@ def find_messages(content: str, name: str) -> list[str]:
         messages = []
         i = match.end()
         while i < list_end:
-            if content[i] == "{":
+            if content[i] == '"':
+                i = _string_end(content, i)
+            elif content[i] == "{":
                 close = _matching_close(content, i)
                 messages.append(content[i + 1 : close])
                 i = close
@@ -142,6 +162,7 @@ def message_fields(message: str) -> dict[str, str]:
         The raw value text of each field, keyed by name. Quoted strings are
         unquoted; lists keep their brackets.
     """
+    message = _strip_comments(message)
     fields = {}
     depth = 0
     flat = []

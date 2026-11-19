@@ -245,6 +245,20 @@ class LoadDeployableModelSchemaTest(_PackageTest):
         self.assertEqual(_items(schema.input_schema), [("x", DataType.FLOAT, [1])])
         self.assertEqual(_items(schema.output_schema), [("y", DataType.FLOAT, [1])])
 
+    def test_commented_fields_and_brackets_are_ignored(self):
+        """A commented-out field or bracket changes nothing; "#" in a string stays."""
+        schema = self.schema_of(
+            "input: [  # ]\n"
+            "  {\n"
+            '    # name: "old"\n'
+            '    name: "x#1"\n'
+            "    data_type: TYPE_FP32  # { not a message\n"
+            "    dims: [ 1 ]  # ]\n"
+            "  }\n"
+            "]\n"
+        )
+        self.assertEqual(_items(schema.input_schema), [("x#1", DataType.FLOAT, [1])])
+
     def test_missing_config_pbtxt(self):
         """A package without config.pbtxt is a FileNotFoundError."""
         with self.assertRaisesRegex(FileNotFoundError, "config.pbtxt not found"):
