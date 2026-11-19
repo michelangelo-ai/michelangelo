@@ -39,8 +39,23 @@ This file renders to empty YAML when all checks pass.
 {{- if not (kindIs "bool" .Values.envoy.corsAllowCredentials) -}}
 {{- fail (printf "envoy.corsAllowCredentials must be a boolean (true or false), got %s %q — with --set-string the value is a non-empty string, which Helm treats as true. Use --set envoy.corsAllowCredentials=true|false. See docs/operator-guides/setup/ui-authentication.md." (kindOf .Values.envoy.corsAllowCredentials) (toString .Values.envoy.corsAllowCredentials)) -}}
 {{- end -}}
-{{- if or (not .Values.envoy.corsOrigins) (eq .Values.envoy.corsOrigins ".*") -}}
-{{- fail "envoy.corsAllowCredentials=true requires an explicit, non-wildcard envoy.corsOrigins regex. Leaving corsOrigins unset (or set to \".*\") matches every origin, and Envoy's CORS filter reflects that back as the exact caller's Origin on every request — combined with allow_credentials this would let any origin make authenticated, credentialed calls. See docs/operator-guides/setup/ui-authentication.md." -}}
+{{- $envoyCorsOrigins := .Values.envoy.corsOrigins -}}
+{{- if and $envoyCorsOrigins (not (kindIs "string" $envoyCorsOrigins)) -}}
+{{- fail (printf "envoy.corsOrigins must be a string (a single RE2 regex such as \"https://ml\\\\.example\\\\.com\"), got %s %q. See docs/operator-guides/setup/ui-authentication.md." (kindOf $envoyCorsOrigins) (toString $envoyCorsOrigins)) -}}
+{{- else -}}
+{{- $permissive := not $envoyCorsOrigins -}}
+{{- if $envoyCorsOrigins -}}
+{{- /* Compile the regex as written first, so an invalid one fails here with Helm's "error parsing regexp" message naming $envoyCorsOrigins. */ -}}
+{{- $_ := mustRegexMatch $envoyCorsOrigins "" -}}
+{{- /* Envoy's safe_regex is a full match, so anchor the same way, then probe with origins no deployment should allow. A regex that accepts them accepts any host. */ -}}
+{{- $anchored := printf "^(?:%s)$" $envoyCorsOrigins -}}
+{{- range list "null" "https://michelangelo-cors-probe.invalid" "http://michelangelo-cors-probe.invalid" -}}
+{{- if mustRegexMatch $anchored . -}}{{- $permissive = true -}}{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- if $permissive -}}
+{{- fail (printf "envoy.corsAllowCredentials=true requires an explicit, non-wildcard envoy.corsOrigins regex, got %q. Leaving corsOrigins unset renders \".*\", and patterns such as \".*\", \"^.*$\", \".+\" or \"https?://.*\" match every origin (including \"null\"). Envoy's CORS filter reflects the caller's exact Origin on a match — combined with allow_credentials this would let any origin make authenticated, credentialed calls. List the UI origin explicitly with dots escaped, e.g. \"https://ml\\\\.example\\\\.com\". See docs/operator-guides/setup/ui-authentication.md." (toString (default "" $envoyCorsOrigins))) -}}
+{{- end -}}
 {{- end -}}
 {{- end -}}
 {{- $apiCredentials := .Values.ui.apiCredentials -}}
