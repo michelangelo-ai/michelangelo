@@ -27,6 +27,7 @@ metadata:
 data:
   config.json: |
     {
-      "apiBaseUrl": {{ $apiBaseUrl | quote }}
+      "apiBaseUrl": {{ $apiBaseUrl | quote }}{{- if .Values.ui.apiCredentials }},
+      "apiCredentials": {{ .Values.ui.apiCredentials | quote }}{{- end }}
     }
 {{- end }}

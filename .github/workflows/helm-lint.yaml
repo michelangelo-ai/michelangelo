@@ -160,6 +160,15 @@ jobs:
             --set controllermgr.enabled=false \
             2>/dev/null
 
+      - name: Validate ui.apiCredentials rejects unsupported values (false, 0, unknown modes must fail)
+        run: |
+          for v in false 0 bogus; do
+            ! helm template michelangelo helm/michelangelo \
+              -f helm/michelangelo/values-k3d.yaml \
+              --set ui.apiCredentials=$v \
+              2>/dev/null || { echo "ui.apiCredentials=$v was accepted"; exit 1; }
+          done
+
       - name: Template — Ingress enabled (UI + Envoy, hosts[] syntax)
         run: |
           helm template michelangelo helm/michelangelo \

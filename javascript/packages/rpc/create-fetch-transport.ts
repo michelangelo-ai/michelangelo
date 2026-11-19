@@ -19,6 +19,7 @@ export function createFetchTransport(options: FetchTransportOptions): FetchTrans
     async callUnary(serviceName, methodName, request, perRequestHeaders) {
       const response = await fetch(`${baseUrl}/${serviceName}/${methodName}`, {
         method: 'POST',
+        ...(options.credentials ? { credentials: options.credentials } : {}),
         headers: perRequestHeaders ? { ...headers, ...perRequestHeaders } : headers,
         body: JSON.stringify(request),
       });

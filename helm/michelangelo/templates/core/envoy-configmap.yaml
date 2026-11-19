@@ -39,6 +39,16 @@ data:
                             allow_origin_string_match:
                               - safe_regex:
                                   regex: {{ .Values.envoy.corsOrigins | default ".*" | quote }}
+                            {{- if .Values.envoy.corsAllowCredentials }}
+                            # Lets the browser send/receive cookies on cross-origin calls to
+                            # Envoy — needed when an auth proxy (e.g. oauth2-proxy) in front of
+                            # the UI and Envoy authenticates callers via a session cookie.
+                            # Gated by templates/validations.yaml on corsOrigins naming a
+                            # specific origin: Envoy's CORS filter reflects the caller's actual
+                            # Origin header on a match rather than sending a literal "*", so
+                            # this must never ship paired with the wildcard default.
+                            allow_credentials: true
+                            {{- end }}
                             allow_methods: "GET, POST, OPTIONS"
                             allow_headers: "authorization,connect-protocol-version,connect-timeout-ms,content-type,context-ttl-ms,grpc-timeout,rpc-caller,rpc-encoding,rpc-service,x-grpc-web,x-user-agent,x-user-email,x-user-name"
                             max_age: "1728000"
