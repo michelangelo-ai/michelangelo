@@ -13,6 +13,8 @@ spec:
       {{- include "michelangelo.componentSelectorLabels" (dict "context" . "component" "ui") | nindent 6 }}
   template:
     metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/core/ui-configmap.yaml") . | sha256sum }}
       labels:
         {{- include "michelangelo.componentSelectorLabels" (dict "context" . "component" "ui") | nindent 8 }}
     spec:

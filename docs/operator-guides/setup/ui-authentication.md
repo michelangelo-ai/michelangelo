@@ -37,6 +37,8 @@ ui:
 
 The chart renders `"apiCredentials": "include"` into the UI's `config.json`, and adds `allow_credentials: true` to Envoy's CORS policy.
 
+The UI deployment carries a checksum of its `config.json` ConfigMap, so changing `ui.apiCredentials` or `ui.apiBaseUrl` with `helm upgrade` restarts the UI pods.
+
 ### Writing the `corsOrigins` regex
 
 Envoy matches `envoy.corsOrigins` against the whole `Origin` header, so you don't need `^` or `$`. Keep the regex as narrow as your UI origins:

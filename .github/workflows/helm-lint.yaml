@@ -193,6 +193,17 @@ jobs:
             --debug \
             | grep 'allow_credentials: true'
 
+      - name: Template — UI pods roll when the UI config changes (checksum/config differs)
+        run: |
+          before=$(helm template michelangelo helm/michelangelo \
+            -f helm/michelangelo/values-k3d.yaml \
+            -s templates/core/ui-deployment.yaml | grep 'checksum/config:')
+          after=$(helm template michelangelo helm/michelangelo \
+            -f helm/michelangelo/values-k3d.yaml \
+            --set ui.apiCredentials=omit \
+            -s templates/core/ui-deployment.yaml | grep 'checksum/config:')
+          [ "$before" != "$after" ] || { echo "ui-deployment checksum/config did not change"; exit 1; }
+
       - name: Template — Ingress enabled (UI + Envoy, hosts[] syntax)
         run: |
           helm template michelangelo helm/michelangelo \
