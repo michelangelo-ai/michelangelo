@@ -137,6 +137,37 @@ def test_null_keys_are_sampled_by_their_other_columns():
     assert _kept_keys(rows) == kept
 
 
+def test_timestamp_units_do_not_split_groups():
+    """The same instant keeps the same fate in blocks with different units."""
+    import datetime
+
+    instants = [
+        datetime.datetime(2026, 1, 1) + datetime.timedelta(hours=i) for i in range(200)
+    ]
+
+    def kept(unit):
+        table = pa.table({"t": pa.array(instants, pa.timestamp(unit))})
+        return (
+            hash_sample_batch(table, 0.5, ["t"])
+            .column("t")
+            .cast(pa.timestamp("s"))
+            .to_pylist()
+        )
+
+    assert 0 < len(kept("s")) < 200
+    assert kept("s") == kept("ms") == kept("us")
+
+
+def test_empty_dataset_is_returned_unsampled(ray_session):
+    """A dataset with no blocks cannot be sampled by Ray, so it is kept as is."""
+    import ray.data
+
+    empty = ray.data.from_items([])
+    config = SamplingConfig(fractions={"train": 0.5})
+
+    assert apply_sampling(empty, config, "train") is empty
+
+
 def test_empty_agg_cols_samples_at_random(ray_session):
     """An empty grouping list is the same as none: seeded random sampling."""
     grouped = SamplingConfig(fractions={"train": 0.25}, agg_cols=[])
