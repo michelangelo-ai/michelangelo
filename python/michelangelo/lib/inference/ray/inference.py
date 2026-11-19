@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import dataclasses
+import inspect
 import logging
 import os
 import shutil
+import tarfile
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pyarrow as pa
@@ -34,15 +37,21 @@ if TYPE_CHECKING:
 _logger = logging.getLogger(__name__)
 
 
-# Default Ray actor fault tolerance for inference map_batches workers. Non-zero so a
-# single
-# dead actor (transient GPU/NVLink fault, OOM-killed process) restarts and its in-
-# flight block
-# is resubmitted, instead of failing a multi-day job at the first fault. Users can
-# override or
-# disable via BatchOptions.max_restarts / max_task_retries = 0.
-DEFAULT_ACTOR_MAX_RESTARTS = 3
+# Default Ray actor fault tolerance for inference map_batches workers. A dead actor
+# (transient GPU/NVLink fault, OOM-killed process) is restarted without limit, which
+# is Ray Data's own default: restarts count over an actor's whole lifetime, so any
+# bound would eventually fail a long job. Each block is resubmitted at most
+# DEFAULT_ACTOR_MAX_TASK_RETRIES times, so a block that kills its actor every time
+# fails the job instead of looping forever. Override either, or disable with 0, via
+# BatchOptions.max_restarts / max_task_retries.
+DEFAULT_ACTOR_MAX_RESTARTS = -1
 DEFAULT_ACTOR_MAX_TASK_RETRIES = 3
+
+# Columns the Predictor adds to identify the model, never reported as outputs.
+_METADATA_COLUMNS = ("model_name", "model_version")
+
+# Whether shutil.unpack_archive takes the PEP 706 extraction ``filter``.
+_UNPACK_HAS_FILTER = "filter" in inspect.signature(shutil.unpack_archive).parameters
 
 
 class Predictor:
@@ -55,9 +64,10 @@ class Predictor:
         model_path: str | None = None,
         model_type: str | None = None,
         storage_backend: StorageBackend | None = None,
-        column_padding_values: dict[str, any] | None = None,
+        column_padding_values: dict[str, Any] | None = None,
         columns_to_keep: list[str] | None = None,
-        num_cpus: int | None = None,
+        num_cpus: float | None = None,
+        revision_id: int | None = None,
     ):
         """Load the model.
 
@@ -74,25 +84,32 @@ class Predictor:
                 ``model_path`` is used as a local directory.
             column_padding_values: The padding value for each column.
             columns_to_keep: Restricts output to exactly these columns, plus
-                predictions and metadata columns (model_name), which are always
-                kept automatically. None keeps all input columns. Label/target
-                columns are NOT auto-kept -- list them explicitly if a downstream
-                task needs them, or they will be silently dropped.
+                predictions and metadata columns (model_name, model_version),
+                which are always kept automatically. None keeps all input
+                columns. Label/target columns are NOT auto-kept -- list them
+                explicitly if a downstream task needs them, or they will be
+                silently dropped.
             num_cpus: The actor's CPU reservation (``batch_options.num_cpus``).
-                When > 1, also sizes a thread pool used to parallelize the
-                per-column PyArrow->NumPy conversion of the input batch, since
-                that work is memory-bandwidth-bound rather than CPU-count-bound
-                and benefits from concurrency up to the actor's own CPU budget.
-                Defaults to None (serial conversion, unchanged behavior).
+                When it is 2 or more, ``int(num_cpus)`` also sizes a thread pool
+                used to parallelize the per-column PyArrow->NumPy conversion of
+                the input batch, since that work is memory-bandwidth-bound rather
+                than CPU-count-bound and benefits from concurrency up to the
+                actor's own CPU budget. Defaults to None (serial conversion).
+            revision_id: The model's revision, written as a ``model_version``
+                column next to ``model_name``. Ignored without ``model_name``.
 
         Raises:
             ValueError: If ``model_path`` is not provided.
         """
         local_model_path = None
+        self._conversion_executor = None
+        # The download directory, removed when the actor is garbage-collected.
+        self._download_dir = None
 
         if model_path:
             if storage_backend is not None:
                 local_model_path = _download_model_package(storage_backend, model_path)
+                self._download_dir = os.path.dirname(local_model_path)
             else:
                 local_model_path = model_path
 
@@ -102,24 +119,34 @@ class Predictor:
             model_name,
         )
         self.model_name = model_name
+        self.revision_id = revision_id
         self.column_padding_values = column_padding_values
         self.columns_to_keep = columns_to_keep
         self.inference.load_model()
         self.input_columns = self.get_input_columns(input_columns)
         self.scalar_output_columns = self.get_scalar_output_columns(self.inference)
-        self._conversion_executor = (
-            ThreadPoolExecutor(max_workers=num_cpus)
-            if num_cpus and num_cpus > 1
-            else None
-        )
+        conversion_threads = int(num_cpus) if num_cpus else 0
+        if conversion_threads > 1:
+            self._conversion_executor = ThreadPoolExecutor(
+                max_workers=conversion_threads
+            )
+
+    def __del__(self):
+        """Stop the conversion threads and remove the downloaded package."""
+        executor = getattr(self, "_conversion_executor", None)
+        if executor is not None:
+            executor.shutdown(wait=False)
+        download_dir = getattr(self, "_download_dir", None)
+        if download_dir:
+            shutil.rmtree(download_dir, ignore_errors=True)
 
     def _convert_input_batch(
         self, batch: pa.Table, input_columns: list[str]
     ) -> dict[str, np.ndarray]:
         """Convert each input column from PyArrow to NumPy.
 
-        Uses a thread pool sized to ``num_cpus`` (see __init__) when that's > 1;
-        otherwise identical to the original serial dict comprehension.
+        Uses a thread pool sized to ``int(num_cpus)`` (see __init__) when that is
+        2 or more; otherwise converts the columns one by one.
         """
         if self._conversion_executor is None:
             return {col: pyarrow_to_numpy(batch[col]) for col in input_columns}
@@ -151,14 +178,11 @@ class Predictor:
                 predictions = self.inference_on_records(input_batch)
         except Exception as e:
             if _should_restart_actor_for_gpu_error(e):
-                # The CUDA context is poisoned: raising here would
-                # fail the whole Ray Data job
-                # (and an in-process retry could never succeed
-                # anyway). Kill the worker process
-                # instead, so Ray restarts the actor on a fresh CUDA
-                # context (max_restarts) and
-                # resubmits this block (max_task_retries). With
-                # restarts disabled the job fails
+                # The CUDA context is poisoned: raising here would fail the whole
+                # Ray Data job (and an in-process retry could never succeed
+                # anyway). Kill the worker process instead, so Ray restarts the
+                # actor on a fresh CUDA context (max_restarts) and resubmits this
+                # block (max_task_retries). With restarts disabled the job fails
                 # either way, so this is never worse than raising.
                 _logger.critical(
                     "Unrecoverable GPU error in %s inference; exiting worker process "
@@ -192,6 +216,10 @@ class Predictor:
         extra: dict[str, pa.Array] = {}
         if self.model_name:
             extra["model_name"] = pa.array(np.full(batch_size, self.model_name))
+            if self.revision_id is not None:
+                extra["model_version"] = pa.array(
+                    np.full(batch_size, self.revision_id, dtype=np.int64)
+                )
         return extra
 
     def inference_on_records(
@@ -368,19 +396,69 @@ def _download_model_package(storage_backend: StorageBackend, model_path: str) ->
         model_path: The package's URI: a directory, or a single archive file.
 
     Returns:
-        The local package directory.
+        The local package directory, the only entry of a new temporary directory
+        that the caller removes when done.
+
+    Raises:
+        ValueError: If an archive member would be written outside the package
+            directory.
     """
     work_dir = tempfile.mkdtemp()
-    package_dir = os.path.join(work_dir, "package")
-    storage_backend.download(model_path, package_dir)
-    if not os.path.isfile(package_dir):
-        return package_dir
+    try:
+        package_dir = os.path.join(work_dir, "package")
+        storage_backend.download(model_path, package_dir)
+        if not os.path.isfile(package_dir):
+            return package_dir
 
-    archive = os.path.join(work_dir, "package.tar")
-    os.rename(package_dir, archive)
-    shutil.unpack_archive(archive, package_dir, "tar")
-    os.remove(archive)
-    return package_dir
+        archive = os.path.join(work_dir, "package.tar")
+        os.rename(package_dir, archive)
+        _unpack_tar(archive, package_dir)
+        os.remove(archive)
+        return package_dir
+    except BaseException:
+        shutil.rmtree(work_dir, ignore_errors=True)
+        raise
+
+
+def _unpack_tar(archive: str, dest: str) -> None:
+    """Unpack a tar archive, refusing members that would land outside ``dest``.
+
+    Uses the ``"data"`` extraction filter where Python has it; older Pythons
+    check each member's path and link target here instead.
+
+    Args:
+        archive: The tar file.
+        dest: The directory to unpack into.
+
+    Raises:
+        ValueError: If a member, or the target of a link member, is outside
+            ``dest``. Pythons with the filter raise ``tarfile.TarError``
+            subclasses instead.
+    """
+    if _UNPACK_HAS_FILTER:
+        shutil.unpack_archive(archive, dest, "tar", filter="data")
+        return
+
+    root = os.path.realpath(dest)
+
+    def inside(path: str) -> bool:
+        resolved = os.path.realpath(path)
+        return resolved == root or resolved.startswith(root + os.sep)
+
+    with tarfile.open(archive) as tar:
+        for member in tar.getmembers():
+            target = os.path.join(root, member.name)
+            if member.issym():
+                link = os.path.join(os.path.dirname(target), member.linkname)
+            elif member.islnk():
+                link = os.path.join(root, member.linkname)
+            else:
+                link = target
+            if not (inside(target) and inside(link)) or os.path.isabs(member.name):
+                raise ValueError(
+                    f"Archive member {member.name!r} would be extracted outside {dest}."
+                )
+        tar.extractall(root)
 
 
 @dataclass
@@ -388,6 +466,7 @@ class ModelIdentifier:
     """Identifies the model to run."""
 
     name: str | None = None
+    # Written as the model_version column next to model_name.
     revision_id: int | None = None
     # The path to the model in remote storage
     model_path: str | None = None
@@ -410,15 +489,15 @@ class BatchOptions:
     # For example, specify num_cpus=1 to request 1 CPU for each parallel map worker.
     # Warning: Specifying both num_cpus and num_gpus for map tasks is
     # experimental, and may result in scheduling or stability issues.
-    num_cpus: int | None = None
+    num_cpus: float | None = None
     # Ray actor max concurrency for class-based map_batches workers.
     max_concurrency: int | None = None
     # Maximum queued/in-flight tasks per Ray actor in the ActorPoolMapOperator.
     max_tasks_in_flight_per_actor: int | None = None
-    # Times Ray restarts a dead inference actor before failing the job.
-    # None applies DEFAULT_ACTOR_MAX_RESTARTS; 0 disables restarts.
+    # Times Ray restarts a dead inference actor over its lifetime before failing the
+    # job. None applies DEFAULT_ACTOR_MAX_RESTARTS (unlimited); 0 disables restarts.
     max_restarts: int | None = None
-    # Times the in-flight block is resubmitted after its actor dies. Only effective with
+    # Times a block is resubmitted after its actor dies. Only effective with
     # max_restarts != 0. None applies DEFAULT_ACTOR_MAX_TASK_RETRIES; 0 disables.
     max_task_retries: int | None = None
 
@@ -428,12 +507,12 @@ class PaddingOptions:
     """Options for padding Rag tensors in input data."""
 
     # The padding value for each column.
-    # If not provided, the padding value will be 0 for all columns.
+    # If not provided, a column is padded with the sentinel for its dtype.
     # If provided, the padding value will be used for the corresponding column.
     # The key is the column name and the value is the padding value.
     # The padding value can be a scalar of any type, but it must match the type of
     # the column.
-    column_padding_values: dict[str, any] | None = None
+    column_padding_values: dict[str, Any] | None = None
 
 
 @dataclass
@@ -463,13 +542,18 @@ def batch_model_inference(
 ) -> tuple[dict[str, ray.data.Dataset], list[OutputColumnMetadata]]:
     """Run offline batch inference on packaged models.
 
+    Each model scores every dataset, and a dataset's results are the union of
+    the models' results: one row per input row per model, told apart by the
+    ``model_name`` column. When the models produce different columns, every
+    model's rows get the full set of columns, null where another model
+    produced them, so the union has one schema.
+
     Args:
         config: A list of InferenceConfig objects, each containing model
             information and input columns.
         datasets: A dictionary mapping dataset names to ray.data.Dataset objects.
         storage_backend: Downloads each model's ``model_path`` onto the workers.
-            When None,
-            ``model_path`` is used as a local directory.
+            When None, ``model_path`` is used as a local directory.
 
     Returns:
         A tuple containing:
@@ -487,6 +571,9 @@ def batch_model_inference(
 
     results = {}
     output_column_metadata = []
+    # The columns each model adds, as (name, type) pairs, from a one-row sample
+    # scored on the first non-empty dataset.
+    added_columns: dict[int, list[tuple[str, pa.DataType]]] = {}
 
     for dataset_name, dataset in datasets.items():
         if not dataset or not dataset.limit(1).take(1):
@@ -498,46 +585,140 @@ def batch_model_inference(
             continue
 
         inference_results = []
-        output_metadata = []
 
-        for inference_config in config:
+        for index, inference_config in enumerate(config):
             model_name = inference_config.model.name
             _logger.info(
                 f"Running model inference for {model_name} on dataset {dataset_name}."
             )
 
-            inference_result = _run_predictor_inference(
-                inference_config, dataset, storage_backend
-            )
-            inference_results.append(inference_result)
-
-            # Determine output columns by running a 1-row sample through the Predictor.
-            # We must NOT call inference_result.schema() directly — that triggers Ray to
-            # execute the full map_batches(Predictor) pipeline on the entire dataset,
-            # which fills the object store and causes a deadlock when limit() cannot
-            # short-circuit the ActorPoolMapOperator.
-            sample_for_schema = _run_predictor_inference(
-                inference_config, dataset.limit(1), storage_backend
-            )
-            input_set = set(dataset.schema().names)
-            output_set = set(sample_for_schema.schema().names)
-            output_columns = output_set - input_set - {"model_name"}
-            output_metadata.extend(
-                [
-                    OutputColumnMetadata(column_name=col, model_name=model_name)
-                    for col in output_columns
-                ]
+            inference_results.append(
+                _run_predictor_inference(inference_config, dataset, storage_backend)
             )
 
-        # We assume all the output columns for every dataset is the same
-        # because each dataset are used by the same set of models
-        if len(output_column_metadata) == 0:
-            output_column_metadata = output_metadata
+            if index not in added_columns:
+                added_columns[index] = _sample_added_columns(
+                    inference_config, dataset, storage_backend
+                )
+                output_column_metadata.extend(
+                    OutputColumnMetadata(column_name=name, model_name=model_name)
+                    for name, _ in added_columns[index]
+                    if name not in _METADATA_COLUMNS
+                )
 
+        if len(inference_results) > 1:
+            inference_results = _align_columns(
+                inference_results, config, dataset, added_columns
+            )
         results[dataset_name] = merge_ray_datasets(inference_results) or dataset
 
     _logger.info("Model inference completed for all datasets.")
     return results, output_column_metadata
+
+
+def _sample_added_columns(
+    config: InferenceConfig,
+    dataset: ray.data.Dataset,
+    storage_backend: StorageBackend | None,
+) -> list[tuple[str, pa.DataType]]:
+    """Return the columns one model adds, by scoring a one-row sample.
+
+    The full result's ``schema()`` must NOT be read instead: that makes Ray
+    execute the whole ``map_batches(Predictor)`` pipeline, which fills the object
+    store and deadlocks because ``limit()`` cannot short-circuit the actor pool.
+    The sample runs on a single actor, whatever the configured pool size.
+
+    Args:
+        config: The model to sample.
+        dataset: A non-empty dataset the model scores.
+        storage_backend: Downloads the model package.
+
+    Returns:
+        The added columns in output order, metadata columns included.
+    """
+    sample_options = dataclasses.replace(
+        config.batch_options or BatchOptions(),
+        concurrency=1,
+        max_tasks_in_flight_per_actor=None,
+    )
+    sample = _run_predictor_inference(
+        dataclasses.replace(config, batch_options=sample_options),
+        dataset.limit(1),
+        storage_backend,
+    )
+    input_names = set(dataset.schema().names)
+    schema = sample.schema()
+    return [
+        (name, dtype)
+        for name, dtype in zip(schema.names, schema.types)
+        if name not in input_names
+    ]
+
+
+def _align_columns(
+    inference_results: list[ray.data.Dataset],
+    config: list[InferenceConfig],
+    dataset: ray.data.Dataset,
+    added_columns: dict[int, list[tuple[str, pa.DataType]]],
+) -> list[ray.data.Dataset]:
+    """Give every model's result the same columns, in the same order.
+
+    A column a model does not produce is filled with nulls of the type another
+    model produces it with. Results that already match are returned unchanged.
+
+    Args:
+        inference_results: One result per model, in ``config`` order.
+        config: The models.
+        dataset: The scored input dataset.
+        added_columns: The columns each model adds, by index in ``config``.
+
+    Returns:
+        The results, each with the union of all models' columns.
+    """
+    input_schema = dataset.schema()
+    input_types = dict(zip(input_schema.names, input_schema.types))
+    per_model = []
+    for index, inference_config in enumerate(config):
+        keep = inference_config.columns_to_keep
+        passthrough = [
+            (name, input_types[name])
+            for name in input_schema.names
+            if keep is None or name in keep
+        ]
+        per_model.append(passthrough + added_columns[index])
+
+    target: dict[str, pa.DataType] = {}
+    for columns in per_model:
+        for name, dtype in columns:
+            target.setdefault(name, dtype)
+    target_columns = list(target.items())
+    if all(columns == target_columns for columns in per_model):
+        return inference_results
+
+    return [
+        result.map_batches(
+            _fill_missing_columns,
+            fn_kwargs={"columns": target_columns},
+            batch_format="pyarrow",
+            zero_copy_batch=True,
+        )
+        for result in inference_results
+    ]
+
+
+def _fill_missing_columns(
+    batch: pa.Table, columns: list[tuple[str, pa.DataType]]
+) -> pa.Table:
+    """Select ``columns`` in order, adding null columns for any the batch lacks."""
+    names = set(batch.column_names)
+    return pa.table(
+        {
+            name: batch.column(name)
+            if name in names
+            else pa.nulls(batch.num_rows, type=dtype)
+            for name, dtype in columns
+        }
+    )
 
 
 def _run_predictor_inference(
@@ -596,11 +777,10 @@ def _run_predictor_inference(
     if max_concurrency is not None:
         extra_ray_remote_args["max_concurrency"] = max_concurrency
 
-    # Actor fault tolerance: restart dead actors and resubmit their in-flight
-    # blocks, so one
+    # Actor fault tolerance: restart dead actors and resubmit their blocks, so a
     # transient GPU fault (see _private/lib/gpu_errors.py, used in
-    # Predictor.__call__) or OOM-killed worker
-    # doesn't fail a multi-day job. Defaults are applied above; 0 disables explicitly.
+    # Predictor.__call__) or an OOM-killed worker doesn't fail a multi-day job.
+    # Defaults are applied above; 0 disables explicitly.
     extra_ray_remote_args["max_restarts"] = max_restarts
     extra_ray_remote_args["max_task_retries"] = max_task_retries
 
@@ -615,6 +795,7 @@ def _run_predictor_inference(
             "column_padding_values": column_padding_values,
             "columns_to_keep": config.columns_to_keep,
             "num_cpus": num_cpus,
+            "revision_id": config.model.revision_id,
         },
         batch_size=batch_size,
         num_gpus=num_gpus,

@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import io
 import os
+import shutil
+import tarfile
 import tempfile
 import unittest
 from pathlib import Path
@@ -11,6 +14,7 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pyarrow as pa
+import pyarrow.parquet as pq
 import ray
 import torch
 
@@ -26,6 +30,7 @@ from michelangelo.lib.inference.ray.inference import (
     Predictor,
     _download_model_package,
     _run_predictor_inference,
+    _unpack_tar,
     batch_model_inference,
 )
 from michelangelo.lib.inference.ray.tests.fixtures.predict import (
@@ -63,6 +68,7 @@ class MockPredictor:
         column_padding_values: dict | None = None,
         columns_to_keep: list[str] | None = None,
         num_cpus: int | None = None,
+        revision_id: int | None = None,
     ):
         """Initialize the instance."""
         self.inference = ModelInference("/unused")
@@ -89,12 +95,35 @@ class MockPredictor:
         return pa.table(arrays)
 
 
+class NamedScorePredictor:
+    """Stands in for ``Predictor`` with an output column named after the model."""
+
+    def __init__(self, model_name=None, revision_id=None, **_kwargs):
+        """Initialize the instance."""
+        self.model_name = model_name
+        self.revision_id = revision_id
+
+    def __call__(self, batch: pa.Table) -> pa.Table:
+        """Add ``score_<model_name>`` and the metadata columns."""
+        n = batch.num_rows
+        out = batch.append_column(
+            f"score_{self.model_name}", pa.array([1.5] * n, type=pa.float64())
+        )
+        out = out.append_column("model_name", pa.array([self.model_name] * n))
+        if self.revision_id is not None:
+            out = out.append_column(
+                "model_version", pa.array([self.revision_id] * n, type=pa.int64())
+            )
+        return out
+
+
 class FakeSchema:
     """Test helper."""
 
     def __init__(self, names):
         """Initialize the instance."""
         self.names = names
+        self.types = [pa.string()] * len(names)
 
 
 class FakeDataset:
@@ -136,13 +165,14 @@ def _config(batch_options=None, **kwargs):
 class InferenceTest(TestCase):
     """Tests for Inference."""
 
-    def setUp(self):
-        """Setup."""
-        if not ray.is_initialized():
-            ray.init(num_cpus=2)
+    @classmethod
+    def setUpClass(cls):
+        """Start one local Ray session for the class."""
+        ray.init(num_cpus=2, include_dashboard=False, ignore_reinit_error=True)
 
-    def tearDown(self):
-        """Teardown."""
+    @classmethod
+    def tearDownClass(cls):
+        """Stop the Ray session."""
         ray.shutdown()
 
     @patch(f"{_MODULE}.merge_ray_datasets")
@@ -168,21 +198,26 @@ class InferenceTest(TestCase):
 
         batch_model_inference(config, {"dataset": dataset})
 
+        # The full run, then the one-row output sample.
         self.assertEqual(len(dataset.map_batches_calls), 2)
-        for _, kwargs in dataset.map_batches_calls:
-            self.assertEqual(kwargs["batch_size"], 8192)
-            self.assertEqual(kwargs["num_gpus"], 1)
-            self.assertEqual(kwargs["num_cpus"], 8)
-            self.assertEqual(kwargs["max_concurrency"], 8)
-            self.assertEqual(kwargs["concurrency"], 8)
-            self.assertEqual(kwargs["compute"].min_size, 8)
-            self.assertEqual(kwargs["compute"].max_size, 8)
-            self.assertEqual(kwargs["compute"].max_tasks_in_flight_per_actor, 16)
-            self.assertEqual(kwargs["max_restarts"], 5)
-            self.assertEqual(kwargs["max_task_retries"], 2)
-            ctor = kwargs["fn_constructor_kwargs"]
-            self.assertEqual(ctor["columns_to_keep"], ["user_id"])
-            self.assertEqual(ctor["num_cpus"], 8)
+        (_, kwargs), (_, sample_kwargs) = dataset.map_batches_calls
+        self.assertEqual(kwargs["batch_size"], 8192)
+        self.assertEqual(kwargs["num_gpus"], 1)
+        self.assertEqual(kwargs["num_cpus"], 8)
+        self.assertEqual(kwargs["max_concurrency"], 8)
+        self.assertEqual(kwargs["concurrency"], 8)
+        self.assertEqual(kwargs["compute"].min_size, 8)
+        self.assertEqual(kwargs["compute"].max_size, 8)
+        self.assertEqual(kwargs["compute"].max_tasks_in_flight_per_actor, 16)
+        self.assertEqual(kwargs["max_restarts"], 5)
+        self.assertEqual(kwargs["max_task_retries"], 2)
+        ctor = kwargs["fn_constructor_kwargs"]
+        self.assertEqual(ctor["columns_to_keep"], ["user_id"])
+        self.assertEqual(ctor["num_cpus"], 8)
+        # The sample keeps the resources but runs on one actor.
+        self.assertEqual(sample_kwargs["concurrency"], 1)
+        self.assertIsNone(sample_kwargs["compute"])
+        self.assertEqual(sample_kwargs["num_gpus"], 1)
 
     @patch(f"{_MODULE}.merge_ray_datasets")
     def test_unset_max_concurrency_is_omitted_from_map_batches(
@@ -212,10 +247,10 @@ class InferenceTest(TestCase):
 
         batch_model_inference(config, {"dataset": dataset})
 
-        for _, kwargs in dataset.map_batches_calls:
-            self.assertEqual(kwargs["compute"].min_size, 1)
-            self.assertEqual(kwargs["compute"].max_size, float("inf"))
-            self.assertEqual(kwargs["compute"].max_tasks_in_flight_per_actor, 16)
+        _, kwargs = dataset.map_batches_calls[0]
+        self.assertEqual(kwargs["compute"].min_size, 1)
+        self.assertEqual(kwargs["compute"].max_size, float("inf"))
+        self.assertEqual(kwargs["compute"].max_tasks_in_flight_per_actor, 16)
 
     @patch(f"{_MODULE}.merge_ray_datasets")
     def test_actor_fault_tolerance_defaults_applied_when_unset(
@@ -325,6 +360,74 @@ class InferenceTest(TestCase):
             ],
         )
 
+    @patch(f"{_MODULE}.Predictor", NamedScorePredictor)
+    def test_models_with_different_outputs_share_one_schema(self):
+        """Each model's rows get every model's columns, null where it has none."""
+        config = [
+            InferenceConfig(
+                model=ModelIdentifier(name=name, revision_id=revision),
+                batch_options=BatchOptions(concurrency=1),
+            )
+            for name, revision in (("a", 1), ("b", None))
+        ]
+        dataset = ray.data.from_items([{"x": 1}, {"x": 2}])
+
+        results, metadata = batch_model_inference(config, {"ds": dataset})
+
+        with tempfile.TemporaryDirectory() as out:
+            results["ds"].write_parquet(out)
+            table = pq.read_table(out)
+        rows = sorted(table.to_pylist(), key=lambda r: (r["model_name"], r["x"]))
+        self.assertEqual(
+            table.column_names,
+            ["x", "score_a", "model_name", "model_version", "score_b"],
+        )
+        self.assertEqual(
+            [(r["model_name"], r["score_a"], r["score_b"]) for r in rows],
+            [("a", 1.5, None), ("a", 1.5, None), ("b", None, 1.5), ("b", None, 1.5)],
+        )
+        self.assertEqual([r["model_version"] for r in rows], [1, 1, None, None])
+        self.assertEqual(
+            metadata,
+            [
+                OutputColumnMetadata(column_name="score_a", model_name="a"),
+                OutputColumnMetadata(column_name="score_b", model_name="b"),
+            ],
+        )
+
+    @patch(f"{_MODULE}.Predictor", NamedScorePredictor)
+    def test_models_with_the_same_outputs_are_not_remapped(self):
+        """Matching results are unioned as they are, with no extra map stage."""
+        config = [
+            InferenceConfig(model=ModelIdentifier(name="a"), columns_to_keep=[]),
+            InferenceConfig(model=ModelIdentifier(name="a"), columns_to_keep=[]),
+        ]
+        dataset = ray.data.from_items([{"x": 1}])
+
+        with patch(f"{_MODULE}._fill_missing_columns") as fill:
+            results, _ = batch_model_inference(config, {"ds": dataset})
+            self.assertEqual(len(results["ds"].take_all()), 2)
+        fill.assert_not_called()
+
+    @patch(f"{_MODULE}._run_predictor_inference")
+    def test_output_sample_runs_once_per_model_on_one_actor(self, run):
+        """The one-row sample runs on one actor per model, not per dataset."""
+        dataset = FakeDataset()
+        run.return_value = dataset
+        options = BatchOptions(
+            batch_size=8, concurrency=8, num_gpus=1, max_tasks_in_flight_per_actor=4
+        )
+
+        batch_model_inference(_config(options), {"a": dataset, "b": dataset})
+
+        # One full run per dataset, plus a single sample after the first one.
+        self.assertEqual(run.call_count, 3)
+        sample = run.call_args_list[1].args[0].batch_options
+        self.assertEqual(sample.concurrency, 1)
+        self.assertIsNone(sample.max_tasks_in_flight_per_actor)
+        self.assertEqual((sample.batch_size, sample.num_gpus), (8, 1))
+        self.assertEqual(options.concurrency, 8)
+
     def test_offline_inference_no_config(self):
         """Check offline inference no config."""
         config = []
@@ -383,10 +486,23 @@ class InferenceTest(TestCase):
         self.assertEqual(result["response"].to_pylist(), ["a", "b"])
         self.assertEqual(result["model_name"].to_pylist(), ["test-model", "test-model"])
 
+    def test_predictor_writes_the_revision_as_model_version(self):
+        """A revision is written as an int64 model_version column."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            predictor = Predictor(
+                model_name="m", revision_id=3, model_path=create_model_package(temp_dir)
+            )
+            result = predictor(pa.table({"input": ["a", "b"]}))
+
+        self.assertEqual(result["model_version"].to_pylist(), [3, 3])
+        self.assertEqual(result.schema.field("model_version").type, pa.int64())
+
     def test_predictor_without_model_name_adds_no_metadata_column(self):
         """Check predictor without model name adds no metadata column."""
         with tempfile.TemporaryDirectory() as temp_dir:
-            predictor = Predictor(model_path=create_model_package(temp_dir))
+            predictor = Predictor(
+                model_path=create_model_package(temp_dir), revision_id=3
+            )
             result = predictor(pa.table({"input": ["a"]}))
 
         self.assertEqual(sorted(result.column_names), ["input", "response"])
@@ -589,6 +705,86 @@ class InferenceTest(TestCase):
             package = create_model_package(temp_dir)
             local = _download_model_package(LocalDirStorageBackend(package), "uri")
         self.assertTrue(local.endswith("package"))
+
+    def test_predictor_removes_its_download_when_collected(self):
+        """The downloaded package is deleted with the Predictor."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            package = create_model_package(temp_dir, custom_batch_processing=True)
+            predictor = Predictor(
+                model_path="s3://bucket/models/m",
+                model_type=RawModelType.CUSTOM_PYTHON,
+                storage_backend=LocalDirStorageBackend(package),
+                num_cpus=2.5,
+            )
+            download_dir = os.path.dirname(predictor.inference.model_path)
+            self.assertEqual(predictor._conversion_executor._max_workers, 2)
+            self.assertTrue(os.path.isdir(download_dir))
+            del predictor
+
+        self.assertFalse(os.path.exists(download_dir))
+
+    def test_fractional_num_cpus_below_two_converts_serially(self):
+        """A 1.5 CPU reservation does not start a conversion thread pool."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            predictor = Predictor(
+                model_path=create_model_package(temp_dir), num_cpus=1.5
+            )
+        self.assertIsNone(predictor._conversion_executor)
+
+    def test_failed_download_removes_its_directory(self):
+        """A download that raises leaves no temporary directory behind."""
+        backend = MagicMock()
+        backend.download.side_effect = OSError("boom")
+        before = set(os.listdir(tempfile.gettempdir()))
+
+        with self.assertRaises(OSError):
+            _download_model_package(backend, "s3://bucket/m")
+
+        self.assertEqual(set(os.listdir(tempfile.gettempdir())) - before, set())
+
+    def test_tar_member_outside_the_package_is_refused(self):
+        """A ``../`` member is never written outside the package directory."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            archive = os.path.join(temp_dir, "evil.tar")
+            with tarfile.open(archive, "w") as tar:
+                data = b"x"
+                info = tarfile.TarInfo("../escaped.txt")
+                info.size = len(data)
+                tar.addfile(info, io.BytesIO(data))
+            dest = os.path.join(temp_dir, "pkg", "package")
+
+            with self.assertRaises((ValueError, tarfile.TarError)):
+                _unpack_tar(archive, dest)
+
+            self.assertFalse(
+                os.path.exists(os.path.join(temp_dir, "pkg", "escaped.txt"))
+            )
+
+    def test_tar_symlink_outside_the_package_is_refused(self):
+        """A symlink pointing outside the package directory is refused."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            archive = os.path.join(temp_dir, "evil.tar")
+            with tarfile.open(archive, "w") as tar:
+                info = tarfile.TarInfo("link")
+                info.type = tarfile.SYMTYPE
+                info.linkname = "../../outside"
+                tar.addfile(info)
+
+            with self.assertRaises((ValueError, tarfile.TarError)):
+                _unpack_tar(archive, os.path.join(temp_dir, "package"))
+
+    def test_safe_tar_is_unpacked(self):
+        """Regular members, including nested directories, are unpacked."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            src = os.path.join(temp_dir, "src")
+            os.makedirs(os.path.join(src, "0"))
+            Path(src, "0", "model.txt").write_text("m")
+            archive = shutil.make_archive(os.path.join(temp_dir, "ok"), "tar", src)
+            dest = os.path.join(temp_dir, "package")
+
+            _unpack_tar(archive, dest)
+
+            self.assertEqual(Path(dest, "0", "model.txt").read_text(), "m")
 
     def test_predictor_uses_model_path_directly_without_storage_backend(self):
         """Check predictor uses model path directly without storage backend."""
@@ -796,13 +992,14 @@ def _positional_model():
 class RealPackageInferenceTest(TestCase):
     """Runs real Ray Data inference on packages built by the packagers."""
 
-    def setUp(self):
-        """Setup."""
-        if not ray.is_initialized():
-            ray.init(num_cpus=2)
+    @classmethod
+    def setUpClass(cls):
+        """Start one local Ray session for the class."""
+        ray.init(num_cpus=2, include_dashboard=False, ignore_reinit_error=True)
 
-    def tearDown(self):
-        """Teardown."""
+    @classmethod
+    def tearDownClass(cls):
+        """Stop the Ray session."""
         ray.shutdown()
 
     def _run(self, model_path, dataset, storage_backend=None, **model_kwargs):
@@ -983,8 +1180,10 @@ class FatalGpuErrorTest(TestCase):
         predictor.input_columns = ["feature"]
         predictor.inference = MagicMock(batch_inference=True)
         predictor.model_name = "test-model"
+        predictor.revision_id = None
         predictor.columns_to_keep = None
         predictor._conversion_executor = None
+        predictor._download_dir = None
         return predictor
 
     @patch(f"{_MODULE}.logging.shutdown")
