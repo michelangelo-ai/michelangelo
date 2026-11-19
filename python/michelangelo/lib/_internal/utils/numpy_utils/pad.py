@@ -12,6 +12,53 @@ from michelangelo.lib._internal.utils.numpy_utils.sentinel import (
 from michelangelo.lib._internal.utils.numpy_utils.type import infer_dtype
 
 
+def pad_batch(
+    batch: dict[str, np.ndarray],
+    column_padding_values: dict[str, Any] | None = None,
+) -> dict[str, np.ndarray]:
+    """Pad every ragged column of a batch to a uniform shape.
+
+    Columns converted from Arrow are often object arrays of nested lists, so this
+    also turns well-formed nested object arrays into regular typed arrays.
+    Columns that are not object arrays of lists or arrays pass through unchanged.
+
+    Args:
+        batch: Column name to numpy array, possibly ragged.
+        column_padding_values: Pad value per column name. A column not listed is
+            padded with the sentinel for its dtype, not ``0``: NaN for floats,
+            ``INT32_SENTINEL`` for int32 and int64, ``STRING_SENTINEL`` for
+            strings, ``BYTES_SENTINEL`` for bytes and ``BOOL_SENTINEL`` for
+            bools (see :mod:`michelangelo.lib.constants.sentinel`). int8, int16
+            and unsigned integers have no sentinel and need a pad value here, or
+            a cast to a wider dtype first.
+
+    Returns:
+        A new dict with the same keys, in the same order.
+
+    Raises:
+        ValueError: If a ragged column has a dtype with no default sentinel
+            (int8, int16 and unsigned integers) and no pad value is given for
+            it, or if a column is too irregular to pad to a uniform shape.
+
+    Examples:
+        >>> batch = {"x": np.array([[1, 2], [3]], dtype=object)}
+        >>> pad_batch(batch, {"x": -1})["x"].tolist()
+        [[1, 2], [3, -1]]
+    """
+    padding = column_padding_values or {}
+    padded: dict[str, np.ndarray] = {}
+    for col, arr in batch.items():
+        if (
+            arr.dtype == object
+            and len(arr) > 0
+            and isinstance(arr[0], (list, np.ndarray))
+        ):
+            padded[col] = pad_ragged_tensor(arr, padding.get(col))
+        else:
+            padded[col] = arr
+    return padded
+
+
 def pad_ragged_tensor(arr: np.ndarray, pad_value: Any | None = None) -> np.ndarray:
     """Recursively pad a ragged tensor to uniform shape at each nesting level."""
     if arr.dtype != object:
@@ -27,6 +74,8 @@ def pad_ragged_tensor(arr: np.ndarray, pad_value: Any | None = None) -> np.ndarr
                     "O",
                 ):
                     dtype = next((a.dtype for a in arr if a.size > 0), np.int32)
+                    if len({a.size for a in arr}) == 1:
+                        return np.stack(arr).astype(dtype, copy=False)
                     pad_value = (
                         sentinel_for_numpy_dtype(dtype)
                         if pad_value is None
@@ -44,9 +93,24 @@ def pad_ragged_tensor(arr: np.ndarray, pad_value: Any | None = None) -> np.ndarr
     if dtype is None:
         return arr
 
-    pad_value = sentinel_for_numpy_dtype(dtype) if pad_value is None else pad_value
+    # A uniform tensor is only converted, so it needs no pad value.
+    if pad_value is None and _needs_padding(arr, max_shape):
+        pad_value = sentinel_for_numpy_dtype(dtype)
 
     return _pad_array_recursive(arr, max_shape, pad_value, dtype, level=0)
+
+
+def _needs_padding(arr: Any, target_shape: list[int], level: int = 0) -> bool:
+    """Whether any nested list or array is shorter than ``target_shape``."""
+    if level >= len(target_shape):
+        return False
+    if not isinstance(arr, (np.ndarray, list)) or (
+        isinstance(arr, np.ndarray) and arr.ndim == 0
+    ):
+        return True
+    if len(arr) < target_shape[level]:
+        return True
+    return any(_needs_padding(elem, target_shape, level + 1) for elem in arr)
 
 
 def _pad_1d_arrays_fast(arr: np.ndarray, pad_value: Any, dtype: type) -> np.ndarray:
