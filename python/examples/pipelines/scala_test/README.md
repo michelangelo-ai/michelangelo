@@ -25,8 +25,8 @@ Unlike `SparkTask`, the task's Python function body does no work itself —
 - Java 17 on `PATH`/`JAVA_HOME` for both `scalac` and `spark-submit`
   (`brew install openjdk@17`) — Spark 4.x requires Java 17 or newer, so this
   example is built and run under Java 17.
-- PySpark installed in the project venv (already true for `python/.venv`;
-  provides both the `pyspark` jars used at compile time and the
+- PySpark installed in the project venv (`poetry install --extras "example"` or
+  `--extras "plugin"` installs it; provides both the `pyspark` jars used at compile time and the
   `spark-submit` binary used at run time).
 
 ## Build
