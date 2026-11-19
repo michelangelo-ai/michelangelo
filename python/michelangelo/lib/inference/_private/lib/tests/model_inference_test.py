@@ -359,13 +359,14 @@ class LoadTorchDeployableModelTest(unittest.TestCase):
     @patch("torch.jit.set_fusion_strategy")
     @patch(f"{_SERDE}.load_deployable_model_schema")
     @patch(f"{_SERDE}.load_deployable_model")
+    @patch(f"{_PRIV}._jit_fusion_disabled", False)
     @patch(f"{_PRIV}._torch_model_accepts_dict_input", return_value=False)
     @patch("torch.cuda.is_available", return_value=True)
     def test_cuda_disables_fusion(
         self, mock_cuda, mock_dict, mock_load, mock_schema, mock_fusion
     ):
-        """Cuda disables fusion."""
-        mock_model = MagicMock()
+        """A TorchScript model on CUDA disables fusion."""
+        mock_model = MagicMock(spec=torch.jit.ScriptModule)
         mock_model.to.return_value = mock_model
         mock_load.return_value = mock_model
         mock_schema.return_value = MagicMock()
