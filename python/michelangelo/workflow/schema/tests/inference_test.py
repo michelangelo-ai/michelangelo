@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import dataclasses
-import json
 
 import pytest
 
-from michelangelo.uniflow.core.codec import DataclassCodec
+from michelangelo.uniflow.core.codec import (
+    DataclassCodec,
+    Decoder,
+    Encoder,
+    codec_registry,
+)
 from michelangelo.workflow.schema.exceptions import ConfigurationError
 from michelangelo.workflow.schema.inference import (
     BatchOptions,
@@ -117,10 +121,10 @@ def test_codec_roundtrip_leaf_values(value):
 
 
 def test_codec_roundtrip_nested_config():
-    """A fully populated config round-trips through the dataclass dict form."""
-    encoded = DataclassCodec().encode(_FULL_CONFIG)
-    assert json.dumps(encoded, default=str)
-    decoded = _roundtrip(_FULL_CONFIG)
+    """A fully populated config round-trips through the JSON wire format."""
+    wire = Encoder(codec_registry).encode(_FULL_CONFIG)
+    decoded = Decoder(codec_registry).decode(wire)
+    assert decoded == _FULL_CONFIG
     assert decoded.local_models[0].model == ModelIdentifier(
         name="housing", revision_id=2
     )
@@ -129,6 +133,53 @@ def test_codec_roundtrip_nested_config():
         fractions={"train": 0.25}, agg_cols=["session"]
     )
     assert decoded.max_errored_blocks == 0
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"batch_size": "8"},
+        {"batch_size": True},
+        {"batch_size": 1.5},
+        {"batch_size": 0},
+        {"concurrency": "2"},
+        {"num_gpus": "1", "batch_size": 8},
+        {"num_gpus": True, "batch_size": 8},
+        {"num_gpus": -0.5, "batch_size": 8},
+        {"num_cpus": "4"},
+        {"max_restarts": -2},
+        {"max_task_retries": 1.0},
+        {"num_gpus": 1},
+    ],
+)
+def test_invalid_batch_options_raise_configuration_error(kwargs):
+    """Wrong types and values fail as a ConfigurationError naming the field."""
+    with pytest.raises(ConfigurationError, match="batch_options"):
+        BatchOptions(**kwargs)
+
+
+def test_fractional_resources_are_accepted():
+    """GPUs and CPUs may be fractional; 0 reserves none."""
+    options = BatchOptions(batch_size=8, num_gpus=0.25, num_cpus=1.5)
+    assert (options.num_gpus, options.num_cpus) == (0.25, 1.5)
+    assert BatchOptions(num_gpus=0).batch_size is None
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"name": ""},
+        {"name": "   "},
+        {"name": 123},
+        {"name": "m", "revision_id": -1},
+        {"name": "m", "revision_id": "3"},
+        {"name": "m", "revision_id": True},
+    ],
+)
+def test_invalid_model_identifier_raises_configuration_error(kwargs):
+    """A blank or non-string name and a non-integer revision are rejected."""
+    with pytest.raises(ConfigurationError, match="model"):
+        ModelIdentifier(**kwargs)
 
 
 def test_defaults_are_unset():
