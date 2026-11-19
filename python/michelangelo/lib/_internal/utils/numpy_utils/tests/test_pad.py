@@ -120,3 +120,23 @@ class TestPadBatch:
         with pytest.raises(ValueError, match="sentinel"):
             pad_batch({"small": arr})
         assert pad_batch({"small": arr}, {"small": 0})["small"].shape == (2, 2)
+
+    def test_uniform_unpaddable_column_needs_no_pad_value(self):
+        """A uniform int8 column has nothing to pad, so it needs no pad value."""
+        # Built element by element, as Arrow conversion does: np.array() would
+        # merge equal-length rows into one 2D object array.
+        arr = np.empty(2, dtype=object)
+        arr[0] = np.array([1, 2], dtype=np.int8)
+        arr[1] = np.array([3, 4], dtype=np.int8)
+        out = pad_batch({"small": arr})["small"]
+        assert out.dtype == np.int8
+        assert out.tolist() == [[1, 2], [3, 4]]
+
+    def test_uniform_nested_unpaddable_column_needs_no_pad_value(self):
+        """The recursive path also skips the pad value when nothing is short."""
+        row = np.array([[1, 2], [3, 4]], dtype=np.uint8)
+        arr = np.empty(2, dtype=object)
+        arr[0], arr[1] = list(row), list(row)
+        out = pad_batch({"small": arr})["small"]
+        assert out.shape == (2, 2, 2)
+        assert out.dtype == np.uint8

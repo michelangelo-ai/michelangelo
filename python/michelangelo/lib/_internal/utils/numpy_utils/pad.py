@@ -74,6 +74,8 @@ def pad_ragged_tensor(arr: np.ndarray, pad_value: Any | None = None) -> np.ndarr
                     "O",
                 ):
                     dtype = next((a.dtype for a in arr if a.size > 0), np.int32)
+                    if len({a.size for a in arr}) == 1:
+                        return np.stack(arr).astype(dtype, copy=False)
                     pad_value = (
                         sentinel_for_numpy_dtype(dtype)
                         if pad_value is None
@@ -91,9 +93,24 @@ def pad_ragged_tensor(arr: np.ndarray, pad_value: Any | None = None) -> np.ndarr
     if dtype is None:
         return arr
 
-    pad_value = sentinel_for_numpy_dtype(dtype) if pad_value is None else pad_value
+    # A uniform tensor is only converted, so it needs no pad value.
+    if pad_value is None and _needs_padding(arr, max_shape):
+        pad_value = sentinel_for_numpy_dtype(dtype)
 
     return _pad_array_recursive(arr, max_shape, pad_value, dtype, level=0)
+
+
+def _needs_padding(arr: Any, target_shape: list[int], level: int = 0) -> bool:
+    """Whether any nested list or array is shorter than ``target_shape``."""
+    if level >= len(target_shape):
+        return False
+    if not isinstance(arr, (np.ndarray, list)) or (
+        isinstance(arr, np.ndarray) and arr.ndim == 0
+    ):
+        return True
+    if len(arr) < target_shape[level]:
+        return True
+    return any(_needs_padding(elem, target_shape, level + 1) for elem in arr)
 
 
 def _pad_1d_arrays_fast(arr: np.ndarray, pad_value: Any, dtype: type) -> np.ndarray:
