@@ -144,6 +144,12 @@ func TestValidateAgainstRejectsUnvalidatedInput(t *testing.T) {
 	jsonNullGroup.Tasks["train"].JobSpecs = &types.Struct{Fields: map[string]*types.Value{"ray": nullVal()}}
 	nilFieldRel := &Release{Version: "core-v0", TaskTypes: map[string]*TaskType{"core/python": {Config: Schema{"entry_point": nil}}}}
 	nilTypeRel := &Release{Version: "core-v0", TaskTypes: map[string]*TaskType{"core/python": nil, "core/ray": nil}}
+	floatRel := &Release{Version: "core-v0", TaskTypes: map[string]*TaskType{"core/python": {Config: Schema{
+		"entry_point": {Type: "string", Required: true},
+		"n":           {Type: "float"},
+	}}}}
+	floatSlot := typedDiamond()
+	floatSlot.Tasks["evaluate"].Config.Fields["n"] = boolVal(true)
 	cases := []struct {
 		name string
 		w    *v2.DeclarativeWorkflow
@@ -156,6 +162,7 @@ func TestValidateAgainstRejectsUnvalidatedInput(t *testing.T) {
 		{"null group value", nullGroup, rel, `task "train": job_specs.ray must not be null in core-v1.4.2`},
 		{"json null group value", jsonNullGroup, rel, `task "train": job_specs.ray must not be null in core-v1.4.2`},
 		{"nil schema field", typedDiamond(), nilFieldRel, `task "evaluate": config.entry_point has no schema in task type "core/python" in core-v0`},
+		{"unknown slot type", floatSlot, floatRel, `task "evaluate": config.n has unknown slot type "float" in task type "core/python" in core-v0`},
 		{"nil task type", typedDiamond(), nilTypeRel, `task "evaluate": task_function "core/python" is not a task type in core-v0`},
 	}
 	for _, c := range cases {

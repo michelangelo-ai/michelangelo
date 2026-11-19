@@ -26,18 +26,24 @@ func typeName(t v2.ParameterType) string { return typeNames[t] }
 // Validate runs the checks that need no task-type registry. It returns the
 // first failure.
 func Validate(w *v2.DeclarativeWorkflow, lim Limits) error {
+	_, err := validate(w, lim)
+	return err
+}
+
+// validate runs Validate and returns the depends_on graph it built.
+func validate(w *v2.DeclarativeWorkflow, lim Limits) (*graph, error) {
 	lim = lim.withDefaults()
 	if w == nil {
-		return &Error{Msg: "workflow is not set"}
+		return nil, &Error{Msg: "workflow is not set"}
 	}
 	if w.SchemaVersion != SchemaVersion {
-		return &Error{Msg: fmt.Sprintf("schema_version %q is not supported; use %q", w.SchemaVersion, SchemaVersion)}
+		return nil, &Error{Msg: fmt.Sprintf("schema_version %q is not supported; use %q", w.SchemaVersion, SchemaVersion)}
 	}
 	if len(w.Tasks) == 0 {
-		return &Error{Msg: "tasks must have at least one entry"}
+		return nil, &Error{Msg: "tasks must have at least one entry"}
 	}
 	if len(w.Tasks) > lim.MaxTasks {
-		return &Error{Msg: fmt.Sprintf("tasks has %d entries; the limit is %d", len(w.Tasks), lim.MaxTasks)}
+		return nil, &Error{Msg: fmt.Sprintf("tasks has %d entries; the limit is %d", len(w.Tasks), lim.MaxTasks)}
 	}
 	edges := 0
 	for _, t := range w.Tasks {
@@ -46,23 +52,26 @@ func Validate(w *v2.DeclarativeWorkflow, lim Limits) error {
 		}
 	}
 	if edges > lim.MaxDependencies {
-		return &Error{Msg: fmt.Sprintf("tasks have %d depends_on entries in total; the limit is %d", edges, lim.MaxDependencies)}
+		return nil, &Error{Msg: fmt.Sprintf("tasks have %d depends_on entries in total; the limit is %d", edges, lim.MaxDependencies)}
 	}
 	g, err := buildGraph(w)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if err := validateParameters(w); err != nil {
-		return err
+		return nil, err
 	}
 	refs, err := collectRefs(w)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if err := checkParamRefs(w, refs); err != nil {
-		return err
+		return nil, err
 	}
-	return checkTaskRefs(w, g, refs)
+	if err := checkTaskRefs(w, g, refs); err != nil {
+		return nil, err
+	}
+	return g, nil
 }
 
 // validateParameters checks each parameter: name, type, exactly one of
@@ -119,7 +128,9 @@ func checkDefault(name string, spec *v2.ParameterSpec) error {
 		if !ok {
 			return &Error{Param: name, Msg: "default must be a number for type " + tn}
 		}
-		return checkIntegral(name, "default", nv.NumberValue)
+		if msg := integralProblem("default", nv.NumberValue); msg != "" {
+			return &Error{Param: name, Msg: msg}
+		}
 	case v2.PARAMETER_TYPE_NUMBER:
 		nv, ok := d.Kind.(*types.Value_NumberValue)
 		if !ok {
@@ -144,16 +155,16 @@ func checkDefault(name string, spec *v2.ParameterSpec) error {
 	return nil
 }
 
-// checkIntegral checks that f is a whole number inside the range that a
-// float64 holds exactly. what names the value in the error.
-func checkIntegral(param, what string, f float64) error {
+// integralProblem returns why f is not a whole number inside the range that a
+// float64 holds exactly, or "". what names the value in the message.
+func integralProblem(what string, f float64) string {
 	if f != math.Trunc(f) || math.IsInf(f, 0) || math.IsNaN(f) {
-		return &Error{Param: param, Msg: fmt.Sprintf("%s %v is not an integer", what, f)}
+		return fmt.Sprintf("%s %v is not an integer", what, f)
 	}
 	if math.Abs(f) > maxSafeInteger {
-		return &Error{Param: param, Msg: fmt.Sprintf("%s %.0f is outside ±%d", what, f, int64(maxSafeInteger))}
+		return fmt.Sprintf("%s %.0f is outside ±%d", what, f, int64(maxSafeInteger))
 	}
-	return nil
+	return ""
 }
 
 // taskRef is one reference found in a task, with the field that holds it.

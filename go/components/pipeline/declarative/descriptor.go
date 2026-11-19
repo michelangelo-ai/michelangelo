@@ -13,6 +13,11 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
 	"google.golang.org/protobuf/types/descriptorpb"
+
+	// Register google/protobuf/{duration,struct}.proto in GlobalFiles so that
+	// protodesc.NewFile can resolve the imports of declarative.proto.
+	_ "google.golang.org/protobuf/types/known/durationpb"
+	_ "google.golang.org/protobuf/types/known/structpb"
 )
 
 const declarativeProtoFile = "michelangelo/api/v2/declarative.proto"

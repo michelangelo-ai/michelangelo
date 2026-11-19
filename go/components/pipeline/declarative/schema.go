@@ -12,11 +12,19 @@ import (
 // ValidateAgainst runs Validate, then checks w against the task-type schemas
 // of rel.
 func ValidateAgainst(w *v2.DeclarativeWorkflow, lim Limits, rel *Release) error {
+	_, err := validateAgainst(w, lim, rel)
+	return err
+}
+
+// validateAgainst runs ValidateAgainst and returns the depends_on graph that
+// Validate built.
+func validateAgainst(w *v2.DeclarativeWorkflow, lim Limits, rel *Release) (*graph, error) {
 	if rel == nil {
-		return &Error{Msg: "release is not set"}
+		return nil, &Error{Msg: "release is not set"}
 	}
-	if err := Validate(w, lim); err != nil {
-		return err
+	g, err := validate(w, lim)
+	if err != nil {
+		return nil, err
 	}
 	names := make([]string, 0, len(w.Tasks))
 	for n := range w.Tasks {
@@ -27,20 +35,20 @@ func ValidateAgainst(w *v2.DeclarativeWorkflow, lim Limits, rel *Release) error 
 		t := w.Tasks[n]
 		tt := rel.TaskTypes[t.TaskFunction]
 		if tt == nil {
-			return &Error{Task: n, Release: rel.Version, Msg: fmt.Sprintf("task_function %q is not a task type", t.TaskFunction)}
+			return nil, &Error{Task: n, Release: rel.Version, Msg: fmt.Sprintf("task_function %q is not a task type", t.TaskFunction)}
 		}
 		if r := effectiveRetry(w, t); r != nil && r.MaxAttempts > 1 && !tt.HasCapability("retry") {
-			return &Error{Task: n, Release: rel.Version, Msg: fmt.Sprintf("retry is not a capability of task type %q", t.TaskFunction)}
+			return nil, &Error{Task: n, Release: rel.Version, Msg: fmt.Sprintf("retry is not a capability of task type %q", t.TaskFunction)}
 		}
 		sc := &sectionChecker{w: w, task: n, typeName: t.TaskFunction, release: rel.Version}
 		if err := sc.check("config", t.Config, tt.Config); err != nil {
-			return err
+			return nil, err
 		}
 		if err := sc.check("job_specs", t.JobSpecs, tt.JobSpecs); err != nil {
-			return err
+			return nil, err
 		}
 	}
-	return nil
+	return g, nil
 }
 
 // effectiveRetry returns the retry policy of t, or the workflow default when
@@ -155,8 +163,8 @@ func (c *sectionChecker) leaf(path string, v *types.Value, slot string) error {
 		if !ok {
 			return c.errf(path, "must be a number")
 		}
-		if err := checkIntegral("", "value", nv.NumberValue); err != nil {
-			return c.errf(path, "%s", err.(*Error).Msg)
+		if msg := integralProblem("value", nv.NumberValue); msg != "" {
+			return c.errf(path, "%s", msg)
 		}
 	case "number":
 		nv, ok := v.Kind.(*types.Value_NumberValue)
@@ -178,6 +186,8 @@ func (c *sectionChecker) leaf(path string, v *types.Value, slot string) error {
 		if _, ok := v.Kind.(*types.Value_StructValue); !ok {
 			return c.errf(path, "must be an object")
 		}
+	default:
+		return c.errf(path, "has unknown slot type %q in task type %q", slot, c.typeName)
 	}
 	return nil
 }

@@ -23,10 +23,7 @@ import (
 //
 // Plan returns the first validation error, as ValidateAgainst does.
 func Plan(w *v2.DeclarativeWorkflow, lim Limits, rel *Release, warnings []string) (*v2.ExplainPlan, error) {
-	if err := ValidateAgainst(w, lim, rel); err != nil {
-		return nil, err
-	}
-	g, err := buildGraph(w)
+	g, err := validateAgainst(w, lim, rel)
 	if err != nil {
 		return nil, err
 	}
