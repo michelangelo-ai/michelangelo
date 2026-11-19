@@ -136,16 +136,19 @@ If the annotation is still present once the Deployment reaches `RolloutComplete`
 queries returned no samples the last time every query was answered, so the metric gate was
 not judging the candidate on them when the rollout finished. The usual cause is that the
 metrics are never collected, for example because nothing scrapes Triton's metrics port. To
-confirm, check that the metric exists at all in Prometheus (for the built-in query):
+confirm, check whether Prometheus has the metric for the candidate (for the built-in query):
 
 ```text
-count(nv_inference_request_success)
+count(nv_inference_request_success{model="<model>"})
 ```
 
-An empty result means Prometheus is not scraping Triton's `:8002/metrics`; add a
-`PodMonitor` or scrape job for the inference server pods. The controller manager logs
-`metric gate queries returned no samples; the candidate was not judged on them`, with
-`namespace`, `deployment`, `model` and `queries` fields, each time the list changes.
+A count across all models does not show that this inference server is scraped, so keep the
+`model` filter. An empty result means the series is not reaching Prometheus. Look up the
+inference server pods under Prometheus's targets: if they are not listed, nothing scrapes
+Triton's `:8002/metrics`, so add a `PodMonitor` or scrape job for them; if the target is
+listed and up, check its metric relabeling for a rule that drops the metric. The controller
+manager logs `metric gate queries returned no samples; the candidate was not judged on them`,
+with `namespace`, `deployment`, `model` and `queries` fields, each time the list changes.
 
 The gate runs only during a rollout, and not during a rollback, so after `RolloutComplete`
 or a rollback the annotation stays unchanged until the next rollout, even if the queries

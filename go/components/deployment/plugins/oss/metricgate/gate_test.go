@@ -3,9 +3,9 @@ package metricgate
 import (
 	"context"
 	"fmt"
-	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/http/httptrace"
 	"slices"
 	"strings"
 	"sync"
@@ -679,33 +679,65 @@ func TestEvaluate_PanicInAQuery_IsAFailedQuery(t *testing.T) {
 	assert.False(t, result.AllQueriesAnswered)
 }
 
+// barrier holds callers in wait until size of them have arrived, then lets that group go.
+type barrier struct {
+	mu      sync.Mutex
+	size    int
+	waiting int
+	open    chan struct{}
+}
+
+func newBarrier(size int) *barrier {
+	return &barrier{size: size, open: make(chan struct{})}
+}
+
+func (b *barrier) wait() {
+	b.mu.Lock()
+	open := b.open
+	b.waiting++
+	if b.waiting == b.size {
+		b.waiting = 0
+		b.open = make(chan struct{})
+		close(open)
+	}
+	b.mu.Unlock()
+	<-open
+}
+
 func TestEvaluate_RepeatedEvaluations_ReuseTheirConnections(t *testing.T) {
 	const queries = 6
-	var opened atomic.Int32
-	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte(vectorResponse("0")))
-	}))
-	server.Config.ConnState = func(_ net.Conn, state http.ConnState) {
-		if state == http.StateNew {
-			opened.Add(1)
-		}
-	}
-	server.Start()
-	t.Cleanup(server.Close)
+	// Every evaluation's queries are in flight together, so each needs its own connection.
+	together := newBarrier(queries)
+	server := promServer(t, func(string) (int, string) {
+		together.wait()
+		return http.StatusOK, vectorResponse("0")
+	})
 	configured := make([]maconfig.MetricGateQuery, 0, queries)
 	for i := range queries {
 		name := fmt.Sprintf("q%d", i)
 		configured = append(configured, maconfig.MetricGateQuery{Name: name, Expr: name, Threshold: 0.5})
 	}
 	gate := New(maconfig.MetricGateConfig{PrometheusURL: server.URL, Queries: configured}, zap.NewNop())
+	var dialed, returned atomic.Int32
+	ctx := httptrace.WithClientTrace(context.Background(), &httptrace.ClientTrace{
+		GotConn: func(info httptrace.GotConnInfo) {
+			if !info.Reused {
+				dialed.Add(1)
+			}
+		},
+		// Called for every connection once its response is read, whether the pool kept it or not.
+		PutIdleConn: func(error) { returned.Add(1) },
+	})
 
-	for range 5 {
-		result, err := gate.Evaluate(context.Background(), testDeployment())
+	for round := 1; round <= 5; round++ {
+		result, err := gate.Evaluate(ctx, testDeployment())
 		require.NoError(t, err)
 		require.True(t, result.AllQueriesAnswered)
+		require.Eventually(t, func() bool { return int(returned.Load()) == round*queries },
+			5*time.Second, time.Millisecond, "the connections of round %d were not all handed back", round)
 	}
 
-	assert.LessOrEqual(t, int(opened.Load()), queries, "later evaluations must reuse the first one's connections")
+	assert.Equal(t, queries, int(dialed.Load()), "later evaluations must reuse the first one's connections")
 }
 
 func TestEvaluate_SlowQueriesAfterABreach_DoNotAddUp(t *testing.T) {
