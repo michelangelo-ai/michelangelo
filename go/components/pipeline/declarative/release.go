@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -40,7 +41,11 @@ func (t *TaskType) HasCapability(name string) bool {
 // Schema maps a field name to its declaration.
 type Schema map[string]*Field
 
-// Field is a leaf when Type is set, or a group when Fields is set.
+// Field is a leaf when Type is set, or a group when Fields is set. In a
+// release file, an object with a "type" key is a leaf, with an optional
+// "required" boolean. Any other object is a group. Inside a group, the keys
+// "type" and "required" are reserved, so a group cannot have a child with
+// either name.
 type Field struct {
 	Type     string
 	Required bool
@@ -49,71 +54,204 @@ type Field struct {
 
 var fieldTypes = map[string]bool{"string": true, "integer": true, "number": true, "boolean": true, "list": true, "dict": true}
 
-// UnmarshalJSON decodes an object with a "type" key as a leaf. It decodes any
-// other object as a group.
-func (f *Field) UnmarshalJSON(b []byte) error {
-	var raw map[string]json.RawMessage
-	if err := json.Unmarshal(b, &raw); err != nil {
+// maxSchemaDepth bounds how deeply a task type schema may nest groups.
+const maxSchemaDepth = 32
+
+// UnmarshalJSON decodes a schema and names the field in a decoding error. A
+// null field stays nil, and checkSchema reports it as empty.
+func (s *Schema) UnmarshalJSON(b []byte) error {
+	var v any
+	if err := json.Unmarshal(b, &v); err != nil {
 		return err
 	}
-	if _, ok := raw["type"]; ok {
-		var leaf struct {
-			Type     string `json:"type"`
-			Required bool   `json:"required"`
-		}
-		if err := json.Unmarshal(b, &leaf); err != nil {
-			return err
-		}
-		if leaf.Type == "" {
-			return errors.New("type must be a non-empty string")
-		}
-		f.Type, f.Required = leaf.Type, leaf.Required
-		delete(raw, "type")
-		delete(raw, "required")
-		if len(raw) == 0 {
-			return nil
-		}
+	if v == nil {
+		return nil
 	}
-	f.Fields = Schema{}
-	for k, v := range raw {
-		child := &Field{}
-		if err := json.Unmarshal(v, child); err != nil {
-			return err
-		}
-		f.Fields[k] = child
+	obj, ok := v.(map[string]any)
+	if !ok {
+		return fmt.Errorf("schema must be an object, not %s", jsonKind(v))
 	}
+	fs, err := schemaFromAny(obj, "", 1)
+	if err != nil {
+		return err
+	}
+	*s = fs
 	return nil
 }
 
+// UnmarshalJSON decodes one field declaration.
+func (f *Field) UnmarshalJSON(b []byte) error {
+	var v any
+	if err := json.Unmarshal(b, &v); err != nil {
+		return err
+	}
+	return f.fromAny(v, "", 1)
+}
+
+// MarshalJSON writes f in the shape that UnmarshalJSON reads.
+func (f Field) MarshalJSON() ([]byte, error) {
+	if f.Type == "" {
+		return json.Marshal(f.Fields)
+	}
+	return json.Marshal(struct {
+		Type     string `json:"type"`
+		Required bool   `json:"required,omitempty"`
+	}{f.Type, f.Required})
+}
+
+// schemaFromAny decodes each field of a group. prefix names the group in an
+// error.
+func schemaFromAny(obj map[string]any, prefix string, depth int) (Schema, error) {
+	out := make(Schema, len(obj))
+	for k, cv := range obj {
+		path := k
+		if prefix != "" {
+			path = prefix + "." + k
+		}
+		if cv == nil {
+			out[k] = nil
+			continue
+		}
+		f := &Field{}
+		if err := f.fromAny(cv, path, depth); err != nil {
+			return nil, err
+		}
+		out[k] = f
+	}
+	return out, nil
+}
+
+// fromAny decodes a field from a parsed JSON value. path names the field in
+// an error.
+func (f *Field) fromAny(v any, path string, depth int) error {
+	fail := func(format string, args ...any) error {
+		msg := fmt.Sprintf(format, args...)
+		if path == "" {
+			return errors.New(msg)
+		}
+		return fmt.Errorf("field %q: %s", path, msg)
+	}
+	if depth > maxSchemaDepth {
+		return fail("schema nests more than %d levels", maxSchemaDepth)
+	}
+	obj, ok := v.(map[string]any)
+	if !ok {
+		return fail("must be an object, not %s", jsonKind(v))
+	}
+	if t, ok := obj["type"]; ok {
+		if _, group := t.(map[string]any); group {
+			return fail(`"type" is reserved for the field type; a group cannot have a child named "type"`)
+		}
+		ts, ok := t.(string)
+		if !ok || ts == "" {
+			return fail("type must be a non-empty string")
+		}
+		f.Type = ts
+		if r, ok := obj["required"]; ok {
+			rb, ok := r.(bool)
+			if !ok {
+				return fail("required must be a boolean")
+			}
+			f.Required = rb
+		}
+		rest := make(map[string]any, len(obj))
+		for k, cv := range obj {
+			if k != "type" && k != "required" {
+				rest[k] = cv
+			}
+		}
+		if len(rest) == 0 {
+			return nil
+		}
+		obj = rest
+	} else if _, ok := obj["required"]; ok {
+		return fail(`"required" is reserved; set it next to "type" on a leaf field`)
+	}
+	fs, err := schemaFromAny(obj, path, depth+1)
+	if err != nil {
+		return err
+	}
+	f.Fields = fs
+	return nil
+}
+
+// jsonKind names the JSON kind of a parsed value for an error message.
+func jsonKind(v any) string {
+	switch v.(type) {
+	case string:
+		return "a string"
+	case float64:
+		return "a number"
+	case bool:
+		return "a boolean"
+	case []any:
+		return "a list"
+	case nil:
+		return "null"
+	}
+	return "an object"
+}
+
+// maxReleaseFileBytes bounds the size of one release file.
+const maxReleaseFileBytes = 1 << 20
+
+// readReleaseFile reads a regular file of at most maxReleaseFileBytes. It
+// follows symlinks, which ConfigMap volume mounts use.
+func readReleaseFile(path string) ([]byte, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, errors.Unwrap(err)
+	}
+	if !info.Mode().IsRegular() {
+		return nil, errors.New("is not a regular file")
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, errors.Unwrap(err)
+	}
+	defer f.Close()
+	data, err := io.ReadAll(io.LimitReader(f, maxReleaseFileBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > maxReleaseFileBytes {
+		return nil, fmt.Errorf("is larger than %d bytes", maxReleaseFileBytes)
+	}
+	return data, nil
+}
+
 // LoadReleases reads every *.yaml and *.yml file in dir. It fails on a file
-// name that does not equal the version it declares, and on a version that
-// more than one file declares.
+// that is not a regular file or is larger than 1 MiB, on a file name that
+// does not equal the version it declares, and on a version that more than one
+// file declares. Errors name the file, not its full path.
 func LoadReleases(dir string) (map[string]*Release, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, err
 	}
 	out := map[string]*Release{}
+	files := map[string]string{}
 	for _, e := range entries {
 		ext := filepath.Ext(e.Name())
 		if e.IsDir() || (ext != ".yaml" && ext != ".yml") {
 			continue
 		}
 		stem := strings.TrimSuffix(e.Name(), ext)
-		data, err := os.ReadFile(filepath.Join(dir, e.Name()))
+		data, err := readReleaseFile(filepath.Join(dir, e.Name()))
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("release file %q: %w", e.Name(), err)
 		}
 		r, err := ParseRelease(stem, data)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("release file %q: %w", e.Name(), err)
 		}
 		if r.Version != stem {
 			return nil, fmt.Errorf("release file %q declares version %q; the file name must equal the version", e.Name(), r.Version)
 		}
-		if _, dup := out[r.Version]; dup {
-			return nil, fmt.Errorf("release %q is declared by more than one file", r.Version)
+		if prev, dup := files[r.Version]; dup {
+			return nil, fmt.Errorf("release %q is declared by both %q and %q; keep one", r.Version, prev, e.Name())
 		}
+		files[r.Version] = e.Name()
 		out[r.Version] = r
 	}
 	return out, nil
