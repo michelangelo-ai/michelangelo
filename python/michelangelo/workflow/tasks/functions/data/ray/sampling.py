@@ -45,7 +45,7 @@ def hash_sample_batch(
     # null the whole key.
     keys = pd.DataFrame(
         {
-            str(i): pc.cast(batch.column(c), pa.string()).to_pandas()
+            str(i): pc.cast(_canonical(batch.column(c)), pa.string()).to_pandas()
             for i, c in enumerate(agg_cols)
         }
     )
@@ -53,6 +53,20 @@ def hash_sample_batch(
     # processes and returns uint64 values spread over [0, 2**64).
     hashes = pd.util.hash_pandas_object(keys, index=False)
     return batch.filter(pa.array(hashes < int(fraction * 2**64)))
+
+
+def _canonical(column: pa.ChunkedArray) -> pa.ChunkedArray:
+    """Give a timestamp column one unit, so an instant prints the same in every block.
+
+    Blocks can infer different units (``timestamp[s]`` in one, ``timestamp[ms]``
+    in another), and the string of a timestamp depends on its unit.
+    """
+    import pyarrow as pa
+    import pyarrow.compute as pc
+
+    if pa.types.is_timestamp(column.type):
+        return pc.cast(column, pa.timestamp("ns", tz=column.type.tz))
+    return column
 
 
 def apply_sampling(
@@ -68,7 +82,8 @@ def apply_sampling(
 
     Returns:
         The sampled dataset, or ``dataset`` itself when it is not sampled: when
-        its fraction is not strictly between ``0`` and ``1``.
+        its fraction is not strictly between ``0`` and ``1``, or when it has no
+        blocks.
     """
     fraction = (config.fractions or {}).get(dataset_name, 1.0) if config else 1.0
     if not 0 < fraction < 1:
@@ -94,4 +109,11 @@ def apply_sampling(
             zero_copy_batch=True,
         )
     _logger.info("Sampling %s of the %s rows at random", fraction, dataset_name)
-    return dataset.random_sample(fraction, seed=_SEED)
+    try:
+        return dataset.random_sample(fraction, seed=_SEED)
+    except ValueError as e:
+        # Ray refuses a dataset with no blocks, such as from_items([]), before
+        # running anything; there is nothing to sample, so keep it as it is.
+        if "empty" not in str(e).lower():
+            raise
+        return dataset
