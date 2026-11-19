@@ -40,7 +40,10 @@ _POISONED_CONTEXT_SIGNATURES = (
     "ecc error",
     "uncorrectable",
     "unspecified launch failure",
-    "device-side assert",
+    # Not "device-side assert": PyTorch appends "Compile with
+    # `TORCH_USE_CUDA_DSA` to enable device-side assertions." to every CUDA
+    # error when DSA is not compiled in.
+    "device-side assert triggered",
 )
 # Out-of-memory is never a restart trigger, even when it is reported as "CUDA
 # error: out of memory": the context stays usable and a restart would rerun the
@@ -57,21 +60,27 @@ def _iter_exception_chain(exc: BaseException) -> Iterator[BaseException]:
     """Yield ``exc`` and the exceptions chained under it.
 
     Libraries often wrap the original fault, so the poisoned-context text can
-    sit deeper than the outermost exception. Suppressed contexts
-    (``raise ... from None``) are followed too, because the CUDA context is
-    poisoned however the fault was wrapped. The walk is cycle-safe and bounded
-    by ``_MAX_EXCEPTION_CHAIN_DEPTH``.
+    sit deeper than the outermost exception. Both ``__cause__`` and
+    ``__context__`` are followed, because ``raise B from C`` while handling
+    ``A`` keeps ``C`` as the cause and ``A`` as the context, and either may be
+    the CUDA fault. Suppressed contexts (``raise ... from None``) are followed
+    too, because the CUDA context is poisoned however the fault was wrapped.
+    The walk is cycle-safe and visits at most ``_MAX_EXCEPTION_CHAIN_DEPTH``
+    exceptions.
     """
     seen: set[int] = set()
-    current: BaseException | None = exc
-    while (
-        current is not None
-        and id(current) not in seen
-        and len(seen) < _MAX_EXCEPTION_CHAIN_DEPTH
-    ):
+    pending: list[BaseException] = [exc]
+    while pending and len(seen) < _MAX_EXCEPTION_CHAIN_DEPTH:
+        current = pending.pop(0)
+        if id(current) in seen:
+            continue
         seen.add(id(current))
         yield current
-        current = current.__cause__ or current.__context__
+        pending.extend(
+            link
+            for link in (current.__cause__, current.__context__)
+            if link is not None
+        )
 
 
 def _is_cuda_oom(exc: BaseException, text: str) -> bool:

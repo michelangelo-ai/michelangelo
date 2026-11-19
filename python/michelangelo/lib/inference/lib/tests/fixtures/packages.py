@@ -48,3 +48,17 @@ def torch_deployable(root, model: torch.nn.Module, schema, backend=None) -> str:
         sample_data=[{item.name: torch.ones(1, 1) for item in schema.input_schema}],
         include_import_prefixes=[_PREFIX],
     )
+
+
+class ReversedModel(torch.nn.Module):
+    """Returns ``2 * a + b``, declaring ``b`` before ``a``."""
+
+    def forward(self, b: torch.Tensor, a: torch.Tensor) -> torch.Tensor:
+        return 2 * a + b
+
+
+class DictOutputModel(torch.nn.Module):
+    """Returns two named heads from one input."""
+
+    def forward(self, a: torch.Tensor) -> dict[str, torch.Tensor]:
+        return {"double": 2 * a, "half": a / 2}

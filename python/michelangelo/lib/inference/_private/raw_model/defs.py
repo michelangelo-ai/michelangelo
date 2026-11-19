@@ -19,11 +19,17 @@ def get_model_defs_path(model_path: str) -> str:
 
 
 def inject_model_defs(model_path: str) -> None:
-    """Inject the model defs into ``sys.path``.
+    """Make the modules in a raw model's ``defs/`` importable.
+
+    ``defs/`` is appended to ``sys.path`` once, so it never shadows the standard
+    library or installed packages. This changes process-wide state: a module is
+    imported once per process, so two raw models whose ``defs/`` hold a module
+    of the same name must be loaded in separate processes. Each Ray inference
+    actor loads one model, so the predictor never mixes them.
 
     Args:
         model_path: The path to the packaged raw model.
     """
-    defs_path = get_model_defs_path(model_path)
-    if os.path.exists(defs_path):
-        sys.path.insert(0, defs_path)
+    defs_path = os.path.abspath(get_model_defs_path(model_path))
+    if os.path.exists(defs_path) and defs_path not in sys.path:
+        sys.path.append(defs_path)

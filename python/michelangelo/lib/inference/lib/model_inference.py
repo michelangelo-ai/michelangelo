@@ -1,4 +1,9 @@
-"""Base class for running inference with a model package."""
+"""Base class for running inference with a model package.
+
+Loading a package runs code from it: TorchScript, pickled custom models and the
+modules in a raw package's ``defs/``. Only load packages from storage you trust,
+such as the output of the project's own packagers.
+"""
 
 from __future__ import annotations
 
@@ -10,8 +15,6 @@ from michelangelo.lib.inference._private.lib.model_inference import (
     _is_custom_python,
     _load_custom_python_model,
     _load_deployable_model,
-    _numpy_to_model_input,  # noqa: F401
-    _torch_model_accepts_dict_input,  # noqa: F401
 )
 from michelangelo.lib.inference._private.lib.tensorrt_onnx import _execute_onnx
 from michelangelo.lib.model_manager.constants import RawModelType, TritonBackendType
@@ -35,7 +38,13 @@ class ModelInference:
 
         Args:
             model_path: The local path to the packaged model.
-            model_type: The raw model type of the model.
+            model_type: The raw model type of the model. Only
+                ``RawModelType.CUSTOM_PYTHON`` changes what is loaded: it loads
+                the raw package. Any other value, like ``None`` for a
+                deployable package, loads the deployable package. After
+                ``load_model``, ``self.model_type`` holds the type that was
+                loaded: ``RawModelType.CUSTOM_PYTHON``, ``RawModelType.TORCH``
+                or ``TritonBackendType.ONNX``.
             model_name: The name of the model, used for logging.
 
         Raises:
@@ -80,7 +89,7 @@ class ModelInference:
         Raises:
             ValueError: If the model is not loaded or its type is not supported.
         """
-        if not self.model:
+        if self.model is None:
             raise ValueError(
                 "Model is not loaded yet. "
                 "Please load the model via model_inference.load_model()"
@@ -100,10 +109,9 @@ class ModelInference:
     # Exposed as class methods so subclasses can call self._is_custom_python() etc.
     _is_custom_python = _is_custom_python
     # Bound as methods rather than called as module-level functions so subclasses can
-    # override them. The default `_execute_torch` feeds the model POSITIONALLY in
-    # input_schema order; a subclass can override it to feed by KEYWORD. input_schema
-    # is sorted alphabetically while a compiled forward() takes all its `List[str]`
-    # args first, so a positional call transposes typed arguments and raises
-    # "forward() Expected a value of type 'List[str]' ... found Tensor".
+    # override them. The default `_execute_torch` feeds a model that takes one dict
+    # by name, and any other model positionally, in the order its forward() declares
+    # its parameters when they match the input schema's names, otherwise in
+    # input_schema order.
     _execute_torch = _execute_torch
     _execute_onnx = _execute_onnx

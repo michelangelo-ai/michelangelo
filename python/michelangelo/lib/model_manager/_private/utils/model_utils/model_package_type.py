@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import os
-
-from michelangelo._internal.utils.reflection_utils import get_module_attr
 from michelangelo.lib.model_manager.constants import RawModelType, TritonBackendType
 from michelangelo.lib.model_manager.interface.custom_model import Model
 
@@ -42,19 +39,18 @@ def infer_deployable_model_package_type(model_path: str) -> str | None:
         return TritonBackendType.ONNX
 
     if backend == TritonBackendType.PYTHON:
-        # The model class distinguishes a torch module from a custom Python model.
-        model_class_path = os.path.join(model_path, "0", "model_class.txt")
-        if not os.path.isfile(model_class_path):
-            return None
-
-        with open(model_class_path) as f:
-            model_class_str = f.read().strip()
-        if not model_class_str:
-            return None
+        # The model class distinguishes a torch module from a custom Python
+        # model. It is imported the way the loader imports it, so a class that
+        # ships only inside the package is found.
+        from michelangelo.lib.model_manager._private.serde.model.python_deployable_model import (  # noqa: E501
+            _import_packaged_model_class,
+        )
 
         try:
-            model_cls = get_module_attr(model_class_str)
+            model_cls = _import_packaged_model_class(model_path)
         except Exception:
+            return None
+        if not isinstance(model_cls, type):
             return None
 
         if issubclass(model_cls, Model):

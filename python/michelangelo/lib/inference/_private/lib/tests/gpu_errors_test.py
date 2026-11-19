@@ -114,6 +114,33 @@ class ShouldRestartActorForGpuErrorTest(TestCase):
         except RuntimeError as wrapped:
             self.assertFalse(_should_restart_actor_for_gpu_error(wrapped))
 
+    def test_dsa_footer_alone_is_not_an_assertion_failure(self):
+        """PyTorch's DSA footer appears on every CUDA error, so it proves nothing."""
+        message = (
+            "CUDA error: invalid argument\n"
+            "Compile with `TORCH_USE_CUDA_DSA` to enable device-side assertions."
+        )
+        self.assertFalse(_should_restart_actor_for_gpu_error(RuntimeError(message)))
+        self.assertTrue(
+            _should_restart_actor_for_gpu_error(
+                RuntimeError(f"CUDA error: device-side assert triggered\n{message}")
+            )
+        )
+
+    def test_fault_in_context_is_found_when_cause_is_unrelated(self):
+        """Raise B from C while handling a CUDA fault keeps the fault in __context__."""
+        try:
+            try:
+                raise RuntimeError(
+                    "CUDA error: an illegal memory access was encountered"
+                )
+            except RuntimeError:
+                raise ValueError("wrapper") from KeyError("metadata")
+        except ValueError as wrapper:
+            exc = wrapper
+        self.assertIsInstance(exc.__cause__, KeyError)
+        self.assertTrue(_should_restart_actor_for_gpu_error(exc))
+
     def test_exception_chain_walk_is_bounded(self):
         # Cycle: a.__cause__ -> b, b.__cause__ -> a. Must terminate and still match.
         a = RuntimeError("wrapper A")
