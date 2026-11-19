@@ -466,19 +466,20 @@ func getCRTListOptions(namespace string, opts *metav1.ListOptions) (*ctrlRTClien
 }
 
 // validateCreateKey returns an InvalidArgument status error when a create request has neither a name nor a
-// generateName, when a provided name is not a valid path segment, or when the namespace is empty for a namespaced
-// kind. An empty name is valid when generateName is set, so the name is only checked when it is provided.
-// Running this before the metadata-storage branch keeps the rejection independent of whether metadata storage is on.
+// generateName, when a provided name is not a valid path segment, or when the namespace is empty or not a valid path
+// segment for a namespaced kind. An empty name is valid when generateName is set, so the name is only checked when it
+// is provided. Running this before the metadata-storage branch keeps the rejection independent of whether metadata
+// storage is on.
 func (handler *apiHandler) validateCreateKey(obj runtime.Object, objMeta metav1.Object) error {
 	namespace, name := objMeta.GetNamespace(), objMeta.GetName()
 	if name == "" && objMeta.GetGenerateName() == "" {
 		return status.Errorf(codes.InvalidArgument, "%v: name or generateName is required",
-			apiErrMsg("create", namespace, name))
+			validationErrMsg("create", namespace, name))
 	}
 	if name != "" {
 		if msgs := validationpath.IsValidPathSegmentName(name); len(msgs) != 0 {
 			return status.Errorf(codes.InvalidArgument, "%v: invalid resource name %q: %v",
-				apiErrMsg("create", namespace, name), name, msgs)
+				validationErrMsg("create", namespace, name), name, msgs)
 		}
 	}
 	return handler.validateNamespace(obj, "create", namespace, name,
@@ -486,38 +487,63 @@ func (handler *apiHandler) validateCreateKey(obj runtime.Object, objMeta metav1.
 }
 
 // validateObjectKey returns an InvalidArgument status error when the name is empty or is not a valid path segment,
-// or when the namespace is empty for a namespaced kind. The k8s client refuses to build a request for these keys
-// with a plain fmt.Errorf that carries no error type or gRPC code, so surfaceGrpcError would map it to Unknown.
-// The name rules are the ones client-go applies in rest.Request.Name.
+// or when the namespace is empty or not a valid path segment for a namespaced kind. The k8s client refuses to build
+// a request for these keys with a plain fmt.Errorf that carries no error type or gRPC code, so surfaceGrpcError
+// would map it to Unknown. The name rules are the ones client-go applies in rest.Request.Name.
 func (handler *apiHandler) validateObjectKey(obj runtime.Object, apiAction string, namespace string, name string) error {
 	if name == "" {
 		return status.Errorf(codes.InvalidArgument, "%v: resource name may not be empty",
-			apiErrMsg(apiAction, namespace, name))
+			validationErrMsg(apiAction, namespace, name))
 	}
 	if msgs := validationpath.IsValidPathSegmentName(name); len(msgs) != 0 {
 		return status.Errorf(codes.InvalidArgument, "%v: invalid resource name %q: %v",
-			apiErrMsg(apiAction, namespace, name), name, msgs)
+			validationErrMsg(apiAction, namespace, name), name, msgs)
 	}
 	return handler.validateNamespace(obj, apiAction, namespace, name,
 		"an empty namespace may not be set when a resource name is provided")
 }
 
-// validateNamespace returns an InvalidArgument status error when the namespace is empty and the object's kind is
-// namespaced. When the scope cannot be determined, or the kind is cluster-scoped, it returns nil and leaves the
-// request to the k8s client, so an empty namespace on a cluster-scoped kind keeps working.
+// validateNamespace returns an InvalidArgument status error when the namespace is empty, or is not a valid path
+// segment (the rule client-go applies in rest.Request.Namespace), and the object's kind is namespaced. When the
+// kind is cluster-scoped it returns nil and leaves the request to the k8s client, so a namespace on a cluster-scoped
+// kind keeps working. When the scope cannot be determined the empty-namespace check is skipped, and the failure is
+// logged so a misconfigured REST mapper does not disable the check silently.
 func (handler *apiHandler) validateNamespace(obj runtime.Object, apiAction string, namespace string, name string,
-	reason string) error {
-	if namespace != "" {
+	emptyReason string) error {
+	if scoper, ok := handler.k8sHandler.(namespaceScoper); ok {
+		namespaced, err := scoper.IsObjectNamespaced(obj)
+		if err != nil {
+			handler.logger.Info("could not determine whether the kind is namespaced, skipping namespace validation",
+				"action", apiAction, "namespace", namespace, "name", name, "error", err.Error())
+			return nil
+		}
+		if !namespaced {
+			return nil
+		}
+	} else if namespace == "" {
 		return nil
 	}
-	scoper, ok := handler.k8sHandler.(namespaceScoper)
-	if !ok {
-		return nil
+	if namespace == "" {
+		return status.Errorf(codes.InvalidArgument, "%v: %v", validationErrMsg(apiAction, namespace, name), emptyReason)
 	}
-	if namespaced, err := scoper.IsObjectNamespaced(obj); err != nil || !namespaced {
-		return nil
+	if msgs := validationpath.IsValidPathSegmentName(namespace); len(msgs) != 0 {
+		return status.Errorf(codes.InvalidArgument, "%v: invalid resource namespace %q: %v",
+			validationErrMsg(apiAction, namespace, name), namespace, msgs)
 	}
-	return status.Errorf(codes.InvalidArgument, "%v: %v", apiErrMsg(apiAction, namespace, name), reason)
+	return nil
+}
+
+// validationErrMsg is apiErrMsg with empty values quoted, so a missing name or namespace reads as `name: ""`
+// instead of leaving a blank before the reason.
+func validationErrMsg(apiAction string, namespace string, name string) string {
+	return apiErrMsg(apiAction, quoteIfEmpty(namespace), quoteIfEmpty(name))
+}
+
+func quoteIfEmpty(s string) string {
+	if s == "" {
+		return `""`
+	}
+	return s
 }
 
 func apiErrMsg(apiAction string, namespace string, name string) string {

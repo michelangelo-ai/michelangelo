@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/uber-go/tally"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
@@ -37,12 +38,12 @@ func TestInvalidKeyReturnsInvalidArgument(t *testing.T) {
 		{
 			name:    "get empty name",
 			call:    func(h *apiHandler) error { return h.Get(ctx, "default", "", &metav1.GetOptions{}, &v2pb.RayJob{}) },
-			wantMsg: "failed to get API object. namespace: default, name: : " + emptyName,
+			wantMsg: "failed to get API object. namespace: default, name: \"\": " + emptyName,
 		},
 		{
 			name:    "get empty namespace",
 			call:    func(h *apiHandler) error { return h.Get(ctx, "", "job01", &metav1.GetOptions{}, &v2pb.RayJob{}) },
-			wantMsg: "failed to get API object. namespace: , name: job01: " + emptyNS,
+			wantMsg: "failed to get API object. namespace: \"\", name: job01: " + emptyNS,
 		},
 		{
 			name:    "get name with slash",
@@ -64,42 +65,63 @@ func TestInvalidKeyReturnsInvalidArgument(t *testing.T) {
 			call: func(h *apiHandler) error {
 				return h.Update(ctx, rayJob("default", ""), &metav1.UpdateOptions{})
 			},
-			wantMsg: "failed to update API object. namespace: default, name: : " + emptyName,
+			wantMsg: "failed to update API object. namespace: default, name: \"\": " + emptyName,
 		},
 		{
 			name: "update empty namespace",
 			call: func(h *apiHandler) error {
 				return h.Update(ctx, rayJob("", "job01"), &metav1.UpdateOptions{})
 			},
-			wantMsg: "failed to update API object. namespace: , name: job01: " + emptyNS,
+			wantMsg: "failed to update API object. namespace: \"\", name: job01: " + emptyNS,
 		},
 		{
 			name: "update status empty name",
 			call: func(h *apiHandler) error {
 				return h.UpdateStatus(ctx, rayJob("default", ""), &metav1.UpdateOptions{})
 			},
-			wantMsg: "failed to updateStatus API object. namespace: default, name: : " + emptyName,
+			wantMsg: "failed to updateStatus API object. namespace: default, name: \"\": " + emptyName,
 		},
 		{
 			name: "delete empty name",
 			call: func(h *apiHandler) error {
 				return h.Delete(ctx, rayJob("default", ""), &metav1.DeleteOptions{})
 			},
-			wantMsg: "failed to delete API object. namespace: default, name: : " + emptyName,
+			wantMsg: "failed to delete API object. namespace: default, name: \"\": " + emptyName,
 		},
 		{
 			name: "delete empty namespace",
 			call: func(h *apiHandler) error {
 				return h.Delete(ctx, rayJob("", "job01"), &metav1.DeleteOptions{})
 			},
-			wantMsg: "failed to delete API object. namespace: , name: job01: " + emptyNS,
+			wantMsg: "failed to delete API object. namespace: \"\", name: job01: " + emptyNS,
+		},
+		{
+			name: "get namespace with slash",
+			call: func(h *apiHandler) error {
+				return h.Get(ctx, "a/b", "job01", &metav1.GetOptions{}, &v2pb.RayJob{})
+			},
+			wantMsg: `invalid resource namespace "a/b"`,
+		},
+		{
+			name: "update namespace dot dot",
+			call: func(h *apiHandler) error {
+				return h.Update(ctx, rayJob("..", "job01"), &metav1.UpdateOptions{})
+			},
+			wantMsg: `invalid resource namespace ".."`,
+		},
+		{
+			name: "create namespace with percent",
+			call: func(h *apiHandler) error {
+				return h.Create(ctx, rayJob("a%b", "job01"), &metav1.CreateOptions{})
+			},
+			wantMsg: `invalid resource namespace "a%b"`,
 		},
 		{
 			name: "create neither name nor generateName",
 			call: func(h *apiHandler) error {
 				return h.Create(ctx, rayJob("default", ""), &metav1.CreateOptions{})
 			},
-			wantMsg: "failed to create API object. namespace: default, name: : name or generateName is required",
+			wantMsg: "failed to create API object. namespace: default, name: \"\": name or generateName is required",
 		},
 		{
 			name: "create name with slash",
@@ -113,7 +135,7 @@ func TestInvalidKeyReturnsInvalidArgument(t *testing.T) {
 			call: func(h *apiHandler) error {
 				return h.Create(ctx, rayJob("", "job01"), &metav1.CreateOptions{})
 			},
-			wantMsg: "failed to create API object. namespace: , name: job01: an empty namespace may not be set during creation",
+			wantMsg: "failed to create API object. namespace: \"\", name: job01: an empty namespace may not be set during creation",
 		},
 	}
 	for _, tt := range tests {
@@ -178,7 +200,7 @@ func TestCreateInvalidKeyReturnsInvalidArgument(t *testing.T) {
 		{
 			name:      "neither name nor generateName",
 			namespace: "default",
-			wantMsg:   "failed to create API object. namespace: default, name: : name or generateName is required",
+			wantMsg:   "failed to create API object. namespace: default, name: \"\": name or generateName is required",
 		},
 		{name: "name with slash", namespace: "default", objName: "a/b", wantMsg: `invalid resource name "a/b"`},
 		{
@@ -229,6 +251,28 @@ func TestEmptyNamespaceNotRejectedWhenScopeIsNotNamespaced(t *testing.T) {
 			assert.Equal(t, 1, rec.calls, "the request must reach the k8s layer")
 		})
 	}
+}
+
+// A namespace that is not a valid path segment is only rejected for namespaced kinds.
+func TestInvalidNamespaceNotRejectedForClusterScopedKind(t *testing.T) {
+	h, rec := newRecordingHandler(t, false, nil)
+	err := h.Get(context.Background(), "a/b", "job01", &metav1.GetOptions{}, &v2pb.RayJob{})
+	require.Error(t, err)
+	s, _ := status.FromError(err)
+	assert.NotEqual(t, codes.InvalidArgument, s.Code(), "got %v", err)
+	assert.Equal(t, 1, rec.calls, "the request must reach the k8s layer")
+}
+
+// When the scope query fails the namespace check is skipped, and the failure must be logged.
+func TestScopeLookupFailureIsLogged(t *testing.T) {
+	h, _ := newRecordingHandler(t, true, errors.New("no REST mapping"))
+	core, logs := observer.New(zap.InfoLevel)
+	h.logger = zapr.NewLogger(zap.New(core))
+
+	require.NoError(t, h.validateNamespace(&v2pb.RayJob{}, "get", "", "job01", "reason"))
+
+	require.Equal(t, 1, logs.Len())
+	assert.Contains(t, logs.All()[0].ContextMap()["error"], "no REST mapping")
 }
 
 // A K8sHandler that cannot report scope (no IsObjectNamespaced) must behave as before.
