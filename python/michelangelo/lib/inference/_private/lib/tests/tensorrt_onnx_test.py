@@ -136,6 +136,30 @@ class OnnxInferenceMethodsTest(unittest.TestCase):
         self.assertEqual(out.dtype, np.int32)
         self.assertEqual(out[0].tolist(), [INT32_SENTINEL, 2])
 
+    def test_prepare_nan_into_narrow_int_is_an_error(self):
+        """int8, int16 and unsigned inputs cannot hold the null sentinel."""
+        mi = self._mi()
+        arr = np.array([1.0, np.nan], dtype=np.float32)
+        for dtype in (np.int8, np.int16, np.uint8, np.uint32):
+            with (
+                self.subTest(dtype=dtype),
+                self.assertRaisesRegex(ValueError, "cannot hold the null sentinel"),
+            ):
+                _prepare_onnx_input(mi, arr, np.dtype(dtype))
+
+    def test_prepare_narrow_int_without_nan_is_cast(self):
+        """Without nulls a narrow integer input is a plain cast."""
+        out = _prepare_onnx_input(
+            self._mi(), np.array([1.0, 2.0], dtype=np.float32), np.dtype(np.int8)
+        )
+        np.testing.assert_array_equal(out, np.array([1, 2], dtype=np.int8))
+
+    def test_prepare_float16_nan_maps_to_the_exact_sentinel(self):
+        """float16 cannot hold the sentinel, so it is not used as the fill dtype."""
+        arr = np.array([3.0, np.nan], dtype=np.float16)
+        out = _prepare_onnx_input(self._mi(), arr, np.dtype(np.int32))
+        np.testing.assert_array_equal(out, [3, INT32_SENTINEL])
+
     def test_prepare_int_cast_finite_floats_round_trip(self):
         """Prepare int cast finite floats round trip."""
         mi = SimpleNamespace()

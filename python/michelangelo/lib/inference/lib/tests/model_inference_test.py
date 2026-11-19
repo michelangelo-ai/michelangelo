@@ -14,12 +14,10 @@ import torch
 
 from michelangelo.lib.inference._private.lib.model_inference import (
     _is_custom_python,
-)
-from michelangelo.lib.inference.lib.model_inference import (
-    ModelInference,
     _numpy_to_model_input,
     _torch_model_accepts_dict_input,
 )
+from michelangelo.lib.inference.lib.model_inference import ModelInference
 from michelangelo.lib.inference.lib.tests.fixtures.model import TorchModel
 from michelangelo.lib.model_manager.constants import RawModelType, TritonBackendType
 from michelangelo.lib.model_manager.packager.custom_triton.custom_triton_packager import (  # noqa: E501
@@ -32,6 +30,7 @@ from michelangelo.lib.model_manager.schema import (
 )
 
 _FIXTURES = "michelangelo.lib.inference.lib.tests.fixtures"
+_PRIVATE = "michelangelo.lib.inference._private.lib.model_inference"
 
 
 class ModelInferenceTest(unittest.TestCase):
@@ -721,8 +720,8 @@ output: [
             self.assertIsNone(model_inference.device)
 
     def test_load_torch_model_disables_jit_fusion_on_cuda(self):
-        """Test that JIT fusion is disabled when CUDA is available."""
-        mock_model = unittest.mock.MagicMock()
+        """JIT fusion is disabled once per process for a TorchScript model on CUDA."""
+        mock_model = unittest.mock.MagicMock(spec=torch.jit.ScriptModule)
         mock_model.to.return_value = mock_model
 
         with (
@@ -740,15 +739,44 @@ output: [
             ),
             patch("torch.cuda.is_available", return_value=True),
             patch("torch.jit.set_fusion_strategy") as mock_set_fusion,
+            patch(f"{_PRIVATE}._jit_fusion_disabled", False),
             tempfile.TemporaryDirectory() as temp_dir,
         ):
             torch_deployable_package = self.create_torch_deployable_model_package(
                 temp_dir
             )
-            model_inference = ModelInference(model_path=torch_deployable_package)
-            model_inference.load_model()
+            ModelInference(model_path=torch_deployable_package).load_model()
+            ModelInference(model_path=torch_deployable_package).load_model()
 
         mock_set_fusion.assert_called_once_with([("STATIC", 0), ("DYNAMIC", 0)])
+
+    def test_load_python_backend_module_leaves_jit_fusion_alone_on_cuda(self):
+        """A plain nn.Module never runs through TorchScript, so fusion is left on."""
+        mock_model = unittest.mock.MagicMock(spec=torch.nn.Module)
+        mock_model.to.return_value = mock_model
+
+        with (
+            patch(
+                "michelangelo.lib.model_manager.serde.model.load_deployable_model",
+                return_value=mock_model,
+            ),
+            patch(
+                "michelangelo.lib.model_manager.serde.model.load_deployable_model_schema",
+                return_value=unittest.mock.MagicMock(),
+            ),
+            patch(f"{_PRIVATE}._torch_model_accepts_dict_input", return_value=False),
+            patch(f"{_PRIVATE}._forward_parameter_names", return_value=None),
+            patch("torch.cuda.is_available", return_value=True),
+            patch("torch.jit.set_fusion_strategy") as mock_set_fusion,
+            patch(f"{_PRIVATE}._jit_fusion_disabled", False),
+            tempfile.TemporaryDirectory() as temp_dir,
+        ):
+            torch_deployable_package = self.create_torch_deployable_model_package(
+                temp_dir
+            )
+            ModelInference(model_path=torch_deployable_package).load_model()
+
+        mock_set_fusion.assert_not_called()
 
     def test_load_torch_model_no_jit_fusion_call_on_cpu(self):
         """Test that JIT fusion strategy is not set when loading on CPU."""
@@ -1363,3 +1391,206 @@ class PackagedModelInferenceTest(unittest.TestCase):
         mi, out = self._run(PositionalModel(), backend="onnxruntime")
         self.assertEqual(mi.model_type, TritonBackendType.ONNX)
         np.testing.assert_allclose(out["y"], [[12.0], [24.0]])
+
+
+_PACKAGED_CUSTOM_MODEL = """
+import numpy as np
+
+from michelangelo.lib.model_manager.interface.custom_model import Model
+
+
+class Packaged(Model):
+    def save(self, path):
+        pass
+
+    @classmethod
+    def load(cls, path):
+        return cls()
+
+    def predict(self, inputs):
+        return {{"response": np.asarray(inputs["input"]) * {factor}}}
+"""
+
+
+class PackageShippedClassTest(unittest.TestCase):
+    """Raw packages whose model class exists only inside the package."""
+
+    def _raw_package(self, root: str, factor: int) -> str:
+        """Package a model class from a module that is then made unimportable."""
+        import sys
+        import uuid
+
+        module = f"shipped_{uuid.uuid4().hex}"
+        source_dir = os.path.join(root, "source")
+        os.makedirs(source_dir)
+        with open(os.path.join(source_dir, f"{module}.py"), "w") as f:
+            f.write(_PACKAGED_CUSTOM_MODEL.format(factor=factor))
+        model_dir = os.path.join(root, "model")
+        os.makedirs(model_dir)
+        schema = ModelSchema(
+            input_schema=[ModelSchemaItem("input", DataType.INT, [1])],
+            output_schema=[ModelSchemaItem("response", DataType.INT, [1])],
+        )
+        sys.path.insert(0, source_dir)
+        try:
+            package = CustomTritonPackager().create_raw_model_package(
+                model_path=model_dir,
+                model_class=f"{module}.Packaged",
+                model_schema=schema,
+                sample_data=[{"input": np.array([1])}],
+                dest_model_path=os.path.join(root, "package"),
+                include_import_prefixes=[module],
+            )
+        finally:
+            sys.path.remove(source_dir)
+            sys.modules.pop(module, None)
+        return package
+
+    def test_class_shipped_in_defs_is_loaded(self):
+        """The class is imported from the package's defs/, not the environment."""
+        with tempfile.TemporaryDirectory() as tmp:
+            mi = ModelInference(model_path=self._raw_package(tmp, factor=3))
+            mi.load_model()
+            out = mi.execute({"input": np.array([2])})
+        np.testing.assert_array_equal(out["response"], [6])
+
+    def test_two_raw_packages_in_one_process(self):
+        """Two raw packages loaded side by side each run their own class."""
+        with tempfile.TemporaryDirectory() as a, tempfile.TemporaryDirectory() as b:
+            first = ModelInference(model_path=self._raw_package(a, factor=2))
+            second = ModelInference(model_path=self._raw_package(b, factor=10))
+            first.load_model()
+            second.load_model()
+            data = {"input": np.array([1])}
+            np.testing.assert_array_equal(first.execute(data)["response"], [2])
+            np.testing.assert_array_equal(second.execute(data)["response"], [10])
+
+
+class ReviewedBehaviorTest(unittest.TestCase):
+    """Inputs, outputs and loading rules for TorchScript and custom models."""
+
+    @staticmethod
+    def _schema(inputs, outputs=("y",)):
+        return _packaged_schema(inputs, outputs)
+
+    def _scripted(self, model, inputs, outputs=("y",)):
+        mi = ModelInference(model_path="/unused")
+        mi.model = torch.jit.script(model)
+        mi.model_type = RawModelType.TORCH
+        mi.model_schema = self._schema(inputs, outputs)
+        mi._torch_model_accepts_dict = _torch_model_accepts_dict_input(
+            mi.model, mi.model_schema
+        )
+        from michelangelo.lib.inference._private.lib.model_inference import (
+            _forward_parameter_names,
+        )
+
+        mi._torch_forward_parameters = _forward_parameter_names(mi.model)
+        return mi
+
+    def test_positional_inputs_follow_forward_order_not_schema_order(self):
+        """forward(b, a) gets b first although the schema sorts a before b."""
+        from michelangelo.lib.inference.lib.tests.fixtures.packages import (
+            ReversedModel,
+        )
+
+        mi = self._scripted(ReversedModel(), ("a", "b"))
+        out = mi.execute(
+            {
+                "a": np.array([[1.0]], dtype=np.float32),
+                "b": np.array([[10.0]], dtype=np.float32),
+            }
+        )
+        np.testing.assert_allclose(out["y"], [[12.0]])
+
+    def test_positional_inputs_fall_back_to_schema_order(self):
+        """When the forward's names are not the schema's, schema order is used."""
+        from michelangelo.lib.inference.lib.tests.fixtures.packages import (
+            PositionalModel,
+        )
+
+        mi = self._scripted(PositionalModel(), ("x1", "x2"))
+        out = mi.execute(
+            {
+                "x1": np.array([[1.0]], dtype=np.float32),
+                "x2": np.array([[10.0]], dtype=np.float32),
+            }
+        )
+        np.testing.assert_allclose(out["y"], [[12.0]])
+
+    def test_dict_output_is_mapped_by_name(self):
+        """A forward that returns Dict[str, Tensor] is read by output name."""
+        from michelangelo.lib.inference.lib.tests.fixtures.packages import (
+            DictOutputModel,
+        )
+
+        mi = self._scripted(DictOutputModel(), ("a",), outputs=("double", "half"))
+        self.assertFalse(mi._torch_model_accepts_dict)
+        out = mi.execute({"a": np.array([[4.0]], dtype=np.float32)})
+        np.testing.assert_allclose(out["double"], [[8.0]])
+        np.testing.assert_allclose(out["half"], [[2.0]])
+
+    def test_dict_output_missing_a_schema_output_is_an_error(self):
+        """A dict output without a schema output names both sides."""
+        from michelangelo.lib.inference.lib.tests.fixtures.packages import (
+            DictOutputModel,
+        )
+
+        mi = self._scripted(DictOutputModel(), ("a",), outputs=("double", "other"))
+        with self.assertRaisesRegex(ValueError, "missing \\['other'\\]"):
+            mi.execute({"a": np.array([[4.0]], dtype=np.float32)})
+
+    def test_tuple_output_count_must_match_the_schema(self):
+        """A tuple with too few or too many outputs is a clear error."""
+        from michelangelo.lib.inference.lib.tests.fixtures.packages import (
+            PositionalModel,
+        )
+
+        mi = self._scripted(PositionalModel(), ("a", "b"), outputs=("y", "z"))
+        with self.assertRaisesRegex(ValueError, "returned 1 outputs.*expects 2"):
+            mi.execute(
+                {
+                    "a": np.array([[1.0]], dtype=np.float32),
+                    "b": np.array([[1.0]], dtype=np.float32),
+                }
+            )
+
+    def test_probe_failure_of_any_kind_means_positional(self):
+        """A probe that fails with AttributeError classifies the model positional."""
+
+        class UsesTensorMethods(torch.nn.Module):
+            def forward(self, x):
+                return x.view(-1)
+
+        schema = self._schema(("x",))
+        self.assertFalse(_torch_model_accepts_dict_input(UsesTensorMethods(), schema))
+
+    def test_falsey_model_still_executes(self):
+        """A loaded model whose __bool__ is False is not mistaken for unloaded."""
+        model = MagicMock()
+        model.__bool__.return_value = False
+        model.predict.return_value = {"response": np.array([1])}
+        mi = ModelInference(model_path="/unused")
+        mi.model, mi.model_type = model, RawModelType.CUSTOM_PYTHON
+        self.assertEqual(mi.execute({"input": np.array([1])})["response"], [1])
+
+    def test_custom_python_deployable_package_is_rejected_clearly(self):
+        """A custom model's deployable package asks for the raw package."""
+        schema = ModelSchema(
+            input_schema=[ModelSchemaItem("input", DataType.INT, [1])],
+            output_schema=[ModelSchemaItem("response", DataType.INT, [1])],
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            model_dir = os.path.join(tmp, "model")
+            os.makedirs(model_dir)
+            package = CustomTritonPackager().create_model_package(
+                model_path=model_dir,
+                model_class=f"{_FIXTURES}.predict.Predict",
+                model_schema=schema,
+                sample_data=[{"input": np.array([1])}],
+                dest_model_path=os.path.join(tmp, "package"),
+                include_import_prefixes=[_FIXTURES],
+            )
+            mi = ModelInference(model_path=package)
+            with self.assertRaisesRegex(ValueError, "pass that instead"):
+                mi.load_model()

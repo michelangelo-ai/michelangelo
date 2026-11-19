@@ -7,13 +7,10 @@ from the plain ONNX Runtime session.
 from __future__ import annotations
 
 import logging
-import os
 
 import numpy as np
 
 from michelangelo.lib.constants.sentinel import INT32_SENTINEL
-
-_ONNX_DEPLOYABLE_MODEL_FILE = "model.onnx"
 
 _logger = logging.getLogger(__name__)
 
@@ -26,13 +23,6 @@ def _load_onnx_deployable_model(self) -> None:
     from michelangelo.lib.model_manager.utils.onnx.data_type import (
         onnx_tensor_type_to_np_dtype,
     )
-
-    onnx_file = os.path.join(self.model_path, "0", _ONNX_DEPLOYABLE_MODEL_FILE)
-    if not os.path.exists(onnx_file):
-        raise FileNotFoundError(
-            f"ONNX model file not found at {onnx_file}. Deployable ONNX models "
-            f"should be in 0/{_ONNX_DEPLOYABLE_MODEL_FILE}"
-        )
 
     self.model_schema = load_deployable_model_schema(self.model_path)
     self.batch_inference = True  # ONNX runs on batched inputs
@@ -67,6 +57,10 @@ def _prepare_onnx_input(
 
     Returns:
         The array to feed to the session.
+
+    Raises:
+        ValueError: If the array has NaN and the model's integer dtype cannot
+            hold ``INT32_SENTINEL`` (int8, int16 and unsigned integers).
     """
     if (
         target_dtype is not None
@@ -74,7 +68,17 @@ def _prepare_onnx_input(
         and np.issubdtype(target_dtype, np.integer)
         and np.issubdtype(arr.dtype, np.floating)
     ):
-        arr = np.where(np.isnan(arr), INT32_SENTINEL, arr).astype(arr.dtype, copy=False)
+        nan = np.isnan(arr)
+        if nan.any():
+            if np.iinfo(target_dtype).min > INT32_SENTINEL:
+                raise ValueError(
+                    f"An input with nulls is fed to an ONNX input of dtype "
+                    f"{np.dtype(target_dtype)}, which cannot hold the null "
+                    f"sentinel {INT32_SENTINEL}. Fill the nulls before inference "
+                    "or export the model with an int32 or int64 input."
+                )
+            # float64 holds the sentinel exactly; float16 would overflow to -inf.
+            arr = np.where(nan, INT32_SENTINEL, arr.astype(np.float64, copy=False))
     if target_dtype is not None and arr.dtype != target_dtype:
         arr = arr.astype(target_dtype, copy=False)
     if not arr.flags["C_CONTIGUOUS"]:

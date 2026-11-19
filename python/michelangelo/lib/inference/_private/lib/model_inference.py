@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+from collections.abc import Mapping
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -70,11 +71,14 @@ def _torch_model_accepts_dict_input(model: torch.nn.Module, model_schema) -> boo
     )
 
     try:
-        schema = str(model._c._get_method("forward").schema)
+        arguments = model._c._get_method("forward").schema.arguments
     except Exception:
         pass
     else:
-        return "Dict(str, Tensor)" in schema
+        # Only the parameters decide, not the return type: a forward that
+        # takes a Tensor and returns Dict[str, Tensor] is positional.
+        params = [str(arg.type) for arg in arguments if arg.name != "self"]
+        return len(params) == 1 and "Dict[str, Tensor]" in params[0]
 
     # Fallback: probe call
     if not model_schema or not model_schema.input_schema:
@@ -95,12 +99,43 @@ def _torch_model_accepts_dict_input(model: torch.nn.Module, model_schema) -> boo
     try:
         with torch.no_grad():
             model(probe)
-    except (TypeError, RuntimeError):
-        # TypeError: Python signature mismatch; RuntimeError: TorchScript
-        # "expected Tensor, got dict"
+    except Exception as exc:
+        # Any failure means the forward does not take one dict: a signature
+        # mismatch (TypeError), TorchScript's "expected Tensor, got dict"
+        # (RuntimeError), or a forward that used the dict as a tensor
+        # (AttributeError, KeyError, IndexError).
+        _logger.debug("Dict-input probe failed, using positional inputs: %r", exc)
         return False
     else:
         return True
+
+
+def _forward_parameter_names(model: torch.nn.Module) -> list[str] | None:
+    """Return the names of the model's forward parameters, without ``self``.
+
+    Args:
+        model: A TorchScript module or a plain ``nn.Module``.
+
+    Returns:
+        The names in declaration order, or ``None`` if they cannot be read or
+        the forward takes ``*args`` or ``**kwargs``.
+    """
+    import inspect
+
+    try:
+        arguments = model._c._get_method("forward").schema.arguments
+    except Exception:
+        pass
+    else:
+        return [arg.name for arg in arguments if arg.name != "self"]
+
+    try:
+        parameters = inspect.signature(model.forward).parameters.values()
+    except (TypeError, ValueError):
+        return None
+    if any(p.kind in (p.VAR_POSITIONAL, p.VAR_KEYWORD) for p in parameters):
+        return None
+    return [p.name for p in parameters]
 
 
 def _load_deployable_model(self) -> None:
@@ -113,6 +148,12 @@ def _load_deployable_model(self) -> None:
         _load_onnx_deployable_model(self)
     elif self.model_type in (RawModelType.TORCH, RawModelType.LIGHTNING):
         _load_torch_deployable_model(self)
+    elif self.model_type == RawModelType.CUSTOM_PYTHON:
+        raise ValueError(
+            f"{self.model_path} is a deployable package of a custom-python model. "
+            "Custom-python models are scored from their raw package; pass that "
+            "instead."
+        )
     else:
         raise ValueError(
             f"Unsupported deployable backend '{self.model_type}' at {self.model_path}."
@@ -152,15 +193,33 @@ def _load_torch_deployable_model(self) -> None:
     self._torch_model_accepts_dict = _torch_model_accepts_dict_input(
         self.model, self.model_schema
     )
+    self._torch_forward_parameters = _forward_parameter_names(self.model)
 
     # Move model to GPU if available
     self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    if self.device.type == "cuda":
-        # The fuser emits invalid float literals (e.g. `1.0e+20.f`) for large
-        # clamp constants, causing NVRTC to fail. Fall back to pre-compiled
-        # ATen kernels.
-        torch.jit.set_fusion_strategy([("STATIC", 0), ("DYNAMIC", 0)])
+    if self.device.type == "cuda" and isinstance(self.model, torch.jit.ScriptModule):
+        _disable_jit_fusion()
     self.model = self.model.to(self.device)
+
+
+_jit_fusion_disabled = False
+
+
+def _disable_jit_fusion() -> None:
+    """Turn off TorchScript kernel fusion for this process, once.
+
+    The fuser emits invalid float literals (e.g. ``1.0e+20.f``) for large clamp
+    constants, so NVRTC fails to compile the kernel. With fusion off, TorchScript
+    runs the pre-compiled ATen kernels instead. The setting is process-wide: it
+    applies to every TorchScript model in the worker, not only this one.
+    """
+    global _jit_fusion_disabled
+    if _jit_fusion_disabled:
+        return
+    import torch
+
+    torch.jit.set_fusion_strategy([("STATIC", 0), ("DYNAMIC", 0)])
+    _jit_fusion_disabled = True
 
 
 def _is_custom_python(self) -> bool:
@@ -203,10 +262,9 @@ def _execute_torch(self, data: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
         with torch.no_grad():
             outputs = self.model(model_inputs)
     else:
-        # Model expects positional arguments in schema order
         model_inputs = [
-            _numpy_to_model_input(data[schema_item.name], self.device)
-            for schema_item in self.model_schema.input_schema
+            _numpy_to_model_input(data[name], self.device)
+            for name in _positional_input_names(self)
         ]
         with torch.no_grad():
             if len(model_inputs) == 1:
@@ -215,19 +273,45 @@ def _execute_torch(self, data: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
                 outputs = self.model(*model_inputs)
 
     # Convert tensors to numpy
-    result = {}
+    output_names = [item.name for item in self.model_schema.output_schema]
     if isinstance(outputs, torch.Tensor):
         outputs = (outputs,)
-    if hasattr(outputs, "_fields"):
+    if isinstance(outputs, Mapping):
+        # Dict output (multi-head models): map by key.
+        missing = [name for name in output_names if name not in outputs]
+        if missing:
+            raise ValueError(
+                f"Model output is missing {missing}; it returned "
+                f"{sorted(outputs)} and the output schema expects {output_names}."
+            )
+        values = [outputs[name] for name in output_names]
+    elif hasattr(outputs, "_fields"):
         # NamedTuple output (scripted model): map by field name so
         # output_schema order doesn't matter
-        for schema_item in self.model_schema.output_schema:
-            result[schema_item.name] = (
-                getattr(outputs, schema_item.name).detach().cpu().numpy()
-            )
+        values = [getattr(outputs, name) for name in output_names]
     else:
-        # Plain tuple output (traced model): output_schema order is guaranteed to match
-        # NamedTuple field order by the packager.
-        for i, schema_item in enumerate(self.model_schema.output_schema):
-            result[schema_item.name] = outputs[i].detach().cpu().numpy()
-    return result
+        # Plain tuple output (traced model): output_schema order is guaranteed to
+        # match NamedTuple field order by the packager.
+        if len(outputs) != len(output_names):
+            raise ValueError(
+                f"Model returned {len(outputs)} outputs and the output schema "
+                f"expects {len(output_names)}: {output_names}."
+            )
+        values = list(outputs)
+    return {
+        name: value.detach().cpu().numpy() for name, value in zip(output_names, values)
+    }
+
+
+def _positional_input_names(self) -> list[str]:
+    """Return the input columns in the order the model's forward takes them.
+
+    ``input_schema`` is sorted by name, while a forward can declare its
+    parameters in any order. When every forward parameter names a schema input,
+    the inputs follow the forward's order; otherwise they follow the schema.
+    """
+    schema_names = [item.name for item in self.model_schema.input_schema]
+    forward_names = getattr(self, "_torch_forward_parameters", None)
+    if forward_names and sorted(forward_names) == sorted(schema_names):
+        return forward_names
+    return schema_names
