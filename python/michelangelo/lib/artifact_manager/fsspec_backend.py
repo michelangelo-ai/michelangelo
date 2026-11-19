@@ -33,6 +33,18 @@ Typical usage::
         create_bucket_if_missing=True,  # sandbox only
     )
 
+    # AWS S3 or Aliyun OSS through an explicit endpoint: path_style defaults
+    # to True (MinIO, SeaweedFS, Ceph); virtual-host-only services need False.
+    backend = FsspecStorageBackend(
+        "s3://my-bucket",
+        s3_storage_options(
+            "oss-cn-hangzhou.aliyuncs.com",
+            access_key=os.environ["AWS_ACCESS_KEY_ID"],
+            secret_key=os.environ["AWS_SECRET_ACCESS_KEY"],
+            path_style=False,
+        ),
+    )
+
     # Google Cloud Storage (credentials from the environment)
     backend = FsspecStorageBackend("gs://my-bucket/models")
 
@@ -46,6 +58,7 @@ import errno
 import logging
 import os
 import tempfile
+import threading
 import weakref
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any, NoReturn
@@ -79,9 +92,11 @@ _INSTALL_HINTS = {
 # into memory for single-request uploads (below 2 x chunksize, 100 MiB by
 # default), so this bounds the memory a directory of large files can take.
 _BATCH_SIZE = 8
-# Hosts that need virtual-host addressing (mirrors minio's BucketLookupAuto).
-_VIRTUAL_HOST_SUFFIXES = (".amazonaws.com", ".aliyuncs.com")
-_VIRTUAL_HOSTS = frozenset({"storage.googleapis.com"})
+# Endpoint hosts that usually need virtual-host addressing. Used only for a
+# one-time hint; addressing is set by ``path_style``, never by the host.
+_PATH_STYLE_HINT_SUFFIXES = (".amazonaws.com", ".aliyuncs.com")
+_path_style_hint_logged = False
+_path_style_hint_lock = threading.Lock()
 _REGION_ERRNOS = frozenset(
     code for code in (getattr(errno, "EREMCHG", None), errno.EINVAL) if code
 )
@@ -401,6 +416,27 @@ class FsspecStorageBackend(StorageBackend):
             ) from exc
 
 
+def _maybe_hint_virtual_host(endpoint: str) -> None:
+    """Log once per process if a path-style endpoint looks virtual-host only.
+
+    A hint only: it never changes the addressing style.
+    """
+    global _path_style_hint_logged
+    host = endpoint.rsplit(":", 1)[0].lower()
+    if not host.endswith(_PATH_STYLE_HINT_SUFFIXES):
+        return
+    with _path_style_hint_lock:
+        if _path_style_hint_logged:
+            return
+        _path_style_hint_logged = True
+    _logger.warning(
+        "s3_storage_options: endpoint %r uses path-style addressing "
+        "(path_style=True, the default). AWS S3 setups that require "
+        "virtual-host addressing and Aliyun OSS need path_style=False.",
+        endpoint,
+    )
+
+
 def s3_storage_options(
     endpoint: str | None = None,
     *,
@@ -408,6 +444,7 @@ def s3_storage_options(
     secret_key: str | None = None,
     secure: bool = True,
     region: str | None = None,
+    path_style: bool = True,
 ) -> dict[str, Any]:
     """Build ``s3fs`` storage options for an S3-compatible endpoint.
 
@@ -427,6 +464,15 @@ def s3_storage_options(
             local sandbox server without TLS.
         region: Bucket region, for example ``"eu-west-1"``. ``None`` and
             ``"us-east-1"`` use the botocore default.
+        path_style: Use path-style addressing (``https://host/bucket/key``)
+            instead of virtual-host addressing (``https://bucket.host/key``).
+            Defaults to ``True``, which suits MinIO, SeaweedFS, Ceph RGW and
+            most self-hosted S3-compatible servers. Set ``False`` for AWS S3
+            setups that require virtual-host addressing, and for Aliyun OSS,
+            which does not accept path-style requests. Applies only when
+            ``endpoint`` is given; with ``endpoint=None`` botocore picks the
+            style for the AWS default endpoint (and honours
+            ``s3.addressing_style`` in the AWS config file).
 
     Returns:
         Options for ``FsspecStorageBackend(storage_options=...)`` or
@@ -448,9 +494,9 @@ def s3_storage_options(
                 "path, for example 'localhost:9091'. Use secure= for the scheme."
             )
         client_kwargs["endpoint_url"] = f"{'https' if secure else 'http'}://{endpoint}"
-        host = endpoint.rsplit(":", 1)[0].lower()
-        virtual = host in _VIRTUAL_HOSTS or host.endswith(_VIRTUAL_HOST_SUFFIXES)
-        config_kwargs["s3"] = {"addressing_style": "virtual" if virtual else "path"}
+        config_kwargs["s3"] = {"addressing_style": "path" if path_style else "virtual"}
+        if path_style:
+            _maybe_hint_virtual_host(endpoint)
 
     if region and region != "us-east-1":
         # s3fs sends LocationConstraint=region_name on bucket creation, which
