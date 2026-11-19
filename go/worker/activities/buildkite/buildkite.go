@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/cadence-workflow/starlark-worker/activity"
 	temporalactivity "go.temporal.io/sdk/activity"
@@ -70,6 +71,11 @@ func (r TriggerBuildRequest) Validate() error {
 	if r.Branch == "" || r.Commit == "" {
 		return fmt.Errorf("branch and commit must be non-empty")
 	}
+	for key := range r.Env {
+		if !validEnvKey(key) || strings.HasPrefix(key, "BUILDKITE_") {
+			return fmt.Errorf("env keys must match [A-Za-z_][A-Za-z0-9_]* and must not start with BUILDKITE_")
+		}
+	}
 	return nil
 }
 
@@ -89,9 +95,9 @@ func (r CancelBuildRequest) Validate() error {
 	return GetBuildRequest(r).Validate()
 }
 
-// TriggerBuild submits once. Retrying an ambiguous submission can create another
+// TriggerBuildkiteBuild submits once. Retrying an ambiguous submission can create another
 // build, so the plugin disables mutation retries on both workflow backends.
-func (a *activities) TriggerBuild(ctx context.Context, req TriggerBuildRequest) (*BuildResponse, error) {
+func (a *activities) TriggerBuildkiteBuild(ctx context.Context, req TriggerBuildRequest) (*BuildResponse, error) {
 	if err := req.Validate(); err != nil {
 		return nil, activityError(ctx, yarpcerrors.CodeInvalidArgument.String(), err.Error())
 	}
@@ -106,8 +112,8 @@ func (a *activities) TriggerBuild(ctx context.Context, req TriggerBuildRequest) 
 	return publicBuild(snapshot, err)
 }
 
-// GetBuild returns a snapshot, including terminal failure states.
-func (a *activities) GetBuild(ctx context.Context, req GetBuildRequest) (*BuildResponse, error) {
+// GetBuildkiteBuild returns a snapshot, including terminal failure states.
+func (a *activities) GetBuildkiteBuild(ctx context.Context, req GetBuildRequest) (*BuildResponse, error) {
 	snapshot, err := a.getBuild(ctx, req)
 	return publicBuild(snapshot, err)
 }
@@ -127,8 +133,8 @@ func (a *activities) getBuild(ctx context.Context, req GetBuildRequest) (*buildS
 	return snapshot, nil
 }
 
-// SensorGetBuild makes one status check. The workflow owns durable polling.
-func (a *activities) SensorGetBuild(ctx context.Context, req GetBuildRequest) (*BuildResponse, error) {
+// SensorBuildkiteBuild makes one status check. The workflow owns durable polling.
+func (a *activities) SensorBuildkiteBuild(ctx context.Context, req GetBuildRequest) (*BuildResponse, error) {
 	snapshot, err := a.getBuild(ctx, req)
 	if err != nil {
 		return nil, err
@@ -156,8 +162,8 @@ func (a *activities) SensorGetBuild(ctx context.Context, req GetBuildRequest) (*
 	}
 }
 
-// CancelBuild requests cancellation once; its snapshot may still be canceling.
-func (a *activities) CancelBuild(ctx context.Context, req CancelBuildRequest) (*BuildResponse, error) {
+// CancelBuildkiteBuild requests cancellation once; its snapshot may still be canceling.
+func (a *activities) CancelBuildkiteBuild(ctx context.Context, req CancelBuildRequest) (*BuildResponse, error) {
 	if err := req.Validate(); err != nil {
 		return nil, activityError(ctx, yarpcerrors.CodeInvalidArgument.String(), err.Error())
 	}
@@ -195,6 +201,20 @@ func validateSlug(value string) error {
 		}
 	}
 	return fmt.Errorf("must be a slug matching [a-z0-9][a-z0-9_-]*")
+}
+
+func validEnvKey(value string) bool {
+	if value == "" {
+		return false
+	}
+	for index, character := range value {
+		if character >= 'a' && character <= 'z' || character >= 'A' && character <= 'Z' ||
+			character == '_' || index > 0 && character >= '0' && character <= '9' {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func activityError(ctx context.Context, reason, message string) error {

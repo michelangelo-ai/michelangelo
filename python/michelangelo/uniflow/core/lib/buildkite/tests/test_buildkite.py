@@ -1,10 +1,14 @@
 """Hermetic tests for the public Buildkite API, transport, and compilation."""
 
+import importlib.util
 import io
 import json
+import re
+import sys
 import threading
 from http.client import IncompleteRead
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from unittest.mock import Mock
 from urllib.error import HTTPError, URLError
 
@@ -84,6 +88,7 @@ class Clock:
 def configuration(monkeypatch: pytest.MonkeyPatch) -> None:
     """Keep tests independent of developer credentials."""
     monkeypatch.setenv("BUILDKITE_ORGANIZATION", "example")
+    monkeypatch.setenv("BUILDKITE_ALLOWED_PIPELINES", "smoke-test")
     monkeypatch.setenv("BUILDKITE_API_TOKEN", "test-token")
     monkeypatch.delenv("BUILDKITE_API_URL", raising=False)
 
@@ -130,6 +135,7 @@ def test_submission_maps_arguments_and_only_returns_safe_fields(opener: Mock) ->
     assert opener.open.call_args.kwargs == {"timeout": 30}
     assert env == {"MODE": "smoke"}
     assert metadata == {"release": "bundle"}
+    assert set(Build.__annotations__) == set(expected())
 
 
 @pytest.mark.parametrize(
@@ -176,6 +182,15 @@ def test_snapshot_operations(opener: Mock, function, method, suffix, state) -> N
         (trigger_build, {"pipeline": "smoke-test", "commit": None}),
         (trigger_build, {"pipeline": "smoke-test", "env": {"X": 1}}),
         (trigger_build, {"pipeline": "smoke-test", "env": {"X": None}}),
+        (trigger_build, {"pipeline": "smoke-test", "env": {"": "private-value"}}),
+        (trigger_build, {"pipeline": "smoke-test", "env": {"1FIRST": "private-value"}}),
+        (trigger_build, {"pipeline": "smoke-test", "env": {"A=B": "private-value"}}),
+        (trigger_build, {"pipeline": "smoke-test", "env": {"A\nB": "private-value"}}),
+        (trigger_build, {"pipeline": "smoke-test", "env": {"naïve": "private-value"}}),
+        (
+            trigger_build,
+            {"pipeline": "smoke-test", "env": {"BUILDKITE_REPO": "private-value"}},
+        ),
         (trigger_build, {"pipeline": "smoke-test", "metadata": {1: "X"}}),
         (trigger_build, {"pipeline": "smoke-test", "metadata": ["bad"]}),
         (get_build, {"pipeline": "smoke-test", "build_number": 0}),
@@ -189,15 +204,75 @@ def test_snapshot_operations(opener: Mock, function, method, suffix, state) -> N
             wait_for_build,
             {"pipeline": "smoke-test", "build_number": 17, "poll_interval": -1},
         ),
+        (
+            wait_for_build,
+            {
+                "pipeline": "smoke-test",
+                "build_number": 17,
+                "cancel_on_timeout": "false",
+            },
+        ),
     ],
 )
 def test_invalid_arguments_have_no_side_effects(
     opener: Mock, function, arguments: dict
 ) -> None:
     """Reject malformed inputs before making any request."""
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError) as raised:
+        function(**arguments)
+    message = str(raised.value)
+    assert message.startswith(function.__name__ + ": ")
+    assert "private-value" not in message
+    assert "_TriggerRequest" not in message
+    assert "_WaitOptions" not in message
+    assert "errors.pydantic.dev" not in message
+    opener.open.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "allowed,exception",
+    [
+        ("", RuntimeError),
+        ("  ", RuntimeError),
+        ("other-pipeline", RuntimeError),
+        ("*", ValueError),
+        ("smoke-test,../other", ValueError),
+        ("smoke-test,", ValueError),
+    ],
+)
+@pytest.mark.parametrize(
+    "function", [trigger_build, get_build, wait_for_build, invoke_build, cancel_build]
+)
+def test_allowlist_guards_every_operation(
+    opener: Mock,
+    monkeypatch: pytest.MonkeyPatch,
+    allowed: str,
+    exception,
+    function,
+) -> None:
+    """Deny unauthorized pipelines before any read, mutation, or retry."""
+    monkeypatch.setenv("BUILDKITE_ALLOWED_PIPELINES", allowed)
+    arguments = {"pipeline": "smoke-test"}
+    if function in (get_build, wait_for_build, cancel_build):
+        arguments["build_number"] = 17
+    with pytest.raises(exception, match="BUILDKITE_ALLOWED_PIPELINES"):
         function(**arguments)
     opener.open.assert_not_called()
+
+
+def test_allowlist_whitespace_and_valid_environment(
+    opener: Mock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Trim and deduplicate slugs; restrict environment keys, not metadata keys."""
+    monkeypatch.setenv(
+        "BUILDKITE_ALLOWED_PIPELINES", "other-pipeline, smoke-test,smoke-test "
+    )
+    opener.open.return_value = response(snapshot("scheduled"))
+    assert trigger_build(
+        "smoke-test",
+        env={"_Release_2": "smoke"},
+        metadata={"BUILDKITE_NOTE": "metadata is not the job environment"},
+    ) == expected("scheduled")
 
 
 def test_wait_polls_pending_states(opener: Mock, clock: Clock) -> None:
@@ -244,6 +319,14 @@ def test_permanent_http_errors_are_safe_and_not_retried(
         wait_for_build("smoke-test", 17)
     assert "private" not in str(raised.value)
     assert "test-token" not in str(raised.value)
+    hints = {
+        401: "BUILDKITE_API_TOKEN",
+        403: "read_builds/write_builds",
+        404: "pipeline slug",
+        422: "branch, commit",
+    }
+    if status in hints:
+        assert hints[status] in str(raised.value)
     assert raised.value.__suppress_context__
     opener.open.assert_called_once()
     assert error.fp.closed
@@ -262,6 +345,81 @@ def test_wait_retries_only_transient_reads(opener: Mock, clock: Clock) -> None:
     ]
     assert wait_for_build("smoke-test", 17, poll_interval=1) == expected()
     assert clock.sleeps == [1] * 5
+
+
+def test_transient_poll_outage_is_diagnosable(
+    opener: Mock, clock: Clock, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A deadline must identify sanitized polling failures and still clean up."""
+
+    def unavailable(request, **_kwargs):
+        if request.method == "GET":
+            raise http_error(503)
+        return response(snapshot("canceling"))
+
+    opener.open.side_effect = unavailable
+    with pytest.raises(TimeoutError, match="last poll error: .*HTTP 503") as raised:
+        wait_for_build("smoke-test", 17, 5, 2)
+    assert clock.sleeps == [2, 2, 1]
+    assert "private" not in str(raised.value)
+    assert "test-token" not in caplog.text
+    assert "private" not in caplog.text
+    assert caplog.text.count("Transient error polling build") == 3
+    assert [call.args[0].method for call in opener.open.call_args_list] == [
+        "GET",
+        "GET",
+        "GET",
+        "PUT",
+    ]
+
+
+def test_successful_read_clears_stale_poll_diagnostic(
+    opener: Mock, clock: Clock
+) -> None:
+    """Do not blame an old network error after polling successfully resumed."""
+    opener.open.side_effect = [
+        http_error(503),
+        response(snapshot("running")),
+        response(snapshot("canceling")),
+    ]
+    with pytest.raises(TimeoutError) as raised:
+        wait_for_build("smoke-test", 17, 2, 1)
+    assert "last poll error" not in str(raised.value)
+
+
+def test_poll_transport_failure_can_consume_remaining_budget(
+    opener: Mock, clock: Clock
+) -> None:
+    """A failed read at the deadline must not sleep or hide its transport cause."""
+
+    def delayed_failure(*_args, **_kwargs):
+        clock.now += 5
+        raise TimeoutError("private-transport-detail")
+
+    opener.open.side_effect = delayed_failure
+    with pytest.raises(
+        TimeoutError, match="last poll error: .*could not complete"
+    ) as raised:
+        wait_for_build("smoke-test", 17, 5, 1, cancel_on_timeout=False)
+    assert "private" not in str(raised.value)
+    assert clock.sleeps == []
+    opener.open.assert_called_once()
+
+
+@pytest.mark.parametrize("interrupted", [False, True])
+def test_observer_wait_never_cancels(
+    opener: Mock, clock: Clock, interrupted: bool
+) -> None:
+    """An opt-out leaves an external build alone on timeout and interruption."""
+    if interrupted:
+        opener.open.side_effect = KeyboardInterrupt()
+    else:
+        opener.open.side_effect = lambda *_args, **_kwargs: response(
+            snapshot("running")
+        )
+    with pytest.raises(KeyboardInterrupt if interrupted else TimeoutError):
+        wait_for_build("smoke-test", 17, 2, 1, cancel_on_timeout=False)
+    assert all(call.args[0].method == "GET" for call in opener.open.call_args_list)
 
 
 @pytest.mark.parametrize("cleanup_status", [200, 403])
@@ -350,13 +508,42 @@ def test_invoke_submits_once_then_waits(opener: Mock, clock: Clock) -> None:
     assert clock.sleeps == [1]
 
 
-def test_ambiguous_submission_is_never_retried(opener: Mock) -> None:
+@pytest.mark.parametrize(
+    "failure",
+    [
+        TimeoutError("private-upstream-detail"),
+        URLError("private-upstream-detail"),
+        http_error(408),
+        http_error(429),
+        http_error(502),
+        http_error(504),
+    ],
+)
+def test_ambiguous_submission_is_never_retried(opener: Mock, failure) -> None:
     """A lost acknowledgement cannot safely be retried by this API."""
-    opener.open.side_effect = TimeoutError("private-upstream-detail")
-    with pytest.raises(RuntimeError, match="could not complete") as raised:
+    opener.open.side_effect = failure
+    with pytest.raises(
+        RuntimeError, match="submission outcome may be unknown"
+    ) as raised:
         invoke_build("smoke-test")
+    assert "check the pipeline's recent builds before retrying" in str(raised.value)
     assert "private" not in str(raised.value)
     opener.open.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    "body", [b"invalid-json", b"null", b"{}", b"x" * (8 * 1024 * 1024 + 1)]
+)
+def test_unusable_submission_acknowledgement_warns_before_retry(
+    opener: Mock, body: bytes
+) -> None:
+    """A successful POST with an unusable response can already have a build."""
+    stream = io.BytesIO(body)
+    opener.open.return_value = stream
+    with pytest.raises(RuntimeError, match="submission outcome may be unknown"):
+        trigger_build("smoke-test")
+    opener.open.assert_called_once()
+    assert stream.closed
 
 
 @pytest.mark.parametrize(
@@ -443,7 +630,12 @@ def test_invalid_configuration_never_makes_a_request(
 
 @pytest.mark.parametrize(
     "api_url",
-    ["http://127.0.0.1:8080/v2/", "http://[::1]:8080/v2", "https://proxy.example/v2"],
+    [
+        "http://127.0.0.1:8080/v2/",
+        "http://[::1]:8080/v2",
+        "http://localhost:8080/v2",
+        "https://proxy.example/v2",
+    ],
 )
 def test_explicit_proxy_can_supply_its_own_authentication(
     opener: Mock, monkeypatch: pytest.MonkeyPatch, api_url: str
@@ -574,11 +766,13 @@ def test_loopback_bypasses_forward_proxy(
 
 
 @workflow()
-def compile_probe() -> "list[Build]":
+def compile_probe():
     """Compile every binding without executing any Python plugin body."""
     submitted = trigger_build("smoke-test", env=None, metadata={"smoke": "true"})
     snapshot = get_build("smoke-test", submitted["number"])
-    completed = wait_for_build("smoke-test", submitted["number"], 60, 2)
+    completed = wait_for_build(
+        "smoke-test", submitted["number"], 60, 2, cancel_on_timeout=False
+    )
     invoked = invoke_build("smoke-test", env={"MODE": "smoke"}, timeout_seconds=60)
     cancelled = cancel_build("smoke-test", submitted["number"])
     return [snapshot, completed, invoked, cancelled]
@@ -599,4 +793,27 @@ def test_compilation_binds_every_operation_without_network(opener: Mock) -> None
         assert f"__buildkite__.{operation}(" in source
     assert "timeout_seconds=60" in source
     assert "env=None" in source
+    assert "cancel_on_timeout=False" in source
+    opener.open.assert_not_called()
+
+
+def test_documentation_example_matches_executable_remote_fixture(
+    tmp_path: Path, opener: Mock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Keep the guide's actual compiled example parseable on the remote worker."""
+    root = Path(__file__).resolve().parents[7]
+    guide = (root / "docs/user-guides/ml-pipelines/buildkite.md").read_text()
+    example = re.search(r"```python\n(.*?)```", guide, re.DOTALL)
+    assert example is not None
+    path = tmp_path / "buildkite_guide.py"
+    path.write_text(example.group(1))
+    spec = importlib.util.spec_from_file_location("buildkite_guide", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, spec.name, module)
+    spec.loader.exec_module(module)
+    package = build(module.release)
+    source = package.files[package.main_file].decode()
+    fixture = root / "go/worker/plugins/buildkite/testdata/documented.star"
+    assert source == fixture.read_text()
     opener.open.assert_not_called()

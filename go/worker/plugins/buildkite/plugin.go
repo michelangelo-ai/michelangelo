@@ -25,8 +25,9 @@ const (
 )
 
 type waitOptions struct {
-	timeoutSeconds int64
-	pollInterval   int64
+	timeoutSeconds  int64
+	pollInterval    int64
+	cancelOnTimeout bool
 }
 
 // triggerBuild submits once and returns the current snapshot without waiting.
@@ -35,7 +36,7 @@ func triggerBuild(t *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, 
 	if err != nil {
 		return nil, argumentError(service.GetContext(t), err)
 	}
-	return executeBuild(singleCallContext(service.GetContext(t)), buildkite.Activities.TriggerBuild, req)
+	return executeBuild(singleCallContext(service.GetContext(t)), buildkite.Activities.TriggerBuildkiteBuild, req)
 }
 
 func getBuild(t *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
@@ -43,11 +44,11 @@ func getBuild(t *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwar
 	if err != nil {
 		return nil, argumentError(service.GetContext(t), err)
 	}
-	return executeBuild(singleCallContext(service.GetContext(t)), buildkite.Activities.GetBuild, req)
+	return executeBuild(singleCallContext(service.GetContext(t)), buildkite.Activities.GetBuildkiteBuild, req)
 }
 
 func waitForBuild(t *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	options := waitOptions{defaultTimeoutSeconds, defaultPollInterval}
+	options := waitOptions{defaultTimeoutSeconds, defaultPollInterval, true}
 	req, err := unpackBuild("wait_for_build", args, kwargs, &options)
 	if err != nil {
 		return nil, argumentError(service.GetContext(t), err)
@@ -59,15 +60,20 @@ func waitForBuild(t *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, 
 // Unlike triggerBuild, terminal failure returns an error; timeout or workflow
 // cancellation also requests best-effort cancellation of the submitted build.
 func invokeBuild(t *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	options := waitOptions{defaultTimeoutSeconds, defaultPollInterval}
+	options := waitOptions{defaultTimeoutSeconds, defaultPollInterval, true}
 	req, err := unpackTrigger("invoke_build", args, kwargs, &options)
 	if err != nil {
 		return nil, argumentError(service.GetContext(t), err)
 	}
 	ctx := service.GetContext(t)
-	callCtx := singleCallContext(ctx)
+	// A canceled parent must not discard an in-flight submission's build
+	// number. Finish the bounded, non-retried POST, then let the canceled
+	// wait context request cleanup for the acknowledged build.
+	triggerCtx, cancel := workflow.NewDisconnectedContext(ctx)
+	defer cancel()
+	callCtx := singleCallContext(triggerCtx)
 	var build buildkite.BuildResponse
-	if err := workflow.ExecuteActivity(callCtx, buildkite.Activities.TriggerBuild, req).Get(callCtx, &build); err != nil {
+	if err := workflow.ExecuteActivity(callCtx, buildkite.Activities.TriggerBuildkiteBuild, req).Get(callCtx, &build); err != nil {
 		return nil, err
 	}
 	return waitForBuildRequest(ctx, buildkite.GetBuildRequest{
@@ -80,7 +86,7 @@ func cancelBuild(t *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, k
 	if err != nil {
 		return nil, argumentError(service.GetContext(t), err)
 	}
-	return executeBuild(singleCallContext(service.GetContext(t)), buildkite.Activities.CancelBuild, buildkite.CancelBuildRequest(req))
+	return executeBuild(singleCallContext(service.GetContext(t)), buildkite.Activities.CancelBuildkiteBuild, buildkite.CancelBuildRequest(req))
 }
 
 func unpackTrigger(name string, args starlark.Tuple, kwargs []starlark.Tuple, options *waitOptions) (buildkite.TriggerBuildRequest, error) {
@@ -139,7 +145,8 @@ func unpackBuild(name string, args starlark.Tuple, kwargs []starlark.Tuple, opti
 	parameters := []interface{}{"pipeline", &req.Pipeline, "build_number", &req.BuildNumber}
 	if options != nil {
 		parameters = append(parameters,
-			"timeout_seconds?", &options.timeoutSeconds, "poll_interval?", &options.pollInterval)
+			"timeout_seconds?", &options.timeoutSeconds, "poll_interval?", &options.pollInterval,
+			"cancel_on_timeout?", &options.cancelOnTimeout)
 	}
 	if err := starlark.UnpackArgs(name, args, kwargs, parameters...); err != nil {
 		return req, err
@@ -204,6 +211,12 @@ func executeBuild(ctx workflow.Context, activity interface{}, request interface{
 }
 
 func waitForBuildRequest(ctx workflow.Context, req buildkite.GetBuildRequest, options waitOptions) (starlark.Value, error) {
+	// Both native SDK contexts expose Err. In particular, an invoke whose
+	// disconnected submission just completed must clean up immediately if
+	// its parent was canceled, without scheduling another status read.
+	if parent, ok := ctx.(interface{ Err() error }); ok && parent.Err() != nil {
+		return cancelWait(ctx, req, options, parent.Err())
+	}
 	timeout := time.Duration(options.timeoutSeconds) * time.Second
 	deadline := workflow.Now(ctx).Add(timeout)
 	poll := time.Duration(options.pollInterval) * time.Second
@@ -220,15 +233,14 @@ func waitForBuildRequest(ctx workflow.Context, req buildkite.GetBuildRequest, op
 			ScheduleToCloseTimeout: remaining,
 			RetryPolicy:            &policy,
 		})
-		result, err := executeBuild(sensorCtx, buildkite.Activities.SensorGetBuild, req)
+		result, err := executeBuild(sensorCtx, buildkite.Activities.SensorBuildkiteBuild, req)
 		if err == nil {
-			if workflow.Now(ctx).Before(deadline) {
-				return result, nil
-			}
-			break
+			// ScheduleToCloseTimeout bounds completion on the server. A slow
+			// workflow task can observe that success after our local deadline.
+			return result, nil
 		}
 		if workflow.IsCanceledError(ctx, err) {
-			return cancelWait(ctx, req, err)
+			return cancelWait(ctx, req, options, err)
 		}
 		if !retryableSensorError(err) {
 			return nil, err
@@ -239,21 +251,24 @@ func waitForBuildRequest(ctx workflow.Context, req buildkite.GetBuildRequest, op
 			// expiration time, before our actual deadline. Keep that remainder
 			// open using a durable timer rather than cancelling early.
 			if err := workflow.Sleep(ctx, min(poll, remaining)); err != nil {
-				return cancelWait(ctx, req, err)
+				return cancelWait(ctx, req, options, err)
 			}
 		}
 	}
-	return cancelWait(ctx, req, newWorkflowError(ctx, yarpcerrors.CodeDeadlineExceeded.String(),
+	return cancelWait(ctx, req, options, newWorkflowError(ctx, yarpcerrors.CodeDeadlineExceeded.String(),
 		fmt.Sprintf("build %s/%d did not pass within %d seconds",
 			req.Pipeline, req.BuildNumber, options.timeoutSeconds)))
 }
 
-func cancelWait(ctx workflow.Context, req buildkite.GetBuildRequest, original error) (starlark.Value, error) {
+func cancelWait(ctx workflow.Context, req buildkite.GetBuildRequest, options waitOptions, original error) (starlark.Value, error) {
+	if !options.cancelOnTimeout {
+		return nil, original
+	}
 	// Parent cancellation must not suppress cleanup or be replaced by its error.
 	cleanupCtx, cancel := workflow.NewDisconnectedContext(ctx)
 	defer cancel()
 	cleanupCtx = singleCallContext(cleanupCtx)
-	if _, err := executeBuild(cleanupCtx, buildkite.Activities.CancelBuild, buildkite.CancelBuildRequest(req)); err != nil {
+	if _, err := executeBuild(cleanupCtx, buildkite.Activities.CancelBuildkiteBuild, buildkite.CancelBuildRequest(req)); err != nil {
 		workflow.GetLogger(ctx).Error("buildkite-cleanup-failed",
 			zap.String("pipeline", req.Pipeline), zap.Int64("build_number", req.BuildNumber), zap.Error(err))
 	}

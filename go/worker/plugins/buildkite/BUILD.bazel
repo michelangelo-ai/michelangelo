@@ -33,6 +33,7 @@ go_test(
         "//go/worker/activities/buildkite:go_default_library",
         "//go/worker/plugins/utils:go_default_library",
         "@com_github_cadence_workflow_starlark_worker//service:go_default_library",
+        "@com_github_cadence_workflow_starlark_worker//workflow:go_default_library",
         "@com_github_stretchr_testify//assert:go_default_library",
         "@com_github_stretchr_testify//mock:go_default_library",
         "@com_github_stretchr_testify//require:go_default_library",
