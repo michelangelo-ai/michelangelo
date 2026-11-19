@@ -200,7 +200,7 @@ def test_custom_assembled_model_is_scored_from_its_raw_package(
 
 
 def test_scores_with_registry_resolved_model(ray_session, tmp_path, out_dir):
-    """A registry reference is looked up, downloaded and scored."""
+    """A registry model is looked up, downloaded, scored and named in the rows."""
     storage = LocalStorageBackend(base_dir=str(tmp_path / "store"))
     (tmp_path / "store").mkdir()
     uri = storage.upload(_package(tmp_path / "pkg"), "models/housing")
@@ -220,6 +220,8 @@ def test_scores_with_registry_resolved_model(ray_session, tmp_path, out_dir):
     )
 
     _assert_scored(result["train"])
+    rows = _rows(result["train"])
+    assert {(r["model_name"], r["model_version"]) for r in rows} == {("housing", 1)}
 
 
 def test_registry_deployable_pushed_as_a_tar_archive(ray_session, tmp_path, out_dir):
