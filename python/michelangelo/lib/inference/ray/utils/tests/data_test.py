@@ -12,14 +12,14 @@ from michelangelo.lib.inference.ray.utils.data import merge_ray_datasets
 class DataTest(TestCase):
     """Tests for ``merge_ray_datasets``."""
 
-    def setUp(self):
-        """Setup."""
-        super().setUp()
-        if not ray.is_initialized():
-            ray.init(num_cpus=2)
+    @classmethod
+    def setUpClass(cls):
+        """Start one local Ray session for the class."""
+        ray.init(num_cpus=2, include_dashboard=False, ignore_reinit_error=True)
 
-    def tearDown(self):
-        """Teardown."""
+    @classmethod
+    def tearDownClass(cls):
+        """Stop the Ray session."""
         ray.shutdown()
 
     def test_merge_ray_datasets(self):
