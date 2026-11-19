@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"unicode/utf8"
 
@@ -61,6 +62,10 @@ func prometheusServer(t *testing.T, answer func(expr string) (int, []string)) *h
 			entries = append(entries, fmt.Sprintf(`{"metric":{},"value":[1700000000,"%s"]}`, value))
 		}
 		w.WriteHeader(status)
+		if status != http.StatusOK {
+			_, _ = fmt.Fprint(w, `{"status":"error","errorType":"internal","error":"boom"}`)
+			return
+		}
 		_, _ = fmt.Fprintf(w, `{"status":"success","data":{"resultType":"vector","result":[%s]}}`, strings.Join(entries, ","))
 	}))
 	t.Cleanup(server.Close)
@@ -115,6 +120,10 @@ func TestHealthCheckGate(t *testing.T) {
 	readyModel := func(mb *backendsmocks.MockBackend, mc *modelconfigmocks.MockModelConfigProvider) {
 		expectConfig(mc, []modelconfig.ModelConfigEntry{servingEntry(deploymentName, "model-v1")}, nil)
 		expectStatus(mb, "model-v1", readyOnAllReplicas(), nil)
+	}
+	mustNotBeQueried := func(expr string) (int, []string) {
+		t.Errorf("prometheus must not be queried, got %q", expr)
+		return http.StatusOK, nil
 	}
 	withNoDataAnnotation := func(annotation string) func(*testing.T) *v2pb.Deployment {
 		return func(t *testing.T) *v2pb.Deployment {
@@ -303,28 +312,30 @@ func TestHealthCheckGate(t *testing.T) {
 			wantHealthy: true,
 		},
 		{
-			name: "a rollback leaves the no-data annotation unchanged when queries return no samples",
+			name: "a rollback checks nothing and keeps both annotations",
 			deployment: func(t *testing.T) *v2pb.Deployment {
 				dep := withNoDataAnnotation("model-v2: left by the rollout")(t)
+				dep.Annotations[common.HealthGateReasonAnnotation] = "the breach that started the rollback"
 				dep.Status.Stage = v2pb.DEPLOYMENT_STAGE_ROLLBACK_IN_PROGRESS
 				return dep
 			},
-			setupMocks:  readyModel,
-			prometheus:  everyQueryReturns(),
-			wantHealthy: true,
-			wantNoData:  "model-v2: left by the rollout",
+			setupMocks:    func(*backendsmocks.MockBackend, *modelconfigmocks.MockModelConfigProvider) {},
+			prometheus:    mustNotBeQueried,
+			wantHealthy:   true,
+			wantReasonSub: "the breach that started the rollback",
+			wantNoData:    "model-v2: left by the rollout",
 		},
 		{
-			name: "a rollback leaves the no-data annotation unchanged when queries return samples",
+			name: "a rollback is not held up by a malformed query template",
 			deployment: func(t *testing.T) *v2pb.Deployment {
-				dep := withNoDataAnnotation("model-v2: left by the rollout")(t)
+				dep := withSingleClusterAnnotation(t, gateDeployment(), "test-cluster")
 				dep.Status.Stage = v2pb.DEPLOYMENT_STAGE_ROLLBACK_IN_PROGRESS
 				return dep
 			},
-			setupMocks:  readyModel,
-			prometheus:  everyQueryReturns("0"),
+			setupMocks:  func(*backendsmocks.MockBackend, *modelconfigmocks.MockModelConfigProvider) {},
+			prometheus:  mustNotBeQueried,
+			queries:     []maconfig.MetricGateQuery{{Name: "broken", Expr: "{{.Nope}}"}},
 			wantHealthy: true,
-			wantNoData:  "model-v2: left by the rollout",
 		},
 		{
 			name:          "a breach on a query listed in the no-data annotation removes it from the list",
@@ -365,6 +376,20 @@ func TestHealthCheckGate(t *testing.T) {
 			wantHealthy:   false,
 			wantReasonSub: `"second" could not be evaluated`,
 			wantNoData:    "model-v2: left by an earlier evaluation",
+		},
+		{
+			name:        "a failed query removes a no-data annotation that names another model",
+			deployment:  withNoDataAnnotation("model-v1: left by an earlier rollout"),
+			setupMocks:  readyModel,
+			prometheus:  queriesReturn(nil),
+			wantHealthy: true,
+		},
+		{
+			name:        "a failed query removes a no-data annotation for a model whose name only starts the same",
+			deployment:  withNoDataAnnotation("model-v20: left by an earlier rollout"),
+			setupMocks:  readyModel,
+			prometheus:  queriesReturn(nil),
+			wantHealthy: true,
 		},
 		{
 			name:        "a failed query keeps the other queries that return no samples off the annotation",
@@ -509,6 +534,69 @@ func TestHealthCheckGate_MetricGateNoData_LogsOnlyWhenTheAnnotationChanges(t *te
 	assert.Equal(t, 4, logs.Len(), "the gate itself logs nothing at Info")
 }
 
+// TestHealthCheckGate_BreachThenRollback follows one rollout through the reconciles the
+// controller would run: the candidate has no samples yet, then breaches, then is rolled back.
+func TestHealthCheckGate_BreachThenRollback(t *testing.T) {
+	var mu sync.Mutex
+	answers := map[string][]string{"errors": nil, "latency": nil}
+	requests := 0
+	server := prometheusServer(t, func(expr string) (int, []string) {
+		mu.Lock()
+		defer mu.Unlock()
+		requests++
+		return http.StatusOK, answers[expr]
+	})
+	set := func(expr string, values ...string) {
+		mu.Lock()
+		defer mu.Unlock()
+		answers[expr] = values
+	}
+	sent := func() int {
+		mu.Lock()
+		defer mu.Unlock()
+		return requests
+	}
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	plugin := &Plugin{
+		client:          newKubeClient(t),
+		backendRegistry: createTestRegistry(backendsmocks.NewMockBackend(ctrl)),
+		logger:          zap.NewNop(),
+		metricGate: metricgate.New(maconfig.MetricGateConfig{
+			PrometheusURL: server.URL,
+			Queries:       []maconfig.MetricGateQuery{gateQuery("errors"), gateQuery("latency")},
+		}, zap.NewNop()),
+	}
+	deployment := gateDeployment()
+	gate := func() bool {
+		t.Helper()
+		healthy, err := plugin.HealthCheckGate(context.Background(), plugins.ObservabilityContext{}, deployment)
+		require.NoError(t, err)
+		return healthy
+	}
+
+	require.True(t, gate(), "a candidate without samples is not rolled back")
+	assert.Equal(t, "model-v2: errors, latency", deployment.Annotations[common.MetricGateNoDataAnnotation])
+
+	set("errors", "0.9")
+	require.False(t, gate(), "the breach fails the gate")
+	reason := deployment.Annotations[common.HealthGateReasonAnnotation]
+	assert.Contains(t, reason, `metric gate "errors" breached for model model-v2: 0.9 gt 0.5`)
+	assert.Equal(t, "model-v2: latency", deployment.Annotations[common.MetricGateNoDataAnnotation],
+		"the breaching query has samples, so only the other one is still listed")
+
+	// The controller starts the rollback, which unloads the candidate: its series disappear.
+	deployment.Status.Stage = v2pb.DEPLOYMENT_STAGE_ROLLBACK_IN_PROGRESS
+	set("errors")
+	before := sent()
+	require.True(t, gate())
+	require.True(t, gate())
+	assert.Equal(t, before, sent(), "the gate is not evaluated during a rollback")
+	assert.Equal(t, reason, deployment.Annotations[common.HealthGateReasonAnnotation],
+		"the reason for the rollback stays readable")
+	assert.Equal(t, "model-v2: latency", deployment.Annotations[common.MetricGateNoDataAnnotation])
+}
+
 func TestHealthCheckGate_MetricGateNoData_LogNamesTheModelInTheAnnotation(t *testing.T) {
 	server := prometheusServer(t, everyQueryReturns())
 	ctrl := gomock.NewController(t)
@@ -533,22 +621,42 @@ func TestHealthCheckGate_MetricGateNoData_LogNamesTheModelInTheAnnotation(t *tes
 }
 
 func TestNoDataAnnotation(t *testing.T) {
-	long := strings.Repeat("é", maxNoDataAnnotationBytes)
-
-	assert.Empty(t, noDataAnnotation("model-v2", nil), "no listed query means no annotation")
-	assert.Equal(t, "model-v2: first, second", noDataAnnotation("model-v2", []string{"first", "second"}))
-
 	atCap := strings.Repeat("q", maxNoDataAnnotationBytes-len("m: "))
-	assert.Equal(t, "m: "+atCap, noDataAnnotation("m", []string{atCap}), "a value at the cap is kept whole")
-	overCap := noDataAnnotation("m", []string{atCap + "q"})
-	assert.Len(t, overCap, maxNoDataAnnotationBytes)
-	assert.True(t, strings.HasSuffix(overCap, "q..."))
+	// 1024 two-byte characters: the cut lands in the middle of one.
+	wide := strings.Repeat("é", maxNoDataAnnotationBytes)
 
-	capped := noDataAnnotation("model-v2", []string{long, "second"})
-	assert.LessOrEqual(t, len(capped), maxNoDataAnnotationBytes)
-	assert.True(t, strings.HasPrefix(capped, "model-v2: éé"))
-	assert.True(t, strings.HasSuffix(capped, "é..."), "the cut must not split a character")
-	assert.True(t, utf8.ValidString(capped))
+	tests := []struct {
+		name    string
+		model   string
+		queries []string
+		want    string
+	}{
+		{name: "no listed query means no annotation", model: "model-v2"},
+		{name: "queries are listed after the model", model: "model-v2", queries: []string{"first", "second"}, want: "model-v2: first, second"},
+		{name: "a value at the cap is kept whole", model: "m", queries: []string{atCap}, want: "m: " + atCap},
+		{
+			name:    "a value over the cap is cut to the cap and ends in an ellipsis",
+			model:   "m",
+			queries: []string{atCap + "q"},
+			want:    "m: " + atCap[:len(atCap)-len("...")] + "...",
+		},
+		{
+			name:    "the cut does not split a character",
+			model:   "model-v2",
+			queries: []string{wide, "second"},
+			want:    "model-v2: " + strings.Repeat("é", 505) + "...",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := noDataAnnotation(tt.model, tt.queries)
+
+			assert.Equal(t, tt.want, got)
+			assert.LessOrEqual(t, len(got), maxNoDataAnnotationBytes)
+			assert.True(t, utf8.ValidString(got))
+		})
+	}
 }
 
 func TestHealthCheckGate_MetricGateTemplateError_ReturnsError(t *testing.T) {

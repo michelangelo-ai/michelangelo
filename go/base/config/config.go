@@ -278,7 +278,8 @@ type MetricGateConfig struct {
 	// a breach. Off by default, so an observability outage stalls nothing and is logged
 	// instead. A query that returns no samples is not a breach under either setting.
 	FailClosed bool `yaml:"failClosed"`
-	// Queries are evaluated in order. Empty uses the gate's built-in Triton failure-ratio
+	// Queries are sent to Prometheus at the same time and judged in this order; the first
+	// breach in this order is the reason. Empty uses the gate's built-in Triton failure-ratio
 	// query.
 	Queries []MetricGateQuery `yaml:"queries"`
 }

@@ -3,16 +3,20 @@ package metricgate
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest/observer"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -322,11 +326,19 @@ func TestEvaluate_NoData(t *testing.T) {
 }
 
 func TestEvaluate_QueryWithoutSamples_IsLoggedAtDebugWithItsExpression(t *testing.T) {
-	server := promServer(t, func(string) (int, string) { return http.StatusOK, vectorResponse("NaN") })
+	server := promServer(t, func(expr string) (int, string) {
+		if strings.HasPrefix(expr, "up") {
+			return http.StatusOK, vectorResponse("NaN")
+		}
+		return http.StatusOK, vectorResponse("0")
+	})
 	core, logs := observer.New(zap.DebugLevel)
 	gate := New(maconfig.MetricGateConfig{
 		PrometheusURL: server.URL,
-		Queries:       []maconfig.MetricGateQuery{{Name: "errors", Expr: `up{model="{{.Model}}"}`}},
+		Queries: []maconfig.MetricGateQuery{
+			{Name: "latency", Expr: `latency{model="{{.Model}}"}`},
+			{Name: "errors", Expr: `up{model="{{.Model}}"}`},
+		},
 	}, zap.New(core))
 
 	_, err := gate.Evaluate(context.Background(), testDeployment())
@@ -454,37 +466,125 @@ func TestEvaluate_TemplateErrors(t *testing.T) {
 	assert.Contains(t, err.Error(), `"broken"`)
 }
 
-func TestEvaluate_TemplateErrorAfterAQueryWithoutSamples_IsReturned(t *testing.T) {
-	server := promServer(t, func(string) (int, string) { return http.StatusOK, vectorResponse() })
-	gate := New(maconfig.MetricGateConfig{
-		PrometheusURL: server.URL,
-		Queries: []maconfig.MetricGateQuery{
-			{Name: "first", Expr: "up"},
-			{Name: "broken", Expr: "up{model={{.Nope}}}"},
-		},
-	}, zap.NewNop())
+func TestEvaluate_TemplateError_IsReturnedBeforeAnyQueryIsSent(t *testing.T) {
+	tests := []struct {
+		name  string
+		first string // what the query before the malformed one would return
+	}{
+		{name: "when an earlier query would breach", first: vectorResponse("1")},
+		{name: "when an earlier query would return no samples", first: vectorResponse()},
+		{name: "when an earlier query would pass", first: vectorResponse("0")},
+	}
 
-	_, err := gate.Evaluate(context.Background(), testDeployment())
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var requests atomic.Int32
+			server := promServer(t, func(string) (int, string) {
+				requests.Add(1)
+				return http.StatusOK, tt.first
+			})
+			gate := New(maconfig.MetricGateConfig{
+				PrometheusURL: server.URL,
+				Queries: []maconfig.MetricGateQuery{
+					{Name: "first", Expr: "up", Threshold: 0.5},
+					{Name: "broken", Expr: "up{model={{.Nope}}}"},
+				},
+			}, zap.NewNop())
 
-	require.ErrorContains(t, err, `"broken"`)
+			_, err := gate.Evaluate(context.Background(), testDeployment())
+
+			require.ErrorContains(t, err, `"broken"`)
+			assert.Zero(t, requests.Load(), "the verdict must not depend on what the other queries return")
+		})
+	}
 }
 
-func TestEvaluate_TemplateErrorAfterABreach_KeepsTheBreach(t *testing.T) {
-	server := promServer(t, func(string) (int, string) { return http.StatusOK, vectorResponse("1") })
-	gate := New(maconfig.MetricGateConfig{
-		PrometheusURL: server.URL,
-		Queries: []maconfig.MetricGateQuery{
-			{Name: "first", Expr: "up", Threshold: 0.5},
-			{Name: "broken", Expr: "up{model={{.Nope}}}"},
+func TestNew_ReportsMisconfigurationOnce(t *testing.T) {
+	const notUnique = "metric gate query names are not unique; " +
+		"the no-data annotation and rollback reasons will be ambiguous"
+	query := func(name, expr string) maconfig.MetricGateQuery {
+		return maconfig.MetricGateQuery{Name: name, Expr: expr}
+	}
+	tests := []struct {
+		name       string
+		cfg        maconfig.MetricGateConfig
+		wantLevel  zapcore.Level
+		wantMsg    string
+		wantFields map[string]interface{}
+	}{
+		{
+			name:       "a timeout that leaves no room to act on the verdict",
+			cfg:        maconfig.MetricGateConfig{Timeout: 31 * time.Second},
+			wantLevel:  zap.WarnLevel,
+			wantMsg:    "metric gate timeout can take most of the reconcile budget; lower it",
+			wantFields: map[string]interface{}{"timeout": 31 * time.Second, "recommended_max": 30 * time.Second},
 		},
-	}, zap.NewNop())
+		{
+			name: "two queries with the same name",
+			cfg: maconfig.MetricGateConfig{Queries: []maconfig.MetricGateQuery{
+				query("p99", "a"), query("errors", "b"), query("p99", "c"),
+			}},
+			wantLevel:  zap.WarnLevel,
+			wantMsg:    notUnique,
+			wantFields: map[string]interface{}{"query": "p99"},
+		},
+		{
+			name: "an unnamed query that collides with a configured name",
+			cfg: maconfig.MetricGateConfig{Queries: []maconfig.MetricGateQuery{
+				query("", "a"), query("unnamed query 1", "b"),
+			}},
+			wantLevel:  zap.WarnLevel,
+			wantMsg:    notUnique,
+			wantFields: map[string]interface{}{"query": "unnamed query 1"},
+		},
+		{
+			name: "a template that does not render",
+			cfg: maconfig.MetricGateConfig{Queries: []maconfig.MetricGateQuery{
+				query("ok", "up"), query("broken", "{{.Nope}}"),
+			}},
+			wantLevel: zap.ErrorLevel,
+			wantMsg: "metric gate query template does not render with sample values; " +
+				"evaluations will fail until it is fixed",
+			wantFields: map[string]interface{}{"query": "broken"},
+		},
+	}
 
-	result, err := gate.Evaluate(context.Background(), testDeployment())
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			core, logs := observer.New(zap.DebugLevel)
+			tt.cfg.PrometheusURL = "http://prometheus.invalid"
 
-	require.NoError(t, err, "an error would keep the controller from rolling the candidate back")
-	assert.False(t, result.Healthy)
-	assert.Contains(t, result.Reason, `"first" breached`)
-	assert.False(t, result.AllQueriesAnswered)
+			New(tt.cfg, zap.New(core))
+
+			require.Equal(t, 1, logs.Len())
+			entry := logs.All()[0]
+			assert.Equal(t, tt.wantLevel, entry.Level)
+			assert.Equal(t, tt.wantMsg, entry.Message)
+			for key, want := range tt.wantFields {
+				assert.Equal(t, want, entry.ContextMap()[key])
+			}
+		})
+	}
+
+	t.Run("a sound configuration logs nothing", func(t *testing.T) {
+		core, logs := observer.New(zap.DebugLevel)
+
+		New(maconfig.MetricGateConfig{
+			PrometheusURL: "http://prometheus.invalid",
+			Timeout:       30 * time.Second,
+			Queries:       []maconfig.MetricGateQuery{query("a", "up"), query("", `up{model="{{.Model}}"}`)},
+		}, zap.New(core))
+
+		assert.Zero(t, logs.Len())
+	})
+
+	t.Run("the default configuration logs nothing", func(t *testing.T) {
+		core, logs := observer.New(zap.DebugLevel)
+
+		New(maconfig.MetricGateConfig{PrometheusURL: "http://prometheus.invalid"}, zap.New(core))
+
+		assert.Zero(t, logs.Len())
+	})
 }
 
 func TestEvaluate_NoModelSkipsQueries(t *testing.T) {
@@ -500,10 +600,17 @@ func TestEvaluate_NoModelSkipsQueries(t *testing.T) {
 	assert.Equal(t, Result{Healthy: true, AllQueriesAnswered: true}, result)
 }
 
-func TestEvaluate_EveryQueryRuns_AndTheReasonNamesTheFirstBreach(t *testing.T) {
+func TestEvaluate_EveryQueryRuns_AndTheReasonNamesTheFirstBreachInConfigOrder(t *testing.T) {
+	var mu sync.Mutex
 	var exprs []string
 	server := promServer(t, func(expr string) (int, string) {
+		if expr == "second" {
+			// Let the third query's breach arrive first.
+			time.Sleep(50 * time.Millisecond)
+		}
+		mu.Lock()
 		exprs = append(exprs, expr)
+		mu.Unlock()
 		if expr == "first" {
 			return http.StatusOK, vectorResponse("0")
 		}
@@ -523,15 +630,121 @@ func TestEvaluate_EveryQueryRuns_AndTheReasonNamesTheFirstBreach(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, result.Healthy)
 	assert.Contains(t, result.Reason, `"second"`)
-	assert.Equal(t, []string{"first", "second", "third"}, exprs)
+	assert.ElementsMatch(t, []string{"first", "second", "third"}, exprs)
 }
 
-func TestEvaluate_FailedQuery_EndsTheEvaluationWhenTheGateFailsClosed(t *testing.T) {
-	var exprs []string
-	server := promServer(t, func(expr string) (int, string) {
-		exprs = append(exprs, expr)
-		return http.StatusInternalServerError, "boom"
+func TestEvaluate_QueriesAreSentAtTheSameTime(t *testing.T) {
+	const queries = 4
+	var arrived sync.WaitGroup
+	arrived.Add(queries)
+	server := promServer(t, func(string) (int, string) {
+		// Answer only once every query has arrived. Queries sent one after another would
+		// each wait here until they time out.
+		arrived.Done()
+		arrived.Wait()
+		return http.StatusOK, vectorResponse("0")
 	})
+	configured := make([]maconfig.MetricGateQuery, 0, queries)
+	for i := range queries {
+		name := fmt.Sprintf("q%d", i)
+		configured = append(configured, maconfig.MetricGateQuery{Name: name, Expr: name, Threshold: 0.5})
+	}
+	gate := New(maconfig.MetricGateConfig{
+		PrometheusURL: server.URL,
+		Timeout:       2 * time.Second,
+		Queries:       configured,
+	}, zap.NewNop())
+
+	result, err := gate.Evaluate(context.Background(), testDeployment())
+
+	require.NoError(t, err)
+	assert.True(t, result.Healthy, result.Reason)
+	assert.True(t, result.AllQueriesAnswered, "a query timed out, so the queries did not overlap")
+}
+
+type roundTripperFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripperFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+func TestEvaluate_PanicInAQuery_IsAFailedQuery(t *testing.T) {
+	gate := New(maconfig.MetricGateConfig{PrometheusURL: "http://prometheus.invalid"}, zap.NewNop())
+	gate.client.Transport = roundTripperFunc(func(*http.Request) (*http.Response, error) {
+		panic("boom in transport")
+	})
+
+	result, err := gate.Evaluate(context.Background(), testDeployment())
+
+	require.NoError(t, err)
+	assert.True(t, result.Healthy, "a failed query is skipped when the gate fails open")
+	assert.False(t, result.AllQueriesAnswered)
+}
+
+func TestEvaluate_RepeatedEvaluations_ReuseTheirConnections(t *testing.T) {
+	const queries = 6
+	var opened atomic.Int32
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(vectorResponse("0")))
+	}))
+	server.Config.ConnState = func(_ net.Conn, state http.ConnState) {
+		if state == http.StateNew {
+			opened.Add(1)
+		}
+	}
+	server.Start()
+	t.Cleanup(server.Close)
+	configured := make([]maconfig.MetricGateQuery, 0, queries)
+	for i := range queries {
+		name := fmt.Sprintf("q%d", i)
+		configured = append(configured, maconfig.MetricGateQuery{Name: name, Expr: name, Threshold: 0.5})
+	}
+	gate := New(maconfig.MetricGateConfig{PrometheusURL: server.URL, Queries: configured}, zap.NewNop())
+
+	for range 5 {
+		result, err := gate.Evaluate(context.Background(), testDeployment())
+		require.NoError(t, err)
+		require.True(t, result.AllQueriesAnswered)
+	}
+
+	assert.LessOrEqual(t, int(opened.Load()), queries, "later evaluations must reuse the first one's connections")
+}
+
+func TestEvaluate_SlowQueriesAfterABreach_DoNotAddUp(t *testing.T) {
+	const timeout = 300 * time.Millisecond
+	release := make(chan struct{})
+	server := promServer(t, func(expr string) (int, string) {
+		if expr == "first" {
+			return http.StatusOK, vectorResponse("1")
+		}
+		<-release
+		return http.StatusOK, vectorResponse("0")
+	})
+	// Registered after the server so that it runs first: closing the server waits for the
+	// handlers this releases.
+	t.Cleanup(func() { close(release) })
+	gate := New(maconfig.MetricGateConfig{
+		PrometheusURL: server.URL,
+		Timeout:       timeout,
+		Queries: []maconfig.MetricGateQuery{
+			{Name: "first", Expr: "first", Threshold: 0.5},
+			{Name: "second", Expr: "second", Threshold: 0.5},
+			{Name: "third", Expr: "third", Threshold: 0.5},
+			{Name: "fourth", Expr: "fourth", Threshold: 0.5},
+		},
+	}, zap.NewNop())
+
+	start := time.Now()
+	result, err := gate.Evaluate(context.Background(), testDeployment())
+	elapsed := time.Since(start)
+
+	require.NoError(t, err)
+	assert.False(t, result.Healthy)
+	assert.Contains(t, result.Reason, `"first" breached`)
+	assert.False(t, result.AllQueriesAnswered)
+	assert.Less(t, elapsed, 2*timeout, "three hanging queries must cost one timeout, not three")
+}
+
+func TestEvaluate_FailedQueries_ReasonNamesTheFirstWhenTheGateFailsClosed(t *testing.T) {
+	server := promServer(t, func(string) (int, string) { return http.StatusInternalServerError, "boom" })
 	gate := New(maconfig.MetricGateConfig{
 		PrometheusURL: server.URL,
 		FailClosed:    true,
@@ -545,6 +758,6 @@ func TestEvaluate_FailedQuery_EndsTheEvaluationWhenTheGateFailsClosed(t *testing
 
 	require.NoError(t, err)
 	assert.False(t, result.Healthy)
-	assert.Contains(t, result.Reason, `"first"`)
-	assert.Equal(t, []string{"first"}, exprs)
+	assert.Contains(t, result.Reason, `"first" could not be evaluated`)
+	assert.False(t, result.AllQueriesAnswered)
 }

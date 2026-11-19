@@ -308,17 +308,25 @@ func (p *Plugin) GetState(ctx context.Context, observability plugins.Observabili
 	return deployment.Status, nil
 }
 
-// HealthCheckGate decides whether an in-progress rollout may continue. In every cluster the
-// rollout placed the deployment in, each model this deployment currently serves must be
-// loaded on every replica; then the metric gate is evaluated against the candidate. A false
-// result makes the controller roll the candidate back; the reason is recorded on the
-// deployment so operators can see which cluster, model or metric tripped it.
+// HealthCheckGate decides whether an in-progress rollout may continue. It checks nothing once
+// a rollback has started. In every cluster the rollout placed the deployment in, each model
+// this deployment currently serves must be loaded on every replica; then the metric gate is
+// evaluated against the candidate. A false result makes the controller roll the candidate
+// back; the reason is recorded on the deployment so operators can see which cluster, model
+// or metric tripped it.
 //
 // The gate judges only this deployment's own serving models. The inference server's pod
 // readiness covers every model of every deployment on the server, so using it would roll
 // this deployment back whenever another deployment's model is still loading, for example
 // after the server restarts.
 func (p *Plugin) HealthCheckGate(ctx context.Context, observability plugins.ObservabilityContext, deployment *v2pb.Deployment) (bool, error) {
+	// Once a rollback has started the controller runs it to completion and ignores this
+	// verdict, so nothing is checked. The candidate is being unloaded, an error here would
+	// keep the controller from reaching the rollback, and the annotations must keep what
+	// they said when the rollback started.
+	if deployment.Status.Stage == v2pb.DEPLOYMENT_STAGE_ROLLBACK_IN_PROGRESS {
+		return true, nil
+	}
 	inferenceServer := deployment.Spec.GetInferenceServer()
 	// Check if the inference server is specified
 	if inferenceServer == nil {
@@ -379,12 +387,14 @@ func (p *Plugin) checkMetricGate(ctx context.Context, deployment *v2pb.Deploymen
 	if err != nil {
 		return false, fmt.Errorf("evaluate metric gate for deployment %s/%s: %w", deployment.Namespace, deployment.Name, err)
 	}
-	// The no-data annotation is updated only when every query was answered: a query that
-	// failed may or may not return samples. It is also left unchanged during a rollback,
-	// because the candidate is being unloaded and a query that returns no samples then says
-	// nothing about the rollout.
-	if result.AllQueriesAnswered && deployment.Status.Stage != v2pb.DEPLOYMENT_STAGE_ROLLBACK_IN_PROGRESS {
+	switch {
+	case result.AllQueriesAnswered:
 		p.recordMetricGateNoData(deployment, result.Model, result.NoData)
+	case !strings.HasPrefix(deployment.Annotations[common.MetricGateNoDataAnnotation], result.Model+": "):
+		// A query failed, so the list cannot be refreshed: that query may or may not return
+		// samples. A value that names another model is removed all the same, because it would
+		// read as this candidate's.
+		p.recordMetricGateNoData(deployment, result.Model, nil)
 	}
 	if !result.Healthy {
 		p.recordGateReason(deployment, result.Reason)
@@ -430,7 +440,8 @@ const maxNoDataAnnotationBytes = 1024
 
 // noDataAnnotation renders the value of MetricGateNoDataAnnotation: "<model>: <query>,
 // <query>", cut short with "..." when it is longer than maxNoDataAnnotationBytes, or empty
-// when no query is listed.
+// when no query is listed. The value is for people to read: query names may contain the
+// separators, so it cannot be parsed back reliably.
 func noDataAnnotation(model string, queries []string) string {
 	if len(queries) == 0 {
 		return ""
