@@ -78,9 +78,9 @@ function createServiceClient<T extends DescService>(
 let servicesPromise: Promise<Services> | null = null;
 
 async function createServices(): Promise<Services> {
-  const { apiBaseUrl } = await getRuntimeConfig();
+  const { apiBaseUrl, apiCredentials } = await getRuntimeConfig();
 
-  const transport = createFetchTransport({ baseUrl: apiBaseUrl });
+  const transport = createFetchTransport({ baseUrl: apiBaseUrl, credentials: apiCredentials });
 
   return {
     ClusterService: createServiceClient(ClusterService, transport),

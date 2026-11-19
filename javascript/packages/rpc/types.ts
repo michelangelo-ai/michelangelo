@@ -19,6 +19,8 @@ import type { getRpcHandlers } from './handlers';
 
 export interface RuntimeConfig {
   apiBaseUrl: string;
+  /** @see {@link FetchTransportOptions.credentials} */
+  apiCredentials?: RequestCredentials;
 }
 
 /**

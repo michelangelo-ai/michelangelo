@@ -43,3 +43,11 @@ This file renders to empty YAML when all checks pass.
 {{- fail "envoy.corsAllowCredentials=true requires an explicit, non-wildcard envoy.corsOrigins regex. Leaving corsOrigins unset (or set to \".*\") matches every origin, and Envoy's CORS filter reflects that back as the exact caller's Origin on every request — combined with allow_credentials this would let any origin make authenticated, credentialed calls. See docs/operator-guides/setup/ui-authentication.md." -}}
 {{- end -}}
 {{- end -}}
+{{- if .Values.ui.apiCredentials -}}
+{{- if not (has .Values.ui.apiCredentials (list "include" "same-origin" "omit")) -}}
+{{- fail (printf "ui.apiCredentials must be \"include\", \"same-origin\", or \"omit\" (got %q) — these are fetch()'s only valid credentials modes. See docs/operator-guides/setup/ui-authentication.md." .Values.ui.apiCredentials) -}}
+{{- end -}}
+{{- if and (eq .Values.ui.apiCredentials "include") (not .Values.envoy.corsAllowCredentials) -}}
+{{- fail "ui.apiCredentials=include requires envoy.corsAllowCredentials=true (with a matching, non-wildcard envoy.corsOrigins) — otherwise the browser sends the session cookie but Envoy's CORS response won't allow the page to read the result. See docs/operator-guides/setup/ui-authentication.md." -}}
+{{- end -}}
+{{- end -}}

@@ -405,6 +405,15 @@ ui:
   # Production: "https://michelangelo.example.com/api"
   apiBaseUrl: ""
 
+  # fetch()'s credentials mode for every API call the UI makes. Leave empty
+  # for the default ("same-origin"). Set to "include" only when apiBaseUrl is
+  # a different origin than the UI itself and that origin is fronted by an
+  # auth proxy (e.g. oauth2-proxy) authenticating callers via a cross-origin
+  # session cookie — see docs/operator-guides/setup/ui-authentication.md.
+  # Requires envoy.corsAllowCredentials=true with a matching, non-wildcard
+  # envoy.corsOrigins, or the browser discards every response.
+  apiCredentials: ""
+
   resources:
     requests:
       memory: 128Mi
