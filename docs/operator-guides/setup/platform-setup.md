@@ -1,5 +1,6 @@
 ---
 last_verified: 2026-10-14
+sidebar_position: 1
 ---
 
 # Platform Setup Guide

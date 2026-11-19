@@ -201,6 +201,8 @@ envoy:
   corsOrigins: "https://your-app-domain\\.com|http://localhost:[0-9]+"
 ```
 
+If you're embedding on a different origin than Envoy's and the control plane runs in `k8s-rbac` mode behind your own auth proxy, you'll hit the same cross-origin cookie gap documented in [UI Authentication](../setup/ui-authentication.md#required-changes-for-option-b): Envoy's CORS policy needs `allow_credentials: true`, and `createFetchTransport`'s `fetch()` call needs `credentials: 'include'`. If you can instead route Envoy under your app's own origin (the guide's recommended option), neither change is needed.
+
 **Backend Routing and Transcoding:** The chart renders the route, the `michelangelo-apiserver` cluster, and the `grpc_json_transcoder` filter (with an allowlist of services generated into `helm/michelangelo/files/transcoder-services.json`). If you run your own Envoy, copy these from `helm/michelangelo/templates/core/envoy-configmap.yaml`; the UI depends on `always_print_primitive_fields: true` and `always_print_enums_as_ints: false` in the transcoder `print_options`.
 
 **Reference Configuration:** See the [Deploying Michelangelo AI UI](./deploying-michelangelo-ui.md) guide.
