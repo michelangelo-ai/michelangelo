@@ -5,6 +5,6 @@
     {"tasks": ["b"]},
     {"tasks": ["d"]}
   ],
-  "warnings": ["task \"e\" has no dependents and no dependencies"],
+  "warnings": ["caller-supplied warning"],
   "task_count": 5
 }

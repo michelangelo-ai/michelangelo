@@ -6,32 +6,32 @@ import (
 	"sort"
 
 	"github.com/gogo/protobuf/types"
-	v2 "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
 const maxSafeInteger = 1<<53 - 1
 
-var typeNames = map[v2.ParameterType]string{
-	v2.PARAMETER_TYPE_STRING:  "string",
-	v2.PARAMETER_TYPE_INTEGER: "integer",
-	v2.PARAMETER_TYPE_NUMBER:  "number",
-	v2.PARAMETER_TYPE_BOOLEAN: "boolean",
-	v2.PARAMETER_TYPE_LIST:    "list",
-	v2.PARAMETER_TYPE_DICT:    "dict",
+var typeNames = map[v2pb.ParameterType]string{
+	v2pb.PARAMETER_TYPE_STRING:  "string",
+	v2pb.PARAMETER_TYPE_INTEGER: "integer",
+	v2pb.PARAMETER_TYPE_NUMBER:  "number",
+	v2pb.PARAMETER_TYPE_BOOLEAN: "boolean",
+	v2pb.PARAMETER_TYPE_LIST:    "list",
+	v2pb.PARAMETER_TYPE_DICT:    "dict",
 }
 
 // typeName returns the schema type name of t, or "" for an unknown type.
-func typeName(t v2.ParameterType) string { return typeNames[t] }
+func typeName(t v2pb.ParameterType) string { return typeNames[t] }
 
 // Validate runs the checks that need no release: names, limits, the
 // depends_on graph, parameters, and references. It returns the first failure.
-func Validate(w *v2.DeclarativeWorkflow, lim Limits) error {
+func Validate(w *v2pb.DeclarativeWorkflow, lim Limits) error {
 	_, err := validate(w, lim)
 	return err
 }
 
 // validate runs Validate and returns the depends_on graph it built.
-func validate(w *v2.DeclarativeWorkflow, lim Limits) (*graph, error) {
+func validate(w *v2pb.DeclarativeWorkflow, lim Limits) (*graph, error) {
 	lim = lim.withDefaults()
 	if w == nil {
 		return nil, &Error{Msg: "workflow is not set"}
@@ -76,7 +76,7 @@ func validate(w *v2.DeclarativeWorkflow, lim Limits) (*graph, error) {
 
 // validateParameters checks each parameter: name, type, exactly one of
 // default or required, and a default that fits the type.
-func validateParameters(w *v2.DeclarativeWorkflow) error {
+func validateParameters(w *v2pb.DeclarativeWorkflow) error {
 	names := make([]string, 0, len(w.Parameters))
 	for n := range w.Parameters {
 		names = append(names, n)
@@ -90,7 +90,7 @@ func validateParameters(w *v2.DeclarativeWorkflow) error {
 		if spec == nil {
 			return &Error{Param: n, Msg: "parameter is not set"}
 		}
-		if spec.Type == v2.PARAMETER_TYPE_UNSPECIFIED {
+		if spec.Type == v2pb.PARAMETER_TYPE_UNSPECIFIED {
 			return &Error{Param: n, Msg: "type is not set"}
 		}
 		if _, ok := typeNames[spec.Type]; !ok {
@@ -109,7 +109,7 @@ func validateParameters(w *v2.DeclarativeWorkflow) error {
 }
 
 // checkDefault checks that the default value of a parameter fits its type.
-func checkDefault(name string, spec *v2.ParameterSpec) error {
+func checkDefault(name string, spec *v2pb.ParameterSpec) error {
 	d := spec.Default
 	tn := typeName(spec.Type)
 	if d.Kind == nil {
@@ -119,11 +119,11 @@ func checkDefault(name string, spec *v2.ParameterSpec) error {
 		return &Error{Param: name, Msg: "default must not be null"}
 	}
 	switch spec.Type {
-	case v2.PARAMETER_TYPE_STRING:
+	case v2pb.PARAMETER_TYPE_STRING:
 		if _, ok := d.Kind.(*types.Value_StringValue); !ok {
 			return &Error{Param: name, Msg: "default must be a string for type " + tn}
 		}
-	case v2.PARAMETER_TYPE_INTEGER:
+	case v2pb.PARAMETER_TYPE_INTEGER:
 		nv, ok := d.Kind.(*types.Value_NumberValue)
 		if !ok {
 			return &Error{Param: name, Msg: "default must be a number for type " + tn}
@@ -131,7 +131,7 @@ func checkDefault(name string, spec *v2.ParameterSpec) error {
 		if msg := integralProblem("default", nv.NumberValue); msg != "" {
 			return &Error{Param: name, Msg: msg}
 		}
-	case v2.PARAMETER_TYPE_NUMBER:
+	case v2pb.PARAMETER_TYPE_NUMBER:
 		nv, ok := d.Kind.(*types.Value_NumberValue)
 		if !ok {
 			return &Error{Param: name, Msg: "default must be a number for type " + tn}
@@ -139,15 +139,15 @@ func checkDefault(name string, spec *v2.ParameterSpec) error {
 		if math.IsInf(nv.NumberValue, 0) || math.IsNaN(nv.NumberValue) {
 			return &Error{Param: name, Msg: "default must be finite"}
 		}
-	case v2.PARAMETER_TYPE_BOOLEAN:
+	case v2pb.PARAMETER_TYPE_BOOLEAN:
 		if _, ok := d.Kind.(*types.Value_BoolValue); !ok {
 			return &Error{Param: name, Msg: "default must be a bool for type " + tn}
 		}
-	case v2.PARAMETER_TYPE_LIST:
+	case v2pb.PARAMETER_TYPE_LIST:
 		if _, ok := d.Kind.(*types.Value_ListValue); !ok {
 			return &Error{Param: name, Msg: "default must be a list for type " + tn}
 		}
-	case v2.PARAMETER_TYPE_DICT:
+	case v2pb.PARAMETER_TYPE_DICT:
 		if _, ok := d.Kind.(*types.Value_StructValue); !ok {
 			return &Error{Param: name, Msg: "default must be a struct for type " + tn}
 		}
@@ -176,7 +176,7 @@ type taskRef struct {
 
 // collectRefs parses the references in the config and job_specs of each
 // task and returns them by task name.
-func collectRefs(w *v2.DeclarativeWorkflow) (map[string][]taskRef, error) {
+func collectRefs(w *v2pb.DeclarativeWorkflow) (map[string][]taskRef, error) {
 	out := map[string][]taskRef{}
 	names := make([]string, 0, len(w.Tasks))
 	for n := range w.Tasks {
@@ -248,7 +248,7 @@ func walkValue(path string, v *types.Value, fn func(field, value string)) {
 
 // checkParamRefs checks that each parameter reference names a declared
 // parameter, and that a list or dict parameter is not embedded in a longer string.
-func checkParamRefs(w *v2.DeclarativeWorkflow, refs map[string][]taskRef) error {
+func checkParamRefs(w *v2pb.DeclarativeWorkflow, refs map[string][]taskRef) error {
 	names := make([]string, 0, len(refs))
 	for n := range refs {
 		names = append(names, n)
@@ -263,7 +263,7 @@ func checkParamRefs(w *v2.DeclarativeWorkflow, refs map[string][]taskRef) error 
 			if !ok {
 				return &Error{Task: n, Field: tr.Field, Msg: fmt.Sprintf("references undeclared parameter %q", tr.Ref.Name)}
 			}
-			if !tr.Ref.Whole && (spec.Type == v2.PARAMETER_TYPE_LIST || spec.Type == v2.PARAMETER_TYPE_DICT) {
+			if !tr.Ref.Whole && (spec.Type == v2pb.PARAMETER_TYPE_LIST || spec.Type == v2pb.PARAMETER_TYPE_DICT) {
 				return &Error{Task: n, Field: tr.Field, Msg: fmt.Sprintf("embeds parameter %q of type %s; only string, integer, number, and boolean parameters can be embedded in a longer string", tr.Ref.Name, typeName(spec.Type))}
 			}
 		}
@@ -273,7 +273,7 @@ func checkParamRefs(w *v2.DeclarativeWorkflow, refs map[string][]taskRef) error 
 
 // checkTaskRefs checks that each task output reference names another task
 // that is a dependency and that has succeeded whenever the referencing task runs.
-func checkTaskRefs(w *v2.DeclarativeWorkflow, g *graph, refs map[string][]taskRef) error {
+func checkTaskRefs(w *v2pb.DeclarativeWorkflow, g *graph, refs map[string][]taskRef) error {
 	r := g.reachability()
 	for _, n := range g.names {
 		for _, tr := range refs[n] {

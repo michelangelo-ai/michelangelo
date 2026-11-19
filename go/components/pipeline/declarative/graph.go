@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	v2 "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
 // nameRe is the rule for task and parameter names, and for the names in
@@ -28,7 +28,7 @@ type graph struct {
 
 // buildGraph checks task names and depends_on edges, then builds the graph.
 // It rejects unknown, duplicate, and self edges, unknown when values, and cycles.
-func buildGraph(w *v2.DeclarativeWorkflow) (*graph, error) {
+func buildGraph(w *v2pb.DeclarativeWorkflow) (*graph, error) {
 	g := &graph{deps: map[string][]string{}, rdeps: map[string][]string{}, okDeps: map[string][]string{}}
 	for name := range w.Tasks {
 		g.names = append(g.names, name)
@@ -59,7 +59,7 @@ func buildGraph(w *v2.DeclarativeWorkflow) (*graph, error) {
 				return nil, &Error{Task: name, Msg: fmt.Sprintf("depends_on names unknown task %q", d.Task)}
 			}
 			switch d.When {
-			case v2.OUTCOME_UNSPECIFIED, v2.OUTCOME_SUCCEEDED, v2.OUTCOME_FAILED, v2.OUTCOME_COMPLETED:
+			case v2pb.OUTCOME_UNSPECIFIED, v2pb.OUTCOME_SUCCEEDED, v2pb.OUTCOME_FAILED, v2pb.OUTCOME_COMPLETED:
 			default:
 				return nil, &Error{Task: name, Msg: fmt.Sprintf("depends_on[%d].when %d is not a known outcome; use SUCCEEDED, FAILED, COMPLETED, or leave it unset", i, d.When)}
 			}
@@ -69,7 +69,7 @@ func buildGraph(w *v2.DeclarativeWorkflow) (*graph, error) {
 			seen[d.Task] = true
 			g.deps[name] = append(g.deps[name], d.Task)
 			g.rdeps[d.Task] = append(g.rdeps[d.Task], name)
-			if d.When == v2.OUTCOME_UNSPECIFIED || d.When == v2.OUTCOME_SUCCEEDED {
+			if d.When == v2pb.OUTCOME_UNSPECIFIED || d.When == v2pb.OUTCOME_SUCCEEDED {
 				g.okDeps[name] = append(g.okDeps[name], d.Task)
 			}
 		}

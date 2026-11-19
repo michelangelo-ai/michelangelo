@@ -43,6 +43,9 @@ func TestParseRefsErrors(t *testing.T) {
 		{"{{ params.Bad-Name }}", `reference "{{ params.Bad-Name }}" has a malformed name`},
 		{"{{ params. }}", `reference "{{ params. }}" has a malformed name`},
 		{"{{ }}", `reference "{{ }}" must start with "params." or "tasks."`},
+		{"{{ tasks.Bad.output }}", `reference "{{ tasks.Bad.output }}" has a malformed name`},
+		{"{{ tasks.a.output.1x }}", `reference "{{ tasks.a.output.1x }}" has a malformed name`},
+		{"{{ tasks.a.output. }}", `reference "{{ tasks.a.output. }}" has a malformed name`},
 	}
 	for _, c := range cases {
 		t.Run(c.in, func(t *testing.T) {

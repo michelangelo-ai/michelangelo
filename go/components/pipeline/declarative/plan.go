@@ -1,7 +1,7 @@
 package declarative
 
 import (
-	v2 "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
 // Plan validates w against release rel and returns its explain plan. The
@@ -22,18 +22,18 @@ import (
 // gates are not met at run time is skipped, but it still appears in the plan.
 //
 // Plan returns the first validation error, as ValidateAgainst does.
-func Plan(w *v2.DeclarativeWorkflow, lim Limits, rel *Release, warnings []string) (*v2.ExplainPlan, error) {
+func Plan(w *v2pb.DeclarativeWorkflow, lim Limits, rel *Release, warnings []string) (*v2pb.ExplainPlan, error) {
 	g, err := validateAgainst(w, lim, rel)
 	if err != nil {
 		return nil, err
 	}
-	p := &v2.ExplainPlan{
+	p := &v2pb.ExplainPlan{
 		InterpreterVersion: rel.Version,
 		TaskCount:          uint32(len(w.Tasks)),
 		Warnings:           append([]string(nil), warnings...),
 	}
 	for _, lvl := range g.levels() {
-		p.Levels = append(p.Levels, &v2.ExecutionLevel{Tasks: lvl})
+		p.Levels = append(p.Levels, &v2pb.ExecutionLevel{Tasks: lvl})
 	}
 	return p, nil
 }

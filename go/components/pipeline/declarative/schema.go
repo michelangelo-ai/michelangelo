@@ -6,19 +6,19 @@ import (
 	"sort"
 
 	"github.com/gogo/protobuf/types"
-	v2 "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
 // ValidateAgainst runs Validate, then checks w against the task-type schemas
 // of rel.
-func ValidateAgainst(w *v2.DeclarativeWorkflow, lim Limits, rel *Release) error {
+func ValidateAgainst(w *v2pb.DeclarativeWorkflow, lim Limits, rel *Release) error {
 	_, err := validateAgainst(w, lim, rel)
 	return err
 }
 
 // validateAgainst runs ValidateAgainst and returns the depends_on graph that
 // Validate built.
-func validateAgainst(w *v2.DeclarativeWorkflow, lim Limits, rel *Release) (*graph, error) {
+func validateAgainst(w *v2pb.DeclarativeWorkflow, lim Limits, rel *Release) (*graph, error) {
 	if rel == nil {
 		return nil, &Error{Msg: "release is not set"}
 	}
@@ -53,7 +53,7 @@ func validateAgainst(w *v2.DeclarativeWorkflow, lim Limits, rel *Release) (*grap
 
 // effectiveRetry returns the retry policy of t, or the workflow default when
 // t sets none.
-func effectiveRetry(w *v2.DeclarativeWorkflow, t *v2.DeclarativeTask) *v2.RetryPolicy {
+func effectiveRetry(w *v2pb.DeclarativeWorkflow, t *v2pb.DeclarativeTask) *v2pb.RetryPolicy {
 	if t.Retry != nil {
 		return t.Retry
 	}
@@ -66,7 +66,7 @@ func effectiveRetry(w *v2.DeclarativeWorkflow, t *v2.DeclarativeTask) *v2.RetryP
 // sectionChecker checks the config or job_specs of one task against the
 // schema of its task type.
 type sectionChecker struct {
-	w        *v2.DeclarativeWorkflow
+	w        *v2pb.DeclarativeWorkflow
 	task     string
 	typeName string
 	release  string

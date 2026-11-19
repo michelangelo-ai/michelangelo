@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	gogoproto "github.com/gogo/protobuf/proto"
-	v2 "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -30,7 +30,7 @@ const recursionLimit = 200
 // Decode unpacks manifest.content. It rejects a wrong type URL, content
 // larger than 4 MiB or nested too deeply, an unknown field at any nesting
 // level, and an unknown schema_version.
-func Decode(m *v2.PipelineManifest) (w *v2.DeclarativeWorkflow, err error) {
+func Decode(m *v2pb.PipelineManifest) (w *v2pb.DeclarativeWorkflow, err error) {
 	if m == nil || m.Content == nil {
 		return nil, &Error{Msg: "content is not set"}
 	}
@@ -49,7 +49,7 @@ func Decode(m *v2.PipelineManifest) (w *v2.DeclarativeWorkflow, err error) {
 	if err := rejectUnknownFields(m.Content.Value); err != nil {
 		return nil, err
 	}
-	w = &v2.DeclarativeWorkflow{}
+	w = &v2pb.DeclarativeWorkflow{}
 	if err := gogoproto.Unmarshal(m.Content.Value, w); err != nil {
 		return nil, &Error{Msg: "content does not decode: " + err.Error()}
 	}

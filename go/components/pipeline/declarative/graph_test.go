@@ -3,13 +3,13 @@ package declarative
 import (
 	"testing"
 
-	v2 "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func diamond() *v2.DeclarativeWorkflow {
-	return newWorkflow(map[string]*v2.DeclarativeTask{
+func diamond() *v2pb.DeclarativeWorkflow {
+	return newWorkflow(map[string]*v2pb.DeclarativeTask{
 		"extract":  task("core/python"),
 		"train":    task("core/ray", "extract"),
 		"evaluate": task("core/python", "extract"),
