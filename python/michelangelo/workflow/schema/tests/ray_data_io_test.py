@@ -123,6 +123,12 @@ class TestWriteConfig(TestCase):
             with self.subTest(bad=bad), self.assertRaises(ConfigurationError):
                 WriteConfig(concurrency=bad)
 
+    def test_invalid_memory_rejected(self):
+        """Non-positive or non-integer memory is rejected at config time."""
+        for bad in (0, -1, True, 2.5, "1GiB"):
+            with self.subTest(bad=bad), self.assertRaises(ConfigurationError):
+                WriteConfig(memory=bad)
+
     def test_memory_defaults_to_none_and_roundtrips(self):
         """Write memory is unset by default and round-trips through asdict."""
         self.assertIsNone(WriteConfig().memory)
@@ -140,6 +146,12 @@ class TestRayDataContextConfig(TestCase):
         cfg = RayDataContextConfig(preserve_order=False)
         self.assertIs(cfg.preserve_order, False)
         self.assertEqual(RayDataContextConfig(**dataclasses.asdict(cfg)), cfg)
+
+    def test_non_bool_preserve_order_rejected(self):
+        """A string such as "false" would be truthy, so it is rejected."""
+        for bad in ("false", 0, 1):
+            with self.subTest(bad=bad), self.assertRaises(ConfigurationError):
+                RayDataContextConfig(preserve_order=bad)
 
     def test_buffer_setting_defaults_to_none(self):
         """The streaming buffer setting is unset by default."""

@@ -116,6 +116,15 @@ class SetRayDataContextTest(TestCase):
         set_ray_data_context()
         self.assertEqual(ctx.execution_options.preserve_order, default)
 
+    def test_log_shows_the_preserve_order_in_effect(self):
+        """An earlier call's preserve_order stays in effect and is what is logged."""
+        set_ray_data_context(preserve_order=True)
+        with self.assertLogs(
+            "michelangelo.uniflow.plugins.ray.data_context", level="INFO"
+        ) as logs:
+            set_ray_data_context()
+        self.assertIn("preserve_order=True", logs.output[-1])
+
     def test_max_blocks_in_streaming_gen_buffer_is_applied(self):
         """An explicit buffer size is applied to the context."""
         set_ray_data_context(max_blocks_in_streaming_gen_buffer=1)

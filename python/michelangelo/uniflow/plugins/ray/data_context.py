@@ -100,6 +100,10 @@ def set_ray_data_context(
             instead of completion order, which can reduce throughput. ``None``
             keeps Ray's default (``False``).
 
+    The ``DataContext`` is global to the driver process, and ``None`` never
+    resets a field, so a value set by an earlier call stays in effect for
+    later Ray Data work in the same driver.
+
     Raises:
         ValueError: If ``max_errored_blocks`` is negative.
     """
@@ -181,6 +185,6 @@ def set_ray_data_context(
         if max_blocks_in_streaming_gen_buffer is not None
         else None,
         getattr(ctx, "max_errored_blocks", None),
-        preserve_order,
+        getattr(getattr(ctx, "execution_options", None), "preserve_order", None),
         ctx.retried_io_errors,
     )
