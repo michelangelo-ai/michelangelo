@@ -136,7 +136,7 @@ class LoadDeployableModelSchemaTest(_PackageTest):
     """Parsing ``config.pbtxt``."""
 
     def test_round_trips_names_types_and_shapes(self):
-        """What the packager writes is read back, without the optional flag."""
+        """What the packager writes is read back, including the optional flag."""
         self.write_deployable()
 
         schema = load_deployable_model_schema(self.root)
@@ -146,7 +146,7 @@ class LoadDeployableModelSchemaTest(_PackageTest):
             [
                 ("ids", DataType.LONG, [3], None),
                 ("grid", DataType.DOUBLE, [2, 4], None),
-                ("text", DataType.STRING, [1], None),
+                ("text", DataType.STRING, [1], True),
             ],
         )
         self.assertEqual(
