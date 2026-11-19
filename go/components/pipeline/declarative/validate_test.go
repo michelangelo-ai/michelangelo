@@ -248,3 +248,46 @@ func TestValidateOutputRefNeedsSucceededLastEdge(t *testing.T) {
 	bothPaths.Tasks["evaluate"].DependsOn = append(bothPaths.Tasks["evaluate"].DependsOn, &v2.TaskDependency{Task: "train"})
 	assert.NoError(t, Validate(notifyOn(bothPaths, "publish", v2.OUTCOME_SUCCEEDED), Limits{}), "evaluate ran, so train succeeded")
 }
+
+func TestValidateRejectsTooManyDependencies(t *testing.T) {
+	w := newWorkflow(map[string]*v2.DeclarativeTask{
+		"a": task("core/python"),
+		"b": task("core/python", "a"),
+		"c": task("core/python", "a", "b"),
+	})
+	assert.EqualError(t, Validate(w, Limits{MaxDependencies: 2}), "tasks have 3 depends_on entries in total; the limit is 2")
+	assert.NoError(t, Validate(w, Limits{MaxDependencies: 3}))
+}
+
+// denseWorkflow is the costliest shape that fits the default limits: a fully
+// connected block of 96 tasks, then a chain, where each task reads the output
+// of its last dependency.
+func denseWorkflow() *v2.DeclarativeWorkflow {
+	name := func(i int) string { return fmt.Sprintf("t%03d", i) }
+	ts := map[string]*v2.DeclarativeTask{}
+	for i := 0; i < DefaultLimits().MaxTasks; i++ {
+		var deps []string
+		if i < 96 {
+			for j := 0; j < i; j++ {
+				deps = append(deps, name(j))
+			}
+		} else {
+			deps = []string{name(i - 1)}
+		}
+		tk := task("core/python", deps...)
+		if len(deps) > 0 {
+			tk.Config.Fields["uri"] = strVal("{{ tasks." + deps[len(deps)-1] + ".output }}")
+		}
+		ts[name(i)] = tk
+	}
+	return typed(newWorkflow(ts))
+}
+
+func BenchmarkValidateDense(b *testing.B) {
+	w := denseWorkflow()
+	require.NoError(b, Validate(w, Limits{}))
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_ = Validate(w, Limits{})
+	}
+}

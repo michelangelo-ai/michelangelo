@@ -165,36 +165,59 @@ func (g *graph) levels() [][]string {
 	return out
 }
 
-// transitiveDeps returns every task that task depends on, directly or not.
-func (g *graph) transitiveDeps(task string) map[string]bool { return reach(g.deps, task) }
-
-// succeededDeps returns the tasks that have succeeded whenever task runs. A
-// skipped task satisfies no gate, so every transitive dependency of a running
-// task ran; each success edge out of those tasks proves its target succeeded.
-func (g *graph) succeededDeps(task string) map[string]bool {
-	out := map[string]bool{}
-	ran := g.transitiveDeps(task)
-	ran[task] = true
-	for m := range ran {
-		for _, d := range g.okDeps[m] {
-			out[d] = true
-		}
-	}
-	return out
+// reachability holds, for each task, bitsets over g.names of the tasks it
+// depends on, directly or not, and of the tasks that have succeeded whenever
+// it runs.
+type reachability struct {
+	idx         map[string]int
+	trans, succ [][]uint64
 }
 
-// reach returns every node reachable from task along adj, without task itself.
-func reach(adj map[string][]string, task string) map[string]bool {
-	out := map[string]bool{}
-	stack := append([]string{}, adj[task]...)
-	for len(stack) > 0 {
-		n := stack[len(stack)-1]
-		stack = stack[:len(stack)-1]
-		if out[n] {
-			continue
-		}
-		out[n] = true
-		stack = append(stack, adj[n]...)
+// reachability computes both sets for every task in one pass in level order.
+// A skipped task satisfies no gate, so every transitive dependency of a
+// running task ran, and each success edge out of those tasks proves that its
+// target succeeded:
+//
+//	trans(n) = union over deps d of {d} and trans(d)
+//	succ(n)  = okDeps(n), plus the union over deps d of succ(d)
+func (g *graph) reachability() *reachability {
+	r := &reachability{idx: make(map[string]int, len(g.names))}
+	for i, n := range g.names {
+		r.idx[n] = i
 	}
-	return out
+	words := (len(g.names) + 63) / 64
+	r.trans = make([][]uint64, len(g.names))
+	r.succ = make([][]uint64, len(g.names))
+	for _, lvl := range g.levels() {
+		for _, n := range lvl {
+			t, s := make([]uint64, words), make([]uint64, words)
+			for _, d := range g.deps[n] {
+				j := r.idx[d]
+				t[j/64] |= 1 << (j % 64)
+				for w := range t {
+					t[w] |= r.trans[j][w]
+					s[w] |= r.succ[j][w]
+				}
+			}
+			for _, d := range g.okDeps[n] {
+				j := r.idx[d]
+				s[j/64] |= 1 << (j % 64)
+			}
+			r.trans[r.idx[n]], r.succ[r.idx[n]] = t, s
+		}
+	}
+	return r
 }
+
+// dependsOn reports whether task depends on target, directly or not.
+func (r *reachability) dependsOn(task, target string) bool {
+	return has(r.trans[r.idx[task]], r.idx[target])
+}
+
+// succeeded reports whether target has succeeded whenever task runs.
+func (r *reachability) succeeded(task, target string) bool {
+	return has(r.succ[r.idx[task]], r.idx[target])
+}
+
+// has reports whether bit i is set in b.
+func has(b []uint64, i int) bool { return b[i/64]&(1<<(i%64)) != 0 }

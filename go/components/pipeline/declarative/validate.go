@@ -39,6 +39,15 @@ func Validate(w *v2.DeclarativeWorkflow, lim Limits) error {
 	if len(w.Tasks) > lim.MaxTasks {
 		return &Error{Msg: fmt.Sprintf("tasks has %d entries; the limit is %d", len(w.Tasks), lim.MaxTasks)}
 	}
+	edges := 0
+	for _, t := range w.Tasks {
+		if t != nil {
+			edges += len(t.DependsOn)
+		}
+	}
+	if edges > lim.MaxDependencies {
+		return &Error{Msg: fmt.Sprintf("tasks have %d depends_on entries in total; the limit is %d", edges, lim.MaxDependencies)}
+	}
 	g, err := buildGraph(w)
 	if err != nil {
 		return err
@@ -254,8 +263,8 @@ func checkParamRefs(w *v2.DeclarativeWorkflow, refs map[string][]taskRef) error 
 // checkTaskRefs checks that each task output reference names another task
 // that is a dependency and that has succeeded whenever the referencing task runs.
 func checkTaskRefs(w *v2.DeclarativeWorkflow, g *graph, refs map[string][]taskRef) error {
+	r := g.reachability()
 	for _, n := range g.names {
-		var deps, okDeps map[string]bool
 		for _, tr := range refs[n] {
 			if tr.Ref.Kind != refTaskOutput {
 				continue
@@ -267,14 +276,10 @@ func checkTaskRefs(w *v2.DeclarativeWorkflow, g *graph, refs map[string][]taskRe
 			if _, ok := w.Tasks[target]; !ok {
 				return &Error{Task: n, Field: tr.Field, Msg: fmt.Sprintf("references unknown task %q", target)}
 			}
-			if deps == nil {
-				deps = g.transitiveDeps(n)
-				okDeps = g.succeededDeps(n)
-			}
-			if !deps[target] {
+			if !r.dependsOn(n, target) {
 				return &Error{Task: n, Field: tr.Field, Msg: fmt.Sprintf("references task %q that is not a dependency of %q", target, n)}
 			}
-			if !okDeps[target] {
+			if !r.succeeded(n, target) {
 				return &Error{Task: n, Field: tr.Field, Msg: fmt.Sprintf("references task %q, which may not have succeeded when %q runs; add depends_on {task: %s, when: SUCCEEDED} to %q or to a task it depends on", target, n, target, n)}
 			}
 		}

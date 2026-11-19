@@ -23,9 +23,26 @@ func TestGraphLevels(t *testing.T) {
 	assert.Equal(t, [][]string{{"extract"}, {"evaluate", "train"}, {"publish"}}, g.levels())
 }
 
-func TestGraphTransitiveDeps(t *testing.T) {
-	g, err := buildGraph(diamond())
+func TestGraphReachability(t *testing.T) {
+	g, err := buildGraph(diamondFailure())
 	require.NoError(t, err)
-	assert.Equal(t, map[string]bool{"extract": true, "train": true, "evaluate": true}, g.transitiveDeps("publish"))
-	assert.Equal(t, map[string]bool{}, g.transitiveDeps("extract"))
+	r := g.reachability()
+	for _, d := range []string{"extract", "train", "evaluate"} {
+		assert.True(t, r.dependsOn("publish", d), d)
+	}
+	assert.False(t, r.dependsOn("extract", "publish"))
+	assert.False(t, r.dependsOn("extract", "extract"))
+	assert.True(t, r.succeeded("publish", "extract"))
+	assert.True(t, r.dependsOn("notify", "extract"))
+	assert.True(t, r.succeeded("notify", "extract"), "publish ran, so its success gates held")
+	assert.False(t, r.succeeded("notify", "publish"), "a FAILED edge does not prove success")
+	assert.False(t, r.succeeded("cleanup", "train"), "a COMPLETED edge does not prove success")
+	assert.True(t, r.succeeded("cleanup", "extract"))
+	for _, n := range g.names {
+		for _, d := range g.names {
+			if r.succeeded(n, d) {
+				assert.True(t, r.dependsOn(n, d), "%s succeeded-dep %s must be a dep", n, d)
+			}
+		}
+	}
 }

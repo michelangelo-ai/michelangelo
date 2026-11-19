@@ -39,16 +39,22 @@ func (e *Error) Error() string {
 
 // Limits bounds a workflow. A zero field takes the default.
 type Limits struct {
+	// MaxTasks bounds the number of tasks.
 	MaxTasks int
+	// MaxDependencies bounds the total number of depends_on entries.
+	MaxDependencies int
 }
 
 // DefaultLimits returns the platform defaults.
-func DefaultLimits() Limits { return Limits{MaxTasks: 500} }
+func DefaultLimits() Limits { return Limits{MaxTasks: 500, MaxDependencies: 5000} }
 
 // withDefaults replaces each zero or negative limit with its default.
 func (l Limits) withDefaults() Limits {
 	if l.MaxTasks <= 0 {
 		l.MaxTasks = DefaultLimits().MaxTasks
+	}
+	if l.MaxDependencies <= 0 {
+		l.MaxDependencies = DefaultLimits().MaxDependencies
 	}
 	return l
 }

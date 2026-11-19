@@ -39,7 +39,7 @@ func parseRefs(s string) ([]ref, error) {
 		}
 		end := strings.Index(rest[start:], "}}")
 		if end < 0 {
-			return nil, fmt.Errorf("unterminated \"{{\" in %q", s)
+			return nil, fmt.Errorf("unterminated \"{{\" in %q", clip(s))
 		}
 		token := rest[start : start+end+2]
 		r, err := parseOneRef(token)

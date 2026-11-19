@@ -32,4 +32,7 @@ func TestDefaultLimits(t *testing.T) {
 	assert.Equal(t, 500, DefaultLimits().MaxTasks)
 	assert.Equal(t, 500, (Limits{}).withDefaults().MaxTasks)
 	assert.Equal(t, 7, (Limits{MaxTasks: 7}).withDefaults().MaxTasks)
+	assert.Equal(t, 5000, DefaultLimits().MaxDependencies)
+	assert.Equal(t, 5000, (Limits{}).withDefaults().MaxDependencies)
+	assert.Equal(t, 9, (Limits{MaxDependencies: 9}).withDefaults().MaxDependencies)
 }
