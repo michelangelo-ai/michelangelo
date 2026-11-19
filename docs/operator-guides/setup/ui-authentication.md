@@ -1,5 +1,5 @@
 ---
-last_verified: 2026-11-02
+last_verified: 2026-11-18
 sidebar_position: 4
 ---
 
@@ -23,14 +23,38 @@ If the UI and Envoy are reachable under the **same origin** — same scheme, hos
 
 The chart's own `ui.apiBaseUrl` already supports this: [Network & Ingress](./network.md#envoy-proxy-configuration) notes the UI calls Envoy "on the Envoy host (**or a path on a shared host**, if your controller rewrites paths)". The chart doesn't generate a single merged Ingress for you, so you write one yourself and disable the chart's own `ui.ingress`/`envoy.ingress`:
 
+`auth-url`/`auth-signin` and the other `nginx.ingress.kubernetes.io/*` annotations below apply to every path in the Ingress resource that carries them — there is no per-path override. oauth2-proxy's own `/oauth2` path must therefore live on a **separate** Ingress resource (same host, no auth annotations), or the auth subrequest would end up challenging oauth2-proxy's own login endpoint:
+
 ```yaml
+# Unprotected: oauth2-proxy's own endpoints. Must NOT carry auth-url/auth-signin,
+# or the login flow would try to authenticate against itself.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: michelangelo-app-oauth2
+spec:
+  ingressClassName: nginx
+  tls:
+    - secretName: michelangelo-app-tls
+      hosts:
+        - app.your-domain.com
+  rules:
+    - host: app.your-domain.com
+      http:
+        paths:
+          - path: /oauth2
+            pathType: Prefix
+            backend:
+              service: { name: oauth2-proxy, port: { number: 4180 } }
+---
+# Protected: the UI and Envoy.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: michelangelo-app
   annotations:
-    nginx.ingress.kubernetes.io/auth-url: "https://auth.your-domain.com/oauth2/auth"
-    nginx.ingress.kubernetes.io/auth-signin: "https://auth.your-domain.com/oauth2/start?rd=$escaped_request_uri"
+    nginx.ingress.kubernetes.io/auth-url: "https://app.your-domain.com/oauth2/auth"
+    nginx.ingress.kubernetes.io/auth-signin: "https://app.your-domain.com/oauth2/start?rd=$escaped_request_uri"
     nginx.ingress.kubernetes.io/use-regex: "true"
     nginx.ingress.kubernetes.io/rewrite-target: /$2
 spec:
@@ -66,9 +90,9 @@ envoy:
     enabled: false   # replaced by the merged Ingress above
 ```
 
-Because the redirect back from the IdP (`rd=$escaped_request_uri`) targets the *same* host the request came from, there's no `--whitelist-domain` or `--cookie-domain` configuration needed on the oauth2-proxy side either — see [Deploy oauth2-proxy](#deploy-oauth2-proxy) below for the rest of its config, which is identical for both options.
+Because the redirect back from the IdP (`rd=$escaped_request_uri`) targets the *same* host the request came from, there's no `--whitelist-domain` or `--cookie-domain` configuration needed on the oauth2-proxy side either, and oauth2-proxy's session cookie is scoped to `app.your-domain.com` by default — exactly the host both the UI and Envoy are now reachable on, so the cookie reaches every `auth_request` subrequest without any extra configuration. See [Deploy oauth2-proxy](#deploy-oauth2-proxy) below for the rest of its config; the one difference from Option B is Ingress exposure, called out there.
 
-Service names above assume a release named `michelangelo`; adjust to `<release-name>-envoy` / `<release-name>-ui` for yours (see `michelangelo.componentFullname` in the chart's `_helpers.tpl`).
+Service names above assume a release named `michelangelo`, where the chart's `michelangelo.fullname` helper collapses to just `michelangelo` (it only prepends the release name when the release name doesn't already contain it). For a release named anything else — say `prod` — `michelangelo.componentFullname` (`_helpers.tpl`) produces `<release>-michelangelo-<component>`, e.g. `prod-michelangelo-envoy`, **not** `prod-envoy`. Don't guess: run `helm template . | grep -A2 'kind: Service'` against your actual release name and values, or set `fullnameOverride: michelangelo` to keep the names in this guide exactly correct regardless of release name.
 
 ## Option B: Separate hostnames for the UI and Envoy
 
@@ -109,7 +133,7 @@ Verified against the current chart and UI source — as of this writing, neither
 
 **1. Envoy's CORS policy needs explicit, opt-in credential support.** `helm/michelangelo/templates/core/envoy-configmap.yaml`'s virtual-host-level `cors:` block sets `allow_origin_string_match`, `allow_methods`, `allow_headers`, `max_age`, and `expose_headers`, but never `allow_credentials`. Add a Helm value for it (`envoy.corsAllowCredentials`, default `false`) and a corresponding chart validation: **never enable it without an explicit, non-wildcard `corsOrigins`.** Envoy's CORS filter doesn't send a literal `Access-Control-Allow-Origin: *` — when `allow_origin_string_match` matches, it echoes back the caller's actual `Origin` header. Since the chart's default `corsOrigins: ""` renders as the regex `.*`, which matches every origin, pairing that default with `allow_credentials: true` would let **any** origin make authenticated, cookie-bearing calls — the opposite of what the setting is supposed to restrict. There's no `*`-literal special case here to rely on; enforce it with a `fail`.
 
-**2. The UI's fetch transport needs an opt-in way to send cookies cross-origin.** `javascript/packages/rpc/create-fetch-transport.ts` calls `fetch()` with no `credentials` option, which defaults to `'same-origin'` — cookies are attached only when the request target is the same origin as the page. `FetchTransportOptions` (`javascript/packages/rpc/types.ts`) needs a `credentials` field threaded through to the `fetch()` call, left unset by default so nothing changes for deployments that don't need it.
+**2. The UI needs to send cookies cross-origin.** `javascript/packages/rpc/create-fetch-transport.ts` calls `fetch()` with no `credentials` option, which defaults to `'same-origin'` — cookies are attached only when the request target is the same origin as the page. Set `ui.apiCredentials: "include"` in your Helm values: the chart renders it into the UI's runtime `/config.json`, which the UI reads on startup and passes through to every `fetch()` call. No application code change needed — this is a chart value, not just an internal API.
 
 ### Deploy oauth2-proxy
 
@@ -140,16 +164,29 @@ extraArgs:
   # cookie-domain: .your-domain.com                     # parent domain covering the UI + Envoy hosts
   # whitelist-domain: .your-domain.com                  # oauth2-proxy drops post-login redirects to any host not listed here
 
+# Option A: no Ingress of its own — the michelangelo-app-oauth2 Ingress shown
+# above already routes app.your-domain.com/oauth2 to this release's Service.
 ingress:
-  enabled: true
-  className: nginx
-  hosts:
-    - auth.your-domain.com                              # its own small Ingress; not app/envoy's hostnames
+  enabled: false
+
+# Option B only — its own small Ingress, separate from app/envoy's hostnames.
+# Delete the block above and use this one instead:
+# ingress:
+#   enabled: true
+#   className: nginx
+#   hosts:
+#     - auth.your-domain.com
+#   tls:
+#     - secretName: auth-your-domain-tls
+#       hosts:
+#         - auth.your-domain.com
 ```
 
 `set-authorization-header` is what makes oauth2-proxy inject `Authorization: Bearer <id_token>` on the response the Ingress controller's `auth_request` subrequest reads — that header is what the Ingress annotation below copies onto the real request. (`pass-authorization-header` is a separate flag for oauth2-proxy's *reverse-proxy* mode, where it forwards the token to a real upstream; it does nothing here, since `upstream: static://202` is never actually proxied to.) The `aud` claim in that `id_token` is the OIDC client's `client_id` — `apiserver.auth.oidc.audiences` must include your oauth2-proxy client's `clientID`, or the API server will reject every token on arrival with `token verification failed`.
 
-**Token lifetime**: oauth2-proxy's session cookie defaults to a 168-hour lifetime, far longer than a typical ~1-hour OIDC `id_token`. Without `cookie-refresh` set *below* that token lifetime (and a refresh token — most IdPs need the `offline_access` scope requested for one to be issued), the UI will look logged in while every API call fails with `token verification failed` about an hour after login, which is confusing to diagnose. If your IdP doesn't issue refresh tokens, you'll need to re-authenticate at that same interval instead.
+**TLS on the auth subrequest**: `auth-url` is an `https://` address, and nginx validates that certificate using the Ingress controller's own default trust store (public CAs), independent of and unrelated to the `nginx.ingress.kubernetes.io/auth-tls-*` annotations — those configure *client*-certificate (mTLS) verification for a different purpose entirely. If the certificate behind `auth-url` comes from a public CA (the common case, including the `michelangelo-app-tls`/`auth-your-domain-tls` secrets above if issued via cert-manager and Let's Encrypt), nothing extra is needed. If you terminate TLS there with a private/internal CA instead, point ingress-nginx's `proxy-ssl-secret` annotation at a Secret containing that CA, or the subrequest fails closed with a TLS error. Don't disable verification to work around this — the subrequest is exactly what carries the session cookie.
+
+**Token lifetime**: oauth2-proxy's session cookie defaults to a 168-hour lifetime, far longer than a typical ~1-hour OIDC `id_token`. Without `cookie-refresh` set *below* that token lifetime (and a refresh token — most IdPs need the `offline_access` scope requested for one to be issued), the UI will look logged in while every API call fails with `token verification failed` about an hour after login, which is confusing to diagnose. If your IdP doesn't issue refresh tokens, you'll need to re-authenticate at that same interval instead. Separately, a large OIDC session (many scopes/claims) can make oauth2-proxy split its session across multiple `Set-Cookie` headers — ingress-nginx's `auth_request` module only forwards the *first* `Set-Cookie` from the subrequest, so a refresh can leave the browser with mismatched cookie parts and an interrupted session. If you hit this, the fix is a shared session store (oauth2-proxy's `--session-store-type=redis`) rather than the default cookie-only sessions, not something this guide covers in depth.
 
 **Non-browser clients** (the `ma` CLI, SDK scripts) should keep going through `apiserver.ingress`, not through an `auth_request`-protected Envoy Ingress — oauth2-proxy rejects bearer-only requests by default (`--skip-jwt-bearer-tokens` exists if you need to let them through the same Ingress).
 
@@ -174,6 +211,7 @@ nginx.ingress.kubernetes.io/auth-response-headers: "Authorization"
 
 - **`cookie-domain` widens your CSRF trust boundary.** Under Option B, setting it to a parent domain (`.your-domain.com`) makes every subdomain of it "same-site" for the purposes of `SameSite=Lax` — a compromised or user-content subdomain elsewhere on that parent domain could send credentialed requests to Envoy, and read the responses too if `corsOrigins` matches it. Prefer a dedicated parent domain used for nothing else, and never widen `cookie-samesite` to `none` without separately addressing this. Option A has no equivalent exposure, since there's no cross-site cookie at all.
 - **Escape literal dots in `corsOrigins`.** As `helm/michelangelo/values.yaml` already notes for the field generally, an unescaped `https://app.your-domain.com` also matches `https://app-your-domain.com` as a regex. This matters more once credentials are involved.
+- **The bearer token also crosses two internal hops in cleartext by default.** Both the Ingress-to-Envoy hop (documented above as plain `http://` to the `michelangelo-envoy` Service) and the chart's own Envoy-to-apiserver hop default to plaintext. Setting `apiserver.tls.enabled: true` encrypts the second hop, but check what it actually buys you before relying on it for this: Envoy's config renders `trust_chain_verification: ACCEPT_UNTRUSTED` on that connection (`envoy-configmap.yaml`), which encrypts the traffic but does **not** authenticate the API server's certificate — it protects against passive sniffing on that hop, not an active on-path attacker presenting any certificate. Anyone who can observe either hop, or sit on the apiserver one, can still capture and replay the token. Terminating both hops with real, verified TLS (or routing them through a service mesh that already does) is out of scope for this guide, but don't treat `apiserver.tls.enabled: true` alone as closing this gap.
 
 ## Keep `apiserver.auth.oidc` in sync (Option B)
 
