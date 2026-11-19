@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import os
-import re
 
+from michelangelo.lib.model_manager._private.serde.model.pbtxt import (
+    find_string_field,
+)
 from michelangelo.lib.model_manager.constants.triton_backend_type import (
     TritonBackendType,
 )
-
-_BACKEND_PATTERN = re.compile(r'^\s*backend\s*:\s*"([^"]+)"', re.MULTILINE)
 
 
 def get_deployable_backend_type(model_path: str) -> str:
@@ -31,14 +31,13 @@ def get_deployable_backend_type(model_path: str) -> str:
     if not os.path.exists(config_path):
         raise FileNotFoundError(f"config.pbtxt not found in {model_path}")
 
-    with open(config_path) as f:
-        match = _BACKEND_PATTERN.search(f.read())
-    if not match:
+    with open(config_path, encoding="utf-8") as f:
+        backend = find_string_field(f.read(), "backend")
+    if not backend:
         raise ValueError(
             f"Could not find backend specification in config.pbtxt at {model_path}"
         )
 
-    backend = match.group(1)
     supported = get_supported_deployable_backend_types()
     if backend not in supported:
         raise ValueError(
