@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import os
-import re
 
 import yaml
 
 from michelangelo.lib.model_manager._private.schema.common.serde import dict_to_schema
 from michelangelo.lib.model_manager._private.schema.triton.data_type import (
     DATA_TYPE_MAPPING,
+)
+from michelangelo.lib.model_manager._private.serde.model.pbtxt import (
+    find_messages,
+    message_fields,
 )
 from michelangelo.lib.model_manager.schema import (
     DataType,
@@ -19,12 +22,6 @@ from michelangelo.lib.model_manager.schema import (
 
 # Triton data type name (``TYPE_FP32``) back to the schema data type.
 _TRITON_TYPE_TO_DATA_TYPE = {f"TYPE_{v}": k for k, v in DATA_TYPE_MAPPING.items()}
-
-_ITEM_PATTERN = re.compile(
-    r'\{[^}]*?name\s*:\s*"([^"]+)"[^}]*?data_type\s*:\s*(\w+)'
-    r"[^}]*?dims\s*:\s*\[\s*([^\]]*?)\s*\]",
-    re.DOTALL,
-)
 
 
 def load_raw_model_schema(model_path: str, submodule: str = "") -> ModelSchema:
@@ -46,13 +43,15 @@ def load_raw_model_schema(model_path: str, submodule: str = "") -> ModelSchema:
     """
     if submodule:
         schemas_yaml = os.path.join(model_path, "metadata", "submodel_schemas.yaml")
-        with open(schemas_yaml) as f:
+        with open(schemas_yaml, encoding="utf-8") as f:
             data = yaml.safe_load(f) or {}
         if submodule not in data:
             raise KeyError(f"Submodel '{submodule}' not found in {schemas_yaml}")
         return dict_to_schema(data[submodule])
 
-    with open(os.path.join(model_path, "metadata", "schema.yaml")) as f:
+    with open(
+        os.path.join(model_path, "metadata", "schema.yaml"), encoding="utf-8"
+    ) as f:
         return dict_to_schema(yaml.safe_load(f))
 
 
@@ -67,7 +66,8 @@ def load_deployable_model_schema(model_path: str) -> ModelSchema:
 
     Returns:
         The schema. An item needs a name, a data type and dims to be read; a
-        data type with no schema equivalent is read as ``FLOAT``.
+        data type with no schema equivalent is read as ``FLOAT``. An input's
+        ``optional`` flag is kept.
 
     Raises:
         FileNotFoundError: If the package has no ``config.pbtxt``.
@@ -76,7 +76,7 @@ def load_deployable_model_schema(model_path: str) -> ModelSchema:
     if not os.path.exists(config_path):
         raise FileNotFoundError(f"config.pbtxt not found in {model_path}")
 
-    with open(config_path) as f:
+    with open(config_path, encoding="utf-8") as f:
         content = f.read()
     return ModelSchema(
         input_schema=_parse_io_section("input", content),
@@ -86,19 +86,22 @@ def load_deployable_model_schema(model_path: str) -> ModelSchema:
 
 def _parse_io_section(section_name: str, content: str) -> list[ModelSchemaItem]:
     """Parse the ``input`` or ``output`` section of a ``config.pbtxt``."""
-    match = re.search(
-        rf"{section_name}\s*:\s*\[((?:[^\[\]]|\[[^\]]*\])*)\]", content, re.DOTALL
-    )
-    if not match:
-        return []
-
     items = []
-    for name, data_type, dims in _ITEM_PATTERN.findall(match.group(1)):
+    for message in find_messages(content, section_name):
+        fields = message_fields(message)
+        if not {"name", "data_type", "dims"} <= fields.keys():
+            continue
+        optional = fields.get("optional", "").lower()
         items.append(
             ModelSchemaItem(
-                name=name,
-                data_type=_TRITON_TYPE_TO_DATA_TYPE.get(data_type, DataType.FLOAT),
-                shape=[int(d) for d in dims.split(",") if d.strip()],
+                name=fields["name"],
+                data_type=_TRITON_TYPE_TO_DATA_TYPE.get(
+                    fields["data_type"], DataType.FLOAT
+                ),
+                shape=[
+                    int(d) for d in fields["dims"].strip("[]").split(",") if d.strip()
+                ],
+                optional=True if optional in ("true", "1") else None,
             )
         )
     return items

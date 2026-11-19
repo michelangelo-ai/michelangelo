@@ -50,8 +50,21 @@ class TritonBackendTypeTest(TestCase):
         )
         self.assertEqual(self.backend_of(content), "onnxruntime")
 
+    def test_backend_on_one_line_with_other_fields(self):
+        """``backend`` does not have to start a line."""
+        self.assertEqual(self.backend_of('name: "m" backend: "python"'), "python")
+
+    def test_nested_or_commented_backend_is_ignored(self):
+        """A ``backend`` inside a nested message or a comment is not the backend."""
+        content = (
+            '# backend: "python"\n'
+            'parameters: { key: "k", value: { backend: "python" } }\n'
+        )
+        with self.assertRaisesRegex(ValueError, "Could not find backend"):
+            self.backend_of(content)
+
     def test_backend_text_inside_another_field_is_ignored(self):
-        """Only a line that starts with ``backend`` names the backend."""
+        """Text inside a quoted value is never read as the backend."""
         content = 'name: "m"\nplatform: "my_backend: \\"python\\""\n'
         with self.assertRaisesRegex(ValueError, "Could not find backend"):
             self.backend_of(content)

@@ -195,6 +195,56 @@ class LoadDeployableModelSchemaTest(_PackageTest):
         self.assertEqual(schema.input_schema, [])
         self.assertEqual(schema.output_schema, [])
 
+    def test_sections_without_a_colon(self):
+        """``input [ ... ]`` is read the same as ``input: [ ... ]``."""
+        schema = self.schema_of(
+            "input [\n"
+            '  { name: "x", data_type: TYPE_FP32, dims: [ 4 ] }\n'
+            "]\n"
+            "output [\n"
+            '  { name: "y", data_type: TYPE_FP32, dims: [ 1 ] }\n'
+            "]\n"
+        )
+        self.assertEqual(_items(schema.input_schema), [("x", DataType.FLOAT, [4])])
+        self.assertEqual(_items(schema.output_schema), [("y", DataType.FLOAT, [1])])
+
+    def test_item_fields_in_any_order(self):
+        """An item's fields may come in any order."""
+        schema = self.schema_of(
+            'input: [ { dims: [ 4 ], data_type: TYPE_INT32, name: "x" } ]\n'
+        )
+        self.assertEqual(_items(schema.input_schema), [("x", DataType.INT, [4])])
+
+    def test_optional_input_is_kept(self):
+        """``optional: True``, as the packager writes it, marks the item optional."""
+        schema = self.schema_of(
+            "input: [\n"
+            '  { name: "x", data_type: TYPE_FP32, dims: [ 1 ], optional: True },\n'
+            '  { name: "y", data_type: TYPE_FP32, dims: [ 1 ], optional: false },\n'
+            '  { name: "z", data_type: TYPE_FP32, dims: [ 1 ] }\n'
+            "]\n"
+        )
+        self.assertEqual([i.optional for i in schema.input_schema], [True, None, None])
+
+    def test_nested_messages_and_comments_are_skipped(self):
+        """A nested ``reshape`` message, comments and quoted text are not fields."""
+        schema = self.schema_of(
+            '# input: [ { name: "commented" } ]\n'
+            'parameters: { key: "input: [", value: { string_value: "]" } }\n'
+            "input: [\n"
+            "  {\n"
+            '    name: "x"  # the feature\n'
+            "    reshape: { shape: [ ] }\n"
+            "    data_type: TYPE_FP32\n"
+            "    dims: [ 1 ]\n"
+            "  }\n"
+            "]\n"
+            'output_names: [ "not_the_output" ]\n'
+            'output: [ { name: "y", data_type: TYPE_FP32, dims: [ 1 ] } ]\n'
+        )
+        self.assertEqual(_items(schema.input_schema), [("x", DataType.FLOAT, [1])])
+        self.assertEqual(_items(schema.output_schema), [("y", DataType.FLOAT, [1])])
+
     def test_missing_config_pbtxt(self):
         """A package without config.pbtxt is a FileNotFoundError."""
         with self.assertRaisesRegex(FileNotFoundError, "config.pbtxt not found"):
@@ -212,6 +262,15 @@ class LoadRawModelSchemaTest(_PackageTest):
         )
         self.write("metadata/schema.yaml", yaml.dump(schema_to_dict(schema)))
         self.assertEqual(load_raw_model_schema(self.root), schema)
+
+    def test_optional_item_is_kept(self):
+        """An item's ``optional`` flag survives the round trip."""
+        schema = ModelSchema(
+            input_schema=[ModelSchemaItem("a", DataType.FLOAT, [1], optional=True)],
+            output_schema=[ModelSchemaItem("b", DataType.INT, [2])],
+        )
+        self.write("metadata/schema.yaml", yaml.dump(schema_to_dict(schema)))
+        self.assertTrue(load_raw_model_schema(self.root).input_schema[0].optional)
 
     def test_submodule_schema(self):
         """A submodule's schema is read from submodel_schemas.yaml."""
