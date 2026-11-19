@@ -1,11 +1,15 @@
-Captured local-run stdout/stderr (verbatim):
+WHEEL_SOURCE_BYTE_MATCH: PASS
+ISOLATED_INSTALL: /tmp/uniflow-buildkite/wheel-env/lib/python3.12/site-packages/michelangelo/uniflow/core/lib/buildkite/buildkite.py
+PYTHONPATH: unset
+SOURCE_COMMIT: c392fb49141fb2ad1f73e44f1b433f9ddad6ea8b
+PYTHON_VERSION: 3.12.16
+LIVE_STAR_COMPILATION: PASS
 
-2026-11-18 06:46:00,515 |     INFO | michelangelo.uniflow.core.context        | ctx: Context(_args=[], _target='local-run', environ={})
-Buildkite plugin smoke: {'submitted': {'id': '01a1ed67-bb74-4e39-a648-1037f52d7a7d', 'number': 49597323, 'pipeline': 'go-code-udj', 'state': 'passed', 'web_url': 'https://buildkite.com/uber/go-code-udj/builds/49597323', 'branch': 'suhas.anumukonda/uniflow-buildkite', 'commit': '5cb2de6da52b773ff89e646d9e17cd3e0b083722'}, 'invoked': {'id': '01a1ed6a-3895-4df1-aa51-93f465e8a673', 'number': 49597585, 'pipeline': 'go-code-udj', 'state': 'passed', 'web_url': 'https://buildkite.com/uber/go-code-udj/builds/49597585', 'branch': 'suhas.anumukonda/uniflow-buildkite', 'commit': '5cb2de6da52b773ff89e646d9e17cd3e0b083722'}, 'cancelled': {'id': '01a1ed6c-ddf2-4c78-a6dd-b51536525d3a', 'number': 49597813, 'pipeline': 'go-code-udj', 'state': 'canceled', 'web_url': 'https://buildkite.com/uber/go-code-udj/builds/49597813', 'branch': 'suhas.anumukonda/uniflow-buildkite', 'commit': '5cb2de6da52b773ff89e646d9e17cd3e0b083722'}}
+INSTALLED_WHEEL_LOCAL_RUN: starting
+2026-11-19 06:59:03,006 |     INFO | michelangelo.uniflow.core.context        | ctx: Context(_args=[], _target='local-run', environ={})
+SMOKE_RESULTS {'submitted': {'id': '01a1f29a-0802-4b43-8c5b-8824e2e527c4', 'number': 49728325, 'pipeline': 'go-code-udj', 'state': 'scheduled', 'web_url': 'https://buildkite.com/uber/go-code-udj/builds/49728325', 'branch': 'suhas.anumukonda/uniflow-buildkite', 'commit': '5cb2de6da52b773ff89e646d9e17cd3e0b083722'}, 'snapshot': {'id': '01a1f29a-0802-4b43-8c5b-8824e2e527c4', 'number': 49728325, 'pipeline': 'go-code-udj', 'state': 'scheduled', 'web_url': 'https://buildkite.com/uber/go-code-udj/builds/49728325', 'branch': 'suhas.anumukonda/uniflow-buildkite', 'commit': '5cb2de6da52b773ff89e646d9e17cd3e0b083722'}, 'completed': {'id': '01a1f29a-0802-4b43-8c5b-8824e2e527c4', 'number': 49728325, 'pipeline': 'go-code-udj', 'state': 'passed', 'web_url': 'https://buildkite.com/uber/go-code-udj/builds/49728325', 'branch': 'suhas.anumukonda/uniflow-buildkite', 'commit': '5cb2de6da52b773ff89e646d9e17cd3e0b083722'}, 'invoked': {'id': '01a1f29c-6172-4cd8-912b-464a70032e5e', 'number': 49728546, 'pipeline': 'go-code-udj', 'state': 'passed', 'web_url': 'https://buildkite.com/uber/go-code-udj/builds/49728546', 'branch': 'suhas.anumukonda/uniflow-buildkite', 'commit': '5cb2de6da52b773ff89e646d9e17cd3e0b083722'}, 'cancelled': {'id': '01a1f29e-ccbe-4ae3-b7aa-5d83700e58e1', 'number': 49728696, 'pipeline': 'go-code-udj', 'state': 'canceled', 'web_url': 'https://buildkite.com/uber/go-code-udj/builds/49728696', 'branch': 'suhas.anumukonda/uniflow-buildkite', 'commit': '5cb2de6da52b773ff89e646d9e17cd3e0b083722'}}
+INSTALLED_WHEEL_LOCAL_RUN: completed
 
-Independent read-only verification (verbatim):
-
-submitted {"number": 49597323, "state": "passed", "url": "https://buildkite.com/uber/go-code-udj/builds/49597323", "smoke_marker": "Uniflow Buildkite plugin smoke: passed"}
-invoked {"number": 49597585, "state": "passed", "url": "https://buildkite.com/uber/go-code-udj/builds/49597585", "smoke_marker": "Uniflow Buildkite plugin smoke: passed"}
-cancelled {"number": 49597813, "state": "canceled", "url": "https://buildkite.com/uber/go-code-udj/builds/49597813"}
-Verified compact result schema/types, exact commit/config, terminal states and job markers.
+INDEPENDENT_PYTHON_BUILD_VERIFICATION: 49728325 passed; fixture identity verified; all script jobs passed; expected smoke marker found
+INDEPENDENT_PYTHON_BUILD_VERIFICATION: 49728546 passed; fixture identity verified; all script jobs passed; expected smoke marker found
+INDEPENDENT_PYTHON_BUILD_VERIFICATION: 49728696 canceled; fixture identity verified
