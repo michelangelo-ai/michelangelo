@@ -169,6 +169,30 @@ jobs:
               2>/dev/null || { echo "ui.apiCredentials=$v was accepted"; exit 1; }
           done
 
+      - name: Validate fail-fast guard (corsAllowCredentials with a match-everything, invalid, or non-string corsOrigins must fail)
+        run: |
+          for origins in '' '.*' '^.*$' '.+' '(.*)' 'https?://.*' 'null' 'https://(ml'; do
+            ! helm template michelangelo helm/michelangelo \
+              -f helm/michelangelo/values-k3d.yaml \
+              --set envoy.corsAllowCredentials=true \
+              --set-string "envoy.corsOrigins=$origins" \
+              2>/dev/null || { echo "envoy.corsOrigins='$origins' was accepted"; exit 1; }
+          done
+          ! helm template michelangelo helm/michelangelo \
+            -f helm/michelangelo/values-k3d.yaml \
+            --set envoy.corsAllowCredentials=true \
+            --set envoy.corsOrigins=123 \
+            2>/dev/null || { echo "non-string envoy.corsOrigins was accepted"; exit 1; }
+
+      - name: Template — corsAllowCredentials with an explicit corsOrigins
+        run: |
+          helm template michelangelo helm/michelangelo \
+            -f helm/michelangelo/values-k3d.yaml \
+            --set envoy.corsAllowCredentials=true \
+            --set-json 'envoy.corsOrigins="https://ml\\.example\\.com"' \
+            --debug \
+            | grep 'allow_credentials: true'
+
       - name: Template — Ingress enabled (UI + Envoy, hosts[] syntax)
         run: |
           helm template michelangelo helm/michelangelo \
