@@ -9,7 +9,12 @@ import (
 	v2 "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
-var taskNameRe = regexp.MustCompile(`^[a-z][a-z0-9_]{0,62}$`)
+// nameRe is the rule for task and parameter names, and for the names in
+// references.
+var nameRe = regexp.MustCompile(`^[a-z][a-z0-9_]{0,62}$`)
+
+// nameRule states nameRe in words for error messages.
+const nameRule = "name must start with a lowercase letter and use only lowercase letters, digits, and underscores, at most 63 characters"
 
 // graph is the depends_on graph of a workflow. deps maps a task to the tasks
 // it depends on, and rdeps maps a task to the tasks that depend on it.
@@ -30,8 +35,8 @@ func buildGraph(w *v2.DeclarativeWorkflow) (*graph, error) {
 	}
 	sort.Strings(g.names)
 	for _, name := range g.names {
-		if !taskNameRe.MatchString(name) {
-			return nil, &Error{Task: name, Msg: "name must match " + taskNameRe.String()}
+		if !nameRe.MatchString(name) {
+			return nil, &Error{Task: name, Msg: nameRule}
 		}
 		t := w.Tasks[name]
 		if t == nil {

@@ -1,4 +1,3 @@
-// Package declarative decodes, validates, and plans a DeclarativeWorkflow.
 package declarative
 
 import (
@@ -6,13 +5,25 @@ import (
 	"strings"
 )
 
-// Error is one validation failure.
+// Error is one problem in the content of a workflow. Decode, Validate,
+// ValidateAgainst, and Plan return *Error for every such problem, so a server
+// can map *Error to InvalidArgument. Any other error from this package is an
+// internal fault or comes from LoadReleases or ParseRelease, which report
+// problems in release files as plain errors.
 type Error struct {
-	Task    string
-	Param   string
-	Field   string
+	// Task is the name of the task at fault, or "".
+	Task string
+	// Param is the name of the parameter at fault, or "". Error ignores it
+	// when Task is set.
+	Param string
+	// Field is the path of the value at fault inside the task, such as
+	// "config.ray.image", or "".
+	Field string
+	// Release is the version of the release whose schema rejected the task,
+	// or "".
 	Release string
-	Msg     string
+	// Msg says what is wrong and, where it can, how to fix it.
+	Msg string
 }
 
 // Error formats the failure as "task|parameter <name>: <field> <msg> in <release>",

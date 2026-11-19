@@ -23,10 +23,8 @@ type ref struct {
 	Whole bool
 }
 
-var (
-	refName  = regexp.MustCompile(`^[a-z][a-z0-9_]{0,62}$`)
-	refField = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
-)
+// refField is the rule for a field name after "output" in a reference.
+var refField = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 // parseRefs returns every "{{ ... }}" reference in s, in order.
 func parseRefs(s string) ([]ref, error) {
@@ -59,7 +57,7 @@ func parseOneRef(token string) (ref, error) {
 	switch {
 	case strings.HasPrefix(body, "params."):
 		name := strings.TrimPrefix(body, "params.")
-		if !refName.MatchString(name) {
+		if !nameRe.MatchString(name) {
 			return ref{}, fmt.Errorf("reference %q has a malformed name", token)
 		}
 		return ref{Kind: refParam, Name: name}, nil
@@ -68,7 +66,7 @@ func parseOneRef(token string) (ref, error) {
 		if len(parts) < 2 || parts[1] != "output" {
 			return ref{}, fmt.Errorf("reference %q must name \"tasks.%s.output\"", token, parts[0])
 		}
-		if !refName.MatchString(parts[0]) {
+		if !nameRe.MatchString(parts[0]) {
 			return ref{}, fmt.Errorf("reference %q has a malformed name", token)
 		}
 		var path []string

@@ -30,11 +30,11 @@ func TestValidateStructural(t *testing.T) {
 		{"nil tasks", &v2.DeclarativeWorkflow{SchemaVersion: SchemaVersion}, Limits{},
 			"tasks must have at least one entry"},
 		{"bad name uppercase", newWorkflow(map[string]*v2.DeclarativeTask{"Train": task("core/ray")}), Limits{},
-			`task "Train": name must match ^[a-z][a-z0-9_]{0,62}$`},
+			`task "Train": name must start with a lowercase letter and use only lowercase letters, digits, and underscores, at most 63 characters`},
 		{"bad name leading digit", newWorkflow(map[string]*v2.DeclarativeTask{"1a": task("core/ray")}), Limits{},
-			`task "1a": name must match ^[a-z][a-z0-9_]{0,62}$`},
+			`task "1a": name must start with a lowercase letter and use only lowercase letters, digits, and underscores, at most 63 characters`},
 		{"name too long", newWorkflow(map[string]*v2.DeclarativeTask{"a" + strings.Repeat("b", 63): task("core/ray")}), Limits{},
-			`task "` + "a" + strings.Repeat("b", 63) + `": name must match ^[a-z][a-z0-9_]{0,62}$`},
+			`task "` + "a" + strings.Repeat("b", 63) + `": name must start with a lowercase letter and use only lowercase letters, digits, and underscores, at most 63 characters`},
 		{"too many tasks", func() *v2.DeclarativeWorkflow {
 			ts := map[string]*v2.DeclarativeTask{}
 			for i := 0; i < 3; i++ {
@@ -138,7 +138,7 @@ func TestValidateParameters(t *testing.T) {
 
 func TestValidateParameterName(t *testing.T) {
 	w := withParams(diamond(), map[string]*v2.ParameterSpec{"Bad": paramSpec(v2.PARAMETER_TYPE_STRING, strVal("x"))})
-	assert.EqualError(t, Validate(w, Limits{}), `parameter "Bad": name must match ^[a-z][a-z0-9_]{0,62}$`)
+	assert.EqualError(t, Validate(w, Limits{}), `parameter "Bad": name must start with a lowercase letter and use only lowercase letters, digits, and underscores, at most 63 characters`)
 }
 
 func TestValidateNilParameter(t *testing.T) {
@@ -183,7 +183,7 @@ func TestValidateTaskOutputReferences(t *testing.T) {
 	require.NoError(t, Validate(w, Limits{}), "direct and transitive dependencies are both allowed")
 
 	w.Tasks["evaluate"].Config.Fields["model"] = strVal("{{ tasks.train.output }}")
-	assert.EqualError(t, Validate(w, Limits{}), `task "evaluate": config.model references task "train" that is not a dependency of "evaluate"`)
+	assert.EqualError(t, Validate(w, Limits{}), `task "evaluate": config.model references task "train" that is not a dependency of "evaluate"; add depends_on {task: train} to "evaluate" or to a task it depends on`)
 
 	w.Tasks["evaluate"].Config.Fields["model"] = strVal("{{ tasks.evaluate.output }}")
 	assert.EqualError(t, Validate(w, Limits{}), `task "evaluate": config.model references the task itself`)

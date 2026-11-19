@@ -23,8 +23,8 @@ var typeNames = map[v2.ParameterType]string{
 // typeName returns the schema type name of t, or "" for an unknown type.
 func typeName(t v2.ParameterType) string { return typeNames[t] }
 
-// Validate runs the checks that need no task-type registry. It returns the
-// first failure.
+// Validate runs the checks that need no release: names, limits, the
+// depends_on graph, parameters, and references. It returns the first failure.
 func Validate(w *v2.DeclarativeWorkflow, lim Limits) error {
 	_, err := validate(w, lim)
 	return err
@@ -83,8 +83,8 @@ func validateParameters(w *v2.DeclarativeWorkflow) error {
 	}
 	sort.Strings(names)
 	for _, n := range names {
-		if !taskNameRe.MatchString(n) {
-			return &Error{Param: n, Msg: "name must match " + taskNameRe.String()}
+		if !nameRe.MatchString(n) {
+			return &Error{Param: n, Msg: nameRule}
 		}
 		spec := w.Parameters[n]
 		if spec == nil {
@@ -288,7 +288,7 @@ func checkTaskRefs(w *v2.DeclarativeWorkflow, g *graph, refs map[string][]taskRe
 				return &Error{Task: n, Field: tr.Field, Msg: fmt.Sprintf("references unknown task %q", target)}
 			}
 			if !r.dependsOn(n, target) {
-				return &Error{Task: n, Field: tr.Field, Msg: fmt.Sprintf("references task %q that is not a dependency of %q", target, n)}
+				return &Error{Task: n, Field: tr.Field, Msg: fmt.Sprintf("references task %q that is not a dependency of %q; add depends_on {task: %s} to %q or to a task it depends on", target, n, target, n)}
 			}
 			if !r.succeeded(n, target) {
 				return &Error{Task: n, Field: tr.Field, Msg: fmt.Sprintf("references task %q, which may not have succeeded when %q runs; add depends_on {task: %s, when: SUCCEEDED} to %q or to a task it depends on", target, n, target, n)}
