@@ -368,7 +368,7 @@ def test_sampling_scores_only_the_sampled_rows(ray_session, tmp_path, out_dir):
 
 def test_ray_data_context_options_reach_ray_data(ray_session):
     """Task-level and context-level options are applied before scoring."""
-    config = _config()
+    config = TabularInferenceConfig()
     config.max_errored_blocks = 7
     config.ray_data_context = RayDataContextConfig(preserve_order=True)
     with patch(

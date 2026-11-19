@@ -185,21 +185,6 @@ class TabularInferenceImplTest(TestCase):
 
         mock_sampling.assert_not_called()
 
-    @patch(f"{_MODULE}.DatasetVariable.load_ray_dataset")
-    @patch(f"{_MODULE}.DatasetVariable.save_ray_dataset")
-    @patch(f"{_MODULE}.offline_inference")
-    @patch(f"{_MODULE}.set_ray_data_context")
-    def test_none_result_is_not_saved(self, _context, mock_offline, mock_save, _load):
-        """A dataset with no result becomes an empty variable that is not saved."""
-        mock_offline.return_value = ({"train": None}, [])
-
-        result = tabular_inference_impl(
-            TabularInferenceConfig(), {"train": DatasetVariable.create(None)}
-        )
-
-        self.assertIn("train", result)
-        mock_save.assert_not_called()
-
     @patch(f"{_MODULE}.offline_inference")
     @patch(f"{_MODULE}.DatasetVariable.load_ray_dataset")
     @patch(f"{_MODULE}.set_ray_data_context")

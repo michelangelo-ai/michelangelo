@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import dataclasses
 from unittest import TestCase
 from unittest.mock import MagicMock, patch
 
+import michelangelo.lib.inference.ray.inference as lib_inference
+import michelangelo.workflow.schema.inference as schema_inference
 from michelangelo.lib.artifact_manager.storage_backend import LocalStorageBackend
 from michelangelo.lib.inference.ray.inference import OutputColumnMetadata
 from michelangelo.lib.model_manager.constants import RawModelType
@@ -184,20 +187,137 @@ class OfflineInferenceTest(TestCase):
             self.assertEqual(cfg.model.model_type, framework)
 
     @patch(_PATCH_TARGET)
-    def test_assembled_model_wins_over_registry_model(self, mock_batch):
-        """The assembled model's package is used for every entry."""
+    def test_assembled_and_registry_entries_resolve_separately(self, mock_batch):
+        """An entry with a model uses the registry even next to an assembled model."""
         mock_batch.return_value = ({}, [])
+        registry = InMemoryRegistryClient()
+        registry.register_model(
+            "m", artifact_uri="s3://raw", deployable_artifact_uri="s3://deployable"
+        )
+        registry.register_model(
+            "m", artifact_uri="s3://raw2", deployable_artifact_uri="s3://deployable2"
+        )
         config = [
-            OfflineInferenceConfig(model=ModelIdentifier(name="m", revision_id=2)),
+            OfflineInferenceConfig(model=ModelIdentifier(name="m", revision_id=1)),
             OfflineInferenceConfig(),
         ]
 
-        offline_inference(config, {}, _assembled(TRAINING_FRAMEWORK_PYTORCH))
+        offline_inference(
+            config,
+            {},
+            _assembled(TRAINING_FRAMEWORK_PYTORCH),
+            storage_backend=LocalStorageBackend("/tmp"),
+            registry_client=registry,
+        )
 
-        first, second = mock_batch.call_args.args[0]
-        self.assertEqual(first.model.model_path, "deployable/path")
-        self.assertEqual((first.model.name, first.model.revision_id), ("m", 2))
-        self.assertEqual(second.model.model_path, "deployable/path")
+        registry_entry, assembled_entry = mock_batch.call_args.args[0]
+        self.assertEqual(registry_entry.model.model_path, "s3://deployable")
+        self.assertEqual(
+            (registry_entry.model.name, registry_entry.model.revision_id), ("m", 1)
+        )
+        self.assertEqual(assembled_entry.model.model_path, "deployable/path")
+        self.assertIsNone(assembled_entry.model.name)
+        self.assertIsNone(assembled_entry.model.revision_id)
+
+    @patch(_PATCH_TARGET)
+    def test_entry_without_any_model_is_rejected(self, mock_batch):
+        """An entry with no model and no assembled model fails before Ray runs."""
+        config = [
+            OfflineInferenceConfig(model=ModelIdentifier(name="m")),
+            OfflineInferenceConfig(),
+        ]
+        with self.assertRaisesRegex(ConfigurationError, r"local_models\[1\]"):
+            offline_inference(config, {}, registry_client=InMemoryRegistryClient())
+        mock_batch.assert_not_called()
+
+    @patch(_PATCH_TARGET)
+    def test_two_entries_scoring_the_assembled_model_are_rejected(self, mock_batch):
+        """Two entries without a model would score the same model twice."""
+        config = [OfflineInferenceConfig(), OfflineInferenceConfig()]
+        with self.assertRaisesRegex(ConfigurationError, "duplicate every row"):
+            offline_inference(config, {}, _assembled(TRAINING_FRAMEWORK_CUSTOM))
+        mock_batch.assert_not_called()
+
+    @patch(_PATCH_TARGET)
+    def test_pytorch_assembled_model_without_deployable_is_rejected(self, mock_batch):
+        """A PyTorch model is scored from its deployable package, so it must exist."""
+        assembled = _assembled(TRAINING_FRAMEWORK_PYTORCH)
+        assembled.deployable_model = None
+        with self.assertRaisesRegex(ConfigurationError, "no deployable package"):
+            offline_inference([OfflineInferenceConfig()], {}, assembled)
+        mock_batch.assert_not_called()
+
+    @patch(_PATCH_TARGET)
+    def test_custom_assembled_model_needs_no_deployable(self, mock_batch):
+        """A custom model is scored from its raw package, deployable or not."""
+        mock_batch.return_value = ({}, [])
+        assembled = _assembled(TRAINING_FRAMEWORK_CUSTOM)
+        assembled.deployable_model = None
+
+        offline_inference([OfflineInferenceConfig()], {}, assembled)
+
+        (cfg,) = mock_batch.call_args.args[0]
+        self.assertEqual(cfg.model.model_path, "raw/path")
+
+    @patch(_PATCH_TARGET)
+    def test_unregistered_model_is_a_configuration_error(self, mock_batch):
+        """An unknown name or revision fails like any other config mistake."""
+        registry = InMemoryRegistryClient()
+        registry.register_model("m", artifact_uri="s3://raw")
+        for model, match in (
+            (ModelIdentifier(name="typo"), "'typo' revision None not found"),
+            (ModelIdentifier(name="m", revision_id=9), "'m' revision 9 not found"),
+        ):
+            with (
+                self.subTest(model=model),
+                self.assertRaisesRegex(ConfigurationError, match),
+            ):
+                offline_inference(
+                    [OfflineInferenceConfig(model=model)],
+                    {},
+                    storage_backend=LocalStorageBackend("/tmp"),
+                    registry_client=registry,
+                )
+        mock_batch.assert_not_called()
+
+    @patch(_PATCH_TARGET)
+    def test_latest_registry_version_fills_revision_id(self, mock_batch):
+        """Without a revision, the version the registry returned is recorded."""
+        mock_batch.return_value = ({}, [])
+        registry = InMemoryRegistryClient()
+        for _ in range(3):
+            registry.register_model(
+                "m", artifact_uri="s3://raw", deployable_artifact_uri="s3://dep"
+            )
+
+        offline_inference(
+            [OfflineInferenceConfig(model=ModelIdentifier(name="m"))],
+            {},
+            storage_backend=LocalStorageBackend("/tmp"),
+            registry_client=registry,
+        )
+
+        (cfg,) = mock_batch.call_args.args[0]
+        self.assertEqual((cfg.model.name, cfg.model.revision_id), ("m", 3))
+
+    @patch(_PATCH_TARGET)
+    def test_non_numeric_registry_version_leaves_revision_id_unset(self, mock_batch):
+        """A version that is not a number cannot be recorded as a revision."""
+        mock_batch.return_value = ({}, [])
+        registry = MagicMock()
+        registry.get_model.return_value.version = "champion"
+        registry.get_model.return_value.labels = {}
+        registry.get_model.return_value.deployable_artifact_uri = "s3://dep"
+
+        offline_inference(
+            [OfflineInferenceConfig(model=ModelIdentifier(name="m"))],
+            {},
+            storage_backend=LocalStorageBackend("/tmp"),
+            registry_client=registry,
+        )
+
+        (cfg,) = mock_batch.call_args.args[0]
+        self.assertIsNone(cfg.model.revision_id)
 
     @patch(_PATCH_TARGET)
     def test_registry_model_uses_deployable_artifact(self, mock_batch):
@@ -316,3 +436,24 @@ class OfflineInferenceTest(TestCase):
                 registry_client=registry,
             )
         mock_batch.assert_not_called()
+
+
+def _field_names(cls):
+    return {f.name for f in dataclasses.fields(cls)}
+
+
+def test_schema_options_match_the_library_options():
+    """Every schema option has a library field to be forwarded to.
+
+    ``offline_inference`` copies these field by field, so a field added to the
+    schema and not to the library would be dropped silently.
+    """
+    assert _field_names(schema_inference.BatchOptions) == _field_names(
+        lib_inference.BatchOptions
+    )
+    assert _field_names(schema_inference.PaddingOptions) == _field_names(
+        lib_inference.PaddingOptions
+    )
+    assert _field_names(schema_inference.ModelIdentifier) <= _field_names(
+        lib_inference.ModelIdentifier
+    )

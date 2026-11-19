@@ -8,7 +8,10 @@ from typing import TYPE_CHECKING
 from michelangelo.uniflow.plugins.ray.data_context import set_ray_data_context
 from michelangelo.uniflow.plugins.ray.parquet_io import parquet_read_config_to_kwargs
 from michelangelo.workflow.tasks.functions.data.ray.sampling import apply_sampling
-from michelangelo.workflow.tasks.functions.data.ray.write import write_config_to_kwargs
+from michelangelo.workflow.tasks.functions.data.ray.write import (
+    save_datasets,
+    write_config_to_kwargs,
+)
 from michelangelo.workflow.tasks.tabular_inference.offline.inference import (
     offline_inference,
 )
@@ -38,7 +41,8 @@ def tabular_inference_impl(
     Args:
         config: Tabular inference configuration.
         datasets: Dataset name to dataset variable.
-        assembled_model: Assembled model used by every ``local_models`` entry.
+        assembled_model: The model scored by the ``local_models`` entry that has
+            no ``model``.
         storage_backend: Downloads model packages that are not local directories.
         registry_client: Looks up ``local_models[i].model`` in the model registry.
 
@@ -67,7 +71,7 @@ def tabular_inference_impl(
     )
 
     for name, dataset_var in datasets.items():
-        if dataset_var is not None and dataset_var._value is None:
+        if dataset_var is not None:
             dataset_var.load_ray_dataset(
                 **parquet_read_config_to_kwargs(
                     config.parquet_read_config, dataset_name=name
@@ -98,24 +102,22 @@ def tabular_inference_impl(
 
     write_kwargs = write_config_to_kwargs(config.write_config)
 
-    results = {}
+    results = {
+        name: DatasetVariable.create(ray_result)
+        for name, ray_result in ray_results.items()
+    }
+    save_datasets(results, **write_kwargs)
 
     for name, ray_result in ray_results.items():
-        if ray_result:
-            res = DatasetVariable.create(ray_result)
-            results[name] = res
-            res.save_ray_dataset(**write_kwargs)
-            try:
-                stats = ray_result.stats()
-                if stats:
-                    _logger.info(
-                        f"[PROFILER] Tabular inference Ray Data operator stats for "
-                        f"'{name}':\n{stats}"
-                    )
-            except Exception as e:
-                _logger.debug(f"Could not get Ray Data stats for '{name}': {e}")
-        else:
-            results[name] = DatasetVariable.create(ray_result)
+        try:
+            stats = ray_result.stats()
+            if stats:
+                _logger.info(
+                    f"[PROFILER] Tabular inference Ray Data operator stats for "
+                    f"'{name}':\n{stats}"
+                )
+        except Exception as e:
+            _logger.debug(f"Could not get Ray Data stats for '{name}': {e}")
 
     _logger.info(f"Tabular inference results: {results}")
 
