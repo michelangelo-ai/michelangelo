@@ -680,15 +680,17 @@ func TestEvaluate_PanicInAQuery_IsAFailedQuery(t *testing.T) {
 }
 
 // barrier holds callers in wait until size of them have arrived, then lets that group go.
+// abandon lets go of callers whose group will never be complete.
 type barrier struct {
-	mu      sync.Mutex
-	size    int
-	waiting int
-	open    chan struct{}
+	mu        sync.Mutex
+	size      int
+	waiting   int
+	open      chan struct{}
+	abandoned chan struct{}
 }
 
 func newBarrier(size int) *barrier {
-	return &barrier{size: size, open: make(chan struct{})}
+	return &barrier{size: size, open: make(chan struct{}), abandoned: make(chan struct{})}
 }
 
 func (b *barrier) wait() {
@@ -701,7 +703,14 @@ func (b *barrier) wait() {
 		close(open)
 	}
 	b.mu.Unlock()
-	<-open
+	select {
+	case <-open:
+	case <-b.abandoned:
+	}
+}
+
+func (b *barrier) abandon() {
+	close(b.abandoned)
 }
 
 func TestEvaluate_RepeatedEvaluations_ReuseTheirConnections(t *testing.T) {
@@ -712,6 +721,9 @@ func TestEvaluate_RepeatedEvaluations_ReuseTheirConnections(t *testing.T) {
 		together.wait()
 		return http.StatusOK, vectorResponse("0")
 	})
+	// Registered after the server so that it runs first: if a query never arrives, closing
+	// the server would wait forever for the handlers still held at the barrier.
+	t.Cleanup(together.abandon)
 	configured := make([]maconfig.MetricGateQuery, 0, queries)
 	for i := range queries {
 		name := fmt.Sprintf("q%d", i)
