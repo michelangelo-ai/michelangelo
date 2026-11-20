@@ -1,0 +1,10 @@
+{
+  "interpreter_version": "core-v1.4.2",
+  "levels": [
+    {"tasks": ["extract"]},
+    {"tasks": ["evaluate", "train"]},
+    {"tasks": ["cleanup", "publish"]},
+    {"tasks": ["notify"]}
+  ],
+  "task_count": 6
+}

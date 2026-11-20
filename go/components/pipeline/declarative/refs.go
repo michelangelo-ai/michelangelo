@@ -1,0 +1,82 @@
+package declarative
+
+import (
+	"fmt"
+	"regexp"
+	"strings"
+)
+
+// refKind tells a parameter reference from a task output reference.
+type refKind int
+
+const (
+	refParam refKind = iota
+	refTaskOutput
+)
+
+// ref is one parsed "{{ ... }}" reference. Path holds the fields after
+// "output". Whole is true when the reference is the full string value.
+type ref struct {
+	Kind  refKind
+	Name  string
+	Path  []string
+	Whole bool
+}
+
+// refField is the rule for a field name after "output" in a reference.
+var refField = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
+// parseRefs returns every "{{ ... }}" reference in s, in order.
+func parseRefs(s string) ([]ref, error) {
+	var out []ref
+	rest := s
+	for {
+		start := strings.Index(rest, "{{")
+		if start < 0 {
+			return out, nil
+		}
+		end := strings.Index(rest[start:], "}}")
+		if end < 0 {
+			return nil, fmt.Errorf("unterminated \"{{\" in %q", clip(s))
+		}
+		token := rest[start : start+end+2]
+		r, err := parseOneRef(token)
+		if err != nil {
+			return nil, err
+		}
+		r.Whole = s == token
+		out = append(out, r)
+		rest = rest[start+end+2:]
+	}
+}
+
+// parseOneRef parses one "{{ ... }}" token as {{ params.NAME }} or
+// {{ tasks.NAME.output[.FIELD...] }}.
+func parseOneRef(token string) (ref, error) {
+	body := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(token, "{{"), "}}"))
+	switch {
+	case strings.HasPrefix(body, "params."):
+		name := strings.TrimPrefix(body, "params.")
+		if !nameRe.MatchString(name) {
+			return ref{}, fmt.Errorf("reference %q has a malformed name", token)
+		}
+		return ref{Kind: refParam, Name: name}, nil
+	case strings.HasPrefix(body, "tasks."):
+		parts := strings.Split(strings.TrimPrefix(body, "tasks."), ".")
+		if len(parts) < 2 || parts[1] != "output" {
+			return ref{}, fmt.Errorf("reference %q must name \"tasks.%s.output\"", token, parts[0])
+		}
+		if !nameRe.MatchString(parts[0]) {
+			return ref{}, fmt.Errorf("reference %q has a malformed name", token)
+		}
+		var path []string
+		for _, p := range parts[2:] {
+			if !refField.MatchString(p) {
+				return ref{}, fmt.Errorf("reference %q has a malformed name", token)
+			}
+			path = append(path, p)
+		}
+		return ref{Kind: refTaskOutput, Name: parts[0], Path: path}, nil
+	}
+	return ref{}, fmt.Errorf("reference %q must start with \"params.\" or \"tasks.\"", token)
+}

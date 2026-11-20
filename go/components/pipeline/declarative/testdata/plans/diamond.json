@@ -1,0 +1,9 @@
+{
+  "interpreter_version": "core-v1.4.2",
+  "levels": [
+    {"tasks": ["extract"]},
+    {"tasks": ["evaluate", "train"]},
+    {"tasks": ["publish"]}
+  ],
+  "task_count": 4
+}

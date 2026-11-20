@@ -1,0 +1,7 @@
+version: core-v2
+artifact: s3://x
+digest: sha256:ab
+task_types:
+  core/python:
+    config:
+      x: {type: float}
