@@ -3,6 +3,7 @@ package k8sengine
 import (
 	"bytes"
 	"fmt"
+	"strings"
 	"text/template"
 
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/types"
@@ -11,12 +12,16 @@ import (
 	"go.uber.org/config"
 	"go.uber.org/fx"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/validation"
 )
 
 // Mapper helps to map global to local crds and vice versa
 type Mapper struct {
 	LogPersistence LogPersistenceConfig
 	logURLTemplate *template.Template
+	// rayLocalNamespace is the configured compute-cluster namespace for Ray
+	// workloads. Read it through localNamespace, which applies the default.
+	rayLocalNamespace string
 }
 
 // MapperResult has Mapper result
@@ -30,6 +35,14 @@ const _mapperName = "k8sengineMapper"
 
 const logPersistenceConfigKey = "jobs.k8sengine.mapper.logPersistence"
 
+const rayLocalNamespaceConfigKey = "jobs.k8sengine.mapper.rayLocalNamespace"
+
+// RayLocalNamespaceConfig is the compute-cluster namespace that Ray workloads
+// (RayClusters, RayJobs and the per-job Secrets and ConfigMaps created next to
+// them) are created in. It is the same for every compute cluster. Empty means
+// RayLocalNamespace.
+type RayLocalNamespaceConfig string
+
 // NewLogPersistenceConfig loads LogPersistenceConfig from YAML config provider.
 func NewLogPersistenceConfig(provider config.Provider) (LogPersistenceConfig, error) {
 	conf := LogPersistenceConfig{}
@@ -41,19 +54,57 @@ func NewLogPersistenceConfig(provider config.Provider) (LogPersistenceConfig, er
 	return conf, nil
 }
 
+// NewRayLocalNamespaceConfig loads RayLocalNamespaceConfig from YAML config
+// provider. Returns RayLocalNamespace when the key is unset or empty.
+func NewRayLocalNamespaceConfig(provider config.Provider) (RayLocalNamespaceConfig, error) {
+	var namespace string
+	if err := provider.Get(rayLocalNamespaceConfigKey).Populate(&namespace); err != nil {
+		return "", fmt.Errorf("load %s: %w", rayLocalNamespaceConfigKey, err)
+	}
+	if namespace == "" {
+		namespace = RayLocalNamespace
+	}
+	return RayLocalNamespaceConfig(namespace), nil
+}
+
+// MapperParams are the inputs to NewMapper.
+type MapperParams struct {
+	fx.In
+
+	LogPersistence    LogPersistenceConfig
+	RayLocalNamespace RayLocalNamespaceConfig
+}
+
 // NewMapper constructs the Mapper. Panics if LogURLFormat is set but does not
-// parse as a valid Go text/template — config errors should fail at startup.
-func NewMapper(logPersistence LogPersistenceConfig) MapperResult {
+// parse as a valid Go text/template, or if RayLocalNamespace is set but is not
+// a valid DNS-1123 label — config errors should fail at startup.
+func NewMapper(p MapperParams) MapperResult {
+	namespace := string(p.RayLocalNamespace)
+	if namespace != "" {
+		if errs := validation.IsDNS1123Label(namespace); len(errs) > 0 {
+			panic(fmt.Sprintf("invalid Ray local namespace %q: %s", namespace, strings.Join(errs, "; ")))
+		}
+	}
 	var tmpl *template.Template
-	if logPersistence.Enabled && logPersistence.LogURLFormat != "" {
-		tmpl = template.Must(template.New("logURL").Parse(logPersistence.LogURLFormat))
+	if p.LogPersistence.Enabled && p.LogPersistence.LogURLFormat != "" {
+		tmpl = template.Must(template.New("logURL").Parse(p.LogPersistence.LogURLFormat))
 	}
 	return MapperResult{
 		Mapper: Mapper{
-			LogPersistence: logPersistence,
-			logURLTemplate: tmpl,
+			LogPersistence:    p.LogPersistence,
+			logURLTemplate:    tmpl,
+			rayLocalNamespace: namespace,
 		},
 	}
+}
+
+// localNamespace returns the compute-cluster namespace for Ray workloads: the
+// configured one, or RayLocalNamespace when none is set (e.g. a zero Mapper).
+func (m Mapper) localNamespace() string {
+	if m.rayLocalNamespace == "" {
+		return RayLocalNamespace
+	}
+	return m.rayLocalNamespace
 }
 
 // MapGlobalJobToLocal maps the global job object to local job object
@@ -99,10 +150,10 @@ func (m Mapper) MapGlobalJobClusterToLocal(jobClusterObject runtime.Object, clus
 func (m Mapper) GetLocalName(obj runtime.Object) (namespace, name string) {
 	switch job := obj.(type) {
 	case *v2pb.RayJob:
-		namespace = RayLocalNamespace
+		namespace = m.localNamespace()
 		name = job.Name
 	case *v2pb.RayCluster:
-		namespace = RayLocalNamespace
+		namespace = m.localNamespace()
 		name = job.Name
 	case *v2pb.SparkJob:
 		// Not implemented yet; return empty
@@ -138,8 +189,8 @@ func (m Mapper) MapLocalClusterStatusToGlobal(localClusterObject runtime.Object)
 // buildLogURL renders LogPersistenceConfig.LogURLFormat against the per-cluster
 // values (Bucket, PathPrefix, ClusterName, RayLocalNamespace). Returns "" when
 // log persistence is disabled or no format is configured. RayLocalNamespace is
-// the compute-cluster Ray namespace (where pods actually run), not the v2
-// RayCluster CR's control-plane namespace.
+// the configured compute-cluster Ray namespace (where pods actually run), not
+// the v2 RayCluster CR's control-plane namespace.
 func (m Mapper) buildLogURL(clusterName string) string {
 	if m.logURLTemplate == nil {
 		return ""
@@ -154,7 +205,7 @@ func (m Mapper) buildLogURL(clusterName string) string {
 		Bucket:            m.LogPersistence.Bucket,
 		PathPrefix:        m.LogPersistence.PathPrefix,
 		ClusterName:       clusterName,
-		RayLocalNamespace: RayLocalNamespace,
+		RayLocalNamespace: m.localNamespace(),
 	})
 	if err != nil {
 		return ""

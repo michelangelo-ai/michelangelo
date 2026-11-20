@@ -49,6 +49,15 @@ controllers:
 jobs:
   k8sengine:
     mapper:
+      # rayLocalNamespace is the namespace on every compute cluster that Ray
+      # workloads are created in: RayClusters, RayJobs and their per-job
+      # Secrets and ConfigMaps. It must be a DNS-1123 label, must already exist
+      # on each compute cluster, and must hold the Secrets the Ray pods
+      # reference (e.g. logPersistence.credentialsSecret). logURLFormat's
+      # {{.RayLocalNamespace}} renders it. Workloads created before a change
+      # stay in the old namespace and are no longer tracked, so drain them
+      # first. Unset means "default".
+      # rayLocalNamespace: default
       logPersistence:
         enabled: true
         storageEndpoint: "k3d-michelangelo-sandbox-agent-0:30007"

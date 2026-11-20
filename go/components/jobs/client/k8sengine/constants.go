@@ -2,7 +2,8 @@ package k8sengine
 
 // exported constants
 const (
-	// RayLocalNamespace is the single namespace used for all Ray jobs.
+	// RayLocalNamespace is the default compute-cluster namespace for Ray
+	// workloads, used when jobs.k8sengine.mapper.rayLocalNamespace is unset.
 	RayLocalNamespace = "default"
 
 	// RayAPIVersion is the API version of the RayJob CRD
