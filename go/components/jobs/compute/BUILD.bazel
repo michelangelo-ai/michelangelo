@@ -29,6 +29,7 @@ go_test(
     srcs = [
         "factory_test.go",
         "module_test.go",
+        "utils_test.go",
     ],
     embed = [":go_default_library"],
     deps = [

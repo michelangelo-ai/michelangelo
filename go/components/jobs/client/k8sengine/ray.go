@@ -36,7 +36,8 @@ type LogPersistenceConfig struct {
 	// LogURLFormat is a Go text/template applied during local→global cluster
 	// status translation to produce the human-browsable log URL surfaced on
 	// v2 RayClusterStatus. Available template variables: Bucket, PathPrefix,
-	// ClusterName, RayLocalNamespace. Empty string disables log_url emission.
+	// ClusterName, RayLocalNamespace (the configured Ray namespace). Empty
+	// string disables log_url emission.
 	LogURLFormat string `yaml:"logURLFormat"`
 }
 
@@ -56,12 +57,12 @@ func (m Mapper) mapRay(rayJob *v2pb.RayJob, jobClusterObject runtime.Object, clu
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      rayJob.Name,
-			Namespace: RayLocalNamespace,
+			Namespace: m.localNamespace(),
 		},
 		Spec: rayv1.RayJobSpec{
 			ClusterSelector: map[string]string{
 				"ray.io/cluster":      rayCluster.Name,
-				"rayClusterNamespace": RayLocalNamespace,
+				"rayClusterNamespace": m.localNamespace(),
 			},
 			Entrypoint:               rayJob.Spec.Entrypoint,
 			TTLSecondsAfterFinished:  int32(300),
@@ -152,7 +153,7 @@ func (m Mapper) mapRayCluster(rayCluster *v2pb.RayCluster) (runtime.Object, erro
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      rayCluster.Name,
-			Namespace: RayLocalNamespace,
+			Namespace: m.localNamespace(),
 		},
 		Spec: rayv1.RayClusterSpec{
 			HeadGroupSpec:    headGroupSpec,

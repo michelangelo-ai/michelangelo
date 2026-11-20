@@ -1,10 +1,13 @@
 package k8sengine
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/config"
+	"go.uber.org/fx"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -13,6 +16,7 @@ import (
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	k8sptr "k8s.io/utils/ptr"
 
+	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/types"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
@@ -649,4 +653,176 @@ func TestMapLocalClusterStatusToGlobal_WithConditions(t *testing.T) {
 			assert.Equal(t, tt.expectReason, result.Reason)
 		})
 	}
+}
+
+func TestNewRayLocalNamespaceConfig(t *testing.T) {
+	tests := []struct {
+		name            string
+		yaml            string
+		want            RayLocalNamespaceConfig
+		expectErrSubstr string
+	}{
+		{
+			name: "no jobs section -> default",
+			yaml: "controllers: {}\n",
+			want: RayLocalNamespace,
+		},
+		{
+			name: "key unset -> default",
+			yaml: "jobs:\n  k8sengine:\n    mapper:\n      logPersistence:\n        enabled: false\n",
+			want: RayLocalNamespace,
+		},
+		{
+			name: "key empty -> default",
+			yaml: "jobs:\n  k8sengine:\n    mapper:\n      rayLocalNamespace: \"\"\n",
+			want: RayLocalNamespace,
+		},
+		{
+			name: "key set -> configured namespace",
+			yaml: "jobs:\n  k8sengine:\n    mapper:\n      rayLocalNamespace: ray-jobs\n",
+			want: "ray-jobs",
+		},
+		{
+			name:            "key not a string -> error",
+			yaml:            "jobs:\n  k8sengine:\n    mapper:\n      rayLocalNamespace: [ray-jobs]\n",
+			expectErrSubstr: rayLocalNamespaceConfigKey,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			provider, err := config.NewYAML(config.Source(strings.NewReader(tt.yaml)))
+			require.NoError(t, err)
+
+			got, err := NewRayLocalNamespaceConfig(provider)
+			if tt.expectErrSubstr != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.expectErrSubstr)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+// TestNewMapper_RayLocalNamespace checks that the configured namespace reaches
+// every place the mapper names the compute-cluster namespace, and that an
+// empty one keeps the default.
+func TestNewMapper_RayLocalNamespace(t *testing.T) {
+	rayCluster := &v2pb.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "rc-1", Namespace: "project-ns"},
+		Spec: v2pb.RayClusterSpec{
+			Head: &v2pb.RayHeadSpec{Pod: &corev1.PodTemplateSpec{}},
+		},
+	}
+	rayJob := &v2pb.RayJob{ObjectMeta: metav1.ObjectMeta{Name: "rj-1", Namespace: "project-ns"}}
+
+	tests := []struct {
+		name      string
+		namespace RayLocalNamespaceConfig
+		want      string
+	}{
+		{name: "configured namespace", namespace: "ray-jobs", want: "ray-jobs"},
+		{name: "empty -> default", namespace: "", want: RayLocalNamespace},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := NewMapper(MapperParams{
+				LogPersistence: LogPersistenceConfig{
+					Enabled:      true,
+					LogURLFormat: "https://logs.example.com/{{.RayLocalNamespace}}/{{.ClusterName}}",
+				},
+				RayLocalNamespace: tt.namespace,
+			}).Mapper
+
+			ns, name := m.GetLocalName(rayCluster)
+			assert.Equal(t, tt.want, ns)
+			assert.Equal(t, "rc-1", name)
+			ns, name = m.GetLocalName(rayJob)
+			assert.Equal(t, tt.want, ns)
+			assert.Equal(t, "rj-1", name)
+
+			localCluster, err := m.MapGlobalJobClusterToLocal(rayCluster, nil)
+			require.NoError(t, err)
+			kubeRayCluster, ok := localCluster.(*rayv1.RayCluster)
+			require.True(t, ok)
+			assert.Equal(t, tt.want, kubeRayCluster.Namespace)
+
+			localJob, err := m.MapGlobalJobToLocal(rayJob, rayCluster, nil)
+			require.NoError(t, err)
+			kubeRayJob, ok := localJob.(*rayv1.RayJob)
+			require.True(t, ok)
+			assert.Equal(t, tt.want, kubeRayJob.Namespace)
+			assert.Equal(t, tt.want, kubeRayJob.Spec.ClusterSelector["rayClusterNamespace"])
+
+			status, err := m.MapLocalClusterStatusToGlobal(&rayv1.RayCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "rc-1", Namespace: tt.want},
+			})
+			require.NoError(t, err)
+			assert.Equal(t, "https://logs.example.com/"+tt.want+"/rc-1", status.Ray.LogUrl)
+		})
+	}
+}
+
+func TestNewMapper_InvalidRayLocalNamespacePanics(t *testing.T) {
+	tests := []struct {
+		name      string
+		namespace RayLocalNamespaceConfig
+	}{
+		{name: "uppercase", namespace: "Ray-Jobs"},
+		{name: "underscore", namespace: "ray_jobs"},
+		{name: "dot", namespace: "ray.jobs"},
+		{name: "leading dash", namespace: "-ray-jobs"},
+		{name: "longer than 63 characters", namespace: RayLocalNamespaceConfig(strings.Repeat("a", 64))},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Panics(t, func() {
+				NewMapper(MapperParams{RayLocalNamespace: tt.namespace})
+			})
+		})
+	}
+}
+
+type mapperIn struct {
+	fx.In
+
+	Mapper types.Mapper `name:"k8sengineMapper"`
+}
+
+// TestModule_RayLocalNamespace checks that Module feeds the configured
+// namespace into the mapper it provides.
+func TestModule_RayLocalNamespace(t *testing.T) {
+	provider, err := config.NewYAML(config.Source(strings.NewReader(
+		"jobs:\n  k8sengine:\n    mapper:\n      rayLocalNamespace: ray-jobs\n")))
+	require.NoError(t, err)
+
+	var in mapperIn
+	app := fx.New(
+		fx.NopLogger,
+		fx.Provide(func() config.Provider { return provider }),
+		Module,
+		fx.Populate(&in),
+	)
+	require.NoError(t, app.Err())
+
+	ns, _ := in.Mapper.GetLocalName(&v2pb.RayCluster{ObjectMeta: metav1.ObjectMeta{Name: "rc-1"}})
+	assert.Equal(t, "ray-jobs", ns)
+}
+
+// TestNewMapper_RequiresRayLocalNamespaceConfig checks that the namespace is a
+// required input: an app that wires NewMapper without providing a
+// RayLocalNamespaceConfig fails validation instead of silently using the
+// default namespace.
+func TestNewMapper_RequiresRayLocalNamespaceConfig(t *testing.T) {
+	err := fx.ValidateApp(
+		fx.Supply(LogPersistenceConfig{}),
+		fx.Provide(NewMapper),
+		fx.Invoke(func(mapperIn) {}),
+	)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "RayLocalNamespaceConfig")
 }
