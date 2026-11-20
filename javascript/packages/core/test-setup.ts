@@ -30,8 +30,8 @@ if (timezoneOffset !== 0) {
  * Mock ResizeObserver for components that use it (like sticky table columns)
  * We mock it to prevent real observation side effects in tests
  */
-global.ResizeObserver = vi.fn().mockImplementation(() => ({
-  observe: vi.fn(),
-  unobserve: vi.fn(),
-  disconnect: vi.fn(),
-}));
+global.ResizeObserver = class implements ResizeObserver {
+  observe = vi.fn();
+  unobserve = vi.fn();
+  disconnect = vi.fn();
+};

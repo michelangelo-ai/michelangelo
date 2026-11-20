@@ -1,15 +1,22 @@
 // vitest.config.ts - Root configuration with projects
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
+    exclude: [...configDefaults.exclude, '**/dist/**'],
     globals: true, // Enable global Jest-like functions (describe, it, expect)
     silent: 'passed-only', // Clean output - only show failures
     env: {
       TZ: 'UTC',
     },
     coverage: {
-      exclude: ['packages/core/components/views/sandbox/**', 'packages/rpc/gen/**'],
+      include: ['**/*.{js,cjs,mjs,ts,mts,tsx,jsx}'],
+      exclude: [
+        '**/dist/**',
+        '**/__tests__/**',
+        'packages/core/components/views/sandbox/**',
+        'packages/rpc/gen/**',
+      ],
     },
     projects: [
       {
@@ -22,7 +29,7 @@ export default defineConfig({
           setupFiles: ['./packages/core/test-setup.ts'],
           deps: {
             optimizer: {
-              web: {
+              client: {
                 enabled: true,
                 // BaseUI dnd-list appears to be bundled incorrectly according to vitest's
                 // expectations. This is a workaround recommended by vite maintainers.

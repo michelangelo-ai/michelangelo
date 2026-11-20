@@ -5,6 +5,8 @@ import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getBaseProviderWrapper } from '#core/test/wrappers/get-base-provider-wrapper';
 import { CollapsibleBox } from '../collapsible-box';
 
+import type { MockInstance } from 'vitest';
+
 describe('CollapsibleBox', () => {
   describe('Controlled mode warnings', () => {
     const expectedWarning =
@@ -12,7 +14,7 @@ describe('CollapsibleBox', () => {
       'This will make the component unresponsive to user interaction. ' +
       'Either provide `onToggle` or use `defaultExpanded` instead.';
 
-    let consoleWarnSpy: ReturnType<typeof vi.spyOn>;
+    let consoleWarnSpy: MockInstance<typeof console.warn>;
 
     beforeEach(() => {
       consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => null);

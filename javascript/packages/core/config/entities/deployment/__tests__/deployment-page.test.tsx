@@ -995,7 +995,10 @@ describe('Deployment update action', () => {
     const dialog = await openUpdateDialog(user);
 
     // The prefilled Model select's accessible name is its selected value.
-    await user.click(within(dialog).getByRole('combobox', { name: /Selected bert-cola-37/ }));
+    const modelSelect = await within(dialog).findByRole('combobox', {
+      name: /Selected bert-cola-37/,
+    });
+    await user.click(modelSelect);
     await user.click(await screen.findByRole('option', { name: 'bert-cola-38' }));
     await user.click(within(dialog).getByRole('button', { name: 'Update' }));
 
