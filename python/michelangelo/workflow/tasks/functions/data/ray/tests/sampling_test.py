@@ -1,0 +1,181 @@
+"""Tests for Ray dataset row sampling."""
+
+from __future__ import annotations
+
+import pyarrow as pa
+import pytest
+
+from michelangelo.workflow.schema.sampling import SamplingConfig
+from michelangelo.workflow.tasks.functions.data.ray.sampling import (
+    apply_sampling,
+    hash_sample_batch,
+)
+
+_ROWS = [{"session": i // 4, "user": i % 3, "x": i} for i in range(400)]
+
+
+@pytest.fixture(scope="module")
+def ray_session():
+    """One shared local Ray session for the module."""
+    import ray
+
+    ray.init(num_cpus=2, include_dashboard=False, ignore_reinit_error=True)
+    yield
+    ray.shutdown()
+
+
+def _dataset():
+    import ray.data
+
+    return ray.data.from_items(_ROWS)
+
+
+@pytest.mark.parametrize(
+    "config",
+    [
+        None,
+        SamplingConfig(),
+        SamplingConfig(fractions={"validation": 0.1}),
+        SamplingConfig(fractions={"train": 1.0}),
+        SamplingConfig(fractions={"train": 0}),
+        SamplingConfig(fractions={"train": -0.1}),
+        SamplingConfig(fractions={"train": 1.5}),
+    ],
+    ids=[
+        "no-config",
+        "no-fractions",
+        "other-dataset",
+        "fraction-one",
+        "fraction-zero",
+        "negative",
+        "above-one",
+    ],
+)
+def test_unsampled_datasets_are_returned_as_they_are(config):
+    """Nothing is added to the plan when the dataset keeps every row."""
+    dataset = object()
+    assert apply_sampling(dataset, config, "train") is dataset
+
+
+def test_random_sampling_is_seeded(ray_session):
+    """The same rows are kept on every run."""
+    config = SamplingConfig(fractions={"train": 0.25})
+
+    first = sorted(
+        r["x"] for r in apply_sampling(_dataset(), config, "train").take_all()
+    )
+    second = sorted(
+        r["x"] for r in apply_sampling(_dataset(), config, "train").take_all()
+    )
+
+    assert first == second
+    assert 40 < len(first) < 160
+
+
+def test_group_sampling_keeps_whole_groups(ray_session):
+    """Every session is either fully kept or fully dropped."""
+    config = SamplingConfig(fractions={"train": 0.5}, agg_cols=["session"])
+
+    kept = apply_sampling(_dataset(), config, "train").take_all()
+
+    sessions = {r["session"] for r in kept}
+    assert 0 < len(sessions) < 100
+    assert len(kept) == 4 * len(sessions)
+
+
+def test_group_sampling_is_independent_of_batching():
+    """A group's fate depends only on its key, so batches agree with each other."""
+    table = pa.Table.from_pylist(_ROWS)
+
+    whole = hash_sample_batch(table, 0.5, ["session", "user"])
+    halves = [
+        hash_sample_batch(table.slice(0, 200), 0.5, ["session", "user"]),
+        hash_sample_batch(table.slice(200), 0.5, ["session", "user"]),
+    ]
+
+    assert whole.column("x").to_pylist() == [
+        x for half in halves for x in half.column("x").to_pylist()
+    ]
+
+
+def test_group_sampling_by_one_column():
+    """A single grouping column keeps whole groups too."""
+    table = pa.Table.from_pylist(_ROWS)
+
+    kept = hash_sample_batch(table, 0.5, ["session"]).column("session").to_pylist()
+
+    assert 0 < len(set(kept)) < 100
+    assert all(kept.count(s) == 4 for s in set(kept))
+
+
+def _kept_keys(rows, fraction=0.5):
+    table = pa.Table.from_pylist(rows)
+    kept = hash_sample_batch(table, fraction, ["a", "b"])
+    return set(zip(kept.column("a").to_pylist(), kept.column("b").to_pylist()))
+
+
+def test_separator_in_values_does_not_merge_groups():
+    """("x|y", "z") and ("x", "y|z") are different groups."""
+    pairs = [(f"k{i}|v", "w") for i in range(200)] + [
+        (f"k{i}", "v|w") for i in range(200)
+    ]
+    kept = _kept_keys([{"a": a, "b": b} for a, b in pairs])
+
+    joined_alike = [
+        ((f"k{i}|v", "w") in kept, (f"k{i}", "v|w") in kept) for i in range(200)
+    ]
+    assert any(left != right for left, right in joined_alike)
+
+
+def test_null_keys_are_sampled_by_their_other_columns():
+    """A null in one column does not drop or keep every such row together."""
+    rows = [{"a": None, "b": str(i)} for i in range(200)]
+
+    kept = _kept_keys(rows)
+
+    assert 0 < len(kept) < 200
+    assert _kept_keys(rows) == kept
+
+
+def test_timestamp_units_do_not_split_groups():
+    """The same instant keeps the same fate in blocks with different units."""
+    import datetime
+
+    instants = [
+        datetime.datetime(2026, 1, 1) + datetime.timedelta(hours=i) for i in range(200)
+    ]
+
+    def kept(unit):
+        table = pa.table({"t": pa.array(instants, pa.timestamp(unit))})
+        return (
+            hash_sample_batch(table, 0.5, ["t"])
+            .column("t")
+            .cast(pa.timestamp("s"))
+            .to_pylist()
+        )
+
+    assert 0 < len(kept("s")) < 200
+    assert kept("s") == kept("ms") == kept("us")
+
+
+def test_empty_dataset_is_returned_unsampled(ray_session):
+    """A dataset with no blocks cannot be sampled by Ray, so it is kept as is."""
+    import ray.data
+
+    empty = ray.data.from_items([])
+    config = SamplingConfig(fractions={"train": 0.5})
+
+    assert apply_sampling(empty, config, "train") is empty
+
+
+def test_empty_agg_cols_samples_at_random(ray_session):
+    """An empty grouping list is the same as none: seeded random sampling."""
+    grouped = SamplingConfig(fractions={"train": 0.25}, agg_cols=[])
+    plain = SamplingConfig(fractions={"train": 0.25})
+
+    def kept(config):
+        return sorted(
+            r["x"] for r in apply_sampling(_dataset(), config, "train").take_all()
+        )
+
+    assert kept(grouped) == kept(plain)
