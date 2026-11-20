@@ -2,8 +2,6 @@ import { vi } from 'vitest';
 
 import { generateSuffix, resolveTriggerRunTypePrefix } from '../name-utils';
 
-const originalDate = Date;
-
 beforeEach(() => {
   Object.defineProperty(global, 'crypto', {
     value: {
@@ -12,14 +10,12 @@ beforeEach(() => {
     writable: true,
   });
 
-  const mockDate = new Date('2024-01-01T12:00:00.000Z');
-  // @ts-expect-error only mocking Date methods required for testing
-  global.Date = vi.fn(() => mockDate);
-  global.Date.parse = originalDate.parse;
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date('2024-01-01T12:00:00.000Z'));
 });
 
 afterEach(() => {
-  global.Date = originalDate;
+  vi.useRealTimers();
 });
 
 describe('generateSuffix', () => {
