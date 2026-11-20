@@ -192,13 +192,38 @@ On create, and on an update that changes the trigger's shape (its type, `start_t
 
 An update that keeps the shape (a pause, a notification change, the controller's own bookkeeping) is accepted even when the object would not pass those rules today, so an existing trigger can always be edited; an update that turns a cron trigger into a backfill, or moves a backfill window, is held to the same rules as a create. A kill (`spec.action: TRIGGER_RUN_ACTION_KILL`) is never refused by these rules, so a trigger created before a rule existed can always be stopped.
 
+## Rerunning Failed Pipeline Runs (Batch Rerun)
+
+A batch rerun creates a new pipeline run for each failed run you give it. Each
+new run resumes from a point in the pipeline DAG, instead of starting over.
+Use this to recover from transient failures without reprocessing everything.
+
+Run this command to start a batch rerun:
+
+```bash
+ma trigger_run rerun \
+  --namespace=ml-team \
+  --name=training-pipeline-rerun-jan \
+  --pipeline=training-pipeline \
+  --pipeline-run=training-pipeline-run-1 \
+  --pipeline-run=training-pipeline-run-2 \
+  --resume-from=feature_gen
+```
+
+A few things to keep in mind:
+
+- **`--pipeline-run`** is repeatable. Pass it once for each failed run you want to rerun.
+- **`--resume-from`** sets the DAG node each rerun starts from. Leave it out to resume from the point each run failed.
+- **`--resume-up-to`** sets the DAG node each rerun stops at, inclusive. Leave it out to run to completion.
+- **`--revision`** pins the reruns to a specific pipeline revision. Leave it out to use the pipeline's current revision.
+
 ## Advanced Configuration
 
-### Automatic Revision Tracking (auto_flip) — Preview
+### Automatic Revision Tracking (auto_flip)
 
-> **Note:** The `auto_flip` field is available in the YAML schema and UI, but the runtime logic that automatically switches to newer revisions is **not yet active**. For now, please continue pinning your triggers to a specific revision. We're including this section so you know what's coming.
+By default, a trigger is pinned to the specific pipeline revision you set in `spec.revision`. Set `auto_flip: true` to let your trigger automatically pick up the latest pipeline revision whenever a new one is registered on the `main` or `master` branch. This is especially useful in production environments — your triggers will automatically get improvements, bug fixes, and updated logic without any manual intervention, reducing operational overhead.
 
-By default, a trigger is pinned to the specific pipeline revision you set in `spec.revision`. Once `auto_flip` is fully active, setting `auto_flip: true` will let your trigger automatically pick up the latest pipeline revision whenever a new one is registered. This is especially useful in production environments — your triggers will automatically get improvements, bug fixes, and updated logic without any manual intervention, reducing operational overhead.
+If the pipeline has no revision on `main` or `master` yet, the trigger cannot resolve a revision to flip to. In that case, `auto_flip` turns itself off and the trigger reports a warning in `status.error_message`. Set `spec.auto_flip` back to `true` once a main/master revision exists.
 
 Here's what the configuration will look like:
 
@@ -213,10 +238,10 @@ spec:
     name: training-pipeline
     namespace: ml-team
   revision:
-    name: rev-2024-03-01               # Starting revision (will auto-update when feature is active)
+    name: rev-2024-03-01               # Starting revision, auto-updates to the latest main/master revision
     namespace: ml-team
 
-  # Automatically use the latest pipeline revision (preview — not yet active)
+  # Automatically use the latest pipeline revision on main/master
   auto_flip: true
 
   trigger:
@@ -227,7 +252,7 @@ spec:
     name: "your-username"
 ```
 
-#### When to Use auto_flip (Once Active)
+#### When to Use auto_flip
 
 | Scenario | Recommendation |
 | :---- | :---- |
@@ -237,7 +262,7 @@ spec:
 | You need reproducible runs tied to a known-good version | Pin to a specific revision (`auto_flip: false` or omit) |
 | Changes require approval or review before running in production (compliance, auditing) | Pin to a specific revision |
 
-> **Tip:** Even when `auto_flip` is fully active, you'll still need to provide an initial `spec.revision`. The trigger will start with that revision and switch to newer ones as they become available.
+> **Tip:** You'll still need to provide an initial `spec.revision`. The trigger starts with that revision and switches to newer ones as they become available on `main` or `master`.
 
 ### Parameterized Triggers
 
@@ -392,9 +417,8 @@ Running into issues? Here are a few common things to check:
 We're working on additional trigger types to give you even more flexibility:
 
 - **Interval Schedule** — Trigger pipeline runs at a fixed time interval (for example, every 2 hours) instead of using cron expressions. Great for simple, recurring schedules.
-- **Batch Rerun** — Rerun a set of failed pipeline runs in bulk, with the option to resume from a specific point in the pipeline DAG. Useful for recovering from transient failures without reprocessing everything.
 
-These features are defined in the system but not yet fully available. Stay tuned for updates!
+This feature is defined in the system but not yet fully available. Stay tuned for updates!
 
 ## What's Next
 
