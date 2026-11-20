@@ -288,6 +288,35 @@ func TestEmptyNamespacePassesThroughWithoutScoper(t *testing.T) {
 	assert.NotEqual(t, codes.InvalidArgument, s.Code(), "got %v", err)
 }
 
+// A well-formed key on a namespaced kind must pass validation and reach the k8s layer. newRecordingHandler reports the
+// kind as namespaced, so this reaches the final return of validateNamespace.
+func TestValidKeyReachesK8sForNamespacedKind(t *testing.T) {
+	ctx := context.Background()
+	tests := []struct {
+		name string
+		call func(h *apiHandler) error
+	}{
+		{name: "get", call: func(h *apiHandler) error {
+			return h.Get(ctx, "default", "job01", &metav1.GetOptions{}, &v2pb.RayJob{})
+		}},
+		{name: "create", call: func(h *apiHandler) error {
+			return h.Create(ctx, rayJob("default", "new-job"), &metav1.CreateOptions{})
+		}},
+		{name: "delete", call: func(h *apiHandler) error {
+			return h.Delete(ctx, rayJob("default", "job01"), &metav1.DeleteOptions{})
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h, rec := newRecordingHandler(t, true, nil)
+			require.NoError(t, tt.call(h))
+			assert.Equal(t, 1, rec.calls, "the request must reach the k8s layer")
+		})
+	}
+}
+
+// The fake client has an empty REST mapper, so this test runs with the scope unknown and skips the namespace checks.
+// TestValidKeyReachesK8sForNamespacedKind covers the namespaced path.
 func TestValidKeysAreUnaffected(t *testing.T) {
 	ctx := context.Background()
 	client, err := setupK8s()
