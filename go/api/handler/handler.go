@@ -88,7 +88,7 @@ func (handler *apiHandler) Create(ctx context.Context, obj ctrlRTClient.Object, 
 		return status.Error(codes.InvalidArgument, err.Error())
 	}
 
-	if err := handler.validateCreateKey(obj, objMeta); err != nil {
+	if err := handler.validateCreateKey(log, obj, objMeta); err != nil {
 		return err
 	}
 
@@ -121,7 +121,7 @@ func (handler *apiHandler) Get(
 	log, headers := initLogger(ctx, handler.logger, "Get", namespace, name, kind)
 	defer emitAPIMetrics("Get", handler.metrics, log, start, kind, headers)
 
-	if err := handler.validateObjectKey(obj, "get", namespace, name); err != nil {
+	if err := handler.validateObjectKey(log, obj, "get", namespace, name); err != nil {
 		return err
 	}
 
@@ -168,7 +168,7 @@ func (handler *apiHandler) Update(ctx context.Context, obj ctrlRTClient.Object, 
 		return err
 	}
 
-	if err := handler.validateObjectKey(obj, "update", obj.GetNamespace(), obj.GetName()); err != nil {
+	if err := handler.validateObjectKey(log, obj, "update", obj.GetNamespace(), obj.GetName()); err != nil {
 		return err
 	}
 
@@ -225,7 +225,7 @@ func (handler *apiHandler) UpdateStatus(ctx context.Context, obj ctrlRTClient.Ob
 		return err
 	}
 
-	if err := handler.validateObjectKey(obj, "updateStatus", obj.GetNamespace(), obj.GetName()); err != nil {
+	if err := handler.validateObjectKey(log, obj, "updateStatus", obj.GetNamespace(), obj.GetName()); err != nil {
 		return err
 	}
 
@@ -262,7 +262,7 @@ func (handler *apiHandler) Delete(ctx context.Context, obj ctrlRTClient.Object,
 		return status.Error(codes.InvalidArgument, err.Error())
 	}
 
-	if err := handler.validateObjectKey(obj, "delete", objMeta.GetNamespace(), objMeta.GetName()); err != nil {
+	if err := handler.validateObjectKey(log, obj, "delete", objMeta.GetNamespace(), objMeta.GetName()); err != nil {
 		return err
 	}
 
@@ -470,7 +470,7 @@ func getCRTListOptions(namespace string, opts *metav1.ListOptions) (*ctrlRTClien
 // segment for a namespaced kind. An empty name is valid when generateName is set, so the name is only checked when it
 // is provided. Running this before the metadata-storage branch keeps the rejection independent of whether metadata
 // storage is on.
-func (handler *apiHandler) validateCreateKey(obj runtime.Object, objMeta metav1.Object) error {
+func (handler *apiHandler) validateCreateKey(log logr.Logger, obj runtime.Object, objMeta metav1.Object) error {
 	namespace, name := objMeta.GetNamespace(), objMeta.GetName()
 	if name == "" && objMeta.GetGenerateName() == "" {
 		return status.Errorf(codes.InvalidArgument, "%v: name or generateName is required",
@@ -482,7 +482,7 @@ func (handler *apiHandler) validateCreateKey(obj runtime.Object, objMeta metav1.
 				validationErrMsg("create", namespace, name), name, msgs)
 		}
 	}
-	return handler.validateNamespace(obj, "create", namespace, name,
+	return handler.validateNamespace(log, obj, "create", namespace, name,
 		"an empty namespace may not be set during creation")
 }
 
@@ -490,7 +490,8 @@ func (handler *apiHandler) validateCreateKey(obj runtime.Object, objMeta metav1.
 // or when the namespace is empty or not a valid path segment for a namespaced kind. The k8s client refuses to build
 // a request for these keys with a plain fmt.Errorf that carries no error type or gRPC code, so surfaceGrpcError
 // would map it to Unknown. The name rules are the ones client-go applies in rest.Request.Name.
-func (handler *apiHandler) validateObjectKey(obj runtime.Object, apiAction string, namespace string, name string) error {
+func (handler *apiHandler) validateObjectKey(log logr.Logger, obj runtime.Object, apiAction string, namespace string,
+	name string) error {
 	if name == "" {
 		return status.Errorf(codes.InvalidArgument, "%v: resource name may not be empty",
 			validationErrMsg(apiAction, namespace, name))
@@ -499,28 +500,30 @@ func (handler *apiHandler) validateObjectKey(obj runtime.Object, apiAction strin
 		return status.Errorf(codes.InvalidArgument, "%v: invalid resource name %q: %v",
 			validationErrMsg(apiAction, namespace, name), name, msgs)
 	}
-	return handler.validateNamespace(obj, apiAction, namespace, name,
+	return handler.validateNamespace(log, obj, apiAction, namespace, name,
 		"an empty namespace may not be set when a resource name is provided")
 }
 
 // validateNamespace returns an InvalidArgument status error when the namespace is empty, or is not a valid path
 // segment (the rule client-go applies in rest.Request.Namespace), and the object's kind is namespaced. When the
 // kind is cluster-scoped it returns nil and leaves the request to the k8s client, so a namespace on a cluster-scoped
-// kind keeps working. When the scope cannot be determined the empty-namespace check is skipped, and the failure is
-// logged so a misconfigured REST mapper does not disable the check silently.
-func (handler *apiHandler) validateNamespace(obj runtime.Object, apiAction string, namespace string, name string,
-	emptyReason string) error {
-	if scoper, ok := handler.k8sHandler.(namespaceScoper); ok {
-		namespaced, err := scoper.IsObjectNamespaced(obj)
-		if err != nil {
-			handler.logger.Info("could not determine whether the kind is namespaced, skipping namespace validation",
-				"action", apiAction, "namespace", namespace, "name", name, "error", err.Error())
-			return nil
-		}
-		if !namespaced {
-			return nil
-		}
-	} else if namespace == "" {
+// kind keeps working. When the handler cannot report scope (it has no namespaceScoper) it returns nil too, because
+// without the scope it cannot tell whether the namespace is used at all. When the scope lookup fails the namespace
+// checks are skipped and the failure is logged on the request logger, so a misconfigured REST mapper does not
+// disable the checks silently.
+func (handler *apiHandler) validateNamespace(log logr.Logger, obj runtime.Object, apiAction string, namespace string,
+	name string, emptyReason string) error {
+	scoper, ok := handler.k8sHandler.(namespaceScoper)
+	if !ok {
+		return nil
+	}
+	namespaced, err := scoper.IsObjectNamespaced(obj)
+	if err != nil {
+		log.Info("could not determine whether the kind is namespaced, skipping namespace validation",
+			"error", err.Error())
+		return nil
+	}
+	if !namespaced {
 		return nil
 	}
 	if namespace == "" {

@@ -16,6 +16,7 @@ import (
 	"go.uber.org/zap/zaptest/observer"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	corev1 "k8s.io/api/core/v1"
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -263,16 +264,38 @@ func TestInvalidNamespaceNotRejectedForClusterScopedKind(t *testing.T) {
 	assert.Equal(t, 1, rec.calls, "the request must reach the k8s layer")
 }
 
-// When the scope query fails the namespace check is skipped, and the failure must be logged.
+// When the scope query fails the namespace check is skipped, and the failure must be logged with the request context.
 func TestScopeLookupFailureIsLogged(t *testing.T) {
 	h, _ := newRecordingHandler(t, true, errors.New("no REST mapping"))
 	core, logs := observer.New(zap.InfoLevel)
 	h.logger = zapr.NewLogger(zap.New(core))
 
-	require.NoError(t, h.validateNamespace(&v2pb.RayJob{}, "get", "", "job01", "reason"))
+	_ = h.Get(context.Background(), "", "job01", &metav1.GetOptions{}, &v2pb.RayJob{})
 
-	require.Equal(t, 1, logs.Len())
-	assert.Contains(t, logs.All()[0].ContextMap()["error"], "no REST mapping")
+	entries := logs.FilterMessageSnippet("could not determine whether the kind is namespaced").All()
+	require.Len(t, entries, 1)
+	ctxMap := entries[0].ContextMap()
+	assert.Contains(t, ctxMap["error"], "no REST mapping")
+	assert.Equal(t, "RayJob", ctxMap["kind"])
+	assert.Equal(t, "Get", ctxMap["action"])
+}
+
+// A K8sHandler that cannot report scope cannot tell whether the namespace is used, so no namespace is rejected. Node is
+// cluster-scoped, and controller-runtime ignores the namespace for it.
+func TestNamespaceNotValidatedWithoutScoper(t *testing.T) {
+	for _, namespace := range []string{"", "a/b"} {
+		t.Run(fmt.Sprintf("namespace=%q", namespace), func(t *testing.T) {
+			client, err := setupK8s()
+			require.NoError(t, err)
+			h := NewFakeAPIHandler(client).(*apiHandler)
+			h.k8sHandler = struct{ K8sHandler }{NewK8sHandler(client)}
+
+			err = h.Get(context.Background(), namespace, "node01", &metav1.GetOptions{}, &corev1.Node{})
+			require.Error(t, err)
+			s, _ := status.FromError(err)
+			assert.NotEqual(t, codes.InvalidArgument, s.Code(), "got %v", err)
+		})
+	}
 }
 
 // A K8sHandler that cannot report scope (no IsObjectNamespaced) must behave as before.
