@@ -16,10 +16,11 @@ from pathlib import Path
 from typing import Optional
 
 import ray
+from ray.data import Dataset
+
 from michelangelo.uniflow.core.io_registry import io_registry
 from michelangelo.uniflow.core.task_config import TaskBinding, TaskConfig
 from michelangelo.uniflow.plugins.ray.io import RayDatasetIO
-from ray.data import Dataset
 
 log = logging.getLogger(__name__)
 
