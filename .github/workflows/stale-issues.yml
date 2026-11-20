@@ -1,0 +1,54 @@
+name: Stale issues
+
+# Label-only: never closes. Keep in sync with docs/contributing/stale-issue-policy.md.
+on:
+  schedule:
+    - cron: '17 6 * * *'   # off the hour to avoid scheduler congestion
+  workflow_dispatch:
+    inputs:
+      debug-only:
+        description: 'Dry run: log what would happen, change nothing'
+        type: boolean
+        default: true   # scheduled runs pass '' and run live
+
+# Overlapping runs would each post the stale comment.
+concurrency:
+  group: stale-issues
+  cancel-in-progress: false
+
+permissions:
+  issues: write
+  pull-requests: none
+
+jobs:
+  stale:
+    # Forks with Actions enabled would otherwise run this daily on their own issues.
+    if: github.repository == 'michelangelo-ai/michelangelo'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@v11
+        with:
+          debug-only: ${{ inputs.debug-only }}
+          days-before-issue-stale: 180
+          days-before-issue-close: -1
+          stale-issue-label: 'stale'
+          stale-issue-message: >
+            This issue has had no activity for 180 days and has been labeled
+            `stale`. It will **not** be closed automatically — a maintainer
+            reviews stale issues during regular triage. If it's still relevant, please
+            leave a comment (reactions and description edits don't count); the label
+            comes off at the next daily check. Maintainers can apply `frozen`
+            to exclude it from future sweeps. See the
+            [stale issue policy](https://github.com/michelangelo-ai/michelangelo/blob/main/docs/contributing/stale-issue-policy.md).
+          # Keep in sync with stale-issues-unstale-on-exempt.yml.
+          exempt-issue-labels: >
+            tech-debt,
+            todo-tracking,
+            frozen
+          # Not exempt-issue-milestones: that takes milestone names, and `true` matches nothing.
+          exempt-all-milestones: true
+          days-before-pr-stale: -1
+          days-before-pr-close: -1
+          # Runs don't resume past this budget; a newly stale issue costs about 4.
+          operations-per-run: 400
+          ascending: true
