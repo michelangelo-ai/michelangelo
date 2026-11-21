@@ -59,8 +59,8 @@ func NewDeclarative(cfg Config) (*Declarative, error) {
 	return &Declarative{enabled: true, releases: releases, defaultRelease: def}, nil
 }
 
-// versions returns the loaded release versions in sorted order.
-func (d *Declarative) versions() []string {
+// Versions returns the loaded release versions in sorted order.
+func (d *Declarative) Versions() []string {
 	out := make([]string, 0, len(d.releases))
 	for v := range d.releases {
 		out = append(out, v)
@@ -71,5 +71,5 @@ func (d *Declarative) versions() []string {
 
 // versionList formats the loaded release versions as "[a, b]".
 func (d *Declarative) versionList() string {
-	return "[" + strings.Join(d.versions(), ", ") + "]"
+	return "[" + strings.Join(d.Versions(), ", ") + "]"
 }

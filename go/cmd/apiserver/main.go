@@ -104,11 +104,15 @@ func getScheme() (*runtime.Scheme, error) {
 
 // registerDeclarativeHook loads the declarative interpreter releases and
 // registers the Pipeline API hook. A load error fails apiserver start.
-func registerDeclarativeHook(apiHandler api.Handler, conf pipelineapihook.Config) error {
+func registerDeclarativeHook(logger *zap.Logger, apiHandler api.Handler, conf pipelineapihook.Config) error {
 	d, err := pipelineapihook.NewDeclarative(conf)
 	if err != nil {
 		return err
 	}
+	logger.Info("declarative pipelines",
+		zap.Bool("enabled", conf.Enabled),
+		zap.String("defaultInterpreter", conf.DefaultInterpreter),
+		zap.Strings("releases", d.Versions()))
 	pipelineapihook.RegisterPipelineAPIHook(apiHandler, d)
 	return nil
 }

@@ -50,7 +50,7 @@ func TestNewDeclarative(t *testing.T) {
 		d, err := NewDeclarative(Config{Enabled: true, DefaultInterpreter: "core-v1", ReleasesDir: releasesDir})
 		require.NoError(t, err)
 		assert.True(t, d.enabled)
-		assert.ElementsMatch(t, []string{"core-v1", "core-v2"}, d.versions())
+		assert.ElementsMatch(t, []string{"core-v1", "core-v2"}, d.Versions())
 		assert.Equal(t, "core-v1", d.defaultRelease.Version)
 	})
 	t.Run("default has no release file", func(t *testing.T) {
