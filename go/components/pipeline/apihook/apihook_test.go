@@ -546,3 +546,24 @@ func TestBeforeUpdate_GetModifyUpdateRoundTrip(t *testing.T) {
 	require.NoError(t, hook.BeforeUpdate(context.Background(), req))
 	assert.Equal(t, stored, req.Pipeline)
 }
+
+// A type change from DECLARATIVE to YAML or UNIFLOW is a plain update of a
+// non-declarative pipeline. The hook does not read the stored pipeline.
+func TestBeforeUpdate_TypeChangeFromDeclarative(t *testing.T) {
+	for _, typ := range []v2.PipelineManifest_Type{v2.PIPELINE_MANIFEST_TYPE_YAML, v2.PIPELINE_MANIFEST_TYPE_UNIFLOW} {
+		t.Run(typ.String(), func(t *testing.T) {
+			// The mock has no expectations, so any Get fails the test.
+			hook, _ := newHook(t, loadDeclarative(t, true, "core-v1"))
+
+			p := typedPipeline(typ)
+			want := p.DeepCopy()
+			require.NoError(t, hook.BeforeUpdate(context.Background(), &v2.UpdatePipelineRequest{Pipeline: p}))
+			assert.Equal(t, want, p, "a request without a pin passes through unchanged")
+
+			p = typedPipeline(typ)
+			p.Spec.Manifest.InterpreterPin = &v2.InterpreterPin{Version: "core-v1"}
+			requireStatus(t, hook.BeforeUpdate(context.Background(), &v2.UpdatePipelineRequest{Pipeline: p}),
+				codes.InvalidArgument, "interpreter_pin is only valid for declarative pipelines")
+		})
+	}
+}
