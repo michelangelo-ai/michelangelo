@@ -121,6 +121,20 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	state := pipeline.Status.State
 	logger.Info("Reconciling pipeline", zap.Any("PipelineStatusState", state.String()))
 
+	// The apiserver stamps the pin on every DECLARATIVE write. A pipeline
+	// without one was written directly to Kubernetes and cannot run. Stop
+	// before the revision and READY steps.
+	manifest := pipeline.Spec.Manifest
+	if manifest.GetType() == v2pb.PIPELINE_MANIFEST_TYPE_DECLARATIVE && manifest.GetInterpreterPin() == nil {
+		pipeline.Status.State = v2pb.PIPELINE_STATE_ERROR
+		pipeline.Status.ErrorMessage = "declarative pipeline has no interpreter pin; re-apply through the API"
+		result, err := r.updatePipelineStatus(ctx, pipeline, originalPipeline, logger)
+		if err != nil {
+			IncPipelineReconcileError(pipeline.Namespace, pipeline.Name)
+		}
+		return result, err
+	}
+
 	if r.config.RevisioningEnabled && pipeline.Spec.Commit != nil {
 		// Only default-branch commits advance status.latestRevision. Feature-branch
 		// applies still snapshot a Revision CR below — they just must not rewrite
@@ -134,6 +148,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		}
 	}
 	pipeline.Status.State = v2pb.PIPELINE_STATE_READY
+	pipeline.Status.ErrorMessage = ""
 
 	// Emit metrics for pipeline becoming ready
 	if originalPipeline.Status.State != v2pb.PIPELINE_STATE_READY && pipeline.Status.State == v2pb.PIPELINE_STATE_READY {

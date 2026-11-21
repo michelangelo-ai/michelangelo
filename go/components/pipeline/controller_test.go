@@ -9,6 +9,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	pbtypes "github.com/gogo/protobuf/types"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -17,6 +18,7 @@ import (
 
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
+	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	"github.com/michelangelo-ai/michelangelo/go/base/revision"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
@@ -726,4 +728,109 @@ func TestSnapshotRevision_CopiesCommitMetadata(t *testing.T) {
 	require.NoError(t, reconciler.snapshotRevision(context.Background(), pipeline))
 	require.NotNil(t, manager.upserted)
 	assert.Equal(t, commit, manager.upserted.Spec.GitCommit)
+}
+
+// readyCount returns the pipeline_ready_total value for one pipeline.
+func readyCount(t *testing.T, namespace, name string) float64 {
+	t.Helper()
+	return counterValue(t, pipelineReady, namespace, name)
+}
+
+// counterValue returns the value of vec for one pipeline.
+func counterValue(t *testing.T, vec *prometheus.CounterVec, namespace, name string) float64 {
+	t.Helper()
+	reg := prometheus.NewRegistry()
+	require.NoError(t, reg.Register(vec))
+	mfs, err := reg.Gather()
+	require.NoError(t, err)
+	for _, mf := range mfs {
+		for _, m := range mf.GetMetric() {
+			labels := map[string]string{}
+			for _, l := range m.GetLabel() {
+				labels[l.GetName()] = l.GetValue()
+			}
+			if labels["namespace"] == namespace && labels["pipeline"] == name {
+				return m.GetCounter().GetValue()
+			}
+		}
+	}
+	return 0
+}
+
+func declarativePipeline(name string, pin *v2pb.InterpreterPin, status v2pb.PipelineStatus) *v2pb.Pipeline {
+	return &v2pb.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "test-namespace"},
+		Spec: v2pb.PipelineSpec{
+			Commit: &v2pb.CommitInfo{GitRef: "abc123456789", Branch: "main"},
+			Manifest: &v2pb.PipelineManifest{
+				Type:           v2pb.PIPELINE_MANIFEST_TYPE_DECLARATIVE,
+				InterpreterPin: pin,
+			},
+		},
+		Status: status,
+	}
+}
+
+func TestReconcile_DeclarativeWithoutPin(t *testing.T) {
+	const name = "declarative-no-pin"
+	p := declarativePipeline(name, nil, v2pb.PipelineStatus{})
+	reconciler := setUpReconciler(t, []client.Object{p}, env.Context{}, Config{RevisioningEnabled: true})
+	before := readyCount(t, "test-namespace", name)
+
+	result, err := reconciler.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{Name: name, Namespace: "test-namespace"}})
+	require.NoError(t, err)
+	assert.Equal(t, ctrl.Result{}, result, "ERROR is terminal and does not requeue")
+
+	got := &v2pb.Pipeline{}
+	require.NoError(t, reconciler.Get(context.Background(), "test-namespace", name, &metav1.GetOptions{}, got))
+	assert.Equal(t, v2pb.PIPELINE_STATE_ERROR, got.Status.State)
+	assert.Equal(t, "declarative pipeline has no interpreter pin; re-apply through the API", got.Status.ErrorMessage)
+	assert.Nil(t, got.Status.LatestRevision)
+	assert.Equal(t, before, readyCount(t, "test-namespace", name))
+
+	rev := &v2pb.Revision{}
+	err = reconciler.Get(context.Background(), "test-namespace", "pipeline-"+name+"-abc123456789", &metav1.GetOptions{}, rev)
+	assert.True(t, utils.IsNotFoundError(err), "no revision snapshot: %v", err)
+}
+
+func TestReconcile_DeclarativeWithPin(t *testing.T) {
+	const name = "declarative-pinned"
+	pin := &v2pb.InterpreterPin{Version: "core-v1", Artifact: "s3://a/core-v1.tar.gz", Digest: "sha256:00"}
+	// The pipeline was ERROR and is now re-applied through the API with a pin.
+	p := declarativePipeline(name, pin, v2pb.PipelineStatus{
+		State:        v2pb.PIPELINE_STATE_ERROR,
+		ErrorMessage: "declarative pipeline has no interpreter pin; re-apply through the API",
+	})
+	reconciler := setUpReconciler(t, []client.Object{p}, env.Context{}, Config{})
+
+	_, err := reconciler.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{Name: name, Namespace: "test-namespace"}})
+	require.NoError(t, err)
+
+	got := &v2pb.Pipeline{}
+	require.NoError(t, reconciler.Get(context.Background(), "test-namespace", name, &metav1.GetOptions{}, got))
+	assert.Equal(t, v2pb.PIPELINE_STATE_READY, got.Status.State)
+	assert.Empty(t, got.Status.ErrorMessage)
+}
+
+func TestReconcile_DeclarativeWithoutPin_StatusUpdateErrorIsCounted(t *testing.T) {
+	const name = "declarative-no-pin-update-fails"
+	p := declarativePipeline(name, nil, v2pb.PipelineStatus{})
+	scheme := runtime.NewScheme()
+	require.NoError(t, v2pb.AddToScheme(scheme))
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(p).
+		WithStatusSubresource(p).
+		WithInterceptorFuncs(interceptor.Funcs{
+			SubResourceUpdate: func(context.Context, client.Client, string, client.Object, ...client.SubResourceUpdateOption) error {
+				return errors.New("etcd unavailable")
+			},
+		}).
+		Build()
+	reconciler := &Reconciler{Handler: apiHandler.NewFakeAPIHandler(k8sClient), logger: zaptest.NewLogger(t), scheme: scheme}
+	before := counterValue(t, pipelineReconcileErrors, "test-namespace", name)
+
+	_, err := reconciler.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{Name: name, Namespace: "test-namespace"}})
+	require.ErrorContains(t, err, "etcd unavailable")
+	assert.Equal(t, before+1, counterValue(t, pipelineReconcileErrors, "test-namespace", name))
 }
