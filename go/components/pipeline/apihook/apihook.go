@@ -127,11 +127,11 @@ func (a apiHook) target(stored *v2.Pipeline, reqPin *v2.InterpreterPin) (*declar
 
 	if s := reqPin.GetArtifact(); s != "" && s != pin.Artifact && s != storedPin.Artifact {
 		return nil, nil, status.Errorf(codes.InvalidArgument,
-			"interpreter_pin.artifact %q does not match release %s; leave it unset", s, rel.Version)
+			"interpreter_pin.artifact %q does not match the pin for interpreter %s; leave it unset", s, rel.Version)
 	}
 	if s := reqPin.GetDigest(); s != "" && s != pin.Digest && s != storedPin.Digest {
 		return nil, nil, status.Errorf(codes.InvalidArgument,
-			"interpreter_pin.digest %q does not match release %s; leave it unset", s, rel.Version)
+			"interpreter_pin.digest %q does not match the pin for interpreter %s; leave it unset", s, rel.Version)
 	}
 	return rel, pin, nil
 }
