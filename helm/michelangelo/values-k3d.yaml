@@ -62,6 +62,12 @@ apiserver:
   # OSS install, which should never guess a real environment).
   pipelineRunDefaults:
     environment: "development"
+  # Declarative pipelines stay off in the sandbox. To try them, set
+  # enabled=true, defaultInterpreter, and one --set-file per release. Escape
+  # each dot in a version:
+  #   --set-file 'apiserver.declarative.releases.core-v1\.4\.2=core-v1.4.2.yaml'
+  declarative:
+    enabled: false
 
 envoy:
   corsOrigins: "http://localhost:[0-9]+"

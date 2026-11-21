@@ -1,0 +1,19 @@
+{{- if and .Values.apiserver.enabled .Values.apiserver.declarative.enabled }}
+{{- $decl := .Values.apiserver.declarative }}
+{{- $default := required "apiserver.declarative.defaultInterpreter is required when apiserver.declarative.enabled=true" $decl.defaultInterpreter }}
+{{- if not (hasKey ($decl.releases | default dict) $default) }}
+{{- fail (printf "apiserver.declarative.releases has no entry for defaultInterpreter %q" $default) }}
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "michelangelo.componentFullname" (dict "context" . "component" "apiserver-declarative-releases") }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "michelangelo.componentLabels" (dict "context" . "component" "apiserver") | nindent 4 }}
+data:
+  {{- range $version, $content := $decl.releases }}
+  {{ printf "%s.yaml" $version }}: |
+    {{- $content | nindent 4 }}
+  {{- end }}
+{{- end }}
