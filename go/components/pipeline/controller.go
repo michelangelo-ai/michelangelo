@@ -240,12 +240,14 @@ func snapshotMatchesSpec(rev *v2pb.Revision, pipeline *v2pb.Pipeline) (bool, err
 }
 
 // comparableSpec returns a copy of spec without the fields that vary between applies of
-// the same commit. The caller's spec is not modified.
+// the same commit. The caller's spec is not modified. The interpreter pin is a runtime
+// choice, not authored content, so a pin upgrade on the same commit keeps its revision.
 func comparableSpec(spec v2pb.PipelineSpec) v2pb.PipelineSpec {
 	spec.Commit, spec.Owner = nil, nil
 	if spec.Manifest != nil {
 		manifest := gogoproto.Clone(spec.Manifest).(*v2pb.PipelineManifest)
 		manifest.UniflowTar = ""
+		manifest.InterpreterPin = nil
 		spec.Manifest = manifest
 	}
 	return spec

@@ -834,3 +834,41 @@ func TestReconcile_DeclarativeWithoutPin_StatusUpdateErrorIsCounted(t *testing.T
 	require.ErrorContains(t, err, "etcd unavailable")
 	assert.Equal(t, before+1, counterValue(t, pipelineReconcileErrors, "test-namespace", name))
 }
+
+// An interpreter pin upgrade changes only the runtime, not the authored spec.
+// A re-apply of the same commit with a new pin must not count as a changed
+// spec, and the immutable revision must stay as it is.
+func TestReconcile_PinUpgradeOnSameCommitKeepsRevision(t *testing.T) {
+	spec := func(pin *v2pb.InterpreterPin) v2pb.PipelineSpec {
+		return v2pb.PipelineSpec{
+			Description: "same",
+			Commit:      &v2pb.CommitInfo{GitRef: "main", Branch: "main"},
+			Manifest: &v2pb.PipelineManifest{
+				Type:           v2pb.PIPELINE_MANIFEST_TYPE_DECLARATIVE,
+				UniflowTar:     pin.Artifact,
+				InterpreterPin: pin,
+			},
+		}
+	}
+	v1 := &v2pb.InterpreterPin{Version: "core-v1", Artifact: "s3://a/core-v1.tar.gz", Digest: "sha256:01"}
+	v2 := &v2pb.InterpreterPin{Version: "core-v2", Artifact: "s3://a/core-v2.tar.gz", Digest: "sha256:02"}
+	pipeline := &v2pb.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-pipeline", Namespace: "test-namespace"},
+		Spec:       spec(v2),
+	}
+	existing := immutableRevision("pipeline-test-pipeline-main", "main")
+	existing.Spec.Content = mustSnapshot(&v2pb.Pipeline{Spec: spec(v1)})
+
+	reconciler := setUpReconciler(t, []client.Object{pipeline, existing}, env.Context{}, Config{RevisioningEnabled: true})
+	_, err := reconciler.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{Name: "test-pipeline", Namespace: "test-namespace"}})
+	require.NoError(t, err)
+
+	got := &v2pb.Revision{}
+	require.NoError(t, reconciler.Get(context.Background(), "test-namespace", "pipeline-test-pipeline-main", &metav1.GetOptions{}, got))
+	assert.Equal(t, existing.Spec.Content, got.Spec.Content, "the immutable revision is not rewritten")
+
+	matches, err := snapshotMatchesSpec(existing, pipeline)
+	require.NoError(t, err)
+	assert.True(t, matches)
+	assert.Equal(t, v2, pipeline.Spec.Manifest.InterpreterPin, "the caller's pipeline must not be modified")
+}
