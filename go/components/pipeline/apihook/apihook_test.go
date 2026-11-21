@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/gogo/protobuf/jsonpb"
 	"github.com/gogo/protobuf/types"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -142,4 +143,121 @@ func TestFlagOff(t *testing.T) {
 
 	err = hook.BeforeUpdate(context.Background(), &v2.UpdatePipelineRequest{Pipeline: declarativePipeline(t, workflow(nil))})
 	requireStatus(t, err, codes.FailedPrecondition, msg)
+}
+
+func dryRunCreate(p *v2.Pipeline) *v2.CreatePipelineRequest {
+	return &v2.CreatePipelineRequest{Pipeline: p, CreateOptions: &metav1.CreateOptions{DryRun: []string{metav1.DryRunAll}}}
+}
+
+func release(t *testing.T, d *Declarative, version string) *declarative.Release {
+	t.Helper()
+	r, ok := d.releases[version]
+	require.True(t, ok, version)
+	return r
+}
+
+// explainPlan parses the annotation on p and returns nil when it is absent.
+func explainPlan(t *testing.T, p *v2.Pipeline) *v2.ExplainPlan {
+	t.Helper()
+	raw, ok := p.Annotations[explainPlanAnnotation]
+	if !ok {
+		return nil
+	}
+	got := &v2.ExplainPlan{}
+	require.NoError(t, jsonpb.UnmarshalString(raw, got))
+	return got
+}
+
+func wantPlan(t *testing.T, w *v2.DeclarativeWorkflow, r *declarative.Release) *v2.ExplainPlan {
+	t.Helper()
+	p, err := declarative.Plan(w, declarative.DefaultLimits(), r, nil)
+	require.NoError(t, err)
+	return p
+}
+
+func TestBeforeCreate(t *testing.T) {
+	d := loadDeclarative(t, true, "core-v1")
+	v1 := release(t, d, "core-v1")
+	ctx := context.Background()
+
+	t.Run("client pin is rejected", func(t *testing.T) {
+		hook, _ := newHook(t, d)
+		p := declarativePipeline(t, workflow(nil))
+		p.Spec.Manifest.InterpreterPin = &v2.InterpreterPin{Version: "core-v1"}
+		requireStatus(t, hook.BeforeCreate(ctx, &v2.CreatePipelineRequest{Pipeline: p}),
+			codes.InvalidArgument, "interpreter_pin is server-owned")
+	})
+
+	t.Run("client uniflow_tar is rejected", func(t *testing.T) {
+		hook, _ := newHook(t, d)
+		p := declarativePipeline(t, workflow(nil))
+		p.Spec.Manifest.UniflowTar = "s3://bucket/user.tar.gz"
+		requireStatus(t, hook.BeforeCreate(ctx, &v2.CreatePipelineRequest{Pipeline: p}),
+			codes.InvalidArgument, "uniflow_tar is server-owned for declarative pipelines")
+	})
+
+	t.Run("manifest that does not decode is rejected", func(t *testing.T) {
+		hook, _ := newHook(t, d)
+		p := declarativePipeline(t, workflow(nil))
+		p.Spec.Manifest.Content.TypeUrl = "type.googleapis.com/other"
+		_, wantErr := declarative.Decode(p.Spec.Manifest)
+		require.Error(t, wantErr)
+		requireStatus(t, hook.BeforeCreate(ctx, &v2.CreatePipelineRequest{Pipeline: p}),
+			codes.InvalidArgument, wantErr.Error())
+	})
+
+	t.Run("unknown task_function gives the planner error", func(t *testing.T) {
+		hook, _ := newHook(t, d)
+		w := workflow(nil)
+		w.Tasks["b"].TaskFunction = "core/nope"
+		_, wantErr := declarative.Plan(w, declarative.DefaultLimits(), v1, nil)
+		require.Error(t, wantErr)
+		requireStatus(t, hook.BeforeCreate(ctx, &v2.CreatePipelineRequest{Pipeline: declarativePipeline(t, w)}),
+			codes.InvalidArgument, wantErr.Error())
+	})
+
+	t.Run("field the default release does not declare is rejected", func(t *testing.T) {
+		hook, _ := newHook(t, d)
+		w := workflow(map[string]*types.Value{"timeout_seconds": numVal(30)})
+		err := hook.BeforeCreate(ctx, &v2.CreatePipelineRequest{Pipeline: declarativePipeline(t, w)})
+		assert.Equal(t, codes.InvalidArgument, status.Code(err), err)
+	})
+
+	t.Run("real create stamps the default pin and removes a client annotation", func(t *testing.T) {
+		hook, _ := newHook(t, d)
+		p := declarativePipeline(t, workflow(nil))
+		p.Annotations = map[string]string{explainPlanAnnotation: `{"taskCount":99}`, "keep": "me"}
+		require.NoError(t, hook.BeforeCreate(ctx, &v2.CreatePipelineRequest{
+			Pipeline: p, CreateOptions: &metav1.CreateOptions{},
+		}))
+		assert.Equal(t, pinOf(v1), p.Spec.Manifest.InterpreterPin)
+		assert.Equal(t, map[string]string{"keep": "me"}, p.Annotations)
+	})
+
+	t.Run("nil CreateOptions is not a dry run", func(t *testing.T) {
+		hook, _ := newHook(t, d)
+		p := declarativePipeline(t, workflow(nil))
+		require.NoError(t, hook.BeforeCreate(ctx, &v2.CreatePipelineRequest{Pipeline: p}))
+		assert.Equal(t, pinOf(v1), p.Spec.Manifest.InterpreterPin)
+		assert.Nil(t, explainPlan(t, p))
+	})
+
+	t.Run("dry run sets the explain plan annotation", func(t *testing.T) {
+		hook, _ := newHook(t, d)
+		w := workflow(nil)
+		p := declarativePipeline(t, w)
+		p.Annotations = map[string]string{explainPlanAnnotation: `{"taskCount":99}`}
+		require.NoError(t, hook.BeforeCreate(ctx, dryRunCreate(p)))
+		assert.Equal(t, pinOf(v1), p.Spec.Manifest.InterpreterPin)
+		got := explainPlan(t, p)
+		require.NotNil(t, got)
+		assert.Equal(t, wantPlan(t, w, v1), got)
+		assert.Equal(t, "core-v1", got.InterpreterVersion)
+		assert.Equal(t, uint32(2), got.TaskCount)
+		// jsonpb.Unmarshal accepts both name styles, so check the raw text
+		// for the lowerCamel names that protojson uses.
+		raw := p.Annotations[explainPlanAnnotation]
+		assert.Contains(t, raw, `"interpreterVersion":"core-v1"`)
+		assert.Contains(t, raw, `"taskCount":2`)
+	})
 }
