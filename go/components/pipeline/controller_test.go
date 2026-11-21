@@ -784,7 +784,7 @@ func TestReconcile_DeclarativeWithoutPin(t *testing.T) {
 	got := &v2pb.Pipeline{}
 	require.NoError(t, reconciler.Get(context.Background(), "test-namespace", name, &metav1.GetOptions{}, got))
 	assert.Equal(t, v2pb.PIPELINE_STATE_ERROR, got.Status.State)
-	assert.Equal(t, "declarative pipeline has no interpreter pin; re-apply through the API", got.Status.ErrorMessage)
+	assert.Equal(t, "declarative pipeline has no interpreter pin; re-apply through the API with apiserver.declarative.enabled=true", got.Status.ErrorMessage)
 	assert.Nil(t, got.Status.LatestRevision)
 	assert.Equal(t, before, readyCount(t, "test-namespace", name))
 
@@ -799,7 +799,7 @@ func TestReconcile_DeclarativeWithPin(t *testing.T) {
 	// The pipeline was ERROR and is now re-applied through the API with a pin.
 	p := declarativePipeline(name, pin, v2pb.PipelineStatus{
 		State:        v2pb.PIPELINE_STATE_ERROR,
-		ErrorMessage: "declarative pipeline has no interpreter pin; re-apply through the API",
+		ErrorMessage: "declarative pipeline has no interpreter pin; re-apply through the API with apiserver.declarative.enabled=true",
 	})
 	reconciler := setUpReconciler(t, []client.Object{p}, env.Context{}, Config{})
 

@@ -128,7 +128,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	manifest := pipeline.Spec.Manifest
 	if manifest.GetType() == v2pb.PIPELINE_MANIFEST_TYPE_DECLARATIVE && manifest.GetInterpreterPin() == nil {
 		pipeline.Status.State = v2pb.PIPELINE_STATE_ERROR
-		pipeline.Status.ErrorMessage = "declarative pipeline has no interpreter pin; re-apply through the API"
+		pipeline.Status.ErrorMessage = "declarative pipeline has no interpreter pin; re-apply through the API with apiserver.declarative.enabled=true"
 		result, err := r.updatePipelineStatus(ctx, pipeline, originalPipeline, logger)
 		if err != nil {
 			IncPipelineReconcileError(pipeline.Namespace, pipeline.Name)
