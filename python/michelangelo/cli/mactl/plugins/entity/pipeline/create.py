@@ -12,6 +12,11 @@ from google.protobuf.any_pb2 import Any
 from google.protobuf.message import Message
 from google.protobuf.struct_pb2 import Struct
 
+from michelangelo.cli.mactl.plugins.entity.pipeline.declarative import (
+    DECLARATIVE_MANIFEST_TYPE,
+    is_declarative,
+    pack_declarative_content,
+)
 from michelangelo.cli.mactl.utils import (
     get_user_name,
     read_subprocess_outputs,
@@ -177,6 +182,13 @@ def convert_crd_metadata_pipeline(
         _LOG.error("Expected a dictionary, got: %r", type(yaml_dict))
         raise ValueError("Expected a dictionary for CRD metadata")
 
+    # A declarative manifest is data: it needs no registration subprocess.
+    declarative_content = (
+        pack_declarative_content(yaml_dict["spec"]["manifest"])
+        if is_declarative(yaml_dict)
+        else None
+    )
+
     repo = Repo(".", search_parent_directories=True)
     repo_root = Path(repo.git.rev_parse("--show-toplevel")).resolve()
     _LOG.info("Current git repository info: %r", repo)
@@ -188,11 +200,14 @@ def convert_crd_metadata_pipeline(
     # Get relative path of config file from repo root
     config_file_relative_path = str(yaml_path.relative_to(repo_root))
 
-    workflow_inputs, uniflow_tar_path, workflow_function_name = (
-        handle_workflow_inputs_retrieval(
-            repo_root, config_file_relative_path, project, pipeline
+    if declarative_content is None:
+        workflow_inputs, uniflow_tar_path, workflow_function_name = (
+            handle_workflow_inputs_retrieval(
+                repo_root, config_file_relative_path, project, pipeline
+            )
         )
-    )
+    else:
+        workflow_inputs, uniflow_tar_path, workflow_function_name = None, "", ""
 
     res = {
         "metadata": {
@@ -203,7 +218,7 @@ def convert_crd_metadata_pipeline(
         }
     }
 
-    return populate_pipeline_spec_with_workflow_inputs(
+    res = populate_pipeline_spec_with_workflow_inputs(
         res,
         yaml_dict,
         workflow_inputs,
@@ -214,6 +229,10 @@ def convert_crd_metadata_pipeline(
         uniflow_tar_path,
         workflow_function_name,
     )
+    if declarative_content is not None:
+        res["spec"]["manifest"]["type"] = DECLARATIVE_MANIFEST_TYPE
+        res["spec"]["manifest"]["content"] = declarative_content
+    return res
 
 
 def handle_workflow_inputs_retrieval(
