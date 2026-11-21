@@ -42,6 +42,7 @@ ctx.run(my_workflow)
 """
 
 import argparse
+import inspect
 import logging
 import os
 import sys
@@ -175,8 +176,8 @@ def _local_run(fn: Callable, *args, **kw):
     """Execute a workflow function in Local Mode.
 
     Sets up the necessary environment for running workflows locally,
-    ensuring local storage and execution. Validates the workflow code
-    before execution.
+    ensuring local storage and execution. Validates the workflow body before
+    execution; local failure callbacks run as Python, not Starlark.
 
     Args:
         fn: The workflow function to execute.
@@ -188,7 +189,10 @@ def _local_run(fn: Callable, *args, **kw):
     """
     # Validate the function's code.
     try:
-        build(fn)
+        workflow_fn = fn
+        if getattr(fn, "_uf_on_failure", None) is not None:
+            workflow_fn = inspect.unwrap(fn)
+        build(workflow_fn)
     except Exception as err:  # pragma: no cover
         raise RuntimeError(
             "Error building @workflow. Ensure it meets workflow specifications."
