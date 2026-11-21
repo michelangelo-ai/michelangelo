@@ -41,7 +41,7 @@ func (a apiHook) BeforeCreate(_ context.Context, req *v2.CreatePipelineRequest) 
 		return err
 	}
 	if req.Pipeline.Spec.Manifest.InterpreterPin != nil {
-		return status.Error(codes.InvalidArgument, "interpreter_pin is server-owned")
+		return status.Error(codes.InvalidArgument, "interpreter_pin is server-owned; remove interpreter_pin from the request")
 	}
 	d := a.d.defaultRelease
 	pin := pinOf(d)
@@ -90,7 +90,7 @@ func (a apiHook) target(stored *v2.Pipeline, reqPin *v2.InterpreterPin) (*declar
 	storedPin := stored.Spec.Manifest.GetInterpreterPin()
 	if stored.Spec.Manifest.GetType() != v2.PIPELINE_MANIFEST_TYPE_DECLARATIVE || storedPin == nil {
 		if reqPin != nil {
-			return nil, nil, status.Error(codes.InvalidArgument, "interpreter_pin is server-owned")
+			return nil, nil, status.Error(codes.InvalidArgument, "interpreter_pin is server-owned; remove interpreter_pin from the request")
 		}
 		return a.d.defaultRelease, pinOf(a.d.defaultRelease), nil
 	}
@@ -148,7 +148,7 @@ func (a apiHook) gate(p *v2.Pipeline) (skip bool, err error) {
 		return true, nil
 	}
 	if !a.d.enabled {
-		return false, status.Error(codes.FailedPrecondition, "declarative pipelines are not enabled on this apiserver")
+		return false, status.Error(codes.FailedPrecondition, "declarative pipelines are not enabled on this apiserver; an operator must set apiserver.declarative.enabled=true")
 	}
 	return false, nil
 }
@@ -162,7 +162,7 @@ func checkTar(tar string, pin *v2.InterpreterPin, storedArtifact string) error {
 	if tar == "" || tar == pin.Artifact || (storedArtifact != "" && tar == storedArtifact) {
 		return nil
 	}
-	return status.Error(codes.InvalidArgument, "uniflow_tar is server-owned for declarative pipelines")
+	return status.Error(codes.InvalidArgument, "uniflow_tar is server-owned for declarative pipelines; remove uniflow_tar from the request")
 }
 
 // apply validates p against rel, stamps pin, and sets uniflow_tar to the pin

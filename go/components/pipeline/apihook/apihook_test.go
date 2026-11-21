@@ -165,7 +165,7 @@ func TestNonDeclarativePinIsRejected(t *testing.T) {
 
 func TestFlagOff(t *testing.T) {
 	hook, _ := newHook(t, loadDeclarative(t, false, ""))
-	const msg = "declarative pipelines are not enabled on this apiserver"
+	const msg = "declarative pipelines are not enabled on this apiserver; an operator must set apiserver.declarative.enabled=true"
 
 	err := hook.BeforeCreate(context.Background(), &v2.CreatePipelineRequest{Pipeline: declarativePipeline(t, workflow(nil))})
 	requireStatus(t, err, codes.FailedPrecondition, msg)
@@ -214,7 +214,7 @@ func TestBeforeCreate(t *testing.T) {
 		p := declarativePipeline(t, workflow(nil))
 		p.Spec.Manifest.InterpreterPin = &v2.InterpreterPin{Version: "core-v1"}
 		requireStatus(t, hook.BeforeCreate(ctx, &v2.CreatePipelineRequest{Pipeline: p}),
-			codes.InvalidArgument, "interpreter_pin is server-owned")
+			codes.InvalidArgument, "interpreter_pin is server-owned; remove interpreter_pin from the request")
 	})
 
 	t.Run("client uniflow_tar is rejected", func(t *testing.T) {
@@ -222,7 +222,7 @@ func TestBeforeCreate(t *testing.T) {
 		p := declarativePipeline(t, workflow(nil))
 		p.Spec.Manifest.UniflowTar = "s3://bucket/user.tar.gz"
 		requireStatus(t, hook.BeforeCreate(ctx, &v2.CreatePipelineRequest{Pipeline: p}),
-			codes.InvalidArgument, "uniflow_tar is server-owned for declarative pipelines")
+			codes.InvalidArgument, "uniflow_tar is server-owned for declarative pipelines; remove uniflow_tar from the request")
 	})
 
 	t.Run("client uniflow_tar equal to the default artifact is accepted", func(t *testing.T) {
@@ -363,14 +363,14 @@ func TestBeforeUpdate(t *testing.T) {
 			stored:   storedPipeline(t, pinOf(v1)),
 			reqTar:   v2Rel.Artifact,
 			wantCode: codes.InvalidArgument,
-			wantMsg:  "uniflow_tar is server-owned for declarative pipelines",
+			wantMsg:  "uniflow_tar is server-owned for declarative pipelines; remove uniflow_tar from the request",
 		},
 		{
 			name:     "a uniflow_tar from another source is rejected",
 			stored:   storedPipeline(t, pinOf(v1)),
 			reqTar:   "s3://bucket/user.tar.gz",
 			wantCode: codes.InvalidArgument,
-			wantMsg:  "uniflow_tar is server-owned for declarative pipelines",
+			wantMsg:  "uniflow_tar is server-owned for declarative pipelines; remove uniflow_tar from the request",
 		},
 		{
 			name:    "upgrade replaces an echoed old artifact",
@@ -385,14 +385,14 @@ func TestBeforeUpdate(t *testing.T) {
 			reqPin:   &v2.InterpreterPin{Version: "core-v2"},
 			reqTar:   "s3://bucket/user.tar.gz",
 			wantCode: codes.InvalidArgument,
-			wantMsg:  "uniflow_tar is server-owned for declarative pipelines",
+			wantMsg:  "uniflow_tar is server-owned for declarative pipelines; remove uniflow_tar from the request",
 		},
 		{
 			name:     "stored UNIFLOW pipeline rejects its echoed user tar",
 			stored:   typedPipeline(v2.PIPELINE_MANIFEST_TYPE_UNIFLOW),
 			reqTar:   "s3://bucket/user.tar.gz",
 			wantCode: codes.InvalidArgument,
-			wantMsg:  "uniflow_tar is server-owned for declarative pipelines",
+			wantMsg:  "uniflow_tar is server-owned for declarative pipelines; remove uniflow_tar from the request",
 		},
 		{
 			name:    "same version keeps the stored pin verbatim",
@@ -561,7 +561,7 @@ func TestBeforeUpdate(t *testing.T) {
 			stored:   typedPipeline(v2.PIPELINE_MANIFEST_TYPE_UNIFLOW),
 			reqPin:   &v2.InterpreterPin{Version: "core-v1"},
 			wantCode: codes.InvalidArgument,
-			wantMsg:  "interpreter_pin is server-owned",
+			wantMsg:  "interpreter_pin is server-owned; remove interpreter_pin from the request",
 		},
 		{
 			name:    "stored DECLARATIVE pipeline with no pin follows the create rules",
