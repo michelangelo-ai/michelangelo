@@ -44,7 +44,11 @@ func (a apiHook) BeforeCreate(_ context.Context, req *v2.CreatePipelineRequest) 
 		return status.Error(codes.InvalidArgument, "interpreter_pin is server-owned")
 	}
 	d := a.d.defaultRelease
-	return apply(req.Pipeline, d, pinOf(d), req.CreateOptions != nil && isDryRun(req.CreateOptions.DryRun))
+	pin := pinOf(d)
+	if err := checkTar(req.Pipeline.Spec.Manifest.UniflowTar, pin, ""); err != nil {
+		return err
+	}
+	return apply(req.Pipeline, d, pin, req.CreateOptions != nil && isDryRun(req.CreateOptions.DryRun))
 }
 
 // BeforeUpdate validates a DECLARATIVE pipeline and keeps or moves its pin.
@@ -63,6 +67,13 @@ func (a apiHook) BeforeUpdate(ctx context.Context, req *v2.UpdatePipelineRequest
 	}
 	rel, pin, err := a.target(stored, p.Spec.Manifest.InterpreterPin)
 	if err != nil {
+		return err
+	}
+	var oldArtifact string
+	if storedPin := stored.Spec.Manifest.GetInterpreterPin(); storedPin != nil && storedPin.Version != pin.Version {
+		oldArtifact = storedPin.Artifact
+	}
+	if err := checkTar(p.Spec.Manifest.UniflowTar, pin, oldArtifact); err != nil {
 		return err
 	}
 	return apply(p, rel, pin, req.UpdateOptions != nil && isDryRun(req.UpdateOptions.DryRun))
@@ -120,13 +131,22 @@ func (a apiHook) gate(p *v2.Pipeline) (skip bool, err error) {
 	if !a.d.enabled {
 		return false, status.Error(codes.FailedPrecondition, "declarative pipelines are not enabled on this apiserver")
 	}
-	if p.Spec.Manifest.UniflowTar != "" {
-		return false, status.Error(codes.InvalidArgument, "uniflow_tar is server-owned for declarative pipelines")
-	}
 	return false, nil
 }
 
-// apply validates p against rel and stamps pin. On a dry run it sets the
+// checkTar accepts a client uniflow_tar only when it equals the artifact of
+// pin, so a get-modify-update round trip succeeds. On an upgrade, oldArtifact
+// is the artifact of the stored pin. The hook replaces that value too, since
+// a client that changes only interpreter_pin.version echoes it.
+func checkTar(tar string, pin *v2.InterpreterPin, oldArtifact string) error {
+	if tar == "" || tar == pin.Artifact || (oldArtifact != "" && tar == oldArtifact) {
+		return nil
+	}
+	return status.Error(codes.InvalidArgument, "uniflow_tar is server-owned for declarative pipelines")
+}
+
+// apply validates p against rel, stamps pin, and sets uniflow_tar to the pin
+// artifact. On a dry run it sets the
 // explain-plan annotation. Otherwise it removes the annotation, so a client
 // cannot store a plan.
 func apply(p *v2.Pipeline, rel *declarative.Release, pin *v2.InterpreterPin, dryRun bool) error {
@@ -139,6 +159,7 @@ func apply(p *v2.Pipeline, rel *declarative.Release, pin *v2.InterpreterPin, dry
 		return toStatus(err)
 	}
 	p.Spec.Manifest.InterpreterPin = pin
+	p.Spec.Manifest.UniflowTar = pin.Artifact
 	if !dryRun {
 		delete(p.Annotations, explainPlanAnnotation)
 		return nil

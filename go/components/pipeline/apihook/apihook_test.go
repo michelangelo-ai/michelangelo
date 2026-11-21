@@ -199,6 +199,14 @@ func TestBeforeCreate(t *testing.T) {
 			codes.InvalidArgument, "uniflow_tar is server-owned for declarative pipelines")
 	})
 
+	t.Run("client uniflow_tar equal to the default artifact is accepted", func(t *testing.T) {
+		hook, _ := newHook(t, d)
+		p := declarativePipeline(t, workflow(nil))
+		p.Spec.Manifest.UniflowTar = v1.Artifact
+		require.NoError(t, hook.BeforeCreate(ctx, &v2.CreatePipelineRequest{Pipeline: p}))
+		assert.Equal(t, v1.Artifact, p.Spec.Manifest.UniflowTar)
+	})
+
 	t.Run("manifest that does not decode is rejected", func(t *testing.T) {
 		hook, _ := newHook(t, d)
 		p := declarativePipeline(t, workflow(nil))
@@ -234,6 +242,7 @@ func TestBeforeCreate(t *testing.T) {
 			Pipeline: p, CreateOptions: &metav1.CreateOptions{},
 		}))
 		assert.Equal(t, pinOf(v1), p.Spec.Manifest.InterpreterPin)
+		assert.Equal(t, v1.Artifact, p.Spec.Manifest.UniflowTar)
 		assert.Equal(t, map[string]string{"keep": "me"}, p.Annotations)
 	})
 
@@ -301,6 +310,7 @@ func TestBeforeUpdate(t *testing.T) {
 		getErr    error
 		extra     map[string]*types.Value
 		reqPin    *v2.InterpreterPin
+		reqTar    string
 		dryRun    bool
 		wantPin   *v2.InterpreterPin
 		wantCode  codes.Code
@@ -312,6 +322,48 @@ func TestBeforeUpdate(t *testing.T) {
 			name:    "pin absent keeps the stored pin verbatim",
 			stored:  storedPipeline(t, oldV1),
 			wantPin: oldV1,
+		},
+		{
+			name:    "the artifact of a verbatim pin is accepted as uniflow_tar",
+			stored:  storedPipeline(t, oldV1),
+			reqTar:  oldV1.Artifact,
+			wantPin: oldV1,
+		},
+		{
+			name:     "same version rejects the artifact of another release",
+			stored:   storedPipeline(t, pinOf(v1)),
+			reqTar:   v2Rel.Artifact,
+			wantCode: codes.InvalidArgument,
+			wantMsg:  "uniflow_tar is server-owned for declarative pipelines",
+		},
+		{
+			name:     "a uniflow_tar from another source is rejected",
+			stored:   storedPipeline(t, pinOf(v1)),
+			reqTar:   "s3://bucket/user.tar.gz",
+			wantCode: codes.InvalidArgument,
+			wantMsg:  "uniflow_tar is server-owned for declarative pipelines",
+		},
+		{
+			name:    "upgrade replaces an echoed old artifact",
+			stored:  storedPipeline(t, pinOf(v1)),
+			reqPin:  &v2.InterpreterPin{Version: "core-v2"},
+			reqTar:  v1.Artifact,
+			wantPin: pinOf(v2Rel),
+		},
+		{
+			name:     "upgrade rejects a uniflow_tar from another source",
+			stored:   storedPipeline(t, pinOf(v1)),
+			reqPin:   &v2.InterpreterPin{Version: "core-v2"},
+			reqTar:   "s3://bucket/user.tar.gz",
+			wantCode: codes.InvalidArgument,
+			wantMsg:  "uniflow_tar is server-owned for declarative pipelines",
+		},
+		{
+			name:     "stored UNIFLOW pipeline rejects its echoed user tar",
+			stored:   typedPipeline(v2.PIPELINE_MANIFEST_TYPE_UNIFLOW),
+			reqTar:   "s3://bucket/user.tar.gz",
+			wantCode: codes.InvalidArgument,
+			wantMsg:  "uniflow_tar is server-owned for declarative pipelines",
 		},
 		{
 			name:    "same version keeps the stored pin verbatim",
@@ -422,6 +474,7 @@ func TestBeforeUpdate(t *testing.T) {
 			expectGet(h, tc.stored, tc.getErr)
 			p := declarativePipeline(t, workflow(tc.extra))
 			p.Spec.Manifest.InterpreterPin = tc.reqPin
+			p.Spec.Manifest.UniflowTar = tc.reqTar
 			p.Annotations = map[string]string{explainPlanAnnotation: `{"taskCount":99}`}
 			want := p.DeepCopy()
 			req := &v2.UpdatePipelineRequest{Pipeline: p, UpdateOptions: &metav1.UpdateOptions{}}
@@ -446,6 +499,7 @@ func TestBeforeUpdate(t *testing.T) {
 				return
 			}
 			assert.Equal(t, tc.wantPin, p.Spec.Manifest.InterpreterPin)
+			assert.Equal(t, tc.wantPin.Artifact, p.Spec.Manifest.UniflowTar, "uniflow_tar follows the pin")
 			if tc.wantPlan == nil {
 				assert.Nil(t, explainPlan(t, p), "a real update removes the client annotation")
 				return
@@ -455,10 +509,15 @@ func TestBeforeUpdate(t *testing.T) {
 	}
 }
 
-func TestBeforeUpdate_RejectsClientUniflowTar(t *testing.T) {
-	hook, _ := newHook(t, loadDeclarative(t, true, "core-v1"))
-	p := declarativePipeline(t, workflow(nil))
-	p.Spec.Manifest.UniflowTar = "s3://bucket/user.tar.gz"
-	requireStatus(t, hook.BeforeUpdate(context.Background(), &v2.UpdatePipelineRequest{Pipeline: p}),
-		codes.InvalidArgument, "uniflow_tar is server-owned for declarative pipelines")
+// A client that gets a pipeline and sends it back unchanged must succeed.
+func TestBeforeUpdate_GetModifyUpdateRoundTrip(t *testing.T) {
+	d := loadDeclarative(t, true, "core-v1")
+	hook, h := newHook(t, d)
+	stored := storedPipeline(t, pinOf(release(t, d, "core-v1")))
+	stored.Spec.Manifest.UniflowTar = release(t, d, "core-v1").Artifact
+	expectGet(h, stored, nil)
+	req := &v2.UpdatePipelineRequest{Pipeline: stored.DeepCopy()}
+
+	require.NoError(t, hook.BeforeUpdate(context.Background(), req))
+	assert.Equal(t, stored, req.Pipeline)
 }
