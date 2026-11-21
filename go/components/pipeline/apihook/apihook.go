@@ -16,6 +16,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/michelangelo-ai/michelangelo/go/api"
+	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	"github.com/michelangelo-ai/michelangelo/go/components/pipeline/declarative"
 	v2 "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
@@ -47,11 +48,67 @@ func (a apiHook) BeforeCreate(_ context.Context, req *v2.CreatePipelineRequest) 
 }
 
 // BeforeUpdate validates a DECLARATIVE pipeline and keeps or moves its pin.
-func (a apiHook) BeforeUpdate(_ context.Context, req *v2.UpdatePipelineRequest) error {
+func (a apiHook) BeforeUpdate(ctx context.Context, req *v2.UpdatePipelineRequest) error {
 	if skip, err := a.gate(req.Pipeline); skip || err != nil {
 		return err
 	}
-	return nil
+	p := req.Pipeline
+	stored := &v2.Pipeline{}
+	if err := a.apiHandler.Get(ctx, p.Namespace, p.Name, &metav1.GetOptions{}, stored); err != nil {
+		if utils.IsNotFoundError(err) {
+			// The Update call that follows reports the missing pipeline.
+			return nil
+		}
+		return err
+	}
+	rel, pin, err := a.target(stored, p.Spec.Manifest.InterpreterPin)
+	if err != nil {
+		return err
+	}
+	return apply(p, rel, pin, req.UpdateOptions != nil && isDryRun(req.UpdateOptions.DryRun))
+}
+
+// target resolves the release and the pin of an update, per spec 6.2. A
+// stored pipeline that is not a pinned DECLARATIVE pipeline follows the
+// create rules. This covers a type change and a pipeline that kubectl wrote
+// without a pin.
+func (a apiHook) target(stored *v2.Pipeline, reqPin *v2.InterpreterPin) (*declarative.Release, *v2.InterpreterPin, error) {
+	storedPin := stored.Spec.Manifest.GetInterpreterPin()
+	if stored.Spec.Manifest.GetType() != v2.PIPELINE_MANIFEST_TYPE_DECLARATIVE || storedPin == nil {
+		if reqPin != nil {
+			return nil, nil, status.Error(codes.InvalidArgument, "interpreter_pin is server-owned")
+		}
+		return a.d.defaultRelease, pinOf(a.d.defaultRelease), nil
+	}
+
+	var rel *declarative.Release
+	var pin *v2.InterpreterPin
+	if v := reqPin.GetVersion(); v == "" || v == storedPin.Version {
+		r, ok := a.d.releases[storedPin.Version]
+		if !ok {
+			return nil, nil, status.Errorf(codes.InvalidArgument,
+				"interpreter %s is no longer available; set interpreter_pin.version to one of %s",
+				storedPin.Version, a.d.versionList())
+		}
+		rel, pin = r, storedPin
+	} else {
+		r, ok := a.d.releases[v]
+		if !ok {
+			return nil, nil, status.Errorf(codes.InvalidArgument,
+				"interpreter_pin.version %q is not a known release; use one of %s", v, a.d.versionList())
+		}
+		rel, pin = r, pinOf(r)
+	}
+
+	if s := reqPin.GetArtifact(); s != "" && s != rel.Artifact {
+		return nil, nil, status.Errorf(codes.InvalidArgument,
+			"interpreter_pin.artifact %q does not match release %s; leave it unset", s, rel.Version)
+	}
+	if s := reqPin.GetDigest(); s != "" && s != rel.Digest {
+		return nil, nil, status.Errorf(codes.InvalidArgument,
+			"interpreter_pin.digest %q does not match release %s; leave it unset", s, rel.Version)
+	}
+	return rel, pin, nil
 }
 
 // gate reports skip for a pipeline that is not DECLARATIVE, and an error for

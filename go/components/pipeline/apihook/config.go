@@ -3,6 +3,7 @@ package apihook
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"go.uber.org/config"
 
@@ -66,4 +67,9 @@ func (d *Declarative) versions() []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// versionList formats the loaded release versions as "[a, b]".
+func (d *Declarative) versionList() string {
+	return "[" + strings.Join(d.versions(), ", ") + "]"
 }
