@@ -272,7 +272,7 @@ Top-level keys. See [`values.yaml`](./values.yaml) for the full annotated schema
 | `apiserver.declarative.enabled` | bool | `false` | no | Accept DECLARATIVE pipelines. When off, the apiserver rejects them. |
 | `apiserver.declarative.defaultInterpreter` | string | `""` | conditional | Release version that a new pipeline is pinned to. Required when `declarative.enabled=true`. |
 | `apiserver.declarative.releasesDir` | string | `/etc/michelangelo/declarative/releases` | no | Mount path of the releases ConfigMap. |
-| `apiserver.declarative.releases` | map | `{}` | conditional | Maps each release version to its release file YAML. Must include `defaultInterpreter`. With `--set-file`, escape each dot in a version: `releases.core-v1\.4\.2`. |
+| `apiserver.declarative.releases` | map | `{}` | conditional | Maps each release version to its release file YAML. Must include `defaultInterpreter`. Do not change a release file after you publish it; add a new version instead. With `--set-file`, escape each dot in a version: `releases.core-v1\.4\.2`. |
 | `envoy.enabled` | bool | `true` | no | Toggle the gRPC-Web proxy. |
 | `envoy.port` | int | `8081` | no | |
 | `envoy.corsOrigins` | string | `""` | no | Regex for `Access-Control-Allow-Origin`. Required if the UI runs on a different host. |

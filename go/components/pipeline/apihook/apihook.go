@@ -69,21 +69,23 @@ func (a apiHook) BeforeUpdate(ctx context.Context, req *v2.UpdatePipelineRequest
 	if err != nil {
 		return err
 	}
-	var oldArtifact string
-	if storedPin := stored.Spec.Manifest.GetInterpreterPin(); storedPin != nil && storedPin.Version != pin.Version {
-		oldArtifact = storedPin.Artifact
+	var storedArtifact string
+	if stored.Spec.Manifest.GetType() == v2.PIPELINE_MANIFEST_TYPE_DECLARATIVE {
+		storedArtifact = stored.Spec.Manifest.GetInterpreterPin().GetArtifact()
 	}
-	if err := checkTar(p.Spec.Manifest.UniflowTar, pin, oldArtifact); err != nil {
+	if err := checkTar(p.Spec.Manifest.UniflowTar, pin, storedArtifact); err != nil {
 		return err
 	}
 	return apply(p, rel, pin, req.UpdateOptions != nil && isDryRun(req.UpdateOptions.DryRun))
 }
 
-// target resolves the release and the pin of an update, per spec 6.2. A
-// stored pipeline that is not a pinned DECLARATIVE pipeline follows the
-// create rules. This covers a type change and a pipeline that kubectl wrote
-// without a pin. On an upgrade, a request artifact or digest that equals the
-// stored pin is an echo from a get-modify-update, and the new pin replaces it.
+// target resolves the release and the pin of an update. A stored pipeline
+// that is not a pinned DECLARATIVE pipeline follows the create rules. This
+// covers a type change and a pipeline that kubectl wrote without a pin.
+//
+// A request artifact or digest is accepted when it equals the pin that the
+// hook writes, or the stored pin. The second case is an echo from a
+// get-modify-update, and the hook replaces it.
 func (a apiHook) target(stored *v2.Pipeline, reqPin *v2.InterpreterPin) (*declarative.Release, *v2.InterpreterPin, error) {
 	storedPin := stored.Spec.Manifest.GetInterpreterPin()
 	if stored.Spec.Manifest.GetType() != v2.PIPELINE_MANIFEST_TYPE_DECLARATIVE || storedPin == nil {
@@ -95,7 +97,6 @@ func (a apiHook) target(stored *v2.Pipeline, reqPin *v2.InterpreterPin) (*declar
 
 	var rel *declarative.Release
 	var pin *v2.InterpreterPin
-	var echo *v2.InterpreterPin
 	if v := reqPin.GetVersion(); v == "" || v == storedPin.Version {
 		r, ok := a.d.releases[storedPin.Version]
 		if !ok {
@@ -103,21 +104,32 @@ func (a apiHook) target(stored *v2.Pipeline, reqPin *v2.InterpreterPin) (*declar
 				"interpreter %s is no longer available; set interpreter_pin.version to one of %s",
 				storedPin.Version, a.d.versionList())
 		}
-		rel, pin = r, storedPin
+		switch storedPin.Digest {
+		case r.Digest:
+			rel, pin = r, storedPin
+		case "":
+			// kubectl wrote a pin with no digest. Stamp it again from the
+			// release of the same version.
+			rel, pin = r, pinOf(r)
+		default:
+			return nil, nil, status.Errorf(codes.FailedPrecondition,
+				"the release file for interpreter %s changed after this pipeline was pinned; set interpreter_pin.version to another release in %s",
+				storedPin.Version, a.d.versionList())
+		}
 	} else {
 		r, ok := a.d.releases[v]
 		if !ok {
 			return nil, nil, status.Errorf(codes.InvalidArgument,
 				"interpreter_pin.version %q is not a known release; use one of %s", v, a.d.versionList())
 		}
-		rel, pin, echo = r, pinOf(r), storedPin
+		rel, pin = r, pinOf(r)
 	}
 
-	if s := reqPin.GetArtifact(); s != "" && s != rel.Artifact && s != echo.GetArtifact() {
+	if s := reqPin.GetArtifact(); s != "" && s != pin.Artifact && s != storedPin.Artifact {
 		return nil, nil, status.Errorf(codes.InvalidArgument,
 			"interpreter_pin.artifact %q does not match release %s; leave it unset", s, rel.Version)
 	}
-	if s := reqPin.GetDigest(); s != "" && s != rel.Digest && s != echo.GetDigest() {
+	if s := reqPin.GetDigest(); s != "" && s != pin.Digest && s != storedPin.Digest {
 		return nil, nil, status.Errorf(codes.InvalidArgument,
 			"interpreter_pin.digest %q does not match release %s; leave it unset", s, rel.Version)
 	}
@@ -142,11 +154,12 @@ func (a apiHook) gate(p *v2.Pipeline) (skip bool, err error) {
 }
 
 // checkTar accepts a client uniflow_tar only when it equals the artifact of
-// pin, so a get-modify-update round trip succeeds. On an upgrade, oldArtifact
-// is the artifact of the stored pin. The hook replaces that value too, since
-// a client that changes only interpreter_pin.version echoes it.
-func checkTar(tar string, pin *v2.InterpreterPin, oldArtifact string) error {
-	if tar == "" || tar == pin.Artifact || (oldArtifact != "" && tar == oldArtifact) {
+// pin, so a get-modify-update round trip succeeds. On an update, it also
+// accepts storedArtifact, the artifact of the stored pin. A client that
+// changes only interpreter_pin.version echoes that value, and the hook
+// replaces it.
+func checkTar(tar string, pin *v2.InterpreterPin, storedArtifact string) error {
+	if tar == "" || tar == pin.Artifact || (storedArtifact != "" && tar == storedArtifact) {
 		return nil
 	}
 	return status.Error(codes.InvalidArgument, "uniflow_tar is server-owned for declarative pipelines")

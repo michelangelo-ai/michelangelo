@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/gogo/protobuf/jsonpb"
+	"github.com/gogo/protobuf/proto"
 	"github.com/gogo/protobuf/types"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -326,6 +327,9 @@ func TestBeforeUpdate(t *testing.T) {
 	// oldV1 is a stored pin whose artifact differs from the release file, so
 	// a test can tell a pin kept verbatim from a pin stamped again.
 	oldV1 := &v2.InterpreterPin{Version: "core-v1", Artifact: "s3://old/core-v1.tar.gz", Digest: v1.Digest}
+	// driftV1 is a stored pin whose digest differs from the release file. An
+	// operator changed core-v1.yaml after the pin was stamped.
+	driftV1 := &v2.InterpreterPin{Version: "core-v1", Artifact: v1.Artifact, Digest: "sha256:stale"}
 	const versions = "[core-v1, core-v2]"
 
 	tests := []struct {
@@ -395,6 +399,46 @@ func TestBeforeUpdate(t *testing.T) {
 			stored:  storedPipeline(t, oldV1),
 			reqPin:  &v2.InterpreterPin{Version: "core-v1"},
 			wantPin: oldV1,
+		},
+		{
+			name:    "same version accepts an echo of a verbatim pin and its uniflow_tar",
+			stored:  storedPipeline(t, oldV1),
+			reqPin:  proto.Clone(oldV1).(*v2.InterpreterPin),
+			reqTar:  oldV1.Artifact,
+			wantPin: oldV1,
+		},
+		{
+			name:     "same version rejects the release file artifact beside a verbatim pin",
+			stored:   storedPipeline(t, oldV1),
+			reqPin:   &v2.InterpreterPin{Version: "core-v1", Artifact: v1.Artifact},
+			wantCode: codes.InvalidArgument,
+			wantMsg:  `interpreter_pin.artifact "` + v1.Artifact + `" does not match release core-v1; leave it unset`,
+		},
+		{
+			name:     "same version fails when the release file changed after the pin",
+			stored:   storedPipeline(t, driftV1),
+			wantCode: codes.FailedPrecondition,
+			wantMsg:  "the release file for interpreter core-v1 changed after this pipeline was pinned; set interpreter_pin.version to another release in " + versions,
+		},
+		{
+			name:     "an echo of a drifted pin also fails",
+			stored:   storedPipeline(t, driftV1),
+			reqPin:   proto.Clone(driftV1).(*v2.InterpreterPin),
+			wantCode: codes.FailedPrecondition,
+			wantMsg:  "the release file for interpreter core-v1 changed after this pipeline was pinned; set interpreter_pin.version to another release in " + versions,
+		},
+		{
+			name:    "an upgrade away from a drifted pin succeeds",
+			stored:  storedPipeline(t, driftV1),
+			reqPin:  &v2.InterpreterPin{Version: "core-v2", Artifact: driftV1.Artifact, Digest: driftV1.Digest},
+			wantPin: pinOf(v2Rel),
+		},
+		{
+			name:    "a stored pin with no digest is stamped again from its own release",
+			stored:  storedPipeline(t, &v2.InterpreterPin{Version: "core-v1", Artifact: "s3://old/core-v1.tar.gz"}),
+			reqPin:  &v2.InterpreterPin{Version: "core-v1", Artifact: "s3://old/core-v1.tar.gz"},
+			reqTar:  "s3://old/core-v1.tar.gz",
+			wantPin: pinOf(v1),
 		},
 		{
 			name:    "a round trip of the stored pin is accepted",

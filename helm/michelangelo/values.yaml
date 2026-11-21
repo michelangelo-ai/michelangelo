@@ -286,7 +286,10 @@ apiserver:
     # Directory where the releases ConfigMap is mounted.
     releasesDir: /etc/michelangelo/declarative/releases
     # Maps each release version to the YAML text of its release file. The
-    # chart writes each one as <version>.yaml. Escape each dot in a version
+    # chart writes each one as <version>.yaml. Do not change a release file
+    # after you publish it. A changed digest blocks updates to every pipeline
+    # pinned to that version. To change a release, add a new version.
+    # Escape each dot in a version
     # on the command line, or --set-file reads it as a nested key. Example:
     #   helm upgrade ... --set-file 'apiserver.declarative.releases.core-v1\.4\.2=core-v1.4.2.yaml'
     releases: {}
