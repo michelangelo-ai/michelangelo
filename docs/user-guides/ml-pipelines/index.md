@@ -122,6 +122,7 @@ Start with the [Getting started](../getting-started/getting-started.md) guide to
 | [**Pipeline Running Modes**](./pipeline-running-modes.md) | Understand Local, Remote, Dev, and Pipeline run modes |
 | [**Pipeline Management**](./pipeline-management.md) | Create and manage standard and custom pipelines |
 | [**Workflow Patterns**](./workflow-patterns.md) | Sequence, branch, loop, run tasks in parallel, and share datasets across runtimes |
+| [**Buildkite Plugin**](./buildkite.md) | Submit, inspect, wait for, and cancel Buildkite builds from a workflow |
 | [**Running Uniflow Pipelines**](./running-uniflow.md) | Environment setup, execution, and debugging |
 | [**Caching and Resume**](./cache-and-pipelinerun-resume-form.md) | Cache task results and resume failed runs |
 | [**File Sync**](./file-sync-testing-flow-runbook.md) | Sync local code changes to remote runs |
