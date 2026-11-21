@@ -122,8 +122,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	logger.Info("Reconciling pipeline", zap.Any("PipelineStatusState", state.String()))
 
 	// The apiserver stamps the pin on every DECLARATIVE write. A pipeline
-	// without one was written directly to Kubernetes and cannot run. Stop
-	// before the revision and READY steps.
+	// without one was written directly to Kubernetes. Mark it ERROR and stop
+	// before the revision and READY steps. A pin shows only that the
+	// pipeline went through the apiserver.
 	manifest := pipeline.Spec.Manifest
 	if manifest.GetType() == v2pb.PIPELINE_MANIFEST_TYPE_DECLARATIVE && manifest.GetInterpreterPin() == nil {
 		pipeline.Status.State = v2pb.PIPELINE_STATE_ERROR
