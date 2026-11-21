@@ -82,7 +82,8 @@ func (a apiHook) BeforeUpdate(ctx context.Context, req *v2.UpdatePipelineRequest
 // target resolves the release and the pin of an update, per spec 6.2. A
 // stored pipeline that is not a pinned DECLARATIVE pipeline follows the
 // create rules. This covers a type change and a pipeline that kubectl wrote
-// without a pin.
+// without a pin. On an upgrade, a request artifact or digest that equals the
+// stored pin is an echo from a get-modify-update, and the new pin replaces it.
 func (a apiHook) target(stored *v2.Pipeline, reqPin *v2.InterpreterPin) (*declarative.Release, *v2.InterpreterPin, error) {
 	storedPin := stored.Spec.Manifest.GetInterpreterPin()
 	if stored.Spec.Manifest.GetType() != v2.PIPELINE_MANIFEST_TYPE_DECLARATIVE || storedPin == nil {
@@ -94,6 +95,7 @@ func (a apiHook) target(stored *v2.Pipeline, reqPin *v2.InterpreterPin) (*declar
 
 	var rel *declarative.Release
 	var pin *v2.InterpreterPin
+	var echo *v2.InterpreterPin
 	if v := reqPin.GetVersion(); v == "" || v == storedPin.Version {
 		r, ok := a.d.releases[storedPin.Version]
 		if !ok {
@@ -108,14 +110,14 @@ func (a apiHook) target(stored *v2.Pipeline, reqPin *v2.InterpreterPin) (*declar
 			return nil, nil, status.Errorf(codes.InvalidArgument,
 				"interpreter_pin.version %q is not a known release; use one of %s", v, a.d.versionList())
 		}
-		rel, pin = r, pinOf(r)
+		rel, pin, echo = r, pinOf(r), storedPin
 	}
 
-	if s := reqPin.GetArtifact(); s != "" && s != rel.Artifact {
+	if s := reqPin.GetArtifact(); s != "" && s != rel.Artifact && s != echo.GetArtifact() {
 		return nil, nil, status.Errorf(codes.InvalidArgument,
 			"interpreter_pin.artifact %q does not match release %s; leave it unset", s, rel.Version)
 	}
-	if s := reqPin.GetDigest(); s != "" && s != rel.Digest {
+	if s := reqPin.GetDigest(); s != "" && s != rel.Digest && s != echo.GetDigest() {
 		return nil, nil, status.Errorf(codes.InvalidArgument,
 			"interpreter_pin.digest %q does not match release %s; leave it unset", s, rel.Version)
 	}

@@ -443,9 +443,45 @@ func TestBeforeUpdate(t *testing.T) {
 		{
 			name:     "digest differs from the target release",
 			stored:   storedPipeline(t, pinOf(v1)),
-			reqPin:   &v2.InterpreterPin{Version: "core-v2", Digest: v1.Digest},
+			reqPin:   &v2.InterpreterPin{Version: "core-v2", Digest: "sha256:bad"},
 			wantCode: codes.InvalidArgument,
-			wantMsg:  `interpreter_pin.digest "` + v1.Digest + `" does not match release core-v2; leave it unset`,
+			wantMsg:  `interpreter_pin.digest "sha256:bad" does not match release core-v2; leave it unset`,
+		},
+		{
+			name:    "upgrade replaces an echoed stored pin artifact and digest",
+			stored:  storedPipeline(t, pinOf(v1)),
+			extra:   onlyV2,
+			reqPin:  &v2.InterpreterPin{Version: "core-v2", Artifact: v1.Artifact, Digest: v1.Digest},
+			reqTar:  v1.Artifact,
+			wantPin: pinOf(v2Rel),
+		},
+		{
+			name:    "upgrade compares the echo with the stored pin, not the release file",
+			stored:  storedPipeline(t, oldV1),
+			reqPin:  &v2.InterpreterPin{Version: "core-v2", Artifact: oldV1.Artifact, Digest: oldV1.Digest},
+			reqTar:  oldV1.Artifact,
+			wantPin: pinOf(v2Rel),
+		},
+		{
+			name:     "upgrade rejects an artifact that is neither the stored nor the target",
+			stored:   storedPipeline(t, pinOf(v1)),
+			reqPin:   &v2.InterpreterPin{Version: "core-v2", Artifact: "s3://evil/tar.gz", Digest: v1.Digest},
+			wantCode: codes.InvalidArgument,
+			wantMsg:  `interpreter_pin.artifact "s3://evil/tar.gz" does not match release core-v2; leave it unset`,
+		},
+		{
+			name:     "upgrade rejects a foreign digest beside an echoed artifact",
+			stored:   storedPipeline(t, pinOf(v1)),
+			reqPin:   &v2.InterpreterPin{Version: "core-v2", Artifact: v1.Artifact, Digest: "sha256:bad"},
+			wantCode: codes.InvalidArgument,
+			wantMsg:  `interpreter_pin.digest "sha256:bad" does not match release core-v2; leave it unset`,
+		},
+		{
+			name:     "same version rejects the artifact of the previous stored release",
+			stored:   storedPipeline(t, pinOf(v1)),
+			reqPin:   &v2.InterpreterPin{Version: "core-v1", Artifact: v2Rel.Artifact},
+			wantCode: codes.InvalidArgument,
+			wantMsg:  `interpreter_pin.artifact "` + v2Rel.Artifact + `" does not match release core-v1; leave it unset`,
 		},
 		{
 			name:     "stored pin names a removed release",
@@ -545,6 +581,24 @@ func TestBeforeUpdate_GetModifyUpdateRoundTrip(t *testing.T) {
 
 	require.NoError(t, hook.BeforeUpdate(context.Background(), req))
 	assert.Equal(t, stored, req.Pipeline)
+}
+
+// A client that gets a pipeline and changes only interpreter_pin.version
+// must succeed. The hook stores the artifact, the digest, and uniflow_tar of
+// the new release.
+func TestBeforeUpdate_GetModifyUpdateUpgrade(t *testing.T) {
+	d := loadDeclarative(t, true, "core-v1")
+	hook, h := newHook(t, d)
+	v1, v2Rel := release(t, d, "core-v1"), release(t, d, "core-v2")
+	stored := storedPipeline(t, pinOf(v1))
+	stored.Spec.Manifest.UniflowTar = v1.Artifact
+	expectGet(h, stored, nil)
+	p := stored.DeepCopy()
+	p.Spec.Manifest.InterpreterPin.Version = "core-v2"
+
+	require.NoError(t, hook.BeforeUpdate(context.Background(), &v2.UpdatePipelineRequest{Pipeline: p}))
+	assert.Equal(t, pinOf(v2Rel), p.Spec.Manifest.InterpreterPin)
+	assert.Equal(t, v2Rel.Artifact, p.Spec.Manifest.UniflowTar)
 }
 
 // A type change from DECLARATIVE to YAML or UNIFLOW is a plain update of a
