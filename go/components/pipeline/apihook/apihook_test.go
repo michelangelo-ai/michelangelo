@@ -95,9 +95,8 @@ func typedPipeline(typ v2.PipelineManifest_Type) *v2.Pipeline {
 			Annotations: map[string]string{explainPlanAnnotation: "client"},
 		},
 		Spec: v2.PipelineSpec{Manifest: &v2.PipelineManifest{
-			Type:           typ,
-			UniflowTar:     "s3://bucket/user.tar.gz",
-			InterpreterPin: &v2.InterpreterPin{Version: "core-v1"},
+			Type:       typ,
+			UniflowTar: "s3://bucket/user.tar.gz",
 		}},
 	}
 }
@@ -132,6 +131,32 @@ func TestPassThrough(t *testing.T) {
 				want = update.Pipeline.DeepCopy()
 				require.NoError(t, hook.BeforeUpdate(context.Background(), update))
 				assert.Equal(t, want, update.Pipeline)
+			})
+		}
+	}
+}
+
+func TestNonDeclarativePinIsRejected(t *testing.T) {
+	const msg = "interpreter_pin is only valid for declarative pipelines"
+	manifestTypes := []v2.PipelineManifest_Type{
+		v2.PIPELINE_MANIFEST_TYPE_YAML,
+		v2.PIPELINE_MANIFEST_TYPE_UNIFLOW,
+		v2.PIPELINE_MANIFEST_TYPE_INVALID,
+	}
+	for _, typ := range manifestTypes {
+		for _, enabled := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/enabled=%t", typ, enabled), func(t *testing.T) {
+				// The mock has no expectations, so any Get fails the test.
+				hook, _ := newHook(t, loadDeclarative(t, enabled, "core-v1"))
+				pinned := func() *v2.Pipeline {
+					p := typedPipeline(typ)
+					p.Spec.Manifest.InterpreterPin = &v2.InterpreterPin{Version: "core-v1"}
+					return p
+				}
+				requireStatus(t, hook.BeforeCreate(context.Background(), &v2.CreatePipelineRequest{Pipeline: pinned()}),
+					codes.InvalidArgument, msg)
+				requireStatus(t, hook.BeforeUpdate(context.Background(), &v2.UpdatePipelineRequest{Pipeline: pinned()}),
+					codes.InvalidArgument, msg)
 			})
 		}
 	}
