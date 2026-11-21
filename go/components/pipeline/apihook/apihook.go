@@ -1,8 +1,8 @@
 // Package apihook validates DECLARATIVE pipelines on create and update and
 // pins each one to an interpreter release.
 //
-// The hook passes every other manifest type through unchanged, unless the
-// request sets interpreter_pin. When the apiserver.declarative flag is off, a
+// The hook passes every other manifest type through, unless the request sets
+// interpreter_pin. It removes only the explain-plan annotation. When the apiserver.declarative flag is off, a
 // DECLARATIVE write fails with FailedPrecondition.
 package apihook
 
@@ -136,15 +136,17 @@ func (a apiHook) target(stored *v2.Pipeline, reqPin *v2.InterpreterPin) (*declar
 	return rel, pin, nil
 }
 
-// gate reports skip for a pipeline that is not DECLARATIVE. It returns an
-// error for a pipeline that is not DECLARATIVE but carries interpreter_pin,
-// and for a DECLARATIVE pipeline when the flag is off. The pin check does not
-// depend on the flag.
+// gate reports skip for a pipeline that is not DECLARATIVE. On skip, it
+// removes the explain-plan annotation, so a client cannot store a plan on
+// that pipeline. It returns an error for a pipeline that is not DECLARATIVE
+// but carries interpreter_pin, and for a DECLARATIVE pipeline when the flag
+// is off. The pin check does not depend on the flag.
 func (a apiHook) gate(p *v2.Pipeline) (skip bool, err error) {
 	if p.Spec.Manifest.GetType() != v2.PIPELINE_MANIFEST_TYPE_DECLARATIVE {
 		if p.Spec.Manifest.GetInterpreterPin() != nil {
 			return false, status.Error(codes.InvalidArgument, "interpreter_pin is only valid for declarative pipelines")
 		}
+		delete(p.Annotations, explainPlanAnnotation)
 		return true, nil
 	}
 	if !a.d.enabled {

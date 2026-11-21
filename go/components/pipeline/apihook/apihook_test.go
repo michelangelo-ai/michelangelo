@@ -93,7 +93,7 @@ func typedPipeline(typ v2.PipelineManifest_Type) *v2.Pipeline {
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:   ns,
 			Name:        name,
-			Annotations: map[string]string{explainPlanAnnotation: "client"},
+			Annotations: map[string]string{explainPlanAnnotation: "client", "team": "ml"},
 		},
 		Spec: v2.PipelineSpec{Manifest: &v2.PipelineManifest{
 			Type:       typ,
@@ -123,13 +123,16 @@ func TestPassThrough(t *testing.T) {
 				// The mock has no expectations, so any Get fails the test.
 				hook, _ := newHook(t, loadDeclarative(t, enabled, "core-v1"))
 
+				// The hook removes only the explain-plan annotation, so a
+				// client cannot store a plan on a non-declarative pipeline.
+				want := mk()
+				delete(want.Annotations, explainPlanAnnotation)
+
 				create := &v2.CreatePipelineRequest{Pipeline: mk(), CreateOptions: &metav1.CreateOptions{DryRun: []string{metav1.DryRunAll}}}
-				want := create.Pipeline.DeepCopy()
 				require.NoError(t, hook.BeforeCreate(context.Background(), create))
 				assert.Equal(t, want, create.Pipeline)
 
 				update := &v2.UpdatePipelineRequest{Pipeline: mk(), UpdateOptions: &metav1.UpdateOptions{DryRun: []string{metav1.DryRunAll}}}
-				want = update.Pipeline.DeepCopy()
 				require.NoError(t, hook.BeforeUpdate(context.Background(), update))
 				assert.Equal(t, want, update.Pipeline)
 			})
@@ -655,8 +658,9 @@ func TestBeforeUpdate_TypeChangeFromDeclarative(t *testing.T) {
 
 			p := typedPipeline(typ)
 			want := p.DeepCopy()
+			delete(want.Annotations, explainPlanAnnotation)
 			require.NoError(t, hook.BeforeUpdate(context.Background(), &v2.UpdatePipelineRequest{Pipeline: p}))
-			assert.Equal(t, want, p, "a request without a pin passes through unchanged")
+			assert.Equal(t, want, p, "a request without a pin passes through")
 
 			p = typedPipeline(typ)
 			p.Spec.Manifest.InterpreterPin = &v2.InterpreterPin{Version: "core-v1"}
