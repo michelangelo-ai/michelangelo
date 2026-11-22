@@ -532,7 +532,13 @@ def test_ambiguous_submission_is_never_retried(opener: Mock, failure) -> None:
 
 
 @pytest.mark.parametrize(
-    "body", [b"invalid-json", b"null", b"{}", b"x" * (8 * 1024 * 1024 + 1)]
+    "body",
+    [
+        b"invalid-json",
+        b"null",
+        b"{}",
+        pytest.param(b"x" * (8 * 1024 * 1024 + 1), id="oversized"),
+    ],
 )
 def test_unusable_submission_acknowledgement_warns_before_retry(
     opener: Mock, body: bytes
@@ -587,7 +593,7 @@ def test_missing_optional_fields_normalize_to_empty_strings(opener: Mock) -> Non
     "body,message",
     [
         (b"not-json", "invalid build JSON"),
-        (b"x" * (8 * 1024 * 1024 + 1), "exceeds 8 MiB"),
+        pytest.param(b"x" * (8 * 1024 * 1024 + 1), "exceeds 8 MiB", id="oversized"),
     ],
 )
 def test_invalid_or_oversized_json_is_not_retried(
