@@ -1808,6 +1808,11 @@ available-typed-arrays@^1.0.7:
   dependencies:
     possible-typed-array-names "^1.0.0"
 
+axe-core@^4.11.0:
+  version "4.14.0"
+  resolved "https://registry.yarnpkg.com/axe-core/-/axe-core-4.14.0.tgz#a9819d3932a8198fbe935d8cbd8afcdfecbcf31d"
+  integrity sha512-9WTZxEjsZ7b13TH8JPmbV2z8CHbl80/2hm3XPEG4JgNdQLK81IBRXmSxHfMAOkSqQeRxT/0dwNDz2GOm3zzpcQ==
+
 babel-plugin-macros@^3.1.0:
   version "3.1.0"
   resolved "https://registry.yarnpkg.com/babel-plugin-macros/-/babel-plugin-macros-3.1.0.tgz#9ef6dc74deb934b4db344dc973ee851d148c50c1"
@@ -1832,14 +1837,14 @@ baseline-browser-mapping@^2.8.25:
   resolved "https://registry.yarnpkg.com/baseline-browser-mapping/-/baseline-browser-mapping-2.8.28.tgz#9ef511f5a7c19d74a94cafcbf951608398e9bdb3"
   integrity sha512-gYjt7OIqdM0PcttNYP2aVrr2G0bMALkBaoehD4BuRGjAOtipg0b6wHg1yNL+s5zSnLZZrGHOw4IrND8CD+3oIQ==
 
-baseui@15.0.0, baseui@^14.0.0, baseui@^15.0.0:
-  version "15.0.0"
-  resolved "https://registry.yarnpkg.com/baseui/-/baseui-15.0.0.tgz#0bb143288476f6b11fd0d5b56bb26c1df4803d8a"
-  integrity sha512-MhWHo1lL96RU8lS1v8mRqbmoWynmZv4FzVC33enkbmFGrcjdkRbsUaFgq5S+dUQPXsty9k1URdWNmg901wHOlg==
+baseui@15.0.0, baseui@^15.0.0:
+  version "15.0.2"
+  resolved "https://registry.yarnpkg.com/baseui/-/baseui-15.0.2.tgz#070f47ac6b0461e23857ebe276b49241dcb274b8"
+  integrity sha512-LJs4v8ddtvXxgTtdRfazAsWCRlpuEzy47yU9zG9i3kkp4RQk8RCrUTZ6ACfMelwdXEQRt8hsqOH4tgnulV96XQ==
   dependencies:
     "@date-io/date-fns" "^2.13.1"
     "@date-io/moment" "^2.13.1"
-    baseui "^14.0.0"
+    axe-core "^4.11.0"
     card-validator "^6.2.0"
     csstype "2.6.11"
     d3 "^6.7.0"
@@ -3979,10 +3984,10 @@ mapbox-gl@^1.0.0:
     tinyqueue "^2.0.3"
     vt-pbf "^3.1.1"
 
-markdown-to-jsx@7.4.7:
-  version "7.4.7"
-  resolved "https://registry.yarnpkg.com/markdown-to-jsx/-/markdown-to-jsx-7.4.7.tgz#740ee7ec933865ef5cc683a0992797685a75e2ee"
-  integrity sha512-0+ls1IQZdU6cwM1yu0ZjjiVWYtkbExSyUIFU2ZeDIFuZM1W42Mh4OlJ4nb4apX4H8smxDHRdFaoIVJGwfv5hkg==
+markdown-to-jsx@9.10.3:
+  version "9.10.3"
+  resolved "https://registry.yarnpkg.com/markdown-to-jsx/-/markdown-to-jsx-9.10.3.tgz#c02428e43c1fe642b74e0cd68c1088d4bf01c92e"
+  integrity sha512-J5/NCmNYQ0ExsnThzvF3F1fSzNYLgROcW2diUqRqoIoiyhoy8DSI06jLuMYk0c86SQd/FiVYJrV6tIgci9S2tQ==
 
 math-intrinsics@^1.1.0:
   version "1.1.0"
@@ -5266,9 +5271,9 @@ tsc-alias@^1.9.7:
     plimit-lit "^1.2.6"
 
 tslib@^1.10.0, tslib@^2.0.0, tslib@^2.0.1, tslib@^2.0.3, tslib@^2.6.2:
-  version "2.8.1"
-  resolved "https://registry.yarnpkg.com/tslib/-/tslib-2.8.1.tgz#612efe4ed235d567e8aba5f2a5fab70280ade83f"
-  integrity sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==
+  version "2.9.1"
+  resolved "https://registry.yarnpkg.com/tslib/-/tslib-2.9.1.tgz#8986213ba2f17f38ba39a7c43d0e565a9134ff5f"
+  integrity sha512-a4Ux9VKuIMHsOS7ENbEq6hK2ZGYIT27Rtl0E4eD9KqwxhKiQeMZE/9xb3IdYwWaSOyIBQLExhQgXDTYoiCxnWA==
 
 tslib@^1.14.1:
   version "1.14.1"
@@ -5426,9 +5431,9 @@ vite-node@3.2.4:
     vite "^5.0.0 || ^6.0.0 || ^7.0.0-0"
 
 vite@6.2.0, "vite@^5.0.0 || ^6.0.0 || ^7.0.0-0", vite@^6.2.0:
-  version "6.4.1"
-  resolved "https://registry.yarnpkg.com/vite/-/vite-6.4.1.tgz#afbe14518cdd6887e240a4b0221ab6d0ce733f96"
-  integrity sha512-+Oxm7q9hDoLMyJOYfUYBuHQo+dkAloi33apOPP56pzj+vsdJDzr+j1NISE5pyaAuKL4A3UD34qd0lx5+kfKp2g==
+  version "6.4.5"
+  resolved "https://registry.yarnpkg.com/vite/-/vite-6.4.5.tgz#8da9987120422f92e432b6d25535b82cee867dad"
+  integrity sha512-4enwjFfi4IwtEh0w+jPzpLVOFQiPHmmzPxcHXQOyEur47o6u0jE573DmGpjA+7irXoMLYRZD5ZaFUEneS3abPg==
   dependencies:
     esbuild "^0.25.0"
     fdir "^6.4.4"
