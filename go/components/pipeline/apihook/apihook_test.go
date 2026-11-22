@@ -3,6 +3,7 @@ package apihook
 import (
 	"context"
 	"fmt"
+	"sort"
 	"testing"
 
 	"github.com/gogo/protobuf/jsonpb"
@@ -13,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/encoding/protowire"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -75,17 +77,70 @@ func workflow(extra map[string]*types.Value) *v2.DeclarativeWorkflow {
 	}
 }
 
+// declarativePipeline packs w in the byte form that the hook stores.
 func declarativePipeline(t *testing.T, w *v2.DeclarativeWorkflow) *v2.Pipeline {
 	t.Helper()
-	content, err := types.MarshalAny(w)
+	raw, err := declarative.Encode(w)
 	require.NoError(t, err)
 	return &v2.Pipeline{
 		ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: name},
 		Spec: v2.PipelineSpec{Manifest: &v2.PipelineManifest{
 			Type:    v2.PIPELINE_MANIFEST_TYPE_DECLARATIVE,
-			Content: content,
+			Content: &types.Any{TypeUrl: declarative.TypeURL, Value: raw},
 		}},
 	}
+}
+
+// encodeInOrder encodes w by hand. It writes the task map entries, and the
+// config fields of each task, in sorted key order or in reverse order.
+// Repeated message fields merge, so each config field is a separate Struct.
+func encodeInOrder(t *testing.T, w *v2.DeclarativeWorkflow, reverse bool) []byte {
+	t.Helper()
+	keys := func(n int, at func(int) string) []string {
+		out := make([]string, n)
+		for i := range out {
+			out[i] = at(i)
+		}
+		sort.Strings(out)
+		if reverse {
+			sort.Sort(sort.Reverse(sort.StringSlice(out)))
+		}
+		return out
+	}
+	marshal := func(m proto.Message) []byte {
+		b, err := proto.Marshal(m)
+		require.NoError(t, err)
+		return b
+	}
+	head := proto.Clone(w).(*v2.DeclarativeWorkflow)
+	head.Tasks = nil
+	out := marshal(head)
+	taskNames := make([]string, 0, len(w.Tasks))
+	for k := range w.Tasks {
+		taskNames = append(taskNames, k)
+	}
+	for _, k := range keys(len(taskNames), func(i int) string { return taskNames[i] }) {
+		bare := proto.Clone(w.Tasks[k]).(*v2.DeclarativeTask)
+		bare.Config = nil
+		task := marshal(bare)
+		fields := w.Tasks[k].GetConfig().GetFields()
+		fieldNames := make([]string, 0, len(fields))
+		for f := range fields {
+			fieldNames = append(fieldNames, f)
+		}
+		for _, f := range keys(len(fieldNames), func(i int) string { return fieldNames[i] }) {
+			one := &types.Struct{Fields: map[string]*types.Value{f: fields[f]}}
+			task = append(task, marshal(&v2.DeclarativeTask{Config: one})...)
+		}
+		var entry []byte
+		entry = protowire.AppendTag(entry, 1, protowire.BytesType)
+		entry = protowire.AppendString(entry, k)
+		entry = protowire.AppendTag(entry, 2, protowire.BytesType)
+		entry = protowire.AppendBytes(entry, task)
+		out = protowire.AppendTag(out, 4, protowire.BytesType) // DeclarativeWorkflow.tasks
+		out = protowire.AppendBytes(out, entry)
+	}
+	return out
 }
 
 func typedPipeline(typ v2.PipelineManifest_Type) *v2.Pipeline {
@@ -646,6 +701,59 @@ func TestBeforeUpdate_GetModifyUpdateUpgrade(t *testing.T) {
 	require.NoError(t, hook.BeforeUpdate(context.Background(), &v2.UpdatePipelineRequest{Pipeline: p}))
 	assert.Equal(t, pinOf(v2Rel), p.Spec.Manifest.InterpreterPin)
 	assert.Equal(t, v2Rel.Artifact, p.Spec.Manifest.UniflowTar)
+}
+
+// One workflow sent with its map entries in two orders must be stored as the
+// same bytes, so a re-apply does not change the spec.
+func TestStoredContentIsCanonical(t *testing.T) {
+	d := loadDeclarative(t, true, "core-v1")
+	w := workflow(map[string]*types.Value{
+		"args": {Kind: &types.Value_ListValue{ListValue: &types.ListValue{Values: []*types.Value{strVal("--x")}}}},
+	})
+	sorted, reversed := encodeInOrder(t, w, false), encodeInOrder(t, w, true)
+	require.NotEqual(t, sorted, reversed, "the two inputs must differ")
+
+	withContent := func(raw []byte) *v2.Pipeline {
+		p := declarativePipeline(t, w)
+		p.Spec.Manifest.Content.Value = raw
+		return p
+	}
+	assertStored := func(t *testing.T, a, b *v2.Pipeline) {
+		t.Helper()
+		assert.Equal(t, declarative.TypeURL, a.Spec.Manifest.Content.TypeUrl)
+		assert.Equal(t, a.Spec.Manifest.Content.Value, b.Spec.Manifest.Content.Value)
+		got := &v2.DeclarativeWorkflow{}
+		require.NoError(t, proto.Unmarshal(a.Spec.Manifest.Content.Value, got))
+		assert.True(t, proto.Equal(w, got), "the stored bytes decode to the same workflow")
+	}
+
+	for _, dryRun := range []bool{false, true} {
+		t.Run(fmt.Sprintf("create/dryRun=%t", dryRun), func(t *testing.T) {
+			hook, _ := newHook(t, d)
+			var got []*v2.Pipeline
+			for _, raw := range [][]byte{sorted, reversed} {
+				req := &v2.CreatePipelineRequest{Pipeline: withContent(raw), CreateOptions: &metav1.CreateOptions{}}
+				if dryRun {
+					req.CreateOptions.DryRun = []string{metav1.DryRunAll}
+				}
+				require.NoError(t, hook.BeforeCreate(context.Background(), req))
+				got = append(got, req.Pipeline)
+			}
+			assertStored(t, got[0], got[1])
+		})
+	}
+	t.Run("update", func(t *testing.T) {
+		hook, h := newHook(t, d)
+		stored := storedPipeline(t, pinOf(release(t, d, "core-v1")))
+		var got []*v2.Pipeline
+		for _, raw := range [][]byte{sorted, reversed} {
+			expectGet(h, stored, nil)
+			req := &v2.UpdatePipelineRequest{Pipeline: withContent(raw)}
+			require.NoError(t, hook.BeforeUpdate(context.Background(), req))
+			got = append(got, req.Pipeline)
+		}
+		assertStored(t, got[0], got[1])
+	})
 }
 
 // A type change from DECLARATIVE to YAML or UNIFLOW is a plain update of a

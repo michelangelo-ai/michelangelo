@@ -8,6 +8,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
+	gogoproto "github.com/gogo/protobuf/proto"
 	pbtypes "github.com/gogo/protobuf/types"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
@@ -21,6 +22,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	"github.com/michelangelo-ai/michelangelo/go/base/revision"
+	"github.com/michelangelo-ai/michelangelo/go/components/pipeline/declarative"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"go.uber.org/yarpc"
@@ -871,4 +873,69 @@ func TestReconcile_PinUpgradeOnSameCommitKeepsRevision(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, matches)
 	assert.Equal(t, v2, pipeline.Spec.Manifest.InterpreterPin, "the caller's pipeline must not be modified")
+}
+
+// reorderedContent returns one two-task workflow encoded with its task map
+// entries in the given order. Each entry is a separate one-task message, and
+// repeated map fields merge on decode.
+func reorderedContent(t *testing.T, order ...string) []byte {
+	t.Helper()
+	head, err := gogoproto.Marshal(&v2pb.DeclarativeWorkflow{SchemaVersion: declarative.SchemaVersion})
+	require.NoError(t, err)
+	out := head
+	for _, k := range order {
+		one := &v2pb.DeclarativeWorkflow{Tasks: map[string]*v2pb.DeclarativeTask{k: {
+			TaskFunction: "core/python",
+			Config: &pbtypes.Struct{Fields: map[string]*pbtypes.Value{
+				"entry_point": {Kind: &pbtypes.Value_StringValue{StringValue: k + ".py"}},
+			}},
+		}}}
+		b, err := gogoproto.Marshal(one)
+		require.NoError(t, err)
+		out = append(out, b...)
+	}
+	return out
+}
+
+// storedContent decodes raw and re-encodes it, as the Pipeline API hook does.
+func storedContent(t *testing.T, raw []byte) []byte {
+	t.Helper()
+	w, err := declarative.Decode(&v2pb.PipelineManifest{Content: &pbtypes.Any{TypeUrl: declarative.TypeURL, Value: raw}})
+	require.NoError(t, err)
+	out, err := declarative.Encode(w)
+	require.NoError(t, err)
+	return out
+}
+
+// A re-apply of the same commit whose client wrote the task map in another
+// order must keep the immutable revision.
+func TestReconcile_ReorderedContentOnSameCommitKeepsRevision(t *testing.T) {
+	ab, ba := reorderedContent(t, "a", "b"), reorderedContent(t, "b", "a")
+	require.NotEqual(t, ab, ba, "the two inputs must differ")
+	pin := &v2pb.InterpreterPin{Version: "core-v1", Artifact: "s3://a/core-v1.tar.gz", Digest: "sha256:01"}
+	spec := func(raw []byte) v2pb.PipelineSpec {
+		return v2pb.PipelineSpec{
+			Commit: &v2pb.CommitInfo{GitRef: "main", Branch: "main"},
+			Manifest: &v2pb.PipelineManifest{
+				Type:           v2pb.PIPELINE_MANIFEST_TYPE_DECLARATIVE,
+				Content:        &pbtypes.Any{TypeUrl: declarative.TypeURL, Value: storedContent(t, raw)},
+				UniflowTar:     pin.Artifact,
+				InterpreterPin: pin,
+			},
+		}
+	}
+	pipeline := &v2pb.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-pipeline", Namespace: "test-namespace"},
+		Spec:       spec(ba),
+	}
+	existing := immutableRevision("pipeline-test-pipeline-main", "main")
+	existing.Spec.Content = mustSnapshot(&v2pb.Pipeline{Spec: spec(ab)})
+
+	reconciler := setUpReconciler(t, []client.Object{pipeline, existing}, env.Context{}, Config{RevisioningEnabled: true})
+	_, err := reconciler.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{Name: "test-pipeline", Namespace: "test-namespace"}})
+	require.NoError(t, err)
+
+	got := &v2pb.Revision{}
+	require.NoError(t, reconciler.Get(context.Background(), "test-namespace", "pipeline-test-pipeline-main", &metav1.GetOptions{}, got))
+	assert.Equal(t, existing.Spec.Content, got.Spec.Content, "the immutable revision is not rewritten")
 }

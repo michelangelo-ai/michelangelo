@@ -168,9 +168,10 @@ func checkTar(tar string, pin *v2.InterpreterPin, storedArtifact string) error {
 }
 
 // apply validates p against rel, stamps pin, and sets uniflow_tar to the pin
-// artifact. On a dry run it sets the
-// explain-plan annotation. Otherwise it removes the annotation, so a client
-// cannot store a plan.
+// artifact. It also writes the content in the byte form of
+// declarative.Encode, so a re-apply of the same workflow keeps the spec. On a
+// dry run it sets the explain-plan annotation. Otherwise it removes the
+// annotation, so a client cannot store a plan.
 func apply(p *v2.Pipeline, rel *declarative.Release, pin *v2.InterpreterPin, dryRun bool) error {
 	w, err := declarative.Decode(p.Spec.Manifest)
 	if err != nil {
@@ -180,6 +181,11 @@ func apply(p *v2.Pipeline, rel *declarative.Release, pin *v2.InterpreterPin, dry
 	if err != nil {
 		return toStatus(err)
 	}
+	content, err := declarative.Encode(w)
+	if err != nil {
+		return status.Errorf(codes.Internal, "encode declarative content: %v", err)
+	}
+	p.Spec.Manifest.Content.Value = content
 	p.Spec.Manifest.InterpreterPin = pin
 	p.Spec.Manifest.UniflowTar = pin.Artifact
 	if !dryRun {
