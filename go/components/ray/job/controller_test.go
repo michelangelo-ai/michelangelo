@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-logr/logr"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -1229,4 +1230,25 @@ func TestReconciler_Reconcile_RetriesImmutableAnnotationWhenStatusUnchanged(t *t
 	var after v2pb.RayJob
 	require.NoError(t, r.Get(ctx, requestRayJob, &after))
 	assert.True(t, utils.IsImmutable(&after), "already-terminal RayJob must still be marked immutable even when this pass made no status change")
+}
+
+func TestReconciler_ApplyRayJobStatus_CopiesKubeRayIdentifiers(t *testing.T) {
+	rayJob := &v2pb.RayJob{}
+	res := &ctrl.Result{}
+	(&Reconciler{}).applyRayJobStatus(logr.Discard(), rayJob, &jobtypes.JobStatus{
+		Ray: &v2pb.RayJobStatus{
+			State:               v2pb.RAY_JOB_STATE_RUNNING,
+			JobStatus:           string(v1.JobStatusRunning),
+			JobDeploymentStatus: string(v1.JobDeploymentStatusRunning),
+			JobId:               "test-job-xyz12",
+			RayClusterName:      "test-job-raycluster-k8x2p",
+			DashboardUrl:        "test-job-raycluster-k8x2p-head-svc.default.svc.cluster.local:8265",
+		},
+	}, res)
+
+	assert.Equal(t, "test-job-xyz12", rayJob.Status.JobId)
+	assert.Equal(t, "test-job-raycluster-k8x2p", rayJob.Status.RayClusterName)
+	assert.Equal(t, string(v1.JobDeploymentStatusRunning), rayJob.Status.JobDeploymentStatus)
+	assert.Equal(t, "test-job-raycluster-k8x2p-head-svc.default.svc.cluster.local:8265", rayJob.Status.DashboardUrl)
+	assert.NotZero(t, res.RequeueAfter)
 }

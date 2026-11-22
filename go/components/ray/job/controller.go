@@ -279,6 +279,9 @@ func (r *Reconciler) applyRayJobStatus(
 	rayJob.Status.JobStatus = jobStatus.Ray.JobStatus
 	rayJob.Status.Message = jobStatus.Ray.Message
 	rayJob.Status.DashboardUrl = jobStatus.Ray.DashboardUrl
+	rayJob.Status.JobId = jobStatus.Ray.JobId
+	rayJob.Status.RayClusterName = jobStatus.Ray.RayClusterName
+	rayJob.Status.JobDeploymentStatus = jobStatus.Ray.JobDeploymentStatus
 
 	if !isTerminalRayJobState(jobStatus.Ray.State) {
 		res.RequeueAfter = requeueAfter
