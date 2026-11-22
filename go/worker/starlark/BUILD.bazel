@@ -1,4 +1,4 @@
-load("@io_bazel_rules_go//go:def.bzl", "go_library")
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "go_default_library",
@@ -6,6 +6,7 @@ go_library(
     importpath = "github.com/michelangelo-ai/michelangelo/go/worker/starlark",
     visibility = ["//visibility:public"],
     deps = [
+        "//go/worker/plugins/buildkite:go_default_library",
         "//go/worker/plugins/cachedoutput:go_default_library",
         "//go/worker/plugins/deployment:go_default_library",
         "//go/worker/plugins/model:go_default_library",
@@ -16,5 +17,17 @@ go_library(
         "@com_github_cadence_workflow_starlark_worker//service:go_default_library",
         "@com_github_cadence_workflow_starlark_worker//worker:go_default_library",
         "@org_uber_go_fx//:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["module_test.go"],
+    data = glob(["testdata/**"]),
+    embed = [":go_default_library"],
+    deps = [
+        "//go/worker/plugins/buildkite:go_default_library",
+        "@com_github_cadence_workflow_starlark_worker//service:go_default_library",
+        "@com_github_stretchr_testify//require:go_default_library",
     ],
 )
