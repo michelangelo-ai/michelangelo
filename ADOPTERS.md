@@ -4,6 +4,7 @@ If your organization is using Michelangelo AI, please add it below — this help
 
 | Organization | Contact | Description of Use |
 |---|---|---|
+| [Grab](https://www.grab.com) | [@zhouxianzx](https://github.com/zhouxianzx) | Grab uses Michelangelo AI to orchestrate and run ML pipelines, and contributes to its pipeline, trigger and storage components. |
 | [Uber](https://www.uber.com) | [@cm-howard](https://github.com/cm-howard) | Michelangelo AI is Uber's machine learning platform, used across the organization to streamline the development, deployment, and monitoring of machine learning models at scale. |
 
 ## Adding your organization
