@@ -9,6 +9,9 @@
 
 set -euo pipefail
 
+# An active venv would make Poetry install into it instead of python/.venv.
+unset VIRTUAL_ENV
+
 REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
 EXTRAS=""
 while [ $# -gt 0 ]; do

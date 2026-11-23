@@ -6,7 +6,7 @@ user-invocable: true
 
 # Sandbox Reset
 
-Full teardown and recreation of the local Michelangelo sandbox. Use when `ma sandbox sync` or `ma sandbox health` can't recover the cluster.
+Full teardown and recreation of the local Michelangelo sandbox. Use when `ma sandbox sync` can't recover the cluster.
 
 A cluster whose containers have merely exited (after a reboot or a Docker restart) is stopped, not broken. Resume it with `bash .claude/skills/ma-sandbox-scripts/start.sh`, which keeps all state, instead of resetting.
 
@@ -38,7 +38,7 @@ Without this the UI loads but shows no data. Skip only if you have a specific re
 ## Step 4: Verify
 
 ```bash
-poetry run ma sandbox health
+kubectl get pods -A
 ```
 
-All checks should pass. Open the sandbox UI and confirm the seeded demo project is visible.
+Every pod should be `Running` or `Completed`. Open the sandbox UI and confirm the seeded demo project is visible.

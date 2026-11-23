@@ -41,7 +41,7 @@ running the skill — end this session and start a new one, then re-invoke `/ma-
 git diff --name-only origin/main...HEAD
 ```
 
-This lists the changes committed on this branch; also check `git status --short` for uncommitted and untracked files. Call the output `$CHANGED_FILES` below.
+This lists the changes committed on this branch; also check `git status --short --untracked-files=all` for uncommitted and untracked files, including those inside new directories. Call the output `$CHANGED_FILES` below.
 
 Categorize by path prefix: `go/` → Go, `javascript/` → JS, `python/` → Python. Mixed changes run every
 applicable stage below, once per stack, each gated independently — a Go build failure doesn't block
@@ -97,7 +97,7 @@ bash .claude/skills/ma-sandbox-scripts/find-vite-port.sh
 
 **Python:**
 ```bash
-python/.venv/bin/ma sandbox health
+kubectl get pods -A
 ```
 Confirm the services relevant to the change are running.
 

@@ -11,7 +11,6 @@ allowed-tools:
   - Bash(kubectl describe *)
   - Bash(kubectl rollout status *)
   - Bash(docker ps *)
-  - Bash(python/.venv/bin/ma sandbox health)
 ---
 
 # Sandbox Debug
@@ -25,7 +24,6 @@ Invoke this skill before running its scripts, and use the literal `bash .claude/
 ## Step 1: Health overview
 
 ```bash
-python/.venv/bin/ma sandbox health        # high-level check: cluster, pods, API, envoy, UI
 kubectl get pods -A      # full pod inventory with status
 ```
 
@@ -93,7 +91,7 @@ The **Events** section and **Last State** (exit code, reason) in `describe` outp
 | `ImagePullBackOff` | `describe pod` Events | Image not imported — run `k3d image import` |
 | Feature broken after deploy | apiserver logs | Business logic bug in the deployed binary |
 | Cluster unreachable, containers exited | `docker ps -a` | Stopped, not broken — resume it with `bash .claude/skills/ma-sandbox-scripts/start.sh`, don't reset |
-| `create` failed partway / "cluster already exists" | — | Ask the user, then run `ma sandbox sync` to finish — don't delete+recreate. **`sync` drops and recreates the sandbox MySQL `michelangelo` database**, so metadata-storage-only data is lost |
+| `create` failed partway / "cluster already exists" | — | Run `ma sandbox sync` to finish only if the user agrees; if they decline, stop. Don't delete+recreate. **`sync` drops and recreates the sandbox MySQL `michelangelo` database**, so metadata-storage-only data is lost |
 
 ## Filter logs for errors
 

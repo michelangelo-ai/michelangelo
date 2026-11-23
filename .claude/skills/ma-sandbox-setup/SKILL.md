@@ -8,7 +8,6 @@ allowed-tools:
   - Bash(bash .claude/skills/ma-sandbox-scripts/check-dev-prereqs.sh)
   - Bash(python/.venv/bin/ma sandbox create)
   - Bash(python/.venv/bin/ma sandbox demo pipeline)
-  - Bash(python/.venv/bin/ma sandbox health)
 ---
 
 # Michelangelo Sandbox Setup Reference
@@ -80,10 +79,10 @@ This creates the `ma-dev-test` project with training, eval, and trigger pipeline
 ### 5. Verify
 
 ```bash
-python/.venv/bin/ma sandbox health
+kubectl get pods -A
 ```
 
-All checks should pass. Then open **http://localhost:8090** — navigate to the `ma-dev-test` project.
+Every pod should be `Running` or `Completed` (expected noise is listed in `/ma-sandbox-debug`). Then open **http://localhost:8090** — navigate to the `ma-dev-test` project.
 
 ## Key commands
 
@@ -91,7 +90,6 @@ All checks should pass. Then open **http://localhost:8090** — navigate to the 
 | --------------------------- | --------------------------------------------------------------- |
 | `ma sandbox create`         | Create cluster + deploy all services                            |
 | `ma sandbox sync`           | Restart app services in an existing cluster (fast, skips infra). **Drops and recreates the MySQL `michelangelo` database** |
-| `ma sandbox health`         | Run health checks: cluster, pods, API resources, envoy, UI      |
 | `ma sandbox stop`           | Stop the cluster (preserves state)                              |
 | `ma sandbox start`          | Resume a stopped cluster (or `start.sh`, which also waits for nodes to be ready) |
 | `ma sandbox delete`         | Tear down cluster entirely                                      |
