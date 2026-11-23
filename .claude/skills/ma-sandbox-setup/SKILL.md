@@ -82,7 +82,7 @@ This creates the `ma-dev-test` project with training, eval, and trigger pipeline
 kubectl get pods -A
 ```
 
-Every pod should be `Running` or `Completed` (expected noise is listed in `/ma-sandbox-debug`). Then open **http://localhost:8090** — navigate to the `ma-dev-test` project.
+Every pod should be `Completed`, or `Running` with every container ready (READY `n/n`, such as `1/1`; `0/1 Running` is not ready) (expected noise is listed in `/ma-sandbox-debug`). Then open **http://localhost:8090** — navigate to the `ma-dev-test` project.
 
 ## Key commands
 

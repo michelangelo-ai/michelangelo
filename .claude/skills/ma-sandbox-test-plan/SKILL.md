@@ -99,7 +99,7 @@ bash .claude/skills/ma-sandbox-scripts/find-vite-port.sh
 ```bash
 kubectl get pods -A
 ```
-Confirm the services relevant to the change are running.
+Confirm the services relevant to the change are `Running` with every container ready (READY `n/n`, not `0/1`).
 
 ## Stage 4: Integration scenarios
 

@@ -35,17 +35,25 @@ esac
 IMAGE="michelangelo-$SERVICE:local"
 DEPLOY="michelangelo-$SERVICE"
 CTX="/tmp/ma-sandbox-deploy/$SERVICE"
-KUBECTL=(kubectl --context "k3d-$CLUSTER")
 step() { echo; echo "==> $*"; }
 
 step "Preflight"
 k3d cluster list --no-headers | awk '{print $1}' | grep -qx "$CLUSTER" \
   || { echo "cluster $CLUSTER missing; run 'ma sandbox create'" >&2; exit 1; }
+# Point every child command (kubectl, helm, `ma sandbox sync`) at the sandbox
+# without touching the caller's kube context, which may be another cluster.
+KUBECONFIG=$(mktemp)
+export KUBECONFIG
+trap 'rm -f "$KUBECONFIG"' EXIT
+k3d kubeconfig get "$CLUSTER" > "$KUBECONFIG"
+ARCH=$(kubectl get nodes -o jsonpath='{.items[0].status.nodeInfo.architecture}')
+[ -n "$ARCH" ] || { echo "could not read the sandbox node architecture" >&2; exit 1; }
+FINGERPRINT=$(bash "$SELF_REPO/.claude/skills/ma-sandbox-scripts/source-fingerprint.sh" "$SRC_REPO")
 MA=$(bash "$SELF_REPO/.claude/skills/ma-sandbox-scripts/python-env.sh" | tail -1)
 
 # `sync` always sets the engine, defaulting to cadence, so pass the installed one
 # or a Temporal sandbox is switched to Cadence.
-ENGINE=$(helm get values michelangelo --kube-context "k3d-$CLUSTER" -o json \
+ENGINE=$(helm get values michelangelo -o json \
   | python3 -c 'import json,sys; print((json.load(sys.stdin) or {}).get("workflow", {}).get("engine", "cadence"))') \
   || { echo "could not read workflow.engine from the michelangelo release; not syncing" >&2; exit 1; }
 
@@ -53,16 +61,16 @@ ENGINE=$(helm get values michelangelo --kube-context "k3d-$CLUSTER" -o json \
 OVERRIDES=()
 for svc in apiserver controllermgr worker ui; do
   if [ "$svc" = "$SERVICE" ]; then continue; fi
-  cur=$("${KUBECTL[@]}" get deployment "michelangelo-$svc" -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || true)
+  cur=$(kubectl get deployment "michelangelo-$svc" -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || true)
   case "$cur" in
     "michelangelo-$svc:"*) OVERRIDES+=(--set "images.$svc.repository=michelangelo-$svc" --set "images.$svc.tag=${cur##*:}") ;;
   esac
 done
 
-step "Build static linux/arm64 binary from $SRC_REPO"
+step "Build static linux/$ARCH binary from $SRC_REPO"
 rm -rf "$CTX"
 mkdir -p "$CTX"
-(cd "$SRC_REPO/go" && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o "$CTX/$SERVICE" "./cmd/$SERVICE/")
+(cd "$SRC_REPO/go" && CGO_ENABLED=0 GOOS=linux GOARCH="$ARCH" go build -o "$CTX/$SERVICE" "./cmd/$SERVICE/")
 cp -r "$SRC_REPO/go/cmd/$SERVICE/config" "$CTX/config"
 
 step "Docker build $IMAGE"
@@ -73,12 +81,20 @@ docker build \
   -f "$SRC_REPO/docker/service.Dockerfile" \
   --build-arg BINARY_PATH="$SERVICE" \
   --build-arg CONFIG_PATH=config \
-  --platform linux/arm64 \
+  --platform "linux/$ARCH" \
   --label "git.branch=$BRANCH" --label "git.sha=$SHA" --label "git.dirty=$DIRTY" \
   -t "$IMAGE" "$CTX"
 
 step "Import into k3d"
-k3d image import "$IMAGE" -c "$CLUSTER"
+# With the containerd image store a plain `k3d image import <image>` can exit 0
+# without importing anything, leaving the old :local image on the nodes. Import
+# a single-platform archive instead, falling back to the plain import when
+# `docker save --platform` is unavailable.
+if docker save --platform "linux/$ARCH" -o "$CTX/image.tar" "$IMAGE"; then
+  k3d image import "$CTX/image.tar" -c "$CLUSTER"
+else
+  k3d image import "$IMAGE" -c "$CLUSTER"
+fi
 
 step "ma sandbox sync (WARNING: drops and recreates the MySQL 'michelangelo' database)"
 "$MA" sandbox sync \
@@ -92,13 +108,15 @@ step "ma sandbox sync (WARNING: drops and recreates the MySQL 'michelangelo' dat
 
 step "Rollout"
 # Sync restarts deployments; restart explicitly so a same-tag rebuild is always picked up.
-"${KUBECTL[@]}" rollout restart "deployment/$DEPLOY"
-"${KUBECTL[@]}" rollout status "deployment/$DEPLOY" --timeout=180s
+kubectl rollout restart "deployment/$DEPLOY"
+kubectl rollout status "deployment/$DEPLOY" --timeout=180s
+# check-backend.sh reads this to tell a current build from a stale one.
+kubectl annotate "deployment/$DEPLOY" --overwrite "michelangelo.ai/source-fingerprint=$FINGERPRINT"
 
 step "Verify what's deployed"
 SEL="app.kubernetes.io/component=$SERVICE"
 FAIL=0
-POD_IMAGE=$("${KUBECTL[@]}" get pod -l "$SEL" --field-selector=status.phase=Running -o jsonpath='{.items[0].spec.containers[0].image}')
+POD_IMAGE=$(kubectl get pod -l "$SEL" --field-selector=status.phase=Running -o jsonpath='{.items[0].spec.containers[0].image}')
 echo "1. pod image:   $POD_IMAGE"
 [ "$POD_IMAGE" = "$IMAGE" ] || { echo "   FAIL: expected $IMAGE"; FAIL=1; }
 
@@ -110,7 +128,7 @@ case "$LABELS" in
 esac
 
 BUILT=$(docker image inspect "$IMAGE" --format '{{.Created}}')
-STARTED=$("${KUBECTL[@]}" get pod -l "$SEL" --field-selector=status.phase=Running -o jsonpath='{.items[0].status.startTime}')
+STARTED=$(kubectl get pod -l "$SEL" --field-selector=status.phase=Running -o jsonpath='{.items[0].status.startTime}')
 echo "3. image built: $BUILT"
 echo "   pod started: $STARTED"
 # Both are UTC ISO-8601; compare at second precision (first 19 chars).

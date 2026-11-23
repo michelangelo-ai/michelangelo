@@ -41,4 +41,4 @@ Without this the UI loads but shows no data. Skip only if you have a specific re
 kubectl get pods -A
 ```
 
-Every pod should be `Running` or `Completed`. Open the sandbox UI and confirm the seeded demo project is visible.
+Every pod should be `Completed`, or `Running` with every container ready (READY `n/n`, such as `1/1`; `0/1 Running` is not ready). Open the sandbox UI and confirm the seeded demo project is visible.

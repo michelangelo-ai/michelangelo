@@ -9,8 +9,11 @@
 #
 # Prints one line per affected service and exits 0 always:
 #
-#   deployed <service>        — affected AND the local image is running in k3d
-#   needs-deploy <service>    — affected but a non-local image is running
+#   deployed <service>        — affected AND a local image built from the current
+#                               sources is running in k3d
+#   needs-deploy <service>    — affected, and the running image is not local or was
+#                               built from different sources (deploy-local.sh
+#                               records the source fingerprint on the deployment)
 #
 # or a single `clean` line when no service is affected (Vite-only verify is
 # appropriate). The caller decides how to proceed from the output.
@@ -64,10 +67,13 @@ if [ ${#AFFECTED[@]} -eq 0 ]; then
   exit 0
 fi
 
+CURRENT_FINGERPRINT=$(bash "$REPO_ROOT/.claude/skills/ma-sandbox-scripts/source-fingerprint.sh" "$REPO_ROOT")
 for svc in "${AFFECTED[@]}"; do
   RUNNING_IMAGE=$(kubectl get pod -l "app.kubernetes.io/component=$svc" \
     -o jsonpath='{.items[0].spec.containers[0].image}' 2>/dev/null || echo "")
-  if echo "$RUNNING_IMAGE" | grep -q ':local'; then
+  DEPLOYED_FINGERPRINT=$(kubectl get deployment "michelangelo-$svc" \
+    -o jsonpath='{.metadata.annotations.michelangelo\.ai/source-fingerprint}' 2>/dev/null || echo "")
+  if echo "$RUNNING_IMAGE" | grep -q ':local' && [ "$DEPLOYED_FINGERPRINT" = "$CURRENT_FINGERPRINT" ]; then
     echo "deployed $svc"
   else
     echo "needs-deploy $svc"

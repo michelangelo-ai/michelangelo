@@ -29,9 +29,9 @@ kubectl get pods -A      # full pod inventory with status
 
 **IF** `kubectl get pods -A` output contains any pod in `CrashLoopBackOff`, `Error`, or `ImagePullBackOff` state (excluding expected noise listed below): **proceed to Step 3** for each affected pod.
 
-**IF** a pod is stuck `Pending` beyond 3 minutes: **proceed to Step 3** for that pod.
+**IF** a pod is stuck `Pending`, or is `Running` but not fully ready (READY `0/1`, `1/2`), beyond 3 minutes: **proceed to Step 3** for that pod.
 
-**IF** all pods show `Running` or `Completed`: report the cluster as healthy and stop — do not continue to Step 2 unless the user reports a specific symptom.
+**IF** every pod is `Completed`, or `Running` with every container ready (READY `n/n`, such as `1/1`; `0/1 Running` is not ready): report the cluster as healthy and stop — do not continue to Step 2 unless the user reports a specific symptom.
 
 ## Step 2: Tail logs by service
 
