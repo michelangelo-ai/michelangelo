@@ -73,6 +73,27 @@ class DecoratorFactoryAnnotationTest(unittest.TestCase):
                 self.assertIs(fn.__wrapped__, _sample)
         self.assertIsInstance(decorated["task"], TaskFunction)
 
+    def test_overridden_tasks_keep_signature_and_metadata(self):
+        """with_overrides() copies expose the wrapped function's metadata."""
+        original = task(config=TaskA(cpu=1), alias="sample")(_sample)
+        once = original.with_overrides(alias="sample_v2")
+        overridden = {
+            "once": once,
+            "twice": once.with_overrides(config=TaskA(cpu=2)),
+        }
+        for name, fn in overridden.items():
+            with self.subTest(overrides=name):
+                self.assertIsInstance(fn, TaskFunction)
+                self.assertIsNot(fn, original)
+                self.assertIs(fn.__wrapped__, _sample)
+                self.assertIs(inspect.unwrap(fn), _sample)
+                self.assertEqual(fn.__name__, original.__name__)
+                self.assertEqual(fn.__qualname__, original.__qualname__)
+                self.assertEqual(fn.__doc__, _sample.__doc__)
+                self.assertEqual(inspect.signature(fn), inspect.signature(_sample))
+                self.assertEqual(fn._alias, "sample_v2")
+                self.assertFalse(hasattr(fn, "_uf_task"))
+
 
 def _run_mypy(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *target: str):
     """Run mypy --strict on ``target`` against this source tree."""

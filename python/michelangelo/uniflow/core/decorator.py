@@ -273,7 +273,7 @@ class TaskFunction(Generic[P, R]):
         ... )
         ```
         """
-        return TaskFunction(
+        task_fn = TaskFunction(
             fn=self._fn,
             config=config or self._config,
             alias=alias or self._alias,
@@ -282,6 +282,12 @@ class TaskFunction(Generic[P, R]):
             cache_version=self._cache_version,
             retry_attempts=retry_attempts or self._retry_attempts,
         )
+        update_wrapper(task_fn, self._fn)
+        # update_wrapper() also merges self._fn.__dict__, which may hold the
+        # _uf_task back-reference that task() sets after its own update_wrapper()
+        # call. Drop it so the copy has the same attributes as the original task.
+        task_fn.__dict__.pop("_uf_task", None)
+        return task_fn
 
     def _transpile(self, dependencies: Dependencies) -> ast.AST:
         """Transpile task to Starlark AST for workflow compilation.
