@@ -363,7 +363,7 @@ def task(
     cache_version: Optional[str] = None,
     retry_attempts: int = DEFAULT_RETRY_ATTEMPTS,
     image_spec: Optional[ImageSpec] = None,
-):
+) -> Callable[[Callable[P, R]], TaskFunction[P, R]]:
     """Decorator for defining a Uniflow task.
 
     Wraps a function to make it executable as a Uniflow task with caching,
@@ -456,7 +456,7 @@ def task(
     return decorator
 
 
-def workflow():
+def workflow() -> Callable[[Callable[P, R]], Callable[P, R]]:
     """Decorator for defining a Uniflow workflow.
 
     Marks a function as a workflow entry point. Workflows orchestrate multiple
@@ -533,7 +533,7 @@ def workflow():
     return decorator
 
 
-def star_plugin(binding: str):
+def star_plugin(binding: str) -> Callable[[Callable[P, R]], Callable[P, R]]:
     """Decorator for Starlark plugin functions.
 
     Marks a Python function as a Starlark plugin, making it available for
