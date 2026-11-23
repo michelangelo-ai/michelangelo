@@ -2,6 +2,7 @@
 last_verified: 2026-11-18
 sidebar_position: 5
 sidebar_label: "Examples"
+last_verified: 2026-11-18
 ---
 
 # Examples
@@ -47,7 +48,7 @@ Most examples live in [`python/examples/`](https://github.com/michelangelo-ai/mi
 
 | Example | Description | Runtime | Difficulty |
 |---------|-------------|---------|------------|
-| [Evaluator Workflow](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/evaluator) | Runs the evaluator task on synthetic predictions: metrics declared in config (`torchmetrics`), results split per segment, and a `SanityCheck` threshold that fails the run when one segment regresses even though the aggregate passes. Set `BREAK_IT=1` to see the failure. Install with the `example` and `evaluator` extras. | Ray | Intermediate |
+| [Evaluator Workflow](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/evaluator) | Runs the evaluator task on synthetic predictions: metrics declared in config (`torchmetrics`), results split per segment, and a `SanityCheck` threshold that fails the run when one segment regresses even though the aggregate passes. Set `BREAK_IT=1` to see the failure. Install with the `example` and `evaluator` extras. See [Evaluate Models and Read Reports](../train-and-deploy-models/evaluate-models-and-read-reports.md) for the full walkthrough. | Ray | Intermediate |
 
 ### Model Packaging
 
