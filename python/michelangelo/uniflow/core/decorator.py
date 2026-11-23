@@ -96,6 +96,11 @@ class TaskFunction(Generic[P, R]):
     ```
     """
 
+    # Set on each instance by functools.update_wrapper() in task().
+    __name__: str
+    __qualname__: str
+    __wrapped__: Callable[P, R]
+
     def __init__(
         self,
         *,
@@ -208,8 +213,8 @@ class TaskFunction(Generic[P, R]):
             raise
 
         try:
-            args, kwargs = _unref_args(sig, args, kwargs, self._io)  # type: ignore[return-value]
-            res = self._fn(*args, **kwargs)
+            call_args, call_kwargs = _unref_args(sig, args, kwargs, self._io)
+            res = self._fn(*call_args, **call_kwargs)
             res = ref(res, self._io)
             if result_url:
                 assert isinstance(result_url, str)
@@ -510,12 +515,14 @@ def workflow() -> Callable[[Callable[P, R]], Callable[P, R]]:
             fn: Function to mark as workflow.
 
         Returns:
-            The original function with workflow marker.
+            A ``functools.wraps`` wrapper around ``fn``. The workflow marker
+            is set on ``fn`` itself, so ``is_workflow()`` sees it only after
+            ``inspect.unwrap()``.
         """
         log.debug("init-decorator: %s", dot_path(fn))
 
         @wraps(fn)
-        def wrapper(*args, **kwargs) -> R:
+        def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
             """Execute the workflow function.
 
             Args:
@@ -527,7 +534,7 @@ def workflow() -> Callable[[Callable[P, R]], Callable[P, R]]:
             """
             return fn(*args, **kwargs)
 
-        fn._uf_workflow = True
+        fn._uf_workflow = True  # type: ignore[attr-defined]
         return wrapper
 
     return decorator
@@ -562,11 +569,13 @@ def star_plugin(binding: str) -> Callable[[Callable[P, R]], Callable[P, R]]:
             fn: Function to mark as plugin.
 
         Returns:
-            The original function with plugin markers.
+            A ``functools.wraps`` wrapper around ``fn``. The plugin markers
+            are set on ``fn`` itself, so ``is_star_plugin()`` sees them only
+            after ``inspect.unwrap()``.
         """
 
         @wraps(fn)
-        def wrapper(*args, **kwargs) -> R:
+        def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
             """Execute the plugin function.
 
             Args:
@@ -578,8 +587,8 @@ def star_plugin(binding: str) -> Callable[[Callable[P, R]], Callable[P, R]]:
             """
             return fn(*args, **kwargs)
 
-        fn._uf_star_plugin = True
-        fn._uf_star_plugin_binding = binding
+        fn._uf_star_plugin = True  # type: ignore[attr-defined]
+        fn._uf_star_plugin_binding = binding  # type: ignore[attr-defined]
         return wrapper
 
     return decorator
