@@ -20,7 +20,7 @@ from pyspark.sql import DataFrame, SparkSession
 
 from michelangelo.uniflow.core.io_registry import io_registry
 from michelangelo.uniflow.core.task_config import TaskBinding, TaskConfig
-from michelangelo.uniflow.plugins.spark.io import SparkIO
+from michelangelo.uniflow.plugins.spark.io import SparkIO, s3a_spark_config
 
 log = logging.getLogger(__name__)
 
@@ -119,11 +119,14 @@ class SparkTask(TaskConfig):
     def pre_run(self):
         """Initialize the Spark session before task execution.
 
-        Creates a Spark session with Hive support enabled. Additional Spark
-        properties can be specified via the _SPARK_PROPERTIES environment
-        variable as comma-separated key=value pairs.
+        Creates a Spark session with Hive support enabled and the S3A settings
+        from `s3a_spark_config()`. Additional Spark properties can be specified
+        via the _SPARK_PROPERTIES environment variable as comma-separated
+        key=value pairs; they take precedence over the S3A defaults.
         """
         sb = SparkSession.builder.enableHiveSupport()
+        for k, v in s3a_spark_config().items():
+            sb = sb.config(k, v)
 
         if props := os.environ.get("_SPARK_PROPERTIES"):
             for kv in props.split(","):
