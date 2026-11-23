@@ -41,6 +41,8 @@ Before you begin, make sure you have the following installed. Install commands b
 
 > **Python version note:** Use Python 3.12 (3.10 and 3.11 also work). `poetry install` fails on Python 3.13+ because some ML dependencies, such as `onnxruntime` 1.19.2, have no wheel for it. If `python3` is 3.13, point Poetry at another interpreter with `poetry env use <path-to-python3.12>` before installing.
 
+> **Helm version note:** Helm 3 and Helm 4 both work. `ma sandbox sync` passes `--force-conflicts` only on Helm 4, the first version that has it.
+
 > **Docker daemon note:** `docker info` (the verify command above) requires the Docker daemon to be running — unlike `docker --version`, which only checks the binary. If `docker info` fails, start Docker Desktop or Colima before continuing.
 
 > **Poetry install note (macOS, python.org builds):** if the Poetry install command aborts with `ssl.SSLCertVerificationError: [SSL: CERTIFICATE_VERIFY_FAILED]`, your interpreter has no CA bundle wired into `ssl` — python.org framework builds ship one but do not install it. Run the bundled installer once, then retry:

@@ -675,3 +675,24 @@ class HelmReleaseUpgradableTest(TestCase):
     def test_missing_release_is_not_upgradable(self):
         """`helm status` failing means there is no release to upgrade."""
         self.assertFalse(self._upgradable(1))
+
+
+class HelmForceConflictsArgsTest(TestCase):
+    """Test cases for gating `--force-conflicts` on the Helm major version."""
+
+    def _args(self, version_stdout: str):
+        with patch.object(sandbox.subprocess, "run") as mock_run:
+            mock_run.return_value = Mock(returncode=0, stdout=version_stdout)
+            return sandbox._helm_force_conflicts_args()
+
+    def test_helm_4_gets_the_flag(self):
+        """Helm 4 applies server-side and supports `--force-conflicts`."""
+        self.assertEqual(self._args("v4.2.2\n"), ["--force-conflicts"])
+
+    def test_helm_3_does_not(self):
+        """Helm 3 has no such flag and would reject the upgrade."""
+        self.assertEqual(self._args("v3.22.0\n"), [])
+
+    def test_unparseable_version_omits_the_flag(self):
+        """An unreadable version falls back to plain `helm upgrade`."""
+        self.assertEqual(self._args(""), [])

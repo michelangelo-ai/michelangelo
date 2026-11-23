@@ -3,6 +3,7 @@
 import argparse
 import base64
 import json
+import re
 import shutil
 import string
 import subprocess
@@ -402,6 +403,21 @@ def _helm_release_upgradable() -> bool:
     return status == "deployed" or (status == "failed" and release["version"] > 1)
 
 
+def _helm_force_conflicts_args() -> list[str]:
+    """`--force-conflicts` for `helm upgrade`, on Helm versions that have it.
+
+    The flag arrived with server-side apply in Helm 4. Helm 3 rejects it as an
+    unknown flag, and applies client-side, so it has no conflicts to force.
+    """
+    result = subprocess.run(
+        ["helm", "version", "--template", "{{.Version}}"],
+        capture_output=True,
+        text=True,
+    )
+    match = re.match(r"v(\d+)\.", result.stdout.strip())
+    return ["--force-conflicts"] if match and int(match.group(1)) >= 4 else []
+
+
 def _sync(ns: argparse.Namespace):
     """Restart only Michelangelo app services in an existing cluster.
 
@@ -482,10 +498,11 @@ def _sync(ns: argparse.Namespace):
             str(_chart_dir / "values-k3d.yaml"),
             "--dependency-update",
             "--reuse-values",
-            # Helm applies server-side; fields last written by `kubectl set image`
-            # or `kubectl apply` belong to other managers and make the upgrade
-            # fail with a conflict. The chart is the source of truth in a sandbox.
-            "--force-conflicts",
+            # Helm 4 applies server-side; fields last written by `kubectl set
+            # image` or `kubectl apply` belong to other managers and make the
+            # upgrade fail with a conflict. The chart is the source of truth in
+            # a sandbox.
+            *_helm_force_conflicts_args(),
             *helm_args,
         )
         _ensure_cadence_domain(ns)
