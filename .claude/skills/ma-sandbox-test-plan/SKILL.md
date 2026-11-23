@@ -38,10 +38,10 @@ running the skill — end this session and start a new one, then re-invoke `/ma-
 ## Stage 0: Detect stack
 
 ```bash
-git diff --name-only origin/main
+git diff --name-only origin/main...HEAD
 ```
 
-This lists committed and uncommitted changes to tracked files; also check `git status --short` for untracked files. Call the output `$CHANGED_FILES` below.
+This lists the changes committed on this branch; also check `git status --short` for uncommitted and untracked files. Call the output `$CHANGED_FILES` below.
 
 Categorize by path prefix: `go/` → Go, `javascript/` → JS, `python/` → Python. Mixed changes run every
 applicable stage below, once per stack, each gated independently — a Go build failure doesn't block

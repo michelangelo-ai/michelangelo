@@ -12,7 +12,9 @@ commands that match them.
   `cd ... &&`, `source ...` or `VAR=$(...)` don't match the allow rules.
 - **One command per Bash call.** Chained calls (`&&`, `;`, pipes into other
   tools) are judged as a whole.
-- **Pass checkouts with flags.** To target another checkout, use the script's
-  `--repo <path>` flag instead of changing directory.
+- **Pass checkouts with flags.** To target another checkout, use the
+  `--repo <path>` flag of `deploy-local.sh` or `python-env.sh` instead of
+  changing directory. `start.sh` and `check-backend.sh` take no `--repo`;
+  `check-backend.sh` reads the checkout it is run from.
 - **Denied means stop.** Don't reshape a denied command into another form.
   Record the command and the denial text, and report it.

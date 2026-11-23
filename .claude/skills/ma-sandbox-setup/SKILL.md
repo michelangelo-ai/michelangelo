@@ -5,6 +5,10 @@ user-invocable: true
 allowed-tools:
   - Bash(bash .claude/skills/ma-sandbox-scripts/start.sh)
   - Bash(bash .claude/skills/ma-sandbox-scripts/python-env.sh *)
+  - Bash(bash .claude/skills/ma-sandbox-scripts/check-dev-prereqs.sh)
+  - Bash(python/.venv/bin/ma sandbox create)
+  - Bash(python/.venv/bin/ma sandbox demo pipeline)
+  - Bash(python/.venv/bin/ma sandbox health)
 ---
 
 # Michelangelo Sandbox Setup Reference
@@ -33,7 +37,7 @@ IF any command prints "not found" or returns no output: **STOP**. Report which t
 
 Before committing Python changes, run `bash .claude/skills/ma-sandbox-scripts/check-dev-prereqs.sh`. IF it exits non-zero, run the command its message names and re-run it.
 
-**Docker resource limits:** Ensure your Docker runtime (Docker Desktop or Colima) has at least 4 CPUs, 8 GB memory, and 60 GB disk allocated, or pods will crash or fail to schedule.
+**Docker resource limits:** Ensure your Docker runtime (Docker Desktop or Colima) has at least 4 CPUs, 12 GB memory, and 60 GB disk allocated, or pods will crash or fail to schedule.
 
 ## Full ordered setup sequence
 

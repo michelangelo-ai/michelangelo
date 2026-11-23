@@ -35,6 +35,7 @@ esac
 IMAGE="michelangelo-$SERVICE:local"
 DEPLOY="michelangelo-$SERVICE"
 CTX="/tmp/ma-sandbox-deploy/$SERVICE"
+KUBECTL=(kubectl --context "k3d-$CLUSTER")
 step() { echo; echo "==> $*"; }
 
 step "Preflight"
@@ -42,11 +43,17 @@ k3d cluster list --no-headers | awk '{print $1}' | grep -qx "$CLUSTER" \
   || { echo "cluster $CLUSTER missing; run 'ma sandbox create'" >&2; exit 1; }
 MA=$(bash "$SELF_REPO/.claude/skills/ma-sandbox-scripts/python-env.sh" | tail -1)
 
+# `sync` always sets the engine, defaulting to cadence, so pass the installed one
+# or a Temporal sandbox is switched to Cadence.
+ENGINE=$(helm get values michelangelo --kube-context "k3d-$CLUSTER" -o json \
+  | python3 -c 'import json,sys; print((json.load(sys.stdin) or {}).get("workflow", {}).get("engine", "cadence"))') \
+  || { echo "could not read workflow.engine from the michelangelo release; not syncing" >&2; exit 1; }
+
 # Other services already on locally-built images, captured before sync restarts anything.
 OVERRIDES=()
 for svc in apiserver controllermgr worker ui; do
   if [ "$svc" = "$SERVICE" ]; then continue; fi
-  cur=$(kubectl get deployment "michelangelo-$svc" -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || true)
+  cur=$("${KUBECTL[@]}" get deployment "michelangelo-$svc" -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || true)
   case "$cur" in
     "michelangelo-$svc:"*) OVERRIDES+=(--set "images.$svc.repository=michelangelo-$svc" --set "images.$svc.tag=${cur##*:}") ;;
   esac
@@ -75,6 +82,7 @@ k3d image import "$IMAGE" -c "$CLUSTER"
 
 step "ma sandbox sync (WARNING: drops and recreates the MySQL 'michelangelo' database)"
 "$MA" sandbox sync \
+  --workflow "$ENGINE" \
   --set "images.$SERVICE.repository=michelangelo-$SERVICE" \
   --set "images.$SERVICE.tag=local" \
   ${OVERRIDES[@]+"${OVERRIDES[@]}"} \
@@ -84,13 +92,13 @@ step "ma sandbox sync (WARNING: drops and recreates the MySQL 'michelangelo' dat
 
 step "Rollout"
 # Sync restarts deployments; restart explicitly so a same-tag rebuild is always picked up.
-kubectl rollout restart "deployment/$DEPLOY"
-kubectl rollout status "deployment/$DEPLOY" --timeout=180s
+"${KUBECTL[@]}" rollout restart "deployment/$DEPLOY"
+"${KUBECTL[@]}" rollout status "deployment/$DEPLOY" --timeout=180s
 
 step "Verify what's deployed"
 SEL="app.kubernetes.io/component=$SERVICE"
 FAIL=0
-POD_IMAGE=$(kubectl get pod -l "$SEL" --field-selector=status.phase=Running -o jsonpath='{.items[0].spec.containers[0].image}')
+POD_IMAGE=$("${KUBECTL[@]}" get pod -l "$SEL" --field-selector=status.phase=Running -o jsonpath='{.items[0].spec.containers[0].image}')
 echo "1. pod image:   $POD_IMAGE"
 [ "$POD_IMAGE" = "$IMAGE" ] || { echo "   FAIL: expected $IMAGE"; FAIL=1; }
 
@@ -102,7 +110,7 @@ case "$LABELS" in
 esac
 
 BUILT=$(docker image inspect "$IMAGE" --format '{{.Created}}')
-STARTED=$(kubectl get pod -l "$SEL" --field-selector=status.phase=Running -o jsonpath='{.items[0].status.startTime}')
+STARTED=$("${KUBECTL[@]}" get pod -l "$SEL" --field-selector=status.phase=Running -o jsonpath='{.items[0].status.startTime}')
 echo "3. image built: $BUILT"
 echo "   pod started: $STARTED"
 # Both are UTC ISO-8601; compare at second precision (first 19 chars).

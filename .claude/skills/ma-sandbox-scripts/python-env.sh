@@ -27,7 +27,11 @@ venv_supported() {
   [ -x "$PY_DIR/.venv/bin/python" ] && "$PY_DIR/.venv/bin/python" -c "$SUPPORTED"
 }
 
+# Reuse a working venv, but sync it to poetry.lock first so a rebase or pull that
+# changed dependencies doesn't leave it stale. `poetry install` is a no-op when
+# the venv is already current.
 if venv_supported && [ -x "$MA" ] && "$MA" --help >/dev/null 2>&1 && [ -z "$EXTRAS" ]; then
+  (cd "$PY_DIR" && poetry install >&2)
   echo "$MA"
   exit 0
 fi

@@ -20,4 +20,4 @@ else
   echo "$CLUSTER is already running."
 fi
 
-kubectl wait --for=condition=ready node --all --timeout=120s
+kubectl --context "k3d-$CLUSTER" wait --for=condition=ready node --all --timeout=120s
