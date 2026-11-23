@@ -1,6 +1,7 @@
 """Scenario-level tests for `ma sandbox snapshot`."""
 
 import argparse
+import json
 import tempfile
 from pathlib import Path
 from unittest import TestCase
@@ -633,12 +634,65 @@ class SyncCadenceDomainTest(TestCase):
 
     def test_domain_registered_before_waiting_after_upgrade(self):
         """A healthy release upgrade registers the domain before the wait."""
-        calls = self._run_sync('{"info":{"status":"deployed"}}')
+        calls = self._run_sync('{"version":1,"info":{"status":"deployed"}}')
         names = [c[0] for c in calls.mock_calls]
         self.assertEqual(names, ["ensure", "wait"])
 
     def test_domain_registered_before_waiting_after_reinstall(self):
         """A failed release is reinstalled and still gets the domain registered."""
-        calls = self._run_sync('{"info":{"status":"failed"}}')
+        calls = self._run_sync('{"version":1,"info":{"status":"failed"}}')
         names = [c[0] for c in calls.mock_calls]
         self.assertEqual(names, ["ensure", "wait"])
+
+
+class HelmReleaseUpgradableTest(TestCase):
+    """Test cases for the in-place upgrade check used by `ma sandbox sync`."""
+
+    def _upgradable(self, returncode: int, status: str = "", version: int = 1):
+        stdout = json.dumps({"version": version, "info": {"status": status}})
+        with patch.object(sandbox.subprocess, "run") as mock_run:
+            mock_run.return_value = Mock(returncode=returncode, stdout=stdout)
+            return sandbox._helm_release_upgradable()
+
+    def test_deployed_release_is_upgradable(self):
+        """A `deployed` release is upgraded in place."""
+        self.assertTrue(self._upgradable(0, "deployed", version=1))
+
+    def test_failed_upgrade_is_upgradable(self):
+        """A release left `failed` by an upgrade (revision > 1) is upgraded in place."""
+        self.assertTrue(self._upgradable(0, "failed", version=3))
+
+    def test_failed_first_install_is_reinstalled(self):
+        """A `failed` first install has nothing to preserve."""
+        self.assertFalse(self._upgradable(0, "failed", version=1))
+
+    def test_other_statuses_are_reinstalled(self):
+        """Pending and uninstalled releases are not upgraded in place."""
+        for status in ("pending-install", "pending-upgrade", "uninstalled"):
+            with self.subTest(status=status):
+                self.assertFalse(self._upgradable(0, status, version=2))
+
+    def test_missing_release_is_not_upgradable(self):
+        """`helm status` failing means there is no release to upgrade."""
+        self.assertFalse(self._upgradable(1))
+
+
+class HelmForceConflictsArgsTest(TestCase):
+    """Test cases for gating `--force-conflicts` on the Helm major version."""
+
+    def _args(self, version_stdout: str):
+        with patch.object(sandbox.subprocess, "run") as mock_run:
+            mock_run.return_value = Mock(returncode=0, stdout=version_stdout)
+            return sandbox._helm_force_conflicts_args()
+
+    def test_helm_4_gets_the_flag(self):
+        """Helm 4 applies server-side and supports `--force-conflicts`."""
+        self.assertEqual(self._args("v4.2.2\n"), ["--force-conflicts"])
+
+    def test_helm_3_does_not(self):
+        """Helm 3 has no such flag and would reject the upgrade."""
+        self.assertEqual(self._args("v3.22.0\n"), [])
+
+    def test_unparseable_version_omits_the_flag(self):
+        """An unreadable version falls back to plain `helm upgrade`."""
+        self.assertEqual(self._args(""), [])
