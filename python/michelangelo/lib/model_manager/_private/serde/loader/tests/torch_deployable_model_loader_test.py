@@ -99,13 +99,16 @@ class LoadTorchPythonDeployableModelTest(TestCase):
             with self.assertRaisesRegex(ValueError, "model_class.txt is empty"):
                 _load_torch_python_deployable_model(tmp)
 
+    # Keep the import_module patch outermost. Decorators are entered innermost first,
+    # and on Python 3.11+ patch() resolves a dotted target via importlib.import_module,
+    # so a patch entered while it is mocked adds extra calls to call_count.
+    @patch("importlib.import_module")
     @patch(
         "michelangelo.lib.model_manager._private.utils.loader_utils.class_importer."
         "create_alternative_defs"
     )
-    @patch("importlib.import_module")
     def test_falls_back_through_all_import_tiers_on_collision(
-        self, mock_import_module, mock_create_alt
+        self, mock_create_alt, mock_import_module
     ):
         """A model class whose module collides on sys.path still loads.
 
