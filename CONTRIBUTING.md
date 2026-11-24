@@ -137,6 +137,7 @@ We use GitHub issues to track bugs. If you run into an issue with the project:
 * The project team will label the issue accordingly.
 * A project maintainer will try to reproduce the issue with your provided steps. If there are no reproduction steps, or no obvious way to reproduce the issue, we’ll request these details but the bug won’t be addressed until they are provided.
 * If the team is able to reproduce the issue, it will be tagged and the issue will be queued to be implemented.
+* An issue with no activity for 180 days is labeled `stale` for maintainer review; it is never closed automatically. See the [Stale Issue Policy](./docs/contributing/stale-issue-policy.md).
 
 <a id="commit-messages"></a>
 ## Commit Messages

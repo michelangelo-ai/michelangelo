@@ -1,0 +1,24 @@
+name: Remove stale label when an issue is exempted
+
+# actions/stale skips exempt issues, so it never removes the label from one exempted after flagging.
+on:
+  issues:
+    types: [labeled, milestoned]
+
+permissions:
+  issues: write
+
+jobs:
+  unstale:
+    # Keep this label list in sync with exempt-issue-labels in stale-issues.yml.
+    if: >-
+      contains(github.event.issue.labels.*.name, 'stale') &&
+      (github.event.action == 'milestoned' ||
+       contains(fromJSON('["tech-debt", "todo-tracking", "frozen"]'), github.event.label.name))
+    runs-on: ubuntu-latest
+    steps:
+      - run: gh issue edit "$NUMBER" --repo "$REPO" --remove-label "stale"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NUMBER: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}
