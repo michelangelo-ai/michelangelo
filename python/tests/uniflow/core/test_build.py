@@ -1,19 +1,25 @@
+"""Tests for building uniflow workflow packages."""
+
 import json
 import unittest
 
 import tests.uniflow.core.demo_app.demo_app as demo_app
+import tests.uniflow.core.demo_app.overrides_app as overrides_app
 import tests.uniflow.core.demo_platform.workflows as demo_platform_workflows
 from michelangelo.uniflow.core.build import TranspilerCallback, build
 
 
 class Test(unittest.TestCase):
+    """Tests for build()."""
+
     def test_demo_app(self):
+        """build() packages the workflow and its dependencies."""
         package = build(demo_app.main)
 
         # Find and assert the main file
         main_file = [
             p
-            for p in package.files.keys()
+            for p in package.files
             if p.endswith("/tests/uniflow/core/demo_app/demo_app.py")
         ]
         self.assertEqual(1, len(main_file))
@@ -46,6 +52,8 @@ class Test(unittest.TestCase):
         self.assertEqual(expected_meta, meta)
 
     def test_build_with_transpiler_callback(self):
+        """build() reports each task function to the transpiler callback."""
+
         class MyTranspilerCallback(TranspilerCallback):
             def __init__(self):
                 self.task_functions = []
@@ -74,3 +82,22 @@ class Test(unittest.TestCase):
 
         package1 = build(demo_app.main)
         self.assertEqual(package0, package1)
+
+    def test_build_keeps_module_level_overrides(self):
+        """A module-level with_overrides() copy keeps its alias and retries."""
+        task_functions = []
+
+        class MyTranspilerCallback(TranspilerCallback):
+            def on_task_function(self, task_fn):
+                task_functions.append(task_fn)
+
+        package = build(overrides_app.main, transpiler_callback=MyTranspilerCallback())
+
+        self.assertEqual(len(task_functions), 2)
+        self.assertIs(task_functions[0], overrides_app.task_slow)
+        self.assertIs(task_functions[1], overrides_app.task_fast)
+
+        main_source = package.files[package.main_file].decode()
+        self.assertIn("alias='task_slow'", main_source)
+        self.assertIn("alias='task_fast'", main_source)
+        self.assertIn("retry_attempts=3", main_source)

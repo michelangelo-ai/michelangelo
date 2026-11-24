@@ -701,9 +701,13 @@ class FunctionTransformer(ast.NodeTransformer):
 
         # Global var is defined by the module, get its value for further introspection
         v = getattr(self._module, node.id)
+        # Use a TaskFunction as is: inspect.unwrap() follows its __wrapped__ to
+        # the original function, whose _uf_task is the undecorated task, so a
+        # with_overrides() copy would lose its alias and config.
+        task = v if isinstance(v, TaskFunction) else None
         v = inspect.unwrap(v)
 
-        if task := getattr(v, "_uf_task", None):
+        if task := task or getattr(v, "_uf_task", None):
             assert isinstance(task, TaskFunction)
             if self._transpiler_callback:
                 self._transpiler_callback.on_task_function(task)

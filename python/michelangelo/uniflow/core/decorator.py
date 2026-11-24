@@ -96,6 +96,11 @@ class TaskFunction(Generic[P, R]):
     ```
     """
 
+    # Set on each instance by functools.update_wrapper() in task().
+    __name__: str
+    __qualname__: str
+    __wrapped__: Callable[P, R]
+
     def __init__(
         self,
         *,
@@ -208,8 +213,8 @@ class TaskFunction(Generic[P, R]):
             raise
 
         try:
-            args, kwargs = _unref_args(sig, args, kwargs, self._io)  # type: ignore[return-value]
-            res = self._fn(*args, **kwargs)
+            call_args, call_kwargs = _unref_args(sig, args, kwargs, self._io)
+            res = self._fn(*call_args, **call_kwargs)
             res = ref(res, self._io)
             if result_url:
                 assert isinstance(result_url, str)
@@ -268,7 +273,7 @@ class TaskFunction(Generic[P, R]):
         ... )
         ```
         """
-        return TaskFunction(
+        task_fn = TaskFunction(
             fn=self._fn,
             config=config or self._config,
             alias=alias or self._alias,
@@ -277,6 +282,12 @@ class TaskFunction(Generic[P, R]):
             cache_version=self._cache_version,
             retry_attempts=retry_attempts or self._retry_attempts,
         )
+        update_wrapper(task_fn, self._fn)
+        # update_wrapper() also merges self._fn.__dict__, which may hold the
+        # _uf_task back-reference that task() sets after its own update_wrapper()
+        # call. Drop it so the copy has the same attributes as the original task.
+        task_fn.__dict__.pop("_uf_task", None)
+        return task_fn
 
     def _transpile(self, dependencies: Dependencies) -> ast.AST:
         """Transpile task to Starlark AST for workflow compilation.
@@ -363,7 +374,7 @@ def task(
     cache_version: Optional[str] = None,
     retry_attempts: int = DEFAULT_RETRY_ATTEMPTS,
     image_spec: Optional[ImageSpec] = None,
-):
+) -> Callable[[Callable[P, R]], TaskFunction[P, R]]:
     """Decorator for defining a Uniflow task.
 
     Wraps a function to make it executable as a Uniflow task with caching,
@@ -456,7 +467,7 @@ def task(
     return decorator
 
 
-def workflow():
+def workflow() -> Callable[[Callable[P, R]], Callable[P, R]]:
     """Decorator for defining a Uniflow workflow.
 
     Marks a function as a workflow entry point. Workflows orchestrate multiple
@@ -510,12 +521,14 @@ def workflow():
             fn: Function to mark as workflow.
 
         Returns:
-            The original function with workflow marker.
+            A ``functools.wraps`` wrapper around ``fn``. The workflow marker
+            is set on ``fn`` itself, so ``is_workflow()`` sees it only after
+            ``inspect.unwrap()``.
         """
         log.debug("init-decorator: %s", dot_path(fn))
 
         @wraps(fn)
-        def wrapper(*args, **kwargs) -> R:
+        def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
             """Execute the workflow function.
 
             Args:
@@ -527,13 +540,13 @@ def workflow():
             """
             return fn(*args, **kwargs)
 
-        fn._uf_workflow = True
+        fn._uf_workflow = True  # type: ignore[attr-defined]
         return wrapper
 
     return decorator
 
 
-def star_plugin(binding: str):
+def star_plugin(binding: str) -> Callable[[Callable[P, R]], Callable[P, R]]:
     """Decorator for Starlark plugin functions.
 
     Marks a Python function as a Starlark plugin, making it available for
@@ -562,11 +575,13 @@ def star_plugin(binding: str):
             fn: Function to mark as plugin.
 
         Returns:
-            The original function with plugin markers.
+            A ``functools.wraps`` wrapper around ``fn``. The plugin markers
+            are set on ``fn`` itself, so ``is_star_plugin()`` sees them only
+            after ``inspect.unwrap()``.
         """
 
         @wraps(fn)
-        def wrapper(*args, **kwargs) -> R:
+        def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
             """Execute the plugin function.
 
             Args:
@@ -578,8 +593,8 @@ def star_plugin(binding: str):
             """
             return fn(*args, **kwargs)
 
-        fn._uf_star_plugin = True
-        fn._uf_star_plugin_binding = binding
+        fn._uf_star_plugin = True  # type: ignore[attr-defined]
+        fn._uf_star_plugin_binding = binding  # type: ignore[attr-defined]
         return wrapper
 
     return decorator
