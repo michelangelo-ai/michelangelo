@@ -1,0 +1,24 @@
+# Mock interpreter release for local tests. The artifact does not exist and
+# the digest is a placeholder: no interpreter runs these pipelines yet.
+version: mock-v1
+artifact: s3://mock-artifacts/declarative/interpreters/mock-v1.tar.gz
+digest: sha256:0000000000000000000000000000000000000000000000000000000000000001
+task_types:
+  mock/python:
+    capabilities: []
+    config:
+      entry_point: {type: string, required: true}
+      args: {type: list}
+    job_specs:
+      cpu: {type: integer}
+      memory: {type: string}
+  mock/trainer:
+    capabilities: [retry]
+    config:
+      entry_point: {type: string, required: true}
+      epochs: {type: integer}
+      learning_rate: {type: number}
+      dataset: {type: string}
+    job_specs:
+      cpu: {type: integer}
+      gpu: {type: integer}

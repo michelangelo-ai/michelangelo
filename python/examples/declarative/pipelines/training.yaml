@@ -1,0 +1,45 @@
+apiVersion: michelangelo.api/v2
+kind: Pipeline
+metadata:
+  name: declarative-training
+  namespace: declarative-test
+spec:
+  description: Parameters, a diamond, retry, and a failure handler
+  manifest:
+    type: PIPELINE_MANIFEST_TYPE_DECLARATIVE
+    content:
+      schemaVersion: v1alpha1
+      workflowConfig:
+        maxConcurrency: 2
+      parameters:
+        dataset:
+          default: s3://mock-data/cola/train.parquet
+          description: Training data
+        epochs:
+          default: 3
+      tasks:
+        prepare:
+          taskFunction: mock/python
+          config: {entry_point: prepare.py, args: ["--dataset", "{{ params.dataset }}"]}
+        train_small:
+          taskFunction: mock/trainer
+          config: {entry_point: train.py, epochs: "{{ params.epochs }}", learning_rate: 0.01}
+          jobSpecs: {cpu: 4}
+          retry: {maxAttempts: 3, initialInterval: 30s}
+          dependsOn: [{task: prepare}]
+        train_large:
+          taskFunction: mock/trainer
+          config: {entry_point: train.py, epochs: "{{ params.epochs }}", learning_rate: 0.001}
+          jobSpecs: {cpu: 8, gpu: 1}
+          retry: {maxAttempts: 3, initialInterval: 30s}
+          dependsOn: [{task: prepare}]
+        evaluate:
+          taskFunction: mock/python
+          config:
+            entry_point: evaluate.py
+            args: ["{{ tasks.train_small.output.model_uri }}", "{{ tasks.train_large.output.model_uri }}"]
+          dependsOn: [{task: train_small}, {task: train_large}]
+        notify_failure:
+          taskFunction: mock/python
+          config: {entry_point: notify.py}
+          dependsOn: [{task: evaluate, when: failed}]

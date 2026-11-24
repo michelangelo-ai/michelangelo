@@ -1,0 +1,14 @@
+# Expected: INVALID_ARGUMENT, a cycle a -> b -> a.
+apiVersion: michelangelo.api/v2
+kind: Pipeline
+metadata:
+  name: declarative-cycle
+  namespace: declarative-test
+spec:
+  manifest:
+    type: PIPELINE_MANIFEST_TYPE_DECLARATIVE
+    content:
+      schemaVersion: v1alpha1
+      tasks:
+        a: {taskFunction: mock/python, config: {entry_point: a.py}, dependsOn: [{task: b}]}
+        b: {taskFunction: mock/python, config: {entry_point: b.py}, dependsOn: [{task: a}]}

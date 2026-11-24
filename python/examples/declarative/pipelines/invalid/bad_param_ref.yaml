@@ -1,0 +1,13 @@
+# Expected: INVALID_ARGUMENT, the parameter "dataset" is not declared.
+apiVersion: michelangelo.api/v2
+kind: Pipeline
+metadata:
+  name: declarative-bad-param-ref
+  namespace: declarative-test
+spec:
+  manifest:
+    type: PIPELINE_MANIFEST_TYPE_DECLARATIVE
+    content:
+      schemaVersion: v1alpha1
+      tasks:
+        a: {taskFunction: mock/python, config: {entry_point: a.py, args: ["{{ params.dataset }}"]}}

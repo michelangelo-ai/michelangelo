@@ -1,0 +1,14 @@
+# Expected: INVALID_ARGUMENT, timeout_seconds is not in the mock-v1 schema
+# for mock/python. It is valid after a pin upgrade to mock-v2.
+apiVersion: michelangelo.api/v2
+kind: Pipeline
+metadata:
+  name: declarative-bad-config
+  namespace: declarative-test
+spec:
+  manifest:
+    type: PIPELINE_MANIFEST_TYPE_DECLARATIVE
+    content:
+      schemaVersion: v1alpha1
+      tasks:
+        a: {taskFunction: mock/python, config: {entry_point: a.py, timeout_seconds: 600}}

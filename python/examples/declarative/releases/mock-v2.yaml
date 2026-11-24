@@ -1,0 +1,25 @@
+# Mock interpreter release for local tests. It adds timeout_seconds to
+# mock/python. Use it to test a pin upgrade from mock-v1.
+version: mock-v2
+artifact: s3://mock-artifacts/declarative/interpreters/mock-v2.tar.gz
+digest: sha256:0000000000000000000000000000000000000000000000000000000000000002
+task_types:
+  mock/python:
+    capabilities: []
+    config:
+      entry_point: {type: string, required: true}
+      args: {type: list}
+      timeout_seconds: {type: integer}
+    job_specs:
+      cpu: {type: integer}
+      memory: {type: string}
+  mock/trainer:
+    capabilities: [retry]
+    config:
+      entry_point: {type: string, required: true}
+      epochs: {type: integer}
+      learning_rate: {type: number}
+      dataset: {type: string}
+    job_specs:
+      cpu: {type: integer}
+      gpu: {type: integer}
