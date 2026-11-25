@@ -15,11 +15,13 @@ on:
       - "python/examples/**"
       - "python/pyproject.toml"
       - "python/poetry.lock"
+      - "proto/**"
   pull_request:
     paths:
       - "python/examples/**"
       - "python/pyproject.toml"
       - "python/poetry.lock"
+      - "proto/**"
   workflow_dispatch:
 
 env:
