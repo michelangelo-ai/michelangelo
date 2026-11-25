@@ -2,6 +2,7 @@ package declarative
 
 import (
 	"encoding/json"
+	"os"
 	"sort"
 	"testing"
 
@@ -617,4 +618,29 @@ func TestEngineWait(t *testing.T) {
 		assert.Equal(t, map[string]string{}, got.states)
 		assert.Equal(t, "fail: declarative: wait budget exhausted", got.err)
 	})
+}
+
+func TestEngineDiamondFixture(t *testing.T) {
+	tar := casesTar(t)
+	raw, err := os.ReadFile("testdata/inputs/diamond.json")
+	require.NoError(t, err)
+	var args []any
+	require.NoError(t, json.Unmarshal(raw, &args))
+	require.Len(t, args, 2)
+
+	got := runEngine(t, tar, "run_case", args...)
+	require.Empty(t, got.err)
+	record := func(alias string, retry int) map[string]any {
+		return map[string]any{"ep": alias + ".py", "alias": alias, "args": []any{}, "kwargs": map[string]any{}, "retry": retry, "fields": map[string]any{}}
+	}
+	assert.Equal(t, map[string]any{
+		"states": map[string]any{"extract": succeeded, "train": succeeded, "evaluate": succeeded, "publish": succeeded, "notify": skipped},
+		"outputs": map[string]any{
+			"extract":  record("extract", 1),
+			"train":    with(record("train", 2), "fields", map[string]any{"head_cpu": 2, "epochs": 3}),
+			"evaluate": record("evaluate", 1),
+			"publish":  record("publish", 1),
+			"notify":   nil,
+		},
+	}, got.result)
 }
