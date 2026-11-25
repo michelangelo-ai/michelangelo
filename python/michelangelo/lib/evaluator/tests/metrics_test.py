@@ -195,6 +195,32 @@ class ExtractDataForCollectionTest(TestCase):
         self.assertIsNone(data["predictions"][1])
         self.assertNotIn("targets", data)
 
+    def test_extract_without_pred_dtype_fails_on_invalid_embeddings(self):
+        """Mismatched dimensions or NaN/Inf elements fail, naming the column."""
+        column_mapping = ColumnMapping(prediction_col="embedding", target_col="user_id")
+        cases = {
+            "same dimension": [[1.0, 2.0], [1.0, 2.0], [1.0]],
+            "NaN, Inf or missing": [[1.0, 2.0], [float("inf"), 2.0], None],
+        }
+        for message, rows in cases.items():
+            df = pd.DataFrame({"embedding": rows, "user_id": ["a", "b", "c"]})
+            pattern = f"column 'embedding': .*{message}"
+            with (
+                self.subTest(message=message),
+                self.assertRaisesRegex(ValueError, pattern),
+            ):
+                extract_data_for_collection(df, column_mapping, None, None)
+
+    def test_extract_without_pred_dtype_logs_null_rows(self):
+        """Null rows are logged once."""
+        df = pd.DataFrame({"embedding": [[1.0, 2.0], None], "user_id": ["a", "b"]})
+        column_mapping = ColumnMapping(prediction_col="embedding", target_col="user_id")
+        with self.assertLogs(
+            "michelangelo.lib.evaluator.metrics", level="WARNING"
+        ) as logs:
+            extract_data_for_collection(df, column_mapping, None, None)
+        self.assertIn("1 of 2 rows have no embedding", logs.output[0])
+
 
 class InferTaskTypeTest(TestCase):
     """infer_task_type_from_path reads the metric's module hierarchy."""

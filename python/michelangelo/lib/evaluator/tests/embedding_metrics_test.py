@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import torch
 
-from michelangelo.lib.evaluator import embedding_metrics
+from michelangelo.lib.evaluator import embedding_metrics as embedding
 from michelangelo.lib.evaluator.embedding_metrics import (
     EmbeddingCosineSimilarity,
     EmbeddingDeadDimensions,
@@ -22,7 +22,7 @@ from michelangelo.lib.evaluator.embedding_metrics import (
 )
 
 
-def _score(metric, *batches) -> float:
+def _score(metric, *batches: torch.Tensor) -> float:
     for batch in batches:
         metric.update(batch)
     return metric.compute().item()
@@ -55,17 +55,26 @@ class EmbeddingCosineSimilarityTest(unittest.TestCase):
         """Percentiles read the sorted distinct-pair similarities."""
         # Pairs: (a,b)=1, (a,c)=0, (b,c)=0 -> sorted [0, 0, 1].
         x = torch.tensor([[1.0, 0.0], [1.0, 0.0], [0.0, 1.0]])
-        for stat, expected in (("p0", 0.0), ("p50", 0.0), ("p75", 0.5), ("p100", 1.0)):
-            self.assertAlmostEqual(
-                _score(EmbeddingCosineSimilarity(stat=stat), x), expected, places=5
-            )
+        self.assertAlmostEqual(
+            _score(EmbeddingCosineSimilarity(stat="p0"), x), 0.0, places=5
+        )
+        self.assertAlmostEqual(
+            _score(EmbeddingCosineSimilarity(stat="p50"), x), 0.0, places=5
+        )
+        self.assertAlmostEqual(
+            _score(EmbeddingCosineSimilarity(stat="p75"), x), 0.5, places=5
+        )
+        self.assertAlmostEqual(
+            _score(EmbeddingCosineSimilarity(stat="p100"), x), 1.0, places=5
+        )
 
     def test_percentile_matches_numpy_linear_interpolation(self) -> None:
         """Percentiles interpolate linearly, like numpy."""
         x = torch.randn(40, 8, generator=torch.Generator().manual_seed(0))
         normed = torch.nn.functional.normalize(x, dim=1)
-        upper = torch.triu(torch.ones(40, 40, dtype=torch.bool), diagonal=1)
-        pairs = (normed @ normed.T)[upper]
+        pairs = (normed @ normed.T)[
+            torch.triu(torch.ones(40, 40, dtype=torch.bool), diagonal=1)
+        ]
         for stat, q in (("p5", 5.0), ("p25", 25.0), ("p99.5", 99.5)):
             expected = float(np.percentile(pairs.numpy(), q))
             self.assertAlmostEqual(
@@ -89,18 +98,24 @@ class EmbeddingUniformityTest(unittest.TestCase):
 
     def test_orthogonal_rows(self) -> None:
         """Orthogonal unit rows are sqrt(2) apart, so the score is -2t."""
-        eye = torch.eye(4)
-        self.assertAlmostEqual(_score(EmbeddingUniformity(), eye), -4.0, places=5)
-        self.assertAlmostEqual(_score(EmbeddingUniformity(t=1.0), eye), -2.0, places=5)
+        # Every pair of unit rows is sqrt(2) apart: log(exp(-t * 2)) = -2t.
+        self.assertAlmostEqual(
+            _score(EmbeddingUniformity(), torch.eye(4)), -4.0, places=5
+        )
+        self.assertAlmostEqual(
+            _score(EmbeddingUniformity(t=1.0), torch.eye(4)), -2.0, places=5
+        )
 
     def test_antipodal_rows(self) -> None:
         """Opposite rows are 2 apart: log(exp(-4t)) = -8 at t=2."""
+        # ||x - (-x)||**2 = 4: log(exp(-4t)) = -8 at t=2.
         x = torch.tensor([[3.0, 0.0], [-1.0, 0.0]])
         self.assertAlmostEqual(_score(EmbeddingUniformity(), x), -8.0, places=5)
 
     def test_clusters_score_worse_than_spread_rows(self) -> None:
         """Pairs inside tight clusters dominate, unlike a mean cosine."""
-        # Two opposite clusters average a cosine of ~0, like orthogonal rows.
+        # Two opposite clusters average a cosine of ~0, like orthogonal rows,
+        # but the pairs inside each cluster dominate uniformity.
         clusters = torch.tensor(
             [[1.0, 0.0, 0.0, 0.0]] * 2 + [[-1.0, 0.0, 0.0, 0.0]] * 2
         )
@@ -146,7 +161,7 @@ class EmbeddingNormTest(unittest.TestCase):
 
     def test_percentile_preserves_inf(self) -> None:
         """Infinite norms stay infinite instead of turning into nan."""
-        x = torch.tensor([[float("inf"), 0.0], [float("inf"), 0.0]])
+        x = torch.tensor([[float("inf"), 0.0], [float("inf"), 0.0]])  # both norms inf
         self.assertEqual(_score(EmbeddingNorm(stat="p100"), x), float("inf"))
         self.assertEqual(_score(EmbeddingNorm(stat="p50"), x), float("inf"))
 
@@ -167,8 +182,11 @@ class EmbeddingEffectiveRankTest(unittest.TestCase):
     def test_singular_spectrum_is_not_centered(self) -> None:
         """The singular spectrum keeps the dimension centering would remove."""
         # The identity's rows span all 4 dimensions, but centering removes one.
-        singular = EmbeddingEffectiveRank(spectrum="singular")
-        self.assertAlmostEqual(_score(singular, torch.eye(4)), 4.0, places=4)
+        self.assertAlmostEqual(
+            _score(EmbeddingEffectiveRank(spectrum="singular"), torch.eye(4)),
+            4.0,
+            places=4,
+        )
         self.assertAlmostEqual(
             _score(EmbeddingEffectiveRank(), torch.eye(4)), 3.0, places=4
         )
@@ -220,7 +238,7 @@ class EmbeddingHubnessTest(unittest.TestCase):
     def test_balanced_neighbors_return_nan(self) -> None:
         """Equal k-occurrences leave skewness undefined."""
         # A regular hexagon: every vertex's 2 nearest are its 2 sides, so every
-        # k-occurrence is 2.
+        # k-occurrence is 2 and skewness is undefined.
         angles = torch.arange(6) * (2 * math.pi / 6)
         x = torch.stack([angles.cos(), angles.sin()], dim=1)
         self.assertTrue(math.isnan(_score(EmbeddingHubness(k=2), x)))
@@ -280,8 +298,9 @@ class EmbeddingDeadDimensionsTest(unittest.TestCase):
     def test_threshold_is_relative_to_widest_dimension(self) -> None:
         """The threshold scales with the widest dimension."""
         # Stds ~1 and ~1e-2: alive at the default 1e-3, dead at 0.1, at any scale.
-        x = torch.randn(1000, 2, generator=torch.Generator().manual_seed(0))
-        x = x * torch.tensor([1.0, 1e-2])
+        x = torch.randn(
+            1000, 2, generator=torch.Generator().manual_seed(0)
+        ) * torch.tensor([1.0, 1e-2])
         for scale in (1e-4, 1.0, 1e4):
             with self.subTest(scale=scale):
                 self.assertEqual(_score(EmbeddingDeadDimensions(), x * scale), 0.0)
@@ -307,69 +326,6 @@ class EmbeddingDeadDimensionsTest(unittest.TestCase):
                 EmbeddingDeadDimensions(threshold=threshold)
 
 
-class EmbeddingMetricSamplingTest(unittest.TestCase):
-    """Sampling and accumulation shared by every embedding metric."""
-
-    def test_sampled_result_is_reproducible(self) -> None:
-        """Sampled result is reproducible."""
-        x = torch.randn(500, 4, generator=torch.Generator().manual_seed(1))
-        first = _score(EmbeddingCosineSimilarity(stat="std", max_samples=50), x)
-        second = _score(EmbeddingCosineSimilarity(stat="std", max_samples=50), x)
-        self.assertEqual(first, second)
-
-    def test_multiple_updates_accumulate(self) -> None:
-        """Multiple updates accumulate."""
-        x = torch.tensor([[3.0, 4.0], [0.0, 1.0]])
-        self.assertAlmostEqual(_score(EmbeddingNorm(), x[:1], x[1:]), 3.0, places=5)
-
-    def test_empty_scope_returns_nan(self) -> None:
-        """Empty scope returns nan."""
-        self.assertTrue(math.isnan(_score(EmbeddingNorm(), torch.empty(0))))
-
-    def test_non_matrix_input_raises(self) -> None:
-        """Non matrix input raises."""
-        with self.assertRaises(ValueError):
-            EmbeddingNorm().update(torch.tensor([1.0, 2.0]))
-
-    def test_sample_weighs_updates_by_their_row_count(self) -> None:
-        """Sample weighs updates by their row count."""
-        # 9,000 rows of norm 1 then 1,000 of norm 9: the true mean norm is 1.8.
-        # Capping each update separately would weigh both equally (mean 5).
-        metric = EmbeddingNorm(max_samples=500)
-        metric.update(torch.tensor([[1.0, 0.0]]).repeat(9_000, 1))
-        metric.update(torch.tensor([[9.0, 0.0]]).repeat(1_000, 1))
-        self.assertAlmostEqual(metric.compute().item(), 1.8, delta=0.4)
-
-    def test_state_stays_bounded_across_updates(self) -> None:
-        """State stays bounded across updates."""
-        for step in ("update", "forward"):
-            with self.subTest(step=step):
-                metric = EmbeddingNorm(max_samples=100)
-                for _ in range(50):
-                    getattr(metric, step)(torch.randn(80, 4))
-                self.assertEqual(sum(t.numel() for t in metric.samples), 100 * 4)
-
-    def test_compute_after_distributed_sync(self) -> None:
-        """Compute after distributed sync."""
-        # Stand-ins for all_gather across two ranks: one whose peer saw the same
-        # rows, and one whose peer saw none. A sync leaves the list states as
-        # concatenated tensors.
-        peers = {
-            "same rows": lambda t, group=None: [t, t],
-            "no rows": lambda t, group=None: [
-                t,
-                t if t.dim() == 0 else t[:0],
-            ],
-        }
-        x = torch.tensor([[3.0, 4.0], [0.0, 1.0]])
-        for name, gather in peers.items():
-            with self.subTest(peer=name):
-                metric = EmbeddingNorm(
-                    dist_sync_fn=gather, distributed_available_fn=lambda: True
-                )
-                self.assertAlmostEqual(_score(metric, x), 3.0, places=5)
-
-
 def _rows(*values) -> np.ndarray:
     """A column as embedding-type metrics receive it: one object per row."""
     column = np.empty(len(values), dtype=object)
@@ -389,6 +345,7 @@ class EmbeddingNullRateTest(unittest.TestCase):
 
     def test_counts_numpy_float32_nan_rows(self) -> None:
         """A float32 NaN, which is not a Python float, is a missing row."""
+        # Iterating a float32 column yields np.float32, which is not a Python float.
         column = np.array([float("nan"), float("nan"), 0.0, 1.0], dtype=np.float32)
         self.assertAlmostEqual(_score(EmbeddingNullRate(), column), 0.5, places=5)
         self.assertAlmostEqual(_score(EmbeddingZeroRate(), column), 0.25, places=5)
@@ -400,15 +357,14 @@ class EmbeddingNullRateTest(unittest.TestCase):
 
     def test_list_input_keeps_one_value_per_row(self) -> None:
         """Equal-length rows are not read as a matrix of per-element nulls."""
+        # Equal-length rows must not be read as a matrix of per-element nulls.
         self.assertAlmostEqual(
             _score(EmbeddingNullRate(), [[1.0, float("nan")], None, [0.0, 0.0]]),
             1 / 3,
             places=5,
         )
         self.assertAlmostEqual(
-            _score(EmbeddingZeroRate(), [[1.0, 2.0], None, [0.0, 0.0]]),
-            1 / 3,
-            places=5,
+            _score(EmbeddingZeroRate(), [[1.0, 2.0], None, [0.0, 0.0]]), 1 / 3, places=5
         )
 
     def test_accumulates_over_updates(self) -> None:
@@ -437,6 +393,7 @@ class EmbeddingZeroRateTest(unittest.TestCase):
 
     def test_counts_all_zero_rows_over_all_rows(self) -> None:
         """A null row counts in the denominator but not as zero."""
+        # The null row counts in the denominator but not as zero.
         column = _rows([0.0, 0.0], [0.0, 1e-6], None, [0.0, 0.0])
         self.assertAlmostEqual(_score(EmbeddingZeroRate(), column), 0.5, places=5)
 
@@ -452,23 +409,29 @@ class EmbeddingZeroRateTest(unittest.TestCase):
 
     def test_counts_across_stacking_chunks(self) -> None:
         """A budget of 2 elements over 1-dim rows stacks 2 rows at a time."""
-        with patch.object(embedding_metrics, "_STACK_CHUNK_ELEMENTS", 2):
+        # A budget of 2 elements over 1-dim rows stacks 2 rows at a time.
+        with patch.object(embedding, "_STACK_CHUNK_ELEMENTS", 2):
             column = _rows([0.0], [1.0], [0.0], None, [0.0])
             self.assertAlmostEqual(_score(EmbeddingZeroRate(), column), 0.6, places=5)
 
     def test_chunk_size_scales_with_dimension(self) -> None:
         """A budget of 4 elements over 2-dim rows stacks 2 rows at a time."""
-        with patch.object(embedding_metrics, "_STACK_CHUNK_ELEMENTS", 4):
+        # A budget of 4 elements over 2-dim rows stacks 2 rows at a time.
+        with patch.object(embedding, "_STACK_CHUNK_ELEMENTS", 4):
             column = _rows([0.0, 0.0], [1.0, 0.0], [0.0, 0.0], [0.0, 2.0], [0.0, 0.0])
             self.assertAlmostEqual(_score(EmbeddingZeroRate(), column), 0.6, places=5)
 
     def test_pandas_missing_values_are_skipped(self) -> None:
         """pd.NA and pd.NaT are null rows: not zero, and no ambiguous-truth crash."""
+        # pd.NA and pd.NaT are null rows: not zero, and no crash on their ambiguous
+        # truth value.
         column = _rows([0.0, 0.0], pd.NA, pd.NaT, [1.0, 1.0])
         self.assertAlmostEqual(_score(EmbeddingZeroRate(), column), 0.25, places=5)
 
     def test_missing_elements_make_a_row_nonzero(self) -> None:
         """A missing element makes a present vector nonzero, without crashing."""
+        # A present vector with a missing element is not all-zero and must not crash the
+        # reduction, whether rows arrive as lists or as object arrays.
         as_lists = [[0.0, pd.NA], [0.0, 0.0], [0.0, None]]
         as_arrays = np.empty(3, dtype=object)
         for i, row in enumerate(as_lists):
@@ -487,3 +450,330 @@ class EmbeddingZeroRateTest(unittest.TestCase):
             EmbeddingZeroRate(), column
         )
         self.assertAlmostEqual(unusable, 0.75, places=5)
+
+
+def _brute_force(x: torch.Tensor) -> dict[str, float]:
+    """The exact metrics computed directly, in float64, over every row and pair."""
+    x = x.double()
+    normed = torch.nn.functional.normalize(x, dim=1)
+    n = len(x)
+    pairs = (normed @ normed.T)[
+        torch.triu(torch.ones(n, n, dtype=torch.bool), diagonal=1)
+    ]
+    variance = torch.linalg.svdvals(x - x.mean(dim=0)) ** 2
+    singular = torch.linalg.svdvals(x)
+
+    def rank(s: torch.Tensor) -> float:
+        p = s / s.sum()
+        p = p[p > 0]
+        return torch.exp(-(p * p.log()).sum()).item()
+
+    std = x.std(dim=0)
+    return {
+        "cosine_mean": pairs.mean().item(),
+        "cosine_std": pairs.std().item(),
+        "rank_variance": rank(variance),
+        "rank_singular": rank(singular),
+        "dead": (std <= 0.5 * std.max()).double().mean().item(),
+        "norm_std": torch.linalg.vector_norm(x, dim=1).std().item(),
+    }
+
+
+def _exact_metrics() -> dict[str, embedding._EmbeddingMetric]:
+    return {
+        "cosine_mean": EmbeddingCosineSimilarity(),
+        "cosine_std": EmbeddingCosineSimilarity(stat="std"),
+        "rank_variance": EmbeddingEffectiveRank(),
+        "rank_singular": EmbeddingEffectiveRank(spectrum="singular"),
+        "dead": EmbeddingDeadDimensions(threshold=0.5),
+        "norm_std": EmbeddingNorm(stat="std"),
+    }
+
+
+class EmbeddingExactMetricsTest(unittest.TestCase):
+    """EmbeddingExactMetrics."""
+
+    def setUp(self) -> None:
+        """SetUp."""
+        g = torch.Generator().manual_seed(0)
+        # Offset and anisotropic, so centering and the spread of each dimension matter.
+        self.x = (
+            torch.randn(300, 6, generator=g)
+            * torch.tensor([3.0, 2.0, 1.0, 0.5, 0.1, 0.01])
+            + 1.0
+        )
+        self.expected = _brute_force(self.x)
+
+    def test_match_direct_computation_over_every_row(self) -> None:
+        """Match direct computation over every row."""
+        for name, metric in _exact_metrics().items():
+            with self.subTest(metric=name):
+                self.assertAlmostEqual(
+                    _score(metric, self.x), self.expected[name], places=4
+                )
+
+    def test_chunks_and_updates_do_not_change_the_result(self) -> None:
+        """Chunks and updates do not change the result."""
+        # A budget of 30 elements over 6-dim rows streams 5 rows at a time.
+        with patch.object(embedding, "_STACK_CHUNK_ELEMENTS", 30):
+            for name, metric in _exact_metrics().items():
+                with self.subTest(metric=name):
+                    batches = (self.x[:7], self.x[7:150], self.x[150:])
+                    self.assertAlmostEqual(
+                        _score(metric, *batches), self.expected[name], places=4
+                    )
+
+    def test_raw_column_skips_null_rows(self) -> None:
+        """Raw column skips null rows."""
+        column = _rows(
+            *([None, float("nan")] + [row.tolist() for row in self.x] + [pd.NA])
+        )
+        for name, metric in _exact_metrics().items():
+            with self.subTest(metric=name):
+                self.assertAlmostEqual(
+                    _score(metric, column), self.expected[name], places=4
+                )
+
+    def test_cosine_counts_zero_rows_as_orthogonal_to_everything(self) -> None:
+        """Cosine counts zero rows as orthogonal to everything."""
+        x = torch.tensor([[1.0, 0.0], [1.0, 0.0], [0.0, 0.0]])  # pairs: 1, 0, 0
+        self.assertAlmostEqual(_score(EmbeddingCosineSimilarity(), x), 1 / 3, places=5)
+        expected = torch.tensor([1.0, 0.0, 0.0]).std().item()
+        self.assertAlmostEqual(
+            _score(EmbeddingCosineSimilarity(stat="std"), x), expected, places=5
+        )
+
+    def test_too_few_rows_return_nan(self) -> None:
+        """Too few rows return nan."""
+        one_row = torch.ones(1, 3)
+        for stat in ("mean", "std"):
+            with self.subTest(stat=stat):
+                self.assertTrue(
+                    math.isnan(_score(EmbeddingCosineSimilarity(stat=stat), one_row))
+                )
+        self.assertTrue(math.isnan(_score(EmbeddingDeadDimensions(), one_row)))
+
+    def test_compute_after_distributed_sync(self) -> None:
+        """Compute after distributed sync."""
+        # Stand-ins for all_gather across two ranks: one whose peer saw the same
+        # rows, and one whose peer saw none. A sync leaves the list states as
+        # concatenated tensors. Seeing every row twice leaves these metrics unchanged.
+        peers = {
+            "same rows": lambda t, group=None: [t, t],
+            "no rows": lambda t, group=None: [t, t if t.dim() == 0 else t[:0]],
+        }
+        sync = {"distributed_available_fn": lambda: True}
+        for name, gather in peers.items():
+            metrics = {
+                "norm mean": (EmbeddingNorm(dist_sync_fn=gather, **sync), 3.0),
+                "effective rank": (
+                    EmbeddingEffectiveRank(
+                        spectrum="singular", dist_sync_fn=gather, **sync
+                    ),
+                    self.expected["rank_singular"],
+                ),
+                "dead dimensions": (
+                    EmbeddingDeadDimensions(threshold=0.5, dist_sync_fn=gather, **sync),
+                    self.expected["dead"],
+                ),
+            }
+            for metric_name, (metric, expected) in metrics.items():
+                with self.subTest(peer=name, metric=metric_name):
+                    x = (
+                        torch.tensor([[3.0, 4.0], [0.0, 1.0]])
+                        if metric_name == "norm mean"
+                        else self.x
+                    )
+                    self.assertAlmostEqual(_score(metric, x), expected, places=4)
+
+
+class EmbeddingSampledMetricsTest(unittest.TestCase):
+    """EmbeddingSampledMetrics."""
+
+    def test_sampled_result_is_reproducible(self) -> None:
+        """Sampled result is reproducible."""
+        x = torch.randn(500, 4, generator=torch.Generator().manual_seed(1))
+        first = _score(EmbeddingCosineSimilarity(stat="p50", max_samples=50), x)
+        second = _score(EmbeddingCosineSimilarity(stat="p50", max_samples=50), x)
+        self.assertEqual(first, second)
+
+    def test_sample_weighs_updates_by_their_row_count(self) -> None:
+        """Sample weighs updates by their row count."""
+        # 9,000 rows along e1, then 1,000 along e2: about 82% of pairs share a
+        # direction (cosine 1), so the 25th percentile is 1. Capping each update
+        # separately would weigh both equally and put it at 0.
+        metric = EmbeddingCosineSimilarity(stat="p25", max_samples=500)
+        metric.update(torch.tensor([[1.0, 0.0]]).repeat(9_000, 1))
+        metric.update(torch.tensor([[0.0, 1.0]]).repeat(1_000, 1))
+        self.assertAlmostEqual(metric.compute().item(), 1.0, places=5)
+
+    def test_state_stays_bounded_across_updates(self) -> None:
+        """State stays bounded across updates."""
+        for step in ("update", "forward"):
+            with self.subTest(step=step):
+                metric = EmbeddingUniformity(max_samples=100)
+                for _ in range(50):
+                    getattr(metric, step)(torch.randn(80, 4))
+                self.assertEqual(sum(t.numel() for t in metric.samples), 100 * 4)
+
+    def test_raw_column_stacks_only_sampled_rows_and_skips_nulls(self) -> None:
+        """Raw column stacks only sampled rows and skips nulls."""
+        x = torch.randn(40, 4, generator=torch.Generator().manual_seed(2))
+        column = _rows(*([None] + [row.tolist() for row in x] + [pd.NaT]))
+        self.assertAlmostEqual(
+            _score(EmbeddingHubness(k=3), column),
+            _score(EmbeddingHubness(k=3), x),
+            places=5,
+        )
+
+    def test_random_pairs_estimate_every_pair(self) -> None:
+        """Random pairs estimate every pair."""
+        x = torch.randn(300, 8, generator=torch.Generator().manual_seed(3))
+        for name, metric_cls, params in (
+            ("uniformity", EmbeddingUniformity, {}),
+            ("cosine p50", EmbeddingCosineSimilarity, {"stat": "p50"}),
+        ):
+            with self.subTest(metric=name):
+                exact = _score(
+                    metric_cls(**params), x
+                )  # 44,850 pairs, under the default
+                sampled = _score(metric_cls(num_pairs=20_000, **params), x)
+                self.assertNotEqual(exact, sampled)
+                self.assertAlmostEqual(sampled, exact, delta=0.02)
+
+    def test_hubness_is_the_same_in_chunks(self) -> None:
+        """Hubness is the same in chunks."""
+        x = torch.randn(60, 4, generator=torch.Generator().manual_seed(4))
+        whole = _score(EmbeddingHubness(k=3), x)
+        # A budget of 120 elements over 60 rows compares 2 rows at a time.
+        with patch.object(embedding, "_STACK_CHUNK_ELEMENTS", 120):
+            self.assertAlmostEqual(_score(EmbeddingHubness(k=3), x), whole, places=5)
+
+    @unittest.skipUnless(torch.cuda.is_available(), "needs a GPU")
+    def test_cuda_input_matches_cpu(self) -> None:
+        """Cuda input matches cpu."""
+        x = torch.randn(200, 4, generator=torch.Generator().manual_seed(5))
+        for metric_cls in (EmbeddingUniformity, EmbeddingHubness):
+            with self.subTest(metric=metric_cls.__name__):
+                cpu = _score(metric_cls(max_samples=50), x)
+                self.assertAlmostEqual(
+                    _score(metric_cls(max_samples=50), x.cuda()), cpu, places=4
+                )
+
+    def test_invalid_sampling_params_raise(self) -> None:
+        """Invalid sampling params raise."""
+        for kwargs in ({"max_samples": 1}, {"num_pairs": 0}):
+            with self.subTest(**kwargs), self.assertRaises(ValueError):
+                EmbeddingUniformity(**kwargs)
+
+
+class EmbeddingInputTest(unittest.TestCase):
+    """EmbeddingInput."""
+
+    def test_multiple_updates_accumulate(self) -> None:
+        """Multiple updates accumulate."""
+        x = torch.tensor([[3.0, 4.0], [0.0, 1.0]])
+        self.assertAlmostEqual(_score(EmbeddingNorm(), x[:1], x[1:]), 3.0, places=5)
+
+    def test_empty_scope_returns_nan(self) -> None:
+        """Empty scope returns nan."""
+        for metric in (EmbeddingNorm(), EmbeddingEffectiveRank(), EmbeddingHubness()):
+            with self.subTest(metric=type(metric).__name__):
+                self.assertTrue(math.isnan(_score(metric, torch.empty(0))))
+                self.assertTrue(math.isnan(_score(type(metric)(), _rows(None, None))))
+
+    def test_non_matrix_input_raises(self) -> None:
+        """Non matrix input raises."""
+        with self.assertRaises(ValueError):
+            EmbeddingNorm().update(torch.tensor([1.0, 2.0]))
+
+    def test_dimension_change_between_updates_raises(self) -> None:
+        """Dimension change between updates raises."""
+        for metric in (
+            EmbeddingNorm(),
+            EmbeddingDeadDimensions(),
+            EmbeddingUniformity(),
+        ):
+            with self.subTest(metric=type(metric).__name__):
+                metric.update(torch.ones(4, 3))
+                with self.assertRaisesRegex(ValueError, "same dimension"):
+                    metric.update(torch.ones(4, 2))
+
+    def test_zero_width_rows_raise(self) -> None:
+        """Zero width rows raise."""
+        for metric in (EmbeddingNorm(), EmbeddingEffectiveRank(), EmbeddingHubness()):
+            with (
+                self.subTest(metric=type(metric).__name__),
+                self.assertRaisesRegex(ValueError, "dimension 0"),
+            ):
+                metric.update(torch.ones(4, 0))
+
+    def test_reset_forgets_the_dimension(self) -> None:
+        """Reset forgets the dimension."""
+        metric = EmbeddingNorm()
+        metric.update(torch.ones(4, 3))
+        metric.reset()
+        self.assertAlmostEqual(_score(metric, torch.ones(2, 4)), 2.0, places=5)
+
+
+class CheckEmbeddingColumnTest(unittest.TestCase):
+    """CheckEmbeddingColumn."""
+
+    def test_returns_null_count_of_a_valid_column(self) -> None:
+        """Returns null count of a valid column."""
+        self.assertEqual(
+            embedding.check_embedding_column(
+                _rows([1.0, 2.0], None, [3.0, 4.0], pd.NA)
+            ),
+            2,
+        )
+        self.assertEqual(embedding.check_embedding_column([[1.0, 2.0], None]), 1)
+        self.assertEqual(embedding.check_embedding_column(_rows(None)), 1)
+        self.assertEqual(embedding.check_embedding_column(torch.ones(3, 2)), 0)
+
+    def test_dimension_mismatch_names_the_expected_dimension(self) -> None:
+        """Dimension mismatch names the expected dimension."""
+        column = _rows(*([[1.0, 2.0, 3.0]] * 3 + [[1.0, 2.0]]))
+        with self.assertRaisesRegex(
+            ValueError, r"expected 3 \(75\.0% of rows\), but 1 rows have dim 2"
+        ):
+            embedding.check_embedding_column(column)
+
+    def test_dimension_mismatch_across_chunks(self) -> None:
+        """Dimension mismatch across chunks."""
+        # Each 2-row chunk stacks on its own, so only comparing chunks catches it.
+        with patch.object(embedding, "_STACK_CHUNK_ELEMENTS", 4):
+            column = _rows([1.0, 2.0], [3.0, 4.0], [1.0, 2.0, 3.0], [4.0, 5.0, 6.0])
+            with self.assertRaisesRegex(ValueError, "same dimension"):
+                embedding.check_embedding_column(column)
+
+    def test_zero_width_rows_raise(self) -> None:
+        """Zero width rows raise."""
+        for name, column in (("lists", [[], [], None]), ("tensor", torch.ones(3, 0))):
+            with (
+                self.subTest(column=name),
+                self.assertRaisesRegex(ValueError, "dimension 0"),
+            ):
+                embedding.check_embedding_column(column)
+
+    def test_non_finite_and_missing_elements(self) -> None:
+        """Non finite and missing elements."""
+        cases = {
+            "nan": _rows([1.0, float("nan")], [1.0, 2.0]),
+            "inf": _rows([float("inf"), 1.0], [1.0, 2.0]),
+            "pd.NA": [[1.0, pd.NA], [1.0, 2.0]],
+            "None": [[1.0, None], [1.0, 2.0]],
+            "tensor": torch.tensor([[1.0, float("nan")], [1.0, 2.0]]),
+        }
+        for name, column in cases.items():
+            with (
+                self.subTest(case=name),
+                self.assertRaisesRegex(
+                    ValueError, "1 of 2 rows contain NaN, Inf or missing"
+                ),
+            ):
+                embedding.check_embedding_column(column)
+
+
+if __name__ == "__main__":
+    unittest.main()
