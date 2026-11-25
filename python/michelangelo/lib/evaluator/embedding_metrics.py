@@ -28,6 +28,7 @@ which bounds memory and keeps the pairwise metrics at ``max_samples**2`` work
 regardless of dataset size, while staying reproducible across runs.
 """
 
+import math
 import re
 from typing import Any, Optional, Union
 
@@ -36,9 +37,12 @@ from torchmetrics import Metric
 
 __all__ = [
     "EmbeddingCosineSimilarity",
+    "EmbeddingDeadDimensions",
     "EmbeddingEffectiveRank",
+    "EmbeddingHubness",
     "EmbeddingNorm",
     "EmbeddingSilhouette",
+    "EmbeddingUniformity",
 ]
 
 _STATS = {"mean": torch.mean, "std": torch.std}
@@ -202,6 +206,43 @@ class EmbeddingCosineSimilarity(_EmbeddingMetric):
         return _reduce(self.stat, (x @ x.T)[upper])
 
 
+class EmbeddingUniformity(_EmbeddingMetric):
+    """Uniformity of the L2-normalized rows on the hypersphere (Wang & Isola, 2020).
+
+    Computed as ``log(mean(exp(-t * ||x - y||**2)))`` over distinct row pairs.
+    Lower is better: 0 when every row points the same way, near ``-2 * t``
+    when the rows spread evenly in high dimensions. Unlike a mean cosine,
+    close pairs dominate, so it also catches rows bunched into a few tight
+    clusters. Ignores norms (see ``EmbeddingNorm``), and the scale depends on
+    D and ``t``, so compare it across embeddings of the same width.
+    """
+
+    def __init__(self, t: float = 2.0, **kwargs: Any) -> None:
+        """Create the metric.
+
+        Args:
+            t: Temperature of the Gaussian potential; must be > 0.
+            **kwargs: Passed through to ``_EmbeddingMetric``.
+        """
+        super().__init__(**kwargs)
+        if t <= 0:
+            raise ValueError(f"t must be > 0, got {t}")
+        self.t = t
+
+    def _score(self, x: torch.Tensor) -> torch.Tensor:
+        n = x.shape[0]
+        if n < 2:
+            return torch.tensor(float("nan"))
+        x = torch.nn.functional.normalize(x, dim=1)
+        upper = torch.triu(
+            torch.ones(n, n, dtype=torch.bool, device=x.device), diagonal=1
+        )
+        # Unit rows: ||x - y||**2 = 2 - 2 * cos. Clamped against rounding below 0.
+        sq_dist = (2 - 2 * (x @ x.T)[upper]).clamp(min=0)
+        # logsumexp keeps the log of a mean of tiny exponentials finite.
+        return torch.logsumexp(-self.t * sq_dist, dim=0) - math.log(sq_dist.numel())
+
+
 class EmbeddingNorm(_EmbeddingMetric):
     """Mean, std or a percentile of the rows' L2 norms.
 
@@ -272,6 +313,49 @@ class EmbeddingEffectiveRank(_EmbeddingMetric):
         return rank / x.shape[1] if self.relative else rank
 
 
+class EmbeddingHubness(_EmbeddingMetric):
+    """Skewness of the k-occurrence distribution under cosine similarity.
+
+    Follows Radovanović et al. (2010). A row's k-occurrence is how many other
+    rows list it among their ``k`` nearest neighbors; it averages exactly
+    ``k``. A right skew means hubs -- a few rows that are a neighbor of nearly
+    everyone -- and orphans that are nobody's neighbor, which retrieval would
+    recommend everywhere and never, respectively. Near 0 is balanced; above ~1
+    is notable hubness. The value depends on ``k``, D and the sample size, so
+    compare it at the same ``k`` and ``max_samples``. Returns nan when the
+    sample has no more than ``k`` rows, or every row has the same k-occurrence
+    (skewness is undefined).
+    """
+
+    def __init__(self, k: int = 10, **kwargs: Any) -> None:
+        """Create the metric.
+
+        Args:
+            k: Number of nearest neighbors each row lists; must be >= 1.
+            **kwargs: Passed through to ``_EmbeddingMetric``.
+        """
+        super().__init__(**kwargs)
+        if k < 1:
+            raise ValueError(f"k must be >= 1, got {k}")
+        self.k = k
+
+    def _score(self, x: torch.Tensor) -> torch.Tensor:
+        n = x.shape[0]
+        # NaN similarities would still yield (arbitrary) neighbors; propagate.
+        if n <= self.k or x.isnan().any():
+            return torch.tensor(float("nan"))
+        x = torch.nn.functional.normalize(x, dim=1)
+        sim = x @ x.T
+        sim.fill_diagonal_(float("-inf"))  # a row is not its own neighbor
+        neighbors = sim.topk(self.k, dim=1).indices
+        occurrences = torch.bincount(neighbors.flatten(), minlength=n).float()
+        centered = occurrences - occurrences.mean()
+        std = centered.pow(2).mean().sqrt()
+        if std == 0:
+            return torch.tensor(float("nan"))
+        return centered.pow(3).mean() / std**3
+
+
 class EmbeddingSilhouette(_EmbeddingMetric):
     """Silhouette score (-1 to 1) of a K-means clustering of the sample.
 
@@ -305,3 +389,34 @@ class EmbeddingSilhouette(_EmbeddingMetric):
         if len(set(labels)) < 2:
             return torch.tensor(float("nan"))
         return torch.tensor(float(silhouette_score(data, labels)))
+
+
+class EmbeddingDeadDimensions(_EmbeddingMetric):
+    """Fraction (0 to 1) of dimensions that barely vary across rows.
+
+    A dimension is dead when its std over the sample is at most ``threshold``
+    times the largest dimension's std. Relative, so one default fits embeddings
+    of any scale -- which also means a space that shrinks as a whole keeps its
+    score; ``EmbeddingNorm`` catches that instead. A sample of one repeated
+    point scores 1.
+    """
+
+    def __init__(self, threshold: float = 1e-3, **kwargs: Any) -> None:
+        """Create the metric.
+
+        Args:
+            threshold: Std ratio to the widest dimension at or below which a
+                dimension counts as dead; in [0, 1).
+            **kwargs: Passed through to ``_EmbeddingMetric``.
+        """
+        super().__init__(**kwargs)
+        if not 0 <= threshold < 1:
+            raise ValueError(f"threshold must be in [0, 1), got {threshold}")
+        self.threshold = threshold
+
+    def _score(self, x: torch.Tensor) -> torch.Tensor:
+        std = x.std(dim=0)
+        # A NaN std would compare False and pass as alive; propagate it instead.
+        if std.isnan().any():
+            return torch.tensor(float("nan"))
+        return (std <= self.threshold * std.max()).float().mean()

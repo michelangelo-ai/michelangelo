@@ -8,9 +8,12 @@ import torch
 
 from michelangelo.lib.evaluator.embedding_metrics import (
     EmbeddingCosineSimilarity,
+    EmbeddingDeadDimensions,
     EmbeddingEffectiveRank,
+    EmbeddingHubness,
     EmbeddingNorm,
     EmbeddingSilhouette,
+    EmbeddingUniformity,
 )
 
 
@@ -69,6 +72,47 @@ class EmbeddingCosineSimilarityTest(unittest.TestCase):
         for stat in ("median", "p101", "q5", "p", "5", 5):
             with self.subTest(stat=stat), self.assertRaises(ValueError):
                 EmbeddingCosineSimilarity(stat=stat)
+
+
+class EmbeddingUniformityTest(unittest.TestCase):
+    """EmbeddingUniformity."""
+
+    def test_collapsed_space_is_zero(self) -> None:
+        """Rows pointing one way score 0."""
+        x = torch.tensor([[1.0, 2.0], [2.0, 4.0], [0.5, 1.0]])
+        self.assertAlmostEqual(_score(EmbeddingUniformity(), x), 0.0, places=5)
+
+    def test_orthogonal_rows(self) -> None:
+        """Orthogonal unit rows are sqrt(2) apart, so the score is -2t."""
+        eye = torch.eye(4)
+        self.assertAlmostEqual(_score(EmbeddingUniformity(), eye), -4.0, places=5)
+        self.assertAlmostEqual(_score(EmbeddingUniformity(t=1.0), eye), -2.0, places=5)
+
+    def test_antipodal_rows(self) -> None:
+        """Opposite rows are 2 apart: log(exp(-4t)) = -8 at t=2."""
+        x = torch.tensor([[3.0, 0.0], [-1.0, 0.0]])
+        self.assertAlmostEqual(_score(EmbeddingUniformity(), x), -8.0, places=5)
+
+    def test_clusters_score_worse_than_spread_rows(self) -> None:
+        """Pairs inside tight clusters dominate, unlike a mean cosine."""
+        # Two opposite clusters average a cosine of ~0, like orthogonal rows.
+        clusters = torch.tensor(
+            [[1.0, 0.0, 0.0, 0.0]] * 2 + [[-1.0, 0.0, 0.0, 0.0]] * 2
+        )
+        self.assertGreater(
+            _score(EmbeddingUniformity(), clusters),
+            _score(EmbeddingUniformity(), torch.eye(4)),
+        )
+
+    def test_single_row_returns_nan(self) -> None:
+        """One row has no pairs."""
+        self.assertTrue(math.isnan(_score(EmbeddingUniformity(), torch.ones(1, 3))))
+
+    def test_invalid_t_raises(self) -> None:
+        """Non-positive t raises."""
+        for t in (0.0, -1.0):
+            with self.subTest(t=t), self.assertRaises(ValueError):
+                EmbeddingUniformity(t=t)
 
 
 class EmbeddingNormTest(unittest.TestCase):
@@ -146,6 +190,53 @@ class EmbeddingEffectiveRankTest(unittest.TestCase):
             EmbeddingEffectiveRank(spectrum="eigen")
 
 
+class EmbeddingHubnessTest(unittest.TestCase):
+    """EmbeddingHubness."""
+
+    def test_hub_skews_k_occurrence(self) -> None:
+        """A hub that is everyone's neighbor skews the k-occurrence."""
+        # Orthogonal e1..e4 are each nearest to the hub (cos ~0.5 vs 0); the hub,
+        # tilted toward e1, is nearest to e1. k=1 occurrences: [4, 1, 0, 0, 0],
+        # deviations from the mean of 1 are [3, 0, -1, -1, -1].
+        x = torch.cat([torch.tensor([[1.1, 1.0, 1.0, 1.0]]), torch.eye(4)])
+        expected = (24 / 5) / (12 / 5) ** 1.5  # third central moment / std**3
+        self.assertAlmostEqual(_score(EmbeddingHubness(k=1), x), expected, places=5)
+
+    def test_cosine_ignores_norms(self) -> None:
+        """Scaling rows does not change their neighbors."""
+        x = torch.cat([torch.tensor([[1.1, 1.0, 1.0, 1.0]]), torch.eye(4)])
+        scaled = x * torch.tensor([[100.0], [1.0], [0.01], [5.0], [1.0]])
+        self.assertAlmostEqual(
+            _score(EmbeddingHubness(k=1), scaled),
+            _score(EmbeddingHubness(k=1), x),
+            places=5,
+        )
+
+    def test_balanced_neighbors_return_nan(self) -> None:
+        """Equal k-occurrences leave skewness undefined."""
+        # A regular hexagon: every vertex's 2 nearest are its 2 sides, so every
+        # k-occurrence is 2.
+        angles = torch.arange(6) * (2 * math.pi / 6)
+        x = torch.stack([angles.cos(), angles.sin()], dim=1)
+        self.assertTrue(math.isnan(_score(EmbeddingHubness(k=2), x)))
+
+    def test_too_few_rows_returns_nan(self) -> None:
+        """No more than k rows returns nan."""
+        self.assertTrue(math.isnan(_score(EmbeddingHubness(k=10), torch.randn(10, 4))))
+
+    def test_nan_propagates(self) -> None:
+        """A nan input returns nan."""
+        x = torch.randn(20, 4, generator=torch.Generator().manual_seed(0))
+        x[3, 1] = float("nan")
+        self.assertTrue(math.isnan(_score(EmbeddingHubness(k=2), x)))
+
+    def test_invalid_k_raises(self) -> None:
+        """Non-positive k raises."""
+        for k in (0, -1):
+            with self.subTest(k=k), self.assertRaises(ValueError):
+                EmbeddingHubness(k=k)
+
+
 class EmbeddingSilhouetteTest(unittest.TestCase):
     """EmbeddingSilhouette."""
 
@@ -165,6 +256,50 @@ class EmbeddingSilhouetteTest(unittest.TestCase):
         self.assertTrue(
             math.isnan(_score(EmbeddingSilhouette(n_clusters=8), torch.randn(3, 2)))
         )
+
+
+class EmbeddingDeadDimensionsTest(unittest.TestCase):
+    """EmbeddingDeadDimensions."""
+
+    def test_constant_dimensions_are_dead(self) -> None:
+        """Dimensions that never vary are dead."""
+        x = torch.randn(100, 4, generator=torch.Generator().manual_seed(0))
+        x[:, 2:] = 5.0  # half the dimensions never vary
+        self.assertAlmostEqual(_score(EmbeddingDeadDimensions(), x), 0.5, places=5)
+
+    def test_varying_dimensions_are_alive(self) -> None:
+        """Varying dimensions are alive."""
+        x = torch.randn(100, 4, generator=torch.Generator().manual_seed(0))
+        self.assertEqual(_score(EmbeddingDeadDimensions(), x), 0.0)
+
+    def test_threshold_is_relative_to_widest_dimension(self) -> None:
+        """The threshold scales with the widest dimension."""
+        # Stds ~1 and ~1e-2: alive at the default 1e-3, dead at 0.1, at any scale.
+        x = torch.randn(1000, 2, generator=torch.Generator().manual_seed(0))
+        x = x * torch.tensor([1.0, 1e-2])
+        for scale in (1e-4, 1.0, 1e4):
+            with self.subTest(scale=scale):
+                self.assertEqual(_score(EmbeddingDeadDimensions(), x * scale), 0.0)
+                self.assertAlmostEqual(
+                    _score(EmbeddingDeadDimensions(threshold=0.1), x * scale),
+                    0.5,
+                    places=5,
+                )
+
+    def test_repeated_point_is_all_dead(self) -> None:
+        """One repeated point scores 1."""
+        self.assertEqual(_score(EmbeddingDeadDimensions(), torch.ones(10, 3)), 1.0)
+
+    def test_nan_propagates(self) -> None:
+        """A nan input returns nan."""
+        x = torch.tensor([[1.0, 2.0], [3.0, float("nan")]])
+        self.assertTrue(math.isnan(_score(EmbeddingDeadDimensions(), x)))
+
+    def test_invalid_threshold_raises(self) -> None:
+        """A threshold outside [0, 1) raises."""
+        for threshold in (-0.1, 1.0):
+            with self.subTest(threshold=threshold), self.assertRaises(ValueError):
+                EmbeddingDeadDimensions(threshold=threshold)
 
 
 class EmbeddingMetricSamplingTest(unittest.TestCase):
