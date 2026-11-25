@@ -1,7 +1,7 @@
 ---
 sidebar_position: 0
 sidebar_label: Overview
-last_verified: 2026-11-05
+last_verified: 2026-11-18
 ---
 
 # API Reference
@@ -14,4 +14,4 @@ Auto-generated reference for the `michelangelo` Python package — task and work
 
 ## [gRPC Service Reference](grpc/conventions.md)
 
-Full RPC and field reference for all 15 resource services that back the Michelangelo AI control plane — models, pipelines, serving, and jobs. Start here if you're calling the API directly over gRPC.
+Full RPC and field reference for all 15 resource services that back the Michelangelo AI control plane — models, pipelines, serving, and jobs. Start here if you're calling the API directly over gRPC. From Python, the [Python APIClient Guide](../user-guides/reference/python-api-client.md) shows how to call these services without building stubs yourself.
