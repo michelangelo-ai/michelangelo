@@ -45,7 +45,7 @@ func spec(workflowConfig map[string]any, tasks map[string]any) map[string]any {
 // okRecord is what fake/ok returns for a task with no args, kwargs, fields,
 // or retry policy.
 func okRecord(alias string) map[string]any {
-	return map[string]any{"ep": "x.py", "alias": alias, "args": []any{}, "kwargs": map[string]any{}, "retry": nil, "fields": map[string]any{}}
+	return map[string]any{"ep": "x.py", "alias": alias, "args": []any{}, "kwargs": map[string]any{}, "retry": "absent", "fields": map[string]any{}}
 }
 
 type engineRun struct {
@@ -281,6 +281,110 @@ func TestEngineConcurrency(t *testing.T) {
 			}
 			assert.Equal(t, states, got.states)
 			assert.Equal(t, tc.groups, startGroups(t, got.result["outputs"].(map[string]any)))
+		})
+	}
+}
+
+// with returns a copy of task m with key set to v.
+func with(m map[string]any, key string, v any) map[string]any {
+	out := map[string]any{}
+	for k, val := range m {
+		out[k] = val
+	}
+	out[key] = v
+	return out
+}
+
+func retry(maxAttempts int) map[string]any {
+	return map[string]any{"max_attempts": maxAttempts, "initial_interval": nil}
+}
+
+// A factory runs before dispatch, so its failure stops the workflow with its
+// own text instead of failing one task without a reason.
+func TestEngineFactoryFailure(t *testing.T) {
+	got := runEngine(t, casesTar(t), "run_case", spec(nil, map[string]any{
+		"a": task("fake/ok"),
+		"b": task("fake/bad_factory", "a"),
+		"c": task("fake/ok", "a"),
+	}), map[string]any{})
+	assert.Equal(t, map[string]string{"a": succeeded}, got.states)
+	assert.Equal(t, "fail: bad factory: b", got.err)
+}
+
+func TestEngineFactory(t *testing.T) {
+	tar := casesTar(t)
+	for _, tc := range []struct {
+		name    string
+		spec    map[string]any
+		outputs map[string]any
+	}{
+		{
+			name: "test_retry_replacement",
+			spec: spec(map[string]any{"default_retry": retry(4)}, map[string]any{
+				"a": with(task("fake/ok"), "retry", retry(2)),
+				"b": task("fake/ok"),
+				"c": with(task("fake/ok"), "retry", retry(1)),
+			}),
+			outputs: map[string]any{
+				"a": with(okRecord("a"), "retry", 1),
+				"b": with(okRecord("b"), "retry", 3),
+				"c": with(okRecord("c"), "retry", 0),
+			},
+		},
+		{
+			name:    "test_retry_absent",
+			spec:    spec(map[string]any{"max_concurrency": 0, "default_retry": nil}, map[string]any{"a": task("fake/ok")}),
+			outputs: map[string]any{"a": okRecord("a")},
+		},
+		{
+			name: "retry_zero",
+			spec: spec(map[string]any{"default_retry": retry(3)}, map[string]any{
+				"a": with(task("fake/ok"), "retry", retry(0)),
+			}),
+			outputs: map[string]any{"a": okRecord("a")},
+		},
+		{
+			name: "retry_zero_default",
+			spec: spec(map[string]any{"default_retry": retry(0)}, map[string]any{
+				"a": task("fake/ok"),
+			}),
+			outputs: map[string]any{"a": okRecord("a")},
+		},
+		{
+			name: "retry_no_capability",
+			spec: spec(map[string]any{"default_retry": retry(3)}, map[string]any{
+				"a": with(task("fake/noretry"), "retry", retry(2)),
+			}),
+			outputs: map[string]any{"a": map[string]any{"ep": "x.py", "alias": "a", "fields": map[string]any{}}},
+		},
+		{
+			name: "factory_kwargs",
+			spec: spec(nil, map[string]any{
+				"a": with(with(task("fake/ok"),
+					"config", map[string]any{"entry_point": "a.py", "args": []any{}, "kwargs": map[string]any{}, "lr": 0.5, "name": "n"}),
+					"job_specs", map[string]any{"fake": map[string]any{"cpu": 2, "lr": 0.25}, "other": map[string]any{"x": 1}}),
+			}),
+			outputs: map[string]any{"a": map[string]any{
+				"ep": "a.py", "alias": "a", "args": []any{}, "kwargs": map[string]any{}, "retry": "absent",
+				"fields": map[string]any{"cpu": 2, "lr": 0.5, "name": "n"},
+			}},
+		},
+		{
+			name: "callable_args",
+			spec: spec(nil, map[string]any{
+				"a": with(task("fake/ok"), "config", map[string]any{"entry_point": "x.py", "args": []any{1, "two"}, "kwargs": map[string]any{"k": "v"}}),
+			}),
+			outputs: map[string]any{"a": with(with(okRecord("a"), "args", []any{1, "two"}), "kwargs", map[string]any{"k": "v"})},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := runEngine(t, tar, "run_case", tc.spec, map[string]any{})
+			require.Empty(t, got.err)
+			states := map[string]any{}
+			for name := range tc.outputs {
+				states[name] = succeeded
+			}
+			assert.Equal(t, map[string]any{"states": states, "outputs": tc.outputs}, got.result)
 		})
 	}
 }

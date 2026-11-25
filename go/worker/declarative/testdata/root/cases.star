@@ -7,7 +7,8 @@ load("@plugin", "time")
 def _report(alias, state):
     report_progress(task_path = "fake", task_name = alias, task_state = state)
 
-def _ok(entry_point, alias = None, retry_attempts = None, **fields):
+# "absent" tells a missing retry_attempts kwarg from an explicit None.
+def _ok(entry_point, alias = None, retry_attempts = "absent", **fields):
     def call(*args, **kwargs):
         _report(alias, TASK_STATE_SUCCEEDED)
         return {"ep": entry_point, "alias": alias, "args": list(args), "kwargs": kwargs, "retry": retry_attempts, "fields": fields}
@@ -20,6 +21,9 @@ def _fail(entry_point, alias = None, retry_attempts = None, **fields):
         fail("fake failure: " + alias)
 
     return call
+
+def _bad_factory(entry_point, alias = None, **fields):
+    fail("bad factory: " + alias)
 
 def _noretry(entry_point, alias = None, **fields):
     def call(*args, **kwargs):
@@ -42,6 +46,7 @@ def _entry(factory, job_specs_key, capabilities):
 
 REGISTRY = {
     "core/ray": _entry(_ok, "ray", ["retry"]),
+    "fake/bad_factory": _entry(_bad_factory, "fake", []),
     "fake/fail": _entry(_fail, "fake", ["retry"]),
     "fake/noretry": _entry(_noretry, "fake", []),
     "fake/ok": _entry(_ok, "fake", ["retry"]),

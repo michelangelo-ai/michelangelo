@@ -19,6 +19,9 @@ load("@plugin", "concurrent", "time")
 # for loop.
 _MAX_STEPS = 100000
 
+# Config keys that the engine consumes. The rest go to the factory.
+_ENGINE_CONFIG_KEYS = ["entry_point", "args", "kwargs"]
+
 _WAIT_INTERVAL_SECONDS = 5
 _MAX_WAIT_POLLS = 720
 
@@ -119,9 +122,12 @@ def _run_level(runnable, tasks, registry, workflow_config, states, outputs):
     callables = []
     for name in runnable:
         task = tasks[name]
-        factory = registry[task["task_function"]]["factory"]
-        entry_point = (task.get("config") or {}).get("entry_point")
-        callables.append(concurrent.new_callable(_dispatch, outcomes, name, factory, entry_point, {"alias": name}))
+        entry = registry[task["task_function"]]
+        config = task.get("config") or {}
+        # The factory runs in the workflow thread, so a factory that fails
+        # stops the workflow with its own error text.
+        task_callable = entry["factory"](config.get("entry_point"), **_factory_kwargs(name, task, entry, config, task.get("job_specs") or {}, workflow_config))
+        callables.append(concurrent.new_callable(_dispatch, outcomes, name, task_callable, config.get("args") or [], config.get("kwargs") or {}))
 
     cap = workflow_config.get("max_concurrency") or 0
     if cap < 1:
@@ -141,11 +147,38 @@ def _run_level(runnable, tasks, registry, workflow_config, states, outputs):
         states[name] = outcomes[name]["state"]
         outputs[name] = outcomes[name]["output"]
 
-def _dispatch(outcomes, name, factory, entry_point, factory_kwargs):
-    # Starlark has no try/except, and a factory signals failure with fail().
-    # The pessimistic FAILED stays when the factory or its callable fails, so
-    # the rest of the graph still runs.
+def _factory_kwargs(name, task, entry, config, job_specs, workflow_config):
+    kwargs = dict(job_specs.get(entry["job_specs_key"]) or {})
+    for key, value in config.items():
+        if key not in _ENGINE_CONFIG_KEYS:
+            kwargs[key] = value
+    kwargs["alias"] = name
+    retry_attempts = _retry_attempts(task, entry, workflow_config)
+    if retry_attempts != None:
+        kwargs["retry_attempts"] = retry_attempts
+    return kwargs
+
+def _retry_attempts(task, entry, workflow_config):
+    """Return the retries after the first attempt, or None for no policy."""
+    if "retry" not in entry["capabilities"]:
+        return None
+
+    # A task policy replaces the default policy as a whole.
+    policy = task.get("retry")
+    if policy == None:
+        policy = workflow_config.get("default_retry")
+    if policy == None:
+        return None
+    max_attempts = policy.get("max_attempts") or 0
+    if max_attempts < 1:
+        return None
+    return max_attempts - 1
+
+def _dispatch(outcomes, name, task_callable, args, kwargs):
+    # Starlark has no try/except, and a task callable signals failure with
+    # fail(). The pessimistic FAILED stays when it fails, so the rest of the
+    # graph still runs.
     outcomes[name] = {"state": TASK_STATE_FAILED, "output": None}
-    result = factory(entry_point, **factory_kwargs)()
+    result = task_callable(*args, **kwargs)
     outcomes[name] = {"state": TASK_STATE_SUCCEEDED, "output": result}
     return result
