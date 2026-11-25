@@ -348,3 +348,8 @@ python/test_mlflow_model_loading.py
 
 # Captured `ma sandbox snapshot create` output — local dev artifacts
 python/michelangelo/cli/sandbox/snapshots/
+
+# Generated main.star of the declarative interpreter assembly tool
+/.declarative-build/
+# The golden interpreter tar of the worker tests
+!/go/worker/declarative/testdata/release/*.tar.gz
