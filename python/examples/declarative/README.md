@@ -11,9 +11,14 @@ sandbox.
 
 ## Requirements
 
-- The apiserver must run with `apiserver.declarative.enabled: true`. It must
-  also load at least one interpreter release. Otherwise, a declarative write
-  fails with `FAILED_PRECONDITION`.
+- The apiserver must run with `apiserver.declarative.enabled: true`. With the
+  flag on, the apiserver does not start unless `releasesDir` holds the
+  `defaultInterpreter` release. With the flag off, a declarative write fails
+  with `FAILED_PRECONDITION`.
+- An existing sandbox must run control-plane images that include
+  [#2222](https://github.com/michelangelo-ai/michelangelo/pull/2222). An older
+  controllermgr cannot list Pipelines while a pinned pipeline exists. Its log
+  then shows `unknown field "interpreterPin"`.
 - No interpreter runs declarative pipelines yet. Do not start a PipelineRun of
   a declarative pipeline.
 
@@ -68,6 +73,7 @@ apiserver on your machine on port `15568`. It uses the same cluster.
 
    ```bash
    cd python
+   poetry install
    poetry run ma sandbox create
    ```
 
@@ -95,20 +101,25 @@ apiserver on your machine on port `15568`. It uses the same cluster.
    "msg":"declarative pipelines","enabled":true,"defaultInterpreter":"mock-v1","releases":["mock-v1","mock-v2"]
    ```
 
-   If the Pipeline CRD in the cluster has no `interpreterPin` field, the
-   apiserver adds the field and logs
-   `"msg":"CRD updated","name":"pipelines.michelangelo.api"`.
+   The apiserver also logs
+   `"msg":"CRD updated","name":"pipelines.michelangelo.api"` on every start.
+   This line shows that the CRD sync ran and that the cluster did not refuse
+   the update. If the Pipeline CRD has no `interpreterPin` field, this update
+   adds it.
 
 Keep the apiserver running. Use a second terminal for the next steps.
 
 ## Set up the client
 
-1. In the second terminal, point `ma` at the new apiserver:
+1. In the second terminal, install `ma`, and point it at the new apiserver:
 
    ```bash
    cd python
+   poetry install
    export MACTL_ADDRESS=localhost:15568 MACTL_USE_TLS=false
    ```
+
+   `ma` needs no Poetry extras.
 
 1. Create the namespace:
 
@@ -262,15 +273,31 @@ each commit. A different spec on the same commit can fail in the controller.
 
    Set the version back to `mock-v2`.
 
-You can also pin a new pipeline on create. Add `interpreterPin.version:
-mock-v2` to a copy of `invalid/bad_config.yaml`, and apply it with
-`--dry-run`. The plan shows `Interpreter: mock-v2`, and the apply passes.
+You can also pin a new pipeline on create:
+
+1. Copy `bad_config.yaml`:
+
+   ```bash
+   cp examples/declarative/pipelines/invalid/bad_config.yaml \
+     examples/declarative/bad_config_mock_v2.yaml
+   ```
+
+1. In the copy, add `interpreterPin.version: mock-v2` under `spec.manifest`.
+
+1. Apply the copy with `--dry-run`. The plan shows `Interpreter: mock-v2`, and
+   the apply passes.
 
 ### 6. Server-owned fields
 
-Add `uniflowTar` or `interpreterPin.artifact` under `spec.manifest` in a copy
-of `training.yaml`, then apply it. `ma` rejects the file before it calls the
-apiserver:
+Copy `training.yaml`:
+
+```bash
+cp examples/declarative/pipelines/training.yaml \
+  examples/declarative/training_server_owned.yaml
+```
+
+Add `uniflowTar` or `interpreterPin.artifact` under `spec.manifest` in the
+copy, then apply it. `ma` rejects the file before it calls the apiserver:
 
 ```text
 Error: spec.manifest.uniflowTar is server-owned for declarative pipelines; remove it, because the apiserver sets it from the interpreter pin
@@ -318,9 +345,12 @@ YAML and UNIFLOW pipelines work as before.
 
 1. Stop the apiserver with `Ctrl+C`.
 
-1. Undo the overlay change from step 8, and delete the test branch:
+1. Delete the copies from steps 5 and 6. Undo the overlay change from step 8,
+   and delete the test branch:
 
    ```bash
+   rm examples/declarative/bad_config_mock_v2.yaml \
+     examples/declarative/training_server_owned.yaml
    git restore examples/declarative/apiserver/declarative-test.yaml
    git switch -
    git branch -D declarative-test
