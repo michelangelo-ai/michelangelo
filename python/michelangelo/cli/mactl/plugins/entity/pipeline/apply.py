@@ -6,7 +6,7 @@ from logging import getLogger
 from typing import Optional
 
 from google.protobuf import descriptor_pool
-from google.protobuf.json_format import MessageToJson, ParseError
+from google.protobuf.json_format import MessageToJson, ParseDict, ParseError
 from google.protobuf.message import Message
 from google.protobuf.text_format import MessageToString
 from grpc import RpcError, StatusCode
@@ -18,15 +18,18 @@ from michelangelo.cli.mactl.crd import (
     crd_method_call,
     get_crd_namespace_and_name_from_yaml,
     read_yaml_to_crd_request,
+    yaml_to_dict,
 )
 from michelangelo.cli.mactl.plugins.entity.pipeline.declarative import (
     EXPLAIN_PLAN_ANNOTATION,
     DeclarativeManifestError,
     explain_plan_from,
+    is_declarative,
+    pack_declarative_manifest,
     printable,
     render_explain_plan,
 )
-from michelangelo.gen.api.v2.declarative_pb2 import ExplainPlan
+from michelangelo.gen.api.v2.declarative_pb2 import DeclarativeWorkflow, ExplainPlan
 from michelangelo.gen.api.v2.pipeline_pb2 import PipelineManifest
 
 _LOG = getLogger(__name__)
@@ -136,6 +139,7 @@ def _create_or_update(update_method_info: CrdMethodInfo, arguments: dict) -> Mes
     channel = update_method_info.channel
 
     _namespace, _name = get_crd_namespace_and_name_from_yaml(_file)
+    _check_declarative_manifest(_file)
     existing = _get_existing(_self, _namespace, _name)
 
     if existing is None:
@@ -163,6 +167,21 @@ def _create_or_update(update_method_info: CrdMethodInfo, arguments: dict) -> Mes
         ).metadata.resourceVersion
     apply_dry_run_to_request(request_input, options_attr, arguments)
     return crd_method_call(method_info, request_input)
+
+
+def _check_declarative_manifest(file: str) -> None:
+    """Run the declarative manifest checks before any call to the apiserver.
+
+    The converter runs the same checks again when it builds the request.
+    """
+    yaml_dict = yaml_to_dict(file)
+    if not is_declarative(yaml_dict):
+        return
+    content = pack_declarative_manifest(yaml_dict["spec"]["manifest"])["content"]
+    ParseDict(
+        {key: value for key, value in content.items() if key != "@type"},
+        DeclarativeWorkflow(),
+    )
 
 
 def _get_existing(_self: CRD, namespace: str, name: str) -> Optional[Message]:

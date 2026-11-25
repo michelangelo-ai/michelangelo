@@ -3,6 +3,8 @@
 import json
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest import TestCase
 from unittest.mock import MagicMock, Mock, patch
 
@@ -10,8 +12,12 @@ from google.protobuf import descriptor_pb2, descriptor_pool, message_factory
 from google.protobuf.json_format import ParseDict, ParseError
 from grpc import RpcError, StatusCode
 
+from michelangelo.cli.mactl.crd import yaml_to_dict
 from michelangelo.cli.mactl.plugins.entity.pipeline.apply import (
     pipeline_apply_func_impl,
+)
+from michelangelo.cli.mactl.plugins.entity.pipeline.create import (
+    convert_crd_metadata_pipeline,
 )
 from michelangelo.cli.mactl.plugins.entity.pipeline.declarative import (
     EXPLAIN_PLAN_ANNOTATION,
@@ -25,6 +31,8 @@ from michelangelo.gen.api.v2.pipeline_svc_pb2 import (
     UpdatePipelineRequest,
     UpdatePipelineResponse,
 )
+
+_MODULE = "michelangelo.cli.mactl.plugins.entity.pipeline.apply"
 
 
 class _FakeRpcError(RpcError):
@@ -41,6 +49,12 @@ class _FakeRpcError(RpcError):
 
 class PipelineApplyFuncImplTest(TestCase):
     """Tests for pipeline_apply_func_impl."""
+
+    def setUp(self):
+        """Stub the YAML read of the early manifest check; f.yaml is not a file."""
+        patcher = patch(f"{_MODULE}.yaml_to_dict", return_value={})
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def _make_method_info(self):
         from michelangelo.cli.mactl.crd import CrdMethodInfo
@@ -119,6 +133,58 @@ class PipelineApplyFuncImplTest(TestCase):
         self.assertEqual(create_info.method_name, "Create")
         self.assertEqual(list(request.create_options.dryRun), [])
 
+    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.apply.crd_method_call")
+    def test_bad_declarative_file_fails_before_any_call(self, mock_call):
+        """A manifest error exits before the get, so the apiserver sees no call."""
+        cases = [
+            (
+                "uniflowTar: s3://x",
+                "{tasks: {a: {taskFunction: mock/python}}}",
+                "Error: spec.manifest.uniflowTar is server-owned for declarative"
+                " pipelines; remove it, because the apiserver sets it from the"
+                " interpreter pin",
+            ),
+            (
+                "description: unknown content field",
+                "{tasks: {a: {taskFuncton: mock/python}}}",
+                'Error: Failed to parse tasks field: Message type "michelangelo.api'
+                '.v2.DeclarativeTask" has no field named "taskFuncton"',
+            ),
+        ]
+        for manifest_line, content, message in cases:
+            with self.subTest(message=message):
+                update_info = self._make_method_info()
+                mock_crd = Mock(
+                    func_crd_metadata_converter=convert_crd_metadata_pipeline
+                )
+                mock_crd.name = "pipeline"
+                mock_crd._get.return_value = UpdatePipelineResponse()
+                with TemporaryDirectory() as tmp:
+                    path = Path(tmp) / "p.yaml"
+                    path.write_text(
+                        "metadata: {name: pipe, namespace: ns}\n"
+                        "spec:\n"
+                        "  manifest:\n"
+                        "    type: DECLARATIVE\n"
+                        f"    {manifest_line}\n"
+                        f"    content: {content}\n"
+                    )
+
+                    with (
+                        patch(f"{_MODULE}.yaml_to_dict", side_effect=yaml_to_dict),
+                        self.assertRaises(SystemExit) as err,
+                    ):
+                        pipeline_apply_func_impl(
+                            update_info, self._make_bound_args(mock_crd, str(path))
+                        )
+
+                self.assertTrue(
+                    err.exception.code.startswith(message), err.exception.code
+                )
+                self.assertEqual(update_info.channel.mock_calls, [])
+                self.assertEqual(mock_crd.mock_calls, [])
+                mock_call.assert_not_called()
+
     @patch(
         "michelangelo.cli.mactl.plugins.entity.pipeline.apply.get_crd_namespace_and_name_from_yaml"
     )
@@ -141,8 +207,6 @@ _PLAN = {
     "warnings": [],
     "taskCount": 3,
 }
-
-_MODULE = "michelangelo.cli.mactl.plugins.entity.pipeline.apply"
 
 
 def _update_response(annotations):
@@ -176,6 +240,12 @@ def _reflected_class(message_class):
 
 class PipelineApplyRenderTest(TestCase):
     """Tests for response rendering and the error boundary of pipeline apply."""
+
+    def setUp(self):
+        """Stub the YAML read of the early manifest check; f.yaml is not a file."""
+        patcher = patch(f"{_MODULE}.yaml_to_dict", return_value={})
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def _run(self, response, output=None, dry_run=True, create=False, error=None):
         """Run pipeline apply against stubbed calls and return stdout."""
