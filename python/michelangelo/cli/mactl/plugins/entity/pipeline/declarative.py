@@ -39,7 +39,8 @@ _CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f-\x9f]")
 _TYPE_URL = f"type.googleapis.com/{DeclarativeWorkflow.DESCRIPTOR.full_name}"
 _MAX_SAFE_INTEGER = 2**53 - 1
 # YAML aliases let a small file describe a large tree, so the copy walk stops
-# at these limits. The depth cap stays below the server proto recursion limit.
+# at these limits. By estimate, the depth cap is near the server proto
+# recursion limit.
 _MAX_CONTENT_NODES = 100_000
 _MAX_CONTENT_DEPTH = 64
 # bool precedes int because bool is an int subclass.
