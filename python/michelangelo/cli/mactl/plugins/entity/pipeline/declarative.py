@@ -7,7 +7,7 @@ it as ``Any<DeclarativeWorkflow>``. The apiserver validates the graph and owns
 the interpreter pin.
 """
 
-from copy import deepcopy
+import math
 from os.path import commonprefix
 from typing import Any, Optional
 
@@ -35,6 +35,10 @@ _MANIFEST_TYPE_NAMES = {
 
 _TYPE_URL = f"type.googleapis.com/{DeclarativeWorkflow.DESCRIPTOR.full_name}"
 _MAX_SAFE_INTEGER = 2**53 - 1
+# YAML aliases let a small file describe a large tree, so the copy walk stops
+# at these limits. The depth cap stays below the server proto recursion limit.
+_MAX_CONTENT_NODES = 100_000
+_MAX_CONTENT_DEPTH = 64
 _SERVER_OWNED_MANIFEST_FIELDS = (
     "interpreterPin",
     "interpreter_pin",
@@ -100,16 +104,14 @@ def pack_declarative_content(manifest: dict) -> dict:
 def normalize_workflow(content: dict) -> dict:
     """Return a copy of the author's workflow dict in the wire form.
 
-    Rejects integers that an IEEE double cannot hold exactly, infers missing
-    parameter types from their defaults, and maps short enum names to full
-    names.
+    Rejects values that JSON cannot hold exactly, infers missing parameter
+    types from their defaults, and maps short enum names to full names.
     """
     if not isinstance(content, dict):
         raise DeclarativeManifestError(
             "spec.manifest.content must be a mapping of DeclarativeWorkflow fields"
         )
-    workflow = deepcopy(content)
-    _check_safe_integers(workflow, "content")
+    workflow = _copy_checked(content, "content", [_MAX_CONTENT_NODES], 0)
     parameters = workflow.get("parameters")
     if isinstance(parameters, dict):
         _infer_parameter_types(parameters)
@@ -117,14 +119,39 @@ def normalize_workflow(content: dict) -> dict:
     return workflow
 
 
-def _check_safe_integers(node: Any, path: str) -> None:
+def _copy_checked(node: Any, path: str, budget: list, depth: int) -> Any:
+    """Return a copy of node with a new dict or list for each YAML alias.
+
+    The walk counts nodes, so an alias tree fails before it expands in memory.
+    It rejects non-string keys, non-finite floats, and unsafe integers.
+    """
+    budget[0] -= 1
+    if budget[0] < 0:
+        raise DeclarativeManifestError(
+            f"spec.manifest.content has more than {_MAX_CONTENT_NODES} values"
+            " after YAML aliases are expanded"
+        )
+    if depth > _MAX_CONTENT_DEPTH:
+        raise DeclarativeManifestError(
+            f"{path}: nested deeper than {_MAX_CONTENT_DEPTH} levels"
+        )
     if isinstance(node, dict):
+        copy = {}
         for key, value in node.items():
-            _check_safe_integers(value, f"{path}.{key}")
-    elif isinstance(node, list):
-        for index, value in enumerate(node):
-            _check_safe_integers(value, f"{path}[{index}]")
-    elif (
+            if not isinstance(key, str):
+                raise DeclarativeManifestError(
+                    f"{path}: key {key!r} is a YAML {type(key).__name__}; quote it"
+                )
+            copy[key] = _copy_checked(value, f"{path}.{key}", budget, depth + 1)
+        return copy
+    if isinstance(node, list):
+        return [
+            _copy_checked(value, f"{path}[{index}]", budget, depth + 1)
+            for index, value in enumerate(node)
+        ]
+    if isinstance(node, float) and not math.isfinite(node):
+        raise DeclarativeManifestError(f"{path}: {node} is not a finite number")
+    if (
         isinstance(node, int)
         and not isinstance(node, bool)
         and abs(node) > _MAX_SAFE_INTEGER
@@ -133,6 +160,7 @@ def _check_safe_integers(node: Any, path: str) -> None:
             f"{path}: integer {node} is outside ±(2^53-1); numbers travel as"
             " IEEE doubles, so declare it as a string"
         )
+    return node
 
 
 def _infer_parameter_types(parameters: dict) -> None:

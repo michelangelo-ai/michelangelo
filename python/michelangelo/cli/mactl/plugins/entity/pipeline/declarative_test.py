@@ -5,6 +5,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
+import yaml
 from google.protobuf.json_format import ParseDict, ParseError
 
 from michelangelo.cli.mactl.plugins.entity.pipeline.create import (
@@ -191,6 +192,95 @@ def test_normalize_does_not_mutate_input():
     normalize_workflow(content)
 
     assert content == {"parameters": {"p": {"default": 1}}}
+
+
+def test_shared_alias_keeps_each_occurrence_separate(tmp_path):
+    """Type inference on an anchor does not change a value that aliases it."""
+    yaml_dict = yaml.safe_load(
+        """
+metadata: {name: p, namespace: proj}
+spec:
+  manifest:
+    type: DECLARATIVE
+    content:
+      parameters:
+        count: &count {default: 3}
+        payload: {type: dict, default: *count}
+"""
+    )
+
+    manifest = _convert(yaml_dict, tmp_path).pipeline.spec.manifest
+
+    wf = declarative_pb2.DeclarativeWorkflow()
+    assert manifest.content.Unpack(wf)
+    assert wf.parameters["count"].type == declarative_pb2.PARAMETER_TYPE_INTEGER
+    assert list(wf.parameters["payload"].default.struct_value.fields) == ["default"]
+
+
+def test_self_alias_fails_at_the_depth_cap(tmp_path):
+    """A self-alias fails with a manifest error, not a RecursionError."""
+    yaml_dict = yaml.safe_load(
+        """
+metadata: {name: p, namespace: proj}
+spec:
+  manifest:
+    type: DECLARATIVE
+    content:
+      parameters:
+        p: &p {default: [*p]}
+"""
+    )
+
+    with pytest.raises(DeclarativeManifestError, match="nested deeper than 64 levels"):
+        _convert(yaml_dict, tmp_path)
+
+
+def test_alias_expansion_fails_at_the_node_budget():
+    """Nested aliases that expand past the node budget fail fast."""
+    lines = ["l0: &l0 [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]"]
+    for level in range(1, 10):
+        refs = ", ".join([f"*l{level - 1}"] * 10)
+        lines.append(f"l{level}: &l{level} [{refs}]")
+    content = {"tasks": {"a": {"config": yaml.safe_load("\n".join(lines))}}}
+
+    with pytest.raises(DeclarativeManifestError) as err:
+        normalize_workflow(content)
+
+    assert str(err.value) == (
+        "spec.manifest.content has more than 100000 values"
+        " after YAML aliases are expanded"
+    )
+
+
+@pytest.mark.parametrize(
+    ("config", "message"),
+    [
+        (
+            "class_weights: {0: 1.0}",
+            "content.tasks.a.config.class_weights: key 0 is a YAML int; quote it",
+        ),
+        ("on: 1", "content.tasks.a.config: key True is a YAML bool; quote it"),
+        ("x: .nan", "content.tasks.a.config.x: nan is not a finite number"),
+        ("x: [-.inf]", "content.tasks.a.config.x[0]: -inf is not a finite number"),
+        ("x: 1.0e+400", "content.tasks.a.config.x: inf is not a finite number"),
+    ],
+)
+def test_scalars_that_json_cannot_hold_fail(config, message):
+    """Non-string keys and non-finite floats fail with their path."""
+    content = {"tasks": {"a": {"config": yaml.safe_load(config)}}}
+
+    with pytest.raises(DeclarativeManifestError) as err:
+        normalize_workflow(content)
+
+    assert str(err.value) == message
+
+
+def test_non_string_parameter_name_fails():
+    """A parameter name must be a string."""
+    with pytest.raises(DeclarativeManifestError) as err:
+        normalize_workflow({"parameters": {1: {"default": 1}}})
+
+    assert str(err.value) == "content.parameters: key 1 is a YAML int; quote it"
 
 
 _DECLARATIVE_YAML = {
