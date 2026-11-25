@@ -19,12 +19,17 @@ or label column, not a wide one like another embedding:
         prediction_col: user_embedding
         target_col: user_id   # required by schema; loaded but not read
 
+``EmbeddingCosineSimilarity`` and ``EmbeddingNorm`` take a ``stat``: ``mean``,
+``std``, or a percentile such as ``p5`` / ``p50`` / ``p95``. Configure one metric
+per percentile to read the shape of the distribution, not just its center.
+
 Every metric works on a seeded random sample of at most ``max_samples`` rows,
 which bounds memory and keeps the pairwise metrics at ``max_samples**2`` work
 regardless of dataset size, while staying reproducible across runs.
 """
 
-from typing import Any, Union
+import re
+from typing import Any, Optional, Union
 
 import torch
 from torchmetrics import Metric
@@ -37,12 +42,43 @@ __all__ = [
 ]
 
 _STATS = {"mean": torch.mean, "std": torch.std}
+# "p5", "p50", "p99.9": a percentile in [0, 100].
+_PERCENTILE_STAT = re.compile(r"p(\d+(?:\.\d+)?)")
+
+
+def _percentile_of(stat: Any) -> Optional[float]:
+    match = _PERCENTILE_STAT.fullmatch(stat) if isinstance(stat, str) else None
+    if match is None or float(match.group(1)) > 100:
+        return None
+    return float(match.group(1))
 
 
 def _check_stat(stat: str) -> str:
-    if stat not in _STATS:
-        raise ValueError(f"stat must be one of {sorted(_STATS)}, got {stat!r}")
+    if stat not in _STATS and _percentile_of(stat) is None:
+        raise ValueError(
+            "stat must be 'mean', 'std' or a percentile such as 'p5' or 'p95', "
+            f"got {stat!r}"
+        )
     return stat
+
+
+def _reduce(stat: str, values: torch.Tensor) -> torch.Tensor:
+    if stat in _STATS:
+        return _STATS[stat](values)
+    # sort() moves NaNs to the end, which would hide them from low percentiles;
+    # propagate them like mean/std and numpy do.
+    if values.numel() == 0 or values.isnan().any():
+        return torch.tensor(float("nan"))
+    # Sort-based instead of torch.quantile, which rejects inputs over 2**24
+    # elements -- fewer than the pairs of a sample larger than ~5.8k rows.
+    # Interpolates linearly, like numpy.
+    ordered = values.flatten().sort().values
+    pos = _percentile_of(stat) / 100 * (ordered.numel() - 1)
+    lo = int(pos)
+    hi = min(lo + 1, ordered.numel() - 1)
+    if lo == hi or ordered[lo] == ordered[hi]:
+        return ordered[lo]
+    return ordered[lo] + (ordered[hi] - ordered[lo]) * (pos - lo)
 
 
 def _rank() -> int:
@@ -139,17 +175,19 @@ class _EmbeddingMetric(Metric):
 
 
 class EmbeddingCosineSimilarity(_EmbeddingMetric):
-    """Mean or std of pairwise cosine similarity over distinct row pairs.
+    """Mean, std or a percentile of pairwise cosine similarity over row pairs.
 
     The collapse check: a mean near 1 with a small std means every embedding
-    points the same way. A healthy space sits near 0 with a wide spread.
+    points the same way. A healthy space sits near 0 with a wide spread; the
+    percentiles (e.g. ``p5`` and ``p95``) show how wide.
     """
 
     def __init__(self, stat: str = "mean", **kwargs: Any) -> None:
         """Create the metric.
 
         Args:
-            stat: ``"mean"`` or ``"std"`` of the pairwise similarities.
+            stat: ``"mean"``, ``"std"`` or a percentile such as ``"p95"`` of the
+                pairwise similarities.
             **kwargs: Passed through to ``_EmbeddingMetric``.
         """
         super().__init__(**kwargs)
@@ -161,39 +199,77 @@ class EmbeddingCosineSimilarity(_EmbeddingMetric):
         upper = torch.triu(
             torch.ones(n, n, dtype=torch.bool, device=x.device), diagonal=1
         )
-        return _STATS[self.stat]((x @ x.T)[upper])
+        return _reduce(self.stat, (x @ x.T)[upper])
 
 
 class EmbeddingNorm(_EmbeddingMetric):
-    """Mean or std of the rows' L2 norms -- flags exploding or vanishing vectors."""
+    """Mean, std or a percentile of the rows' L2 norms.
+
+    Flags exploding or vanishing vectors.
+    """
 
     def __init__(self, stat: str = "mean", **kwargs: Any) -> None:
         """Create the metric.
 
         Args:
-            stat: ``"mean"`` or ``"std"`` of the row norms.
+            stat: ``"mean"``, ``"std"`` or a percentile such as ``"p5"`` of the
+                row norms.
             **kwargs: Passed through to ``_EmbeddingMetric``.
         """
         super().__init__(**kwargs)
         self.stat = _check_stat(stat)
 
     def _score(self, x: torch.Tensor) -> torch.Tensor:
-        return _STATS[self.stat](torch.linalg.vector_norm(x, dim=1))
+        return _reduce(self.stat, torch.linalg.vector_norm(x, dim=1))
 
 
 class EmbeddingEffectiveRank(_EmbeddingMetric):
-    """Effective rank of the centered sample (Roy & Vetterli, 2007).
+    """Effective rank: ``exp(entropy(p))`` over the sample's normalized spectrum.
 
-    Computed as ``exp(entropy(s**2 / sum(s**2)))`` over the singular values.
-    Ranges from 1 (all variance along one direction) to D (variance spread
-    evenly over every dimension); a value far below D means dimensional collapse.
+    ``spectrum`` picks what ``p`` is:
+
+    - ``variance`` (default): ``s**2 / sum(s**2)`` over the singular values of the
+      centered sample, i.e. its PCA eigenvalues -- how many directions the rows
+      vary along. Squaring makes it strict about weak directions.
+    - ``singular``: ``s / sum(s)`` over the singular values of the raw sample. This
+      is the effective rank of Roy & Vetterli (2007), which RankMe (Garrido et al.,
+      2023) showed tracks downstream linear-probe accuracy across runs of one
+      method. It is not centered, so an offset shared by every row lowers it too.
+
+    Ranges from 1 (one direction) to D (spread evenly over every dimension), or to
+    the row count if smaller, so keep ``max_samples`` well above D. ``relative``
+    divides by D, so models with different widths compare directly. The two
+    spectra read differently on the same embeddings (``singular`` is higher), so
+    only compare values computed with the same one.
     """
 
+    def __init__(
+        self, spectrum: str = "variance", relative: bool = False, **kwargs: Any
+    ) -> None:
+        """Create the metric.
+
+        Args:
+            spectrum: ``"variance"`` or ``"singular"``; see the class docstring.
+            relative: Divide the rank by the embedding width D.
+            **kwargs: Passed through to ``_EmbeddingMetric``.
+        """
+        super().__init__(**kwargs)
+        if spectrum not in ("variance", "singular"):
+            raise ValueError(
+                f"spectrum must be 'variance' or 'singular', got {spectrum!r}"
+            )
+        self.spectrum = spectrum
+        self.relative = relative
+
     def _score(self, x: torch.Tensor) -> torch.Tensor:
-        s = torch.linalg.svdvals(x - x.mean(dim=0, keepdim=True))
-        p = s**2 / (s**2).sum()
+        if self.spectrum == "variance":
+            s = torch.linalg.svdvals(x - x.mean(dim=0, keepdim=True)) ** 2
+        else:
+            s = torch.linalg.svdvals(x)
+        p = s / s.sum()
         p = p[p > 0]
-        return torch.exp(-(p * p.log()).sum())
+        rank = torch.exp(-(p * p.log()).sum())
+        return rank / x.shape[1] if self.relative else rank
 
 
 class EmbeddingSilhouette(_EmbeddingMetric):
