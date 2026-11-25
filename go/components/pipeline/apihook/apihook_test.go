@@ -677,8 +677,8 @@ func TestBeforeUpdate(t *testing.T) {
 		{
 			name:     "stored pin names a removed release",
 			stored:   storedPipeline(t, &v2.InterpreterPin{Version: "core-v0"}),
-			wantCode: codes.InvalidArgument,
-			wantMsg:  "interpreter core-v0 is no longer available; set interpreter_pin.version to one of " + versions,
+			wantCode: codes.FailedPrecondition,
+			wantMsg:  "interpreter core-v0 is not loaded on this apiserver; set interpreter_pin.version to one of " + versions,
 		},
 		{
 			name:    "stored pin names a removed release and the request upgrades",

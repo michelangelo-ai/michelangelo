@@ -118,8 +118,10 @@ func (a apiHook) target(stored *v2.Pipeline, reqPin *v2.InterpreterPin) (*declar
 	if v := reqPin.GetVersion(); v == "" || v == storedPin.Version {
 		r, ok := a.d.releases[storedPin.Version]
 		if !ok {
-			return nil, nil, status.Errorf(codes.InvalidArgument,
-				"interpreter %s is no longer available; set interpreter_pin.version to one of %s",
+			// The operator removed the release, or this replica started
+			// before the release was added. The request itself is valid.
+			return nil, nil, status.Errorf(codes.FailedPrecondition,
+				"interpreter %s is not loaded on this apiserver; set interpreter_pin.version to one of %s",
 				storedPin.Version, a.d.versionList())
 		}
 		switch storedPin.Digest {
