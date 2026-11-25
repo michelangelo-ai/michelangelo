@@ -1,7 +1,8 @@
-# Mock interpreter release for local tests. The artifact does not exist and
-# the digest is a placeholder: no interpreter runs these pipelines yet.
+# Mock interpreter release for local tests only. No blob store serves the
+# mock:// scheme, so the artifact cannot be fetched. The digest is a
+# placeholder.
 version: mock-v1
-artifact: s3://mock-artifacts/declarative/interpreters/mock-v1.tar.gz
+artifact: mock://declarative/interpreters/mock-v1.tar.gz
 digest: sha256:0000000000000000000000000000000000000000000000000000000000000001
 task_types:
   mock/python:

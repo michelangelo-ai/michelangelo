@@ -13,7 +13,7 @@ spec:
         maxConcurrency: 2
       parameters:
         dataset:
-          default: s3://mock-data/cola/train.parquet
+          default: mock://data/cola/train.parquet
           description: Training data
         epochs:
           default: 3

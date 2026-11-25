@@ -176,9 +176,9 @@ Expected output:
 
 ```text
 pin: mock-v1 -> mock-v2
-artifact: s3://mock-artifacts/declarative/interpreters/mock-v2.tar.gz
+artifact: mock://declarative/interpreters/mock-v2.tar.gz
 digest: sha256:0000000000000000000000000000000000000000000000000000000000000002
-uniflow_tar: s3://mock-artifacts/declarative/interpreters/mock-v2.tar.gz
+uniflow_tar: mock://declarative/interpreters/mock-v2.tar.gz
 ```
 
 Add `--dry-run` to see the result without a write. An unknown version fails
