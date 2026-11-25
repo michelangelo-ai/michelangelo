@@ -194,6 +194,20 @@ class ExtractDataForCollectionTest(TestCase):
         self.assertEqual(data["predictions"][0], [1.0, 2.0])
         self.assertIsNone(data["predictions"][1])
         self.assertNotIn("targets", data)
+        self.assertNotIn("ids", data)
+
+    def test_extract_without_pred_dtype_passes_index_col_as_ids(self):
+        """index_col reaches embedding metrics as raw IDs, not factorized indexes."""
+        df = pd.DataFrame(
+            {"embedding": [[1.0, 2.0], [3.0, 4.0]], "user_id": ["a", "b"]}
+        )
+        column_mapping = ColumnMapping(
+            prediction_col="embedding", target_col="user_id", index_col="user_id"
+        )
+        data = extract_data_for_collection(df, column_mapping, None, None)
+
+        self.assertEqual(list(data["ids"]), ["a", "b"])
+        self.assertNotIn("indexes", data)
 
     def test_extract_without_pred_dtype_fails_on_invalid_embeddings(self):
         """Mismatched dimensions or NaN/Inf elements fail, naming the column."""

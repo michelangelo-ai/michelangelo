@@ -77,8 +77,14 @@ def _update_collection(
     extra_kwargs = data.get("extra_cols", {})
 
     if _is_aggregation_only(collection, target_dtype):
+        # Embedding collections carry entity IDs, for the metrics that sample by
+        # them.
+        ids = data.get("ids")
         for metric in collection.values():
-            metric.update(data["predictions"])
+            if ids is not None and "ids" in inspect.signature(metric.update).parameters:
+                metric.update(data["predictions"], ids=ids)
+            else:
+                metric.update(data["predictions"])
         return
 
     has_custom_metric = any(

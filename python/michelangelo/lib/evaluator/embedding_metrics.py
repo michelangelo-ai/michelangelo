@@ -16,14 +16,16 @@ with no embedding at all are skipped by the geometry metrics and counted by
 reads it, but the evaluator still loads it from the dataset (without a
 ``data_preprocessor`` it is part of the parquet column projection), so point it
 at a cheap, narrow column such as a small ID or label column, not a wide one
-like another embedding:
+like another embedding. The optional ``columns.index_col`` names the row's
+entity ID, which the sampled metrics below draw their sample by:
 
-    - name: user_emb_cosine_mean
+    - name: user_emb_cosine_p95
       metric: michelangelo.lib.evaluator.embedding_metrics.EmbeddingCosineSimilarity
-      params: {stat: mean}
+      params: {stat: p95}
       columns:
         prediction_col: user_embedding
         target_col: user_id   # required by schema; loaded but not read
+        index_col: user_id    # optional; the sample is drawn by user_id
 
 ``EmbeddingCosineSimilarity`` and ``EmbeddingNorm`` take a ``stat``: ``mean``,
 ``std``, or a percentile such as ``p5`` / ``p50`` / ``p95``. Configure one metric
@@ -34,10 +36,18 @@ chunks so memory stays bounded: ``EmbeddingNorm``, ``EmbeddingDeadDimensions``,
 ``EmbeddingEffectiveRank`` (from the D x D covariance) and the mean and std of
 ``EmbeddingCosineSimilarity`` (from sums over the normalized rows, without
 forming any pair). The others compare rows with each other, so they work on a
-seeded uniform sample of ``max_samples`` rows, reproducible across runs: cosine
-percentiles and ``EmbeddingUniformity`` score ``num_pairs`` random pairs of it
-(every pair, when there are fewer), ``EmbeddingHubness`` searches neighbors
-within it and ``EmbeddingSilhouette`` clusters it.
+seeded uniform sample of ``max_samples`` rows: cosine percentiles and
+``EmbeddingUniformity`` score ``num_pairs`` random pairs of it (every pair, when
+there are fewer), ``EmbeddingHubness`` searches neighbors within it and
+``EmbeddingSilhouette`` clusters it.
+
+With an ``index_col``, a row's place in the sample follows from a hash of its ID
+and the ``seed`` alone, so the same entities are sampled however the rows are
+ordered, partitioned or spread over workers, and two runs or two models over the
+same entities score the same ones. That needs one row per ID: the metric fails
+when more than 1% of the sampled rows share an ID. Without IDs, or for rows whose
+ID is missing, the sample is drawn at random, which is reproducible only for the
+same rows in the same order.
 """
 
 import logging
@@ -71,6 +81,8 @@ _PERCENTILE_STAT = re.compile(r"p(\d+(?:\.\d+)?)")
 
 _DEFAULT_MAX_SAMPLES = 50_000
 _DEFAULT_NUM_PAIRS = 10_000_000
+# Share of sampled rows that may share an ID with another before ID sampling fails.
+_MAX_DUPLICATE_ID_SHARE = 0.01
 
 # Elements stacked or multiplied at a time (~128 MB at float64), bounding each copy
 # to a slice of the column however wide the embedding -- the GLOBAL scope evaluates
@@ -119,6 +131,33 @@ def _rank() -> int:
     if torch.distributed.is_available() and torch.distributed.is_initialized():
         return torch.distributed.get_rank()
     return 0
+
+
+def _hash_ids(ids: Any) -> Optional[np.ndarray]:
+    """A 64-bit hash of each row's ID as a string, or None when one is missing.
+
+    Hashing the string form makes 5 and "5" agree. hash_array hashes strings
+    with SipHash under a fixed key: the same on every run and host.
+    """
+    column = np.asarray(_as_column(ids), dtype=object)
+    if pd.isna(column).any():
+        return None
+    return pd.util.hash_array(column.astype(str).astype(object))
+
+
+def _id_keys(id_hashes: np.ndarray, seed: int) -> torch.Tensor:
+    """Sample keys in [0, 1) from each ID hash mixed with the seed.
+
+    Uses splitmix64's finalizer.
+    """
+    z = id_hashes.astype(np.uint64) ^ np.uint64(
+        (seed * 0x9E3779B97F4A7C15) & 0xFFFFFFFFFFFFFFFF
+    )
+    # uint64 array arithmetic wraps around, as the mix intends.
+    z = (z ^ (z >> np.uint64(30))) * np.uint64(0xBF58476D1CE4E5B9)
+    z = (z ^ (z >> np.uint64(27))) * np.uint64(0x94D049BB133111EB)
+    z ^= z >> np.uint64(31)
+    return torch.from_numpy((z >> np.uint64(11)).astype(np.float64) * 2.0**-53)
 
 
 def _cat(state: Union[list[torch.Tensor], torch.Tensor]) -> torch.Tensor:
@@ -329,13 +368,13 @@ class _EmbeddingMetric(Metric):
     its accumulated state in ``_finish`` (exact metrics), or calls
     ``_keep_sample`` and scores a seeded uniform sample in ``_score``.
 
-    The sample is bottom-k: every row draws a random key and the
-    ``max_samples`` rows with the smallest keys are kept. That is a uniform
-    sample of every row seen, however the rows were split into updates, and
-    two kept sets merge by keeping the smallest keys again -- which is what
-    lets the states cat-reduce across processes. Only the kept rows are ever
-    stacked. All states are 1-D lists, which a process that saw no rows can
-    still sync.
+    The sample is bottom-k: every row gets a key uniform in [0, 1) -- hashed from
+    its ID and the seed, or drawn at random -- and the ``max_samples`` rows with
+    the smallest keys are kept. That is a uniform sample of every row seen,
+    however the rows were split into updates, and two kept sets merge by keeping
+    the smallest keys again -- which is what lets the states cat-reduce across
+    processes. Only the kept rows are ever stacked. All states are 1-D lists,
+    which a process that saw no rows can still sync.
     """
 
     higher_is_better = None
@@ -353,12 +392,25 @@ class _EmbeddingMetric(Metric):
         super().reset()
         self._dim = None
 
-    def update(self, preds: Any) -> None:
+    def update(self, preds: Any, ids: Any = None) -> None:
+        """Add a batch of rows; ``ids``, one entity ID per row, place them."""
         rows = _non_null_rows(preds)
         if len(rows) == 0:
             return
         if self.max_samples is not None:
-            self._sample(rows)
+            id_hashes = None
+            if ids is not None:
+                if len(ids) != len(preds):
+                    raise ValueError(f"got {len(ids)} ids for {len(preds)} rows")
+                id_hashes = _hash_ids(ids)
+                if id_hashes is None:
+                    _logger.warning(
+                        "%s: some rows have no ID; sampling at random instead",
+                        type(self).__name__,
+                    )
+                else:
+                    id_hashes = id_hashes[~_null_mask(preds)]
+            self._sample(rows, id_hashes)
             return
         for chunk in _row_chunks(rows):
             x = _to_matrix(chunk)
@@ -372,9 +424,17 @@ class _EmbeddingMetric(Metric):
         keys = _cat(self.keys)
         if keys.numel() == 0:
             return torch.tensor(float("nan"))
-        _, idx = torch.topk(
+        kept, idx = torch.topk(
             keys, min(self.max_samples, keys.numel()), largest=False, sorted=True
         )
+        # Equal keys come from equal IDs: random 53-bit keys practically never collide.
+        shared = 1 - kept.unique().numel() / kept.numel()
+        if shared > _MAX_DUPLICATE_ID_SHARE:
+            raise ValueError(
+                f"{shared:.1%} of the sampled rows share an ID with another; "
+                "sampling by ID needs one row per ID -- point index_col at a "
+                "unique ID column, or leave it unset to sample at random"
+            )
         sample = _cat(self.samples).view(keys.numel(), -1)[idx]
         _logger.info(
             "%s: scoring a sample of %d of %d rows",
@@ -448,18 +508,21 @@ class _EmbeddingMetric(Metric):
         self.seed = seed
         self.add_state("samples", default=[], dist_reduce_fx="cat")
         self.add_state("keys", default=[], dist_reduce_fx="cat")
-        # Rows this process has seen; seeds each update's keys, so a run is
-        # reproducible and no two updates draw the same keys.
+        # Rows this process has seen; seeds each update's random keys, so a run
+        # is reproducible and no two updates draw the same keys.
         self.add_state("rows_seen", default=torch.tensor(0), dist_reduce_fx="sum")
 
-    def _sample(self, rows: Rows) -> None:
+    def _sample(self, rows: Rows, id_hashes: Optional[np.ndarray]) -> None:
         n, dim = len(rows), _width(rows)
         self._check_dim(dim)
-        generator = torch.Generator().manual_seed(
-            hash((self.seed, _rank(), int(self.rows_seen)))
-        )
-        new_keys = torch.rand(n, generator=generator)
-        old_keys = _cat(self.keys).cpu()
+        if id_hashes is not None:
+            new_keys = _id_keys(id_hashes, self.seed)
+        else:
+            generator = torch.Generator().manual_seed(
+                hash((self.seed, _rank(), int(self.rows_seen)))
+            )
+            new_keys = torch.rand(n, generator=generator, dtype=torch.float64)
+        old_keys = _cat(self.keys).cpu().double()
         all_keys = torch.cat([old_keys, new_keys])
         keys, idx = torch.topk(
             all_keys,

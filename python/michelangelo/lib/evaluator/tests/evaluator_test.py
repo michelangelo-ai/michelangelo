@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest import TestCase
 from unittest.mock import patch
 
+import numpy as np
 import pandas as pd
 import torch
 from pandas.errors import UndefinedVariableError
@@ -207,6 +208,40 @@ class EvaluateTest(TestCase):
         results = TorchMetricEvaluator(config).evaluate(data)
 
         self.assertAlmostEqual(results["emb_cosine_mean"], 1.0, places=5)
+
+    def test_sampled_embedding_metric_samples_by_index_col(self):
+        """The sample is drawn by the IDs in index_col.
+
+        Shuffling the rows therefore leaves the result unchanged.
+        """
+        config = EvaluatorConfig(
+            metrics=[
+                MetricConfig(
+                    name="emb_cosine_p50",
+                    metric=f"{EmbeddingCosineSimilarity.__module__}.{EmbeddingCosineSimilarity.__name__}",
+                    params={"stat": "p50", "max_samples": 20},
+                    columns=ColumnMapping(
+                        prediction_col="embedding",
+                        target_col="user_id",
+                        index_col="user_id",
+                    ),
+                ),
+            ]
+        )
+        rng = np.random.default_rng(0)
+        data = pd.DataFrame(
+            {
+                "embedding": list(rng.normal(size=(200, 4))),
+                "user_id": [f"u{i}" for i in range(200)],
+            }
+        )
+
+        first = TorchMetricEvaluator(config).evaluate(data)["emb_cosine_p50"]
+        shuffled = TorchMetricEvaluator(config).evaluate(
+            data.sample(frac=1, random_state=1)
+        )["emb_cosine_p50"]
+
+        self.assertAlmostEqual(first, shuffled, places=6)
 
     def test_embedding_row_rates_see_missing_rows(self):
         """Null and zero rates get the raw column, so a missing vector is counted.
