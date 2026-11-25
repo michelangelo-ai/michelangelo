@@ -98,6 +98,31 @@ def test_enums_inside_struct_fields_stay_untouched():
     }
 
 
+def test_task_name_in_depends_on_fails_with_expected_shape():
+    """A task name in place of a dependency mapping names the shape to use."""
+    content = {"tasks": {"load": {"dependsOn": ["transform"]}}}
+
+    with pytest.raises(DeclarativeManifestError) as err:
+        normalize_workflow(content)
+
+    assert str(err.value) == (
+        "content.tasks.load.dependsOn[0]: expected a mapping of TaskDependency"
+        " fields, got str 'transform'"
+    )
+
+
+def test_both_spellings_of_one_field_fail():
+    """A field set as both task_function and taskFunction is an error."""
+    content = {"tasks": {"a": {"task_function": "core/x", "taskFunction": "core/y"}}}
+
+    with pytest.raises(DeclarativeManifestError) as err:
+        normalize_workflow(content)
+
+    assert str(err.value) == (
+        "content.tasks.a: set taskFunction or task_function, not both"
+    )
+
+
 @pytest.mark.parametrize(
     ("default", "expected"),
     [

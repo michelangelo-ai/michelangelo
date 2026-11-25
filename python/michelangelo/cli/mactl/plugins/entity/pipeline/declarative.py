@@ -193,6 +193,11 @@ def _infer_parameter_types(parameters: dict) -> None:
 
 
 def _normalize_enums(node: dict, descriptor: Descriptor, path: str) -> None:
+    for field in descriptor.fields:
+        if field.name != field.json_name and {field.name, field.json_name} <= set(node):
+            raise DeclarativeManifestError(
+                f"{path}: set {field.json_name} or {field.name}, not both"
+            )
     fields = {field.name: field for field in descriptor.fields}
     fields.update({field.json_name: field for field in descriptor.fields})
     for key, value in node.items():
@@ -222,11 +227,17 @@ def _normalize_value(field: FieldDescriptor, value: Any, path: str) -> Any:
     message = field.message_type
     # google.protobuf types (Struct, Value, Duration) hold user data, not enums.
     if (
-        message is not None
-        and not message.full_name.startswith("google.protobuf.")
-        and isinstance(value, dict)
+        value is None
+        or message is None
+        or message.full_name.startswith("google.protobuf.")
     ):
-        _normalize_enums(value, message, path)
+        return value
+    if not isinstance(value, dict):
+        raise DeclarativeManifestError(
+            f"{path}: expected a mapping of {message.name} fields,"
+            f" got {type(value).__name__} {value!r}"
+        )
+    _normalize_enums(value, message, path)
     return value
 
 
