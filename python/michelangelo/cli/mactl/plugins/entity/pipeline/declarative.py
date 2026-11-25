@@ -3,8 +3,8 @@
 A declarative pipeline YAML sets ``spec.manifest.type`` to
 ``PIPELINE_MANIFEST_TYPE_DECLARATIVE`` and writes the ``DeclarativeWorkflow``
 fields under ``spec.manifest.content``. mactl normalizes that content and packs
-it as ``Any<DeclarativeWorkflow>``. The apiserver validates the graph and owns
-the interpreter pin.
+it as ``Any<DeclarativeWorkflow>``. The apiserver validates the graph and writes
+the interpreter pin. The YAML can set only ``interpreterPin.version``.
 """
 
 import math
@@ -42,12 +42,6 @@ _MAX_SAFE_INTEGER = 2**53 - 1
 # at these limits. The depth cap stays below the server proto recursion limit.
 _MAX_CONTENT_NODES = 100_000
 _MAX_CONTENT_DEPTH = 64
-_SERVER_OWNED_MANIFEST_FIELDS = (
-    "interpreterPin",
-    "interpreter_pin",
-    "uniflowTar",
-    "uniflow_tar",
-)
 # bool precedes int because bool is an int subclass.
 _INFERRED_PARAMETER_TYPES = (
     (bool, ParameterType.PARAMETER_TYPE_BOOLEAN),
@@ -87,13 +81,17 @@ def is_declarative(yaml_dict: dict) -> bool:
     return full_name == DECLARATIVE_MANIFEST_TYPE
 
 
-def pack_declarative_content(manifest: dict) -> dict:
-    """Return ``manifest.content`` as a JSON-form ``Any<DeclarativeWorkflow>``."""
-    for field in _SERVER_OWNED_MANIFEST_FIELDS:
+def pack_declarative_manifest(manifest: dict) -> dict:
+    """Return the declarative manifest fields of the request.
+
+    The result holds the type, ``content`` as a JSON-form
+    ``Any<DeclarativeWorkflow>``, and the pin version when the YAML sets one.
+    """
+    for field in ("uniflowTar", "uniflow_tar"):
         if field in manifest:
             raise DeclarativeManifestError(
                 f"spec.manifest.{field} is server-owned for declarative pipelines;"
-                " remove it"
+                " remove it, because the apiserver sets it from the interpreter pin"
             )
     workflow = normalize_workflow(manifest.get("content"))
     type_url = workflow.pop("@type", _TYPE_URL)
@@ -101,7 +99,44 @@ def pack_declarative_content(manifest: dict) -> dict:
         raise DeclarativeManifestError(
             f"spec.manifest.content.@type must be {_TYPE_URL}, got {type_url}"
         )
-    return {"@type": _TYPE_URL, **workflow}
+    fields = {
+        "type": DECLARATIVE_MANIFEST_TYPE,
+        "content": {"@type": _TYPE_URL, **workflow},
+    }
+    version = _pin_version(manifest)
+    if version is not None:
+        fields["interpreterPin"] = {"version": version}
+    return fields
+
+
+def _pin_version(manifest: dict) -> Optional[str]:
+    """Return interpreterPin.version, the only pin field that a client sets."""
+    if {"interpreterPin", "interpreter_pin"} <= set(manifest):
+        raise DeclarativeManifestError(
+            "spec.manifest: set interpreterPin or interpreter_pin, not both"
+        )
+    field = "interpreter_pin" if "interpreter_pin" in manifest else "interpreterPin"
+    if field not in manifest:
+        return None
+    pin = manifest[field]
+    if not isinstance(pin, dict):
+        raise DeclarativeManifestError(
+            f"spec.manifest.{field} must be a mapping with one key, version;"
+            f" for example {field}: {{version: <release>}}"
+        )
+    for key in pin:
+        if key != "version":
+            raise DeclarativeManifestError(
+                f"spec.manifest.{field}.{key} is server-owned; to change the pin,"
+                f" set only {field}.version"
+            )
+    version = pin.get("version")
+    if not isinstance(version, str) or not version:
+        raise DeclarativeManifestError(
+            f"spec.manifest.{field}.version must be a release version string,"
+            f" got {version!r}"
+        )
+    return version
 
 
 def normalize_workflow(content: dict) -> dict:

@@ -13,9 +13,8 @@ from google.protobuf.message import Message
 from google.protobuf.struct_pb2 import Struct
 
 from michelangelo.cli.mactl.plugins.entity.pipeline.declarative import (
-    DECLARATIVE_MANIFEST_TYPE,
     is_declarative,
-    pack_declarative_content,
+    pack_declarative_manifest,
 )
 from michelangelo.cli.mactl.utils import (
     get_user_name,
@@ -183,8 +182,8 @@ def convert_crd_metadata_pipeline(
         raise ValueError("Expected a dictionary for CRD metadata")
 
     # A declarative manifest is data: it needs no registration subprocess.
-    declarative_content = (
-        pack_declarative_content(yaml_dict["spec"]["manifest"])
+    declarative_manifest = (
+        pack_declarative_manifest(yaml_dict["spec"]["manifest"])
         if is_declarative(yaml_dict)
         else None
     )
@@ -200,7 +199,7 @@ def convert_crd_metadata_pipeline(
     # Get relative path of config file from repo root
     config_file_relative_path = str(yaml_path.relative_to(repo_root))
 
-    if declarative_content is None:
+    if declarative_manifest is None:
         workflow_inputs, uniflow_tar_path, workflow_function_name = (
             handle_workflow_inputs_retrieval(
                 repo_root, config_file_relative_path, project, pipeline
@@ -229,9 +228,8 @@ def convert_crd_metadata_pipeline(
         uniflow_tar_path,
         workflow_function_name,
     )
-    if declarative_content is not None:
-        res["spec"]["manifest"]["type"] = DECLARATIVE_MANIFEST_TYPE
-        res["spec"]["manifest"]["content"] = declarative_content
+    if declarative_manifest is not None:
+        res["spec"]["manifest"].update(declarative_manifest)
     return res
 
 

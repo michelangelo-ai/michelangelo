@@ -389,11 +389,9 @@ def test_declarative_yaml_packs_content_as_any(tmp_path):
     assert wf.tasks["root"].config["n"] == "{{ params.epochs }}"
 
 
-@pytest.mark.parametrize(
-    "field", ["interpreterPin", "interpreter_pin", "uniflowTar", "uniflow_tar"]
-)
-def test_server_owned_manifest_field_fails(tmp_path, field):
-    """A server-owned manifest field in the YAML fails before any request."""
+@pytest.mark.parametrize("field", ["uniflowTar", "uniflow_tar"])
+def test_uniflow_tar_fails(tmp_path, field):
+    """A uniflowTar in the YAML fails before any request."""
     yaml_dict = json.loads(json.dumps(_DECLARATIVE_YAML))
     yaml_dict["spec"]["manifest"][field] = "x"
 
@@ -401,7 +399,75 @@ def test_server_owned_manifest_field_fails(tmp_path, field):
         _convert(yaml_dict, tmp_path)
 
     assert str(err.value) == (
-        f"spec.manifest.{field} is server-owned for declarative pipelines; remove it"
+        f"spec.manifest.{field} is server-owned for declarative pipelines;"
+        " remove it, because the apiserver sets it from the interpreter pin"
+    )
+
+
+@pytest.mark.parametrize("field", ["interpreterPin", "interpreter_pin"])
+def test_pin_version_is_sent(tmp_path, field):
+    """interpreterPin.version goes to the apiserver, which writes the pin."""
+    yaml_dict = json.loads(json.dumps(_DECLARATIVE_YAML))
+    yaml_dict["spec"]["manifest"][field] = {"version": "mock-v2"}
+
+    manifest = _convert(yaml_dict, tmp_path).pipeline.spec.manifest
+
+    assert manifest.interpreter_pin == pipeline_pb2.InterpreterPin(version="mock-v2")
+    assert manifest.content.type_url.endswith("DeclarativeWorkflow")
+
+
+@pytest.mark.parametrize(
+    ("pin", "message"),
+    [
+        (
+            {"version": "mock-v2", "artifact": "s3://x"},
+            "spec.manifest.interpreterPin.artifact is server-owned; to change"
+            " the pin, set only interpreterPin.version",
+        ),
+        (
+            {"digest": "sha256:0"},
+            "spec.manifest.interpreterPin.digest is server-owned; to change"
+            " the pin, set only interpreterPin.version",
+        ),
+        (
+            "mock-v2",
+            "spec.manifest.interpreterPin must be a mapping with one key,"
+            " version; for example interpreterPin: {version: <release>}",
+        ),
+        (
+            {"version": ""},
+            "spec.manifest.interpreterPin.version must be a release version"
+            " string, got ''",
+        ),
+        (
+            {"version": 2},
+            "spec.manifest.interpreterPin.version must be a release version"
+            " string, got 2",
+        ),
+    ],
+)
+def test_pin_other_than_version_fails(tmp_path, pin, message):
+    """Only interpreterPin.version passes; the apiserver owns the rest."""
+    yaml_dict = json.loads(json.dumps(_DECLARATIVE_YAML))
+    yaml_dict["spec"]["manifest"]["interpreterPin"] = pin
+
+    with pytest.raises(DeclarativeManifestError) as err:
+        _convert(yaml_dict, tmp_path)
+
+    assert str(err.value) == message
+
+
+def test_both_pin_spellings_fail(tmp_path):
+    """Both pin spellings in one manifest is an error."""
+    yaml_dict = json.loads(json.dumps(_DECLARATIVE_YAML))
+    yaml_dict["spec"]["manifest"]["interpreterPin"] = {"version": "mock-v1"}
+    yaml_dict["spec"]["manifest"]["interpreter_pin"] = {"version": "mock-v2"}
+
+    with pytest.raises(DeclarativeManifestError) as err:
+        _convert(yaml_dict, tmp_path)
+
+    assert str(err.value) == (
+        "spec.manifest: set interpreterPin or interpreter_pin, not both"
     )
 
 
