@@ -474,19 +474,18 @@ func TestBeforeUpdate(t *testing.T) {
 	const versions = "[core-v1, core-v2]"
 
 	tests := []struct {
-		name      string
-		d         *Declarative
-		stored    *v2.Pipeline
-		getErr    error
-		extra     map[string]*types.Value
-		reqPin    *v2.InterpreterPin
-		reqTar    string
-		dryRun    bool
-		wantPin   *v2.InterpreterPin
-		wantCode  codes.Code
-		wantMsg   string
-		wantPlan  *declarative.Release
-		unchanged bool
+		name     string
+		d        *Declarative
+		stored   *v2.Pipeline
+		getErr   error
+		extra    map[string]*types.Value
+		reqPin   *v2.InterpreterPin
+		reqTar   string
+		dryRun   bool
+		wantPin  *v2.InterpreterPin
+		wantCode codes.Code
+		wantMsg  string
+		wantPlan *declarative.Release
 	}{
 		{
 			name:    "pin absent keeps the stored pin verbatim",
@@ -681,9 +680,36 @@ func TestBeforeUpdate(t *testing.T) {
 			wantPin: pinOf(v2Rel),
 		},
 		{
-			name:      "stored pipeline not found",
-			getErr:    apierrors.NewNotFound(schema.GroupResource{Resource: "pipelines"}, name),
-			unchanged: true,
+			name:    "stored pipeline not found follows the create rules",
+			getErr:  apierrors.NewNotFound(schema.GroupResource{Resource: "pipelines"}, name),
+			wantPin: pinOf(v1),
+		},
+		{
+			name:    "stored pipeline not found accepts a loaded client version",
+			getErr:  status.Error(codes.NotFound, "pipeline not found"),
+			extra:   onlyV2,
+			reqPin:  &v2.InterpreterPin{Version: "core-v2"},
+			wantPin: pinOf(v2Rel),
+		},
+		{
+			name:     "stored pipeline not found rejects a forged pin",
+			getErr:   status.Error(codes.NotFound, "pipeline not found"),
+			reqPin:   &v2.InterpreterPin{Version: "evil", Artifact: "s3://attacker/x.tar.gz"},
+			wantCode: codes.InvalidArgument,
+			wantMsg:  `interpreter_pin.version "evil" is not a known release; use one of ` + versions,
+		},
+		{
+			name:     "stored pipeline not found rejects a forged uniflow_tar",
+			getErr:   status.Error(codes.NotFound, "pipeline not found"),
+			reqTar:   "s3://attacker/x.tar.gz",
+			wantCode: codes.InvalidArgument,
+			wantMsg:  "uniflow_tar is server-owned for declarative pipelines; remove uniflow_tar from the request",
+		},
+		{
+			name:     "stored pipeline not found validates the content",
+			getErr:   status.Error(codes.NotFound, "pipeline not found"),
+			extra:    onlyV2,
+			wantCode: codes.InvalidArgument,
 		},
 		{
 			name:     "other Get error is returned",
@@ -735,7 +761,6 @@ func TestBeforeUpdate(t *testing.T) {
 			p.Spec.Manifest.InterpreterPin = tc.reqPin
 			p.Spec.Manifest.UniflowTar = tc.reqTar
 			p.Annotations = map[string]string{explainPlanAnnotation: `{"taskCount":99}`}
-			want := p.DeepCopy()
 			req := &v2.UpdatePipelineRequest{Pipeline: p, UpdateOptions: &metav1.UpdateOptions{}}
 			if tc.dryRun {
 				req.UpdateOptions.DryRun = []string{metav1.DryRunAll}
@@ -753,10 +778,6 @@ func TestBeforeUpdate(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-			if tc.unchanged {
-				assert.Equal(t, want, p)
-				return
-			}
 			assert.Equal(t, tc.wantPin, p.Spec.Manifest.InterpreterPin)
 			assert.Equal(t, tc.wantPin.Artifact, p.Spec.Manifest.UniflowTar, "uniflow_tar follows the pin")
 			if tc.wantPlan == nil {

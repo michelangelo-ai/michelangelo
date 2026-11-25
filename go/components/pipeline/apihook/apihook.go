@@ -59,11 +59,12 @@ func (a apiHook) BeforeUpdate(ctx context.Context, req *v2.UpdatePipelineRequest
 	p := req.Pipeline
 	stored := &v2.Pipeline{}
 	if err := a.apiHandler.Get(ctx, p.Namespace, p.Name, &metav1.GetOptions{}, stored); err != nil {
-		if utils.IsNotFoundError(err) {
-			// The Update call that follows reports the missing pipeline.
-			return nil
+		if !utils.IsNotFoundError(err) {
+			return err
 		}
-		return err
+		// With metadata storage on, Update inserts a missing pipeline into
+		// MySQL. Validate and pin it with the create rules.
+		stored = &v2.Pipeline{}
 	}
 	rel, pin, err := a.target(stored, p.Spec.Manifest.InterpreterPin)
 	if err != nil {
