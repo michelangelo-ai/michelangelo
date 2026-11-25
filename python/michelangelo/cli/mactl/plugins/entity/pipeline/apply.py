@@ -19,6 +19,7 @@ from michelangelo.cli.mactl.crd import (
 from michelangelo.cli.mactl.plugins.entity.pipeline.declarative import (
     DeclarativeManifestError,
     explain_plan_from,
+    printable,
     render_explain_plan,
 )
 
@@ -123,5 +124,5 @@ def _get_existing(_self: CRD, namespace: str, name: str) -> Optional[Message]:
 
 def _error_message(err: Exception) -> str:
     if isinstance(err, RpcError) and hasattr(err, "details"):
-        return f"{err.code().name}: {err.details()}"
-    return str(err)
+        return printable(f"{err.code().name}: {err.details()}")
+    return printable(str(err))

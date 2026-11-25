@@ -519,3 +519,24 @@ def test_render_explain_plan_json():
         "warnings": [],
         "task_count": 4,
     }
+
+
+def test_render_explain_plan_table_escapes_control_characters():
+    """Server text cannot move the cursor or set the terminal title."""
+    plan = declarative_pb2.ExplainPlan(
+        interpreter_version="v1\x1b[2J",
+        task_count=1,
+        levels=[declarative_pb2.ExecutionLevel(tasks=["a\x1b]0;t\x07"])],
+        warnings=["line one\nline two\x9b"],
+    )
+
+    assert render_explain_plan(plan, "table") == (
+        "Interpreter: v1\\x1b[2J\n"
+        "Tasks: 1\n"
+        "\n"
+        "LEVEL  TASKS\n"
+        "0      a\\x1b]0;t\\x07\n"
+        "\n"
+        "WARNINGS\n"
+        "line one line two\\x9b"
+    )

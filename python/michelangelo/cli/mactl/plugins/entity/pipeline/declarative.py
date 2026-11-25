@@ -8,6 +8,7 @@ the interpreter pin.
 """
 
 import math
+import re
 from os.path import commonprefix
 from typing import Any, Optional
 
@@ -33,6 +34,8 @@ _MANIFEST_TYPE_NAMES = {
     for name in (full_name, full_name.removeprefix(_MANIFEST_TYPE_PREFIX))
 }
 
+_LINE_BREAKS = re.compile(r"\s*[\r\n\t]+\s*")
+_CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f-\x9f]")
 _TYPE_URL = f"type.googleapis.com/{DeclarativeWorkflow.DESCRIPTOR.full_name}"
 _MAX_SAFE_INTEGER = 2**53 - 1
 # YAML aliases let a small file describe a large tree, so the copy walk stops
@@ -241,6 +244,15 @@ def _full_enum_name(enum: EnumDescriptor, value: Any, path: str) -> Any:
     )
 
 
+def printable(text: str) -> str:
+    """Return text on one line, with each control character as a hex escape.
+
+    Server text then cannot move the cursor or change the terminal.
+    """
+    text = _LINE_BREAKS.sub(" ", text)
+    return _CONTROL_CHARS.sub(lambda m: f"\\x{ord(m.group()):02x}", text)
+
+
 def explain_plan_from(pipeline: pipeline_pb2.Pipeline) -> Optional[ExplainPlan]:
     """Return the dry-run explain plan on the pipeline, or None when absent.
 
@@ -265,15 +277,15 @@ def render_explain_plan(plan: ExplainPlan, output: str) -> str:
         )
     level_width = max(len("LEVEL"), len(str(len(plan.levels) - 1)))
     lines = [
-        f"Interpreter: {plan.interpreter_version}",
+        f"Interpreter: {printable(plan.interpreter_version)}",
         f"Tasks: {plan.task_count}",
         "",
         f"{'LEVEL'.ljust(level_width)}  TASKS",
     ]
     lines += [
-        f"{str(index).ljust(level_width)}  {', '.join(level.tasks)}"
+        f"{str(index).ljust(level_width)}  {printable(', '.join(level.tasks))}"
         for index, level in enumerate(plan.levels)
     ]
     if plan.warnings:
-        lines += ["", "WARNINGS", *plan.warnings]
+        lines += ["", "WARNINGS", *(printable(w) for w in plan.warnings)]
     return "\n".join(lines)

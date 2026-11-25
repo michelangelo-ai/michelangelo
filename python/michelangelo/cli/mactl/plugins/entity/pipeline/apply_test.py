@@ -6,6 +6,7 @@ from io import StringIO
 from unittest import TestCase
 from unittest.mock import MagicMock, Mock, patch
 
+from google.protobuf.json_format import ParseDict, ParseError
 from grpc import RpcError, StatusCode
 
 from michelangelo.cli.mactl.plugins.entity.pipeline.apply import (
@@ -15,6 +16,7 @@ from michelangelo.cli.mactl.plugins.entity.pipeline.declarative import (
     EXPLAIN_PLAN_ANNOTATION,
     DeclarativeManifestError,
 )
+from michelangelo.gen.api.v2.declarative_pb2 import DeclarativeWorkflow
 from michelangelo.gen.api.v2.pipeline_svc_pb2 import (
     CreatePipelineRequest,
     CreatePipelineResponse,
@@ -266,3 +268,39 @@ class PipelineApplyRenderTest(TestCase):
                 )
 
         self.assertEqual(err.exception.code, "Error: content.x: bad")
+
+    def test_parse_error_exits_on_one_line(self):
+        """A real unknown-field ParseError prints on one line."""
+        try:
+            ParseDict({"tasks": {"a": {"taskFuncton": "x"}}}, DeclarativeWorkflow())
+        except ParseError as parse_error:
+            error = parse_error
+        self.assertIn("\n", str(error))
+
+        with (
+            patch(f"{_MODULE}.read_yaml_to_crd_request", side_effect=error),
+            patch(
+                f"{_MODULE}.get_crd_namespace_and_name_from_yaml",
+                return_value=("ns", "pipe"),
+            ),
+            self.assertRaises(SystemExit) as err,
+        ):
+            pipeline_apply_func_impl(
+                Mock(), Mock(arguments={"self": Mock(), "file": "f.yaml"})
+            )
+
+        message = err.exception.code
+        self.assertNotIn("\n", message)
+        self.assertIn('has no field named "taskFuncton"', message)
+        self.assertIn('"DeclarativeWorkflow.tasks[a]". Available Fields', message)
+
+    def test_rejection_details_print_on_one_line(self):
+        """Line breaks become spaces and other control characters are escaped."""
+        rejection = _FakeRpcError(StatusCode.INVALID_ARGUMENT, "bad\r\n\tvalue\x1b[2J")
+
+        with self.assertRaises(SystemExit) as err:
+            self._run(None, error=rejection)
+
+        self.assertEqual(
+            err.exception.code, "Error: INVALID_ARGUMENT: bad value\\x1b[2J"
+        )
