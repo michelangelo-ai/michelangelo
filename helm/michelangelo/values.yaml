@@ -386,6 +386,11 @@ envoy:
   # Single host:    "https://michelangelo\\.example\\.com"
   # Multiple:       "https://(michelangelo|staging)\\.example\\.com"
   #
+  # Envoy full-matches the regex against the whole Origin. An unescaped dot
+  # matches any character, so "https://ml.example.com" also matches the
+  # look-alike domain "https://ml-example.com". Never put `.*` in the host
+  # part ("https://.*example\\.com" matches "https://evilexample.com").
+  #
   # When envoy.ingress.enabled=true, this MUST match the scheme + host
   # of ui.ingress.hosts[0].host.
   corsOrigins: ""
@@ -397,7 +402,10 @@ envoy:
   # reflects the caller's actual Origin header on a match rather than sending
   # a literal "*", so leaving corsOrigins at its wildcard default would let
   # any origin make authenticated, credentialed calls. Enforced by a chart
-  # validation — see templates/validations.yaml.
+  # validation — see templates/validations.yaml: it rejects a non-string
+  # corsOrigins, an invalid regex, and any regex that matches every origin
+  # (".*", "^.*$", ".+", "https?://.*", ...). It cannot detect look-alike
+  # patterns such as unescaped dots, so follow the escaping rules above.
   corsAllowCredentials: false
 
   resources: {}
