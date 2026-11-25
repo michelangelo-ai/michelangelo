@@ -329,12 +329,6 @@ func (r *Reconciler) processPlugin(ctx context.Context, log logr.Logger, metrics
 	var err error
 	var conditionPlugin conditionInterfaces.Plugin[*v2pb.Deployment]
 
-	// TODO(#551): Add runtime context to match Uber internal pattern exactly
-	// The Uber internal code uses: runtimeContext := conditions.NewRequestContext(log, r.Recorder)
-	// and passes it to all Engine.Run() calls: r.engine.Run(ctx, runtimeContext, conditionPlugin, deployment)
-	// This requires updating the Engine interface to match Uber's 4-parameter signature
-	// For now, our simplified Engine interface uses 3 parameters: Engine.Run(ctx, conditionPlugin, deployment)
-
 	if ShouldCleanup(*deployment) {
 		if !IsCleanupStage(deployment.Status.Stage) {
 			log.Info("detected that a cleanup should occur")
