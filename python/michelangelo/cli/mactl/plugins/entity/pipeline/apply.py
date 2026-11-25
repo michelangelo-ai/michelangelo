@@ -1,11 +1,14 @@
 """Pipeline `apply` function plugin module."""
 
+import sys
 from inspect import Parameter
 from logging import getLogger
 from typing import Optional
 
-from google.protobuf.json_format import ParseError
+from google.protobuf import descriptor_pool
+from google.protobuf.json_format import MessageToJson, ParseError
 from google.protobuf.message import Message
+from google.protobuf.text_format import MessageToString
 from grpc import RpcError, StatusCode
 
 from michelangelo.cli.mactl.crd import (
@@ -24,6 +27,7 @@ from michelangelo.cli.mactl.plugins.entity.pipeline.declarative import (
     render_explain_plan,
 )
 from michelangelo.gen.api.v2.declarative_pb2 import ExplainPlan
+from michelangelo.gen.api.v2.pipeline_pb2 import Pipeline, PipelineManifest
 
 _LOG = getLogger(__name__)
 
@@ -38,8 +42,9 @@ _OUTPUT_ARG = {
         "choices": ["table", "json"],
         "default": "table",
         "help": (
-            "Format of the declarative dry-run explain plan, one of: table|json"
-            " (default: table). Other responses print unchanged."
+            "Output format, one of: table|json (default: table). A dry run of a"
+            " declarative pipeline prints the explain plan. Other responses"
+            " print the pipeline as text, or as JSON with json."
         ),
     },
 }
@@ -70,12 +75,41 @@ def pipeline_apply_func_impl(
         response = _create_or_update(update_method_info, arguments)
     except (RpcError, DeclarativeManifestError, ParseError) as err:
         raise SystemExit(f"Error: {_error_message(err)}") from None
+    output = arguments.get("output", "table")
     plan = _dry_run_plan(response, arguments)
-    if plan is None:
-        print(response)
+    if plan is not None:
+        print(render_explain_plan(plan, output))
+    elif output == "json":
+        _print_json(response)
     else:
-        print(render_explain_plan(plan, arguments.get("output", "table")))
+        _print_text(response)
     return response
+
+
+def _print_json(response: Message) -> None:
+    try:
+        print(MessageToJson(response, preserving_proto_field_name=True))
+    except TypeError as err:
+        # MessageToJson raises TypeError for an Any type that is not loaded.
+        print(
+            f"Warning: cannot print the response as JSON ({printable(str(err))});"
+            " printing it as text",
+            file=sys.stderr,
+        )
+        _print_text(response)
+
+
+def _print_text(response: Message) -> None:
+    pipeline = getattr(response, "pipeline", None)
+    if (
+        isinstance(pipeline, Pipeline)
+        and pipeline.spec.manifest.type
+        == PipelineManifest.PIPELINE_MANIFEST_TYPE_DECLARATIVE
+    ):
+        # The default pool expands the Any, so the stored workflow is readable.
+        print(MessageToString(response, descriptor_pool=descriptor_pool.Default()))
+    else:
+        print(response)
 
 
 def _dry_run_plan(response: Message, arguments: dict) -> Optional[ExplainPlan]:

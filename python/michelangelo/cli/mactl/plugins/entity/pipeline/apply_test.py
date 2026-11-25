@@ -1,7 +1,7 @@
 """Unit tests for pipeline apply plugin."""
 
 import json
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from unittest import TestCase
 from unittest.mock import MagicMock, Mock, patch
@@ -17,6 +17,7 @@ from michelangelo.cli.mactl.plugins.entity.pipeline.declarative import (
     DeclarativeManifestError,
 )
 from michelangelo.gen.api.v2.declarative_pb2 import DeclarativeWorkflow
+from michelangelo.gen.api.v2.pipeline_pb2 import PipelineManifest
 from michelangelo.gen.api.v2.pipeline_svc_pb2 import (
     CreatePipelineRequest,
     CreatePipelineResponse,
@@ -227,13 +228,65 @@ class PipelineApplyRenderTest(TestCase):
         self.assertEqual(list(self.sent.create_options.dryRun), ["All"])
 
     def test_response_without_plan_prints_as_before(self):
-        """A response without the annotation prints the message as before."""
+        """A non-declarative response prints the text form as before."""
+        response = _update_response({"team": "ml"})
+        response.pipeline.spec.manifest.type = (
+            PipelineManifest.PIPELINE_MANIFEST_TYPE_UNIFLOW
+        )
+
+        out = self._run(response, dry_run=False)
+
+        self.assertEqual(out, f"{response}\n")
+        self.assertEqual(list(self.sent.update_options.dryRun), [])
+
+    def test_declarative_response_prints_the_workflow(self):
+        """A declarative response shows the stored workflow, not escaped bytes."""
+        response = _update_response({})
+        response.pipeline.spec.manifest.type = (
+            PipelineManifest.PIPELINE_MANIFEST_TYPE_DECLARATIVE
+        )
+        response.pipeline.spec.manifest.content.Pack(
+            DeclarativeWorkflow(schema_version="v1alpha1")
+        )
+
+        out = self._run(response, dry_run=False)
+
+        self.assertIn(
+            "[type.googleapis.com/michelangelo.api.v2.DeclarativeWorkflow] {\n"
+            '          schema_version: "v1alpha1"\n',
+            out,
+        )
+        self.assertNotIn("value:", out)
+
+    def test_json_output_applies_to_every_response(self):
+        """-o json prints a response without a plan as JSON."""
         response = _update_response({"team": "ml"})
 
         out = self._run(response, output="json", dry_run=False)
 
+        self.assertEqual(
+            json.loads(out)["pipeline"]["metadata"],
+            {"name": "pipe", "annotations": {"team": "ml"}},
+        )
+
+    def test_json_output_falls_back_to_text_for_unknown_any(self):
+        """An Any type that JSON cannot resolve prints as text with a warning."""
+        response = _update_response({})
+        response.pipeline.spec.manifest.content.type_url = (
+            "type.googleapis.com/unknown.Type"
+        )
+        stderr = StringIO()
+
+        with redirect_stderr(stderr):
+            out = self._run(response, output="json", dry_run=False)
+
         self.assertEqual(out, f"{response}\n")
-        self.assertEqual(list(self.sent.update_options.dryRun), [])
+        self.assertEqual(
+            stderr.getvalue(),
+            "Warning: cannot print the response as JSON (Can not find message"
+            " descriptor by type_url: type.googleapis.com/unknown.Type);"
+            " printing it as text\n",
+        )
 
     def test_write_ignores_the_plan_annotation(self):
         """Without --dry-run, mactl does not read the plan annotation."""
