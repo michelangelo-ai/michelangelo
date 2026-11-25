@@ -8,8 +8,7 @@ import { TAG_COLOR, TAG_SIZE } from '#core/components/tag/constants';
 import { Tag } from '#core/components/tag/tag';
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
 import { useStudioQuery } from '#core/hooks/use-studio-query';
-import { formatRevisionLabel } from '#core/utils/revision-utils';
-import { capitalizeFirstLetter } from '#core/utils/string-utils';
+import { buildRevisionListOptions, formatRevisionLabel } from '#core/utils/revision-utils';
 import {
   RevisionColumns,
   RevisionLabel,
@@ -19,12 +18,6 @@ import {
 } from './styled-components';
 
 import type { RevisionOption, RevisionSelectorProps } from './types';
-
-/** `SORT_ORDER_DESC` from `proto/api/list.proto` — protobuf-es encodes enums by number. */
-const SORT_ORDER_DESC = 2;
-
-/** `CRITERION_OPERATOR_EQUAL` from `proto/api/list.proto`. */
-const CRITERION_OPERATOR_EQUAL = 1;
 
 /**
  * Header dropdown listing the Revision snapshots of a revisioned entity. The Revision that
@@ -45,32 +38,19 @@ export function RevisionSelector({
     queryName: 'ListRevision',
     serviceOptions: {
       namespace: projectId,
-      listOptionsExt: {
-        operation: {
-          criterion: [
-            {
-              fieldName: 'revision.base_type',
-              operator: CRITERION_OPERATOR_EQUAL,
-              matchValue: capitalizeFirstLetter(service),
-            },
-            {
-              fieldName: 'revision.base_resource_name',
-              operator: CRITERION_OPERATOR_EQUAL,
-              matchValue: entityId,
-            },
-          ],
-        },
-        orderBy: [{ field: 'metadata.update_timestamp', dir: SORT_ORDER_DESC }],
-      },
+      listOptionsExt: buildRevisionListOptions(service, entityId),
     },
   });
 
   const revisions = data?.revisionList?.items ?? [];
   const isLatest = (revision: RevisionOption) => revision.metadata.name === latestRevisionName;
   // With no `?revisionId=`, the page renders the latest Revision, so the trigger shows it too.
+  // An entity with no `status.latestRevision` pointer (e.g. only feature-branch Revisions) is
+  // rendered from the most recently updated Revision, which the list's sort order puts first.
   const selected =
     revisions.find((revision) => revision.spec.revisionId === selectedRevisionId) ??
-    revisions.find(isLatest);
+    revisions.find(isLatest) ??
+    (selectedRevisionId ? undefined : revisions[0]);
 
   if (!selected) return null;
 

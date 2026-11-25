@@ -145,12 +145,18 @@ describe('time-utils', () => {
       ['a number', 1704067200],
       ['a numeric string', '1704067200'],
       ['an RFC 3339 string', '2024-01-01T00:00:00Z'],
+      ['a protobuf Timestamp object', { seconds: '1704067200', nanos: 1 }],
+      ['a protobuf Timestamp with bigint seconds', { seconds: 1704067200n, nanos: 1 }],
     ])('reads %s', (_label, timestamp) => {
       expect(toEpochSeconds(timestamp)).toBe(1704067200);
     });
 
     test('returns NaN for an unparseable string', () => {
       expect(toEpochSeconds('not-a-timestamp')).toBeNaN();
+    });
+
+    test('returns NaN when a Timestamp object has no seconds', () => {
+      expect(toEpochSeconds({ nanos: 1 })).toBeNaN();
     });
   });
 

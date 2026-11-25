@@ -23,6 +23,15 @@ export const TaskContentStack = styled('div', ({ $theme }) => ({
   gap: $theme.sizing.scale800,
 }));
 
+/** Header row for the execution overview: title on the left, view switch on the right. */
+export const OverviewHeader = styled('div', ({ $theme }) => ({
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: $theme.sizing.scale500,
+  width: '100%',
+}));
+
 export function TaskPanel(props: CollapsibleBoxProps & { id?: string; state?: TaskState }) {
   const { id, defaultExpanded, state, overrides: userOverrides, ...collapsibleBoxProps } = props;
 

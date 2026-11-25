@@ -1,0 +1,33 @@
+name: Stale-issue config check
+
+# Catches exempt-list drift, missing labels, and edits that break the bot's guarantees.
+on:
+  pull_request:
+    paths:
+      - .github/workflows/stale-issues.yml
+      - .github/workflows/stale-issues-unstale-on-exempt.yml
+      - .github/workflows/stale-issues-config-check.yml
+      - .github/scripts/check_stale_config.py
+  schedule:
+    - cron: '7 6 * * *'   # before the 06:17 stale run, to catch labels renamed in settings
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: read
+
+jobs:
+  check:
+    # Forks don't copy labels, so the daily run would fail on every fork with Actions enabled.
+    if: github.repository == 'michelangelo-ai/michelangelo'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - run: pip install pyyaml==6.0.2
+      - run: gh label list --repo "$GITHUB_REPOSITORY" --limit 1000 --json name > "$RUNNER_TEMP/labels.json"
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - run: python .github/scripts/check_stale_config.py --labels "$RUNNER_TEMP/labels.json"

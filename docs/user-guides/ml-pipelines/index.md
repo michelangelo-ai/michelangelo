@@ -4,14 +4,14 @@ last_verified: 2026-10-14
 
 # ML Pipelines
 
-ML Pipelines on Michelangelo AI let you build, run, and manage end-to-end machine learning workflows -- from data preparation to model training and evaluation. Pipelines are built with **Uniflow**, a Python-first framework that lets you define workflows using standard Python functions and run them locally or at production scale.
+ML Pipelines on Michelangelo AI let you build, run, and manage end-to-end machine learning workflows -- from data preparation to model training and evaluation. Pipelines are built with **[Uniflow](../../getting-started/glossary.md#uniflow)**, a Python-first framework that lets you define workflows using standard Python functions and run them locally or at production scale.
 
 ## What you'll learn
 
 * How to define ML workflows using Python tasks and workflows
 * The difference between standard and custom pipelines
 * Which running mode to use at each stage of development
-* How caching, retry, and resume improve pipeline reliability
+* How caching, retry, and resume improve [pipeline](../../getting-started/glossary.md#pipeline) reliability
 
 ## Key concepts
 
@@ -122,6 +122,7 @@ Start with the [Getting started](../getting-started/getting-started.md) guide to
 | [**Pipeline Running Modes**](./pipeline-running-modes.md) | Understand Local, Remote, Dev, and Pipeline run modes |
 | [**Pipeline Management**](./pipeline-management.md) | Create and manage standard and custom pipelines |
 | [**Workflow Patterns**](./workflow-patterns.md) | Sequence, branch, loop, run tasks in parallel, and share datasets across runtimes |
+| [**Buildkite Plugin**](./buildkite.md) | Submit, inspect, wait for, and cancel Buildkite builds from a workflow |
 | [**Running Uniflow Pipelines**](./running-uniflow.md) | Environment setup, execution, and debugging |
 | [**Caching and Resume**](./cache-and-pipelinerun-resume-form.md) | Cache task results and resume failed runs |
 | [**File Sync**](./file-sync-testing-flow-runbook.md) | Sync local code changes to remote runs |

@@ -394,35 +394,83 @@ class TestDivide:
 
 
 class TestLogTransform:
-    """Logarithmic transform with offset and clamping."""
+    """Logarithmic transform with the input clamped to ``[1.0, 1e20]``."""
+
+    @staticmethod
+    def _run(values: list[float], **kwargs) -> torch.Tensor:
+        layer = LogTransform(
+            input_cols=["feature"], output_cols=["log_feature"], **kwargs
+        )
+        return layer({"feature": torch.tensor(values)})["log_feature"]
 
     def test_forward_basic(self) -> None:
-        """log(x + 1) is clamped to ``[1.0, 1e20]``."""
-        layer = LogTransform(input_cols=["feature"], output_cols=["log_feature"])
-        inputs = {"feature": torch.tensor([0.0, 1.0, 9.0])}
-        expected = torch.clamp(
-            torch.log(torch.tensor([1.0, 2.0, 10.0])), min=1.0, max=1e20
+        """log(x + 1) is returned unclamped for ``x + 1 >= 1``."""
+        torch.testing.assert_close(
+            self._run([0.0, 1.0, 9.0]),
+            torch.log(torch.tensor([1.0, 2.0, 10.0])),
         )
-        torch.testing.assert_close(layer(inputs)["log_feature"], expected)
 
     def test_forward_custom_add_constant(self) -> None:
         """A custom ``add_constant`` shifts the input before the log."""
-        layer = LogTransform(
-            input_cols=["feature"], output_cols=["log_feature"], add_constant=10.0
+        torch.testing.assert_close(
+            self._run([0.0, 90.0], add_constant=10.0),
+            torch.log(torch.tensor([10.0, 100.0])),
         )
-        inputs = {"feature": torch.tensor([0.0, 90.0])}
-        expected = torch.clamp(
-            torch.log(torch.tensor([10.0, 100.0])), min=1.0, max=1e20
-        )
-        torch.testing.assert_close(layer(inputs)["log_feature"], expected)
 
     def test_forward_clamping_min(self) -> None:
-        """Results below 1.0 are clamped up to 1.0."""
-        layer = LogTransform(
-            input_cols=["feature"], output_cols=["log_feature"], add_constant=0.1
+        """Inputs with ``x + c <= 1`` map to 0.0 (the input clamp floor)."""
+        torch.testing.assert_close(
+            self._run([0.0], add_constant=0.1), torch.tensor([0.0])
         )
-        inputs = {"feature": torch.tensor([0.0])}
-        torch.testing.assert_close(layer(inputs)["log_feature"], torch.tensor([1.0]))
+
+    def test_negative_input_is_not_nan(self) -> None:
+        """Negative ``x + c`` maps to 0.0 instead of NaN."""
+        result = self._run([-5.0, -1.0, 0.0])
+        assert not torch.isnan(result).any()
+        torch.testing.assert_close(result, torch.zeros(3))
+
+    def test_nan_input_propagates(self) -> None:
+        """NaN inputs are not sanitised: NaN in gives NaN out."""
+        result = self._run([float("nan"), 2.0])
+        assert torch.isnan(result[0])
+        assert not torch.isnan(result[1])
+
+    def test_small_add_constant_gives_zero(self) -> None:
+        """``add_constant=0.1`` maps small inputs to 0.0."""
+        torch.testing.assert_close(
+            self._run([0.0, 0.5, 0.9], add_constant=0.1), torch.zeros(3)
+        )
+
+    def test_zero_add_constant_zero_input(self) -> None:
+        """``add_constant=0`` with ``x=0`` gives 0.0, not ``-inf``."""
+        torch.testing.assert_close(
+            self._run([0.0], add_constant=0.0), torch.tensor([0.0])
+        )
+
+    def test_large_input_clamps_at_log_1e20(self) -> None:
+        """Very large inputs saturate at ``log(1e20)``."""
+        result = self._run([1e25, float("inf")])
+        torch.testing.assert_close(
+            result, torch.full((2,), torch.log(torch.tensor(1e20)).item())
+        )
+
+    def test_values_between_one_and_e_keep_true_log(self) -> None:
+        """``x + c`` in ``(1, e)`` keeps its true log instead of collapsing to 1.0."""
+        values = [0.5, 1.0, 1.5]
+        result = self._run(values)
+        torch.testing.assert_close(result, torch.log(torch.tensor(values) + 1.0))
+        assert result.max() < 1.0
+
+    def test_torchscript_parity(self) -> None:
+        """Scripted and traced modules match eager output."""
+        layer = LogTransform(input_cols=["feature"], output_cols=["log_feature"])
+        inputs = {"feature": torch.tensor([-5.0, 0.0, 0.5, 2.0, 1e25])}
+        eager = layer(inputs)["log_feature"]
+        scripted = torch.jit.script(layer)(inputs)["log_feature"]
+        # strict=False: the layer returns a dict, which strict tracing rejects.
+        traced = torch.jit.trace(layer, (inputs,), strict=False)(inputs)["log_feature"]
+        torch.testing.assert_close(scripted, eager)
+        torch.testing.assert_close(traced, eager)
 
     def test_mismatched_columns_raises(self) -> None:
         """Unequal input/output column counts raise ``ValueError``."""
@@ -1405,6 +1453,61 @@ class TestPadOrCrop1D:
         torch.testing.assert_close(
             outputs["o2"], torch.tensor([6, 7, 8, 9], dtype=torch.int64)
         )
+
+    @pytest.mark.parametrize("align", ["left", "right"])
+    def test_traced_graph_has_no_baked_cpu_device(self, align: str) -> None:
+        """A CPU trace must not bake a ``cpu`` device literal into the graph.
+
+        This string match is a heuristic; the ``meta``-device test below is the
+        stronger check.
+        """
+        layer = PadOrCrop1D(
+            input_cols=["x"], output_cols=["y"], max_length=4, align=align
+        )
+        example = {"x": torch.tensor([[1.0, 2.0, 3.0]])}
+        traced = torch.jit.trace(layer, (example,), strict=False)
+        assert 'device=torch.device("cpu")' not in traced.code
+
+    @pytest.mark.parametrize("align", ["left", "right"])
+    def test_cpu_traced_module_runs_on_meta_device(self, align: str) -> None:
+        """A CPU-traced module runs on a non-CPU device (``meta`` proxies CUDA)."""
+        layer = PadOrCrop1D(
+            input_cols=["x"], output_cols=["y"], max_length=4, align=align
+        )
+        example = {"x": torch.tensor([[1.0, 2.0, 3.0]])}
+        traced = torch.jit.trace(layer, (example,), strict=False)
+        out = traced({"x": torch.empty(2, 6, device="meta")})["y"]
+        assert out.device.type == "meta"
+        assert out.shape == (2, 4)
+
+    @pytest.mark.parametrize(
+        ("row", "expected"),
+        [
+            # Short content: left-padded with pad_value.
+            ([1, 2], [-1, -1, 1, 2]),
+            # Content longer than max_length: keeps the last max_length elements.
+            ([1, 2, 3, 4, 5, 6], [3, 4, 5, 6]),
+            # Trailing sentinels are stripped before cropping.
+            ([1, 2, 3, 4, 5, INT32_SENTINEL, INT32_SENTINEL], [2, 3, 4, 5]),
+            # All-sentinel row becomes all padding.
+            ([INT32_SENTINEL] * 3, [-1, -1, -1, -1]),
+        ],
+    )
+    def test_right_align_values(self, row: list[int], expected: list[int]) -> None:
+        """Right alignment keeps the last real elements, eager and traced."""
+        layer = PadOrCrop1D(
+            input_cols=["x"],
+            output_cols=["y"],
+            max_length=4,
+            pad_value=-1,
+            dtype=torch.int64,
+            align="right",
+        )
+        x = torch.tensor([row], dtype=torch.int32)
+        want = torch.tensor([expected], dtype=torch.int64)
+        torch.testing.assert_close(layer({"x": x})["y"], want)
+        traced = torch.jit.trace(layer, ({"x": x},), strict=False)
+        torch.testing.assert_close(traced({"x": x})["y"], want)
 
 
 class TestScale:

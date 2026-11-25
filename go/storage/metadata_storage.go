@@ -104,7 +104,10 @@ type IndexedField struct {
 	// in the metadata storage.
 	Key string
 
-	// Value is the value of the indexed field.
+	// Value is the value of the indexed field. It is bound as a SQL parameter, so it must be
+	// nil, a value accepted by database/sql/driver (string, bool, integer, float, []byte,
+	// time.Time), or a Timestamp type (*types.Timestamp, *metav1.Time) that the MySQL
+	// storage converts to a UTC DATETIME before binding.
 	Value interface{}
 }
 

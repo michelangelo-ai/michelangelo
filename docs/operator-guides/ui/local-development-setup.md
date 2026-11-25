@@ -1,3 +1,7 @@
+---
+last_verified: 2026-11-05
+---
+
 # Local Development Setup
 
 This guide covers setting up a local development environment for contributing to the Michelangelo AI UI codebase. The local development setup provides hot-reload capabilities, debugging tools, and integration with the Michelangelo AI sandbox environment for UI development and testing.
@@ -7,7 +11,7 @@ This guide covers setting up a local development environment for contributing to
 **Hot Reload**: Automatic browser refresh when code changes are detected
 **Vite**: Modern build tool providing fast development server and optimized builds
 **Sandbox Environment**: Local Kubernetes cluster with all Michelangelo AI components
-**gRPC-Web**: Protocol enabling browser-based gRPC communication
+**proto3 JSON**: The UI sends protobuf's JSON mapping as plain HTTP `POST` requests, and Envoy transcodes them into gRPC calls to the API server
 **Protobuf Generation**: Creating TypeScript clients from .proto files
 **Yarn Workspaces**: Monorepo management tool for handling multiple packages
 
@@ -46,6 +50,8 @@ npm install --global yarn
 yarn --version  # Verify installation
 ```
 
+**buf CLI:** `yarn setup` generates the TypeScript clients with `buf` and exits if it isn't installed. Follow the [buf installation guide](https://buf.build/docs/installation).
+
 **For full-stack development (optional):** following [Michelangelo AI Sandbox Getting Started](../../getting-started/sandbox-setup.md).
 
 **Note:** The sandbox is optional for UI development. You can develop UI components and pages without a running API server by mocking responses or working with static data.
@@ -68,7 +74,7 @@ yarn setup
 ```bash
 # In separate terminal
 ma sandbox create
-ma sandbox demo  # Optional: add demo data
+ma sandbox demo pipeline  # Optional: add demo data
 ```
 
 4. **Start development server:**
@@ -83,7 +89,7 @@ Open http://localhost:5173
 
 1. **Development server starts:**
 ```
-VITE v6.2.5   ready in 187 ms
+VITE v6.4.1  ready in 187 ms
 
 ➜  Local:     http://localhost:5173/
 ➜  Network: use --host to expose

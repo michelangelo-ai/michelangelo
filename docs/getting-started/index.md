@@ -1,3 +1,7 @@
+---
+last_verified: 2026-11-05
+---
+
 # Getting Started
 
 Welcome to Michelangelo AI! Whether you're evaluating the platform or ready to build your first ML pipeline, you're in the right place.
@@ -12,15 +16,16 @@ Start here if you're evaluating the platform or want to learn the key concepts b
 
 - **[Overview](./overview.md)** — What Michelangelo AI is, how it works, and how familiar ML tools map to it
 - **[Core Concepts and Key Terms](./core-concepts-and-key-terms.md)** — Projects, workflows, tasks, and the key terms you'll encounter
-- **[MLOps Glossary](./glossary.md)** — Alphabetical reference for all Michelangelo AI terms, plus a concept mapping table for users coming from MLflow, Kubeflow, Ray, or Airflow
+- **[System Architecture](./architecture.md)** — How the control plane, offline pipelines, and online serving fit together, and which controller owns each resource
+- **[MLOps Glossary](./glossary.md)** — Alphabetical reference for all Michelangelo AI terms, plus a concept mapping table for users coming from MLflow, Kubeflow, Ray, Airflow, or Flyte
 
 ### I want to set up and start building
 
-Ready to get hands-on? Follow these guides in order. You'll have a working local environment in about 20 minutes.
+Ready to get hands-on? Follow these guides in order. The first sandbox setup takes 30–60 minutes, most of it image pulls; later recreates take 5–10 minutes.
 
-1. **[Sandbox Setup](./sandbox-setup.md)** — Set up a local Michelangelo AI cluster with all services running (~20 min)
+1. **[Sandbox Setup](./sandbox-setup.md)** — Set up a local Michelangelo AI cluster with all services running (30–60 min on first run)
 2. **[Getting Started with Pipelines](../user-guides/getting-started/getting-started.md)** — Build and run your first ML pipeline (~30 min)
-3. **[Browse Examples](../user-guides/examples/index.md)** — 10 end-to-end workflows: XGBoost, BERT, GPT fine-tuning, batch inference, and more
+3. **[Browse Examples](../user-guides/examples/index.md)** — 12 end-to-end workflows: XGBoost, BERT, GPT fine-tuning, batch inference, and more
 
 ### Reference
 

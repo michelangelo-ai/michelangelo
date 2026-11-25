@@ -579,6 +579,41 @@ class TestLightningTrainerConfig(TestCase):
         self.assertIsNone(cfg.transfer_learning_spec)
         self.assertIsNone(cfg.incremental_training_mode)
 
+    def test_random_seed_defaults_to_none(self):
+        """Seeding is opt-in."""
+        self.assertIsNone(_minimal_lightning_config().random_seed)
+
+    def test_random_seed_stored(self):
+        """It stores zero and positive seeds."""
+        for seed in (0, 42, 2**32 - 1):
+            with self.subTest(seed=seed):
+                self.assertEqual(
+                    _minimal_lightning_config(random_seed=seed).random_seed, seed
+                )
+
+    def test_random_seed_invalid_raises(self):
+        """Negative, bool, float and str seeds raise ConfigurationError."""
+        for bad in (-1, 2**32, True, False, 1.5, "7"):
+            with (
+                self.subTest(bad=bad),
+                self.assertRaisesRegex(ConfigurationError, "random_seed"),
+            ):
+                _minimal_lightning_config(random_seed=bad)
+
+    def test_random_seed_is_last_field_and_round_trips(self):
+        """It is the final field, a plain dataclass field, and survives asdict."""
+        import dataclasses
+
+        self.assertEqual(
+            dataclasses.fields(LightningTrainerConfig)[-1].name, "random_seed"
+        )
+        from michelangelo.uniflow.core.codec import DataclassCodec
+
+        cfg = _minimal_lightning_config(random_seed=9)
+        self.assertEqual(dataclasses.asdict(cfg)["random_seed"], 9)
+        codec = DataclassCodec()
+        self.assertEqual(codec.decode(codec.encode(cfg)).random_seed, 9)
+
     def test_optional_fields_stored(self):
         """It stores all optional fields when provided."""
         tracker = ExperimentTrackerConfig(

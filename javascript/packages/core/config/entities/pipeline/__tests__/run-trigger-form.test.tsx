@@ -55,6 +55,7 @@ describe('RunTriggerForm', () => {
         getRouterWrapper({ location: '/ma-dev-test/train/pipelines' }),
         getServiceProviderWrapper({
           request: createQueryMockRouter({
+            ListRevision: { revisionList: { items: [] } },
             GetPipeline: buildPipelineResponse({
               nightly: {
                 cronSchedule: { cron: '0 2 * * *' },
@@ -86,6 +87,7 @@ describe('RunTriggerForm', () => {
         getRouterWrapper({ location: '/ma-dev-test/train/pipelines' }),
         getServiceProviderWrapper({
           request: createQueryMockRouter({
+            ListRevision: { revisionList: { items: [] } },
             GetPipeline: buildPipelineResponse({
               nightly: {
                 cronSchedule: { cron: '0 2 * * *' },
@@ -109,6 +111,7 @@ describe('RunTriggerForm', () => {
       cronSchedule: { cron: '0 2 * * *' },
     };
     const request = createQueryMockRouter({
+      ListRevision: { revisionList: { items: [] } },
       GetPipeline: buildPipelineResponse({ nightly: cronTrigger }),
       CreateTriggerRun: {
         triggerRun: { metadata: { name: 'cron-nightly-20240101-120000-abcd1234' } },
@@ -167,6 +170,7 @@ describe('RunTriggerForm', () => {
       cronSchedule: { cron: '0 2 * * *' },
     };
     const request = createQueryMockRouter({
+      ListRevision: { revisionList: { items: [] } },
       GetPipeline: buildPipelineResponse({ nightly: cronTrigger }),
       CreateTriggerRun: {
         triggerRun: { metadata: { name: 'cron-nightly-20240101-120000-abcd1234' } },
@@ -222,6 +226,7 @@ describe('RunTriggerForm', () => {
       cronSchedule: { cron: '0 2 * * *' },
     };
     const request = createQueryMockRouter({
+      ListRevision: { revisionList: { items: [] } },
       GetPipeline: buildPipelineResponse({ nightly: cronTrigger }),
       CreateTriggerRun: {},
     });
@@ -274,6 +279,7 @@ describe('RunTriggerForm', () => {
       cronSchedule: { cron: '0 2 * * *' },
     };
     const request = createQueryMockRouter({
+      ListRevision: { revisionList: { items: [] } },
       GetPipeline: buildPipelineResponse({ nightly: cronTrigger }),
       CreateTriggerRun: {},
     });
@@ -327,6 +333,7 @@ describe('RunTriggerForm', () => {
   it('keeps the dialog open and shows the error when the submit fails', async () => {
     const user = userEvent.setup();
     const request = createQueryMockRouter({
+      ListRevision: { revisionList: { items: [] } },
       GetPipeline: buildPipelineResponse({
         nightly: { cronSchedule: { cron: '0 2 * * *' } },
       }),
@@ -361,6 +368,7 @@ describe('RunTriggerForm', () => {
       cronSchedule: { cron: '0 2 * * *' },
     };
     const request = createQueryMockRouter({
+      ListRevision: { revisionList: { items: [] } },
       GetPipeline: buildPipelineResponse({ nightly: cronTrigger }),
       CreateTriggerRun: {},
     });
@@ -424,6 +432,7 @@ describe('RunTriggerForm', () => {
         getRouterWrapper({ location: '/ma-dev-test/train/pipelines' }),
         getServiceProviderWrapper({
           request: createQueryMockRouter({
+            ListRevision: { revisionList: { items: [] } },
             GetPipeline: buildPipelineResponse({
               nightly: {
                 cronSchedule: { cron: '0 2 * * *' },
@@ -453,6 +462,7 @@ describe('RunTriggerForm', () => {
       maxConcurrency: 5,
     };
     const request = createQueryMockRouter({
+      ListRevision: { revisionList: { items: [] } },
       GetPipeline: buildPipelineResponse({ nightly: trigger }),
       CreateTriggerRun: {},
     });
@@ -509,6 +519,7 @@ describe('RunTriggerForm', () => {
   it('refuses to submit until a trigger is chosen', async () => {
     const user = userEvent.setup();
     const request = createQueryMockRouter({
+      ListRevision: { revisionList: { items: [] } },
       GetPipeline: buildPipelineResponse({
         nightly: { cronSchedule: { cron: '0 2 * * *' } },
       }),
@@ -548,7 +559,10 @@ describe('RunTriggerForm', () => {
         getInterpolationProviderWrapper(),
         getRouterWrapper({ location: '/ma-dev-test/train/pipelines' }),
         getServiceProviderWrapper({
-          request: createQueryMockRouter({ GetPipeline: buildPipelineResponse({}) }),
+          request: createQueryMockRouter({
+            ListRevision: { revisionList: { items: [] } },
+            GetPipeline: buildPipelineResponse({}),
+          }),
         }),
       ])
     );
@@ -558,5 +572,142 @@ describe('RunTriggerForm', () => {
         'This pipeline declares no triggers. Add one to its manifest to run it.'
       )
     ).toBeInTheDocument();
+  });
+
+  it('falls back to the most recently updated revision when the pipeline has no latest pointer', async () => {
+    const user = userEvent.setup();
+    const cronTrigger = { cronSchedule: { cron: '0 2 * * *' } };
+    const fallbackRevision = {
+      name: 'pipeline-test-pipeline-5c4d3e2f1a0b',
+      namespace: 'ma-dev-test',
+    };
+    const request = createQueryMockRouter({
+      GetPipeline: buildPipelineResponse({ nightly: cronTrigger }),
+      CreateTriggerRun: {},
+      ListRevision: {
+        revisionList: {
+          items: [
+            { metadata: fallbackRevision },
+            { metadata: { name: 'pipeline-test-pipeline-older', namespace: 'ma-dev-test' } },
+          ],
+        },
+      },
+    });
+    const record = {
+      metadata: { name: 'test-pipeline', namespace: 'ma-dev-test' },
+      spec: { owner: { name: 'test-owner' } },
+    };
+
+    render(
+      <RunTriggerForm record={record} onClose={vi.fn()} />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getIconProviderWrapper(),
+        getErrorProviderWrapper(),
+        getInterpolationProviderWrapper(),
+        getRouterWrapper({ location: '/ma-dev-test/train/pipelines' }),
+        getServiceProviderWrapper({ request }),
+      ])
+    );
+
+    const dialog = await screen.findByRole('dialog', { name: 'Run trigger' });
+    await waitFor(() => {
+      expect(within(dialog).getByRole('textbox', { name: 'Revision ID' })).toHaveValue(
+        fallbackRevision.name
+      );
+    });
+    await user.click(within(dialog).getByRole('combobox', { name: 'Trigger *' }));
+    await user.click(await screen.findByRole('option', { name: 'nightly — cron 0 2 * * *' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Run' }));
+
+    await waitFor(() => {
+      expect(request).toHaveBeenCalledWith(
+        'CreateTriggerRun',
+        expect.objectContaining({
+          spec: expect.objectContaining({ revision: fallbackRevision }) as Record<string, unknown>,
+        }),
+        {}
+      );
+    });
+  });
+
+  it('disables submit with the error as tooltip when the revision lookup fails', async () => {
+    const user = userEvent.setup();
+    const router = createQueryMockRouter({
+      ListRevision: { revisionList: { items: [] } },
+      GetPipeline: buildPipelineResponse({ nightly: { cronSchedule: { cron: '0 2 * * *' } } }),
+      CreateTriggerRun: {},
+    });
+    const request = vi.fn(
+      (name: string, args: unknown, headers?: Record<string, string>): Promise<unknown> =>
+        name === 'ListRevision'
+          ? Promise.reject(new Error('lookup failed'))
+          : router(name, args, headers)
+    );
+    const record = {
+      metadata: { name: 'test-pipeline', namespace: 'ma-dev-test' },
+      spec: { owner: { name: 'test-owner' } },
+    };
+
+    render(
+      <RunTriggerForm record={record} onClose={vi.fn()} />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getIconProviderWrapper(),
+        getErrorProviderWrapper(),
+        getInterpolationProviderWrapper(),
+        getRouterWrapper({ location: '/ma-dev-test/train/pipelines' }),
+        getServiceProviderWrapper({ request }),
+      ])
+    );
+
+    const dialog = await screen.findByRole('dialog', { name: 'Run trigger' });
+    await user.click(within(dialog).getByRole('combobox', { name: 'Trigger *' }));
+    await user.click(await screen.findByRole('option', { name: 'nightly — cron 0 2 * * *' }));
+    const runButton = within(dialog).getByRole('button', { name: 'Run' });
+    expect(runButton).toBeDisabled();
+    await user.hover(runButton.parentElement!);
+    expect(
+      await screen.findByText(/Could not load the pipeline's latest revision\./)
+    ).toBeInTheDocument();
+    expect(request.mock.calls.map(([name]) => name)).not.toContain('CreateTriggerRun');
+  });
+
+  it('disables submit while the revision lookup is still loading', async () => {
+    const user = userEvent.setup();
+    const router = createQueryMockRouter({
+      ListRevision: { revisionList: { items: [] } },
+      GetPipeline: buildPipelineResponse({ nightly: { cronSchedule: { cron: '0 2 * * *' } } }),
+      CreateTriggerRun: {},
+    });
+    const request = vi.fn(
+      (name: string, args: unknown, headers?: Record<string, string>): Promise<unknown> =>
+        name === 'ListRevision' ? new Promise<never>(() => undefined) : router(name, args, headers)
+    );
+    const record = {
+      metadata: { name: 'test-pipeline', namespace: 'ma-dev-test' },
+      spec: { owner: { name: 'test-owner' } },
+    };
+
+    render(
+      <RunTriggerForm record={record} onClose={vi.fn()} />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getIconProviderWrapper(),
+        getErrorProviderWrapper(),
+        getInterpolationProviderWrapper(),
+        getRouterWrapper({ location: '/ma-dev-test/train/pipelines' }),
+        getServiceProviderWrapper({ request }),
+      ])
+    );
+
+    const dialog = await screen.findByRole('dialog', { name: 'Run trigger' });
+    await user.click(within(dialog).getByRole('combobox', { name: 'Trigger *' }));
+    await user.click(await screen.findByRole('option', { name: 'nightly — cron 0 2 * * *' }));
+    const runButton = within(dialog).getByRole('button', { name: 'Run' });
+    expect(runButton).toBeDisabled();
+    await user.hover(runButton.parentElement!);
+    expect(await screen.findByText(/Loading the pipeline's latest revision/)).toBeInTheDocument();
+    expect(request.mock.calls.map(([name]) => name)).not.toContain('CreateTriggerRun');
   });
 });

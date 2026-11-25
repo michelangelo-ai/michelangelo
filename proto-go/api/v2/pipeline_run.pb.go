@@ -6423,9 +6423,15 @@ spec:
                 properties:
                   commit:
                     properties:
+                      author:
+                        type: string
                       branch:
                         type: string
                       gitRef:
+                        type: string
+                      message:
+                        type: string
+                      url:
                         type: string
                     type: object
                   description:
@@ -6445,6 +6451,15 @@ spec:
                         type: object
                       filePath:
                         type: string
+                      interpreterPin:
+                        properties:
+                          artifact:
+                            type: string
+                          digest:
+                            type: string
+                          version:
+                            type: string
+                        type: object
                       overridableFieldsUrl:
                         type: string
                       paramsMap:
@@ -6569,6 +6584,7 @@ spec:
                         - PIPELINE_MANIFEST_TYPE_INVALID
                         - PIPELINE_MANIFEST_TYPE_YAML
                         - PIPELINE_MANIFEST_TYPE_UNIFLOW
+                        - PIPELINE_MANIFEST_TYPE_DECLARATIVE
                         type: string
                       uniflowFunction:
                         type: string
@@ -6864,9 +6880,15 @@ spec:
                         properties:
                           commit:
                             properties:
+                              author:
+                                type: string
                               branch:
                                 type: string
                               gitRef:
+                                type: string
+                              message:
+                                type: string
+                              url:
                                 type: string
                             type: object
                           description:
@@ -6887,6 +6909,15 @@ spec:
                                 type: object
                               filePath:
                                 type: string
+                              interpreterPin:
+                                properties:
+                                  artifact:
+                                    type: string
+                                  digest:
+                                    type: string
+                                  version:
+                                    type: string
+                                type: object
                               overridableFieldsUrl:
                                 type: string
                               paramsMap:
@@ -7011,6 +7042,7 @@ spec:
                                 - PIPELINE_MANIFEST_TYPE_INVALID
                                 - PIPELINE_MANIFEST_TYPE_YAML
                                 - PIPELINE_MANIFEST_TYPE_UNIFLOW
+                                - PIPELINE_MANIFEST_TYPE_DECLARATIVE
                                 type: string
                               uniflowFunction:
                                 type: string
@@ -7239,9 +7271,15 @@ spec:
                         properties:
                           commit:
                             properties:
+                              author:
+                                type: string
                               branch:
                                 type: string
                               gitRef:
+                                type: string
+                              message:
+                                type: string
+                              url:
                                 type: string
                             type: object
                           description:
@@ -7262,6 +7300,15 @@ spec:
                                 type: object
                               filePath:
                                 type: string
+                              interpreterPin:
+                                properties:
+                                  artifact:
+                                    type: string
+                                  digest:
+                                    type: string
+                                  version:
+                                    type: string
+                                type: object
                               overridableFieldsUrl:
                                 type: string
                               paramsMap:
@@ -7386,6 +7433,7 @@ spec:
                                 - PIPELINE_MANIFEST_TYPE_INVALID
                                 - PIPELINE_MANIFEST_TYPE_YAML
                                 - PIPELINE_MANIFEST_TYPE_UNIFLOW
+                                - PIPELINE_MANIFEST_TYPE_DECLARATIVE
                                 type: string
                               uniflowFunction:
                                 type: string

@@ -123,17 +123,37 @@ Protecting the UI Ingress is **required**, not optional: the session cookie is o
 
 ### CORS preflight: an unresolved hard problem with this option
 
-Because the UI sends a non-simple `Content-Type` and custom headers (`Rpc-Caller`, etc.), every cross-origin call triggers a browser CORS **preflight** — an `OPTIONS` request the browser sends before the real one, which **never carries cookies**. NGINX Ingress's `auth_request` runs on every method including `OPTIONS`, so the preflight itself gets challenged by oauth2-proxy, fails (no cookie), and the real request is never sent — independent of whether the CORS and `credentials` patches in [Required changes](#required-changes-for-option-b) are applied.
+Because the UI sends a non-simple `Content-Type` and custom headers (`Rpc-Caller`, etc.), every cross-origin call triggers a browser CORS **preflight** — an `OPTIONS` request the browser sends before the real one, which **never carries cookies**. NGINX Ingress's `auth_request` runs on every method including `OPTIONS`, so the preflight itself gets challenged by oauth2-proxy, fails (no cookie), and the real request is never sent — independent of whether the values in [Configure credential sharing](#configure-credential-sharing-option-b) are set.
 
 This guide does not have a verified fix for this interaction. The most likely candidate is oauth2-proxy's `--skip-auth-preflight` flag, which is documented to skip authentication for `OPTIONS` requests — but `auth_request` subrequests are issued as `GET` regardless of the original method, so it is not confirmed here whether oauth2-proxy can tell the two apart in that mode. **Verify this in your own cluster before relying on it**; if it doesn't resolve the issue, [Option A](#option-a-put-envoy-on-the-uis-own-origin-recommended) sidesteps the problem entirely, since same-origin requests never trigger a CORS preflight.
 
-### Required changes for Option B
+### Configure credential sharing (Option B)
 
-Verified against the current chart and UI source — as of this writing, neither of these exists, so even once the preflight problem above is solved, credentials still won't flow without both patches applied together (a deployment with only one of them fails every call: either the cookie never gets sent, or it gets sent but the browser discards the response).
+Making the UI send its session cookie to Envoy, and letting Envoy accept it cross-origin, needs both of these Helm values set together — a deployment with only one of them configured fails every call: either the cookie never gets sent, or it gets sent but the browser discards the response.
 
-**1. Envoy's CORS policy needs explicit, opt-in credential support.** `helm/michelangelo/templates/core/envoy-configmap.yaml`'s virtual-host-level `cors:` block sets `allow_origin_string_match`, `allow_methods`, `allow_headers`, `max_age`, and `expose_headers`, but never `allow_credentials`. Add a Helm value for it (`envoy.corsAllowCredentials`, default `false`) and a corresponding chart validation: **never enable it without an explicit, non-wildcard `corsOrigins`.** Envoy's CORS filter doesn't send a literal `Access-Control-Allow-Origin: *` — when `allow_origin_string_match` matches, it echoes back the caller's actual `Origin` header. Since the chart's default `corsOrigins: ""` renders as the regex `.*`, which matches every origin, pairing that default with `allow_credentials: true` would let **any** origin make authenticated, cookie-bearing calls — the opposite of what the setting is supposed to restrict. There's no `*`-literal special case here to rely on; enforce it with a `fail`.
+| Helm value | Type | Default | Description |
+|---|---|---|---|
+| `envoy.corsOrigins` | string (RE2 regex) | `""` (treated as `.*`) | Origins Envoy accepts via CORS. Must name your UI origin explicitly once credentials are enabled — see the validation below. |
+| `envoy.corsAllowCredentials` | boolean | `false` | When `true`, renders `allow_credentials: true` into Envoy's CORS policy, so the browser accepts responses to credentialed cross-origin requests. |
+| `ui.apiCredentials` | string | `""` | The `fetch()` `credentials` mode the UI uses for every API call: `"include"`, `"same-origin"`, or `"omit"`. Empty keeps the browser default (`"same-origin"`) and leaves `/config.json` unchanged. |
 
-**2. The UI needs to send cookies cross-origin.** `javascript/packages/rpc/create-fetch-transport.ts` calls `fetch()` with no `credentials` option, which defaults to `'same-origin'` — cookies are attached only when the request target is the same origin as the page. Set `ui.apiCredentials: "include"` in your Helm values: the chart renders it into the UI's runtime `/config.json`, which the UI reads on startup and passes through to every `fetch()` call. No application code change needed — this is a chart value, not just an internal API.
+```yaml
+envoy:
+  corsOrigins: "https://app\\.your-domain\\.com"
+  corsAllowCredentials: true
+
+ui:
+  apiCredentials: "include"
+```
+
+The chart refuses to render these combinations, rather than silently doing the wrong thing:
+
+- `envoy.corsAllowCredentials` set to anything other than a real boolean. `--set-string envoy.corsAllowCredentials=false` produces the string `"false"`, which Helm/Go templates treat as truthy — the opposite of what was asked for.
+- `envoy.corsAllowCredentials=true` with `corsOrigins` left unset or set to the literal wildcard `.*`. Envoy's CORS filter doesn't send a literal `Access-Control-Allow-Origin: *` — on a match it echoes back the caller's actual `Origin` header, so a wildcard paired with credentials would let **any** origin make authenticated, cookie-bearing calls.
+- `ui.apiCredentials` set to anything other than empty, `"include"`, `"same-origin"`, or `"omit"`. Non-string values such as `false` or `0` are rejected too, not silently treated as unset.
+- `ui.apiCredentials=include` without `envoy.corsAllowCredentials=true`. The browser would send the cookie but discard every response.
+
+Internally: `ui.apiCredentials` is what makes the UI call `fetch()` with the matching `credentials` option — `javascript/packages/rpc/create-fetch-transport.ts` defaults to `'same-origin'` otherwise, so cookies are attached only when the request target is the same origin as the page. The chart renders the value into the UI's runtime `/config.json`, which the UI reads on startup; no application code change is needed.
 
 ### Deploy oauth2-proxy
 
@@ -209,7 +229,8 @@ nginx.ingress.kubernetes.io/auth-response-headers: "Authorization"
 
 ## Security notes
 
-- **`cookie-domain` widens your CSRF trust boundary.** Under Option B, setting it to a parent domain (`.your-domain.com`) makes every subdomain of it "same-site" for the purposes of `SameSite=Lax` — a compromised or user-content subdomain elsewhere on that parent domain could send credentialed requests to Envoy, and read the responses too if `corsOrigins` matches it. Prefer a dedicated parent domain used for nothing else, and never widen `cookie-samesite` to `none` without separately addressing this. Option A has no equivalent exposure, since there's no cross-site cookie at all.
+- **`cookie-domain` widens your CSRF trust boundary.** Under Option B, setting it to a parent domain (`.your-domain.com`) makes every subdomain of it "same-site" for the purposes of `SameSite=Lax` — a compromised or user-content subdomain elsewhere on that parent domain could send credentialed requests to Envoy, and read the responses too if `corsOrigins` matches it. Prefer a dedicated parent domain used for nothing else. Option A has no equivalent exposure, since there's no cross-site cookie at all.
+- **If the UI and Envoy aren't even subdomains of a shared parent domain** — genuinely different registrable domains, not just different hosts under one — `cookie-domain` can't help at all; cookies can't be scoped across domains. The only way the session cookie crosses in that case is `cookie-samesite: none` with `cookie-secure: true`, which drops the CSRF protection `SameSite=Lax` was providing. Before reaching for this, reconsider whether Option B is still the right call for your setup.
 - **Escape literal dots in `corsOrigins`.** As `helm/michelangelo/values.yaml` already notes for the field generally, an unescaped `https://app.your-domain.com` also matches `https://app-your-domain.com` as a regex. This matters more once credentials are involved.
 - **The bearer token also crosses two internal hops in cleartext by default.** Both the Ingress-to-Envoy hop (documented above as plain `http://` to the `michelangelo-envoy` Service) and the chart's own Envoy-to-apiserver hop default to plaintext. Setting `apiserver.tls.enabled: true` encrypts the second hop, but check what it actually buys you before relying on it for this: Envoy's config renders `trust_chain_verification: ACCEPT_UNTRUSTED` on that connection (`envoy-configmap.yaml`), which encrypts the traffic but does **not** authenticate the API server's certificate — it protects against passive sniffing on that hop, not an active on-path attacker presenting any certificate. Anyone who can observe either hop, or sit on the apiserver one, can still capture and replay the token. Terminating both hops with real, verified TLS (or routing them through a service mesh that already does) is out of scope for this guide, but don't treat `apiserver.tls.enabled: true` alone as closing this gap.
 
@@ -229,7 +250,7 @@ If you set `usernameClaim: sub` on the API server (see [Choosing a usernameClaim
 | Symptom | Likely cause |
 |---|---|
 | Browser redirect loop between the UI and the IdP | Under Option B, `cookie-domain` doesn't cover the UI's host, so oauth2-proxy never sees its own cookie on the next request |
-| Every API call fails, browser console shows a CORS error | Check the Network tab first: a `401`/`302` from the Ingress (auth failure, or the preflight problem under Option B) can look identical to a CORS error. If the response really is `200` with missing CORS headers: `allow_credentials` missing from the CORS policy, or the UI's `fetch()` isn't sending `credentials: 'include'` — both patches in [Required changes](#required-changes-for-option-b) must be applied together |
+| Every API call fails, browser console shows a CORS error | Check the Network tab first: a `401`/`302` from the Ingress (auth failure, or the preflight problem under Option B) can look identical to a CORS error. If the response really is `200` with missing CORS headers: `envoy.corsAllowCredentials` isn't set, or `ui.apiCredentials` isn't `"include"` — both values in [Configure credential sharing](#configure-credential-sharing-option-b) must be set together |
 | `auth_request` returns 200 but the API call still gets `missing authorization header` | Either `auth-response-headers: "Authorization"` is missing from the protected Ingress, or oauth2-proxy is missing `set-authorization-header: "true"` — either way, no header made it onto the real request |
 | API call reaches Envoy with a token, apiserver rejects it with `token verification failed` | Most likely an expired `id_token` — see the token-lifetime note under [Deploy oauth2-proxy](#deploy-oauth2-proxy) — or an `issuerUrl`/`audiences` mismatch, see [above](#keep-apiserverauthoidc-in-sync-option-b) |
 | Login fails outright with a CSRF-cookie error | `cookie-samesite: strict` blocks the CSRF cookie on the cross-site navigation back from the IdP — use `lax` |

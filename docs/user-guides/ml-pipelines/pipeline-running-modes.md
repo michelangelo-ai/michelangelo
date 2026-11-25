@@ -1,3 +1,7 @@
+---
+last_verified: 2026-11-05
+---
+
 # Pipeline Running Modes
 
 Michelangelo AI provides four running modes that correspond to different stages of the machine learning development lifecycle. Each mode solves specific problems developers face when moving from initial experimentation to production deployment.
@@ -23,7 +27,7 @@ Machine learning workflows have unique challenges:
 | ----- | ----- | ----- | ----- |
 | **Local Run** | Development Testing | "Can I test this change right now?" | **Instant** \- Zero provisioning time |
 | **Remote Run** | Resource-Intensive Testing | "My laptop can't handle this dataset" | **2-5 mins** \- Quick cloud resources |
-| **Pipeline Dev Run** | Build Integration | "Does my Dockerfile actually work?" | **20+ mins** \- Full image building |
+| **Pipeline Dev Run** | Pipeline Integration | "Does my whole pipeline run through the control plane?" | **Tracked** \- Creates a resumable `PipelineRun` |
 | **Pipeline Run** | Production Deployment | "How do I deploy my committed code?" | **Varies** \- Only accepts committed code |
 
 ## Local Run mode
@@ -106,40 +110,42 @@ poetry run python workflow.py remote-run --storage-url s3://my-bucket/workflows 
 
 ### Optional
 
-* `--workflow` (`cadence` | `temporal`)  
+* `--workflow` (`cadence` | `temporal`, default `cadence`)  
 * `--cron`  
 * `--file-sync`  
+* `--env KEY=VALUE` (alias `--environ`)  
+* `--execution-timeout-seconds`  
 * `--yes`
 
 ## Pipeline Dev Run mode
 
 ### Why this mode exists
 
-Engineers must validate the **entire pipeline**, including container image builds, dependency resolution, and resume functionality — without pushing to production.
+Engineers must validate the **entire pipeline** as the control plane runs it, including resume functionality, without registering a pipeline. The run uses the image named by the `michelangelo/uniflow-image` annotation in your pipeline YAML; the open-source **Image Build** stage resolves that annotation and doesn't build an image.
 
 ### Benefits
 
 * **Full Pipeline Testing**  
-* **Resumeable Execution**  
-* **Build Validation** (Dockerfile \+ dependencies)  
+* **Resumable Execution**  
+* **Tracked Runs**: creates a `PipelineRun` you can query with `ma pipeline_run get`  
 * **Integration Simulation**
 
 ### When to Use
 
 * **Stage**: Pipeline integration  
-* **Scenario**: "Does my Dockerfile actually work?"  
+* **Scenario**: "Does my whole pipeline run through the control plane?"  
 * **Team**: ML engineers validating pipeline end-to-end
 
 ### Execution timing
 
-* **Provisioning \+ Building**: **20+ mins**
+* **Provisioning**: Same compute as a Pipeline Run; no image build
 * **Execution**: Depends on pipeline
 * **Best for**: Pre-production verification
 
 ### Completeness vs speed trade-off
 
 * **Completeness**: High  
-* **Speed**: Slowest (build \+ run)
+* **Speed**: Slower than Remote Run (goes through the API server and controller)
 
 ### Usage
 
@@ -158,10 +164,10 @@ Enterprises need **production-grade pipeline execution** with full CI/CD, govern
 
 ### Benefits
 
-* **Full CI/CD Pipeline**  
-* **Version Control \+ Rollback**  
-* **Enterprise Monitoring \+ SLAs**  
-* **Automated Governance**
+* **Registered Pipeline**: the `Pipeline` entity records the git branch and commit it was created from  
+* **Scheduling**: attach [triggers](./set-up-triggers.md) for cron and backfill runs  
+* **Visible in MA Studio**: runs appear under their pipeline  
+* **Resumable**: restart a failed run from a step with `--resume_from`
 
 ### When to Use
 
@@ -171,8 +177,8 @@ Enterprises need **production-grade pipeline execution** with full CI/CD, govern
 
 ### Execution timing
 
-* **Provisioning**: Depends on CI/CD
-* **Execution**: Production-grade reliability
+* **Provisioning**: Register the pipeline first with `ma pipeline apply` or `ma pipeline create`
+* **Execution**: Runs the registered pipeline on the control plane
 * **Requirements**: Code must be committed
 
 ### Reliability vs agility trade-off
@@ -200,10 +206,10 @@ From the "why this mode exists" framing above, Remote Run and Pipeline Dev Run c
 | Creates a `PipelineRun` entity? | No | Yes |
 | Resumable with `--resume_from`? | No | Yes |
 | Visible in MA Studio? | No | No — no parent `Pipeline` entity is created either, so there's nothing to attach it to in Studio's pipeline list. The run itself is still a real, queryable entity via `ma get pipeline_run` / kubectl |
-| Requires a prebuilt image? | Yes — you pass `--image` | No — builds and validates the image as part of the run |
+| Requires a prebuilt image? | Yes — you pass `--image` | Yes — named by the `michelangelo/uniflow-image` annotation in `pipeline.yaml` |
 
 :::tip
-If you'll need to come back to a run later, share it with a teammate, or resume it from a failed step, use **Pipeline Dev Run** — it's the only one of the two that creates a trackable entity. Reach for **Remote Run** only once you already trust your image and just need real compute for a quick check.
+If you'll need to come back to a run later, share it with a teammate, or resume it from a failed step, use **Pipeline Dev Run** — it's the only one of the two that creates a trackable entity. Reach for **Remote Run** when you just need real compute for a quick check and don't need a tracked run.
 :::
 
 Job scheduling itself is identical either way: both ultimately submit to the same Cadence/Temporal worker, which is what talks to the Ray/Spark compute cluster. The difference is entirely in what happens *before* that — whether the Michelangelo AI control plane is involved at all.
@@ -225,5 +231,5 @@ See the [CLI reference](../reference/cli.md#differences-between-dev-run-and-remo
 | ----- | ----- |
 | Fast iteration | Local Run |
 | Need more compute | Remote Run |
-| Validate image \+ pipeline | Pipeline Dev Run |
+| Validate the full pipeline | Pipeline Dev Run |
 | Production reliability | Pipeline Run |

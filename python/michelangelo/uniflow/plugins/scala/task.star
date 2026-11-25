@@ -101,6 +101,9 @@ def scala_task(
 
         total_retry_attempt = retry_attempts + 1
         for retry_attempt_id in range(1, total_retry_attempt + 1):
+            # Each retry attempt reports its own start time.
+            if retry_attempt_id > 1:
+                start_time_formatted_str = time.utc_format_seconds(TIME_FOMART, time.time())
             job_state, terminated_job = execute_spark_crd_job(
                 namespace = namespace,
                 task_name = task_name,

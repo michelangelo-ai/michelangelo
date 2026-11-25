@@ -1,6 +1,7 @@
 ---
 sidebar_position: 0
 sidebar_label: Overview
+last_verified: 2026-11-05
 ---
 
 # How to Read the gRPC API Reference
@@ -20,7 +21,7 @@ Every resource service exposes the same six RPCs:
 | `Delete<Resource>Collection` | Delete every resource matching a list filter |
 | `List<Resource>` | List resources within one namespace |
 
-**Watch is not implemented, and `List` cannot span all namespaces** — every `List` call must be scoped to a single namespace. This holds for all 15 services covered by these pages.
+**Watch is not implemented, and listing across all namespaces is not supported.** This holds for all 15 services covered by these pages: none has a Watch RPC, and every service's proto marks cross-namespace listing as unsupported. Always set `namespace` on a `List` call. The API server doesn't reject an empty `namespace` (it passes it through to storage, which then searches every namespace), but that behavior is unsupported; don't rely on it.
 
 ## Reading the "Required" column
 

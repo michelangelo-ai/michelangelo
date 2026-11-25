@@ -1,6 +1,7 @@
 package cachedoutput
 
 import (
+	"context"
 	"mock/github.com/michelangelo-ai/michelangelo/proto-go/api/v2/v2mock"
 	"net/http/httptest"
 	"testing"
@@ -10,17 +11,23 @@ import (
 	"github.com/cadence-workflow/starlark-worker/service"
 	"github.com/cadence-workflow/starlark-worker/test/types"
 	"github.com/golang/mock/gomock"
+	"github.com/michelangelo-ai/michelangelo/go/worker/runnertoken"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"github.com/stretchr/testify/suite"
 )
 
+// testRunID is the RunID both the Cadence and Temporal test suites stamp on
+// activity.GetInfo(ctx).WorkflowExecution.
+const testRunID = "default-test-run-id"
+
 type Suite struct {
 	suite.Suite
-	act              *activities
-	server           *httptest.Server
-	t                *testing.T
-	activitySuite    types.StarTestActivitySuite
-	mockCachedOutput *v2mock.MockCachedOutputServiceYARPCClient
+	act                    *activities
+	server                 *httptest.Server
+	t                      *testing.T
+	activitySuite          types.StarTestActivitySuite
+	mockCachedOutput       *v2mock.MockCachedOutputServiceYARPCClient
+	mockPipelineRunService *v2mock.MockPipelineRunServiceYARPCClient
 }
 
 func TestITCadence(t *testing.T) {
@@ -40,8 +47,10 @@ func TestITTemporal(t *testing.T) {
 func (r *Suite) SetupSuite() {
 	ctrl := gomock.NewController(r.t)
 	r.mockCachedOutput = v2mock.NewMockCachedOutputServiceYARPCClient(ctrl)
+	r.mockPipelineRunService = v2mock.NewMockPipelineRunServiceYARPCClient(ctrl)
 	r.act = &activities{
-		cachedOutput: r.mockCachedOutput,
+		cachedOutput:       r.mockCachedOutput,
+		pipelineRunService: r.mockPipelineRunService,
 	}
 	r.activitySuite.RegisterActivity(r.act)
 }
@@ -71,4 +80,186 @@ func (r *Suite) Test_Get_Success() {
 	r.Require().NoError(val.Get(&res))
 	r.Require().Equal("test", res.GetCachedOutput().Name)
 	r.Require().Equal("default", res.GetCachedOutput().Namespace)
+}
+
+func (r *Suite) Test_ShouldOverrideCacheForRetry_NoRetryInfo() {
+	r.mockPipelineRunService.EXPECT().GetPipelineRun(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, req *v2pb.GetPipelineRunRequest, _ ...interface{}) (*v2pb.GetPipelineRunResponse, error) {
+			r.Require().Equal("default", req.Namespace)
+			return &v2pb.GetPipelineRunResponse{PipelineRun: &v2pb.PipelineRun{}}, nil
+		})
+
+	request := ShouldOverrideCacheForRetryRequest{Namespace: "default", TaskPath: "a.b.task_a", TaskName: "task_a"}
+	val, err := r.activitySuite.ExecuteActivity(Activities.ShouldOverrideCacheForRetry, request)
+	r.Require().NoError(err)
+
+	var res ShouldOverrideCacheForRetryResponse
+	r.Require().NoError(val.Get(&res))
+	r.Require().False(res.HasOverride)
+	r.Require().NotEmpty(res.ActivityID)
+}
+
+func (r *Suite) Test_ShouldOverrideCacheForRetry_PropagatesNamespaceOnContext() {
+	r.mockPipelineRunService.EXPECT().GetPipelineRun(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, _ *v2pb.GetPipelineRunRequest, _ ...interface{}) (*v2pb.GetPipelineRunResponse, error) {
+			ns, ok := runnertoken.NamespaceFromContext(ctx)
+			r.Require().True(ok, "namespace must be set on the outbound ctx")
+			r.Require().Equal("project-ns", ns)
+			return &v2pb.GetPipelineRunResponse{PipelineRun: &v2pb.PipelineRun{}}, nil
+		})
+
+	request := ShouldOverrideCacheForRetryRequest{Namespace: "project-ns", TaskPath: "a.b.task_a", TaskName: "task_a"}
+	_, err := r.activitySuite.ExecuteActivity(Activities.ShouldOverrideCacheForRetry, request)
+	r.Require().NoError(err)
+}
+
+func (r *Suite) Test_ShouldOverrideCacheForRetry_RetryTarget_KeepsCacheOff() {
+	pipelineRun := &v2pb.PipelineRun{
+		Spec: v2pb.PipelineRunSpec{
+			RetryInfo: &v2pb.RetryInfo{ActivityId: "act-1", WorkflowRunId: "old-run-id"},
+		},
+		Status: v2pb.PipelineRunStatus{
+			WorkflowRunId: testRunID,
+			Steps: []*v2pb.PipelineRunStepInfo{
+				{
+					Name: "Execute Workflow",
+					SubSteps: []*v2pb.PipelineRunStepInfo{
+						{Name: "a.b.task_a", DisplayName: "task_a", ActivityId: "act-1"},
+						{Name: "a.b.task_b", DisplayName: "task_b", ActivityId: "act-2"},
+					},
+				},
+			},
+		},
+	}
+	r.mockPipelineRunService.EXPECT().GetPipelineRun(gomock.Any(), gomock.Any()).Return(
+		&v2pb.GetPipelineRunResponse{PipelineRun: pipelineRun}, nil)
+
+	request := ShouldOverrideCacheForRetryRequest{Namespace: "default", TaskPath: "a.b.task_a", TaskName: "task_a"}
+	val, err := r.activitySuite.ExecuteActivity(Activities.ShouldOverrideCacheForRetry, request)
+	r.Require().NoError(err)
+
+	var res ShouldOverrideCacheForRetryResponse
+	r.Require().NoError(val.Get(&res))
+	r.Require().True(res.HasOverride)
+	r.Require().NotEmpty(res.ActivityID)
+	r.Require().False(res.UseCache)
+}
+
+func (r *Suite) Test_ShouldOverrideCacheForRetry_Sibling_TurnsCacheOn() {
+	pipelineRun := &v2pb.PipelineRun{
+		Spec: v2pb.PipelineRunSpec{
+			RetryInfo: &v2pb.RetryInfo{ActivityId: "act-1", WorkflowRunId: "old-run-id"},
+		},
+		Status: v2pb.PipelineRunStatus{
+			WorkflowRunId: testRunID,
+			Steps: []*v2pb.PipelineRunStepInfo{
+				{
+					Name: "Execute Workflow",
+					SubSteps: []*v2pb.PipelineRunStepInfo{
+						{Name: "a.b.task_a", DisplayName: "task_a", ActivityId: "act-1"},
+						{Name: "a.b.task_b", DisplayName: "task_b", ActivityId: "act-2"},
+					},
+				},
+			},
+		},
+	}
+	r.mockPipelineRunService.EXPECT().GetPipelineRun(gomock.Any(), gomock.Any()).Return(
+		&v2pb.GetPipelineRunResponse{PipelineRun: pipelineRun}, nil)
+
+	request := ShouldOverrideCacheForRetryRequest{Namespace: "default", TaskPath: "a.b.task_b", TaskName: "task_b"}
+	val, err := r.activitySuite.ExecuteActivity(Activities.ShouldOverrideCacheForRetry, request)
+	r.Require().NoError(err)
+
+	var res ShouldOverrideCacheForRetryResponse
+	r.Require().NoError(val.Get(&res))
+	r.Require().True(res.HasOverride)
+	r.Require().NotEmpty(res.ActivityID)
+	r.Require().True(res.UseCache)
+}
+
+func (r *Suite) Test_ShouldOverrideCacheForRetry_TargetMissingFromStatus_NoOverride() {
+	// After a reset, status.steps is rebuilt from the new run's progress, so a
+	// sibling can ask before the retry target has reported. The target can't be
+	// identified then; it must not be treated as a sibling (which would let it
+	// replay its cached output and skip execution).
+	pipelineRun := &v2pb.PipelineRun{
+		Spec: v2pb.PipelineRunSpec{
+			RetryInfo: &v2pb.RetryInfo{ActivityId: "act-1", WorkflowRunId: "old-run-id"},
+		},
+		Status: v2pb.PipelineRunStatus{
+			WorkflowRunId: testRunID,
+			Steps: []*v2pb.PipelineRunStepInfo{
+				{Name: "a.b.task_b", DisplayName: "task_b", ActivityId: "act-2"},
+			},
+		},
+	}
+	r.mockPipelineRunService.EXPECT().GetPipelineRun(gomock.Any(), gomock.Any()).Return(
+		&v2pb.GetPipelineRunResponse{PipelineRun: pipelineRun}, nil)
+
+	request := ShouldOverrideCacheForRetryRequest{Namespace: "default", TaskPath: "a.b.task_a", TaskName: "task_a"}
+	val, err := r.activitySuite.ExecuteActivity(Activities.ShouldOverrideCacheForRetry, request)
+	r.Require().NoError(err)
+
+	var res ShouldOverrideCacheForRetryResponse
+	r.Require().NoError(val.Get(&res))
+	r.Require().False(res.HasOverride)
+	r.Require().False(res.UseCache)
+	r.Require().NotEmpty(res.ActivityID)
+}
+
+func (r *Suite) Test_ShouldOverrideCacheForRetry_PendingRetry_NoOverride() {
+	// Retry requested but not yet processed: retryInfo.workflowRunId still equals
+	// status.workflowRunId, so the reset hasn't happened.
+	pipelineRun := &v2pb.PipelineRun{
+		Spec: v2pb.PipelineRunSpec{
+			RetryInfo: &v2pb.RetryInfo{ActivityId: "act-1", WorkflowRunId: testRunID},
+		},
+		Status: v2pb.PipelineRunStatus{
+			WorkflowRunId: testRunID,
+			Steps: []*v2pb.PipelineRunStepInfo{
+				{Name: "a.b.task_b", DisplayName: "task_b", ActivityId: "act-2"},
+			},
+		},
+	}
+	r.mockPipelineRunService.EXPECT().GetPipelineRun(gomock.Any(), gomock.Any()).Return(
+		&v2pb.GetPipelineRunResponse{PipelineRun: pipelineRun}, nil)
+
+	request := ShouldOverrideCacheForRetryRequest{Namespace: "default", TaskPath: "a.b.task_b", TaskName: "task_b"}
+	val, err := r.activitySuite.ExecuteActivity(Activities.ShouldOverrideCacheForRetry, request)
+	r.Require().NoError(err)
+
+	var res ShouldOverrideCacheForRetryResponse
+	r.Require().NoError(val.Get(&res))
+	r.Require().False(res.HasOverride)
+	r.Require().NotEmpty(res.ActivityID)
+}
+
+func (r *Suite) Test_ShouldOverrideCacheForRetry_StatusLagsBehindReset_StillOverrides() {
+	// The reset run makes its cache decisions before the controller writes the
+	// new run ID back to status, so status.workflowRunId may still equal the
+	// (old) run named by retryInfo. The decision must key off the live RunID.
+	pipelineRun := &v2pb.PipelineRun{
+		Spec: v2pb.PipelineRunSpec{
+			RetryInfo: &v2pb.RetryInfo{ActivityId: "act-1", WorkflowRunId: "old-run-id"},
+		},
+		Status: v2pb.PipelineRunStatus{
+			WorkflowRunId: "old-run-id",
+			Steps: []*v2pb.PipelineRunStepInfo{
+				{Name: "a.b.task_a", DisplayName: "task_a", ActivityId: "act-1"},
+				{Name: "a.b.task_b", DisplayName: "task_b", ActivityId: "act-2"},
+			},
+		},
+	}
+	r.mockPipelineRunService.EXPECT().GetPipelineRun(gomock.Any(), gomock.Any()).Return(
+		&v2pb.GetPipelineRunResponse{PipelineRun: pipelineRun}, nil)
+
+	request := ShouldOverrideCacheForRetryRequest{Namespace: "default", TaskPath: "a.b.task_b", TaskName: "task_b"}
+	val, err := r.activitySuite.ExecuteActivity(Activities.ShouldOverrideCacheForRetry, request)
+	r.Require().NoError(err)
+
+	var res ShouldOverrideCacheForRetryResponse
+	r.Require().NoError(val.Get(&res))
+	r.Require().True(res.HasOverride)
+	r.Require().True(res.UseCache)
+	r.Require().NotEmpty(res.ActivityID)
 }

@@ -407,6 +407,16 @@ class TestTrainTabularLightning(TestCase):
         kwargs = self._run_and_get_param_kwargs(config)
         self.assertEqual(kwargs["prefetch_batches"], 8)
 
+    def test_random_seed_defaults_to_none(self):
+        """Without opt-in, no seed reaches LightningTrainerParam."""
+        kwargs = self._run_and_get_param_kwargs(make_tabular_config())
+        self.assertIsNone(kwargs["random_seed"])
+
+    def test_random_seed_forwarded(self):
+        """LightningTrainerConfig.random_seed reaches LightningTrainerParam."""
+        kwargs = self._run_and_get_param_kwargs(make_tabular_config(random_seed=1234))
+        self.assertEqual(kwargs["random_seed"], 1234)
+
     def test_checkpoint_upload_async_forwarded(self):
         """CheckpointConfig.upload_async reaches LightningTrainerParam."""
         config = make_tabular_config(
@@ -429,6 +439,32 @@ class TestTrainTabularLightning(TestCase):
         )
         kwargs = self._run_and_get_param_kwargs(config)
         self.assertIs(kwargs["drop_last"], True)
+
+    def test_val_batch_size_forwarded_from_batch_iter_config(self):
+        """BatchIterConfig.val_batch_size reaches LightningTrainerParam."""
+        config = make_tabular_config(
+            dataloading_config=DataloadingConfig(
+                batch_iter_config=BatchIterConfig(batch_size=16, val_batch_size=64)
+            ),
+        )
+        kwargs = self._run_and_get_param_kwargs(config)
+        self.assertEqual(kwargs["batch_size"], 16)
+        self.assertEqual(kwargs["val_batch_size"], 64)
+
+    def test_val_batch_size_none_without_batch_iter_config(self):
+        """Without a BatchIterConfig, validation reuses the training batch size."""
+        kwargs = self._run_and_get_param_kwargs(make_tabular_config())
+        self.assertIsNone(kwargs["val_batch_size"])
+
+    def test_val_batch_size_none_when_unset_in_batch_iter_config(self):
+        """An unset BatchIterConfig.val_batch_size is forwarded as None."""
+        config = make_tabular_config(
+            dataloading_config=DataloadingConfig(
+                batch_iter_config=BatchIterConfig(batch_size=16)
+            ),
+        )
+        kwargs = self._run_and_get_param_kwargs(config)
+        self.assertIsNone(kwargs["val_batch_size"])
 
     def test_comet_tracker_sets_logger_kwargs(self):
         """CometConfig resolves to the build_comet_logger dotted path + kwargs."""

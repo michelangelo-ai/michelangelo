@@ -2,24 +2,36 @@
 name: ma-sandbox-debug
 description: Tail logs, inspect pods, and diagnose unhealthy services in a running Michelangelo sandbox. Use when a service is crashlooping, returning errors, or not responding as expected. Triggers on "check logs", "why is X failing", "debug sandbox", "kubectl logs".
 user-invocable: true
+allowed-tools:
+  - Bash(bash .claude/skills/ma-sandbox-scripts/start.sh)
+  - Bash(bash .claude/skills/ma-sandbox-scripts/set_log_level.sh *)
+  - Bash(bash .claude/skills/ma-sandbox-scripts/capture_service_logs.sh *)
+  - Bash(kubectl get *)
+  - Bash(kubectl logs *)
+  - Bash(kubectl describe *)
+  - Bash(kubectl rollout status *)
+  - Bash(docker ps *)
 ---
 
 # Sandbox Debug
 
 Diagnosing service failures in a running sandbox. Start with health overview, then drill into specific services.
 
+## How to run commands
+
+Invoke this skill before running its scripts, and use the literal `bash .claude/skills/ma-sandbox-scripts/<script>.sh <args>` form from the repo root, one command per call. See `.claude/skills/ma-sandbox-references/running-commands.md`.
+
 ## Step 1: Health overview
 
 ```bash
-ma sandbox health        # high-level check: cluster, pods, API, envoy, UI
 kubectl get pods -A      # full pod inventory with status
 ```
 
 **IF** `kubectl get pods -A` output contains any pod in `CrashLoopBackOff`, `Error`, or `ImagePullBackOff` state (excluding expected noise listed below): **proceed to Step 3** for each affected pod.
 
-**IF** a pod is stuck `Pending` beyond 3 minutes: **proceed to Step 3** for that pod.
+**IF** a pod is stuck `Pending`, or is `Running` but not fully ready (READY `0/1`, `1/2`), beyond 3 minutes: **proceed to Step 3** for that pod.
 
-**IF** all pods show `Running` or `Completed`: report the cluster as healthy and stop — do not continue to Step 2 unless the user reports a specific symptom.
+**IF** every pod is `Completed`, or `Running` with every container ready (READY `n/n`, such as `1/1`; `0/1 Running` is not ready): report the cluster as healthy and stop — do not continue to Step 2 unless the user reports a specific symptom.
 
 ## Step 2: Tail logs by service
 
@@ -47,10 +59,10 @@ Useful flags: `--tail=100` to limit output; `--previous` to see logs from the la
 Go services default to `info` level. Enable debug logging for deeper investigation:
 
 ```bash
-bash $(git rev-parse --show-toplevel)/.claude/skills/ma-sandbox-scripts/set_log_level.sh controllermgr debug
+bash .claude/skills/ma-sandbox-scripts/set_log_level.sh controllermgr debug
 ```
 
-Revert when done: replace `debug` with `info`. Pair with `$(git rev-parse --show-toplevel)/.claude/skills/ma-sandbox-scripts/capture_service_logs.sh` to filter the resulting output down to signal.
+Revert when done: replace `debug` with `info`. Pair with `bash .claude/skills/ma-sandbox-scripts/capture_service_logs.sh controllermgr` to filter the resulting output down to signal.
 
 ## Step 3: Inspect a crashing pod
 
@@ -78,7 +90,8 @@ The **Events** section and **Last State** (exit code, reason) in `describe` outp
 | Pod stuck `Pending` | `describe pod` Events | No node resources or PVC mount failure |
 | `ImagePullBackOff` | `describe pod` Events | Image not imported — run `k3d image import` |
 | Feature broken after deploy | apiserver logs | Business logic bug in the deployed binary |
-| `create` failed partway / "cluster already exists" | — | Run `ma sandbox sync` to finish — don't delete+recreate |
+| Cluster unreachable, containers exited | `docker ps -a` | Stopped, not broken — resume it with `bash .claude/skills/ma-sandbox-scripts/start.sh`, don't reset |
+| `create` failed partway / "cluster already exists" | — | Run `ma sandbox sync` to finish only if the user agrees; if they decline, stop. Don't delete+recreate. **`sync` drops and recreates the sandbox MySQL `michelangelo` database**, so metadata-storage-only data is lost |
 
 ## Filter logs for errors
 
@@ -102,4 +115,4 @@ kubectl rollout status deployment/michelangelo-apiserver --timeout=60s
 
 ## Still stuck?
 
-If the cluster state is unrecoverable, do a full reset: `/ma-sandbox-reset`.
+If the cluster state is unrecoverable, do a full reset: `/ma-sandbox-reset`. A reset, like `ma sandbox sync`, wipes the sandbox MySQL database; get the user's agreement first.

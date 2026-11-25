@@ -20,6 +20,7 @@ go_library(
         "//go/components/pipelinerun/plugin:go_default_library",
         "//go/storage:go_default_library",
         "//proto/api/v2:go_default_library",
+        "@com_github_gogo_protobuf//types:go_default_library",
         "@com_github_prometheus_client_golang//prometheus:go_default_library",
         "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
         "@io_k8s_apimachinery//pkg/runtime:go_default_library",

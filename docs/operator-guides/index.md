@@ -2,6 +2,14 @@
 
 These guides cover deploying, configuring, and integrating Michelangelo AI in a Kubernetes environment. They target platform engineers and infrastructure operators who are responsible for running Michelangelo AI in production and for connecting it to the broader ML infrastructure their teams already use — experiment tracking, model registries, compute clusters, schedulers, and serving frameworks.
 
+## System Architecture
+
+Michelangelo AI is split into a [control plane](../getting-started/glossary.md#control-plane) and two runtime areas. In the control plane, Michelangelo AI Studio and the CLI talk to the [API server](../getting-started/glossary.md#api-server), and the [controller manager](../getting-started/glossary.md#controller-manager) reconciles the resources it stores. Offline, the controllers run Uniflow and Canvas pipelines on Ray and Spark compute. Online, they deploy models to the inference service.
+
+![Michelangelo AI system architecture: a control plane with the API server and controllers above offline pipelines and online model serving](./images/ma-system-architecture.png)
+
+For the full overview, including the custom resources and which controller reconciles each one, see [System Architecture](../getting-started/architecture.md). For how the server components connect to each other, see the [service architecture diagram](setup/platform-setup.md#michelangelo-ai-service-architecture-diagram) in Platform Setup.
+
 ## Getting Started
 
 For a fresh deployment, follow this recommended reading order:

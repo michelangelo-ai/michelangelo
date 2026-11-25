@@ -1,3 +1,7 @@
+---
+last_verified: 2026-11-05
+---
+
 # Integrate with Your Custom Backend
 
 This guide explains how to extend Michelangelo AI Inference with custom serving backends, model configuration providers, and traffic routing.
@@ -28,7 +32,7 @@ type Backend interface {
     GetServerStatus(ctx context.Context, logger *zap.Logger, kubeClient client.Client, inferenceServerName string, namespace string) (*ServerStatus, error)
     DeleteServer(ctx context.Context, logger *zap.Logger, kubeClient client.Client, inferenceServerName string, namespace string) error
     IsHealthy(ctx context.Context, logger *zap.Logger, kubeClient client.Client, inferenceServerName string, namespace string) (bool, error)
-    CheckModelStatus(ctx context.Context, logger *zap.Logger, kubeClient client.Client, httpClient *http.Client, inferenceServerName string, namespace string, modelName string) (bool, error)
+    GetModelStatus(ctx context.Context, logger *zap.Logger, kubeClient client.Client, httpClient *http.Client, apiServerURL string, inferenceServerName string, namespace string, modelName string) (*ModelStatus, error)
 }
 ```
 
@@ -39,7 +43,7 @@ type Backend interface {
 ### To add a new backend:
 
 1. Create a new file (e.g., `torchserve.go`) implementing the `Backend` interface
-2. Register it in the `Registry` with the appropriate `BackendType`
+2. Register it with its `BackendType` in `NewBackendRegistry` ([`backends/module.go`](https://github.com/michelangelo-ai/michelangelo/blob/main/go/components/inferenceserver/backends/module.go)), next to the Triton registration. If no existing `BackendType` value fits, add one to the enum in [`proto/api/v2/inference_server.proto`](https://github.com/michelangelo-ai/michelangelo/blob/main/proto/api/v2/inference_server.proto)
 
 ---
 
@@ -56,7 +60,7 @@ type ModelConfigProvider interface {
     DeleteModelConfig(ctx context.Context, logger *zap.Logger, kubeclient client.Client, inferenceServerName string, namespace string) error
     GetModelsFromConfig(ctx context.Context, logger *zap.Logger, kubeclient client.Client, inferenceServerName string, namespace string) ([]ModelConfigEntry, error)
     AddModelToConfig(ctx context.Context, logger *zap.Logger, kubeclient client.Client, inferenceServerName string, namespace string, entry ModelConfigEntry) error
-    RemoveModelFromConfig(ctx context.Context, logger *zap.Logger, kubeclient client.Client, inferenceServerName string, namespace string, modelName string) error
+    RemoveModelFromConfig(ctx context.Context, logger *zap.Logger, kubeclient client.Client, inferenceServerName string, namespace string, deploymentName string, modelName string) error
 }
 ```
 
@@ -95,7 +99,7 @@ type Manager interface {
 The default implementation uses Gateway API HTTPRoute resources:
 
 - **`Create`** — creates an HTTPRoute for the given name/namespace using the supplied `RouteConfig`
-- **`AddRules` / `RemoveRules`** — incrementally adds or removes path-matching rules on an existing HTTPRoute; `RemoveRules` matches by path prefix
+- **`AddRules` / `RemoveRules`** — incrementally adds or removes path-matching rules on an existing HTTPRoute. `AddRules` upserts each rule by its match path and fails if the route doesn't exist; `RemoveRules` removes rules whose match path equals one of the given paths exactly
 - **`Exists` / `RuleExists`** — idempotency checks used by controllers before creating or adding rules
 
 ---

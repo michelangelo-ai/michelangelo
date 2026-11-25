@@ -1,5 +1,6 @@
 ---
 sidebar_position: 5
+last_verified: 2026-11-05
 ---
 
 # Set Up Your Python IDE
@@ -49,11 +50,14 @@ After configuring your editor, confirm everything works by checking that you get
 
 ```python
 import michelangelo.uniflow.core as uniflow
+from michelangelo.uniflow.plugins.ray import RayTask
 
-@uniflow.task()
+@uniflow.task(config=RayTask(head_cpu=1))
 def hello():
     print("IDE setup working!")
 ```
+
+`@uniflow.task` requires a `config`. `RayTask` comes from the optional Ray plugin, so if `michelangelo.uniflow.plugins.ray` doesn't resolve, install it with `poetry install --extras plugin`. The `example` extra used in [Getting Started with Pipelines](../user-guides/getting-started/getting-started.md) includes it too.
 
 If your editor can't resolve the `michelangelo` import:
 

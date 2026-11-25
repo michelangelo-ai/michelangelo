@@ -504,14 +504,25 @@ class ArgumentParsingTest(TestCase):
         ns = self._parse(["create"])
         self.assertEqual(ns.helm_set, [])
 
-    def test_create_object_store_defaults_to_minio(self):
-        """`ma sandbox create` without --object-store should default to minio."""
-        ns = self._parse(["create"])
-        self.assertEqual(ns.object_store, "minio")
+    def test_create_object_store_defaults_to_none(self):
+        """`ma sandbox create` without --object-store leaves it unresolved.
 
-    def test_sync_object_store_defaults_to_minio(self):
-        """`ma sandbox sync` without --object-store should default to minio."""
+        `_create` resolves None to seaweedfs; argparse sets no static default.
+        """
+        ns = self._parse(["create"])
+        self.assertIsNone(ns.object_store)
+
+    def test_sync_object_store_defaults_to_none(self):
+        """`ma sandbox sync` without --object-store leaves it unresolved.
+
+        `_sync` keeps an existing cluster's backend, so there is no static default.
+        """
         ns = self._parse(["sync"])
+        self.assertIsNone(ns.object_store)
+
+    def test_create_accepts_object_store_minio(self):
+        """`ma sandbox create --object-store minio` (deprecated) parses through."""
+        ns = self._parse(["create", "--object-store", "minio"])
         self.assertEqual(ns.object_store, "minio")
 
     def test_create_accepts_object_store_seaweedfs(self):
@@ -561,8 +572,8 @@ class DeployServicesObjectStoreTest(TestCase):
         applied = {call.args[0].name for call in mock_kube_apply.call_args_list}
         return applied
 
-    def test_default_object_store_applies_minio_yaml(self):
-        """object_store="minio" (default) applies minio.yaml only."""
+    def test_minio_object_store_applies_minio_yaml(self):
+        """object_store="minio" applies minio.yaml only."""
         applied = self._run_deploy_services("minio")
         self.assertIn("minio.yaml", applied)
         self.assertNotIn("weed-server.yaml", applied)
@@ -771,13 +782,20 @@ class TestCheckObjectStoreBackend:
         from michelangelo.cli.sandbox.sandbox import _check_object_store_backend
 
         def fake_run(args, **kwargs):
-            return MagicMock(returncode=0 if args[-1] in existing_pods else 1)
+            # Lookups use --ignore-not-found, so an absent Pod is an empty
+            # successful result rather than a nonzero exit.
+            assert args[:3] == ["kubectl", "get", "pod"]
+            assert "--ignore-not-found=true" in args
+            name = args[3]
+            return MagicMock(
+                returncode=0, stdout=f"pod/{name}" if name in existing_pods else ""
+            )
 
         with patch("michelangelo.cli.sandbox.sandbox.subprocess.run", fake_run):
             _check_object_store_backend(argparse.Namespace(object_store=object_store))
 
     def test_same_backend_is_allowed(self):
-        """A minio cluster synced with the default backend is fine."""
+        """A minio cluster synced with --object-store minio is fine."""
         self._check("minio", {"minio"})
 
     def test_fresh_cluster_is_allowed(self):
@@ -803,7 +821,7 @@ class TestEnsureObjectStoreRunning:
         return ensure
 
     def test_minio_backend_checks_minio_pod(self):
-        """The default backend checks the minio pod from minio.yaml."""
+        """The minio backend checks the minio pod from minio.yaml."""
         self._run("minio").assert_called_once_with("minio", "minio.yaml")
 
     def test_seaweedfs_backend_checks_seaweedfs_pod(self):

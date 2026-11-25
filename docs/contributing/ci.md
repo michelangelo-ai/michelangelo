@@ -36,6 +36,12 @@ CI is path-filtered: jobs only run when their relevant files change. Opening a P
 |-----|---------|-------------|
 | **UI Pre-Land** (`ui-pre-land.yaml`) | Changes to `javascript/` | Runs UI-specific checks (linting, tests, build) |
 
+### Repository Automation
+
+| Job | Trigger | What it does |
+|-----|---------|-------------|
+| **Stale-issue config check** (`stale-issues-config-check.yml`) | Changes to the `stale-issues*.yml` workflows or `.github/scripts/check_stale_config.py`; also daily | Checks the stale-issue bot's settings against each other and the repo's labels — see [Stale Issue Policy](stale-issue-policy.md) |
+
 ---
 
 ## Pre-Merge Requirements

@@ -12,7 +12,9 @@ jobs:
   
   ruff:
     name: Python Run Ruff on Changed Files
-    runs-on: ubuntu-latest
+    # Python 3.9 has no actions/python-versions build for Ubuntu 26.04 (the
+    # new ubuntu-latest). Pinned until CI moves to Python 3.11.
+    runs-on: ubuntu-24.04
     permissions:
       pull-requests: write   # For commenting on PRs
       contents: read

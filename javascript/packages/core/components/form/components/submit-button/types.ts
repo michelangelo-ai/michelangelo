@@ -9,4 +9,9 @@ export interface SubmitButtonProps extends Omit<ButtonProps, 'type'> {
    * Use when button is rendered outside the form (e.g., in modal footer)
    */
   formId?: string;
+
+  /**
+   * Tooltip text explaining why the button is disabled. Display only: pair it with `disabled`.
+   */
+  disabledReason?: string;
 }

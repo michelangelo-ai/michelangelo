@@ -1,0 +1,10 @@
+{
+  "interpreter_version": "core-v1.4.2",
+  "levels": [
+    {"tasks": ["a", "c", "e"]},
+    {"tasks": ["b"]},
+    {"tasks": ["d"]}
+  ],
+  "warnings": ["caller-supplied warning"],
+  "task_count": 5
+}

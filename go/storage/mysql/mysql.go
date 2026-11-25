@@ -1255,7 +1255,7 @@ func (m *mysqlMetadataStorage) fullUpsert(ctx context.Context, tx *sql.Tx, table
 	// Build indexed fields map
 	indexedFieldsMap := make(map[string]interface{})
 	for _, field := range indexedFields {
-		indexedFieldsMap[field.Key] = field.Value
+		indexedFieldsMap[field.Key] = toSQLIndexValue(field.Value)
 	}
 
 	// Determine primary key: use MetadataStoragePrimaryKeyAnnotation if set, else UID.
@@ -1305,6 +1305,49 @@ func (m *mysqlMetadataStorage) fullUpsert(ctx context.Context, tx *sql.Tx, table
 	}
 
 	return nil
+}
+
+// toSQLIndexValue converts an indexed-field value into a value the MySQL driver can bind.
+//
+// Indexes on google.protobuf.Timestamp and k8s meta/v1 Time fields are generated as
+// DATETIME columns, but GetIndexedKeyValuePairs returns the raw *types.Timestamp or
+// *metav1.Time. Neither implements driver.Valuer, so binding them fails with
+// "unsupported type types.Timestamp, a struct". These values are converted to a UTC
+// time.Time truncated to the second, which matches the DATETIME column precision and
+// makes the stored value independent of the server's fractional-second rounding mode.
+// A typed nil pointer, or a zero metav1.Time, becomes nil (SQL NULL). Any other value is
+// returned unchanged.
+//
+// time.Unix is used instead of types.TimestampFromProto on purpose: the latter returns
+// an error for out-of-range values, and failing here would block the whole upsert again.
+func toSQLIndexValue(v interface{}) interface{} {
+	switch t := v.(type) {
+	case *gogotypes.Timestamp:
+		if t == nil {
+			return nil
+		}
+		return protoTimestampToSQL(*t)
+	case gogotypes.Timestamp:
+		return protoTimestampToSQL(t)
+	case *metav1.Time:
+		return k8sTimeToSQL(t)
+	case metav1.Time:
+		return k8sTimeToSQL(&t)
+	}
+	return v
+}
+
+// k8sTimeToSQL treats a zero metav1.Time like a nil one, as Kubernetes serialization
+// does; the zero time.Time is also outside the MySQL DATETIME range.
+func k8sTimeToSQL(t *metav1.Time) interface{} {
+	if t.IsZero() {
+		return nil
+	}
+	return t.Time.UTC().Truncate(time.Second)
+}
+
+func protoTimestampToSQL(t gogotypes.Timestamp) time.Time {
+	return time.Unix(t.Seconds, int64(t.Nanos)).UTC().Truncate(time.Second)
 }
 
 // directUpdateManagedLabels and directUpdateManagedAnnotations are the label and

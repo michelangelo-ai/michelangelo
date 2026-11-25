@@ -7,6 +7,7 @@ import (
 	"go.uber.org/zap"
 
 	"k8s.io/client-go/dynamic"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	conditionUtils "github.com/michelangelo-ai/michelangelo/go/base/conditions/utils"
 	"github.com/michelangelo-ai/michelangelo/go/components/common/routing"
@@ -20,6 +21,7 @@ import (
 
 // CleanupActor removes models from ConfigMap and tears down the deployment's routing during deletion.
 type CleanupActor struct {
+	Client              client.Reader
 	DynamicClient       dynamic.Interface
 	ClientFactory       clientfactory.ClientFactory
 	RouteManager        routing.Manager
@@ -39,9 +41,9 @@ func (a *CleanupActor) Retrieve(ctx context.Context, deployment *v2pb.Deployment
 
 	// Every check below runs against each cluster the rollout placed the deployment in.
 	// Cleanup is only complete once all of them are clear.
-	targets, err := common.ReadTargetClustersAnnotation(deployment)
+	targets, err := a.targetClusters(ctx, deployment)
 	if err != nil {
-		return conditionUtils.GenerateFalseCondition(condition, "UnableToReadTargetClusters", fmt.Sprintf("Unable to read target-clusters annotation: %v", err)), nil
+		return conditionUtils.GenerateFalseCondition(condition, "UnableToReadTargetClusters", fmt.Sprintf("Unable to read target clusters: %v", err)), nil
 	}
 
 	// The model config is per-cluster, so cleanup is only complete once every cluster has
@@ -105,9 +107,9 @@ func (a *CleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, condi
 	// Unload the model and remove the TrafficRoute rule on every cluster the rollout
 	// placed the deployment in. The model config is a per-cluster ConfigMap, so removing
 	// it only from the control plane would leave remote Tritons serving the model.
-	targets, err := common.ReadTargetClustersAnnotation(resource)
+	targets, err := a.targetClusters(ctx, resource)
 	if err != nil {
-		return conditionUtils.GenerateFalseCondition(condition, "UnableToReadTargetClusters", fmt.Sprintf("Unable to read target-clusters annotation: %v", err)), nil
+		return conditionUtils.GenerateFalseCondition(condition, "UnableToReadTargetClusters", fmt.Sprintf("Unable to read target clusters: %v", err)), nil
 	}
 	trafficMatchPath := routenames.TrafficMatchPath(isName, resource.Name)
 	for _, target := range targets {
@@ -143,4 +145,24 @@ func (a *CleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, condi
 
 	a.Logger.Info("Model cleanup completed successfully", zap.String("current_model", currentModel))
 	return conditionUtils.GenerateTrueCondition(condition), nil
+}
+
+// targetClusters returns the clusters to clean up. If the InferenceServer cannot be read, it falls
+// back to the Deployment's cluster snapshot: the condition engine does not retry a FALSE cleanup
+// condition, so failing here on a transient read error would leave the finalizer in place.
+func (a *CleanupActor) targetClusters(ctx context.Context, deployment *v2pb.Deployment) ([]*v2pb.ClusterTarget, error) {
+	targets, err := common.ResolveTargetClusters(ctx, a.Client, deployment)
+	if err == nil {
+		return targets, nil
+	}
+	snapshot, snapshotErr := common.ReadTargetClustersAnnotation(deployment)
+	if snapshotErr != nil {
+		return nil, snapshotErr
+	}
+	a.Logger.Warn("Could not read the InferenceServer; using the Deployment's cluster snapshot",
+		zap.String("deployment", deployment.GetName()),
+		zap.String("namespace", deployment.GetNamespace()),
+		zap.String("inference_server", deployment.Spec.GetInferenceServer().GetName()),
+		zap.Error(err))
+	return snapshot, nil
 }

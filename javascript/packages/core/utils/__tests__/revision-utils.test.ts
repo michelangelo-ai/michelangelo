@@ -1,4 +1,8 @@
-import { buildRevisionName, formatRevisionLabel } from '../revision-utils';
+import {
+  buildRevisionListOptions,
+  buildRevisionName,
+  formatRevisionLabel,
+} from '../revision-utils';
 
 describe('revision-utils', () => {
   test('formatRevisionLabel truncates to the display length', () => {
@@ -16,5 +20,22 @@ describe('revision-utils', () => {
 
   test('buildRevisionName falls back to entityId for an unrecognized service', () => {
     expect(buildRevisionName('model', 'My-Model', '3f2a1b9c0d4e5f6a7b8c')).toBe('My-Model');
+  });
+
+  test("buildRevisionListOptions selects one entity's revisions, most recently updated first", () => {
+    const options = buildRevisionListOptions('pipeline', 'my-pipeline');
+    expect(options.operation.criterion).toEqual([
+      { fieldName: 'revision.base_type', operator: 1, matchValue: 'Pipeline' },
+      { fieldName: 'revision.base_resource_name', operator: 1, matchValue: 'my-pipeline' },
+    ]);
+    expect(options.orderBy).toEqual([{ field: 'metadata.update_timestamp', dir: 2 }]);
+  });
+
+  test('buildRevisionListOptions caps the page size only when asked', () => {
+    expect(buildRevisionListOptions('pipeline', 'my-pipeline')).not.toHaveProperty('pagination');
+    expect(buildRevisionListOptions('pipeline', 'my-pipeline', 1).pagination).toEqual({
+      offset: 0,
+      limit: 1,
+    });
   });
 });

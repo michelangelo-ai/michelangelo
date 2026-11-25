@@ -3,6 +3,7 @@ package activities
 import (
 	"go.uber.org/fx"
 
+	"github.com/michelangelo-ai/michelangelo/go/worker/activities/buildkite"
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/cachedoutput"
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/deployment"
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/model"
@@ -16,6 +17,7 @@ import (
 // in cmd/worker/main.go so that downstream forks can supply their own
 // transport implementations without conflicting with the defaults.
 var Module = fx.Options(
+	buildkite.Module,
 	storage.Module,
 	model.Module,
 	cachedoutput.Module,

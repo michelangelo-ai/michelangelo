@@ -680,7 +680,9 @@ def _apply_batch_limit(
     Lightning's ``limit_{train,val}_batches`` only stops its own loop; without
     this, the Ray Dataset behind the loader is still read in full. An integer
     limit ``N`` therefore caps the dataset at ``N * batch_size * num_workers`` rows
-    (Ray Train splits the rows evenly, so each worker sees ``N * batch_size``).
+    (Ray Train splits the rows evenly, so each worker sees ``N * batch_size``),
+    where ``batch_size`` is the split's own batch size: ``val_batch_size`` for the
+    validation split, falling back to the training ``batch_size`` when unset.
     ``accumulate_grad_batches`` does not enter the math: Lightning counts
     dataloader batches, not optimizer steps.
 
@@ -718,7 +720,8 @@ def _apply_batch_limit(
         limit: The ``limit_*_batches`` value: ``None``, an int number of batches
             (any ``numbers.Integral``, such as a NumPy integer), or a float
             fraction in ``[0.0, 1.0]``.
-        batch_size: Per-worker batch size.
+        batch_size: Per-worker batch size of the split (``val_batch_size`` for
+            validation, falling back to ``batch_size``).
         num_workers: Number of Ray Train workers the dataset is split across.
         split: The split being limited, used in log and error messages.
         drop_last: Whether the loader drops the last incomplete batch, which
@@ -894,6 +897,12 @@ def _train_loop_per_worker(train_loop_config):
     the Lightning Trainer, handles checkpoint restoration from a previous run,
     and calls trainer.fit.
     """
+    # Seed before any dataloader or model is created so weight init, dropout
+    # and dataloader-worker RNGs all see the seed.
+    random_seed = train_loop_config.get("random_seed")
+    if random_seed is not None:
+        pl.seed_everything(random_seed, workers=True)
+
     if torch.cuda.is_available():
         _logger.info(
             "CUDA is available with torch, training on GPU with CUDA version: %s",
@@ -910,6 +919,7 @@ def _train_loop_per_worker(train_loop_config):
 
     # Read configurations.
     batch_size = train_loop_config["batch_size"]
+    val_batch_size = train_loop_config.get("val_batch_size") or batch_size
     # num_epochs is kept here because callers can use LightningTrainer directly without
     # setting lightning_trainer_kwargs["max_epochs"]; we apply this as a default below.
     num_epochs = train_loop_config["num_epochs"]
@@ -944,7 +954,7 @@ def _train_loop_per_worker(train_loop_config):
             else num_shuffle_batches * batch_size,
         )
         val_dataloader = val_dataset_shard.iter_torch_batches(
-            batch_size=batch_size,
+            batch_size=val_batch_size,
             collate_fn=collate_fn_to_torch,
             prefetch_batches=prefetch_batches,
         )

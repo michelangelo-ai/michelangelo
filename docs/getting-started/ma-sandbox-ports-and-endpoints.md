@@ -15,7 +15,7 @@ The most common URLs you'll open after the sandbox is up:
 | Service | URL | Default credentials |
 |---|---|---|
 | MA Studio UI | http://localhost:8090 | none |
-| MinIO Console | http://localhost:9090 | `michelangeloadmin` / `michelangeloadmin` |
+| Object store UI (MinIO Console or SeaweedFS Filer) | http://localhost:9090 | MinIO: `michelangeloadmin` / `michelangeloadmin`; SeaweedFS: none (no authentication, bound to localhost) |
 | Cadence Web (default) | http://localhost:8088 | none |
 | Temporal Web (with `--workflow temporal`) | http://localhost:8080 | none |
 | Grafana | http://localhost:3000 | `admin` / `admin` |
@@ -45,8 +45,8 @@ These mappings are created automatically by `ma sandbox create`:
 | Cadence Frontend (gRPC) | 7833 | 30002 | `michelangelo-cadence` | 7833 | Cadence SDK and client connections |
 | Cadence Frontend (TChannel) | 7933 | 30003 | `michelangelo-cadence` | 7933 | Cadence internal RPC |
 | MySQL | 3306 | 30001 | `mysql` | 3306 | Metadata storage for the workflow engine |
-| MinIO (S3 API) | 9091 | 30007 | `minio` | 9091 | S3-compatible object storage endpoint |
-| MinIO (Console) | 9090 | 30008 | `minio` | 9090 | Web UI for browsing buckets |
+| Object store (S3 API; SeaweedFS by default, or MinIO) | 9091 | 30007 | `objectstore` | 9091 | S3-compatible object storage endpoint |
+| Object store UI | 9090 | 30008 | `objectstore` | 9090 (MinIO Console) / 8888 (SeaweedFS Filer) | Web UI for browsing buckets; the SeaweedFS filer UI has no authentication and also allows uploads and deletes |
 | Grafana | 3000 | 30012 | `grafana` | 3000 | Dashboards (skipped with `--exclude grafana`) |
 | Prometheus | 9092 | 30015 | `prometheus` | 9090 | Metrics (skipped with `--exclude prometheus`) |
 | MLflow Tracking | 5001 | 30013 | `mlflow` | 5000 | Experiment tracking (only deployed with `--include-experimental mlflow`) |
@@ -54,7 +54,7 @@ These mappings are created automatically by `ma sandbox create`:
 
 ### Temporal workflow engine
 
-When you pass `--workflow temporal`, the sandbox swaps the Cadence-specific mappings for Temporal ones at cluster-create time. The Cadence Web port is not exposed; everything else above (UI, API Server, MinIO, MySQL, Grafana, Prometheus, MLflow) stays the same.
+When you pass `--workflow temporal`, the sandbox swaps the Cadence-specific mappings for Temporal ones at cluster-create time. The Cadence Web port is not exposed; everything else above (UI, API Server, object store, MySQL, Grafana, Prometheus, MLflow) stays the same.
 
 | Service | Host port | NodePort | In-cluster service | What it's for |
 |---|---:|---:|---|---|
@@ -135,5 +135,6 @@ You usually don't need these — they're for developers debugging Kubernetes net
 | `michelangelo-cadence-web` | 8088 | Cadence Web UI |
 | `michelangelo-temporal-frontend` | 7233 | Temporal frontend (gRPC) |
 | `michelangelo-temporal-web` | 8080 | Temporal Web UI |
-| `minio` | 9090 / 9091 | Console / S3 API |
+| `objectstore` | 9090 / 9091 | Console or Filer UI / S3 API |
+| `minio` (alias of `objectstore`) | 9091 | S3 API only, for backward compatibility (under SeaweedFS its 9090 reaches nothing) |
 | `mysql` | 3306 | MySQL |

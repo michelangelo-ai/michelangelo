@@ -32,8 +32,18 @@ move_generated_files() {
   mv "$src_api" "$client_dir"
 }
 
+# Pinned buf version. Keep in sync with the `version:` input of every
+# bufbuild/buf-setup-action step under .github/workflows/. A different buf
+# embeds a different google/protobuf/descriptor.proto in descriptors.pb and
+# makes the generated files non-reproducible.
+BUF_VERSION="1.54.0"
+
 if ! command -v buf &> /dev/null; then
-  echo "Buf is NOT installed. Please install it from https://docs.buf.build/installation"
+  echo "Buf is NOT installed. Please install buf ${BUF_VERSION} from https://docs.buf.build/installation"
+  exit 1
+fi
+if [ "$(buf --version)" != "${BUF_VERSION}" ]; then
+  echo "buf ${BUF_VERSION} is required, found $(buf --version)."
   exit 1
 fi
 

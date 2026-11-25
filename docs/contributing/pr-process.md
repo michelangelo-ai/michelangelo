@@ -1,5 +1,5 @@
 ---
-last_verified: 2026-10-14
+last_verified: 2026-11-18
 ---
 
 # PR Process
@@ -12,12 +12,23 @@ Contributing to Michelangelo AI follows a standard fork-and-PR workflow. This gu
 
 **For larger changes** (new features, API changes, significant refactors): open a GitHub issue first to discuss the approach. This prevents wasted work if the direction needs to change.
 
+Sign the [CLA](#contributor-license-agreement-cla) if you have not already; the `license/cla` check must pass.
+
 Ensure your branch is current before pushing:
 
 ```bash
 git fetch origin
 git rebase origin/main
 ```
+
+## Contributor License Agreement (CLA)
+
+Before your first contribution can be merged, you must sign the project's Contributor License Agreement (CLA). By signing, you confirm that you authored the content, have the rights to contribute it, and that it may be provided under the project license (see [Legal Notice](https://github.com/michelangelo-ai/michelangelo/blob/main/CONTRIBUTING.md#legal-notice)).
+
+- **When you are asked:** you are prompted when you submit your first contribution. The prompt is tied to the pull request, not to forking or cloning.
+- **How to sign:** the CLA is managed by [CLA Assistant](https://cla-assistant.io/michelangelo-ai). Follow the sign-in and signing prompt for your pull request.
+- **The check:** every PR shows a `license/cla` status check. It reports "Contributor License Agreement is signed." once you have signed.
+- **If the check is pending or failing:** the check is not satisfied until the CLA is signed, so sign it through the link above. Then confirm the status on the PR turns green.
 
 ## Branch Naming
 

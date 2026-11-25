@@ -27,17 +27,18 @@ class PluginRegistry:
         parent: Optional parent registry to inherit registrations from. When
             a name is absent locally, lookup continues in the parent.
 
-    Example::
+    Example:
+    ```python
+    from michelangelo.workflow.tasks.pusher.registry import default_registry
 
-        from michelangelo.workflow.tasks.pusher.registry import default_registry
-
-        custom_registry = default_registry.extend()
-        custom_registry.register(
-            "my_plugin",
-            MyPlugin,
-            MyArtifactType,
-        )
-        plugin_class, artifact_type = custom_registry.get("model_plugin")
+    custom_registry = default_registry.extend()
+    custom_registry.register(
+        "my_plugin",
+        MyPlugin,
+        MyArtifactType,
+    )
+    plugin_class, artifact_type = custom_registry.get("model_plugin")
+    ```
     """
 
     def __init__(self, parent: PluginRegistry | None = None) -> None:
@@ -74,8 +75,10 @@ class PluginRegistry:
                 Overrides must go through a child registry via ``extend()``.
 
         Example:
-            >>> registry = PluginRegistry()
-            >>> # registry.register("model_plugin", ModelPusherPlugin, AssembledModel)
+        ```python
+        >>> registry = PluginRegistry()
+        >>> # registry.register("model_plugin", ModelPusherPlugin, AssembledModel)
+        ```
         """
         if name in self._registry:
             raise ValueError(
@@ -102,11 +105,13 @@ class PluginRegistry:
                 any ancestor registry.
 
         Example:
-            >>> registry = PluginRegistry()
-            >>> registry.get("unknown")  # doctest: +IGNORE_EXCEPTION_DETAIL
-            Traceback (most recent call last):
-                ...
-            michelangelo.workflow.schema.exceptions.ConfigurationError: ...
+        ```python
+        >>> registry = PluginRegistry()
+        >>> registry.get("unknown")  # doctest: +IGNORE_EXCEPTION_DETAIL
+        Traceback (most recent call last):
+            ...
+        michelangelo.workflow.schema.exceptions.ConfigurationError: ...
+        ```
         """
         if name in self._registry:
             return self._registry[name]
@@ -125,9 +130,11 @@ class PluginRegistry:
             ancestor registries.
 
         Example:
-            >>> registry = PluginRegistry()
-            >>> registry.registered_names()
-            []
+        ```python
+        >>> registry = PluginRegistry()
+        >>> registry.registered_names()
+        []
+        ```
         """
         names: set[str] = set(self._registry.keys())
         if self._parent is not None:
@@ -144,16 +151,17 @@ class PluginRegistry:
         Returns:
             A new ``PluginRegistry`` whose parent is this registry.
 
-        Example::
+        Example:
+        ```python
+        from michelangelo.workflow.tasks.pusher.registry import default_registry
 
-            from michelangelo.workflow.tasks.pusher.registry import default_registry
-
-            provider_registry = default_registry.extend()
-            provider_registry.register(
-                "model_plugin",
-                ProviderModelPusherPlugin,
-                AssembledModel,
-            )
+        provider_registry = default_registry.extend()
+        provider_registry.register(
+            "model_plugin",
+            ProviderModelPusherPlugin,
+            AssembledModel,
+        )
+        ```
         """
         return PluginRegistry(parent=self)
 

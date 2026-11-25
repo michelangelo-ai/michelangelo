@@ -1,6 +1,7 @@
 ---
 sidebar_position: 3
 sidebar_label: Serving
+last_verified: 2026-11-05
 ---
 
 # Serving gRPC API Reference

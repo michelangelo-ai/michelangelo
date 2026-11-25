@@ -1,5 +1,6 @@
 ---
 sidebar_position: 4
+last_verified: 2026-11-05
 ---
 
 # Workflow Patterns
@@ -99,7 +100,7 @@ def pipeline_with_guard(data_url: str, min_rows: int = 1000):
 :::note Workflow code limitations
 Workflow functions run inside a Starlark interpreter for deterministic replay. A few Python constructs are unavailable in workflow code (task functions have no such restrictions):
 
-- **No standard library imports** — use Uniflow builtins (`uniflow.time()`) instead of `time.time()` or other modules.
+- **No standard library imports** — use Uniflow builtins instead of `time.time()` or other modules. For the current time, import `from michelangelo.uniflow.core.lib.time import time as uniflow_time` at module level and call `uniflow_time()` in the workflow (see [Backfill](./backfill.md)).
 - **No f-strings** — use `.format()`: `"SELECT * FROM {t}".format(t=table_name)`.
 - **No `is` comparisons** — use `==`: `if x == None` not `if x is None`.
 - **No `try`/`except`** — handle errors inside `@task` functions instead.

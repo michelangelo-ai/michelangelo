@@ -17,6 +17,7 @@ proto_library(
         "chart.proto",
         "cluster.proto",
         "cluster_svc.proto",
+        "declarative.proto",
         "deployment.proto",
         "deployment_svc.proto",
         "evaluation_report.proto",

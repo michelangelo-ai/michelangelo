@@ -364,7 +364,7 @@ describe('EntityDetailRoute', () => {
       expect(screen.queryByText(/revisionId=/)).not.toBeInTheDocument();
     });
 
-    test('shows not found when a revisioned entity has no revision', async () => {
+    test('falls back to the most recently updated revision when the entity has no latestRevision', async () => {
       const testPhases = {
         train: buildPhase({ id: 'train', entities: [revisionedEntity] }),
       };
@@ -372,6 +372,73 @@ describe('EntityDetailRoute', () => {
         GetPipeline: livePipeline,
         GetRevision: revision,
         ListRevision: revisionList,
+      });
+
+      render(
+        <EntityDetailRoute phases={testPhases} />,
+        buildWrapper([
+          getErrorProviderWrapper(),
+          getRouterWrapper({ location: '/myproject/train/pipelines/My-Pipeline/overview' }),
+          getServiceProviderWrapper({ request: mockRequest }),
+        ])
+      );
+
+      expect(await screen.findByText('snapshot-owner')).toBeInTheDocument();
+      expect(screen.queryByText('Entity not found')).not.toBeInTheDocument();
+      // The list is sorted most recently updated first, so its first item is the fallback.
+      expect(mockRequest.getCall('GetRevision')?.args).toEqual({
+        namespace: 'myproject',
+        name: 'pipeline-my-pipeline-aaaaaaaaaaaa',
+      });
+      // The selector shows the fallback revision, without claiming it is the pointed-at latest.
+      const trigger = await screen.findByRole('button', { name: /Select revision/ });
+      expect(trigger).toHaveTextContent('Revision aaaaaaaaaaaa');
+      expect(within(trigger).queryByText('Latest')).not.toBeInTheDocument();
+    });
+
+    test('prefers status.latestRevision over the list fallback', async () => {
+      const testPhases = {
+        train: buildPhase({ id: 'train', entities: [revisionedEntity] }),
+      };
+      const mockRequest = createQueryMockRouter({
+        GetPipeline: {
+          pipeline: {
+            ...livePipeline.pipeline,
+            status: { latestRevision: { name: 'pipeline-my-pipeline-3f2a1b9c0d4e' } },
+          },
+        },
+        GetRevision: revision,
+        ListRevision: revisionList,
+      });
+
+      render(
+        <EntityDetailRoute phases={testPhases} />,
+        buildWrapper([
+          getErrorProviderWrapper(),
+          getRouterWrapper({ location: '/myproject/train/pipelines/My-Pipeline/overview' }),
+          getServiceProviderWrapper({ request: mockRequest }),
+        ])
+      );
+
+      expect(await screen.findByText('snapshot-owner')).toBeInTheDocument();
+      expect(mockRequest.getCall('GetRevision')?.args).toEqual({
+        namespace: 'myproject',
+        name: 'pipeline-my-pipeline-3f2a1b9c0d4e',
+      });
+      // The detail page itself never needed the list; only the selector asks for it.
+      expect(await screen.findByRole('button', { name: /Select revision/ })).toHaveTextContent(
+        'Revision 3f2a1b9c0d4e'
+      );
+    });
+
+    test('shows not found when a revisioned entity has no revisions at all', async () => {
+      const testPhases = {
+        train: buildPhase({ id: 'train', entities: [revisionedEntity] }),
+      };
+      const mockRequest = createQueryMockRouter({
+        GetPipeline: livePipeline,
+        GetRevision: revision,
+        ListRevision: { revisionList: { items: [] } },
       });
 
       render(

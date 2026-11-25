@@ -62,6 +62,8 @@ if TYPE_CHECKING:
     )
 
 _logger = logging.getLogger(__name__)
+# Upper bound Lightning's seed_everything accepts; larger values are replaced by 0.
+_MAX_RANDOM_SEED = 2**32 - 1
 CHECKPOINT_NAME = ray.train.lightning.RayTrainReportCallback.CHECKPOINT_NAME
 CHECKPOINT_PATH_KEY = "checkpoint_path"
 # Filename Ray Train V2 uses for its on-disk checkpoint manager state, written
@@ -93,6 +95,10 @@ class LightningTrainerParam:
         val_data: Validation Ray Dataset. May be ``None`` only when
             ``custom_dataloader`` is file-backed.
         batch_size: Per-worker training batch size.
+        val_batch_size: Per-worker validation batch size. ``None`` (the default)
+            reuses ``batch_size``. Must be ``>= 1`` when set. Applies to the Ray Data
+            validation iterator only; a ``custom_dataloader`` owns its own batch
+            sizes and does not receive it.
         num_shuffle_batches: Number of batches kept in the Ray Data local shuffle
             buffer. ``0`` disables shuffling.
         prefetch_batches: Number of batches Ray Data fetches, formats and
@@ -164,10 +170,23 @@ class LightningTrainerParam:
             the count of full batches when set. Not applied to a
             ``custom_dataloader``, which owns its own batching. Defaults to
             ``False``.
+        random_seed: Optional integer seed in ``0..2**32 - 1`` (the range
+            Lightning accepts). When set, every Ray Train worker calls
+            ``pytorch_lightning.seed_everything(random_seed, workers=True)`` at
+            the start of its training loop, before the dataloaders and the
+            model are created, so weight initialisation and dropout are seeded.
+            ``workers=True`` also makes a ``custom_dataloader`` that uses torch
+            ``DataLoader`` workers seed them; Ray Data batches are unaffected.
+            Every rank uses the same value; DDP then broadcasts the parameters
+            from rank 0, and dropout masks are the same on every worker. It does
+            not by itself make a run bit-reproducible (shuffle order and
+            non-deterministic CUDA kernels are not controlled). Defaults to
+            ``None`` (no seeding, behaviour unchanged).
 
     Raises:
         ValueError: At construction, if ``prefetch_batches`` is not an integer
-            ``>= 0`` or ``upload_async`` is not a ``bool``.
+            ``>= 0``, ``upload_async`` is not a ``bool``, or ``random_seed`` is
+            neither ``None`` nor an integer in ``0..2**32 - 1``.
         UserInputError: At construction, if ``train_data`` or ``val_data`` is
             ``None`` without a file-backed ``custom_dataloader``.
     """
@@ -191,14 +210,25 @@ class LightningTrainerParam:
     experiment_store: ExperimentStore | None = None
     profiler_sink: Callable | None = None
     custom_dataloader: CustomDataloaderParam | None = None
-    # prefetch_batches, upload_async and drop_last are appended last so
-    # positional construction is unaffected.
+    # prefetch_batches, upload_async, drop_last, val_batch_size and random_seed
+    # are appended last so positional construction is unaffected.
     prefetch_batches: int = 1  # Ray Data default; 0 disables prefetching.
     upload_async: bool = False
     drop_last: bool = False
+    val_batch_size: int | None = None  # Defaults to batch_size when unset.
+    random_seed: int | None = None
 
     def __post_init__(self):
-        """Validate new options, apply default ``num_epochs``, warn on deprecated fields."""
+        """Validate new options, apply default ``num_epochs``, warn on deprecated fields.
+
+        Raises:
+            UserInputError: If ``train_data`` or ``val_data`` is missing and
+                ``custom_dataloader`` is not file-backed.
+            ValueError: If ``prefetch_batches`` is not an integer ``>= 0``,
+                ``upload_async`` is not a bool, ``val_batch_size`` is neither
+                ``None`` nor an integer ``>= 1``, or ``random_seed`` is neither
+                ``None`` nor an integer in ``0..2**32 - 1``.
+        """
         if (
             isinstance(self.prefetch_batches, bool)
             or not isinstance(self.prefetch_batches, int)
@@ -210,6 +240,25 @@ class LightningTrainerParam:
             )
         if not isinstance(self.upload_async, bool):
             raise ValueError(f"upload_async must be a bool, got {self.upload_async!r}.")
+        if self.val_batch_size is not None and (
+            isinstance(self.val_batch_size, bool)
+            or not isinstance(self.val_batch_size, int)
+            or self.val_batch_size < 1
+        ):
+            raise ValueError(
+                f"val_batch_size must be an integer >= 1 or None, got "
+                f"{self.val_batch_size!r}. Use None to reuse batch_size for "
+                "validation."
+            )
+        if self.random_seed is not None and (
+            isinstance(self.random_seed, bool)
+            or not isinstance(self.random_seed, int)
+            or not 0 <= self.random_seed <= _MAX_RANDOM_SEED
+        ):
+            raise ValueError(
+                f"random_seed must be None or an integer in 0..{_MAX_RANDOM_SEED}, "
+                f"got {self.random_seed!r}. Use None to disable seeding."
+            )
         file_backed = (
             self.custom_dataloader is not None and self.custom_dataloader.file_backed
         )
@@ -277,7 +326,7 @@ class LightningTrainer(TorchTrainer):
         val_data, val_limit = _apply_batch_limit(
             val_data,
             trainer_kwargs.get("limit_val_batches") if cap_datasets else None,
-            trainer_param.batch_size,
+            trainer_param.val_batch_size or trainer_param.batch_size,
             num_workers,
             "val",
         )

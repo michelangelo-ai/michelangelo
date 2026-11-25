@@ -35,3 +35,20 @@ This file renders to empty YAML when all checks pass.
 {{- if and $gcs.enabled $gcs.endpoint (not $gcs.anonymous) (not (hasPrefix "https://" $gcs.endpoint)) -}}
 {{- fail "gcsStorage.endpoint must start with https:// unless gcsStorage.anonymous=true — plain-http endpoints are for emulators only and must not receive credentials. See helm/michelangelo/README.md." -}}
 {{- end -}}
+{{- if .Values.envoy.corsAllowCredentials -}}
+{{- if not (kindIs "bool" .Values.envoy.corsAllowCredentials) -}}
+{{- fail (printf "envoy.corsAllowCredentials must be a boolean (true or false), got %s %q — with --set-string the value is a non-empty string, which Helm treats as true. Use --set envoy.corsAllowCredentials=true|false. See docs/operator-guides/setup/ui-authentication.md." (kindOf .Values.envoy.corsAllowCredentials) (toString .Values.envoy.corsAllowCredentials)) -}}
+{{- end -}}
+{{- if or (not .Values.envoy.corsOrigins) (eq .Values.envoy.corsOrigins ".*") -}}
+{{- fail "envoy.corsAllowCredentials=true requires an explicit, non-wildcard envoy.corsOrigins regex. Leaving corsOrigins unset (or set to \".*\") matches every origin, and Envoy's CORS filter reflects that back as the exact caller's Origin on every request — combined with allow_credentials this would let any origin make authenticated, credentialed calls. See docs/operator-guides/setup/ui-authentication.md." -}}
+{{- end -}}
+{{- end -}}
+{{- $apiCredentials := .Values.ui.apiCredentials -}}
+{{- if and (not (kindIs "invalid" $apiCredentials)) (ne (toString $apiCredentials) "") -}}
+{{- if not (and (kindIs "string" $apiCredentials) (has $apiCredentials (list "include" "same-origin" "omit"))) -}}
+{{- fail (printf "ui.apiCredentials must be \"include\", \"same-origin\", or \"omit\" (or empty for the default), got %s %q — these are fetch()'s only valid credentials modes, and non-string values such as false or 0 are rejected rather than treated as unset. See docs/operator-guides/setup/ui-authentication.md." (kindOf $apiCredentials) (toString $apiCredentials)) -}}
+{{- end -}}
+{{- if and (eq (toString $apiCredentials) "include") (not .Values.envoy.corsAllowCredentials) -}}
+{{- fail "ui.apiCredentials=include requires envoy.corsAllowCredentials=true (with a matching, non-wildcard envoy.corsOrigins) — otherwise the browser sends the session cookie but Envoy's CORS response won't allow the page to read the result. See docs/operator-guides/setup/ui-authentication.md." -}}
+{{- end -}}
+{{- end -}}

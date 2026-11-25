@@ -1,22 +1,24 @@
 #!/usr/bin/env bash
 # Compiles src/ScalaTest.scala into target/ScalaTest.jar.
 #
-# Spark 3.5.x is built against Scala 2.12, whose stdlib is not binary
+# Spark 4.x is built against Scala 2.13, whose stdlib is not binary
 # compatible with Scala 3 (NoSuchMethodError: ScalaRunTime$.wrapRefArray) —
-# this must be compiled with a Scala 2.12.x compiler, not scalac 3.x.
+# this must be compiled with a Scala 2.13.x compiler, not scalac 3.x.
 #
 # Prerequisites (macOS):
-#   brew install scala@2.12 openjdk@11
+#   brew install scala@2.13 openjdk@17
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PYTHON_DIR="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
-SCALAC="${SCALAC:-/opt/homebrew/opt/scala@2.12/bin/scalac}"
-JAVA_HOME="${JAVA_HOME:-/opt/homebrew/opt/openjdk@11}"
+# Homebrew lives in /opt/homebrew on Apple Silicon and /usr/local on Intel.
+BREW_PREFIX="$(brew --prefix 2>/dev/null || echo /opt/homebrew)"
+SCALAC="${SCALAC:-${BREW_PREFIX}/opt/scala@2.13/bin/scalac}"
+JAVA_HOME="${JAVA_HOME:-${BREW_PREFIX}/opt/openjdk@17}"
 PYSPARK_PYTHON="${PYSPARK_PYTHON:-${PYTHON_DIR}/.venv/bin/python3}"
 
 if [[ ! -x "${SCALAC}" ]]; then
-  echo "ERROR: scalac 2.12 not found at ${SCALAC} (brew install scala@2.12)" >&2
+  echo "ERROR: scalac 2.13 not found at ${SCALAC} (brew install scala@2.13)" >&2
   exit 1
 fi
 

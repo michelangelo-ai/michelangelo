@@ -7,6 +7,7 @@ import (
 
 	"go.uber.org/zap"
 	"k8s.io/client-go/dynamic"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	goapi "github.com/michelangelo-ai/michelangelo/go/api"
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
@@ -29,6 +30,8 @@ type conditionPlugin struct {
 
 // Params contains dependencies injected for rollback plugin initialization.
 type Params struct {
+	// Client reads the InferenceServer for each cluster's current connection.
+	Client        client.Reader
 	ClientFactory clientfactory.ClientFactory
 	// APIHandler reads the previous revision's Model when its config entry has to be recreated.
 	APIHandler          goapi.Handler
@@ -47,9 +50,9 @@ type Params struct {
 // actors are derived from the cluster snapshot the rollout recorded on the deployment, so a
 // rollback undoes exactly the clusters the rollout touched.
 func NewRollbackPlugin(ctx context.Context, p Params, deployment *v2pb.Deployment) (conditionInterfaces.Plugin[*v2pb.Deployment], error) {
-	targets, err := osscommon.ReadTargetClustersAnnotation(deployment)
+	targets, err := osscommon.ResolveTargetClusters(ctx, p.Client, deployment)
 	if err != nil {
-		return nil, fmt.Errorf("read target clusters annotation: %w", err)
+		return nil, fmt.Errorf("resolve target clusters: %w", err)
 	}
 
 	actors := make([]conditionInterfaces.ConditionActor[*v2pb.Deployment], 0, len(targets)+1)

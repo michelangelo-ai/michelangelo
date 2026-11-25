@@ -1,1 +1,0 @@
-"""Amazon Books source definitions."""

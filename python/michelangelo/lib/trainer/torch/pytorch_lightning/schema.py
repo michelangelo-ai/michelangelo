@@ -370,9 +370,9 @@ class CustomDataloaderParam:
     When set, the trainer builds the train and validation dataloaders by calling
     ``factory`` instead of iterating the Ray Data shards with
     ``iter_torch_batches``. Settings that only configure that default path
-    (``batch_size``, ``num_shuffle_batches``, ``data_collate_fn``, and
-    ``limit_*_batches`` capping of the Ray Datasets) are not applied to custom
-    loaders; the factory owns batching. Integer ``limit_*_batches`` values are
+    (``batch_size``, ``val_batch_size``, ``num_shuffle_batches``,
+    ``data_collate_fn``, and ``limit_*_batches`` capping of the Ray Datasets)
+    are not applied to custom loaders; the factory owns batching. Integer ``limit_*_batches`` values are
     still honored by Lightning itself.
 
     Attributes:

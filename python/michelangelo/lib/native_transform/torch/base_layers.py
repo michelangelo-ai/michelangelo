@@ -2,19 +2,17 @@
 
 TorchScript- and ONNX-exportable ``nn.Module`` transform layers that operate on a
 ``dict[str, torch.Tensor]`` in/out contract so the exact same transform runs at
-train and serve time. Every layer subclasses :class:`TorchTransformBaseLayer` and
-uses :func:`~michelangelo.lib.native_transform.torch.utils.format_inputs` /
-:func:`~michelangelo.lib.native_transform.torch.utils.format_outputs` to map its
+train and serve time. Every layer subclasses `TorchTransformBaseLayer` and
+uses `format_inputs` /
+`format_outputs` to map its
 declared input/output columns to and from a single stacked tensor.
 
-This module provides the foundation (stateless, elementwise) layers, plus
-structural layers (``Tile``, ``PadOrCrop1D``, ``Clip``, ``Scale``, ``CaseWhen``,
 This module provides the foundation (stateless, elementwise) layers, plus
 structural layers (``Tile``, ``PadOrCrop1D``, ``Clip``, ``Scale``, ``CaseWhen``,
 ``Compare``, ``TensorColFillNone``, etc.) and the ``IDHashTokenizer`` wrapper
 layer. Fitted-statistics layers (``MinMax``, ``Normalization``,
 ``Bucketization``) live in
-:mod:`~michelangelo.lib.native_transform.torch.stats_layers`.
+`michelangelo.lib.native_transform.torch.stats_layers`.
 """
 
 from __future__ import annotations
@@ -363,7 +361,7 @@ class Divide(TorchTransformBaseLayer):
             division.
         eps: Small value substituted for a zero denominator to avoid division by
             zero (default
-            :data:`~michelangelo.lib.native_transform.torch.constants.DEFAULT_EPSILON`).
+            `DEFAULT_EPSILON`).
         **kwargs: Additional base-layer options (e.g. ``name``).
 
     Raises:
@@ -386,7 +384,7 @@ class Divide(TorchTransformBaseLayer):
             output_cols: Column names of the quotient outputs.
             add_constant_to_divisor: Constant added to every denominator.
             eps: Small value substituted for a zero denominator (default
-                :data:`~michelangelo.lib.native_transform.torch.constants.DEFAULT_EPSILON`).
+                `DEFAULT_EPSILON`).
             **kwargs: Additional base-layer options (e.g. ``name``).
 
         Raises:
@@ -435,9 +433,17 @@ class Divide(TorchTransformBaseLayer):
 
 
 class LogTransform(TorchTransformBaseLayer):
-    """Apply a logarithmic transform with an offset and output clamping.
+    """Apply a logarithmic transform with an offset and input clamping.
 
-    Computes ``log(x + add_constant)`` and clamps the result to ``[1.0, 1e20]``.
+    Computes ``log(clamp(x + add_constant, min=1.0, max=1e20))``, which is
+    equivalent to ``log(max(x + add_constant, 1))`` with an upper cap.
+
+    Note:
+        The input to the logarithm is clamped to ``[1.0, 1e20]``, so the output
+        lies in ``[0.0, ~46.05]`` (``log(1e20)``). Any finite or infinite
+        element with ``x + add_constant <= 1`` maps to ``0.0``, and values with
+        ``x + add_constant`` above ``1`` keep their true logarithm. NaN inputs
+        (or a NaN ``add_constant``) propagate to NaN output.
 
     Args:
         input_cols: Column names of the input tensors.
@@ -484,11 +490,13 @@ class LogTransform(TorchTransformBaseLayer):
             inputs: Mapping from column name to tensor.
 
         Returns:
-            A mapping from each output column to its transformed, clamped tensor.
+            A mapping from each output column to its transformed tensor, with
+            values in ``[0.0, log(1e20)]``.
         """
         stacked_inputs = format_inputs(self.input_cols, inputs)
-        stacked_outputs = torch.log(stacked_inputs + self.add_constant)
-        stacked_outputs = torch.clamp(stacked_outputs, min=1.0, max=1e20)
+        stacked_outputs = torch.log(
+            torch.clamp(stacked_inputs + self.add_constant, min=1.0, max=1e20)
+        )
         return format_outputs(self.output_cols, stacked_outputs)
 
 
@@ -1166,17 +1174,21 @@ class PadOrCrop1D(TorchTransformBaseLayer):
             # Gather the last ``max_length`` elements of the *real* content
             # (everything up to and including the last non-sentinel position),
             # left-padding when the content is shorter than ``max_length``.
-            positions = torch.arange(
-                stacked_input.size(-1), device=stacked_input.device
+            # Allocate the index tensors on the input's device via ``new_empty``
+            # and fill them with ``arange(out=...)``, the same principle as
+            # ``Constant``. ``device=stacked_input.device`` would bake the
+            # trace-time device literal into the graph, breaking a CPU-traced
+            # module served on GPU.
+            positions = stacked_input.new_empty(
+                stacked_input.size(-1), dtype=torch.long
             )
+            torch.arange(stacked_input.size(-1), out=positions)
+            out_positions = stacked_input.new_empty(self.max_length, dtype=torch.long)
+            torch.arange(self.max_length, out=out_positions)
             content_length = torch.where(
                 sentinel_mask, torch.zeros_like(positions), positions + 1
             ).amax(dim=-1, keepdim=True)
-            source_index = (
-                torch.arange(self.max_length, device=stacked_input.device)
-                + content_length
-                - self.max_length
-            )
+            source_index = out_positions + content_length - self.max_length
             gathered = torch.gather(stacked_input, -1, source_index.clamp(min=0))
             output_tensor = torch.where(source_index >= 0, gathered, replacement).to(
                 output_dtype
@@ -1340,7 +1352,7 @@ class IDHashTokenizer(TorchTransformBaseLayer):
     package if that changes.
 
     Composes the vocabulary-lookup core in
-    :class:`~michelangelo.lib.native_transform.torch.id_hash_tokenizer.IDHashTokenizer`
+    `michelangelo.lib.native_transform.torch.id_hash_tokenizer.IDHashTokenizer`
     into the ``dict[str, torch.Tensor]`` layer contract. Sentinel positions
     from upstream ragged-batch collation (``NaN`` for float inputs,
     ``INT32_SENTINEL`` for integer inputs) are automatically detected and
@@ -1349,14 +1361,14 @@ class IDHashTokenizer(TorchTransformBaseLayer):
     cast), and restored as ``INT32_SENTINEL`` in the output regardless of the
     input's original dtype.
 
-    .. note::
-        This is a different class from the one previously exported as
-        ``michelangelo.lib.native_transform.torch.IDHashTokenizer``: prior to
+    Note:
+        This is a different class from the one previously exported
+        as ``michelangelo.lib.native_transform.torch.IDHashTokenizer``: prior to
         this layer's addition, that top-level name referred to the bare
         lookup core above (a plain ``nn.Module`` taking and returning a
         single ``torch.Tensor``). That core is still available under its
         original name at
-        :mod:`michelangelo.lib.native_transform.torch.id_hash_tokenizer`; the
+        `michelangelo.lib.native_transform.torch.id_hash_tokenizer`; the
         top-level package name now refers to this layer instead, which
         composes the core into the dict-of-tensors transform-layer contract
         used throughout this package.
