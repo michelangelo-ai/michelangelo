@@ -1,5 +1,6 @@
 ---
 last_verified: 2026-10-14
+sidebar_position: 3
 ---
 
 # Network & Ingress Configuration
@@ -316,5 +317,6 @@ Use this checklist when deploying Michelangelo AI to a new environment:
 
 - [Platform Setup — Environment Overrides](platform-setup.md#environment-overrides--domain-settings)
 - [Authentication](authentication.md)
+- [UI Authentication](ui-authentication.md) — fronting the UI and Envoy Ingresses with an auth proxy once `k8s-rbac` mode is on
 - [Register a Compute Cluster](register-a-compute-cluster-to-michelangelo-control-plane.md)
 - [Troubleshooting](../operations/troubleshooting.md)

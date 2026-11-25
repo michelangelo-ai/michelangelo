@@ -1,3 +1,7 @@
+---
+sidebar_position: 5
+---
+
 # Register a Compute Cluster
 
 Register an existing compute Kubernetes cluster with the Michelangelo AI control plane to enable running Ray jobs.
