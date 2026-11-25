@@ -155,6 +155,21 @@ def test_build_star_relative_names(tmp_path):
     }
 
 
+def test_build_star_meta_json(tmp_path):
+    """meta.json is compact JSON, and a quote in a file name stays valid."""
+    _write_tree(tmp_path)
+    pkg = build_star(tmp_path / "a/main.star", root=tmp_path)
+    assert pkg.files["meta.json"] == (
+        b'{"main_file":"/a/main.star","main_function":"main"}'
+    )
+
+    (tmp_path / 'a/ma"in.star').write_text("def main():\n    return 1\n")
+    pkg = build_star(tmp_path / 'a/ma"in.star', root=tmp_path)
+    assert pkg.files["meta.json"] == (
+        b'{"main_file":"/a/ma\\"in.star","main_function":"main"}'
+    )
+
+
 def test_build_star_rejects_load_outside_root(tmp_path):
     """A load that leaves the root raises ValueError naming the path."""
     root = tmp_path / "root"

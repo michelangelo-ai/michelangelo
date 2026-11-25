@@ -1,21 +1,23 @@
 """Tests for the declarative interpreter release assembly tool."""
 
 import ast
-import copy
 import hashlib
 import io
 import json
 import shutil
 import tarfile
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 import yaml
 
 from michelangelo.uniflow.declarative.assemble import (
+    ReleaseSource,
     ReleaseSourceError,
     assemble,
     generate_main,
+    main,
     parse_source,
 )
 
@@ -203,6 +205,35 @@ def _retry_attempts_field(doc):
     _ray(doc)["job_specs"]["ray"]["retry_attempts"] = {"type": "integer"}
 
 
+def _version_newline(doc):
+    doc["version"] = "core-v0.1.0\n"
+
+
+def _capabilities_not_list(doc):
+    _ray(doc)["capabilities"] = "retry"
+
+
+def _capabilities_not_strings(doc):
+    _ray(doc)["capabilities"] = [1]
+
+
+def _unknown_capability(doc):
+    _ray(doc)["capabilities"] = ["retry", "cache"]
+
+
+def _non_ascii_type_name(doc):
+    doc["task_types"]["core/r\u00e9y"] = doc["task_types"].pop("core/ray")
+
+
+def _non_ascii_job_specs_key(doc):
+    _ray(doc)["job_specs_key"] = "r\u00e9y"
+    _ray(doc)["job_specs"] = {"r\u00e9y": {}}
+
+
+def _non_ascii_factory(doc):
+    _ray(doc)["factory"] = "python/michelangelo/uniflow/plugins/ray/task.star:t\u00e9sk"
+
+
 @pytest.mark.parametrize(
     ("mutate", "message"),
     [
@@ -235,6 +266,40 @@ def _retry_attempts_field(doc):
             'task type "core/ray": field "retry_attempts" is reserved;'
             " the engine sets it",
         ),
+        (
+            _version_newline,
+            'release source: version "core-v0.1.0\\n"'
+            " must match [A-Za-z0-9][A-Za-z0-9._-]*",
+        ),
+        (
+            _capabilities_not_list,
+            'task type "core/ray": capabilities must be a list of strings',
+        ),
+        (
+            _capabilities_not_strings,
+            'task type "core/ray": capabilities must be a list of strings',
+        ),
+        (
+            _unknown_capability,
+            'task type "core/ray": unknown capability "cache";'
+            ' known: "outcome_mode", "retry"',
+        ),
+        (
+            _non_ascii_type_name,
+            'task type "core/r\\u00e9y": the name is not an identifier'
+            ' after mapping "/" and "." to "_"',
+        ),
+        (
+            _non_ascii_job_specs_key,
+            'task type "core/ray": job_specs_key "r\\u00e9y" is not an identifier'
+            ' after mapping "/" and "." to "_"',
+        ),
+        (
+            _non_ascii_factory,
+            'task type "core/ray": factory'
+            ' "python/michelangelo/uniflow/plugins/ray/task.star:t\\u00e9sk"'
+            " must be <file>.star:<function>",
+        ),
     ],
 )
 def test_parse_source_rejects(mutate, message):
@@ -258,9 +323,75 @@ def test_generated_main_quotes_strings(tmp_path):
         ' after mapping "/" and "." to "_"'
     )
 
-    doc = _source()
-    _ray(doc)["capabilities"] = ['re"try\n']
+    ray = parse_source(_source()).task_types["core/ray"]
+    source = ReleaseSource(
+        version="v",
+        artifact="a",
+        task_types={"core/ray": replace(ray, capabilities=['re"try\n'])},
+    )
     root = _copy_root(tmp_path / "root")
-    main = generate_main(parse_source(copy.deepcopy(doc)), root / "build", root)
-    assert '["re\\"try\\n"]' in main
-    ast.parse(main)
+    out = generate_main(source, root / "build", root)
+    assert '["re\\"try\\n"]' in out
+    ast.parse(out)
+
+
+def test_assemble_same_output_is_noop(tmp_path):
+    """A second run that writes the same bytes succeeds and changes nothing."""
+    root = _copy_root(tmp_path / "root")
+    out = tmp_path / "out"
+    first, _ = _assemble(root, out)
+    paths = [out / "core-v0.1.0.tar.gz", out / "core-v0.1.0.yaml"]
+    before = [p.stat().st_mtime_ns for p in paths]
+    second, _ = _assemble(root, out)
+    assert first == second
+    assert [p.stat().st_mtime_ns for p in paths] == before
+    assert sorted(out.iterdir()) == paths
+
+
+def test_assemble_restores_release_file(tmp_path):
+    """A run that stopped after the tar write completes on the next run."""
+    root = _copy_root(tmp_path / "root")
+    out = tmp_path / "out"
+    _, release = _assemble(root, out)
+    (out / "core-v0.1.0.yaml").unlink()
+    _, again = _assemble(root, out)
+    assert again == release
+
+
+def test_assemble_refuses_changed_release(tmp_path):
+    """A release version is immutable: new bytes for it are an error."""
+    root = _copy_root(tmp_path / "root")
+    out = tmp_path / "out"
+    _assemble(root, out)
+    release = (out / "core-v0.1.0.yaml").read_text()
+    engine = root / "python/michelangelo/uniflow/declarative/engine.star"
+    engine.write_text(engine.read_text() + "\nEXTRA = 1\n")
+    with pytest.raises(FileExistsError) as e:
+        _assemble(root, out)
+    assert str(e.value) == (
+        f"{out / 'core-v0.1.0.tar.gz'} exists with other bytes;"
+        " bump the version in the release source"
+    )
+    assert (out / "core-v0.1.0.yaml").read_text() == release
+
+
+def test_main_reports_errors(tmp_path, capsys):
+    """The CLI prints a bad source or a file error to stderr and exits 2."""
+    root = _copy_root(tmp_path / "root")
+    doc = _source()
+    doc["owner"] = "x"
+    bad = tmp_path / "bad.yaml"
+    bad.write_text(yaml.safe_dump(doc))
+    for source, message in [
+        (bad, 'error: release source: unknown key "owner"\n'),
+        (
+            tmp_path / "missing.yaml",
+            "error: [Errno 2] No such file or directory:"
+            f" '{tmp_path / 'missing.yaml'}'\n",
+        ),
+    ]:
+        with pytest.raises(SystemExit) as e:
+            main([str(source), "--root", str(root), "--out", str(tmp_path / "out")])
+        assert e.value.code == 2
+        captured = capsys.readouterr()
+        assert (captured.out, captured.err) == ("", message)

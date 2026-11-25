@@ -33,6 +33,7 @@ import argparse
 import ast
 import gzip
 import inspect
+import json
 import logging
 import sys
 import tarfile
@@ -425,9 +426,10 @@ def _package(files: dict[str, bytes], main_file: str, main_function: str) -> Pac
 
     meta_file = "meta.json"
     assert meta_file not in files, f"{meta_file} is a reserved file"
-    files[meta_file] = (
-        f'{{"main_file":"{main_file}","main_function":"{main_function}"}}'.encode()
-    )
+    files[meta_file] = json.dumps(
+        {"main_file": main_file, "main_function": main_function},
+        separators=(",", ":"),
+    ).encode()
 
     return Package(
         files=files,
