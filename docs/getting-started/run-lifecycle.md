@@ -60,7 +60,7 @@ ma pipeline run --namespace="<namespace>" --name="<pipeline>"
 | **Resource** | None yet. The CLI builds a `PipelineRun` and sends it in a `CreatePipelineRun` gRPC request. |
 | **Code** | [`python/michelangelo/cli/mactl/plugins/entity/pipeline/run.py`](https://github.com/michelangelo-ai/michelangelo/blob/main/python/michelangelo/cli/mactl/plugins/entity/pipeline/run.py) |
 
-The CLI generates a unique run name of the form `run-YYYYMMDD-HHMMSS-<8 hex characters>` and fills in `spec.pipeline` (the pipeline name and namespace) and `spec.actor` (your user name). If you pass `--resume_from`, it also fills in `spec.resume`. If you pass `--notify-slack`, `--notify-email`, or `--notify-on`, it fills in `spec.notifications`, and the API server then leaves the run's notification rules alone in the next hop. It then calls `PipelineRunService/CreatePipelineRun` on the API server, which is `127.0.0.1:15566` by default and can be overridden with `MACTL_ADDRESS`. With `--dry-run`, the server validates the request and rolls it back, so nothing below this hop happens.
+The CLI generates a unique run name of the form `run-YYYYMMDD-HHMMSS-<8 hex characters>` and fills in `spec.pipeline` (the pipeline name and namespace) and `spec.actor` (your user name). If you pass `--resume_from`, it also fills in `spec.resume`. If you pass `--notify-slack` or `--notify-email`, with `--notify-on` to choose the events, it fills in `spec.notifications`, and the API server then leaves the run's notification rules alone in the next hop. It then calls `PipelineRunService/CreatePipelineRun` on the API server, which is `127.0.0.1:15566` by default and can be overridden with `MACTL_ADDRESS`. With `--dry-run`, the server validates the request and rolls it back, so nothing below this hop happens.
 
 `ma pipeline run` has no `--revision` flag. The revision a run uses is chosen on the server in the next hop.
 
@@ -195,11 +195,13 @@ In the sandbox the control plane and the compute cluster can be the same Kuberne
 
 A `SparkTask` follows the same pattern through the `spark` module ([`go/worker/plugins/spark/starlark_module.go`](https://github.com/michelangelo-ai/michelangelo/blob/main/go/worker/plugins/spark/starlark_module.go)), but it creates a single `SparkJob` and has no cluster phase. The SparkJob controller ([`go/components/spark/job/controller.go`](https://github.com/michelangelo-ai/michelangelo/blob/main/go/components/spark/job/controller.go)) creates a `SparkApplication` through the Spark Operator and copies its state back into the `SparkJob`.
 
-Unlike Ray, Spark work does not go through the scheduler. The SparkJob controller uses the controller manager's own kubeconfig, so the `SparkApplication` lands in the run's namespace on the control-plane cluster:
+Unlike Ray, Spark work does not go through the scheduler. The SparkJob controller uses the controller manager's own kubeconfig, so the `SparkApplication` lands on the control-plane cluster. It and the `SparkJob` are both created in the `default` namespace, whatever the pipeline's namespace. For Python Spark tasks, their names start with `uniflow-sp-`:
 
 ```bash
-kubectl get sparkjobs.michelangelo.api,sparkapplications -n <namespace>
+kubectl get sparkjobs.michelangelo.api,sparkapplications -n default
 ```
+
+Unlike Ray objects, a finished `SparkJob` stays in etcd, so you can still inspect it after the task ends.
 
 Multi-cluster Spark is tracked in [#616](https://github.com/michelangelo-ai/michelangelo/issues/616).
 
@@ -235,7 +237,7 @@ ma pipeline_run get --namespace="<namespace>" --name="<run-name>" --output=yaml
 | 3 | PipelineRun controller | `PipelineRun.status.conditions`, `status.steps` | `deployment/michelangelo-controllermgr` logs |
 | 4 | Workflow engine | `status.workflowId`, `status.workflowRunId` | Cadence Web or Temporal Web |
 | 5 | Worker | Calls to the API server | `deployment/michelangelo-worker` logs |
-| 6 | Scheduler, Ray controllers, KubeRay | `RayCluster`, `RayJob` (and KubeRay's own `ray.io` copies) | `kubectl get rayclusters.michelangelo.api,rayjobs.michelangelo.api` (live objects only), Ray dashboard |
+| 6 | Scheduler, Ray controllers, KubeRay | `RayCluster`, `RayJob` (and KubeRay's own `ray.io` copies) | `kubectl get rayclusters.michelangelo.api,rayjobs.michelangelo.api -n <namespace>` (live objects only), Ray dashboard |
 | 7 | Controllers, workflow, CLI | `CachedOutput`, `Model` (from your code), `status.state` | `ma pipeline_run get` |
 
 ## Where to go next
