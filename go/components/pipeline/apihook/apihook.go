@@ -138,9 +138,11 @@ func (a apiHook) target(stored *v2.Pipeline, reqPin *v2.InterpreterPin) (*declar
 			// release of the same version.
 			rel, pin = r, pinOf(r)
 		default:
+			// Only the digest line is compared. An edit to task_types or
+			// artifact under the same version and digest is not detected.
 			return nil, nil, status.Errorf(codes.FailedPrecondition,
-				"the release file for interpreter %s changed after this pipeline was pinned; set interpreter_pin.version to another release in %s",
-				storedPin.Version, a.d.versionList())
+				"the digest in the release file for interpreter %s is %s, but this pipeline was pinned with %s; set interpreter_pin.version to another release in %s",
+				storedPin.Version, r.Digest, declarative.Clip(storedPin.Digest), a.d.versionList())
 		}
 	} else {
 		r, ok := a.d.releases[v]

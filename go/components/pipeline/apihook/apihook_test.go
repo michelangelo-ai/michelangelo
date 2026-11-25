@@ -556,6 +556,8 @@ func TestBeforeUpdate(t *testing.T) {
 	// operator changed core-v1.yaml after the pin was stamped.
 	driftV1 := &v2.InterpreterPin{Version: "core-v1", Artifact: v1.Artifact, Digest: "sha256:stale"}
 	const versions = "[core-v1, core-v2]"
+	driftMsg := "the digest in the release file for interpreter core-v1 is " + v1.Digest +
+		", but this pipeline was pinned with sha256:stale; set interpreter_pin.version to another release in " + versions
 
 	tests := []struct {
 		name     string
@@ -642,14 +644,14 @@ func TestBeforeUpdate(t *testing.T) {
 			name:     "same version fails when the release file changed after the pin",
 			stored:   storedPipeline(t, driftV1),
 			wantCode: codes.FailedPrecondition,
-			wantMsg:  "the release file for interpreter core-v1 changed after this pipeline was pinned; set interpreter_pin.version to another release in " + versions,
+			wantMsg:  driftMsg,
 		},
 		{
 			name:     "an echo of a drifted pin also fails",
 			stored:   storedPipeline(t, driftV1),
 			reqPin:   proto.Clone(driftV1).(*v2.InterpreterPin),
 			wantCode: codes.FailedPrecondition,
-			wantMsg:  "the release file for interpreter core-v1 changed after this pipeline was pinned; set interpreter_pin.version to another release in " + versions,
+			wantMsg:  driftMsg,
 		},
 		{
 			name:    "an upgrade away from a drifted pin succeeds",
