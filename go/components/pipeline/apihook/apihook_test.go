@@ -179,8 +179,8 @@ func TestPassThrough(t *testing.T) {
 				// The mock has no expectations, so any Get fails the test.
 				hook, _ := newHook(t, loadDeclarative(t, enabled, "core-v1"))
 
-				// The hook removes only the explain-plan annotation, so a
-				// client cannot store a plan on a non-declarative pipeline.
+				// The hook removes only the explain-plan annotation and
+				// interpreter_pin. This request has no pin.
 				want := mk()
 				delete(want.Annotations, explainPlanAnnotation)
 

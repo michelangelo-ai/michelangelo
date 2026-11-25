@@ -118,7 +118,8 @@ func (a apiHook) createTarget(reqPin *v2.InterpreterPin) (*declarative.Release, 
 
 // target resolves the release and the pin of an update. A stored pipeline
 // that is not a pinned DECLARATIVE pipeline follows the create rules. This
-// covers a type change and a pipeline that kubectl wrote without a pin.
+// covers a type change, a pipeline that kubectl wrote without a pin, and a
+// missing pipeline, which arrives as an empty stored pipeline.
 //
 // A request artifact or digest is accepted when it equals the pin that the
 // hook writes, or the stored pin. The second case is an echo from a
