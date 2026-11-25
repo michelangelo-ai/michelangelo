@@ -15,6 +15,9 @@ spec:
     metadata:
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/core/apiserver-configmap.yaml") . | sha256sum }}
+        {{- if .Values.apiserver.declarative.enabled }}
+        checksum/declarative-releases: {{ include (print $.Template.BasePath "/core/apiserver-declarative-releases-configmap.yaml") . | sha256sum }}
+        {{- end }}
       labels:
         {{- include "michelangelo.componentSelectorLabels" (dict "context" . "component" "apiserver") | nindent 8 }}
     spec:
@@ -127,6 +130,11 @@ spec:
           volumeMounts:
             - name: config
               mountPath: /config
+            {{- if .Values.apiserver.declarative.enabled }}
+            - name: declarative-releases
+              mountPath: {{ .Values.apiserver.declarative.releasesDir }}
+              readOnly: true
+            {{- end }}
             {{- if .Values.apiserver.tls.enabled }}
             - name: tls
               mountPath: {{ .Values.apiserver.tls.mountPath | default "/tls" }}
@@ -143,6 +151,11 @@ spec:
         - name: schema
           configMap:
             name: {{ include "michelangelo.schemaInitConfigMapName" . }}
+        {{- if .Values.apiserver.declarative.enabled }}
+        - name: declarative-releases
+          configMap:
+            name: {{ include "michelangelo.componentFullname" (dict "context" . "component" "apiserver-declarative-releases") }}
+        {{- end }}
         {{- if .Values.apiserver.tls.enabled }}
         - name: tls
           secret:

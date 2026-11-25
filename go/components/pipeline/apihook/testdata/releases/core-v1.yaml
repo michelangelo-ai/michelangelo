@@ -1,0 +1,11 @@
+version: core-v1
+artifact: s3://ma-artifacts/interpreters/core-v1.tar.gz
+digest: sha256:1111111111111111111111111111111111111111111111111111111111111111
+task_types:
+  core/python:
+    capabilities: []
+    config:
+      entry_point: {type: string, required: true}
+      args: {type: list}
+    job_specs:
+      cpu: {type: integer}

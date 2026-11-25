@@ -1,0 +1,12 @@
+version: core-v2
+artifact: s3://ma-artifacts/interpreters/core-v2.tar.gz
+digest: sha256:2222222222222222222222222222222222222222222222222222222222222222
+task_types:
+  core/python:
+    capabilities: []
+    config:
+      entry_point: {type: string, required: true}
+      args: {type: list}
+      timeout_seconds: {type: integer}
+    job_specs:
+      cpu: {type: integer}

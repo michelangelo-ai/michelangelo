@@ -21,6 +21,7 @@ go_library(
         "//go/base/env:go_default_library",
         "//go/base/zapfx:go_default_library",
         "//go/components/model/apihook:go_default_library",
+        "//go/components/pipeline/apihook:go_default_library",
         "//go/components/pipelinerun/apihook:go_default_library",
         "//go/components/project/apihook:go_default_library",
         "//go/components/triggerrun/apihook:go_default_library",
@@ -74,14 +75,17 @@ go_test(
     ],
     embed = [":go_default_library"],
     deps = [
+        "//go/components/pipeline/apihook:go_default_library",
         "//proto/api/v2:go_default_library",
         "@com_github_stretchr_testify//assert:go_default_library",
+        "@com_github_stretchr_testify//require:go_default_library",
         "@org_uber_go_config//:go_default_library",
         "@org_uber_go_fx//:go_default_library",
         "@org_uber_go_fx//fxtest:go_default_library",
         "@org_uber_go_yarpc//api/transport:go_default_library",
         "@org_uber_go_yarpc//encoding/protobuf/reflection:go_default_library",
         "@org_uber_go_zap//:go_default_library",
+        "@org_uber_go_zap//zaptest/observer:go_default_library",
     ],
 )
 

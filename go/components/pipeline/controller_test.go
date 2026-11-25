@@ -8,7 +8,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
+	gogoproto "github.com/gogo/protobuf/proto"
 	pbtypes "github.com/gogo/protobuf/types"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -17,8 +19,10 @@ import (
 
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
+	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	"github.com/michelangelo-ai/michelangelo/go/base/revision"
+	"github.com/michelangelo-ai/michelangelo/go/components/pipeline/declarative"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"go.uber.org/yarpc"
@@ -726,4 +730,214 @@ func TestSnapshotRevision_CopiesCommitMetadata(t *testing.T) {
 	require.NoError(t, reconciler.snapshotRevision(context.Background(), pipeline))
 	require.NotNil(t, manager.upserted)
 	assert.Equal(t, commit, manager.upserted.Spec.GitCommit)
+}
+
+// readyCount returns the pipeline_ready_total value for one pipeline.
+func readyCount(t *testing.T, namespace, name string) float64 {
+	t.Helper()
+	return counterValue(t, pipelineReady, namespace, name)
+}
+
+// counterValue returns the value of vec for one pipeline.
+func counterValue(t *testing.T, vec *prometheus.CounterVec, namespace, name string) float64 {
+	t.Helper()
+	reg := prometheus.NewRegistry()
+	require.NoError(t, reg.Register(vec))
+	mfs, err := reg.Gather()
+	require.NoError(t, err)
+	for _, mf := range mfs {
+		for _, m := range mf.GetMetric() {
+			labels := map[string]string{}
+			for _, l := range m.GetLabel() {
+				labels[l.GetName()] = l.GetValue()
+			}
+			if labels["namespace"] == namespace && labels["pipeline"] == name {
+				return m.GetCounter().GetValue()
+			}
+		}
+	}
+	return 0
+}
+
+func declarativePipeline(name string, pin *v2pb.InterpreterPin, status v2pb.PipelineStatus) *v2pb.Pipeline {
+	return &v2pb.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "test-namespace"},
+		Spec: v2pb.PipelineSpec{
+			Commit: &v2pb.CommitInfo{GitRef: "abc123456789", Branch: "main"},
+			Manifest: &v2pb.PipelineManifest{
+				Type:           v2pb.PIPELINE_MANIFEST_TYPE_DECLARATIVE,
+				InterpreterPin: pin,
+			},
+		},
+		Status: status,
+	}
+}
+
+func TestReconcile_DeclarativeWithoutPin(t *testing.T) {
+	const name = "declarative-no-pin"
+	p := declarativePipeline(name, nil, v2pb.PipelineStatus{})
+	reconciler := setUpReconciler(t, []client.Object{p}, env.Context{}, Config{RevisioningEnabled: true})
+	before := readyCount(t, "test-namespace", name)
+
+	result, err := reconciler.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{Name: name, Namespace: "test-namespace"}})
+	require.NoError(t, err)
+	assert.Equal(t, ctrl.Result{}, result, "ERROR is terminal and does not requeue")
+
+	got := &v2pb.Pipeline{}
+	require.NoError(t, reconciler.Get(context.Background(), "test-namespace", name, &metav1.GetOptions{}, got))
+	assert.Equal(t, v2pb.PIPELINE_STATE_ERROR, got.Status.State)
+	assert.Equal(t, "declarative pipeline has no interpreter pin; re-apply through the API with apiserver.declarative.enabled=true", got.Status.ErrorMessage)
+	assert.Nil(t, got.Status.LatestRevision)
+	assert.Equal(t, before, readyCount(t, "test-namespace", name))
+
+	rev := &v2pb.Revision{}
+	err = reconciler.Get(context.Background(), "test-namespace", "pipeline-"+name+"-abc123456789", &metav1.GetOptions{}, rev)
+	assert.True(t, utils.IsNotFoundError(err), "no revision snapshot: %v", err)
+}
+
+func TestReconcile_DeclarativeWithPin(t *testing.T) {
+	const name = "declarative-pinned"
+	pin := &v2pb.InterpreterPin{Version: "core-v1", Artifact: "s3://a/core-v1.tar.gz", Digest: "sha256:00"}
+	// The pipeline was ERROR and is now re-applied through the API with a pin.
+	p := declarativePipeline(name, pin, v2pb.PipelineStatus{
+		State:        v2pb.PIPELINE_STATE_ERROR,
+		ErrorMessage: "declarative pipeline has no interpreter pin; re-apply through the API with apiserver.declarative.enabled=true",
+	})
+	reconciler := setUpReconciler(t, []client.Object{p}, env.Context{}, Config{})
+
+	_, err := reconciler.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{Name: name, Namespace: "test-namespace"}})
+	require.NoError(t, err)
+
+	got := &v2pb.Pipeline{}
+	require.NoError(t, reconciler.Get(context.Background(), "test-namespace", name, &metav1.GetOptions{}, got))
+	assert.Equal(t, v2pb.PIPELINE_STATE_READY, got.Status.State)
+	assert.Empty(t, got.Status.ErrorMessage)
+}
+
+func TestReconcile_DeclarativeWithoutPin_StatusUpdateErrorIsCounted(t *testing.T) {
+	const name = "declarative-no-pin-update-fails"
+	p := declarativePipeline(name, nil, v2pb.PipelineStatus{})
+	scheme := runtime.NewScheme()
+	require.NoError(t, v2pb.AddToScheme(scheme))
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(p).
+		WithStatusSubresource(p).
+		WithInterceptorFuncs(interceptor.Funcs{
+			SubResourceUpdate: func(context.Context, client.Client, string, client.Object, ...client.SubResourceUpdateOption) error {
+				return errors.New("etcd unavailable")
+			},
+		}).
+		Build()
+	reconciler := &Reconciler{Handler: apiHandler.NewFakeAPIHandler(k8sClient), logger: zaptest.NewLogger(t), scheme: scheme}
+	before := counterValue(t, pipelineReconcileErrors, "test-namespace", name)
+
+	_, err := reconciler.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{Name: name, Namespace: "test-namespace"}})
+	require.ErrorContains(t, err, "etcd unavailable")
+	assert.Equal(t, before+1, counterValue(t, pipelineReconcileErrors, "test-namespace", name))
+}
+
+// An interpreter pin upgrade changes only the runtime, not the authored spec.
+// A re-apply of the same commit with a new pin must not count as a changed
+// spec, and the immutable revision must stay as it is.
+func TestReconcile_PinUpgradeOnSameCommitKeepsRevision(t *testing.T) {
+	spec := func(pin *v2pb.InterpreterPin) v2pb.PipelineSpec {
+		return v2pb.PipelineSpec{
+			Description: "same",
+			Commit:      &v2pb.CommitInfo{GitRef: "main", Branch: "main"},
+			Manifest: &v2pb.PipelineManifest{
+				Type:           v2pb.PIPELINE_MANIFEST_TYPE_DECLARATIVE,
+				UniflowTar:     pin.Artifact,
+				InterpreterPin: pin,
+			},
+		}
+	}
+	v1 := &v2pb.InterpreterPin{Version: "core-v1", Artifact: "s3://a/core-v1.tar.gz", Digest: "sha256:01"}
+	v2 := &v2pb.InterpreterPin{Version: "core-v2", Artifact: "s3://a/core-v2.tar.gz", Digest: "sha256:02"}
+	pipeline := &v2pb.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-pipeline", Namespace: "test-namespace"},
+		Spec:       spec(v2),
+	}
+	existing := immutableRevision("pipeline-test-pipeline-main", "main")
+	existing.Spec.Content = mustSnapshot(&v2pb.Pipeline{Spec: spec(v1)})
+
+	reconciler := setUpReconciler(t, []client.Object{pipeline, existing}, env.Context{}, Config{RevisioningEnabled: true})
+	_, err := reconciler.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{Name: "test-pipeline", Namespace: "test-namespace"}})
+	require.NoError(t, err)
+
+	got := &v2pb.Revision{}
+	require.NoError(t, reconciler.Get(context.Background(), "test-namespace", "pipeline-test-pipeline-main", &metav1.GetOptions{}, got))
+	assert.Equal(t, existing.Spec.Content, got.Spec.Content, "the immutable revision is not rewritten")
+
+	matches, err := snapshotMatchesSpec(existing, pipeline)
+	require.NoError(t, err)
+	assert.True(t, matches)
+	assert.Equal(t, v2, pipeline.Spec.Manifest.InterpreterPin, "the caller's pipeline must not be modified")
+}
+
+// reorderedContent returns one two-task workflow encoded with its task map
+// entries in the given order. Each entry is a separate one-task message, and
+// repeated map fields merge on decode.
+func reorderedContent(t *testing.T, order ...string) []byte {
+	t.Helper()
+	head, err := gogoproto.Marshal(&v2pb.DeclarativeWorkflow{SchemaVersion: declarative.SchemaVersion})
+	require.NoError(t, err)
+	out := head
+	for _, k := range order {
+		one := &v2pb.DeclarativeWorkflow{Tasks: map[string]*v2pb.DeclarativeTask{k: {
+			TaskFunction: "core/python",
+			Config: &pbtypes.Struct{Fields: map[string]*pbtypes.Value{
+				"entry_point": {Kind: &pbtypes.Value_StringValue{StringValue: k + ".py"}},
+			}},
+		}}}
+		b, err := gogoproto.Marshal(one)
+		require.NoError(t, err)
+		out = append(out, b...)
+	}
+	return out
+}
+
+// storedContent decodes raw and re-encodes it, as the Pipeline API hook does.
+func storedContent(t *testing.T, raw []byte) []byte {
+	t.Helper()
+	w, err := declarative.Decode(&v2pb.PipelineManifest{Content: &pbtypes.Any{TypeUrl: declarative.TypeURL, Value: raw}})
+	require.NoError(t, err)
+	out, err := declarative.Encode(w)
+	require.NoError(t, err)
+	return out
+}
+
+// A re-apply of the same commit whose client wrote the task map in another
+// order must keep the immutable revision.
+func TestReconcile_ReorderedContentOnSameCommitKeepsRevision(t *testing.T) {
+	ab, ba := reorderedContent(t, "a", "b"), reorderedContent(t, "b", "a")
+	require.NotEqual(t, ab, ba, "the two inputs must differ")
+	require.Equal(t, storedContent(t, ab), storedContent(t, ba),
+		"the hook's byte form removes the order difference before the controller compares")
+	pin := &v2pb.InterpreterPin{Version: "core-v1", Artifact: "s3://a/core-v1.tar.gz", Digest: "sha256:01"}
+	spec := func(raw []byte) v2pb.PipelineSpec {
+		return v2pb.PipelineSpec{
+			Commit: &v2pb.CommitInfo{GitRef: "main", Branch: "main"},
+			Manifest: &v2pb.PipelineManifest{
+				Type:           v2pb.PIPELINE_MANIFEST_TYPE_DECLARATIVE,
+				Content:        &pbtypes.Any{TypeUrl: declarative.TypeURL, Value: storedContent(t, raw)},
+				UniflowTar:     pin.Artifact,
+				InterpreterPin: pin,
+			},
+		}
+	}
+	pipeline := &v2pb.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-pipeline", Namespace: "test-namespace"},
+		Spec:       spec(ba),
+	}
+	existing := immutableRevision("pipeline-test-pipeline-main", "main")
+	existing.Spec.Content = mustSnapshot(&v2pb.Pipeline{Spec: spec(ab)})
+
+	reconciler := setUpReconciler(t, []client.Object{pipeline, existing}, env.Context{}, Config{RevisioningEnabled: true})
+	_, err := reconciler.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{Name: "test-pipeline", Namespace: "test-namespace"}})
+	require.NoError(t, err)
+
+	got := &v2pb.Revision{}
+	require.NoError(t, reconciler.Get(context.Background(), "test-namespace", "pipeline-test-pipeline-main", &metav1.GetOptions{}, got))
+	assert.Equal(t, existing.Spec.Content, got.Spec.Content, "the immutable revision is not rewritten")
 }

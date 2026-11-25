@@ -20,6 +20,14 @@ data:
         enableCRDUpdate: {{ .Values.apiserver.crdSync.enableUpdate }}
       pipelineRunDefaults:
         environment: {{ .Values.apiserver.pipelineRunDefaults.environment | default "" | quote }}
+      {{- with .Values.apiserver.declarative }}
+      {{- if .enabled }}
+      declarative:
+        enabled: true
+        defaultInterpreter: {{ required "apiserver.declarative.defaultInterpreter is required when apiserver.declarative.enabled=true" .defaultInterpreter | quote }}
+        releasesDir: {{ required "apiserver.declarative.releasesDir is required when apiserver.declarative.enabled=true" .releasesDir | quote }}
+      {{- end }}
+      {{- end }}
       {{- if eq $auth.mode "k8s-rbac" }}
       auth:
         mode: {{ $auth.mode | quote }}

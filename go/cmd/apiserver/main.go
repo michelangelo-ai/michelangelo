@@ -9,6 +9,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	"github.com/michelangelo-ai/michelangelo/go/base/zapfx"
 	modelapihook "github.com/michelangelo-ai/michelangelo/go/components/model/apihook"
+	pipelineapihook "github.com/michelangelo-ai/michelangelo/go/components/pipeline/apihook"
 	pipelinerunapihook "github.com/michelangelo-ai/michelangelo/go/components/pipelinerun/apihook"
 	projectapihook "github.com/michelangelo-ai/michelangelo/go/components/project/apihook"
 	triggerrunapihook "github.com/michelangelo-ai/michelangelo/go/components/triggerrun/apihook"
@@ -61,6 +62,8 @@ func opts() fx.Option {
 		fx.Invoke(func(logger *zap.Logger, apiHandler api.Handler, conf apihandler.Config) {
 			modelapihook.RegisterModelAPIHook(logger, apiHandler, conf.PipelineRunDefaultEnvironment)
 		}),
+		fx.Provide(pipelineapihook.NewConfig),
+		fx.Invoke(registerDeclarativeHook),
 		v2pb.CachedOutputSvcModule,
 		v2pb.ClusterSvcModule,
 		v2pb.DeploymentSvcModule,
@@ -97,6 +100,21 @@ func getScheme() (*runtime.Scheme, error) {
 		return nil, err
 	}
 	return s, nil
+}
+
+// registerDeclarativeHook loads the declarative interpreter releases and
+// registers the Pipeline API hook. A load error fails apiserver start.
+func registerDeclarativeHook(logger *zap.Logger, apiHandler api.Handler, conf pipelineapihook.Config) error {
+	d, err := pipelineapihook.NewDeclarative(conf)
+	if err != nil {
+		return err
+	}
+	logger.Info("declarative pipelines",
+		zap.Bool("enabled", conf.Enabled),
+		zap.String("defaultInterpreter", conf.DefaultInterpreter),
+		zap.Strings("releases", d.Versions()))
+	pipelineapihook.RegisterPipelineAPIHook(apiHandler, d)
+	return nil
 }
 
 func printConfig(logger *zap.Logger, provider uberconfig.Provider) {

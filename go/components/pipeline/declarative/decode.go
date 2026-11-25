@@ -35,7 +35,7 @@ func Decode(m *v2pb.PipelineManifest) (w *v2pb.DeclarativeWorkflow, err error) {
 		return nil, &Error{Msg: "content is not set"}
 	}
 	if m.Content.TypeUrl != TypeURL {
-		return nil, &Error{Msg: fmt.Sprintf("content type URL %q is not %q", clip(m.Content.TypeUrl), TypeURL)}
+		return nil, &Error{Msg: fmt.Sprintf("content type URL %q is not %q", Clip(m.Content.TypeUrl), TypeURL)}
 	}
 	if n := len(m.Content.Value); n > maxContentBytes {
 		return nil, &Error{Msg: fmt.Sprintf("content is %d bytes; the limit is %d", n, maxContentBytes)}
@@ -93,8 +93,8 @@ func (p *fieldPath) String() string {
 	return b.String()
 }
 
-// clip shortens caller-supplied text for an error message.
-func clip(s string) string {
+// Clip shortens caller-supplied text for an error message.
+func Clip(s string) string {
 	const max = 128
 	if len(s) <= max {
 		return s

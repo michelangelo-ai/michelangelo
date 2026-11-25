@@ -6,6 +6,7 @@ go_library(
         "decode.go",
         "descriptor.go",
         "doc.go",
+        "encode.go",
         "errors.go",
         "graph.go",
         "plan.go",
@@ -37,6 +38,7 @@ go_test(
     name = "go_default_test",
     srcs = [
         "decode_test.go",
+        "encode_test.go",
         "errors_test.go",
         "example_test.go",
         "fixtures_test.go",

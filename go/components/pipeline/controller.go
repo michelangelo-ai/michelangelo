@@ -121,6 +121,21 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	state := pipeline.Status.State
 	logger.Info("Reconciling pipeline", zap.Any("PipelineStatusState", state.String()))
 
+	// The apiserver stamps the pin on every DECLARATIVE write. A missing pin
+	// means the pipeline was written directly to Kubernetes. Mark it ERROR
+	// and stop before the revision and READY steps. A present pin is not
+	// verified here.
+	manifest := pipeline.Spec.Manifest
+	if manifest.GetType() == v2pb.PIPELINE_MANIFEST_TYPE_DECLARATIVE && manifest.GetInterpreterPin() == nil {
+		pipeline.Status.State = v2pb.PIPELINE_STATE_ERROR
+		pipeline.Status.ErrorMessage = "declarative pipeline has no interpreter pin; re-apply through the API with apiserver.declarative.enabled=true"
+		result, err := r.updatePipelineStatus(ctx, pipeline, originalPipeline, logger)
+		if err != nil {
+			IncPipelineReconcileError(pipeline.Namespace, pipeline.Name)
+		}
+		return result, err
+	}
+
 	if r.config.RevisioningEnabled && pipeline.Spec.Commit != nil {
 		// Only default-branch commits advance status.latestRevision. Feature-branch
 		// applies still snapshot a Revision CR below — they just must not rewrite
@@ -134,6 +149,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		}
 	}
 	pipeline.Status.State = v2pb.PIPELINE_STATE_READY
+	pipeline.Status.ErrorMessage = ""
 
 	// Emit metrics for pipeline becoming ready
 	if originalPipeline.Status.State != v2pb.PIPELINE_STATE_READY && pipeline.Status.State == v2pb.PIPELINE_STATE_READY {
@@ -225,12 +241,14 @@ func snapshotMatchesSpec(rev *v2pb.Revision, pipeline *v2pb.Pipeline) (bool, err
 }
 
 // comparableSpec returns a copy of spec without the fields that vary between applies of
-// the same commit. The caller's spec is not modified.
+// the same commit. The caller's spec is not modified. The interpreter pin is a runtime
+// choice, not authored content, so a pin upgrade on the same commit keeps its revision.
 func comparableSpec(spec v2pb.PipelineSpec) v2pb.PipelineSpec {
 	spec.Commit, spec.Owner = nil, nil
 	if spec.Manifest != nil {
 		manifest := gogoproto.Clone(spec.Manifest).(*v2pb.PipelineManifest)
 		manifest.UniflowTar = ""
+		manifest.InterpreterPin = nil
 		spec.Manifest = manifest
 	}
 	return spec
