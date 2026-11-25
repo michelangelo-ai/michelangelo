@@ -1,0 +1,127 @@
+[
+  {
+    "parameters": {
+      "dataset": {
+        "default": "s3://d",
+        "description": "",
+        "required": false,
+        "type": "PARAMETER_TYPE_STRING"
+      },
+      "epochs": {
+        "default": 3,
+        "description": "",
+        "required": false,
+        "type": "PARAMETER_TYPE_INTEGER"
+      },
+      "flags": {
+        "default": {
+          "a": true
+        },
+        "description": "",
+        "required": false,
+        "type": "PARAMETER_TYPE_DICT"
+      },
+      "lr": {
+        "default": 1,
+        "description": "",
+        "required": false,
+        "type": "PARAMETER_TYPE_NUMBER"
+      }
+    },
+    "schema_version": "v1alpha1",
+    "tasks": {
+      "evaluate": {
+        "config": {
+          "entry_point": "evaluate.py"
+        },
+        "depends_on": [
+          {
+            "task": "extract",
+            "when": "OUTCOME_UNSPECIFIED"
+          }
+        ],
+        "job_specs": null,
+        "retry": null,
+        "task_function": "core/ray"
+      },
+      "extract": {
+        "config": {
+          "entry_point": "extract.py"
+        },
+        "depends_on": [],
+        "job_specs": null,
+        "retry": null,
+        "task_function": "core/ray"
+      },
+      "notify": {
+        "config": {
+          "entry_point": "notify.py"
+        },
+        "depends_on": [
+          {
+            "task": "publish",
+            "when": "OUTCOME_FAILED"
+          }
+        ],
+        "job_specs": null,
+        "retry": null,
+        "task_function": "core/ray"
+      },
+      "publish": {
+        "config": {
+          "entry_point": "publish.py"
+        },
+        "depends_on": [
+          {
+            "task": "train",
+            "when": "OUTCOME_UNSPECIFIED"
+          },
+          {
+            "task": "evaluate",
+            "when": "OUTCOME_UNSPECIFIED"
+          }
+        ],
+        "job_specs": null,
+        "retry": null,
+        "task_function": "core/ray"
+      },
+      "train": {
+        "config": {
+          "entry_point": "train.py",
+          "epochs": "{{ params.epochs }}"
+        },
+        "depends_on": [
+          {
+            "task": "extract",
+            "when": "OUTCOME_UNSPECIFIED"
+          }
+        ],
+        "job_specs": {
+          "ray": {
+            "head_cpu": 2
+          }
+        },
+        "retry": {
+          "initial_interval": null,
+          "max_attempts": 3
+        },
+        "task_function": "core/ray"
+      }
+    },
+    "workflow_config": {
+      "default_retry": {
+        "initial_interval": "30s",
+        "max_attempts": 2
+      },
+      "max_concurrency": 2
+    }
+  },
+  {
+    "dataset": "s3://d",
+    "epochs": 3,
+    "flags": {
+      "a": true
+    },
+    "lr": 1
+  }
+]
