@@ -10,11 +10,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// edge is a depends_on entry with an explicit gate.
 type edge struct{ task, when string }
 
-// task returns a task as WorkflowArgs emits it. A string dependency has the
-// OUTCOME_UNSPECIFIED gate.
 func task(typ string, deps ...any) map[string]any {
 	dependsOn := []any{}
 	for _, d := range deps {
@@ -43,17 +40,13 @@ func spec(workflowConfig map[string]any, tasks map[string]any) map[string]any {
 	}
 }
 
-// okRecord is what fake/ok returns for a task with no args, kwargs, fields,
-// or retry policy.
 func okRecord(alias string) map[string]any {
 	return map[string]any{"ep": "x.py", "alias": alias, "args": []any{}, "kwargs": map[string]any{}, "retry": "absent", "fields": map[string]any{}}
 }
 
 type engineRun struct {
-	result map[string]any
-	// states is the run view: the last state each task reported.
-	states map[string]string
-	// messages holds the last non-empty message each task reported.
+	result   map[string]any
+	states   map[string]string
 	messages map[string]string
 	err      string
 }
@@ -207,8 +200,6 @@ func toAny(states map[string]string) map[string]any {
 	return out
 }
 
-// startGroups groups the tasks of a fake/sleep run by start time, in time
-// order, so a test can see which tasks ran side by side.
 func startGroups(t *testing.T, outputs map[string]any) [][]string {
 	t.Helper()
 	byStart := map[int][]string{}
@@ -292,7 +283,6 @@ func TestEngineConcurrency(t *testing.T) {
 	}
 }
 
-// with returns a copy of task m with key set to v.
 func with(m map[string]any, key string, v any) map[string]any {
 	out := map[string]any{}
 	for k, val := range m {
@@ -306,8 +296,6 @@ func retry(maxAttempts int) map[string]any {
 	return map[string]any{"max_attempts": maxAttempts, "initial_interval": nil}
 }
 
-// A factory runs before dispatch, so its failure stops the workflow with its
-// own text instead of failing one task without a reason.
 func TestEngineFactoryFailure(t *testing.T) {
 	got := runEngine(t, casesTar(t), "run_case", spec(nil, map[string]any{
 		"a": task("fake/ok"),
@@ -318,8 +306,6 @@ func TestEngineFactoryFailure(t *testing.T) {
 	assert.Equal(t, "fail: bad factory: b", got.err)
 }
 
-// A callable that fails without a progress report leaves its cause only in
-// the workflow error.
 func TestEngineSilentFailureCause(t *testing.T) {
 	got := runEngine(t, casesTar(t), "run_case", spec(nil, map[string]any{
 		"a": task("fake/ok"),
@@ -408,7 +394,6 @@ func TestEngineFactory(t *testing.T) {
 	}
 }
 
-// config returns task m with config set to entry_point x.py plus fields.
 func config(m map[string]any, fields map[string]any) map[string]any {
 	c := map[string]any{"entry_point": "x.py"}
 	for k, v := range fields {
@@ -427,9 +412,9 @@ func TestEngineRefs(t *testing.T) {
 		name     string
 		spec     map[string]any
 		states   map[string]string
-		fields   map[string]map[string]any // task -> expected fields of its record
-		args     map[string][]any          // task -> expected callable args
-		kwargs   map[string]map[string]any // task -> expected callable kwargs
+		fields   map[string]map[string]any
+		args     map[string][]any
+		kwargs   map[string]map[string]any
 		messages map[string]string
 		err      string
 	}{
@@ -630,13 +615,9 @@ func TestEngineWait(t *testing.T) {
 		got := runEngine(t, tar, "run_timed", sleeper(900), map[string]any{})
 		require.Empty(t, got.err)
 		assert.Equal(t, map[string]string{"a": succeeded}, got.states)
-		// Polls at 5, 15, 35, 75, 155, 315, 615, and 915 s: the delay
-		// starts at 5 s, doubles, and stops at 300 s.
 		assert.Equal(t, 915, got.result["elapsed"])
 	})
 
-	// The last poll is at 7 days + 15 s, the first poll at or after the
-	// 7-day workflow timeout.
 	t.Run("wait_seven_days", func(t *testing.T) {
 		got := runEngine(t, tar, "run_timed", sleeper(7*day), map[string]any{})
 		require.Empty(t, got.err)
@@ -650,7 +631,6 @@ func TestEngineWait(t *testing.T) {
 		assert.Equal(t, "fail: declarative: wait budget exhausted; still running: a", got.err)
 	})
 
-	// A failed or finished task in the same level is not running.
 	t.Run("wait_budget_names_running", func(t *testing.T) {
 		long := config(task("fake/sleep"), map[string]any{"seconds": 7*day + 16})
 		got := runEngine(t, tar, "run_timed", spec(nil, map[string]any{

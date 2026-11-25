@@ -45,8 +45,6 @@ func Plan(w *v2pb.DeclarativeWorkflow, lim Limits, rel *Release, warnings []stri
 	return p, nil
 }
 
-// unsupportedWarnings lists the features that w uses and that the interpreter
-// accepts but does not act on yet. w must be valid against rel.
 func unsupportedWarnings(w *v2pb.DeclarativeWorkflow, rel *Release) []string {
 	names := make([]string, 0, len(w.Tasks))
 	for n := range w.Tasks {
@@ -60,9 +58,8 @@ func unsupportedWarnings(w *v2pb.DeclarativeWorkflow, rel *Release) []string {
 			if d.When != v2pb.OUTCOME_FAILED && d.When != v2pb.OUTCOME_COMPLETED {
 				continue
 			}
-			// The upstream factory is what would hand the error text to the
-			// handler, so its type decides.
-			if !rel.TaskTypes[w.Tasks[d.Task].TaskFunction].HasCapability("outcome_mode") {
+			upstream := rel.TaskTypes[w.Tasks[d.Task].TaskFunction]
+			if !upstream.HasCapability("outcome_mode") {
 				out = append(out, fmt.Sprintf("tasks.%s.depends_on[%d]: the handler runs, but it gets no error text until outcome mode ships", n, i))
 			}
 		}

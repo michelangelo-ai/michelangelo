@@ -73,9 +73,6 @@ func (r reg) RegisterWorkflowWithOptions(w interface{}, o worker.RegisterWorkflo
 // converter and passing the bytes through unchanged keeps that asymmetry:
 // the test env's own converter would encode Go maps with jsoniter, which
 // does not sort map keys.
-//
-// It returns the result, the task_progress reports, and the fail text of a
-// failed workflow, which the worker keeps in the error details.
 func runStar(t *testing.T, tar []byte, path, fn string, args ...any) (*starlark.Dict, []string, error) {
 	t.Helper()
 	svc, err := service.NewServiceBuilder(service.CadenceBackend).SetPlugins(workerPlugins()).SetClientTaskList("test").Build()
@@ -139,8 +136,6 @@ func dirTar(t *testing.T, dir string) []byte {
 	return buf.Bytes()
 }
 
-// rewriteLoads makes each load module of file, which is not "@"-prefixed or
-// absolute, an absolute path resolved against the directory of file.
 func rewriteLoads(file string, src []byte) ([]byte, error) {
 	f, err := syntax.Parse(file, src, 0)
 	if err != nil {
@@ -156,7 +151,6 @@ func rewriteLoads(file string, src []byte) ([]byte, error) {
 		}
 	}
 	out := src
-	// Splice back to front so that earlier offsets stay valid.
 	for i := len(loads) - 1; i >= 0; i-- {
 		lit := loads[i]
 		module := lit.Value.(string)
@@ -188,8 +182,6 @@ func byteOffset(src []byte, pos syntax.Position) int {
 	return off
 }
 
-// toGo converts a Starlark result to Go values so that a test can compare it
-// with a literal. An int stays an int and a float stays a float64.
 func toGo(t *testing.T, v starlark.Value) any {
 	t.Helper()
 	switch v := v.(type) {
@@ -247,8 +239,6 @@ func TestRewriteLoads(t *testing.T) {
 	assert.EqualError(t, err, `/a.star: load "../b.star" leaves the tar root`)
 }
 
-// The worker tars a test root with WalkDir, which does not descend into a
-// directory symlink, so a linked directory must sit outside the tarred root.
 func TestDirSymlinkResolves(t *testing.T) {
 	entries, err := os.ReadDir("testdata/dirlink/uniflow")
 	require.NoError(t, err)

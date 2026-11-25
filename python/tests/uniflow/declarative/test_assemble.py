@@ -49,7 +49,6 @@ LOADS = {
 
 
 def _copy_root(dst: Path) -> Path:
-    """Copy the release source and every Starlark file it can load to dst."""
     src = REPO_ROOT / "python/michelangelo/uniflow"
     for star in src.rglob("*.star"):
         target = dst / "python/michelangelo/uniflow" / star.relative_to(src)
@@ -61,19 +60,16 @@ def _copy_root(dst: Path) -> Path:
 
 
 def _assemble(root: Path, out: Path) -> tuple[bytes, dict]:
-    """Assemble the core-v0.1.0 source under root into out."""
     tar_path, release_path = assemble(root / SOURCE, root, out)
     return tar_path.read_bytes(), yaml.safe_load(release_path.read_text())
 
 
 def _members(tar_bytes: bytes) -> dict[str, bytes]:
-    """Return each tar member name mapped to its content, in tar order."""
     with tarfile.open(fileobj=io.BytesIO(tar_bytes), mode="r:gz") as tar:
         return {m.name: tar.extractfile(m).read() for m in tar.getmembers()}
 
 
 def _loads(src: bytes) -> list[str]:
-    """Return the module of each load statement that is not a plugin."""
     out = []
     for node in ast.parse(src).body:
         call = node.value if isinstance(node, ast.Expr) else None
@@ -85,7 +81,6 @@ def _loads(src: bytes) -> list[str]:
 
 
 def _source() -> dict:
-    """Return a valid release source document."""
     return yaml.safe_load((REPO_ROOT / SOURCE).read_text())
 
 

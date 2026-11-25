@@ -2,13 +2,12 @@ load("/michelangelo/uniflow/commons.star", "TASK_STATE_FAILED", "TASK_STATE_SUCC
 load("/michelangelo/uniflow/declarative/engine.star", "levels", "run")
 load("@plugin", "time")
 
-# Each fake reports its terminal state like a real factory does, so a test
-# can read the run view even when the workflow fails.
 def _report(alias, state):
     report_progress(task_path = "fake", task_name = alias, task_state = state)
 
-# "absent" tells a missing retry_attempts kwarg from an explicit None.
-def _ok(entry_point, alias = None, retry_attempts = "absent", **fields):
+_ABSENT = "absent"
+
+def _ok(entry_point, alias = None, retry_attempts = _ABSENT, **fields):
     def call(*args, **kwargs):
         _report(alias, TASK_STATE_SUCCEEDED)
         return {"ep": entry_point, "alias": alias, "args": list(args), "kwargs": kwargs, "retry": retry_attempts, "fields": fields}
@@ -22,8 +21,6 @@ def _fail(entry_point, alias = None, retry_attempts = None, **fields):
 
     return call
 
-# A callable that fails without a progress report, so only the workflow
-# error can carry its cause.
 def _fail_silent(entry_point, alias = None, **fields):
     def call(*args, **kwargs):
         fail("silent failure: " + alias)

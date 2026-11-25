@@ -116,7 +116,6 @@ class Test(unittest.TestCase):
 
 
 def _write_tree(root: Path):
-    """Write a main file that loads lib/x.star, which loads lib/y.star."""
     (root / "a").mkdir(parents=True)
     (root / "lib").mkdir()
     (root / "a/main.star").write_text(
@@ -129,7 +128,6 @@ def _write_tree(root: Path):
 
 
 def _load_modules(source: bytes) -> list:
-    """Return the module constant of each top-level load call in source."""
     return [
         node.value.args[0].value
         for node in ast.parse(source).body

@@ -20,18 +20,13 @@ load("@plugin", "concurrent", "json", "time")
 # for loop.
 _MAX_STEPS = 100000
 
-# Config keys that the engine consumes. The rest go to the factory.
 _ENGINE_CONFIG_KEYS = ["entry_point", "args", "kwargs"]
 
 _FIRST_POLL_SECONDS = 5
 _MAX_POLL_SECONDS = 300
 
-# The wait loop polls at least this long per level, so a run with several
-# levels can outlive it.
-_WAIT_BUDGET_SECONDS = 7 * 24 * 60 * 60
+_LEVEL_WAIT_BUDGET_SECONDS = 7 * 24 * 60 * 60
 
-# Gate outcome -> the dependency states that satisfy it. A SKIPPED dependency
-# satisfies no gate, so a skip propagates.
 _GATES = {
     "OUTCOME_UNSPECIFIED": [TASK_STATE_SUCCEEDED],
     "OUTCOME_SUCCEEDED": [TASK_STATE_SUCCEEDED],
@@ -51,7 +46,7 @@ def _poll_count(budget):
         total += next_poll_delay(poll)
     return budget
 
-_MAX_POLLS = _poll_count(_WAIT_BUDGET_SECONDS)
+_MAX_POLLS = _poll_count(_LEVEL_WAIT_BUDGET_SECONDS)
 
 def run(spec, params, registry):
     """Run every task of spec and return the states and outputs."""
@@ -166,8 +161,6 @@ def _run_level(runnable, tasks, registry, workflow_config, refs):
             _report(name, task, TASK_STATE_FAILED, "Failed: " + err)
             outcomes[name] = {"state": TASK_STATE_FAILED, "output": None}
             continue
-        # The factory runs in the workflow thread, so a factory that fails
-        # stops the workflow with its own error text.
         task_callable = entry["factory"](config.get("entry_point"), **_factory_kwargs(name, task, entry, config, job_specs, workflow_config))
         callables.append(concurrent.new_callable(_dispatch, outcomes, running, name, task_callable, config.get("args") or [], config.get("kwargs") or {}))
 
@@ -224,7 +217,6 @@ def _retry_attempts(task, entry, workflow_config):
     if "retry" not in entry["capabilities"]:
         return None
 
-    # A task policy replaces the default policy as a whole.
     policy = task.get("retry")
     if policy == None:
         policy = workflow_config.get("default_retry")
@@ -312,8 +304,6 @@ def _resolve(value, path, name, refs):
     return root["value"], None
 
 def _resolve_string(s, name, refs):
-    # The grammar matches the apiserver validator: a reference is whole only
-    # when it is the full string, and an unterminated "{{" is an error.
     parts = []
     rest = s
     for _ in range(len(s)):

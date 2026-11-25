@@ -45,7 +45,7 @@ func TestPlanGolden(t *testing.T) {
 		// depth-0 dependency. Plan copies the caller's warnings unchanged.
 		{"alt_shape", []string{"caller-supplied warning"}},
 		// diamond_failure: FAILED and COMPLETED edges still order tasks into
-		// levels. Each one warns, because the upstream types lack outcome_mode.
+		// levels.
 		{"diamond_failure", nil},
 	}
 	for _, c := range cases {
@@ -90,8 +90,6 @@ func TestPlanWarningOrder(t *testing.T) {
 	}, p.Warnings)
 }
 
-// The warning depends on the upstream type: its factory is what would hand
-// the error text to the handler.
 func TestPlanNoWarningForOutcomeMode(t *testing.T) {
 	w := typedDiamond()
 	w.Tasks["publish"].TaskFunction = "core/outcome"
@@ -103,8 +101,6 @@ func TestPlanNoWarningForOutcomeMode(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, p.Warnings)
 
-	// The handler type does not matter: an outcome_mode handler on a plain
-	// upstream still warns.
 	w = typedDiamond()
 	handler := task("core/outcome")
 	handler.DependsOn = []*v2pb.TaskDependency{{Task: "publish", When: v2pb.OUTCOME_FAILED}}

@@ -61,8 +61,6 @@ func TestReleaseLoads(t *testing.T) {
 	assert.Equal(t, map[string]any{"states": map[string]any{}, "outputs": map[string]any{}}, toGo(t, res))
 }
 
-// sourceType is one task type of a release source file. The source holds the
-// factory and job_specs_key, which the release file drops.
 type sourceType struct {
 	Factory      string                    `json:"factory"`
 	JobSpecsKey  string                    `json:"job_specs_key"`
@@ -71,9 +69,6 @@ type sourceType struct {
 	JobSpecs     map[string]map[string]any `json:"job_specs"`
 }
 
-// factoryGaps returns, per task type, the kwargs that the engine passes to
-// the factory, and the ones that the factory does not declare as named
-// parameters. A **kwargs parameter does not count: it would hide a typo.
 func factoryGaps(t *testing.T, tar, source []byte) (passed, missing map[string][]string) {
 	t.Helper()
 	var src struct {
@@ -90,7 +85,7 @@ func factoryGaps(t *testing.T, tar, source []byte) (passed, missing map[string][
 	for name, tt := range src.TaskTypes {
 		file, fn, ok := strings.Cut(tt.Factory, ":")
 		require.True(t, ok, tt.Factory)
-		params := factoryParams(t, "/"+file, members["/"+file], fn)
+		params := namedParams(t, "/"+file, members["/"+file], fn)
 
 		var want []string
 		for f := range tt.Config {
@@ -118,8 +113,7 @@ func factoryGaps(t *testing.T, tar, source []byte) (passed, missing map[string][
 	return passed, missing
 }
 
-// factoryParams returns the named parameters of the def fn in file.
-func factoryParams(t *testing.T, file string, src []byte, fn string) map[string]bool {
+func namedParams(t *testing.T, file string, src []byte, fn string) map[string]bool {
 	t.Helper()
 	require.NotNil(t, src, "%s is not in the tar", file)
 	f, err := syntax.Parse(file, src, 0)

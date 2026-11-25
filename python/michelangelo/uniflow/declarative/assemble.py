@@ -41,9 +41,9 @@ _TOP_KEYS = ("version", "artifact", "task_types")
 _TYPE_KEYS = ("factory", "job_specs_key", "capabilities", "config", "job_specs")
 _RESERVED_FIELDS = ("alias", "retry_attempts")
 _CAPABILITIES = ("outcome_mode", "retry")
+_FACTORY_ALIAS_PREFIX = "factory_"
 _VERSION = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
-# str.isidentifier() accepts non-ASCII letters, which Starlark does not.
-_IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+_ASCII_IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
 
 class ReleaseSourceError(ValueError):
@@ -83,23 +83,20 @@ class ReleaseSource:
 
 
 def _identifier(name: str) -> str:
-    """Return name with "/" and "." mapped to "_"."""
     return name.replace("/", "_").replace(".", "_")
 
 
 def _is_identifier(name: str) -> bool:
-    return _IDENTIFIER.fullmatch(name) is not None
+    return _ASCII_IDENTIFIER.fullmatch(name) is not None
 
 
 def _check_keys(doc: dict, allowed: tuple, where: str) -> None:
-    """Reject a key of doc that is not in allowed."""
     for key in doc:
         if key not in allowed:
             raise ReleaseSourceError(f"{where}: unknown key {json.dumps(key)}")
 
 
 def _require(doc: dict, key: str, kind: type, where: str):
-    """Return doc[key], which must be set and of type kind."""
     value = doc.get(key)
     if not isinstance(value, kind) or not value:
         raise ReleaseSourceError(f"{where}: {key} must be a non-empty {kind.__name__}")
@@ -107,7 +104,6 @@ def _require(doc: dict, key: str, kind: type, where: str):
 
 
 def _parse_type(name: str, doc) -> TaskTypeSource:
-    """Parse and check one task type of a release source."""
     where = f"task type {json.dumps(name)}"
     if not isinstance(doc, dict):
         raise ReleaseSourceError(f"{where}: must be a mapping")
@@ -224,8 +220,7 @@ def generate_main(source: ReleaseSource, build_dir: Path, root: Path) -> str:
     lines = [f'load({rel(ENGINE)}, "run")']
     entries = []
     for t in source.task_types.values():
-        # A prefix keeps a factory alias apart from run, main, and REGISTRY.
-        alias = "factory_" + _identifier(t.name)
+        alias = _FACTORY_ALIAS_PREFIX + _identifier(t.name)
         lines.append(
             f"load({rel(t.factory_file)}, {alias} = {json.dumps(t.factory_function)})"
         )
@@ -293,8 +288,6 @@ def assemble(source_file: Path, root: Path, out_dir: Path) -> tuple:
     out_dir.mkdir(parents=True, exist_ok=True)
     tar_path = out_dir / f"{source.version}.tar.gz"
     release_path = out_dir / f"{source.version}.yaml"
-    # A published version is immutable: its digest is pinned in the
-    # apiserver config, so new bytes need a new version.
     if tar_path.exists() and tar_path.read_bytes() != tar_bytes:
         raise FileExistsError(
             f"{tar_path} exists with other bytes;"
@@ -310,17 +303,12 @@ def assemble(source_file: Path, root: Path, out_dir: Path) -> tuple:
         sort_keys=False,
         default_flow_style=None,
     )
-    # The tar goes first, so a release file never names a missing tar.
-    _replace(tar_path, tar_bytes)
-    _replace(release_path, release.encode())
+    _atomic_write(tar_path, tar_bytes)
+    _atomic_write(release_path, release.encode())
     return tar_path, release_path
 
 
-def _replace(path: Path, data: bytes) -> None:
-    """Write data to path unless it holds data already.
-
-    The write goes through a temp file, so a reader never sees part of it.
-    """
+def _atomic_write(path: Path, data: bytes) -> None:
     if path.exists() and path.read_bytes() == data:
         return
     fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")

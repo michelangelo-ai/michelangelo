@@ -23,8 +23,6 @@ func readProto(t *testing.T, path string, m gogoproto.Message) {
 	require.NoError(t, jsonpb.Unmarshal(f, m))
 }
 
-// The engine and the planner each compute levels. A drift between them would
-// make the explain plan show an order that the run does not follow.
 func TestEngineLevelsMatchPlanner(t *testing.T) {
 	tar := casesTar(t)
 	paths, err := filepath.Glob("testdata/specs/*.json")

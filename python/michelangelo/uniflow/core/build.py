@@ -257,7 +257,6 @@ class Package:
             self._add_to_tar(tar)
 
     def _add_to_tar(self, tar: tarfile.TarFile):
-        """Add each package file to tar and log the file contents."""
         file_log = ""
         main_file_log = None
         for path, code_bytes in self.files.items():
@@ -405,23 +404,12 @@ def build_star(main_file: Path, root: Path, main_function: str = "main") -> Pack
 
 
 def _root_name(path: Path, root: Path) -> str:
-    """Return the package name of path: "/" + its path relative to root."""
     if not path.is_relative_to(root):
         raise ValueError(f"{path} is outside root {root}")
     return "/" + path.relative_to(root).as_posix()
 
 
 def _package(files: dict[str, bytes], main_file: str, main_function: str) -> Package:
-    """Add meta.json to files and return the Package.
-
-    Args:
-        files: Package file names mapped to their content.
-        main_file: The package name of the main file.
-        main_function: The function that the worker calls.
-
-    Returns:
-        The Package.
-    """
     assert main_file in files
 
     meta_file = "meta.json"
@@ -525,9 +513,6 @@ def _add_star_file(
         files: Dictionary to accumulate package files.
         root: With root, each load holds "/" + the path relative to root.
             Without it, each load holds the absolute filesystem path.
-
-    Raises:
-        ValueError: If root is given and a load resolves outside root.
     """
     if path in files:
         return
