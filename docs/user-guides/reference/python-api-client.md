@@ -1,7 +1,7 @@
 ---
 sidebar_position: 1
 sidebar_label: "Python APIClient"
-last_verified: 2026-11-18
+last_verified: 2026-11-25
 ---
 
 # Python APIClient Guide
@@ -30,7 +30,7 @@ There are two ways to use `APIClient`. Both expose the same service attributes.
 from michelangelo.api.v2 import APIClient
 
 with APIClient(endpoint="localhost:15566", caller="my-script") as client:
-    project = client.ProjectService.get_project(namespace="default", name="my-project")
+    project = client.ProjectService.get_project(namespace="my-project", name="my-project")
 ```
 
 - `endpoint` is the `host:port` address. Pass either `endpoint` or a pre-built `channel`, never both and never neither. Either mistake raises `ValueError`.
@@ -77,15 +77,17 @@ Set the caller before the first call. If no caller is set, the default header pr
 | `MA_API_SERVER_NAME` | Environment variable | `ma-apiserver` | Value of the `rpc-service` header, used for routing |
 | `caller` | `APIClient(caller=...)` or `APIClient.set_caller(...)` | None, required before the first call | Value of the `rpc-caller` header |
 | `timeout` | Argument on every service method | 60 seconds | Per-call deadline |
-| `headers` | Argument on every service method | None | Extra headers for that call. `rpc-service` and `rpc-caller` you pass are not overwritten |
+| `headers` | Argument on every service method | None | Extra headers for that call. `rpc-service` and `rpc-caller` you pass are not overwritten. The client adds its own keys to the dict you pass, so don't reuse one dict across calls if that matters to you |
 
 The client also sets `rpc-encoding: proto` on every call, and allows messages up to 1 GB in each direction.
+
+If you pass your own `channel`, none of the client's channel options apply, including the 1 GB message limits. The client sets those only on channels it creates.
 
 ### Security and authentication
 
 By default the API server does not authenticate callers. With `apiserver.auth.mode` unset or `dummy`, which is the sandbox setup, every request is allowed. In that case you need no token, and a plaintext connection to `localhost:15566` is fine.
 
-If your operator has set `apiserver.auth.mode: k8s-rbac`, every call must carry an `authorization: Bearer <id-token>` header. The token is an OIDC ID token from your deployment's identity provider. Michelangelo AI doesn't issue it, so get it from the same login flow or tooling your operator set up for the CLI and other clients. The server verifies the token and authorizes the request through Kubernetes RBAC. `APIClient` doesn't attach the header for you, so add it with a header provider. `k8s-rbac` mode runs only behind TLS, so pair the header with TLS credentials:
+If your operator has set `apiserver.auth.mode: k8s-rbac`, every call must carry an `authorization: Bearer <token>` header. The token is usually an OIDC ID token from your deployment's identity provider. If the operator has enabled `apiserver.auth.serviceAccounts.enabled`, the server also accepts Kubernetes ServiceAccount tokens, and a deployment can run on those alone. Michelangelo AI doesn't issue tokens, and neither `APIClient` nor the `ma` CLI obtains one, so get it from your identity provider (or the ServiceAccount token your operator set up). The server verifies the token and authorizes the request through Kubernetes RBAC. `APIClient` doesn't attach the header for you, so add it with a header provider. `k8s-rbac` mode runs only behind TLS, so pair the header with TLS credentials:
 
 ```python
 import grpc
@@ -112,6 +114,14 @@ client = APIClient(
 )
 ```
 
+TLS works only with this per-instance constructor. `from_env(caller)` takes no `credentials`, so its channel is always plaintext. The singleton opens its default channel with `grpc.insecure_channel`. To use TLS with the singleton, which code such as `run_pipeline` and `APIRegistryClient` without `svc` relies on, set the channel and header provider yourself:
+
+```python
+APIClient.set_channel(grpc.secure_channel("api.example.com:443", grpc.ssl_channel_credentials()))
+APIClient.init()
+APIClient.set_header_provider(BearerHeaderProvider(id_token))
+```
+
 - Use the lowercase key `authorization`, because gRPC metadata keys must be lowercase.
 - `credentials` takes a `grpc.ChannelCredentials` and opens a TLS channel. Without it the channel is plaintext and the token would travel unencrypted.
 - `header_provider` replaces the default one. Subclassing `DefaultHeaderProvider`, as above, keeps `caller` working. A custom provider without a `caller` attribute makes the `caller=` argument raise `TypeError`.
@@ -128,24 +138,30 @@ The examples below use the `client` from a per-instance client. With the singlet
 
 ### Projects
 
+A project's name must equal its namespace, so read one with the same value for both. To list every project, pass an empty namespace:
+
 ```python
-project = client.ProjectService.get_project(namespace="default", name="my-project")
+project = client.ProjectService.get_project(namespace="my-project", name="my-project")
 print(project.spec.description)
 
-projects = client.ProjectService.list_project(namespace="default")
+projects = client.ProjectService.list_project(namespace="")
 for p in projects.items:
     print(p.metadata.name)
 ```
 
-To create one, build a `Project` and pass it in:
+To create one, build a `Project` and pass it in. The server rejects projects in `default` or `kube-*` namespaces, and requires a description, an owning team UUID, a tier from 1 to 5, a Git repository, and a root directory. This example follows [`python/examples/config/project.yaml`](https://github.com/michelangelo-ai/michelangelo/blob/main/python/examples/config/project.yaml):
 
 ```python
 from michelangelo.gen.api.v2.project_pb2 import Project
 
 project = Project()
-project.metadata.namespace = "default"
+project.metadata.namespace = "my-project"   # must equal the name
 project.metadata.name = "my-project"
 project.spec.description = "My ML project"
+project.spec.owner.owning_team = "00000000-0000-0000-0000-000000000001"  # any UUID
+project.spec.tier = 4                        # 1-5
+project.spec.git_repo = "https://github.com/my-org/my-repo"
+project.spec.root_dir = "pipelines"
 client.ProjectService.create_project(project)
 ```
 
@@ -187,7 +203,7 @@ if current.status.error_message:
 
 `status.state` is one of `PIPELINE_RUN_STATE_PENDING`, `RUNNING`, `SUCCEEDED`, `KILLED`, `FAILED`, or `SKIPPED`, and `PIPELINE_RUN_STATE_INVALID` before the run is validated. You choose the run name, so make it unique within the namespace. `michelangelo.api.v2.generate_random_name("run")` returns a time-sortable unique name.
 
-The SDK already wraps this flow in `michelangelo.uniflow.plugins.pipeline.run`, which provides `create_pipeline_run`, `poll_pipeline_run`, and `run_pipeline`, including input arguments. For one-off runs, `ma pipeline run` does the same from the command line; see [Pipeline Management](../ml-pipelines/pipeline-management.md).
+The SDK already wraps this flow, including input arguments, in `run_pipeline`: `from michelangelo.uniflow.plugins.pipeline import run_pipeline`. It uses the singleton, so set `MA_API_SERVER` and call `APIClient.set_caller(...)` first. For one-off runs, `ma pipeline run` does the same from the command line; see [Pipeline Management](../ml-pipelines/pipeline-management.md).
 
 ### Models
 
@@ -204,7 +220,7 @@ for m in models.items:
 
 ### Limit and filter lists
 
-`list_*` methods accept `list_options` and `list_options_ext`, each as a protobuf message or a plain dict:
+`list_*` methods accept `list_options` and `list_options_ext`. `list_options` can be a protobuf message or a plain dict:
 
 ```python
 first_five = client.PipelineRunService.list_pipeline_run(
@@ -212,7 +228,15 @@ first_five = client.PipelineRunService.list_pipeline_run(
 ).items
 ```
 
-`list_options` is the Kubernetes `ListOptions` message, with fields such as `limit`, `label_selector`, and `field_selector`. `list_options_ext` is Michelangelo AI's `ListOptionsExt`, which adds `order_by`, `pagination`, a `returned_field_skip_list`, and a `CriterionOperation` filter under `operation`. See [How to Read the gRPC API Reference](../../api-reference/grpc/conventions.md) for the list conventions. Always pass a `namespace`; listing across namespaces isn't supported.
+`list_options` is the Kubernetes `ListOptions` message, with fields such as `limit`, `label_selector`, and `field_selector`. `list_options_ext` is Michelangelo AI's `ListOptionsExt`, which adds `order_by`, `pagination`, a `returned_field_skip_list`, and a `CriterionOperation` filter under `operation`. See [How to Read the gRPC API Reference](../../api-reference/grpc/conventions.md) for the list conventions.
+
+:::warning
+Pass `list_options_ext` as a **new dict on every call**. A `ListOptionsExt` message loses its `operation` filter before it is sent, and the client deletes `operation` from a dict you pass, so reusing the same dict sends no filter the second time.
+:::
+
+`list_options_ext` only takes effect when the operator has turned metadata storage on. Otherwise the API server ignores it. Metadata storage is off in the Helm chart defaults and on in the sandbox.
+
+To list across all namespaces, pass `namespace=""`. This is what `ma <resource> get --all-namespaces` sends.
 
 ## Errors, retries, and timeouts
 
@@ -220,7 +244,7 @@ The client raises or passes through only what the code defines:
 
 - **Configuration errors.** `ValueError` for a missing or malformed `MA_API_SERVER`, for a missing or doubled `endpoint`/`channel`, and for an unset caller. `TypeError` if a custom header provider has no `caller` attribute and you pass `caller=`.
 - **Server errors.** The client doesn't wrap these. A failed RPC raises the underlying `grpc.RpcError`, so catch that and inspect `.code()`.
-- **Retries.** The channel's service config retries a call up to 3 attempts in total, with exponential backoff from 0.1 s to 10 s, when the status is `INTERNAL`, `UNAVAILABLE`, or `UNKNOWN`. Other status codes fail on the first attempt.
+- **Retries.** The client doesn't retry. A failed RPC raises on the first attempt, so wrap calls in your own retry if you need one.
 - **Timeouts.** Each call has a 60-second deadline by default. Override it with `timeout=` on the method.
 
 ```python
@@ -240,7 +264,7 @@ The client exposes 12 services: `CachedOutputService`, `DeploymentService`, `Eva
 [s for s in dir(APIClient) if s.endswith("Service")]
 ```
 
-The gRPC reference documents 15 services. `InferenceServerService`, `RevisionService`, and `ClusterService` have no generated Python wrapper at the moment, so call those over gRPC directly.
+The gRPC reference documents 15 services. `InferenceServerService`, `RevisionService`, and `ClusterService` have no generated Python wrapper at the moment, so call those over gRPC directly with the stubs the package already ships: `RevisionServiceStub` in `michelangelo.gen.api.v2.revision_svc_pb2_grpc`, `ClusterServiceStub` in `cluster_svc_pb2_grpc`, and `InferenceServerServiceStub` in `inference_server_svc_pb2_grpc`. You then have to send the `rpc-service`, `rpc-caller`, and `rpc-encoding` headers yourself.
 
 ## Next steps
 

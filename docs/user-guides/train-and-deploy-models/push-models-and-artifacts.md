@@ -107,7 +107,7 @@ def push_step(assembled: AssembledModel) -> list[PusherResult]:
     )
 ```
 
-`APIRegistryClient(namespace=...)` with no `svc` argument uses `APIClient.ModelService`, which needs the `MA_API_SERVER` environment variable. See the [Python APIClient Guide](../reference/python-api-client.md) for how the client connects and how to point it at a different endpoint. It records the model as a `Model` resource in that namespace. For tests and quick local runs, use `InMemoryRegistryClient()` from the same package instead. It keeps nothing after the process exits.
+`APIRegistryClient(namespace=...)` with no `svc` argument uses `APIClient.ModelService`, which needs the `MA_API_SERVER` environment variable and a caller set with `APIClient.set_caller(...)` before the first call. Without a caller it raises `ValueError("caller is not set")`. See the [Python APIClient Guide](../reference/python-api-client.md) for how the client connects and how to point it at a different endpoint. It records the model as a `Model` resource in that namespace. For tests and quick local runs, use `InMemoryRegistryClient()` from the same package instead. It keeps nothing after the process exits.
 
 ### Error handling
 
