@@ -267,7 +267,7 @@ class TaskConfig(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def pre_run(self):
+    def pre_run(self) -> None:
         """Execute setup code before the task function runs.
 
         Called by the task execution framework before invoking the user's
@@ -284,7 +284,7 @@ class TaskConfig(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def post_run(self):
+    def post_run(self) -> None:
         """Execute cleanup code after the task function completes.
 
         Called by the task execution framework after the user's task function

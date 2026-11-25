@@ -522,6 +522,18 @@ Need to return custom Python object?
 
 ---
 
+## Static Type Checking (mypy)
+
+Everything above is about runtime serialization — what Uniflow does when data moves between tasks. This section is about a separate concern: whether a static type checker like mypy can verify your code *before* you run it.
+
+The `michelangelo` package ships a [PEP 561](https://peps.python.org/pep-0561/) `py.typed` marker scoped to `michelangelo.uniflow` (not the top-level package — see below for why). With it, type checkers read the type hints already present in `task()`, `workflow()`, `Context`, and the other `uniflow` symbols you import, instead of treating everything from the package as `Any`.
+
+If you install `michelangelo` and run `mypy --strict` against your own pipeline code, upgrading to a version with this marker can surface new type errors in code that previously type-checked cleanly — not because your code changed, but because mypy can now see type information it couldn't before. This is expected: the errors were always there, just invisible to the type checker.
+
+**Why the marker only covers `uniflow/`, not the whole package:** the rest of `michelangelo` (`api/`, the generated protobuf stubs under `gen/`, and public functions without annotations yet) isn't fully annotated. A package-wide marker would expose all of that to `--strict` type-checking at once, which is a much larger, separate effort. If you need typed access to those modules too, check whether a newer release has widened the marker's scope before assuming it never will.
+
+---
+
 ## Next Steps
 
 - [Reference System Guide](./reference-system.md) - Understand how data flows between tasks
