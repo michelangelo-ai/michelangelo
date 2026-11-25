@@ -15,8 +15,9 @@ the aggregate row is materialized on the driver.
 from __future__ import annotations
 
 import importlib
+import inspect
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol
 
 import pandas as pd
 import ray
@@ -61,6 +62,8 @@ from michelangelo.workflow.variables import MessageVariable
 from michelangelo.workflow.variables.types import EvaluationMetrics, EvaluationResult
 
 if TYPE_CHECKING:
+    from ray.data.grouped_data import GroupedData
+
     from michelangelo.gen.api.v2.chart_pb2 import Chart
     from michelangelo.lib.evaluator.sanity import SanityCheckResult
     from michelangelo.workflow.schema.evaluator import EvaluatorConfig
@@ -234,6 +237,45 @@ def _resolve_preprocessor(config: EvaluatorConfig) -> PreprocessorFn | None:
     return preprocessor
 
 
+class _SegmentDataset(Protocol):
+    """The part of ``ray.data.Dataset`` the segment groupby uses."""
+
+    def groupby(self, key: list[str], **kwargs: Any) -> GroupedData:
+        """Group the rows by the ``key`` columns."""
+        ...
+
+
+def _groupby_segments(
+    ray_dataset: _SegmentDataset,
+    segment_columns: list[str],
+    num_partitions: int | None,
+) -> GroupedData:
+    """Group by the segment columns, into ``num_partitions`` shuffle partitions.
+
+    See :attr:`EvaluatorConfig.segment_shuffle_partitions`. Ray versions whose
+    ``groupby`` takes no ``num_partitions`` ignore the setting, with a warning.
+
+    Args:
+        ray_dataset: Dataset to group.
+        segment_columns: Columns to group by.
+        num_partitions: Shuffle partition count, or ``None`` for Ray's default.
+
+    Returns:
+        The grouped dataset.
+    """
+    if num_partitions is None:
+        return ray_dataset.groupby(segment_columns)
+    if "num_partitions" not in inspect.signature(ray_dataset.groupby).parameters:
+        _logger.warning(
+            "segment_shuffle_partitions=%d ignored: Ray %s groupby takes no "
+            "num_partitions",
+            num_partitions,
+            ray.__version__,
+        )
+        return ray_dataset.groupby(segment_columns)
+    return ray_dataset.groupby(segment_columns, num_partitions=num_partitions)
+
+
 def _fill_segment_nulls(
     batch: pd.DataFrame, segment_columns: list[str]
 ) -> pd.DataFrame:
@@ -395,7 +437,9 @@ def _evaluate_segmented(
     )
 
     segment_df = (
-        ray_dataset.groupby(segment_columns)
+        _groupby_segments(
+            ray_dataset, segment_columns, config.segment_shuffle_partitions
+        )
         .map_groups(
             lambda group_df: _evaluate_segment(group_df, evaluator, segment_columns)
         )
@@ -430,7 +474,9 @@ def _evaluate_segmented(
             ray_dataset, segment_df, segment_columns, config.min_segment_row_count
         ).select_columns([*segment_columns, *sorted(chart_cols)])
         segment_chart_df = (
-            surviving.groupby(segment_columns)
+            _groupby_segments(
+                surviving, segment_columns, config.segment_shuffle_partitions
+            )
             .map_groups(
                 lambda group_df, cols=segment_columns: compute_chart_data_for_group(
                     group_df, evaluator.config, cols
