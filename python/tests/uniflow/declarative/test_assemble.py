@@ -224,6 +224,10 @@ def _capabilities_not_list(doc):
     _ray(doc)["capabilities"] = "retry"
 
 
+def _capabilities_empty_dict(doc):
+    _ray(doc)["capabilities"] = {}
+
+
 def _capabilities_not_strings(doc):
     _ray(doc)["capabilities"] = [1]
 
@@ -284,6 +288,10 @@ def _non_ascii_factory(doc):
         ),
         (
             _capabilities_not_list,
+            'task type "core/ray": capabilities must be a list of strings',
+        ),
+        (
+            _capabilities_empty_dict,
             'task type "core/ray": capabilities must be a list of strings',
         ),
         (

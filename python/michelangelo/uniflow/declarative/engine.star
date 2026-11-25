@@ -10,7 +10,8 @@ dispatches each task to the factory that the registry holds for its type.
 
 The result is {"states": {task: state}, "outputs": {task: value}}. If a task
 failed, the workflow ends FAILED after the walk. When a task callable failed,
-the workflow error carries the error of the first one.
+the workflow error holds the errors of the failed callables in the first such
+level, joined with "; ".
 """
 
 load("../commons.star", "TASK_STATE_FAILED", "TASK_STATE_SKIPPED", "TASK_STATE_SUCCEEDED", "TIME_FOMART", "report_progress")
@@ -76,8 +77,8 @@ def run(spec, params, registry):
     if failed:
         summary = "declarative: failed task(s): " + ", ".join(failed)
         if failed_batches:
-            # get() raises the error of the first failed callable, which
-            # replaces the summary as the workflow error.
+            # get() raises the joined errors of the failed callables in the
+            # batch, which replace the summary as the workflow error.
             print(summary)
             failed_batches[0].get()
         fail(summary)

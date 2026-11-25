@@ -123,7 +123,9 @@ def _parse_type(name: str, doc) -> TaskTypeSource:
     if not _is_identifier(_identifier(key)):
         raise ReleaseSourceError(f"{where}: job_specs_key {json.dumps(key)} {rule}")
 
-    capabilities = doc.get("capabilities") or []
+    capabilities = doc.get("capabilities")
+    if capabilities is None:
+        capabilities = []
     if not isinstance(capabilities, list) or not all(
         isinstance(c, str) for c in capabilities
     ):

@@ -316,6 +316,26 @@ func TestEngineSilentFailureCause(t *testing.T) {
 	assert.Equal(t, "fail: silent failure: b", got.err)
 }
 
+func TestEngineFailureCauseOrder(t *testing.T) {
+	tar := casesTar(t)
+	t.Run("two_failures_in_one_level", func(t *testing.T) {
+		got := runEngine(t, tar, "run_case", spec(nil, map[string]any{
+			"a": task("fake/fail_silent"),
+			"b": task("fake/fail_silent"),
+		}), map[string]any{})
+		assert.Equal(t, "fail: silent failure: a; fail: silent failure: b", got.err)
+	})
+	t.Run("reference_failure_then_callable_failure", func(t *testing.T) {
+		got := runEngine(t, tar, "run_case", spec(nil, map[string]any{
+			"a": config(task("fake/ok"), map[string]any{"args": []any{"{{ params.nope }}"}}),
+			"b": task("fake/ok"),
+			"c": task("fake/fail_silent", "b"),
+		}), map[string]any{})
+		assert.Equal(t, map[string]string{"a": failed, "b": succeeded}, got.states)
+		assert.Equal(t, "fail: silent failure: c", got.err)
+	})
+}
+
 func TestEngineFactory(t *testing.T) {
 	tar := casesTar(t)
 	for _, tc := range []struct {
