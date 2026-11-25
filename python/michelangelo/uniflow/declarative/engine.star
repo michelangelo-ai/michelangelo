@@ -42,7 +42,7 @@ def run(spec, params, registry):
 
     states = {}
     outputs = {}
-    refs = {"params": params, "states": states, "outputs": outputs, "ancestors": _ancestors(tasks)}
+    refs = {"params": _typed_params(spec, params), "states": states, "outputs": outputs, "ancestors": _ancestors(tasks)}
     for level in levels(spec):
         runnable = []
         for name in level:
@@ -194,6 +194,17 @@ def _dispatch(outcomes, name, task_callable, args, kwargs):
     outcomes[name] = {"state": TASK_STATE_FAILED, "output": None}
     result = task_callable(*args, **kwargs)
     outcomes[name] = {"state": TASK_STATE_SUCCEEDED, "output": result}
+    return result
+
+def _typed_params(spec, params):
+    # JSON decoding gives an int for an integral number, but a NUMBER
+    # parameter always reaches a task as a float.
+    declared = spec.get("parameters") or {}
+    result = {}
+    for name, value in params.items():
+        if value != None and (declared.get(name) or {}).get("type") == "PARAMETER_TYPE_NUMBER":
+            value = float(value)
+        result[name] = value
     return result
 
 def _ancestors(tasks):

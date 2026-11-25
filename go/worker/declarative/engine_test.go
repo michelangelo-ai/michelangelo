@@ -564,3 +564,25 @@ func TestEngineRefs(t *testing.T) {
 		})
 	}
 }
+
+func TestEngineNumberParam(t *testing.T) {
+	tar := casesTar(t)
+	s := spec(nil, map[string]any{
+		"a": config(task("fake/types"), map[string]any{
+			"lr":     "{{ params.lr }}",
+			"epochs": "{{ params.epochs }}",
+			"text":   "lr={{ params.lr }} zero={{ params.zero }}",
+		}),
+	})
+	s["parameters"] = map[string]any{
+		"lr":     map[string]any{"type": "PARAMETER_TYPE_NUMBER", "default": 1, "required": false, "description": ""},
+		"epochs": map[string]any{"type": "PARAMETER_TYPE_INTEGER", "default": 3, "required": false, "description": ""},
+		"zero":   map[string]any{"type": "PARAMETER_TYPE_NUMBER", "default": 0, "required": false, "description": ""},
+	}
+	got := runEngine(t, tar, "run_case", s, map[string]any{"lr": 1, "epochs": 3, "zero": 0})
+	require.Empty(t, got.err)
+	assert.Equal(t, map[string]any{
+		"types":  map[string]any{"lr": "float", "epochs": "int", "text": "string"},
+		"fields": map[string]any{"lr": 1.0, "epochs": 3, "text": "lr=1 zero=0"},
+	}, got.result["outputs"].(map[string]any)["a"])
+}

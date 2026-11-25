@@ -32,6 +32,15 @@ def _noretry(entry_point, alias = None, **fields):
 
     return call
 
+# The result round trip can turn 1.0 into 1, so this fake reports the
+# Starlark type of each field.
+def _types(entry_point, alias = None, **fields):
+    def call(*args, **kwargs):
+        _report(alias, TASK_STATE_SUCCEEDED)
+        return {"types": {k: type(v) for k, v in fields.items()}, "fields": fields}
+
+    return call
+
 def _sleep(entry_point, alias = None, seconds = 10, **fields):
     def call(*args, **kwargs):
         start = time.time()
@@ -51,6 +60,7 @@ REGISTRY = {
     "fake/noretry": _entry(_noretry, "fake", []),
     "fake/ok": _entry(_ok, "fake", ["retry"]),
     "fake/sleep": _entry(_sleep, "fake", []),
+    "fake/types": _entry(_types, "fake", []),
 }
 
 def run_case(spec, params):
