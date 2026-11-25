@@ -297,7 +297,7 @@ cp examples/declarative/pipelines/training.yaml \
 ```
 
 Add `uniflowTar` or `interpreterPin.artifact` under `spec.manifest` in the
-copy, then apply it. `ma` rejects the file before it calls the apiserver:
+copy, then apply it. `ma` rejects the file before it sends a Pipeline request to the apiserver:
 
 ```text
 Error: spec.manifest.uniflowTar is server-owned for declarative pipelines; remove it, because the apiserver sets it from the interpreter pin
