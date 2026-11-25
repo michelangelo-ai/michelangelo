@@ -7,6 +7,7 @@ import (
 
 	"github.com/gogo/protobuf/jsonpb"
 	gogoproto "github.com/gogo/protobuf/proto"
+	"github.com/gogo/protobuf/types"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -44,7 +45,7 @@ func TestPlanGolden(t *testing.T) {
 		// depth-0 dependency. Plan copies the caller's warnings unchanged.
 		{"alt_shape", []string{"caller-supplied warning"}},
 		// diamond_failure: FAILED and COMPLETED edges still order tasks into
-		// levels.
+		// levels. Each one warns, because the upstream types lack outcome_mode.
 		{"diamond_failure", nil},
 	}
 	for _, c := range cases {
@@ -60,6 +61,58 @@ func TestPlanGolden(t *testing.T) {
 			assert.Truef(t, gogoproto.Equal(want, got), "explain-plan mismatch\nwant: %s\ngot:  %s", want.String(), got.String())
 		})
 	}
+}
+
+func TestPlanWarnsInitialInterval(t *testing.T) {
+	w := typedDiamond()
+	w.Tasks["train"].Retry = &v2pb.RetryPolicy{MaxAttempts: 2, InitialInterval: &types.Duration{Seconds: 30}}
+	w.WorkflowConfig = &v2pb.WorkflowSettings{DefaultRetry: &v2pb.RetryPolicy{MaxAttempts: 1, InitialInterval: &types.Duration{Seconds: 5}}}
+	p, err := Plan(w, Limits{}, loadRelease(t), []string{"caller"})
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"caller",
+		"tasks.train.retry.initial_interval is not used yet",
+		"workflow_config.default_retry.initial_interval is not used yet",
+	}, p.Warnings)
+}
+
+func TestPlanWarningOrder(t *testing.T) {
+	w := typedDiamond()
+	w.Tasks["publish"].DependsOn = []*v2pb.TaskDependency{{Task: "train"}, {Task: "evaluate", When: v2pb.OUTCOME_COMPLETED}}
+	w.Tasks["publish"].Retry = &v2pb.RetryPolicy{InitialInterval: &types.Duration{Seconds: 1}}
+	w.Tasks["evaluate"].Retry = &v2pb.RetryPolicy{InitialInterval: &types.Duration{Seconds: 1}}
+	p, err := Plan(w, Limits{}, loadRelease(t), nil)
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"tasks.evaluate.retry.initial_interval is not used yet",
+		"tasks.publish.depends_on[1]: the handler runs, but it gets no error text until outcome mode ships",
+		"tasks.publish.retry.initial_interval is not used yet",
+	}, p.Warnings)
+}
+
+// The warning depends on the upstream type: its factory is what would hand
+// the error text to the handler.
+func TestPlanNoWarningForOutcomeMode(t *testing.T) {
+	w := typedDiamond()
+	w.Tasks["publish"].TaskFunction = "core/outcome"
+	notify := task("core/python")
+	notify.DependsOn = []*v2pb.TaskDependency{{Task: "publish", When: v2pb.OUTCOME_FAILED}}
+	notify.Config.Fields["entry_point"] = strVal("main.py")
+	w.Tasks["notify"] = notify
+	p, err := Plan(w, Limits{}, loadRelease(t), nil)
+	require.NoError(t, err)
+	assert.Empty(t, p.Warnings)
+
+	// The handler type does not matter: an outcome_mode handler on a plain
+	// upstream still warns.
+	w = typedDiamond()
+	handler := task("core/outcome")
+	handler.DependsOn = []*v2pb.TaskDependency{{Task: "publish", When: v2pb.OUTCOME_FAILED}}
+	handler.Config.Fields["entry_point"] = strVal("main.py")
+	w.Tasks["notify"] = handler
+	p, err = Plan(w, Limits{}, loadRelease(t), nil)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"tasks.notify.depends_on[0]: the handler runs, but it gets no error text until outcome mode ships"}, p.Warnings)
 }
 
 func TestPlanRejectsCycle(t *testing.T) {
