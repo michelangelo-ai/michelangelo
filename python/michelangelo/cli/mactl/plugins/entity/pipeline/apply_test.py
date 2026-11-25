@@ -235,6 +235,29 @@ class PipelineApplyRenderTest(TestCase):
         self.assertEqual(out, f"{response}\n")
         self.assertEqual(list(self.sent.update_options.dryRun), [])
 
+    def test_write_ignores_the_plan_annotation(self):
+        """Without --dry-run, mactl does not read the plan annotation."""
+        response = _update_response({EXPLAIN_PLAN_ANNOTATION: "{not json"})
+
+        out = self._run(response, dry_run=False)
+
+        self.assertEqual(out, f"{response}\n")
+
+    def test_unreadable_plan_on_dry_run_names_the_annotation(self):
+        """A dry run with a malformed plan exits with the annotation name."""
+        response = _update_response({EXPLAIN_PLAN_ANNOTATION: "{not json"})
+
+        with self.assertRaises(SystemExit) as err:
+            self._run(response)
+
+        self.assertTrue(
+            err.exception.code.startswith(
+                f"Error: cannot read the {EXPLAIN_PLAN_ANNOTATION} annotation:"
+                " Failed to load JSON"
+            ),
+            err.exception.code,
+        )
+
     def test_rejection_exits_with_status_message(self):
         """A server rejection exits with the gRPC status message."""
         rejection = _FakeRpcError(

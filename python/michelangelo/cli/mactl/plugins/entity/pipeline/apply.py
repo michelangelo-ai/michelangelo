@@ -17,11 +17,13 @@ from michelangelo.cli.mactl.crd import (
     read_yaml_to_crd_request,
 )
 from michelangelo.cli.mactl.plugins.entity.pipeline.declarative import (
+    EXPLAIN_PLAN_ANNOTATION,
     DeclarativeManifestError,
     explain_plan_from,
     printable,
     render_explain_plan,
 )
+from michelangelo.gen.api.v2.declarative_pb2 import ExplainPlan
 
 _LOG = getLogger(__name__)
 
@@ -66,14 +68,28 @@ def pipeline_apply_func_impl(
     arguments = bound_args.arguments
     try:
         response = _create_or_update(update_method_info, arguments)
-        plan = explain_plan_from(response.pipeline)
     except (RpcError, DeclarativeManifestError, ParseError) as err:
         raise SystemExit(f"Error: {_error_message(err)}") from None
+    plan = _dry_run_plan(response, arguments)
     if plan is None:
         print(response)
     else:
         print(render_explain_plan(plan, arguments.get("output", "table")))
     return response
+
+
+def _dry_run_plan(response: Message, arguments: dict) -> Optional[ExplainPlan]:
+    # The apiserver sets the plan only on a dry run. A write is already stored,
+    # so it must not fail on the plan.
+    if not arguments.get("dry_run", False):
+        return None
+    try:
+        return explain_plan_from(response.pipeline)
+    except ParseError as err:
+        raise SystemExit(
+            f"Error: cannot read the {EXPLAIN_PLAN_ANNOTATION} annotation:"
+            f" {_error_message(err)}"
+        ) from None
 
 
 def _create_or_update(update_method_info: CrdMethodInfo, arguments: dict) -> Message:
