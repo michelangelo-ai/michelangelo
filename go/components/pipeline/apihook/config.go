@@ -20,7 +20,7 @@ type Config struct {
 	// apiserver rejects them with FailedPrecondition.
 	Enabled bool `yaml:"enabled"`
 	// DefaultInterpreter is the release version that a new pipeline is
-	// pinned to.
+	// pinned to when the request names no interpreter_pin.version.
 	DefaultInterpreter string `yaml:"defaultInterpreter"`
 	// ReleasesDir holds one <version>.yaml file per interpreter release.
 	ReleasesDir string `yaml:"releasesDir"`

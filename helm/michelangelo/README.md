@@ -269,10 +269,10 @@ Top-level keys. See [`values.yaml`](./values.yaml) for the full annotated schema
 | `apiserver.port` | int | `15566` | no | gRPC port. |
 | `apiserver.service.type` | string | `ClusterIP` | no | `ClusterIP`, `NodePort`, or `LoadBalancer`. |
 | `apiserver.service.nodePort` | int | `null` | no | Required when `service.type=NodePort`. |
-| `apiserver.declarative.enabled` | bool | `false` | no | Accept DECLARATIVE pipelines. When off, the apiserver rejects them. |
-| `apiserver.declarative.defaultInterpreter` | string | `""` | conditional | Release version that a new pipeline is pinned to. Required when `declarative.enabled=true`. |
+| `apiserver.declarative.enabled` | bool | `false` | no | Accept DECLARATIVE pipelines. When off, the apiserver rejects them. If `crdSync.enableUpdate=false`, apply the updated Pipeline CRD before you turn it on. Otherwise Kubernetes drops `interpreterPin`. See [Declarative pipelines (alpha)](#declarative-pipelines-alpha). |
+| `apiserver.declarative.defaultInterpreter` | string | `""` | conditional | Release version that a new pipeline is pinned to when the request names no `interpreter_pin.version`. Required when `declarative.enabled=true`. |
 | `apiserver.declarative.releasesDir` | string | `/etc/michelangelo/declarative/releases` | no | Mount path of the releases ConfigMap. |
-| `apiserver.declarative.releases` | map | `{}` | conditional | Maps each release version to its release file YAML. Must include `defaultInterpreter`. Do not change a release file after you publish it; add a new version instead. With `--set-file`, escape each dot in a version: `releases.core-v1\.4\.2`. |
+| `apiserver.declarative.releases` | map | `{}` | conditional | Maps each release version to its release file YAML. Must include `defaultInterpreter`. Do not change a release file after you publish it; add a new version instead. An edit to `task_types` under the same version and digest is not detected. With `--set-file`, escape each dot in a version: `releases.core-v1\.4\.2`. |
 | `envoy.enabled` | bool | `true` | no | Toggle the gRPC-Web proxy. |
 | `envoy.port` | int | `8081` | no | |
 | `envoy.corsOrigins` | string | `""` | no | Regex for `Access-Control-Allow-Origin`. Required if the UI runs on a different host. |
@@ -307,6 +307,70 @@ Top-level keys. See [`values.yaml`](./values.yaml) for the full annotated schema
 | `affinity` | object | `{}` | no | |
 
 `gcsStorage` is additive: the chart templates still require `objectStorage.endpoint` (worker and controller manager ConfigMaps), and both Deployments still read the object-storage Secret, so `objectStorage.accessKeyId` and `objectStorage.secretAccessKey` (or `objectStorage.existingSecret`) must be set. A GCS-only install must therefore still supply these `objectStorage` values today.
+
+## Declarative pipelines (alpha)
+
+The apiserver validates DECLARATIVE pipelines and pins each one to an interpreter release. The feature is off by default.
+
+### Before you enable it
+
+- If `apiserver.crdSync.enableUpdate` is `false`, apply the updated Pipeline CRD first. Otherwise Kubernetes drops `interpreterPin` without an error, and the controller marks the pipeline ERROR.
+- The controller marks any DECLARATIVE pipeline without a pin ERROR, with the flag on or off. This includes a pipeline written with `kubectl`.
+- The chart sets no memory limit in `apiserver.resources`. The apiserver decodes each DECLARATIVE write in memory, up to 512 KiB of content. Set a limit that fits your load.
+
+### Enable
+
+Write one release file per interpreter release. The file name must equal `version`.
+
+```yaml
+# core-v1.4.2.yaml
+version: core-v1.4.2
+artifact: s3://my-bucket/interpreters/core-v1.4.2.tar.gz
+digest: sha256:<64 hex characters>
+task_types:
+  core/python:
+    capabilities: []
+    config:
+      entry_point: {type: string, required: true}
+      args: {type: list}
+    job_specs:
+      cpu: {type: integer}
+```
+
+Escape each dot in the version in `--set-file`:
+
+```bash
+helm upgrade michelangelo ./helm/michelangelo --reuse-values \
+  --set apiserver.declarative.enabled=true \
+  --set apiserver.declarative.defaultInterpreter=core-v1.4.2 \
+  --set-file 'apiserver.declarative.releases.core-v1\.4\.2=core-v1.4.2.yaml'
+```
+
+### Pin rules
+
+- Create pins the release that `interpreter_pin.version` names. With no version, create pins `defaultInterpreter`.
+- Update keeps the stored pin. To move a pipeline, set `interpreter_pin.version` to another loaded release.
+- `interpreter_pin.artifact`, `interpreter_pin.digest`, and `uniflow_tar` are server-owned.
+- A pipeline can move to any loaded release. Remove a release only when no pipeline uses it.
+- A stored pin whose release is not loaded fails an update with `FailedPrecondition`.
+- Do not edit a published release file. A changed `digest` fails an update with `FailedPrecondition`. An edit to `task_types` under the same version and digest is not detected.
+- A dry-run create or update returns the plan in the `michelangelo/declarative-explain-plan` annotation.
+
+### Roll out a new release
+
+The apiserver loads the releases once at start. A change to `releases` restarts the apiserver. During a rolling update, an old pod does not know a new release. Use three upgrades:
+
+1. Add the new release.
+2. Switch `defaultInterpreter` to the new release.
+3. Remove the old release when no pipeline uses it.
+
+All releases share one ConfigMap, which has a 1 MiB limit.
+
+### Known limits
+
+- A direct `kubectl` write skips validation. The controller does not verify a pin that is present.
+- Any user with update rights can change `interpreter_pin.version`.
+- No run path reads the ERROR state yet.
 
 ## Ingress
 

@@ -273,22 +273,40 @@ apiserver:
   pipelineRunDefaults:
     environment: ""
 
-  # Declarative pipelines (manifest type DECLARATIVE). Off by default. When
-  # off, the apiserver rejects a DECLARATIVE create or update. When on, the
-  # apiserver validates each DECLARATIVE pipeline against an interpreter
-  # release and pins the pipeline to it. The apiserver loads the releases
-  # once at start, so a change to `releases` restarts the apiserver.
+  # Declarative pipelines (manifest type DECLARATIVE). Off by default.
+  # Off: the apiserver rejects DECLARATIVE creates and updates with
+  #   FailedPrecondition.
+  # On: the apiserver validates each DECLARATIVE pipeline against an
+  #   interpreter release and pins the pipeline to it.
+  # Before you enable it:
+  #   - If apiserver.crdSync.enableUpdate is false, apply the updated Pipeline
+  #     CRD first. Otherwise Kubernetes drops interpreterPin without an error,
+  #     and the controller marks the pipeline ERROR.
+  #   - The controller marks any DECLARATIVE pipeline without a pin ERROR,
+  #     with the flag on or off. This includes a pipeline written with kubectl.
+  #   - The chart sets no memory limit in `resources`. The apiserver decodes
+  #     each DECLARATIVE write in memory, up to 512 KiB of content.
+  # The apiserver loads the releases once at start. A change to `releases`
+  # restarts the apiserver. On a rolling update, an old pod does not know a
+  # new release. Roll out in three upgrades: add the new release, then switch
+  # defaultInterpreter, then remove the old release.
+  # A pipeline can move to any loaded release. Remove a release only when no
+  # pipeline uses it.
+  # All releases share one ConfigMap, which has a 1 MiB limit.
+  # See "Declarative pipelines (alpha)" in README.md.
   declarative:
     enabled: false
-    # Release version that a new pipeline is pinned to. Required when
-    # enabled; it must be a key of `releases`.
+    # Release version that a new pipeline is pinned to when the request names
+    # no interpreter_pin.version. Required when enabled; it must be a key of
+    # `releases`.
     defaultInterpreter: ""
     # Directory where the releases ConfigMap is mounted.
     releasesDir: /etc/michelangelo/declarative/releases
     # Maps each release version to the YAML text of its release file. The
     # chart writes each one as <version>.yaml. Do not change a release file
     # after you publish it. A changed digest blocks updates to every pipeline
-    # pinned to that version. To change a release, add a new version.
+    # pinned to that version. An edit to task_types under the same version and
+    # digest is not detected. To change a release, add a new version.
     # Escape each dot in a version
     # on the command line, or --set-file reads it as a nested key. Example:
     #   helm upgrade ... --set-file 'apiserver.declarative.releases.core-v1\.4\.2=core-v1.4.2.yaml'
