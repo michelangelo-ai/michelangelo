@@ -1,9 +1,19 @@
 // Package apihook validates DECLARATIVE pipelines on create and update and
 // pins each one to an interpreter release.
 //
-// The hook passes every other manifest type through, unless the request sets
-// interpreter_pin. It removes only the explain-plan annotation. When the apiserver.declarative flag is off, a
-// DECLARATIVE write fails with FailedPrecondition.
+// On create, a request can name a loaded release in interpreter_pin.version.
+// No version means the default release. On update, the hook keeps the stored
+// pin, or moves it to the loaded release that the request names. The pin
+// artifact, the pin digest, and uniflow_tar are server-owned.
+//
+// On update, the hook compares the digest of the stored pin with the digest
+// line of the release file. It does not detect an edit to task_types under a
+// published version.
+//
+// For other manifest types, the hook changes nothing except that it removes
+// the explain-plan annotation and interpreter_pin. When the
+// apiserver.declarative flag is off, a DECLARATIVE write fails with
+// FailedPrecondition.
 package apihook
 
 import (
