@@ -52,20 +52,26 @@ type engineRun struct {
 	result map[string]any
 	// states is the run view: the last state each task reported.
 	states map[string]string
-	err    string
+	// messages holds the last non-empty message each task reported.
+	messages map[string]string
+	err      string
 }
 
 func runEngine(t *testing.T, tar []byte, fn string, args ...any) engineRun {
 	t.Helper()
 	res, progress, err := runStar(t, tar, "/cases.star", fn, args...)
-	out := engineRun{states: map[string]string{}}
+	out := engineRun{states: map[string]string{}, messages: map[string]string{}}
 	for _, line := range progress {
 		var p struct {
-			TaskName  string `json:"task_name"`
-			TaskState string `json:"task_state"`
+			TaskName    string `json:"task_name"`
+			TaskState   string `json:"task_state"`
+			TaskMessage string `json:"task_message"`
 		}
 		require.NoError(t, json.Unmarshal([]byte(line), &p), line)
 		out.states[p.TaskName] = p.TaskState
+		if p.TaskMessage != "" {
+			out.messages[p.TaskName] = p.TaskMessage
+		}
 	}
 	if err != nil {
 		out.err = err.Error()
@@ -385,6 +391,176 @@ func TestEngineFactory(t *testing.T) {
 				states[name] = succeeded
 			}
 			assert.Equal(t, map[string]any{"states": states, "outputs": tc.outputs}, got.result)
+		})
+	}
+}
+
+// config returns task m with config set to entry_point x.py plus fields.
+func config(m map[string]any, fields map[string]any) map[string]any {
+	c := map[string]any{"entry_point": "x.py"}
+	for k, v := range fields {
+		c[k] = v
+	}
+	return with(m, "config", c)
+}
+
+func TestEngineRefs(t *testing.T) {
+	tar := casesTar(t)
+	params := map[string]any{
+		"epochs": 3, "cpu": 2, "s": "x", "flag": true, "f": 1.5, "a": "{{ params.b }}", "b": "x",
+		"big": 1234567.5, "small": 0.000015, "tiny": 1.5e-7, "neg": -0.00003, "frac": 123456789012.25,
+	}
+	for _, tc := range []struct {
+		name     string
+		spec     map[string]any
+		states   map[string]string
+		fields   map[string]map[string]any // task -> expected fields of its record
+		args     map[string][]any          // task -> expected callable args
+		kwargs   map[string]map[string]any // task -> expected callable kwargs
+		messages map[string]string
+		err      string
+	}{
+		{
+			name:   "test_refs_non_recursive",
+			spec:   spec(nil, map[string]any{"a": config(task("fake/ok"), map[string]any{"args": []any{"{{ params.a }}"}})}),
+			states: map[string]string{"a": succeeded},
+			args:   map[string][]any{"a": {"{{ params.b }}"}},
+		},
+		{
+			name: "test_refs_in_nested_structures",
+			spec: spec(nil, map[string]any{
+				"root": task("fake/ok"),
+				"child": config(task("fake/ok", "root"), map[string]any{"kwargs": map[string]any{
+					"note": "s={{ params.s }} root={{ tasks.root.output.alias }}",
+					"list": []any{"{{ params.epochs }}", 3},
+					"deep": map[string]any{"inner": []any{map[string]any{"ep": "{{ tasks.root.output.ep }}"}}},
+				}}),
+			}),
+			states: map[string]string{"root": succeeded, "child": succeeded},
+			kwargs: map[string]map[string]any{"child": {
+				"note": "s=x root=root",
+				"list": []any{3, 3},
+				"deep": map[string]any{"inner": []any{map[string]any{"ep": "x.py"}}},
+			}},
+		},
+		{
+			name:   "ref_config_scalar",
+			spec:   spec(nil, map[string]any{"a": config(task("fake/ok"), map[string]any{"epochs": "{{ params.epochs }}"})}),
+			states: map[string]string{"a": succeeded},
+			fields: map[string]map[string]any{"a": {"epochs": 3}},
+		},
+		{
+			name:   "ref_job_specs_slot",
+			spec:   spec(nil, map[string]any{"a": with(task("fake/ok"), "job_specs", map[string]any{"fake": map[string]any{"cpu": "{{params.cpu}}"}})}),
+			states: map[string]string{"a": succeeded},
+			fields: map[string]map[string]any{"a": {"cpu": 2}},
+		},
+		{
+			name: "ref_embedded",
+			spec: spec(nil, map[string]any{
+				"root": config(task("fake/ok"), map[string]any{"args": []any{1, "two"}}),
+				"a": config(task("fake/ok", "root"), map[string]any{
+					"n":      "n={{ params.epochs }}",
+					"text":   "flag={{ params.flag }} f={{ params.f }} s={{ params.s }} args={{ tasks.root.output.args }}",
+					"space":  " {{ params.epochs }}",
+					"floats": "{{ params.big }} {{ params.small }} {{ params.tiny }} {{ params.neg }} {{ params.frac }}",
+				}),
+			}),
+			states: map[string]string{"root": succeeded, "a": succeeded},
+			fields: map[string]map[string]any{"a": {"n": "n=3", "text": `flag=true f=1.5 s=x args=[1,"two"]`, "space": " 3",
+				"floats": "1234567.5 0.000015 1.5e-7 -0.00003 123456789012.25"}},
+		},
+		{
+			name: "ref_deep_output",
+			spec: spec(nil, map[string]any{
+				"a": config(task("fake/ok"), map[string]any{"m": map[string]any{"k": "deep"}}),
+				"b": config(task("fake/ok", "a"), map[string]any{"v": "{{ tasks.a.output.fields.m.k }}"}),
+			}),
+			states: map[string]string{"a": succeeded, "b": succeeded},
+			fields: map[string]map[string]any{"b": {"v": "deep"}},
+		},
+		{
+			name: "test_ref_unknown_param",
+			spec: spec(nil, map[string]any{
+				"root":    config(task("fake/ok"), map[string]any{"args": []any{"{{ params.nope }}"}}),
+				"other":   task("fake/ok"),
+				"after":   task("fake/ok", "root"),
+				"handler": task("fake/ok", edge{"root", "OUTCOME_FAILED"}),
+			}),
+			states:   map[string]string{"root": failed, "other": succeeded, "after": skipped, "handler": succeeded},
+			messages: map[string]string{"root": `Failed: config.args[0]: reference "{{ params.nope }}" names an unknown parameter`, "after": "Skipped: dependency gate not satisfied"},
+			err:      "declarative: failed task(s): root",
+		},
+		{
+			name: "test_ref_non_dependency",
+			spec: spec(nil, map[string]any{
+				"root":  task("fake/ok"),
+				"other": task("fake/ok"),
+				"child": config(task("fake/ok", "root"), map[string]any{"args": []any{"{{ tasks.other.output.alias }}"}}),
+			}),
+			states:   map[string]string{"root": succeeded, "other": succeeded, "child": failed},
+			messages: map[string]string{"child": `Failed: config.args[0]: reference "{{ tasks.other.output.alias }}" names task "other", which is not a dependency`},
+			err:      "declarative: failed task(s): child",
+		},
+		{
+			name: "test_ref_missing_output_field",
+			spec: spec(nil, map[string]any{
+				"root":  task("fake/ok"),
+				"child": with(task("fake/ok", "root"), "job_specs", map[string]any{"fake": map[string]any{"cpu": "{{ tasks.root.output.fields.nope }}"}}),
+			}),
+			states:   map[string]string{"root": succeeded, "child": failed},
+			messages: map[string]string{"child": `Failed: job_specs.fake.cpu: reference "{{ tasks.root.output.fields.nope }}" names field "nope", which the output does not have`},
+			err:      "declarative: failed task(s): child",
+		},
+		{
+			name: "test_ref_output_of_failed_task",
+			spec: spec(nil, map[string]any{
+				"a": task("fake/fail"),
+				"b": config(task("fake/ok", edge{"a", "OUTCOME_FAILED"}), map[string]any{"args": []any{"{{ tasks.a.output.alias }}"}}),
+			}),
+			states:   map[string]string{"a": failed, "b": failed},
+			messages: map[string]string{"b": `Failed: config.args[0]: reference "{{ tasks.a.output.alias }}" names task "a", which did not succeed`},
+			err:      "declarative: failed task(s): a, b",
+		},
+		{
+			name: "ref_malformed",
+			spec: spec(nil, map[string]any{
+				"a": config(task("fake/ok"), map[string]any{"x": "{{ params.Bad }}"}),
+				"b": config(task("fake/ok"), map[string]any{"x": "n={{ params.epochs"}),
+				"c": config(task("fake/ok"), map[string]any{"x": "{{ tasks.a }}"}),
+				"d": config(task("fake/ok"), map[string]any{"x": "{{ pipeline.execution_time }}"}),
+			}),
+			states: map[string]string{"a": failed, "b": failed, "c": failed, "d": failed},
+			messages: map[string]string{
+				"a": `Failed: config.x: reference "{{ params.Bad }}" has a malformed name`,
+				"b": `Failed: config.x: unterminated "{{" in "n={{ params.epochs"`,
+				"c": `Failed: config.x: reference "{{ tasks.a }}" must name "tasks.a.output"`,
+				"d": `Failed: config.x: reference "{{ pipeline.execution_time }}" must start with "params." or "tasks."`,
+			},
+			err: "declarative: failed task(s): a, b, c, d",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := runEngine(t, tar, "run_case", tc.spec, params)
+			assert.Equal(t, tc.states, got.states, "run view")
+			if tc.messages != nil {
+				assert.Equal(t, tc.messages, got.messages)
+			}
+			if tc.err != "" {
+				assert.Equal(t, "fail: "+tc.err, got.err)
+				return
+			}
+			require.Empty(t, got.err)
+			outputs := got.result["outputs"].(map[string]any)
+			for name, want := range tc.fields {
+				assert.Equal(t, want, outputs[name].(map[string]any)["fields"], name)
+			}
+			for name, want := range tc.args {
+				assert.Equal(t, want, outputs[name].(map[string]any)["args"], name)
+			}
+			for name, want := range tc.kwargs {
+				assert.Equal(t, want, outputs[name].(map[string]any)["kwargs"], name)
+			}
 		})
 	}
 }

@@ -13,7 +13,7 @@ failed, run calls fail() after the walk, so the workflow ends FAILED.
 """
 
 load("../commons.star", "TASK_STATE_FAILED", "TASK_STATE_SKIPPED", "TASK_STATE_SUCCEEDED", "TIME_FOMART", "report_progress")
-load("@plugin", "concurrent", "time")
+load("@plugin", "concurrent", "json", "time")
 
 # This dialect has no while loop and no recursion, so each walk is a bounded
 # for loop.
@@ -42,6 +42,7 @@ def run(spec, params, registry):
 
     states = {}
     outputs = {}
+    refs = {"params": params, "states": states, "outputs": outputs, "ancestors": _ancestors(tasks)}
     for level in levels(spec):
         runnable = []
         for name in level:
@@ -52,7 +53,7 @@ def run(spec, params, registry):
                 states[name] = TASK_STATE_SKIPPED
                 outputs[name] = None
         if runnable:
-            _run_level(runnable, tasks, registry, workflow_config, states, outputs)
+            _run_level(runnable, tasks, registry, workflow_config, refs)
 
     failed = [name for name in sorted(states.keys()) if states[name] == TASK_STATE_FAILED]
     if failed:
@@ -117,18 +118,34 @@ def _report(name, task, state, message):
         end_time = ts,
     )
 
-def _run_level(runnable, tasks, registry, workflow_config, states, outputs):
+def _run_level(runnable, tasks, registry, workflow_config, refs):
+    states = refs["states"]
+    outputs = refs["outputs"]
     outcomes = {}
     callables = []
     for name in runnable:
         task = tasks[name]
         entry = registry[task["task_function"]]
-        config = task.get("config") or {}
+        config, err = _resolve(task.get("config") or {}, "config", name, refs)
+        job_specs = {}
+        if err == None:
+            job_specs, err = _resolve(task.get("job_specs") or {}, "job_specs", name, refs)
+        if err != None:
+            _report(name, task, TASK_STATE_FAILED, "Failed: " + err)
+            outcomes[name] = {"state": TASK_STATE_FAILED, "output": None}
+            continue
         # The factory runs in the workflow thread, so a factory that fails
         # stops the workflow with its own error text.
-        task_callable = entry["factory"](config.get("entry_point"), **_factory_kwargs(name, task, entry, config, task.get("job_specs") or {}, workflow_config))
+        task_callable = entry["factory"](config.get("entry_point"), **_factory_kwargs(name, task, entry, config, job_specs, workflow_config))
         callables.append(concurrent.new_callable(_dispatch, outcomes, name, task_callable, config.get("args") or [], config.get("kwargs") or {}))
 
+    if callables:
+        _wait(callables, workflow_config)
+    for name in runnable:
+        states[name] = outcomes[name]["state"]
+        outputs[name] = outcomes[name]["output"]
+
+def _wait(callables, workflow_config):
     cap = workflow_config.get("max_concurrency") or 0
     if cap < 1:
         cap = len(callables)
@@ -142,10 +159,6 @@ def _run_level(runnable, tasks, registry, workflow_config, states, outputs):
         time.sleep(seconds = _WAIT_INTERVAL_SECONDS)
     if not batch.is_ready():
         fail("declarative: wait budget exhausted")
-
-    for name in runnable:
-        states[name] = outcomes[name]["state"]
-        outputs[name] = outcomes[name]["output"]
 
 def _factory_kwargs(name, task, entry, config, job_specs, workflow_config):
     kwargs = dict(job_specs.get(entry["job_specs_key"]) or {})
@@ -182,3 +195,154 @@ def _dispatch(outcomes, name, task_callable, args, kwargs):
     result = task_callable(*args, **kwargs)
     outcomes[name] = {"state": TASK_STATE_SUCCEEDED, "output": result}
     return result
+
+def _ancestors(tasks):
+    """Return task name -> the set of its transitive dependencies."""
+    result = {}
+    for name in tasks.keys():
+        seen = {}
+        stack = _dep_names(tasks[name])
+        for _ in range(_MAX_STEPS):
+            if not stack:
+                break
+            dep = stack.pop()
+            if dep not in seen:
+                seen[dep] = True
+                stack.extend(_dep_names(tasks[dep]))
+        result[name] = seen
+    return result
+
+def _resolve(value, path, name, refs):
+    """Return (value, error) with each reference in a string leaf resolved.
+
+    A resolved value is not scanned again.
+    """
+    root = {}
+    work = [(root, "value", value, path)]
+    for i in range(_MAX_STEPS):
+        if i >= len(work):
+            break
+        parent, key, node, at = work[i]
+        if type(node) == "string":
+            node, err = _resolve_string(node, name, refs)
+            if err != None:
+                return None, at + ": " + err
+        elif type(node) == "dict":
+            copy = {}
+            for k in node.keys():
+                copy[k] = None
+                work.append((copy, k, node[k], at + "." + k))
+            node = copy
+        elif type(node) == "list":
+            copy = [None] * len(node)
+            for j in range(len(node)):
+                work.append((copy, j, node[j], "{}[{}]".format(at, j)))
+            node = copy
+        parent[key] = node
+    if len(work) > _MAX_STEPS:
+        fail("declarative: task {} has too many values in {}".format(repr(name), path))
+    return root["value"], None
+
+def _resolve_string(s, name, refs):
+    # The grammar matches the apiserver validator: a reference is whole only
+    # when it is the full string, and an unterminated "{{" is an error.
+    parts = []
+    rest = s
+    for _ in range(len(s)):
+        start = rest.find("{{")
+        if start < 0:
+            break
+        end = rest.find("}}", start)
+        if end < 0:
+            return None, "unterminated {} in {}".format(repr("{{"), repr(s))
+        token = rest[start:end + 2]
+        value, err = _lookup(token, name, refs)
+        if err != None:
+            return None, err
+        if token == s:
+            return value, None
+        parts.append(rest[:start])
+        parts.append(_text(value))
+        rest = rest[end + 2:]
+    parts.append(rest)
+    return "".join(parts), None
+
+def _lookup(token, name, refs):
+    body = token[2:-2].strip()
+    if body.startswith("params."):
+        param = body[len("params."):]
+        if not _is_name(param):
+            return None, "reference {} has a malformed name".format(repr(token))
+        if param not in refs["params"]:
+            return None, "reference {} names an unknown parameter".format(repr(token))
+        return refs["params"][param], None
+    if body.startswith("tasks."):
+        parts = body[len("tasks."):].split(".")
+        if len(parts) < 2 or parts[1] != "output":
+            return None, "reference {} must name {}".format(repr(token), repr("tasks.{}.output".format(parts[0])))
+        dep = parts[0]
+        fields = parts[2:]
+        if not _is_name(dep) or not all([_is_field(f) for f in fields]):
+            return None, "reference {} has a malformed name".format(repr(token))
+        if dep not in refs["ancestors"][name]:
+            return None, "reference {} names task {}, which is not a dependency".format(repr(token), repr(dep))
+        if refs["states"][dep] != TASK_STATE_SUCCEEDED:
+            return None, "reference {} names task {}, which did not succeed".format(repr(token), repr(dep))
+        value = refs["outputs"][dep]
+        for f in fields:
+            if type(value) != "dict" or f not in value:
+                return None, "reference {} names field {}, which the output does not have".format(repr(token), repr(f))
+            value = value[f]
+        return value, None
+    return None, "reference {} must start with {} or {}".format(repr(token), repr("params."), repr("tasks."))
+
+_LOWER = "abcdefghijklmnopqrstuvwxyz"
+_DIGITS = "0123456789"
+_FIELD_START = _LOWER + _LOWER.upper() + "_"
+
+def _is_name(s):
+    if len(s) < 1 or len(s) > 63 or s[0] not in _LOWER:
+        return False
+    return all([c in _LOWER + _DIGITS + "_" for c in s.elems()])
+
+def _is_field(s):
+    if len(s) < 1 or s[0] not in _FIELD_START:
+        return False
+    return all([c in _FIELD_START + _DIGITS for c in s.elems()])
+
+def _text(value):
+    """Return the text of value embedded in a longer string.
+
+    The text is the JSON encoding of value, except that a string is not
+    quoted. An integral float has no fraction, as in Go encoding/json.
+    """
+    if type(value) == "string":
+        return value
+    if type(value) == "float":
+        return _float_text(value)
+    return json.dumps(value)
+
+def _float_text(f):
+    # Go writes the shortest digits, in positional form when 1e-6 <= |f| <
+    # 1e21 and in exponent form otherwise. Starlark str() gives the same
+    # shortest digits, so only the layout changes.
+    s = str(f)
+    mantissa, _, exponent = s.partition("e")
+    if f != 0 and (abs(f) < 1e-6 or abs(f) >= 1e21):
+        if not exponent:
+            return s
+        return mantissa.removesuffix(".0") + "e" + exponent[0] + (exponent[1:].lstrip("0") or "0")
+    sign = ""
+    if mantissa.startswith("-"):
+        sign = "-"
+        mantissa = mantissa[1:]
+    whole, _, frac = mantissa.partition(".")
+    digits = (whole + frac).rstrip("0") or "0"
+    point = len(whole)
+    if exponent:
+        point += int(exponent[0] + (exponent[1:].lstrip("0") or "0"))
+    if point <= 0:
+        return sign + "0." + "0" * -point + digits
+    if point >= len(digits):
+        return sign + digits + "0" * (point - len(digits))
+    return sign + digits[:point] + "." + digits[point:]
