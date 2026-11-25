@@ -22,6 +22,14 @@ def _fail(entry_point, alias = None, retry_attempts = None, **fields):
 
     return call
 
+# A callable that fails without a progress report, so only the workflow
+# error can carry its cause.
+def _fail_silent(entry_point, alias = None, **fields):
+    def call(*args, **kwargs):
+        fail("silent failure: " + alias)
+
+    return call
+
 def _bad_factory(entry_point, alias = None, **fields):
     fail("bad factory: " + alias)
 
@@ -57,6 +65,7 @@ REGISTRY = {
     "core/ray": _entry(_ok, "ray", ["retry"]),
     "fake/bad_factory": _entry(_bad_factory, "fake", []),
     "fake/fail": _entry(_fail, "fake", ["retry"]),
+    "fake/fail_silent": _entry(_fail_silent, "fake", []),
     "fake/noretry": _entry(_noretry, "fake", []),
     "fake/ok": _entry(_ok, "fake", ["retry"]),
     "fake/sleep": _entry(_sleep, "fake", []),

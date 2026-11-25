@@ -9,7 +9,8 @@ dispatches each task to the factory that the registry holds for its type.
 - registry: task type -> {"factory", "job_specs_key", "capabilities"}.
 
 The result is {"states": {task: state}, "outputs": {task: value}}. If a task
-failed, run calls fail() after the walk, so the workflow ends FAILED.
+failed, the workflow ends FAILED after the walk. When a task callable failed,
+the workflow error carries the error of the first one.
 """
 
 load("../commons.star", "TASK_STATE_FAILED", "TASK_STATE_SKIPPED", "TASK_STATE_SUCCEEDED", "TIME_FOMART", "report_progress")
@@ -25,7 +26,8 @@ _ENGINE_CONFIG_KEYS = ["entry_point", "args", "kwargs"]
 _FIRST_POLL_SECONDS = 5
 _MAX_POLL_SECONDS = 300
 
-# The workflow timeout. The wait loop polls at least this long per level.
+# The wait loop polls at least this long per level, so a run with several
+# levels can outlive it.
 _WAIT_BUDGET_SECONDS = 7 * 24 * 60 * 60
 
 # Gate outcome -> the dependency states that satisfy it. A SKIPPED dependency
@@ -60,6 +62,7 @@ def run(spec, params, registry):
     states = {}
     outputs = {}
     refs = {"params": _typed_params(spec, params), "states": states, "outputs": outputs, "ancestors": _ancestors(tasks)}
+    failed_batches = []
     for level in levels(spec):
         runnable = []
         for name in level:
@@ -70,11 +73,19 @@ def run(spec, params, registry):
                 states[name] = TASK_STATE_SKIPPED
                 outputs[name] = None
         if runnable:
-            _run_level(runnable, tasks, registry, workflow_config, refs)
+            batch = _run_level(runnable, tasks, registry, workflow_config, refs)
+            if batch != None:
+                failed_batches.append(batch)
 
     failed = [name for name in sorted(states.keys()) if states[name] == TASK_STATE_FAILED]
     if failed:
-        fail("declarative: failed task(s): " + ", ".join(failed))
+        summary = "declarative: failed task(s): " + ", ".join(failed)
+        if failed_batches:
+            # get() raises the error of the first failed callable, which
+            # replaces the summary as the workflow error.
+            print(summary)
+            failed_batches[0].get()
+        fail(summary)
     return {
         "states": {name: states[name] for name in sorted(states.keys())},
         "outputs": {name: outputs[name] for name in sorted(outputs.keys())},
@@ -136,9 +147,11 @@ def _report(name, task, state, message):
     )
 
 def _run_level(runnable, tasks, registry, workflow_config, refs):
+    """Run one level and return its batch if a task callable failed, else None."""
     states = refs["states"]
     outputs = refs["outputs"]
     outcomes = {}
+    running = {}
     callables = []
     for name in runnable:
         task = tasks[name]
@@ -147,6 +160,8 @@ def _run_level(runnable, tasks, registry, workflow_config, refs):
         job_specs = {}
         if err == None:
             job_specs, err = _resolve(task.get("job_specs") or {}, "job_specs", name, refs)
+        if err == None:
+            err = _check_types(config)
         if err != None:
             _report(name, task, TASK_STATE_FAILED, "Failed: " + err)
             outcomes[name] = {"state": TASK_STATE_FAILED, "output": None}
@@ -154,15 +169,29 @@ def _run_level(runnable, tasks, registry, workflow_config, refs):
         # The factory runs in the workflow thread, so a factory that fails
         # stops the workflow with its own error text.
         task_callable = entry["factory"](config.get("entry_point"), **_factory_kwargs(name, task, entry, config, job_specs, workflow_config))
-        callables.append(concurrent.new_callable(_dispatch, outcomes, name, task_callable, config.get("args") or [], config.get("kwargs") or {}))
+        callables.append(concurrent.new_callable(_dispatch, outcomes, running, name, task_callable, config.get("args") or [], config.get("kwargs") or {}))
 
+    batch = None
     if callables:
-        _wait(callables, workflow_config)
+        batch = _wait(callables, running, workflow_config)
     for name in runnable:
         states[name] = outcomes[name]["state"]
         outputs[name] = outcomes[name]["output"]
+    if [name for name in running.keys() if states[name] == TASK_STATE_FAILED]:
+        return batch
+    return None
 
-def _wait(callables, workflow_config):
+def _check_types(config):
+    """Return an error if a config key that the engine consumes has a wrong type."""
+    for key, want in [("entry_point", "string"), ("args", "list"), ("kwargs", "dict")]:
+        value = config.get(key)
+        if value == None and key != "entry_point":
+            continue
+        if type(value) != want:
+            return "config.{}: must be a {}, got {}".format(key, want, type(value))
+    return None
+
+def _wait(callables, running, workflow_config):
     cap = workflow_config.get("max_concurrency") or 0
     if cap < 1:
         cap = len(callables)
@@ -172,10 +201,12 @@ def _wait(callables, workflow_config):
     # outcomes come from the shared dict instead.
     for poll in range(_MAX_POLLS):
         if batch.is_ready():
-            break
+            return batch
         time.sleep(seconds = next_poll_delay(poll))
-    if not batch.is_ready():
-        fail("declarative: wait budget exhausted")
+    if batch.is_ready():
+        return batch
+    still = [name for name in sorted(running.keys()) if not running[name].is_ready()]
+    fail("declarative: wait budget exhausted; still running: " + ", ".join(still))
 
 def _factory_kwargs(name, task, entry, config, job_specs, workflow_config):
     kwargs = dict(job_specs.get(entry["job_specs_key"]) or {})
@@ -204,14 +235,23 @@ def _retry_attempts(task, entry, workflow_config):
         return None
     return max_attempts - 1
 
-def _dispatch(outcomes, name, task_callable, args, kwargs):
+def _dispatch(outcomes, running, name, task_callable, args, kwargs):
     # Starlark has no try/except, and a task callable signals failure with
     # fail(). The pessimistic FAILED stays when it fails, so the rest of the
     # graph still runs.
     outcomes[name] = {"state": TASK_STATE_FAILED, "output": None}
-    result = task_callable(*args, **kwargs)
+
+    # A batch of one tells a running callable from a failed one: is_ready()
+    # is true only after the callable returned or failed.
+    call = concurrent.batch_run([concurrent.new_callable(_call, task_callable, args, kwargs)], 1)
+    running[name] = call
+    result = call.get()[0]
     outcomes[name] = {"state": TASK_STATE_SUCCEEDED, "output": result}
     return result
+
+def _call(task_callable, args, kwargs):
+    # concurrent.new_callable passes no keyword arguments.
+    return task_callable(*args, **kwargs)
 
 def _typed_params(spec, params):
     # JSON decoding gives an int for an integral number, but a NUMBER

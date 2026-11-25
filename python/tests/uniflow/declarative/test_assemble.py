@@ -122,6 +122,22 @@ def test_assemble_entries(tmp_path):
     assert {n: _loads(src) for n, src in golden.items() if n != "meta.json"} == LOADS
 
 
+def test_golden_tar_is_fresh(tmp_path):
+    """The golden tar holds the Starlark that the repo sources assemble to.
+
+    The digest depends on the Python and zlib versions, so the test
+    compares the parsed source of each member, not the bytes.
+    """
+    tar_bytes, _ = _assemble(_copy_root(tmp_path / "root"), tmp_path / "out")
+    fresh = _members(tar_bytes)
+    golden = _members(GOLDEN_TAR.read_bytes())
+    assert set(golden) == set(fresh)
+    for name in sorted(set(golden) - {"meta.json"}):
+        assert ast.dump(ast.parse(golden[name])) == ast.dump(ast.parse(fresh[name])), (
+            f"{name} is stale; rerun the assembly tool on the release source"
+        )
+
+
 def test_generated_main(tmp_path):
     """main.star loads the engine and each factory, and defines REGISTRY."""
     root = _copy_root(tmp_path / "root")

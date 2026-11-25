@@ -122,7 +122,7 @@ func TestEngineGraph(t *testing.T) {
 				"report": task("fake/ok", "join"),
 			}),
 			states: map[string]string{"root": succeeded, "left": failed, "right": succeeded, "join": skipped, "report": skipped},
-			err:    "declarative: failed task(s): left",
+			err:    "fake failure: left",
 		},
 		{
 			name: "test_gate_completed_and_failed_outcomes",
@@ -133,7 +133,7 @@ func TestEngineGraph(t *testing.T) {
 				"d": task("fake/ok", edge{"a", "OUTCOME_FAILED"}),
 			}),
 			states: map[string]string{"a": failed, "b": succeeded, "c": skipped, "d": succeeded},
-			err:    "declarative: failed task(s): a",
+			err:    "fake failure: a",
 		},
 		{
 			name: "test_skip_only_run_succeeds",
@@ -316,6 +316,18 @@ func TestEngineFactoryFailure(t *testing.T) {
 	}), map[string]any{})
 	assert.Equal(t, map[string]string{"a": succeeded}, got.states)
 	assert.Equal(t, "fail: bad factory: b", got.err)
+}
+
+// A callable that fails without a progress report leaves its cause only in
+// the workflow error.
+func TestEngineSilentFailureCause(t *testing.T) {
+	got := runEngine(t, casesTar(t), "run_case", spec(nil, map[string]any{
+		"a": task("fake/ok"),
+		"b": task("fake/fail_silent", "a"),
+		"c": task("fake/ok", "b"),
+	}), map[string]any{})
+	assert.Equal(t, map[string]string{"a": succeeded, "c": skipped}, got.states)
+	assert.Equal(t, "fail: silent failure: b", got.err)
 }
 
 func TestEngineFactory(t *testing.T) {
@@ -521,7 +533,7 @@ func TestEngineRefs(t *testing.T) {
 			}),
 			states:   map[string]string{"a": failed, "b": failed},
 			messages: map[string]string{"b": `Failed: config.args[0]: reference "{{ tasks.a.output.alias }}" names task "a", which did not succeed`},
-			err:      "declarative: failed task(s): a, b",
+			err:      "fake failure: a",
 		},
 		{
 			name: "ref_malformed",
@@ -564,6 +576,25 @@ func TestEngineRefs(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestEngineConfigTypes(t *testing.T) {
+	got := runEngine(t, casesTar(t), "run_case", spec(nil, map[string]any{
+		"ep":      with(task("fake/ok"), "config", map[string]any{"entry_point": 3}),
+		"no_ep":   with(task("fake/ok"), "config", map[string]any{}),
+		"args":    config(task("fake/ok"), map[string]any{"args": map[string]any{"k": "v"}}),
+		"kwargs":  config(task("fake/ok"), map[string]any{"kwargs": []any{"{{ params.s }}"}}),
+		"unset":   config(task("fake/ok"), map[string]any{"args": nil, "kwargs": nil}),
+		"handler": task("fake/ok", edge{"ep", "OUTCOME_FAILED"}),
+	}), map[string]any{"s": "x"})
+	assert.Equal(t, map[string]string{"ep": failed, "no_ep": failed, "args": failed, "kwargs": failed, "unset": succeeded, "handler": succeeded}, got.states)
+	assert.Equal(t, map[string]string{
+		"ep":     "Failed: config.entry_point: must be a string, got int",
+		"no_ep":  "Failed: config.entry_point: must be a string, got NoneType",
+		"args":   "Failed: config.args: must be a list, got dict",
+		"kwargs": "Failed: config.kwargs: must be a dict, got list",
+	}, got.messages)
+	assert.Equal(t, "fail: declarative: failed task(s): args, ep, kwargs, no_ep", got.err)
 }
 
 func TestEngineNumberParam(t *testing.T) {
@@ -616,7 +647,20 @@ func TestEngineWait(t *testing.T) {
 	t.Run("wait_budget_exhausted", func(t *testing.T) {
 		got := runEngine(t, tar, "run_timed", sleeper(7*day+16), map[string]any{})
 		assert.Equal(t, map[string]string{}, got.states)
-		assert.Equal(t, "fail: declarative: wait budget exhausted", got.err)
+		assert.Equal(t, "fail: declarative: wait budget exhausted; still running: a", got.err)
+	})
+
+	// A failed or finished task in the same level is not running.
+	t.Run("wait_budget_names_running", func(t *testing.T) {
+		long := config(task("fake/sleep"), map[string]any{"seconds": 7*day + 16})
+		got := runEngine(t, tar, "run_timed", spec(nil, map[string]any{
+			"a": task("fake/fail"),
+			"b": task("fake/ok"),
+			"c": long,
+			"d": long,
+		}), map[string]any{})
+		assert.Equal(t, map[string]string{"a": failed, "b": succeeded}, got.states)
+		assert.Equal(t, "fail: declarative: wait budget exhausted; still running: c, d", got.err)
 	})
 }
 
