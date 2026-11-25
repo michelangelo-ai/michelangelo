@@ -667,6 +667,112 @@ class EmbeddingSampledMetricsTest(unittest.TestCase):
                 EmbeddingUniformity(**kwargs)
 
 
+def _sample_of(metric, *batches) -> set:
+    """The rows a sampled metric keeps, as tuples, after (preds, ids) updates."""
+    for preds, ids in batches:
+        metric.update(preds, ids)
+    keys = embedding._cat(metric.keys)
+    _, idx = torch.topk(keys, min(metric.max_samples, keys.numel()), largest=False)
+    return {
+        tuple(row.tolist())
+        for row in embedding._cat(metric.samples).view(keys.numel(), -1)[idx]
+    }
+
+
+class EmbeddingIdSamplingTest(unittest.TestCase):
+    """EmbeddingIdSampling."""
+
+    def setUp(self) -> None:
+        """SetUp."""
+        self.x = torch.randn(500, 4, generator=torch.Generator().manual_seed(6))
+        self.ids = np.array([f"item-{i}" for i in range(500)], dtype=object)
+
+    def test_sample_ignores_row_order_update_split_and_rank(self) -> None:
+        """Sample ignores row order update split and rank."""
+        whole = _sample_of(EmbeddingHubness(max_samples=50), (self.x, self.ids))
+        perm = torch.randperm(500, generator=torch.Generator().manual_seed(7))
+        shuffled = _sample_of(
+            EmbeddingHubness(max_samples=50), (self.x[perm], self.ids[perm.numpy()])
+        )
+        split = _sample_of(
+            EmbeddingHubness(max_samples=50),
+            (self.x[:120], self.ids[:120]),
+            (self.x[120:], self.ids[120:]),
+        )
+        with patch.object(embedding, "_rank", return_value=3):
+            other_rank = _sample_of(
+                EmbeddingHubness(max_samples=50), (self.x, self.ids)
+            )
+        self.assertEqual(len(whole), 50)
+        self.assertEqual(shuffled, whole)
+        self.assertEqual(split, whole)
+        self.assertEqual(other_rank, whole)
+
+    def test_score_ignores_row_order(self) -> None:
+        """Score ignores row order."""
+        perm = torch.randperm(500, generator=torch.Generator().manual_seed(8))
+        for metric_cls, params in (
+            (EmbeddingCosineSimilarity, {"stat": "p50"}),
+            (EmbeddingHubness, {"k": 3}),
+        ):
+            with self.subTest(metric=metric_cls.__name__):
+                first = metric_cls(max_samples=50, **params)
+                first.update(self.x, self.ids)
+                second = metric_cls(max_samples=50, **params)
+                second.update(self.x[perm], self.ids[perm.numpy()])
+                self.assertAlmostEqual(
+                    first.compute().item(), second.compute().item(), places=6
+                )
+
+    def test_ids_hash_as_strings(self) -> None:
+        """Ids hash as strings."""
+        self.assertEqual(
+            _sample_of(EmbeddingUniformity(max_samples=50), (self.x, np.arange(500))),
+            _sample_of(
+                EmbeddingUniformity(max_samples=50),
+                (self.x, np.array([str(i) for i in range(500)], dtype=object)),
+            ),
+        )
+
+    def test_null_rows_are_skipped_with_their_ids(self) -> None:
+        """Null rows are skipped with their ids."""
+        column = _rows(*([None] + [row.tolist() for row in self.x] + [pd.NA]))
+        ids = np.concatenate([["null-a"], self.ids, ["null-b"]])
+        self.assertEqual(
+            _sample_of(EmbeddingHubness(max_samples=50), (column, ids)),
+            _sample_of(EmbeddingHubness(max_samples=50), (self.x, self.ids)),
+        )
+
+    def test_seed_changes_the_sample(self) -> None:
+        """Seed changes the sample."""
+        self.assertNotEqual(
+            _sample_of(EmbeddingHubness(max_samples=50, seed=0), (self.x, self.ids)),
+            _sample_of(EmbeddingHubness(max_samples=50, seed=1), (self.x, self.ids)),
+        )
+
+    def test_duplicated_ids_raise(self) -> None:
+        """Duplicated ids raise."""
+        metric = EmbeddingHubness(max_samples=50)
+        metric.update(self.x, np.arange(500) % 100)
+        with self.assertRaisesRegex(ValueError, "share an ID"):
+            metric.compute()
+
+    def test_missing_ids_fall_back_to_random_keys(self) -> None:
+        """Missing ids fall back to random keys."""
+        ids = self.ids.copy()
+        ids[0] = None
+        with self.assertLogs(embedding.__name__, level="WARNING"):
+            with_missing = _sample_of(EmbeddingHubness(max_samples=50), (self.x, ids))
+        self.assertEqual(
+            with_missing, _sample_of(EmbeddingHubness(max_samples=50), (self.x, None))
+        )
+
+    def test_id_count_must_match_rows(self) -> None:
+        """Id count must match rows."""
+        with self.assertRaisesRegex(ValueError, "ids for"):
+            EmbeddingHubness().update(self.x, self.ids[:10])
+
+
 class EmbeddingInputTest(unittest.TestCase):
     """EmbeddingInput."""
 

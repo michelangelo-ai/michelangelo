@@ -184,6 +184,9 @@ def extract_data_for_collection(
                 len(pred_array),
             )
         data["predictions"] = pred_array
+        # The entity IDs the sampled embedding metrics draw their sample by.
+        if column_mapping.index_col:
+            data["ids"] = df[column_mapping.index_col].to_numpy()
     else:
         if len(pred_array) > 0 and isinstance(pred_array[0], (list, np.ndarray)):
             pred_array = np.vstack(pred_array)
@@ -197,7 +200,11 @@ def extract_data_for_collection(
 
     _log_data_dtype_details(pred_dtype, target_dtype, data)
 
-    if column_mapping.index_col and column_mapping.index_col in df.columns:
+    if (
+        pred_dtype is not None
+        and column_mapping.index_col
+        and column_mapping.index_col in df.columns
+    ):
         data["indexes"] = encode_categorical_column_to_tensor(
             df[column_mapping.index_col].to_numpy(),
             target_dtype=torch.long,
