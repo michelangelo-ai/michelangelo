@@ -690,10 +690,12 @@ monitoring:
     additionalLabels: {}
 
     envoyAlerts:
-      # Add inference latency/error-rate alerts on Envoy upstream metrics.
-      # Off by default because the Envoy admin interface (which exposes
-      # those metrics) is not enabled by the chart — enable it and add a
-      # scrape job first, or these alerts can never fire. See
+      # Add latency/error-rate alerts for the UI's Envoy proxy (UI-to-apiserver
+      # traffic — this Envoy does not front inference-serving traffic, which
+      # goes through a separate gateway this chart does not manage). Off by
+      # default because the Envoy admin interface (which exposes those
+      # metrics) is not enabled by the chart — enable it and add a scrape job
+      # first, or these alerts can never fire. See
       # docs/operator-guides/operations/monitoring.md.
       enabled: false
 

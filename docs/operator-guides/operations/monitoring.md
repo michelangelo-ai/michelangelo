@@ -81,15 +81,15 @@ Envoy can expose an admin stats interface for scraping request counts, latency h
 
 Workflow metrics are emitted by the Cadence or Temporal server, not by Michelangelo AI. Consult your workflow engine's documentation for its native Prometheus metrics. Michelangelo AI's worker-side reconcile metrics are captured under the `pipelinerun_*` counters above.
 
-### Model Serving (Envoy)
+### UI Proxy (Envoy)
 
-If you have enabled the Envoy admin interface, these standard Envoy metrics are available:
+If you have enabled the Envoy admin interface, these standard Envoy metrics are available. This Envoy is the UI-to-apiserver proxy the chart deploys (see [Envoy Proxy Configuration](../setup/network.md#envoy-proxy-configuration)) — it carries API traffic from the browser UI, not inference-serving traffic. Inference requests go through a separate gateway this chart does not manage, so these metrics don't reflect model-serving latency or errors.
 
 | Metric | Description | Unit |
 |--------|-------------|------|
-| `envoy_cluster_upstream_rq_total` | Total requests to inference backends | Count |
-| `envoy_cluster_upstream_rq_5xx` | 5xx error responses from inference backends | Count |
-| `envoy_cluster_upstream_rq_time` | Request latency histogram to inference servers | Seconds |
+| `envoy_cluster_upstream_rq_total` | Total UI-to-apiserver requests | Count |
+| `envoy_cluster_upstream_rq_5xx` | 5xx error responses from the API server, as seen by the UI proxy | Count |
+| `envoy_cluster_upstream_rq_time` | Request latency histogram from the UI proxy to the API server | Seconds |
 
 ### Controller Manager Health
 
@@ -119,7 +119,7 @@ The `kind` label is a stable dashboard/alerting **contract**: its value is alway
 
 ## Alerting Rules
 
-If you use the Prometheus Operator, the Helm chart installs these rules as a `PrometheusRule` resource when `monitoring.enabled=true` (on by default under the toggle; disable with `monitoring.prometheusRule.enabled=false`). The four alerts based on controller-manager metrics are always included; the two Envoy-based inference alerts are behind `monitoring.prometheusRule.envoyAlerts.enabled` because they require the Envoy admin interface and a scrape job for it (see [Envoy Proxy](#envoy-proxy) above).
+If you use the Prometheus Operator, the Helm chart installs these rules as a `PrometheusRule` resource when `monitoring.enabled=true` (on by default under the toggle; disable with `monitoring.prometheusRule.enabled=false`). The four alerts based on controller-manager metrics are always included; the two UI-proxy alerts (on the UI's Envoy, not inference traffic — see [UI Proxy (Envoy)](#ui-proxy-envoy) above) are behind `monitoring.prometheusRule.envoyAlerts.enabled` because they require the Envoy admin interface and a scrape job for it (see [Envoy Proxy](#envoy-proxy) above).
 
 If you manage Prometheus configuration directly, add the rules yourself:
 
@@ -167,8 +167,9 @@ groups:
         {{ $value | humanize }} errors/sec. Check logs:
         kubectl -n ma-system logs deployment/michelangelo-controllermgr
 
-  # Inference latency: P99 above 500ms for 5 minutes
-  - alert: InferenceLatencyHigh
+  # UI proxy latency: P99 above 500ms for 5 minutes. This is the UI-to-apiserver
+  # Envoy, not an inference-serving gateway — see "UI Proxy (Envoy)" above.
+  - alert: UIProxyLatencyHigh
     expr: >
       histogram_quantile(0.99,
         rate(envoy_cluster_upstream_rq_time_bucket[5m])
@@ -177,13 +178,13 @@ groups:
     labels:
       severity: warning
     annotations:
-      summary: "Inference P99 latency is above 500ms"
+      summary: "UI proxy P99 latency is above 500ms"
       description: >
-        The 99th percentile inference request latency is {{ $value }}ms.
-        Check InferenceServer and model-sync sidecar logs.
+        The 99th percentile latency from the UI's Envoy proxy to the API server
+        is {{ $value }}ms. Check apiserver and controllermgr logs.
 
-  # Inference error rate: more than 1% of requests returning 5xx
-  - alert: InferenceErrorRateHigh
+  # UI proxy error rate: more than 1% of requests returning 5xx
+  - alert: UIProxyErrorRateHigh
     expr: >
       rate(envoy_cluster_upstream_rq_5xx[5m])
       / rate(envoy_cluster_upstream_rq_total[5m]) > 0.01
@@ -191,9 +192,10 @@ groups:
     labels:
       severity: warning
     annotations:
-      summary: "Inference 5xx error rate above 1%"
+      summary: "UI proxy 5xx error rate above 1%"
       description: >
-        {{ $value | humanizePercentage }} of inference requests are returning 5xx errors.
+        {{ $value | humanizePercentage }} of requests from the UI's Envoy proxy
+        to the API server are returning 5xx errors.
 
   # Cascade delete: safety timeout force-completed a child's drain
   - alert: CascadeChildDrainTimeout

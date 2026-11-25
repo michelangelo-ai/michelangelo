@@ -65,27 +65,32 @@ spec:
 
     - name: michelangelo-envoy
       rules:
-        # Inference latency: P99 above 500ms for 5 minutes
-        - alert: InferenceLatencyHigh
+        # UI proxy latency: P99 above 500ms for 5 minutes. This Envoy is the
+        # UI-to-apiserver proxy (see helm/michelangelo/templates/core/envoy-configmap.yaml,
+        # the only listener routes to the michelangelo-apiserver cluster) — it does not
+        # front inference-serving traffic, which goes through a separate gateway this
+        # chart does not manage.
+        - alert: UIProxyLatencyHigh
           expr: histogram_quantile(0.99, rate(envoy_cluster_upstream_rq_time_bucket[5m])) > 500
           for: 5m
           labels:
             severity: warning
           annotations:
-            summary: "Inference P99 latency is above 500ms"
+            summary: "UI proxy P99 latency is above 500ms"
             description: >-
-              The 99th percentile inference request latency is {{`{{ $value }}`}}ms.
-              Check InferenceServer and model-sync sidecar logs.
+              The 99th percentile latency from the UI's Envoy proxy to the API server is
+              {{`{{ $value }}`}}ms. Check apiserver and controllermgr logs.
 
-        # Inference error rate: more than 1% of requests returning 5xx
-        - alert: InferenceErrorRateHigh
+        # UI proxy error rate: more than 1% of requests returning 5xx
+        - alert: UIProxyErrorRateHigh
           expr: rate(envoy_cluster_upstream_rq_5xx[5m]) / rate(envoy_cluster_upstream_rq_total[5m]) > 0.01
           for: 5m
           labels:
             severity: warning
           annotations:
-            summary: "Inference 5xx error rate above 1%"
+            summary: "UI proxy 5xx error rate above 1%"
             description: >-
-              {{`{{ $value | humanizePercentage }}`}} of inference requests are returning 5xx errors.
+              {{`{{ $value | humanizePercentage }}`}} of requests from the UI's Envoy proxy to
+              the API server are returning 5xx errors.
     {{- end }}
 {{- end }}
