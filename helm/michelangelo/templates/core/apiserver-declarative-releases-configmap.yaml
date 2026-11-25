@@ -2,7 +2,23 @@
 {{- $decl := .Values.apiserver.declarative }}
 {{- $default := required "apiserver.declarative.defaultInterpreter is required when apiserver.declarative.enabled=true" $decl.defaultInterpreter }}
 {{- if not (hasKey ($decl.releases | default dict) $default) }}
-{{- fail (printf "apiserver.declarative.releases has no entry for defaultInterpreter %q" $default) }}
+{{- fail (printf "apiserver.declarative.releases has no entry for defaultInterpreter %q. With --set-file, escape each dot in the version: releases.core-v1\\.4\\.2" $default) }}
+{{- end }}
+{{- /* Checks stay in this file, not in validations.yaml. The deployment includes this file for its checksum, and that include renders first. */}}
+{{- range $version, $content := $decl.releases }}
+{{- if not (regexMatch "^[-._a-zA-Z0-9]+$" $version) }}
+{{- fail (printf "apiserver.declarative.releases key %q is not a valid ConfigMap key; use only letters, digits, '-', '_' and '.'" $version) }}
+{{- end }}
+{{- if not (kindIs "string" $content) }}
+{{- fail (printf "apiserver.declarative.releases.%s must be the YAML text of a release file; with --set-file, escape each dot in the version" $version) }}
+{{- end }}
+{{- $parsed := fromYaml $content }}
+{{- if hasKey $parsed "Error" }}
+{{- fail (printf "apiserver.declarative.releases.%s is not valid YAML: %s" $version $parsed.Error) }}
+{{- end }}
+{{- if ne (toString $parsed.version) $version }}
+{{- fail (printf "apiserver.declarative.releases.%s declares version %q; the key must equal the version in the file" $version (toString $parsed.version)) }}
+{{- end }}
 {{- end }}
 apiVersion: v1
 kind: ConfigMap
@@ -14,6 +30,6 @@ metadata:
 data:
   {{- range $version, $content := $decl.releases }}
   {{ printf "%s.yaml" $version }}: |
-    {{- $content | nindent 4 }}
+    {{- $content | trim | nindent 4 }}
   {{- end }}
 {{- end }}
