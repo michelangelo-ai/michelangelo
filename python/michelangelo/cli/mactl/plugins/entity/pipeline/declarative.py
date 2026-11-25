@@ -25,6 +25,13 @@ DECLARATIVE_MANIFEST_TYPE = pipeline_pb2.PipelineManifest.Type.Name(
     pipeline_pb2.PipelineManifest.PIPELINE_MANIFEST_TYPE_DECLARATIVE
 )
 EXPLAIN_PLAN_ANNOTATION = "michelangelo/declarative-explain-plan"
+_MANIFEST_TYPE_PREFIX = "PIPELINE_MANIFEST_TYPE_"
+# Full and short names of every manifest type except the zero value.
+_MANIFEST_TYPE_NAMES = {
+    name: full_name
+    for full_name in pipeline_pb2.PipelineManifest.Type.keys()[1:]
+    for name in (full_name, full_name.removeprefix(_MANIFEST_TYPE_PREFIX))
+}
 
 _TYPE_URL = f"type.googleapis.com/{DeclarativeWorkflow.DESCRIPTOR.full_name}"
 _MAX_SAFE_INTEGER = 2**53 - 1
@@ -50,9 +57,27 @@ class DeclarativeManifestError(ValueError):
 
 
 def is_declarative(yaml_dict: dict) -> bool:
-    """Return whether the pipeline YAML declares a declarative manifest."""
+    """Return whether the pipeline YAML declares a declarative manifest.
+
+    The type can be a full or a short enum name, in any case. Content with a
+    missing or unknown type is an error, because the UNIFLOW path drops it.
+    """
     manifest = (yaml_dict.get("spec") or {}).get("manifest") or {}
-    return manifest.get("type") == DECLARATIVE_MANIFEST_TYPE
+    manifest_type = manifest.get("type")
+    full_name = _MANIFEST_TYPE_NAMES.get(
+        manifest_type.upper() if isinstance(manifest_type, str) else None
+    )
+    if full_name is None and "content" in manifest:
+        found = (
+            "is missing"
+            if manifest_type is None
+            else f"{manifest_type!r} is not a manifest type"
+        )
+        raise DeclarativeManifestError(
+            f"spec.manifest.type {found}; set it to DECLARATIVE to apply"
+            " spec.manifest.content"
+        )
+    return full_name == DECLARATIVE_MANIFEST_TYPE
 
 
 def pack_declarative_content(manifest: dict) -> dict:

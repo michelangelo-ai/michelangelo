@@ -14,6 +14,7 @@ from michelangelo.cli.mactl.plugins.entity.pipeline.declarative import (
     EXPLAIN_PLAN_ANNOTATION,
     DeclarativeManifestError,
     explain_plan_from,
+    is_declarative,
     normalize_workflow,
     render_explain_plan,
 )
@@ -287,6 +288,63 @@ def test_server_owned_manifest_field_fails(tmp_path, field):
     assert str(err.value) == (
         f"spec.manifest.{field} is server-owned for declarative pipelines; remove it"
     )
+
+
+@pytest.mark.parametrize(
+    "manifest_type",
+    ["PIPELINE_MANIFEST_TYPE_DECLARATIVE", "DECLARATIVE", "declarative"],
+)
+def test_manifest_type_names_are_declarative(tmp_path, manifest_type):
+    """The full, short, and lowercase type names all pack the content."""
+    yaml_dict = json.loads(json.dumps(_DECLARATIVE_YAML))
+    yaml_dict["spec"]["manifest"]["type"] = manifest_type
+
+    manifest = _convert(yaml_dict, tmp_path).pipeline.spec.manifest
+
+    assert (
+        manifest.type
+        == pipeline_pb2.PipelineManifest.PIPELINE_MANIFEST_TYPE_DECLARATIVE
+    )
+    assert manifest.content.type_url.endswith("DeclarativeWorkflow")
+
+
+@pytest.mark.parametrize(
+    ("manifest_type", "message"),
+    [
+        (
+            None,
+            "spec.manifest.type is missing; set it to DECLARATIVE to apply"
+            " spec.manifest.content",
+        ),
+        (
+            "DECLARATVE",
+            "spec.manifest.type 'DECLARATVE' is not a manifest type; set it to"
+            " DECLARATIVE to apply spec.manifest.content",
+        ),
+    ],
+)
+def test_content_without_known_type_fails(tmp_path, manifest_type, message):
+    """Content with a missing or unknown type fails, so it is never dropped."""
+    yaml_dict = json.loads(json.dumps(_DECLARATIVE_YAML))
+    if manifest_type is None:
+        del yaml_dict["spec"]["manifest"]["type"]
+    else:
+        yaml_dict["spec"]["manifest"]["type"] = manifest_type
+
+    with pytest.raises(DeclarativeManifestError) as err:
+        _convert(yaml_dict, tmp_path)
+
+    assert str(err.value) == message
+
+
+@pytest.mark.parametrize("manifest_type", ["PIPELINE_MANIFEST_TYPE_UNIFLOW", "uniflow"])
+def test_uniflow_with_content_takes_the_uniflow_path(manifest_type):
+    """A UNIFLOW YAML from `ma pipeline get -o yaml` carries content and passes."""
+    yaml_dict = {
+        "spec": {"manifest": {"type": manifest_type, "content": {"@type": "x"}}}
+    }
+
+    assert not is_declarative(yaml_dict)
 
 
 def test_unknown_workflow_field_fails_at_parse(tmp_path):
