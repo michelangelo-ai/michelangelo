@@ -2,7 +2,10 @@ load("@io_bazel_rules_go//go:def.bzl", "go_test")
 
 go_test(
     name = "go_default_test",
-    srcs = ["harness_test.go"],
+    srcs = [
+        "engine_test.go",
+        "harness_test.go",
+    ],
     data = glob(["testdata/**"]),
     deps = [
         "//go/worker/plugins/cachedoutput:go_default_library",
@@ -19,6 +22,7 @@ go_test(
         "@com_github_stretchr_testify//require:go_default_library",
         "@net_starlark_go//starlark:go_default_library",
         "@net_starlark_go//syntax:go_default_library",
+        "@org_uber_go_cadence//:go_default_library",
         "@org_uber_go_cadence//encoded:go_default_library",
         "@org_uber_go_cadence//testsuite:go_default_library",
         "@org_uber_go_cadence//worker:go_default_library",

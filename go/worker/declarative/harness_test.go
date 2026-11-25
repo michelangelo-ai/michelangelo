@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.starlark.net/starlark"
 	"go.starlark.net/syntax"
+	cadclient "go.uber.org/cadence"
 	"go.uber.org/cadence/encoded"
 	"go.uber.org/cadence/testsuite"
 	cadworker "go.uber.org/cadence/worker"
@@ -72,7 +73,10 @@ func (r reg) RegisterWorkflowWithOptions(w interface{}, o worker.RegisterWorkflo
 // converter and passing the bytes through unchanged keeps that asymmetry:
 // the test env's own converter would encode Go maps with jsoniter, which
 // does not sort map keys.
-func runStar(t *testing.T, tar []byte, path, fn string, args ...any) (*starlark.Dict, error) {
+//
+// It returns the result, the task_progress reports, and the fail text of a
+// failed workflow, which the worker keeps in the error details.
+func runStar(t *testing.T, tar []byte, path, fn string, args ...any) (*starlark.Dict, []string, error) {
 	t.Helper()
 	svc, err := service.NewServiceBuilder(service.CadenceBackend).SetPlugins(workerPlugins()).SetClientTaskList("test").Build()
 	require.NoError(t, err)
@@ -85,12 +89,22 @@ func runStar(t *testing.T, tar []byte, path, fn string, args ...any) (*starlark.
 	require.NoError(t, err)
 	env.ExecuteWorkflow(service.ServiceWorkflowFunc, input)
 	require.True(t, env.IsWorkflowCompleted())
+
+	q, err := env.QueryWorkflow("task_progress")
+	require.NoError(t, err)
+	var progress []string
+	require.NoError(t, q.Get(&progress))
+
 	if err := env.GetWorkflowError(); err != nil {
-		return nil, err
+		var ce *cadclient.CustomError
+		require.ErrorAs(t, err, &ce)
+		var details map[string]any
+		require.NoError(t, ce.Details(&details))
+		return nil, progress, fmt.Errorf("%v", details["error"])
 	}
 	var res *starlark.Dict
 	require.NoError(t, env.GetWorkflowResult(&res))
-	return res, nil
+	return res, progress, nil
 }
 
 // dirTar tars dir with every relative load made absolute. The worker anchors
@@ -174,13 +188,25 @@ func byteOffset(src []byte, pos syntax.Position) int {
 	return off
 }
 
-// toGo converts a Starlark result of strings, lists, and dicts to Go values
-// so that a test can compare it with a literal.
+// toGo converts a Starlark result to Go values so that a test can compare it
+// with a literal. An int stays an int and a float stays a float64.
 func toGo(t *testing.T, v starlark.Value) any {
 	t.Helper()
 	switch v := v.(type) {
+	case starlark.NoneType:
+		return nil
+	case starlark.Bool:
+		return bool(v)
+	case starlark.Int:
+		i, ok := v.Int64()
+		require.True(t, ok, "int %s overflows int64", v)
+		return int(i)
+	case starlark.Float:
+		return float64(v)
 	case starlark.String:
 		return string(v)
+	case starlark.Tuple:
+		return toGo(t, starlark.NewList(v))
 	case *starlark.List:
 		out := []any{}
 		for i := 0; i < v.Len(); i++ {
@@ -202,7 +228,7 @@ func toGo(t *testing.T, v starlark.Value) any {
 
 func TestProbeInputShapes(t *testing.T) {
 	spec := map[string]any{"n": float64(3), "x": 1.5, "nil": nil, "m": map[string]any{"k": "v"}, "l": []any{}}
-	res, err := runStar(t, dirTar(t, "testdata/root"), "/probe.star", "probe", spec, map[string]any{})
+	res, _, err := runStar(t, dirTar(t, "testdata/root"), "/probe.star", "probe", spec, map[string]any{})
 	require.NoError(t, err)
 	assert.Equal(t, map[string]any{
 		"keys":   []any{"l", "m", "n", "nil", "x"},
@@ -232,8 +258,9 @@ func TestDirSymlinkResolves(t *testing.T) {
 	}
 	assert.Equal(t, []string{"commons.star", "declarative"}, names)
 
-	src, err := os.ReadFile("testdata/dirlink/uniflow/declarative/engine.star")
+	linked, err := os.ReadFile("testdata/dirlink/uniflow/declarative/engine.star")
 	require.NoError(t, err)
-	firstLine, _, _ := strings.Cut(string(src), "\n")
-	assert.Equal(t, `load("../commons.star", "TASK_STATE_SUCCEEDED")`, firstLine)
+	direct, err := os.ReadFile("testdata/root/michelangelo/uniflow/declarative/engine.star")
+	require.NoError(t, err)
+	assert.Equal(t, direct, linked)
 }
