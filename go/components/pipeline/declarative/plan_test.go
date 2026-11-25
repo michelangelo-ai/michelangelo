@@ -36,21 +36,21 @@ func diamondFailure() *v2pb.DeclarativeWorkflow {
 func TestPlanGolden(t *testing.T) {
 	cases := []struct {
 		name     string
-		w        *v2pb.DeclarativeWorkflow
 		warnings []string
 	}{
 		// diamond: one root, a fan-out of two, and a fan-in.
-		{"diamond", typed(diamond()), nil},
+		{"diamond", nil},
 		// alt_shape: roots a, c, and e at level 0; d joins a depth-1 and a
 		// depth-0 dependency. Plan copies the caller's warnings unchanged.
-		{"alt_shape", typed(altShape()), []string{"caller-supplied warning"}},
+		{"alt_shape", []string{"caller-supplied warning"}},
 		// diamond_failure: FAILED and COMPLETED edges still order tasks into
 		// levels.
-		{"diamond_failure", typed(diamondFailure()), nil},
+		{"diamond_failure", nil},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got, err := Plan(c.w, Limits{}, loadRelease(t), c.warnings)
+			w := readWorkflow(t, filepath.Join("testdata", "specs", c.name+".json"))
+			got, err := Plan(w, Limits{}, loadRelease(t), c.warnings)
 			require.NoError(t, err)
 			f, err := os.Open(filepath.Join("testdata", "plans", c.name+".json"))
 			require.NoError(t, err)

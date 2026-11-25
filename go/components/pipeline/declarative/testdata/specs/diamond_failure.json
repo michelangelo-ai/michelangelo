@@ -1,0 +1,72 @@
+{
+  "schema_version": "v1alpha1",
+  "parameters": {},
+  "tasks": {
+    "cleanup": {
+      "task_function": "core/python",
+      "config": {
+        "entry_point": "main.py"
+      },
+      "depends_on": [
+        {
+          "task": "train",
+          "when": "OUTCOME_COMPLETED"
+        }
+      ]
+    },
+    "evaluate": {
+      "task_function": "core/python",
+      "config": {
+        "entry_point": "main.py"
+      },
+      "depends_on": [
+        {
+          "task": "extract"
+        }
+      ]
+    },
+    "extract": {
+      "task_function": "core/python",
+      "config": {
+        "entry_point": "main.py"
+      }
+    },
+    "notify": {
+      "task_function": "core/python",
+      "config": {
+        "entry_point": "main.py"
+      },
+      "depends_on": [
+        {
+          "task": "publish",
+          "when": "OUTCOME_FAILED"
+        }
+      ]
+    },
+    "publish": {
+      "task_function": "core/python",
+      "config": {
+        "entry_point": "main.py"
+      },
+      "depends_on": [
+        {
+          "task": "train"
+        },
+        {
+          "task": "evaluate"
+        }
+      ]
+    },
+    "train": {
+      "task_function": "core/ray",
+      "config": {
+        "entry_point": "main.py"
+      },
+      "depends_on": [
+        {
+          "task": "extract"
+        }
+      ]
+    }
+  }
+}

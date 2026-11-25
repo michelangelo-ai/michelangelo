@@ -1,0 +1,49 @@
+{
+  "schema_version": "v1alpha1",
+  "parameters": {},
+  "tasks": {
+    "a": {
+      "task_function": "core/python",
+      "config": {
+        "entry_point": "main.py"
+      }
+    },
+    "b": {
+      "task_function": "core/python",
+      "config": {
+        "entry_point": "main.py"
+      },
+      "depends_on": [
+        {
+          "task": "a"
+        }
+      ]
+    },
+    "c": {
+      "task_function": "core/python",
+      "config": {
+        "entry_point": "main.py"
+      }
+    },
+    "d": {
+      "task_function": "core/python",
+      "config": {
+        "entry_point": "main.py"
+      },
+      "depends_on": [
+        {
+          "task": "b"
+        },
+        {
+          "task": "c"
+        }
+      ]
+    },
+    "e": {
+      "task_function": "core/python",
+      "config": {
+        "entry_point": "main.py"
+      }
+    }
+  }
+}
