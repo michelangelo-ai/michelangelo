@@ -912,6 +912,8 @@ func storedContent(t *testing.T, raw []byte) []byte {
 func TestReconcile_ReorderedContentOnSameCommitKeepsRevision(t *testing.T) {
 	ab, ba := reorderedContent(t, "a", "b"), reorderedContent(t, "b", "a")
 	require.NotEqual(t, ab, ba, "the two inputs must differ")
+	require.Equal(t, storedContent(t, ab), storedContent(t, ba),
+		"the hook's byte form removes the order difference before the controller compares")
 	pin := &v2pb.InterpreterPin{Version: "core-v1", Artifact: "s3://a/core-v1.tar.gz", Digest: "sha256:01"}
 	spec := func(raw []byte) v2pb.PipelineSpec {
 		return v2pb.PipelineSpec{
