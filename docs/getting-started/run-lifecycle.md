@@ -2,7 +2,7 @@
 sidebar_position: 2.6
 title: Trace a Pipeline Run End to End
 description: Follow one `ma pipeline run` from the CLI through the API server, controllers, workflow engine, and Ray or Spark, and see which resource and source file handles each hop.
-last_verified: 2026-11-18
+last_verified: 2026-11-25
 ---
 
 # Trace a Pipeline Run End to End
@@ -38,7 +38,7 @@ The path has seven hops:
 ```
 
 :::note
-The example below follows a **Ray** task, because that is the path with the most code in this repository. A Spark task takes the same route with `SparkJob` in place of `RayCluster` and `RayJob`; see [Spark tasks](#spark-tasks).
+The example below follows a **Ray** task, because that is the path with the most code in this repository. A Spark task takes a shorter route. The worker creates a `SparkJob`, and the SparkJob controller creates a `SparkApplication` directly on the cluster where the controller manager runs, with no scheduler step. See [Spark tasks](#spark-tasks).
 :::
 
 ## Prerequisites
@@ -60,7 +60,7 @@ ma pipeline run --namespace="<namespace>" --name="<pipeline>"
 | **Resource** | None yet. The CLI builds a `PipelineRun` and sends it in a `CreatePipelineRun` gRPC request. |
 | **Code** | [`python/michelangelo/cli/mactl/plugins/entity/pipeline/run.py`](https://github.com/michelangelo-ai/michelangelo/blob/main/python/michelangelo/cli/mactl/plugins/entity/pipeline/run.py) |
 
-The CLI generates a unique run name of the form `run-YYYYMMDD-HHMMSS-<8 hex characters>` and fills in `spec.pipeline` (the pipeline name and namespace) and `spec.actor` (your user name). If you pass `--resume_from`, it also fills in `spec.resume`. It then calls `PipelineRunService/CreatePipelineRun` on the API server, which is `127.0.0.1:15566` by default and can be overridden with `MACTL_ADDRESS`. With `--dry-run`, the server validates the request and rolls it back, so nothing below this hop happens.
+The CLI generates a unique run name of the form `run-YYYYMMDD-HHMMSS-<8 hex characters>` and fills in `spec.pipeline` (the pipeline name and namespace) and `spec.actor` (your user name). If you pass `--resume_from`, it also fills in `spec.resume`. If you pass `--notify-slack`, `--notify-email`, or `--notify-on`, it fills in `spec.notifications`, and the API server then leaves the run's notification rules alone in the next hop. It then calls `PipelineRunService/CreatePipelineRun` on the API server, which is `127.0.0.1:15566` by default and can be overridden with `MACTL_ADDRESS`. With `--dry-run`, the server validates the request and rolls it back, so nothing below this hop happens.
 
 `ma pipeline run` has no `--revision` flag. The revision a run uses is chosen on the server in the next hop.
 
@@ -69,15 +69,16 @@ The CLI generates a unique run name of the form `run-YYYYMMDD-HHMMSS-<8 hex char
 | | |
 |---|---|
 | **Component** | API server (the `michelangelo-apiserver` Deployment) |
-| **Resource** | `PipelineRun` is created in Kubernetes (etcd), and in MySQL too when metadata storage is on |
+| **Resource** | `PipelineRun` is created in Kubernetes (etcd). When metadata storage is on, the API server also adds the ingester finalizer, and the ingester in the controller manager copies the run to MySQL. |
 | **Code** | [`proto-go/api/v2/pipeline_run.pb.kubeyarpc.go`](https://github.com/michelangelo-ai/michelangelo/blob/main/proto-go/api/v2/pipeline_run.pb.kubeyarpc.go) (generated handler), [`go/components/pipelinerun/apihook/apihook.go`](https://github.com/michelangelo-ai/michelangelo/blob/main/go/components/pipelinerun/apihook/apihook.go) (hook), [`go/api/handler/`](https://github.com/michelangelo-ai/michelangelo/tree/main/go/api/handler) |
 
-The generated `CreatePipelineRun` handler authenticates and authorizes the caller, validates the resource, runs the registered `BeforeCreate` hooks, and then asks the API handler to create the object. The `PipelineRun` hook does four things:
+The generated `CreatePipelineRun` handler authenticates and authorizes the caller, validates the resource, runs the registered `BeforeCreate` hooks, and then asks the API handler to create the object. The `PipelineRun` hook does five things:
 
 - Sets the `michelangelo/environment` label to the default environment if it is absent.
 - Pins the run to a revision. If the pipeline has `status.latestRevision`, the hook copies that revision's pipeline spec into the run. If it has none, the run falls back to the live `Pipeline`.
 - Copies the pipeline's notification rules onto the run when the run has none.
 - Stamps the owning `Pipeline` as the run's `ownerReference`, which is what lets [cascade delete](../operator-guides/cascade-delete.md) find the run.
+- Stamps the pipeline's type as the `michelangelo/SourcePipelineType` label.
 
 For the framework behind this, see [API Framework](../operator-guides/api-framework.md).
 
@@ -94,18 +95,18 @@ The run exists but `status` is mostly empty until a controller picks it up. The 
 | | |
 |---|---|
 | **Component** | Controller manager (the `michelangelo-controllermgr` Deployment), PipelineRun controller |
-| **Resource** | `PipelineRun`: finalizer and `ownerReference` added, then `status.conditions`, `status.steps`, and `status.state` updated |
+| **Resource** | `PipelineRun`: drain finalizer added, then `status.conditions`, `status.steps`, and `status.state` updated |
 | **Code** | [`go/components/pipelinerun/controller.go`](https://github.com/michelangelo-ai/michelangelo/blob/main/go/components/pipelinerun/controller.go), [`go/components/pipelinerun/plugin/plugin.go`](https://github.com/michelangelo-ai/michelangelo/blob/main/go/components/pipelinerun/plugin/plugin.go) |
 
-The controller watches `PipelineRun` objects. On each reconcile it first adds a drain finalizer (`pipelineruns.michelangelo.uber.com/drain`) so a pipeline delete can cancel the workflow before the run is garbage-collected. It then runs the object through a condition engine with three actors, in order. Each actor records a condition and a matching step in `status.steps`:
+The controller watches `PipelineRun` objects. While the run isn't terminal, each reconcile makes sure it has a drain finalizer (`pipelineruns.michelangelo.uber.com/drain`) so a pipeline delete can cancel the workflow before the run is garbage-collected. The `ownerReference` was already set by the hook in hop 2; the controller only fills it in on runs created before that hook existed. It then runs the object through a condition engine with three actors, in order. Each actor records a condition and a matching step in `status.steps`:
 
 | Actor | Step name | What it does | Code |
 |-------|-----------|--------------|------|
-| `SourcePipelineActor` | `Source Pipeline` | Loads the `Pipeline` the run refers to and copies it into `status.sourcePipeline` | [`actors/sourcepipeline.go`](https://github.com/michelangelo-ai/michelangelo/blob/main/go/components/pipelinerun/actors/sourcepipeline.go) |
-| `ImageBuildActor` | `Image Build` | Reads the image ID from the pipeline's `michelangelo/uniflow-image` annotation. It does not build anything, and the step fails if the annotation is missing. | [`actors/imagebuild.go`](https://github.com/michelangelo-ai/michelangelo/blob/main/go/components/pipelinerun/actors/imagebuild.go) |
+| `SourcePipelineActor` | `Source Pipeline` | Copies the pipeline into `status.sourcePipeline`: the revision snapshot pinned in hop 2 if there is one (built from the run's inline `spec.pipelineSpec` and annotations), otherwise the live `Pipeline` | [`actors/sourcepipeline.go`](https://github.com/michelangelo-ai/michelangelo/blob/main/go/components/pipelinerun/actors/sourcepipeline.go) |
+| `ImageBuildActor` | `Image Build` | Reads the image ID from the source pipeline's `michelangelo/uniflow-image` annotation. It does not build anything, and the step fails if the annotation is missing. | [`actors/imagebuild.go`](https://github.com/michelangelo-ai/michelangelo/blob/main/go/components/pipelinerun/actors/imagebuild.go) |
 | `ExecuteWorkflowActor` | `Execute Workflow` | Starts the workflow, then polls it (hop 4) | [`actors/executeworkflow.go`](https://github.com/michelangelo-ai/michelangelo/blob/main/go/components/pipelinerun/actors/executeworkflow.go) |
 
-After the engine runs, the reconciler maps the result to `status.state`: `RUNNING` while any condition is unfinished, `SUCCEEDED` when all are satisfied, `FAILED` otherwise, and `KILLED` if `spec.kill` was set. It persists the status and sends notifications on state changes. A terminal run is kept in etcd for the configured `pipelineRun.ttlDays`, then marked immutable and evicted to MySQL, but only when metadata storage is enabled.
+After the engine runs, the reconciler maps the result to `status.state`: `RUNNING` while any condition is unfinished, `SUCCEEDED` when all are satisfied, `FAILED` otherwise, and `KILLED` if `spec.kill` was set. It persists the status and sends notifications on state changes. When metadata storage is on, a terminal run is marked immutable once `pipelineRun.ttlDays` has passed, and the ingester then moves it to MySQL and deletes it from etcd. The Helm chart doesn't set `ttlDays`, and at its default of `0` this happens as soon as the run finishes. The sandbox turns metadata storage on, so finished runs drop out of `kubectl get pipelineruns` right away, but `ma pipeline_run get` still finds them. With metadata storage off, terminal runs stay in etcd.
 
 **Observe it:**
 
@@ -115,7 +116,7 @@ kubectl -n <release-namespace> logs deployment/michelangelo-controllermgr
 ma pipeline_run get --namespace="<namespace>" --name="<run-name>" --output=yaml
 ```
 
-In the YAML, look at `status.steps` for the three steps above and at `status.state`. If the run is stuck at `Image Build`, check the `michelangelo/uniflow-image` annotation on the pipeline.
+In the YAML, look at `status.steps` for the three steps above and at `status.state`. If the run fails at `Image Build`, check the `michelangelo/uniflow-image` annotation on the run (copied from the revision when one was pinned) or on the pipeline. `status.sourcePipeline.pipeline` shows the pipeline the controller actually used.
 
 ## 4. The controller starts a workflow
 
@@ -147,7 +148,7 @@ The `ExecuteWorkflowActor` reads the pipeline's Uniflow package from the blob st
 | **Resource** | None directly. The worker calls the API server to create and read resources. |
 | **Code** | [`go/worker/`](https://github.com/michelangelo-ai/michelangelo/tree/main/go/worker) (`workflowfx/` for the engine connection, `plugins/` for the Starlark modules, `activities/` for the activities), [`python/michelangelo/uniflow/`](https://github.com/michelangelo-ai/michelangelo/tree/main/python/michelangelo/uniflow) (the `.star` task definitions) |
 
-The worker polls the engine's task lists, as configured under `workflow-engine.workers`. The workflow it runs is generic: it interprets the Starlark code from the pipeline's Uniflow package, so changing a pipeline does not require redeploying the worker. Each Uniflow task, such as a `RayTask`, becomes a Starlark function that calls built-in modules (`ray`, `spark`, `cachedoutput`, `storage`) registered by [`go/worker/starlark/module.go`](https://github.com/michelangelo-ai/michelangelo/blob/main/go/worker/starlark/module.go). Those modules call workflow activities, and the activities call the API server over gRPC. The worker does not talk to Kubernetes directly. See the [Starlark worker README](https://github.com/michelangelo-ai/michelangelo/blob/main/go/worker/starlark/README.md).
+The worker polls the engine's task lists, as configured under `workflow-engine.workers`. The workflow it runs is generic: it interprets the Starlark code from the pipeline's Uniflow package, so changing a pipeline does not require redeploying the worker. Each Uniflow task, such as a `RayTask`, becomes a Starlark function that calls built-in modules, such as `ray`, `spark`, `cachedoutput`, `storage`, `model`, `pipeline`, and `deployment`, registered by [`go/worker/starlark/module.go`](https://github.com/michelangelo-ai/michelangelo/blob/main/go/worker/starlark/module.go). Those modules call workflow activities, and the activities call the API server over gRPC. The worker does not create Kubernetes resources itself. See the [Starlark worker README](https://github.com/michelangelo-ai/michelangelo/blob/main/go/worker/starlark/README.md).
 
 For each task, the Starlark code first checks the task cache. If caching is enabled and a matching `CachedOutput` exists, the task is skipped. This is also how `--resume_from` works: the run sets `CACHE_ENABLED` and the cache versions of the earlier run's tasks.
 
@@ -180,17 +181,27 @@ The Image Build step's output reaches the workflow as the `UF_TASK_IMAGE` enviro
 # On the control plane, where Michelangelo AI's own resources live
 kubectl get rayclusters.michelangelo.api,rayjobs.michelangelo.api -n <namespace>
 
-# On the compute cluster, where KubeRay runs the pods
-kubectl --context <compute-context> get rayclusters,rayjobs
-kubectl --context <compute-context> get pods -l ray.io/cluster=<cluster-name>
-kubectl --context <compute-context> logs <head-pod-name>
+# On the compute cluster, where KubeRay runs the pods (always in the default namespace)
+kubectl --context <compute-context> -n default get rayclusters.ray.io,rayjobs.ray.io
+kubectl --context <compute-context> -n default get pods -l ray.io/cluster=<cluster-name>
+kubectl --context <compute-context> -n default logs <head-pod-name>
 ```
 
-In the sandbox the control plane and the compute cluster can be the same Kubernetes cluster. The `michelangelo.api` group suffix keeps the two `rayjobs` resources apart. `RayJob.status.dashboardUrl` links to the Ray dashboard, which is at `http://localhost:8265` in a sandbox created with `--create-compute-cluster`. See [Troubleshooting](../operator-guides/operations/troubleshooting.md) for more on diagnosing stuck jobs.
+Terminal `RayCluster` and `RayJob` objects are moved out of etcd the same way as finished runs, so use these commands while the task is running.
+
+In the sandbox the control plane and the compute cluster can be the same Kubernetes cluster. The `michelangelo.api` and `ray.io` group suffixes keep the two sets of `rayclusters` and `rayjobs` apart. KubeRay's copies use the same names as Michelangelo AI's. `RayJob.status.dashboardUrl` links to the Ray dashboard, which is at `http://localhost:8265` in a sandbox created with `--create-compute-cluster`. See [Troubleshooting](../operator-guides/operations/troubleshooting.md) for more on diagnosing stuck jobs.
 
 ### Spark tasks
 
 A `SparkTask` follows the same pattern through the `spark` module ([`go/worker/plugins/spark/starlark_module.go`](https://github.com/michelangelo-ai/michelangelo/blob/main/go/worker/plugins/spark/starlark_module.go)), but it creates a single `SparkJob` and has no cluster phase. The SparkJob controller ([`go/components/spark/job/controller.go`](https://github.com/michelangelo-ai/michelangelo/blob/main/go/components/spark/job/controller.go)) creates a `SparkApplication` through the Spark Operator and copies its state back into the `SparkJob`.
+
+Unlike Ray, Spark work does not go through the scheduler. The SparkJob controller uses the controller manager's own kubeconfig, so the `SparkApplication` lands in the run's namespace on the control-plane cluster:
+
+```bash
+kubectl get sparkjobs.michelangelo.api,sparkapplications -n <namespace>
+```
+
+Multi-cluster Spark is tracked in [#616](https://github.com/michelangelo-ai/michelangelo/issues/616).
 
 ## 7. Outputs and status flow back
 
@@ -224,7 +235,7 @@ ma pipeline_run get --namespace="<namespace>" --name="<run-name>" --output=yaml
 | 3 | PipelineRun controller | `PipelineRun.status.conditions`, `status.steps` | `deployment/michelangelo-controllermgr` logs |
 | 4 | Workflow engine | `status.workflowId`, `status.workflowRunId` | Cadence Web or Temporal Web |
 | 5 | Worker | Calls to the API server | `deployment/michelangelo-worker` logs |
-| 6 | Scheduler, Ray controllers, KubeRay | `RayCluster`, `RayJob` (and KubeRay's own `ray.io` copies) | `kubectl get rayclusters,rayjobs`, Ray dashboard |
+| 6 | Scheduler, Ray controllers, KubeRay | `RayCluster`, `RayJob` (and KubeRay's own `ray.io` copies) | `kubectl get rayclusters.michelangelo.api,rayjobs.michelangelo.api` (live objects only), Ray dashboard |
 | 7 | Controllers, workflow, CLI | `CachedOutput`, `Model` (from your code), `status.state` | `ma pipeline_run get` |
 
 ## Where to go next
@@ -233,5 +244,5 @@ ma pipeline_run get --namespace="<namespace>" --name="<run-name>" --output=yaml
 - [Running Uniflow Pipelines](../user-guides/ml-pipelines/running-uniflow.md): write and run the pipelines that start this flow.
 - [CLI Reference](../user-guides/reference/cli.md): every `ma` command and flag.
 - [API Framework](../operator-guides/api-framework.md): how the API server turns gRPC calls into Kubernetes resources.
-- [Jobs Overview](../operator-guides/jobs/index.md): how the scheduler assigns Ray and Spark work to compute clusters.
+- [Jobs Overview](../operator-guides/jobs/index.md): how the scheduler assigns Ray work to compute clusters.
 - [Troubleshooting](../operator-guides/operations/troubleshooting.md): what to check when a hop stalls.
