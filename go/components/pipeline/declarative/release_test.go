@@ -128,6 +128,22 @@ func TestLoadReleasesFollowsSymlinks(t *testing.T) {
 	assert.Contains(t, rs, "core-v1.4.2")
 }
 
+// Kubelet mounts a ConfigMap as a timestamped directory, a "..data" symlink
+// to it, and one symlink per key into "..data". A change to Lstat would
+// break every deployment, so this test pins the layout.
+func TestLoadReleasesReadsConfigMapVolumeLayout(t *testing.T) {
+	dir := t.TempDir()
+	ts := filepath.Join(dir, "..2026_11_24_10_00_00.000000001")
+	require.NoError(t, os.Mkdir(ts, 0o700))
+	copyRelease(t, ts)
+	require.NoError(t, os.Symlink(filepath.Base(ts), filepath.Join(dir, "..data")))
+	require.NoError(t, os.Symlink(filepath.Join("..data", "core-v1.4.2.yaml"), filepath.Join(dir, "core-v1.4.2.yaml")))
+	rs, err := LoadReleases(dir)
+	require.NoError(t, err)
+	assert.Len(t, rs, 1)
+	assert.Contains(t, rs, "core-v1.4.2")
+}
+
 func TestLoadReleasesRejectsNonRegularFile(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, syscall.Mkfifo(filepath.Join(dir, "v1.yaml"), 0o600))
