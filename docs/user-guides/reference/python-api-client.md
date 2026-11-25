@@ -114,19 +114,22 @@ client = APIClient(
 )
 ```
 
-TLS works only with this per-instance constructor. `from_env(caller)` takes no `credentials`, so its channel is always plaintext. The singleton opens its default channel with `grpc.insecure_channel`. To use TLS with the singleton, which code such as `run_pipeline` and `APIRegistryClient` without `svc` relies on, set the channel and header provider yourself:
-
-```python
-APIClient.set_channel(grpc.secure_channel("api.example.com:443", grpc.ssl_channel_credentials()))
-APIClient.init()
-APIClient.set_header_provider(BearerHeaderProvider(id_token))
-```
-
 - Use the lowercase key `authorization`, because gRPC metadata keys must be lowercase.
 - `credentials` takes a `grpc.ChannelCredentials` and opens a TLS channel. Without it the channel is plaintext and the token would travel unencrypted.
 - `header_provider` replaces the default one. Subclassing `DefaultHeaderProvider`, as above, keeps `caller` working. A custom provider without a `caller` attribute makes the `caller=` argument raise `TypeError`.
 - ID tokens expire. For long-running processes, have `get_headers` fetch a fresh token each time instead of storing one.
 - `interceptors` takes a list of gRPC client interceptors for tracing or other custom behavior. They are ignored when you pass your own `channel`.
+
+TLS works only with the per-instance constructor. `from_env(caller)` takes no `credentials`, so its channel is always plaintext. The singleton opens its default channel with `grpc.insecure_channel`. To use TLS with the singleton, which code such as `run_pipeline` and `APIRegistryClient` without `svc` relies on, set the channel, header provider, and caller yourself:
+
+```python
+APIClient.set_channel(grpc.secure_channel("api.example.com:443", grpc.ssl_channel_credentials()))
+APIClient.init()
+APIClient.set_header_provider(BearerHeaderProvider(id_token))
+APIClient.set_caller("my-pipeline")  # after set_header_provider, which replaces the provider
+```
+
+Call `set_caller` last. `set_header_provider` replaces the provider along with any caller set on it, and the first call then raises `ValueError: caller is not set`.
 
 For how the server is configured, see [Authentication](../../operator-guides/setup/authentication.md).
 
@@ -134,7 +137,7 @@ For how the server is configured, see [Authentication](../../operator-guides/set
 
 Every service is an attribute of the client, such as `client.PipelineService`. Methods follow one pattern across services: `get_<resource>`, `list_<resource>`, `create_<resource>`, `update_<resource>`, `delete_<resource>`, and `delete_<resource>_collection`. Read and delete calls take `namespace` and `name` as keywords. Create and update calls take the resource object. Responses are protobuf messages, so you read them with attribute access.
 
-The examples below use the `client` from a per-instance client. With the singleton, replace `client` with `APIClient`.
+The examples below assume `client` is still open. Run them inside the `with` block above, or create it with `client = APIClient(endpoint="localhost:15566", caller="my-script")` and call `client.close()` when you're done. With the singleton, replace `client` with `APIClient`.
 
 ### Projects
 
@@ -236,7 +239,7 @@ Pass `list_options_ext` as a **new dict on every call**. A `ListOptionsExt` mess
 
 `list_options_ext` only takes effect when the operator has turned metadata storage on. Otherwise the API server ignores it. Metadata storage is off in the Helm chart defaults and on in the sandbox.
 
-To list across all namespaces, pass `namespace=""`. This is what `ma <resource> get --all-namespaces` sends.
+To list across all namespaces, pass `namespace=""`. This is what `ma <resource> get --all-namespaces` sends. Only `list_*` accepts an empty namespace. Get, create, update, and delete calls reject it with `InvalidArgument`.
 
 ## Errors, retries, and timeouts
 
