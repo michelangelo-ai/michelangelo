@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/gogo/protobuf/jsonpb"
@@ -445,6 +446,47 @@ func TestBeforeCreate(t *testing.T) {
 		raw := p.Annotations[explainPlanAnnotation]
 		assert.Contains(t, raw, `"interpreterVersion":"core-v1"`)
 		assert.Contains(t, raw, `"taskCount":2`)
+	})
+}
+
+// paddedPipeline returns a valid pipeline whose content is exactly n bytes.
+// It pads one args string of task "b".
+func paddedPipeline(t *testing.T, n int) *v2.Pipeline {
+	t.Helper()
+	pad := n
+	for i := 0; i < 8; i++ {
+		args := &types.ListValue{Values: []*types.Value{strVal(strings.Repeat("x", pad))}}
+		p := declarativePipeline(t, workflow(map[string]*types.Value{"args": {Kind: &types.Value_ListValue{ListValue: args}}}))
+		got := len(p.Spec.Manifest.Content.Value)
+		if got == n {
+			return p
+		}
+		pad += n - got
+	}
+	t.Fatalf("no padding gives content of %d bytes", n)
+	return nil
+}
+
+func TestContentLimit(t *testing.T) {
+	d := loadDeclarative(t, true, "core-v1")
+	ctx := context.Background()
+
+	t.Run("create at the limit is accepted", func(t *testing.T) {
+		hook, _ := newHook(t, d)
+		p := paddedPipeline(t, maxAPIContentBytes)
+		require.NoError(t, hook.BeforeCreate(ctx, &v2.CreatePipelineRequest{Pipeline: p}))
+		assert.Len(t, p.Spec.Manifest.Content.Value, maxAPIContentBytes)
+	})
+	t.Run("create one byte over the limit is rejected", func(t *testing.T) {
+		hook, _ := newHook(t, d)
+		requireStatus(t, hook.BeforeCreate(ctx, dryRunCreate(paddedPipeline(t, maxAPIContentBytes+1))),
+			codes.InvalidArgument, "manifest.content is 524289 bytes; the limit for the API is 524288 bytes")
+	})
+	t.Run("update one byte over the limit is rejected", func(t *testing.T) {
+		hook, h := newHook(t, d)
+		expectGet(h, storedPipeline(t, pinOf(release(t, d, "core-v1"))), nil)
+		requireStatus(t, hook.BeforeUpdate(ctx, &v2.UpdatePipelineRequest{Pipeline: paddedPipeline(t, maxAPIContentBytes+1)}),
+			codes.InvalidArgument, "manifest.content is 524289 bytes; the limit for the API is 524288 bytes")
 	})
 }
 

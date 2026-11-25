@@ -24,6 +24,12 @@ import (
 // explainPlanAnnotation holds the protojson ExplainPlan on a dry-run response.
 const explainPlanAnnotation = "michelangelo/declarative-explain-plan"
 
+// maxAPIContentBytes bounds manifest.content on a create or update. Decode and
+// Encode each build a dynamic message that costs about 200 bytes of heap per
+// content byte. The stored object must also fit in etcd. Real workflows are a
+// few KB.
+const maxAPIContentBytes = 512 << 10
+
 // RegisterPipelineAPIHook registers the declarative pipeline hook.
 func RegisterPipelineAPIHook(apiHandler api.Handler, d *Declarative) {
 	v2.RegisterPipelineAPIHook(apiHook{apiHandler: apiHandler, d: d})
@@ -204,6 +210,12 @@ func checkTar(tar string, pin *v2.InterpreterPin, storedArtifact string) error {
 // dry run it sets the explain-plan annotation. Otherwise it removes the
 // annotation, so a client cannot store a plan.
 func apply(p *v2.Pipeline, rel *declarative.Release, pin *v2.InterpreterPin, dryRun bool) error {
+	if n := len(p.Spec.Manifest.GetContent().GetValue()); n > maxAPIContentBytes {
+		return status.Errorf(codes.InvalidArgument, "manifest.content is %d bytes; the limit for the API is %d bytes", n, maxAPIContentBytes)
+	}
+	// Encode re-encodes from the gogo w, not from the dynamic message that
+	// Decode built. The two can disagree on a malformed map entry, and the
+	// stored bytes must equal what Plan validated.
 	w, err := declarative.Decode(p.Spec.Manifest)
 	if err != nil {
 		return toStatus(err)
