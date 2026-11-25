@@ -1,0 +1,13 @@
+# Overlay for an apiserver that runs on your machine next to the sandbox.
+# Load it with RUNTIME_ENVIRONMENT=declarative-test; see ../README.md.
+apiserver:
+  yarpc:
+    port: 15568
+  crdSync:
+    enableCRDUpdate: true
+    enableCRDDeletion: false
+  declarative:
+    enabled: true
+    defaultInterpreter: mock-v1
+    # Relative to the go/ directory, where you start the apiserver.
+    releasesDir: ../python/examples/declarative/releases

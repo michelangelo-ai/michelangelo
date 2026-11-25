@@ -1,0 +1,13 @@
+# Expected: INVALID_ARGUMENT, mock/python has no retry capability.
+apiVersion: michelangelo.api/v2
+kind: Pipeline
+metadata:
+  name: declarative-retry-not-supported
+  namespace: declarative-test
+spec:
+  manifest:
+    type: PIPELINE_MANIFEST_TYPE_DECLARATIVE
+    content:
+      schemaVersion: v1alpha1
+      tasks:
+        a: {taskFunction: mock/python, config: {entry_point: a.py}, retry: {maxAttempts: 2}}

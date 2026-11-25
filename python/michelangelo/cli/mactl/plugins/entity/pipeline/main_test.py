@@ -4,9 +4,11 @@ Tests the apply_plugins function which configures the CRD with
 plugin-specific converters.
 """
 
+from argparse import ArgumentParser
 from unittest import TestCase
 from unittest.mock import Mock, patch
 
+from michelangelo.cli.mactl.crd import CRD
 from michelangelo.cli.mactl.plugins.entity.pipeline.create import (
     convert_crd_metadata_pipeline,
 )
@@ -22,7 +24,7 @@ class PipelineMainTest(TestCase):
     def setUp(self):
         """Set up test fixtures."""
         self.mock_crd = Mock()
-        self.mock_crd.func_signature = {}  # Real dict for item assignment
+        self.mock_crd.func_signature = {"apply": {"args": []}}  # Real dict
         self.mock_crds = {"pipeline": self.mock_crd}
         self.mock_channel = Mock()
 
@@ -46,6 +48,21 @@ class PipelineMainTest(TestCase):
         apply_plugin_command(self.mock_crd, "apply", self.mock_crds, self.mock_channel)
 
         self.assertEqual(crd_module.apply_func_impl, pipeline_apply_func_impl)
+
+    @patch("michelangelo.cli.mactl.crd.apply_func_impl")
+    def test_apply_command_adds_output_flag(self, _):
+        """Pipeline apply accepts -o json and defaults to table."""
+        crd = CRD("pipeline", "michelangelo.api.v2.PipelineService", [])
+        apply_plugin_command(crd, "apply", {"pipeline": crd}, self.mock_channel)
+        apply_plugin_command(crd, "apply", {"pipeline": crd}, self.mock_channel)
+        parser = ArgumentParser()
+        crd.configure_parser("apply", parser)
+
+        self.assertEqual(
+            parser.parse_args(["-f", "p.yaml", "-o", "json"]).output, "json"
+        )
+        self.assertEqual(parser.parse_args(["-f", "p.yaml"]).output, "table")
+        self.assertIn("output", crd._read_signatures("apply").parameters)
 
     def test_apply_plugins_run_command(self):
         """Test apply_plugins for run command."""

@@ -7,6 +7,7 @@ from grpc import Channel
 
 from michelangelo.cli.mactl.crd import CRD
 from michelangelo.cli.mactl.plugins.entity.pipeline.apply import (
+    add_apply_output_arg,
     pipeline_apply_func_impl,
 )
 from michelangelo.cli.mactl.plugins.entity.pipeline.create import (
@@ -76,6 +77,7 @@ def apply_plugin_command(
     _LOG.debug("gRPC Channel: %r", channel)
     if target_command == "apply":
         crd.func_crd_metadata_converter = convert_crd_metadata_pipeline
+        add_apply_output_arg(crd)
         import michelangelo.cli.mactl.crd as crd_module
 
         crd_module.apply_func_impl = pipeline_apply_func_impl

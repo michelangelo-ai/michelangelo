@@ -159,6 +159,9 @@ ma pipeline apply --file="./pipelines/" --recursive
 
 # Validate a change on the server without saving it
 ma pipeline apply --file="./examples/bert_cola/pipeline.yaml" --dry-run
+
+# Print the explain plan of a declarative pipeline as JSON, without saving it
+ma pipeline apply --file="./examples/declarative/pipelines/training.yaml" --dry-run -o json
 ```
 
 #### Arguments
@@ -167,6 +170,7 @@ ma pipeline apply --file="./examples/bert_cola/pipeline.yaml" --dry-run
 - `--root` / `-r` — external workspace root. When set, it is prepended to `--file`.
 - `--recursive` / `-R` — when `--file` is a directory, walk it recursively and apply every `.yaml` file whose `kind` matches `<RESOURCE_TYPE>`. Other files are skipped with a message, and an error in one file doesn't stop the walk. If any file fails, the command reports the failed files at the end and exits with an error.
 - `--dry-run` — server-side dry run: the server validates the request and rolls it back, so nothing is saved
+- `--output` / `-o` — `pipeline apply` only: `table` (default) or `json`. A dry run of a declarative pipeline prints the explain plan. Other responses print the pipeline as text, or as JSON with `json`. For declarative pipelines, see the [declarative pipeline guide](https://github.com/michelangelo-ai/michelangelo/tree/main/python/examples/declarative).
 
 ### DELETE - Remove a resource
 
