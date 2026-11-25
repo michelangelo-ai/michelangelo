@@ -639,7 +639,9 @@ def test_render_explain_plan_table():
         "2      join\n"
         "\n"
         "WARNINGS\n"
-        "task right has no retry policy"
+        "task right has no retry policy\n"
+        "\n"
+        "Dry run: nothing was saved."
     )
 
 
@@ -649,7 +651,9 @@ def test_render_explain_plan_table_without_warnings():
         _pipeline({EXPLAIN_PLAN_ANNOTATION: json.dumps({**_PLAN, "warnings": []})})
     )
 
-    assert render_explain_plan(plan, "table").endswith("2      join")
+    assert render_explain_plan(plan, "table").endswith(
+        "2      join\n\nDry run: nothing was saved."
+    )
 
 
 def test_render_explain_plan_json():
@@ -687,5 +691,7 @@ def test_render_explain_plan_table_escapes_control_characters():
         "0      a\\x1b]0;t\\x07\n"
         "\n"
         "WARNINGS\n"
-        "line one line two\\x9b"
+        "line one line two\\x9b\n"
+        "\n"
+        "Dry run: nothing was saved."
     )

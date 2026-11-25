@@ -314,7 +314,10 @@ def explain_plan_from(pipeline: pipeline_pb2.Pipeline) -> Optional[ExplainPlan]:
 
 
 def render_explain_plan(plan: ExplainPlan, output: str) -> str:
-    """Render the plan as a table, or as JSON when output is "json"."""
+    """Render the plan as a table, or as JSON when output is "json".
+
+    The table ends with a line that says that the dry run saved nothing.
+    """
     if output == "json":
         return MessageToJson(
             plan,
@@ -334,4 +337,6 @@ def render_explain_plan(plan: ExplainPlan, output: str) -> str:
     ]
     if plan.warnings:
         lines += ["", "WARNINGS", *(printable(w) for w in plan.warnings)]
+    # The apiserver sets the plan only on a dry run.
+    lines += ["", "Dry run: nothing was saved."]
     return "\n".join(lines)

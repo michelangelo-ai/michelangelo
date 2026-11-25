@@ -205,7 +205,9 @@ class PipelineApplyRenderTest(TestCase):
             "\n"
             "LEVEL  TASKS\n"
             "0      root\n"
-            "1      left, right\n",
+            "1      left, right\n"
+            "\n"
+            "Dry run: nothing was saved.\n",
         )
         self.assertEqual(list(self.sent.update_options.dryRun), ["All"])
 
