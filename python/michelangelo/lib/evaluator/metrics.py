@@ -20,6 +20,8 @@ import numpy as np
 import pandas as pd
 import torch
 
+from michelangelo.lib.evaluator.embedding_metrics import check_embedding_column
+
 if TYPE_CHECKING:
     from michelangelo.workflow.schema.evaluator import ColumnMapping, EvaluatorConfig
 
@@ -151,7 +153,8 @@ def extract_data_for_collection(
         column_mapping: Which columns feed predictions, targets, and extras.
         pred_dtype: Dtype for the prediction tensor. ``None`` passes the
             prediction column through uncast, one value per row (see
-            :data:`TASK_TYPE_TO_DTYPES`).
+            :data:`TASK_TYPE_TO_DTYPES`), after failing on an embedding column
+            no metric could be valid on.
         target_dtype: Dtype for the target tensor. ``None`` marks an
             aggregation-style collection that does not read the target column.
 
@@ -163,6 +166,23 @@ def extract_data_for_collection(
 
     pred_array = df[column_mapping.prediction_col].to_numpy()
     if pred_dtype is None:
+        # Only embedding-type metrics leave the column uncast. Mismatched
+        # dimensions or NaN/Inf elements make every one of them invalid, so fail
+        # before any runs.
+        try:
+            null_rows = check_embedding_column(pred_array)
+        except ValueError as err:
+            raise ValueError(
+                f"column {column_mapping.prediction_col!r}: {err}"
+            ) from err
+        if null_rows:
+            _logger.warning(
+                "column %r: %d of %d rows have no embedding; "
+                "embedding metrics skip them",
+                column_mapping.prediction_col,
+                null_rows,
+                len(pred_array),
+            )
         data["predictions"] = pred_array
     else:
         if len(pred_array) > 0 and isinstance(pred_array[0], (list, np.ndarray)):

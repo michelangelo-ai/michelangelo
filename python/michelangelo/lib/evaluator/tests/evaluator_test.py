@@ -14,6 +14,7 @@ from torchmetrics import Metric
 
 from michelangelo.lib.evaluator.embedding_metrics import (
     EmbeddingCosineSimilarity,
+    EmbeddingEffectiveRank,
     EmbeddingNullRate,
     EmbeddingZeroRate,
 )
@@ -177,10 +178,10 @@ class EvaluateTest(TestCase):
         results = TorchMetricEvaluator(config).evaluate(_DF)
         self.assertAlmostEqual(results["mean_pred"], 0.525, places=5)
 
-    def test_custom_aggregation_metric_gets_predictions_only(self):
-        """A custom metric tagged ``_metric_type = "aggregation"`` gets no target.
+    def test_embedding_metric_gets_predictions_only(self):
+        """An embedding metric is updated without a target.
 
-        No targets tensor is extracted for it, so passing one would KeyError.
+        No targets are extracted for it, so passing one would KeyError.
         """
         config = EvaluatorConfig(
             metrics=[
@@ -239,6 +240,58 @@ class EvaluateTest(TestCase):
 
         self.assertAlmostEqual(results["emb_null_rate"], 0.25, places=5)
         self.assertAlmostEqual(results["emb_zero_rate"], 0.25, places=5)
+
+    def test_embedding_metrics_skip_null_rows_next_to_regular_metrics(self):
+        """Geometry metrics skip the null rows that the row rates count.
+
+        They run next to a regular metric on other columns, with no filter_expr.
+        """
+
+        def metric(name, cls, params=None):
+            return MetricConfig(
+                name=name,
+                metric=f"{cls.__module__}.{cls.__name__}",
+                params=params or {},
+                columns=ColumnMapping(prediction_col="embedding", target_col="user_id"),
+            )
+
+        config = EvaluatorConfig(
+            metrics=[
+                MetricConfig(
+                    name="auroc",
+                    metric="torchmetrics.classification.BinaryAUROC",
+                    params={},
+                    columns=ColumnMapping(prediction_col="score", target_col="label"),
+                ),
+                metric("emb_cosine_mean", EmbeddingCosineSimilarity),
+                metric("emb_cosine_p50", EmbeddingCosineSimilarity, {"stat": "p50"}),
+                metric("emb_rank", EmbeddingEffectiveRank, {"spectrum": "singular"}),
+                metric("emb_null_rate", EmbeddingNullRate),
+                metric("emb_zero_rate", EmbeddingZeroRate),
+            ]
+        )
+        data = pd.DataFrame(
+            {
+                "embedding": [[1.0, 0.0], None, [0.0, 1.0], [2.0, 0.0], None],
+                "user_id": ["a", "b", "c", "d", "e"],
+                "score": [0.9, 0.1, 0.8, 0.3, 0.2],
+                "label": [1, 0, 1, 0, 0],
+            }
+        )
+
+        results = TorchMetricEvaluator(config).evaluate(data)
+
+        self.assertAlmostEqual(results["auroc"], 1.0, places=5)
+        # Pairs of the 3 present rows: 0, 1, 0.
+        self.assertAlmostEqual(results["emb_cosine_mean"], 1 / 3, places=5)
+        self.assertAlmostEqual(results["emb_cosine_p50"], 0.0, places=5)
+        # Singular values of [[1, 0], [0, 1], [2, 0]]: sqrt(5) and 1.
+        p = torch.tensor([5**0.5, 1.0]) / (5**0.5 + 1)
+        self.assertAlmostEqual(
+            results["emb_rank"], torch.exp(-(p * p.log()).sum()).item(), places=4
+        )
+        self.assertAlmostEqual(results["emb_null_rate"], 0.4, places=5)
+        self.assertEqual(results["emb_zero_rate"], 0.0)
 
     def test_aggregation_subclass_outside_torchmetrics_ignores_target(self):
         """A MeanMetric subclass outside torchmetrics still gets predictions only.
