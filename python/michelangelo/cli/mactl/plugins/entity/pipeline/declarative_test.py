@@ -1,5 +1,6 @@
 """Unit tests for declarative pipeline packing and explain-plan rendering."""
 
+import datetime
 import json
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -8,6 +9,7 @@ import pytest
 import yaml
 from google.protobuf.json_format import ParseDict, ParseError
 
+from michelangelo.cli.mactl.crd import yaml_to_dict
 from michelangelo.cli.mactl.plugins.entity.pipeline.create import (
     convert_crd_metadata_pipeline,
 )
@@ -17,6 +19,7 @@ from michelangelo.cli.mactl.plugins.entity.pipeline.declarative import (
     explain_plan_from,
     is_declarative,
     normalize_workflow,
+    pack_declarative_manifest,
     render_explain_plan,
 )
 from michelangelo.gen.api.v2 import declarative_pb2, pipeline_pb2, pipeline_svc_pb2
@@ -535,6 +538,61 @@ def test_unknown_workflow_field_fails_at_parse(tmp_path):
 
     with pytest.raises(ParseError, match="taskFuncton"):
         _convert(yaml_dict, tmp_path)
+
+
+_EXAMPLES = Path(__file__).parents[6] / "examples" / "declarative" / "pipelines"
+_EXAMPLE_FILES = sorted(_EXAMPLES.rglob("*.yaml"))
+
+
+def test_example_dir_is_found():
+    """The example pipelines exist where the next test reads them."""
+    assert _EXAMPLE_FILES, f"no examples under {_EXAMPLES}"
+
+
+@pytest.mark.parametrize(
+    "path", _EXAMPLE_FILES, ids=lambda p: str(p.relative_to(_EXAMPLES))
+)
+def test_example_packs_through_the_converter(tmp_path, path):
+    """Each example packs; an invalid one fails only on the apiserver."""
+    manifest = _convert(yaml_to_dict(str(path)), tmp_path).pipeline.spec.manifest
+
+    wf = declarative_pb2.DeclarativeWorkflow()
+    assert manifest.content.Unpack(wf)
+    assert wf.tasks
+    if path.parent.name == "invalid":
+        assert path.read_text().startswith("# Expected: INVALID_ARGUMENT")
+
+
+@pytest.mark.parametrize(
+    ("manifest", "message"),
+    [
+        (
+            {"content": ["tasks"]},
+            "spec.manifest.content must be a mapping of DeclarativeWorkflow fields",
+        ),
+        (
+            {"content": {"@type": "type.googleapis.com/michelangelo.api.v2.Pipeline"}},
+            "spec.manifest.content.@type must be type.googleapis.com/"
+            "michelangelo.api.v2.DeclarativeWorkflow, got "
+            "type.googleapis.com/michelangelo.api.v2.Pipeline",
+        ),
+        (
+            {
+                "content": {
+                    "parameters": {"day": {"default": datetime.date(2024, 1, 1)}}
+                }
+            },
+            "content.parameters.day: set type; it cannot be inferred from a default"
+            " of YAML type date",
+        ),
+    ],
+)
+def test_pack_rejects_malformed_content(manifest, message):
+    """Malformed content fails locally with the path and the fix."""
+    with pytest.raises(DeclarativeManifestError) as err:
+        pack_declarative_manifest(manifest)
+
+    assert str(err.value) == message
 
 
 _PLAN = {

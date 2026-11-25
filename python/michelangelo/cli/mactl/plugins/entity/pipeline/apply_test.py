@@ -78,6 +78,8 @@ class PipelineApplyFuncImplTest(TestCase):
 
         mock_read_yaml.assert_called_once()
         mock_call.assert_called_once_with(update_info, mock_request)
+        self.assertEqual(mock_request.pipeline.metadata.resourceVersion, "42")
+        mock_request.update_options.dryRun.append.assert_not_called()
 
     @patch("michelangelo.cli.mactl.plugins.entity.pipeline.apply.crd_method_call")
     @patch(
