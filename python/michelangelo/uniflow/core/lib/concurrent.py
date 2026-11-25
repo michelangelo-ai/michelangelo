@@ -1,12 +1,17 @@
+"""Starlark-callable helpers for running callables concurrently from a task."""
+
 import atexit
+from abc import ABC, abstractmethod
 from concurrent.futures import ProcessPoolExecutor
+from typing import Any
 
 from michelangelo.uniflow.core import star_plugin
-from abc import ABC, abstractmethod
 
 # TODO: andrii: revise concurrent execution for local runs.
-# Currently, ProcessPoolExecutor fails to serialize TaskFunction resulting in the following error:
-#   _pickle.PicklingError: Can't pickle <function task_1 at 0x7bbf8db623a0>: it's not the same object as __main__.task_1
+# Currently, ProcessPoolExecutor fails to serialize TaskFunction resulting in
+# the following error:
+#   _pickle.PicklingError: Can't pickle <function task_1 at 0x7bbf8db623a0>:
+#   it's not the same object as __main__.task_1
 
 _USE_PROCESS_POOL = False
 
@@ -14,11 +19,15 @@ _pool = None
 
 
 class Future(ABC):
+    """A pending or resolved result of a concurrently-run callable."""
+
     @abstractmethod
-    def result(self):
+    def result(self) -> Any:
+        """Return the callable's result, blocking until it is available."""
         raise NotImplementedError
 
     def done(self) -> bool:
+        """Return whether the callable has finished running."""
         raise NotImplementedError
 
 
@@ -45,8 +54,11 @@ class _ResolvedFuture(Future):
 
 
 class Callable(ABC):
+    """A function and its arguments, bundled to be invoked later."""
+
     @abstractmethod
     def __call__(self):
+        """Invoke the wrapped function with its bundled arguments."""
         raise NotImplementedError
 
 
@@ -60,16 +72,21 @@ class _Callable(Callable):
 
 
 class BatchFuture(ABC):
+    """The pending or resolved results of a batch of concurrently-run callables."""
+
     @abstractmethod
     def is_ready(self) -> bool:
+        """Return whether every callable in the batch has finished running."""
         raise NotImplementedError
 
     @abstractmethod
     def get(self) -> list[object]:
+        """Return every callable's result, blocking until all are available."""
         raise NotImplementedError
 
     @abstractmethod
     def get_futures(self) -> list[Future]:
+        """Return a Future for each callable in the batch."""
         raise NotImplementedError
 
 
@@ -89,8 +106,7 @@ class _BatchFuture(BatchFuture):
 
 @star_plugin("concurrent.run")
 def run(fn, *args, **kwargs) -> Future:
-    """
-    Execute a function concurrently and return a Future.
+    """Execute a function concurrently and return a Future.
 
     Args:
         fn: The function to execute
@@ -110,8 +126,7 @@ def run(fn, *args, **kwargs) -> Future:
 
 @star_plugin("concurrent.new_callable")
 def new_callable(fn, *args):
-    """
-    Creates a callable object that wraps a function and its arguments.
+    """Creates a callable object that wraps a function and its arguments.
 
     Args:
         fn: The function to wrap
@@ -125,8 +140,7 @@ def new_callable(fn, *args):
 
 @star_plugin("concurrent.batch_run")
 def batch_run(callables, max_concurrency=None) -> BatchFuture:
-    """
-    Execute multiple callables in parallel with optional concurrency limit.
+    """Execute multiple callables in parallel with optional concurrency limit.
 
     Args:
         callables: List of callable objects created by new_callable
@@ -148,8 +162,7 @@ def batch_run(callables, max_concurrency=None) -> BatchFuture:
 
 
 def _process_pool_batch_run(callables, max_concurrency=None) -> BatchFuture:
-    """
-    Execute callables using ProcessPoolExecutor.
+    """Execute callables using ProcessPoolExecutor.
 
     Args:
         callables: List of callable objects

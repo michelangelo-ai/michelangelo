@@ -76,7 +76,7 @@ class Context:
     _target: str
     environ: dict = field(default_factory=dict)
 
-    def is_local_run(self):
+    def is_local_run(self) -> bool:
         """Check if the context is configured for local execution.
 
         Returns:
@@ -84,7 +84,7 @@ class Context:
         """
         return self._target == "local-run"
 
-    def run(self, fn, *args, **kwargs):
+    def run(self, fn, *args, **kwargs) -> None:
         """Executes the workflow function in the specified context.
 
         Args:
