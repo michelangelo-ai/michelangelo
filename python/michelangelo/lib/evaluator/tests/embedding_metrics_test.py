@@ -3,6 +3,7 @@
 import math
 import unittest
 
+import numpy as np
 import torch
 
 from michelangelo.lib.evaluator.embedding_metrics import (
@@ -42,10 +43,32 @@ class EmbeddingCosineSimilarityTest(unittest.TestCase):
             _score(EmbeddingCosineSimilarity(stat="std"), x), expected, places=5
         )
 
+    def test_percentiles_over_distinct_pairs(self) -> None:
+        """Percentiles read the sorted distinct-pair similarities."""
+        # Pairs: (a,b)=1, (a,c)=0, (b,c)=0 -> sorted [0, 0, 1].
+        x = torch.tensor([[1.0, 0.0], [1.0, 0.0], [0.0, 1.0]])
+        for stat, expected in (("p0", 0.0), ("p50", 0.0), ("p75", 0.5), ("p100", 1.0)):
+            self.assertAlmostEqual(
+                _score(EmbeddingCosineSimilarity(stat=stat), x), expected, places=5
+            )
+
+    def test_percentile_matches_numpy_linear_interpolation(self) -> None:
+        """Percentiles interpolate linearly, like numpy."""
+        x = torch.randn(40, 8, generator=torch.Generator().manual_seed(0))
+        normed = torch.nn.functional.normalize(x, dim=1)
+        upper = torch.triu(torch.ones(40, 40, dtype=torch.bool), diagonal=1)
+        pairs = (normed @ normed.T)[upper]
+        for stat, q in (("p5", 5.0), ("p25", 25.0), ("p99.5", 99.5)):
+            expected = float(np.percentile(pairs.numpy(), q))
+            self.assertAlmostEqual(
+                _score(EmbeddingCosineSimilarity(stat=stat), x), expected, places=5
+            )
+
     def test_invalid_stat_raises(self) -> None:
         """Invalid stat raises."""
-        with self.assertRaises(ValueError):
-            EmbeddingCosineSimilarity(stat="median")
+        for stat in ("median", "p101", "q5", "p", "5", 5):
+            with self.subTest(stat=stat), self.assertRaises(ValueError):
+                EmbeddingCosineSimilarity(stat=stat)
 
 
 class EmbeddingNormTest(unittest.TestCase):
@@ -61,6 +84,23 @@ class EmbeddingNormTest(unittest.TestCase):
             places=5,
         )
 
+    def test_percentile_of_norms(self) -> None:
+        """Percentiles of the row norms."""
+        x = torch.tensor([[3.0, 4.0], [1.0, 0.0]])  # norms 5 and 1
+        self.assertAlmostEqual(_score(EmbeddingNorm(stat="p50"), x), 3.0, places=5)
+        self.assertAlmostEqual(_score(EmbeddingNorm(stat="p100"), x), 5.0, places=5)
+
+    def test_percentile_propagates_nan(self) -> None:
+        """A nan norm makes every percentile nan, like mean and std."""
+        x = torch.tensor([[3.0, 4.0], [1.0, 0.0], [float("nan"), 0.0]])
+        self.assertTrue(math.isnan(_score(EmbeddingNorm(stat="p5"), x)))
+
+    def test_percentile_preserves_inf(self) -> None:
+        """Infinite norms stay infinite instead of turning into nan."""
+        x = torch.tensor([[float("inf"), 0.0], [float("inf"), 0.0]])
+        self.assertEqual(_score(EmbeddingNorm(stat="p100"), x), float("inf"))
+        self.assertEqual(_score(EmbeddingNorm(stat="p50"), x), float("inf"))
+
 
 class EmbeddingEffectiveRankTest(unittest.TestCase):
     """EmbeddingEffectiveRank."""
@@ -74,6 +114,36 @@ class EmbeddingEffectiveRankTest(unittest.TestCase):
         """Isotropic data is close to dimension."""
         x = torch.randn(4000, 8, generator=torch.Generator().manual_seed(0))
         self.assertGreater(_score(EmbeddingEffectiveRank(), x), 7.5)
+
+    def test_singular_spectrum_is_not_centered(self) -> None:
+        """The singular spectrum keeps the dimension centering would remove."""
+        # The identity's rows span all 4 dimensions, but centering removes one.
+        singular = EmbeddingEffectiveRank(spectrum="singular")
+        self.assertAlmostEqual(_score(singular, torch.eye(4)), 4.0, places=4)
+        self.assertAlmostEqual(
+            _score(EmbeddingEffectiveRank(), torch.eye(4)), 3.0, places=4
+        )
+
+    def test_singular_spectrum_weighs_singular_values_unsquared(self) -> None:
+        """The singular spectrum normalizes s, not s**2."""
+        # Singular values [10, 1, 1, 1]: p = [10, 1, 1, 1] / 13 (about 2.21), where
+        # squaring them first would give [100, 1, 1, 1] / 103 (about 1.18).
+        p = torch.tensor([10.0, 1.0, 1.0, 1.0]) / 13
+        expected = torch.exp(-(p * p.log()).sum()).item()
+        x = torch.diag(torch.tensor([10.0, 1.0, 1.0, 1.0]))
+        self.assertAlmostEqual(
+            _score(EmbeddingEffectiveRank(spectrum="singular"), x), expected, places=4
+        )
+
+    def test_relative_divides_by_dimension(self) -> None:
+        """Relative rank divides by D."""
+        metric = EmbeddingEffectiveRank(spectrum="singular", relative=True)
+        self.assertAlmostEqual(_score(metric, torch.eye(4)), 1.0, places=4)
+
+    def test_invalid_spectrum_raises(self) -> None:
+        """Invalid spectrum raises."""
+        with self.assertRaises(ValueError):
+            EmbeddingEffectiveRank(spectrum="eigen")
 
 
 class EmbeddingSilhouetteTest(unittest.TestCase):
