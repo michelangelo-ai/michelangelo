@@ -6,6 +6,7 @@ from io import StringIO
 from unittest import TestCase
 from unittest.mock import MagicMock, Mock, patch
 
+from google.protobuf import descriptor_pb2, descriptor_pool, message_factory
 from google.protobuf.json_format import ParseDict, ParseError
 from grpc import RpcError, StatusCode
 
@@ -152,6 +153,27 @@ def _update_response(annotations):
     return response
 
 
+def _reflected_class(message_class):
+    """Return message_class built in a separate pool, as server reflection does."""
+    pool = descriptor_pool.DescriptorPool()
+    added = set()
+
+    def add(file_descriptor):
+        if file_descriptor.name in added:
+            return
+        for dependency in file_descriptor.dependencies:
+            add(dependency)
+        file_proto = descriptor_pb2.FileDescriptorProto()
+        file_descriptor.CopyToProto(file_proto)
+        pool.Add(file_proto)
+        added.add(file_descriptor.name)
+
+    add(message_class.DESCRIPTOR.file)
+    return message_factory.GetMessageClass(
+        pool.FindMessageTypeByName(message_class.DESCRIPTOR.full_name)
+    )
+
+
 class PipelineApplyRenderTest(TestCase):
     """Tests for response rendering and the error boundary of pipeline apply."""
 
@@ -261,6 +283,32 @@ class PipelineApplyRenderTest(TestCase):
             out,
         )
         self.assertNotIn("value:", out)
+
+    def test_reflected_declarative_response_prints_the_workflow(self):
+        """The CLI response class comes from a reflection pool, not pipeline_pb2."""
+        response = _reflected_class(UpdatePipelineResponse)()
+        self.assertNotIsInstance(response, UpdatePipelineResponse)
+        response.pipeline.spec.manifest.type = (
+            PipelineManifest.PIPELINE_MANIFEST_TYPE_DECLARATIVE
+        )
+        response.pipeline.spec.manifest.content.Pack(
+            DeclarativeWorkflow(schema_version="v1alpha1")
+        )
+
+        out = self._run(response, dry_run=False)
+        json_out = self._run(response, output="json", dry_run=False)
+
+        self.assertIn(
+            "[type.googleapis.com/michelangelo.api.v2.DeclarativeWorkflow] {", out
+        )
+        self.assertNotIn("value:", out)
+        self.assertEqual(
+            json.loads(json_out)["pipeline"]["spec"]["manifest"]["content"],
+            {
+                "@type": "type.googleapis.com/michelangelo.api.v2.DeclarativeWorkflow",
+                "schema_version": "v1alpha1",
+            },
+        )
 
     def test_json_output_applies_to_every_response(self):
         """-o json prints a response without a plan as JSON."""

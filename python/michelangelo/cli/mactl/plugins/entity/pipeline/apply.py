@@ -27,7 +27,7 @@ from michelangelo.cli.mactl.plugins.entity.pipeline.declarative import (
     render_explain_plan,
 )
 from michelangelo.gen.api.v2.declarative_pb2 import ExplainPlan
-from michelangelo.gen.api.v2.pipeline_pb2 import Pipeline, PipelineManifest
+from michelangelo.gen.api.v2.pipeline_pb2 import PipelineManifest
 
 _LOG = getLogger(__name__)
 
@@ -100,16 +100,21 @@ def _print_json(response: Message) -> None:
 
 
 def _print_text(response: Message) -> None:
-    pipeline = getattr(response, "pipeline", None)
-    if (
-        isinstance(pipeline, Pipeline)
-        and pipeline.spec.manifest.type
-        == PipelineManifest.PIPELINE_MANIFEST_TYPE_DECLARATIVE
-    ):
+    if _is_declarative_response(response):
         # The default pool expands the Any, so the stored workflow is readable.
         print(MessageToString(response, descriptor_pool=descriptor_pool.Default()))
     else:
         print(response)
+
+
+def _is_declarative_response(response: Message) -> bool:
+    # The CLI builds the response class from server reflection, in a separate
+    # descriptor pool. Thus compare the enum value, not the class.
+    try:
+        manifest_type = response.pipeline.spec.manifest.type
+    except AttributeError:
+        return False
+    return manifest_type == PipelineManifest.PIPELINE_MANIFEST_TYPE_DECLARATIVE
 
 
 def _dry_run_plan(response: Message, arguments: dict) -> Optional[ExplainPlan]:
