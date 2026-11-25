@@ -490,6 +490,41 @@ func TestContentLimit(t *testing.T) {
 	})
 }
 
+// The hook clips caller text in an error, so a long value does not give a
+// long error or log line.
+func TestErrorsClipCallerText(t *testing.T) {
+	d := loadDeclarative(t, true, "core-v1")
+	long := strings.Repeat("x", 200)
+	clipped := strings.Repeat("x", 128) + "..."
+	tests := []struct {
+		name    string
+		reqPin  *v2.InterpreterPin
+		wantMsg string
+	}{
+		{"version", &v2.InterpreterPin{Version: long},
+			`interpreter_pin.version "` + clipped + `" is not a known release; use one of [core-v1, core-v2]`},
+		{"artifact", &v2.InterpreterPin{Artifact: long},
+			`interpreter_pin.artifact "` + clipped + `" does not match the pin for interpreter core-v1; leave it unset`},
+		{"digest", &v2.InterpreterPin{Digest: long},
+			`interpreter_pin.digest "` + clipped + `" does not match the pin for interpreter core-v1; leave it unset`},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			hook, h := newHook(t, d)
+			p := declarativePipeline(t, workflow(nil))
+			p.Spec.Manifest.InterpreterPin = tc.reqPin
+			requireStatus(t, hook.BeforeCreate(context.Background(), &v2.CreatePipelineRequest{Pipeline: p}),
+				codes.InvalidArgument, tc.wantMsg)
+
+			expectGet(h, storedPipeline(t, pinOf(release(t, d, "core-v1"))), nil)
+			p = declarativePipeline(t, workflow(nil))
+			p.Spec.Manifest.InterpreterPin = tc.reqPin
+			requireStatus(t, hook.BeforeUpdate(context.Background(), &v2.UpdatePipelineRequest{Pipeline: p}),
+				codes.InvalidArgument, tc.wantMsg)
+		})
+	}
+}
+
 // expectGet makes the mock return stored, or err when it is set.
 func expectGet(h *apimocks.MockHandler, stored *v2.Pipeline, err error) {
 	h.EXPECT().Get(gomock.Any(), ns, name, gomock.Any(), gomock.Any()).DoAndReturn(

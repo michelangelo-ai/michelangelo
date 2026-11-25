@@ -157,7 +157,7 @@ func (a apiHook) target(stored *v2.Pipeline, reqPin *v2.InterpreterPin) (*declar
 
 func (a apiHook) unknownVersion(v string) error {
 	return status.Errorf(codes.InvalidArgument,
-		"interpreter_pin.version %q is not a known release; use one of %s", v, a.d.versionList())
+		"interpreter_pin.version %q is not a known release; use one of %s", declarative.Clip(v), a.d.versionList())
 }
 
 // checkPinFields accepts a request artifact or digest that is empty, equals
@@ -165,11 +165,11 @@ func (a apiHook) unknownVersion(v string) error {
 func checkPinFields(reqPin, pin, storedPin *v2.InterpreterPin) error {
 	if s := reqPin.GetArtifact(); s != "" && s != pin.Artifact && s != storedPin.GetArtifact() {
 		return status.Errorf(codes.InvalidArgument,
-			"interpreter_pin.artifact %q does not match the pin for interpreter %s; leave it unset", s, pin.Version)
+			"interpreter_pin.artifact %q does not match the pin for interpreter %s; leave it unset", declarative.Clip(s), pin.Version)
 	}
 	if s := reqPin.GetDigest(); s != "" && s != pin.Digest && s != storedPin.GetDigest() {
 		return status.Errorf(codes.InvalidArgument,
-			"interpreter_pin.digest %q does not match the pin for interpreter %s; leave it unset", s, pin.Version)
+			"interpreter_pin.digest %q does not match the pin for interpreter %s; leave it unset", declarative.Clip(s), pin.Version)
 	}
 	return nil
 }
