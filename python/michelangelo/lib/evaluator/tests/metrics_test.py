@@ -184,6 +184,17 @@ class ExtractDataForCollectionTest(TestCase):
         )
         self.assertEqual(tuple(data["predictions"].shape), (2, 2))
 
+    def test_extract_without_pred_dtype_passes_column_through(self):
+        """pred_dtype=None hands over the raw column, missing rows included."""
+        df = pd.DataFrame({"embedding": [[1.0, 2.0], None], "user_id": ["a", "b"]})
+        column_mapping = ColumnMapping(prediction_col="embedding", target_col="user_id")
+        data = extract_data_for_collection(df, column_mapping, None, None)
+
+        self.assertIsInstance(data["predictions"], np.ndarray)
+        self.assertEqual(data["predictions"][0], [1.0, 2.0])
+        self.assertIsNone(data["predictions"][1])
+        self.assertNotIn("targets", data)
+
 
 class InferTaskTypeTest(TestCase):
     """infer_task_type_from_path reads the metric's module hierarchy."""
