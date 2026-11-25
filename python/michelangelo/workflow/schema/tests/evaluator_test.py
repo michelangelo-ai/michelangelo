@@ -8,10 +8,12 @@ from michelangelo.workflow.schema.evaluator import (
     ColumnMapping,
     CustomEvalConfig,
     DataAnalyticsConfig,
+    EmbeddingProjection,
     EvaluationConfig,
     EvaluatorConfig,
     Metric,
     MetricConfig,
+    ProjectionMethod,
     SanityCheck,
     SanityCheckOperator,
     Step,
@@ -323,3 +325,72 @@ class DataAnalyticsConfigTest(TestCase):
         self.assertEqual(
             DataAnalyticsConfig(stats_sampling_ratio=0.1).stats_sampling_ratio, 0.1
         )
+
+
+class EmbeddingProjectionTest(TestCase):
+    """Tests for EmbeddingProjection."""
+
+    @staticmethod
+    def _projection(**overrides) -> EmbeddingProjection:
+        """A valid projection, with ``overrides`` applied."""
+        params = {
+            "name": "users",
+            "embedding_col": "user_embedding",
+            "color_cols": ["country"],
+        }
+        return EmbeddingProjection(**{**params, **overrides})
+
+    def test_defaults(self):
+        """It defaults to UMAP over up to 20k rows."""
+        projection = self._projection()
+        self.assertIs(projection.method, ProjectionMethod.UMAP)
+        self.assertEqual(projection.max_samples, 20_000)
+        self.assertEqual(projection.max_categories, 10)
+        self.assertEqual(projection.params, {})
+
+    def test_method_string_is_coerced(self):
+        """A method given as a string becomes the enum."""
+        self.assertIs(self._projection(method="pca").method, ProjectionMethod.PCA)
+
+    def test_unknown_method_raises(self):
+        """It names the valid methods."""
+        with self.assertRaises(ConfigurationError) as ctx:
+            self._projection(method="tsne")
+        self.assertIn("'umap'", str(ctx.exception))
+
+    def test_empty_color_cols_raises(self):
+        """A projection with nothing to color by is rejected."""
+        with self.assertRaises(ConfigurationError):
+            self._projection(color_cols=[])
+
+    def test_small_max_samples_raises(self):
+        """Fewer than 100 rows make a meaningless picture."""
+        with self.assertRaises(ConfigurationError):
+            self._projection(max_samples=99)
+
+    def test_zero_max_categories_raises(self):
+        """At least one category must be kept."""
+        with self.assertRaises(ConfigurationError):
+            self._projection(max_categories=0)
+
+    def test_embedding_col_cannot_be_reused(self):
+        """The embedding column cannot color, label or identify points."""
+        for override in (
+            {"color_cols": ["user_embedding"]},
+            {"hover_cols": ["user_embedding"]},
+            {"id_col": "user_embedding"},
+        ):
+            with self.subTest(override=override):
+                with self.assertRaises(ConfigurationError) as ctx:
+                    self._projection(**override)
+                self.assertIn("cannot also be in", str(ctx.exception))
+
+    def test_evaluator_config_defaults_to_no_projections(self):
+        """Existing configs carry no projections."""
+        self.assertEqual(EvaluatorConfig().embedding_projections, [])
+
+    def test_evaluator_config_holds_projections(self):
+        """EvaluatorConfig keeps the projections it is given."""
+        projection = self._projection()
+        config = EvaluatorConfig(embedding_projections=[projection])
+        self.assertEqual(config.embedding_projections, [projection])

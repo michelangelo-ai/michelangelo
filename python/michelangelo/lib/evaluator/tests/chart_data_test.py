@@ -10,6 +10,7 @@ from pandas.errors import UndefinedVariableError
 
 from michelangelo.lib.evaluator.chart_data import (
     apply_filter_expr,
+    chart_columns,
     chart_segment_labels,
     compute_chart_data_for_group,
     filter_chart_df_by_segments,
@@ -410,3 +411,43 @@ class FilterRayToSurvivingSegmentsTest(TestCase):
             ),
             dataset,
         )
+
+
+class ChartColumnsTest(TestCase):
+    """chart_columns names the columns the binary and regression charts read."""
+
+    def test_binary_and_regression_columns(self):
+        """Prediction and target columns of both chart families are kept."""
+        config = EvaluatorConfig(
+            metrics=[
+                *_binary_config().metrics,
+                MetricConfig(
+                    name="mse",
+                    metric="torchmetrics.regression.MeanSquaredError",
+                    columns=ColumnMapping(prediction_col="reg_pred", target_col="reg"),
+                ),
+            ]
+        )
+        columns = chart_columns(config, ["pred", "label", "reg_pred", "reg", "emb"])
+        self.assertEqual(columns, {"pred", "label", "reg_pred", "reg"})
+
+    def test_no_chart_metric_reads_no_columns(self):
+        """A config with only non-chart metrics reads nothing."""
+        config = EvaluatorConfig(
+            metrics=[
+                MetricConfig(
+                    name="norm",
+                    metric="michelangelo.lib.evaluator.embedding_metrics.EmbeddingNorm",
+                    columns=ColumnMapping(prediction_col="emb", target_col="item"),
+                )
+            ]
+        )
+        self.assertEqual(chart_columns(config, ["emb", "item"]), set())
+
+    def test_adds_the_columns_a_filter_expr_mentions(self):
+        """A column named as a whole word in a filter_expr is kept too."""
+        config = _binary_config("label_mask == 1 and `task id` > 0")
+        columns = chart_columns(
+            config, ["pred", "label", "label_mask", "task id", "emb"]
+        )
+        self.assertEqual(columns, {"pred", "label", "label_mask", "task id"})

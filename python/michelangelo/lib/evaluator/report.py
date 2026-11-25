@@ -22,6 +22,8 @@ Two DataFrame shapes are consumed:
 
 from __future__ import annotations
 
+from base64 import b64encode
+from io import BytesIO
 from typing import TYPE_CHECKING
 
 from michelangelo.gen.api.v2.chart_pb2 import (
@@ -33,6 +35,7 @@ from michelangelo.gen.api.v2.chart_pb2 import (
     ConfusionMatrix,
     DataPointSource,
     Filter,
+    Image,
     LineChart,
     Matrix,
     MatrixRow,
@@ -45,10 +48,12 @@ from michelangelo.lib.evaluator.utils import sample_curve_indices
 
 if TYPE_CHECKING:
     import pandas as pd
+    from matplotlib.figure import Figure
 
 __all__ = [
     "SOURCE_PIPELINE_TYPE_LABEL_NAME",
     "create_absolute_errors_chart",
+    "create_chart_with_image",
     "create_confusion_matrix_chart",
     "create_default_evaluation_report",
     "create_errors_chart",
@@ -57,6 +62,7 @@ __all__ = [
     "create_roc_chart",
     "create_segment_filter_chart",
     "create_threshold_filter_chart",
+    "matplotlib_fig_to_html",
 ]
 
 SOURCE_PIPELINE_TYPE_LABEL_NAME = "michelangelo/SourcePipelineType"
@@ -104,6 +110,44 @@ def create_metrics_table(
         metrics_table.rows.append(metric_row)
     metrics_chart.table.CopyFrom(metrics_table)
     return metrics_chart
+
+
+def matplotlib_fig_to_html(fig: Figure, fmt: str = "svg") -> str:
+    """Encode a matplotlib figure as a base64 ``data:`` URI for an HTML ``<img>``.
+
+    Args:
+        fig: The figure to render.
+        fmt: Image format passed to ``Figure.savefig``. Use ``"png"`` for figures
+            with many marks, where an SVG would hold one element per mark.
+
+    Returns:
+        A ``data:image/<mime>;base64, ...`` string.
+    """
+    buffer = BytesIO()
+    fig.savefig(buffer, format=fmt, bbox_inches="tight")
+    encoded = b64encode(buffer.getvalue()).decode("utf-8")
+    mime = "svg+xml" if fmt == "svg" else fmt
+    return f"data:image/{mime};base64, {encoded}"
+
+
+def create_chart_with_image(img_src: str, description: str, title: str) -> Chart:
+    """Create an image chart.
+
+    Args:
+        img_src: Image source, typically the ``data:`` URI from
+            :func:`matplotlib_fig_to_html`.
+        description: Alt text shown with the image.
+        title: Chart title; also used as the section ID.
+
+    Returns:
+        A ``Chart`` of type ``CHART_TYPE_IMAGE``.
+    """
+    chart = Chart()
+    chart.title = title
+    chart.chart_type = ChartType.CHART_TYPE_IMAGE
+    chart.section_id = title
+    chart.image.CopyFrom(Image(img_src=img_src, description=description))
+    return chart
 
 
 def create_default_evaluation_report(

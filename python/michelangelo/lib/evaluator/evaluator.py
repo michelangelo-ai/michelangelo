@@ -38,6 +38,22 @@ _logger = logging.getLogger(__name__)
 
 _AGGREGATION_METRICS = (MeanMetric, SumMetric, MinMetric, MaxMetric)
 
+# Result keys, next to each embedding metric's value, for the rows it scored and
+# their dimension. Not metrics: the evaluator task moves them into their own
+# table.
+SCORED_ROWS_PREFIX = "_scored_rows/"
+SCORED_DIM_PREFIX = "_scored_dim/"
+
+
+def _scoring_details(collection: Any) -> dict[str, Any]:
+    """Rows each embedding metric of ``collection`` scored, and their dimension."""
+    details: dict[str, Any] = {}
+    for name, metric in collection.items():
+        if getattr(metric, "scored_rows", None) is not None:
+            details[SCORED_ROWS_PREFIX + name] = metric.scored_rows
+            details[SCORED_DIM_PREFIX + name] = metric.scored_dim
+    return details
+
 
 def _is_aggregation_only(collection: Any, target_dtype: torch.dtype | None) -> bool:
     """Report whether every metric in a collection consumes predictions only.
@@ -227,6 +243,7 @@ class TorchMetricEvaluator:
             del data  # Free the tensors now that the update has consumed them.
 
             results.update(_scalarize(collection.compute()))
+            results.update(_scoring_details(collection))
             # Free internal state; retrieval metrics hold every sample.
             collection.reset()
 
@@ -251,6 +268,7 @@ class TorchMetricEvaluator:
                         "metric=%s state=%s", name, metric_state_for_logging(metric)
                     )
             results.update(_scalarize(collection.compute()))
+            results.update(_scoring_details(collection))
 
         return results
 

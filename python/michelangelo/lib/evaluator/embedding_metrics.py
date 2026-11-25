@@ -387,10 +387,15 @@ class _EmbeddingMetric(Metric):
         super().__init__(**kwargs)
         self.max_samples: Optional[int] = None
         self._dim: Optional[int] = None
+        self._exact_rows = 0
+        # Rows the last compute() scored and their dimension, for the report.
+        self.scored_rows: Optional[int] = None
+        self.scored_dim: Optional[int] = None
 
     def reset(self) -> None:
         super().reset()
         self._dim = None
+        self._exact_rows = 0
 
     def update(self, preds: Any, ids: Any = None) -> None:
         """Add a batch of rows; ``ids``, one entity ID per row, place them."""
@@ -416,13 +421,16 @@ class _EmbeddingMetric(Metric):
             x = _to_matrix(chunk)
             self._check_dim(x.shape[1])
             self._consume(x)
+            self._exact_rows += x.shape[0]
 
     def compute(self) -> torch.Tensor:
         if self.max_samples is None:
+            self.scored_rows, self.scored_dim = self._exact_rows, self._dim
             return self._finish()
         # A distributed sync hands the list states over already concatenated.
         keys = _cat(self.keys)
         if keys.numel() == 0:
+            self.scored_rows, self.scored_dim = 0, None
             return torch.tensor(float("nan"))
         kept, idx = torch.topk(
             keys, min(self.max_samples, keys.numel()), largest=False, sorted=True
@@ -436,6 +444,7 @@ class _EmbeddingMetric(Metric):
                 "unique ID column, or leave it unset to sample at random"
             )
         sample = _cat(self.samples).view(keys.numel(), -1)[idx]
+        self.scored_rows, self.scored_dim = len(sample), sample.shape[1]
         _logger.info(
             "%s: scoring a sample of %d of %d rows",
             type(self).__name__,

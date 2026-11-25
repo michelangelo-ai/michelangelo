@@ -881,5 +881,33 @@ class CheckEmbeddingColumnTest(unittest.TestCase):
                 embedding.check_embedding_column(column)
 
 
+class ScoredRowsTest(unittest.TestCase):
+    """ScoredRows."""
+
+    def test_exact_metric_scores_every_non_null_row(self) -> None:
+        """Exact metric scores every non null row."""
+        metric = EmbeddingNorm()
+        metric.update(_rows([1.0, 2.0, 3.0], None, [4.0, 5.0, 6.0]))
+        metric.update(_rows([7.0, 8.0, 9.0]))
+        metric.compute()
+        self.assertEqual((metric.scored_rows, metric.scored_dim), (3, 3))
+
+    def test_sampled_metric_scores_at_most_max_samples(self) -> None:
+        """Sampled metric scores at most max samples."""
+        for n, expected in ((50, 10), (6, 6)):
+            with self.subTest(rows=n):
+                metric = EmbeddingUniformity(max_samples=10)
+                metric.update(torch.randn(n, 4))
+                metric.compute()
+                self.assertEqual((metric.scored_rows, metric.scored_dim), (expected, 4))
+
+    def test_no_rows_scores_none(self) -> None:
+        """No rows scores none."""
+        metric = EmbeddingUniformity(max_samples=10)
+        metric.update(_rows(None))
+        metric.compute()
+        self.assertEqual((metric.scored_rows, metric.scored_dim), (0, None))
+
+
 if __name__ == "__main__":
     unittest.main()

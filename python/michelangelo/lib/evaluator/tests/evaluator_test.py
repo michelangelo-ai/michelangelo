@@ -209,6 +209,37 @@ class EvaluateTest(TestCase):
 
         self.assertAlmostEqual(results["emb_cosine_mean"], 1.0, places=5)
 
+    def test_embedding_metrics_report_rows_scored_and_dim(self):
+        """Each embedding metric's scored rows and dimension get their own keys."""
+        config = EvaluatorConfig(
+            metrics=[
+                MetricConfig(
+                    name=name,
+                    metric=f"{EmbeddingCosineSimilarity.__module__}.{EmbeddingCosineSimilarity.__name__}",
+                    params=params,
+                    columns=ColumnMapping(
+                        prediction_col="embedding", target_col="user_id"
+                    ),
+                )
+                for name, params in (
+                    ("emb_cosine_mean", {"stat": "mean"}),
+                    ("emb_cosine_p50", {"stat": "p50", "max_samples": 20}),
+                )
+            ]
+        )
+        rng = np.random.default_rng(0)
+        embeddings = [*rng.normal(size=(50, 4)), None]
+        data = pd.DataFrame(
+            {"embedding": embeddings, "user_id": [f"u{i}" for i in range(51)]}
+        )
+
+        results = TorchMetricEvaluator(config).evaluate(data)
+
+        self.assertEqual(results["_scored_rows/emb_cosine_mean"], 50)
+        self.assertEqual(results["_scored_rows/emb_cosine_p50"], 20)
+        self.assertEqual(results["_scored_dim/emb_cosine_mean"], 4)
+        self.assertEqual(results["_scored_dim/emb_cosine_p50"], 4)
+
     def test_sampled_embedding_metric_samples_by_index_col(self):
         """The sample is drawn by the IDs in index_col.
 

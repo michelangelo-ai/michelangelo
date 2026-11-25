@@ -11,8 +11,12 @@ ray = pytest.importorskip("ray")
 pytest.importorskip("torch")
 pytest.importorskip("torchmetrics")
 
+import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
+from michelangelo.lib.evaluator.embedding_metrics import (  # noqa: E402
+    EmbeddingCosineSimilarity,
+)
 from michelangelo.lib.evaluator.report_generator import (  # noqa: E402
     build_combined_report,
 )
@@ -21,8 +25,10 @@ from michelangelo.lib.exceptions import (  # noqa: E402
 )
 from michelangelo.workflow.schema.evaluator import (  # noqa: E402
     ColumnMapping,
+    EmbeddingProjection,
     EvaluatorConfig,
     MetricConfig,
+    ProjectionMethod,
     SanityCheck,
     SanityCheckOperator,
     Step,
@@ -481,3 +487,152 @@ class ReportsBeforeGatingTest(TestCase):
         ):
             evaluate(config, {"test": _FakeDataset(_frame())})
         spy.assert_called_once()
+
+
+class EmbeddingReportTest(TestCase):
+    """Embedding projections, the metric settings table and the chart-data skip."""
+
+    @classmethod
+    def setUpClass(cls):
+        """Start a small local Ray instance."""
+        _init_ray()
+
+    def setUp(self):
+        """Stub out summary persistence, keeping what would have been saved."""
+        patcher = patch(f"{_TASK}._save_summary")
+        self.save_summary = patcher.start()
+        self.addCleanup(patcher.stop)
+        self.saved: list[pd.DataFrame] = []
+        self.save_summary.side_effect = lambda df: self.saved.append(df) or MagicMock()
+
+    @staticmethod
+    def _mean_metric() -> MetricConfig:
+        """A metric with no chart and no embedding."""
+        return MetricConfig(
+            name="mean_score",
+            metric="torchmetrics.aggregation.MeanMetric",
+            columns=ColumnMapping(prediction_col="scores", target_col="scores"),
+        )
+
+    @staticmethod
+    def _cosine_metric() -> MetricConfig:
+        """An embedding metric, which reports the rows it scored."""
+        return MetricConfig(
+            name="emb_cosine_mean",
+            metric=(
+                f"{EmbeddingCosineSimilarity.__module__}."
+                f"{EmbeddingCosineSimilarity.__name__}"
+            ),
+            params={"stat": "mean"},
+            columns=ColumnMapping(prediction_col="embedding", target_col="user_id"),
+        )
+
+    @staticmethod
+    def _projection() -> EmbeddingProjection:
+        """A PCA projection over the test frame's embedding."""
+        return EmbeddingProjection(
+            name="embedding_pca",
+            embedding_col="embedding",
+            color_cols=["category"],
+            method=ProjectionMethod.PCA,
+            id_col="user_id",
+            max_samples=100,
+        )
+
+    @staticmethod
+    def _dataset(n_rows: int) -> _FakeDataset:
+        """Rows with a score, a category, an ID and a 4-d embedding."""
+        rng = np.random.default_rng(0)
+        return _FakeDataset(
+            pd.DataFrame(
+                {
+                    "scores": rng.random(n_rows),
+                    "category": ["AB"[i % 2] for i in range(n_rows)],
+                    "user_id": [f"u{i}" for i in range(n_rows)],
+                    "embedding": [rng.normal(size=4).tolist() for _ in range(n_rows)],
+                }
+            )
+        )
+
+    def _extra_charts(self, config: EvaluatorConfig, n_rows: int) -> list:
+        """Run evaluate and return the extra charts handed to the report."""
+        with patch(
+            f"{_TASK}.build_combined_report", wraps=build_combined_report
+        ) as spy:
+            evaluate(config, {"test": self._dataset(n_rows)})
+        (results, _segment_columns), _ = spy.call_args
+        return results[0].extra_charts
+
+    def test_projections_without_metrics_raise(self):
+        """A projection needs metrics, and the error names the projections."""
+        config = EvaluatorConfig(embedding_projections=[self._projection()])
+        with pytest.raises(ConfigurationError, match="embedding_projections"):
+            evaluate(config, {"test": self._dataset(4)})
+
+    def test_projection_columns_are_read(self):
+        """The projection's columns join the columns loaded from the dataset."""
+        dataset = self._dataset(60)
+        config = EvaluatorConfig(
+            metrics=[self._mean_metric()], embedding_projections=[self._projection()]
+        )
+        evaluate(config, {"test": dataset})
+        assert {"embedding", "category", "user_id"} <= set(dataset.load_columns)
+
+    def test_projection_charts_reach_the_report(self):
+        """Charts of a projection are handed to the report."""
+        config = EvaluatorConfig(
+            metrics=[self._mean_metric()], embedding_projections=[self._projection()]
+        )
+        assert self._extra_charts(config, 60)
+
+    def test_projection_with_too_few_rows_is_skipped(self):
+        """Too few embeddings make no picture, and say so."""
+        config = EvaluatorConfig(
+            metrics=[self._mean_metric()], embedding_projections=[self._projection()]
+        )
+        with self.assertLogs(_TASK, level="WARNING") as logs:
+            charts = self._extra_charts(config, 10)
+        assert charts == []
+        assert any("embedding_pca: skipped" in line for line in logs.output)
+
+    def test_failing_projection_keeps_the_metrics(self):
+        """A projection that raises is logged and left out; the run completes."""
+        config = EvaluatorConfig(
+            metrics=[self._mean_metric()], embedding_projections=[self._projection()]
+        )
+        failing = patch(f"{_TASK}.project", side_effect=ValueError("bad params"))
+        with failing, self.assertLogs(_TASK, level="ERROR") as logs:
+            charts = self._extra_charts(config, 60)
+        assert charts == []
+        assert any("embedding_pca: failed" in line for line in logs.output)
+        assert "mean_score" in self.saved[0].columns
+
+    def test_embedding_metric_settings_table_comes_first(self):
+        """The settings table leads the extra charts and leaves the summary clean."""
+        config = EvaluatorConfig(
+            metrics=[self._cosine_metric()],
+            embedding_projections=[self._projection()],
+        )
+        charts = self._extra_charts(config, 60)
+        projection_only = self._extra_charts(
+            EvaluatorConfig(
+                metrics=[self._mean_metric()],
+                embedding_projections=[self._projection()],
+            ),
+            60,
+        )
+        assert len(charts) == len(projection_only) + 1
+        assert charts[0].title == "Embedding metric settings"
+        assert not [c for c in self.saved[0].columns if c.startswith("_scored_")]
+
+    def test_segments_without_chart_metrics_skip_chart_data(self):
+        """With no binary or regression metric the chart groupby is not run."""
+        config = EvaluatorConfig(
+            metrics=[self._mean_metric()],
+            segment_columns=["category"],
+            min_segment_row_count=1,
+        )
+        with self.assertLogs(_TASK, level="INFO") as logs:
+            result = evaluate(config, {"test": self._dataset(8)})
+        assert "test" in result.metrics
+        assert any("skipping per-segment chart data" in line for line in logs.output)

@@ -10,6 +10,7 @@ from michelangelo.gen.api.v2.chart_pb2 import ChartType, DataPointSource, Filter
 from michelangelo.lib.evaluator.report import (
     SOURCE_PIPELINE_TYPE_LABEL_NAME,
     create_absolute_errors_chart,
+    create_chart_with_image,
     create_confusion_matrix_chart,
     create_default_evaluation_report,
     create_errors_chart,
@@ -18,6 +19,7 @@ from michelangelo.lib.evaluator.report import (
     create_roc_chart,
     create_segment_filter_chart,
     create_threshold_filter_chart,
+    matplotlib_fig_to_html,
 )
 from michelangelo.lib.evaluator.utils import sample_curve_indices
 
@@ -415,3 +417,45 @@ class ThresholdFilterChartTest(TestCase):
             _binary_rows("GLOBAL", [0.9, 0.1]), "other", "label"
         )
         self.assertEqual(len(chart.filter.filter_values), 0)
+
+
+class MatplotlibFigToHtmlTest(TestCase):
+    """matplotlib_fig_to_html encodes a figure as a data URI."""
+
+    def _figure(self):
+        """A tiny figure with one line."""
+        from matplotlib.figure import Figure
+
+        fig = Figure(figsize=(1, 1))
+        fig.subplots().plot([0, 1])
+        return fig
+
+    def test_defaults_to_svg(self):
+        """With no format, the URI carries an SVG."""
+        self.assertTrue(
+            matplotlib_fig_to_html(self._figure()).startswith(
+                "data:image/svg+xml;base64, "
+            )
+        )
+
+    def test_png_format(self):
+        """fmt="png" yields a PNG URI that decodes to PNG bytes."""
+        from base64 import b64decode
+
+        uri = matplotlib_fig_to_html(self._figure(), fmt="png")
+        prefix = "data:image/png;base64, "
+        self.assertTrue(uri.startswith(prefix))
+        self.assertTrue(b64decode(uri[len(prefix) :]).startswith(b"\x89PNG"))
+
+
+class ChartWithImageTest(TestCase):
+    """create_chart_with_image wraps an image source in a chart."""
+
+    def test_builds_an_image_chart(self):
+        """Title doubles as the section ID."""
+        chart = create_chart_with_image("data:image/png;base64, AA", "alt", "My plot")
+        self.assertEqual(chart.chart_type, ChartType.CHART_TYPE_IMAGE)
+        self.assertEqual(chart.title, "My plot")
+        self.assertEqual(chart.section_id, "My plot")
+        self.assertEqual(chart.image.img_src, "data:image/png;base64, AA")
+        self.assertEqual(chart.image.description, "alt")
