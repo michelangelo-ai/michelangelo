@@ -68,9 +68,12 @@ class ImportModelClassTest(TestCase):
         self.assertEqual(result, mock_class)
         self.assertEqual(mock_import_module.call_count, 2)
 
-    @patch(f"{_MODULE}.create_alternative_defs")
+    # Keep the import_module patch outermost. Decorators are entered innermost first,
+    # and on Python 3.11+ patch() resolves a dotted target via importlib.import_module,
+    # so a patch entered while it is mocked adds extra calls to call_count.
     @patch("importlib.import_module")
-    def test_fallback_to_alternative_defs(self, mock_import_module, mock_create_alt):
+    @patch(f"{_MODULE}.create_alternative_defs")
+    def test_fallback_to_alternative_defs(self, mock_create_alt, mock_import_module):
         """Test fallback to create_alternative_defs when both direct imports fail."""
         mock_module = MagicMock()
         mock_class = MagicMock()
