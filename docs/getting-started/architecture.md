@@ -2,7 +2,7 @@
 sidebar_position: 2.5
 title: System Architecture
 description: How the Michelangelo AI control plane, offline pipelines and compute, and online serving fit together, plus the custom resources that connect them.
-last_verified: 2026-11-09
+last_verified: 2026-11-18
 ---
 
 # System Architecture
@@ -81,6 +81,7 @@ The diagram shows a complete production-style deployment. Not everything in it s
 ## Where to go next
 
 - [Core Concepts and Key Terms](./core-concepts-and-key-terms.md): the vocabulary used on this page.
+- [Trace a Pipeline Run End to End](./run-lifecycle.md): follow one `ma pipeline run` through the API server, controllers, workflow engine, and Ray.
 - [Sandbox Setup](./sandbox-setup.md): run the whole control plane on your laptop.
 - [Operator Guides](../operator-guides/index.md): deploy and configure each component.
 - [Platform Setup](../operator-guides/setup/platform-setup.md): how the server components connect.
