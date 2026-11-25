@@ -267,12 +267,95 @@ func TestBeforeCreate(t *testing.T) {
 	v1 := release(t, d, "core-v1")
 	ctx := context.Background()
 
-	t.Run("client pin is rejected", func(t *testing.T) {
-		hook, _ := newHook(t, d)
-		p := declarativePipeline(t, workflow(nil))
-		p.Spec.Manifest.InterpreterPin = &v2.InterpreterPin{Version: "core-v1"}
-		requireStatus(t, hook.BeforeCreate(ctx, &v2.CreatePipelineRequest{Pipeline: p}),
-			codes.InvalidArgument, "interpreter_pin is server-owned; remove interpreter_pin from the request")
+	t.Run("client pin", func(t *testing.T) {
+		v2Rel := release(t, d, "core-v2")
+		onlyV2 := map[string]*types.Value{"timeout_seconds": numVal(30)}
+		const versions = "[core-v1, core-v2]"
+		tests := []struct {
+			name     string
+			extra    map[string]*types.Value
+			reqPin   *v2.InterpreterPin
+			reqTar   string
+			wantPin  *v2.InterpreterPin
+			wantCode codes.Code
+			wantMsg  string
+		}{
+			{
+				name:    "a loaded version is validated and stamped",
+				extra:   onlyV2,
+				reqPin:  &v2.InterpreterPin{Version: "core-v2"},
+				wantPin: pinOf(v2Rel),
+			},
+			{
+				name:    "the full pin of a loaded release is accepted",
+				reqPin:  pinOf(v2Rel),
+				reqTar:  v2Rel.Artifact,
+				wantPin: pinOf(v2Rel),
+			},
+			{
+				name:    "no version with the default artifact gives the default pin",
+				reqPin:  &v2.InterpreterPin{Artifact: v1.Artifact},
+				wantPin: pinOf(v1),
+			},
+			{
+				name:     "a field the named release does not declare is rejected",
+				extra:    onlyV2,
+				reqPin:   &v2.InterpreterPin{Version: "core-v1"},
+				wantCode: codes.InvalidArgument,
+			},
+			{
+				name:     "an unknown version is rejected",
+				reqPin:   &v2.InterpreterPin{Version: "core-v9"},
+				wantCode: codes.InvalidArgument,
+				wantMsg:  `interpreter_pin.version "core-v9" is not a known release; use one of ` + versions,
+			},
+			{
+				name:     "an artifact that differs from the named release is rejected",
+				reqPin:   &v2.InterpreterPin{Version: "core-v2", Artifact: "s3://evil/tar.gz"},
+				wantCode: codes.InvalidArgument,
+				wantMsg:  `interpreter_pin.artifact "s3://evil/tar.gz" does not match the pin for interpreter core-v2; leave it unset`,
+			},
+			{
+				name:     "the default artifact beside another version is rejected",
+				reqPin:   &v2.InterpreterPin{Version: "core-v2", Artifact: v1.Artifact},
+				wantCode: codes.InvalidArgument,
+				wantMsg:  `interpreter_pin.artifact "` + v1.Artifact + `" does not match the pin for interpreter core-v2; leave it unset`,
+			},
+			{
+				name:     "a digest that differs from the named release is rejected",
+				reqPin:   &v2.InterpreterPin{Version: "core-v2", Digest: "sha256:bad"},
+				wantCode: codes.InvalidArgument,
+				wantMsg:  `interpreter_pin.digest "sha256:bad" does not match the pin for interpreter core-v2; leave it unset`,
+			},
+			{
+				name:     "a uniflow_tar of the default release beside another version is rejected",
+				reqPin:   &v2.InterpreterPin{Version: "core-v2"},
+				reqTar:   v1.Artifact,
+				wantCode: codes.InvalidArgument,
+				wantMsg:  "uniflow_tar is server-owned for declarative pipelines; remove uniflow_tar from the request",
+			},
+		}
+		for _, tc := range tests {
+			t.Run(tc.name, func(t *testing.T) {
+				hook, _ := newHook(t, d)
+				p := declarativePipeline(t, workflow(tc.extra))
+				p.Spec.Manifest.InterpreterPin = tc.reqPin
+				p.Spec.Manifest.UniflowTar = tc.reqTar
+				err := hook.BeforeCreate(ctx, &v2.CreatePipelineRequest{Pipeline: p})
+				if tc.wantCode != codes.OK {
+					require.Error(t, err)
+					st := status.Convert(err)
+					assert.Equal(t, tc.wantCode, st.Code(), st.Message())
+					if tc.wantMsg != "" {
+						assert.Equal(t, tc.wantMsg, st.Message())
+					}
+					return
+				}
+				require.NoError(t, err)
+				assert.Equal(t, tc.wantPin, p.Spec.Manifest.InterpreterPin)
+				assert.Equal(t, tc.wantPin.Artifact, p.Spec.Manifest.UniflowTar)
+			})
+		}
 	})
 
 	t.Run("client uniflow_tar is rejected", func(t *testing.T) {
@@ -615,11 +698,24 @@ func TestBeforeUpdate(t *testing.T) {
 			wantPin: pinOf(v2Rel),
 		},
 		{
-			name:     "stored UNIFLOW pipeline rejects a client pin",
+			name:    "stored UNIFLOW pipeline accepts a loaded client version",
+			stored:  typedPipeline(v2.PIPELINE_MANIFEST_TYPE_UNIFLOW),
+			reqPin:  &v2.InterpreterPin{Version: "core-v2"},
+			wantPin: pinOf(v2Rel),
+		},
+		{
+			name:     "stored UNIFLOW pipeline rejects an unknown client version",
 			stored:   typedPipeline(v2.PIPELINE_MANIFEST_TYPE_UNIFLOW),
-			reqPin:   &v2.InterpreterPin{Version: "core-v1"},
+			reqPin:   &v2.InterpreterPin{Version: "core-v9"},
 			wantCode: codes.InvalidArgument,
-			wantMsg:  "interpreter_pin is server-owned; remove interpreter_pin from the request",
+			wantMsg:  `interpreter_pin.version "core-v9" is not a known release; use one of ` + versions,
+		},
+		{
+			name:     "stored DECLARATIVE pipeline with no pin rejects a foreign artifact",
+			stored:   storedPipeline(t, nil),
+			reqPin:   &v2.InterpreterPin{Artifact: "s3://evil/tar.gz"},
+			wantCode: codes.InvalidArgument,
+			wantMsg:  `interpreter_pin.artifact "s3://evil/tar.gz" does not match the pin for interpreter core-v1; leave it unset`,
 		},
 		{
 			name:    "stored DECLARATIVE pipeline with no pin follows the create rules",

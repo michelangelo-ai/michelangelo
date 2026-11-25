@@ -35,20 +35,20 @@ type apiHook struct {
 	d          *Declarative
 }
 
-// BeforeCreate validates a DECLARATIVE pipeline and pins it.
+// BeforeCreate validates a DECLARATIVE pipeline and pins it with the create
+// rules.
 func (a apiHook) BeforeCreate(_ context.Context, req *v2.CreatePipelineRequest) error {
 	if skip, err := a.gate(req.Pipeline); skip || err != nil {
 		return err
 	}
-	if req.Pipeline.Spec.Manifest.InterpreterPin != nil {
-		return status.Error(codes.InvalidArgument, "interpreter_pin is server-owned; remove interpreter_pin from the request")
+	rel, pin, err := a.createTarget(req.Pipeline.Spec.Manifest.InterpreterPin)
+	if err != nil {
+		return err
 	}
-	d := a.d.defaultRelease
-	pin := pinOf(d)
 	if err := checkTar(req.Pipeline.Spec.Manifest.UniflowTar, pin, ""); err != nil {
 		return err
 	}
-	return apply(req.Pipeline, d, pin, req.CreateOptions != nil && isDryRun(req.CreateOptions.DryRun))
+	return apply(req.Pipeline, rel, pin, req.CreateOptions != nil && isDryRun(req.CreateOptions.DryRun))
 }
 
 // BeforeUpdate validates a DECLARATIVE pipeline and keeps or moves its pin.
@@ -79,6 +79,26 @@ func (a apiHook) BeforeUpdate(ctx context.Context, req *v2.UpdatePipelineRequest
 	return apply(p, rel, pin, req.UpdateOptions != nil && isDryRun(req.UpdateOptions.DryRun))
 }
 
+// createTarget resolves the release and the pin with the create rules. The
+// request can name a loaded release in interpreter_pin.version. No version
+// means the default release. The artifact and the digest are server-owned. A
+// request value must be empty or equal the pin that the hook writes.
+func (a apiHook) createTarget(reqPin *v2.InterpreterPin) (*declarative.Release, *v2.InterpreterPin, error) {
+	rel := a.d.defaultRelease
+	if v := reqPin.GetVersion(); v != "" {
+		r, ok := a.d.releases[v]
+		if !ok {
+			return nil, nil, a.unknownVersion(v)
+		}
+		rel = r
+	}
+	pin := pinOf(rel)
+	if err := checkPinFields(reqPin, pin, nil); err != nil {
+		return nil, nil, err
+	}
+	return rel, pin, nil
+}
+
 // target resolves the release and the pin of an update. A stored pipeline
 // that is not a pinned DECLARATIVE pipeline follows the create rules. This
 // covers a type change and a pipeline that kubectl wrote without a pin.
@@ -89,10 +109,7 @@ func (a apiHook) BeforeUpdate(ctx context.Context, req *v2.UpdatePipelineRequest
 func (a apiHook) target(stored *v2.Pipeline, reqPin *v2.InterpreterPin) (*declarative.Release, *v2.InterpreterPin, error) {
 	storedPin := stored.Spec.Manifest.GetInterpreterPin()
 	if stored.Spec.Manifest.GetType() != v2.PIPELINE_MANIFEST_TYPE_DECLARATIVE || storedPin == nil {
-		if reqPin != nil {
-			return nil, nil, status.Error(codes.InvalidArgument, "interpreter_pin is server-owned; remove interpreter_pin from the request")
-		}
-		return a.d.defaultRelease, pinOf(a.d.defaultRelease), nil
+		return a.createTarget(reqPin)
 	}
 
 	var rel *declarative.Release
@@ -119,21 +136,33 @@ func (a apiHook) target(stored *v2.Pipeline, reqPin *v2.InterpreterPin) (*declar
 	} else {
 		r, ok := a.d.releases[v]
 		if !ok {
-			return nil, nil, status.Errorf(codes.InvalidArgument,
-				"interpreter_pin.version %q is not a known release; use one of %s", v, a.d.versionList())
+			return nil, nil, a.unknownVersion(v)
 		}
 		rel, pin = r, pinOf(r)
 	}
-
-	if s := reqPin.GetArtifact(); s != "" && s != pin.Artifact && s != storedPin.Artifact {
-		return nil, nil, status.Errorf(codes.InvalidArgument,
-			"interpreter_pin.artifact %q does not match the pin for interpreter %s; leave it unset", s, rel.Version)
-	}
-	if s := reqPin.GetDigest(); s != "" && s != pin.Digest && s != storedPin.Digest {
-		return nil, nil, status.Errorf(codes.InvalidArgument,
-			"interpreter_pin.digest %q does not match the pin for interpreter %s; leave it unset", s, rel.Version)
+	if err := checkPinFields(reqPin, pin, storedPin); err != nil {
+		return nil, nil, err
 	}
 	return rel, pin, nil
+}
+
+func (a apiHook) unknownVersion(v string) error {
+	return status.Errorf(codes.InvalidArgument,
+		"interpreter_pin.version %q is not a known release; use one of %s", v, a.d.versionList())
+}
+
+// checkPinFields accepts a request artifact or digest that is empty, equals
+// pin, or equals storedPin. storedPin is nil under the create rules.
+func checkPinFields(reqPin, pin, storedPin *v2.InterpreterPin) error {
+	if s := reqPin.GetArtifact(); s != "" && s != pin.Artifact && s != storedPin.GetArtifact() {
+		return status.Errorf(codes.InvalidArgument,
+			"interpreter_pin.artifact %q does not match the pin for interpreter %s; leave it unset", s, pin.Version)
+	}
+	if s := reqPin.GetDigest(); s != "" && s != pin.Digest && s != storedPin.GetDigest() {
+		return status.Errorf(codes.InvalidArgument,
+			"interpreter_pin.digest %q does not match the pin for interpreter %s; leave it unset", s, pin.Version)
+	}
+	return nil
 }
 
 // gate reports skip for a pipeline that is not DECLARATIVE. On skip, it
