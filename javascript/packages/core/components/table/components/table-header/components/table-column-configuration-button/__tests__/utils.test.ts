@@ -3,13 +3,16 @@ import { vi } from 'vitest';
 import { CellType } from '#core/components/cell/constants';
 import { createColumnListChangeHandler } from '../utils';
 
+import type { Mock } from 'vitest';
+import type { ControlledTableState } from '#core/components/table/types/table-types';
+
 describe('createColumnListChangeHandler', () => {
-  let mockSetColumnOrder: ReturnType<typeof vi.fn>;
-  let mockSetColumnVisibility: ReturnType<typeof vi.fn>;
+  let mockSetColumnOrder: Mock<ControlledTableState['setColumnOrder']>;
+  let mockSetColumnVisibility: Mock<ControlledTableState['setColumnVisibility']>;
 
   beforeEach(() => {
-    mockSetColumnOrder = vi.fn();
-    mockSetColumnVisibility = vi.fn();
+    mockSetColumnOrder = vi.fn<ControlledTableState['setColumnOrder']>();
+    mockSetColumnVisibility = vi.fn<ControlledTableState['setColumnVisibility']>();
   });
 
   it('reorders columns when given position indices', () => {
@@ -46,10 +49,10 @@ describe('createColumnListChangeHandler', () => {
 
     expect(mockSetColumnOrder).not.toHaveBeenCalled();
 
-    // setColumnVisibility is called with a function, we need to call it to get the result
-    const updaterFunction = mockSetColumnVisibility.mock.calls[0][0] as (
-      columnVisibility: Record<string, boolean>
-    ) => Record<string, boolean>;
+    const [updaterFunction] = mockSetColumnVisibility.mock.calls[0];
+    if (typeof updaterFunction !== 'function') {
+      throw new Error('Expected a column visibility updater function');
+    }
 
     // col2 starts visible (true) and should be toggled to hidden (false)
     const currentVisibility = { col1: true, col2: true, col3: false, col4: true };
