@@ -6,7 +6,7 @@ Example project showing various capabilities of the Michelangelo AI workflows.
 - `entrypoint.sh` is the image entrypoint (used by the Dockerfile).
 - `config/project.yaml` is the `Project` resource manifest (`ma-examples`).
 - Other directories represent concrete workflow use cases. Each has its own README with prerequisites and run instructions where applicable: `bert_cola`, `llm_prediction`, `evaluator`, `workflow_patterns`, `model_manager/*` and `pipelines/*`.
-- `declarative` holds mock interpreter releases, example declarative pipelines, and a [test guide](declarative/README.md) for the apiserver and `ma` support for declarative pipelines.
+- `declarative` holds mock interpreter releases, example declarative pipelines, and a [guide](declarative/README.md) that shows you how to write, validate, and pin a declarative pipeline.
 
 ## Requirements
 

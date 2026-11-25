@@ -1,5 +1,5 @@
 # Expected: INVALID_ARGUMENT, timeout_seconds is not in the mock-v1 schema
-# for mock/python. It is valid after a pin upgrade to mock-v2.
+# for mock/python. It is valid on a pipeline pinned to mock-v2.
 apiVersion: michelangelo.api/v2
 kind: Pipeline
 metadata:

@@ -1,54 +1,75 @@
-# Declarative pipelines: test guide
+# Declarative pipelines
 
-This guide shows you how to test declarative pipelines (RFC
-[michelangelo-ai/enhancements#24](https://github.com/michelangelo-ai/enhancements/pull/24))
-on the local sandbox. You run an apiserver from
-[#2461](https://github.com/michelangelo-ai/michelangelo/pull/2461) on your machine,
-and you write pipelines with `ma` from
-[#2462](https://github.com/michelangelo-ai/michelangelo/pull/2462).
+A declarative pipeline sets `spec.manifest.type` to `DECLARATIVE` and lists
+its tasks under `spec.manifest.content`. The apiserver validates the task
+graph against an interpreter release. It then pins the pipeline to that
+release.
 
-These PRs cover how you write and validate a declarative pipeline. They do not
-run it. No interpreter exists yet, so do not start a PipelineRun of a
-declarative pipeline.
+This guide shows you how to write a declarative pipeline. It also shows you
+how to validate, create, and pin one with `ma pipeline apply` on the local
+sandbox.
+
+## Requirements
+
+- The apiserver must run with `apiserver.declarative.enabled: true`. It must
+  also load at least one interpreter release. Otherwise, a declarative write
+  fails with `FAILED_PRECONDITION`.
+- No interpreter runs declarative pipelines yet. Do not start a PipelineRun of
+  a declarative pipeline.
 
 ## Contents
 
 | Path | What it is |
 |---|---|
 | `releases/mock-v1.yaml` | Mock interpreter release. It is the default release. |
-| `releases/mock-v2.yaml` | Mock release that adds `timeout_seconds` to `mock/python`. Use it to test a pin upgrade. |
+| `releases/mock-v2.yaml` | Mock release that adds `timeout_seconds` to `mock/python`. Use it to change the pin. |
 | `apiserver/declarative-test.yaml` | Apiserver config overlay. It turns on the feature and loads the mock releases. |
-| `pipelines/hello.yaml` | Valid pipeline: three tasks in a chain. |
 | `pipelines/training.yaml` | Valid pipeline: parameters, parallel tasks, retry, a task output reference, and a failure handler. |
-| `pipelines/invalid/*.yaml` | Pipelines that the apiserver must reject. Each file names the expected error. |
-| `upgrade_pin.py` | Moves a pipeline to another release through the API. `ma` cannot do this yet. |
+| `pipelines/invalid/*.yaml` | Pipelines that the apiserver rejects. The first line of each file names the error. |
 
-The mock releases use placeholder artifacts and digests. The apiserver does not
-fetch the artifact, so a placeholder is enough to test validation and pinning.
+The mock releases use `mock://` artifacts and placeholder digests. No blob
+store serves the `mock://` scheme, so nothing can fetch these artifacts. The
+apiserver does not fetch the artifact, so a placeholder is enough to test
+validation and pinning.
 
-## Before you begin
+## Write a declarative pipeline
 
-- Install the tools in the [examples README](../README.md#remote-run): Go,
-  Poetry, Docker, k3d, and `kubectl`.
-- Create the sandbox, if you do not have one:
+Write the `DeclarativeWorkflow` fields under `spec.manifest.content`. See
+`pipelines/training.yaml` for a full example.
 
-  ```bash
-  cd python
-  poetry run ma sandbox create
-  ```
+- You can write enum values as short names, in any case. For example, write
+  `when: failed` for `OUTCOME_FAILED`, and `type: DECLARATIVE` for
+  `PIPELINE_MANIFEST_TYPE_DECLARATIVE`.
+- When a parameter has no `type`, `ma` sets the type from the `default` value.
+  A parameter with no `type` and no default is an error.
+- Quote a value when its YAML type is not clear. YAML reads `yes` as a
+  boolean, `0755` as the integer 493, and `1:30` as the integer 90. Write
+  `"0755"`, or set `type: string` on the parameter.
+- Quote a mapping key that YAML reads as a number or a boolean, such as `0:`
+  or `on:`. `ma` rejects keys that are not strings.
+- Write an integer outside ±(2^53-1) as a string. `ma` also rejects `.nan` and
+  `.inf`.
+- To pin the pipeline to a release, set `spec.manifest.interpreterPin.version`.
+  With no version, the apiserver pins a new pipeline to its default release.
+  The apiserver sets the pin artifact, the pin digest, and `uniflowTar`.
 
-- Check out both PRs in one tree. The two branches merge without conflicts.
-
-  ```bash
-  git fetch origin pull/2461/head:declarative-p3 pull/2462/head:declarative-p4
-  git checkout declarative-p4
-  git merge --no-edit declarative-p3
-  ```
+`ma pipeline apply` needs the YAML file in a git repository. It writes the
+current commit to `spec.commit`.
 
 ## Start the apiserver
 
-The sandbox apiserver listens on port `15566` and runs older code. You start a
-second apiserver on your machine on port `15568`. It uses the same cluster.
+The sandbox apiserver does not load the mock releases. You start a second
+apiserver on your machine on port `15568`. It uses the same cluster.
+
+1. Install the tools in the [examples README](../README.md#remote-run): Go,
+   Poetry, Docker, k3d, and `kubectl`.
+
+1. Create the sandbox, if you do not have one:
+
+   ```bash
+   cd python
+   poetry run ma sandbox create
+   ```
 
 1. Point the apiserver at the sandbox cluster only:
 
@@ -68,31 +89,38 @@ second apiserver on your machine on port `15568`. It uses the same cluster.
    go run ./cmd/apiserver
    ```
 
-1. Look for these lines in the log:
+1. Look for this line in the log:
 
    ```text
    "msg":"declarative pipelines","enabled":true,"defaultInterpreter":"mock-v1","releases":["mock-v1","mock-v2"]
-   "msg":"CRD updated","name":"pipelines.michelangelo.api"
    ```
 
-   The second line shows that the apiserver added `interpreterPin` to the
-   Pipeline CRD. Without that field, Kubernetes drops the pin.
+   If the Pipeline CRD in the cluster has no `interpreterPin` field, the
+   apiserver adds the field and logs
+   `"msg":"CRD updated","name":"pipelines.michelangelo.api"`.
 
 Keep the apiserver running. Use a second terminal for the next steps.
 
 ## Set up the client
 
-In the second terminal, point `ma` at the new apiserver and create the
-namespace:
+1. In the second terminal, point `ma` at the new apiserver:
 
-```bash
-cd python
-export MACTL_ADDRESS=localhost:15568 MACTL_USE_TLS=false
-kubectl --context k3d-michelangelo-sandbox create namespace declarative-test
-```
+   ```bash
+   cd python
+   export MACTL_ADDRESS=localhost:15568 MACTL_USE_TLS=false
+   ```
 
-`ma pipeline apply` needs the YAML file in a git repository. This checkout is
-one, so you can apply the example files from where they are.
+1. Create the namespace:
+
+   ```bash
+   kubectl --context k3d-michelangelo-sandbox create namespace declarative-test
+   ```
+
+1. Create a test branch. Some steps commit changes to `training.yaml`.
+
+   ```bash
+   git switch -c declarative-test
+   ```
 
 ## Test cases
 
@@ -101,28 +129,36 @@ Run each command from the `python/` directory.
 ### 1. Dry run
 
 ```bash
-poetry run ma pipeline apply -f examples/declarative/pipelines/hello.yaml --dry-run
+poetry run ma pipeline apply -f examples/declarative/pipelines/training.yaml --dry-run
 ```
 
 Expected output:
 
 ```text
 Interpreter: mock-v1
-Tasks: 3
+Tasks: 5
 
 LEVEL  TASKS
-0      extract
-1      transform
-2      load
+0      prepare
+1      train_large, train_small
+2      evaluate
+3      notify_failure
+
+Dry run: nothing was saved.
 ```
 
-The dry run stores nothing. To check, run
-`kubectl -n declarative-test get pipeline declarative-hello`. Expected result:
-`NotFound`.
+`train_large` and `train_small` are in the same level, so they can run in
+parallel. Add `-o json` to get the plan as JSON.
 
-Do the same with `training.yaml`. The plan has 5 tasks in 4 levels.
-`train_large` and `train_small` are in the same level. Add `-o json` to get the
-plan as JSON.
+The dry run stores nothing. To check, run this command:
+
+```bash
+kubectl --context k3d-michelangelo-sandbox -n declarative-test \
+  get pipeline declarative-training
+```
+
+Expected output:
+`Error from server (NotFound): pipelines.michelangelo.api "declarative-training" not found`.
 
 ### 2. Validation errors
 
@@ -132,7 +168,8 @@ Apply each file in `pipelines/invalid/`, with or without `--dry-run`:
 poetry run ma pipeline apply -f examples/declarative/pipelines/invalid/cycle.yaml
 ```
 
-Each command fails with one line. The apiserver returns `INVALID_ARGUMENT`.
+Each command prints one line that starts with `Error: INVALID_ARGUMENT:`, and
+exits with code 1.
 
 | File | Expected message |
 |---|---|
@@ -144,79 +181,132 @@ Each command fails with one line. The apiserver returns `INVALID_ARGUMENT`.
 
 ### 3. Create
 
-```bash
-poetry run ma pipeline apply -f examples/declarative/pipelines/hello.yaml
-kubectl --context k3d-michelangelo-sandbox -n declarative-test \
-  get pipeline declarative-hello -o yaml
-```
+1. Apply the pipeline:
+
+   ```bash
+   poetry run ma pipeline apply -f examples/declarative/pipelines/training.yaml
+   ```
+
+   `ma` prints the stored pipeline. The `content` block shows the stored
+   workflow under `[type.googleapis.com/michelangelo.api.v2.DeclarativeWorkflow]`.
+
+1. Read the stored pipeline:
+
+   ```bash
+   kubectl --context k3d-michelangelo-sandbox -n declarative-test \
+     get pipeline declarative-training -o yaml
+   ```
 
 In `spec.manifest`, expect:
 
 - `interpreterPin.version: mock-v1`.
 - `interpreterPin.artifact` and `interpreterPin.digest` from `releases/mock-v1.yaml`.
 - `uniflowTar` equal to the pin artifact.
-- `metadata.generation: 1`, and no `michelangelo/declarative-explain-plan` annotation.
+
+Also expect `metadata.generation: 1`, and no
+`michelangelo/declarative-explain-plan` annotation.
 
 ### 4. Re-apply
 
-Apply `hello.yaml` again with no change. Expect the same pin, and
-`generation` stays at `1`.
+`ma` writes the commit SHA to `spec.commit.git_ref`. Thus a new commit alone
+changes the spec and increments `generation`.
 
-Change a task in `hello.yaml`, commit the change, and apply again. Expect
-`generation: 2` and the same pin.
+1. Apply `training.yaml` again with no change and no new commit. Expect the
+   same pin. `generation` stays at `1`.
 
-### 5. Pin upgrade
+1. Make a commit with no change, and apply again:
 
-```bash
-PYTHONPATH=. poetry run python examples/declarative/upgrade_pin.py \
-  declarative-test declarative-hello mock-v2
-```
+   ```bash
+   git commit --allow-empty -m "test: no change"
+   poetry run ma pipeline apply -f examples/declarative/pipelines/training.yaml
+   ```
 
-Expected output:
+   Expect `generation: 2` and the same pin. The new commit causes this
+   change.
 
-```text
-pin: mock-v1 -> mock-v2
-artifact: mock://declarative/interpreters/mock-v2.tar.gz
-digest: sha256:0000000000000000000000000000000000000000000000000000000000000002
-uniflow_tar: mock://declarative/interpreters/mock-v2.tar.gz
-```
+1. Change `learning_rate` of `train_small` to `0.02`. Commit the change, and
+   apply again. Expect `generation: 3` and the same pin. This step shows that
+   an edit passes validation and keeps the pin.
 
-Add `--dry-run` to see the result without a write. An unknown version fails
-with `INVALID_ARGUMENT` and lists the loaded releases.
+Commit each change before you apply it. The controller keeps one revision for
+each commit. A different spec on the same commit can fail in the controller.
 
-After the upgrade, the pipeline validates against `mock-v2`. To check, add
-`timeout_seconds: 600` to the `extract` config in `hello.yaml`, commit, and
-apply. The apply passes. The same change on a pipeline pinned to `mock-v1`
-fails, as in `bad_config.yaml`.
+### 5. Change the pin
+
+1. Add the pin version under `spec.manifest` in `training.yaml`:
+
+   ```yaml
+   spec:
+     manifest:
+       type: PIPELINE_MANIFEST_TYPE_DECLARATIVE
+       interpreterPin:
+         version: mock-v2
+   ```
+
+1. Commit the change, and apply it. In the stored pipeline, expect:
+
+   - `interpreterPin.version: mock-v2`.
+   - `interpreterPin.artifact: mock://declarative/interpreters/mock-v2.tar.gz`.
+   - `interpreterPin.digest: sha256:0000000000000000000000000000000000000000000000000000000000000002`.
+   - `uniflowTar: mock://declarative/interpreters/mock-v2.tar.gz`.
+
+1. Add `timeout_seconds: 600` to the `prepare` config. Commit, and apply. The
+   apply passes, because `mock-v2` declares `timeout_seconds`. The same change
+   fails on `mock-v1`, as in `bad_config.yaml`.
+
+1. Set the version to `mock-v9`, and apply with `--dry-run`. Expected output:
+
+   ```text
+   Error: INVALID_ARGUMENT: interpreter_pin.version "mock-v9" is not a known release; use one of [mock-v1, mock-v2]
+   ```
+
+   Set the version back to `mock-v2`.
+
+You can also pin a new pipeline on create. Add `interpreterPin.version:
+mock-v2` to a copy of `invalid/bad_config.yaml`, and apply it with
+`--dry-run`. The plan shows `Interpreter: mock-v2`, and the apply passes.
 
 ### 6. Server-owned fields
 
-Add `interpreterPin` or `uniflowTar` under `spec.manifest` in a copy of
-`hello.yaml`, then apply it. `ma` rejects the file before it calls the
+Add `uniflowTar` or `interpreterPin.artifact` under `spec.manifest` in a copy
+of `training.yaml`, then apply it. `ma` rejects the file before it calls the
 apiserver:
 
 ```text
-Error: spec.manifest.interpreterPin is server-owned for declarative pipelines; remove it
+Error: spec.manifest.uniflowTar is server-owned for declarative pipelines; remove it, because the apiserver sets it from the interpreter pin
+Error: spec.manifest.interpreterPin.artifact is server-owned; to change the pin, set only interpreterPin.version
 ```
 
-### 7. Feature flag off
+### 7. Release not loaded
 
-Stop the apiserver. Start it again with `declarative.enabled: false` in
-`apiserver/declarative-test.yaml`. The startup log shows `"enabled":false`.
+A pipeline stays pinned to its release. Remove a release only when no
+pipeline uses it.
 
-Apply `hello.yaml`. Expected result: `FAILED_PRECONDITION`. YAML and UNIFLOW
-pipelines work as before.
+1. Stop the apiserver. Move `releases/mock-v2.yaml` out of the releases
+   directory, and start the apiserver again.
 
-## What you cannot test yet
+1. Apply `training.yaml`. It is pinned to `mock-v2`. Expected output:
 
-- **Run a pipeline.** No interpreter exists, and the run path does not read
-  the pin.
-- **Pin upgrade with `ma`.** `ma` rejects `interpreterPin` in the YAML. Use
-  `upgrade_pin.py`.
-- **`resume_from` and caching.** These come with the interpreter.
-- **The controller ERROR state.** The sandbox controller runs older code. Unit
-  tests in #2461 cover this state.
-- **The UI.** The UI does not show declarative pipelines or the explain plan.
+   ```text
+   Error: FAILED_PRECONDITION: interpreter mock-v2 is not loaded on this apiserver; set interpreter_pin.version to one of [mock-v1]
+   ```
+
+1. Stop the apiserver. Move `mock-v2.yaml` back, and start the apiserver
+   again.
+
+### 8. Feature flag off
+
+1. Stop the apiserver. Set `declarative.enabled: false` in
+   `apiserver/declarative-test.yaml`, and start the apiserver again. The
+   startup log shows `"enabled":false`.
+
+1. Apply `training.yaml`. Expected output:
+
+   ```text
+   Error: FAILED_PRECONDITION: declarative pipelines are not enabled on this apiserver; an operator must set apiserver.declarative.enabled=true
+   ```
+
+YAML and UNIFLOW pipelines work as before.
 
 ## Clean up
 
@@ -228,16 +318,23 @@ pipelines work as before.
 
 1. Stop the apiserver with `Ctrl+C`.
 
-The CRD fields that the new apiserver added stay in the cluster. The sandbox
-apiserver runs older code. If it restarts, its CRD sync can fail on those
-fields. To reset the cluster, run `poetry run ma sandbox delete`, then
-`poetry run ma sandbox create`.
+1. Undo the overlay change from step 8, and delete the test branch:
+
+   ```bash
+   git restore examples/declarative/apiserver/declarative-test.yaml
+   git switch -
+   git branch -D declarative-test
+   ```
 
 ## Troubleshooting
 
-- **`default interpreter "mock-v1" has no release file`.** You started the
-  apiserver from a directory other than `go/`. The `releasesDir` path in the
-  overlay is relative to `go/`.
+- **`load declarative releases: open ../python/examples/declarative/releases: no such file or directory`**,
+  or the apiserver cannot find its config. You started the apiserver from a
+  directory other than `go/`. `CONFIG_DIR` and `releasesDir` are both
+  relative to `go/`.
+- **`default interpreter "mock-v1" has no release file in ...`.** The releases
+  directory has no `mock-v1.yaml`, or `defaultInterpreter` in the overlay
+  changed.
 - **The pin is missing from the stored pipeline.** The Pipeline CRD has no
   `interpreterPin` field. Check that the startup log shows `CRD updated` for
   `pipelines.michelangelo.api`.

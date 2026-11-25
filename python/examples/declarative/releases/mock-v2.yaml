@@ -1,5 +1,6 @@
-# Mock interpreter release for local tests. It adds timeout_seconds to
-# mock/python. Use it to test a pin upgrade from mock-v1.
+# Mock interpreter release for local tests only. It adds timeout_seconds to
+# mock/python. Use it to change the pin from mock-v1. The artifact uses the
+# mock:// scheme, so it cannot be fetched.
 version: mock-v2
 artifact: mock://declarative/interpreters/mock-v2.tar.gz
 digest: sha256:0000000000000000000000000000000000000000000000000000000000000002
