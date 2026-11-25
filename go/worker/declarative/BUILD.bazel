@@ -6,6 +6,7 @@ go_test(
         "engine_test.go",
         "harness_test.go",
         "levels_test.go",
+        "release_test.go",
     ],
     data = glob(["testdata/**"]),
     deps = [
@@ -25,6 +26,7 @@ go_test(
         "@com_github_gogo_protobuf//proto:go_default_library",
         "@com_github_stretchr_testify//assert:go_default_library",
         "@com_github_stretchr_testify//require:go_default_library",
+        "@io_k8s_sigs_yaml//:go_default_library",
         "@net_starlark_go//starlark:go_default_library",
         "@net_starlark_go//syntax:go_default_library",
         "@org_uber_go_cadence//:go_default_library",
