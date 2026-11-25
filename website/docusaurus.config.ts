@@ -8,8 +8,14 @@ const config: Config = {
   favicon: 'img/favicon.svg',
 
   future: {
-    v4: true,
-    experimental_faster: true,
+    v4: {
+      removeLegacyPostBuildHeadAttribute: true,
+      useCssCascadeLayers: true,
+      fasterByDefault: true,
+    },
+    faster: {
+      gitEagerVcs: false,
+    },
   },
 
   url: 'https://michelangelo-ai.org',
