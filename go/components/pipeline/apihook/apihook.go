@@ -167,16 +167,15 @@ func checkPinFields(reqPin, pin, storedPin *v2.InterpreterPin) error {
 }
 
 // gate reports skip for a pipeline that is not DECLARATIVE. On skip, it
-// removes the explain-plan annotation, so a client cannot store a plan on
-// that pipeline. It returns an error for a pipeline that is not DECLARATIVE
-// but carries interpreter_pin, and for a DECLARATIVE pipeline when the flag
-// is off. The pin check does not depend on the flag.
+// removes the explain-plan annotation and interpreter_pin, so a client cannot
+// store them on that pipeline. No code reads them there. gate returns an
+// error for a DECLARATIVE pipeline when the flag is off.
 func (a apiHook) gate(p *v2.Pipeline) (skip bool, err error) {
 	if p.Spec.Manifest.GetType() != v2.PIPELINE_MANIFEST_TYPE_DECLARATIVE {
-		if p.Spec.Manifest.GetInterpreterPin() != nil {
-			return false, status.Error(codes.InvalidArgument, "interpreter_pin is only valid for declarative pipelines")
-		}
 		delete(p.Annotations, explainPlanAnnotation)
+		if p.Spec.Manifest != nil {
+			p.Spec.Manifest.InterpreterPin = nil
+		}
 		return true, nil
 	}
 	if !a.d.enabled {

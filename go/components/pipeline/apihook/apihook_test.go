@@ -195,8 +195,9 @@ func TestPassThrough(t *testing.T) {
 	}
 }
 
-func TestNonDeclarativePinIsRejected(t *testing.T) {
-	const msg = "interpreter_pin is only valid for declarative pipelines"
+// No code reads interpreter_pin on a non-declarative pipeline, so the hook
+// removes it without an error.
+func TestNonDeclarativePinIsRemoved(t *testing.T) {
 	manifestTypes := []v2.PipelineManifest_Type{
 		v2.PIPELINE_MANIFEST_TYPE_YAML,
 		v2.PIPELINE_MANIFEST_TYPE_UNIFLOW,
@@ -212,10 +213,16 @@ func TestNonDeclarativePinIsRejected(t *testing.T) {
 					p.Spec.Manifest.InterpreterPin = &v2.InterpreterPin{Version: "core-v1"}
 					return p
 				}
-				requireStatus(t, hook.BeforeCreate(context.Background(), &v2.CreatePipelineRequest{Pipeline: pinned()}),
-					codes.InvalidArgument, msg)
-				requireStatus(t, hook.BeforeUpdate(context.Background(), &v2.UpdatePipelineRequest{Pipeline: pinned()}),
-					codes.InvalidArgument, msg)
+				want := typedPipeline(typ)
+				delete(want.Annotations, explainPlanAnnotation)
+
+				create := &v2.CreatePipelineRequest{Pipeline: pinned()}
+				require.NoError(t, hook.BeforeCreate(context.Background(), create))
+				assert.Equal(t, want, create.Pipeline)
+
+				update := &v2.UpdatePipelineRequest{Pipeline: pinned()}
+				require.NoError(t, hook.BeforeUpdate(context.Background(), update))
+				assert.Equal(t, want, update.Pipeline)
 			})
 		}
 	}
@@ -888,9 +895,9 @@ func TestBeforeUpdate_TypeChangeFromDeclarative(t *testing.T) {
 			assert.Equal(t, want, p, "a request without a pin passes through")
 
 			p = typedPipeline(typ)
-			p.Spec.Manifest.InterpreterPin = &v2.InterpreterPin{Version: "core-v1"}
-			requireStatus(t, hook.BeforeUpdate(context.Background(), &v2.UpdatePipelineRequest{Pipeline: p}),
-				codes.InvalidArgument, "interpreter_pin is only valid for declarative pipelines")
+			p.Spec.Manifest.InterpreterPin = &v2.InterpreterPin{Version: "core-v1", Artifact: "s3://ma-artifacts/interpreters/core-v1.tar.gz"}
+			require.NoError(t, hook.BeforeUpdate(context.Background(), &v2.UpdatePipelineRequest{Pipeline: p}))
+			assert.Equal(t, want, p, "the hook removes an echoed pin")
 		})
 	}
 }
