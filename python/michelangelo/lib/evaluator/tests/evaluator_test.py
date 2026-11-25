@@ -12,7 +12,11 @@ import torch
 from pandas.errors import UndefinedVariableError
 from torchmetrics import Metric
 
-from michelangelo.lib.evaluator.embedding_metrics import EmbeddingCosineSimilarity
+from michelangelo.lib.evaluator.embedding_metrics import (
+    EmbeddingCosineSimilarity,
+    EmbeddingNullRate,
+    EmbeddingZeroRate,
+)
 from michelangelo.lib.evaluator.evaluator import (
     TorchMetricEvaluator,
     create_evaluator,
@@ -202,6 +206,39 @@ class EvaluateTest(TestCase):
         results = TorchMetricEvaluator(config).evaluate(data)
 
         self.assertAlmostEqual(results["emb_cosine_mean"], 1.0, places=5)
+
+    def test_embedding_row_rates_see_missing_rows(self):
+        """Null and zero rates get the raw column, so a missing vector is counted.
+
+        Stacking the column into a tensor would crash on the missing row.
+        """
+        config = EvaluatorConfig(
+            metrics=[
+                MetricConfig(
+                    name=name,
+                    metric=f"{cls.__module__}.{cls.__name__}",
+                    params={},
+                    columns=ColumnMapping(
+                        prediction_col="embedding", target_col="user_id"
+                    ),
+                )
+                for name, cls in (
+                    ("emb_null_rate", EmbeddingNullRate),
+                    ("emb_zero_rate", EmbeddingZeroRate),
+                )
+            ]
+        )
+        data = pd.DataFrame(
+            {
+                "embedding": [[1.0, 2.0], None, [0.0, 0.0], [3.0, 4.0]],
+                "user_id": ["a", "b", "c", "d"],
+            }
+        )
+
+        results = TorchMetricEvaluator(config).evaluate(data)
+
+        self.assertAlmostEqual(results["emb_null_rate"], 0.25, places=5)
+        self.assertAlmostEqual(results["emb_zero_rate"], 0.25, places=5)
 
     def test_aggregation_subclass_outside_torchmetrics_ignores_target(self):
         """A MeanMetric subclass outside torchmetrics still gets predictions only.

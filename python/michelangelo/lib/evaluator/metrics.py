@@ -44,11 +44,16 @@ _logger = logging.getLogger(__name__)
 #
 # Custom metrics declare intent via a `_metric_type` class attribute; the
 # bundling layer then keys collections by the resolved dtypes, not the tag.
-TASK_TYPE_TO_DTYPES: dict[str, tuple[torch.dtype, torch.dtype | None]] = {
+#
+# pred_dtype=None hands the prediction column to the metric as-is, a numpy array
+# of per-row values, instead of a tensor -- for metrics that must see rows a
+# tensor cannot hold, such as missing embeddings.
+TASK_TYPE_TO_DTYPES: dict[str, tuple[torch.dtype | None, torch.dtype | None]] = {
     "regression": (torch.float32, torch.float32),
     "classification": (torch.float32, torch.long),
     "retrieval": (torch.float32, torch.long),
     "aggregation": (torch.float32, None),
+    "embedding": (None, None),
 }
 
 
@@ -110,7 +115,7 @@ def encode_categorical_column_to_tensor(
 
 
 def _log_data_dtype_details(
-    pred_dtype: torch.dtype,
+    pred_dtype: torch.dtype | None,
     target_dtype: torch.dtype | None,
     data: dict[str, torch.Tensor],
 ) -> None:
@@ -132,7 +137,7 @@ def _log_data_dtype_details(
 def extract_data_for_collection(
     df: pd.DataFrame,
     column_mapping: ColumnMapping,
-    pred_dtype: torch.dtype,
+    pred_dtype: torch.dtype | None,
     target_dtype: torch.dtype | None,
 ) -> dict[str, torch.Tensor]:
     """Extract the tensors one ``MetricCollection`` needs from a DataFrame.
@@ -144,7 +149,9 @@ def extract_data_for_collection(
         df: Rows to extract from, already filtered by the metric's
             ``filter_expr``.
         column_mapping: Which columns feed predictions, targets, and extras.
-        pred_dtype: Dtype for the prediction tensor.
+        pred_dtype: Dtype for the prediction tensor. ``None`` passes the
+            prediction column through uncast, one value per row (see
+            :data:`TASK_TYPE_TO_DTYPES`).
         target_dtype: Dtype for the target tensor. ``None`` marks an
             aggregation-style collection that does not read the target column.
 
@@ -155,9 +162,12 @@ def extract_data_for_collection(
     data = {}
 
     pred_array = df[column_mapping.prediction_col].to_numpy()
-    if len(pred_array) > 0 and isinstance(pred_array[0], (list, np.ndarray)):
-        pred_array = np.vstack(pred_array)
-    data["predictions"] = cast_array_to_dtype(pred_array, pred_dtype)
+    if pred_dtype is None:
+        data["predictions"] = pred_array
+    else:
+        if len(pred_array) > 0 and isinstance(pred_array[0], (list, np.ndarray)):
+            pred_array = np.vstack(pred_array)
+        data["predictions"] = cast_array_to_dtype(pred_array, pred_dtype)
 
     if target_dtype is not None:
         target_array = df[column_mapping.target_col].to_numpy()
@@ -253,7 +263,7 @@ def infer_task_type_from_path(metric_path: str) -> str:
 def resolve_dtypes_for_metric(
     metric_path: str,
     metric_instance: Any,
-) -> tuple[torch.dtype, torch.dtype | None]:
+) -> tuple[torch.dtype | None, torch.dtype | None]:
     """Resolve the ``(pred_dtype, target_dtype)`` pair for one metric.
 
     Resolution order:
@@ -378,7 +388,9 @@ def metric_state_for_logging(metric: Any) -> dict[str, Any]:
 
 def create_metric_collections(
     config: EvaluatorConfig,
-) -> tuple[dict[tuple, Any], dict[tuple, tuple[torch.dtype, torch.dtype | None]]]:
+) -> tuple[
+    dict[tuple, Any], dict[tuple, tuple[torch.dtype | None, torch.dtype | None]]
+]:
     """Group the configured metrics into TorchMetrics ``MetricCollection``s.
 
     The bundling key is ``(ColumnMapping, filter_expr, pred_dtype,
@@ -420,7 +432,7 @@ def create_metric_collections(
         grouped.setdefault(collection_key, {})[metric_config.name] = metric_instance
 
     metric_collections: dict[tuple, Any] = {}
-    dtype_map: dict[tuple, tuple[torch.dtype, torch.dtype | None]] = {}
+    dtype_map: dict[tuple, tuple[torch.dtype | None, torch.dtype | None]] = {}
 
     for collection_key, metrics in grouped.items():
         metric_collections[collection_key] = MetricCollection(metrics)

@@ -23,15 +23,19 @@ or label column, not a wide one like another embedding:
 ``std``, or a percentile such as ``p5`` / ``p50`` / ``p95``. Configure one metric
 per percentile to read the shape of the distribution, not just its center.
 
-Every metric works on a seeded random sample of at most ``max_samples`` rows,
-which bounds memory and keeps the pairwise metrics at ``max_samples**2`` work
-regardless of dataset size, while staying reproducible across runs.
+The geometry metrics work on a seeded random sample of at most ``max_samples``
+rows, which bounds memory and keeps the pairwise metrics at ``max_samples**2``
+work regardless of dataset size, while staying reproducible across runs. The
+data checks ``EmbeddingNullRate`` and ``EmbeddingZeroRate`` instead count every
+row, since a rare bad row is exactly what they exist to catch.
 """
 
 import math
 import re
 from typing import Any, Optional, Union
 
+import numpy as np
+import pandas as pd
 import torch
 from torchmetrics import Metric
 
@@ -41,8 +45,10 @@ __all__ = [
     "EmbeddingEffectiveRank",
     "EmbeddingHubness",
     "EmbeddingNorm",
+    "EmbeddingNullRate",
     "EmbeddingSilhouette",
     "EmbeddingUniformity",
+    "EmbeddingZeroRate",
 ]
 
 _STATS = {"mean": torch.mean, "std": torch.std}
@@ -420,3 +426,117 @@ class EmbeddingDeadDimensions(_EmbeddingMetric):
         if std.isnan().any():
             return torch.tensor(float("nan"))
         return (std <= self.threshold * std.max()).float().mean()
+
+
+# Elements stacked at a time by EmbeddingZeroRate (~128 MB at float64), bounding
+# the copy to a slice of the column however wide the embedding -- a global scope
+# evaluates every row at once, on a node already holding the whole dataset.
+_STACK_CHUNK_ELEMENTS = 16_000_000
+
+
+def _null_mask(preds: Any) -> np.ndarray:
+    """Rows with no embedding: None, NaN of any float width, ``pd.NA``, ``pd.NaT``.
+
+    Each row is one value to ``pd.isna``, so a NaN inside a vector is not a
+    missing embedding.
+    """
+    if isinstance(preds, torch.Tensor):  # a stacked tensor cannot miss a row
+        return np.zeros(len(preds), dtype=bool)
+    if isinstance(preds, list):
+        # One object per row; np.asarray would turn equal-length rows into a
+        # matrix.
+        column = np.empty(len(preds), dtype=object)
+        for i, row in enumerate(preds):
+            column[i] = row
+        preds = column
+    return np.asarray(pd.isna(preds), dtype=bool)
+
+
+def _is_zero_row(row: Any) -> bool:
+    """All elements zero; a missing element (NaN, None, pd.NA) makes it nonzero."""
+    values = np.asarray(row, dtype=object)
+    return not pd.isna(values).any() and not values.astype(float).any()
+
+
+class _EmbeddingRowRate(Metric):
+    """Share of all rows a subclass flags in ``_count``, with no sampling.
+
+    Tagged ``_metric_type = "embedding"``, so the evaluator hands ``update`` the
+    column as-is -- one value per row, missing ones included -- instead of a
+    stacked tensor, which cannot hold a missing row.
+    """
+
+    higher_is_better = False
+    full_state_update = False
+    _metric_type = "embedding"
+
+    def __init__(self, **kwargs: Any) -> None:
+        """Create the metric.
+
+        Args:
+            **kwargs: Passed through to ``torchmetrics.Metric``.
+        """
+        super().__init__(**kwargs)
+        self.add_state("matching", default=torch.tensor(0), dist_reduce_fx="sum")
+        self.add_state("total", default=torch.tensor(0), dist_reduce_fx="sum")
+
+    def update(self, preds: Any) -> None:
+        """Count the flagged rows of a batch, one value per row."""
+        self.matching += self._count(preds)
+        self.total += len(preds)
+
+    def compute(self) -> torch.Tensor:
+        """Share of flagged rows; nan when no rows were seen."""
+        if self.total == 0:
+            return torch.tensor(float("nan"))
+        return self.matching.float() / self.total
+
+    def _count(self, preds: Any) -> int:
+        raise NotImplementedError
+
+
+class EmbeddingNullRate(_EmbeddingRowRate):
+    """Share of rows with no embedding at all.
+
+    For example entities a left join found no vector for.
+    """
+
+    def _count(self, preds: Any) -> int:
+        return int(_null_mask(preds).sum())
+
+
+class EmbeddingZeroRate(_EmbeddingRowRate):
+    """Share of rows whose embedding is all zeros, a common missing-vector filler.
+
+    Rows with no embedding at all do not count here; ``EmbeddingNullRate``
+    reports those. Both are shares of all rows, so they add up.
+    """
+
+    def _count(self, preds: Any) -> int:
+        if isinstance(preds, torch.Tensor):
+            return int((preds == 0).all(dim=1).sum())
+        null = _null_mask(preds)
+        if isinstance(preds, list):
+            rows = [row for row, n in zip(preds, null) if not n]
+        else:
+            rows = preds[~null]
+        if len(rows) == 0:
+            return 0
+        chunk_rows = max(1, _STACK_CHUNK_ELEMENTS // max(1, np.size(rows[0])))
+        count = 0
+        for start in range(0, len(rows), chunk_rows):
+            chunk = rows[start : start + chunk_rows]
+            try:
+                matrix = np.vstack(chunk)
+            except ValueError:  # rows of mixed lengths cannot stack
+                matrix = None
+            if matrix is not None and matrix.dtype != object:
+                # any() reduces without materializing an elementwise mask; a NaN
+                # is nonzero.
+                count += int((~matrix.any(axis=1)).sum())
+            else:
+                # Mixed lengths, or missing elements (None, pd.NA) that make the
+                # stack an object array, whose reduction would call bool() on
+                # them and raise.
+                count += sum(_is_zero_row(row) for row in chunk)
+        return count

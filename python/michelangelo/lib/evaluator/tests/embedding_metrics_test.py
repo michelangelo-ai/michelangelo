@@ -2,22 +2,27 @@
 
 import math
 import unittest
+from unittest.mock import patch
 
 import numpy as np
+import pandas as pd
 import torch
 
+from michelangelo.lib.evaluator import embedding_metrics
 from michelangelo.lib.evaluator.embedding_metrics import (
     EmbeddingCosineSimilarity,
     EmbeddingDeadDimensions,
     EmbeddingEffectiveRank,
     EmbeddingHubness,
     EmbeddingNorm,
+    EmbeddingNullRate,
     EmbeddingSilhouette,
     EmbeddingUniformity,
+    EmbeddingZeroRate,
 )
 
 
-def _score(metric, *batches: torch.Tensor) -> float:
+def _score(metric, *batches) -> float:
     for batch in batches:
         metric.update(batch)
     return metric.compute().item()
@@ -363,3 +368,122 @@ class EmbeddingMetricSamplingTest(unittest.TestCase):
                     dist_sync_fn=gather, distributed_available_fn=lambda: True
                 )
                 self.assertAlmostEqual(_score(metric, x), 3.0, places=5)
+
+
+def _rows(*values) -> np.ndarray:
+    """A column as embedding-type metrics receive it: one object per row."""
+    column = np.empty(len(values), dtype=object)
+    column[:] = [
+        np.asarray(v, dtype=float) if isinstance(v, list) else v for v in values
+    ]
+    return column
+
+
+class EmbeddingNullRateTest(unittest.TestCase):
+    """EmbeddingNullRate."""
+
+    def test_counts_none_and_nan_scalar_rows(self) -> None:
+        """None and a scalar NaN are missing rows."""
+        column = _rows([1.0, 2.0], None, [0.0, 0.0], float("nan"))
+        self.assertAlmostEqual(_score(EmbeddingNullRate(), column), 0.5, places=5)
+
+    def test_counts_numpy_float32_nan_rows(self) -> None:
+        """A float32 NaN, which is not a Python float, is a missing row."""
+        column = np.array([float("nan"), float("nan"), 0.0, 1.0], dtype=np.float32)
+        self.assertAlmostEqual(_score(EmbeddingNullRate(), column), 0.5, places=5)
+        self.assertAlmostEqual(_score(EmbeddingZeroRate(), column), 0.25, places=5)
+
+    def test_counts_pandas_missing_values(self) -> None:
+        """pd.NA and pd.NaT are missing rows."""
+        column = _rows([1.0, 2.0], pd.NA, pd.NaT, [3.0, 4.0])
+        self.assertAlmostEqual(_score(EmbeddingNullRate(), column), 0.5, places=5)
+
+    def test_list_input_keeps_one_value_per_row(self) -> None:
+        """Equal-length rows are not read as a matrix of per-element nulls."""
+        self.assertAlmostEqual(
+            _score(EmbeddingNullRate(), [[1.0, float("nan")], None, [0.0, 0.0]]),
+            1 / 3,
+            places=5,
+        )
+        self.assertAlmostEqual(
+            _score(EmbeddingZeroRate(), [[1.0, 2.0], None, [0.0, 0.0]]),
+            1 / 3,
+            places=5,
+        )
+
+    def test_accumulates_over_updates(self) -> None:
+        """Counts accumulate over updates."""
+        self.assertAlmostEqual(
+            _score(EmbeddingNullRate(), _rows(None, [1.0]), _rows([1.0], [2.0])),
+            0.25,
+            places=5,
+        )
+
+    def test_nan_inside_a_vector_is_not_null(self) -> None:
+        """A NaN element does not make the row missing."""
+        self.assertEqual(_score(EmbeddingNullRate(), _rows([float("nan"), 1.0])), 0.0)
+
+    def test_tensor_input_has_no_nulls(self) -> None:
+        """A stacked tensor cannot hold a missing row."""
+        self.assertEqual(_score(EmbeddingNullRate(), torch.ones(3, 2)), 0.0)
+
+    def test_no_rows_returns_nan(self) -> None:
+        """No rows returns nan."""
+        self.assertTrue(math.isnan(EmbeddingNullRate().compute().item()))
+
+
+class EmbeddingZeroRateTest(unittest.TestCase):
+    """EmbeddingZeroRate."""
+
+    def test_counts_all_zero_rows_over_all_rows(self) -> None:
+        """A null row counts in the denominator but not as zero."""
+        column = _rows([0.0, 0.0], [0.0, 1e-6], None, [0.0, 0.0])
+        self.assertAlmostEqual(_score(EmbeddingZeroRate(), column), 0.5, places=5)
+
+    def test_tensor_input(self) -> None:
+        """A stacked tensor is checked row by row."""
+        x = torch.tensor([[0.0, 0.0], [1.0, 0.0], [0.0, 0.0], [2.0, 3.0]])
+        self.assertAlmostEqual(_score(EmbeddingZeroRate(), x), 0.5, places=5)
+
+    def test_rows_of_mixed_lengths_are_checked_one_by_one(self) -> None:
+        """Rows that cannot stack are checked one by one."""
+        column = _rows([0.0, 0.0], [0.0, 0.0, 0.0], [1.0])
+        self.assertAlmostEqual(_score(EmbeddingZeroRate(), column), 2 / 3, places=5)
+
+    def test_counts_across_stacking_chunks(self) -> None:
+        """A budget of 2 elements over 1-dim rows stacks 2 rows at a time."""
+        with patch.object(embedding_metrics, "_STACK_CHUNK_ELEMENTS", 2):
+            column = _rows([0.0], [1.0], [0.0], None, [0.0])
+            self.assertAlmostEqual(_score(EmbeddingZeroRate(), column), 0.6, places=5)
+
+    def test_chunk_size_scales_with_dimension(self) -> None:
+        """A budget of 4 elements over 2-dim rows stacks 2 rows at a time."""
+        with patch.object(embedding_metrics, "_STACK_CHUNK_ELEMENTS", 4):
+            column = _rows([0.0, 0.0], [1.0, 0.0], [0.0, 0.0], [0.0, 2.0], [0.0, 0.0])
+            self.assertAlmostEqual(_score(EmbeddingZeroRate(), column), 0.6, places=5)
+
+    def test_pandas_missing_values_are_skipped(self) -> None:
+        """pd.NA and pd.NaT are null rows: not zero, and no ambiguous-truth crash."""
+        column = _rows([0.0, 0.0], pd.NA, pd.NaT, [1.0, 1.0])
+        self.assertAlmostEqual(_score(EmbeddingZeroRate(), column), 0.25, places=5)
+
+    def test_missing_elements_make_a_row_nonzero(self) -> None:
+        """A missing element makes a present vector nonzero, without crashing."""
+        as_lists = [[0.0, pd.NA], [0.0, 0.0], [0.0, None]]
+        as_arrays = np.empty(3, dtype=object)
+        for i, row in enumerate(as_lists):
+            as_arrays[i] = np.array(row, dtype=object)
+        for name, column in (("lists", as_lists), ("object arrays", as_arrays)):
+            with self.subTest(rows=name):
+                self.assertAlmostEqual(
+                    _score(EmbeddingZeroRate(), column), 1 / 3, places=5
+                )
+                self.assertEqual(_score(EmbeddingNullRate(), column), 0.0)
+
+    def test_null_and_zero_rates_add_up(self) -> None:
+        """Null and zero rates are shares of all rows, so they add up."""
+        column = _rows(None, [0.0, 0.0], [1.0, 1.0], None)
+        unusable = _score(EmbeddingNullRate(), column) + _score(
+            EmbeddingZeroRate(), column
+        )
+        self.assertAlmostEqual(unusable, 0.75, places=5)
