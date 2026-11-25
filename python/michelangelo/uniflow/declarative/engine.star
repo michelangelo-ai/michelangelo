@@ -22,8 +22,11 @@ _MAX_STEPS = 100000
 # Config keys that the engine consumes. The rest go to the factory.
 _ENGINE_CONFIG_KEYS = ["entry_point", "args", "kwargs"]
 
-_WAIT_INTERVAL_SECONDS = 5
-_MAX_WAIT_POLLS = 720
+_FIRST_POLL_SECONDS = 5
+_MAX_POLL_SECONDS = 300
+
+# The workflow timeout. The wait loop polls at least this long per level.
+_WAIT_BUDGET_SECONDS = 7 * 24 * 60 * 60
 
 # Gate outcome -> the dependency states that satisfy it. A SKIPPED dependency
 # satisfies no gate, so a skip propagates.
@@ -33,6 +36,20 @@ _GATES = {
     "OUTCOME_FAILED": [TASK_STATE_FAILED],
     "OUTCOME_COMPLETED": [TASK_STATE_SUCCEEDED, TASK_STATE_FAILED],
 }
+
+def next_poll_delay(poll):
+    """Return the seconds to sleep after poll number poll, counted from 0."""
+    return min(_FIRST_POLL_SECONDS << min(poll, 7), _MAX_POLL_SECONDS)
+
+def _poll_count(budget):
+    total = 0
+    for poll in range(budget):
+        if total >= budget:
+            return poll
+        total += next_poll_delay(poll)
+    return budget
+
+_MAX_POLLS = _poll_count(_WAIT_BUDGET_SECONDS)
 
 def run(spec, params, registry):
     """Run every task of spec and return the states and outputs."""
@@ -153,10 +170,10 @@ def _wait(callables, workflow_config):
 
     # batch.get() raises when a member failed; is_ready() does not. The
     # outcomes come from the shared dict instead.
-    for _ in range(_MAX_WAIT_POLLS):
+    for poll in range(_MAX_POLLS):
         if batch.is_ready():
             break
-        time.sleep(seconds = _WAIT_INTERVAL_SECONDS)
+        time.sleep(seconds = next_poll_delay(poll))
     if not batch.is_ready():
         fail("declarative: wait budget exhausted")
 

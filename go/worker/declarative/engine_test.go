@@ -586,3 +586,35 @@ func TestEngineNumberParam(t *testing.T) {
 		"fields": map[string]any{"lr": 1.0, "epochs": 3, "text": "lr=1 zero=0"},
 	}, got.result["outputs"].(map[string]any)["a"])
 }
+
+func TestEngineWait(t *testing.T) {
+	tar := casesTar(t)
+	const day = 24 * 60 * 60
+	sleeper := func(seconds int) map[string]any {
+		return spec(nil, map[string]any{"a": config(task("fake/sleep"), map[string]any{"seconds": seconds})})
+	}
+
+	t.Run("slow_task", func(t *testing.T) {
+		got := runEngine(t, tar, "run_timed", sleeper(900), map[string]any{})
+		require.Empty(t, got.err)
+		assert.Equal(t, map[string]string{"a": succeeded}, got.states)
+		// Polls at 5, 15, 35, 75, 155, 315, 615, and 915 s: the delay
+		// starts at 5 s, doubles, and stops at 300 s.
+		assert.Equal(t, 915, got.result["elapsed"])
+	})
+
+	// The last poll is at 7 days + 15 s, the first poll at or after the
+	// 7-day workflow timeout.
+	t.Run("wait_seven_days", func(t *testing.T) {
+		got := runEngine(t, tar, "run_timed", sleeper(7*day), map[string]any{})
+		require.Empty(t, got.err)
+		assert.Equal(t, map[string]string{"a": succeeded}, got.states)
+		assert.Equal(t, 7*day+15, got.result["elapsed"])
+	})
+
+	t.Run("wait_budget_exhausted", func(t *testing.T) {
+		got := runEngine(t, tar, "run_timed", sleeper(7*day+16), map[string]any{})
+		assert.Equal(t, map[string]string{}, got.states)
+		assert.Equal(t, "fail: declarative: wait budget exhausted", got.err)
+	})
+}
