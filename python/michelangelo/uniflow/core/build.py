@@ -31,6 +31,7 @@ Example:
 
 import argparse
 import ast
+import gzip
 import inspect
 import logging
 import sys
@@ -230,7 +231,7 @@ class Package:
     main_file: str
     main_function: str
 
-    def to_tarball(self, file_obj):
+    def to_tarball(self, file_obj, gzip_mtime: Optional[int] = None):
         """Write the package to a tarball file object.
 
         Creates a gzipped tarball containing all package files and writes it
@@ -238,15 +239,31 @@ class Package:
 
         Args:
             file_obj: File-like object to write the tarball to.
+            gzip_mtime: Timestamp for the gzip header. With None, gzip writes
+                the current time. With an integer, equal packages give equal
+                bytes.
         """
+        if gzip_mtime is None:
+            with tarfile.open(fileobj=file_obj, mode="w:gz") as tar:
+                self._add_to_tar(tar)
+            return
+        with (
+            gzip.GzipFile(
+                filename="", mode="wb", fileobj=file_obj, mtime=gzip_mtime
+            ) as gz,
+            tarfile.open(fileobj=gz, mode="w") as tar,
+        ):
+            self._add_to_tar(tar)
+
+    def _add_to_tar(self, tar: tarfile.TarFile):
+        """Add each package file to tar and log the file contents."""
         file_log = ""
         main_file_log = None
-        with tarfile.open(fileobj=file_obj, mode="w:gz") as tar:
-            for path, code_bytes in self.files.items():
-                info = tarfile.TarInfo(path)
-                info.size = len(code_bytes)
-                tar.addfile(info, BytesIO(initial_bytes=code_bytes))
-                _log = f"""
+        for path, code_bytes in self.files.items():
+            info = tarfile.TarInfo(path)
+            info.size = len(code_bytes)
+            tar.addfile(info, BytesIO(initial_bytes=code_bytes))
+            _log = f"""
 
 #
 # path: {info.path}
@@ -255,11 +272,11 @@ class Package:
 
 {code_bytes.decode("utf-8")}
 """
-                if path == self.main_file:
-                    assert main_file_log is None  # Should be unique
-                    main_file_log = _log
-                else:
-                    file_log += _log
+            if path == self.main_file:
+                assert main_file_log is None  # Should be unique
+                main_file_log = _log
+            else:
+                file_log += _log
 
         assert main_file_log  # Should always be present
         # To enhance user convenience, we place the main file log at the end.
@@ -354,19 +371,66 @@ def build(
 
         package_files[path.as_posix()] = content
 
-    main_file = fn_path.as_posix()
-    main_function = fn.__name__
+    return _package(package_files, fn_path.as_posix(), fn.__name__)
 
-    assert main_file in package_files
+
+def build_star(main_file: Path, root: Path, main_function: str = "main") -> Package:
+    """Build a package from a Starlark main file and the files it loads.
+
+    Each file is named by its path relative to root, with a leading "/", and
+    each relative load is rewritten to that name. So the same tree under two
+    roots gives the same package.
+
+    Args:
+        main_file: The Starlark file that defines main_function.
+        root: The directory that holds main_file and every file it loads.
+        main_function: The function that the worker calls.
+
+    Returns:
+        A Package with the Starlark files and meta.json.
+
+    Raises:
+        ValueError: If main_file or a loaded file is outside root.
+    """
+    root = Path(root).resolve()
+    main_path = Path(main_file).resolve()
+    files: dict[Path, ast.Module] = {}
+    _add_star_file(main_path, files, root=root)
+    package_files = {
+        _root_name(path, root): ast.unparse(module).encode("utf-8")
+        for path, module in files.items()
+    }
+    return _package(package_files, _root_name(main_path, root), main_function)
+
+
+def _root_name(path: Path, root: Path) -> str:
+    """Return the package name of path: "/" + its path relative to root."""
+    if not path.is_relative_to(root):
+        raise ValueError(f"{path} is outside root {root}")
+    return "/" + path.relative_to(root).as_posix()
+
+
+def _package(files: dict[str, bytes], main_file: str, main_function: str) -> Package:
+    """Add meta.json to files and return the Package.
+
+    Args:
+        files: Package file names mapped to their content.
+        main_file: The package name of the main file.
+        main_function: The function that the worker calls.
+
+    Returns:
+        The Package.
+    """
+    assert main_file in files
 
     meta_file = "meta.json"
-    assert meta_file not in package_files, f"{meta_file} is a reserved file"
-    package_files[meta_file] = (
+    assert meta_file not in files, f"{meta_file} is a reserved file"
+    files[meta_file] = (
         f'{{"main_file":"{main_file}","main_function":"{main_function}"}}'.encode()
     )
 
     return Package(
-        files=package_files,
+        files=files,
         main_file=main_file,
         main_function=main_function,
     )
@@ -446,7 +510,9 @@ def _transpile_function(
     return fn_path
 
 
-def _add_star_file(path: Path, files: dict[Path, ast.Module]):
+def _add_star_file(
+    path: Path, files: dict[Path, ast.Module], root: Optional[Path] = None
+):
     """Add a Starlark file and its dependencies to the package.
 
     Reads a .star file, parses it, resolves its load dependencies recursively,
@@ -455,6 +521,11 @@ def _add_star_file(path: Path, files: dict[Path, ast.Module]):
     Args:
         path: Path to the Starlark file to add.
         files: Dictionary to accumulate package files.
+        root: With root, each load holds "/" + the path relative to root.
+            Without it, each load holds the absolute filesystem path.
+
+    Raises:
+        ValueError: If root is given and a load resolves outside root.
     """
     if path in files:
         return
@@ -486,9 +557,12 @@ def _add_star_file(path: Path, files: dict[Path, ast.Module]):
 
         assert dep_path.is_file(), dep_path
 
-        path_constant.value = dep_path.as_posix()
+        if root is None:
+            path_constant.value = dep_path.as_posix()
+        else:
+            path_constant.value = _root_name(dep_path, root)
 
-        _add_star_file(dep_path, files)
+        _add_star_file(dep_path, files, root=root)
 
 
 def _iter_top_level_calls(module: ast.Module) -> Iterator[ast.Call]:
