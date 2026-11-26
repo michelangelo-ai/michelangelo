@@ -509,11 +509,20 @@ class EvaluatorConfig:
             before any data is read.
         embedding_projections: Optional 2-D pictures of embedding columns for the
             report; see :class:`EmbeddingProjection`. Requires ``metrics``.
+        segment_shuffle_partitions: Optional number of shuffle partitions for the
+            segment groupbys (metrics and chart data). Unset keeps Ray's default.
+            On Ray versions whose groupby hash shuffle starts one aggregator actor
+            per partition, up to the cluster's CPUs, each actor holds one of its
+            node's worker ports; with few segments, a small value (at least the
+            segment count) avoids running a node out of ports ("No available
+            ports"). Ignored, with a warning, on Ray versions whose groupby takes no
+            partition count.
 
     Raises:
         ConfigurationError: If ``sanity_checks`` is set without ``metrics``, if
-            a check names an unknown metric, or if checks are combined with
-            ``segment_columns`` while ``min_segment_row_count`` is 0.
+            a check names an unknown metric, if checks are combined with
+            ``segment_columns`` while ``min_segment_row_count`` is 0, or if
+            ``segment_shuffle_partitions`` is below 1.
 
     Example:
         >>> EvaluatorConfig().enable_global_segment_evaluation
@@ -528,9 +537,17 @@ class EvaluatorConfig:
     data_preprocessor: str | None = None
     sanity_checks: list[SanityCheck] = field(default_factory=list)
     embedding_projections: list[EmbeddingProjection] = field(default_factory=list)
+    segment_shuffle_partitions: int | None = None
 
     def __post_init__(self) -> None:
-        """Validate sanity checks against the configured metrics."""
+        """Validate the shuffle partitions and the sanity checks."""
+        if self.segment_shuffle_partitions is not None and (
+            self.segment_shuffle_partitions < 1
+        ):
+            raise ConfigurationError(
+                "segment_shuffle_partitions must be at least 1; got "
+                f"{self.segment_shuffle_partitions}."
+            )
         if not self.sanity_checks:
             return
         if not self.metrics:

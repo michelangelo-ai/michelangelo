@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import cast
 from unittest import TestCase
 from unittest.mock import MagicMock, patch
 
@@ -45,8 +46,10 @@ from michelangelo.workflow.tasks.evaluator.task import (  # noqa: E402
     _apply_preprocessor,
     _evaluate_segment,
     _fill_segment_nulls,
+    _groupby_segments,
     _load_dataset,
     _resolve_preprocessor,
+    _SegmentDataset,
     evaluate,
 )
 
@@ -636,3 +639,75 @@ class EmbeddingReportTest(TestCase):
             result = evaluate(config, {"test": self._dataset(8)})
         assert "test" in result.metrics
         assert any("skipping per-segment chart data" in line for line in logs.output)
+
+
+class _NewRayDataset:
+    """Stands in for a Ray Dataset whose groupby takes num_partitions."""
+
+    def __init__(self) -> None:
+        """Start with no recorded groupby calls."""
+        self.calls: list[tuple[object, ...]] = []
+
+    def groupby(self, key: list[str], num_partitions: int | None = None) -> None:
+        """Record the call."""
+        self.calls.append((key, num_partitions))
+
+
+class _OldRayDataset:
+    """Stands in for a Ray Dataset whose groupby has no num_partitions."""
+
+    def __init__(self) -> None:
+        """Start with no recorded groupby calls."""
+        self.calls: list[tuple[object, ...]] = []
+
+    def groupby(self, key: list[str]) -> None:
+        """Record the call."""
+        self.calls.append((key,))
+
+
+class GroupbySegmentsTest(TestCase):
+    """Tests for the opt-in segment_shuffle_partitions."""
+
+    @classmethod
+    def setUpClass(cls):
+        """Start a small local Ray instance."""
+        _init_ray()
+
+    def test_unset_keeps_ray_default(self):
+        """Without a partition count the groupby is called as before."""
+        dataset = _NewRayDataset()
+        _groupby_segments(cast(_SegmentDataset, dataset), ["region"], None)
+        assert dataset.calls == [(["region"], None)]
+
+    def test_set_passes_num_partitions(self):
+        """A partition count is handed to the groupby."""
+        dataset = _NewRayDataset()
+        _groupby_segments(cast(_SegmentDataset, dataset), ["region"], 4)
+        assert dataset.calls == [(["region"], 4)]
+
+    def test_ray_without_num_partitions_ignores_setting(self):
+        """Where groupby takes no partition count, the setting is ignored, loudly."""
+        dataset = _OldRayDataset()
+        with self.assertLogs(_TASK, level="WARNING") as logs:
+            _groupby_segments(cast(_SegmentDataset, dataset), ["region"], 4)
+        assert dataset.calls == [(["region"],)]
+        assert any("segment_shuffle_partitions=4 ignored" in m for m in logs.output)
+
+    def test_config_rejects_zero_partitions(self):
+        """At least one partition is needed."""
+        with pytest.raises(ConfigurationError, match="segment_shuffle_partitions"):
+            EvaluatorConfig(segment_shuffle_partitions=0)
+
+    @patch(f"{_TASK}._save_summary")
+    def test_segmented_evaluation_runs_with_partitions_set(self, _mock_save):
+        """Both segment groupbys pass the count to Ray, and the run completes."""
+        config = _config(
+            segment_columns=["region"],
+            min_segment_row_count=1,
+            segment_shuffle_partitions=2,
+        )
+        with patch(f"{_TASK}._groupby_segments", wraps=_groupby_segments) as spy:
+            result = evaluate(config, {"test": _FakeDataset(_frame(segment=True))})
+        assert "test" in result.metrics
+        # One groupby for the metrics, one for the chart data.
+        assert [call.args[2] for call in spy.call_args_list] == [2, 2]

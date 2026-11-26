@@ -244,6 +244,19 @@ class EvaluatorConfigTest(TestCase):
         self.assertEqual(cfg.min_segment_row_count, 0)
         self.assertIsNone(cfg.data_preprocessor)
 
+    def test_segment_shuffle_partitions_is_opt_in(self):
+        """It is unset by default and accepts a positive count."""
+        self.assertIsNone(EvaluatorConfig().segment_shuffle_partitions)
+        self.assertEqual(
+            EvaluatorConfig(segment_shuffle_partitions=4).segment_shuffle_partitions, 4
+        )
+
+    def test_segment_shuffle_partitions_below_one_raises(self):
+        """Zero or negative partitions are rejected."""
+        for value in (0, -1):
+            with self.subTest(value=value), self.assertRaises(ConfigurationError):
+                EvaluatorConfig(segment_shuffle_partitions=value)
+
     def test_list_defaults_are_independent_per_instance(self):
         """It gives each instance its own list fields."""
         a, b = EvaluatorConfig(), EvaluatorConfig()
