@@ -394,6 +394,11 @@ release. The `core-v0.1.0` release has one task type, `core/ray`.
 1. Copy `core-v0.1.0.yaml` into the `releasesDir` of the apiserver, and
    restart the apiserver. The startup log lists `core-v0.1.0`.
 
+> **Note:** Each apiserver replica loads its release files at startup. Copy a
+> new release file to every replica, and restart all replicas. Do this before
+> you apply a pipeline with that release. Otherwise, a replica without the
+> release rejects the apply and the runs of that pipeline.
+
 Do not change the tar after you upload it. The controller compares the
 digest of the tar with the digest in the pin.
 
@@ -429,13 +434,24 @@ rejects the run in these cases:
 
 | Case | Code |
 |---|---|
-| The run names a pipeline in another namespace, and the pipeline with that name in the run namespace is declarative. | `INVALID_ARGUMENT` |
+| The run names a pipeline in another namespace, and that pipeline or the pipeline with that name in the run namespace is declarative. | `INVALID_ARGUMENT` |
 | The flag is off. | `FAILED_PRECONDITION` |
 | The pipeline has no pin, or the pin does not equal a loaded release. | `FAILED_PRECONDITION` |
 | The workflow does not conform to the pinned release. | `INVALID_ARGUMENT` |
-| The run input sets `task_configs`, `workflow_config`, `args`, `kw_args`, or `parameter_map`. | `INVALID_ARGUMENT` |
+| The run input sets `task_configs` or `workflow_config`. | `INVALID_ARGUMENT` |
+| The run input sets a non-empty `args`, `kw_args`, or `parameter_map`. | `INVALID_ARGUMENT` |
 | The run input sets an `environ` key other than `LAST_SCHEDULE_TIMESTAMP`. | `INVALID_ARGUMENT` |
+| The run input sets `LAST_SCHEDULE_TIMESTAMP` to a value that is not a string. | `INVALID_ARGUMENT` |
 | A parameter has no default. | `INVALID_ARGUMENT` |
+
+A run of the latest revision of a pipeline uses the pin of the live pipeline.
+A run of an explicit `spec.revision` uses the pin of that revision. When the
+apiserver does not load that pin, apply the pipeline from a new commit. This
+makes a new revision.
+
+The apiserver does the same check when an update changes the inline spec, the
+pipeline or revision reference, or the input of a run. An update of other
+fields, such as `kill`, skips the check.
 
 ### Start failures
 
@@ -450,6 +466,11 @@ message:
 | Tar too large | `interpreter <version> is larger than the 1 MiB limit` |
 | Digest mismatch | `interpreter <version> does not match the digest in its pin` |
 | Spec does not decode | `cannot decode declarative spec: <error>` |
+| Run input is not supported | The message of the apiserver check, such as `parameter overrides are not supported yet` |
+| A parameter has no default | `parameter <name> is required; parameter overrides are not supported yet` |
+
+The last two rows apply to a run that a client wrote directly to Kubernetes.
+The apiserver rejects these runs before it creates them.
 
 The step message names only the interpreter version. The controller writes the
 artifact path, the fetch error, the tar size, and the digests to its log, at
@@ -458,14 +479,32 @@ trigger a new run.
 
 ### Cron triggers
 
-A cron trigger can run a declarative pipeline. The trigger adds
-`LAST_SCHEDULE_TIMESTAMP` to the run environment after the first run.
+A cron trigger can run a declarative pipeline. The trigger sets
+`environ.LAST_SCHEDULE_TIMESTAMP` in the run input when the trigger schedule
+gives a previous schedule time:
 
-Do not set `parameter_map` on a cron trigger of a declarative pipeline. The
-trigger copies `parameter_map` into the run input, and the apiserver rejects
-the run with `parameter overrides are not supported yet`. The trigger retries
-the create 5 times. In batch mode, the default, the trigger then logs the error and
-creates no run. In concurrent mode, the trigger fails.
+- An interval schedule gives it on every run, also the first run. The value
+  is the execution time minus the interval.
+- A cron schedule gives it when the trigger finds a cron time before the
+  execution time. The trigger looks back two cron periods. The value is the
+  latest cron time that it finds.
+- A batch rerun never gives it.
+
+The value is a Unix time in seconds, as a string. It comes from the schedule,
+not from the previous run. The run environment gets the same value.
+
+The apiserver rejects a run of a declarative pipeline when the trigger
+parameters set any of these inputs:
+
+- `task_configs` or `workflow_config`.
+- A non-empty `args` or `kw_args`.
+- An `environ` key other than `LAST_SCHEDULE_TIMESTAMP`.
+- A non-empty `parameter_map`. The rejection message is `parameter overrides
+  are not supported yet`.
+
+Do not set these inputs on a trigger of a declarative pipeline. The trigger
+retries the create 5 times. In batch mode, the default, the trigger then logs
+the error and creates no run. In concurrent mode, the trigger fails.
 
 ## Clean up
 
