@@ -13,19 +13,18 @@ import (
 )
 
 // checkDeclarativeRun validates a run of a DECLARATIVE pipeline spec at
-// trigger. It returns nil for any other spec. revision is the name of the
-// revision that the run names explicitly, or "".
-func checkDeclarativeRun(run *v2.PipelineRun, spec *v2.PipelineSpec, revision string, d *pipelineapihook.Declarative) error {
+// trigger. It returns nil for any other spec.
+func checkDeclarativeRun(run *v2.PipelineRun, spec *v2.PipelineSpec, explicitRevision string, d *pipelineapihook.Declarative) error {
 	if spec.GetManifest().GetType() != v2.PIPELINE_MANIFEST_TYPE_DECLARATIVE {
 		return nil
 	}
-	if err := checkPipelineNamespace(run); err != nil {
+	if err := requirePipelineInRunNamespace(run); err != nil {
 		return err
 	}
 	if !d.Enabled() {
 		return status.Error(codes.FailedPrecondition, pipelineapihook.NotEnabledMessage)
 	}
-	rel, err := pinnedRelease(spec.Manifest.InterpreterPin, revision, d)
+	rel, err := pinnedRelease(spec.Manifest.InterpreterPin, explicitRevision, d)
 	if err != nil {
 		return err
 	}
@@ -52,10 +51,7 @@ func checkDeclarativeRun(run *v2.PipelineRun, spec *v2.PipelineSpec, revision st
 	return nil
 }
 
-// checkPipelineNamespace rejects a run by name that names a pipeline in
-// another namespace. The SourcePipeline actor reads a pipeline by name from
-// the run namespace, so the run would not run the pipeline that it names.
-func checkPipelineNamespace(run *v2.PipelineRun) error {
+func requirePipelineInRunNamespace(run *v2.PipelineRun) error {
 	if run.Spec.PipelineSpec != nil {
 		return nil
 	}
@@ -65,32 +61,31 @@ func checkPipelineNamespace(run *v2.PipelineRun) error {
 	return nil
 }
 
-// pinnedRelease returns the loaded release that pin names. A re-apply cannot
-// change the pin of an explicit revision, so its errors ask for a new revision.
-func pinnedRelease(pin *v2.InterpreterPin, revision string, d *pipelineapihook.Declarative) (*declarative.Release, error) {
+func pinnedRelease(pin *v2.InterpreterPin, explicitRevision string, d *pipelineapihook.Declarative) (*declarative.Release, error) {
 	if pin.GetVersion() == "" {
 		return nil, status.Error(codes.FailedPrecondition, "declarative pipeline has no interpreter pin; re-apply the pipeline through the API")
 	}
-	rel, ok := d.Release(pin.Version)
-	switch {
-	case !ok && revision != "":
-		return nil, status.Errorf(codes.FailedPrecondition, "revision %q pins interpreter %q, which is not loaded on this apiserver; %s", revision, pin.Version, newRevisionHint)
-	case !ok:
-		return nil, status.Errorf(codes.FailedPrecondition, "interpreter %q is not loaded on this apiserver; loaded releases: [%s]", pin.Version, strings.Join(d.Versions(), ", "))
-	case (pin.Artifact != rel.Artifact || pin.Digest != rel.Digest) && revision != "":
-		return nil, status.Errorf(codes.FailedPrecondition, "revision %q pins interpreter %q, which does not equal the loaded release; %s", revision, pin.Version, newRevisionHint)
-	case pin.Artifact != rel.Artifact || pin.Digest != rel.Digest:
-		return nil, status.Errorf(codes.FailedPrecondition, "interpreter pin %q does not equal the loaded release; re-apply the pipeline through the API", pin.Version)
+	rel, loaded := d.Release(pin.Version)
+	if loaded && pin.Artifact == rel.Artifact && pin.Digest == rel.Digest {
+		return rel, nil
 	}
-	return rel, nil
+	if explicitRevision != "" {
+		return nil, staleRevisionPinError(explicitRevision, pin.Version, loaded)
+	}
+	if !loaded {
+		return nil, status.Errorf(codes.FailedPrecondition, "interpreter %q is not loaded on this apiserver; loaded releases: [%s]", pin.Version, strings.Join(d.Versions(), ", "))
+	}
+	return nil, status.Errorf(codes.FailedPrecondition, "interpreter pin %q does not equal the loaded release; re-apply the pipeline through the API", pin.Version)
 }
 
-const newRevisionHint = "apply the pipeline from a new commit to create a new revision"
+func staleRevisionPinError(revision, version string, loaded bool) error {
+	problem := "is not loaded on this apiserver"
+	if loaded {
+		problem = "does not equal the loaded release"
+	}
+	return status.Errorf(codes.FailedPrecondition, "revision %q pins interpreter %q, which %s; apply the pipeline from a new commit to create a new revision", revision, version, problem)
+}
 
-// takeLivePin copies the interpreter pin and uniflow_tar of the live Pipeline
-// into a DECLARATIVE spec that a run resolved from status.latestRevision. A
-// re-apply on the same commit changes the pin of the live Pipeline but keeps
-// the revision, so the snapshot pin can name a release that is gone.
 func takeLivePin(spec *v2.PipelineSpec, live *v2.Pipeline) {
 	if spec.GetManifest().GetType() != v2.PIPELINE_MANIFEST_TYPE_DECLARATIVE ||
 		live.Spec.GetManifest().GetType() != v2.PIPELINE_MANIFEST_TYPE_DECLARATIVE {

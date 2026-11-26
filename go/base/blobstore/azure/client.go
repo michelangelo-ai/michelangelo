@@ -16,6 +16,8 @@ var (
 	_ blobstore.LimitedGetter   = (*azureBlobClient)(nil)
 )
 
+const noLimit = -1
+
 // azureBlobClient is a client for Azure Blob Storage with SAS token authentication.
 // It provides methods to interact with Azure Blob Storage using container-level SAS tokens.
 type azureBlobClient struct {
@@ -44,15 +46,13 @@ func newAzureBlobClient(storageAccount, sasToken, endpoint string) *azureBlobCli
 // Get retrieves an object from Azure Blob Storage using SAS token authentication.
 // The blobURI is expected to be in the format "abfss://container@storageaccount.blob.core.windows.net/path".
 func (c *azureBlobClient) Get(ctx context.Context, blobURI string) ([]byte, error) {
-	return c.get(ctx, blobURI, -1)
+	return c.get(ctx, blobURI, noLimit)
 }
 
-// GetLimited returns at most limit+1 bytes of the blob.
 func (c *azureBlobClient) GetLimited(ctx context.Context, blobURI string, limit int64) ([]byte, error) {
 	return c.get(ctx, blobURI, limit)
 }
 
-// get reads the whole blob when limit is negative.
 func (c *azureBlobClient) get(ctx context.Context, blobURI string, limit int64) ([]byte, error) {
 	parsedURL, err := url.Parse(blobURI)
 	if err != nil {
@@ -114,7 +114,7 @@ func (c *azureBlobClient) downloadBlob(ctx context.Context, originalURI, blobURL
 	}
 
 	var r io.Reader = resp.Body
-	if limit >= 0 {
+	if limit != noLimit {
 		r = io.LimitReader(resp.Body, limit+1)
 	}
 	data, err := io.ReadAll(r)

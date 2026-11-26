@@ -110,7 +110,6 @@ func hookWith(t *testing.T, d *pipelineapihook.Declarative, objects ...client.Ob
 	return h
 }
 
-// withStalePin returns a copy of p pinned to a release that is not loaded.
 func withStalePin(p *v2.Pipeline) *v2.Pipeline {
 	stale := *p
 	manifest := *p.Spec.Manifest
@@ -135,11 +134,8 @@ var specSources = []specSource{
 		},
 	},
 	{
-		name: "latest revision",
+		name: "latest revision with stale snapshot pin",
 		setUp: func(t *testing.T, p *v2.Pipeline, d *pipelineapihook.Declarative) (apiHook, *v2.CreatePipelineRunRequest) {
-			// The run takes the workflow from the snapshot and the pin from the
-			// live Pipeline. The snapshot pin is stale, so a case passes only
-			// when the hook checks the live pin.
 			live := pinnedPipeline(t, p.Namespace, runWorkflow())
 			live.Spec.Manifest.InterpreterPin = p.Spec.Manifest.InterpreterPin
 			live.Status.LatestRevision = &apipb.ResourceIdentifier{Name: "rev-1", Namespace: testNamespace}
@@ -162,15 +158,14 @@ func TestBeforeCreate_DeclarativeRun(t *testing.T) {
 		"environ": structOf(map[string]*types.Value{"LAST_SCHEDULE_TIMESTAMP": str("1764115200")}),
 	}}
 	for _, tc := range []struct {
-		name     string
-		enabled  bool
-		workflow func(w *v2.DeclarativeWorkflow)
-		pipeline func(p *v2.Pipeline)
-		input    *types.Struct
-		code     codes.Code
-		msg      string
-		// revisionMsg replaces msg for a run of an explicit revision.
-		revisionMsg string
+		name                string
+		enabled             bool
+		workflow            func(w *v2.DeclarativeWorkflow)
+		pipeline            func(p *v2.Pipeline)
+		input               *types.Struct
+		code                codes.Code
+		msg                 string
+		explicitRevisionMsg string
 	}{
 		{name: "valid run", enabled: true},
 		{name: "cron input", enabled: true, input: cronInput},
@@ -198,7 +193,7 @@ func TestBeforeCreate_DeclarativeRun(t *testing.T) {
 			pipeline: func(p *v2.Pipeline) { p.Spec.Manifest.InterpreterPin.Version = "core-v9" },
 			code:     codes.FailedPrecondition,
 			msg:      `interpreter "core-v9" is not loaded on this apiserver; loaded releases: [core-v1]`,
-			revisionMsg: `revision "rev-1" pins interpreter "core-v9", which is not loaded on this apiserver; ` +
+			explicitRevisionMsg: `revision "rev-1" pins interpreter "core-v9", which is not loaded on this apiserver; ` +
 				"apply the pipeline from a new commit to create a new revision",
 		},
 		{
@@ -206,7 +201,7 @@ func TestBeforeCreate_DeclarativeRun(t *testing.T) {
 			pipeline: func(p *v2.Pipeline) { p.Spec.Manifest.InterpreterPin.Digest = "sha256:22" },
 			code:     codes.FailedPrecondition,
 			msg:      `interpreter pin "core-v1" does not equal the loaded release; re-apply the pipeline through the API`,
-			revisionMsg: `revision "rev-1" pins interpreter "core-v1", which does not equal the loaded release; ` +
+			explicitRevisionMsg: `revision "rev-1" pins interpreter "core-v1", which does not equal the loaded release; ` +
 				"apply the pipeline from a new commit to create a new revision",
 		},
 		{
@@ -214,7 +209,7 @@ func TestBeforeCreate_DeclarativeRun(t *testing.T) {
 			pipeline: func(p *v2.Pipeline) { p.Spec.Manifest.InterpreterPin.Artifact = "s3://other/core-v1.tar.gz" },
 			code:     codes.FailedPrecondition,
 			msg:      `interpreter pin "core-v1" does not equal the loaded release; re-apply the pipeline through the API`,
-			revisionMsg: `revision "rev-1" pins interpreter "core-v1", which does not equal the loaded release; ` +
+			explicitRevisionMsg: `revision "rev-1" pins interpreter "core-v1", which does not equal the loaded release; ` +
 				"apply the pipeline from a new commit to create a new revision",
 		},
 		{
@@ -304,8 +299,8 @@ func TestBeforeCreate_DeclarativeRun(t *testing.T) {
 				require.True(t, ok, "not a status error: %v", err)
 				assert.Equal(t, tc.code, st.Code())
 				want := tc.msg
-				if src.name == "explicit revision" && tc.revisionMsg != "" {
-					want = tc.revisionMsg
+				if src.name == "explicit revision" && tc.explicitRevisionMsg != "" {
+					want = tc.explicitRevisionMsg
 				}
 				assert.Equal(t, want, st.Message())
 			})
@@ -333,8 +328,6 @@ func TestBeforeCreate_DeclarativeRunChecksPipelineInRunNamespace(t *testing.T) {
 	assert.Equal(t, `declarative pipeline run must name a pipeline in its own namespace "test-namespace", not "other-namespace"`, st.Message())
 }
 
-// A run by name in another namespace would run a pipeline of that name in the
-// run namespace, or fail, so it never runs the declarative pipeline it names.
 func TestBeforeCreate_DeclarativeRunNamesPipelineInOtherNamespace(t *testing.T) {
 	other := pinnedPipeline(t, "other-namespace", runWorkflow())
 	h := hookWith(t, loadDeclarative(t, true), other)
@@ -458,8 +451,7 @@ func TestBeforeUpdate_DeclarativeRun(t *testing.T) {
 			msg:  `declarative pipeline run must name a pipeline in its own namespace "test-namespace", not "other-namespace"`,
 		},
 		{
-			// The flag is off, so the update passes only when the hook skips the check.
-			name: "kill and retry only", enabled: false, stored: inline,
+			name: "kill and retry only with flag off", enabled: false, stored: inline,
 			update: func(spec *v2.PipelineRunSpec) {
 				spec.Kill = true
 				spec.RetryInfo = &v2.RetryInfo{ActivityId: "7"}

@@ -132,8 +132,7 @@ func (a apiHook) BeforeCreate(ctx context.Context, request *v2.CreatePipelineRun
 // from, so this only ever fills in the configured default when the label is
 // absent and never overwrites a value the caller (or a prior update) set. It
 // also guards against a nil Annotations map, since callers/serialization can
-// leave it unset and later merges into the map would otherwise panic. Last, it
-// runs the declarative trigger check when the update changes what the run runs.
+// leave it unset and later merges into the map would otherwise panic.
 func (a apiHook) BeforeUpdate(ctx context.Context, request *v2.UpdatePipelineRunRequest) error {
 	if request.PipelineRun.Annotations == nil {
 		request.PipelineRun.Annotations = map[string]string{}
@@ -145,18 +144,9 @@ func (a apiHook) BeforeUpdate(ctx context.Context, request *v2.UpdatePipelineRun
 	return a.checkDeclarativeUpdate(ctx, request.PipelineRun)
 }
 
-// checkDeclarativeUpdate runs the declarative trigger check again when an
-// update changes what the run controller runs: the inline spec, the pipeline
-// or revision reference, or the input. The UI sets kill and retry_info through
-// Update, so an update of other fields skips the check. When the stored run
-// cannot be read, the check runs.
 func (a apiHook) checkDeclarativeUpdate(ctx context.Context, run *v2.PipelineRun) error {
 	stored := &v2.PipelineRun{}
-	if err := a.apiHandler.Get(ctx, run.Namespace, run.Name, &metav1.GetOptions{}, stored); err == nil &&
-		gogoproto.Equal(stored.Spec.PipelineSpec, run.Spec.PipelineSpec) &&
-		gogoproto.Equal(stored.Spec.Pipeline, run.Spec.Pipeline) &&
-		gogoproto.Equal(stored.Spec.Revision, run.Spec.Revision) &&
-		gogoproto.Equal(stored.Spec.Input, run.Spec.Input) {
+	if err := a.apiHandler.Get(ctx, run.Namespace, run.Name, &metav1.GetOptions{}, stored); err == nil && sameRunSource(&stored.Spec, &run.Spec) {
 		return nil
 	}
 	var referenced *v2.Pipeline
@@ -164,6 +154,13 @@ func (a apiHook) checkDeclarativeUpdate(ctx context.Context, run *v2.PipelineRun
 		referenced = a.getReferencedPipeline(ctx, run)
 	}
 	return a.checkDeclarativeSource(ctx, run, referenced, "")
+}
+
+func sameRunSource(a, b *v2.PipelineRunSpec) bool {
+	return gogoproto.Equal(a.PipelineSpec, b.PipelineSpec) &&
+		gogoproto.Equal(a.Pipeline, b.Pipeline) &&
+		gogoproto.Equal(a.Revision, b.Revision) &&
+		gogoproto.Equal(a.Input, b.Input)
 }
 
 // getReferencedPipeline loads Spec.Pipeline when set. Any Get failure (including
@@ -201,16 +198,11 @@ func (a apiHook) getReferencedPipeline(ctx context.Context, run *v2.PipelineRun)
 	return pipeline
 }
 
-// checkDeclarativeSource runs the declarative trigger check on the spec that
-// the run controller runs: the inline spec, or else the named Pipeline in the
-// run namespace. referenced is the Pipeline that spec.pipeline names, or nil.
-// A run by name of a declarative Pipeline in another namespace is rejected,
-// because the controller reads the run namespace and never runs that Pipeline.
-func (a apiHook) checkDeclarativeSource(ctx context.Context, run *v2.PipelineRun, referenced *v2.Pipeline, revision string) error {
+func (a apiHook) checkDeclarativeSource(ctx context.Context, run *v2.PipelineRun, referenced *v2.Pipeline, explicitRevision string) error {
 	spec := run.Spec.GetPipelineSpec()
 	if spec == nil {
 		if referenced != nil && referenced.Spec.GetManifest().GetType() == v2.PIPELINE_MANIFEST_TYPE_DECLARATIVE {
-			if err := checkPipelineNamespace(run); err != nil {
+			if err := requirePipelineInRunNamespace(run); err != nil {
 				return err
 			}
 		}
@@ -218,7 +210,7 @@ func (a apiHook) checkDeclarativeSource(ctx context.Context, run *v2.PipelineRun
 			spec = &p.Spec
 		}
 	}
-	return checkDeclarativeRun(run, spec, revision, a.declarative)
+	return checkDeclarativeRun(run, spec, explicitRevision, a.declarative)
 }
 
 // runNamespacePipeline returns the Pipeline that the SourcePipeline actor runs

@@ -356,9 +356,9 @@ func (a *ExecuteWorkflowActor) Run(ctx context.Context, pipelineRun *v2.Pipeline
 		workflowExecution, err := a.StartWorkflow(ctx, pipelineRun, taskList)
 		var startErr *startError
 		if errors.As(err, &startErr) {
-			logger.Warn("cannot start declarative run", append([]zap.Field{zap.String("message", startErr.msg)}, startErr.fields...)...)
+			logger.Warn("cannot start declarative run", append([]zap.Field{zap.String("message", startErr.stepMessage)}, startErr.logFields...)...)
 			executeWorkflowStep.State = v2.PIPELINE_RUN_STEP_STATE_FAILED
-			executeWorkflowStep.Message = startErr.msg
+			executeWorkflowStep.Message = startErr.stepMessage
 			executeWorkflowStep.EndTime = pbtypes.TimestampNow()
 			return &apipb.Condition{
 				Type:   ExecuteWorkflowType,

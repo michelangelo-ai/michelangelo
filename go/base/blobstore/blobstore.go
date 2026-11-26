@@ -17,8 +17,8 @@ type BlobStoreClient interface {
 	Scheme() string
 }
 
-// LimitedGetter is a BlobStoreClient that can stop reading a blob after a
-// byte limit, so that a large blob never fully loads into memory.
+// LimitedGetter stops reading a blob after a byte limit, so that a large blob
+// never fully loads into memory.
 type LimitedGetter interface {
 	// GetLimited returns at most limit+1 bytes of the blob.
 	GetLimited(ctx context.Context, blobURI string, limit int64) ([]byte, error)

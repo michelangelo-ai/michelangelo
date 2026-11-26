@@ -26,6 +26,8 @@ var (
 	_ blobstore.LimitedGetter   = (*gcsBlobClient)(nil)
 )
 
+const noLimit = -1
+
 // gcsBlobClient is a client for Google Cloud Storage.
 //
 // The underlying storage.Client is created lazily on the first Get call
@@ -120,15 +122,13 @@ func refuseInsecureRedirect(req *http.Request, via []*http.Request) error {
 // Get retrieves the content of a blob from Google Cloud Storage.
 // The blobURI is expected to be in the format "gs://bucket/path/to/object".
 func (c *gcsBlobClient) Get(ctx context.Context, blobURI string) ([]byte, error) {
-	return c.get(ctx, blobURI, -1)
+	return c.get(ctx, blobURI, noLimit)
 }
 
-// GetLimited returns at most limit+1 bytes of the object.
 func (c *gcsBlobClient) GetLimited(ctx context.Context, blobURI string, limit int64) ([]byte, error) {
 	return c.get(ctx, blobURI, limit)
 }
 
-// get reads the whole object when limit is negative.
 func (c *gcsBlobClient) get(ctx context.Context, blobURI string, limit int64) ([]byte, error) {
 	parsedURL, err := url.Parse(blobURI)
 	if err != nil {
@@ -155,7 +155,7 @@ func (c *gcsBlobClient) get(ctx context.Context, blobURI string, limit int64) ([
 		return nil, fmt.Errorf("failed to get object: %w", err)
 	}
 	var r io.Reader = reader
-	if limit >= 0 {
+	if limit != noLimit {
 		r = io.LimitReader(reader, limit+1)
 	}
 	data, err := io.ReadAll(r)

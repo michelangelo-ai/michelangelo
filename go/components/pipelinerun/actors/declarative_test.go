@@ -104,12 +104,11 @@ func declActor(t *testing.T, ctrl *gomock.Controller, setUp func(*workflowclient
 func TestDeclarativeStartFailure(t *testing.T) {
 	f := loadDeclFixture(t)
 	for _, tc := range []struct {
-		name  string
-		edit  func(run *v2.PipelineRun)
-		fetch func(b *blobstoreMock.MockBlobStoreClient)
-		msg   string
-		// log holds the fields of the Warn log beyond the run key and the message.
-		log map[string]interface{}
+		name           string
+		edit           func(run *v2.PipelineRun)
+		fetch          func(b *blobstoreMock.MockBlobStoreClient)
+		msg            string
+		extraLogFields map[string]interface{}
 	}{
 		{
 			name: "no pin",
@@ -154,16 +153,16 @@ func TestDeclarativeStartFailure(t *testing.T) {
 			fetch: func(b *blobstoreMock.MockBlobStoreClient) {
 				b.EXPECT().Get(gomock.Any(), declArtifact).Return(nil, errors.New("access denied for key"))
 			},
-			msg: "cannot fetch interpreter core-v0.1.0",
-			log: map[string]interface{}{"artifact": declArtifact, "error": "access denied for key"},
+			msg:            "cannot fetch interpreter core-v0.1.0",
+			extraLogFields: map[string]interface{}{"artifact": declArtifact, "error": "access denied for key"},
 		},
 		{
 			name: "too large",
 			fetch: func(b *blobstoreMock.MockBlobStoreClient) {
 				b.EXPECT().Get(gomock.Any(), declArtifact).Return(make([]byte, 1<<20+1), nil)
 			},
-			msg: "interpreter core-v0.1.0 is larger than the 1 MiB limit",
-			log: map[string]interface{}{"artifact": declArtifact, "bytes": int64(1<<20 + 1)},
+			msg:            "interpreter core-v0.1.0 is larger than the 1 MiB limit",
+			extraLogFields: map[string]interface{}{"artifact": declArtifact, "bytes": int64(1<<20 + 1)},
 		},
 		{
 			name: "digest mismatch",
@@ -171,7 +170,7 @@ func TestDeclarativeStartFailure(t *testing.T) {
 				b.EXPECT().Get(gomock.Any(), declArtifact).Return([]byte("other"), nil)
 			},
 			msg: "interpreter core-v0.1.0 does not match the digest in its pin",
-			log: map[string]interface{}{
+			extraLogFields: map[string]interface{}{
 				"artifact":      declArtifact,
 				"pinDigest":     f.digest,
 				"fetchedDigest": "sha256:d9298a10d1b0735837dc4bd85dac641b0f3cef27a47e5d53a54f2f3f5b2fcffa",
@@ -202,7 +201,7 @@ func TestDeclarativeStartFailure(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, &apipb.Condition{Type: ExecuteWorkflowType, Status: apipb.CONDITION_STATUS_FALSE}, condition)
 			wantLog := map[string]interface{}{"pipelineRun": declNamespace + "/" + declRunName, "message": tc.msg}
-			for k, v := range tc.log {
+			for k, v := range tc.extraLogFields {
 				wantLog[k] = v
 			}
 			require.Equal(t, 1, logs.Len())
@@ -325,8 +324,6 @@ func TestDeclarativeStartResume(t *testing.T) {
 	}, got.env)
 }
 
-// limitedClient returns limit+1 bytes from GetLimited, as a blob store client
-// does for a blob larger than limit.
 type limitedClient struct {
 	t      *testing.T
 	limits []int64
@@ -361,8 +358,6 @@ func TestDeclarativeStartBoundsTheFetch(t *testing.T) {
 	assert.Equal(t, "interpreter core-v0.1.0 is larger than the 1 MiB limit", step.Message)
 }
 
-// A cache env error is retryable, and a fetch error is final, so the
-// controller must not fetch before the cache env succeeds.
 func TestDeclarativeStartCacheErrorDoesNotFetch(t *testing.T) {
 	f := loadDeclFixture(t)
 	ctrl := gomock.NewController(t)
