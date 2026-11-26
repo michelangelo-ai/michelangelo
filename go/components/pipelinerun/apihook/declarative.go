@@ -51,10 +51,9 @@ func checkDeclarativeRun(run *v2.PipelineRun, spec *v2.PipelineSpec, explicitRev
 	return nil
 }
 
+// requirePipelineInRunNamespace also applies to an inline spec, because
+// latest-revision resolution inlines the spec of a run by name.
 func requirePipelineInRunNamespace(run *v2.PipelineRun) error {
-	if run.Spec.PipelineSpec != nil {
-		return nil
-	}
 	if ns := run.Spec.GetPipeline().GetNamespace(); ns != "" && ns != run.Namespace {
 		return status.Errorf(codes.InvalidArgument, "declarative pipeline run must name a pipeline in its own namespace %q, not %q", run.Namespace, ns)
 	}
