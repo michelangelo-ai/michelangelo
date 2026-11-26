@@ -87,3 +87,12 @@ func TestDeclarativeAccessors(t *testing.T) {
 		assert.False(t, ok)
 	})
 }
+
+func TestNilDeclarative(t *testing.T) {
+	var d *Declarative
+	assert.False(t, d.Enabled())
+	r, ok := d.Release("core-v1")
+	assert.False(t, ok)
+	assert.Nil(t, r)
+	assert.Equal(t, []string{}, d.Versions())
+}
