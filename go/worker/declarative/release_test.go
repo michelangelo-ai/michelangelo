@@ -48,8 +48,10 @@ func TestReleaseParses(t *testing.T) {
 	assert.Equal(t, "core-v0.1.0", r.Version)
 	assert.Equal(t, "s3://default/interpreters/core-v0.1.0.tar.gz", r.Artifact)
 	require.Contains(t, r.TaskTypes, "core/ray")
-	assert.Len(t, r.TaskTypes, 1)
+	require.Contains(t, r.TaskTypes, "core/spark")
+	assert.Len(t, r.TaskTypes, 2)
 	assert.Equal(t, []string{"retry"}, r.TaskTypes["core/ray"].Capabilities)
+	assert.Equal(t, []string{"retry"}, r.TaskTypes["core/spark"].Capabilities)
 }
 
 // TestReleaseLoads runs the tar with no path and no function, so the worker
@@ -140,6 +142,15 @@ func namedParams(t *testing.T, file string, src []byte, fn string) map[string]bo
 
 func TestReleaseFactoryConformance(t *testing.T) {
 	passed, missing := factoryGaps(t, readFile(t, releaseTar), readFile(t, releaseSource))
-	assert.Equal(t, map[string][]string{"core/ray": {"alias", "head_cpu", "retry_attempts", "worker_instances"}}, passed)
+	assert.Equal(t, map[string][]string{
+		"core/ray": {
+			"alias", "head_cpu", "head_disk", "head_gpu", "head_memory", "head_object_store_memory", "retry_attempts",
+			"worker_cpu", "worker_disk", "worker_gpu", "worker_instances", "worker_memory", "worker_object_store_memory",
+		},
+		"core/spark": {
+			"alias", "driver_cpu", "driver_disk", "driver_gpu", "driver_memory", "executor_cpu", "executor_disk",
+			"executor_gpu", "executor_instances", "executor_memory", "retry_attempts",
+		},
+	}, passed)
 	assert.Empty(t, missing, "kwargs that the factory does not declare")
 }

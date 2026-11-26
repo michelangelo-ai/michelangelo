@@ -30,6 +30,7 @@ ENTRIES = [
     "/python/michelangelo/uniflow/declarative/engine.star",
     "/python/michelangelo/uniflow/commons.star",
     "/python/michelangelo/uniflow/plugins/ray/task.star",
+    "/python/michelangelo/uniflow/plugins/spark/task.star",
     "meta.json",
 ]
 
@@ -37,12 +38,16 @@ LOADS = {
     "/.declarative-build/core-v0.1.0/main.star": [
         "/python/michelangelo/uniflow/declarative/engine.star",
         "/python/michelangelo/uniflow/plugins/ray/task.star",
+        "/python/michelangelo/uniflow/plugins/spark/task.star",
     ],
     "/python/michelangelo/uniflow/declarative/engine.star": [
         "/python/michelangelo/uniflow/commons.star",
     ],
     "/python/michelangelo/uniflow/commons.star": [],
     "/python/michelangelo/uniflow/plugins/ray/task.star": [
+        "/python/michelangelo/uniflow/commons.star",
+    ],
+    "/python/michelangelo/uniflow/plugins/spark/task.star": [
         "/python/michelangelo/uniflow/commons.star",
     ],
 }
@@ -142,9 +147,13 @@ def test_generated_main(tmp_path):
         'load("../../python/michelangelo/uniflow/declarative/engine.star", "run")\n'
         'load("../../python/michelangelo/uniflow/plugins/ray/task.star",'
         ' factory_core_ray = "task")\n'
+        'load("../../python/michelangelo/uniflow/plugins/spark/task.star",'
+        ' factory_core_spark = "spark_task")\n'
         "\n"
         "REGISTRY = {\n"
         '    "core/ray": {"factory": factory_core_ray, "job_specs_key": "ray",'
+        ' "capabilities": ["retry"]},\n'
+        '    "core/spark": {"factory": factory_core_spark, "job_specs_key": "spark",'
         ' "capabilities": ["retry"]},\n'
         "}\n"
         "\n"
@@ -171,10 +180,40 @@ def test_release_file_fields(tmp_path):
                 "job_specs": {
                     "ray": {
                         "head_cpu": {"type": "integer"},
+                        "head_memory": {"type": "string"},
+                        "head_disk": {"type": "string"},
+                        "head_gpu": {"type": "integer"},
+                        "head_object_store_memory": {"type": "integer"},
+                        "worker_cpu": {"type": "integer"},
+                        "worker_memory": {"type": "string"},
+                        "worker_disk": {"type": "string"},
+                        "worker_gpu": {"type": "integer"},
+                        "worker_object_store_memory": {"type": "integer"},
                         "worker_instances": {"type": "integer"},
                     }
                 },
-            }
+            },
+            "core/spark": {
+                "capabilities": ["retry"],
+                "config": {
+                    "entry_point": {"type": "string", "required": True},
+                    "args": {"type": "list"},
+                    "kwargs": {"type": "dict"},
+                },
+                "job_specs": {
+                    "spark": {
+                        "driver_cpu": {"type": "integer"},
+                        "driver_memory": {"type": "string"},
+                        "driver_disk": {"type": "string"},
+                        "driver_gpu": {"type": "integer"},
+                        "executor_cpu": {"type": "integer"},
+                        "executor_memory": {"type": "string"},
+                        "executor_disk": {"type": "string"},
+                        "executor_gpu": {"type": "integer"},
+                        "executor_instances": {"type": "integer"},
+                    }
+                },
+            },
         },
     }
 

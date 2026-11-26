@@ -12,4 +12,32 @@ task_types:
     job_specs:
       ray:
         head_cpu: {type: integer}
+        head_memory: {type: string}
+        head_disk: {type: string}
+        head_gpu: {type: integer}
+        head_object_store_memory: {type: integer}
+        worker_cpu: {type: integer}
+        worker_memory: {type: string}
+        worker_disk: {type: string}
+        worker_gpu: {type: integer}
+        worker_object_store_memory: {type: integer}
         worker_instances: {type: integer}
+  core/spark:
+    factory: python/michelangelo/uniflow/plugins/spark/task.star:spark_task
+    job_specs_key: spark
+    capabilities: [retry]
+    config:
+      entry_point: {type: string, required: true}
+      args: {type: list}
+      kwargs: {type: dict}
+    job_specs:
+      spark:
+        driver_cpu: {type: integer}
+        driver_memory: {type: string}
+        driver_disk: {type: string}
+        driver_gpu: {type: integer}
+        executor_cpu: {type: integer}
+        executor_memory: {type: string}
+        executor_disk: {type: string}
+        executor_gpu: {type: integer}
+        executor_instances: {type: integer}
