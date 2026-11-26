@@ -103,11 +103,11 @@ func (a apiHook) BeforeCreate(ctx context.Context, request *v2.CreatePipelineRun
 		pipeline = a.getReferencedPipeline(ctx, request)
 	}
 
-	// A run by name has no inline spec. When the Pipeline Get fails, the hook
-	// skips this check, and the run controller still checks the pin digest.
 	spec := request.PipelineRun.Spec.GetPipelineSpec()
-	if spec == nil && pipeline != nil {
-		spec = &pipeline.Spec
+	if spec == nil {
+		if p := a.runNamespacePipeline(ctx, request, pipeline); p != nil {
+			spec = &p.Spec
+		}
 	}
 	if err := checkDeclarativeRun(request.PipelineRun, spec, a.declarative); err != nil {
 		return err
@@ -176,6 +176,31 @@ func (a apiHook) getReferencedPipeline(ctx context.Context, request *v2.CreatePi
 		a.logger.Warn("BeforeCreate: failed to get Pipeline",
 			zap.String("pipeline", pipelineRef.GetName()),
 			zap.String("namespace", namespace),
+			zap.Error(err))
+		return nil
+	}
+	return pipeline
+}
+
+// runNamespacePipeline returns the Pipeline that the SourcePipeline actor runs
+// for a run by name: the named Pipeline in the run namespace. The reference
+// can name another namespace, so referenced is reused only when it comes from
+// the run namespace. A Get failure returns nil. The hook then skips the
+// declarative check, and the run controller still checks the pin digest.
+func (a apiHook) runNamespacePipeline(ctx context.Context, request *v2.CreatePipelineRunRequest, referenced *v2.Pipeline) *v2.Pipeline {
+	ref := request.PipelineRun.Spec.GetPipeline()
+	runNS := request.PipelineRun.GetNamespace()
+	if ref.GetName() == "" {
+		return nil
+	}
+	if resourceNamespace(ref, runNS) == runNS {
+		return referenced
+	}
+	pipeline := &v2.Pipeline{}
+	if err := a.apiHandler.Get(ctx, runNS, ref.GetName(), &metav1.GetOptions{}, pipeline); err != nil {
+		a.logger.Info("BeforeCreate: no pipeline in the run namespace for the declarative check",
+			zap.String("pipeline", ref.GetName()),
+			zap.String("namespace", runNS),
 			zap.Error(err))
 		return nil
 	}
