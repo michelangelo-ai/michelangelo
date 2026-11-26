@@ -105,13 +105,7 @@ func (a apiHook) BeforeCreate(ctx context.Context, request *v2.CreatePipelineRun
 		pipeline = a.getReferencedPipeline(ctx, request)
 	}
 
-	spec := request.PipelineRun.Spec.GetPipelineSpec()
-	if spec == nil {
-		if p := a.runNamespacePipeline(ctx, request, pipeline); p != nil {
-			spec = &p.Spec
-		}
-	}
-	if err := checkDeclarativeRun(request.PipelineRun, spec, explicitRevision, a.declarative); err != nil {
+	if err := a.checkDeclarativeSource(ctx, request.PipelineRun, pipeline, explicitRevision); err != nil {
 		return err
 	}
 
@@ -184,14 +178,34 @@ func (a apiHook) getReferencedPipeline(ctx context.Context, request *v2.CreatePi
 	return pipeline
 }
 
+// checkDeclarativeSource runs the declarative trigger check on the spec that
+// the run controller runs: the inline spec, or else the named Pipeline in the
+// run namespace. referenced is the Pipeline that spec.pipeline names, or nil.
+// A run by name of a declarative Pipeline in another namespace is rejected,
+// because the controller reads the run namespace and never runs that Pipeline.
+func (a apiHook) checkDeclarativeSource(ctx context.Context, run *v2.PipelineRun, referenced *v2.Pipeline, revision string) error {
+	spec := run.Spec.GetPipelineSpec()
+	if spec == nil {
+		if referenced != nil && referenced.Spec.GetManifest().GetType() == v2.PIPELINE_MANIFEST_TYPE_DECLARATIVE {
+			if err := checkPipelineNamespace(run); err != nil {
+				return err
+			}
+		}
+		if p := a.runNamespacePipeline(ctx, run, referenced); p != nil {
+			spec = &p.Spec
+		}
+	}
+	return checkDeclarativeRun(run, spec, revision, a.declarative)
+}
+
 // runNamespacePipeline returns the Pipeline that the SourcePipeline actor runs
 // for a run by name: the named Pipeline in the run namespace. The reference
 // can name another namespace, so referenced is reused only when it comes from
 // the run namespace. A Get failure returns nil. The hook then skips the
 // declarative check, and the run controller still checks the pin digest.
-func (a apiHook) runNamespacePipeline(ctx context.Context, request *v2.CreatePipelineRunRequest, referenced *v2.Pipeline) *v2.Pipeline {
-	ref := request.PipelineRun.Spec.GetPipeline()
-	runNS := request.PipelineRun.GetNamespace()
+func (a apiHook) runNamespacePipeline(ctx context.Context, run *v2.PipelineRun, referenced *v2.Pipeline) *v2.Pipeline {
+	ref := run.Spec.GetPipeline()
+	runNS := run.GetNamespace()
 	if ref.GetName() == "" {
 		return nil
 	}

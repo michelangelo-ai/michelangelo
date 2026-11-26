@@ -19,11 +19,8 @@ func checkDeclarativeRun(run *v2.PipelineRun, spec *v2.PipelineSpec, revision st
 	if spec.GetManifest().GetType() != v2.PIPELINE_MANIFEST_TYPE_DECLARATIVE {
 		return nil
 	}
-	// The SourcePipeline actor reads a pipeline by name from the run namespace.
-	if run.Spec.PipelineSpec == nil {
-		if ns := run.Spec.GetPipeline().GetNamespace(); ns != "" && ns != run.Namespace {
-			return status.Errorf(codes.InvalidArgument, "declarative pipeline run must name a pipeline in its own namespace %q, not %q", run.Namespace, ns)
-		}
+	if err := checkPipelineNamespace(run); err != nil {
+		return err
 	}
 	if !d.Enabled() {
 		return status.Error(codes.FailedPrecondition, pipelineapihook.NotEnabledMessage)
@@ -51,6 +48,19 @@ func checkDeclarativeRun(run *v2.PipelineRun, spec *v2.PipelineSpec, revision st
 		if w.Parameters[name].GetDefault() == nil {
 			return status.Errorf(codes.InvalidArgument, "parameter %s is required; parameter overrides are not supported yet", name)
 		}
+	}
+	return nil
+}
+
+// checkPipelineNamespace rejects a run by name that names a pipeline in
+// another namespace. The SourcePipeline actor reads a pipeline by name from
+// the run namespace, so the run would not run the pipeline that it names.
+func checkPipelineNamespace(run *v2.PipelineRun) error {
+	if run.Spec.PipelineSpec != nil {
+		return nil
+	}
+	if ns := run.Spec.GetPipeline().GetNamespace(); ns != "" && ns != run.Namespace {
+		return status.Errorf(codes.InvalidArgument, "declarative pipeline run must name a pipeline in its own namespace %q, not %q", run.Namespace, ns)
 	}
 	return nil
 }

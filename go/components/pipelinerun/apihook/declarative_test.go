@@ -332,6 +332,19 @@ func TestBeforeCreate_DeclarativeRunChecksPipelineInRunNamespace(t *testing.T) {
 	assert.Equal(t, `declarative pipeline run must name a pipeline in its own namespace "test-namespace", not "other-namespace"`, st.Message())
 }
 
+// A run by name in another namespace would run a pipeline of that name in the
+// run namespace, or fail, so it never runs the declarative pipeline it names.
+func TestBeforeCreate_DeclarativeRunNamesPipelineInOtherNamespace(t *testing.T) {
+	other := pinnedPipeline(t, "other-namespace", runWorkflow())
+	h := hookWith(t, loadDeclarative(t, true), other)
+	req := runRequest(v2.PipelineRunSpec{Pipeline: &apipb.ResourceIdentifier{Name: "decl", Namespace: "other-namespace"}})
+	err := h.BeforeCreate(context.Background(), req)
+	st, ok := status.FromError(err)
+	require.True(t, ok, "not a status error: %v", err)
+	assert.Equal(t, codes.InvalidArgument, st.Code())
+	assert.Equal(t, `declarative pipeline run must name a pipeline in its own namespace "test-namespace", not "other-namespace"`, st.Message())
+}
+
 func TestBeforeCreate_NonDeclarativeRunInOtherNamespaceIsUnchecked(t *testing.T) {
 	other := &v2.Pipeline{
 		ObjectMeta: metav1.ObjectMeta{Name: "yaml", Namespace: "other-namespace"},
