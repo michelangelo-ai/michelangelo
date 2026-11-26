@@ -327,7 +327,12 @@ def execute_ray_task(task_path, task_name, cluster, cluster_namespace, runtime_e
         first_activity_id = first_activity_id,
     )
 
-    atexit.register(terminate_cluster, cluster_namespace, cluster_name)
+    # atexit.unregister removes the first hook with the same function value.
+    # A closure per call keeps concurrent tasks from removing each other's hooks.
+    def terminate_this_cluster():
+        terminate_cluster(cluster_namespace, cluster_name)
+
+    atexit.register(terminate_this_cluster)
 
     # Run job
     entrypoint = ray_job_entrypoint(task_path, result_url, args, kwargs)
@@ -341,7 +346,10 @@ def execute_ray_task(task_path, task_name, cluster, cluster_namespace, runtime_e
 
     print("ray | +run job: job=" + str(job))
 
-    atexit.register(report_ray_task_result, job, task_path, task_name, task_log_url, start_time_formated_str, args, kwargs, retry_attempt_id, cache_version, namespace, result_url, first_activity_id)
+    def report_this_result():
+        report_ray_task_result(job, task_path, task_name, task_log_url, start_time_formated_str, args, kwargs, retry_attempt_id, cache_version, namespace, result_url, first_activity_id)
+
+    atexit.register(report_this_result)
 
     if breakpoint:
         print("ray | breakpoint:", "ns=" + cluster_namespace, "n=" + cluster_name)
@@ -358,8 +366,8 @@ def execute_ray_task(task_path, task_name, cluster, cluster_namespace, runtime_e
     else:
         ray.terminate_cluster(cluster_name, cluster_namespace, "job failed", "TERMINATION_TYPE_FAILED")
 
-    atexit.unregister(terminate_cluster)
-    atexit.unregister(report_ray_task_result)
+    atexit.unregister(terminate_this_cluster)
+    atexit.unregister(report_this_result)
 
     return (job_state, job, cluster_url, cluster_log_url)
 

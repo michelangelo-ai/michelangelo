@@ -5,6 +5,7 @@ go_test(
     srcs = [
         "cancel_test.go",
         "engine_test.go",
+        "exit_hooks_test.go",
         "harness_test.go",
         "levels_test.go",
         "release_test.go",
