@@ -1,0 +1,11 @@
+# A run of declarative-training. Apply it with
+# `ma pipeline_run apply -f examples/declarative/pipelines/run.yaml`.
+apiVersion: michelangelo.api/v2
+kind: PipelineRun
+metadata:
+  name: declarative-training-run
+  namespace: declarative-test
+spec:
+  pipeline:
+    name: declarative-training
+    namespace: declarative-test

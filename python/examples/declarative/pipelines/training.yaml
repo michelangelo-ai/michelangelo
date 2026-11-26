@@ -3,6 +3,10 @@ kind: Pipeline
 metadata:
   name: declarative-training
   namespace: declarative-test
+  annotations:
+    # A run needs a task image. The image must hold the code of each
+    # entry_point.
+    michelangelo/uniflow-image: ghcr.io/michelangelo-ai/examples:main
 spec:
   description: Parameters, a diamond, retry, and a failure handler
   manifest:
