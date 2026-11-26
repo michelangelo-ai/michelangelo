@@ -446,13 +446,15 @@ message:
 | Case | Message |
 |---|---|
 | No pin | `declarative pipeline run has no interpreter pin; re-apply the pipeline through the API` |
-| Fetch fails | `cannot fetch interpreter <version> from <artifact>` |
-| Tar too large | `interpreter <version> is <n> bytes; the limit is 1048576` |
-| Digest mismatch | `interpreter <version> digest mismatch: pin <digest>, fetched <digest> from <artifact>` |
+| Fetch fails | `cannot fetch interpreter <version>` |
+| Tar too large | `interpreter <version> is larger than the 1 MiB limit` |
+| Digest mismatch | `interpreter <version> does not match the digest in its pin` |
 | Spec does not decode | `cannot decode declarative spec: <error>` |
 
-The controller writes the cause of a fetch failure to its log only. A fetch
-failure is final. To try again, trigger a new run.
+The step message names only the interpreter version. The controller writes the
+artifact path, the fetch error, the tar size, and the digests to its log, at
+the `WARN` level, with the run name. A fetch failure is final. To try again,
+trigger a new run.
 
 ### Cron triggers
 

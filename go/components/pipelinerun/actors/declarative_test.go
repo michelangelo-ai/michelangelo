@@ -13,6 +13,8 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -106,6 +108,8 @@ func TestDeclarativeStartFailure(t *testing.T) {
 		edit  func(run *v2.PipelineRun)
 		fetch func(b *blobstoreMock.MockBlobStoreClient)
 		msg   string
+		// log holds the fields of the Warn log beyond the run key and the message.
+		log map[string]interface{}
 	}{
 		{
 			name: "no pin",
@@ -153,22 +157,28 @@ func TestDeclarativeStartFailure(t *testing.T) {
 			fetch: func(b *blobstoreMock.MockBlobStoreClient) {
 				b.EXPECT().Get(gomock.Any(), declArtifact).Return(nil, errors.New("access denied for key"))
 			},
-			msg: "cannot fetch interpreter core-v0.1.0 from mock://interpreters/core-v0.1.0.tar.gz",
+			msg: "cannot fetch interpreter core-v0.1.0",
+			log: map[string]interface{}{"artifact": declArtifact, "error": "access denied for key"},
 		},
 		{
 			name: "too large",
 			fetch: func(b *blobstoreMock.MockBlobStoreClient) {
 				b.EXPECT().Get(gomock.Any(), declArtifact).Return(make([]byte, 1<<20+1), nil)
 			},
-			msg: "interpreter core-v0.1.0 is 1048577 bytes; the limit is 1048576",
+			msg: "interpreter core-v0.1.0 is larger than the 1 MiB limit",
+			log: map[string]interface{}{"artifact": declArtifact, "bytes": int64(1<<20 + 1)},
 		},
 		{
 			name: "digest mismatch",
 			fetch: func(b *blobstoreMock.MockBlobStoreClient) {
 				b.EXPECT().Get(gomock.Any(), declArtifact).Return([]byte("other"), nil)
 			},
-			msg: "interpreter core-v0.1.0 digest mismatch: pin " + f.digest + ", " +
-				"fetched sha256:d9298a10d1b0735837dc4bd85dac641b0f3cef27a47e5d53a54f2f3f5b2fcffa from mock://interpreters/core-v0.1.0.tar.gz",
+			msg: "interpreter core-v0.1.0 does not match the digest in its pin",
+			log: map[string]interface{}{
+				"artifact":      declArtifact,
+				"pinDigest":     f.digest,
+				"fetchedDigest": "sha256:d9298a10d1b0735837dc4bd85dac641b0f3cef27a47e5d53a54f2f3f5b2fcffa",
+			},
 		},
 		{
 			name: "decode fails",
@@ -188,6 +198,8 @@ func TestDeclarativeStartFailure(t *testing.T) {
 					tc.fetch(b)
 				}
 			})
+			core, logs := observer.New(zap.WarnLevel)
+			actor.logger = zap.New(core)
 			run := f.run()
 			if tc.edit != nil {
 				tc.edit(run)
@@ -195,6 +207,15 @@ func TestDeclarativeStartFailure(t *testing.T) {
 			condition, err := actor.Run(context.Background(), run, nil)
 			require.NoError(t, err)
 			assert.Equal(t, &apipb.Condition{Type: ExecuteWorkflowType, Status: apipb.CONDITION_STATUS_FALSE}, condition)
+			wantLog := map[string]interface{}{"pipelineRun": declNamespace + "/" + declRunName, "message": tc.msg}
+			for k, v := range tc.log {
+				wantLog[k] = v
+			}
+			require.Equal(t, 1, logs.Len())
+			entry := logs.All()[0]
+			assert.Equal(t, zap.WarnLevel, entry.Level)
+			assert.Equal(t, "cannot start declarative run", entry.Message)
+			assert.Equal(t, wantLog, entry.ContextMap())
 			step := pipelinerunutils.GetStep(run, pipelinerunutils.ExecuteWorkflowStepName)
 			assert.Equal(t, v2.PIPELINE_RUN_STEP_STATE_FAILED, step.State)
 			assert.Equal(t, tc.msg, step.Message)
