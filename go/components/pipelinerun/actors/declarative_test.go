@@ -113,6 +113,26 @@ func TestDeclarativeStartFailure(t *testing.T) {
 			msg:  "declarative pipeline run has no interpreter pin; re-apply the pipeline through the API",
 		},
 		{
+			name: "run input sets args",
+			edit: func(run *v2.PipelineRun) {
+				run.Spec.Input = &pbtypes.Struct{Fields: map[string]*pbtypes.Value{
+					"args": {Kind: &pbtypes.Value_ListValue{ListValue: &pbtypes.ListValue{Values: []*pbtypes.Value{{Kind: &pbtypes.Value_StringValue{StringValue: "x"}}}}}},
+				}}
+			},
+			msg: "run input args must be empty for declarative pipelines",
+		},
+		{
+			name: "run input sets another environ key",
+			edit: func(run *v2.PipelineRun) {
+				run.Spec.Input = &pbtypes.Struct{Fields: map[string]*pbtypes.Value{
+					"environ": {Kind: &pbtypes.Value_StructValue{StructValue: &pbtypes.Struct{Fields: map[string]*pbtypes.Value{
+						"UF_TASK_IMAGE": {Kind: &pbtypes.Value_StringValue{StringValue: "other"}},
+					}}}},
+				}}
+			},
+			msg: `run input environ key "UF_TASK_IMAGE" is not supported for declarative pipelines; only LAST_SCHEDULE_TIMESTAMP is allowed`,
+		},
+		{
 			name: "fetch fails",
 			fetch: func(b *blobstoreMock.MockBlobStoreClient) {
 				b.EXPECT().Get(gomock.Any(), declArtifact).Return(nil, errors.New("access denied for key"))
@@ -204,9 +224,9 @@ func TestDeclarativeStart(t *testing.T) {
 	run.Spec.Input = &pbtypes.Struct{Fields: map[string]*pbtypes.Value{
 		"environ": {Kind: &pbtypes.Value_StructValue{StructValue: &pbtypes.Struct{Fields: map[string]*pbtypes.Value{
 			"LAST_SCHEDULE_TIMESTAMP": {Kind: &pbtypes.Value_StringValue{StringValue: "1764111600"}},
-			"UF_TASK_IMAGE":           {Kind: &pbtypes.Value_StringValue{StringValue: "ignored"}},
 		}}}},
-		"args": {Kind: &pbtypes.Value_ListValue{ListValue: &pbtypes.ListValue{Values: []*pbtypes.Value{{Kind: &pbtypes.Value_StringValue{StringValue: "ignored"}}}}}},
+		"args":    {Kind: &pbtypes.Value_ListValue{ListValue: &pbtypes.ListValue{}}},
+		"kw_args": {Kind: &pbtypes.Value_StructValue{StructValue: &pbtypes.Struct{}}},
 	}}
 
 	condition, err := actor.Run(context.Background(), run, nil)

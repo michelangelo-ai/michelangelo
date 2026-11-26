@@ -16,10 +16,6 @@ import (
 // workflow start event, next to the spec.
 const maxInterpreterBytes = 1 << 20
 
-// lastScheduleTimestampEnv is the only run input environ key that a
-// declarative run applies. The cron trigger sets it.
-const lastScheduleTimestampEnv = "LAST_SCHEDULE_TIMESTAMP"
-
 // startError is a start failure that the user can fix. Run shows its message
 // on the ExecuteWorkflow step and fails the run.
 type startError struct {
@@ -36,6 +32,11 @@ func (a *ExecuteWorkflowActor) declarativeStart(ctx context.Context, run *v2.Pip
 	pin := manifest.GetInterpreterPin()
 	if pin.GetArtifact() == "" {
 		return nil, nil, nil, &startError{msg: "declarative pipeline run has no interpreter pin; re-apply the pipeline through the API"}
+	}
+	// The apiserver checks the input at trigger, but a client with direct write
+	// access to the PipelineRun skips that check.
+	if err := declarative.CheckRunInput(run.Spec.GetInput()); err != nil {
+		return nil, nil, nil, &startError{msg: err.Error()}
 	}
 	tar, err := a.blobStore.Get(ctx, pin.Artifact)
 	if err != nil {
@@ -62,8 +63,8 @@ func (a *ExecuteWorkflowActor) declarativeStart(ctx context.Context, run *v2.Pip
 	}
 
 	envs := baseEnv(run)
-	if v, ok := run.Spec.GetInput().GetFields()["environ"].GetStructValue().GetFields()[lastScheduleTimestampEnv]; ok {
-		envs[lastScheduleTimestampEnv] = v.GetStringValue()
+	if v, ok := run.Spec.GetInput().GetFields()["environ"].GetStructValue().GetFields()[declarative.LastScheduleTimestampEnv]; ok {
+		envs[declarative.LastScheduleTimestampEnv] = v.GetStringValue()
 	}
 	addTaskImageToEnv(run, envs)
 	if err := a.addTaskCacheEnv(ctx, run, envs); err != nil {
