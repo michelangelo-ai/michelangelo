@@ -415,6 +415,53 @@ func TestGenerateUniflowPRInput(t *testing.T) {
 			},
 		},
 		{
+			name:   "ParameterMap only",
+			params: &v2pb.PipelineExecutionParameters{ParameterMap: map[string]string{"epochs": "5", "lr": "0.1"}},
+			expectedResult: &types.Struct{
+				Fields: map[string]*types.Value{
+					"parameter_map": {Kind: &types.Value_StructValue{StructValue: &types.Struct{Fields: map[string]*types.Value{
+						"epochs": {Kind: &types.Value_StringValue{StringValue: "5"}},
+						"lr":     {Kind: &types.Value_StringValue{StringValue: "0.1"}},
+					}}}},
+				},
+			},
+		},
+		{
+			name: "ParameterMap with Environ",
+			params: &v2pb.PipelineExecutionParameters{
+				ParameterMap: map[string]string{"epochs": "5"},
+				Environ:      map[string]string{"K": "v"},
+			},
+			expectedResult: &types.Struct{
+				Fields: map[string]*types.Value{
+					"environ": {Kind: &types.Value_StructValue{StructValue: &types.Struct{Fields: map[string]*types.Value{
+						"K": {Kind: &types.Value_StringValue{StringValue: "v"}},
+					}}}},
+					"args":    {Kind: &types.Value_ListValue{ListValue: &types.ListValue{Values: []*types.Value{}}}},
+					"kw_args": {Kind: &types.Value_StructValue{StructValue: &types.Struct{Fields: map[string]*types.Value{}}}},
+					"parameter_map": {Kind: &types.Value_StructValue{StructValue: &types.Struct{Fields: map[string]*types.Value{
+						"epochs": {Kind: &types.Value_StringValue{StringValue: "5"}},
+					}}}},
+				},
+			},
+		},
+		{
+			name: "ParameterMap with WorkflowConfig",
+			params: &v2pb.PipelineExecutionParameters{
+				ParameterMap:   map[string]string{"epochs": "5"},
+				WorkflowConfig: &types.Struct{Fields: map[string]*types.Value{}},
+			},
+			expectedResult: &types.Struct{
+				Fields: map[string]*types.Value{
+					"workflow_config": {Kind: &types.Value_StructValue{StructValue: &types.Struct{Fields: map[string]*types.Value{}}}},
+					"task_configs":    {Kind: &types.Value_StructValue{StructValue: &types.Struct{Fields: map[string]*types.Value{}}}},
+					"parameter_map": {Kind: &types.Value_StructValue{StructValue: &types.Struct{Fields: map[string]*types.Value{
+						"epochs": {Kind: &types.Value_StringValue{StringValue: "5"}},
+					}}}},
+				},
+			},
+		},
+		{
 			name:   "Empty parameters",
 			params: &v2pb.PipelineExecutionParameters{},
 			expectedResult: &types.Struct{
