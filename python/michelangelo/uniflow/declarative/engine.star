@@ -8,10 +8,13 @@ dispatches each task to the factory that the registry holds for its type.
 - params: parameter name -> value.
 - registry: task type -> {"factory", "job_specs_key", "capabilities"}.
 
-The result is {"states": {task: state}, "outputs": {task: value}}. If a task
-failed, the workflow ends FAILED after the walk. When a task callable failed,
-the workflow error holds the errors of the failed callables in the first such
-level, joined with "; ".
+The result is {"states": {task: state}}, so the workflow result stays small.
+A task output does not travel in the result. The task writes its output to
+storage. The task factory creates a CachedOutput for it and reports only the
+name of the CachedOutput. The run controller reads the output from storage.
+If a task failed, the workflow ends FAILED after the walk. When a task
+callable failed, the workflow error holds the errors of the failed callables
+in the first such level, joined with "; ".
 """
 
 load("../commons.star", "TASK_STATE_FAILED", "TASK_STATE_SKIPPED", "TASK_STATE_SUCCEEDED", "TIME_FOMART", "report_progress")
@@ -50,7 +53,7 @@ def _poll_count(budget):
 _MAX_POLLS = _poll_count(_LEVEL_WAIT_BUDGET_SECONDS)
 
 def run(spec, params, registry):
-    """Run every task of spec and return the states and outputs."""
+    """Run every task of spec and return the task states."""
     tasks = spec.get("tasks") or {}
     workflow_config = spec.get("workflow_config") or {}
     _validate(tasks, registry)
@@ -82,10 +85,7 @@ def run(spec, params, registry):
             print(summary)
             failed_batches[0].get()
         fail(summary)
-    return {
-        "states": {name: states[name] for name in sorted(states.keys())},
-        "outputs": {name: outputs[name] for name in sorted(outputs.keys())},
-    }
+    return {"states": {name: states[name] for name in sorted(states.keys())}}
 
 def levels(spec):
     """Return the topological levels of spec, each level in sorted name order."""

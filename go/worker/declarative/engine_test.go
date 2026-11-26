@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -48,23 +49,28 @@ type engineRun struct {
 	result   map[string]any
 	states   map[string]string
 	messages map[string]string
+	received map[string]any
 	err      string
 }
 
 func runEngine(t *testing.T, tar []byte, fn string, args ...any) engineRun {
 	t.Helper()
 	res, progress, err := runStar(t, tar, "/cases.star", fn, args...)
-	out := engineRun{states: map[string]string{}, messages: map[string]string{}}
+	out := engineRun{states: map[string]string{}, messages: map[string]string{}, received: map[string]any{}}
 	for _, line := range progress {
 		var p struct {
 			TaskName    string `json:"task_name"`
 			TaskState   string `json:"task_state"`
 			TaskMessage string `json:"task_message"`
+			Output      string `json:"output"`
 		}
 		require.NoError(t, json.Unmarshal([]byte(line), &p), line)
 		out.states[p.TaskName] = p.TaskState
 		if p.TaskMessage != "" {
 			out.messages[p.TaskName] = p.TaskMessage
+		}
+		if p.Output != "" {
+			out.received[p.TaskName] = decodeNumbers(t, p.Output)
 		}
 	}
 	if err != nil {
@@ -73,6 +79,38 @@ func runEngine(t *testing.T, tar []byte, fn string, args ...any) engineRun {
 	}
 	out.result = toGo(t, res).(map[string]any)
 	return out
+}
+
+// decodeNumbers decodes JSON with each integral number as an int, as toGo
+// gives for a Starlark int.
+func decodeNumbers(t *testing.T, s string) any {
+	t.Helper()
+	d := json.NewDecoder(strings.NewReader(s))
+	d.UseNumber()
+	var v any
+	require.NoError(t, d.Decode(&v), s)
+	var walk func(any) any
+	walk = func(v any) any {
+		switch v := v.(type) {
+		case json.Number:
+			if i, err := v.Int64(); err == nil {
+				return int(i)
+			}
+			f, err := v.Float64()
+			require.NoError(t, err)
+			return f
+		case map[string]any:
+			for k, e := range v {
+				v[k] = walk(e)
+			}
+		case []any:
+			for i, e := range v {
+				v[i] = walk(e)
+			}
+		}
+		return v
+	}
+	return walk(v)
 }
 
 func casesTar(t *testing.T) []byte {
@@ -88,11 +126,11 @@ const (
 func TestEngineGraph(t *testing.T) {
 	tar := casesTar(t)
 	for _, tc := range []struct {
-		name    string
-		spec    map[string]any
-		states  map[string]string
-		outputs map[string]any
-		err     string
+		name     string
+		spec     map[string]any
+		states   map[string]string
+		received map[string]any
+		err      string
 	}{
 		{
 			name: "test_diamond_happy",
@@ -102,8 +140,8 @@ func TestEngineGraph(t *testing.T) {
 				"right": task("fake/ok", "root"),
 				"join":  task("fake/ok", "left", "right"),
 			}),
-			states:  map[string]string{"root": succeeded, "left": succeeded, "right": succeeded, "join": succeeded},
-			outputs: map[string]any{"root": okRecord("root"), "left": okRecord("left"), "right": okRecord("right"), "join": okRecord("join")},
+			states:   map[string]string{"root": succeeded, "left": succeeded, "right": succeeded, "join": succeeded},
+			received: map[string]any{"root": okRecord("root"), "left": okRecord("left"), "right": okRecord("right"), "join": okRecord("join")},
 		},
 		{
 			name: "test_failure_semantics",
@@ -135,8 +173,8 @@ func TestEngineGraph(t *testing.T) {
 				"b": task("fake/ok", edge{"a", "OUTCOME_FAILED"}),
 				"c": task("fake/ok", "b"),
 			}),
-			states:  map[string]string{"a": succeeded, "b": skipped, "c": skipped},
-			outputs: map[string]any{"a": okRecord("a"), "b": nil, "c": nil},
+			states:   map[string]string{"a": succeeded, "b": skipped, "c": skipped},
+			received: map[string]any{"a": okRecord("a")},
 		},
 		{
 			name: "test_validation_cycle",
@@ -173,10 +211,10 @@ func TestEngineGraph(t *testing.T) {
 			err:    `declarative: task "b" has unknown gate "FAILED" on "a"`,
 		},
 		{
-			name:    "empty_tasks",
-			spec:    spec(nil, map[string]any{}),
-			states:  map[string]string{},
-			outputs: map[string]any{},
+			name:     "empty_tasks",
+			spec:     spec(nil, map[string]any{}),
+			states:   map[string]string{},
+			received: map[string]any{},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -187,7 +225,8 @@ func TestEngineGraph(t *testing.T) {
 				return
 			}
 			require.Empty(t, got.err)
-			assert.Equal(t, map[string]any{"states": toAny(tc.states), "outputs": tc.outputs}, got.result)
+			assert.Equal(t, map[string]any{"states": toAny(tc.states)}, got.result)
+			assert.Equal(t, tc.received, got.received)
 		})
 	}
 }
@@ -200,10 +239,10 @@ func toAny(states map[string]string) map[string]any {
 	return out
 }
 
-func startGroups(t *testing.T, outputs map[string]any) [][]string {
+func startGroups(t *testing.T, received map[string]any) [][]string {
 	t.Helper()
 	byStart := map[int][]string{}
-	for name, out := range outputs {
+	for name, out := range received {
 		start := out.(map[string]any)["start"].(int)
 		byStart[start] = append(byStart[start], name)
 	}
@@ -278,7 +317,7 @@ func TestEngineConcurrency(t *testing.T) {
 				states[name] = succeeded
 			}
 			assert.Equal(t, states, got.states)
-			assert.Equal(t, tc.groups, startGroups(t, got.result["outputs"].(map[string]any)))
+			assert.Equal(t, tc.groups, startGroups(t, got.received))
 		})
 	}
 }
@@ -339,9 +378,9 @@ func TestEngineFailureCauseOrder(t *testing.T) {
 func TestEngineFactory(t *testing.T) {
 	tar := casesTar(t)
 	for _, tc := range []struct {
-		name    string
-		spec    map[string]any
-		outputs map[string]any
+		name     string
+		spec     map[string]any
+		received map[string]any
 	}{
 		{
 			name: "test_retry_replacement",
@@ -350,37 +389,37 @@ func TestEngineFactory(t *testing.T) {
 				"b": task("fake/ok"),
 				"c": with(task("fake/ok"), "retry", retry(1)),
 			}),
-			outputs: map[string]any{
+			received: map[string]any{
 				"a": with(okRecord("a"), "retry", 1),
 				"b": with(okRecord("b"), "retry", 3),
 				"c": with(okRecord("c"), "retry", 0),
 			},
 		},
 		{
-			name:    "test_retry_absent",
-			spec:    spec(map[string]any{"max_concurrency": 0, "default_retry": nil}, map[string]any{"a": task("fake/ok")}),
-			outputs: map[string]any{"a": okRecord("a")},
+			name:     "test_retry_absent",
+			spec:     spec(map[string]any{"max_concurrency": 0, "default_retry": nil}, map[string]any{"a": task("fake/ok")}),
+			received: map[string]any{"a": okRecord("a")},
 		},
 		{
 			name: "retry_zero",
 			spec: spec(map[string]any{"default_retry": retry(3)}, map[string]any{
 				"a": with(task("fake/ok"), "retry", retry(0)),
 			}),
-			outputs: map[string]any{"a": okRecord("a")},
+			received: map[string]any{"a": okRecord("a")},
 		},
 		{
 			name: "retry_zero_default",
 			spec: spec(map[string]any{"default_retry": retry(0)}, map[string]any{
 				"a": task("fake/ok"),
 			}),
-			outputs: map[string]any{"a": okRecord("a")},
+			received: map[string]any{"a": okRecord("a")},
 		},
 		{
 			name: "retry_no_capability",
 			spec: spec(map[string]any{"default_retry": retry(3)}, map[string]any{
 				"a": with(task("fake/noretry"), "retry", retry(2)),
 			}),
-			outputs: map[string]any{"a": map[string]any{"ep": "x.py", "alias": "a", "fields": map[string]any{}}},
+			received: map[string]any{"a": map[string]any{"ep": "x.py", "alias": "a", "fields": map[string]any{}}},
 		},
 		{
 			name: "factory_kwargs",
@@ -389,7 +428,7 @@ func TestEngineFactory(t *testing.T) {
 					"config", map[string]any{"entry_point": "a.py", "args": []any{}, "kwargs": map[string]any{}, "lr": 0.5, "name": "n"}),
 					"job_specs", map[string]any{"fake": map[string]any{"cpu": 2, "lr": 0.25}, "other": map[string]any{"x": 1}}),
 			}),
-			outputs: map[string]any{"a": map[string]any{
+			received: map[string]any{"a": map[string]any{
 				"ep": "a.py", "alias": "a", "args": []any{}, "kwargs": map[string]any{}, "retry": "absent",
 				"fields": map[string]any{"cpu": 2, "lr": 0.5, "name": "n"},
 			}},
@@ -399,17 +438,18 @@ func TestEngineFactory(t *testing.T) {
 			spec: spec(nil, map[string]any{
 				"a": with(task("fake/ok"), "config", map[string]any{"entry_point": "x.py", "args": []any{1, "two"}, "kwargs": map[string]any{"k": "v"}}),
 			}),
-			outputs: map[string]any{"a": with(with(okRecord("a"), "args", []any{1, "two"}), "kwargs", map[string]any{"k": "v"})},
+			received: map[string]any{"a": with(with(okRecord("a"), "args", []any{1, "two"}), "kwargs", map[string]any{"k": "v"})},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got := runEngine(t, tar, "run_case", tc.spec, map[string]any{})
 			require.Empty(t, got.err)
 			states := map[string]any{}
-			for name := range tc.outputs {
+			for name := range tc.received {
 				states[name] = succeeded
 			}
-			assert.Equal(t, map[string]any{"states": states, "outputs": tc.outputs}, got.result)
+			assert.Equal(t, map[string]any{"states": states}, got.result)
+			assert.Equal(t, tc.received, got.received)
 		})
 	}
 }
@@ -569,15 +609,14 @@ func TestEngineRefs(t *testing.T) {
 				return
 			}
 			require.Empty(t, got.err)
-			outputs := got.result["outputs"].(map[string]any)
 			for name, want := range tc.fields {
-				assert.Equal(t, want, outputs[name].(map[string]any)["fields"], name)
+				assert.Equal(t, want, got.received[name].(map[string]any)["fields"], name)
 			}
 			for name, want := range tc.args {
-				assert.Equal(t, want, outputs[name].(map[string]any)["args"], name)
+				assert.Equal(t, want, got.received[name].(map[string]any)["args"], name)
 			}
 			for name, want := range tc.kwargs {
-				assert.Equal(t, want, outputs[name].(map[string]any)["kwargs"], name)
+				assert.Equal(t, want, got.received[name].(map[string]any)["kwargs"], name)
 			}
 		})
 	}
@@ -621,7 +660,7 @@ func TestEngineNumberParam(t *testing.T) {
 	assert.Equal(t, map[string]any{
 		"types":  map[string]any{"lr": "float", "epochs": "int", "text": "string"},
 		"fields": map[string]any{"lr": 1.0, "epochs": 3, "text": "lr=1 zero=0"},
-	}, got.result["outputs"].(map[string]any)["a"])
+	}, got.received["a"])
 }
 
 func TestEngineWait(t *testing.T) {
@@ -679,12 +718,11 @@ func TestEngineDiamondFixture(t *testing.T) {
 	}
 	assert.Equal(t, map[string]any{
 		"states": map[string]any{"extract": succeeded, "train": succeeded, "evaluate": succeeded, "publish": succeeded, "notify": skipped},
-		"outputs": map[string]any{
-			"extract":  record("extract", 1),
-			"train":    with(record("train", 2), "fields", map[string]any{"head_cpu": 2, "epochs": 3}),
-			"evaluate": record("evaluate", 1),
-			"publish":  record("publish", 1),
-			"notify":   nil,
-		},
 	}, got.result)
+	assert.Equal(t, map[string]any{
+		"extract":  record("extract", 1),
+		"train":    with(record("train", 2), "fields", map[string]any{"head_cpu": 2, "epochs": 3}),
+		"evaluate": record("evaluate", 1),
+		"publish":  record("publish", 1),
+	}, got.received)
 }

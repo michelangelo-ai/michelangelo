@@ -60,7 +60,7 @@ func TestReleaseLoads(t *testing.T) {
 	empty := map[string]any{"schema_version": "v1alpha1", "workflow_config": nil, "parameters": map[string]any{}, "tasks": map[string]any{}}
 	res, _, err := runStar(t, readFile(t, releaseTar), "", "", empty, map[string]any{})
 	require.NoError(t, err)
-	assert.Equal(t, map[string]any{"states": map[string]any{}, "outputs": map[string]any{}}, toGo(t, res))
+	assert.Equal(t, map[string]any{"states": map[string]any{}}, toGo(t, res))
 }
 
 type sourceType struct {

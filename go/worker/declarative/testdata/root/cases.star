@@ -1,16 +1,19 @@
 load("/michelangelo/uniflow/commons.star", "TASK_STATE_FAILED", "TASK_STATE_SUCCEEDED", "report_progress")
 load("/michelangelo/uniflow/declarative/engine.star", "levels", "run")
-load("@plugin", "time")
+load("@plugin", "json", "time")
 
-def _report(alias, state):
-    report_progress(task_path = "fake", task_name = alias, task_state = state)
+# The workflow result holds no task outputs, so each fake reports what it
+# received as its progress output.
+def _report(alias, state, received = None):
+    report_progress(task_path = "fake", task_name = alias, task_state = state, output = json.dumps(received) if received != None else "")
 
 _ABSENT = "absent"
 
 def _ok(entry_point, alias = None, retry_attempts = _ABSENT, **fields):
     def call(*args, **kwargs):
-        _report(alias, TASK_STATE_SUCCEEDED)
-        return {"ep": entry_point, "alias": alias, "args": list(args), "kwargs": kwargs, "retry": retry_attempts, "fields": fields}
+        record = {"ep": entry_point, "alias": alias, "args": list(args), "kwargs": kwargs, "retry": retry_attempts, "fields": fields}
+        _report(alias, TASK_STATE_SUCCEEDED, record)
+        return record
 
     return call
 
@@ -32,8 +35,9 @@ def _bad_factory(entry_point, alias = None, **fields):
 
 def _noretry(entry_point, alias = None, **fields):
     def call(*args, **kwargs):
-        _report(alias, TASK_STATE_SUCCEEDED)
-        return {"ep": entry_point, "alias": alias, "fields": fields}
+        record = {"ep": entry_point, "alias": alias, "fields": fields}
+        _report(alias, TASK_STATE_SUCCEEDED, record)
+        return record
 
     return call
 
@@ -41,8 +45,9 @@ def _noretry(entry_point, alias = None, **fields):
 # Starlark type of each field.
 def _types(entry_point, alias = None, **fields):
     def call(*args, **kwargs):
-        _report(alias, TASK_STATE_SUCCEEDED)
-        return {"types": {k: type(v) for k, v in fields.items()}, "fields": fields}
+        record = {"types": {k: type(v) for k, v in fields.items()}, "fields": fields}
+        _report(alias, TASK_STATE_SUCCEEDED, record)
+        return record
 
     return call
 
@@ -50,8 +55,9 @@ def _sleep(entry_point, alias = None, seconds = 10, **fields):
     def call(*args, **kwargs):
         start = time.time()
         time.sleep(seconds = seconds)
-        _report(alias, TASK_STATE_SUCCEEDED)
-        return {"start": int(start)}
+        record = {"start": int(start)}
+        _report(alias, TASK_STATE_SUCCEEDED, record)
+        return record
 
     return call
 
