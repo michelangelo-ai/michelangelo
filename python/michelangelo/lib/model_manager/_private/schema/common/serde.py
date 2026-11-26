@@ -78,4 +78,5 @@ def dict_to_schema_item(item: dict) -> ModelSchemaItem:
         name=item["name"],
         data_type=DataType[item["data_type"].upper()],
         shape=item.get("shape"),
+        optional=item.get("optional"),
     )
