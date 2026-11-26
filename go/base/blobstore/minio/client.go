@@ -10,7 +10,10 @@ import (
 	"github.com/minio/minio-go/v7"
 )
 
-var _ blobstore.BlobStoreClient = (*minioClient)(nil)
+var (
+	_ blobstore.BlobStoreClient = (*minioClient)(nil)
+	_ blobstore.LimitedGetter   = (*minioClient)(nil)
+)
 
 // minioClient is a wrapper around the MinIO S3 client.
 // It provides methods to interact with S3-compatible storage.
@@ -23,6 +26,16 @@ type minioClient struct {
 // unmarshals the JSON data, and returns the result.
 // The blobURI is expected to be in the format "s3://bucket/path".
 func (a *minioClient) Get(ctx context.Context, blobURI string) ([]byte, error) {
+	return a.get(ctx, blobURI, -1)
+}
+
+// GetLimited returns at most limit+1 bytes of the object.
+func (a *minioClient) GetLimited(ctx context.Context, blobURI string, limit int64) ([]byte, error) {
+	return a.get(ctx, blobURI, limit)
+}
+
+// get reads the whole object when limit is negative.
+func (a *minioClient) get(ctx context.Context, blobURI string, limit int64) ([]byte, error) {
 	// Split the path into bucket and file path.
 	parsedURL, err := url.Parse(blobURI)
 	if err != nil {
@@ -40,8 +53,11 @@ func (a *minioClient) Get(ctx context.Context, blobURI string) ([]byte, error) {
 		return nil, fmt.Errorf("failed to get object: %w", err)
 	}
 
-	// Read all data from the retrieved object.
-	data, err := io.ReadAll(output)
+	var r io.Reader = output
+	if limit >= 0 {
+		r = io.LimitReader(output, limit+1)
+	}
+	data, err := io.ReadAll(r)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read object: %w", err)
 	}

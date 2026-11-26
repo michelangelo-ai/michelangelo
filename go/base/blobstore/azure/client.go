@@ -11,7 +11,10 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
 )
 
-var _ blobstore.BlobStoreClient = (*azureBlobClient)(nil)
+var (
+	_ blobstore.BlobStoreClient = (*azureBlobClient)(nil)
+	_ blobstore.LimitedGetter   = (*azureBlobClient)(nil)
+)
 
 // azureBlobClient is a client for Azure Blob Storage with SAS token authentication.
 // It provides methods to interact with Azure Blob Storage using container-level SAS tokens.
@@ -41,6 +44,16 @@ func newAzureBlobClient(storageAccount, sasToken, endpoint string) *azureBlobCli
 // Get retrieves an object from Azure Blob Storage using SAS token authentication.
 // The blobURI is expected to be in the format "abfss://container@storageaccount.blob.core.windows.net/path".
 func (c *azureBlobClient) Get(ctx context.Context, blobURI string) ([]byte, error) {
+	return c.get(ctx, blobURI, -1)
+}
+
+// GetLimited returns at most limit+1 bytes of the blob.
+func (c *azureBlobClient) GetLimited(ctx context.Context, blobURI string, limit int64) ([]byte, error) {
+	return c.get(ctx, blobURI, limit)
+}
+
+// get reads the whole blob when limit is negative.
+func (c *azureBlobClient) get(ctx context.Context, blobURI string, limit int64) ([]byte, error) {
 	parsedURL, err := url.Parse(blobURI)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse url: %w", err)
@@ -53,7 +66,7 @@ func (c *azureBlobClient) Get(ctx context.Context, blobURI string) ([]byte, erro
 	container, blobPath := c.parseABFSSURL(parsedURL)
 	blobURL := c.buildBlobURL(container, blobPath)
 
-	return c.downloadBlob(ctx, blobURI, blobURL)
+	return c.downloadBlob(ctx, blobURI, blobURL, limit)
 }
 
 // parseABFSSURL extracts container and blob path from an ABFSS URL.
@@ -84,7 +97,7 @@ func (c *azureBlobClient) buildBlobURL(container, blobPath string) string {
 }
 
 // downloadBlob performs the HTTP request to download the blob data.
-func (c *azureBlobClient) downloadBlob(ctx context.Context, originalURI, blobURL string) ([]byte, error) {
+func (c *azureBlobClient) downloadBlob(ctx context.Context, originalURI, blobURL string, limit int64) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", blobURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request for %s: %w", originalURI, err)
@@ -100,7 +113,11 @@ func (c *azureBlobClient) downloadBlob(ctx context.Context, originalURI, blobURL
 		return nil, fmt.Errorf("failed to get object from %s: HTTP %d - URL: %s", originalURI, resp.StatusCode, blobURL)
 	}
 
-	data, err := io.ReadAll(resp.Body)
+	var r io.Reader = resp.Body
+	if limit >= 0 {
+		r = io.LimitReader(resp.Body, limit+1)
+	}
+	data, err := io.ReadAll(r)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read object from %s: %w", originalURI, err)
 	}

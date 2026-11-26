@@ -21,7 +21,10 @@ import (
 // reproduced explicitly or a misbehaving endpoint could redirect forever.
 const maxRedirects = 10
 
-var _ blobstore.BlobStoreClient = (*gcsBlobClient)(nil)
+var (
+	_ blobstore.BlobStoreClient = (*gcsBlobClient)(nil)
+	_ blobstore.LimitedGetter   = (*gcsBlobClient)(nil)
+)
 
 // gcsBlobClient is a client for Google Cloud Storage.
 //
@@ -117,6 +120,16 @@ func refuseInsecureRedirect(req *http.Request, via []*http.Request) error {
 // Get retrieves the content of a blob from Google Cloud Storage.
 // The blobURI is expected to be in the format "gs://bucket/path/to/object".
 func (c *gcsBlobClient) Get(ctx context.Context, blobURI string) ([]byte, error) {
+	return c.get(ctx, blobURI, -1)
+}
+
+// GetLimited returns at most limit+1 bytes of the object.
+func (c *gcsBlobClient) GetLimited(ctx context.Context, blobURI string, limit int64) ([]byte, error) {
+	return c.get(ctx, blobURI, limit)
+}
+
+// get reads the whole object when limit is negative.
+func (c *gcsBlobClient) get(ctx context.Context, blobURI string, limit int64) ([]byte, error) {
 	parsedURL, err := url.Parse(blobURI)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse url: %w", err)
@@ -141,7 +154,11 @@ func (c *gcsBlobClient) Get(ctx context.Context, blobURI string) ([]byte, error)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get object: %w", err)
 	}
-	data, err := io.ReadAll(reader)
+	var r io.Reader = reader
+	if limit >= 0 {
+		r = io.LimitReader(reader, limit+1)
+	}
+	data, err := io.ReadAll(r)
 	if err != nil {
 		_ = reader.Close()
 		return nil, fmt.Errorf("failed to read object: %w", err)

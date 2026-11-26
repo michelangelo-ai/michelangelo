@@ -325,6 +325,42 @@ func TestDeclarativeStartResume(t *testing.T) {
 	}, got.env)
 }
 
+// limitedClient returns limit+1 bytes from GetLimited, as a blob store client
+// does for a blob larger than limit.
+type limitedClient struct {
+	t      *testing.T
+	limits []int64
+}
+
+func (c *limitedClient) Get(context.Context, string) ([]byte, error) {
+	c.t.Error("Get reads the whole blob; the controller must call GetLimited")
+	return nil, errors.New("unexpected Get")
+}
+
+func (c *limitedClient) GetLimited(_ context.Context, _ string, limit int64) ([]byte, error) {
+	c.limits = append(c.limits, limit)
+	return make([]byte, limit+1), nil
+}
+
+func (c *limitedClient) Scheme() string { return "limited" }
+
+func TestDeclarativeStartBoundsTheFetch(t *testing.T) {
+	f := loadDeclFixture(t)
+	ctrl := gomock.NewController(t)
+	actor := declActor(t, ctrl, func(*workflowclientMock.MockWorkflowClient, *blobstoreMock.MockBlobStoreClient) {})
+	limited := &limitedClient{t: t}
+	actor.blobStore.RegisterClient(limited)
+	run := f.run()
+	run.Status.SourcePipeline.Pipeline.Spec.Manifest.InterpreterPin.Artifact = "limited://interpreters/core-v0.1.0.tar.gz"
+
+	_, err := actor.Run(context.Background(), run, nil)
+	require.NoError(t, err)
+	assert.Equal(t, []int64{1 << 20}, limited.limits)
+	step := pipelinerunutils.GetStep(run, pipelinerunutils.ExecuteWorkflowStepName)
+	assert.Equal(t, v2.PIPELINE_RUN_STEP_STATE_FAILED, step.State)
+	assert.Equal(t, "interpreter core-v0.1.0 is larger than the 1 MiB limit", step.Message)
+}
+
 // A cache env error is retryable, and a fetch error is final, so the
 // controller must not fetch before the cache env succeeds.
 func TestDeclarativeStartCacheErrorDoesNotFetch(t *testing.T) {

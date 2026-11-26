@@ -64,7 +64,7 @@ func (a *ExecuteWorkflowActor) declarativeStart(ctx context.Context, run *v2.Pip
 		return nil, nil, nil, fmt.Errorf("failed to add task cache env: %w", err)
 	}
 	// A fetch failure is final, so the fetch runs after every retryable step.
-	tar, err := a.blobStore.Get(ctx, pin.Artifact)
+	tar, err := a.blobStore.GetLimited(ctx, pin.Artifact, maxInterpreterBytes)
 	if err != nil {
 		return nil, nil, nil, &startError{
 			msg:    fmt.Sprintf("cannot fetch interpreter %s", pin.Version),
