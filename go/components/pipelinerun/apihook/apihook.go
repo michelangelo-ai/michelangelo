@@ -14,6 +14,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	"github.com/michelangelo-ai/michelangelo/go/cascadedelete"
+	pipelineapihook "github.com/michelangelo-ai/michelangelo/go/components/pipeline/apihook"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2 "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
@@ -48,21 +49,23 @@ var platformManagedAnnotations = map[string]struct{}{
 // the caller did not supply one. defaultEnv is the operator-configured
 // default environment label value (empty when unconfigured, in which case
 // api.UnspecifiedEnvironment is used instead).
-func RegisterPipelineRunAPIHook(logger *zap.Logger, apiHandler api.Handler, scheme *runtime.Scheme, defaultEnv string) {
+func RegisterPipelineRunAPIHook(logger *zap.Logger, apiHandler api.Handler, scheme *runtime.Scheme, defaultEnv string, d *pipelineapihook.Declarative) {
 	v2.RegisterPipelineRunAPIHook(apiHook{
-		logger:     logger,
-		apiHandler: apiHandler,
-		scheme:     scheme,
-		defaultEnv: defaultEnv,
+		logger:      logger,
+		apiHandler:  apiHandler,
+		scheme:      scheme,
+		defaultEnv:  defaultEnv,
+		declarative: d,
 	})
 }
 
 type apiHook struct {
 	v2.NoopPipelineRunAPIHook
-	logger     *zap.Logger
-	apiHandler api.Handler
-	scheme     *runtime.Scheme
-	defaultEnv string
+	logger      *zap.Logger
+	apiHandler  api.Handler
+	scheme      *runtime.Scheme
+	defaultEnv  string
+	declarative *pipelineapihook.Declarative
 }
 
 func (a apiHook) BeforeCreate(ctx context.Context, request *v2.CreatePipelineRunRequest) error {
@@ -99,6 +102,17 @@ func (a apiHook) BeforeCreate(ctx context.Context, request *v2.CreatePipelineRun
 	if pipeline == nil {
 		pipeline = a.getReferencedPipeline(ctx, request)
 	}
+
+	// A run by name has no inline spec. When the Pipeline Get fails, the hook
+	// skips this check, and the run controller still checks the pin digest.
+	spec := request.PipelineRun.Spec.GetPipelineSpec()
+	if spec == nil && pipeline != nil {
+		spec = &pipeline.Spec
+	}
+	if err := checkDeclarativeRun(request.PipelineRun, spec, a.declarative); err != nil {
+		return err
+	}
+
 	if pipeline == nil {
 		a.logger.Info("BeforeCreate: no pipeline reference, skipping ownerRef/notifications")
 		return nil

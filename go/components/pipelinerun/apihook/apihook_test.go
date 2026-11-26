@@ -628,7 +628,7 @@ func TestBeforeUpdate_NilAnnotationsReplacedWithEmptyMap(t *testing.T) {
 }
 
 func TestRegisterPipelineRunAPIHook(t *testing.T) {
-	RegisterPipelineRunAPIHook(zaptest.NewLogger(t), nil, runtime.NewScheme(), "production")
+	RegisterPipelineRunAPIHook(zaptest.NewLogger(t), nil, runtime.NewScheme(), "production", nil)
 }
 
 func TestBeforeCreate_PipelineGetTransientErrorIsSoft(t *testing.T) {
