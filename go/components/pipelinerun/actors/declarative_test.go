@@ -147,9 +147,6 @@ func TestDeclarativeStartFailure(t *testing.T) {
 				require.NoError(t, err)
 				manifest.Content = &pbtypes.Any{TypeUrl: declarative.TypeURL, Value: raw}
 			},
-			fetch: func(b *blobstoreMock.MockBlobStoreClient) {
-				b.EXPECT().Get(gomock.Any(), declArtifact).Return(f.tar, nil)
-			},
 			msg: "parameter batch is required; parameter overrides are not supported yet",
 		},
 		{
@@ -184,9 +181,6 @@ func TestDeclarativeStartFailure(t *testing.T) {
 			name: "decode fails",
 			edit: func(run *v2.PipelineRun) {
 				run.Status.SourcePipeline.Pipeline.Spec.Manifest.Content = &pbtypes.Any{TypeUrl: "type.googleapis.com/other"}
-			},
-			fetch: func(b *blobstoreMock.MockBlobStoreClient) {
-				b.EXPECT().Get(gomock.Any(), declArtifact).Return(f.tar, nil)
 			},
 			msg: `cannot decode declarative spec: content type URL "type.googleapis.com/other" is not "type.googleapis.com/michelangelo.api.v2.DeclarativeWorkflow"`,
 		},
@@ -329,6 +323,25 @@ func TestDeclarativeStartResume(t *testing.T) {
 		"CACHE_VERSION_GET_train":   "prev-run",
 		"CACHE_ENABLED_train":       "false",
 	}, got.env)
+}
+
+// A cache env error is retryable, and a fetch error is final, so the
+// controller must not fetch before the cache env succeeds.
+func TestDeclarativeStartCacheErrorDoesNotFetch(t *testing.T) {
+	f := loadDeclFixture(t)
+	ctrl := gomock.NewController(t)
+	actor := declActor(t, ctrl, func(*workflowclientMock.MockWorkflowClient, *blobstoreMock.MockBlobStoreClient) {})
+	run := f.run()
+	run.Spec.Resume = &v2.Resume{
+		PipelineRun: &apipb.ResourceIdentifier{Name: "missing-run", Namespace: declNamespace},
+		ResumeFrom:  []string{"train"},
+	}
+
+	_, err := actor.Run(context.Background(), run, nil)
+	require.ErrorContains(t, err, "failed to add task cache env")
+	step := pipelinerunutils.GetStep(run, pipelinerunutils.ExecuteWorkflowStepName)
+	assert.NotEqual(t, v2.PIPELINE_RUN_STEP_STATE_FAILED, step.State)
+	assert.Empty(t, step.Message)
 }
 
 func TestDeclarativeManualRetryAfterStartFailure(t *testing.T) {

@@ -42,6 +42,28 @@ func (a *ExecuteWorkflowActor) declarativeStart(ctx context.Context, run *v2.Pip
 	if err := declarative.CheckRunInput(run.Spec.GetInput()); err != nil {
 		return nil, nil, nil, &startError{msg: err.Error()}
 	}
+	w, err := declarative.Decode(manifest)
+	if err != nil {
+		return nil, nil, nil, &startError{msg: "cannot decode declarative spec: " + err.Error()}
+	}
+	args, err := declarative.WorkflowArgs(w)
+	var declErr *declarative.Error
+	if errors.As(err, &declErr) {
+		return nil, nil, nil, &startError{msg: fmt.Sprintf("parameter %s is required; parameter overrides are not supported yet", declErr.Param)}
+	}
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("build declarative workflow args: %w", err)
+	}
+
+	envs := baseEnv(run)
+	if v, ok := run.Spec.GetInput().GetFields()["environ"].GetStructValue().GetFields()[declarative.LastScheduleTimestampEnv]; ok {
+		envs[declarative.LastScheduleTimestampEnv] = v.GetStringValue()
+	}
+	addTaskImageToEnv(run, envs)
+	if err := a.addTaskCacheEnv(ctx, run, envs); err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to add task cache env: %w", err)
+	}
+	// A fetch failure is final, so the fetch runs after every retryable step.
 	tar, err := a.blobStore.Get(ctx, pin.Artifact)
 	if err != nil {
 		return nil, nil, nil, &startError{
@@ -65,27 +87,6 @@ func (a *ExecuteWorkflowActor) declarativeStart(ctx context.Context, run *v2.Pip
 				zap.String("fetchedDigest", digest),
 			},
 		}
-	}
-	w, err := declarative.Decode(manifest)
-	if err != nil {
-		return nil, nil, nil, &startError{msg: "cannot decode declarative spec: " + err.Error()}
-	}
-	args, err := declarative.WorkflowArgs(w)
-	var declErr *declarative.Error
-	if errors.As(err, &declErr) {
-		return nil, nil, nil, &startError{msg: fmt.Sprintf("parameter %s is required; parameter overrides are not supported yet", declErr.Param)}
-	}
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("build declarative workflow args: %w", err)
-	}
-
-	envs := baseEnv(run)
-	if v, ok := run.Spec.GetInput().GetFields()["environ"].GetStructValue().GetFields()[declarative.LastScheduleTimestampEnv]; ok {
-		envs[declarative.LastScheduleTimestampEnv] = v.GetStringValue()
-	}
-	addTaskImageToEnv(run, envs)
-	if err := a.addTaskCacheEnv(ctx, run, envs); err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to add task cache env: %w", err)
 	}
 	return tar, args, envs, nil
 }
