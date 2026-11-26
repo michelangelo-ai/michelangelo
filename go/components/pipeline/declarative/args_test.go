@@ -36,5 +36,6 @@ func TestWorkflowArgsRequiredParam(t *testing.T) {
 	w := typedDiamond()
 	w.Parameters["x"] = &v2pb.ParameterSpec{Type: v2pb.PARAMETER_TYPE_STRING, Required: true}
 	_, err := WorkflowArgs(w)
-	assert.ErrorContains(t, err, `parameter "x" has no value`)
+	assert.Equal(t, &Error{Param: "x", Msg: "has no value; set a default"}, err)
+	assert.EqualError(t, err, `parameter "x": has no value; set a default`)
 }

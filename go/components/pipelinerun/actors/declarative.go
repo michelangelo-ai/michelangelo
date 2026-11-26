@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 
 	"go.uber.org/zap"
@@ -58,6 +59,10 @@ func (a *ExecuteWorkflowActor) declarativeStart(ctx context.Context, run *v2.Pip
 		return nil, nil, nil, &startError{msg: "cannot decode declarative spec: " + err.Error()}
 	}
 	args, err := declarative.WorkflowArgs(w)
+	var declErr *declarative.Error
+	if errors.As(err, &declErr) {
+		return nil, nil, nil, &startError{msg: fmt.Sprintf("parameter %s is required; parameter overrides are not supported yet", declErr.Param)}
+	}
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("build declarative workflow args: %w", err)
 	}

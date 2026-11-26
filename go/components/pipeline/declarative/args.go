@@ -30,7 +30,7 @@ func WorkflowArgs(w *v2pb.DeclarativeWorkflow) ([]any, error) {
 	for _, name := range names {
 		def := w.Parameters[name].GetDefault()
 		if def == nil {
-			return nil, &Error{Msg: fmt.Sprintf("parameter %q has no value; set a default", name)}
+			return nil, &Error{Param: name, Msg: "has no value; set a default"}
 		}
 		if params[name], err = toJSON(def); err != nil {
 			return nil, err

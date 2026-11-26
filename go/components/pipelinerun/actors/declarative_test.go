@@ -133,6 +133,22 @@ func TestDeclarativeStartFailure(t *testing.T) {
 			msg: `run input environ key "UF_TASK_IMAGE" is not supported for declarative pipelines; only LAST_SCHEDULE_TIMESTAMP is allowed`,
 		},
 		{
+			name: "parameter has no default",
+			edit: func(run *v2.PipelineRun) {
+				manifest := run.Status.SourcePipeline.Pipeline.Spec.Manifest
+				w, err := declarative.Decode(manifest)
+				require.NoError(t, err)
+				w.Parameters["batch"] = &v2.ParameterSpec{Type: v2.PARAMETER_TYPE_INTEGER, Required: true}
+				raw, err := declarative.Encode(w)
+				require.NoError(t, err)
+				manifest.Content = &pbtypes.Any{TypeUrl: declarative.TypeURL, Value: raw}
+			},
+			fetch: func(b *blobstoreMock.MockBlobStoreClient) {
+				b.EXPECT().Get(gomock.Any(), declArtifact).Return(f.tar, nil)
+			},
+			msg: "parameter batch is required; parameter overrides are not supported yet",
+		},
+		{
 			name: "fetch fails",
 			fetch: func(b *blobstoreMock.MockBlobStoreClient) {
 				b.EXPECT().Get(gomock.Any(), declArtifact).Return(nil, errors.New("access denied for key"))
