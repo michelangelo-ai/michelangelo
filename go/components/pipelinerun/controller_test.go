@@ -494,6 +494,110 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		{
+			name: "ExecuteWorkflow start failure of a declarative run fails the run with the step message",
+			initialObjects: []client.Object{
+				&v2.PipelineRun{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-pipeline-run",
+						Namespace: "test-namespace",
+					},
+					Spec: v2.PipelineRunSpec{
+						Pipeline: &apipb.ResourceIdentifier{
+							Name:      "test-pipeline",
+							Namespace: "test-namespace",
+						},
+					},
+					Status: v2.PipelineRunStatus{
+						Conditions: []*apipb.Condition{
+							{
+								Type:   actors.SourcePipelineType,
+								Status: apipb.CONDITION_STATUS_TRUE,
+							},
+							{
+								Type:   actors.ImageBuildType,
+								Status: apipb.CONDITION_STATUS_TRUE,
+							},
+							{
+								Type:   actors.ExecuteWorkflowType,
+								Status: apipb.CONDITION_STATUS_FALSE,
+							},
+						},
+						Steps: []*v2.PipelineRunStepInfo{
+							{
+								Name:  pipelinerunutils.SourcePipelineStepName,
+								State: v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED,
+							},
+							{
+								Name:  pipelinerunutils.ImageBuildStepName,
+								State: v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED,
+							},
+						},
+						SourcePipeline: &v2.SourcePipeline{
+							Pipeline: &v2.Pipeline{
+								ObjectMeta: metav1.ObjectMeta{
+									Name:      "test-pipeline",
+									Namespace: "test-namespace",
+									Annotations: map[string]string{
+										pipelinerunutils.ImageIDAnnotationKey: "test-image-id",
+									},
+								},
+								Spec: v2.PipelineSpec{
+									Manifest: &v2.PipelineManifest{
+										Type:       v2.PIPELINE_MANIFEST_TYPE_DECLARATIVE,
+										UniflowTar: "mock://test-uniflow-tar",
+									},
+								},
+							},
+						},
+					},
+				},
+				&v2.Project{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-namespace",
+						Namespace: "test-namespace",
+						Annotations: map[string]string{
+							"michelangelo/worker_queue": "test-task-list",
+						},
+					},
+				},
+			},
+			mockFunc: func(mockWorkflowClient *workflowClientMock.MockWorkflowClient, mockBlobStorageClient *blobStorageClientMock.MockBlobStoreClient) {
+				mockWorkflowClient.EXPECT().GetWorkflowExecutionInfo(gomock.Any(), "test-pipeline-run", "").Return(nil, fmt.Errorf("not found")).AnyTimes()
+			},
+			expectedConditions: []*apipb.Condition{
+				{
+					Type:   actors.SourcePipelineType,
+					Status: apipb.CONDITION_STATUS_TRUE,
+				},
+				{
+					Type:   actors.ImageBuildType,
+					Status: apipb.CONDITION_STATUS_TRUE,
+				},
+				{
+					Type:   actors.ExecuteWorkflowType,
+					Status: apipb.CONDITION_STATUS_FALSE,
+				},
+			},
+			expectedPipelineRunStatus: v2.PipelineRunStatus{
+				State: v2.PIPELINE_RUN_STATE_FAILED,
+			},
+			expectedErrorMessage: "declarative pipeline run has no interpreter pin; re-apply the pipeline through the API",
+			expectedSteps: []*v2.PipelineRunStepInfo{
+				{
+					Name:  pipelinerunutils.SourcePipelineStepName,
+					State: v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED,
+				},
+				{
+					Name:  pipelinerunutils.ImageBuildStepName,
+					State: v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED,
+				},
+				{
+					Name:  pipelinerunutils.ExecuteWorkflowStepName,
+					State: v2.PIPELINE_RUN_STEP_STATE_FAILED,
+				},
+			},
+		},
+		{
 			name: "third reconcile, ExecuteWorkflow actor starts workflow",
 			initialObjects: []client.Object{
 				&v2.PipelineRun{
