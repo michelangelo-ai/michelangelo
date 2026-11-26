@@ -90,7 +90,13 @@ def test_config_requires_a_color_column():
 
 
 @pytest.mark.parametrize(
-    "override", [{"color_cols": ["emb"]}, {"hover_cols": ["emb"]}, {"id_col": "emb"}]
+    "override",
+    [
+        {"color_cols": ["emb"]},
+        {"hover_cols": ["emb"]},
+        {"id_col": "emb"},
+        {"where": {"emb": "x"}},
+    ],
 )
 def test_config_rejects_the_embedding_column_in_another_role(override):
     """The embedding column cannot also color, label or identify points."""
@@ -129,6 +135,18 @@ def test_projection_columns():
     assert columns == {"emb", "blob", "item", "title"}
 
 
+def test_projection_columns_include_where_columns():
+    """A ``where`` column is read from the dataset too."""
+    columns = projection_columns(_projection(where={"model": "m1"}))
+    assert columns == {"emb", "blob", "item", "model"}
+
+
+def test_config_rejects_cluster_dims_below_two():
+    """Clustering needs at least two dimensions."""
+    with pytest.raises(ConfigurationError, match="cluster_dims"):
+        _projection(cluster_dims=1)
+
+
 def test_embedding_chart_columns():
     """The columns of every projection are unioned; none gives an empty set."""
     assert embedding_chart_columns([]) == set()
@@ -164,6 +182,16 @@ def test_sample_without_id_col_still_fills():
         _FakeRayDataset([_blobs()]), _projection(id_col=None, max_samples=100)
     )
     assert len(sample) == 100
+
+
+def test_sample_where_selects_rows_and_still_fills_the_sample():
+    """One model in ten rows: the sample comes from its rows, at full size."""
+    df = _blobs(n_per_blob=500)
+    df["model"] = ["m1" if i % 10 == 0 else "m2" for i in range(len(df))]
+    dataset = _FakeRayDataset([df.iloc[:400], df.iloc[400:]])
+    sample = sample_rows(dataset, _projection(max_samples=100, where={"model": "m1"}))
+    assert len(sample) == 100
+    assert set(sample["model"]) == {"m1"}
 
 
 def test_pca_separates_blobs_into_clusters():
@@ -206,6 +234,51 @@ def test_umap_gets_defaults_and_params(monkeypatch):
         "metric": "cosine",
         "random_state": 7,
     }
+
+
+@pytest.mark.parametrize("cluster_dims, layout_only", [(2, True), (10, False)])
+def test_cluster_dims_clusters_in_its_own_umap(monkeypatch, cluster_dims, layout_only):
+    """More than 2 cluster dims run a second, tighter UMAP and cluster in it."""
+    seen = []
+
+    class FakeUMAP:
+        """Records its constructor arguments and keeps the leading coordinates."""
+
+        def __init__(self, **kwargs):
+            """Remember the keyword arguments."""
+            seen.append(kwargs)
+            self.n_components = kwargs.get("n_components", 2)
+
+        def fit_transform(self, x):
+            """Return the first ``n_components`` coordinates."""
+            return x[:, : self.n_components]
+
+    monkeypatch.setitem(sys.modules, "umap", types.SimpleNamespace(UMAP=FakeUMAP))
+    projection = _projection(
+        method="umap", params={"min_dist": 0.3}, cluster_dims=cluster_dims
+    )
+    out = project(_blobs(), projection)
+    assert seen[0]["min_dist"] == 0.3
+    if layout_only:
+        assert len(seen) == 1
+    else:
+        # The clustering reduction keeps the user's params but packs points tight.
+        assert seen[1] == {**seen[0], "n_components": 10, "min_dist": 0.0}
+    assert (out.groupby("blob")["_cluster"].nunique() == 1).all()
+
+
+def test_pca_cluster_dims_clusters_in_more_components():
+    """With PCA the clustering space is a PCA of ``cluster_dims`` components."""
+    out = project(_blobs(), _projection(cluster_dims=5))
+    by_blob = out.groupby("blob")["_cluster"].agg(lambda c: c.mode().iloc[0])
+    assert by_blob["a"] != by_blob["b"]
+
+
+def test_cluster_dims_is_capped_at_the_embedding_width():
+    """Asking for more dims than the embedding has still clusters."""
+    out = project(_blobs(dim=4), _projection(cluster_dims=10))
+    by_blob = out.groupby("blob")["_cluster"].agg(lambda c: c.mode().iloc[0])
+    assert by_blob["a"] != by_blob["b"]
 
 
 @pytest.mark.skipif(not _HAS_UMAP, reason="umap-learn is not installed")

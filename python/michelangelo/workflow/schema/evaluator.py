@@ -361,12 +361,12 @@ class ProjectionMethod(str, Enum):
 class EmbeddingProjection:
     """A 2-D picture of an embedding column, drawn in the evaluation report.
 
-    Samples up to ``max_samples`` rows of the whole dataset (segments are not drawn
-    separately; name a segment column in ``color_cols`` to tell them apart),
-    projects them to 2-D and clusters the layout. For each color column the report
-    gets a static image of every sampled row and an interactive scatter of some of
-    them, and each projection gets a table of its clusters: size, top color values,
-    examples.
+    Samples up to ``max_samples`` rows of the whole dataset, or of the rows ``where``
+    selects (segments are not drawn separately; name a segment column in
+    ``color_cols`` to tell them apart), projects them to 2-D and clusters them. For
+    each color column the report gets a static image of every sampled row and an
+    interactive scatter of some of them, and each projection gets a table of its
+    clusters: size, top color values, examples.
 
     A diagnostic, not a metric: UMAP layouts are not aligned across runs, so two
     runs' pictures cannot be compared point by point.
@@ -386,11 +386,20 @@ class EmbeddingProjection:
         max_categories: Values kept per color column.
         seed: Seed for sampling, UMAP and PCA.
         params: Passed as-is to ``umap.UMAP`` or ``sklearn.decomposition.PCA``.
+        where: Keep only rows whose column equals the value, compared as strings.
+            For a long table with one row per (entity, model), this projects one
+            model's vectors instead of mixing every model's space in one picture.
+        cluster_dims: Dimensions HDBSCAN clusters in. 2 clusters the drawn layout.
+            More reduces the embedding again, to this many dimensions with the same
+            method (UMAP with ``min_dist=0``), and clusters that: a 2-D layout tears
+            and squashes neighbourhoods, so high-dimensional embeddings cluster
+            truer in about 10.
 
     Raises:
         ConfigurationError: If ``color_cols`` is empty, ``max_samples`` is below
-            100, ``max_categories`` is below 1, ``method`` is unknown, or
-            ``embedding_col`` is also a color, hover or ID column.
+            100, ``max_categories`` is below 1, ``cluster_dims`` is below 2,
+            ``method`` is unknown, or ``embedding_col`` is also a color, hover, ID
+            or ``where`` column.
 
     Example:
         >>> EmbeddingProjection(
@@ -409,6 +418,8 @@ class EmbeddingProjection:
     max_categories: int = 10
     seed: int = 0
     params: dict[str, Any] = field(default_factory=dict)
+    where: dict[str, str] = field(default_factory=dict)
+    cluster_dims: int = 2
 
     def __post_init__(self) -> None:
         """Validate the sizes and reject a reused embedding column."""
@@ -435,15 +446,22 @@ class EmbeddingProjection:
                 f"embedding_projection {self.name!r}: max_categories must be at "
                 f"least 1; got {self.max_categories}."
             )
+        if self.cluster_dims < 2:
+            raise ConfigurationError(
+                f"embedding_projection {self.name!r}: cluster_dims must be at least "
+                f"2; got {self.cluster_dims}."
+            )
         # The projection replaces the embedding with 2-D coordinates before it
         # colors and labels the points, so such a projection could only fail at
-        # run time.
+        # run time; and a vector never equals a ``where`` string, so it would
+        # select no rows.
         reused = [
             role
             for role, cols in (
                 ("color_cols", self.color_cols),
                 ("hover_cols", self.hover_cols),
                 ("id_col", [self.id_col]),
+                ("where", list(self.where)),
             )
             if self.embedding_col in cols
         ]

@@ -379,11 +379,23 @@ class EmbeddingProjectionTest(TestCase):
             {"color_cols": ["user_embedding"]},
             {"hover_cols": ["user_embedding"]},
             {"id_col": "user_embedding"},
+            {"where": {"user_embedding": "x"}},
         ):
             with self.subTest(override=override):
                 with self.assertRaises(ConfigurationError) as ctx:
                     self._projection(**override)
                 self.assertIn("cannot also be in", str(ctx.exception))
+
+    def test_where_and_cluster_dims_defaults(self):
+        """It filters nothing and clusters the 2-D layout by default."""
+        projection = self._projection()
+        self.assertEqual(projection.where, {})
+        self.assertEqual(projection.cluster_dims, 2)
+
+    def test_cluster_dims_below_two_raises(self):
+        """Clustering needs at least two dimensions."""
+        with self.assertRaises(ConfigurationError):
+            self._projection(cluster_dims=1)
 
     def test_evaluator_config_defaults_to_no_projections(self):
         """Existing configs carry no projections."""
