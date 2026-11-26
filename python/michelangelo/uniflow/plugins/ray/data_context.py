@@ -41,6 +41,7 @@ def set_ray_data_context(
     object_store_memory_limit: int | None = None,
     wait_for_min_actors_s: int | None = None,
     max_blocks_in_streaming_gen_buffer: int | None = None,
+    max_errored_blocks: int | None = None,
 ) -> None:
     """Configure Ray ``DataContext`` with block sizes and retried I/O error patterns.
 
@@ -87,7 +88,19 @@ def set_ray_data_context(
             This is a private Ray attribute: if the installed Ray does not
             expose it, a warning is logged and the setting is ignored.
             ``None`` keeps Ray's default.
+        max_errored_blocks: Sets ``DataContext.max_errored_blocks``: how many
+            blocks may fail in one dataset execution before the job fails.
+            Failed blocks are dropped from the output and logged by Ray, so
+            only set this when consumers tolerate incomplete output. ``None``
+            keeps Ray's default of ``0``, which fails on the first errored
+            block.
+
+    Raises:
+        ValueError: If ``max_errored_blocks`` is negative.
     """
+    if max_errored_blocks is not None and max_errored_blocks < 0:
+        raise ValueError(f"max_errored_blocks must be >= 0, got {max_errored_blocks}")
+
     ctx = ray.data.DataContext.get_current()
     # Only override block sizes when explicitly provided; otherwise keep Ray's
     # auto-tuned defaults.
@@ -140,11 +153,14 @@ def set_ray_data_context(
                 _STREAMING_GEN_BUFFER_ATTR,
             )
 
+    if max_errored_blocks is not None:
+        ctx.max_errored_blocks = max_errored_blocks
+
     _logger.info(
         "Ray data context set: target_min_block_size=%s MB, "
         "target_max_block_size=%s MB, object_store_memory_limit=%s, "
         "wait_for_min_actors_s=%s, max_blocks_in_streaming_gen_buffer=%s, "
-        "retried_io_errors=%s",
+        "max_errored_blocks=%s, retried_io_errors=%s",
         f"{ctx.target_min_block_size / (1024 * 1024):.0f}"
         if ctx.target_min_block_size
         else "ray-default",
@@ -156,5 +172,6 @@ def set_ray_data_context(
         getattr(ctx, _STREAMING_GEN_BUFFER_ATTR, "unsupported")
         if max_blocks_in_streaming_gen_buffer is not None
         else None,
+        getattr(ctx, "max_errored_blocks", None),
         ctx.retried_io_errors,
     )
