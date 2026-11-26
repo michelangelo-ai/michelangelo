@@ -16,9 +16,6 @@ import logging
 import time
 from typing import TYPE_CHECKING
 
-import ray
-from packaging import version
-
 from michelangelo.lib.native_transform.torch import (
     TorchTransformModule,
     TransformSpec,
@@ -33,6 +30,10 @@ from michelangelo.uniflow.plugins.ray.native_transform import (
 )
 from michelangelo.uniflow.plugins.ray.parquet_io import parquet_read_config_to_kwargs
 from michelangelo.workflow.schema.exceptions import ConfigurationError
+from michelangelo.workflow.tasks.functions.data.ray.write import (
+    save_datasets,
+    write_config_to_kwargs,
+)
 from michelangelo.workflow.tasks.tabular_native_transform._private import (
     incremental_training,
 )
@@ -52,18 +53,10 @@ if TYPE_CHECKING:
     from michelangelo.workflow.schema.native_transform import (
         TabularNativeTransformConfig,
     )
-    from michelangelo.workflow.schema.ray_data_io import WriteConfig
 
 _logger = logging.getLogger(__name__)
 
 __all__ = ["tabular_native_transform"]
-
-# Ray version floors below which `Dataset.write_parquet` silently swallows the
-# kwarg into `**arrow_parquet_args` instead of applying it, later raising a
-# confusing `TypeError` from inside a write task rather than failing at
-# config time. See `parquet_io.py`'s analogous 2.50 read-API gate.
-_MIN_RAY_VERSION_FOR_MAX_ROWS_PER_FILE = version.parse("2.48")
-_MIN_RAY_VERSION_FOR_MIN_ROWS_PER_FILE = version.parse("2.43")
 
 
 def tabular_native_transform(
@@ -180,8 +173,8 @@ def tabular_native_transform(
     _logger.info("Creating transform module (model) from transform spec")
     model_variable = _create_transform_model(transform_spec, feature_stats, sample_data)
 
-    write_kwargs = _write_config_to_kwargs(config.write_config)
-    _save_datasets(transformed_datasets, **write_kwargs)
+    write_kwargs = write_config_to_kwargs(config.write_config)
+    save_datasets(transformed_datasets, **write_kwargs)
 
     if incremental_training.is_incremental(inc) and model_variable is None:
         raise ConfigurationError(
@@ -381,76 +374,3 @@ def _create_transform_model(
     model_variable.save()
 
     return model_variable
-
-
-def _write_config_to_kwargs(write_config: WriteConfig | None) -> dict:
-    """Convert a ``WriteConfig`` into ``write_parquet`` kwargs, gated by Ray version.
-
-    ``max_rows_per_file``/``min_rows_per_file`` are only understood by
-    ``Dataset.write_parquet`` from Ray 2.48/2.43 onward respectively. On an
-    older Ray, the kwarg isn't rejected up front — it flows through to
-    PyArrow's writer as an unexpected option and fails deep inside a write
-    task, after the whole transform has already run. Fail fast here instead.
-
-    Raises:
-        ConfigurationError: If ``write_config`` requests a kwarg the
-            installed Ray version doesn't support.
-    """
-    if not write_config:
-        return {}
-
-    ray_version = version.parse(ray.__version__)
-    write_kwargs = {}
-
-    if write_config.max_rows_per_file is not None:
-        if ray_version < _MIN_RAY_VERSION_FOR_MAX_ROWS_PER_FILE:
-            raise ConfigurationError(
-                f"write_config.max_rows_per_file requires Ray >= "
-                f"{_MIN_RAY_VERSION_FOR_MAX_ROWS_PER_FILE}, but installed Ray is "
-                f"{ray.__version__}."
-            )
-        write_kwargs["max_rows_per_file"] = write_config.max_rows_per_file
-
-    if write_config.min_rows_per_file is not None:
-        if ray_version < _MIN_RAY_VERSION_FOR_MIN_ROWS_PER_FILE:
-            raise ConfigurationError(
-                f"write_config.min_rows_per_file requires Ray >= "
-                f"{_MIN_RAY_VERSION_FOR_MIN_ROWS_PER_FILE}, but installed Ray is "
-                f"{ray.__version__}."
-            )
-        write_kwargs["min_rows_per_file"] = write_config.min_rows_per_file
-
-    # ``Dataset.write_parquet`` accepts ``concurrency`` in the Ray releases this
-    # package has been checked against (2.41-2.48 and 2.51), so no version gate.
-    if write_config.concurrency is not None:
-        write_kwargs["concurrency"] = write_config.concurrency
-
-    return write_kwargs
-
-
-def _save_datasets(
-    transformed_datasets: dict[str, DatasetVariable], **write_kwargs
-) -> None:
-    """Persist each transformed dataset through its ``DatasetVariable``.
-
-    Transformed datasets already carry native PyArrow schemas (the native
-    transform emits ``pa.Table`` blocks with multi-dim columns encoded as
-    nested ``list<list<...>>``), so each dataset is written straight through
-    to its sink.
-
-    Args:
-        transformed_datasets: Mapping of dataset name to the transformed
-            ``DatasetVariable`` to persist.
-        **write_kwargs: Forwarded to ``DatasetVariable.save_ray_dataset()``
-            and ultimately to ``ray.data.Dataset.write_parquet()``.
-            Supported keys include ``max_rows_per_file``,
-            ``min_rows_per_file`` and ``concurrency``.
-    """
-    for dataset_name, dataset_var in transformed_datasets.items():
-        _logger.info("Saving transformed dataset: %s", dataset_name)
-        t = time.time()
-
-        if write_kwargs:
-            _logger.info("Writing %s with write_kwargs=%s", dataset_name, write_kwargs)
-        dataset_var.save_ray_dataset(**write_kwargs)
-        _logger.info("Saved %s dataset in %.2f seconds", dataset_name, time.time() - t)
