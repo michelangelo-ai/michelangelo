@@ -59,6 +59,17 @@ func NewDeclarative(cfg Config) (*Declarative, error) {
 	return &Declarative{enabled: true, releases: releases, defaultRelease: def}, nil
 }
 
+// Enabled reports whether the apiserver accepts DECLARATIVE pipelines and runs.
+func (d *Declarative) Enabled() bool {
+	return d.enabled
+}
+
+// Release returns the loaded release with the given version.
+func (d *Declarative) Release(version string) (*declarative.Release, bool) {
+	r, ok := d.releases[version]
+	return r, ok
+}
+
 // Versions returns the loaded release versions in sorted order.
 func (d *Declarative) Versions() []string {
 	out := make([]string, 0, len(d.releases))

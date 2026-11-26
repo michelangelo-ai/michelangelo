@@ -37,7 +37,9 @@ func TestRegisterDeclarativeHook(t *testing.T) {
 	t.Run("disabled registers the hook and loads nothing", func(t *testing.T) {
 		v2pb.ClearPipelineAPIHooks()
 		core, logs := observer.New(zap.InfoLevel)
-		require.NoError(t, registerDeclarativeHook(zap.New(core), nil, pipelineapihook.Config{}))
+		d, err := pipelineapihook.NewDeclarative(pipelineapihook.Config{})
+		require.NoError(t, err)
+		registerDeclarativeHook(zap.New(core), nil, pipelineapihook.Config{}, d)
 		assert.Len(t, v2pb.GetPipelineAPIHooks(), 1)
 		assertDeclarativeLog(t, logs, false, "", []any{})
 	})
@@ -54,16 +56,21 @@ func TestRegisterDeclarativeHook(t *testing.T) {
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "core-v1.yaml"), []byte(release), 0o600))
 		core, logs := observer.New(zap.InfoLevel)
 		conf := pipelineapihook.Config{Enabled: true, DefaultInterpreter: "core-v1", ReleasesDir: dir}
-		require.NoError(t, registerDeclarativeHook(zap.New(core), nil, conf))
+		d, err := pipelineapihook.NewDeclarative(conf)
+		require.NoError(t, err)
+		registerDeclarativeHook(zap.New(core), nil, conf, d)
 		assert.Len(t, v2pb.GetPipelineAPIHooks(), 1)
 		assertDeclarativeLog(t, logs, true, "core-v1", []any{"core-v1"})
 	})
 	t.Run("missing default release fails start", func(t *testing.T) {
-		v2pb.ClearPipelineAPIHooks()
 		conf := pipelineapihook.Config{Enabled: true, DefaultInterpreter: "x", ReleasesDir: t.TempDir()}
-		err := registerDeclarativeHook(zap.NewNop(), nil, conf)
+		err := fx.New(
+			fx.Supply(conf),
+			fx.Provide(pipelineapihook.NewDeclarative),
+			fx.Invoke(func(*pipelineapihook.Declarative) {}),
+			fx.NopLogger,
+		).Err()
 		assert.ErrorContains(t, err, `default interpreter "x" has no release file`)
-		assert.Empty(t, v2pb.GetPipelineAPIHooks())
 	})
 }
 
