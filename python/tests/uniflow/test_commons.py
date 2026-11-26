@@ -428,14 +428,14 @@ class TestExecuteSparkCrdJob(unittest.TestCase):
         )
         self.execute = ns["execute_spark_crd_job"]
 
-    def _call(self, spark_crd_job, **kwargs):
+    def _call(self, spark_crd_job, retry_attempt_id=1, **kwargs):
         return self.execute(
             namespace="ma-dev-test",
             task_name="my_task",
             task_path="pkg.my_task",
             spark_crd_job=spark_crd_job,
             start_time_formatted_str="2024-01-01 00:00:00",
-            retry_attempt_id=0,
+            retry_attempt_id=retry_attempt_id,
             total_retry_attempt=3,
             job_label="Spark",
             log_url_prefix="",
@@ -497,14 +497,19 @@ class TestExecuteSparkCrdJob(unittest.TestCase):
             return_value={"sparkJob": created_job, "activityId": "act-1"}
         )
         running_job = {"status": {"jobUrl": "https://driver.example.com"}}
-        spark.sensor_job = MagicMock(side_effect=[running_job, terminated_job])
+        spark.sensor_job = MagicMock(
+            side_effect=[running_job, terminated_job, terminated_job]
+        )
 
         self._call({"kind": "SparkJob"}, first_activity_id="decide-1")
 
         self.assertEqual(self._reported_first_activity_ids(), {"decide-1"})
-        atexit_args = self.globals_["atexit"].register.call_args.args
-        self.assertIn("decide-1", atexit_args)
-        self.assertNotIn("act-1", atexit_args)
+        # The exit hook must report with the same anchor.
+        reports = self.globals_["report_progress"].call_args_list
+        before = len(reports)
+        self.globals_["atexit"].register.call_args.args[0]()
+        self.assertEqual(len(reports), before + 1)
+        self.assertEqual(reports[-1].kwargs["activity_id"], "decide-1")
 
     def test_job_creation_anchors_without_cache_decision(self):
         """Without a cache decision the job creation activity is the anchor."""
@@ -525,8 +530,7 @@ class TestExecuteSparkCrdJob(unittest.TestCase):
 
         self.assertEqual(self._reported_first_activity_ids(), {"act-1"})
 
-    def test_failed_job_does_not_unregister_atexit_hook(self):
-        """A job that ultimately fails leaves the atexit safety hook registered."""
+    def _run_failed_attempt(self, retry_attempt_id):
         spark = self.globals_["spark"]
         created_job = {"metadata": {"name": "uniflow-sp-abc"}, "status": {}}
         running_job = {"status": {"jobUrl": "https://driver.example.com"}}
@@ -535,17 +539,54 @@ class TestExecuteSparkCrdJob(unittest.TestCase):
                 "statusConditions": [_condition("Succeeded", "CONDITION_STATUS_FALSE")]
             }
         }
-
         spark.create_job = MagicMock(
             return_value={"sparkJob": created_job, "activityId": "act-1"}
         )
         spark.sensor_job = MagicMock(side_effect=[running_job, terminated_job])
 
-        job_state, final_job = self._call({"kind": "SparkJob"})
+        job_state, final_job = self._call(
+            {"kind": "SparkJob"}, retry_attempt_id=retry_attempt_id
+        )
 
         self.assertEqual(job_state, "FAILED")
         self.assertEqual(final_job, terminated_job)
+
+    def test_failed_attempt_before_a_retry_unregisters_its_atexit_hook(self):
+        """A failed attempt that a retry follows removes its own exit hook.
+
+        A hook that stays fails the workflow at exit, also when the retry
+        succeeded.
+        """
+        self._run_failed_attempt(retry_attempt_id=2)
+
+        atexit = self.globals_["atexit"]
+        atexit.unregister.assert_called_once_with(atexit.register.call_args.args[0])
+
+    def test_last_failed_attempt_keeps_its_atexit_hook(self):
+        """The last failed attempt keeps its hook, which reports the reason."""
+        self._run_failed_attempt(retry_attempt_id=3)
+
         self.globals_["atexit"].unregister.assert_not_called()
+
+    def test_killed_job_unregisters_its_atexit_hook(self):
+        """A killed job is reported, so its exit hook has no more work."""
+        spark = self.globals_["spark"]
+        created_job = {"metadata": {"name": "uniflow-sp-abc"}, "status": {}}
+        terminated_job = {
+            "status": {
+                "statusConditions": [_condition("Killed", "CONDITION_STATUS_TRUE")]
+            }
+        }
+        spark.create_job = MagicMock(
+            return_value={"sparkJob": created_job, "activityId": "act-1"}
+        )
+        spark.sensor_job = MagicMock(side_effect=[{"status": {}}, terminated_job])
+
+        job_state, _ = self._call({"kind": "SparkJob"}, retry_attempt_id=3)
+
+        self.assertEqual(job_state, "KILLED")
+        atexit = self.globals_["atexit"]
+        atexit.unregister.assert_called_once_with(atexit.register.call_args.args[0])
 
 
 if __name__ == "__main__":
