@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from unittest import TestCase
 
+import numpy as np
 import pandas as pd
 
-from michelangelo.gen.api.v2.chart_pb2 import ChartType
+from michelangelo.gen.api.v2.chart_pb2 import Chart, ChartType
 from michelangelo.lib.evaluator.report_generator import (
     DEFAULT_REPORT_TITLE,
     DatasetResult,
     build_combined_report,
     generate_evaluation_report,
+    split_scoring_details,
 )
 
 
@@ -315,3 +318,149 @@ class BuildCombinedReportTest(TestCase):
             None,
         )
         self.assertEqual(_sections(report), ["Metrics"])
+
+
+class ExtraChartsTest(TestCase):
+    """Extra charts are appended after the generated ones."""
+
+    def test_single_dataset_appends_extra_charts_last(self):
+        """A lone dataset's extra charts end the report."""
+        extra = Chart(title="emb (pca) clusters", section_id="emb (pca) clusters")
+        results = [
+            DatasetResult(
+                name="train",
+                summary_df=pd.DataFrame({"auc": [0.9]}),
+                extra_charts=[extra],
+            )
+        ]
+        report = build_combined_report(results, segment_columns=None)
+        self.assertEqual(report.spec.charts[-1].title, "emb (pca) clusters")
+
+    def test_multiple_datasets_prefix_extra_charts_with_the_dataset(self):
+        """Each dataset's copy is named after the dataset; the original is untouched."""
+        extra = Chart(title="emb (pca) clusters", section_id="emb (pca) clusters")
+        results = [
+            DatasetResult(
+                name=name,
+                summary_df=pd.DataFrame({"auc": [auc]}),
+                extra_charts=[extra],
+            )
+            for name, auc in (("train", 0.9), ("val", 0.85))
+        ]
+        report = build_combined_report(results, segment_columns=None)
+        self.assertEqual(
+            [(c.title, c.section_id) for c in report.spec.charts[-2:]],
+            [
+                ("train / emb (pca) clusters", "train / emb (pca) clusters"),
+                ("val / emb (pca) clusters", "val / emb (pca) clusters"),
+            ],
+        )
+        self.assertEqual(extra.title, "emb (pca) clusters")
+
+    def test_generate_evaluation_report_appends_extra_charts(self):
+        """The extra_charts argument lands after the metrics table."""
+        extra = Chart(title="extra")
+        report = generate_evaluation_report(_summary(auc=0.9), extra_charts=[extra])
+        self.assertEqual([c.title for c in report.spec.charts], ["Metrics", "extra"])
+
+
+class SplitScoringDetailsTest(TestCase):
+    """split_scoring_details moves scoring details into a settings table."""
+
+    METRICS = {  # noqa: RUF012
+        "cos_mean": SimpleNamespace(max_samples=None, num_pairs=None, seed=0),
+        "uniformity": SimpleNamespace(max_samples=200, num_pairs=1000, seed=7),
+    }
+
+    def _summary(self) -> pd.DataFrame:
+        """A summary with a GLOBAL row and one segment, plus scoring details."""
+        return pd.DataFrame(
+            {
+                "source": ["GLOBAL", "web"],
+                "auc": [0.9, 0.8],
+                "cos_mean": [0.1, 0.2],
+                "_scored_rows/cos_mean": [500, 50],
+                "_scored_dim/cos_mean": [8, 8],
+                "uniformity": [-2.0, -1.5],
+                "_scored_rows/uniformity": [200, 50],
+                "_scored_dim/uniformity": [8, 8],
+            }
+        )
+
+    @staticmethod
+    def _cells(row) -> list:
+        """A table row's cell values."""
+        return [v.str_value or v.number for v in row.values]
+
+    def test_moves_details_into_a_table(self):
+        """The detail columns leave the summary and fill the table."""
+        summary, table = split_scoring_details(
+            self._summary(), self.METRICS, ["source"], global_first=True
+        )
+        self.assertEqual(
+            list(summary.columns), ["source", "auc", "cos_mean", "uniformity"]
+        )
+        self.assertEqual(table.chart_type, ChartType.CHART_TYPE_TABLE)
+        self.assertEqual(
+            list(table.table.column_names),
+            [
+                "scope",
+                "metric",
+                "dim",
+                "rows scored",
+                "sample limit",
+                "num_pairs",
+                "seed",
+            ],
+        )
+        rows = [self._cells(row) for row in table.table.rows]
+        self.assertEqual(
+            rows,
+            [
+                ["GLOBAL", "cos_mean", 8.0, 500.0, "all rows", "-", "-"],
+                ["GLOBAL", "uniformity", 8.0, 200.0, 200.0, 1000.0, 7.0],
+                ["source=web", "cos_mean", 8.0, 50.0, "all rows", "-", "-"],
+                ["source=web", "uniformity", 8.0, 50.0, 200.0, 1000.0, 7.0],
+            ],
+        )
+
+    def test_no_segments_is_global(self):
+        """Without segment columns every row is the aggregate."""
+        summary = self._summary().drop(columns=["source"]).head(1)
+        _, table = split_scoring_details(summary, self.METRICS, [], global_first=True)
+        scopes = {row.values[0].str_value for row in table.table.rows}
+        self.assertEqual(scopes, {"GLOBAL"})
+
+    def test_global_row_keeps_its_datestr(self):
+        """The aggregate row carries a real datestr, so it is found by position."""
+        summary = self._summary().assign(datestr="2026-10-27")
+        _, table = split_scoring_details(
+            summary, self.METRICS, ["source", "datestr"], global_first=True
+        )
+        scopes = [row.values[0].str_value for row in table.table.rows]
+        self.assertEqual(scopes[:2], ["GLOBAL", "GLOBAL"])
+        self.assertTrue(all(scope.startswith("source=web") for scope in scopes[2:]))
+
+    def test_without_global_row_every_row_is_a_segment(self):
+        """With global_first False no row is labelled GLOBAL."""
+        _, table = split_scoring_details(
+            self._summary(), self.METRICS, ["source"], global_first=False
+        )
+        scopes = [row.values[0].str_value for row in table.table.rows]
+        self.assertNotIn("GLOBAL", scopes)
+
+    def test_missing_value_renders_as_dash(self):
+        """A NaN detail becomes a dash."""
+        summary = self._summary()
+        summary.loc[1, "_scored_rows/cos_mean"] = np.nan
+        _, table = split_scoring_details(
+            summary, self.METRICS, ["source"], global_first=True
+        )
+        self.assertEqual(table.table.rows[2].values[3].str_value, "-")
+
+    def test_no_embedding_metrics_leaves_summary_alone(self):
+        """With no detail columns the summary is returned as is and no table."""
+        summary = pd.DataFrame({"auc": [0.9]})
+        result, table = split_scoring_details(summary, {}, [], global_first=True)
+        self.assertIs(result, summary)
+        self.assertIsNone(table)

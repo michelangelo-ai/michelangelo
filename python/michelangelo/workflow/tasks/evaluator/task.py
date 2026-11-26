@@ -23,6 +23,7 @@ import ray
 
 from michelangelo.api.v2.util import generate_random_name
 from michelangelo.lib.evaluator.chart_data import (
+    chart_columns,
     chart_segment_labels,
     compute_chart_data_for_group,
     filter_chart_df_by_segments,
@@ -30,10 +31,17 @@ from michelangelo.lib.evaluator.chart_data import (
     filter_small_segments,
 )
 from michelangelo.lib.evaluator.evaluator import TorchMetricEvaluator
+from michelangelo.lib.evaluator.projection import (
+    embedding_chart_columns,
+    project,
+    projection_charts,
+    sample_rows,
+)
 from michelangelo.lib.evaluator.report_generator import (
     DatasetResult,
     build_combined_report,
     generate_evaluation_report,
+    split_scoring_details,
 )
 from michelangelo.lib.evaluator.sanity import (
     GLOBAL_SCOPE,
@@ -53,6 +61,7 @@ from michelangelo.workflow.variables import MessageVariable
 from michelangelo.workflow.variables.types import EvaluationMetrics, EvaluationResult
 
 if TYPE_CHECKING:
+    from michelangelo.gen.api.v2.chart_pb2 import Chart
     from michelangelo.lib.evaluator.sanity import SanityCheckResult
     from michelangelo.workflow.schema.evaluator import EvaluatorConfig
     from michelangelo.workflow.tasks.evaluator.preprocessor import PreprocessorFn
@@ -73,6 +82,10 @@ _ROW_COUNT_COLUMN = "_segment_row_count"
 # Name of the combined report -- the one a pusher publishes. Per-dataset reports
 # are keyed by dataset name alongside it.
 COMBINED_REPORT_KEY = "performance_evaluation_report"
+
+# Fewer rows than this make a meaningless picture, and UMAP needs more rows than
+# neighbors.
+_MIN_PROJECTION_ROWS = 50
 
 
 def evaluate(
@@ -102,7 +115,8 @@ def evaluate(
             evaluation -- no metrics declared, sanity checks naming a metric
             that will never be computed or a dataset that is never evaluated,
             or a ``data_preprocessor`` that does not resolve to a callable
-            carrying ``input_columns``. This is always
+            carrying ``input_columns``, or ``embedding_projections`` without
+            ``metrics``. This is always
             ``michelangelo.workflow.schema.exceptions.ConfigurationError``:
             the evaluator library's own ``ConfigurationError`` is translated,
             so callers catch one type rather than two.
@@ -137,6 +151,13 @@ def evaluate(
         raise ConfigurationError(
             "Step-based evaluation (`steps`) is not supported by this evaluator. "
             "Declare the metrics to compute under `metrics` instead."
+        )
+
+    if config.embedding_projections and not config.metrics:
+        raise ConfigurationError(
+            "Evaluator embedding_projections are only supported alongside `metrics`, "
+            "but no metrics are configured. Declare metrics, or remove "
+            "embedding_projections."
         )
 
     if not config.metrics:
@@ -397,21 +418,30 @@ def _evaluate_segmented(
             for row in segment_df.to_dict(orient="records")
         )
 
-    # Curves are computed only for segments that survived, so the groupby does
-    # not spend work on segments no report will show.
-    surviving = filter_ray_to_surviving_segments(
-        ray_dataset, segment_df, segment_columns, config.min_segment_row_count
+    # The groupby gathers each whole segment on one worker, so shuffle only the
+    # columns the charts read -- and skip it when no metric gets a chart.
+    chart_cols = chart_columns(evaluator.config, ray_dataset.schema().names) - set(
+        segment_columns
     )
-    segment_chart_df = (
-        surviving.groupby(segment_columns)
-        .map_groups(
-            lambda group_df, cols=segment_columns: compute_chart_data_for_group(
-                group_df, evaluator.config, cols
-            ),
-            batch_format="pandas",
+    if chart_cols:
+        # Curves are computed only for segments that survived, so the groupby does
+        # not spend work on segments no report will show.
+        surviving = filter_ray_to_surviving_segments(
+            ray_dataset, segment_df, segment_columns, config.min_segment_row_count
+        ).select_columns([*segment_columns, *sorted(chart_cols)])
+        segment_chart_df = (
+            surviving.groupby(segment_columns)
+            .map_groups(
+                lambda group_df, cols=segment_columns: compute_chart_data_for_group(
+                    group_df, evaluator.config, cols
+                ),
+                batch_format="pandas",
+            )
+            .to_pandas()
         )
-        .to_pandas()
-    )
+    else:
+        _logger.info("No binary or regression metric: skipping per-segment chart data")
+        segment_chart_df = pd.DataFrame()
     # Safety net: a no-op when the pre-filter above ran, still needed when
     # min_segment_row_count is 0 and filter_ray_to_surviving_segments passes
     # the dataset straight through.
@@ -475,6 +505,42 @@ def _evaluate_whole(
     chart_df = compute_chart_data_for_group(df, evaluator.config)
     chart_df["segment"] = "GLOBAL"
     return pd.DataFrame([results]), chart_df, scopes
+
+
+def _projection_charts(ray_dataset: Any, config: EvaluatorConfig) -> list[Chart]:
+    """Draw each configured embedding projection of a dataset.
+
+    Projections sample the whole dataset, independent of segments. They are a
+    diagnostic: one that fails is logged and left out, never costing the run its
+    metrics.
+
+    Args:
+        ray_dataset: Dataset to sample, already preprocessed.
+        config: Evaluator configuration holding the projections.
+
+    Returns:
+        The charts of every projection that succeeded.
+    """
+    charts: list[Chart] = []
+    for projection in config.embedding_projections:
+        try:
+            sample = sample_rows(ray_dataset, projection)
+            _logger.info(
+                "Projection %s: %d sampled row(s)", projection.name, len(sample)
+            )
+            if len(sample) < _MIN_PROJECTION_ROWS:
+                _logger.warning(
+                    "Projection %s: skipped, fewer than %d rows with an embedding",
+                    projection.name,
+                    _MIN_PROJECTION_ROWS,
+                )
+                continue
+            charts.extend(projection_charts(project(sample, projection), projection))
+        except Exception:
+            _logger.exception(
+                "Projection %s: failed, left out of the report", projection.name
+            )
+    return charts
 
 
 def _save_summary(summary_df: pd.DataFrame) -> EvaluationMetrics:
@@ -546,6 +612,9 @@ def _evaluate_with_torchmetrics(
     required_columns = evaluator.get_required_columns()
     if config.segment_columns:
         required_columns = required_columns | set(config.segment_columns)
+    required_columns = required_columns | embedding_chart_columns(
+        config.embedding_projections
+    )
 
     # With a preprocessor, the read is driven by its declared inputs instead --
     # the metric columns do not exist until the transform has run.
@@ -598,7 +667,27 @@ def _evaluate_with_torchmetrics(
             summary_df, chart_df, scopes = _evaluate_whole(
                 ray_dataset, evaluator, config
             )
+
+        # Projections run after the metrics, so the segment shuffle starts on fresh
+        # Ray workers and a failing projection cannot cost the run its metrics.
+        extra_charts = _projection_charts(ray_dataset, config)
         del ray_dataset
+
+        # Rows scored and dimension per embedding metric: a table of their own, not
+        # metrics.
+        metrics_by_name = {
+            name: metric
+            for collection in evaluator.collections.values()
+            for name, metric in collection.items()
+        }
+        summary_df, settings_table = split_scoring_details(
+            summary_df,
+            metrics_by_name,
+            config.segment_columns,
+            global_first=config.enable_global_segment_evaluation,
+        )
+        if settings_table is not None:
+            extra_charts.insert(0, settings_table)
 
         _logger.info(
             "Dataset %s evaluated: %d row(s) x %d column(s)",
@@ -615,7 +704,12 @@ def _evaluate_with_torchmetrics(
             )
 
         results.append(
-            DatasetResult(name=dataset_name, summary_df=summary_df, chart_df=chart_df)
+            DatasetResult(
+                name=dataset_name,
+                summary_df=summary_df,
+                chart_df=chart_df,
+                extra_charts=extra_charts,
+            )
         )
         # Per-dataset report, keyed by dataset name. Only the combined report is
         # normally published, but a comparator walking `metrics` expects to find
@@ -625,6 +719,7 @@ def _evaluate_with_torchmetrics(
             segment_columns=segment_columns,
             title=f"Evaluation Report - {dataset_name}",
             chart_df=chart_df,
+            extra_charts=extra_charts,
         )
         per_dataset_report_var = MessageVariable.create(per_dataset_report)
         per_dataset_report_var.save()

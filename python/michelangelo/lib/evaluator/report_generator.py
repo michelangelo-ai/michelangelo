@@ -9,10 +9,15 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 
+from michelangelo.gen.api.v2.chart_pb2 import Chart
+from michelangelo.lib.evaluator.evaluator import (
+    SCORED_DIM_PREFIX,
+    SCORED_ROWS_PREFIX,
+)
 from michelangelo.lib.evaluator.report import (
     create_absolute_errors_chart,
     create_confusion_matrix_chart,
@@ -24,8 +29,11 @@ from michelangelo.lib.evaluator.report import (
     create_segment_filter_chart,
     create_threshold_filter_chart,
 )
+from michelangelo.lib.evaluator.sanity import GLOBAL_SCOPE, segment_scope_label
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from michelangelo.gen.api.v2.evaluation_report_pb2 import EvaluationReport
 
 __all__ = [
@@ -33,6 +41,7 @@ __all__ = [
     "DatasetResult",
     "build_combined_report",
     "generate_evaluation_report",
+    "split_scoring_details",
 ]
 
 _logger = logging.getLogger(__name__)
@@ -50,11 +59,93 @@ class DatasetResult:
         summary_df: One row per segment, one column per metric.
         chart_df: Long-format curve data. Empty when the dataset produced no
             curves.
+        extra_charts: Charts built elsewhere (e.g. embedding projections),
+            appended after the generated ones.
     """
 
     name: str
     summary_df: pd.DataFrame
     chart_df: pd.DataFrame = field(default_factory=pd.DataFrame)
+    extra_charts: list[Chart] = field(default_factory=list)
+
+
+def split_scoring_details(
+    summary_df: pd.DataFrame,
+    metrics: Mapping[str, Any],
+    segment_columns: list[str],
+    global_first: bool,
+) -> tuple[pd.DataFrame, Chart | None]:
+    """Move the rows each embedding metric scored, and their dimension, into a table.
+
+    Args:
+        summary_df: The evaluator's summary, one row per scope.
+        metrics: Maps each metric name to its instance, which supplies the sampling
+            settings.
+        segment_columns: Segment column names, used to label each row's scope.
+        global_first: Whether the first row of a segmented ``summary_df`` is the
+            aggregate. That row keeps its real ``datestr``, so its segment values
+            cannot tell.
+
+    Returns:
+        ``summary_df`` without the evaluator's scored-rows and dimension columns,
+        and a table with one row per scope and embedding metric -- or ``None``
+        (and ``summary_df`` untouched) when no embedding metric reported any.
+    """
+    detail_columns = [
+        col
+        for col in summary_df.columns
+        if col.startswith((SCORED_ROWS_PREFIX, SCORED_DIM_PREFIX))
+    ]
+    if not detail_columns:
+        return summary_df, None
+    names = [
+        col.removeprefix(SCORED_ROWS_PREFIX)
+        for col in detail_columns
+        if col.startswith(SCORED_ROWS_PREFIX)
+    ]
+    segment_columns = [col for col in segment_columns if col in summary_df.columns]
+
+    def cell(value: Any) -> tuple[str | float, str]:
+        if value is None or pd.isna(value):
+            return ("-", "str_value")
+        return (float(value), "number")
+
+    rows: list[list[tuple[str | float, str]]] = []
+    for i, (_, row) in enumerate(summary_df.iterrows()):
+        if not segment_columns or (global_first and i == 0):
+            scope = GLOBAL_SCOPE
+        else:
+            scope = segment_scope_label(row, segment_columns)
+        for name in names:
+            metric = metrics.get(name)
+            max_samples = getattr(metric, "max_samples", None)
+            sampled = max_samples is not None
+            rows.append(
+                [
+                    (scope, "str_value"),
+                    (name, "str_value"),
+                    cell(row[SCORED_DIM_PREFIX + name]),
+                    cell(row[SCORED_ROWS_PREFIX + name]),
+                    cell(max_samples) if sampled else ("all rows", "str_value"),
+                    cell(getattr(metric, "num_pairs", None) if sampled else None),
+                    cell(getattr(metric, "seed", None) if sampled else None),
+                ]
+            )
+    table = create_metrics_table(
+        column_names=[
+            "scope",
+            "metric",
+            "dim",
+            "rows scored",
+            "sample limit",
+            "num_pairs",
+            "seed",
+        ],
+        values=rows,
+        title="Embedding metric settings",
+        section_id="EmbeddingMetricSettings",
+    )
+    return summary_df.drop(columns=detail_columns), table
 
 
 def generate_evaluation_report(
@@ -63,6 +154,7 @@ def generate_evaluation_report(
     title: str = DEFAULT_REPORT_TITLE,
     source_pipeline_type: str = "",
     chart_df: pd.DataFrame | None = None,
+    extra_charts: list[Chart] | None = None,
 ) -> EvaluationReport:
     """Generate an ``EvaluationReport`` from a summary metrics DataFrame.
 
@@ -77,6 +169,7 @@ def generate_evaluation_report(
             PR, and confusion-matrix charts; rows with ``row_type="regression"``
             drive Absolute Errors and Errors Chart. Pass ``None`` when no chart
             data is available.
+        extra_charts: Ready-made charts appended after the generated ones.
 
     Returns:
         A populated ``EvaluationReport``. A report with no metric columns, or
@@ -169,6 +262,8 @@ def generate_evaluation_report(
                 )
             )
 
+    report.spec.charts.extend(extra_charts or [])
+
     _logger.info(
         "Generated evaluation report with %d metric(s) and %d row(s)",
         len(metric_columns),
@@ -203,11 +298,20 @@ def build_combined_report(
             segment_columns=seg_cols,
             title="Evaluation Report",
             chart_df=r.chart_df if not r.chart_df.empty else None,
+            extra_charts=r.extra_charts,
         )
 
     dfs = []
     chart_dfs = []
+    extra_charts: list[Chart] = []
     for r in results:
+        for chart in r.extra_charts:
+            # Same projection per dataset: name each copy after its dataset.
+            named = Chart()
+            named.CopyFrom(chart)
+            named.title = f"{r.name} / {chart.title}"
+            named.section_id = f"{r.name} / {chart.section_id}"
+            extra_charts.append(named)
         df_copy = r.summary_df.copy()
         df_copy.insert(0, "DatasetName", r.name)
         dfs.append(df_copy)
@@ -227,4 +331,5 @@ def build_combined_report(
         segment_columns=combined_seg_cols,
         title="Evaluation Report",
         chart_df=combined_chart_df if not combined_chart_df.empty else None,
+        extra_charts=extra_charts,
     )

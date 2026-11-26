@@ -13,6 +13,7 @@ metrics can share prediction and target columns while filtering differently.
 from __future__ import annotations
 
 import logging
+import re
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -22,11 +23,15 @@ from michelangelo.lib.evaluator.metrics import infer_task_type_from_path
 from michelangelo.lib.evaluator.utils import sample_curve_indices
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from michelangelo.workflow.schema.evaluator import EvaluatorConfig
 
 __all__ = [
     "MAX_CURVE_POINTS",
     "apply_filter_expr",
+    "chart_columns",
+    "chart_pairs",
     "chart_segment_labels",
     "compute_chart_data_for_group",
     "filter_chart_df_by_segments",
@@ -294,6 +299,75 @@ def _regression_error_rows(
     )
 
 
+def chart_pairs(
+    config: EvaluatorConfig,
+) -> tuple[
+    dict[tuple[str, str, str | None], list[str]],
+    dict[tuple[str, str, str | None], list[str]],
+]:
+    """The binary and the regression metrics that get charts.
+
+    Both are keyed by ``(prediction_col, target_col, filter_expr)``: two metrics
+    can share columns while filtering differently, and must not collapse into
+    one curve.
+
+    Args:
+        config: Evaluator configuration holding the metric list.
+
+    Returns:
+        A ``(binary_pairs, regression_pairs)`` pair mapping each key to the names
+        of the metrics that chart it.
+    """
+    binary_pairs: dict[tuple[str, str, str | None], list[str]] = {}
+    regression_pairs: dict[tuple[str, str, str | None], list[str]] = {}
+    for metric in config.metrics:
+        if metric.columns is None:
+            continue
+        key = (
+            metric.columns.prediction_col,
+            metric.columns.target_col,
+            metric.filter_expr,
+        )
+        if metric.params.get("task") == "binary" or "Binary" in metric.metric:
+            binary_pairs.setdefault(key, []).append(metric.name)
+        if infer_task_type_from_path(metric.metric) == "regression":
+            regression_pairs.setdefault(key, []).append(metric.name)
+    return binary_pairs, regression_pairs
+
+
+def chart_columns(
+    config: EvaluatorConfig, available_columns: Iterable[str]
+) -> set[str]:
+    """Columns the binary and regression charts read.
+
+    Each pair's prediction and target columns, plus every one of
+    ``available_columns`` a ``filter_expr`` mentions. A ``filter_expr`` is a
+    pandas query, so a column counts as mentioned when its name appears as a
+    whole word: keeping a column too many is harmless, dropping one the query
+    needs fails it.
+
+    Args:
+        config: Evaluator configuration holding the metric list.
+        available_columns: The dataset's columns.
+
+    Returns:
+        The columns to keep; empty when no metric gets a chart.
+    """
+    binary_pairs, regression_pairs = chart_pairs(config)
+    columns: set[str] = set()
+    filter_exprs = set()
+    for pred_col, target_col, filter_expr in [*binary_pairs, *regression_pairs]:
+        columns |= {pred_col, target_col}
+        if filter_expr:
+            filter_exprs.add(filter_expr)
+    for col in available_columns:
+        if any(
+            re.search(rf"(?<!\w){re.escape(col)}(?!\w)", expr) for expr in filter_exprs
+        ):
+            columns.add(col)
+    return columns
+
+
 def compute_chart_data_for_group(
     df: pd.DataFrame,
     config: EvaluatorConfig,
@@ -367,21 +441,9 @@ def compute_chart_data_for_group(
             return None
         return df_pair
 
-    # --- Binary curves ---
-    # Keyed on filter_expr as well as the columns: two metrics can share columns
-    # while filtering differently, and must not collapse into one curve.
-    binary_pairs: dict[tuple[str, str, str | None], list[str]] = {}
-    for metric in config.metrics:
-        if metric.columns is None:
-            continue
-        if metric.params.get("task") == "binary" or "Binary" in metric.metric:
-            key = (
-                metric.columns.prediction_col,
-                metric.columns.target_col,
-                metric.filter_expr,
-            )
-            binary_pairs.setdefault(key, []).append(metric.name)
+    binary_pairs, regression_pairs = chart_pairs(config)
 
+    # --- Binary curves ---
     for (pred_col, target_col, filter_expr), metric_names in binary_pairs.items():
         df_pair = rows_for_pair(pred_col, target_col, filter_expr, "binary curves")
         if df_pair is None:
@@ -396,18 +458,6 @@ def compute_chart_data_for_group(
     # Same filter_expr requirement as the binary curves: `pred - (-1)` offsets
     # every percentile. There is no label domain to assert here, so the filter
     # is the only protection -- a sentinel is an ordinary real number.
-    regression_pairs: dict[tuple[str, str, str | None], list[str]] = {}
-    for metric in config.metrics:
-        if metric.columns is None:
-            continue
-        if infer_task_type_from_path(metric.metric) == "regression":
-            key = (
-                metric.columns.prediction_col,
-                metric.columns.target_col,
-                metric.filter_expr,
-            )
-            regression_pairs.setdefault(key, []).append(metric.name)
-
     percentile_points = np.linspace(0, 100, 101)
     for (pred_col, target_col, filter_expr), metric_names in regression_pairs.items():
         df_pair = rows_for_pair(pred_col, target_col, filter_expr, "regression errors")

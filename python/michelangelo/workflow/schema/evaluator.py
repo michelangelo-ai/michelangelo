@@ -17,10 +17,12 @@ __all__ = [
     "ColumnMapping",
     "CustomEvalConfig",
     "DataAnalyticsConfig",
+    "EmbeddingProjection",
     "EvaluationConfig",
     "EvaluatorConfig",
     "Metric",
     "MetricConfig",
+    "ProjectionMethod",
     "SanityCheck",
     "SanityCheckOperator",
     "Step",
@@ -343,6 +345,115 @@ class SanityCheck:
             )
 
 
+class ProjectionMethod(str, Enum):
+    """How an embedding projection reduces vectors to two dimensions.
+
+    Example:
+        >>> ProjectionMethod("pca") is ProjectionMethod.PCA
+        True
+    """
+
+    UMAP = "umap"
+    PCA = "pca"
+
+
+@dataclass
+class EmbeddingProjection:
+    """A 2-D picture of an embedding column, drawn in the evaluation report.
+
+    Samples up to ``max_samples`` rows of the whole dataset (segments are not drawn
+    separately; name a segment column in ``color_cols`` to tell them apart),
+    projects them to 2-D and clusters the layout. For each color column the report
+    gets a static image of every sampled row and an interactive scatter of some of
+    them, and each projection gets a table of its clusters: size, top color values,
+    examples.
+
+    A diagnostic, not a metric: UMAP layouts are not aligned across runs, so two
+    runs' pictures cannot be compared point by point.
+
+    Attributes:
+        name: Title of the projection's charts in the report.
+        embedding_col: Column holding one embedding vector per row.
+        color_cols: Categorical columns to color the points by, one chart each.
+            Each keeps its ``max_categories`` most common values; the rest are
+            "other".
+        method: ``umap`` (local clusters) or ``pca`` (the two directions of most
+            variance, linear and deterministic).
+        id_col: Optional row ID. The sample is drawn by a hash of it, so runs over
+            the same rows draw the same sample; it also labels points on hover.
+        hover_cols: Columns shown when hovering a point and as cluster examples.
+        max_samples: Rows to project.
+        max_categories: Values kept per color column.
+        seed: Seed for sampling, UMAP and PCA.
+        params: Passed as-is to ``umap.UMAP`` or ``sklearn.decomposition.PCA``.
+
+    Raises:
+        ConfigurationError: If ``color_cols`` is empty, ``max_samples`` is below
+            100, ``max_categories`` is below 1, ``method`` is unknown, or
+            ``embedding_col`` is also a color, hover or ID column.
+
+    Example:
+        >>> EmbeddingProjection(
+        ...     name="users", embedding_col="user_embedding", color_cols=["country"]
+        ... ).method.value
+        'umap'
+    """
+
+    name: str
+    embedding_col: str
+    color_cols: list[str]
+    method: ProjectionMethod = ProjectionMethod.UMAP
+    id_col: str | None = None
+    hover_cols: list[str] = field(default_factory=list)
+    max_samples: int = 20_000
+    max_categories: int = 10
+    seed: int = 0
+    params: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        """Validate the sizes and reject a reused embedding column."""
+        try:
+            self.method = ProjectionMethod(self.method)
+        except ValueError as exc:
+            valid = ", ".join(repr(m.value) for m in ProjectionMethod)
+            raise ConfigurationError(
+                f"embedding_projection {self.name!r}: method {self.method!r} is not "
+                f"valid; expected one of {valid}."
+            ) from exc
+        if not self.color_cols:
+            raise ConfigurationError(
+                f"embedding_projection {self.name!r}: color_cols needs at least one "
+                "column."
+            )
+        if self.max_samples < 100:
+            raise ConfigurationError(
+                f"embedding_projection {self.name!r}: max_samples must be at least "
+                f"100; got {self.max_samples}."
+            )
+        if self.max_categories < 1:
+            raise ConfigurationError(
+                f"embedding_projection {self.name!r}: max_categories must be at "
+                f"least 1; got {self.max_categories}."
+            )
+        # The projection replaces the embedding with 2-D coordinates before it
+        # colors and labels the points, so such a projection could only fail at
+        # run time.
+        reused = [
+            role
+            for role, cols in (
+                ("color_cols", self.color_cols),
+                ("hover_cols", self.hover_cols),
+                ("id_col", [self.id_col]),
+            )
+            if self.embedding_col in cols
+        ]
+        if reused:
+            raise ConfigurationError(
+                f"embedding_projection {self.name!r}: embedding_col "
+                f"{self.embedding_col!r} cannot also be in {', '.join(reused)}"
+            )
+
+
 @dataclass
 class EvaluatorConfig:
     """Configuration for the evaluator framework.
@@ -378,6 +489,8 @@ class EvaluatorConfig:
             that trained to garbage stops here instead of flowing on to the
             pusher. Checks are validated against the configured metric names
             before any data is read.
+        embedding_projections: Optional 2-D pictures of embedding columns for the
+            report; see :class:`EmbeddingProjection`. Requires ``metrics``.
 
     Raises:
         ConfigurationError: If ``sanity_checks`` is set without ``metrics``, if
@@ -396,6 +509,7 @@ class EvaluatorConfig:
     min_segment_row_count: int = 0
     data_preprocessor: str | None = None
     sanity_checks: list[SanityCheck] = field(default_factory=list)
+    embedding_projections: list[EmbeddingProjection] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         """Validate sanity checks against the configured metrics."""

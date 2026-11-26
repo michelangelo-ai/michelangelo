@@ -1186,7 +1186,7 @@ description = "Cross-platform colored terminal text."
 optional = true
 python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*,!=3.5.*,!=3.6.*,>=2.7"
 groups = ["main"]
-markers = "python_version == \"3.9\" and platform_system == \"Windows\" and (extra == \"dev\" or extra == \"vllm\" or extra == \"example\" or extra == \"trainer-mlflow\" or extra == \"trainer\" or extra == \"trainer-deepspeed\" or extra == \"model-manager\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"evaluator\" or extra == \"trainer-xgboost\") or python_version <= \"3.12\" and sys_platform == \"win32\" and (extra == \"dev\" or extra == \"vllm\") or extra == \"dev\" and sys_platform == \"win32\" or platform_system == \"Windows\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"evaluator\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"trainer-mlflow\" or extra == \"trainer-deepspeed\" or extra == \"model-manager\")"
+markers = "python_version == \"3.9\" and platform_system == \"Windows\" and (extra == \"dev\" or extra == \"vllm\" or extra == \"example\" or extra == \"trainer-mlflow\" or extra == \"trainer\" or extra == \"trainer-deepspeed\" or extra == \"evaluator\" or extra == \"model-manager\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"trainer-xgboost\") or python_version <= \"3.12\" and sys_platform == \"win32\" and (extra == \"dev\" or extra == \"vllm\") or extra == \"dev\" and sys_platform == \"win32\" or platform_system == \"Windows\" and (extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"example\" or extra == \"vllm\" or extra == \"evaluator\" or extra == \"trainer\" or extra == \"trainer-xgboost\" or extra == \"trainer-mlflow\" or extra == \"trainer-deepspeed\" or extra == \"model-manager\")"
 files = [
     {file = "colorama-0.4.6-py2.py3-none-any.whl", hash = "sha256:4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6"},
     {file = "colorama-0.4.6.tar.gz", hash = "sha256:08695f5cb7ed6e0531a20572697297273c47b8cae5a63ffc6d6ed5c201be6e44"},
@@ -1299,7 +1299,7 @@ description = "Python library for calculating contours of 2D quadrilateral grids
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version == \"3.9\" and (extra == \"example\" or extra == \"trainer-mlflow\")"
+markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"evaluator\" or extra == \"example\" or extra == \"trainer-mlflow\")"
 files = [
     {file = "contourpy-1.3.0-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:880ea32e5c774634f9fcd46504bf9f080a41ad855f4fef54f5380f5133d343c7"},
     {file = "contourpy-1.3.0-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:76c905ef940a4474a6289c71d53122a4f77766eef23c03cd57016ce19d0f7b42"},
@@ -1385,7 +1385,7 @@ description = "Python library for calculating contours of 2D quadrilateral grids
 optional = true
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "python_version == \"3.10\" and (extra == \"example\" or extra == \"trainer-mlflow\")"
+markers = "python_version == \"3.10\" and (extra == \"dev\" or extra == \"evaluator\" or extra == \"example\" or extra == \"trainer-mlflow\")"
 files = [
     {file = "contourpy-1.3.2-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:ba38e3f9f330af820c4b27ceb4b9c7feee5fe0493ea53a8720f4792667465934"},
     {file = "contourpy-1.3.2-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:dc41ba0714aa2968d1f8674ec97504a8f7e334f48eeacebcaa6256213acb0989"},
@@ -1463,7 +1463,7 @@ description = "Python library for calculating contours of 2D quadrilateral grids
 optional = true
 python-versions = ">=3.11"
 groups = ["main"]
-markers = "python_version >= \"3.11\" and (extra == \"example\" or extra == \"trainer-mlflow\")"
+markers = "python_version >= \"3.11\" and (extra == \"dev\" or extra == \"evaluator\" or extra == \"example\" or extra == \"trainer-mlflow\")"
 files = [
     {file = "contourpy-1.3.3-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:709a48ef9a690e1343202916450bc48b9e51c049b089c7f79a267b46cffcdaa1"},
     {file = "contourpy-1.3.3-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:23416f38bfd74d5d28ab8429cc4d63fa67d5068bd711a85edb1c3fb0c3e2f381"},
@@ -1934,7 +1934,7 @@ description = "Composable style cycles"
 optional = true
 python-versions = ">=3.8"
 groups = ["main"]
-markers = "extra == \"example\" or extra == \"trainer-mlflow\""
+markers = "extra == \"dev\" or extra == \"evaluator\" or extra == \"example\" or extra == \"trainer-mlflow\""
 files = [
     {file = "cycler-0.12.1-py3-none-any.whl", hash = "sha256:85cef7cff222d8644161529808465972e51340599459b8ac3ccbac5a854e0d30"},
     {file = "cycler-0.12.1.tar.gz", hash = "sha256:88bb128f02ba341da8ef447245a9e138fae777f6a23943da4540077d3601eb1c"},
@@ -2906,7 +2906,7 @@ description = "Tools to manipulate font files"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version == \"3.9\" and (extra == \"example\" or extra == \"trainer-mlflow\")"
+markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"evaluator\" or extra == \"example\" or extra == \"trainer-mlflow\")"
 files = [
     {file = "fonttools-4.60.2-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:4e36fadcf7e8ca6e34d490eef86ed638d6fd9c55d2f514b05687622cfc4a7050"},
     {file = "fonttools-4.60.2-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:6e500fc9c04bee749ceabfc20cb4903f6981c2139050d85720ea7ada61b75d5c"},
@@ -2988,7 +2988,7 @@ description = "Tools to manipulate font files"
 optional = true
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "python_version >= \"3.10\" and (extra == \"example\" or extra == \"trainer-mlflow\")"
+markers = "python_version >= \"3.10\" and (extra == \"dev\" or extra == \"evaluator\" or extra == \"example\" or extra == \"trainer-mlflow\")"
 files = [
     {file = "fonttools-4.63.0-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:e3297a6a4059b4acc3a1e9a8b04741f240a80044eef08ebd32e8b5bcdddce75b"},
     {file = "fonttools-4.63.0-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:b1cd75a03ad8cb5bc40c90bfde68c0c47de423aa19e5c0f362b43520645eea94"},
@@ -4486,7 +4486,7 @@ description = "Read resources from Python packages"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version == \"3.9\" and (extra == \"example\" or extra == \"trainer-mlflow\")"
+markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"evaluator\" or extra == \"example\" or extra == \"trainer-mlflow\")"
 files = [
     {file = "importlib_resources-6.5.2-py3-none-any.whl", hash = "sha256:789cfdc3ed28c78b67a06acb8126751ced69a3d5f79c095a98298cd8a760ccec"},
     {file = "importlib_resources-6.5.2.tar.gz", hash = "sha256:185f87adef5bcc288449d98fb4fba07cea78bc036455dd44c5fc4a2fe78fed2c"},
@@ -4789,7 +4789,7 @@ description = "A fast implementation of the Cassowary constraint solver"
 optional = true
 python-versions = ">=3.8"
 groups = ["main"]
-markers = "python_version == \"3.9\" and (extra == \"example\" or extra == \"trainer-mlflow\")"
+markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"evaluator\" or extra == \"example\" or extra == \"trainer-mlflow\")"
 files = [
     {file = "kiwisolver-1.4.7-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:8a9c83f75223d5e48b0bc9cb1bf2776cf01563e00ade8775ffe13b0b6e1af3a6"},
     {file = "kiwisolver-1.4.7-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:58370b1ffbd35407444d57057b57da5d6549d2d854fa30249771775c63b5fe17"},
@@ -4914,7 +4914,7 @@ description = "A fast implementation of the Cassowary constraint solver"
 optional = true
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "python_version >= \"3.10\" and (extra == \"example\" or extra == \"trainer-mlflow\")"
+markers = "python_version >= \"3.10\" and (extra == \"dev\" or extra == \"evaluator\" or extra == \"example\" or extra == \"trainer-mlflow\")"
 files = [
     {file = "kiwisolver-1.5.0-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:32cc0a5365239a6ea0c6ed461e8838d053b57e397443c0ca894dcc8e388d4374"},
     {file = "kiwisolver-1.5.0-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:cc0b66c1eec9021353a4b4483afb12dfd50e3669ffbb9152d6842eb34c7e29fd"},
@@ -5273,7 +5273,7 @@ description = "lightweight wrapper around basic LLVM functionality"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version == \"3.9\" and extra == \"vllm\""
+markers = "python_version == \"3.9\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"evaluator\")"
 files = [
     {file = "llvmlite-0.43.0-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:a289af9a1687c6cf463478f0fa8e8aa3b6fb813317b0d70bf1ed0759eab6f761"},
     {file = "llvmlite-0.43.0-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:6d4fd101f571a31acb1559ae1af30f30b1dc4b3186669f92ad780e17c81e91bc"},
@@ -5305,7 +5305,7 @@ description = "lightweight wrapper around basic LLVM functionality"
 optional = true
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "python_version <= \"3.12\" and extra == \"vllm\" and python_version >= \"3.10\""
+markers = "(python_version <= \"3.12\" or extra == \"dev\" or extra == \"evaluator\") and (python_version < \"3.12\" or extra == \"dev\" or extra == \"evaluator\" or extra == \"vllm\") and python_version >= \"3.10\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"evaluator\")"
 files = [
     {file = "llvmlite-0.44.0-cp310-cp310-macosx_10_14_x86_64.whl", hash = "sha256:9fbadbfba8422123bab5535b293da1cf72f9f478a65645ecd73e781f962ca614"},
     {file = "llvmlite-0.44.0-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:cccf8eb28f24840f2689fb1a45f9c0f7e582dd24e088dcf96e424834af11f791"},
@@ -5565,7 +5565,7 @@ description = "Python plotting package"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version == \"3.9\" and (extra == \"example\" or extra == \"trainer-mlflow\")"
+markers = "python_version == \"3.9\" and (extra == \"dev\" or extra == \"evaluator\" or extra == \"example\" or extra == \"trainer-mlflow\")"
 files = [
     {file = "matplotlib-3.9.4-cp310-cp310-macosx_10_12_x86_64.whl", hash = "sha256:c5fdd7abfb706dfa8d307af64a87f1a862879ec3cd8d0ec8637458f0885b9c50"},
     {file = "matplotlib-3.9.4-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:d89bc4e85e40a71d1477780366c27fb7c6494d293e1617788986f74e2a03d7ff"},
@@ -5632,7 +5632,7 @@ description = "Python plotting package"
 optional = true
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "python_version == \"3.10\" and (extra == \"example\" or extra == \"trainer-mlflow\")"
+markers = "python_version == \"3.10\" and (extra == \"dev\" or extra == \"evaluator\" or extra == \"example\" or extra == \"trainer-mlflow\")"
 files = [
     {file = "matplotlib-3.10.9-cp310-cp310-macosx_10_12_x86_64.whl", hash = "sha256:77210dce9cb8153dffc967efaae990543392563d5a376d4dd8539bebcb0ed217"},
     {file = "matplotlib-3.10.9-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:1e7698ac9868428e84d2c967424803b2472ff7167d9d6590d4204ed775343c3b"},
@@ -5712,7 +5712,7 @@ description = "Python plotting package"
 optional = true
 python-versions = ">=3.11"
 groups = ["main"]
-markers = "python_version >= \"3.11\" and (extra == \"example\" or extra == \"trainer-mlflow\")"
+markers = "python_version >= \"3.11\" and (extra == \"dev\" or extra == \"evaluator\" or extra == \"example\" or extra == \"trainer-mlflow\")"
 files = [
     {file = "matplotlib-3.11.0-cp311-cp311-macosx_10_12_x86_64.whl", hash = "sha256:f857524b442f0f36e641868ce2171aafa88cb0bc0644f4e1d8a5df9b32649fef"},
     {file = "matplotlib-3.11.0-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:57baa92fdc82948ed716eae6d2579d4d6f40965cd8d2f416755b4a72580a3233"},
@@ -7010,7 +7010,7 @@ description = "compiling Python code using LLVM"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version == \"3.9\" and extra == \"vllm\""
+markers = "python_version == \"3.9\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"evaluator\")"
 files = [
     {file = "numba-0.60.0-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:5d761de835cd38fb400d2c26bb103a2726f548dc30368853121d66201672e651"},
     {file = "numba-0.60.0-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:159e618ef213fba758837f9837fb402bbe65326e60ba0633dbe6c7f274d42c1b"},
@@ -7046,7 +7046,7 @@ description = "compiling Python code using LLVM"
 optional = true
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "python_version <= \"3.12\" and extra == \"vllm\" and python_version >= \"3.10\""
+markers = "(python_version <= \"3.12\" or extra == \"dev\" or extra == \"evaluator\") and (python_version < \"3.12\" or extra == \"dev\" or extra == \"evaluator\" or extra == \"vllm\") and python_version >= \"3.10\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"evaluator\")"
 files = [
     {file = "numba-0.61.2-cp310-cp310-macosx_10_14_x86_64.whl", hash = "sha256:cf9f9fc00d6eca0c23fc840817ce9f439b9f03c8f03d6246c0e7f0cb15b7162a"},
     {file = "numba-0.61.2-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:ea0247617edcb5dd61f6106a56255baab031acc4257bddaeddb3a1003b4ca3fd"},
@@ -8157,7 +8157,7 @@ description = "Python Imaging Library (Fork)"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version == \"3.9\" and (extra == \"vllm\" or extra == \"example\" or extra == \"trainer-mlflow\")"
+markers = "python_version == \"3.9\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"evaluator\" or extra == \"example\" or extra == \"trainer-mlflow\")"
 files = [
     {file = "pillow-11.3.0-cp310-cp310-macosx_10_10_x86_64.whl", hash = "sha256:1b9c17fd4ace828b3003dfd1e30bff24863e0eb59b535e8f80194d9cc7ecf860"},
     {file = "pillow-11.3.0-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:65dc69160114cdd0ca0f35cb434633c75e8e7fad4cf855177a05bf38678f73ad"},
@@ -8283,7 +8283,7 @@ description = "Python Imaging Library (fork)"
 optional = true
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "(python_version <= \"3.12\" or extra == \"example\" or extra == \"trainer-mlflow\") and (python_version < \"3.12\" or extra == \"example\" or extra == \"trainer-mlflow\" or extra == \"vllm\") and python_version >= \"3.10\" and (extra == \"vllm\" or extra == \"example\" or extra == \"trainer-mlflow\")"
+markers = "(python_version <= \"3.12\" or extra == \"dev\" or extra == \"evaluator\" or extra == \"example\" or extra == \"trainer-mlflow\") and (python_version < \"3.12\" or extra == \"dev\" or extra == \"evaluator\" or extra == \"example\" or extra == \"trainer-mlflow\" or extra == \"vllm\") and python_version >= \"3.10\" and (extra == \"vllm\" or extra == \"dev\" or extra == \"evaluator\" or extra == \"example\" or extra == \"trainer-mlflow\")"
 files = [
     {file = "pillow-12.2.0-cp310-cp310-macosx_10_10_x86_64.whl", hash = "sha256:a4e8f36e677d3336f35089648c8955c51c6d386a13cf6ee9c189c5f5bd713a9f"},
     {file = "pillow-12.2.0-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:2e589959f10d9824d39b350472b92f0ce3b443c0a3442ebf41c40cb8361c5b97"},
@@ -9673,13 +9673,33 @@ files = [
 windows-terminal = ["colorama (>=0.4.6)"]
 
 [[package]]
+name = "pynndescent"
+version = "0.7.0"
+description = "Nearest Neighbor Descent"
+optional = true
+python-versions = "*"
+groups = ["main"]
+markers = "extra == \"dev\" or extra == \"evaluator\""
+files = [
+    {file = "pynndescent-0.7.0-py3-none-any.whl", hash = "sha256:05592399f5fbf07d77590f532ed2a2e3b035ec066813eb5a097632b9ffb9e938"},
+    {file = "pynndescent-0.7.0.tar.gz", hash = "sha256:54f097a003bfdb917225e1bcf55c4027e283a37a2b5e3cae4b4aaf21197f6d1c"},
+]
+
+[package.dependencies]
+joblib = ">=0.11"
+llvmlite = ">=0.38"
+numba = ">=0.55.0"
+scikit-learn = ">=0.18"
+scipy = ">=1.0"
+
+[[package]]
 name = "pyparsing"
 version = "3.3.2"
 description = "pyparsing - Classes and methods to define and execute parsing grammars"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "extra == \"example\" or extra == \"trainer-mlflow\""
+markers = "extra == \"dev\" or extra == \"evaluator\" or extra == \"example\" or extra == \"trainer-mlflow\""
 files = [
     {file = "pyparsing-3.3.2-py3-none-any.whl", hash = "sha256:850ba148bd908d7e2411587e247a1e4f0327839c40e2e5e6d05a007ecc69911d"},
     {file = "pyparsing-3.3.2.tar.gz", hash = "sha256:c777f4d763f140633dcb6d8a3eda953bf7a214dc4eff598413c070bcdc117cbc"},
@@ -12973,7 +12993,7 @@ description = "Fast, Extensible Progress Meter"
 optional = true
 python-versions = ">=3.8"
 groups = ["main"]
-markers = "(python_version < \"3.12\" or extra == \"example\" or extra == \"vllm\" or extra == \"dev\" or extra == \"trainer\" or extra == \"trainer-deepspeed\" or extra == \"model-manager\") and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"trainer-deepspeed\" or extra == \"model-manager\")"
+markers = "(python_version < \"3.12\" or extra == \"example\" or extra == \"vllm\" or extra == \"dev\" or extra == \"trainer\" or extra == \"trainer-deepspeed\" or extra == \"evaluator\" or extra == \"model-manager\") and (extra == \"vllm\" or extra == \"dev\" or extra == \"example\" or extra == \"trainer\" or extra == \"trainer-deepspeed\" or extra == \"evaluator\" or extra == \"model-manager\")"
 files = [
     {file = "tqdm-4.68.3-py3-none-any.whl", hash = "sha256:39832cc2def2789a6f29df83f172db7416cea70052c0907a57801c5f2fdccb03"},
     {file = "tqdm-4.68.3.tar.gz", hash = "sha256:00dfa48452b6b6cfae3dd9885636c23d3422d1ec97c66d96818cbd5e0821d482"},
@@ -13164,6 +13184,33 @@ files = [
     {file = "tzdata-2026.2-py2.py3-none-any.whl", hash = "sha256:bbe9af844f658da81a5f95019480da3a89415801f6cc966806612cc7169bffe7"},
     {file = "tzdata-2026.2.tar.gz", hash = "sha256:9173fde7d80d9018e02a662e168e5a2d04f87c41ea174b139fbef642eda62d10"},
 ]
+
+[[package]]
+name = "umap-learn"
+version = "0.5.12"
+description = "Uniform Manifold Approximation and Projection"
+optional = true
+python-versions = ">=3.9"
+groups = ["main"]
+markers = "extra == \"dev\" or extra == \"evaluator\""
+files = [
+    {file = "umap_learn-0.5.12-py3-none-any.whl", hash = "sha256:f2a85d2a2adcb52b541bed9b27a23ca169b56bb1b23283abeebfb8dfb8a42fe5"},
+    {file = "umap_learn-0.5.12.tar.gz", hash = "sha256:6aff02ecac5f2aad9f3c65ee518d7ae93e1a985ae38721fdcffceee4232c33c7"},
+]
+
+[package.dependencies]
+numba = ">=0.51.2"
+numpy = ">=1.23"
+pynndescent = ">=0.5"
+scikit-learn = ">=1.6"
+scipy = ">=1.3.1"
+tqdm = "*"
+
+[package.extras]
+parametric-umap = ["tensorflow (>=2.1)"]
+plot = ["bokeh", "colorcet", "dask", "datashader", "holoviews", "matplotlib", "pandas", "scikit-image", "seaborn"]
+tbb = ["tbb (>=2019.0)"]
+test = ["pytest"]
 
 [[package]]
 name = "urllib3"
@@ -14536,7 +14583,7 @@ description = "Backport of pathlib-compatible object wrapper for zip files"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version == \"3.9\" and (extra == \"example\" or extra == \"trainer-mlflow\" or extra == \"vllm\" or extra == \"dev\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"evaluator\" or extra == \"trainer\" or extra == \"trainer-xgboost\")"
+markers = "python_version == \"3.9\" and (extra == \"example\" or extra == \"trainer-mlflow\" or extra == \"vllm\" or extra == \"dev\" or extra == \"evaluator\" or extra == \"plugin\" or extra == \"ray-polars\" or extra == \"trainer\" or extra == \"trainer-xgboost\")"
 files = [
     {file = "zipp-3.23.1-py3-none-any.whl", hash = "sha256:0b3596c50a5c700c9cb40ba8d86d9f2cc4807e9bedb06bcdf7fac85633e444dc"},
     {file = "zipp-3.23.1.tar.gz", hash = "sha256:32120e378d32cd9714ad503c1d024619063ec28aad2248dc6672ad13edfa5110"},
@@ -14572,8 +14619,8 @@ test = ["big-O", "jaraco.functools", "jaraco.itertools", "jaraco.test", "more_it
 type = ["pytest-mypy (>=1.0.1) ; platform_python_implementation != \"PyPy\""]
 
 [extras]
-dev = ["coverage", "docker", "jinja2", "mypy", "mypy", "numpy", "onnx", "onnxruntime", "onnxscript", "pandas", "polars", "pre-commit", "pyarrow", "pytest", "pytest-cov", "pytorch_lightning", "ray", "ray", "ruff", "s3fs", "scikit-learn", "torch", "torchmetrics", "transformers", "xgboost"]
-evaluator = ["numpy", "pandas", "pyarrow", "ray", "ray", "scikit-learn", "torch", "torchmetrics"]
+dev = ["coverage", "docker", "importlib-resources", "jinja2", "matplotlib", "mypy", "mypy", "numpy", "onnx", "onnxruntime", "onnxscript", "pandas", "polars", "pre-commit", "pyarrow", "pytest", "pytest-cov", "pytorch_lightning", "ray", "ray", "ruff", "s3fs", "scikit-learn", "torch", "torchmetrics", "transformers", "umap-learn", "xgboost"]
+evaluator = ["importlib-resources", "matplotlib", "numpy", "pandas", "pyarrow", "ray", "ray", "scikit-learn", "torch", "torchmetrics", "umap-learn"]
 example = ["accelerate", "boto3", "datasets", "jinja2", "mlflow", "numpy", "onnx", "onnxscript", "pandas", "pyarrow", "pyspark", "pyspark", "pytorch_lightning", "ray", "ray", "ray", "ray", "s3fs", "scikit-learn", "torch", "transformers"]
 gcs = ["gcsfs"]
 mactl = []
@@ -14592,4 +14639,4 @@ vllm = ["accelerate", "datasets", "numpy", "pandas", "pyarrow", "pytorch_lightni
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.9.0"
-content-hash = "cb09654a7f9d3e71da26462c29dc7fc9f6da374eae73ff2b43a87104f0532db1"
+content-hash = "803d546db46c8a3f9458ae5b16d6b7a3ed1fcbd90c36d439fc2e5f03b4caf23c"
