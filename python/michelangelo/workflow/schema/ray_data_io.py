@@ -50,8 +50,7 @@ class ParquetReadConfig:
     This is a curated subset of the full ``ray.data.read_parquet`` API —
     resource knobs and schema hints only. Fields that overlap with the
     tabular_trainer's own column management (``columns``, ``paths``) and
-    Ray-version-specific placement logic are intentionally omitted. OSS
-    pins a single Ray version so the internal ``<2.50`` branch is unused.
+    Ray-version-specific placement logic are intentionally omitted.
 
     Column projection is derived automatically from ``input_columns``,
     ``labels``, and ``metadata_columns`` — do not include ``columns`` here.
@@ -296,10 +295,14 @@ class RayDataContextConfig:
             un-consumed output blocks reach the limit. This is a private Ray
             attribute: if the installed Ray does not expose it, the setting
             is ignored and a warning is logged. ``None`` keeps Ray's default.
+        preserve_order: Sets ``DataContext.execution_options.preserve_order``.
+            When ``True``, blocks are emitted in input order, which can reduce
+            throughput. ``None`` keeps Ray's default (``False``).
 
     Raises:
         ConfigurationError: If ``max_blocks_in_streaming_gen_buffer`` is set
-            to something other than a positive integer.
+            to something other than a positive integer, or ``preserve_order``
+            to something other than a bool.
 
     Example:
         ``RayDataContextConfig(min_block_size=32 * 1024 * 1024)`` sets a
@@ -313,13 +316,20 @@ class RayDataContextConfig:
     object_store_memory_limit: int | None = None
     wait_for_min_actors_s: int | None = None
     max_blocks_in_streaming_gen_buffer: int | None = None
+    preserve_order: bool | None = None
 
     def __post_init__(self) -> None:
-        """Validate ``max_blocks_in_streaming_gen_buffer``."""
+        """Validate ``max_blocks_in_streaming_gen_buffer`` and ``preserve_order``."""
         if self.max_blocks_in_streaming_gen_buffer is not None:
             _require_positive_int(
                 "max_blocks_in_streaming_gen_buffer",
                 self.max_blocks_in_streaming_gen_buffer,
+            )
+        if self.preserve_order is not None and not isinstance(
+            self.preserve_order, bool
+        ):
+            raise ConfigurationError(
+                f"preserve_order must be a bool, got {self.preserve_order!r}."
             )
 
 
@@ -346,21 +356,31 @@ class WriteConfig:
             per-task execution time (both reported by ``Dataset.stats()``),
             not from the number of available CPUs. ``None`` leaves the write
             stage uncapped.
+        memory: Heap memory in bytes that Ray reserves per write task when
+            scheduling. Ray requests ``0`` by default, so it may pack more
+            write tasks onto a node than fit in memory. Set it to the per-task
+            usage reported by Ray Data's high-memory warning. Over-reserving
+            lowers write parallelism, and a value larger than any node's
+            memory makes the task unschedulable. It does not change the
+            object-store budget. ``None`` keeps Ray's default.
 
     Raises:
-        ConfigurationError: If ``concurrency`` is set to something other than
-            a positive integer.
+        ConfigurationError: If ``concurrency`` or ``memory`` is set to
+            something other than a positive integer.
 
     Example:
-        >>> WriteConfig(max_rows_per_file=1_000_000, concurrency=4)
-        WriteConfig(max_rows_per_file=1000000, min_rows_per_file=None, concurrency=4)
+        >>> WriteConfig(max_rows_per_file=1_000_000, memory=2 * 1024**3).memory
+        2147483648
     """
 
     max_rows_per_file: int | None = None
     min_rows_per_file: int | None = None
     concurrency: int | None = None
+    memory: int | None = None
 
     def __post_init__(self) -> None:
-        """Validate ``concurrency``."""
+        """Validate ``concurrency`` and ``memory``."""
         if self.concurrency is not None:
             _require_positive_int("concurrency", self.concurrency)
+        if self.memory is not None:
+            _require_positive_int("memory", self.memory)
