@@ -44,22 +44,25 @@ func TestLoadReleasesErrors(t *testing.T) {
 
 func TestParseReleaseErrors(t *testing.T) {
 	cases := []struct{ name, yaml, want string }{
-		{"no version", "artifact: a\ndigest: sha256:ab\ntask_types: {}\n", `release "r": version is not set`},
-		{"no artifact", "version: r\ndigest: sha256:ab\ntask_types: {}\n", `release "r": artifact is not set`},
-		{"bad digest", "version: r\nartifact: a\ndigest: ab\ntask_types: {}\n", `release "r": digest must start with "sha256:"`},
-		{"no task types", "version: r\nartifact: a\ndigest: sha256:ab\n", `release "r": task_types is empty`},
-		{"unknown key", "version: r\nartifact: a\ndigest: sha256:ab\ntask_types: {}\nextra: 1\n", `release "r": error unmarshaling JSON: while decoding JSON: json: unknown field "extra"`},
-		{"leaf with children", "version: r\nartifact: a\ndigest: sha256:ab\ntask_types:\n  t:\n    config:\n      x: {type: string, y: {type: string}}\n", `release "r": task type "t" config field "x" mixes type with nested fields`},
-		{"empty type", "version: r\nartifact: a\ndigest: sha256:ab\ntask_types:\n  t:\n    config:\n      x: {type: \"\"}\n", `release "r": error unmarshaling JSON: while decoding JSON: field "x": type must be a non-empty string`},
-		{"null type", "version: r\nartifact: a\ndigest: sha256:ab\ntask_types:\n  t:\n    config:\n      x: {type: null}\n", `release "r": error unmarshaling JSON: while decoding JSON: field "x": type must be a non-empty string`},
-		{"nested null field", "version: r\nartifact: a\ndigest: sha256:ab\ntask_types:\n  t:\n    config:\n      res: {cpu: null}\n", `release "r": task type "t" config field "res.cpu" is empty`},
-		{"nested bad type", "version: r\nartifact: a\ndigest: sha256:ab\ntask_types:\n  t:\n    config:\n      res: {cpu: {type: float}}\n", `release "r": task type "t" config field "res.cpu" has unknown type "float"; use string, integer, number, boolean, list, or dict`},
-		{"nested empty type", "version: r\nartifact: a\ndigest: sha256:ab\ntask_types:\n  t:\n    config:\n      res: {cpu: {type: \"\"}}\n", `release "r": error unmarshaling JSON: while decoding JSON: field "res.cpu": type must be a non-empty string`},
-		{"required not bool", "version: r\nartifact: a\ndigest: sha256:ab\ntask_types:\n  t:\n    config:\n      x: {type: string, required: \"yes\"}\n", `release "r": error unmarshaling JSON: while decoding JSON: field "x": required must be a boolean`},
-		{"child named type", "version: r\nartifact: a\ndigest: sha256:ab\ntask_types:\n  t:\n    config:\n      res: {type: {type: string}}\n", `release "r": error unmarshaling JSON: while decoding JSON: field "res": "type" is reserved for the field type; a group cannot have a child named "type"`},
-		{"required on group", "version: r\nartifact: a\ndigest: sha256:ab\ntask_types:\n  t:\n    config:\n      res: {required: true, cpu: {type: integer}}\n", `release "r": error unmarshaling JSON: while decoding JSON: field "res": "required" is reserved; set it next to "type" on a leaf field`},
-		{"field not object", "version: r\nartifact: a\ndigest: sha256:ab\ntask_types:\n  t:\n    config:\n      x: string\n", `release "r": error unmarshaling JSON: while decoding JSON: field "x": must be an object, not a string`},
-		{"nil task type", "version: r\nartifact: a\ndigest: sha256:ab\ntask_types:\n  t:\n", `release "r": task type "t" is empty`},
+		{"no version", "artifact: a\ndigest: sha256:abababababababababababababababababababababababababababababababab\ntask_types: {}\n", `release "r": version is not set`},
+		{"no artifact", "version: r\ndigest: sha256:abababababababababababababababababababababababababababababababab\ntask_types: {}\n", `release "r": artifact is not set`},
+		{"bad digest", "version: r\nartifact: a\ndigest: ab\ntask_types: {}\n", `release "r": digest must be "sha256:" and 64 lowercase hex characters`},
+		{"short digest", "version: r\nartifact: a\ndigest: sha256:ab\ntask_types: {}\n", `release "r": digest must be "sha256:" and 64 lowercase hex characters`},
+		{"uppercase digest", "version: r\nartifact: a\ndigest: sha256:" + strings.Repeat("AB", 32) + "\ntask_types: {}\n", `release "r": digest must be "sha256:" and 64 lowercase hex characters`},
+		{"long digest", "version: r\nartifact: a\ndigest: sha256:" + strings.Repeat("ab", 33) + "\ntask_types: {}\n", `release "r": digest must be "sha256:" and 64 lowercase hex characters`},
+		{"no task types", "version: r\nartifact: a\ndigest: sha256:abababababababababababababababababababababababababababababababab\n", `release "r": task_types is empty`},
+		{"unknown key", "version: r\nartifact: a\ndigest: sha256:abababababababababababababababababababababababababababababababab\ntask_types: {}\nextra: 1\n", `release "r": error unmarshaling JSON: while decoding JSON: json: unknown field "extra"`},
+		{"leaf with children", "version: r\nartifact: a\ndigest: sha256:abababababababababababababababababababababababababababababababab\ntask_types:\n  t:\n    config:\n      x: {type: string, y: {type: string}}\n", `release "r": task type "t" config field "x" mixes type with nested fields`},
+		{"empty type", "version: r\nartifact: a\ndigest: sha256:abababababababababababababababababababababababababababababababab\ntask_types:\n  t:\n    config:\n      x: {type: \"\"}\n", `release "r": error unmarshaling JSON: while decoding JSON: field "x": type must be a non-empty string`},
+		{"null type", "version: r\nartifact: a\ndigest: sha256:abababababababababababababababababababababababababababababababab\ntask_types:\n  t:\n    config:\n      x: {type: null}\n", `release "r": error unmarshaling JSON: while decoding JSON: field "x": type must be a non-empty string`},
+		{"nested null field", "version: r\nartifact: a\ndigest: sha256:abababababababababababababababababababababababababababababababab\ntask_types:\n  t:\n    config:\n      res: {cpu: null}\n", `release "r": task type "t" config field "res.cpu" is empty`},
+		{"nested bad type", "version: r\nartifact: a\ndigest: sha256:abababababababababababababababababababababababababababababababab\ntask_types:\n  t:\n    config:\n      res: {cpu: {type: float}}\n", `release "r": task type "t" config field "res.cpu" has unknown type "float"; use string, integer, number, boolean, list, or dict`},
+		{"nested empty type", "version: r\nartifact: a\ndigest: sha256:abababababababababababababababababababababababababababababababab\ntask_types:\n  t:\n    config:\n      res: {cpu: {type: \"\"}}\n", `release "r": error unmarshaling JSON: while decoding JSON: field "res.cpu": type must be a non-empty string`},
+		{"required not bool", "version: r\nartifact: a\ndigest: sha256:abababababababababababababababababababababababababababababababab\ntask_types:\n  t:\n    config:\n      x: {type: string, required: \"yes\"}\n", `release "r": error unmarshaling JSON: while decoding JSON: field "x": required must be a boolean`},
+		{"child named type", "version: r\nartifact: a\ndigest: sha256:abababababababababababababababababababababababababababababababab\ntask_types:\n  t:\n    config:\n      res: {type: {type: string}}\n", `release "r": error unmarshaling JSON: while decoding JSON: field "res": "type" is reserved for the field type; a group cannot have a child named "type"`},
+		{"required on group", "version: r\nartifact: a\ndigest: sha256:abababababababababababababababababababababababababababababababab\ntask_types:\n  t:\n    config:\n      res: {required: true, cpu: {type: integer}}\n", `release "r": error unmarshaling JSON: while decoding JSON: field "res": "required" is reserved; set it next to "type" on a leaf field`},
+		{"field not object", "version: r\nartifact: a\ndigest: sha256:abababababababababababababababababababababababababababababababab\ntask_types:\n  t:\n    config:\n      x: string\n", `release "r": error unmarshaling JSON: while decoding JSON: field "x": must be an object, not a string`},
+		{"nil task type", "version: r\nartifact: a\ndigest: sha256:abababababababababababababababababababababababababababababababab\ntask_types:\n  t:\n", `release "r": task type "t" is empty`},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -71,7 +74,7 @@ func TestParseReleaseErrors(t *testing.T) {
 
 func TestParseReleaseRejectsDeepSchema(t *testing.T) {
 	var b strings.Builder
-	b.WriteString("version: r\nartifact: a\ndigest: sha256:ab\ntask_types:\n  t:\n    config:\n      x: ")
+	b.WriteString("version: r\nartifact: a\ndigest: sha256:abababababababababababababababababababababababababababababababab\ntask_types:\n  t:\n    config:\n      x: ")
 	for i := 0; i < maxSchemaDepth+1; i++ {
 		b.WriteString("{g: ")
 	}
