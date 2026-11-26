@@ -109,6 +109,16 @@ func hookWith(t *testing.T, d *pipelineapihook.Declarative, objects ...client.Ob
 	return h
 }
 
+// withStalePin returns a copy of p pinned to a release that is not loaded.
+func withStalePin(p *v2.Pipeline) *v2.Pipeline {
+	stale := *p
+	manifest := *p.Spec.Manifest
+	manifest.InterpreterPin = &v2.InterpreterPin{Version: "core-v0", Artifact: "s3://old/core-v0.tar.gz", Digest: testDigest}
+	manifest.UniflowTar = "s3://old/core-v0.tar.gz"
+	stale.Spec.Manifest = &manifest
+	return &stale
+}
+
 var specSources = []specSource{
 	{
 		name: "inline dev-run",
@@ -126,10 +136,13 @@ var specSources = []specSource{
 	{
 		name: "latest revision",
 		setUp: func(t *testing.T, p *v2.Pipeline, d *pipelineapihook.Declarative) (apiHook, *v2.CreatePipelineRunRequest) {
-			// The live Pipeline is valid, so only the snapshot can fail a case.
+			// The run takes the workflow from the snapshot and the pin from the
+			// live Pipeline. The snapshot pin is stale, so a case passes only
+			// when the hook checks the live pin.
 			live := pinnedPipeline(t, p.Namespace, runWorkflow())
+			live.Spec.Manifest.InterpreterPin = p.Spec.Manifest.InterpreterPin
 			live.Status.LatestRevision = &apipb.ResourceIdentifier{Name: "rev-1", Namespace: testNamespace}
-			h := hookWith(t, d, live, snapshotRevision(t, "rev-1", p))
+			h := hookWith(t, d, live, snapshotRevision(t, "rev-1", withStalePin(p)))
 			return h, runRequest(v2.PipelineRunSpec{Pipeline: &apipb.ResourceIdentifier{Name: p.Name, Namespace: p.Namespace}})
 		},
 	},
@@ -155,6 +168,8 @@ func TestBeforeCreate_DeclarativeRun(t *testing.T) {
 		input    *types.Struct
 		code     codes.Code
 		msg      string
+		// revisionMsg replaces msg for a run of an explicit revision.
+		revisionMsg string
 	}{
 		{name: "valid run", enabled: true},
 		{name: "cron input", enabled: true, input: cronInput},
@@ -182,18 +197,24 @@ func TestBeforeCreate_DeclarativeRun(t *testing.T) {
 			pipeline: func(p *v2.Pipeline) { p.Spec.Manifest.InterpreterPin.Version = "core-v9" },
 			code:     codes.FailedPrecondition,
 			msg:      `interpreter "core-v9" is not loaded on this apiserver; loaded releases: [core-v1]`,
+			revisionMsg: `revision "rev-1" pins interpreter "core-v9", which is not loaded on this apiserver; ` +
+				"apply the pipeline from a new commit to create a new revision",
 		},
 		{
 			name: "pin digest differs from the release", enabled: true,
 			pipeline: func(p *v2.Pipeline) { p.Spec.Manifest.InterpreterPin.Digest = "sha256:22" },
 			code:     codes.FailedPrecondition,
 			msg:      `interpreter pin "core-v1" does not equal the loaded release; re-apply the pipeline through the API`,
+			revisionMsg: `revision "rev-1" pins interpreter "core-v1", which does not equal the loaded release; ` +
+				"apply the pipeline from a new commit to create a new revision",
 		},
 		{
 			name: "pin artifact differs from the release", enabled: true,
 			pipeline: func(p *v2.Pipeline) { p.Spec.Manifest.InterpreterPin.Artifact = "s3://other/core-v1.tar.gz" },
 			code:     codes.FailedPrecondition,
 			msg:      `interpreter pin "core-v1" does not equal the loaded release; re-apply the pipeline through the API`,
+			revisionMsg: `revision "rev-1" pins interpreter "core-v1", which does not equal the loaded release; ` +
+				"apply the pipeline from a new commit to create a new revision",
 		},
 		{
 			name: "content does not decode", enabled: true,
@@ -281,7 +302,11 @@ func TestBeforeCreate_DeclarativeRun(t *testing.T) {
 				st, ok := status.FromError(err)
 				require.True(t, ok, "not a status error: %v", err)
 				assert.Equal(t, tc.code, st.Code())
-				assert.Equal(t, tc.msg, st.Message())
+				want := tc.msg
+				if src.name == "explicit revision" && tc.revisionMsg != "" {
+					want = tc.revisionMsg
+				}
+				assert.Equal(t, want, st.Message())
 			})
 		}
 	}
@@ -335,4 +360,30 @@ func TestBeforeCreate_NonDeclarativeRunIsUnchecked(t *testing.T) {
 	require.NoError(t, h.BeforeCreate(context.Background(), req))
 	assert.Equal(t, input, req.PipelineRun.Spec.Input)
 	assert.Nil(t, req.PipelineRun.Spec.PipelineSpec)
+}
+
+func TestBeforeCreate_LatestRevisionTakesTheLivePin(t *testing.T) {
+	live := pinnedPipeline(t, testNamespace, runWorkflow())
+	live.Status.LatestRevision = &apipb.ResourceIdentifier{Name: "rev-1", Namespace: testNamespace}
+	h := hookWith(t, loadDeclarative(t, true), live, snapshotRevision(t, "rev-1", withStalePin(live)))
+	req := runRequest(v2.PipelineRunSpec{Pipeline: &apipb.ResourceIdentifier{Name: live.Name, Namespace: testNamespace}})
+
+	require.NoError(t, h.BeforeCreate(context.Background(), req))
+	manifest := req.PipelineRun.Spec.PipelineSpec.Manifest
+	assert.Equal(t, &v2.InterpreterPin{Version: testRelease, Artifact: testArtifact, Digest: testDigest}, manifest.InterpreterPin)
+	assert.Equal(t, testArtifact, manifest.UniflowTar)
+	assert.Equal(t, "rev-1", req.PipelineRun.Spec.Revision.Name)
+}
+
+func TestBeforeCreate_ExplicitRevisionKeepsTheSnapshotPin(t *testing.T) {
+	live := pinnedPipeline(t, testNamespace, runWorkflow())
+	h := hookWith(t, loadDeclarative(t, true), live, snapshotRevision(t, "rev-1", withStalePin(live)))
+	req := runRequest(v2.PipelineRunSpec{Revision: &apipb.ResourceIdentifier{Name: "rev-1", Namespace: testNamespace}})
+
+	err := h.BeforeCreate(context.Background(), req)
+	st, ok := status.FromError(err)
+	require.True(t, ok, "not a status error: %v", err)
+	assert.Equal(t, codes.FailedPrecondition, st.Code())
+	assert.Equal(t, `revision "rev-1" pins interpreter "core-v0", which is not loaded on this apiserver; `+
+		"apply the pipeline from a new commit to create a new revision", st.Message())
 }

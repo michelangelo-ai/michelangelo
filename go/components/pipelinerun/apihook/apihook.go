@@ -71,6 +71,8 @@ type apiHook struct {
 func (a apiHook) BeforeCreate(ctx context.Context, request *v2.CreatePipelineRunRequest) error {
 	setIfAbsent(request.PipelineRun, api.EnvironmentLabel, a.defaultEnvironment())
 
+	explicitRevision := request.PipelineRun.Spec.GetRevision().GetName()
+
 	// Fetch the live Pipeline once when a pipeline ref is present. Used both to
 	// optionally pin status.latestRevision and to stamp ownerRef / notifications.
 	pipeline := a.getReferencedPipeline(ctx, request)
@@ -82,7 +84,7 @@ func (a apiHook) BeforeCreate(ctx context.Context, request *v2.CreatePipelineRun
 	//  1. Explicit Spec.Revision — must resolve; failure rejects the create.
 	//  2. Else Pipeline.Status.LatestRevision — pin that snapshot when present.
 	//     If the Revision CR is missing, fall back to the live Pipeline path.
-	if request.PipelineRun.Spec.GetRevision().GetName() != "" {
+	if explicitRevision != "" {
 		if err := a.resolveRevision(ctx, request); err != nil {
 			a.logger.Error("BeforeCreate: failed to resolve pinned revision",
 				zap.String("revision", request.PipelineRun.Spec.GetRevision().GetName()),
@@ -109,7 +111,7 @@ func (a apiHook) BeforeCreate(ctx context.Context, request *v2.CreatePipelineRun
 			spec = &p.Spec
 		}
 	}
-	if err := checkDeclarativeRun(request.PipelineRun, spec, a.declarative); err != nil {
+	if err := checkDeclarativeRun(request.PipelineRun, spec, explicitRevision, a.declarative); err != nil {
 		return err
 	}
 
@@ -249,6 +251,8 @@ func (a apiHook) tryResolveLatestRevision(ctx context.Context, request *v2.Creat
 		}
 		return err
 	}
+
+	takeLivePin(request.PipelineRun.Spec.PipelineSpec, pipeline)
 
 	a.logger.Info("BeforeCreate: pinned status.latestRevision into inline pipeline spec",
 		zap.String("revision", latest.GetName()),
