@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/gogo/protobuf/types"
@@ -399,4 +400,98 @@ func TestBeforeCreate_ExplicitRevisionKeepsTheSnapshotPin(t *testing.T) {
 	assert.Equal(t, codes.FailedPrecondition, st.Code())
 	assert.Equal(t, `revision "rev-1" pins interpreter "core-v0", which is not loaded on this apiserver; `+
 		"apply the pipeline from a new commit to create a new revision", st.Message())
+}
+
+func TestBeforeUpdate_DeclarativeRun(t *testing.T) {
+	inline := func(t *testing.T) v2.PipelineRunSpec {
+		return v2.PipelineRunSpec{PipelineSpec: &pinnedPipeline(t, testNamespace, runWorkflow()).Spec}
+	}
+	uniflow := &v2.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{Name: "uniflow", Namespace: testNamespace},
+		Spec: v2.PipelineSpec{Manifest: &v2.PipelineManifest{
+			Type:       v2.PIPELINE_MANIFEST_TYPE_UNIFLOW,
+			UniflowTar: "s3://bucket/tar.gz",
+		}},
+	}
+	byName := func(name, namespace string) func(*testing.T) v2.PipelineRunSpec {
+		return func(*testing.T) v2.PipelineRunSpec {
+			return v2.PipelineRunSpec{Pipeline: &apipb.ResourceIdentifier{Name: name, Namespace: namespace}}
+		}
+	}
+	for _, tc := range []struct {
+		name    string
+		enabled bool
+		stored  func(t *testing.T) v2.PipelineRunSpec
+		update  func(spec *v2.PipelineRunSpec)
+		objects func(t *testing.T) []client.Object
+		code    codes.Code
+		msg     string
+	}{
+		{
+			name: "pin swap", enabled: true, stored: inline,
+			update: func(spec *v2.PipelineRunSpec) {
+				spec.PipelineSpec.Manifest.InterpreterPin = &v2.InterpreterPin{
+					Version: testRelease, Artifact: "s3://attacker/any.tar.gz", Digest: "sha256:" + strings.Repeat("ab", 32),
+				}
+			},
+			code: codes.FailedPrecondition,
+			msg:  `interpreter pin "core-v1" does not equal the loaded release; re-apply the pipeline through the API`,
+		},
+		{
+			name: "parameter_map", enabled: true, stored: inline,
+			update: func(spec *v2.PipelineRunSpec) {
+				spec.Input = &types.Struct{Fields: map[string]*types.Value{"parameter_map": structOf(map[string]*types.Value{"epochs": str("5")})}}
+			},
+			code: codes.InvalidArgument,
+			msg:  "parameter overrides are not supported yet",
+		},
+		{
+			name: "pipeline in another namespace", enabled: true, stored: inline,
+			update: func(spec *v2.PipelineRunSpec) {
+				spec.PipelineSpec = nil
+				spec.Pipeline = &apipb.ResourceIdentifier{Name: "decl", Namespace: "other-namespace"}
+			},
+			objects: func(t *testing.T) []client.Object {
+				return []client.Object{pinnedPipeline(t, "other-namespace", runWorkflow())}
+			},
+			code: codes.InvalidArgument,
+			msg:  `declarative pipeline run must name a pipeline in its own namespace "test-namespace", not "other-namespace"`,
+		},
+		{
+			// The flag is off, so the update passes only when the hook skips the check.
+			name: "kill and retry only", enabled: false, stored: inline,
+			update: func(spec *v2.PipelineRunSpec) {
+				spec.Kill = true
+				spec.RetryInfo = &v2.RetryInfo{ActivityId: "7"}
+			},
+		},
+		{
+			name: "non-declarative input change", enabled: false, stored: byName("uniflow", testNamespace),
+			update: func(spec *v2.PipelineRunSpec) {
+				spec.Input = &types.Struct{Fields: map[string]*types.Value{"environ": structOf(map[string]*types.Value{"UF_TASK_IMAGE": str("img")})}}
+			},
+			objects: func(*testing.T) []client.Object { return []client.Object{uniflow} },
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			stored := &v2.PipelineRun{ObjectMeta: metav1.ObjectMeta{Name: "run", Namespace: testNamespace}, Spec: tc.stored(t)}
+			objects := []client.Object{stored}
+			if tc.objects != nil {
+				objects = append(objects, tc.objects(t)...)
+			}
+			h := hookWith(t, loadDeclarative(t, tc.enabled), objects...)
+			updated := &v2.PipelineRun{ObjectMeta: metav1.ObjectMeta{Name: "run", Namespace: testNamespace}, Spec: tc.stored(t)}
+			tc.update(&updated.Spec)
+
+			err := h.BeforeUpdate(context.Background(), &v2.UpdatePipelineRunRequest{PipelineRun: updated})
+			if tc.code == codes.OK {
+				require.NoError(t, err)
+				return
+			}
+			st, ok := status.FromError(err)
+			require.True(t, ok, "not a status error: %v", err)
+			assert.Equal(t, tc.code, st.Code())
+			assert.Equal(t, tc.msg, st.Message())
+		})
+	}
 }

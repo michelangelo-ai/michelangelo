@@ -6,6 +6,7 @@ import (
 
 	"go.uber.org/zap"
 
+	gogoproto "github.com/gogo/protobuf/proto"
 	pbtypes "github.com/gogo/protobuf/types"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -75,7 +76,7 @@ func (a apiHook) BeforeCreate(ctx context.Context, request *v2.CreatePipelineRun
 
 	// Fetch the live Pipeline once when a pipeline ref is present. Used both to
 	// optionally pin status.latestRevision and to stamp ownerRef / notifications.
-	pipeline := a.getReferencedPipeline(ctx, request)
+	pipeline := a.getReferencedPipeline(ctx, request.PipelineRun)
 
 	// Resolve a revision into an inline PipelineSpec before ownerRef stamping, so
 	// stamping and notification inheritance observe any backfilled Spec.Pipeline.
@@ -102,7 +103,7 @@ func (a apiHook) BeforeCreate(ctx context.Context, request *v2.CreatePipelineRun
 	// resolveRevision may have backfilled Spec.Pipeline from the revision's base
 	// resource; fetch now if we did not already have the live Pipeline.
 	if pipeline == nil {
-		pipeline = a.getReferencedPipeline(ctx, request)
+		pipeline = a.getReferencedPipeline(ctx, request.PipelineRun)
 	}
 
 	if err := a.checkDeclarativeSource(ctx, request.PipelineRun, pipeline, explicitRevision); err != nil {
@@ -131,8 +132,9 @@ func (a apiHook) BeforeCreate(ctx context.Context, request *v2.CreatePipelineRun
 // from, so this only ever fills in the configured default when the label is
 // absent and never overwrites a value the caller (or a prior update) set. It
 // also guards against a nil Annotations map, since callers/serialization can
-// leave it unset and later merges into the map would otherwise panic.
-func (a apiHook) BeforeUpdate(_ context.Context, request *v2.UpdatePipelineRunRequest) error {
+// leave it unset and later merges into the map would otherwise panic. Last, it
+// runs the declarative trigger check when the update changes what the run runs.
+func (a apiHook) BeforeUpdate(ctx context.Context, request *v2.UpdatePipelineRunRequest) error {
 	if request.PipelineRun.Annotations == nil {
 		request.PipelineRun.Annotations = map[string]string{}
 		a.logger.Warn("BeforeUpdate: pipeline run annotations are nil, creating a new map",
@@ -140,23 +142,44 @@ func (a apiHook) BeforeUpdate(_ context.Context, request *v2.UpdatePipelineRunRe
 	}
 
 	setIfAbsent(request.PipelineRun, api.EnvironmentLabel, a.defaultEnvironment())
-	return nil
+	return a.checkDeclarativeUpdate(ctx, request.PipelineRun)
+}
+
+// checkDeclarativeUpdate runs the declarative trigger check again when an
+// update changes what the run controller runs: the inline spec, the pipeline
+// or revision reference, or the input. The UI sets kill and retry_info through
+// Update, so an update of other fields skips the check. When the stored run
+// cannot be read, the check runs.
+func (a apiHook) checkDeclarativeUpdate(ctx context.Context, run *v2.PipelineRun) error {
+	stored := &v2.PipelineRun{}
+	if err := a.apiHandler.Get(ctx, run.Namespace, run.Name, &metav1.GetOptions{}, stored); err == nil &&
+		gogoproto.Equal(stored.Spec.PipelineSpec, run.Spec.PipelineSpec) &&
+		gogoproto.Equal(stored.Spec.Pipeline, run.Spec.Pipeline) &&
+		gogoproto.Equal(stored.Spec.Revision, run.Spec.Revision) &&
+		gogoproto.Equal(stored.Spec.Input, run.Spec.Input) {
+		return nil
+	}
+	var referenced *v2.Pipeline
+	if run.Spec.PipelineSpec == nil {
+		referenced = a.getReferencedPipeline(ctx, run)
+	}
+	return a.checkDeclarativeSource(ctx, run, referenced, "")
 }
 
 // getReferencedPipeline loads Spec.Pipeline when set. Any Get failure (including
 // not-found) returns nil: latestRevision pinning then no-ops (live fallback),
 // and ownerRef/notification stamping is skipped.
-func (a apiHook) getReferencedPipeline(ctx context.Context, request *v2.CreatePipelineRunRequest) *v2.Pipeline {
-	pipelineRef := request.PipelineRun.Spec.GetPipeline()
+func (a apiHook) getReferencedPipeline(ctx context.Context, run *v2.PipelineRun) *v2.Pipeline {
+	pipelineRef := run.Spec.GetPipeline()
 	if pipelineRef.GetName() == "" {
 		return nil
 	}
 
-	namespace := resourceNamespace(pipelineRef, request.PipelineRun.GetNamespace())
+	namespace := resourceNamespace(pipelineRef, run.GetNamespace())
 	a.logger.Info("BeforeCreate: fetching pipeline",
 		zap.String("pipeline", pipelineRef.GetName()),
 		zap.String("namespace", namespace),
-		zap.String("pipelinerun", request.PipelineRun.GetName()))
+		zap.String("pipelinerun", run.GetName()))
 
 	pipeline := &v2.Pipeline{}
 	if err := a.apiHandler.Get(ctx, namespace, pipelineRef.GetName(), &metav1.GetOptions{}, pipeline); err != nil {
