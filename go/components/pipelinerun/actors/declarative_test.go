@@ -149,6 +149,21 @@ func TestDeclarativeStartFailure(t *testing.T) {
 			msg: "parameter batch is required; parameter overrides are not supported yet",
 		},
 		{
+			// A default with no kind decodes, and has no JSON form.
+			name: "arguments do not encode",
+			edit: func(run *v2.PipelineRun) {
+				manifest := run.Status.SourcePipeline.Pipeline.Spec.Manifest
+				w, err := declarative.Decode(manifest)
+				require.NoError(t, err)
+				w.Parameters["batch"] = &v2.ParameterSpec{Type: v2.PARAMETER_TYPE_INTEGER, Default: &pbtypes.Value{}}
+				raw, err := declarative.Encode(w)
+				require.NoError(t, err)
+				manifest.Content = &pbtypes.Any{TypeUrl: declarative.TypeURL, Value: raw}
+			},
+			msg:            "cannot build the interpreter arguments from the declarative spec",
+			extraLogFields: map[string]interface{}{"error": "marshal *v2.DeclarativeWorkflow: nil Value"},
+		},
+		{
 			name: "fetch fails",
 			fetch: func(b *blobstoreMock.MockBlobStoreClient) {
 				b.EXPECT().Get(gomock.Any(), declArtifact).Return(nil, errors.New("access denied for key"))

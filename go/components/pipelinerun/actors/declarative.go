@@ -49,7 +49,11 @@ func (a *ExecuteWorkflowActor) declarativeStart(ctx context.Context, run *v2.Pip
 		return nil, nil, nil, &startError{stepMessage: fmt.Sprintf("parameter %s is required; parameter overrides are not supported yet", declErr.Param)}
 	}
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("build declarative workflow args: %w", err)
+		// The spec is stored, so a retry gives the same error.
+		return nil, nil, nil, &startError{
+			stepMessage: "cannot build the interpreter arguments from the declarative spec",
+			logFields:   []zap.Field{zap.Error(err)},
+		}
 	}
 
 	envs := baseEnv(run)
