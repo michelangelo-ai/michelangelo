@@ -486,6 +486,7 @@ message:
 | Tar too large | `interpreter <version> is larger than the 1 MiB limit` |
 | Digest mismatch | `interpreter <version> does not match the digest in its pin` |
 | Spec does not decode | `cannot decode declarative spec: <error>` |
+| Spec has no interpreter argument form | `cannot build the interpreter arguments from the declarative spec`. The controller log holds the error. |
 | Run input is not supported | The message of the apiserver check, such as `parameter overrides are not supported yet` |
 | A parameter has no default | `parameter <name> is required; parameter overrides are not supported yet` |
 
