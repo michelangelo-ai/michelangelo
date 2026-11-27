@@ -187,6 +187,11 @@ def _check_types(config):
     return None
 
 def _wait(callables, running, watch, workflow_config):
+    """Run the callables of one level and return their batch.
+
+    When the wait budget ends, this function removes the drain hook before
+    fail. Thus the exit does not drain the tasks that still run.
+    """
     cap = workflow_config.get("max_concurrency") or 0
     if cap < 1:
         cap = len(callables)
