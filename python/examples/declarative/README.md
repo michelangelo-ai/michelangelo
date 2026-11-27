@@ -359,7 +359,26 @@ from test 8.
 
 The run controller starts a declarative run with the interpreter release in
 the pin. The interpreter runs the tasks with the task-type factories of the
-release. The `core-v0.1.0` release has one task type, `core/ray`.
+release. The `core-v0.1.0` release has two task types:
+
+| Task type | `job_specs` key | Resource fields |
+|---|---|---|
+| `core/ray` | `ray` | `head_cpu`, `head_memory`, `head_disk`, `head_gpu`, `head_object_store_memory`, `worker_cpu`, `worker_memory`, `worker_disk`, `worker_gpu`, `worker_object_store_memory`, `worker_instances` |
+| `core/spark` | `spark` | `driver_cpu`, `driver_memory`, `driver_disk`, `driver_gpu`, `executor_cpu`, `executor_memory`, `executor_disk`, `executor_gpu`, `executor_instances` |
+
+The fields have the same names and types as the `RayTask` and `SparkTask`
+fields. A field that you do not set takes the factory default. For
+example, the default Ray head requests 32Gi of memory. On a small cluster,
+set the memory of each task:
+
+```yaml
+tasks:
+  train:
+    taskFunction: core/ray
+    config: {entry_point: examples.train.main}
+    jobSpecs:
+      ray: {head_cpu: 1, head_memory: 2Gi, worker_instances: 0}
+```
 
 ### Prepare the release
 
@@ -434,7 +453,7 @@ rejects the run in these cases:
 
 | Case | Code |
 |---|---|
-| The run names a pipeline in another namespace, and that pipeline or the pipeline with that name in the run namespace is declarative. | `INVALID_ARGUMENT` |
+| The run names a pipeline in another namespace, and that pipeline or the pipeline with that name in the run namespace is declarative. This includes a run that the apiserver resolves to a revision. | `INVALID_ARGUMENT` |
 | The flag is off. | `FAILED_PRECONDITION` |
 | The pipeline has no pin, or the pin does not equal a loaded release. | `FAILED_PRECONDITION` |
 | The workflow does not conform to the pinned release. | `INVALID_ARGUMENT` |
