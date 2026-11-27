@@ -75,17 +75,7 @@ func (r reg) RegisterWorkflowWithOptions(w interface{}, o worker.RegisterWorkflo
 // does not sort map keys.
 func runStar(t *testing.T, tar []byte, path, fn string, args ...any) (*starlark.Dict, []string, error) {
 	t.Helper()
-	svc, err := service.NewServiceBuilder(service.CadenceBackend).SetPlugins(workerPlugins()).SetClientTaskList("test").Build()
-	require.NoError(t, err)
-	var ts testsuite.WorkflowTestSuite
-	env := ts.NewTestWorkflowEnvironment()
-	env.SetWorkerOptions(cadenceWorkerOptions())
-	svc.RegisterWithOptions(reg{env: env}, worker.RegisterWorkflowOptions{Name: service.ServiceWorkflowFunc})
-
-	input, err := encoded.GetDefaultDataConverter().ToData(tar, path, fn, args, []any{}, map[string]any{})
-	require.NoError(t, err)
-	env.ExecuteWorkflow(service.ServiceWorkflowFunc, input)
-	require.True(t, env.IsWorkflowCompleted())
+	env := execStar(t, nil, map[string]any{}, tar, path, fn, args...)
 
 	q, err := env.QueryWorkflow("task_progress")
 	require.NoError(t, err)
@@ -102,6 +92,27 @@ func runStar(t *testing.T, tar []byte, path, fn string, args ...any) (*starlark.
 	var res *starlark.Dict
 	require.NoError(t, env.GetWorkflowResult(&res))
 	return res, progress, nil
+}
+
+// execStar runs the workflow to its end. setup, when set, registers and
+// mocks activities before the run starts.
+func execStar(t *testing.T, setup func(*testsuite.TestWorkflowEnvironment), environ map[string]any, tar []byte, path, fn string, args ...any) *testsuite.TestWorkflowEnvironment {
+	t.Helper()
+	svc, err := service.NewServiceBuilder(service.CadenceBackend).SetPlugins(workerPlugins()).SetClientTaskList("test").Build()
+	require.NoError(t, err)
+	var ts testsuite.WorkflowTestSuite
+	env := ts.NewTestWorkflowEnvironment()
+	env.SetWorkerOptions(cadenceWorkerOptions())
+	svc.RegisterWithOptions(reg{env: env}, worker.RegisterWorkflowOptions{Name: service.ServiceWorkflowFunc})
+	if setup != nil {
+		setup(env)
+	}
+
+	input, err := encoded.GetDefaultDataConverter().ToData(tar, path, fn, args, []any{}, environ)
+	require.NoError(t, err)
+	env.ExecuteWorkflow(service.ServiceWorkflowFunc, input)
+	require.True(t, env.IsWorkflowCompleted())
+	return env
 }
 
 // dirTar tars dir with every relative load made absolute. The worker anchors
@@ -246,7 +257,7 @@ func TestDirSymlinkResolves(t *testing.T) {
 	for _, e := range entries {
 		names = append(names, e.Name())
 	}
-	assert.Equal(t, []string{"commons.star", "declarative"}, names)
+	assert.Equal(t, []string{"commons.star", "declarative", "plugins"}, names)
 
 	linked, err := os.ReadFile("testdata/dirlink/uniflow/declarative/engine.star")
 	require.NoError(t, err)
