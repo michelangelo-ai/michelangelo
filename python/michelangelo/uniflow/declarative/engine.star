@@ -15,7 +15,7 @@ level, joined with "; ".
 """
 
 load("../commons.star", "TASK_STATE_FAILED", "TASK_STATE_SKIPPED", "TASK_STATE_SUCCEEDED", "TIME_FOMART", "report_progress")
-load("@plugin", "concurrent", "json", "time")
+load("@plugin", "atexit", "concurrent", "json", "time")
 
 # This dialect has no while loop and no recursion, so each walk is a bounded
 # for loop.
@@ -148,6 +148,7 @@ def _run_level(runnable, tasks, registry, workflow_config, refs):
     outputs = refs["outputs"]
     outcomes = {}
     running = {}
+    watch = {}
     callables = []
     for name in runnable:
         task = tasks[name]
@@ -163,11 +164,11 @@ def _run_level(runnable, tasks, registry, workflow_config, refs):
             outcomes[name] = {"state": TASK_STATE_FAILED, "output": None}
             continue
         task_callable = entry["factory"](config.get("entry_point"), **_factory_kwargs(name, task, entry, config, job_specs, workflow_config))
-        callables.append(concurrent.new_callable(_dispatch, outcomes, running, name, task_callable, config.get("args") or [], config.get("kwargs") or {}))
+        callables.append(concurrent.new_callable(_dispatch, outcomes, running, watch, name, task_callable, config.get("args") or [], config.get("kwargs") or {}))
 
     batch = None
     if callables:
-        batch = _wait(callables, running, workflow_config)
+        batch = _wait(callables, running, watch, workflow_config)
     for name in runnable:
         states[name] = outcomes[name]["state"]
         outputs[name] = outcomes[name]["output"]
@@ -185,22 +186,35 @@ def _check_types(config):
             return "config.{}: must be a {}, got {}".format(key, want, type(value))
     return None
 
-def _wait(callables, running, workflow_config):
+def _wait(callables, running, watch, workflow_config):
     cap = workflow_config.get("max_concurrency") or 0
     if cap < 1:
         cap = len(callables)
     batch = concurrent.batch_run(callables, cap)
 
-    # batch.get() raises when a member failed; is_ready() does not. The
-    # outcomes come from the shared dict instead.
-    for poll in range(_MAX_POLLS):
-        if batch.is_ready():
-            return batch
-        time.sleep(seconds = next_poll_delay(poll))
+    # A cancel fails a sleep, and the workflow closes when this thread ends.
+    # The poll loop sleeps in its own thread, so that a task that starts
+    # after a cancel can see that the loop ended.
+    watch["poll"] = concurrent.batch_run([concurrent.new_callable(_poll, batch)], 1)
+
+    # After a cancel, each task still cleans up in its own thread. The exit
+    # hook blocks until every task has ended.
+    drain = batch.get
+    atexit.register(drain)
+    watch["poll"].get()
+    atexit.unregister(drain)
     if batch.is_ready():
         return batch
     still = [name for name in sorted(running.keys()) if not running[name].is_ready()]
     fail("declarative: wait budget exhausted; still running: " + ", ".join(still))
+
+def _poll(batch):
+    # batch.get() raises when a member failed; is_ready() does not. The
+    # outcomes come from the shared dict instead.
+    for poll in range(_MAX_POLLS):
+        if batch.is_ready():
+            return
+        time.sleep(seconds = next_poll_delay(poll))
 
 def _factory_kwargs(name, task, entry, config, job_specs, workflow_config):
     kwargs = dict(job_specs.get(entry["job_specs_key"]) or {})
@@ -228,11 +242,16 @@ def _retry_attempts(task, entry, workflow_config):
         return None
     return max_attempts - 1
 
-def _dispatch(outcomes, running, name, task_callable, args, kwargs):
+def _dispatch(outcomes, running, watch, name, task_callable, args, kwargs):
     # Starlark has no try/except, and a task callable signals failure with
     # fail(). The pessimistic FAILED stays when it fails, so the rest of the
     # graph still runs.
     outcomes[name] = {"state": TASK_STATE_FAILED, "output": None}
+
+    # After a cancel, the worker lets a new activity run to its end. A task
+    # that the concurrency cap held back would then run in full.
+    if watch["poll"].is_ready():
+        fail("declarative: task {} did not start: the wait for its level ended".format(repr(name)))
 
     # A batch of one tells a running callable from a failed one: is_ready()
     # is true only after the callable returned or failed.
