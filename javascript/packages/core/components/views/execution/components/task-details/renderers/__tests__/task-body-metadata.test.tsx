@@ -97,6 +97,41 @@ describe('TaskBodyMetadata', () => {
     expect(screen.queryByText('5m 30s')).not.toBeInTheDocument();
   });
 
+  it('should start collapsed when defaultExpanded is omitted', () => {
+    render(
+      <TaskBodyMetadata
+        label="Debug information"
+        value={{ status: 'Success' }}
+        cells={[{ id: 'status', label: 'Status', type: CellType.TEXT, accessor: 'status' }]}
+      />,
+      buildWrapper([getRouterWrapper()])
+    );
+
+    expect(screen.getByRole('button', { name: /Debug information/ })).toHaveAttribute(
+      'aria-expanded',
+      'false'
+    );
+    expect(screen.queryByText('Success')).not.toBeInTheDocument();
+  });
+
+  it('should start expanded when defaultExpanded is true', () => {
+    render(
+      <TaskBodyMetadata
+        label="Debug information"
+        value={{ status: 'Success' }}
+        cells={[{ id: 'status', label: 'Status', type: CellType.TEXT, accessor: 'status' }]}
+        defaultExpanded
+      />,
+      buildWrapper([getRouterWrapper()])
+    );
+
+    expect(screen.getByRole('button', { name: /Debug information/ })).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    );
+    expect(screen.getByText('Success')).toBeInTheDocument();
+  });
+
   it('should render cells with different cell types', async () => {
     const user = userEvent.setup();
     const cellsWithStates = [
