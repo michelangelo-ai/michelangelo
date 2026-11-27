@@ -7,17 +7,25 @@ import (
 
 	"go.uber.org/fx"
 	"go.uber.org/zap"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
-	ctrl "sigs.k8s.io/controller-runtime"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/constants"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
-// SecretProvider defines the interface for secret management
+const (
+	caDataKey = "cadata"
+	tokenKey  = "token"
+)
+
+// SecretProvider defines the interface for secret management.
+//
+// GetClusterClientAuth is called on every compute client lookup so that rotated credentials
+// take effect. Implementations should serve it from memory (for example an informer cache)
+// rather than make a remote call per request.
 type SecretProvider interface {
 	GetClusterClientAuth(ctx context.Context, cluster *v2pb.Cluster) (ClientAuth, error)
 	GetSecretsForDataStore(ctx context.Context, jobObject runtime.Object, cluster *v2pb.Cluster) (map[string][]byte, error)
@@ -30,8 +38,8 @@ type SecretProvider interface {
 // management systems (e.g., HashiCorp Vault, AWS Secrets Manager) or explore utilities
 // designed for sandbox/testing purposes.
 type Provider struct {
-	k8sClusterClient kubernetes.Interface
-	logger           *zap.Logger
+	kubeClient client.Client
+	logger     *zap.Logger
 }
 
 // ClientAuth contains the certs needed to be provided to the Kubernetes API server.
@@ -50,33 +58,10 @@ type ClientAuth struct {
 type Params struct {
 	fx.In
 
-	ClientSet kubernetes.Interface `name:"inClusterClientSet"`
-	Logger    *zap.Logger
-}
-
-type InClusterClientSet struct {
-	fx.Out
-
-	ClientSet kubernetes.Interface `name:"inClusterClientSet"`
-}
-
-func NewInClusterClientSet() InClusterClientSet {
-	// Try in-cluster config first, then fall back to kubeconfig for local development
-	cfg, err := rest.InClusterConfig()
-	if err != nil {
-		// Fall back to kubeconfig (controller-runtime's GetConfig handles this)
-		cfg, err = ctrl.GetConfig()
-		if err != nil {
-			panic(err)
-		}
-	}
-	k8sClusterClient, err := kubernetes.NewForConfig(cfg)
-	if err != nil {
-		panic(err)
-	}
-	return InClusterClientSet{
-		ClientSet: k8sClusterClient,
-	}
+	// KubeClient should serve reads from an informer cache, since GetClusterClientAuth reads
+	// two Secrets on every compute client lookup.
+	KubeClient client.Client
+	Logger     *zap.Logger
 }
 
 // Result has the result of the constructor
@@ -90,8 +75,8 @@ type Result struct {
 func New(p Params) Result {
 	return Result{
 		SecretProvider: Provider{
-			k8sClusterClient: p.ClientSet,
-			logger:           p.Logger,
+			kubeClient: p.KubeClient,
+			logger:     p.Logger,
 		},
 	}
 }
@@ -101,13 +86,25 @@ func GetKubeSecretName(jobName string) string {
 	return constants.SecretNamePrefix + jobName
 }
 
-// retrieveAndDecodeSecret retrieves and decodes a secret from the Kubernetes cluster
+// retrieveSecretData returns the value under dataKey in the named Secret in the default
+// namespace. A missing or empty value is an error rather than an empty credential.
 func (p Provider) retrieveSecretData(ctx context.Context, secretName, dataKey string) (string, error) {
-	secret, err := p.k8sClusterClient.CoreV1().Secrets("default").Get(ctx, secretName, metav1.GetOptions{})
-	if err != nil {
-		return "", fmt.Errorf("failed to get %s: %w", dataKey, err)
+	if secretName == "" {
+		return "", fmt.Errorf("empty %s secret name", dataKey)
 	}
-	return string(secret.Data[dataKey]), nil
+	secret := &corev1.Secret{}
+	// TODO(#2393): make the credential Secret namespace configurable and align it with the
+	// cache scope and RBAC.
+	// TODO(#2415): restrict which Secrets this reader will resolve.
+	key := types.NamespacedName{Namespace: "default", Name: secretName}
+	if err := p.kubeClient.Get(ctx, key, secret); err != nil {
+		return "", fmt.Errorf("get %s secret %s: %w", dataKey, key, err)
+	}
+	value := secret.Data[dataKey]
+	if len(value) == 0 {
+		return "", fmt.Errorf("secret %s key %q is missing or empty", key, dataKey)
+	}
+	return string(value), nil
 }
 
 // GetClusterClientAuth retrieves the client authentication data for a given cluster
@@ -118,24 +115,24 @@ func (p Provider) GetClusterClientAuth(ctx context.Context, cluster *v2pb.Cluste
 	case *v2pb.ClusterSpec_Kubernetes:
 		kubeClusterSpec = cluster.Spec.GetKubernetes()
 	default:
-		return ClientAuth{}, fmt.Errorf("cluster type %s not supported", cluster.Spec.GetCluster())
+		return ClientAuth{}, fmt.Errorf("cluster type %T not supported", cluster.Spec.GetCluster())
 	}
 
-	// Get the certificate authority data secret
-	caDataDecoded, err := p.retrieveSecretData(ctx, kubeClusterSpec.Rest.CaDataTag, "cadata")
+	conn := kubeClusterSpec.GetRest()
+
+	caData, err := p.retrieveSecretData(ctx, conn.GetCaDataTag(), caDataKey)
 	if err != nil {
 		return ClientAuth{}, err
 	}
 
-	// Get the Token secret
-	clientTokenDecoded, err := p.retrieveSecretData(ctx, kubeClusterSpec.Rest.TokenTag, "token")
+	token, err := p.retrieveSecretData(ctx, conn.GetTokenTag(), tokenKey)
 	if err != nil {
 		return ClientAuth{}, err
 	}
 
 	clientAuth := ClientAuth{
-		CertificateAuthorityData: caDataDecoded,
-		ClientTokenData:          clientTokenDecoded,
+		CertificateAuthorityData: caData,
+		ClientTokenData:          token,
 	}
 	return clientAuth, nil
 }

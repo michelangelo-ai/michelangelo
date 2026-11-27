@@ -7,9 +7,10 @@ import (
 	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	fakek8sclient "k8s.io/client-go/kubernetes/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 func TestGetKubeSecretName(t *testing.T) {
@@ -27,7 +28,7 @@ func TestProviderGetClusterClientAuth(t *testing.T) {
 			Namespace: "default",
 		},
 		Data: map[string][]byte{
-			"cadata": []byte("fake-ca-data"),
+			caDataKey: []byte("fake-ca-data"),
 		},
 	}
 
@@ -37,19 +38,40 @@ func TestProviderGetClusterClientAuth(t *testing.T) {
 			Namespace: "default",
 		},
 		Data: map[string][]byte{
-			"token": []byte("fake-token-data"),
+			tokenKey: []byte("fake-token-data"),
 		},
 	}
 
-	// Create fake Kubernetes clientset with the secrets
-	fakeClientSet := fakek8sclient.NewSimpleClientset(caSecret, tokenSecret)
+	emptyCASecret := &corev1.Secret{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "empty-ca-secret",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			caDataKey: {},
+		},
+	}
+
+	tokenSecretWithoutToken := &corev1.Secret{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "token-secret-without-token",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			caDataKey: []byte("fake-ca-data"),
+		},
+	}
+
+	fakeClient := fake.NewClientBuilder().
+		WithObjects(caSecret, tokenSecret, emptyCASecret, tokenSecretWithoutToken).
+		Build()
 
 	tests := []struct {
-		name          string
-		cluster       *v2pb.Cluster
-		expectedError bool
-		errorContains string
-		expectAuth    ClientAuth
+		name           string
+		cluster        *v2pb.Cluster
+		errorContains  string
+		expectNotFound bool
+		expectAuth     ClientAuth
 	}{
 		{
 			name: "unsupported cluster type (no cluster spec provided)",
@@ -62,8 +84,23 @@ func TestProviderGetClusterClientAuth(t *testing.T) {
 					// No cluster type specified - this should trigger the default case
 				},
 			},
-			expectedError: true,
+			errorContains: "not supported",
 			expectAuth:    ClientAuth{},
+		},
+		{
+			name: "Kubernetes cluster spec without a REST connection",
+			cluster: &v2pb.Cluster{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "default",
+				},
+				Spec: v2pb.ClusterSpec{
+					Cluster: &v2pb.ClusterSpec_Kubernetes{
+						Kubernetes: &v2pb.KubernetesSpec{},
+					},
+				},
+			},
+			errorContains: "empty cadata secret name",
 		},
 		{
 			name: "successfully configured Kubernetes cluster spec with secrets",
@@ -110,7 +147,8 @@ func TestProviderGetClusterClientAuth(t *testing.T) {
 					},
 				},
 			},
-			expectedError: true,
+			errorContains:  "get cadata secret default/missing-ca-secret",
+			expectNotFound: true,
 		},
 		{
 			name: "Kubernetes cluster spec with missing token secret",
@@ -132,23 +170,65 @@ func TestProviderGetClusterClientAuth(t *testing.T) {
 					},
 				},
 			},
-			expectedError: true,
+			errorContains:  "get token secret default/missing-token-secret",
+			expectNotFound: true,
+		},
+		{
+			name: "Kubernetes cluster spec with an empty cadata value",
+			cluster: &v2pb.Cluster{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "default",
+				},
+				Spec: v2pb.ClusterSpec{
+					Cluster: &v2pb.ClusterSpec_Kubernetes{
+						Kubernetes: &v2pb.KubernetesSpec{
+							Rest: &v2pb.ConnectionSpec{
+								CaDataTag: "empty-ca-secret",
+								TokenTag:  "token-secret",
+							},
+						},
+					},
+				},
+			},
+			errorContains: `secret default/empty-ca-secret key "cadata" is missing or empty`,
+		},
+		{
+			name: "Kubernetes cluster spec with a token secret missing its token key",
+			cluster: &v2pb.Cluster{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "default",
+				},
+				Spec: v2pb.ClusterSpec{
+					Cluster: &v2pb.ClusterSpec_Kubernetes{
+						Kubernetes: &v2pb.KubernetesSpec{
+							Rest: &v2pb.ConnectionSpec{
+								CaDataTag: "ca-secret",
+								TokenTag:  "token-secret-without-token",
+							},
+						},
+					},
+				},
+			},
+			errorContains: `secret default/token-secret-without-token key "token" is missing or empty`,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			provider := Provider{
-				k8sClusterClient: fakeClientSet,
+				kubeClient: fakeClient,
 			}
 			auth, err := provider.GetClusterClientAuth(context.Background(), tt.cluster)
-			if tt.expectedError {
-				require.Error(t, err)
+			if tt.errorContains != "" {
+				require.ErrorContains(t, err, tt.errorContains)
+				require.Equal(t, tt.expectNotFound, apierrors.IsNotFound(err))
 				require.Equal(t, ClientAuth{}, auth)
-			} else {
-				require.NoError(t, err)
-				require.Equal(t, tt.expectAuth, auth)
+				return
 			}
+			require.NoError(t, err)
+			require.Equal(t, tt.expectAuth, auth)
 		})
 	}
 }
