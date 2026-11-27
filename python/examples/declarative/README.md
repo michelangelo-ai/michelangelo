@@ -454,6 +454,7 @@ rejects the run in these cases:
 | Case | Code |
 |---|---|
 | The run names a pipeline in another namespace, and that pipeline or the pipeline with that name in the run namespace is declarative. This includes a run that the apiserver resolves to a revision. | `INVALID_ARGUMENT` |
+| The run names a revision in another namespace, and the revision holds a declarative pipeline. | `INVALID_ARGUMENT` |
 | The flag is off. | `FAILED_PRECONDITION` |
 | The pipeline has no pin, or the pin does not equal a loaded release. | `FAILED_PRECONDITION` |
 | The workflow does not conform to the pinned release. | `INVALID_ARGUMENT` |

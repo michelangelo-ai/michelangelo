@@ -18,7 +18,7 @@ func checkDeclarativeRun(run *v2.PipelineRun, spec *v2.PipelineSpec, explicitRev
 	if spec.GetManifest().GetType() != v2.PIPELINE_MANIFEST_TYPE_DECLARATIVE {
 		return nil
 	}
-	if err := requirePipelineInRunNamespace(run); err != nil {
+	if err := requireSourceInRunNamespace(run); err != nil {
 		return err
 	}
 	if !d.Enabled() {
@@ -51,11 +51,17 @@ func checkDeclarativeRun(run *v2.PipelineRun, spec *v2.PipelineSpec, explicitRev
 	return nil
 }
 
-// requirePipelineInRunNamespace also applies to an inline spec, because
-// latest-revision resolution inlines the spec of a run by name.
-func requirePipelineInRunNamespace(run *v2.PipelineRun) error {
+// requireSourceInRunNamespace also applies to an inline spec, because
+// revision resolution inlines the spec of a run by name or by revision. It
+// checks the revision reference too: the pipeline reference of a run by
+// revision comes from the base resource of the revision, which can name no
+// namespace.
+func requireSourceInRunNamespace(run *v2.PipelineRun) error {
 	if ns := run.Spec.GetPipeline().GetNamespace(); ns != "" && ns != run.Namespace {
 		return status.Errorf(codes.InvalidArgument, "declarative pipeline run must name a pipeline in its own namespace %q, not %q", run.Namespace, ns)
+	}
+	if ns := run.Spec.GetRevision().GetNamespace(); ns != "" && ns != run.Namespace {
+		return status.Errorf(codes.InvalidArgument, "declarative pipeline run must name a revision in its own namespace %q, not %q", run.Namespace, ns)
 	}
 	return nil
 }

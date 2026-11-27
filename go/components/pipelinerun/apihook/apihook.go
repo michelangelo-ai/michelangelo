@@ -202,7 +202,7 @@ func (a apiHook) checkDeclarativeSource(ctx context.Context, run *v2.PipelineRun
 	spec := run.Spec.GetPipelineSpec()
 	if spec == nil {
 		if referenced != nil && referenced.Spec.GetManifest().GetType() == v2.PIPELINE_MANIFEST_TYPE_DECLARATIVE {
-			if err := requirePipelineInRunNamespace(run); err != nil {
+			if err := requireSourceInRunNamespace(run); err != nil {
 				return err
 			}
 		}
