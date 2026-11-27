@@ -76,7 +76,7 @@ export function TaskBody<TTaskRecord extends object>(props: TaskBodyProps<TTaskR
           }
 
           if (schema.type === 'metadata') {
-            const { cells } = schema;
+            const { cells, defaultExpanded } = schema;
             return (
               <TaskBodyMetadata
                 key={index}
@@ -85,6 +85,7 @@ export function TaskBody<TTaskRecord extends object>(props: TaskBodyProps<TTaskR
                 // at runtime; see #1443
                 value={task.record as Record<string, unknown>}
                 cells={cells}
+                defaultExpanded={defaultExpanded}
               />
             );
           }

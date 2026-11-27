@@ -45,6 +45,13 @@ export interface TaskBodyMetadataSchema extends SharedTaskBodySchema {
   type: 'metadata';
 
   cells: RowCell[];
+
+  /**
+   * Whether the metadata section accordion starts expanded.
+   *
+   * @default false
+   */
+  defaultExpanded?: boolean;
 }
 
 export interface TaskBodyStructProps extends Omit<TaskBodyStructSchema, 'type' | 'accessor'> {

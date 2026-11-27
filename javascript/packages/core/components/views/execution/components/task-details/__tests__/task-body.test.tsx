@@ -180,6 +180,42 @@ describe('TaskBody', () => {
     expect(screen.getByText('5m 30s')).toBeInTheDocument();
   });
 
+  it('should pass defaultExpanded from metadata schema to the section', () => {
+    const taskWithMetadata = createTask({
+      name: 'Task with Metadata',
+      record: {
+        status: 'Success',
+      },
+    });
+
+    const bodySchema = [
+      {
+        type: 'metadata' as const,
+        label: 'Debug information',
+        defaultExpanded: true,
+        cells: [
+          {
+            id: 'status',
+            label: 'Status',
+            type: CellType.TEXT,
+            accessor: 'status',
+          },
+        ],
+      },
+    ];
+
+    render(
+      <TaskBody task={taskWithMetadata} bodySchema={bodySchema} />,
+      buildWrapper([getRouterWrapper()])
+    );
+
+    expect(screen.getByRole('button', { name: /Debug information/ })).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    );
+    expect(screen.getByText('Success')).toBeInTheDocument();
+  });
+
   it('should handle unknown schema types gracefully', () => {
     const taskWithUnknownSchema = createTask({
       name: 'Task with Unknown Schema',
