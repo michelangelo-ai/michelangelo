@@ -3,6 +3,7 @@ package actors
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -353,6 +354,17 @@ func (a *ExecuteWorkflowActor) Run(ctx context.Context, pipelineRun *v2.Pipeline
 		}
 
 		workflowExecution, err := a.StartWorkflow(ctx, pipelineRun, taskList)
+		var startErr *startError
+		if errors.As(err, &startErr) {
+			logger.Warn("cannot start declarative run", append([]zap.Field{zap.String("message", startErr.stepMessage)}, startErr.logFields...)...)
+			executeWorkflowStep.State = v2.PIPELINE_RUN_STEP_STATE_FAILED
+			executeWorkflowStep.Message = startErr.stepMessage
+			executeWorkflowStep.EndTime = pbtypes.TimestampNow()
+			return &apipb.Condition{
+				Type:   ExecuteWorkflowType,
+				Status: apipb.CONDITION_STATUS_FALSE,
+			}, nil
+		}
 		if err != nil {
 			logger.Error("failed to start workflow",
 				zap.Error(err),
@@ -459,18 +471,30 @@ func (a *ExecuteWorkflowActor) processJobTermination(ctx context.Context, pipeli
 //
 // Returns the workflow execution details (ID and RunID) or an error if startup fails.
 func (a *ExecuteWorkflowActor) StartWorkflow(ctx context.Context, pipelineRun *v2.PipelineRun, taskList string) (*clientInterfaces.WorkflowExecution, error) {
-	args, kwArgs, envs, err := getWorkflowInputs(pipelineRun)
-	if err != nil {
-		return nil, fmt.Errorf("get workflow inputs for pipeline run %s/%s: %w", pipelineRun.Namespace, pipelineRun.Name, err)
-	}
-	err = a.addTaskCacheEnv(ctx, pipelineRun, envs)
-	if err != nil {
-		return nil, fmt.Errorf("failed to add task cache env: %w", err)
-	}
+	var tarContent []byte
+	var args, kwArgs []interface{}
+	var envs map[string]interface{}
+	var err error
 	pipeline := pipelineRun.Status.SourcePipeline.Pipeline
-	tarContent, err := a.blobStore.Get(ctx, pipeline.Spec.Manifest.UniflowTar)
-	if err != nil {
-		return nil, fmt.Errorf("get tar content for pipeline %s/%s: %w", pipeline.Namespace, pipeline.Name, err)
+	if pipeline.Spec.Manifest.GetType() == v2.PIPELINE_MANIFEST_TYPE_DECLARATIVE {
+		tarContent, args, envs, err = a.declarativeStart(ctx, pipelineRun)
+		if err != nil {
+			return nil, err
+		}
+		kwArgs = []interface{}{}
+	} else {
+		args, kwArgs, envs, err = getWorkflowInputs(pipelineRun)
+		if err != nil {
+			return nil, fmt.Errorf("get workflow inputs for pipeline run %s/%s: %w", pipelineRun.Namespace, pipelineRun.Name, err)
+		}
+		err = a.addTaskCacheEnv(ctx, pipelineRun, envs)
+		if err != nil {
+			return nil, fmt.Errorf("failed to add task cache env: %w", err)
+		}
+		tarContent, err = a.blobStore.Get(ctx, pipeline.Spec.Manifest.UniflowTar)
+		if err != nil {
+			return nil, fmt.Errorf("get tar content for pipeline %s/%s: %w", pipeline.Namespace, pipeline.Name, err)
+		}
 	}
 
 	workflowExecution, err := a.workflowClient.StartWorkflow(
@@ -505,14 +529,11 @@ func getWorkflowInputs(pipelineRun *v2.PipelineRun) ([]interface{}, []interface{
 
 	var args []interface{} = []interface{}{}
 	var kwArgs []interface{} = []interface{}{}
-	var envs map[string]interface{} = make(map[string]interface{})
+	base := baseEnv(pipelineRun)
 
-	// Set default UF_STORAGE_URL if not provided in pipeline config
-	if pipelineRun.Spec.WorkspaceRootDir != "" {
-		envs["UF_STORAGE_URL"] = pipelineRun.Spec.WorkspaceRootDir
-	} else {
-		envs["UF_STORAGE_URL"] = DefaultWorkSpaceRootURL
-	}
+	// UF_STORAGE_URL is a default that the manifest and the run input can
+	// override. The other base variables name the run and always win.
+	envs := map[string]interface{}{ufStorageURLEnv: base[ufStorageURLEnv]}
 
 	// Apply dynamic parameters from pipelineRun.Spec.Input to override pipeline manifest
 	if pipelineConfigMap != nil {
@@ -557,13 +578,32 @@ func getWorkflowInputs(pipelineRun *v2.PipelineRun) ([]interface{}, []interface{
 		args, kwArgs = extractWorkflowInputs(pipelineConfigMap, envs)
 	}
 
-	envs["MA_NAMESPACE"] = pipelineRun.Namespace
-	envs["MA_PIPELINE_RUN_NAME"] = pipelineRun.Name
-	if executionTs, ok := pipelineRun.Labels[triggerworkflow.PipelineRunExecutionTimestampLabel]; ok {
-		envs["STARLARK_TIME"] = "unix:" + executionTs
+	for k, v := range base {
+		if k != ufStorageURLEnv {
+			envs[k] = v
+		}
 	}
 	addTaskImageToEnv(pipelineRun, envs)
 	return args, kwArgs, envs, nil
+}
+
+const ufStorageURLEnv = "UF_STORAGE_URL"
+
+// baseEnv returns the environment that every run gets: the storage root, the
+// run namespace and name, and the trigger execution time when it is set.
+func baseEnv(pipelineRun *v2.PipelineRun) map[string]interface{} {
+	envs := map[string]interface{}{
+		ufStorageURLEnv:        DefaultWorkSpaceRootURL,
+		"MA_NAMESPACE":         pipelineRun.Namespace,
+		"MA_PIPELINE_RUN_NAME": pipelineRun.Name,
+	}
+	if pipelineRun.Spec.WorkspaceRootDir != "" {
+		envs[ufStorageURLEnv] = pipelineRun.Spec.WorkspaceRootDir
+	}
+	if executionTs, ok := pipelineRun.Labels[triggerworkflow.PipelineRunExecutionTimestampLabel]; ok {
+		envs["STARLARK_TIME"] = "unix:" + executionTs
+	}
+	return envs
 }
 
 // extractWorkflowInputs extracts workflow inputs (args and kw_args) from pipeline config.

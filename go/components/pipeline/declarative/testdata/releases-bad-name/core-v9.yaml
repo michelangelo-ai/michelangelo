@@ -1,6 +1,6 @@
 version: core-v1.4.2
 artifact: s3://x
-digest: sha256:ab
+digest: sha256:abababababababababababababababababababababababababababababababab
 task_types:
   core/python:
     config: {}

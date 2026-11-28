@@ -65,3 +65,34 @@ func TestNewDeclarative(t *testing.T) {
 		assert.Contains(t, err.Error(), `release file "bad.yaml"`)
 	})
 }
+
+func TestDeclarativeAccessors(t *testing.T) {
+	t.Run("disabled", func(t *testing.T) {
+		d, err := NewDeclarative(Config{})
+		require.NoError(t, err)
+		assert.False(t, d.Enabled())
+		r, ok := d.Release("core-v1")
+		assert.False(t, ok)
+		assert.Nil(t, r)
+	})
+	t.Run("enabled", func(t *testing.T) {
+		d, err := NewDeclarative(Config{Enabled: true, DefaultInterpreter: "core-v1", ReleasesDir: releasesDir})
+		require.NoError(t, err)
+		assert.True(t, d.Enabled())
+		r, ok := d.Release("core-v2")
+		require.True(t, ok)
+		assert.Equal(t, "core-v2", r.Version)
+		assert.Equal(t, "s3://ma-artifacts/interpreters/core-v2.tar.gz", r.Artifact)
+		_, ok = d.Release("core-v9")
+		assert.False(t, ok)
+	})
+}
+
+func TestNilDeclarative(t *testing.T) {
+	var d *Declarative
+	assert.False(t, d.Enabled())
+	r, ok := d.Release("core-v1")
+	assert.False(t, ok)
+	assert.Nil(t, r)
+	assert.Equal(t, []string{}, d.Versions())
+}

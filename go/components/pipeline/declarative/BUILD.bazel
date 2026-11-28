@@ -3,6 +3,7 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 go_library(
     name = "go_default_library",
     srcs = [
+        "args.go",
         "decode.go",
         "descriptor.go",
         "doc.go",
@@ -12,6 +13,7 @@ go_library(
         "plan.go",
         "refs.go",
         "release.go",
+        "runinput.go",
         "schema.go",
         "validate.go",
     ],
@@ -19,6 +21,7 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//proto/api/v2:go_default_library",
+        "@com_github_gogo_protobuf//jsonpb:go_default_library",
         "@com_github_gogo_protobuf//proto:go_default_library",
         "@com_github_gogo_protobuf//types:go_default_library",
         "@io_k8s_sigs_yaml//:go_default_library",
@@ -37,6 +40,7 @@ go_library(
 go_test(
     name = "go_default_test",
     srcs = [
+        "args_test.go",
         "decode_test.go",
         "encode_test.go",
         "errors_test.go",
@@ -46,6 +50,7 @@ go_test(
         "plan_test.go",
         "refs_test.go",
         "release_test.go",
+        "runinput_test.go",
         "schema_test.go",
         "validate_test.go",
     ],

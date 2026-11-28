@@ -1,0 +1,41 @@
+{
+  "schema_version": "v1alpha1",
+  "workflow_config": {
+    "max_concurrency": 2,
+    "default_retry": {"max_attempts": 2, "initial_interval": "30s"}
+  },
+  "parameters": {
+    "dataset": {"type": "PARAMETER_TYPE_STRING", "default": "s3://d"},
+    "epochs": {"type": "PARAMETER_TYPE_INTEGER", "default": 3},
+    "lr": {"type": "PARAMETER_TYPE_NUMBER", "default": 1},
+    "flags": {"type": "PARAMETER_TYPE_DICT", "default": {"a": true}}
+  },
+  "tasks": {
+    "extract": {
+      "task_function": "core/ray",
+      "config": {"entry_point": "extract.py"}
+    },
+    "train": {
+      "task_function": "core/ray",
+      "config": {"entry_point": "train.py", "epochs": "{{ params.epochs }}"},
+      "job_specs": {"ray": {"head_cpu": 2}},
+      "depends_on": [{"task": "extract"}],
+      "retry": {"max_attempts": 3}
+    },
+    "evaluate": {
+      "task_function": "core/ray",
+      "config": {"entry_point": "evaluate.py"},
+      "depends_on": [{"task": "extract"}]
+    },
+    "publish": {
+      "task_function": "core/ray",
+      "config": {"entry_point": "publish.py"},
+      "depends_on": [{"task": "train"}, {"task": "evaluate"}]
+    },
+    "notify": {
+      "task_function": "core/ray",
+      "config": {"entry_point": "notify.py"},
+      "depends_on": [{"task": "publish", "when": "OUTCOME_FAILED"}]
+    }
+  }
+}

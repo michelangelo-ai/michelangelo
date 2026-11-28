@@ -478,6 +478,13 @@ func generateUniflowPRInput(dp *v2pb.PipelineExecutionParameters) *pbtypes.Struc
 		}
 		pbStruct.Fields["kw_args"] = utils.NewStructValue(kwArgsStruct)
 	}
+	if len(dp.ParameterMap) > 0 {
+		params := &pbtypes.Struct{Fields: make(map[string]*pbtypes.Value, len(dp.ParameterMap))}
+		for k, v := range dp.ParameterMap {
+			params.Fields[k] = utils.NewStringValue(v)
+		}
+		pbStruct.Fields["parameter_map"] = utils.NewStructValue(params)
+	}
 	return pbStruct
 }
 

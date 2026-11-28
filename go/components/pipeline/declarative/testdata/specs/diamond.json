@@ -1,0 +1,48 @@
+{
+  "schema_version": "v1alpha1",
+  "parameters": {},
+  "tasks": {
+    "evaluate": {
+      "task_function": "core/python",
+      "config": {
+        "entry_point": "main.py"
+      },
+      "depends_on": [
+        {
+          "task": "extract"
+        }
+      ]
+    },
+    "extract": {
+      "task_function": "core/python",
+      "config": {
+        "entry_point": "main.py"
+      }
+    },
+    "publish": {
+      "task_function": "core/python",
+      "config": {
+        "entry_point": "main.py"
+      },
+      "depends_on": [
+        {
+          "task": "train"
+        },
+        {
+          "task": "evaluate"
+        }
+      ]
+    },
+    "train": {
+      "task_function": "core/ray",
+      "config": {
+        "entry_point": "main.py"
+      },
+      "depends_on": [
+        {
+          "task": "extract"
+        }
+      ]
+    }
+  }
+}

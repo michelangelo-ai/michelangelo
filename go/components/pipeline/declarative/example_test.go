@@ -11,7 +11,7 @@ import (
 func ExamplePlan() {
 	rel, err := declarative.ParseRelease("core-v1", []byte(`version: core-v1
 artifact: s3://bucket/core-v1.tar.gz
-digest: sha256:00
+digest: sha256:abababababababababababababababababababababababababababababababab
 task_types:
   core/python:
     config:

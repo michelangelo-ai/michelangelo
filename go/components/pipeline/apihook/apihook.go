@@ -31,6 +31,10 @@ import (
 	v2 "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
+// NotEnabledMessage is the FailedPrecondition message for a DECLARATIVE write
+// or run when the apiserver.declarative flag is off.
+const NotEnabledMessage = "declarative pipelines are not enabled on this apiserver; an operator must set apiserver.declarative.enabled=true"
+
 // explainPlanAnnotation holds the protojson ExplainPlan on a dry-run response.
 const explainPlanAnnotation = "michelangelo/declarative-explain-plan"
 
@@ -200,7 +204,7 @@ func (a apiHook) gate(p *v2.Pipeline) (skip bool, err error) {
 		return true, nil
 	}
 	if !a.d.enabled {
-		return false, status.Error(codes.FailedPrecondition, "declarative pipelines are not enabled on this apiserver; an operator must set apiserver.declarative.enabled=true")
+		return false, status.Error(codes.FailedPrecondition, NotEnabledMessage)
 	}
 	return false, nil
 }

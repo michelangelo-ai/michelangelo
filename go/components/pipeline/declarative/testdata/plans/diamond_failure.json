@@ -6,5 +6,9 @@
     {"tasks": ["cleanup", "publish"]},
     {"tasks": ["notify"]}
   ],
+  "warnings": [
+    "tasks.cleanup.depends_on[0]: the handler runs, but it gets no error text until outcome mode ships",
+    "tasks.notify.depends_on[0]: the handler runs, but it gets no error text until outcome mode ships"
+  ],
   "task_count": 6
 }

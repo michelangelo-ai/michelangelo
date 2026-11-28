@@ -348,3 +348,6 @@ python/test_mlflow_model_loading.py
 
 # Captured `ma sandbox snapshot create` output — local dev artifacts
 python/michelangelo/cli/sandbox/snapshots/
+
+/.declarative-build/
+!/go/worker/declarative/testdata/release/*.tar.gz

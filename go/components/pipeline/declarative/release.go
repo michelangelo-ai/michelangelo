@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -51,6 +52,8 @@ type Field struct {
 	Required bool
 	Fields   Schema
 }
+
+var digestPattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 
 var fieldTypes = map[string]bool{"string": true, "integer": true, "number": true, "boolean": true, "list": true, "dict": true}
 
@@ -272,8 +275,8 @@ func ParseRelease(name string, data []byte) (*Release, error) {
 		return nil, fmt.Errorf("release %q: version is not set", name)
 	case r.Artifact == "":
 		return nil, fmt.Errorf("release %q: artifact is not set", name)
-	case !strings.HasPrefix(r.Digest, "sha256:"):
-		return nil, fmt.Errorf("release %q: digest must start with \"sha256:\"", name)
+	case !digestPattern.MatchString(r.Digest):
+		return nil, fmt.Errorf("release %q: digest must be \"sha256:\" and 64 lowercase hex characters", name)
 	case len(r.TaskTypes) == 0:
 		return nil, fmt.Errorf("release %q: task_types is empty", name)
 	}

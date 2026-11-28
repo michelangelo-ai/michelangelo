@@ -53,8 +53,8 @@ func opts() fx.Option {
 		// Cascade-delete: stamp the owning Pipeline ownerReference on runs at
 		// creation. Also defaults api.EnvironmentLabel from the
 		// operator-configured PipelineRunDefaultEnvironment.
-		fx.Invoke(func(logger *zap.Logger, apiHandler api.Handler, scheme *runtime.Scheme, conf apihandler.Config) {
-			pipelinerunapihook.RegisterPipelineRunAPIHook(logger, apiHandler, scheme, conf.PipelineRunDefaultEnvironment)
+		fx.Invoke(func(logger *zap.Logger, apiHandler api.Handler, scheme *runtime.Scheme, conf apihandler.Config, d *pipelineapihook.Declarative) {
+			pipelinerunapihook.RegisterPipelineRunAPIHook(logger, apiHandler, scheme, conf.PipelineRunDefaultEnvironment, d)
 		}),
 		fx.Invoke(func(logger *zap.Logger, apiHandler api.Handler, scheme *runtime.Scheme, conf apihandler.Config) {
 			triggerrunapihook.RegisterTriggerRunAPIHook(logger, apiHandler, scheme, conf.PipelineRunDefaultEnvironment)
@@ -63,6 +63,7 @@ func opts() fx.Option {
 			modelapihook.RegisterModelAPIHook(logger, apiHandler, conf.PipelineRunDefaultEnvironment)
 		}),
 		fx.Provide(pipelineapihook.NewConfig),
+		fx.Provide(pipelineapihook.NewDeclarative),
 		fx.Invoke(registerDeclarativeHook),
 		v2pb.CachedOutputSvcModule,
 		v2pb.ClusterSvcModule,
@@ -102,19 +103,15 @@ func getScheme() (*runtime.Scheme, error) {
 	return s, nil
 }
 
-// registerDeclarativeHook loads the declarative interpreter releases and
-// registers the Pipeline API hook. A load error fails apiserver start.
-func registerDeclarativeHook(logger *zap.Logger, apiHandler api.Handler, conf pipelineapihook.Config) error {
-	d, err := pipelineapihook.NewDeclarative(conf)
-	if err != nil {
-		return err
-	}
+// registerDeclarativeHook logs the loaded declarative interpreter releases and
+// registers the Pipeline API hook. A release load error fails apiserver start
+// in NewDeclarative.
+func registerDeclarativeHook(logger *zap.Logger, apiHandler api.Handler, conf pipelineapihook.Config, d *pipelineapihook.Declarative) {
 	logger.Info("declarative pipelines",
 		zap.Bool("enabled", conf.Enabled),
 		zap.String("defaultInterpreter", conf.DefaultInterpreter),
 		zap.Strings("releases", d.Versions()))
 	pipelineapihook.RegisterPipelineAPIHook(apiHandler, d)
-	return nil
 }
 
 func printConfig(logger *zap.Logger, provider uberconfig.Provider) {

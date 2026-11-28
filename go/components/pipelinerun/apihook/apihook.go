@@ -6,6 +6,7 @@ import (
 
 	"go.uber.org/zap"
 
+	gogoproto "github.com/gogo/protobuf/proto"
 	pbtypes "github.com/gogo/protobuf/types"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -14,6 +15,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	"github.com/michelangelo-ai/michelangelo/go/cascadedelete"
+	pipelineapihook "github.com/michelangelo-ai/michelangelo/go/components/pipeline/apihook"
 	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	v2 "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
@@ -48,29 +50,33 @@ var platformManagedAnnotations = map[string]struct{}{
 // the caller did not supply one. defaultEnv is the operator-configured
 // default environment label value (empty when unconfigured, in which case
 // api.UnspecifiedEnvironment is used instead).
-func RegisterPipelineRunAPIHook(logger *zap.Logger, apiHandler api.Handler, scheme *runtime.Scheme, defaultEnv string) {
+func RegisterPipelineRunAPIHook(logger *zap.Logger, apiHandler api.Handler, scheme *runtime.Scheme, defaultEnv string, d *pipelineapihook.Declarative) {
 	v2.RegisterPipelineRunAPIHook(apiHook{
-		logger:     logger,
-		apiHandler: apiHandler,
-		scheme:     scheme,
-		defaultEnv: defaultEnv,
+		logger:      logger,
+		apiHandler:  apiHandler,
+		scheme:      scheme,
+		defaultEnv:  defaultEnv,
+		declarative: d,
 	})
 }
 
 type apiHook struct {
 	v2.NoopPipelineRunAPIHook
-	logger     *zap.Logger
-	apiHandler api.Handler
-	scheme     *runtime.Scheme
-	defaultEnv string
+	logger      *zap.Logger
+	apiHandler  api.Handler
+	scheme      *runtime.Scheme
+	defaultEnv  string
+	declarative *pipelineapihook.Declarative
 }
 
 func (a apiHook) BeforeCreate(ctx context.Context, request *v2.CreatePipelineRunRequest) error {
 	setIfAbsent(request.PipelineRun, api.EnvironmentLabel, a.defaultEnvironment())
 
+	explicitRevision := request.PipelineRun.Spec.GetRevision().GetName()
+
 	// Fetch the live Pipeline once when a pipeline ref is present. Used both to
 	// optionally pin status.latestRevision and to stamp ownerRef / notifications.
-	pipeline := a.getReferencedPipeline(ctx, request)
+	pipeline := a.getReferencedPipeline(ctx, request.PipelineRun)
 
 	// Resolve a revision into an inline PipelineSpec before ownerRef stamping, so
 	// stamping and notification inheritance observe any backfilled Spec.Pipeline.
@@ -79,7 +85,7 @@ func (a apiHook) BeforeCreate(ctx context.Context, request *v2.CreatePipelineRun
 	//  1. Explicit Spec.Revision — must resolve; failure rejects the create.
 	//  2. Else Pipeline.Status.LatestRevision — pin that snapshot when present.
 	//     If the Revision CR is missing, fall back to the live Pipeline path.
-	if request.PipelineRun.Spec.GetRevision().GetName() != "" {
+	if explicitRevision != "" {
 		if err := a.resolveRevision(ctx, request); err != nil {
 			a.logger.Error("BeforeCreate: failed to resolve pinned revision",
 				zap.String("revision", request.PipelineRun.Spec.GetRevision().GetName()),
@@ -97,8 +103,13 @@ func (a apiHook) BeforeCreate(ctx context.Context, request *v2.CreatePipelineRun
 	// resolveRevision may have backfilled Spec.Pipeline from the revision's base
 	// resource; fetch now if we did not already have the live Pipeline.
 	if pipeline == nil {
-		pipeline = a.getReferencedPipeline(ctx, request)
+		pipeline = a.getReferencedPipeline(ctx, request.PipelineRun)
 	}
+
+	if err := a.checkDeclarativeSource(ctx, request.PipelineRun, pipeline, explicitRevision); err != nil {
+		return err
+	}
+
 	if pipeline == nil {
 		a.logger.Info("BeforeCreate: no pipeline reference, skipping ownerRef/notifications")
 		return nil
@@ -122,7 +133,7 @@ func (a apiHook) BeforeCreate(ctx context.Context, request *v2.CreatePipelineRun
 // absent and never overwrites a value the caller (or a prior update) set. It
 // also guards against a nil Annotations map, since callers/serialization can
 // leave it unset and later merges into the map would otherwise panic.
-func (a apiHook) BeforeUpdate(_ context.Context, request *v2.UpdatePipelineRunRequest) error {
+func (a apiHook) BeforeUpdate(ctx context.Context, request *v2.UpdatePipelineRunRequest) error {
 	if request.PipelineRun.Annotations == nil {
 		request.PipelineRun.Annotations = map[string]string{}
 		a.logger.Warn("BeforeUpdate: pipeline run annotations are nil, creating a new map",
@@ -130,23 +141,42 @@ func (a apiHook) BeforeUpdate(_ context.Context, request *v2.UpdatePipelineRunRe
 	}
 
 	setIfAbsent(request.PipelineRun, api.EnvironmentLabel, a.defaultEnvironment())
-	return nil
+	return a.checkDeclarativeUpdate(ctx, request.PipelineRun)
+}
+
+func (a apiHook) checkDeclarativeUpdate(ctx context.Context, run *v2.PipelineRun) error {
+	stored := &v2.PipelineRun{}
+	if err := a.apiHandler.Get(ctx, run.Namespace, run.Name, &metav1.GetOptions{}, stored); err == nil && sameRunSource(&stored.Spec, &run.Spec) {
+		return nil
+	}
+	var referenced *v2.Pipeline
+	if run.Spec.PipelineSpec == nil {
+		referenced = a.getReferencedPipeline(ctx, run)
+	}
+	return a.checkDeclarativeSource(ctx, run, referenced, "")
+}
+
+func sameRunSource(a, b *v2.PipelineRunSpec) bool {
+	return gogoproto.Equal(a.PipelineSpec, b.PipelineSpec) &&
+		gogoproto.Equal(a.Pipeline, b.Pipeline) &&
+		gogoproto.Equal(a.Revision, b.Revision) &&
+		gogoproto.Equal(a.Input, b.Input)
 }
 
 // getReferencedPipeline loads Spec.Pipeline when set. Any Get failure (including
 // not-found) returns nil: latestRevision pinning then no-ops (live fallback),
 // and ownerRef/notification stamping is skipped.
-func (a apiHook) getReferencedPipeline(ctx context.Context, request *v2.CreatePipelineRunRequest) *v2.Pipeline {
-	pipelineRef := request.PipelineRun.Spec.GetPipeline()
+func (a apiHook) getReferencedPipeline(ctx context.Context, run *v2.PipelineRun) *v2.Pipeline {
+	pipelineRef := run.Spec.GetPipeline()
 	if pipelineRef.GetName() == "" {
 		return nil
 	}
 
-	namespace := resourceNamespace(pipelineRef, request.PipelineRun.GetNamespace())
+	namespace := resourceNamespace(pipelineRef, run.GetNamespace())
 	a.logger.Info("BeforeCreate: fetching pipeline",
 		zap.String("pipeline", pipelineRef.GetName()),
 		zap.String("namespace", namespace),
-		zap.String("pipelinerun", request.PipelineRun.GetName()))
+		zap.String("pipelinerun", run.GetName()))
 
 	pipeline := &v2.Pipeline{}
 	if err := a.apiHandler.Get(ctx, namespace, pipelineRef.GetName(), &metav1.GetOptions{}, pipeline); err != nil {
@@ -162,6 +192,46 @@ func (a apiHook) getReferencedPipeline(ctx context.Context, request *v2.CreatePi
 		a.logger.Warn("BeforeCreate: failed to get Pipeline",
 			zap.String("pipeline", pipelineRef.GetName()),
 			zap.String("namespace", namespace),
+			zap.Error(err))
+		return nil
+	}
+	return pipeline
+}
+
+func (a apiHook) checkDeclarativeSource(ctx context.Context, run *v2.PipelineRun, referenced *v2.Pipeline, explicitRevision string) error {
+	spec := run.Spec.GetPipelineSpec()
+	if spec == nil {
+		if referenced != nil && referenced.Spec.GetManifest().GetType() == v2.PIPELINE_MANIFEST_TYPE_DECLARATIVE {
+			if err := requireSourceInRunNamespace(run); err != nil {
+				return err
+			}
+		}
+		if p := a.runNamespacePipeline(ctx, run, referenced); p != nil {
+			spec = &p.Spec
+		}
+	}
+	return checkDeclarativeRun(run, spec, explicitRevision, a.declarative)
+}
+
+// runNamespacePipeline returns the Pipeline that the SourcePipeline actor runs
+// for a run by name: the named Pipeline in the run namespace. The reference
+// can name another namespace, so referenced is reused only when it comes from
+// the run namespace. A Get failure returns nil. The hook then skips the
+// declarative check, and the run controller still checks the pin digest.
+func (a apiHook) runNamespacePipeline(ctx context.Context, run *v2.PipelineRun, referenced *v2.Pipeline) *v2.Pipeline {
+	ref := run.Spec.GetPipeline()
+	runNS := run.GetNamespace()
+	if ref.GetName() == "" {
+		return nil
+	}
+	if resourceNamespace(ref, runNS) == runNS {
+		return referenced
+	}
+	pipeline := &v2.Pipeline{}
+	if err := a.apiHandler.Get(ctx, runNS, ref.GetName(), &metav1.GetOptions{}, pipeline); err != nil {
+		a.logger.Info("BeforeCreate: no pipeline in the run namespace for the declarative check",
+			zap.String("pipeline", ref.GetName()),
+			zap.String("namespace", runNS),
 			zap.Error(err))
 		return nil
 	}
@@ -210,6 +280,8 @@ func (a apiHook) tryResolveLatestRevision(ctx context.Context, request *v2.Creat
 		}
 		return err
 	}
+
+	takeLivePin(request.PipelineRun.Spec.PipelineSpec, pipeline)
 
 	a.logger.Info("BeforeCreate: pinned status.latestRevision into inline pipeline spec",
 		zap.String("revision", latest.GetName()),

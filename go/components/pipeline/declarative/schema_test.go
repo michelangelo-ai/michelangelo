@@ -183,7 +183,7 @@ func TestValidateAgainstRejectsUnvalidatedInput(t *testing.T) {
 func TestValidateAgainstRequiredInsideAbsentGroup(t *testing.T) {
 	rel, err := ParseRelease("core-v2.yaml", []byte(`version: core-v2
 artifact: s3://x
-digest: sha256:ab
+digest: sha256:abababababababababababababababababababababababababababababababab
 task_types:
   core/python:
     config:

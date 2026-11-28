@@ -597,7 +597,10 @@ class TestExecuteRayTaskAnchor(TestCase):
         )
         self.assertEqual(reports[-1]["output"], "co-1")
         # The atexit fallback reporter must carry the same anchor.
-        self.assertEqual(registered[-1][1][-1], "decide-3")
+        before = len(reports)
+        registered[-1][0]()
+        self.assertEqual(len(reports), before + 1)
+        self.assertEqual(reports[-1]["first_activity_id"], "decide-3")
         self.assertEqual(terminated[-1][-1], "TERMINATION_TYPE_SUCCEEDED")
 
     def test_falls_back_to_cluster_creation_without_decision(self):
@@ -608,7 +611,10 @@ class TestExecuteRayTaskAnchor(TestCase):
         self.assertEqual(
             {r["first_activity_id"] for r in reports[1:]}, {self._CLUSTER_ACTIVITY_ID}
         )
-        self.assertEqual(registered[-1][1][-1], self._CLUSTER_ACTIVITY_ID)
+        before = len(reports)
+        registered[-1][0]()
+        self.assertEqual(len(reports), before + 1)
+        self.assertEqual(reports[-1]["first_activity_id"], self._CLUSTER_ACTIVITY_ID)
 
     def test_failed_job_reports_failure_with_anchor(self):
         """A failed job still reports with the anchor and terminates as failed."""

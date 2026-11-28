@@ -743,8 +743,13 @@ def execute_spark_crd_job(
 
     # register the check function to be called at the end of the workflow.
     # this is to ensure that the task state is reported correctly even if the
-    # workflow is killed
-    atexit.register(check_spark_crd_job_final_state_at_workflow_exit, created_spark_job, task_name, task_path, start_time_formatted_str, retry_attempt_id, first_activity_id, job_label, log_url_prefix)
+    # workflow is killed. atexit.unregister removes the first hook with the same
+    # function value, so a closure per call keeps concurrent tasks from removing
+    # each other's hooks.
+    def check_this_job_at_exit():
+        check_spark_crd_job_final_state_at_workflow_exit(created_spark_job, task_name, task_path, start_time_formatted_str, retry_attempt_id, first_activity_id, job_label, log_url_prefix)
+
+    atexit.register(check_this_job_at_exit)
 
     # sensor spark job until it is running and driver log url is available
     running_job = spark.sensor_job(job = created_spark_job, assert_condition_type = spark.running_condition_type)
@@ -769,7 +774,13 @@ def execute_spark_crd_job(
     terminated_job = spark.sensor_job(job = created_spark_job)
     print("{} | job terminated. ns:".format(log_prefix), namespace, "task_name:", task_name)
     job_state = report_spark_crd_job_terminated(terminated_job, task_name, task_path, start_time_formatted_str, retry_attempt_id, first_activity_id, job_label, log_url_prefix, job_name = spark_job_name)
-    if job_state == TASK_STATE_SUCCEEDED:
-        atexit.unregister(check_spark_crd_job_final_state_at_workflow_exit)
+
+    # A hook that stays reports this job again at workflow exit and fails the
+    # workflow if the job failed. That is wrong after a retry succeeded. Only
+    # the last failed attempt keeps its hook: the hook puts the failure
+    # reason and the driver url in the workflow error.
+    last_attempt_failed = job_state == TASK_STATE_FAILED and retry_attempt_id >= total_retry_attempt
+    if job_state in (TASK_STATE_SUCCEEDED, TASK_STATE_KILLED, TASK_STATE_FAILED) and not last_attempt_failed:
+        atexit.unregister(check_this_job_at_exit)
 
     return (job_state, terminated_job)

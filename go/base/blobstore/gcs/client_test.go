@@ -385,3 +385,16 @@ func TestGcsClient_Get_RequestsStorageReadWriteScope(t *testing.T) {
 		t.Errorf("expected Authorization %q on the storage request, got %q", "Bearer "+accessToken, gotAuth)
 	}
 }
+
+func TestGcsClient_GetLimited_StopsAfterLimit(t *testing.T) {
+	server := newFakeGCSServer(t, "model.json", []byte("0123456789"))
+
+	client := newGcsBlobClient(Config{Anonymous: true, Endpoint: server.URL})
+	data, err := client.GetLimited(context.Background(), "gs://test-bucket/path/model.json", 4)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if string(data) != "01234" {
+		t.Errorf("expected %q, got %q", "01234", data)
+	}
+}

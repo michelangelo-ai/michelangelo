@@ -7,7 +7,7 @@ release.
 
 This guide shows you how to write a declarative pipeline. It also shows you
 how to validate, create, and pin one with `ma pipeline apply` on the local
-sandbox.
+sandbox, and how to run one.
 
 ## Requirements
 
@@ -19,8 +19,8 @@ sandbox.
   [#2222](https://github.com/michelangelo-ai/michelangelo/pull/2222). An older
   controllermgr cannot list Pipelines while a pinned pipeline exists. Its log
   then shows `unknown field "interpreterPin"`.
-- No interpreter runs declarative pipelines yet. Do not start a PipelineRun of
-  a declarative pipeline.
+- To run a declarative pipeline, the apiserver and the controller manager must
+  include the declarative run path. See [Run a pipeline](#run-a-pipeline).
 
 ## Contents
 
@@ -30,6 +30,7 @@ sandbox.
 | `releases/mock-v2.yaml` | Mock release that adds `timeout_seconds` to `mock/python`. Use it to change the pin. |
 | `apiserver/declarative-test.yaml` | Apiserver config overlay. It turns on the feature and loads the mock releases. |
 | `pipelines/training.yaml` | Valid pipeline: parameters, parallel tasks, retry, a task output reference, and a failure handler. |
+| `pipelines/run.yaml` | PipelineRun of `declarative-training`. |
 | `pipelines/invalid/*.yaml` | Pipelines that the apiserver rejects. The first line of each file names the error. |
 
 The mock releases use `mock://` artifacts and placeholder digests. No blob
@@ -155,11 +156,19 @@ LEVEL  TASKS
 2      evaluate
 3      notify_failure
 
+WARNINGS
+tasks.notify_failure.depends_on[0]: the handler runs, but it gets no error text until outcome mode ships
+tasks.train_large.retry.initial_interval is not used yet
+tasks.train_small.retry.initial_interval is not used yet
+
 Dry run: nothing was saved.
 ```
 
 `train_large` and `train_small` are in the same level, so they can run in
 parallel. Add `-o json` to get the plan as JSON.
+
+The warnings name features that the apiserver accepts but the interpreter
+does not use yet. They do not stop the apply.
 
 The dry run stores nothing. To check, run this command:
 
@@ -334,6 +343,189 @@ pipeline uses it.
    ```
 
 YAML and UNIFLOW pipelines work as before.
+
+### 9. Trigger a run with the flag off
+
+With the flag off, as in test 8, trigger a run of `declarative-training`:
+
+```bash
+poetry run ma pipeline run -n declarative-test --name declarative-training
+```
+
+The apiserver rejects the run with `FAILED_PRECONDITION` and the message
+from test 8.
+
+## Run a pipeline
+
+The run controller starts a declarative run with the interpreter release in
+the pin. The interpreter runs the tasks with the task-type factories of the
+release. The `core-v0.1.0` release has two task types:
+
+| Task type | `job_specs` key | Resource fields |
+|---|---|---|
+| `core/ray` | `ray` | `head_cpu`, `head_memory`, `head_disk`, `head_gpu`, `head_object_store_memory`, `worker_cpu`, `worker_memory`, `worker_disk`, `worker_gpu`, `worker_object_store_memory`, `worker_instances` |
+| `core/spark` | `spark` | `driver_cpu`, `driver_memory`, `driver_disk`, `driver_gpu`, `executor_cpu`, `executor_memory`, `executor_disk`, `executor_gpu`, `executor_instances` |
+
+The fields have the same names and types as the `RayTask` and `SparkTask`
+fields. A field that you do not set takes the factory default. For
+example, the default Ray head requests 32Gi of memory. On a small cluster,
+set the memory of each task:
+
+```yaml
+tasks:
+  train:
+    taskFunction: core/ray
+    config: {entry_point: examples.train.main}
+    jobSpecs:
+      ray: {head_cpu: 1, head_memory: 2Gi, worker_instances: 0}
+```
+
+### Prepare the release
+
+1. Build the release tar and the release file:
+
+   ```bash
+   cd python
+   poetry run python -m michelangelo.uniflow.declarative.assemble \
+     michelangelo/uniflow/declarative/releases/core-v0.1.0.src.yaml \
+     --root .. --out ../.declarative-build/release
+   ```
+
+   The command writes `core-v0.1.0.tar.gz` and `core-v0.1.0.yaml`. The
+   release file holds the artifact path and the digest of the tar.
+
+1. Upload the tar to the `artifact` path of the release file. The controller
+   manager reads the tar from its blob store. On the sandbox, the S3 API of
+   the object store listens on port `9091`:
+
+   ```bash
+   secret() {
+     kubectl --context k3d-michelangelo-sandbox get secret object-storage-credentials \
+       -o "jsonpath={.data.$1}" | base64 -d
+   }
+   AWS_ACCESS_KEY_ID=$(secret AWS_ACCESS_KEY_ID) \
+   AWS_SECRET_ACCESS_KEY=$(secret AWS_SECRET_ACCESS_KEY) \
+   aws --endpoint-url http://localhost:9091 s3 cp \
+     ../.declarative-build/release/core-v0.1.0.tar.gz \
+     s3://default/interpreters/core-v0.1.0.tar.gz
+   ```
+
+1. Copy `core-v0.1.0.yaml` into the `releasesDir` of the apiserver, and
+   restart the apiserver. The startup log lists `core-v0.1.0`.
+
+> **Note:** Each apiserver replica loads its release files at startup. Copy a
+> new release file to every replica, and restart all replicas. Do this before
+> you apply a pipeline with that release. Otherwise, a replica without the
+> release rejects the apply and the runs of that pipeline.
+
+Do not change the tar after you upload it. The controller compares the
+digest of the tar with the digest in the pin.
+
+### Write a pipeline that runs
+
+- Use the task types of the release, such as `core/ray`.
+- Set `spec.manifest.interpreterPin.version` to the release, such as
+  `core-v0.1.0`, unless the release is the default release.
+- Add the `michelangelo/uniflow-image` annotation. The ImageBuild step fails a
+  run with no image. Every task runs in this image, so the image must hold the
+  code of each `entry_point`.
+- Give each parameter a default. A run cannot set parameter values yet.
+
+### Trigger a run
+
+The run namespace needs a Project with the same name. The controller reads
+the worker queue from the Project.
+
+Trigger a run by pipeline name:
+
+```bash
+poetry run ma pipeline run -n declarative-test --name <pipeline>
+```
+
+You can also apply a PipelineRun file, such as `pipelines/run.yaml`:
+
+```bash
+poetry run ma pipeline_run apply -f examples/declarative/pipelines/run.yaml
+```
+
+The apiserver checks each declarative run before it creates the run. It
+rejects the run in these cases:
+
+| Case | Code |
+|---|---|
+| The run names a pipeline in another namespace, and that pipeline or the pipeline with that name in the run namespace is declarative. This includes a run that the apiserver resolves to a revision. | `INVALID_ARGUMENT` |
+| The run names a revision in another namespace, and the revision holds a declarative pipeline. | `INVALID_ARGUMENT` |
+| The flag is off. | `FAILED_PRECONDITION` |
+| The pipeline has no pin, or the pin does not equal a loaded release. | `FAILED_PRECONDITION` |
+| The workflow does not conform to the pinned release. | `INVALID_ARGUMENT` |
+| The run input sets `task_configs` or `workflow_config`. | `INVALID_ARGUMENT` |
+| The run input sets a non-empty `args`, `kw_args`, or `parameter_map`. | `INVALID_ARGUMENT` |
+| The run input sets an `environ` key other than `LAST_SCHEDULE_TIMESTAMP`. | `INVALID_ARGUMENT` |
+| The run input sets `LAST_SCHEDULE_TIMESTAMP` to a value that is not a string. | `INVALID_ARGUMENT` |
+| A parameter has no default. | `INVALID_ARGUMENT` |
+
+A run of the latest revision of a pipeline uses the pin of the live pipeline.
+A run of an explicit `spec.revision` uses the pin of that revision. When the
+apiserver does not load that pin, apply the pipeline from a new commit. This
+makes a new revision.
+
+The apiserver does the same check when an update changes the inline spec, the
+pipeline or revision reference, or the input of a run. An update of other
+fields, such as `kill`, skips the check.
+
+### Start failures
+
+When the controller cannot start a run, it sets the `Execute Workflow` step
+to `FAILED`. The run then fails, and `status.errorMessage` holds the step
+message:
+
+| Case | Message |
+|---|---|
+| No pin | `declarative pipeline run has no interpreter pin; re-apply the pipeline through the API` |
+| Fetch fails | `cannot fetch interpreter <version>` |
+| Tar too large | `interpreter <version> is larger than the 1 MiB limit` |
+| Digest mismatch | `interpreter <version> does not match the digest in its pin` |
+| Spec does not decode | `cannot decode declarative spec: <error>` |
+| Spec has no interpreter argument form | `cannot build the interpreter arguments from the declarative spec`. The controller log holds the error. |
+| Run input is not supported | The message of the apiserver check, such as `parameter overrides are not supported yet` |
+| A parameter has no default | `parameter <name> is required; parameter overrides are not supported yet` |
+
+The last two rows apply to a run that a client wrote directly to Kubernetes.
+The apiserver rejects these runs before it creates them.
+
+The step message names only the interpreter version. The controller writes the
+artifact path, the fetch error, the tar size, and the digests to its log, at
+the `WARN` level, with the run name. A fetch failure is final. To try again,
+trigger a new run.
+
+### Cron triggers
+
+A cron trigger can run a declarative pipeline. The trigger sets
+`environ.LAST_SCHEDULE_TIMESTAMP` in the run input when the trigger schedule
+gives a previous schedule time:
+
+- An interval schedule gives it on every run, also the first run. The value
+  is the execution time minus the interval.
+- A cron schedule gives it when the trigger finds a cron time before the
+  execution time. The trigger looks back two cron periods. The value is the
+  latest cron time that it finds.
+- A batch rerun never gives it.
+
+The value is a Unix time in seconds, as a string. It comes from the schedule,
+not from the previous run. The run environment gets the same value.
+
+The apiserver rejects a run of a declarative pipeline when the trigger
+parameters set any of these inputs:
+
+- `task_configs` or `workflow_config`.
+- A non-empty `args` or `kw_args`.
+- An `environ` key other than `LAST_SCHEDULE_TIMESTAMP`.
+- A non-empty `parameter_map`. The rejection message is `parameter overrides
+  are not supported yet`.
+
+Do not set these inputs on a trigger of a declarative pipeline. The trigger
+retries the create 5 times. In batch mode, the default, the trigger then logs
+the error and creates no run. In concurrent mode, the trigger fails.
 
 ## Clean up
 
