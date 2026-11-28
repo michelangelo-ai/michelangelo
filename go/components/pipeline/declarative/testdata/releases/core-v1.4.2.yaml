@@ -26,3 +26,7 @@ task_types:
       a: {type: string}
     job_specs:
       cpu: {type: integer}
+  core/outcome:
+    capabilities: [outcome_mode]
+    config:
+      entry_point: {type: string, required: true}

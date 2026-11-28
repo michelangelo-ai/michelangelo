@@ -155,11 +155,19 @@ LEVEL  TASKS
 2      evaluate
 3      notify_failure
 
+WARNINGS
+tasks.notify_failure.depends_on[0]: the handler runs, but it gets no error text until outcome mode ships
+tasks.train_large.retry.initial_interval is not used yet
+tasks.train_small.retry.initial_interval is not used yet
+
 Dry run: nothing was saved.
 ```
 
 `train_large` and `train_small` are in the same level, so they can run in
 parallel. Add `-o json` to get the plan as JSON.
+
+The warnings name features that the apiserver accepts but the interpreter
+does not use yet. They do not stop the apply.
 
 The dry run stores nothing. To check, run this command:
 
