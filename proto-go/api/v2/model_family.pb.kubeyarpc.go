@@ -247,14 +247,6 @@ func (c modelFamilyServiceHandler) GetModelFamily(
 		logging.APIProcedureTag: "GetModelFamily",
 	})
 
-	getOptions := &metav1.GetOptions{}
-	if request.GetOptions != nil {
-		getOptions = request.GetOptions
-	}
-
-	result := &ModelFamily{}
-	err = c.apiHandler.Get(ctx, request.Namespace, request.Name, getOptions, result)
-
 	defer c.auditLogEmitter.Emit(ctx, c.buildModelFamilyAuditLogEventForGet(
 		ctx,
 		request,
@@ -262,6 +254,32 @@ func (c modelFamilyServiceHandler) GetModelFamily(
 		err,
 	),
 	)
+
+	// Authentication
+	userAuthenticated, err := c.auth.UserAuthenticated(ctx)
+	if !userAuthenticated {
+		logger.Error(err, "User is not authenticated")
+		metric.Counter("unauthenticated").Inc(1)
+		return nil, err
+	}
+
+	// Authorization
+	projectName := request.Namespace
+	userAuthorized, err := c.auth.UserAuthorized(ctx, projectName, authapi.Get, "ModelFamily")
+
+	if !userAuthorized {
+		logger.Error(err, "User is not authorized")
+		metric.Counter("unauthorized").Inc(1)
+		return nil, err
+	}
+
+	getOptions := &metav1.GetOptions{}
+	if request.GetOptions != nil {
+		getOptions = request.GetOptions
+	}
+
+	result := &ModelFamily{}
+	err = c.apiHandler.Get(ctx, request.Namespace, request.Name, getOptions, result)
 
 	if err != nil {
 		logger.Error(err, "Cannot get ModelFamily request info from k8s/ETCD", "error", err, "api_msg_tag", "GetModelFamily")
@@ -513,6 +531,32 @@ func (c modelFamilyServiceHandler) ListModelFamily(
 		logging.APIProcedureTag: "ListModelFamily",
 	})
 
+	defer c.auditLogEmitter.Emit(ctx, c.buildModelFamilyAuditLogEventForList(
+		ctx,
+		request,
+		resp,
+		err,
+	),
+	)
+
+	// Authentication
+	userAuthenticated, err := c.auth.UserAuthenticated(ctx)
+	if !userAuthenticated {
+		logger.Error(err, "User is not authenticated")
+		metric.Counter("unauthenticated").Inc(1)
+		return nil, err
+	}
+
+	// Authorization
+	projectName := request.Namespace
+	userAuthorized, err := c.auth.UserAuthorized(ctx, projectName, authapi.List, "ModelFamily")
+
+	if !userAuthorized {
+		logger.Error(err, "User is not authorized")
+		metric.Counter("unauthorized").Inc(1)
+		return nil, err
+	}
+
 	result := &ModelFamilyList{}
 	listOptions := &metav1.ListOptions{}
 	if request.ListOptions != nil {
@@ -523,14 +567,6 @@ func (c modelFamilyServiceHandler) ListModelFamily(
 		listOptionsExt = request.ListOptionsExt
 	}
 	err = c.apiHandler.List(ctx, request.Namespace, listOptions, listOptionsExt, result)
-
-	defer c.auditLogEmitter.Emit(ctx, c.buildModelFamilyAuditLogEventForList(
-		ctx,
-		request,
-		resp,
-		err,
-	),
-	)
 
 	if err != nil {
 		logger.Error(err, "API Handler failed to List ModelFamily", "error", err, "api_msg_tag", "ListModelFamily")
